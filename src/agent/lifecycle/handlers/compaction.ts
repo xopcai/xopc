@@ -6,7 +6,7 @@ import type {
   LLMResponsePayload,
 } from '../types.js';
 
-const logger = createLogger('lifecycle-compaction');
+const logger = createLogger('Agent:LifecycleCompaction');
 
 export interface CompactionHandlerConfig {
   minMessages: number;

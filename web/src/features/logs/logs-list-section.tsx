@@ -6,8 +6,10 @@ import type { LogEntry } from '@/features/logs/log.types';
 import {
   interpolate,
   levelLabel,
+  logEntryKey,
   messagePreview,
   moduleLabel,
+  phaseLabel,
   requestIdPreview,
   formatTimeCompact,
 } from '@/features/logs/logs-page-lib';
@@ -21,9 +23,19 @@ type Props = {
   onSelectLog: (log: LogEntry) => void;
   onLoadMore: () => void;
   onRefreshAll: () => void;
+  onFilterByRequestId?: (requestId: string) => void;
 };
 
-export function LogsListSection({ L, logs, loading, hasMore, onSelectLog, onLoadMore, onRefreshAll }: Props) {
+export function LogsListSection({
+  L,
+  logs,
+  loading,
+  hasMore,
+  onSelectLog,
+  onLoadMore,
+  onRefreshAll,
+  onFilterByRequestId,
+}: Props) {
   return (
     <>
       {loading && logs.length === 0 ? (
@@ -66,27 +78,67 @@ export function LogsListSection({ L, logs, loading, hasMore, onSelectLog, onLoad
             {logs.map((log) => {
               const lv = log.level ?? 'info';
               const rid = typeof log.requestId === 'string' ? log.requestId.trim() : '';
+              const phase = phaseLabel(log);
+              const isError = lv === 'error' || lv === 'fatal';
               return (
-                <li key={`${log.timestamp}-${log.requestId ?? log.message ?? ''}`}>
+                <li key={logEntryKey(log)}>
                   <button
                     type="button"
                     onClick={() => onSelectLog(log)}
                     className={cn(
                       'flex w-full min-w-0 items-center gap-3 px-3 py-2.5 text-left transition-colors duration-150 ease-out',
                       'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+                      isError && 'border-l-2 border-l-red-500/70',
                     )}
                   >
                     <span className="w-[5.25rem] shrink-0 tabular-nums text-fg-subtle">
                       {formatTimeCompact(log.timestamp)}
                     </span>
-                    <span className="w-[4.5rem] shrink-0 truncate text-fg-muted" title={lv}>
+                    <span
+                      className={cn(
+                        'w-[4.5rem] shrink-0 truncate',
+                        isError ? 'font-medium text-red-600 dark:text-red-400' : 'text-fg-muted',
+                      )}
+                      title={lv}
+                    >
                       {levelLabel(lv)}
                     </span>
+                    <span className="w-[4.5rem] shrink-0 truncate sm:w-[5.25rem]">
+                      {rid ? (
+                        onFilterByRequestId ? (
+                          <span
+                            role="link"
+                            tabIndex={0}
+                            className="cursor-pointer text-accent hover:underline"
+                            title={`${L.requestId}: ${rid}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onFilterByRequestId(rid);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onFilterByRequestId(rid);
+                              }
+                            }}
+                          >
+                            {requestIdPreview(rid)}
+                          </span>
+                        ) : (
+                          <span className="text-fg-subtle" title={`${L.requestId}: ${rid}`}>
+                            {requestIdPreview(rid)}
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-fg-subtle">—</span>
+                      )}
+                    </span>
                     <span
-                      className="w-[4.5rem] shrink-0 truncate text-fg-subtle sm:w-[5.25rem]"
-                      title={rid ? `${L.requestId}: ${rid}` : undefined}
+                      className="hidden max-w-[6rem] shrink-0 truncate text-fg-subtle xl:inline"
+                      title={phase !== '—' ? phase : undefined}
                     >
-                      {rid ? requestIdPreview(rid) : '—'}
+                      {phase !== '—' ? phase : '—'}
                     </span>
                     <span
                       className="hidden max-w-[7rem] shrink-0 truncate text-fg-muted lg:inline"
@@ -94,7 +146,9 @@ export function LogsListSection({ L, logs, loading, hasMore, onSelectLog, onLoad
                     >
                       {moduleLabel(log)}
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-fg">{messagePreview(log)}</span>
+                    <span className={cn('min-w-0 flex-1 truncate', isError ? 'text-fg' : 'text-fg')}>
+                      {messagePreview(log)}
+                    </span>
                   </button>
                 </li>
               );

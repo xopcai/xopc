@@ -2,7 +2,7 @@ import { createLogger } from '../../utils/logger.js';
 
 import type { ServiceEvent } from './types.js';
 
-const log = createLogger('GatewayService');
+const log = createLogger('Gateway:Service');
 
 const EVENT_BUFFER_SIZE = 200;
 

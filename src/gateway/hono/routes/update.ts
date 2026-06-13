@@ -15,10 +15,10 @@ import {
 } from '../../../infra/update-runner.js';
 import { getUpdateAvailable, runGatewayUpdateCheck } from '../../../infra/update-startup.js';
 import { PACKAGE_VERSION } from '../../../package-version.js';
-import { createLogger } from '../../../utils/logger.js';
+import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-const log = createLogger('GatewayUpdate');
+const log = createGatewayRouteLogger('Update');
 
 function mapUpdateFailure(result: UpdateRunResult, channel: UpdateChannel) {
   const apiResult = formatUpdateApiResult(result, channel);

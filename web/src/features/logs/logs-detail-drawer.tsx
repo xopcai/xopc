@@ -16,9 +16,22 @@ type Props = {
   copiedDetail: 'json' | 'message' | null;
   onCopiedMessage: () => void;
   onCopiedJson: () => void;
+  onFilterByRequestId?: (requestId: string) => void;
+  onFilterBySessionId?: (sessionId: string) => void;
+  onOpenChat?: (sessionId: string) => void;
 };
 
-export function LogsDetailDrawer({ L, log, onClose, copiedDetail, onCopiedMessage, onCopiedJson }: Props) {
+export function LogsDetailDrawer({
+  L,
+  log,
+  onClose,
+  copiedDetail,
+  onCopiedMessage,
+  onCopiedJson,
+  onFilterByRequestId,
+  onFilterBySessionId,
+  onOpenChat,
+}: Props) {
   return (
     <Dialog.Root open={log !== null} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
@@ -86,7 +99,15 @@ export function LogsDetailDrawer({ L, log, onClose, copiedDetail, onCopiedMessag
                   metadata: L.metadata,
                   requestId: L.requestId,
                   sessionId: L.sessionId,
+                  phase: L.phase,
+                  stackTrace: L.stackTrace,
+                  filterByRequestId: L.filterByRequestId,
+                  filterBySessionId: L.filterBySessionId,
+                  openChat: L.openChat,
                 }}
+                onFilterByRequestId={onFilterByRequestId}
+                onFilterBySessionId={onFilterBySessionId}
+                onOpenChat={onOpenChat}
               />
             ) : null}
           </div>

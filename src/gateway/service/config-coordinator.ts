@@ -133,9 +133,9 @@ export class GatewayConfigCoordinator {
       this.scheduleChannelPluginsAfterPersist();
       return { saved: true };
     } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      log.error({ error }, 'Failed to save config');
-      return { saved: false, error };
+      const em = err instanceof Error ? err.message : String(err);
+      log.error({ err, errorMessage: em, phase: 'infra.config' }, `Failed to save config: ${em}`);
+      return { saved: false, error: em };
     }
   }
 
@@ -150,9 +150,9 @@ export class GatewayConfigCoordinator {
       log.debug('Configuration updated successfully');
       return { updated: true };
     } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      log.error({ error }, 'Failed to update config');
-      return { updated: false, error };
+      const em = err instanceof Error ? err.message : String(err);
+      log.error({ err, errorMessage: em, phase: 'infra.config' }, `Failed to update config: ${em}`);
+      return { updated: false, error: em };
     }
   }
 

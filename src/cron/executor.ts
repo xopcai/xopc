@@ -178,8 +178,8 @@ export class DefaultJobExecutor implements JobExecutor {
         log.warn({ jobId: job.id, executionId, reason: result.error }, 'Job skipped');
       } else {
         log.error(
-          { jobId: job.id, executionId, error: result.error },
-          'Job failed'
+          { jobId: job.id, executionId, errorMessage: result.error, phase: 'cron.execute' },
+          `Job failed: ${result.error ?? 'unknown'}`,
         );
       }
 
@@ -197,8 +197,14 @@ export class DefaultJobExecutor implements JobExecutor {
       execution.error = error instanceof Error ? error.message : String(error);
 
       log.error(
-        { jobId: job.id, executionId, error: execution.error },
-        'Job execution error'
+        {
+          err: error,
+          errorMessage: execution.error,
+          jobId: job.id,
+          executionId,
+          phase: 'cron.execute',
+        },
+        `Job execution error: ${execution.error}`,
       );
 
       result = {

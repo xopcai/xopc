@@ -6,7 +6,7 @@ import { createLogger, updateAsyncLogContext } from '../../utils/logger.js';
 import { stringifySSEData } from './sse-json.js';
 import { resolveWebchatSessionKey } from '../resolve-webchat-session-key.js';
 
-const log = createLogger('Hono:SSE');
+const log = createLogger('Gateway:SSE');
 
 // Active SSE connections tracking for connection limiting
 const activeConnections = new Map<string, AbortController>();
@@ -174,7 +174,11 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
           },
         });
       } catch (error) {
-        log.error({ err: error }, 'Agent run failed (JSON mode)');
+        const em = error instanceof Error ? error.message : String(error);
+        log.error(
+          { err: error, errorMessage: em, phase: 'gateway.agent_run', sessionKey: jsonSessionKey, channel },
+          `Agent run failed (JSON mode): ${em}`,
+        );
         return c.json({
           ok: false,
           error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Unknown error' },

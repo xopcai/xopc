@@ -82,7 +82,8 @@ export class SessionConfigStore {
       const config = JSON.parse(content) as SessionAgentConfig;
       return config;
     } catch (error) {
-      log.error({ sessionKey, error }, 'Failed to read session config');
+      const em = error instanceof Error ? error.message : String(error);
+      log.error({ err: error, errorMessage: em, sessionKey, phase: 'session.config' }, `Failed to read session config: ${em}`);
       return null;
     }
   }
@@ -101,7 +102,8 @@ export class SessionConfigStore {
       await writeTextAtomic(configPath, JSON.stringify(configWithTimestamp, null, 2));
       log.debug({ sessionKey }, 'Session config saved');
     } catch (error) {
-      log.error({ sessionKey, error }, 'Failed to save session config');
+      const em = error instanceof Error ? error.message : String(error);
+      log.error({ err: error, errorMessage: em, sessionKey, phase: 'session.config' }, `Failed to save session config: ${em}`);
       throw error;
     }
   }

@@ -22,10 +22,10 @@ import { listSttProvidersForApi } from '../../../voice/stt/list-providers.js';
 import { mergeSttConfigFromAppConfig } from '../../../channels/attachments/voice-stt-webchat.js';
 import { resolveSttProviderConfigSlice } from '../../../voice/stt/config-slice.js';
 import { resolveTtsProviderConfigSlice } from '../../../voice/tts/config-slice.js';
-import { createLogger } from '../../../utils/logger.js';
+import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-const log = createLogger('Gateway:Voice');
+const log = createGatewayRouteLogger('Voice');
 
 function readVoiceApiKeyFromConfigFileOnly(
   cfg: Config,

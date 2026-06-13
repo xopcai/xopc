@@ -28,7 +28,7 @@ import { assertGatewayRuntimeConfig } from './runtime-config.js';
 import { resolveEffectiveGatewayPort } from './host.js';
 import { buckets, isGatewayStrictSecurityEnabled } from './rate-limit/index.js';
 import { prewarmModelRegistry } from '../providers/index.js';
-import { createLogger, getLogDir, getLogStats } from '../utils/logger.js';
+import { createLogger, getLogDir, getRuntimeLogStats } from '../utils/logger.js';
 import {
   resolveConfigPath,
   resolveCronJobsPath,
@@ -68,7 +68,7 @@ export type {
   ServiceEvent,
 } from './service/types.js';
 
-const log = createLogger('GatewayService');
+const log = createLogger('Gateway:Service');
 
 export class GatewayService {
   private bus: MessageBus;
@@ -1147,7 +1147,7 @@ export class GatewayService {
   } {
     const runningChannels = this.channelManager.getRunningChannels();
     const allChannels = this.channelManager.getAllChannels();
-    const logStats = getLogStats();
+    const logStats = getRuntimeLogStats();
     const readiness = this.readiness.getSnapshot();
 
     return {

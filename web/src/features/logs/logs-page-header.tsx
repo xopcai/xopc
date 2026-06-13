@@ -2,6 +2,9 @@ import { Folder, RefreshCw } from 'lucide-react';
 
 import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { Button } from '@/components/ui/button';
+import { LogsExportMenu } from '@/features/logs/logs-export-menu';
+import { LogsLevelPopover } from '@/features/logs/logs-level-popover';
+import type { LogEntry } from '@/features/logs/log.types';
 import { cn } from '@/lib/cn';
 import type { LogsMessages } from '@/i18n/messages';
 
@@ -13,6 +16,7 @@ type Props = {
   onOpenFiles: () => void;
   loading: boolean;
   onRefreshAll: () => void;
+  logs: LogEntry[];
 };
 
 export function LogsPageHeader({
@@ -23,6 +27,7 @@ export function LogsPageHeader({
   onOpenFiles,
   loading,
   onRefreshAll,
+  logs,
 }: Props) {
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -44,6 +49,8 @@ export function LogsPageHeader({
           />
         </div>
         <div className="flex items-center gap-1 self-end sm:self-center">
+          <LogsLevelPopover L={L} />
+          <LogsExportMenu L={L} logs={logs} disabled={loading} />
           <Button
             type="button"
             variant="ghost"

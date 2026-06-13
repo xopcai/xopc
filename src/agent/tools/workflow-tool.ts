@@ -14,7 +14,7 @@ import type {
   WorkflowRunServiceResult,
 } from '../../workflows/service/workflow-run-service.types.js';
 
-const log = createLogger('workflow-tool');
+const log = createLogger('Agent:WorkflowTool');
 
 const WorkflowToolSchema = Type.Object({
   name: Type.Optional(

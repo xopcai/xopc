@@ -19,7 +19,7 @@ import type { BrowserActionContext, BrowserActionResult } from '../../../../brow
 import { loadBrowserPipelineSource } from '../../../../browser/pipeline/source.js';
 import type { BrowserNotReadyError, BrowserSetupHint } from '../../../../browser/readiness.js';
 
-const log = createLogger('browser_use');
+const log = createLogger('Agent:BrowserUse');
 
 export interface CreateBrowserUseToolDeps {
   getManager: () => BrowserManager;

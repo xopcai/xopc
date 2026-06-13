@@ -1,6 +1,9 @@
 import type { Hono } from 'hono';
 
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
+
+const log = createGatewayRouteLogger('Cron');
 
 export function registerCronRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
@@ -37,6 +40,7 @@ export function registerCronRoutes(authenticated: Hono, deps: AuthenticatedRoute
       });
       return c.json(result, 201);
     } catch (err) {
+      logRouteError(log, c, err, 'gateway.route.cron', { operation: 'addJob' });
       return c.json({ error: err instanceof Error ? err.message : 'Failed to add job' }, 400);
     }
   });
@@ -87,6 +91,7 @@ export function registerCronRoutes(authenticated: Hono, deps: AuthenticatedRoute
       await service.cronServiceInstance.runJobNow(id);
       return c.json({ triggered: true });
     } catch (err) {
+      logRouteError(log, c, err, 'gateway.route.cron', { operation: 'runJob' });
       return c.json({ error: err instanceof Error ? err.message : 'Failed to run job' }, 400);
     }
   });
@@ -109,6 +114,7 @@ export function registerCronRoutes(authenticated: Hono, deps: AuthenticatedRoute
       const result = await service.cronServiceInstance.updateJob(id, body);
       return c.json({ updated: result });
     } catch (err) {
+      logRouteError(log, c, err, 'gateway.route.cron', { operation: 'updateJob' });
       return c.json({ error: err instanceof Error ? err.message : 'Failed to update job' }, 400);
     }
   });

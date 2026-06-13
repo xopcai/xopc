@@ -15,8 +15,6 @@ const DEFAULT_CONFIG: LoggerConfig = {
   retentionDays: 7,
   maxFileSizeMB: 100,
   prettyPrint: false,
-  async: true,
-  debugSampleRate: 1.0,
 };
 
 /**
@@ -25,12 +23,9 @@ const DEFAULT_CONFIG: LoggerConfig = {
 export function loadConfig(): LoggerConfig {
   const config: LoggerConfig = { ...DEFAULT_CONFIG };
 
-  // Log level - unified environment variable
-  const logLevel = process.env.XOPC_LOG_LEVEL || process.env.LOG_LEVEL;
-  if (logLevel) {
-    config.level = logLevel.toLowerCase() as LogLevel;
-  } else if (process.env.DEBUG) {
-    config.level = 'debug';
+  // Log level
+  if (process.env.XOPC_LOG_LEVEL) {
+    config.level = process.env.XOPC_LOG_LEVEL.toLowerCase() as LogLevel;
   }
 
   // Log directory

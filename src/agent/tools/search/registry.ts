@@ -7,7 +7,7 @@ import { BingHtmlProvider } from './providers/bing-html.js';
 import { DuckDuckGoHtmlProvider } from './providers/duckduckgo-html.js';
 import { SearXNGProvider } from './providers/searxng.js';
 
-const log = createLogger('web-search');
+const log = createLogger('Agent:WebSearch');
 
 export class SearchProviderRegistry {
   private readonly providers: SearchProvider[];

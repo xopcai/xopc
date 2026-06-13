@@ -24,6 +24,7 @@ import { gunzip } from 'zlib';
 import { promisify } from 'util';
 import { Readable } from 'stream';
 import type { LogLevel, LogFileMeta, LogQuery, LogStats, LogEntry } from './types.js';
+import { logEntrySearchText, pinoRecordToLogEntry } from './pino-record.js';
 
 const gunzipAsync = promisify(gunzip);
 
@@ -123,55 +124,13 @@ function parseLogLine(line: string, source?: string, lineNumber?: number): Parse
   if (!trimmed) return null;
 
   try {
-    // Try JSON format (pino default)
-    const parsed = JSON.parse(trimmed);
-    
-    // Convert pino numeric level to string (10=trace, 20=debug, 30=info, 40=warn, 50=error, 60=fatal)
-    const levelNum = typeof parsed.level === 'number' ? parsed.level : 30;
-    const levelMap: Record<number, string> = {
-      10: 'trace',
-      20: 'debug',
-      30: 'info',
-      40: 'warn',
-      50: 'error',
-      60: 'fatal',
-    };
-
-    return {
-      timestamp: parsed.time || parsed.timestamp || '',
-      level: levelMap[levelNum] || (parsed.level?.toString() || 'info').toLowerCase(),
-      message: parsed.msg || parsed.message || '',
-      module: parsed.module,
-      prefix: parsed.prefix,
-      service: parsed.service,
-      extension: parsed.extension,
-      requestId: parsed.requestId,
-      sessionId: parsed.sessionId,
-      _source: source,
-      _lineNumber: lineNumber,
-      ...parsed,
-    };
+    const parsed = JSON.parse(trimmed) as Record<string, unknown>;
+    const entry = pinoRecordToLogEntry(parsed) as ParsedLogEntry;
+    entry._source = source;
+    entry._lineNumber = lineNumber;
+    return entry;
   } catch {
-    // Fallback: try to parse pino's text format
-    const match = trimmed.match(/^\[([^\]]+)\]\s+(\w+):\s+(.+)$/);
-    if (match) {
-      return {
-        timestamp: match[1],
-        level: match[2].toLowerCase() as LogLevel,
-        message: match[3],
-        _source: source,
-        _lineNumber: lineNumber,
-      };
-    }
-    
-    // Plain text fallback
-    return {
-      timestamp: new Date().toISOString(),
-      level: 'info',
-      message: trimmed,
-      _source: source,
-      _lineNumber: lineNumber,
-    };
+    return null;
   }
 }
 
@@ -254,27 +213,12 @@ function matchesQuery(entry: ParsedLogEntry, query: LogQuery): boolean {
     if (entryDate > toDate) return false;
   }
 
-  // Filter by keyword (search in message and context fields)
+  // Filter by keyword (search message, module, phase, err, structured fields)
   if (query.q) {
     const keyword = query.q.toLowerCase();
-    const searchable = [
-      entry.message,
-      entry.module,
-      entry.prefix,
-      entry.service,
-      entry.extension,
-      entry.requestId,
-      entry.sessionId,
-    ]
-      .filter(Boolean)
-      .map(String)
-      .join(' ')
-      .toLowerCase();
-    
-    if (!searchable.includes(keyword)) return false;
+    if (!logEntrySearchText(entry).includes(keyword)) return false;
   }
 
-  // Filter by specific fields
   if (query.module && entry.module !== query.module) return false;
   if (query.extension && entry.extension !== query.extension) return false;
   if (query.service && entry.service !== query.service) return false;
@@ -332,78 +276,9 @@ export async function queryLogs(query: LogQuery = {}): Promise<LogEntry[]> {
   return results.slice(offset, offset + limit).map(({ _source, _lineNumber, ...rest }) => rest);
 }
 
-/**
- * Get recent logs (convenience method)
- */
-export async function getRecentLogs(options?: {
-  level?: LogLevel;
-  limit?: number;
-  module?: string;
-}): Promise<LogEntry[]> {
-  return queryLogs({
-    levels: options?.level ? [options.level] : undefined,
-    limit: options?.limit || 50,
-    module: options?.module,
-    order: 'desc',
-  });
-}
-
-/**
- * Search logs by keyword
- */
-export async function searchLogs(
-  keyword: string,
-  options?: {
-    from?: string;
-    to?: string;
-    limit?: number;
-  }
-): Promise<LogEntry[]> {
-  return queryLogs({
-    q: keyword,
-    ...options,
-    limit: options?.limit || 100,
-  });
-}
-
-/**
- * Get logs for a specific request/session
- */
-export async function getLogsByContext(
-  contextType: 'requestId' | 'sessionId',
-  contextValue: string,
-  limit: number = 100
-): Promise<LogEntry[]> {
-  return queryLogs({
-    [contextType]: contextValue,
-    limit,
-    order: 'asc',
-  });
-}
-
 // ============================================
 // Statistics
 // ============================================
-
-/**
- * Get available log levels from actual log data
- */
-export async function getLogLevelsFromData(): Promise<LogLevel[]> {
-  const levels = new Set<LogLevel>();
-  const files = getLogFiles().slice(0, 3); // Check last 3 files
-
-  for (const file of files) {
-    for await (const entry of streamLogFile(file.path, { limit: 500 })) {
-      levels.add(entry.level as LogLevel);
-    }
-  }
-
-  return Array.from(levels).sort();
-}
-
-/**
- * Get available modules from log data
- */
 export async function getLogModules(): Promise<string[]> {
   const modules = new Set<string>();
   const files = getLogFiles().slice(0, 7);
@@ -411,7 +286,6 @@ export async function getLogModules(): Promise<string[]> {
   for (const file of files) {
     for await (const entry of streamLogFile(file.path, { limit: 1000 })) {
       if (entry.module) modules.add(entry.module);
-      if (entry.prefix) modules.add(entry.prefix);
     }
   }
 
@@ -421,7 +295,7 @@ export async function getLogModules(): Promise<string[]> {
 /**
  * Get log statistics by level (sampled from recent files)
  */
-export async function getLogStats(): Promise<LogStats> {
+export async function getFileLogStats(): Promise<LogStats> {
   const files = getLogFiles();
 
   // Count by level (sample from recent files)
@@ -447,73 +321,102 @@ export async function getLogStats(): Promise<LogStats> {
 }
 
 // ============================================
-// Cleanup
+// Error aggregation
 // ============================================
 
-/**
- * Clean old logs (actually deletes files)
- */
-export function cleanOldLogs(keepDays: number = 7): {
-  deleted: number;
-  freedBytes: number;
-  errors: string[];
-} {
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - keepDays);
+export interface LogErrorSummaryItem {
+  key: string;
+  errName: string;
+  phase?: string;
+  module?: string;
+  count: number;
+  lastSeen: string;
+  sampleMessage: string;
+}
 
-  let deleted = 0;
-  let freedBytes = 0;
-  const errors: string[] = [];
+function entryMeta(entry: ParsedLogEntry): Record<string, unknown> | undefined {
+  if (!entry.meta || typeof entry.meta !== 'object') return undefined;
+  return entry.meta as Record<string, unknown>;
+}
 
-  const files = getLogFiles();
-  for (const file of files) {
-    const fileDate = new Date(file.modified);
-    if (fileDate < cutoff) {
-      try {
-        const size = file.size;
-        unlinkSync(file.path);
-        deleted++;
-        freedBytes += size;
-      } catch (err) {
-        errors.push(`Failed to delete ${file.name}: ${err}`);
-      }
-    }
+function extractErrName(entry: ParsedLogEntry): string {
+  const meta = entryMeta(entry);
+  const raw = entry.err ?? meta?.err;
+  if (raw && typeof raw === 'object' && raw !== null) {
+    const name = (raw as Record<string, unknown>).name;
+    if (typeof name === 'string' && name.trim()) return name;
+    const message = (raw as Record<string, unknown>).message;
+    if (typeof message === 'string' && message.trim()) return message.slice(0, 120);
   }
+  if (typeof entry.errorMessage === 'string' && entry.errorMessage.trim()) {
+    return entry.errorMessage.slice(0, 120);
+  }
+  return entry.message?.slice(0, 120) || 'Error';
+}
 
-  return { deleted, freedBytes, errors };
+function summaryKey(entry: ParsedLogEntry): string {
+  const errName = extractErrName(entry);
+  const meta = entryMeta(entry);
+  const phase =
+    typeof entry.phase === 'string'
+      ? entry.phase
+      : typeof meta?.phase === 'string'
+        ? meta.phase
+        : '';
+  const module = entry.module || '';
+  return `${errName}::${phase}::${module}`;
 }
 
 /**
- * Clean logs by size (keep total under limit)
+ * Aggregate recent error/fatal logs by err name + phase + module.
  */
-function _cleanBySize(maxTotalMB: number = 500): {
-  deleted: number;
-  freedBytes: number;
-  errors: string[];
-} {
-  const maxBytes = maxTotalMB * 1024 * 1024;
-  const files = getLogFiles();
-  
-  let totalSize = files.reduce((sum, f) => sum + f.size, 0);
-  let deleted = 0;
-  let freedBytes = 0;
-  const errors: string[] = [];
+export async function getLogErrorSummary(options?: {
+  from?: string;
+  to?: string;
+  limit?: number;
+}): Promise<LogErrorSummaryItem[]> {
+  const limit = options?.limit ?? 20;
+  const groups = new Map<string, LogErrorSummaryItem>();
 
-  // Delete oldest files until under limit
-  for (const file of files.slice().reverse()) {
-    if (totalSize <= maxBytes) break;
+  const entries = await queryLogs({
+    levels: ['error', 'fatal'],
+    from: options?.from,
+    to: options?.to,
+    limit: 5000,
+    order: 'desc',
+  });
 
-    try {
-      unlinkSync(file.path);
-      freedBytes += file.size;
-      totalSize -= file.size;
-      deleted++;
-    } catch (err) {
-      errors.push(`Failed to delete ${file.name}: ${err}`);
+  for (const entry of entries) {
+    const key = summaryKey(entry as ParsedLogEntry);
+    const parsed = entry as ParsedLogEntry;
+    const existing = groups.get(key);
+    if (existing) {
+      existing.count += 1;
+      if (entry.timestamp > existing.lastSeen) {
+        existing.lastSeen = entry.timestamp;
+        existing.sampleMessage = entry.message;
+      }
+      continue;
     }
+    groups.set(key, {
+      key,
+      errName: extractErrName(parsed),
+      phase:
+        typeof parsed.phase === 'string'
+          ? parsed.phase
+          : typeof entryMeta(parsed)?.phase === 'string'
+            ? String(entryMeta(parsed)?.phase)
+            : undefined,
+      module: parsed.module,
+      count: 1,
+      lastSeen: entry.timestamp,
+      sampleMessage: entry.message,
+    });
   }
 
-  return { deleted, freedBytes, errors };
+  return Array.from(groups.values())
+    .sort((a, b) => b.count - a.count || b.lastSeen.localeCompare(a.lastSeen))
+    .slice(0, limit);
 }
 
 // ============================================

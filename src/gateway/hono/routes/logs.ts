@@ -1,7 +1,18 @@
 import type { Hono } from 'hono';
 
 import type { LogLevel } from '../../../utils/logger.js';
-import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../../utils/logger/log-store.js';
+import {
+  queryLogs,
+  getLogFiles,
+  getLogLevels,
+  getFileLogStats,
+  getLogModules,
+  getLogErrorSummary,
+  LOG_DIR,
+} from '../../../utils/logger/log-store.js';
+import { createGatewayRouteLogger } from '../lib/route-logger.js';
+
+const log = createGatewayRouteLogger('Logs');
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 export function registerLogsRoutes(authenticated: Hono, _deps: AuthenticatedRouteDeps): void {
@@ -17,6 +28,8 @@ export function registerLogsRoutes(authenticated: Hono, _deps: AuthenticatedRout
       to: query.to,
       q: query.q,
       module: query.module,
+      requestId: query.requestId,
+      sessionId: query.sessionId,
       limit: query.limit ? parseInt(query.limit) : 100,
       offset: query.offset ? parseInt(query.offset) : 0,
     });
@@ -29,10 +42,33 @@ export function registerLogsRoutes(authenticated: Hono, _deps: AuthenticatedRout
     return c.json({ files });
   });
 
-  // GET /api/logs/stats - Get log statistics
+  // GET /api/logs/stats - Get log statistics (file sample + runtime counters)
   authenticated.get('/api/logs/stats', async (c) => {
-    const stats = getLogStats();
-    return c.json(stats);
+    const { getRuntimeLogStats } = await import('../../../utils/logger.js');
+    const [fileStats, runtimeStats] = await Promise.all([
+      getFileLogStats(),
+      Promise.resolve(getRuntimeLogStats()),
+    ]);
+    return c.json({
+      byLevel: fileStats.byLevel,
+      runtime: {
+        byLevel: runtimeStats.byLevel,
+        byModule: runtimeStats.byModule,
+        errorsLast24h: runtimeStats.errorsLast24h,
+        uptimeMs: runtimeStats.uptimeMs,
+      },
+    });
+  });
+
+  // GET /api/logs/errors/summary - Aggregate recent errors by type/phase/module
+  authenticated.get('/api/logs/errors/summary', async (c) => {
+    const query = c.req.query();
+    const items = await getLogErrorSummary({
+      from: query.from,
+      to: query.to,
+      limit: query.limit ? parseInt(query.limit, 10) : 20,
+    });
+    return c.json({ items });
   });
 
   // GET /api/logs/levels - Get available log levels
@@ -53,10 +89,10 @@ export function registerLogsRoutes(authenticated: Hono, _deps: AuthenticatedRout
 
   // GET /api/logs/health - Get log system health status
   authenticated.get('/api/logs/health', async (c) => {
-    const { getLogDir, getLogStats, isLoggerShuttingDown } = await import('../../../utils/logger.js');
+    const { getLogDir, getRuntimeLogStats, isLoggerShuttingDown } = await import('../../../utils/logger.js');
     const { getLogFiles } = await import('../../../utils/logger/log-store.js');
     
-    const stats = getLogStats();
+    const stats = getRuntimeLogStats();
     const files = getLogFiles().slice(0, 5);
     const isShuttingDown = isLoggerShuttingDown();
     
@@ -97,20 +133,22 @@ export function registerLogsRoutes(authenticated: Hono, _deps: AuthenticatedRout
     }
     
     const previousLevel = getLogLevel();
-    setLogLevel(level as any);
+    setLogLevel(level as LogLevel);
     
     // Optional: auto-revert after duration
     let autoRevertAt: string | null = null;
     if (duration) {
-      const durationMs = parseInt(duration) * 60000; // minutes to ms
+      const durationMs = parseInt(duration, 10) * 60000; // minutes to ms
       if (!isNaN(durationMs) && durationMs > 0) {
         autoRevertAt = new Date(Date.now() + durationMs).toISOString();
         setTimeout(() => {
           setLogLevel(previousLevel);
-          console.log(`[Logger] Auto-reverted log level to ${previousLevel}`);
+          log.info({ phase: 'gateway.logs.level', previousLevel, reverted: true }, `Log level auto-reverted to ${previousLevel}`);
         }, durationMs);
       }
     }
+    
+    log.info({ phase: 'gateway.logs.level', previousLevel, current: level, autoRevertAt }, `Log level changed to ${level}`);
     
     return c.json({
       previous: previousLevel,

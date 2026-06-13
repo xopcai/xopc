@@ -9,13 +9,12 @@ import { register, type CLIContext } from '../registry.js';
 import {
   getLogFiles,
   queryLogs,
-  getLogStats as fetchLogStats,
-  cleanOldLogs,
+  getFileLogStats,
   type LogQuery,
   type LogEntry,
 } from '../../utils/logger/log-store.js';
 import { getLoggerConfig } from '../../utils/logger/config.js';
-import { rotateLogs } from '../../utils/logger/rotation.js';
+import { rotateLogs, cleanOldLogs } from '../../utils/logger/rotation.js';
 
 function createLogsCommand(_ctx: CLIContext): Command {
   const command = new Command('logs');
@@ -152,7 +151,7 @@ function createLogsCommand(_ctx: CLIContext): Command {
     .option('--json', 'Output as JSON')
     .action(async (options) => {
       try {
-        const stats = await fetchLogStats();
+        const stats = await getFileLogStats();
         const config = getLoggerConfig();
         
         if (options.json) {

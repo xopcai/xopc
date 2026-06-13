@@ -20,13 +20,14 @@ import { operatorScopes } from './middleware/scopes.js';
 import { createStrictRateLimitMiddleware } from './middleware/strict-rate-limit.js';
 import { logContextMiddleware } from './middleware/log-context.js';
 import { logger } from './middleware/logger.js';
+import { routeErrorMiddleware } from './middleware/route-errors.js';
 import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-extensions.js';
 import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
 import { resetLazyRouteBundlesForTests } from './routes/lazy-fallback.js';
 import { prewarmStaticUiCache } from './lib/static-ui.js';
 import { registerSiteShareMiddleware } from '../../share/site-share-router.js';
-const log = createLogger('HonoApp');
+const log = createLogger('Gateway:App');
 
 export interface HonoAppConfig {
   service: GatewayService;
@@ -209,6 +210,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   registerPublicExtensionAssetRoutes(app, service);
 
   const authenticated = new Hono();
+  authenticated.use(routeErrorMiddleware());
   authenticated.use(
     auth({
       token,
@@ -267,6 +269,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     log.error(
       {
         err,
+        phase: 'gateway.http.unhandled',
         path: c.req.path,
         method: c.req.method,
         userAgent: c.req.header('user-agent'),

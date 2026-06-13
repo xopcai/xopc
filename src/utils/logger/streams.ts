@@ -6,9 +6,12 @@
 import { createWriteStream } from 'fs';
 import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
+import { Writable } from 'stream';
 import type { DestinationStream } from 'pino';
 import type { LogLevel } from './types.js';
 import { config, getLogDir } from './config.js';
+import { emitLogEntry, hasSubscribers } from './log-stream.js';
+import { pinoRecordToLogEntry } from './pino-record.js';
 
 // Store file stream references for later cleanup
 const fileStreams: ReturnType<typeof createWriteStream>[] = [];
@@ -37,6 +40,23 @@ function createLogStream(filePath: string): ReturnType<typeof createWriteStream>
   return createWriteStream(filePath, { flags: 'a', encoding: 'utf-8' });
 }
 
+/** Push parsed Pino lines to live SSE subscribers when any are connected. */
+function createLiveEmitStream(): DestinationStream {
+  return new Writable({
+    write(chunk, _encoding, callback) {
+      if (hasSubscribers()) {
+        try {
+          const parsed = JSON.parse(chunk.toString()) as Record<string, unknown>;
+          emitLogEntry(pinoRecordToLogEntry(parsed));
+        } catch {
+          /* ignore non-JSON lines (e.g. pretty console) */
+        }
+      }
+      callback();
+    },
+  }) as unknown as DestinationStream;
+}
+
 /**
  * Initialize and get all output streams
  */
@@ -44,6 +64,11 @@ export function initializeStreams(): Array<{ stream: DestinationStream | NodeJS.
   ensureLogDir();
   
   const streams: Array<{ stream: DestinationStream | NodeJS.WriteStream; level: LogLevel }> = [];
+
+  streams.push({
+    stream: createLiveEmitStream(),
+    level: 'trace',
+  });
 
   if (config.consoleOutput) {
     streams.push({

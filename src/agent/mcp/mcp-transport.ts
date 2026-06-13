@@ -6,7 +6,7 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { FetchLike, Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { fetch as undiciFetch } from "undici";
 import { createLogger } from "../../utils/logger.js";
-const log = createLogger("McpTransport");
+const log = createLogger("Mcp:Transport");
 import { normalizeOptionalString } from "../../utils/string-coerce.js";
 import { XopcStdioClientTransport } from "./mcp-stdio-transport.js";
 import { resolveMcpTransportConfig } from "./mcp-transport-config.js";

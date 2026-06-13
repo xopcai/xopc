@@ -9,6 +9,7 @@ import type { SessionIndex } from '../../session/index.js';
 import {
   createLogger,
   inboundCorrelationMetadataFromAsyncLogContext,
+  updateAsyncLogContext,
 } from '../../utils/logger.js';
 import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutoff.js';
 
@@ -16,7 +17,7 @@ import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js
 
 import type { AgentRunRelay } from '../agent-run-relay.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
-const log = createLogger('GatewayService');
+const log = createLogger('Gateway:Service');
 
 export type RunGatewayAgentYield = {
   type: string;
@@ -113,6 +114,7 @@ export async function *runGatewayAgent(
       }
 
       const sessionKey = webchatSessionKey;
+      updateAsyncLogContext({ sessionId: sessionKey });
 
       const timezone = agentService.resolveUserTimezoneForSession(sessionKey);
       const stampedMessage = message.trimStart().startsWith('/')
@@ -161,8 +163,19 @@ export async function *runGatewayAgent(
           summary: mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully',
         };
       } catch (error) {
-        log.error({ error }, 'Agent processing failed');
-        streamError = error instanceof Error ? error.message : 'Unknown error';
+        const em = error instanceof Error ? error.message : String(error);
+        log.error(
+          {
+            err: error,
+            errorMessage: em,
+            phase: 'gateway.agent_run',
+            sessionKey,
+            runId,
+            channel: 'webchat',
+          },
+          `Agent processing failed: ${em}`,
+        );
+        streamError = em;
         const errorContent = formatAgentRunErrorForClient(streamError);
         const errorEvent = { type: 'error', content: errorContent };
         runRelay.publish(runId, errorEvent);
@@ -211,7 +224,18 @@ export async function *runGatewayAgent(
     yield { type: 'token', content: 'Done\n' };
     return { status: 'ok', summary: 'Message processed' };
   } catch (error) {
-    log.error({ error }, 'Agent run failed');
+    const em = error instanceof Error ? error.message : String(error);
+    log.error(
+      {
+        err: error,
+        errorMessage: em,
+        phase: 'gateway.agent_run',
+        runId,
+        channel,
+        chatId,
+      },
+      `Agent run failed: ${em}`,
+    );
     throw error;
   }
 }

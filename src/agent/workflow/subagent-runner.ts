@@ -39,7 +39,7 @@ import {
 } from './structured-output-tool.js';
 import type { SubagentRunOptions, SubagentRunner, SubagentProgressEvent } from './types.js';
 
-const log = createLogger('workflow-subagent-runner');
+const log = createLogger('Agent:WorkflowSubagent');
 
 const DEFAULT_MAX_ITERATIONS = 30;
 

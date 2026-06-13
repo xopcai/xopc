@@ -7,10 +7,10 @@ import { readdir, realpath, stat } from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { createLogger } from '../../../utils/logger.js';
+import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-const log = createLogger('HostFs');
+const log = createGatewayRouteLogger('HostFs');
 
 function jsonError(status: number, message: string) {
   return Response.json({ ok: false, error: { message } }, { status });

@@ -2,6 +2,9 @@ import { fetch as undiciFetch } from 'undici';
 import { resolveGatewayLocalClientHost } from '../config/gateway-bind.js';
 import type { Config } from '../config/schema.js';
 import { loadConfig } from '../config/loader.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('Mcp:GatewayClient');
 
 function resolveGatewayTokenFromConfig(cfg: Config): string | undefined {
   const fromConfig = cfg.gateway?.auth?.token?.trim();
@@ -32,7 +35,9 @@ export class GatewayHttpClient {
       headers: this.headers(),
     });
     if (!res.ok) {
-      throw new Error(`Gateway GET ${path} failed: ${res.status}`);
+      const em = `Gateway GET ${path} failed: ${res.status}`;
+      log.warn({ phase: 'mcp.gateway.http', method: 'GET', path, status: res.status }, em);
+      throw new Error(em);
     }
     const body = (await res.json()) as { ok?: boolean; payload?: T } | T;
     if (body && typeof body === 'object' && 'payload' in body) {
@@ -48,7 +53,9 @@ export class GatewayHttpClient {
       body: JSON.stringify(data),
     });
     if (!res.ok) {
-      throw new Error(`Gateway POST ${path} failed: ${res.status}`);
+      const em = `Gateway POST ${path} failed: ${res.status}`;
+      log.warn({ phase: 'mcp.gateway.http', method: 'POST', path, status: res.status }, em);
+      throw new Error(em);
     }
     const body = (await res.json()) as { ok?: boolean; payload?: T } | T;
     if (body && typeof body === 'object' && 'payload' in body) {

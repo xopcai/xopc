@@ -17,7 +17,7 @@ import {
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
 } from '../../../agent/agent-scope.js';
-import { createLogger } from '../../../utils/logger.js';
+import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { resolveHeartbeatMdPath } from '../../workspace-heartbeat-path.js';
 import {
   isPathUnderWorkspace,
@@ -42,7 +42,7 @@ import {
 import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
 
-const log = createLogger('HonoApp');
+const log = createGatewayRouteLogger('Workspace');
 
 /** Agent home for persisted `inbound/` and `tts/` attachments (matches `persistOutboundTtsAudio` / `prepareInboundAttachments`). */
 function resolvePersistedAttachmentAgentHome(cfg: Config, sessionKeyRaw: string | undefined): string {

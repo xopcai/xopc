@@ -14,7 +14,6 @@ export interface LogEntry {
   level: LogLevel;
   message: string;
   module?: string;
-  prefix?: string;
   service?: string;
   extension?: string;
   requestId?: string;
@@ -81,11 +80,6 @@ export interface ContextualLogger extends Logger {
    * Set default context for all subsequent logs
    */
   withContext(context: LogContext): ContextualLogger;
-  
-  /**
-   * Create a child logger with additional context
-   */
-  childContext(context: LogContext): ContextualLogger;
 }
 
 /**
@@ -108,10 +102,6 @@ export interface LoggerConfig {
   maxFileSizeMB: number;
   /** Enable pretty print for console (dev only) */
   prettyPrint: boolean;
-  /** Enable async logging */
-  async: boolean;
-  /** Sample rate for debug logs (0-1, 1 = all) */
-  debugSampleRate?: number;
 }
 
 /**

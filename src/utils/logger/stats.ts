@@ -45,7 +45,7 @@ export function incrementStats(level: LogLevel, module?: string): void {
 /**
  * Get current statistics
  */
-export function getLogStats() {
+export function getRuntimeLogStats() {
   return {
     byLevel: { ...stats.byLevel },
     byModule: Object.fromEntries(stats.byModule),
