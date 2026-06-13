@@ -4,7 +4,7 @@ import type { AgentTool as AnyAgentTool } from "@earendil-works/pi-agent-core";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { Config } from "../../config/schema.js";
 import { createLogger } from "../../utils/logger.js";
-const log = createLogger("BundleMcp");
+const log = createLogger("Mcp:Bundle");
 import { setPluginToolMeta } from "./mcp-tool-meta.js";
 import {
   normalizeLowercaseStringOrEmpty,

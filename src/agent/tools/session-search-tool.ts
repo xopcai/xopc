@@ -10,7 +10,7 @@ import type { SessionStore } from '../../session/store.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import { createLogger } from '../../utils/logger.js';
 
-const log = createLogger('session-search-tool');
+const log = createLogger('Agent:SessionSearch');
 
 const MAX_SUMMARY_CHARS = 20_000;
 

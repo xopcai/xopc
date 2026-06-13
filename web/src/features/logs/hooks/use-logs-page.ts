@@ -3,19 +3,21 @@ import { useSearchParams } from 'react-router-dom';
 
 import {
   getLogDir,
+  getLogErrorSummary,
   getLogFiles,
   getLogModules,
   getLogStats,
   queryLogs,
 } from '@/features/logs/log-api';
-import type { LogEntry, LogFile, LogLevel } from '@/features/logs/log.types';
+import { LogStreamConnection, prependLiveLog } from '@/features/logs/log-stream-connection';
+import type { LogEntry, LogFile, LogLevel, LogErrorSummaryItem } from '@/features/logs/log.types';
 import type { LevelSegmentValue } from '@/features/logs/logs-page-lib';
 import {
   isSameLogLevelSet,
   levelsForPreset,
+  logMatchesClientFilters,
   PAGE_LIMIT,
   parseLogLevelsParam,
-  REFRESH_MS,
   segmentValueFromLevels,
   sortLogsByTimeDesc,
 } from '@/features/logs/logs-page-lib';
@@ -30,6 +32,8 @@ type Filters = {
   debouncedSearch: string;
   selectedLevels: Set<LogLevel>;
   moduleFilter: string;
+  requestIdFilter: string;
+  sessionIdFilter: string;
   dateFrom: string;
   dateTo: string;
   autoRefresh: boolean;
@@ -41,6 +45,8 @@ type FiltersAction =
   | { type: 'setLevels'; value: Set<LogLevel> }
   | { type: 'toggleLevel'; level: LogLevel }
   | { type: 'setModule'; value: string }
+  | { type: 'setRequestIdFilter'; value: string }
+  | { type: 'setSessionIdFilter'; value: string }
   | { type: 'setDateFrom'; value: string }
   | { type: 'setDateTo'; value: string }
   | { type: 'setAutoRefresh'; value: boolean }
@@ -63,6 +69,10 @@ function filtersReducer(state: Filters, action: FiltersAction): Filters {
     }
     case 'setModule':
       return state.moduleFilter === action.value ? state : { ...state, moduleFilter: action.value };
+    case 'setRequestIdFilter':
+      return state.requestIdFilter === action.value ? state : { ...state, requestIdFilter: action.value };
+    case 'setSessionIdFilter':
+      return state.sessionIdFilter === action.value ? state : { ...state, sessionIdFilter: action.value };
     case 'setDateFrom':
       return state.dateFrom === action.value ? state : { ...state, dateFrom: action.value };
     case 'setDateTo':
@@ -76,6 +86,8 @@ function filtersReducer(state: Filters, action: FiltersAction): Filters {
         state.debouncedSearch === p.debouncedSearch &&
         isSameLogLevelSet(state.selectedLevels, p.selectedLevels) &&
         state.moduleFilter === p.moduleFilter &&
+        state.requestIdFilter === p.requestIdFilter &&
+        state.sessionIdFilter === p.sessionIdFilter &&
         state.dateFrom === p.dateFrom &&
         state.dateTo === p.dateTo &&
         state.autoRefresh === p.autoRefresh;
@@ -87,6 +99,8 @@ function filtersReducer(state: Filters, action: FiltersAction): Filters {
         debouncedSearch: '',
         selectedLevels: new Set(),
         moduleFilter: '',
+        requestIdFilter: '',
+        sessionIdFilter: '',
         dateFrom: '',
         dateTo: '',
         autoRefresh: state.autoRefresh,
@@ -114,6 +128,8 @@ type DataAction =
   | { type: 'filesSuccess'; files: LogFile[]; logDir: string | null }
   | { type: 'filesClear' }
   | { type: 'liveTick'; logs: LogEntry[]; hasMore: boolean; stats: Stats }
+  | { type: 'appendLiveEntry'; entry: LogEntry }
+  | { type: 'updateStats'; stats: Stats }
   | { type: 'refreshAllSuccess'; logs: LogEntry[]; hasMore: boolean; stats: Stats; files: LogFile[] };
 
 const initialData: Data = {
@@ -157,6 +173,13 @@ function dataReducer(state: Data, action: DataAction): Data {
         hasMore: action.hasMore,
         stats: action.stats,
       };
+    case 'appendLiveEntry':
+      return {
+        ...state,
+        logs: sortLogsByTimeDesc(prependLiveLog(state.logs, action.entry)),
+      };
+    case 'updateStats':
+      return { ...state, stats: action.stats };
     case 'refreshAllSuccess':
       return {
         ...state,
@@ -184,6 +207,8 @@ export function useLogsPage(language: StoredLanguage) {
       debouncedSearch: initialSearch.trim(),
       selectedLevels: parseLogLevelsParam(sp.get('level')),
       moduleFilter: sp.get('module') ?? '',
+      requestIdFilter: sp.get('requestId') ?? '',
+      sessionIdFilter: sp.get('sessionId') ?? '',
       dateFrom: sp.get('from') ?? '',
       dateTo: sp.get('to') ?? '',
       autoRefresh: sp.get('live') === '1',
@@ -195,8 +220,10 @@ export function useLogsPage(language: StoredLanguage) {
   const [filesOpen, setFilesOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [copiedDetail, setCopiedDetail] = useState<'json' | 'message' | null>(null);
+  const [errorSummary, setErrorSummary] = useState<LogErrorSummaryItem[]>([]);
+  const [errorSummaryLoading, setErrorSummaryLoading] = useState(false);
 
-  const { searchInput, debouncedSearch, selectedLevels, moduleFilter, dateFrom, dateTo, autoRefresh } = filters;
+  const { searchInput, debouncedSearch, selectedLevels, moduleFilter, requestIdFilter, sessionIdFilter, dateFrom, dateTo, autoRefresh } = filters;
   const { logs, loading, error, hasMore, modules, files, stats, logDir } = data;
 
   const setSearchInput = useCallback((value: string) => dispatchFilters({ type: 'setSearchInput', value }), []);
@@ -205,6 +232,14 @@ export function useLogsPage(language: StoredLanguage) {
     [],
   );
   const setModuleFilter = useCallback((value: string) => dispatchFilters({ type: 'setModule', value }), []);
+  const setRequestIdFilter = useCallback(
+    (value: string) => dispatchFilters({ type: 'setRequestIdFilter', value }),
+    [],
+  );
+  const setSessionIdFilter = useCallback(
+    (value: string) => dispatchFilters({ type: 'setSessionIdFilter', value }),
+    [],
+  );
   const setDateFrom = useCallback((value: string) => dispatchFilters({ type: 'setDateFrom', value }), []);
   const setDateTo = useCallback((value: string) => dispatchFilters({ type: 'setDateTo', value }), []);
   const setAutoRefresh = useCallback((value: boolean) => dispatchFilters({ type: 'setAutoRefresh', value }), []);
@@ -223,6 +258,8 @@ export function useLogsPage(language: StoredLanguage) {
     debouncedSearch.length > 0 ||
     selectedLevels.size > 0 ||
     Boolean(moduleFilter) ||
+    Boolean(requestIdFilter) ||
+    Boolean(sessionIdFilter) ||
     Boolean(dateFrom) ||
     Boolean(dateTo);
 
@@ -230,6 +267,8 @@ export function useLogsPage(language: StoredLanguage) {
     (debouncedSearch.length > 0 ? 1 : 0) +
     (selectedLevels.size > 0 ? 1 : 0) +
     (moduleFilter ? 1 : 0) +
+    (requestIdFilter ? 1 : 0) +
+    (sessionIdFilter ? 1 : 0) +
     (dateFrom || dateTo ? 1 : 0);
 
   useEffect(() => {
@@ -246,6 +285,8 @@ export function useLogsPage(language: StoredLanguage) {
         debouncedSearch: nextQ.trim(),
         selectedLevels: parseLogLevelsParam(searchParams.get('level')),
         moduleFilter: searchParams.get('module') ?? '',
+        requestIdFilter: searchParams.get('requestId') ?? '',
+        sessionIdFilter: searchParams.get('sessionId') ?? '',
         dateFrom: searchParams.get('from') ?? '',
         dateTo: searchParams.get('to') ?? '',
         autoRefresh: searchParams.get('live') === '1',
@@ -267,6 +308,10 @@ export function useLogsPage(language: StoredLanguage) {
 
     if (moduleFilter) params.set('module', moduleFilter);
     else params.delete('module');
+    if (requestIdFilter) params.set('requestId', requestIdFilter);
+    else params.delete('requestId');
+    if (sessionIdFilter) params.set('sessionId', sessionIdFilter);
+    else params.delete('sessionId');
     if (dateFrom) params.set('from', dateFrom);
     else params.delete('from');
     if (dateTo) params.set('to', dateTo);
@@ -284,6 +329,8 @@ export function useLogsPage(language: StoredLanguage) {
     dateTo,
     debouncedSearch,
     moduleFilter,
+    requestIdFilter,
+    sessionIdFilter,
     searchParams,
     selectedLevels,
     setSearchParams,
@@ -294,18 +341,58 @@ export function useLogsPage(language: StoredLanguage) {
       q: debouncedSearch || undefined,
       level: selectedLevels.size > 0 ? Array.from(selectedLevels) : undefined,
       module: moduleFilter || undefined,
+      requestId: requestIdFilter || undefined,
+      sessionId: sessionIdFilter || undefined,
       from: dateFrom || undefined,
       to: dateTo || undefined,
       limit: PAGE_LIMIT,
     }),
-    [debouncedSearch, selectedLevels, moduleFilter, dateFrom, dateTo],
+    [debouncedSearch, selectedLevels, moduleFilter, requestIdFilter, sessionIdFilter, dateFrom, dateTo],
   );
+
+  const clientFilterSnapshot = useMemo(
+    () => ({
+      debouncedSearch,
+      selectedLevels,
+      moduleFilter,
+      requestIdFilter,
+      sessionIdFilter,
+      dateFrom,
+      dateTo,
+    }),
+    [debouncedSearch, selectedLevels, moduleFilter, requestIdFilter, sessionIdFilter, dateFrom, dateTo],
+  );
+  const clientFilterRef = useRef(clientFilterSnapshot);
+  clientFilterRef.current = clientFilterSnapshot;
+
+  useEffect(() => {
+    if (!hasToken) return;
+    let cancelled = false;
+    setErrorSummaryLoading(true);
+    void getLogErrorSummary({
+      from: dateFrom || undefined,
+      to: dateTo || undefined,
+      limit: 12,
+    })
+      .then((items) => {
+        if (!cancelled) setErrorSummary(items);
+      })
+      .catch(() => {
+        if (!cancelled) setErrorSummary([]);
+      })
+      .finally(() => {
+        if (!cancelled) setErrorSummaryLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasToken, dateFrom, dateTo]);
 
   useEffect(() => {
     if (!hasToken) return;
     let cancelled = false;
     dispatchData({ type: 'queryStart' });
-    (async () => {
+    void (async () => {
       try {
         const result = await queryLogs({ ...queryParams, offset: 0 });
         if (cancelled) return;
@@ -359,19 +446,34 @@ export function useLogsPage(language: StoredLanguage) {
 
   useEffect(() => {
     if (!autoRefresh || !hasToken) return;
-    const id = window.setInterval(() => {
-      void (async () => {
-        try {
-          const result = await queryLogs({ ...queryParams, offset: 0 });
-          const st = await getLogStats();
-          dispatchData({ type: 'liveTick', logs: result.logs, hasMore: result.logs.length === PAGE_LIMIT, stats: st });
-        } catch {
-          /* ignore */
-        }
-      })();
-    }, REFRESH_MS);
-    return () => clearInterval(id);
-  }, [autoRefresh, hasToken, queryParams]);
+
+    const connection = new LogStreamConnection(token ?? undefined, {
+      onConnected: () => {},
+      onEntry: (entry) => {
+        if (!logMatchesClientFilters(entry, clientFilterRef.current)) return;
+        dispatchData({ type: 'appendLiveEntry', entry });
+      },
+      onError: () => {},
+    });
+
+    connection.connect(
+      selectedLevels.size > 0 ? Array.from(selectedLevels) : undefined,
+      moduleFilter || undefined,
+    );
+
+    const statsInterval = window.setInterval(() => {
+      void getLogStats()
+        .then((st) => {
+          dispatchData({ type: 'updateStats', stats: st });
+        })
+        .catch(() => {});
+    }, 30_000);
+
+    return () => {
+      connection.disconnect();
+      clearInterval(statsInterval);
+    };
+  }, [autoRefresh, hasToken, token, selectedLevels, moduleFilter]);
 
   useEffect(() => {
     if (!copiedDetail) return;
@@ -414,6 +516,35 @@ export function useLogsPage(language: StoredLanguage) {
     })();
   };
 
+  const filterByRequestId = useCallback(
+    (requestId: string) => {
+      setSelectedLog(null);
+      setRequestIdFilter(requestId);
+    },
+    [setRequestIdFilter],
+  );
+
+  const filterBySessionId = useCallback(
+    (sessionId: string) => {
+      setSelectedLog(null);
+      setSessionIdFilter(sessionId);
+    },
+    [setSessionIdFilter],
+  );
+
+  const filterByErrorSummary = useCallback((item: LogErrorSummaryItem) => {
+    dispatchFilters({ type: 'setSearchInput', value: item.errName });
+    dispatchFilters({ type: 'setDebouncedSearch', value: item.errName });
+    if (item.module) dispatchFilters({ type: 'setModule', value: item.module });
+    dispatchFilters({ type: 'setLevels', value: levelsForPreset('errors') });
+  }, []);
+
+  const openChatForSession = useCallback((sessionId: string) => {
+    window.dispatchEvent(
+      new CustomEvent('navigate-to-chat', { detail: { sessionKey: sessionId } }),
+    );
+  }, []);
+
   return {
     L,
     hasToken,
@@ -427,6 +558,8 @@ export function useLogsPage(language: StoredLanguage) {
     setSelectedLevels,
     moduleFilter,
     setModuleFilter,
+    requestIdFilter,
+    sessionIdFilter,
     dateFrom,
     setDateFrom,
     dateTo,
@@ -453,5 +586,11 @@ export function useLogsPage(language: StoredLanguage) {
     refreshAll,
     levelSegment,
     handleLevelSegment,
+    filterByRequestId,
+    filterBySessionId,
+    filterByErrorSummary,
+    openChatForSession,
+    errorSummary,
+    errorSummaryLoading,
   };
 }

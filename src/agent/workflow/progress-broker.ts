@@ -36,7 +36,7 @@ import type {
 import { renderWorkflowText } from './snapshot.js';
 import type { WorkflowAgentSnapshot, WorkflowSnapshot } from './types.js';
 
-const log = createLogger('workflow-progress-broker');
+const log = createLogger('Agent:WorkflowProgress');
 
 const WORKFLOW_TOOL_NAME = 'workflow';
 const RENDER_MAX_AGENTS_PER_PHASE = 4;

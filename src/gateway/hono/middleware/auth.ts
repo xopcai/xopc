@@ -16,9 +16,9 @@ import {
 import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { safeEqualSecret } from '../../security/secret-equal.js';
 import { authorizeTrustedProxy } from '../../trusted-proxy.js';
-import { createLogger } from '../../../utils/logger.js';
+import { createLogger, logAuthEvent } from '../../../utils/logger.js';
 
-const log = createLogger('Hono:Auth');
+const log = createLogger('Gateway:Auth');
 
 export interface AuthConfig {
   token?: string;
@@ -250,9 +250,14 @@ export function auth(config?: AuthConfig) {
     // attached. Counting this would lock users out of the token-entry path.
     if (!providedToken) {
       log.warn(
-        { path: c.req.path, method: c.req.method, clientIp, reason: 'missing_token' },
+        { path: c.req.path, method: c.req.method, clientIp, reason: 'missing_token', phase: 'gateway.http.auth' },
         'HTTP auth rejected: no Bearer or ?token=',
       );
+      void logAuthEvent('auth.failed', {
+        ip: clientIp,
+        result: 'denied',
+        reason: 'missing_token',
+      });
       return c.json(
         { error: 'Unauthorized', code: 'missing_token', message: 'Missing authentication token' },
         401,
@@ -261,9 +266,14 @@ export function auth(config?: AuthConfig) {
 
     recordFailure(rl);
     log.warn(
-      { path: c.req.path, method: c.req.method, clientIp, reason: 'invalid_token' },
+      { path: c.req.path, method: c.req.method, clientIp, reason: 'invalid_token', phase: 'gateway.http.auth' },
       'HTTP auth rejected: token mismatch',
     );
+    void logAuthEvent('auth.failed', {
+      ip: clientIp,
+      result: 'failure',
+      reason: 'invalid_token',
+    });
     return c.json(
       { error: 'Unauthorized', code: 'invalid_token', message: 'Invalid authentication token' },
       401,

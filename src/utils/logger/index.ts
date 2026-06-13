@@ -15,7 +15,7 @@ import type { LogLevel, LogContext, ContextualLogger } from './types.js';
 // Internal modules
 import { config, getLogDir, getLoggerConfig } from './config.js';
 import { initializeStreams } from './streams.js';
-import { incrementStats, getLogStats } from './stats.js';
+import { incrementStats, getRuntimeLogStats } from './stats.js';
 import { isLoggerShuttingDown, flushAndClose, setShuttingDown } from './shutdown.js';
 import { rotateLogs, cleanOldLogs } from './rotation.js';
 import { getAsyncLogContext, getAsyncLogCorrelationKeys, mergeContext } from './context.js';
@@ -121,7 +121,7 @@ function wrapLogMethod(method: Function, defaultContext: LogContext, level: LogL
       }
     }
     
-    const module = (defaultContext.module || defaultContext.prefix) as string | undefined;
+    const module = defaultContext.module as string | undefined;
     incrementStats(level, module);
     
     return msg !== undefined ? method.call(this, data, msg) : method.call(this, data);
@@ -134,11 +134,6 @@ function createProxyLogger(logger: PinoLogger, defaultContext: LogContext = {}):
       const propKey = prop as string;
       
       if (prop === 'withContext') {
-        return (context: LogContext) => {
-          return createProxyLogger(target.child({ ...context }), mergeContext(defaultContext, context));
-        };
-      }
-      if (prop === 'childContext') {
         return (context: LogContext) => {
           return createProxyLogger(target.child({ ...context }), mergeContext(defaultContext, context));
         };
@@ -164,9 +159,9 @@ function createProxyLogger(logger: PinoLogger, defaultContext: LogContext = {}):
 
 export const logger = createProxyLogger(baseLogger);
 
-export function createLogger(prefix: string, context?: LogContext): ContextualLogger {
-  const child = baseLogger.child({ prefix });
-  return createProxyLogger(child, { module: prefix, ...context });
+export function createLogger(module: string, context?: LogContext): ContextualLogger {
+  const child = baseLogger.child({ module });
+  return createProxyLogger(child, { module, ...context });
 }
 
 export function createModuleLogger(moduleName: string, _modulePath?: string): ContextualLogger {
@@ -182,12 +177,6 @@ export function createExtensionLogger(extensionName: string): ContextualLogger {
 export function createServiceLogger(serviceId: string): ContextualLogger {
   const child = baseLogger.child({ service: 'cron', scope: serviceId });
   return createProxyLogger(child, { service: 'cron', scope: serviceId });
-}
-
-export function createRequestLogger(requestId: string, initialContext?: LogContext): ContextualLogger {
-  const context: LogContext = { requestId, ...initialContext };
-  const child = baseLogger.child({ requestId });
-  return createProxyLogger(child, context);
 }
 
 // ============================================
@@ -216,10 +205,7 @@ export function isLevelEnabled(level: LogLevel): boolean {
   const levelValues: Record<LogLevel, number> = {
     trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60, silent: Number.MAX_VALUE,
   };
-  const currentLevelValues: Record<LogLevel, number> = {
-    trace: 10, debug: 20, info: 30, warn: 40, error: 50, fatal: 60, silent: Number.MAX_VALUE,
-  };
-  return levelValues[level] >= currentLevelValues[getLogLevel()];
+  return levelValues[level] >= levelValues[getLogLevel()];
 }
 
 // ============================================
@@ -244,7 +230,7 @@ export {
   getLoggerConfig,
   
   // Stats
-  getLogStats,
+  getRuntimeLogStats,
   
   // Shutdown
   isLoggerShuttingDown,
@@ -292,17 +278,12 @@ export {
   getAuditConfig,
 } from './audit.js';
 
-export { logger as default };
 export { logger as baseLogger };
 export { pino as Pino };
-
-export function registerShutdownHandler(): void {}
 
 export {
   runWithLogContext,
   getAsyncLogContext,
   updateAsyncLogContext,
   inboundCorrelationMetadataFromAsyncLogContext,
-  setRequestContext as setRequestLogger,
-  clearRequestContext as clearRequestLogger,
 } from './context.js';

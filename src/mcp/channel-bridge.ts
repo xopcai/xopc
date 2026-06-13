@@ -17,6 +17,9 @@ import {
   type GatewayHttpClient,
 } from './gateway-http-client.js';
 import { loadUndiciRuntimeDeps } from '../infra/undici-fetch.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('Mcp:Bridge');
 
 const QUEUE_LIMIT = 1000;
 
@@ -43,6 +46,7 @@ export class XopcChannelBridge {
   }
 
   async start(): Promise<void> {
+    log.info({ phase: 'mcp.bridge.connect' }, 'MCP channel bridge starting');
     this.client = createGatewayHttpClientFromConfig({
       config: this.cfg,
       gatewayUrl: this.params.gatewayUrl,
@@ -52,6 +56,7 @@ export class XopcChannelBridge {
   }
 
   async close(): Promise<void> {
+    log.info({ phase: 'mcp.bridge.connect', queueSize: this.queue.length }, 'MCP channel bridge closing');
     this.closed = true;
     this.eventsAbort?.abort();
     this.eventsAbort = null;
@@ -85,6 +90,14 @@ export class XopcChannelBridge {
         signal,
       });
       if (!res.ok || !res.body) {
+        log.warn(
+          {
+            phase: 'mcp.bridge.sse',
+            status: res.status,
+            baseUrl,
+          },
+          `Gateway events SSE connect failed: HTTP ${res.status}`,
+        );
         return;
       }
       const reader = res.body.getReader();
@@ -103,8 +116,14 @@ export class XopcChannelBridge {
           splitAt = buffer.indexOf('\n\n');
         }
       }
-    } catch {
-      // Best-effort reconnect while bridge stays open.
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      if (!signal.aborted && !this.closed) {
+        log.warn(
+          { err, errorMessage: em, phase: 'mcp.bridge.sse', baseUrl },
+          `Gateway events SSE disconnected: ${em}`,
+        );
+      }
     }
     if (!this.closed && !signal.aborted) {
       await new Promise((resolve) => setTimeout(resolve, 2000));

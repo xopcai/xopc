@@ -61,7 +61,7 @@ import { getExtensionLockfileManager } from '../../extensions/lockfile.js';
 import { resolveExtensionsDir, resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 
-const log = createLogger('GatewayMarketplace');
+const log = createLogger('Gateway:Marketplace');
 
 export interface GatewayMarketplaceServiceOptions {
   getConfig: () => Config;

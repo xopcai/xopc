@@ -6,7 +6,7 @@ import { getClientIpFromHeaders } from '../../security/loopback.js';
 import { resolveClientIpFromRequest } from '../../client-ip.js';
 import { createLogger } from '../../../utils/logger.js';
 
-const log = createLogger('Hono:Request');
+const log = createLogger('Gateway:HTTP');
 
 export interface LoggerMiddlewareConfig {
   trustedProxies?: string[];

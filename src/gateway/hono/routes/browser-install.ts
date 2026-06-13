@@ -8,10 +8,10 @@ import {
 } from '../../../browser/install-lock.js';
 import type { BrowserInstallProgress } from '../../../browser/install-progress.js';
 import { runPlaywrightChromiumInstallWithProgress } from '../../../browser/providers/playwright-install.js';
-import { createLogger } from '../../../utils/logger.js';
+import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
-const log = createLogger('GatewayBrowserInstall');
+const log = createGatewayRouteLogger('BrowserInstall');
 
 function parseCloakInstallBody(body: unknown): { cacheDir?: string; binaryPath?: string } {
   const input = body && typeof body === 'object' && !Array.isArray(body)

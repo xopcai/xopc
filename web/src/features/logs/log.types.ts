@@ -7,7 +7,6 @@ export interface LogEntry {
   level: LogLevel;
   message: string;
   module?: string;
-  prefix?: string;
   service?: string;
   extension?: string;
   requestId?: string;
@@ -23,6 +22,8 @@ export interface LogQuery {
   to?: string;
   q?: string;
   module?: string;
+  requestId?: string;
+  sessionId?: string;
   limit?: number;
   offset?: number;
 }
@@ -35,4 +36,20 @@ export interface LogFile {
 
 export interface LogStats {
   byLevel: Partial<Record<LogLevel | 'silent', number>>;
+  runtime?: {
+    byLevel: Partial<Record<LogLevel | 'silent', number>>;
+    byModule?: Record<string, number>;
+    errorsLast24h?: number;
+    uptimeMs?: number;
+  };
+}
+
+export interface LogErrorSummaryItem {
+  key: string;
+  errName: string;
+  phase?: string;
+  module?: string;
+  count: number;
+  lastSeen: string;
+  sampleMessage: string;
 }

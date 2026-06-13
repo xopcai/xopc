@@ -7,6 +7,9 @@ import {
   AUTHENTICATED_LAZY_ROUTE_BUNDLES,
   findAuthenticatedLazyRouteBundle,
 } from './lazy-bundles.js';
+import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
+
+const log = createGatewayRouteLogger('LazyRoutes');
 
 const authenticatedSubApps = new Map<string, Hono>();
 const appSubApps = new Map<string, Hono>();
@@ -97,6 +100,7 @@ async function forwardToSubApp(c: Context, sub: Hono): Promise<Response> {
     if (error instanceof Error && error.message.includes('ExecutionContext')) {
       return sub.fetch(c.req.raw, c.env);
     }
+    logRouteError(log, c, error, 'gateway.route.lazy_forward');
     throw error;
   }
 }
