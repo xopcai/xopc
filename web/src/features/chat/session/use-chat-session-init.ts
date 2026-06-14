@@ -1,5 +1,5 @@
 // Initial chat-session bootstrap. Product contract: docs/web/chat-session-semantics.md
-//   1. `/chat/new` — optimistic client key + background POST (chat_id), replace URL immediately.
+//   1. `/chat/new` — resolve reusable empty shell, else optimistic key + background POST (chat_id).
 //   2. `/chat/:key` route — load that session and try to resume any in-flight agent run for it.
 //   3. No key in URL — pick the most-recent populated session (or fall back to creating one).
 //
@@ -16,11 +16,10 @@ import {
 } from '@/features/chat/session/chat-session-store';
 import { searchParamsForComposerHandoff } from '@/features/chat/session/composer-handoff-params';
 import { takeSkipInitialSessionLoad } from '@/features/chat/session/chat-session-init-skip-load';
-import {
-  followOptimisticSessionRegistration,
-  openOptimisticNewSessionHandoff,
-} from '@/features/chat/session/optimistic-new-session-handoff';
+import { followOptimisticSessionRegistration } from '@/features/chat/session/optimistic-new-session-handoff';
+import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
+import { lastNonNewSessionKeyRef } from '@/features/chat/session/use-chat-session-route';
 
 export function useChatSessionInit(opts: {
   token: string | undefined;
@@ -112,16 +111,16 @@ export function useChatSessionInit(opts: {
     const createNewRouteSession = (): Promise<void> => {
       if (!isLive()) return Promise.resolve();
       const aid = resolveAgentIdForPost();
-      openOptimisticNewSessionHandoff({
+      return openNewChatHandoff({
         sessionMgr: sessionMgrRef.current,
         agentId: aid,
+        currentSessionKey: lastNonNewSessionKeyRef.current,
         navigateToSession,
         replaceNavigate: true,
         search: searchParamsForComposerHandoff(locationSearch),
         onOpened: (key) => adoptEmptySession(key, null),
         followRegistration,
-      });
-      return Promise.resolve();
+      }).then(() => undefined);
     };
 
     const resumeSessionRun = (key: string, seed: Message[]): Promise<void> => {
@@ -163,13 +162,14 @@ export function useChatSessionInit(opts: {
         }
         if (!isLive()) return;
         const aid = resolveAgentIdForPost();
-        openOptimisticNewSessionHandoff({
+        return openNewChatHandoff({
           sessionMgr: sessionMgrRef.current,
           agentId: aid,
+          currentSessionKey: null,
           navigateToSession,
           onOpened: (key) => adoptEmptySession(key, null),
           followRegistration,
-        });
+        }).then(() => undefined);
       });
     };
 

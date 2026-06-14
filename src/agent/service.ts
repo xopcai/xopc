@@ -1,7 +1,10 @@
 import type { AgentEvent, AgentMessage, ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { MessageBus } from '../infra/bus/index.js';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
-import { maybeAutoTitleSessionStore } from '../session/session-title.js';
+import {
+  maybeRefineSessionTitleWithLlm,
+  maybeSetProvisionalSessionTitle,
+} from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -170,7 +173,7 @@ export class AgentService {
   private sessionState = new SessionStateBag();
 
   /** Gateway: notify UI after direct `SessionStore.updateMetadata` (no SessionManager emit). */
-  private onSessionMetadataUpdated?: (sessionKey: string) => void;
+  private onSessionMetadataUpdated?: (sessionKey: string, patch?: { name?: string }) => void;
   private onSessionTranscriptUpdated?: (sessionKey: string) => void;
 
   private effectiveAppConfig(): Config | undefined {
@@ -411,6 +414,7 @@ export class AgentService {
       attachmentRootsForSession: (sk) => this.attachmentRootsForSession(sk),
       prepareInboundAttachments: (sk, att) => this.prepareInboundAttachments(sk, att),
       enqueueMaybeAutoTitleAfterPersist: (sk) => this.enqueueMaybeAutoTitleAfterPersist(sk),
+      enqueueProvisionalSessionTitle: (sk, text) => this.enqueueProvisionalSessionTitle(sk, text),
       endDirectRequestContext: () => this.endDirectRequestContext(),
       onSessionTranscriptUpdated: this.onSessionTranscriptUpdated,
       resetSession: (sk) => this.resetSession(sk),
@@ -714,9 +718,28 @@ export class AgentService {
    * Persist agent messages with the same sanitizer + transcript hygiene as AgentOrchestrator.
    * Uses persistence hygiene so `thinking` blocks remain on disk for the web UI (LLM load path still drops them).
    */
+  private notifySessionTitleUpdated(sessionKey: string, name: string): void {
+    this.onSessionMetadataUpdated?.(sessionKey, { name });
+  }
+
+  /** Fire-and-forget provisional title from first user text (webchat sidebar). */
+  enqueueProvisionalSessionTitle(sessionKey: string, userText: string): void {
+    void (async () => {
+      try {
+        await maybeSetProvisionalSessionTitle(
+          this.sessionStore,
+          sessionKey,
+          userText,
+          (sk, name) => this.notifySessionTitleUpdated(sk, name),
+        );
+      } catch (err) {
+        log.warn({ err, sessionKey }, 'Provisional session title failed');
+      }
+    })();
+  }
+
   /**
-   * Fire-and-forget: `maybeAutoTitleSessionStore` no-ops for cron/heartbeat keys.
-   * Runs after persist so the store has the latest transcript; does not block SSE / callers.
+   * Fire-and-forget LLM refine after turn persist; skips user-locked and finalized LLM titles.
    */
   private enqueueMaybeAutoTitleAfterPersist(sessionKey: string): void {
     void (async () => {
@@ -730,7 +753,12 @@ export class AgentService {
             modelRef = undefined;
           }
         }
-        await maybeAutoTitleSessionStore(this.sessionStore, sessionKey, modelRef?.trim() || undefined);
+        await maybeRefineSessionTitleWithLlm(
+          this.sessionStore,
+          sessionKey,
+          modelRef?.trim() || undefined,
+          (sk, name) => this.notifySessionTitleUpdated(sk, name),
+        );
       } catch (err) {
         log.warn({ err, sessionKey }, 'Auto session title failed');
       }

@@ -39,13 +39,11 @@ export function useChatSessionWindowEvents(opts: {
     const handler = (e: Event) => {
       const d = (e as CustomEvent<{ key?: string; name?: string }>).detail;
       if (!d?.key || d.name === undefined) return;
-      if (d.key === sessionKey) {
-        useChatSessionStore.getState().patchSessionMeta(d.key, { name: d.name || null });
-      }
+      useChatSessionStore.getState().patchSessionMeta(d.key, { name: d.name || null });
     };
     window.addEventListener('session-updated', handler);
     return () => window.removeEventListener('session-updated', handler);
-  }, [sessionKey]);
+  }, []);
 
   useEffect(() => {
     const handler = (e: Event) => {

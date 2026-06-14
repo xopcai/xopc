@@ -67,6 +67,7 @@ export interface TurnDispatcherConfig {
     attachments?: DirectInboundAttachment[],
   ) => Promise<DirectInboundAttachment[] | undefined>;
   enqueueMaybeAutoTitleAfterPersist: (sessionKey: string) => void;
+  enqueueProvisionalSessionTitle?: (sessionKey: string, userText: string) => void;
   endDirectRequestContext: () => void;
   /** Gateway hook fired after assistant text lands on disk (UI refetch). */
   onSessionTranscriptUpdated?: (sessionKey: string) => void;
@@ -183,6 +184,9 @@ export class TurnDispatcher {
         }),
       recordPersistentGoalStreamOutcome: (sk, o) =>
         c.sessionState.recordPersistentGoalStreamOutcome(sk, o),
+      enqueueProvisionalSessionTitle: (sk, userText) => {
+        c.enqueueProvisionalSessionTitle?.(sk, userText);
+      },
       onTurnComplete: (sk, text) => {
         if (text) {
           c.sessionState.setLastAssistantText(sk, text);

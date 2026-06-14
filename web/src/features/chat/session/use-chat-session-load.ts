@@ -7,10 +7,8 @@ import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
 import { isViewingSession, resolveViewSessionKey } from '@/features/chat/session/chat-session-view';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
-import {
-  followOptimisticSessionRegistration,
-  openOptimisticNewSessionHandoff,
-} from '@/features/chat/session/optimistic-new-session-handoff';
+import { followOptimisticSessionRegistration } from '@/features/chat/session/optimistic-new-session-handoff';
+import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
 export function useChatSessionLoad(deps: {
@@ -249,13 +247,14 @@ export function useChatSessionLoad(deps: {
             } else {
               historyBeforeCursorRef.current = null;
               const aid = resolveAgentIdForPost();
-              openOptimisticNewSessionHandoff({
+              void openNewChatHandoff({
                 sessionMgr: sessionMgrRef.current,
                 agentId: aid,
+                currentSessionKey: null,
                 navigateToSession,
                 replaceNavigate: true,
                 onOpened: (key) => {
-                  store().setCommittedSnapshot(key, { messages: [], hasMore: false });
+                  store().setCommittedSnapshot(key, { messages: [], hasMore: false, name: null });
                 },
                 followRegistration: followOptimisticRegistration,
               });
@@ -336,29 +335,35 @@ export function useChatSessionLoad(deps: {
     [sessionKey, sessionMgrRef],
   );
 
-  const createNewSession = useCallback(async () => {
-    dismissClarifyOnSessionLoad();
-    detachForNewConversation();
-    historyBeforeCursorRef.current = null;
-    store().setShellError(null);
-    const aid = resolveAgentIdForPost();
-    openOptimisticNewSessionHandoff({
-      sessionMgr: sessionMgrRef.current,
-      agentId: aid,
+  const createNewSession = useCallback(
+    async (opts?: { forceNew?: boolean }) => {
+      dismissClarifyOnSessionLoad();
+      detachForNewConversation();
+      historyBeforeCursorRef.current = null;
+      store().setShellError(null);
+      const aid = resolveAgentIdForPost();
+      await openNewChatHandoff({
+        sessionMgr: sessionMgrRef.current,
+        agentId: aid,
+        currentSessionKey: sessionKey,
+        forceNew: opts?.forceNew,
+        navigateToSession,
+        onOpened: (key) => {
+          store().setCommittedSnapshot(key, { messages: [], hasMore: false, name: null });
+        },
+        followRegistration: followOptimisticRegistration,
+      });
+    },
+    [
+      dismissClarifyOnSessionLoad,
+      detachForNewConversation,
       navigateToSession,
-      onOpened: (key) => {
-        store().setCommittedSnapshot(key, { messages: [], hasMore: false, name: null });
-      },
-      followRegistration: followOptimisticRegistration,
-    });
-  }, [
-    dismissClarifyOnSessionLoad,
-    detachForNewConversation,
-    navigateToSession,
-    resolveAgentIdForPost,
-    sessionMgrRef,
-    followOptimisticRegistration,
-  ]);
+      resolveAgentIdForPost,
+      sessionKey,
+      sessionMgrRef,
+      followOptimisticRegistration,
+    ],
+  );
 
   return {
     refreshModelThinkingSupport,

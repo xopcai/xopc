@@ -7,6 +7,7 @@ import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { apiUrl } from '@/lib/url';
 import { buildWebchatSessionKey, generateNewChatId, normalizeAgentId } from '@/lib/webchat-session-key';
+import { upsertWebchatEmptyShellCache } from '@/features/chat/session/webchat-empty-shell-cache';
 
 /** Web UI chat sessions use segment `webchat` (same as `ui`). */
 export function isWebUiSessionKey(key: string): boolean {
@@ -71,7 +72,11 @@ export class SessionManager {
       if (!data.hasMore) break;
       offset += pageSize;
     }
-    return out.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    const sorted = out.sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    );
+    upsertWebchatEmptyShellCache(sorted);
+    return sorted;
   }
 
   async loadSessionAgentConfig(sessionKey: string): Promise<SessionAgentConfig> {

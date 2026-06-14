@@ -18,6 +18,10 @@ import {
   useChatSessionStore,
 } from '@/features/chat/session/chat-session-store';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
+import {
+  dispatchSessionTitleUpdated,
+  provisionalTitleFromUserText,
+} from '@/lib/provisional-session-title';
 import { resolveResumeRunId } from '@/features/chat/session/resolve-resume-run-id';
 import {
   FOLLOW_UP_AUTO_SEND_IDLE_MS,
@@ -55,7 +59,7 @@ export function useChatSessionStreaming(deps: {
     data: { messages: Message[]; hasMore: boolean; name?: string },
   ) => void;
   loadSessionById: (key: string, offset?: number) => Promise<Message[] | undefined>;
-  createNewSession: () => Promise<void>;
+  createNewSession: (opts?: { forceNew?: boolean }) => Promise<void>;
   pollSessionNameAfterTurn: () => void;
 }) {
   const {
@@ -233,7 +237,7 @@ export function useChatSessionStreaming(deps: {
       }
       const trimmed = content.trim();
       if (trimmed === '/new' && !attachments?.length) {
-        await createNewSession();
+        await createNewSession({ forceNew: true });
         return;
       }
       const key = sessionKeyRef.current;
@@ -277,7 +281,7 @@ export function useChatSessionStreaming(deps: {
 
       const trimmed = content.trim();
       if (trimmed === '/new' && !attachments?.length) {
-        await createNewSession();
+        await createNewSession({ forceNew: true });
         return;
       }
 
@@ -310,6 +314,14 @@ export function useChatSessionStreaming(deps: {
         sending: true,
         streaming: false,
       });
+
+      if (!existing?.name?.trim() && trimmed) {
+        const provisional = provisionalTitleFromUserText(trimmed);
+        if (provisional) {
+          store().patchSessionMeta(chatId, { name: provisional });
+          dispatchSessionTitleUpdated(chatId, provisional);
+        }
+      }
 
       try {
         const sendStreamCallbacks = createAgentStreamMessagingCallbacks({

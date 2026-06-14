@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { fallbackTitleFromMessages, shouldAutoTitleSessionKey } from '../session-title.ts';
+import {
+  fallbackTitleFromMessages,
+  provisionalTitleFromUserText,
+  shouldAutoTitleSessionKey,
+} from '../session-title.ts';
 
 describe('shouldAutoTitleSessionKey', () => {
   it('allows webchat, telegram, weixin-style keys', () => {
@@ -21,6 +25,16 @@ describe('shouldAutoTitleSessionKey', () => {
   it('rejects empty key', () => {
     expect(shouldAutoTitleSessionKey('')).toBe(false);
     expect(shouldAutoTitleSessionKey('   ')).toBe(false);
+  });
+});
+
+describe('provisionalTitleFromUserText', () => {
+  it('uses first line and strips envelope timestamp', () => {
+    expect(provisionalTitleFromUserText('[2026-01-15 10:00 UTC] 你好')).toBe('你好');
+  });
+
+  it('returns null for blank input', () => {
+    expect(provisionalTitleFromUserText('   ')).toBeNull();
   });
 });
 

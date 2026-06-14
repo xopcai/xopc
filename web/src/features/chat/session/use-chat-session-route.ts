@@ -10,6 +10,9 @@ import { useChatSessionStore } from '@/features/chat/session/chat-session-store'
 /** Latest routed session key (safe to read during render; updated synchronously from URL). */
 const routedFocusedSessionKeyRef = { current: null as string | null };
 
+/** Last `/chat/:key` before navigating to `/chat/new` (for empty-shell reuse). */
+const lastNonNewSessionKeyCell = { current: null as string | null };
+
 /** URL → focused session key; keeps {@link useChatSessionStore} `focusedSessionKey` in sync. */
 export function useChatSessionRoute() {
   const location = useLocation();
@@ -24,6 +27,9 @@ export function useChatSessionRoute() {
   const routeSessionKeyRef = useRef(routedSessionKey);
   routeSessionKeyRef.current = routedSessionKey;
   routedFocusedSessionKeyRef.current = routedFocusedSessionKey;
+  if (!isNewRoute && decodedKey) {
+    lastNonNewSessionKeyCell.current = decodedKey;
+  }
 
   useLayoutEffect(() => {
     const current = useChatSessionStore.getState().focusedSessionKey;
@@ -43,6 +49,13 @@ export function useChatSessionRoute() {
     locationState: location.state,
   };
 }
+
+/** Ref-shaped accessor for the last concrete chat session key (not `/chat/new`). */
+export const lastNonNewSessionKeyRef = {
+  get current(): string | null {
+    return lastNonNewSessionKeyCell.current;
+  },
+};
 
 /** Ref-shaped accessor for hooks that expect `RefObject<string | null>`. */
 export const focusedSessionKeyRef = {
