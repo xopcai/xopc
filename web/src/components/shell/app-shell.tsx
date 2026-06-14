@@ -76,6 +76,8 @@ export function AppShell() {
   // Key for the content area — changes only on top-level route segment so sub-routes
   // (e.g. /chat/new → /chat/:key) don't re-trigger the enter animation.
   const routeKey = pathname.split('/')[1] ?? 'root';
+  /** Routes that scroll inside the page (not on this shell wrapper). */
+  const routeUsesInternalScroll = routeKey === 'chat' || routeKey === 'notes';
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
@@ -117,7 +119,9 @@ export function AppShell() {
                       'page-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden',
                       routeKey === 'settings'
                         ? 'page-enter--gentle overflow-hidden'
-                        : 'overflow-y-auto overscroll-contain [scrollbar-gutter:stable_both-edges]',
+                        : routeUsesInternalScroll
+                          ? 'overflow-hidden'
+                          : 'overflow-y-auto overscroll-contain [scrollbar-gutter:stable_both-edges]',
                     )}
                   >
                     <Outlet />
