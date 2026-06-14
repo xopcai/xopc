@@ -86,6 +86,30 @@ describe('patchSidebarSessionName', () => {
 
     expect(pages[0]?.items[0]?.name).toBe('From user message');
   });
+
+  it('inserts a stub at the top when the row is missing', async () => {
+    let pages: Pages = [
+      {
+        items: [stub('agent:main:webchat:default:direct:other', '2026-01-01T00:00:00.000Z')],
+        hasMore: false,
+      },
+    ];
+    const mutate = async (
+      updater?: Pages | ((p?: Pages) => Pages | undefined),
+    ) => {
+      if (typeof updater === 'function') {
+        pages = updater(pages) ?? pages;
+      }
+      return pages;
+    };
+
+    patchSidebarSessionName(mutate, KEY, 'First message title');
+    await Promise.resolve();
+
+    expect(pages[0]?.items[0]?.key).toBe(KEY);
+    expect(pages[0]?.items[0]?.name).toBe('First message title');
+    expect(pages[0]?.items).toHaveLength(2);
+  });
 });
 
 describe('bumpSidebarSessionRow', () => {

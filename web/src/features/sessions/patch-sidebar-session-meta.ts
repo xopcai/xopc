@@ -89,7 +89,7 @@ export function upsertSidebarSessionRow(
   );
 }
 
-/** Patch session name when the row already exists in cache; otherwise no-op. */
+/** Patch session name in place, or insert a stub at the top when the row is missing. */
 export function patchSidebarSessionName(
   mutate: SidebarMutate,
   sessionKey: string,
@@ -101,18 +101,35 @@ export function patchSidebarSessionName(
 
   void mutate(
     (pages) => {
-      if (!pages?.length) return pages;
+      if (!pages?.length || !pages[0]?.items) return pages;
+
+      let found = false;
       let changed = false;
       const next = pages.map((page) => {
         const items = page.items.map((s) => {
           if (s.key.trim() !== key) return s;
+          found = true;
           if (s.name?.trim() === title) return s;
           changed = true;
           return { ...s, name: title, updatedAt: new Date().toISOString() };
         });
         return changed ? { ...page, items } : page;
       });
-      return changed ? next : pages;
+
+      if (found) {
+        return changed ? next : pages;
+      }
+
+      const now = new Date().toISOString();
+      const row: SessionMetadata = {
+        ...buildSidebarSessionStub(key, { name: title }),
+        updatedAt: now,
+        lastAccessedAt: now,
+      };
+      const page0 = next[0]!;
+      const restPage0 = page0.items.slice(0, Math.max(0, SIDEBAR_PAGE_SIZE - 1));
+      next[0] = { ...page0, items: [row, ...restPage0] };
+      return next;
     },
     { revalidate: false },
   );
