@@ -176,7 +176,7 @@ export function SharePreviewPage() {
             <a
               href={openInlineUrl}
               target="_blank"
-              rel="noopener"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-fg-muted hover:bg-surface-hover hover:text-fg"
             >
               <ExternalLink className="size-3.5" aria-hidden />
@@ -264,6 +264,7 @@ function PreviewBody({
         title={meta.fileName}
         src={openInlineUrl}
         className="h-[80vh] w-full rounded-lg border border-edge bg-surface-panel"
+        sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads"
       />
     );
   }

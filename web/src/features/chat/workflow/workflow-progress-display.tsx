@@ -150,8 +150,8 @@ function RecentLogs({
         ) : null}
       </div>
       <div className="space-y-0.5">
-        {visibleLogs.map((line, index) => (
-          <div key={index} className="break-words font-mono text-xs text-fg-subtle">
+        {visibleLogs.map((line) => (
+          <div key={line} className="break-words font-mono text-xs text-fg-subtle">
             {line}
           </div>
         ))}
@@ -224,8 +224,8 @@ export function ProgressTree({
             ) : null}
           </div>
           <div className="space-y-0.5">
-            {visibleLogs.map((line, i) => (
-              <div key={i} className="break-words font-mono text-xs text-fg-subtle">
+            {visibleLogs.map((line) => (
+              <div key={line} className="break-words font-mono text-xs text-fg-subtle">
                 {line}
               </div>
             ))}

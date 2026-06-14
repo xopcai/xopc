@@ -32,7 +32,7 @@ export function TypedModelsEditor(props: {
     <div className="flex flex-col gap-3">
       {rows.map((row, idx) => (
         <div
-          key={idx}
+          key={row.id || `typed-model-${row.model}-${row.description}`}
           className="grid gap-2 rounded-xl border border-edge-subtle bg-surface-panel/40 p-3 sm:grid-cols-[minmax(0,8rem)_minmax(0,1.2fr)_minmax(0,1fr)_auto] sm:items-start dark:border-edge-subtle"
         >
           <input

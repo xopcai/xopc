@@ -393,7 +393,7 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
             title={fileName}
             className="min-h-0 w-full flex-1 rounded-lg border border-edge-subtle bg-white dark:border-edge dark:bg-[#1e1e1e]"
             srcDoc={textContent}
-            sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-downloads allow-forms allow-modals"
+            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads allow-forms allow-modals"
           />
         </div>
       );

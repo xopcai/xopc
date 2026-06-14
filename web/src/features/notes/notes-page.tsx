@@ -1,5 +1,5 @@
 import { StickyNote, Search } from 'lucide-react';
-import { useCallback, useLayoutEffect, useMemo, useReducer } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useReducer, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import useSWR from 'swr';
@@ -41,6 +41,7 @@ export function NotesPage() {
   const hasToken = Boolean(token);
 
   const [ui, dispatch] = useReducer(uiPatchReducer<NotesUi>, initialUi);
+  const [nowMs] = useState(() => Date.now());
   const navigate = useNavigate();
 
   const swrKey = useMemo(
@@ -215,6 +216,7 @@ export function NotesPage() {
               : n.filterArchived;
             return (
               <button
+                type="button"
                 key={f}
                 onClick={() => dispatch({ type: 'patch', patch: { statusFilter: f } })}
                 className={cn(
@@ -241,6 +243,7 @@ export function NotesPage() {
               : n.kindBookmark;
             return (
               <button
+                type="button"
                 key={f}
                 onClick={() => dispatch({ type: 'patch', patch: { kindFilter: f } })}
                 className={cn(
@@ -282,7 +285,7 @@ export function NotesPage() {
                 <div key={note.id}>
                   {showDateHeader && (
                     <div className={cn('pb-2 text-xs font-medium text-fg-muted', idx > 0 && 'pt-2')}>
-                      {formatDateGroup(note.createdAt, Date.now(), timeLabels)}
+                      {formatDateGroup(note.createdAt, nowMs, timeLabels)}
                     </div>
                   )}
                   <NoteCard

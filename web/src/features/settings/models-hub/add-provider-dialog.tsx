@@ -873,7 +873,7 @@ function ConfigureCustomStep({
         <div className="flex flex-col gap-2">
           <span className="text-sm font-medium text-fg">{labels.modelIdLabel}</span>
           {modelIds.map((modelId, index) => (
-            <div key={index} className="flex items-center gap-2">
+            <div key={modelId || `model-slot-${index}`} className="flex items-center gap-2">
               <input
                 type="text"
                 autoComplete="off"
