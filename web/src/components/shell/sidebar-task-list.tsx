@@ -31,6 +31,7 @@ import {
   renameSession,
   unpinSession,
 } from '@/features/sessions/session-api';
+import { bumpSidebarSessionRow, patchSidebarSessionName } from '@/features/sessions/patch-sidebar-session-meta';
 import type { SessionMetadata } from '@/features/sessions/session.types';
 import { messages } from '@/i18n/messages';
 import { formControlBorderFocusClass } from '@/lib/form-field-width';
@@ -404,16 +405,36 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
 
   useEffect(() => {
     if (!token) return;
-    const onSessionUpdated = () => {
+    const onSessionListRefresh = () => {
       void mutate();
     };
+    const onSessionUpdated = (e: Event) => {
+      const d = (e as CustomEvent<{ key?: string; name?: string }>).detail;
+      if (!d?.key) {
+        void mutate();
+        return;
+      }
+      if (typeof d.name === 'string' && d.name.trim()) {
+        if (data?.length) {
+          patchSidebarSessionName(mutate, d.key, d.name);
+        } else {
+          void mutate();
+        }
+        return;
+      }
+      if (data?.length) {
+        bumpSidebarSessionRow(mutate, d.key);
+      } else {
+        void mutate();
+      }
+    };
     window.addEventListener('session-updated', onSessionUpdated);
-    window.addEventListener('session-created', onSessionUpdated);
+    window.addEventListener('session-created', onSessionListRefresh);
     return () => {
       window.removeEventListener('session-updated', onSessionUpdated);
-      window.removeEventListener('session-created', onSessionUpdated);
+      window.removeEventListener('session-created', onSessionListRefresh);
     };
-  }, [token, mutate]);
+  }, [token, mutate, data?.length]);
 
   // If a server page has no web UI sessions after filtering, fetch the next page until we have rows or run out.
   useEffect(() => {
@@ -426,18 +447,15 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
 
   const activeSessionKey = chatSessionKeyFromPath(pathname);
 
-  // Ensure sidebar list reflects newly created/selected sessions immediately.
-  // Session SSE events can be delayed or absent until later turn metadata updates.
+  // Refetch on session switch; after data loads, bump active row to the top.
   useEffect(() => {
-    if (!token || !activeSessionKey) return;
-    if (lastActiveSessionKeyRef.current === null) {
-      lastActiveSessionKeyRef.current = activeSessionKey;
-      return;
-    }
+    if (!token || !activeSessionKey || sessionFilter !== 'web') return;
     if (lastActiveSessionKeyRef.current === activeSessionKey) return;
     lastActiveSessionKeyRef.current = activeSessionKey;
-    void mutate();
-  }, [token, activeSessionKey, mutate]);
+    void mutate().then(() => {
+      bumpSidebarSessionRow(mutate, activeSessionKey);
+    });
+  }, [token, activeSessionKey, sessionFilter, mutate]);
 
   const openRename = useCallback((key: string) => {
     const row = items.find((s) => s.key === key);

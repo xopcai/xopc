@@ -86,11 +86,16 @@ export type { WindowConfig } from '../agent/memory/window.js';
 
 export {
   maybeAutoTitleSessionStore,
+  maybeSetProvisionalSessionTitle,
+  maybeRefineSessionTitleWithLlm,
   generateSessionTitleFromMessages,
   sanitizeSessionTitle,
+  provisionalTitleFromUserText,
   fallbackTitleFromMessages,
+  getSessionTitleSource,
   isWebchatSessionKey,
   shouldAutoTitleSessionKey,
+  type SessionTitleSource,
 } from './session-title.js';
 
 export { messagesToClientHistory, flattenMessageContent, type ClientHistoryMessage } from './client-history.js';
