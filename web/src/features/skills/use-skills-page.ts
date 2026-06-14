@@ -819,7 +819,7 @@ export function useSkillsPage() {
     if (catalogStatusFilter === 'disabled') {
       rows = rows.filter((r) => !resolveSkillEnabled(r));
     }
-    return [...rows].sort((a, b) => {
+    return [...rows].toSorted((a, b) => {
       const ae = resolveSkillEnabled(a);
       const be = resolveSkillEnabled(b);
       if (ae !== be) return ae ? -1 : 1;

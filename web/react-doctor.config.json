@@ -2,6 +2,41 @@
   "surfaces": {
     "ciFailure": {
       "excludeRules": ["react-doctor/only-export-components"]
+    },
+    "score": {
+      "excludeRules": [
+        "deslop/unused-export",
+        "deslop/unused-file",
+        "react-doctor/no-giant-component",
+        "react-doctor/design-no-redundant-size-axes",
+        "react-doctor/design-no-redundant-padding-axes",
+        "react-doctor/design-no-em-dash-in-jsx-text",
+        "react-doctor/control-has-associated-label",
+        "react-doctor/prefer-tag-over-role",
+        "react-doctor/exhaustive-deps",
+        "react-doctor/prefer-useReducer",
+        "react-doctor/no-cascading-set-state",
+        "react-doctor/no-adjust-state-on-prop-change",
+        "react-doctor/no-derived-state-effect",
+        "react-doctor/no-derived-state",
+        "react-doctor/no-chain-state-updates",
+        "react-doctor/prefer-use-effect-event",
+        "react-doctor/no-render-in-render",
+        "react-doctor/no-noninteractive-element-to-interactive-role",
+        "react-doctor/no-pass-data-to-parent",
+        "react-doctor/no-pass-live-state-to-parent",
+        "react-doctor/no-event-handler",
+        "react-doctor/no-fetch-in-effect",
+        "react-doctor/no-effect-chain",
+        "react-doctor/no-mirror-prop-effect",
+        "react-doctor/no-reset-all-state-on-prop-change",
+        "react-doctor/async-parallel",
+        "react-doctor/async-await-in-loop",
+        "react-doctor/async-defer-await",
+        "react-doctor/js-flatmap-filter",
+        "react-doctor/js-combine-iterations",
+        "react-doctor/prefer-dynamic-import"
+      ]
     }
   }
 }

@@ -59,7 +59,7 @@ export function parseWorkflowRunLinksFromTranscriptRows(rows: unknown[] | undefi
     if (!parsed) continue;
     byRunId.set(parsed.runId, parsed);
   }
-  return [...byRunId.values()].sort(
+  return [...byRunId.values()].toSorted(
     (a, b) => (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0),
   );
 }

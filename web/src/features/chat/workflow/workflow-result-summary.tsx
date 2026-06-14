@@ -143,8 +143,8 @@ export const WorkflowResultSummary = memo(function WorkflowResultSummary({
           {labels.openQuestionsHeading}
         </summary>
         <ul className="mt-1 space-y-0.5 text-sm text-fg-muted">
-          {openQuestions.slice(0, MAX_ITEMS).map((q, i) => (
-            <li key={i} className="flex gap-2">
+          {openQuestions.slice(0, MAX_ITEMS).map((q) => (
+            <li key={q} className="flex gap-2">
               <span className="text-fg-disabled">•</span>
               <span className="min-w-0 break-words">{q}</span>
             </li>
@@ -201,8 +201,8 @@ function StringList({
         {heading}
       </summary>
       <ul className="mt-1 space-y-0.5 text-sm text-fg-muted">
-        {visible.map((item, index) => (
-          <li key={index} className="flex gap-2">
+        {visible.map((item) => (
+          <li key={item} className="flex gap-2">
             <span className="text-fg-disabled">•</span>
             <span className="min-w-0 break-words">{item}</span>
           </li>
@@ -231,8 +231,8 @@ function FindingList({
         {heading}
       </summary>
       <ul className="mt-1 space-y-1">
-        {visible.map((it, i) => (
-          <FindingRow key={i} item={it} />
+        {visible.map((it) => (
+          <FindingRow key={`${it.file ?? ''}:${it.line ?? ''}:${it.title ?? it.reason ?? it.fix ?? ''}`} item={it} />
         ))}
       </ul>
       {items.length > visible.length ? (

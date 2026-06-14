@@ -156,15 +156,27 @@ export function buildWorkflowBoardColumns(
   });
 }
 
+const relativeTimeFormatters = new Map<string, Intl.RelativeTimeFormat>();
+
+function getRelativeTimeFormatter(localeTag: string): Intl.RelativeTimeFormat {
+  let formatter = relativeTimeFormatters.get(localeTag);
+  if (!formatter) {
+    formatter = new Intl.RelativeTimeFormat(localeTag, { numeric: 'auto' });
+    relativeTimeFormatters.set(localeTag, formatter);
+  }
+  return formatter;
+}
+
 export function formatRelativeTime(ms: number, nowMs: number, localeTag: string): string {
   const deltaSec = Math.round((nowMs - ms) / 1000);
-  if (deltaSec < 60) return new Intl.RelativeTimeFormat(localeTag, { numeric: 'auto' }).format(-deltaSec, 'second');
+  const rtf = getRelativeTimeFormatter(localeTag);
+  if (deltaSec < 60) return rtf.format(-deltaSec, 'second');
   const deltaMin = Math.round(deltaSec / 60);
-  if (deltaMin < 60) return new Intl.RelativeTimeFormat(localeTag, { numeric: 'auto' }).format(-deltaMin, 'minute');
+  if (deltaMin < 60) return rtf.format(-deltaMin, 'minute');
   const deltaHour = Math.round(deltaMin / 60);
-  if (deltaHour < 48) return new Intl.RelativeTimeFormat(localeTag, { numeric: 'auto' }).format(-deltaHour, 'hour');
+  if (deltaHour < 48) return rtf.format(-deltaHour, 'hour');
   const deltaDay = Math.round(deltaHour / 24);
-  return new Intl.RelativeTimeFormat(localeTag, { numeric: 'auto' }).format(-deltaDay, 'day');
+  return rtf.format(-deltaDay, 'day');
 }
 
 export function isRunActive(run: WorkflowRunSummary): boolean {

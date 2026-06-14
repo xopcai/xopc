@@ -85,8 +85,8 @@ export function BrowserInstallProgressPanel({
 
       {showLogs && progress.lines.length > 0 ? (
         <div className="max-h-28 overflow-y-auto rounded-md border border-edge bg-surface-panel px-2 py-1.5 font-mono text-[10px] leading-relaxed text-fg-muted">
-          {progress.lines.map((line, i) => (
-            <div key={`${i}-${line.slice(0, 24)}`} className="truncate">
+          {progress.lines.map((line) => (
+            <div key={line} className="truncate">
               {line}
             </div>
           ))}

@@ -44,7 +44,7 @@ function isMonToFri(dowVals: number[]): boolean {
 
 function isWeekends(dowVals: number[]): boolean {
   if (dowVals.length !== 2) return false;
-  const sorted = [...dowVals].sort((a, b) => a - b);
+  const sorted = [...dowVals].toSorted((a, b) => a - b);
   return sorted[0] === 0 && sorted[1] === 6;
 }
 

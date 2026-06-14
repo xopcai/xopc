@@ -10,8 +10,8 @@ import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { buildNewCustomServerRow } from './build-new-custom-server-row';
 import {
-  buildNewCustomServerRow,
   CustomMcpServerDialog,
 } from './custom-mcp-server-dialog';
 import {
@@ -21,7 +21,7 @@ import {
   testMcpServer,
   type McpServerRow,
 } from './mcp/mcp-config-api';
-import { mcpServerEndpointSummary } from './mcp/mcp-server-form-fields';
+import { mcpServerEndpointSummary } from './mcp/mcp-server-endpoint-summary';
 import {
   completeConnectorOAuth,
   fetchConnectorCatalog,

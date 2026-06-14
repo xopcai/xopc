@@ -6,6 +6,7 @@ packages:
 
 overrides:
   axios: ">=1.15.2"
+  esbuild: ">=0.28.1"
 
 allowBuilds:
   '@google/genai': true

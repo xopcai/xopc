@@ -36,8 +36,8 @@ function ShortcutRow({ keys, label, note }: ShortcutEntry) {
         {note && <span className="ml-1.5 text-xs text-fg-muted">({note})</span>}
       </div>
       <div className="flex shrink-0 items-center gap-1">
-        {keys.map((k, i) => (
-          <Kbd key={i}>{k}</Kbd>
+        {keys.map((k) => (
+          <Kbd key={k}>{k}</Kbd>
         ))}
       </div>
     </div>
@@ -52,8 +52,8 @@ function ShortcutSection({ title, shortcuts }: ShortcutCategory) {
     >
       <h2 className="pb-1 pt-3.5 text-sm font-semibold text-fg sm:pt-4">{title}</h2>
       <div className="divide-y divide-edge-subtle">
-        {shortcuts.map((s, i) => (
-          <ShortcutRow key={i} {...s} />
+        {shortcuts.map((s) => (
+          <ShortcutRow key={s.label} {...s} />
         ))}
       </div>
     </section>
@@ -116,8 +116,8 @@ export function KeyboardShortcutsSettingsPanel() {
         <p className="text-sm text-fg-muted">{k.subtitle}</p>
       </header>
 
-      {categories.map((cat, i) => (
-        <ShortcutSection key={i} {...cat} />
+      {categories.map((cat) => (
+        <ShortcutSection key={cat.title} {...cat} />
       ))}
     </div>
   );

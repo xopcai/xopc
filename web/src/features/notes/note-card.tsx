@@ -1,5 +1,6 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { Archive, Bookmark, CheckSquare, Lightbulb, Mic, MoreVertical, Image, Pin, PinOff, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 
 import { cn } from '@/lib/cn';
 
@@ -45,7 +46,8 @@ export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels, ti
   const Icon = KIND_ICON[note.kind] || Lightbulb;
   const previewText = noteCardPreviewText(note, labels);
   const isFallbackText = !note.snippet?.trim();
-  const time = formatRelativeTime(note.createdAt, Date.now(), timeLabels);
+  const [nowMs] = useState(() => Date.now());
+  const time = formatRelativeTime(note.createdAt, nowMs, timeLabels);
 
   return (
     <article
@@ -88,6 +90,7 @@ export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels, ti
         <DropdownMenu.Root>
           <DropdownMenu.Trigger asChild>
             <button
+              type="button"
               onClick={(e) => e.stopPropagation()}
               className="shrink-0 rounded-md p-1 text-fg-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               aria-label="Actions"

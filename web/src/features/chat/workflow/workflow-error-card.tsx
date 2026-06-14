@@ -230,8 +230,8 @@ export const WorkflowErrorCard = memo(function WorkflowErrorCard({
                 {labels.recoveryHeading}
               </div>
               <ul className="space-y-0.5 text-sm text-fg-muted">
-                {recoveryActions.map((action, index) => (
-                  <li key={index} className="flex gap-2">
+                {recoveryActions.map((action) => (
+                  <li key={action} className="flex gap-2">
                     <span className="text-fg-disabled">•</span>
                     <span className="min-w-0 break-words">{action}</span>
                   </li>

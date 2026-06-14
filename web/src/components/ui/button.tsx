@@ -1,5 +1,5 @@
 import { Slot } from '@radix-ui/react-slot';
-import { forwardRef, type ButtonHTMLAttributes } from 'react';
+import { type ButtonHTMLAttributes, type Ref } from 'react';
 
 import { cn } from '@/lib/cn';
 
@@ -19,27 +19,31 @@ const variantClass: Record<ButtonVariant, string> = {
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
   asChild?: boolean;
+  ref?: Ref<HTMLButtonElement>;
 }
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant = 'secondary', asChild = false, type = 'button', ...props }, ref) => {
-    const Comp = asChild ? Slot : 'button';
-    return (
-      <Comp
-        ref={ref}
-        type={asChild ? undefined : type}
-        className={cn(
-          'inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium',
-          'transition-colors duration-150 ease-out transition-transform',
-          'active:scale-95 motion-reduce:transition-none motion-reduce:active:scale-100',
-          'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
-          variantClass[variant],
-          className,
-        )}
-        {...props}
-      />
-    );
-  },
-);
-
-Button.displayName = 'Button';
+export function Button({
+  className,
+  variant = 'secondary',
+  asChild = false,
+  type = 'button',
+  ref,
+  ...props
+}: ButtonProps) {
+  const Comp = asChild ? Slot : 'button';
+  return (
+    <Comp
+      ref={ref}
+      type={asChild ? undefined : type}
+      className={cn(
+        'inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium',
+        'transition-colors duration-150 ease-out transition-transform',
+        'active:scale-95 motion-reduce:transition-none motion-reduce:active:scale-100',
+        'disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50',
+        variantClass[variant],
+        className,
+      )}
+      {...props}
+    />
+  );
+}
