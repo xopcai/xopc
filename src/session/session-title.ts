@@ -196,6 +196,17 @@ Title:`;
 
 export type SessionTitleUpdatedHook = (sessionKey: string, name: string) => void | Promise<void>;
 
+/** Whether post-turn LLM refine may run (provisional or still unnamed; not user-locked). */
+export function shouldRefineSessionTitleWithLlm(
+  meta: { name?: string; customData?: Record<string, unknown> } | null | undefined,
+): boolean {
+  if (!meta) return false;
+  const source = getSessionTitleSource(meta);
+  if (source === 'user') return false;
+  if (meta.name?.trim()) return source === 'provisional';
+  return true;
+}
+
 function canAutoWriteTitle(meta: { name?: string; customData?: Record<string, unknown> } | null): boolean {
   if (!meta) return false;
   const source = getSessionTitleSource(meta);
@@ -264,10 +275,9 @@ export async function maybeRefineSessionTitleWithLlm(
     log.warn({ sessionKey }, 'Session title: metadata missing after save');
     return;
   }
-  const source = getSessionTitleSource(meta);
-  if (source === 'user') return;
-  if (meta.name?.trim() && source === 'llm') return;
+  if (!shouldRefineSessionTitleWithLlm(meta)) return;
 
+  const source = getSessionTitleSource(meta);
   let title: string | null = null;
   const ref = modelRef?.trim();
   if (ref) {
@@ -307,14 +317,4 @@ export async function maybeRefineSessionTitleWithLlm(
   } catch (err) {
     log.warn({ err, sessionKey }, 'Session title: refine updateMetadata failed');
   }
-}
-
-/** @deprecated Use maybeRefineSessionTitleWithLlm — kept for inbound turn-dispatcher hook. */
-export async function maybeAutoTitleSessionStore(
-  sessionStore: SessionStore,
-  sessionKey: string,
-  modelRef: string | undefined,
-  onUpdated?: SessionTitleUpdatedHook,
-): Promise<void> {
-  await maybeRefineSessionTitleWithLlm(sessionStore, sessionKey, modelRef, onUpdated);
 }

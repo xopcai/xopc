@@ -447,9 +447,13 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
 
   const activeSessionKey = chatSessionKeyFromPath(pathname);
 
-  // Refetch on session switch; after data loads, bump active row to the top.
+  // Refetch on session switch (skip initial mount); after data loads, bump active row to the top.
   useEffect(() => {
     if (!token || !activeSessionKey || sessionFilter !== 'web') return;
+    if (lastActiveSessionKeyRef.current === null) {
+      lastActiveSessionKeyRef.current = activeSessionKey;
+      return;
+    }
     if (lastActiveSessionKeyRef.current === activeSessionKey) return;
     lastActiveSessionKeyRef.current = activeSessionKey;
     void mutate().then(() => {
