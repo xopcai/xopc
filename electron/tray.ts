@@ -11,6 +11,8 @@ export type TrayActions = {
   showWindow: () => void;
   /** Open app and navigate once content can receive IPC. */
   navigate: (hashPath: string) => void;
+  /** Main-process DevTools (works when the page is blank). */
+  openDevTools: () => void;
   quit: () => void;
 };
 
@@ -39,6 +41,13 @@ function buildContextMenu(actions: TrayActions): Menu {
       label: 'Settings',
       click: () => {
         actions.navigate('/settings/appearance');
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Developer Tools',
+      click: () => {
+        actions.openDevTools();
       },
     },
     { type: 'separator' },

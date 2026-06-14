@@ -1,5 +1,7 @@
 import { Menu, shell, type BrowserWindow, type MenuItemConstructorOptions } from 'electron';
 
+import { toggleMainWindowDevTools } from './devtools.js';
+
 export function buildAppMenu(mainWindow: BrowserWindow): Menu {
   const isMac = process.platform === 'darwin';
 
@@ -171,6 +173,14 @@ export function buildAppMenu(mainWindow: BrowserWindow): Menu {
           label: 'Release Notes',
           click: () => {
             void shell.openExternal('https://github.com/xopcai/xopc/releases');
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Developer Tools',
+          accelerator: process.platform === 'darwin' ? 'Cmd+Shift+Alt+I' : 'Ctrl+Shift+Alt+I',
+          click: () => {
+            toggleMainWindowDevTools(mainWindow);
           },
         },
       ],
