@@ -15,7 +15,6 @@ import {
   readdirSync, 
   statSync, 
   createReadStream,
-  unlinkSync,
 } from 'fs';
 import { readFile } from 'fs/promises';
 import { join, basename } from 'path';
