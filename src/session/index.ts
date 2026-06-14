@@ -85,7 +85,6 @@ export type { CompactionConfig, CompactionResult } from '../agent/memory/compact
 export type { WindowConfig } from '../agent/memory/window.js';
 
 export {
-  maybeAutoTitleSessionStore,
   maybeSetProvisionalSessionTitle,
   maybeRefineSessionTitleWithLlm,
   generateSessionTitleFromMessages,
@@ -93,6 +92,7 @@ export {
   provisionalTitleFromUserText,
   fallbackTitleFromMessages,
   getSessionTitleSource,
+  shouldRefineSessionTitleWithLlm,
   isWebchatSessionKey,
   shouldAutoTitleSessionKey,
   type SessionTitleSource,

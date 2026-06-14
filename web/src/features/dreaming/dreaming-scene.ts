@@ -20,7 +20,7 @@ export type DreamingPhase = 'light' | 'deep' | 'rem';
 export class DreamingScene {
   private renderer: THREE.WebGLRenderer;
   private camera: THREE.OrthographicCamera;
-  private clock: THREE.Clock;
+  private timer: THREE.Timer;
   private animationFrameId: number | null = null;
   private currentScene: THREE.Scene | null = null;
   private currentAnimation: PhaseAnimation | null = null;
@@ -57,7 +57,8 @@ export class DreamingScene {
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 100);
     this.camera.position.z = 1;
 
-    this.clock = new THREE.Clock(false);
+    this.timer = new THREE.Timer();
+    this.timer.connect(canvas.ownerDocument);
 
     this.resize(width, height);
   }
@@ -118,7 +119,7 @@ export class DreamingScene {
     }
 
     this.fadeTarget = 1;
-    this.clock.start();
+    this.timer.reset().update();
 
     if (!this.animationFrameId) {
       this.tick();
@@ -133,10 +134,11 @@ export class DreamingScene {
     return this.fadeOpacity <= 0.001 && this.fadeTarget === 0;
   }
 
-  private tick = (): void => {
+  private tick = (timestamp?: number): void => {
     if (this.disposed) return;
 
-    const rawDelta = this.clock.getDelta();
+    this.timer.update(timestamp);
+    const rawDelta = this.timer.getDelta();
     const delta = rawDelta * this.timeScale;
 
     // Smooth fade
@@ -246,6 +248,7 @@ export class DreamingScene {
       this.animationFrameId = null;
     }
     this.stopAllAnimations();
+    this.timer.dispose();
     this.renderer.dispose();
   }
 }

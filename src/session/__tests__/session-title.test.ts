@@ -4,6 +4,7 @@ import {
   fallbackTitleFromMessages,
   provisionalTitleFromUserText,
   shouldAutoTitleSessionKey,
+  shouldRefineSessionTitleWithLlm,
 } from '../session-title.ts';
 
 describe('shouldAutoTitleSessionKey', () => {
@@ -35,6 +36,25 @@ describe('provisionalTitleFromUserText', () => {
 
   it('returns null for blank input', () => {
     expect(provisionalTitleFromUserText('   ')).toBeNull();
+  });
+});
+
+describe('shouldRefineSessionTitleWithLlm', () => {
+  it('allows unnamed sessions and provisional titles', () => {
+    expect(shouldRefineSessionTitleWithLlm({})).toBe(true);
+    expect(shouldRefineSessionTitleWithLlm({ name: 'Hi', customData: { titleSource: 'provisional' } })).toBe(
+      true,
+    );
+  });
+
+  it('skips user-locked and finalized titles (including legacy named rows without titleSource)', () => {
+    expect(shouldRefineSessionTitleWithLlm({ name: 'Locked', customData: { titleSource: 'user' } })).toBe(
+      false,
+    );
+    expect(shouldRefineSessionTitleWithLlm({ name: 'Refined', customData: { titleSource: 'llm' } })).toBe(
+      false,
+    );
+    expect(shouldRefineSessionTitleWithLlm({ name: 'Legacy title' })).toBe(false);
   });
 });
 

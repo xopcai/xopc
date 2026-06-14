@@ -15,6 +15,8 @@ export type NewChatHandoffOpts = {
   sessionMgr: SessionManager;
   agentId?: string | null;
   currentSessionKey?: string | null;
+  /** Decoded route session key (`null` on `/chat/new`). Used to skip redundant noop navigation. */
+  routeSessionKey?: string | null;
   forceNew?: boolean;
   navigateToSession: NewChatHandoffNavigate;
   onOpened: (sessionKey: string) => void;
@@ -47,7 +49,10 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
 
     if (resolution.kind === 'noop') {
       opts.onOpened(resolution.sessionKey);
-      opts.navigateToSession(resolution.sessionKey, opts.replaceNavigate ?? false, opts.search);
+      const routeKey = opts.routeSessionKey?.trim() || null;
+      if (routeKey !== resolution.sessionKey) {
+        opts.navigateToSession(resolution.sessionKey, opts.replaceNavigate ?? false, opts.search);
+      }
       return resolution.sessionKey;
     }
 

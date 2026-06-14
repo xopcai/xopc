@@ -251,6 +251,7 @@ export function useChatSessionLoad(deps: {
                 sessionMgr: sessionMgrRef.current,
                 agentId: aid,
                 currentSessionKey: null,
+                routeSessionKey: null,
                 navigateToSession,
                 replaceNavigate: true,
                 onOpened: (key) => {
@@ -346,6 +347,7 @@ export function useChatSessionLoad(deps: {
         sessionMgr: sessionMgrRef.current,
         agentId: aid,
         currentSessionKey: sessionKey,
+        routeSessionKey: sessionKey,
         forceNew: opts?.forceNew,
         navigateToSession,
         onOpened: (key) => {
