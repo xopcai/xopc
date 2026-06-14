@@ -307,8 +307,8 @@ export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer
                       {labels.logsHeading}
                     </div>
                     <div className="space-y-0.5 font-mono text-xs text-fg-subtle">
-                      {snapshot.logs.map((line, i) => (
-                        <div key={i} className="wrap-break-word">
+                      {snapshot.logs.map((line) => (
+                        <div key={line} className="wrap-break-word">
                           {line}
                         </div>
                       ))}

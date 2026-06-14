@@ -30,7 +30,7 @@ function mergeOptimisticEmptyShells(
     if (!isReusableEmptyShell(row, agentId)) continue;
     byKey.set(key, row);
   }
-  return [...byKey.values()].sort(
+  return [...byKey.values()].toSorted(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
 }
