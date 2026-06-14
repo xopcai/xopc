@@ -80,7 +80,7 @@ export function upsertSidebarSessionRow(
         lastAccessedAt: now,
       };
 
-      const page0 = stripped[0]!;
+      const page0 = stripped[0];
       const restPage0 = page0.items.slice(0, Math.max(0, SIDEBAR_PAGE_SIZE - 1));
       stripped[0] = { ...page0, items: [row, ...restPage0] };
       return stripped;
@@ -126,7 +126,7 @@ export function patchSidebarSessionName(
         updatedAt: now,
         lastAccessedAt: now,
       };
-      const page0 = next[0]!;
+      const page0 = next[0];
       const restPage0 = page0.items.slice(0, Math.max(0, SIDEBAR_PAGE_SIZE - 1));
       next[0] = { ...page0, items: [row, ...restPage0] };
       return next;

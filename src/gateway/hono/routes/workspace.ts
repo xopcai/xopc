@@ -17,7 +17,7 @@ import {
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
 } from '../../../agent/agent-scope.js';
-import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
+import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import { resolveHeartbeatMdPath } from '../../workspace-heartbeat-path.js';
 import {
   isPathUnderWorkspace,
