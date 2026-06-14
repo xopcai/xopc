@@ -270,8 +270,9 @@ export class GatewayService {
       model: this.config.agents?.defaults?.model?.primary,
       config: this.config,
       sessionStore: this.sessionIndex.getStore(),
-      onSessionMetadataUpdated: (sessionKey) => {
-        this.sessionIndex.emit('sessionUpdated', { key: sessionKey });
+      onSessionMetadataUpdated: (sessionKey, patch) => {
+        this.sessionIndex.emit('sessionUpdated', { key: sessionKey, name: patch?.name });
+        this.emit('session.updated', { key: sessionKey, name: patch?.name });
       },
       onSessionTranscriptUpdated: (sessionKey) => {
         this.emit('session.transcript_updated', { key: sessionKey });

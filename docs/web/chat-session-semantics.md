@@ -6,7 +6,8 @@ Contract for gateway console chat (`web/`). Phase 2 uses a per-session Zustand s
 
 | User action | Client behavior | Agent run |
 |-------------|-----------------|-----------|
-| **New chat** | Always `POST /api/sessions` (new row). Never adopt/reuse an existing empty session. | Runs on other sessions **continue** in the background. |
+| **New chat** | Prefer reusing an existing **empty** webchat session for the same agent (no `POST` when reusing). If none exists, use optimistic client key + background `POST /api/sessions` with `chat_id`. `/new` forces a fresh session (always create). | Runs on other sessions **continue** in the background. |
+| **First message title** | Provisional title from first user line (optimistic in UI + server on accept). LLM may refine after turn. | — |
 | **Switch session** (sidebar / URL) | Clear **visible** UI for the new key; load history from REST. | Do **not** abort SSE for the session being left. |
 | **Abort** (composer stop) | Clear streaming UI for current session. | `POST /api/agent/abort` + client abort. **Only** user-initiated abort stops the run. |
 | **Refresh** on `/chat/:key` | Load history; resume SSE if gateway reports an active run. | Resume uses gateway `GET /api/sessions/:key/run` first, then `sessionStorage` cache. |
@@ -34,7 +35,6 @@ Contract for gateway console chat (`web/`). Phase 2 uses a per-session Zustand s
 ## Do not
 
 - Abort or clear pending run when opening New chat or switching sessions.
-- Use `sessions.list` `messageCount === 0` for New chat adoption (removed).
 - Add new reconcile/fallback merge paths across sessions (Phase 2 replaces with store).
 
 ## Phase 2 (implemented)
@@ -53,3 +53,16 @@ Per-session Zustand slice + singleton `chatRunManager`; SSE callbacks write to t
 - Chat shell state (`focusedSessionKey`, `initLoading`, `loadingMore`, `shellError`) in the same store.
 - `useChatSessionRoute` syncs URL → `focusedSessionKey`; `useChatSession` is a thin selector/composer.
 - Removed deprecated `chat-agent-run-indicator-store`.
+
+## Phase 5 (implemented)
+
+- New chat resolves a reusable empty webchat shell per agent (client cache + `loadSessions`) before optimistic create.
+- `/new` uses `forceNew` (always optimistic `POST` with client `chat_id`).
+- Sidebar list cache: `webchat-empty-shell-cache` updated on each `SessionManager.loadSessions()`.
+
+## Phase 6 (implemented)
+
+- **Provisional title:** first user message first line → session `name` immediately (client optimistic + server on `user_message` SSE path).
+- **Refined title:** after turn persist, optional LLM short title when `customData.titleSource` is unset or `provisional`.
+- **User rename:** sets `titleSource: user`; auto-title never overwrites.
+- **Sidebar:** `session-updated` with `{ key, name }` patches SWR cache without full list refetch; gateway SSE `session.updated` carries `name`.

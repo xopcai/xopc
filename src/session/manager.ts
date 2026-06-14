@@ -167,7 +167,11 @@ export class SessionIndex extends EventEmitter {
   // ========== Metadata Updates ==========
 
   async renameSession(key: string, name: string): Promise<void> {
-    await this.store.updateMetadata(key, { name });
+    const existing = await this.store.getMetadata(key);
+    await this.store.updateMetadata(key, {
+      name,
+      customData: { ...(existing?.customData ?? {}), titleSource: 'user' },
+    });
     this.emit('sessionUpdated', { key, name });
   }
 

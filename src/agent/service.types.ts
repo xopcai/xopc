@@ -35,7 +35,7 @@ export interface AgentServiceConfig {
    * Gateway: invoked after `sessionStore.updateMetadata` from built-in `/goal` APIs (store does not emit).
    * Wire to `sessionManager.emit('sessionUpdated', { key })` so the console refetches.
    */
-  onSessionMetadataUpdated?: (sessionKey: string) => void;
+  onSessionMetadataUpdated?: (sessionKey: string, patch?: { name?: string }) => void;
   /** Gateway: transcript JSONL append (goal verdict, slash receipt, background turns). */
   onSessionTranscriptUpdated?: (sessionKey: string) => void;
   /** Gateway: persisted workflow runs. */

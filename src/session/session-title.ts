@@ -87,6 +87,27 @@ export function sanitizeSessionTitle(raw: string): string {
   return s;
 }
 
+export type SessionTitleSource = 'provisional' | 'llm' | 'user';
+
+export function getSessionTitleSource(
+  meta: { customData?: Record<string, unknown> } | null | undefined,
+): SessionTitleSource | null {
+  const raw = meta?.customData?.titleSource;
+  if (raw === 'provisional' || raw === 'llm' || raw === 'user') return raw;
+  return null;
+}
+
+/** Title from a single user message (first line), for immediate sidebar labels. */
+export function provisionalTitleFromUserText(raw: string): string | null {
+  const text = stripInboundFileMetadataFromText(
+    stripEnvelopeTimestampPrefix(stripSessionStartupContextFromUserText((raw ?? '').trim())),
+  );
+  if (!text) return null;
+  const line = text.split(/\n/)[0]?.trim();
+  if (!line) return null;
+  return sanitizeSessionTitle(line);
+}
+
 /** Non-LLM title: first line of first user text, else first assistant line. */
 export function fallbackTitleFromMessages(messages: AgentMessage[]): string | null {
   const u = firstUserText(messages);
@@ -173,14 +194,61 @@ Title:`;
   }
 }
 
+export type SessionTitleUpdatedHook = (sessionKey: string, name: string) => void | Promise<void>;
+
+function canAutoWriteTitle(meta: { name?: string; customData?: Record<string, unknown> } | null): boolean {
+  if (!meta) return false;
+  const source = getSessionTitleSource(meta);
+  if (source === 'user') return false;
+  return !meta.name?.trim();
+}
+
 /**
- * If the session is still unnamed, set `name` (LLM when possible, else first-line fallback).
- * Skips cron/heartbeat keys. Ensures index row exists by re-saving when metadata is missing (fixes index lag).
+ * Set provisional title from first user text when session is still unnamed.
+ * Skips cron/heartbeat keys and user-locked titles.
  */
-export async function maybeAutoTitleSessionStore(
+export async function maybeSetProvisionalSessionTitle(
+  sessionStore: SessionStore,
+  sessionKey: string,
+  userText?: string,
+  onUpdated?: SessionTitleUpdatedHook,
+): Promise<void> {
+  if (!shouldAutoTitleSessionKey(sessionKey)) return;
+
+  let meta = await sessionStore.getMetadata(sessionKey);
+  if (!meta) return;
+  if (!canAutoWriteTitle(meta)) return;
+
+  let title: string | null = null;
+  if (userText?.trim()) {
+    title = provisionalTitleFromUserText(userText);
+  }
+  if (!title) {
+    const messages = await sessionStore.load(sessionKey);
+    if (!messages.length) return;
+    title = fallbackTitleFromMessages(messages);
+  }
+  if (!title) return;
+
+  try {
+    await sessionStore.updateMetadata(sessionKey, {
+      name: title,
+      customData: { ...(meta.customData ?? {}), titleSource: 'provisional' },
+    });
+    await onUpdated?.(sessionKey, title);
+  } catch (err) {
+    log.warn({ err, sessionKey }, 'Session title: provisional updateMetadata failed');
+  }
+}
+
+/**
+ * LLM refine when title is empty or still provisional (not user-locked).
+ */
+export async function maybeRefineSessionTitleWithLlm(
   sessionStore: SessionStore,
   sessionKey: string,
   modelRef: string | undefined,
+  onUpdated?: SessionTitleUpdatedHook,
 ): Promise<void> {
   if (!shouldAutoTitleSessionKey(sessionKey)) return;
 
@@ -196,7 +264,9 @@ export async function maybeAutoTitleSessionStore(
     log.warn({ sessionKey }, 'Session title: metadata missing after save');
     return;
   }
-  if (meta.name && meta.name.trim().length > 0) return;
+  const source = getSessionTitleSource(meta);
+  if (source === 'user') return;
+  if (meta.name?.trim() && source === 'llm') return;
 
   let title: string | null = null;
   const ref = modelRef?.trim();
@@ -214,9 +284,37 @@ export async function maybeAutoTitleSessionStore(
   }
   if (!title) return;
 
-  try {
-    await sessionStore.updateMetadata(sessionKey, { name: title });
-  } catch (err) {
-    log.warn({ err, sessionKey }, 'Session title: updateMetadata failed');
+  const existing = meta.name?.trim();
+  if (existing === title) {
+    if (source !== 'llm') {
+      try {
+        await sessionStore.updateMetadata(sessionKey, {
+          customData: { ...(meta.customData ?? {}), titleSource: 'llm' },
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+    return;
   }
+
+  try {
+    await sessionStore.updateMetadata(sessionKey, {
+      name: title,
+      customData: { ...(meta.customData ?? {}), titleSource: 'llm' },
+    });
+    await onUpdated?.(sessionKey, title);
+  } catch (err) {
+    log.warn({ err, sessionKey }, 'Session title: refine updateMetadata failed');
+  }
+}
+
+/** @deprecated Use maybeRefineSessionTitleWithLlm — kept for inbound turn-dispatcher hook. */
+export async function maybeAutoTitleSessionStore(
+  sessionStore: SessionStore,
+  sessionKey: string,
+  modelRef: string | undefined,
+  onUpdated?: SessionTitleUpdatedHook,
+): Promise<void> {
+  await maybeRefineSessionTitleWithLlm(sessionStore, sessionKey, modelRef, onUpdated);
 }

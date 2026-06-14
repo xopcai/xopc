@@ -83,6 +83,7 @@ export interface ProcessDirectStreamingDeps {
     outcome: { skipPersistentGoalPostTurn: boolean },
   ) => void;
   onTurnComplete?: (sessionKey: string, lastAssistantText?: string) => void;
+  enqueueProvisionalSessionTitle?: (sessionKey: string, userText: string) => void;
   /** Disk-only transcript sync (slash receipt already streamed as tokens). */
   reloadWebchatTranscript?: (sessionKey: string) => void;
   maybeEmitWebchatTts: (
@@ -277,6 +278,9 @@ export async function* runProcessDirectStreaming(
             workspaceRelativePath: att.workspaceRelativePath,
           })),
         });
+        if (textForAgent.trim()) {
+          deps.enqueueProvisionalSessionTitle?.(sessionKey, textForAgent);
+        }
       }
 
       const result = await runDirectAgentTurn(
