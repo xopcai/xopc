@@ -36,6 +36,7 @@ import { isShellChromiumPermissionGranted } from './ipc/shell-permission-gates.j
 import { registerCronDisplayWakeIpc, stopCronDisplayWakeBlocker } from './ipc/cron-display-wake-ipc.js';
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
 import { getLoadingPageDataUrl } from './loading-page.js';
+import { isEmbeddedGatewayLoopbackUrl } from './loopback-url.js';
 import { hasPendingInstall, initAutoUpdater, stopAutoUpdater } from './auto-updater.js';
 import { buildAppMenu } from './menu.js';
 import {
@@ -153,6 +154,10 @@ function attachExternalUrlHandlers(win: BrowserWindow): void {
       if (next.protocol !== 'http:' && next.protocol !== 'https:') {
         return { action: 'allow' };
       }
+      // Embedded gateway console always stays in-app on loopback.
+      if (isEmbeddedGatewayLoopbackUrl(details.url)) {
+        return { action: 'allow' };
+      }
       const curHref = wc.getURL();
       if (!curHref || curHref === 'about:blank') {
         return { action: 'allow' };
@@ -172,6 +177,12 @@ function attachExternalUrlHandlers(win: BrowserWindow): void {
     try {
       const next = new URL(navigationUrl);
       if (next.protocol !== 'http:' && next.protocol !== 'https:') return;
+      // Startup: data: loading page → http://127.0.0.1:<port>/ must stay in-window.
+      // Without this, Windows Electron preventDefault() leaves a blank white shell while
+      // the gateway UI opens in the system browser.
+      if (isEmbeddedGatewayLoopbackUrl(navigationUrl)) {
+        return;
+      }
       const curHref = wc.getURL();
       if (!curHref || curHref === 'about:blank') return;
       const cur = new URL(curHref);
@@ -183,6 +194,10 @@ function attachExternalUrlHandlers(win: BrowserWindow): void {
       /* ignore */
     }
   });
+}
+
+async function loadMainWindowUrl(win: BrowserWindow, href: string): Promise<void> {
+  await win.loadURL(href);
 }
 
 function shouldEmbedGateway(): boolean {
@@ -347,7 +362,16 @@ function createWindow(): void {
 
   initAutoUpdater(win);
 
-  attachExternalUrlHandlers(win);
+  win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame) return;
+    console.error(
+      `[main] Window failed to load (${errorCode} ${errorDescription}): ${validatedURL}`,
+    );
+  });
+
+  win.webContents.on('render-process-gone', (_event, details) => {
+    console.error(`[main] Renderer process gone: ${details.reason} (exitCode=${details.exitCode})`);
+  });
 
   // Squirrel.Mac only finishes installing when the app process quits. Closing the last window does not call
   // `app.quit()` on macOS by default, so a pending update would never apply after a red-traffic-light close.
@@ -363,24 +387,35 @@ function createWindow(): void {
     mainWindow = null;
   });
 
+  let externalUrlHandlersAttached = false;
+  const attachExternalUrlHandlersOnce = (): void => {
+    if (externalUrlHandlersAttached || win.isDestroyed()) return;
+    externalUrlHandlersAttached = true;
+    attachExternalUrlHandlers(win);
+  };
+
   void (async () => {
     const embed = shouldEmbedGateway();
     try {
       if (embed) {
-        void win.loadURL(getLoadingPageDataUrl(app.getLocale()));
+        await loadMainWindowUrl(win, getLoadingPageDataUrl(app.getLocale()));
       }
       const load = await resolveWindowLoad();
       if (gatewayExitedUnexpectedly) {
         return;
       }
       if (load.kind === 'url') {
-        void win.loadURL(load.href);
+        await loadMainWindowUrl(win, load.href);
         if (load.openDevTools) {
           win.webContents.openDevTools({ mode: 'detach' });
         }
       } else {
-        void win.loadFile(load.path);
+        await win.loadFile(load.path);
       }
+      // Install link guards only after the first document is loaded. Startup uses main-process
+      // loadURL (data: loading page → loopback gateway SPA); deferring avoids any chance that
+      // will-navigate / window.open handlers interfere with that transition on Windows.
+      attachExternalUrlHandlersOnce();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (embed && !win.isDestroyed()) {
