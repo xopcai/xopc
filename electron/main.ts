@@ -47,6 +47,13 @@ import {
   stopTunnelStatusPolling,
 } from './tunnel-main.js';
 import { createTray, destroyTray } from './tray.js';
+import {
+  appendElectronStartupLog,
+  devToolsGlobalShortcutAccelerator,
+  openMainWindowDevTools,
+  shouldAutoOpenDevTools,
+  toggleMainWindowDevTools,
+} from './devtools.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -355,6 +362,10 @@ function createWindow(): void {
     navigate: (hashPath) => {
       navigateMainWindow(hashPath);
     },
+    openDevTools: () => {
+      focusOrCreateMainWindow();
+      toggleMainWindowDevTools(mainWindow);
+    },
     quit: () => {
       app.quit();
     },
@@ -364,13 +375,25 @@ function createWindow(): void {
 
   win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame) return;
-    console.error(
-      `[main] Window failed to load (${errorCode} ${errorDescription}): ${validatedURL}`,
-    );
+    const msg = `did-fail-load code=${errorCode} desc=${errorDescription} url=${validatedURL}`;
+    console.error(`[main] Window failed to load (${errorCode} ${errorDescription}): ${validatedURL}`);
+    appendElectronStartupLog(msg);
+    if (shouldAutoOpenDevTools()) {
+      openMainWindowDevTools(win);
+    }
   });
 
   win.webContents.on('render-process-gone', (_event, details) => {
+    const msg = `render-process-gone reason=${details.reason} exitCode=${details.exitCode}`;
     console.error(`[main] Renderer process gone: ${details.reason} (exitCode=${details.exitCode})`);
+    appendElectronStartupLog(msg);
+    if (shouldAutoOpenDevTools()) {
+      openMainWindowDevTools(win);
+    }
+  });
+
+  win.webContents.on('did-finish-load', () => {
+    appendElectronStartupLog(`did-finish-load url=${win.webContents.getURL()}`);
   });
 
   // Squirrel.Mac only finishes installing when the app process quits. Closing the last window does not call
@@ -405,12 +428,16 @@ function createWindow(): void {
         return;
       }
       if (load.kind === 'url') {
+        appendElectronStartupLog(`loading gateway url=${load.href}`);
         await loadMainWindowUrl(win, load.href);
-        if (load.openDevTools) {
-          win.webContents.openDevTools({ mode: 'detach' });
+        if (load.openDevTools || shouldAutoOpenDevTools()) {
+          openMainWindowDevTools(win);
         }
       } else {
         await win.loadFile(load.path);
+        if (shouldAutoOpenDevTools()) {
+          openMainWindowDevTools(win);
+        }
       }
       // Install link guards only after the first document is loaded. Startup uses main-process
       // loadURL (data: loading page → loopback gateway SPA); deferring avoids any chance that
@@ -500,6 +527,16 @@ app.whenReady().then(async () => {
   if (!registered) {
     console.warn(`[main] Failed to register global shortcut: ${hotkey}`);
   }
+
+  const devToolsHotkey = devToolsGlobalShortcutAccelerator();
+  const devToolsRegistered = globalShortcut.register(devToolsHotkey, () => {
+    toggleMainWindowDevTools(mainWindow);
+  });
+  if (!devToolsRegistered) {
+    console.warn(`[main] Failed to register global shortcut: ${devToolsHotkey}`);
+  }
+
+  appendElectronStartupLog(`app ready platform=${process.platform} packaged=${app.isPackaged}`);
 
   createWindow();
 
