@@ -53,27 +53,34 @@ export function AgentFilesTab(props: {
       ) : files ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
           <nav
-            className="flex shrink-0 flex-row flex-wrap gap-x-0.5 gap-y-0 border-b border-edge-subtle"
+            className="-mx-1 flex shrink-0 flex-wrap gap-1 px-1 pb-1"
+            role="tablist"
             aria-label={a.navCoreFiles}
           >
-            {files.files.map((f) => (
-              <button
-                key={f.name}
-                type="button"
-                className={cn(
-                  '-mb-px shrink-0 border-b-2 border-transparent px-3 py-2 text-left font-mono text-xs whitespace-nowrap transition-colors',
-                  interaction.press,
-                  activeFile === f.name
-                    ? 'border-accent text-fg'
-                    : 'text-fg-muted hover:border-edge-subtle hover:text-fg',
-                  f.missing && 'opacity-60',
-                )}
-                onClick={() => setActiveFile(f.name)}
-              >
-                {f.name}
-                {f.missing ? ` (${a.missing})` : ''}
-              </button>
-            ))}
+            {files.files.map((f) => {
+              const selected = activeFile === f.name;
+              return (
+                <button
+                  key={f.name}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  className={cn(
+                    'inline-flex shrink-0 items-center rounded-lg px-3 py-2 font-mono text-xs font-medium whitespace-nowrap transition-colors',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                    interaction.press,
+                    selected
+                      ? 'bg-accent-soft text-accent-fg'
+                      : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+                    f.missing && 'opacity-60',
+                  )}
+                  onClick={() => setActiveFile(f.name)}
+                >
+                  {f.name}
+                  {f.missing ? ` (${a.missing})` : ''}
+                </button>
+              );
+            })}
           </nav>
           <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
             {activeFile ? (

@@ -19,11 +19,6 @@ import {
 import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from '../agent/context/workspace.js';
 import { seedAgentProfileMarkdownFiles } from '../agent/context/workspace-seed.js';
 import {
-  isWorkspaceSetupCompleted,
-  resolveAgentWorkspaceStatePath,
-  syncBootstrapSetupCompletion,
-} from '../agent/context/workspace-state.js';
-import {
   applyAgentConfig,
   findAgentEntryIndex,
   pruneAgentConfig,
@@ -38,10 +33,7 @@ import type { AgentTypedModel } from '../config/schema.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
 import { isPathUnderWorkspace, resolveWorkspaceSafePath } from './workspace-editor-path.js';
 
-const EDITABLE_PROFILE_MARKDOWN_NAMES = new Set<string>([
-  ...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES,
-  WORKSPACE_FILES.BOOTSTRAP,
-]);
+const EDITABLE_PROFILE_MARKDOWN_NAMES = new Set<string>([...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES]);
 
 export type GatewayAgentTypedModelsInfo = {
   defaults: AgentTypedModel[];
@@ -578,14 +570,7 @@ export async function listAgentProfileFiles(
   const root = await profileMarkdownRootReal(cfg, id);
   const names = [...EDITABLE_PROFILE_MARKDOWN_NAMES];
   const files: AgentFileEntry[] = [];
-  const statePath = resolveAgentWorkspaceStatePath(cfg, id);
-  syncBootstrapSetupCompletion(statePath, root);
-  const setupCompleted = isWorkspaceSetupCompleted(statePath);
   for (const name of names.sort((a, b) => a.localeCompare(b))) {
-    // Skip BOOTSTRAP.md when setup is already completed
-    if (name === WORKSPACE_FILES.BOOTSTRAP && setupCompleted) {
-      continue;
-    }
     const abs = resolveWorkspaceSafePath(root, name);
     if (!abs) {
       continue;

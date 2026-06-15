@@ -53,7 +53,6 @@ export const WORKSPACE_FILES = {
   TOOLS: 'TOOLS.md',
   HEARTBEAT: 'HEARTBEAT.md',
   MEMORY: 'MEMORY.md',
-  BOOTSTRAP: 'BOOTSTRAP.md',
 } as const;
 
 // ============================================

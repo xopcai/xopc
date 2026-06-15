@@ -27,7 +27,7 @@ import { resolveProviderApiKeySync } from '../auth/sync-provider-auth.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
 import { CredentialResolver } from '../auth/credentials.js';
-import { resolveBundledSkillsDir, resolveStateDir, resolveWorkspaceStatePath } from '../config/paths.js';
+import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
 import { loadProfileMarkdownFiles, extractTextContent } from './context/workspace.js';
 import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
 import type { EmbeddedContextFile } from './bootstrap/types.js';
@@ -400,12 +400,10 @@ export class AgentManager implements AgentInstanceGateway {
   ): EmbeddedContextFile[] {
     const cfg = this.config.config!;
     const profileDir = resolveAgentProfileDir(cfg, profile.agentId);
-    const workspaceStatePath = resolveWorkspaceStatePath(cfg, profile.agentId);
     const heartbeatEnabled = cfg.gateway?.heartbeat?.includeSystemPromptSection ?? false;
     const contextInjection = cfg.agents?.defaults?.contextInjection ?? 'always';
     const { contextFiles } = resolveBootstrapContextSync({
       profileDir,
-      workspaceStatePath,
       config: cfg,
       sessionKey,
       excludeHeartbeat: excludeHeartbeat ?? !heartbeatEnabled,

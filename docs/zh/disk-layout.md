@@ -37,7 +37,7 @@
 
 | 路径 | 用途 |
 |------|------|
-| `profile/` | 系统提示用 profile Markdown：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（与托管 `memories/` 不同）、`BOOTSTRAP.md`（默认不注入），以及网关可选 `agent-avatar.*`。 |
+| `profile/` | 系统提示用 profile Markdown：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（与托管 `memories/` 不同），以及网关可选 `agent-avatar.*`。 |
 | `sessions/` | 遗留目录（可选）；旧版安装可能仍存在。新安装仅将 transcript 写入 `xopc.db`。 |
 | `memories/` | 托管结构化存储（`MEMORY.md`、`USER.md`，条目以固定分隔符分段 — `BuiltinMemoryStore`）。 |
 | `inbound/` | 入站附件（非图片二进制）落盘；transcript 中相对路径为相对 agent home 的 `inbound/...`。 |

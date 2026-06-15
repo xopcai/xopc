@@ -5,7 +5,6 @@ import { tmpdir } from 'os';
 
 import { seedAgentProfileMarkdownFiles } from '../workspace-seed.js';
 import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from '../workspace.js';
-import { WORKSPACE_FILES } from '../../../config/paths.js';
 
 describe('workspace-seed', () => {
   it('creates missing profile Markdown files under profileDir from templates', () => {
@@ -13,8 +12,7 @@ describe('workspace-seed', () => {
     const profileDir = join(root, 'profile');
     const markdownWs = join(root, 'workspace');
     seedAgentProfileMarkdownFiles(profileDir, markdownWs);
-    const expected = [...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES, WORKSPACE_FILES.BOOTSTRAP];
-    for (const name of expected) {
+    for (const name of AGENT_PROFILE_MARKDOWN_SYSTEM_FILES) {
       expect(existsSync(join(profileDir, name))).toBe(true);
     }
   });
@@ -24,7 +22,7 @@ describe('workspace-seed', () => {
     const profileDir = join(root, 'profile');
     const markdownWs = join(root, 'workspace');
     seedAgentProfileMarkdownFiles(profileDir, markdownWs, { displayName: 'Research Buddy' });
-    const identity = readFileSync(join(profileDir, WORKSPACE_FILES.IDENTITY), 'utf-8');
+    const identity = readFileSync(join(profileDir, 'IDENTITY.md'), 'utf-8');
     expect(identity).toContain('Research Buddy');
     expect(identity).not.toContain('_(pick something you like)_');
   });

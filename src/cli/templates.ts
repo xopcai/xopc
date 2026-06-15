@@ -10,7 +10,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-/** All template file names (for loading / caching). */
+/** Profile Markdown template file names (seeded into `agents/<id>/profile/`). */
 export const TEMPLATE_FILES = [
   'SOUL.md',
   'IDENTITY.md',
@@ -19,29 +19,12 @@ export const TEMPLATE_FILES = [
   'AGENTS.md',
   'HEARTBEAT.md',
   'MEMORY.md',
-  'BOOTSTRAP.md',
 ] as const;
 
 export type TemplateFile = (typeof TEMPLATE_FILES)[number];
 
-/**
- * Profile Markdown templates (system-prompt stack, excluding BOOTSTRAP.md).
- * Seeded by seedAgentProfileMarkdownFiles / seedMainAgentProfileMarkdown.
- */
-export const PROFILE_MARKDOWN_TEMPLATE_FILES: readonly TemplateFile[] = [
-  'SOUL.md',
-  'IDENTITY.md',
-  'USER.md',
-  'TOOLS.md',
-  'AGENTS.md',
-  'HEARTBEAT.md',
-  'MEMORY.md',
-];
-
-/**
- * Onboarding guide template (seeded into the Markdown workspace root as `BOOTSTRAP.md`).
- */
-export const WORKSPACE_TEMPLATE_FILES: readonly TemplateFile[] = ['BOOTSTRAP.md'];
+/** Alias for profile Markdown templates used by seed helpers. */
+export const PROFILE_MARKDOWN_TEMPLATE_FILES: readonly TemplateFile[] = [...TEMPLATE_FILES];
 
 /** Template content cache */
 const templateCache = new Map<TemplateFile, string>();
@@ -117,18 +100,6 @@ export function clearTemplateCache(): void {
 /** Minimal fallback templates in case files are missing */
 export function getFallbackTemplate(name: TemplateFile): string {
   const fallbacks: Record<TemplateFile, string> = {
-    'BOOTSTRAP.md': `# BOOTSTRAP.md - Hello, World
-
-_You just woke up. Time to figure out who you are._
-
-Start with something like:
-
-> "Hey. I just came online. Who am I? Who are you?"
-
-Then figure out together your name, nature, vibe, and emoji.
-
-Delete this file when done.
-`,
     'AGENTS.md': `# AGENTS.md - Your Workspace
 
 This folder is home. Treat it that way.

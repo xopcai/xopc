@@ -19,7 +19,6 @@ const CONTEXT_FILE_ORDER = new Map<string, number>([
   ['identity.md', 30],
   ['user.md', 40],
   ['tools.md', 50],
-  ['bootstrap.md', 60],
   ['memory.md', 70],
 ]);
 

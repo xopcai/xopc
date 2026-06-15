@@ -9,14 +9,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { Config } from '../../config/schema.js';
-import { DEFAULT_AGENT_ID, resolveAgentProfileDir, resolveAgentWorkspaceDir } from '../agent-scope.js';
+import {
+  DEFAULT_AGENT_ID,
+  resolveAgentProfileDir,
+  resolveAgentWorkspaceDir,
+  resolveDefaultAgentId,
+} from '../agent-scope.js';
 import { WORKSPACE_FILES } from '../../config/paths.js';
 import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from './workspace.js';
 import { createLogger } from '../../utils/logger.js';
-import {
-  markBootstrapSeeded,
-  resolveWorkspaceStatePathForMarkdownWorkspace,
-} from './workspace-state.js';
 
 const log = createLogger('WorkspaceSeed');
 
@@ -28,8 +29,7 @@ export type SeedWorkspaceProfileMarkdownOptions = {
   displayName?: string;
 };
 
-/** Files to copy when seeding a new agent (includes `BOOTSTRAP.md`, not part of system-prompt load order). */
-const SEED_FILENAMES: readonly string[] = [...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES, WORKSPACE_FILES.BOOTSTRAP];
+const SEED_FILENAMES: readonly string[] = [...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES];
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -120,10 +120,6 @@ export function seedAgentProfileMarkdownFiles(
       name === WORKSPACE_FILES.IDENTITY ? personalizeIdentityTemplate(tpl, options?.displayName) : tpl;
     if (writeFileIfMissing(targetPath, body)) {
       seeded++;
-      // Track bootstrap seeding in workspace state
-      if (name === WORKSPACE_FILES.BOOTSTRAP) {
-        markBootstrapSeeded(resolveWorkspaceStatePathForMarkdownWorkspace(markdownWorkspaceDir));
-      }
     }
   }
 
@@ -154,8 +150,10 @@ function ensureGitRepo(markdownWorkspaceDir: string, isBrandNew: boolean): void 
  * Ensure default (`main`) agent has reference profile Markdown templates (missing files only).
  */
 export function seedMainAgentProfileMarkdown(cfg: Config): void {
+  const agentId = resolveDefaultAgentId(cfg);
   seedAgentProfileMarkdownFiles(
-    resolveAgentProfileDir(cfg, DEFAULT_AGENT_ID),
-    resolveAgentWorkspaceDir(cfg, DEFAULT_AGENT_ID),
+    resolveAgentProfileDir(cfg, agentId),
+    resolveAgentWorkspaceDir(cfg, agentId),
+    { displayName: agentId },
   );
 }

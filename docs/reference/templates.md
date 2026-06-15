@@ -15,7 +15,6 @@ Template resolution at runtime: `XOPC_TEMPLATE_PATH` (if set), else a walk to `d
 | [MEMORY.md](/reference/templates/MEMORY) | Key information storage and memory index |
 | [IDENTITY.md](/reference/templates/IDENTITY) | Identity and boundary definitions |
 | [HEARTBEAT.md](/reference/templates/HEARTBEAT) | Proactive monitoring configuration |
-| [BOOTSTRAP.md](/reference/templates/BOOTSTRAP) | First-run / origin story (not injected into the default system-prompt stack) |
 
 ## System prompt load order
 
@@ -29,9 +28,7 @@ These files are read from the **Markdown workspace root** (when present) and ass
 6. **HEARTBEAT.md**
 7. **MEMORY.md**
 
-**BOOTSTRAP.md** is also copied when seeding a new agent; it is **not** part of that load list (first-run / manual guidance only).
-
-**CONTEXT.md** and **SKILLS.md** are **not** part of the default system-prompt profile list, so they are **not** injected automatically. `xopc init` does **not** create them; add them at the workspace root yourself if you want. The seed used by `onboard` / `agents add` copies the files listed above plus **`BOOTSTRAP.md`** only—it does **not** add `CONTEXT.md` / `SKILLS.md` from this docs folder unless you place them yourself.
+**CONTEXT.md** and **SKILLS.md** are **not** part of the default system-prompt profile list, so they are **not** injected automatically. `xopc init` does **not** create them; add them at the workspace root yourself if you want. The seed used by `onboard` / `agents add` copies the files listed above—it does **not** add `CONTEXT.md` / `SKILLS.md` from this docs folder unless you place them yourself.
 
 ## Memory System
 

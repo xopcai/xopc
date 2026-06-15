@@ -65,7 +65,6 @@ These files are injected into the system prompt as **Project Context** (OpenClaw
 | `AGENTS.md` | Session Startup, Red Lines, and collaboration guidelines. |
 | `HEARTBEAT.md` | Heartbeat / proactive check configuration (dynamic Project Context when enabled). |
 | `MEMORY.md` | Curated long-term memory index (main session only; omitted for subagent/cron). |
-| `BOOTSTRAP.md` | Optional onboarding tips; injected only while the file exists. |
 
 On `/new` and `/reset`, xopc may also prepend recent **`memory/YYYY-MM-DD.md`** excerpts to the first user turn (`agents.defaults.startupContext`). **`agents/<id>/memories/`** is **not** injected into the prompt; use the `curated_memory` tool for live read/write.
 

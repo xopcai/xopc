@@ -29,11 +29,9 @@ Runtime loads bootstrap files from **`agents/<agentId>/profile/`** in a fixed or
 
 - Per-file and total character budgets: `agents.defaults.bootstrapMaxChars` (default 12000), `bootstrapTotalMaxChars` (default 60000)
 - Subagent and cron sessions omit `MEMORY.md` (allowlist: AGENTS, TOOLS, SOUL, IDENTITY, USER)
-- `BOOTSTRAP.md` is injected while setup is pending (file present and `setupCompletedAt` unset in `<markdownWorkspace>/.xopc/workspace.json`)
-- When `BOOTSTRAP.md` is deleted after seeding, runtime records `setupCompletedAt` and stops reinjecting even if the agent failed to delete the file manually on a later run
-- `agents.defaults.contextInjection`: `always` (default), `continuation-skip` (inject bootstrap into the system prompt once per session; cleared on session reset / agent eviction), or `never`
+- `agents.defaults.contextInjection`: `always` (default), `continuation-skip` (inject profile context into the system prompt once per session; cleared on session reset / agent eviction), or `never`
 
-Implementation: `src/agent/bootstrap/`, state in `src/agent/context/workspace-state.ts`, assembled in `src/agent/prompt/system-prompt.ts`.
+Implementation: `src/agent/bootstrap/`, assembled in `src/agent/prompt/system-prompt.ts`.
 
 ## Startup context (`/new`, `/reset`)
 

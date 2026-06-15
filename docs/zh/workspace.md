@@ -65,7 +65,6 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 | `AGENTS.md` | 安全与协作规范。 |
 | `HEARTBEAT.md` | 心跳 / 主动巡检配置（空或仅注释则跳过相关调用）。 |
 | `MEMORY.md` | 长期记忆索引。 |
-| `BOOTSTRAP.md` | 可选的上手说明；常由 `onboard` / 模板流程创建，`init` 不一定生成。 |
 
 根目录下的其他 Markdown（例如 `CONTEXT.md`、`SKILLS.md`）为可选，**默认不会**写入系统提示；需自行通过工具读取或自定义流程使用。
 

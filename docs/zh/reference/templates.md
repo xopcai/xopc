@@ -15,7 +15,6 @@ xopc 使用 **profile Markdown** 模板定义智能体行为与知识。执行 `
 | [MEMORY.md](/zh/reference/templates/MEMORY) | 关键信息存储和记忆索引 |
 | [IDENTITY.md](/zh/reference/templates/IDENTITY) | 身份和边界定义 |
 | [HEARTBEAT.md](/zh/reference/templates/HEARTBEAT) | 主动监控配置 |
-| [BOOTSTRAP.md](/zh/reference/templates/BOOTSTRAP) | 首次运行 / 起源说明（**不在**默认系统提示加载顺序中） |
 
 ## 系统提示加载顺序
 
@@ -29,9 +28,7 @@ xopc 使用 **profile Markdown** 模板定义智能体行为与知识。执行 `
 6. **HEARTBEAT.md**
 7. **MEMORY.md**
 
-**BOOTSTRAP.md** 也会在新建智能体时一并复制，但**不在**上述系统提示链中（仅作首次运行 / 人工说明）。
-
-**CONTEXT.md**、**SKILLS.md** **不在**默认写入系统提示的列表中。`xopc init` **不会**在工作区根下创建这两个文件；需要时可自行放在工作区根。`onboard` / `agents add` 的种子流程只复制上文列表及 **BOOTSTRAP.md**，**不会**自动从本文档目录带入 `CONTEXT.md` / `SKILLS.md`（需自行放入工作区根）。
+**CONTEXT.md**、**SKILLS.md** **不在**默认写入系统提示的列表中。`xopc init` **不会**在工作区根下创建这两个文件；需要时可自行放在工作区根。`onboard` / `agents add` 的种子流程只复制上文列表，**不会**自动从本文档目录带入 `CONTEXT.md` / `SKILLS.md`（需自行放入工作区根）。
 
 ## 记忆系统
 
