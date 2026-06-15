@@ -37,6 +37,7 @@
     "previewUseInChatBusy": "安装中…",
     "marketplaceReinstall": "重新安装",
     "marketplaceInstalled": "已安装",
+    "marketplaceNotInstalled": "未安装",
     "marketplaceReinstallConfirm": "该技能已安装。是否用商店中的版本覆盖本地？",
     "marketplacePagePrev": "上一页",
     "marketplacePageNext": "下一页",

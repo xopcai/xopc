@@ -37,6 +37,7 @@
     "previewUseInChatBusy": "Installing…",
     "marketplaceReinstall": "Reinstall",
     "marketplaceInstalled": "Installed",
+    "marketplaceNotInstalled": "Not installed",
     "marketplaceReinstallConfirm": "This skill is already installed. Replace it with the version from the store?",
     "marketplacePagePrev": "Previous page",
     "marketplacePageNext": "Next page",
