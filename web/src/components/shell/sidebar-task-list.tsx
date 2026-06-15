@@ -31,7 +31,7 @@ import {
   renameSession,
   unpinSession,
 } from '@/features/sessions/session-api';
-import { bumpSidebarSessionRow, patchSidebarSessionName } from '@/features/sessions/patch-sidebar-session-meta';
+import { patchSidebarSessionName } from '@/features/sessions/patch-sidebar-session-meta';
 import type { SessionMetadata } from '@/features/sessions/session.types';
 import { messages } from '@/i18n/messages';
 import { formControlBorderFocusClass } from '@/lib/form-field-width';
@@ -422,11 +422,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         }
         return;
       }
-      if (data?.length) {
-        bumpSidebarSessionRow(mutate, d.key);
-      } else {
-        void mutate();
-      }
+      void mutate();
     };
     window.addEventListener('session-updated', onSessionUpdated);
     window.addEventListener('session-created', onSessionListRefresh);
@@ -447,7 +443,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
 
   const activeSessionKey = chatSessionKeyFromPath(pathname);
 
-  // Refetch on session switch (skip initial mount); after data loads, bump active row to the top.
+  // Refetch on session switch (skip initial mount) to refresh metadata (message count, etc).
   useEffect(() => {
     if (!token || !activeSessionKey || sessionFilter !== 'web') return;
     if (lastActiveSessionKeyRef.current === null) {
@@ -456,9 +452,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     }
     if (lastActiveSessionKeyRef.current === activeSessionKey) return;
     lastActiveSessionKeyRef.current = activeSessionKey;
-    void mutate().then(() => {
-      bumpSidebarSessionRow(mutate, activeSessionKey);
-    });
+    void mutate();
   }, [token, activeSessionKey, sessionFilter, mutate]);
 
   const openRename = useCallback((key: string) => {

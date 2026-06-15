@@ -4,7 +4,7 @@
 # The build stage uses full Debian for native packages; runtime uses slim and runs as non-root.
 ARG XOPC_NODE_IMAGE=docker.io/library/node:22-bookworm
 ARG XOPC_NODE_SLIM_IMAGE=docker.io/library/node:22-bookworm-slim
-ARG XOPC_PNPM_VERSION=10.25.0
+ARG XOPC_PNPM_VERSION=11.6.0
 
 FROM ${XOPC_NODE_IMAGE} AS build
 ARG XOPC_PNPM_VERSION
