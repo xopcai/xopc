@@ -9,8 +9,6 @@ import { setupModel as runModelSetup } from './onboard/model.js';
 import { colors } from '../utils/colors.js';
 import { setupChannels as runChannelOnboard, getChannelConfigurators } from './onboard/channels/index.js';
 import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
-import { resolveDefaultAgentId, resolveAgentProfileDir } from '../../agent/agent-scope.js';
-import { WORKSPACE_FILES } from '../../config/paths.js';
 import { resolveGatewayLocalClientHost } from '../../config/gateway-bind.js';
 import { initWorkspace } from '../utils/init-workspace.js';
 import { ConfigSchema } from '../../config/schema.js';
@@ -152,11 +150,9 @@ async function runOnboard(
     if (gatewayConfigured) {
       console.log('  1. Choose how to launch below (gateway or terminal UI)');
       console.log('  2. Or chat with: xopc agent -i');
-      console.log('  3. Optional: read BOOTSTRAP.md in your workspace for workspace tips');
     } else {
       console.log('  1. Chat in the terminal: xopc agent -i');
       console.log('  2. Optional: add the Web console: xopc onboard --gateway');
-      console.log('  3. Optional: read BOOTSTRAP.md in your workspace');
     }
     console.log('');
   } else if (doGateway && gatewayConfigured) {
@@ -176,12 +172,6 @@ async function runOnboard(
   console.log('\n📁 Files:');
   console.log('  Config:', configPath);
   console.log('  Workspace:', workspacePath);
-  if (runFullWizard) {
-    console.log(
-      '  BOOTSTRAP.md (origin story):',
-      join(resolveAgentProfileDir(config as Config, resolveDefaultAgentId(config as Config)), WORKSPACE_FILES.BOOTSTRAP),
-    );
-  }
 
   if (isInteractive() && didConfigurableSteps) {
     await promptLaunchAfterOnboard(config as Config, ctx, { doChannels });

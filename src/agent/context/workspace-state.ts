@@ -1,20 +1,13 @@
 /**
- * Workspace bootstrap state machine — OpenClaw-aligned.
- *
- * Tracks BOOTSTRAP.md lifecycle in `<markdownWorkspace>/.xopc/workspace.json`
+ * Workspace setup metadata in `<markdownWorkspace>/.xopc/workspace.json`
  * (same path as `resolveWorkspaceStatePath` / `xopc init`).
- *
- * Motivation: BOOTSTRAP.md instructs the agent to delete itself after setup,
- * but that is unreliable (LLM-dependent). This module provides a runtime-level
- * state machine so the system can track whether bootstrap was completed
- * regardless of whether the agent actually deleted the file.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import type { Config } from '../../config/schema.js';
-import { FILENAMES, WORKSPACE_FILES, resolveWorkspaceStatePath } from '../../config/paths.js';
+import { FILENAMES, resolveWorkspaceStatePath } from '../../config/paths.js';
 
 export { resolveWorkspaceStatePath };
 
@@ -26,10 +19,6 @@ export interface WorkspaceSetupState {
   agentId?: string;
   /** ISO timestamp when profile Markdown was first seeded (init / agents add). */
   profileMarkdownSeededAt?: string;
-  /** ISO timestamp when BOOTSTRAP.md was first seeded into the profile. */
-  bootstrapSeededAt?: string;
-  /** ISO timestamp when bootstrap setup was completed (BOOTSTRAP.md workflow finished). */
-  setupCompletedAt?: string;
 }
 
 function parseWorkspaceState(raw: string): WorkspaceSetupState | null {
@@ -43,9 +32,6 @@ function parseWorkspaceState(raw: string): WorkspaceSetupState | null {
       agentId: typeof parsed.agentId === 'string' ? parsed.agentId : undefined,
       profileMarkdownSeededAt:
         typeof parsed.profileMarkdownSeededAt === 'string' ? parsed.profileMarkdownSeededAt : undefined,
-      bootstrapSeededAt:
-        typeof parsed.bootstrapSeededAt === 'string' ? parsed.bootstrapSeededAt : undefined,
-      setupCompletedAt: typeof parsed.setupCompletedAt === 'string' ? parsed.setupCompletedAt : undefined,
     };
   } catch {
     return null;
@@ -81,59 +67,11 @@ export function resolveAgentWorkspaceStatePath(config: Config, agentId: string):
   return resolveWorkspaceStatePath(config, agentId);
 }
 
-/**
- * Check whether the workspace bootstrap setup has been completed.
- * Returns true when `setupCompletedAt` is set in the state file.
- */
-export function isWorkspaceSetupCompleted(statePath: string): boolean {
+/** Record profile Markdown seed time (idempotent). */
+export function markProfileMarkdownSeeded(statePath: string): void {
   const state = readWorkspaceState(statePath);
-  return typeof state.setupCompletedAt === 'string' && state.setupCompletedAt.trim().length > 0;
-}
-
-/**
- * Check whether BOOTSTRAP.md is still pending (seeded but not completed).
- * Works even if the file was already deleted by the agent — the state file is authoritative.
- */
-export function isWorkspaceBootstrapPending(statePath: string): boolean {
-  const state = readWorkspaceState(statePath);
-  if (typeof state.setupCompletedAt === 'string' && state.setupCompletedAt.trim().length > 0) {
-    return false;
-  }
-  return typeof state.bootstrapSeededAt === 'string';
-}
-
-/**
- * When BOOTSTRAP.md was seeded but the file is now gone, treat setup as completed.
- * Idempotent; safe to call before loading bootstrap files or listing profile files.
- */
-export function syncBootstrapSetupCompletion(statePath: string, profileDir: string): void {
-  if (isWorkspaceSetupCompleted(statePath)) {
+  if (state.profileMarkdownSeededAt) {
     return;
   }
-  if (existsSync(join(profileDir, WORKSPACE_FILES.BOOTSTRAP))) {
-    return;
-  }
-  const state = readWorkspaceState(statePath);
-  if (!state.bootstrapSeededAt) {
-    return;
-  }
-  markSetupCompleted(statePath);
-}
-
-/**
- * Mark BOOTSTRAP.md as seeded (call when workspace-seed.ts writes the file).
- */
-export function markBootstrapSeeded(statePath: string): void {
-  const state = readWorkspaceState(statePath);
-  if (state.bootstrapSeededAt) {
-    return;
-  }
-  writeWorkspaceState(statePath, { bootstrapSeededAt: new Date().toISOString() });
-}
-
-/**
- * Mark bootstrap setup as completed.
- */
-export function markSetupCompleted(statePath: string): void {
-  writeWorkspaceState(statePath, { setupCompletedAt: new Date().toISOString() });
+  writeWorkspaceState(statePath, { profileMarkdownSeededAt: new Date().toISOString() });
 }

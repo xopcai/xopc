@@ -1,15 +1,15 @@
 import type { AgentProfileMarkdownFilename } from '../context/workspace.js';
 
-export type BootstrapFileName = AgentProfileMarkdownFilename | 'BOOTSTRAP.md';
+export type BootstrapFileName = AgentProfileMarkdownFilename;
 
-export interface WorkspaceBootstrapFile {
+export type WorkspaceBootstrapFile = {
   name: BootstrapFileName;
   path: string;
   content?: string;
   missing: boolean;
-}
+};
 
-export interface EmbeddedContextFile {
+export type EmbeddedContextFile = {
   path: string;
   content: string;
-}
+};

@@ -112,7 +112,7 @@ export const AgentDefaultsSchema = z.object({
   bootstrapTotalMaxChars: z.number().int().positive().optional(),
   bootstrapPromptTruncationWarning: z.enum(['off', 'once', 'always']).optional(),
   /**
-   * Controls when bootstrap content (including BOOTSTRAP.md) is injected into the system prompt:
+   * Controls when profile bootstrap context is injected into the system prompt:
    * - `always`: inject on every /new and /reset (default, backward-compatible)
    * - `continuation-skip`: inject on the first turn, skip on continuation turns
    * - `never`: never inject bootstrap content

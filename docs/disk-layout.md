@@ -37,7 +37,7 @@ Resolved by `resolveAgentHomeDir(config, agentId)`. Typical layout:
 
 | Path | Purpose |
 |------|---------|
-| `profile/` | Profile Markdown for the system prompt stack: `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (separate from curated `memories/`), `BOOTSTRAP.md` (not injected by default), optional `agent-avatar.*` for the gateway console. |
+| `profile/` | Profile Markdown for the system prompt stack: `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (separate from curated `memories/`), optional `agent-avatar.*` for the gateway console. |
 | `sessions/` | Legacy directory (optional); may remain from older installs. New installs store transcripts in `xopc.db` only. |
 | `memories/` | Curated structured store (`MEMORY.md`, `USER.md`; entries separated by a fixed delimiter — `BuiltinMemoryStore`). |
 | `inbound/` | Persisted inbound attachments (non-image binaries); transcript paths use `inbound/...` relative to agent home. |

@@ -171,7 +171,7 @@ function pushPath(
   });
 }
 
-/** Align with `AGENT_PROFILE_MARKDOWN_SYSTEM_FILES` + BOOTSTRAP in `src/agent/tools/tool-paths.ts`. */
+/** Align with `AGENT_PROFILE_MARKDOWN_SYSTEM_FILES` in `src/agent/tools/tool-paths.ts`. */
 const PROFILE_SYSTEM_MARKDOWN_NAME_LOWER = new Set(
   [
     'SOUL.md',
@@ -181,7 +181,6 @@ const PROFILE_SYSTEM_MARKDOWN_NAME_LOWER = new Set(
     'AGENTS.md',
     'HEARTBEAT.md',
     'MEMORY.md',
-    'BOOTSTRAP.md',
   ].map((f) => f.toLowerCase()),
 );
 

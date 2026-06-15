@@ -14,7 +14,6 @@ import { filterBootstrapFilesForSession } from './filter-bootstrap-files.js';
 import { loadProfileBootstrapFiles } from './load-bootstrap-files.js';
 import type { EmbeddedContextFile, WorkspaceBootstrapFile } from './types.js';
 
-export { isProfileBootstrapPending } from './load-bootstrap-files.js';
 export { clearAllBootstrapSnapshots, clearBootstrapSnapshot } from './bootstrap-cache.js';
 
 function filterHeartbeatBootstrapFile(
@@ -29,18 +28,16 @@ function filterHeartbeatBootstrapFile(
 
 export function resolveBootstrapFilesSync(params: {
   profileDir: string;
-  workspaceStatePath: string;
   sessionKey?: string;
   excludeHeartbeat?: boolean;
 }): WorkspaceBootstrapFile[] {
-  const rawFiles = loadProfileBootstrapFiles(params.profileDir, params.workspaceStatePath);
+  const rawFiles = loadProfileBootstrapFiles(params.profileDir);
   const filtered = filterBootstrapFilesForSession(rawFiles, params.sessionKey);
   return filterHeartbeatBootstrapFile(filtered, params.excludeHeartbeat ?? false);
 }
 
 export async function resolveBootstrapFilesForRun(params: {
   profileDir: string;
-  workspaceStatePath: string;
   sessionKey?: string;
   excludeHeartbeat?: boolean;
   warn?: (message: string) => void;
@@ -49,17 +46,15 @@ export async function resolveBootstrapFilesForRun(params: {
   const rawFiles = sessionKey
     ? await getOrLoadBootstrapFiles({
         profileDir: params.profileDir,
-        workspaceStatePath: params.workspaceStatePath,
         sessionKey,
       })
-    : loadProfileBootstrapFiles(params.profileDir, params.workspaceStatePath);
+    : loadProfileBootstrapFiles(params.profileDir);
   const filtered = filterBootstrapFilesForSession(rawFiles, sessionKey);
   return filterHeartbeatBootstrapFile(filtered, params.excludeHeartbeat ?? false);
 }
 
 export function resolveBootstrapContextSync(params: {
   profileDir: string;
-  workspaceStatePath: string;
   config?: Config;
   sessionKey?: string;
   excludeHeartbeat?: boolean;
@@ -92,7 +87,6 @@ export function resolveBootstrapContextSync(params: {
 
 export async function resolveBootstrapContextForRun(params: {
   profileDir: string;
-  workspaceStatePath: string;
   config?: Config;
   sessionKey?: string;
   excludeHeartbeat?: boolean;
