@@ -1,6 +1,10 @@
 import type { Config } from '../../config/schema.js';
 import { DEFAULT_HEARTBEAT_FILENAME } from '../context/workspace.js';
-import { getOrLoadBootstrapFiles } from './bootstrap-cache.js';
+import {
+  getOrLoadBootstrapFiles,
+  markBootstrapContextInjected,
+  wasBootstrapContextInjected,
+} from './bootstrap-cache.js';
 import {
   buildBootstrapContextFiles,
   resolveBootstrapMaxChars,
@@ -25,60 +29,98 @@ function filterHeartbeatBootstrapFile(
 
 export function resolveBootstrapFilesSync(params: {
   profileDir: string;
+  workspaceStatePath: string;
   sessionKey?: string;
   excludeHeartbeat?: boolean;
 }): WorkspaceBootstrapFile[] {
-  const rawFiles = loadProfileBootstrapFiles(params.profileDir);
+  const rawFiles = loadProfileBootstrapFiles(params.profileDir, params.workspaceStatePath);
   const filtered = filterBootstrapFilesForSession(rawFiles, params.sessionKey);
   return filterHeartbeatBootstrapFile(filtered, params.excludeHeartbeat ?? false);
 }
 
 export async function resolveBootstrapFilesForRun(params: {
   profileDir: string;
+  workspaceStatePath: string;
   sessionKey?: string;
   excludeHeartbeat?: boolean;
   warn?: (message: string) => void;
 }): Promise<WorkspaceBootstrapFile[]> {
   const sessionKey = params.sessionKey;
   const rawFiles = sessionKey
-    ? await getOrLoadBootstrapFiles({ profileDir: params.profileDir, sessionKey })
-    : loadProfileBootstrapFiles(params.profileDir);
+    ? await getOrLoadBootstrapFiles({
+        profileDir: params.profileDir,
+        workspaceStatePath: params.workspaceStatePath,
+        sessionKey,
+      })
+    : loadProfileBootstrapFiles(params.profileDir, params.workspaceStatePath);
   const filtered = filterBootstrapFilesForSession(rawFiles, sessionKey);
   return filterHeartbeatBootstrapFile(filtered, params.excludeHeartbeat ?? false);
 }
 
 export function resolveBootstrapContextSync(params: {
   profileDir: string;
+  workspaceStatePath: string;
   config?: Config;
   sessionKey?: string;
   excludeHeartbeat?: boolean;
+  contextInjection?: 'always' | 'continuation-skip' | 'never';
 }): {
   bootstrapFiles: WorkspaceBootstrapFile[];
   contextFiles: EmbeddedContextFile[];
 } {
+  const mode = params.contextInjection ?? 'always';
+  if (mode === 'never') {
+    return { bootstrapFiles: [], contextFiles: [] };
+  }
+  if (
+    mode === 'continuation-skip' &&
+    params.sessionKey &&
+    wasBootstrapContextInjected(params.sessionKey)
+  ) {
+    return { bootstrapFiles: [], contextFiles: [] };
+  }
   const bootstrapFiles = resolveBootstrapFilesSync(params);
   const contextFiles = buildBootstrapContextFiles(bootstrapFiles, {
     maxChars: resolveBootstrapMaxChars(params.config),
     totalMaxChars: resolveBootstrapTotalMaxChars(params.config),
   });
+  if (mode === 'continuation-skip' && params.sessionKey && contextFiles.length > 0) {
+    markBootstrapContextInjected(params.sessionKey);
+  }
   return { bootstrapFiles, contextFiles };
 }
 
 export async function resolveBootstrapContextForRun(params: {
   profileDir: string;
+  workspaceStatePath: string;
   config?: Config;
   sessionKey?: string;
   excludeHeartbeat?: boolean;
+  contextInjection?: 'always' | 'continuation-skip' | 'never';
   warn?: (message: string) => void;
 }): Promise<{
   bootstrapFiles: WorkspaceBootstrapFile[];
   contextFiles: EmbeddedContextFile[];
 }> {
+  const mode = params.contextInjection ?? 'always';
+  if (mode === 'never') {
+    return { bootstrapFiles: [], contextFiles: [] };
+  }
+  if (
+    mode === 'continuation-skip' &&
+    params.sessionKey &&
+    wasBootstrapContextInjected(params.sessionKey)
+  ) {
+    return { bootstrapFiles: [], contextFiles: [] };
+  }
   const bootstrapFiles = await resolveBootstrapFilesForRun(params);
   const contextFiles = buildBootstrapContextFiles(bootstrapFiles, {
     maxChars: resolveBootstrapMaxChars(params.config),
     totalMaxChars: resolveBootstrapTotalMaxChars(params.config),
     warn: params.warn,
   });
+  if (mode === 'continuation-skip' && params.sessionKey && contextFiles.length > 0) {
+    markBootstrapContextInjected(params.sessionKey);
+  }
   return { bootstrapFiles, contextFiles };
 }

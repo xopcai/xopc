@@ -3,10 +3,12 @@ import type { WorkspaceBootstrapFile } from './types.js';
 
 type BootstrapSnapshot = {
   profileDir: string;
+  workspaceStatePath: string;
   files: WorkspaceBootstrapFile[];
 };
 
 const cache = new Map<string, BootstrapSnapshot>();
+const bootstrapContextInjected = new Set<string>();
 
 function bootstrapFilesEqual(
   previous: WorkspaceBootstrapFile[],
@@ -27,27 +29,43 @@ function bootstrapFilesEqual(
   });
 }
 
+export function wasBootstrapContextInjected(sessionKey: string): boolean {
+  return bootstrapContextInjected.has(sessionKey);
+}
+
+export function markBootstrapContextInjected(sessionKey: string): void {
+  bootstrapContextInjected.add(sessionKey);
+}
+
 export async function getOrLoadBootstrapFiles(params: {
   profileDir: string;
+  workspaceStatePath: string;
   sessionKey: string;
 }): Promise<WorkspaceBootstrapFile[]> {
   const existing = cache.get(params.sessionKey);
-  const files = loadProfileBootstrapFiles(params.profileDir);
+  const files = loadProfileBootstrapFiles(params.profileDir, params.workspaceStatePath);
   if (
     existing &&
     existing.profileDir === params.profileDir &&
+    existing.workspaceStatePath === params.workspaceStatePath &&
     bootstrapFilesEqual(existing.files, files)
   ) {
     return existing.files;
   }
-  cache.set(params.sessionKey, { profileDir: params.profileDir, files });
+  cache.set(params.sessionKey, {
+    profileDir: params.profileDir,
+    workspaceStatePath: params.workspaceStatePath,
+    files,
+  });
   return files;
 }
 
 export function clearBootstrapSnapshot(sessionKey: string): void {
   cache.delete(sessionKey);
+  bootstrapContextInjected.delete(sessionKey);
 }
 
 export function clearAllBootstrapSnapshots(): void {
   cache.clear();
+  bootstrapContextInjected.clear();
 }

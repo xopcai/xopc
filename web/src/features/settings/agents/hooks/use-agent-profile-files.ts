@@ -71,6 +71,24 @@ export function useAgentProfileFiles(options: {
   const [fileSaving, setFileSaving] = useState(false);
   const [filesViewMode, setFilesViewMode] = useState<'edit' | 'preview'>('edit');
 
+  // Reset activeFile when selectedId changes so the auto-select effect fires for the new agent
+  const prevSelectedIdRef = useRef<string | null>(selectedId);
+  useEffect(() => {
+    if (selectedId !== prevSelectedIdRef.current) {
+      prevSelectedIdRef.current = selectedId;
+      setActiveFileState(null);
+    }
+  }, [selectedId]);
+
+  // Auto-select the first file when files are loaded and no file is active yet
+  useEffect(() => {
+    if (files && files.files.length > 0 && !activeFile) {
+      // Prefer AGENTS.md if available, otherwise pick the first file
+      const agentsFile = files.files.find((f) => f.name === 'AGENTS.md');
+      setActiveFileState(agentsFile ? agentsFile.name : files.files[0].name);
+    }
+  }, [files, activeFile]);
+
   const fileDraft = fileEditor.draft;
   const profileEditorNonce = fileEditor.editorNonce;
 
@@ -153,15 +171,24 @@ export function useAgentProfileFiles(options: {
 
   const profileFileKey = activeFile && selectedId ? `${selectedId}:${activeFile}` : '';
 
-  if (profileFileKey !== trackedProfileKeyRef.current) {
-    flushProfileSaveRef.current();
-    trackedProfileKeyRef.current = profileFileKey;
-  }
-  if (!profileFileKey) {
-    if (fileEditor.loadedKey !== '') {
-      dispatchFileEditor({ type: 'clear' });
+  useEffect(() => {
+    if (profileFileKey !== trackedProfileKeyRef.current) {
+      flushProfileSaveRef.current();
+      trackedProfileKeyRef.current = profileFileKey;
     }
-  } else if (!profileFileLoading && fileEditor.loadedKey !== profileFileKey) {
+  }, [profileFileKey]);
+
+  // Load editor content only after the profile file fetch settles for the active key.
+  // Render-time sync previously loaded stale/empty cache data before useAsyncResource
+  // started loading, then skipped the real payload because loadedKey already matched.
+  useEffect(() => {
+    if (!profileFileKey) {
+      dispatchFileEditor({ type: 'clear' });
+      return;
+    }
+    if (profileFileLoading) {
+      return;
+    }
     profileFileKeyRef.current = profileFileKey;
     profileSyncedRef.current = profileFileResource.data;
     dispatchFileEditor({
@@ -169,7 +196,7 @@ export function useAgentProfileFiles(options: {
       key: profileFileKey,
       content: profileFileResource.data,
     });
-  }
+  }, [profileFileKey, profileFileLoading, profileFileResource.data]);
 
   const trackedViewModeKeyRef = useRef({ activeFile, selectedId });
   if (

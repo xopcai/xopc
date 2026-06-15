@@ -19,6 +19,11 @@ import {
 import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from '../agent/context/workspace.js';
 import { seedAgentProfileMarkdownFiles } from '../agent/context/workspace-seed.js';
 import {
+  isWorkspaceSetupCompleted,
+  resolveAgentWorkspaceStatePath,
+  syncBootstrapSetupCompletion,
+} from '../agent/context/workspace-state.js';
+import {
   applyAgentConfig,
   findAgentEntryIndex,
   pruneAgentConfig,
@@ -573,7 +578,14 @@ export async function listAgentProfileFiles(
   const root = await profileMarkdownRootReal(cfg, id);
   const names = [...EDITABLE_PROFILE_MARKDOWN_NAMES];
   const files: AgentFileEntry[] = [];
+  const statePath = resolveAgentWorkspaceStatePath(cfg, id);
+  syncBootstrapSetupCompletion(statePath, root);
+  const setupCompleted = isWorkspaceSetupCompleted(statePath);
   for (const name of names.sort((a, b) => a.localeCompare(b))) {
+    // Skip BOOTSTRAP.md when setup is already completed
+    if (name === WORKSPACE_FILES.BOOTSTRAP && setupCompleted) {
+      continue;
+    }
     const abs = resolveWorkspaceSafePath(root, name);
     if (!abs) {
       continue;

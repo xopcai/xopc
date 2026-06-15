@@ -1,5 +1,3 @@
-import { join } from 'node:path';
-
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../config/schema.js';
@@ -17,7 +15,6 @@ import {
   ensureSessionRecord,
   estimateTokensFromMessages,
   getCompactionCheckpointDetail,
-  getCurrentTranscriptId,
   getGlobalSessionStats,
   getSessionMetadata,
   listCompactionCheckpoints,

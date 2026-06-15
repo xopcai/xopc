@@ -29,9 +29,7 @@ const root = join(__dirname, '..');
 // SQLite schema DDL files (loaded at runtime via readFileSync next to compiled schema.js)
 const schemaSrc = join(root, 'src/storage/sqlite');
 const schemaDist = join(root, 'dist/src/storage/sqlite');
-for (const name of ['schema-v1.sql', 'schema-v2.sql']) {
-  cpSync(join(schemaSrc, name), join(schemaDist, name));
-}
+cpSync(join(schemaSrc, 'schema.sql'), join(schemaDist, 'schema.sql'));
 
 const srcTpl = join(root, 'src/agent/context/workspace-templates');
 const distTpl = join(root, 'dist/src/agent/context/workspace-templates');

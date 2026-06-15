@@ -21,6 +21,8 @@ import {
 
 import { cn } from '@/lib/cn';
 
+import { focusAfterBlockInsert } from './extensions/block-insert-focus';
+
 interface ToolbarButtonProps {
   onClick: () => void;
   isActive?: boolean;
@@ -203,7 +205,10 @@ export function BlockEditorToolbar({ editor, onImageUpload, imageUploading = fal
         <Quote size={iconSize} />
       </ToolbarButton>
       <ToolbarButton
-        onClick={() => editor.chain().focus().setHorizontalRule().run()}
+        onClick={() => {
+          editor.chain().focus().setHorizontalRule().run();
+          focusAfterBlockInsert(editor);
+        }}
         title="Divider"
       >
         <Minus size={iconSize} />

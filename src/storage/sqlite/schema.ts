@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const XOPC_DB_SCHEMA_VERSION = 2;
+export const XOPC_DB_SCHEMA_VERSION = 1;
 
 export const SCHEMA_META_SCHEMA_VERSION_KEY = 'schema_version';
 
@@ -14,8 +14,8 @@ type TableInfoRow = {
 
 const SCHEMA_DIR = dirname(fileURLToPath(import.meta.url));
 
-function readSchemaSql(version: number): string {
-  return readFileSync(join(SCHEMA_DIR, `schema-v${version}.sql`), 'utf8');
+function readSchemaSql(): string {
+  return readFileSync(join(SCHEMA_DIR, 'schema.sql'), 'utf8');
 }
 
 export function ensureXopcDatabaseSchema(db: DatabaseSync): void {
@@ -28,14 +28,7 @@ export function ensureXopcDatabaseSchema(db: DatabaseSync): void {
 
   const currentVersion = readSchemaVersion(db);
   if (currentVersion === 0) {
-    db.exec(readSchemaSql(1));
-    db.exec(readSchemaSql(2));
-    setSchemaVersion(db, XOPC_DB_SCHEMA_VERSION);
-    return;
-  }
-
-  if (currentVersion === 1) {
-    db.exec(readSchemaSql(2));
+    db.exec(readSchemaSql());
     setSchemaVersion(db, XOPC_DB_SCHEMA_VERSION);
     return;
   }

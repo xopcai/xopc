@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { SessionConfigSchema, type Config } from '../config/schema.js';
 import { parseSessionKey } from '../routing/session-key.js';
 import { createLogger } from '../utils/logger.js';
-import { getSessionMetadata, requireXopcDatabase } from '../storage/sqlite/index.js';
+import { requireXopcDatabase } from '../storage/sqlite/index.js';
 import { resolveSessionLifecycleTimestamps } from './lifecycle-timestamps.js';
 import {
   evaluateSessionFreshness,

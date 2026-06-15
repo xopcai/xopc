@@ -27,9 +27,9 @@ import { resolveProviderApiKeySync } from '../auth/sync-provider-auth.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
 import { CredentialResolver } from '../auth/credentials.js';
-import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
+import { resolveBundledSkillsDir, resolveStateDir, resolveWorkspaceStatePath } from '../config/paths.js';
 import { loadProfileMarkdownFiles, extractTextContent } from './context/workspace.js';
-import { resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
+import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
 import type { EmbeddedContextFile } from './bootstrap/types.js';
 import { AgentToolsFactory } from './tools/factory.js';
 import { parseMcpToolName } from './mcp/bundle-mcp-policy.js';
@@ -400,12 +400,16 @@ export class AgentManager implements AgentInstanceGateway {
   ): EmbeddedContextFile[] {
     const cfg = this.config.config!;
     const profileDir = resolveAgentProfileDir(cfg, profile.agentId);
+    const workspaceStatePath = resolveWorkspaceStatePath(cfg, profile.agentId);
     const heartbeatEnabled = cfg.gateway?.heartbeat?.includeSystemPromptSection ?? false;
+    const contextInjection = cfg.agents?.defaults?.contextInjection ?? 'always';
     const { contextFiles } = resolveBootstrapContextSync({
       profileDir,
+      workspaceStatePath,
       config: cfg,
       sessionKey,
       excludeHeartbeat: excludeHeartbeat ?? !heartbeatEnabled,
+      contextInjection,
     });
     return contextFiles;
   }
@@ -588,6 +592,7 @@ export class AgentManager implements AgentInstanceGateway {
       evictEmbeddedSessionRunner(sessionKey, 'agent_removed');
       this.agents.delete(sessionKey);
       this.memoryPrefetch.forgetSession(sessionKey);
+      clearBootstrapSnapshot(sessionKey);
       this.config.getModelManager?.().clearSessionProfileDefault(sessionKey);
       log.info({ sessionKey, totalAgents: this.agents.size }, 'Removed agent instance');
       return true;
