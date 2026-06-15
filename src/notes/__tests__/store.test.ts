@@ -1,9 +1,13 @@
-import { access, mkdtemp, readdir, rm, writeFile, mkdir } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { resolveNoteItemPath, resolveNoteHistoryDir, resolveNotesIndexPath } from '../paths.js';
+import {
+  closeXopcDatabase,
+  resetXopcDatabaseSingletonForTest,
+} from '../../storage/sqlite/index.js';
+import { resolveNoteHistoryDir } from '../paths.js';
 import { buildNoteAttachmentRef } from '../attachment-ref.js';
 import { NotesStore } from '../store.js';
 import type { Note } from '../types.js';
@@ -22,6 +26,8 @@ describe('NotesStore deleteNote', () => {
   });
 
   afterEach(async () => {
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
     if (previousStateDir === undefined) {
       delete process.env.XOPC_STATE_DIR;
     } else {
@@ -30,7 +36,7 @@ describe('NotesStore deleteNote', () => {
     await rm(stateDir, { recursive: true, force: true });
   });
 
-  it('removes note file and index entry on delete', async () => {
+  it('removes note and index entry on delete', async () => {
     const note: Note = {
       id: 'note-delete-me',
       kind: 'thought',
@@ -48,7 +54,6 @@ describe('NotesStore deleteNote', () => {
     await store.flush();
 
     expect(deleted).toBe(true);
-    await expect(access(resolveNoteItemPath(note.id))).rejects.toMatchObject({ code: 'ENOENT' });
     expect(await store.getNote(note.id)).toBeNull();
 
     const listed = await store.listNotes();
@@ -56,35 +61,24 @@ describe('NotesStore deleteNote', () => {
   });
 
   it('excludes trashed notes from default list', async () => {
-    const indexPath = resolveNotesIndexPath();
-    await mkdir(join(stateDir, 'notes', 'items'), { recursive: true });
-    await writeFile(
-      indexPath,
-      JSON.stringify({
-        version: 3,
-        notes: [
-          {
-            id: 'active-note',
-            kind: 'thought',
-            status: 'inbox',
-            createdAt: 2,
-            updatedAt: 2,
-            snippet: 'active',
-          },
-          {
-            id: 'trashed-note',
-            kind: 'thought',
-            status: 'trashed',
-            createdAt: 1,
-            updatedAt: 1,
-            snippet: 'trashed',
-          },
-        ],
-      }),
-    );
-
-    store = new NotesStore();
-    await store.initialize();
+    await store.addNote({
+      id: 'active-note',
+      kind: 'thought',
+      status: 'inbox',
+      text: 'active',
+      createdAt: 2,
+      updatedAt: 2,
+      capturedVia: { channel: 'web' },
+    });
+    await store.addNote({
+      id: 'trashed-note',
+      kind: 'thought',
+      status: 'trashed',
+      text: 'trashed',
+      createdAt: 1,
+      updatedAt: 1,
+      capturedVia: { channel: 'web' },
+    });
 
     const listed = await store.listNotes();
     expect(listed.items.map((item) => item.id)).toEqual(['active-note']);
@@ -93,7 +87,7 @@ describe('NotesStore deleteNote', () => {
     expect(trashedOnly.items.map((item) => item.id)).toEqual(['trashed-note']);
   });
 
-  it('indexes coverAttachmentId for image notes and rebuilds stale index', async () => {
+  it('indexes coverAttachmentId for image notes after re-init', async () => {
     const note: Note = {
       id: 'note-with-image',
       kind: 'media',
@@ -123,14 +117,6 @@ describe('NotesStore deleteNote', () => {
       coverAttachmentId: 'att-1',
     });
     expect(listed.items[0]?.snippet).toBeUndefined();
-
-    await writeFile(
-      resolveNotesIndexPath(),
-      JSON.stringify({
-        version: 1,
-        notes: [{ id: 'note-with-image', kind: 'media', status: 'inbox', createdAt: 2, updatedAt: 2 }],
-      }),
-    );
 
     store = new NotesStore();
     await store.initialize();
@@ -272,6 +258,8 @@ describe('NotesStore snapshots', () => {
   });
 
   afterEach(async () => {
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
     if (previousStateDir === undefined) {
       delete process.env.XOPC_STATE_DIR;
     } else {

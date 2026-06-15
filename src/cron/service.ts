@@ -31,8 +31,8 @@ export interface CronServiceConfig {
   filePath?: string;
   agentService?: any;
   messageBus?: any;
-  /** Override run log directory (tests) */
-  runsDir?: string;
+  /** Override SQLite database path (tests). */
+  dbPath?: string;
 }
 
 export class CronService {
@@ -48,7 +48,7 @@ export class CronService {
     const filePath = config?.filePath || resolveCronJobsPath();
     this.persistence = new CronPersistence(filePath);
     this.executor = new DefaultJobExecutor();
-    this.runLogStore = new CronRunLogStore(config?.runsDir);
+    this.runLogStore = new CronRunLogStore(config?.dbPath);
     this.executor.setRunLogStore(this.runLogStore);
 
     // Set dependencies if provided

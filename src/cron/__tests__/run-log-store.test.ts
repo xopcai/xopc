@@ -1,21 +1,31 @@
 import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { join } from 'node:path';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import {
+  closeXopcDatabase,
+  openXopcDatabase,
+  resetXopcDatabaseSingletonForTest,
+} from '../../storage/sqlite/index.js';
 import { CronRunLogStore } from '../run-log-store.js';
 import type { JobExecution } from '../types.js';
 
 describe('CronRunLogStore', () => {
-  let dir: string;
+  let stateDir: string;
+  let dbPath: string;
   let store: CronRunLogStore;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'cron-runs-'));
-    store = new CronRunLogStore(dir);
+    stateDir = await mkdtemp(join(tmpdir(), 'cron-runs-'));
+    dbPath = join(stateDir, 'xopc.db');
+    resetXopcDatabaseSingletonForTest();
+    store = new CronRunLogStore(dbPath);
   });
 
   afterEach(async () => {
-    await rm(dir, { recursive: true, force: true });
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
+    await rm(stateDir, { recursive: true, force: true });
   });
 
   it('appends completed runs and reads per-job history', async () => {

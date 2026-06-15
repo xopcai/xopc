@@ -64,6 +64,24 @@ export {
   restoreCompactionCheckpoint,
 } from './transcript-repository.js';
 export {
+  appendCronRun,
+  deleteCronRunsForJob,
+  readAllCronRuns,
+  readCronJobHistory,
+} from './cron-run-repository.js';
+export {
+  deleteNoteRecord,
+  getNoteRecord,
+  listNoteRecords,
+  upsertNoteRecord,
+} from './notes-repository.js';
+export {
+  resolveAgentIdFromMemoriesDir,
+  searchMemoryIndex,
+  syncMemoryIndex,
+  type MemorySearchHit,
+} from './memory-index-repository.js';
+export {
   deleteSessionConfig,
   getSessionConfig,
   hasSessionConfig,

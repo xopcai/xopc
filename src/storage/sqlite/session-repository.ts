@@ -23,13 +23,7 @@ const SESSION_COLUMNS = `
   thinking_level, verbose_level
 `;
 
-function escapeFts5Query(raw: string): string {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    return '';
-  }
-  return `"${trimmed.replace(/"/g, '""')}"`;
-}
+import { escapeFts5Query } from './fts.js';
 
 const SELECT_SESSION = `SELECT ${SESSION_COLUMNS} FROM sessions WHERE session_key = ?`;
 
