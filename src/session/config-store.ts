@@ -1,5 +1,4 @@
-import { createLogger } from '../utils/logger.js';
-import type { ThinkLevel, ReasoningLevel, VerboseLevel, ElevatedMode } from '../agent/transcript/thinking-types.js';
+import type { ReasoningLevel, ThinkLevel, VerboseLevel } from '../agent/transcript/thinking-types.js';
 import {
   deleteSessionConfig as deleteSqliteSessionConfig,
   getSessionConfig as getSqliteSessionConfig,
@@ -8,23 +7,12 @@ import {
   setSessionConfig as setSqliteSessionConfig,
   updateSessionConfig as updateSqliteSessionConfig,
 } from '../storage/sqlite/index.js';
+import { createLogger } from '../utils/logger.js';
+import type { SessionAgentConfig } from './config-types.js';
+
+export type { SessionAgentConfig } from './config-types.js';
 
 const log = createLogger('SessionConfigStore');
-
-/**
- * Session-level agent configuration.
- * These settings override agent defaults for a specific session.
- */
-export interface SessionAgentConfig {
-  thinkingLevel?: ThinkLevel;
-  reasoningLevel?: ReasoningLevel;
-  verboseLevel?: VerboseLevel;
-  elevatedMode?: ElevatedMode;
-  modelOverride?: string;
-  providerOverride?: string;
-  workingDirectoryOverride?: string;
-  updatedAt?: number;
-}
 
 export class SessionConfigStore {
   private cwd: string;

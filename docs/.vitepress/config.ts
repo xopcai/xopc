@@ -7,6 +7,15 @@ export default defineConfig({
   title: 'xopc',
   description: 'Ultra-Lightweight Personal AI Assistant',
   base,
+  // esbuild 0.28+ errors when downleveling destructuring for legacy targets; our
+  // browserslist is above Safari 14.1 (see evanw/esbuild#4436, vitejs/vite#22346).
+  vite: {
+    esbuild: {
+      supported: {
+        destructuring: true,
+      },
+    },
+  },
   cleanUrls: true,
   ignoreDeadLinks: true,
   head: [

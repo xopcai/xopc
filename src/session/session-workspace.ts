@@ -6,7 +6,7 @@ import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { resolveUserPath } from '../agent/agent-scope.js';
 import { normalizeWorkspaceDir } from '../config/workspace-path.js';
-import type { SessionAgentConfig } from './config-store.js';
+import type { SessionAgentConfig } from './config-types.js';
 
 /**
  * Normalize user input for `workingDirectoryOverride`. Rejects empty and filesystem roots.

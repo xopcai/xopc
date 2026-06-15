@@ -1,4 +1,4 @@
-import type { JobExecution } from '../../cron/types.js';
+import type { JobExecution } from '../../cron/execution-types.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 const MAX_RUNS_PER_JOB = 2000;
