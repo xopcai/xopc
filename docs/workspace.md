@@ -30,7 +30,7 @@ These are shared across agents unless noted.
 | `credentials/` | Global secrets; `auth-profiles.json`; `oauth/<provider>.json` for OAuth tokens. |
 | `extensions/` | Installed extensions and `extensions-lock.json`. |
 | `skills/` | Skill packages (each skill is a folder with `SKILL.md`). |
-| `cron/` | `jobs.json` scheduled jobs; `logs/` daily JSONL logs; `runs/` per-job run history. |
+| `cron/` | `jobs.json` scheduled jobs; `logs/` daily JSONL logs. Completed run history is in **`xopc.db`** (`cron_runs`). |
 | `logs/` | Process logs (`xopc-<date>.log`), unless `XOPC_LOG_DIR` overrides. |
 | `bin/` | Managed CLI shim (e.g. `xopc`). |
 | `tools/` | Bundled tool runtimes (e.g. `tools/node/current/` for Node/npm used by tools). |

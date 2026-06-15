@@ -1,8 +1,15 @@
-// Memory Search - Semantic memory recall system
+// Memory Search - FTS-backed recall with markdown file reads for snippets
 import { readFileSync, existsSync } from 'fs';
-import { join, relative } from 'path';
+import { join } from 'path';
 
 import { createLogger } from '../../../utils/logger.js';
+import {
+  isXopcDatabaseOpen,
+  openXopcDatabase,
+  resolveAgentIdFromMemoriesDir,
+  searchMemoryIndex,
+  syncMemoryIndex,
+} from '../../../storage/sqlite/index.js';
 
 const log = createLogger('MemorySearch');
 
@@ -22,139 +29,15 @@ export interface MemorySearchOptions {
   minScore?: number;
   /** Absolute path to agent-scoped curated memories dir (MEMORY.md + USER.md). */
   memoriesDir?: string;
-}
-
-interface MemoryFile {
-  path: string;
-  content: string;
-  modified: Date;
+  agentId?: string;
 }
 
 const CURATED_MEMORY_FILENAMES = new Set(['MEMORY.md', 'USER.md']);
 
-// =============================================================================
-// Memory Path Utilities (Internal)
-// =============================================================================
-
-function getDailyMemoryPath(baseDir: string, date?: Date): string {
-  const d = date || new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return join(baseDir, `memory`, `${year}-${month}-${day}.md`);
-}
-
-function getLongTermMemoryPath(baseDir: string): string {
-  return join(baseDir, 'MEMORY.md');
-}
-
-function getCuratedMemoryPaths(memoriesDir: string | undefined): string[] {
-  if (!memoriesDir) return [];
-  const curated = [join(memoriesDir, 'MEMORY.md'), join(memoriesDir, 'USER.md')];
-  return curated.filter((p) => existsSync(p));
-}
-
-function getAllMemoryPaths(baseDir: string, memoriesDir?: string): string[] {
-  const paths: string[] = [];
-
-  paths.push(...getCuratedMemoryPaths(memoriesDir));
-
-  // Long-term memory (workspace root)
-  const longTermPath = getLongTermMemoryPath(baseDir);
-  if (existsSync(longTermPath)) {
-    paths.push(longTermPath);
+function ensureMemoryDatabase(): void {
+  if (!isXopcDatabaseOpen()) {
+    openXopcDatabase();
   }
-
-  // Daily memories (last 30 days)
-  const memoryDir = join(baseDir, 'memory');
-  if (existsSync(memoryDir)) {
-    const today = new Date();
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const path = getDailyMemoryPath(baseDir, date);
-      if (existsSync(path)) {
-        paths.push(path);
-      }
-    }
-  }
-
-  return paths;
-}
-
-// =============================================================================
-// Content Parsing (Internal)
-// =============================================================================
-
-function parseMemoryFile(path: string): MemoryFile {
-  const content = readFileSync(path, 'utf-8');
-  const stats = existsSync(path) ? { mtime: new Date() } : { mtime: new Date() };
-
-  return {
-    path,
-    content,
-    modified: stats.mtime,
-  };
-}
-
-// =============================================================================
-// Simple Fuzzy Search (Internal)
-// =============================================================================
-
-function fuzzyMatch(query: string, text: string): number {
-  const queryLower = query.toLowerCase();
-  const textLower = text.toLowerCase();
-
-  // Exact match
-  if (textLower.includes(queryLower)) {
-    return 1.0;
-  }
-
-  // Word-by-word match
-  const queryWords = queryLower.split(/\s+/);
-  const textWords = textLower.split(/\s+/);
-
-  let matchedWords = 0;
-  for (const qWord of queryWords) {
-    if (textWords.some((tWord) => tWord.includes(qWord) || qWord.includes(tWord))) {
-      matchedWords++;
-    }
-  }
-
-  return matchedWords / queryWords.length;
-}
-
-function searchInContent(query: string, content: string, options: MemorySearchOptions = {}): MemoryMatch | null {
-  const { maxResults = 5, minScore = 0.3 } = options;
-
-  const lines = content.split('\n');
-  const matches: Array<{ line: string; index: number; score: number }> = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const score = fuzzyMatch(query, lines[i]);
-    if (score >= minScore) {
-      matches.push({ line: lines[i], index: i, score });
-    }
-  }
-
-  // Sort by score descending
-  matches.sort((a, b) => b.score - a.score);
-
-  if (matches.length === 0) {
-    return null;
-  }
-
-  // Take top matches
-  const topMatches = matches.slice(0, maxResults);
-  const lineNumbers = topMatches.map((m) => m.index + 1);
-  const linesContent = topMatches.map((m) => m.line).join('\n');
-
-  return {
-    file: '', // Will be set by caller
-    lines: linesContent,
-    score: topMatches[0].score,
-    lineNumbers,
-  };
 }
 
 // =============================================================================
@@ -166,32 +49,29 @@ export async function memorySearch(
   query: string,
   options: MemorySearchOptions = {},
 ): Promise<MemoryMatch[]> {
-  const { maxResults = 5, minScore = 0.3, memoriesDir } = options;
+  const { maxResults = 5, minScore = 0.3, memoriesDir, agentId } = options;
+  const resolvedAgentId = agentId ?? resolveAgentIdFromMemoriesDir(memoriesDir);
 
-  const paths = getAllMemoryPaths(baseDir, memoriesDir);
-  const results: MemoryMatch[] = [];
-
-  for (const path of paths) {
-    try {
-      const memoryFile = parseMemoryFile(path);
-      const match = searchInContent(query, memoryFile.content, options);
-
-      if (match) {
-        match.file = relative(baseDir, path);
-        if (match.score >= minScore) {
-          results.push(match);
-        }
-      }
-    } catch {
-      log.warn({ path }, 'Could not read memory file');
-    }
+  try {
+    ensureMemoryDatabase();
+    syncMemoryIndex({ agentId: resolvedAgentId, workspaceDir: baseDir, memoriesDir });
+    const hits = searchMemoryIndex({
+      agentId: resolvedAgentId,
+      query,
+      maxResults,
+      minScore,
+    });
+    return hits.map((hit) => ({
+      file: hit.path,
+      lines: hit.lines,
+      score: hit.score,
+      lineNumbers: hit.lineNumbers,
+    }));
+  } catch (err) {
+    const em = err instanceof Error ? err.message : String(err);
+    log.warn({ err, errorMessage: em, agentId: resolvedAgentId }, `Memory FTS search failed: ${em}`);
+    return [];
   }
-
-  // Sort all results by score
-  results.sort((a, b) => b.score - a.score);
-
-  // Return top results per file or overall
-  return results.slice(0, maxResults * 3); // Return more to allow grouping
 }
 
 // =============================================================================
