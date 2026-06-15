@@ -1,6 +1,5 @@
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 import {
   BrowserWindow,
@@ -54,8 +53,6 @@ import {
   shouldAutoOpenDevTools,
   toggleMainWindowDevTools,
 } from './devtools.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
 
 /** Track the main window for gateway exit notifications. */
 let mainWindow: BrowserWindow | null = null;
@@ -146,7 +143,7 @@ let appIsQuitting = false;
 let gatewayExitedUnexpectedly = false;
 
 /** Dev / unpackaged: window icon (Linux/Windows). Packaged apps use the bundle icon from electron-builder. */
-const devWindowIcon = join(__dirname, '../../electron/resources/icon.png');
+const devWindowIcon = join(import.meta.dirname, '../../electron/resources/icon.png');
 
 /**
  * Open off-origin http(s) links in the system browser instead of replacing the app window /
@@ -271,7 +268,7 @@ async function resolveWindowLoad(): Promise<
     return { kind: 'url', href: u.toString(), openDevTools: false };
   }
 
-  return { kind: 'file', path: join(__dirname, '../renderer/index.html') };
+  return { kind: 'file', path: join(import.meta.dirname, '../renderer/index.html') };
 }
 
 /** Send navigate IPC once the window can receive it (handles tray actions after window was closed). */
@@ -325,7 +322,7 @@ function createWindow(): void {
     ...browserWindowChromeOptions(),
     ...(!app.isPackaged && existsSync(devWindowIcon) ? { icon: devWindowIcon } : {}),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.cjs'),
+      preload: join(import.meta.dirname, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },
@@ -354,7 +351,7 @@ function createWindow(): void {
 
   const trayIconDir = app.isPackaged
     ? join(process.resourcesPath, 'resources')
-    : join(__dirname, '../../electron/resources');
+    : join(import.meta.dirname, '../../electron/resources');
   createTray(trayIconDir, {
     showWindow: () => {
       focusOrCreateMainWindow();
