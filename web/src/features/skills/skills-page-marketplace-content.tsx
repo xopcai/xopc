@@ -246,9 +246,16 @@ export function SkillsPageMarketplaceContent(p: Props) {
                           <div className="flex items-start justify-between gap-2">
                             <h3
                               id={`mp-skill-title-${row.id}`}
-                              className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-snug tracking-tight text-fg"
+                              className="min-w-0 flex-1 text-[15px] font-semibold leading-snug tracking-tight text-fg"
                             >
-                              {row.name}
+                              <span className="flex min-w-0 items-center gap-1.5">
+                                <span className="truncate">{row.name}</span>
+                                {!installed ? (
+                                  <span className="shrink-0 text-[10px] font-normal leading-none text-fg-subtle">
+                                    {sk.marketplaceNotInstalled}
+                                  </span>
+                                ) : null}
+                              </span>
                             </h3>
                             <div
                               role="group"

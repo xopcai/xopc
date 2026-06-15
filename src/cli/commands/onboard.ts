@@ -1,5 +1,4 @@
 import { Command } from 'commander';
-import { join } from 'path';
 import { select } from '@inquirer/prompts';
 import { saveConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';

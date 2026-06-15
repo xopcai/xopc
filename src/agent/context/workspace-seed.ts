@@ -10,7 +10,6 @@ import { fileURLToPath } from 'node:url';
 
 import type { Config } from '../../config/schema.js';
 import {
-  DEFAULT_AGENT_ID,
   resolveAgentProfileDir,
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
