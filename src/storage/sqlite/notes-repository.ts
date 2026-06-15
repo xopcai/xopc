@@ -1,5 +1,5 @@
 import type { Note, NoteIndexEntry, NotesListQuery } from '../../notes/types.js';
-import { buildNoteIndexMeta, notePlainText } from '../../notes/note-index-meta.js';
+import { buildNoteIndexMeta, extractAttachmentFileNames, notePlainText } from '../../notes/note-index-meta.js';
 import { escapeFts5Query } from './fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
@@ -68,7 +68,8 @@ function rowToIndexEntry(row: NoteRow): NoteIndexEntry {
 function noteSearchContent(note: Note): string {
   const plain = notePlainText(note);
   const attachmentText = note.attachments?.map((a) => a.transcript).filter(Boolean).join(' ') ?? '';
-  return [note.title, plain, attachmentText, ...(note.tags ?? [])].filter(Boolean).join('\n');
+  const attachmentNames = extractAttachmentFileNames(note)?.join(' ') ?? '';
+  return [note.title, plain, attachmentText, attachmentNames, ...(note.tags ?? [])].filter(Boolean).join('\n');
 }
 
 function noteToRow(note: Note): Omit<NoteRow, 'payload_json'> & { payload_json: string } {

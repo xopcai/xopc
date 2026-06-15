@@ -325,7 +325,7 @@ export function resolveWorkspaceStateDir(config: Config, agentId: string): strin
 }
 
 /**
- * OpenClaw-aligned: workspace setup state file (`<workspace>/.xopc/workspace-state.json`).
+ * OpenClaw-aligned: workspace setup state file (`<workspace>/.xopc/workspace.json`).
  */
 export function resolveWorkspaceStatePath(config: Config, agentId: string): string {
   return join(resolveWorkspaceStateDir(config, agentId), FILENAMES.WORKSPACE_STATE);

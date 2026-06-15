@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   closeXopcDatabase,
-  openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
 import { CronRunLogStore } from '../run-log-store.js';

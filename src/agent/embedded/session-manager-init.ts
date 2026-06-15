@@ -1,5 +1,3 @@
-import fs from "node:fs/promises";
-
 type SessionHeaderEntry = { type: "session"; id?: string; cwd?: string };
 type SessionMessageEntry = {
   type: "message";
