@@ -1,5 +1,5 @@
 /**
- * API-level transcript summary types (on-disk format is pi-coding-agent JSONL + `sessions.json`).
+ * API-level transcript summary types (authoritative storage is SQLite `transcript_entries`).
  */
 
 import type { TranscriptStoredRow } from './session-context-for-llm.js';

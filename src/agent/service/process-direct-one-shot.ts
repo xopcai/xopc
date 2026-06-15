@@ -6,7 +6,6 @@ import type { ModelManager } from '../models/index.js';
 import type { SessionStore } from '../../session/index.js';
 import type { Config } from '../../config/schema.js';
 import { initSessionTurn } from '../../session/index.js';
-import { appendPiTranscriptMessage } from '../../session/parity/jsonl-transcript-io.js';
 import { buildDirectUserMessageContent, type DirectInboundAttachment } from './build-direct-message-content.js';
 import type { ProcessDirectStreamLog } from './process-direct-streaming.js';
 import {
@@ -75,18 +74,11 @@ export async function runProcessDirect(
     if (slash.matched) {
       const trimmed = slash.aggregatedText.trim();
       if (trimmed) {
-        const { absPath } = await deps.sessionStore.resolveTranscriptPath(input.sessionKey);
-        const workspaceDir = deps.agentManager.getResolvedWorkspaceForSession(input.sessionKey);
-        await appendPiTranscriptMessage({
-          absPath,
-          cwd: workspaceDir,
-          message: {
-            role: 'assistant',
-            content: [{ type: 'text', text: trimmed }],
-            timestamp: Date.now(),
-          } as AgentMessage,
-          sessionKey: input.sessionKey,
-        });
+        await deps.sessionStore.appendTranscriptMessage(input.sessionKey, {
+          role: 'assistant',
+          content: [{ type: 'text', text: trimmed }],
+          timestamp: Date.now(),
+        } as AgentMessage);
       }
       return slash.aggregatedText ?? '';
     }

@@ -23,11 +23,12 @@ xopc 提供全面的会话管理功能，支持通过 CLI 和 Web UI 管理对�
 
 | 属性 | 值 |
 |------|-----|
-| 存储目录 | `agents/<agentId>/sessions/`（状态目录下；分片 transcript 文件） |
-| 索引文件 | `agents/<agentId>/sessions/index.json` |
-| 文件格式 | JSON |
-| 归档目录 | `agents/<agentId>/sessions/archive/` |
-| 会话级覆盖配置 | `agents/<agentId>/sessions/config/<规范化后的-session-key>.json` |
+| 数据库 | `~/.xopc/xopc.db`（SQLite，WAL） |
+| 主要表 | `sessions`、`transcripts`、`transcript_entries`、`session_config`、`compaction_checkpoints`、`transcript_fts`（FTS5） |
+| 会话级覆盖配置 | SQLite `session_config`（模型、thinking、verbose 等） |
+| 遗留路径 | 旧版可能在 `agents/<agentId>/sessions/` 留有文件；新安装不再向该目录写入 transcript |
+
+会话元数据、transcript 行、压缩检查点与全文检索均存储在 SQLite 中。网关启动时打开数据库（`openXopcDatabase()`）。
 
 ---
 
@@ -201,28 +202,6 @@ interface Message {
 
 ---
 
-## 会话索引
-
-`index.json` 文件维护所有会话元数据的缓存：
-
-```json
-{
-  "version": "1.0",
-  "lastUpdated": "2026-02-14T10:00:00Z",
-  "sessions": [
-    {
-      "key": "telegram:123456",
-      "status": "active",
-      "tags": ["work"],
-      "messageCount": 42,
-      ...
-    }
-  ]
-}
-```
-
----
-
 ## 自动维护
 
 ### 压缩
@@ -282,26 +261,25 @@ interface Message {
 2. 在浏览器开发者工具 **Network** 中确认对 `/api/sessions` 的 REST 请求是否成功；若界面依赖实时推送，再确认 **`GET /api/events`**（SSE）是否保持连接
 3. 检查 gateway 日志中的错误
 
-### 会话索引损坏
+### 会话存储异常
 
-索引将在下次访问时自动重建。强制重建：
+运行深度完整性检查：
 
 ```bash
-# 删除索引文件（将 <agentId> 换成你的 agent id，例如 main）
-rm ~/.xopc/agents/<agentId>/sessions/index.json
-
-# 下次列出会话时会重建
-xopc session list
+xopc doctor --deep
 ```
+
+会校验 `sessions` 与 `transcripts` 的 SQLite 关联、扫描孤立 transcript，并执行 `PRAGMA integrity_check`。
 
 ### 会话丢失
 
-如果磁盘上 `agents/<agentId>/sessions/` 中已有数据但界面不显示：
+若已创建会话但界面未显示：
 
 ```bash
-# 强制重建索引
 xopc session list --limit 1000
 ```
+
+检查 gateway 日志，并确认 `~/.xopc/xopc.db` 存在且可写。
 
 ---
 

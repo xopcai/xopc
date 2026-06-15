@@ -14,7 +14,7 @@ import {
 } from '../agent/agent-scope.js';
 import { ENV_VARS, resolveStateDir } from './paths-state.js';
 
-export { ENV_VARS, resolveHomeDir, resolveStateDir } from './paths-state.js';
+export { ENV_VARS, resolveHomeDir, resolveStateDir, resolveXopcDatabasePath, XOPC_DB_FILENAME } from './paths-state.js';
 export { resolveDefaultAgentWorkspaceDir } from './workspace-defaults.js';
 export {
   resolveAgentWorkspaceDir,
@@ -30,8 +30,8 @@ export const FILENAMES = {
   CONFIG: 'xopc.json',
   MODELS_JSON: 'models.json',
   AGENT_JSON: 'agent.json',
-  /** OpenClaw-aligned session key → entry map (flat `sessions/` dir). */
-  SESSIONS_MAP: 'sessions.json',
+  /** Primary SQLite state database (`~/.xopc/xopc.db`). */
+  XOPC_DB: 'xopc.db',
   EXTENSIONS_LOCK: 'extensions-lock.json',
   CREDENTIALS_PROFILES: 'auth-profiles.json',
   CRON_JOBS: 'jobs.json',
@@ -130,43 +130,11 @@ export function resolveAgentAuthProfilesPath(config: Config, agentId: string): s
 }
 
 /**
- * Agent session store root: `stateDir/agents/<id>/sessions/` (flat `sessions.json` + `*.jsonl`).
+ * Legacy agent-home `sessions/` directory (`stateDir/agents/<id>/sessions/`).
+ * Transcripts live in SQLite (`xopc.db`); this path remains for file-reference classification.
  */
 export function resolveSessionsDir(config: Config, agentId: string): string {
   return resolveSessionsDirScoped(config, agentId);
-}
-
-/**
- * Resolve the OpenClaw-aligned `sessions.json` path for an agent.
- */
-export function resolveSessionsMapPath(config: Config, agentId: string): string {
-  return join(resolveSessionsDir(config, agentId), FILENAMES.SESSIONS_MAP);
-}
-
-/**
- * Resolve the sessions archive directory (optional secondary storage).
- */
-export function resolveSessionsArchiveDir(config: Config, agentId: string): string {
-  return join(resolveSessionsDir(config, agentId), 'archive');
-}
-
-import {
-  resolveSessionFilePath,
-  resolveSessionTranscriptPathInDir,
-} from '../session/parity/transcript-paths.js';
-
-export { resolveSessionFilePath, resolveSessionTranscriptPathInDir };
-
-/**
- * Resolve a session transcript JSONL path (OpenClaw naming: `{sessionId}.jsonl` or topic variant).
- */
-export function resolveSessionTranscriptPath(
-  config: Config,
-  sessionId: string,
-  agentId: string,
-  topicId?: string | number,
-): string {
-  return resolveSessionTranscriptPathInDir(sessionId, resolveSessionsDir(config, agentId), topicId);
 }
 
 /**

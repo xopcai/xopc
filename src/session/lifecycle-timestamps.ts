@@ -1,9 +1,8 @@
-import type { XopcSessionDiskEntry } from './parity/xopc-session-disk-entry.js';
-
-export type SessionLifecycleEntry = Pick<
-  XopcSessionDiskEntry,
-  'sessionStartedAt' | 'lastInteractionAt' | 'updatedAt'
->;
+export type SessionLifecycleEntry = {
+  sessionStartedAt?: number;
+  lastInteractionAt?: number;
+  updatedAt?: number;
+};
 
 function resolveTimestamp(value: number | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;

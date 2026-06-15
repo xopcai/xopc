@@ -634,12 +634,8 @@ class ToolResultGuard {
     }
     const result = this.originalAppend(finalMessage as never);
 
-    const sessionFile = (
-      this.sessionManager as { getSessionFile?: () => string | null }
-    ).getSessionFile?.();
-    if (sessionFile) {
+    if (this.opts.sessionKey) {
       emitSessionTranscriptUpdate({
-        sessionFile,
         sessionKey: this.opts.sessionKey,
         message: finalMessage,
         messageId: typeof result === 'string' ? result : undefined,

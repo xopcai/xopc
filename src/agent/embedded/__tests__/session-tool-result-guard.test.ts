@@ -2,14 +2,14 @@ import { existsSync } from 'node:fs';
 import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { SessionManager } from '@earendil-works/pi-coding-agent';
 
 import { guardSessionManager } from '../session-tool-result-guard.js';
 import { repairAssistantUsageInSessionManager } from '../session-manager-init.js';
-import { readTranscriptRowsFromFile } from '../../../session/parity/jsonl-transcript-io.js';
-import { appendPiTranscriptContextEntry } from '../../../session/parity/jsonl-transcript-io.js';
+import { writeRuntimeTranscriptJsonl } from '../../../session/runtime-transcript.js';
 import { buildSessionContextForLlm } from '../../../session/session-context-for-llm.js';
+import { onSessionTranscriptUpdate } from '../../../session/transcript-events.js';
 
 describe('session-tool-result-guard', () => {
   let dir: string;
@@ -25,8 +25,11 @@ describe('session-tool-result-guard', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
-  it('appendMessage persists assistant text to JSONL', async () => {
-    const sm = guardSessionManager(SessionManager.open(sessionFile, dir, process.cwd()), {
+  it('appendMessage emits transcript update for SQLite-backed session key', async () => {
+    const listener = vi.fn();
+    const unsubscribe = onSessionTranscriptUpdate(listener);
+
+    const sm = guardSessionManager(SessionManager.inMemory(process.cwd()), {
       sessionKey: 'agent:main:test',
     });
     sm.appendMessage({
@@ -40,15 +43,15 @@ describe('session-tool-result-guard', () => {
       timestamp: Date.now(),
     } as never);
 
-    expect(existsSync(sessionFile)).toBe(true);
-    const rows = await readTranscriptRowsFromFile(sessionFile);
-    const llm = buildSessionContextForLlm(rows);
-    expect(llm.some((m) => m.role === 'user')).toBe(true);
-    expect(llm.some((m) => m.role === 'assistant')).toBe(true);
+    expect(listener).toHaveBeenCalled();
+    const updates = listener.mock.calls.map(([update]) => update);
+    expect(updates.some((update) => (update?.message as { role?: string })?.role === 'user')).toBe(true);
+    expect(updates.some((update) => (update?.message as { role?: string })?.role === 'assistant')).toBe(true);
+    unsubscribe();
   });
 
   it('repairAssistantUsageInSessionManager fills missing usage on assistant rows', () => {
-    const sm = SessionManager.open(sessionFile, dir, process.cwd());
+    const sm = SessionManager.inMemory(process.cwd());
     sm.appendMessage({
       role: 'assistant',
       content: [{ type: 'text', text: 'legacy' }],
@@ -62,18 +65,16 @@ describe('session-tool-result-guard', () => {
     expect((assistant as { usage?: { totalTokens?: number } }).usage?.totalTokens).toBe(0);
   });
 
-  it('appendPiTranscriptContextEntry excludes context from LLM projection', async () => {
-    await appendPiTranscriptContextEntry({
+  it('runtime context rows exclude context from LLM projection', async () => {
+    await writeRuntimeTranscriptJsonl({
       absPath: sessionFile,
+      sessionId: 'ctx-test',
       cwd: process.cwd(),
-      entry: { kind: 'context', text: 'audit line', createdAt: new Date().toISOString() },
-      sessionKey: 'agent:main:test',
+      rows: [{ kind: 'context', text: 'audit line', id: 'e1', createdAt: new Date().toISOString() }],
     });
-    const rows = await readTranscriptRowsFromFile(sessionFile);
-    const llm = buildSessionContextForLlm(rows);
+    expect(existsSync(sessionFile)).toBe(true);
+    const sm = SessionManager.open(sessionFile, dir, process.cwd());
+    const llm = buildSessionContextForLlm(sm.getEntries() as never);
     expect(llm).toHaveLength(0);
-    expect(rows.some((r) => typeof r === 'object' && r !== null && 'kind' in r && (r as { kind: string }).kind === 'context')).toBe(
-      true,
-    );
   });
 });

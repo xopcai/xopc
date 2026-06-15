@@ -1,0 +1,72 @@
+export { resolveXopcDatabasePath, XOPC_DB_FILENAME } from './paths.js';
+export {
+  XOPC_DB_SCHEMA_VERSION,
+  SCHEMA_META_SCHEMA_VERSION_KEY,
+  ensureXopcDatabaseSchema,
+  readSchemaVersionForTest,
+} from './schema.js';
+export {
+  closeXopcDatabase,
+  getXopcDatabase,
+  isXopcDatabaseOpen,
+  openXopcDatabase,
+  resetXopcDatabaseSingletonForTest,
+  type OpenXopcDatabaseOptions,
+  type XopcDatabase,
+} from './connection.js';
+export { getSqliteDatabase, withSqliteWriteTransaction } from './transaction.js';
+export {
+  buildDefaultSessionMetadata,
+  extractRoutingFromSessionKey,
+  parseSessionKeySource,
+  resolveAgentIdFromSessionKey,
+} from './session-metadata.js';
+export {
+  buildGlobalSessionStats,
+  classifyStoredRow,
+  estimateTokensFromMessages,
+  extractFtsContent,
+  metadataToSessionInsert,
+  sessionConfigRowToConfig,
+  sessionRowToMetadata,
+  transcriptEntryRowToStoredRow,
+  type SessionConfigRow,
+  type SessionRow,
+  type TranscriptEntryRow,
+} from './row-mappers.js';
+export {
+  deleteSessionRecord,
+  ensureSessionRecord,
+  getCurrentTranscriptId,
+  getGlobalSessionStats,
+  findSessionKeyByTranscriptId,
+  getSessionPersistedLevels,
+  getSessionMetadata,
+  incrementSessionStatsOnAppend,
+  listSessionMetadata,
+  listSessionsByAgent,
+  patchSessionMetadata,
+  resetSessionRecord,
+  resolveSessionAgentId,
+  updateSessionStats,
+} from './session-repository.js';
+export {
+  appendTranscriptEntry,
+  captureCompactionCheckpoint,
+  getCompactionCheckpointDetail,
+  listCompactionCheckpoints,
+  loadCheckpointRows,
+  loadLlmMessagesForSession,
+  loadTranscriptRows,
+  loadTranscriptRowsForSession,
+  paginateTranscriptMessages,
+  replaceTranscriptRows,
+  restoreCompactionCheckpoint,
+} from './transcript-repository.js';
+export {
+  deleteSessionConfig,
+  getSessionConfig,
+  hasSessionConfig,
+  setSessionConfig,
+  updateSessionConfig,
+} from './config-repository.js';

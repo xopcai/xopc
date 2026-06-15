@@ -2,7 +2,7 @@
 
 For a concise map of **profile Markdown**, **agent home**, and the **Markdown workspace**, see [On-disk layout](disk-layout.md).
 
-xopc keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for transcripts, inbox, inbound/TTS blobs, curated memory, and runtime files. Separately, the **agent workspace** is the Markdown root the runtime uses as tool `cwd`, for daily `memory/` notes, user files, and extensions under that tree.
+xopc keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for inbox, inbound/TTS blobs, curated memory, and runtime files. **Session transcripts** live in **`xopc.db`** (SQLite) at the state root. Separately, the **agent workspace** is the Markdown root the runtime uses as tool `cwd`, for daily `memory/` notes, user files, and extensions under that tree.
 
 Paths come from your **main config file** (default `<stateDir>/xopc.json`) and optional env overrides. **`xopc init`** and **`xopc agents add`** create directories and seed templates. The **Markdown workspace** (tool `cwd` and project files) is **not** the same folder as `agents/<id>/` state: by default each agent id uses `<stateDir>/workspace/<agentId>/` (the default agent id is `main`), or under **`agents.defaults.workspace`** as a **parent** directory (`<expanded>/<agentId>/`), or an explicit per-list **`workspace`** path.
 
@@ -26,6 +26,7 @@ These are shared across agents unless noted.
 | Path | Role |
 |------|------|
 | `xopc.json` | Main configuration (providers, gateway, channels, `agents.defaults`, …). |
+| `xopc.db` | SQLite database: sessions, transcripts, per-session config, compaction checkpoints, FTS5 search. |
 | `credentials/` | Global secrets; `auth-profiles.json`; `oauth/<provider>.json` for OAuth tokens. |
 | `extensions/` | Installed extensions and `extensions-lock.json`. |
 | `skills/` | Skill packages (each skill is a folder with `SKILL.md`). |
@@ -41,10 +42,10 @@ For a given **`agentId`**, the **agent home** is `~/.xopc/agents/<id>/` by defau
 
 | Path | Role |
 |------|------|
-| `sessions/` | Session store: sharded transcript files, `index.json`, `archive/` for archived sessions. |
+| `sessions/` | Legacy directory (optional); transcripts are stored in `~/.xopc/xopc.db`. |
 | `agent/` | **Agent state** (not the Markdown workspace): `agent.json`, `credentials/`, file inbox (`inbox/pending`, `inbox/processed`), and volatile files (`pid`, `status.json`, `agent.sock`) — no separate top-level `run/`. |
 
-Session storage is **not** under the Markdown workspace directory; it always uses `agents/<agentId>/sessions/`.
+Session metadata and transcripts live in **`~/.xopc/xopc.db`** (SQLite), not under `agents/<agentId>/sessions/`.
 
 ## Agent workspace directory (Markdown root)
 
@@ -79,7 +80,7 @@ Other root Markdown files (for example `CONTEXT.md` or `SKILLS.md`) are optional
 | `.state/` | Machine state: `workspace.json` (profile Markdown seed metadata), `skills-cache.json`, etc. |
 | `.extensions/` | Per-workspace extension install/cache paths (when used by the extension loader). |
 
-Per-session overrides (`sessions/config/` JSON), **inbound** blobs (`inbound/`), **TTS** cache (`tts/`), and the **curated** store (`memories/`) live under **`agents/<agentId>/`** (agent home), not under this Markdown tree.
+Per-session overrides (SQLite `session_config`), **inbound** blobs (`inbound/`), **TTS** cache (`tts/`), and the **curated** store (`memories/`) relate to **`agents/<agentId>/`** (agent home) or **`xopc.db`**, not under this Markdown tree.
 
 ### Curated memory (`agents/<agentId>/memories/`) {#curated-memory}
 

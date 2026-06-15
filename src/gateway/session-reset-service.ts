@@ -18,7 +18,7 @@ export type SessionResetResult =
 /**
  * Reset a session in place: archive the current transcript, assign a new
  * `sessionId`, keep the session key and persisted overrides (model/thinking in
- * `sessions/config/`, thinking/verbose on the disk entry).
+ * SQLite `session_config`, thinking/verbose on the session row).
  */
 export async function performSessionReset(
   sessionKey: string,

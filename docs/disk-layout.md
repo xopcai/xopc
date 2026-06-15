@@ -9,7 +9,7 @@ For narrative setup (init, templates, env vars), see [State directory & workspac
 | Area | Role |
 |------|------|
 | **State directory** | Global config, credentials, logs, cron, global skills/extensions cache, managed tooling. |
-| **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: transcripts, curated memory, **`profile/`** Markdown (`SOUL.md`, …), inbound/TTS blobs, session tooling config. |
+| **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: curated memory, **`profile/`** Markdown (`SOUL.md`, …), inbound/TTS blobs. Session transcripts live in **`xopc.db`**, not under `sessions/`. |
 | **Agent dir** `…/agents/<agentId>/agent/` | Process state: `agent.json`, per-agent credentials, IPC inbox, pid/socket, small machine state, extension installs, outbound crash-recovery queue. |
 | **Markdown workspace** | User project tree: tool `cwd`, daily `memory/*.md`, `media/generated`, user `skills/`, arbitrary files. |
 
@@ -22,6 +22,7 @@ Default: `~/.xopc/`
 | Path | Purpose |
 |------|---------|
 | `xopc.json` | Main application config (unless `XOPC_CONFIG` / `XOPC_CONFIG_PATH` points elsewhere). |
+| `xopc.db` | Primary SQLite database: sessions, transcripts, per-session config, compaction checkpoints, FTS5 search index. |
 | `credentials/` | Global secrets: `auth-profiles.json`, `oauth/<provider>.json`. |
 | `extensions/` | Installed extension packages, `extensions-lock.json`. |
 | `skills/` | Globally managed skill packages (`<id>/SKILL.md`). |
@@ -37,7 +38,7 @@ Resolved by `resolveAgentHomeDir(config, agentId)`. Typical layout:
 | Path | Purpose |
 |------|---------|
 | `profile/` | Profile Markdown for the system prompt stack: `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (separate from curated `memories/`), `BOOTSTRAP.md` (not injected by default), optional `agent-avatar.*` for the gateway console. |
-| `sessions/` | Transcript store (shards, `index.json`, `archive/`), per-session overrides under `sessions/config/`. |
+| `sessions/` | Legacy directory (optional); may remain from older installs. New installs store transcripts in `xopc.db` only. |
 | `memories/` | Curated structured store (`MEMORY.md`, `USER.md`; entries separated by a fixed delimiter — `BuiltinMemoryStore`). |
 | `inbound/` | Persisted inbound attachments (non-image binaries); transcript paths use `inbound/...` relative to agent home. |
 | `tts/` | Cached outbound TTS audio per session. |

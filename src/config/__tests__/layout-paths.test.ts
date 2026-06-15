@@ -32,7 +32,7 @@ import {
   resolveAgentAuthProfilesPath,
   resolveAgentProfileDir as resolveAgentProfileDirFromPaths,
   resolveAgentProfileMarkdownPath as resolveAgentProfileMarkdownPathFromPaths,
-  resolveSessionsMapPath,
+  resolveXopcDatabasePath,
   FILENAMES,
 } from '../paths.js';
 
@@ -156,11 +156,8 @@ describe('Layout alignment: Phase 2 — Agent Internal Paths', () => {
     expect(resolveSessionsDir(cfg, 'helper')).toBe(join(STATE_DIR, 'agents', 'helper', 'sessions'));
   });
 
-  it('resolveSessionsMapPath returns agents/<id>/sessions/sessions.json', () => {
-    const cfg = makeMultiAgentConfig();
-    expect(resolveSessionsMapPath(cfg, 'main')).toBe(
-      join(STATE_DIR, 'agents', 'main', 'sessions', 'sessions.json'),
-    );
+  it('resolveXopcDatabasePath returns ~/.xopc/xopc.db', () => {
+    expect(resolveXopcDatabasePath()).toBe(join(STATE_DIR, FILENAMES.XOPC_DB));
   });
 });
 

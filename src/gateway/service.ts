@@ -60,6 +60,7 @@ import {
   type GatewayReadinessSnapshot,
 } from './startup-readiness.js';
 import { createGatewayStartupTrace, type GatewayStartupTrace } from './startup-trace.js';
+import { closeXopcDatabase, openXopcDatabase } from '../storage/sqlite/index.js';
 
 export type {
   GatewayChannelStartupPhase1Metrics,
@@ -476,6 +477,7 @@ export class GatewayService {
     });
 
     log.debug('Starting gateway service...');
+    openXopcDatabase();
     this.startTime = Date.now();
     this.running = true;
     this.startupTrace = createGatewayStartupTrace();
@@ -821,6 +823,8 @@ export class GatewayService {
 
     // Tear down rate-limit cleanup timers so the process can exit cleanly.
     buckets.destroyAll();
+
+    closeXopcDatabase();
 
     log.debug('Gateway service stopped');
   }
