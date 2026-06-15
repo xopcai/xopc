@@ -42,7 +42,7 @@ describe('openXopcDatabase', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('creates schema v2 tables and sets schema version', () => {
+  it('creates all schema tables and sets schema version', () => {
     const opened = openXopcDatabase({ path: dbPath });
     expect(opened.path).toBe(dbPath);
     expect(readSchemaVersionForTest(opened.db)).toBe(XOPC_DB_SCHEMA_VERSION);

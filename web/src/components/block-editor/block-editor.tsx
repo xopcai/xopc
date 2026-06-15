@@ -6,7 +6,6 @@ import TaskItem from '@tiptap/extension-task-item';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import { Markdown } from 'tiptap-markdown';
-import { TextSelection } from '@tiptap/pm/state';
 
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -16,10 +15,13 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { noteAttachmentRef, uploadNoteMedia } from '@/features/notes/notes-api';
 
 import { AudioNode } from './extensions/audio-node';
+import { focusAfterBlockInsert } from './extensions/block-insert-focus';
 import { ExtraKeyboardShortcuts } from './extensions/keyboard-shortcuts';
+import { SlashCommands } from './extensions/slash-commands';
+import { BlockTrailingNode } from './extensions/trailing-node';
 import { BlockEditorToolbar } from './toolbar';
 import { ResizableImage } from './extensions/resizable-image';
-import { SlashMenu } from './slash-menu';
+import type { SlashCommandRuntime } from './slash-items';
 
 import './block-editor.css';
 
@@ -35,6 +37,21 @@ export interface BlockEditorProps {
   noteId?: string;
 }
 
+function isEmptyParagraphAtDocEdge(
+  editor: { state: { doc: { childCount: number; resolve: (pos: number) => { index: (depth: number) => number } } } },
+  pos: number,
+): 'first' | 'last' | null {
+  const { doc } = editor.state;
+  const $pos = doc.resolve(pos);
+  if ($pos.index(0) === 0) {
+    return 'first';
+  }
+  if ($pos.index(0) === doc.childCount - 1) {
+    return 'last';
+  }
+  return null;
+}
+
 export function BlockEditor({
   initialContent,
   onChange,
@@ -47,7 +64,8 @@ export function BlockEditor({
   const [imageUploading, setImageUploading] = useState(false);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const slashRuntimeRef = useRef<SlashCommandRuntime>({});
 
   const editor = useEditor({
     extensions: [
@@ -55,6 +73,7 @@ export function BlockEditor({
         heading: { levels: [1, 2, 3] },
         codeBlock: { HTMLAttributes: { class: 'block-editor-code' } },
       }),
+      BlockTrailingNode,
       ResizableImage.configure({
         inline: false,
         allowBase64: true,
@@ -62,7 +81,19 @@ export function BlockEditor({
       }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      Placeholder.configure({ placeholder }),
+      Placeholder.configure({
+        placeholder: ({ editor: editorInstance, node, pos }) => {
+          if (node.type.name !== 'paragraph' || node.content.size > 0) {
+            return '';
+          }
+          const edge = isEmptyParagraphAtDocEdge(editorInstance, pos);
+          if (edge === 'first' || edge === 'last') {
+            return placeholder;
+          }
+          return '';
+        },
+        includeChildren: true,
+      }),
       Link.configure({
         openOnClick: false,
         autolink: true,
@@ -75,10 +106,13 @@ export function BlockEditor({
       }),
       AudioNode,
       ExtraKeyboardShortcuts,
+      SlashCommands.configure({
+        getRuntime: () => slashRuntimeRef.current,
+      }),
     ],
     content: initialContent,
     onUpdate: ({ editor: editorInstance }) => {
-      const markdownContent = (editorInstance.storage as any).markdown.getMarkdown();
+      const markdownContent = (editorInstance.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
       onChangeRef.current(markdownContent);
     },
     editorProps: {
@@ -99,22 +133,8 @@ export function BlockEditor({
           .chain()
           .focus()
           .setImage({ src: noteAttachmentRef(noteId, attachment.id), alt: file.name })
-          .command(({ tr }) => {
-            // After block-image insertion the cursor may land between
-            // blocks (gapcursor position). Resolve it into the next
-            // textblock so typing immediately works.
-            const { from } = tr.selection;
-            const $pos = tr.doc.resolve(from);
-            if (!$pos.parent.isTextblock) {
-              const nextPos = Math.min(from + 1, tr.doc.content.size);
-              const $next = tr.doc.resolve(nextPos);
-              if ($next.parent.isTextblock) {
-                tr.setSelection(TextSelection.near($next));
-              }
-            }
-            return true;
-          })
           .run();
+        focusAfterBlockInsert(editor);
       } catch (err) {
         showToast({
           type: 'error',
@@ -127,6 +147,15 @@ export function BlockEditor({
     },
     [editor, noteId, notesLabels.imageUploadFailed, notesLabels.imageUploadFailedHint],
   );
+
+  const requestImagePicker = useCallback(() => {
+    imageInputRef.current?.click();
+  }, []);
+
+  slashRuntimeRef.current = {
+    onImageUpload: noteId ? handleImageUpload : undefined,
+    requestImagePicker: noteId ? requestImagePicker : undefined,
+  };
 
   // Handle paste/drop images
   useEffect(() => {
@@ -178,10 +207,24 @@ export function BlockEditor({
         onImageUpload={noteId ? handleImageUpload : undefined}
         imageUploading={imageUploading}
       />
-      <div ref={scrollContainerRef} className="relative min-h-0 flex-1 overflow-y-auto px-6 py-4">
-        <SlashMenu editor={editor} onImageUpload={noteId ? handleImageUpload : undefined} containerRef={scrollContainerRef} />
+      <div className="relative min-h-0 flex-1 overflow-y-auto px-6 py-4">
         <EditorContent editor={editor} />
       </div>
+      <input
+        ref={imageInputRef}
+        type="file"
+        accept="image/*"
+        onChange={(event) => {
+          const file = event.target.files?.[0];
+          if (file && noteId) {
+            void handleImageUpload(file);
+          }
+          if (imageInputRef.current) {
+            imageInputRef.current.value = '';
+          }
+        }}
+        className="hidden"
+      />
     </div>
   );
 }
