@@ -5,7 +5,6 @@ import { complete, type UserMessage } from '@earendil-works/pi-ai';
 
 import type { Config } from '../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
-import { getOrLoadSessionSearchIndex } from '../../session/search-index-cache.js';
 import type { SessionStore } from '../../session/store.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import { createLogger } from '../../utils/logger.js';
@@ -13,8 +12,6 @@ import { createLogger } from '../../utils/logger.js';
 const log = createLogger('Agent:SessionSearch');
 
 const MAX_SUMMARY_CHARS = 20_000;
-
-export { invalidateSessionSearchIndexCache } from '../../session/search-index-cache.js';
 
 function resolveSummaryModel(getConfig?: () => Config | undefined) {
   const envRef = process.env.XOPC_SESSION_SEARCH_MODEL?.trim();
@@ -207,9 +204,13 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
           };
         }
 
-        const sessionsRoot = store.getSessionsRoot();
-        const index = await getOrLoadSessionSearchIndex(sessionsRoot);
-        let matches = index.search(query, 80);
+        const listed = await store.list({
+          search: query,
+          limit: limit + 10,
+          sortBy: 'updatedAt',
+          sortOrder: 'desc',
+        });
+        let matches = listed.items.map((item) => ({ key: item.key, score: 1 }));
 
         const exclude = p.excludeSessionKey?.trim() || deps.getCurrentSessionKey?.() || '';
         if (exclude) {
@@ -220,10 +221,7 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool 
 
         const summaries = await Promise.all(
           top.map(async ({ key, score }) => {
-            let messages = index.getSessionMessages(key);
-            if (messages.length === 0) {
-              messages = await store.load(key);
-            }
+            let messages = await store.load(key);
 
             if (p.roleFilter) {
               messages = messages.filter((m) => m.role === p.roleFilter);

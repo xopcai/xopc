@@ -139,9 +139,6 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     runner = await acquireEmbeddedSessionRunner({
       sessionKey,
       sessionId: transcript.sessionId,
-      sessionFile: transcript.sessionFile,
-      sessionsDir: transcript.sessionsDir,
-      hadSessionFile: transcript.hadSessionFile,
       workspaceDir,
       model: resolvedModel,
       modelRef: params.modelRef,

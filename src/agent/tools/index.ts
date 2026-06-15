@@ -13,7 +13,6 @@ export {
 } from './memory-tool.js';
 export { createCuratedMemoryTool } from './curated-memory-tool.js';
 export { createSessionSearchTool } from './session-search-tool.js';
-export { invalidateSessionSearchIndexCache } from '../../session/search-index-cache.js';
 
 // Grep and Find tools
 export {

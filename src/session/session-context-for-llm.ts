@@ -55,7 +55,13 @@ export function transcriptRowsFromJsonArray(arr: unknown[]): TranscriptStoredRow
 export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMessage[] {
   const out: AgentMessage[] = [];
   for (const r of rows) {
-    if (!isTranscriptContextEntry(r)) {
+    if (isTranscriptContextEntry(r)) {
+      continue;
+    }
+    if ((r as { type?: string }).type === 'compaction') {
+      continue;
+    }
+    if (isLikelyAgentMessage(r)) {
       out.push(r);
     }
   }

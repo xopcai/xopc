@@ -372,14 +372,15 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 ### Session transcript (LLM vs on-disk rows)
 
-- **Runtime write path (authoritative):** Gateway, channels, and CLI turns use `runXopcEmbeddedTurn` → `guardSessionManager` → pi `SessionManager.appendMessage` / `appendCustomEntry('xopc:transcript-row', …)` on per-session `*.jsonl`. Each user, assistant, and toolResult row is appended during the turn (OpenClaw-aligned). Do **not** add turn-end `SessionStore.save` / `saveMessages` on agent paths.
-- **Index:** `SessionIndex` (`src/session/manager.ts`, formerly `SessionManager`) owns `sessions.json` metadata only; `onSessionTranscriptUpdate` bumps counts after appends.
-- **On-disk format:** Live transcripts are pi JSONL session files; wrapped `xopc_session_transcript` JSON remains for export/legacy tooling (see `src/session/transcript-format.ts`).
-- **Model input:** Use `SessionStore.loadMessages` / `sessionStore.load` (they apply `buildSessionContextForLlm`). If you parse transcript JSON yourself, run `buildSessionContextForLlm(rows)` before passing history to the LLM.
+- **Authoritative storage:** `~/.xopc/xopc.db` (SQLite). Session metadata, transcripts, per-session config, compaction checkpoints, and FTS5 search all live in `src/storage/sqlite/`. Gateway opens the DB on start via `openXopcDatabase()`.
+- **Runtime write path:** Gateway, channels, and CLI turns use `runXopcEmbeddedTurn` → `openSqliteHydratingSessionManager` (in-memory pi `SessionManager` hydrated from SQLite) → `guardSessionManager` appends → `emitSessionTranscriptUpdate` → `SessionStore.syncEmbeddedTranscriptUpdate` → `appendTranscriptEntry` (SQLite). Do **not** add turn-end `SessionStore.save` / `saveMessages` on agent paths.
+- **Index:** `SessionIndex` (`src/session/manager.ts`) delegates to `SessionStore`; `onSessionTranscriptUpdate` bumps counts after appends.
+- **Model input:** Use `SessionStore.loadMessages` / `sessionStore.load` (they apply `buildSessionContextForLlm`). If you parse transcript rows yourself, run `buildSessionContextForLlm(rows)` before passing history to the LLM.
 - **Webchat abort cutoff:** `POST /api/agent` accepts optional `clientCreatedAtMs`. When it is **omitted**, `abortCutoffTimestamp` does **not** drop stale POSTs (clients must send send-time for skip semantics). Abort uses `abortEmbeddedRun` + context rows via `appendCustomEntry`.
-- **Audit rows on disk:** `kind: 'context'` entries persist for ops/UI via `GET /api/sessions/:key?include=transcriptRows` (comma-separated with `transcript` if you also want `transcriptSummary`).
-- **JSON export:** `SessionStore.exportSession(..., 'json')` includes `transcriptRows` (full on-disk order) alongside API-shaped `messages` (LLM-only). Session text search indexes `context` row `text` / `id` tokens as well.
-- **Reset (`/new`, TUI `/reset`):** `performSessionReset` (`src/gateway/session-reset-service.ts`) archives the live JSONL as `*.reset.*`, assigns a new `sessionId` for the same session key, and keeps per-session overrides (`sessions/config/*.json`, thinking/verbose on the disk entry). Gateway: `POST /api/sessions/:key/reset`. **Delete** (`DELETE /api/sessions/:key`) removes the key from the index — do not use delete for `/new`.
+- **Audit rows:** `kind: 'context'` entries persist for ops/UI via `GET /api/sessions/:key?include=transcriptRows` (comma-separated with `transcript` if you also want `transcriptSummary`).
+- **JSON export:** `SessionStore.exportSession(..., 'json')` includes `transcriptRows` (full stored order) alongside API-shaped `messages` (LLM-only). Session text search uses FTS5 over transcript content.
+- **Reset (`/new`, TUI `/reset`):** `performSessionReset` (`src/gateway/session-reset-service.ts`) archives the active transcript row in SQLite, assigns a new `sessionId` for the same session key, and keeps per-session overrides (`session_config`, thinking/verbose on the session row). Gateway: `POST /api/sessions/:key/reset`. **Delete** (`DELETE /api/sessions/:key`) removes the key from the index — do not use delete for `/new`.
+- **Integrity:** `xopc doctor --deep` runs SQLite session linkage checks and `PRAGMA integrity_check`.
 
 | Area | Primary locations |
 |------|-------------------|
@@ -394,8 +395,8 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | Logging | `src/utils/logger.ts` (barrel) → `src/utils/logger/`; conventions: [Logging conventions](#logging-conventions) |
 | Log Manager | `web/src/` (logs feature / pages) |
 | Tests | Colocated `__tests__` |
-| Session store / transcript | `src/session/store.ts`, `src/session/transcript-format.ts`, `src/session/session-context-for-llm.ts`, `src/gateway/session-reset-service.ts` |
+| Session store / SQLite | `src/session/store.ts`, `src/storage/sqlite/`, `src/session/session-context-for-llm.ts`, `src/gateway/session-reset-service.ts` |
 
 ---
 
-_Last updated: 2026-06-08_
+_Last updated: 2026-06-15_

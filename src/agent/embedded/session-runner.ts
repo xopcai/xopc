@@ -1,11 +1,9 @@
-import { existsSync } from 'node:fs';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import {
   createAgentSession,
   DefaultResourceLoader,
   getAgentDir,
-  SessionManager,
   SettingsManager,
   type AgentSession,
 } from '@earendil-works/pi-coding-agent';
@@ -13,8 +11,7 @@ import type { Model, Api } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
 import { guardSessionManager, type GuardedPiTranscriptManager } from './session-tool-result-guard.js';
-import { prepareSessionManagerForRun } from './session-manager-init.js';
-import { defaultSessionManagerCache, type SessionManagerCache } from './session-manager-cache.js';
+import { openSqliteHydratingSessionManager } from './sqlite-hydrating-session-manager.js';
 import { applyXopcProviderApiKey, createEmbeddedAuthStorage } from './xopc-auth-storage.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
@@ -25,7 +22,7 @@ const log = createLogger('EmbeddedSessionRunner');
 const DEFAULT_IDLE_TTL_MS = 5 * 60_000;
 
 export type EmbeddedRunnerFingerprintInput = {
-  sessionFile: string;
+  sessionId: string;
   workspaceDir: string;
   modelRef: string;
   toolNames: readonly string[];
@@ -37,7 +34,7 @@ export function buildEmbeddedRunnerFingerprint(input: EmbeddedRunnerFingerprintI
   const tools = [...input.toolNames].sort().join('\0');
   const promptMarker = `${input.systemPrompt.length}:${input.systemPrompt.slice(0, 128)}`;
   return [
-    input.sessionFile,
+    input.sessionId,
     input.workspaceDir,
     input.modelRef,
     tools,
@@ -60,9 +57,6 @@ type PooledRunner = {
 export type AcquireEmbeddedSessionRunnerParams = {
   sessionKey: string;
   sessionId: string;
-  sessionFile: string;
-  sessionsDir: string;
-  hadSessionFile: boolean;
   workspaceDir: string;
   model: Model<Api>;
   modelRef: string;
@@ -111,8 +105,6 @@ function createEmbeddedSettingsManager(cwd: string): SettingsManager {
 }
 
 export interface EmbeddedSessionRunnerPoolOptions {
-  /** File-exists cache shared with prewarmSessionFile callers. */
-  sessionManagerCache?: SessionManagerCache;
   /** Override for the env-driven enable flag (testing). */
   isEnabled?: () => boolean;
   /** Override for the env-driven idle TTL (testing). */
@@ -126,7 +118,6 @@ export interface EmbeddedSessionRunnerPoolOptions {
  */
 export class EmbeddedSessionRunnerPool {
   private readonly pool = new Map<string, PooledRunner>();
-  private readonly cache: SessionManagerCache;
   private readonly isEnabledFn: () => boolean;
   private readonly getIdleTtlMsFn: () => number;
 
@@ -138,7 +129,6 @@ export class EmbeddedSessionRunnerPool {
   };
 
   constructor(opts: EmbeddedSessionRunnerPoolOptions = {}) {
-    this.cache = opts.sessionManagerCache ?? defaultSessionManagerCache;
     this.isEnabledFn = opts.isEnabled ?? isEmbeddedSessionRunnerEnabled;
     this.getIdleTtlMsFn = opts.getIdleTtlMs ?? getEmbeddedSessionRunnerIdleTtlMs;
   }
@@ -173,7 +163,7 @@ export class EmbeddedSessionRunnerPool {
     this.stats.acquires += 1;
 
     const fingerprint = buildEmbeddedRunnerFingerprint({
-      sessionFile: params.sessionFile,
+      sessionId: params.sessionId,
       workspaceDir: params.workspaceDir,
       modelRef: params.modelRef,
       toolNames: params.tools.map((t) => t.name),
@@ -253,34 +243,21 @@ export class EmbeddedSessionRunnerPool {
   }
 
   private async createPooledRunner(params: AcquireEmbeddedSessionRunnerParams): Promise<PooledRunner> {
-    const {
-      sessionKey,
-      sessionId,
-      sessionFile,
-      sessionsDir,
-      hadSessionFile,
-      workspaceDir,
-      model,
-      thinkingLevel,
-      tools,
-      systemPrompt,
-    } = params;
+    const { sessionKey, sessionId, workspaceDir, model, thinkingLevel, tools, systemPrompt } = params;
 
-    await this.cache.prewarm(sessionFile);
     const settingsManager = createEmbeddedSettingsManager(workspaceDir);
 
-    const piSm = guardSessionManager(SessionManager.open(sessionFile, sessionsDir, workspaceDir), {
-      sessionKey,
-      contextWindowTokens: model.contextWindow ?? 128_000,
-    });
-
-    await prepareSessionManagerForRun({
-      sessionManager: piSm,
-      sessionFile,
-      hadSessionFile,
-      sessionId,
-      cwd: workspaceDir,
-    });
+    const piSm = guardSessionManager(
+      openSqliteHydratingSessionManager({
+        sessionKey,
+        sessionId,
+        cwd: workspaceDir,
+      }),
+      {
+        sessionKey,
+        contextWindowTokens: model.contextWindow ?? 128_000,
+      },
+    );
 
     const toolDefs = xopcToolsToDefinitions(tools);
     const toolNames = tools.map((t) => t.name);
@@ -314,7 +291,7 @@ export class EmbeddedSessionRunnerPool {
     session.agent.streamFn = baseStreamFn;
 
     const fingerprint = buildEmbeddedRunnerFingerprint({
-      sessionFile,
+      sessionId,
       workspaceDir,
       modelRef: params.modelRef,
       toolNames,
@@ -359,21 +336,13 @@ export function acquireEmbeddedSessionRunner(
   return defaultEmbeddedSessionRunnerPool.acquire(params);
 }
 
-/** Resolve transcript path inputs used by both runner acquire and turn execution. */
+/** Resolve session identity used by embedded runner acquire and turn execution. */
 export async function resolveEmbeddedTranscriptInputs(
   sessionStore: import('../../session/store.js').SessionStore,
   sessionKey: string,
 ): Promise<{
   sessionId: string;
-  sessionFile: string;
-  sessionsDir: string;
-  hadSessionFile: boolean;
+  sessionKey: string;
 }> {
-  const { sessionId, absPath: sessionFile, sessionsDir } = await sessionStore.resolveTranscriptPath(sessionKey);
-  return {
-    sessionId,
-    sessionFile,
-    sessionsDir,
-    hadSessionFile: existsSync(sessionFile),
-  };
+  return sessionStore.resolveTranscriptPath(sessionKey);
 }

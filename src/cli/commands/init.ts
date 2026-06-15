@@ -14,7 +14,6 @@ import {
   resolveToolsDir,
   resolveAgentDir,
   resolveAgentWorkspaceDir,
-  resolveSessionsDir,
   resolveInboxDir,
   resolveConfigPath,
   resolveAgentMetadataPath,
@@ -77,12 +76,10 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   const cfg = loadConfig(configPath);
 
   // ============================================
-  // Create agent directory structure: agents/<id>/{sessions,agent/}, workspace aside
+  // Create agent directory structure: agents/<id>/agent/, workspace aside
   // ============================================
   await mkdir(resolveAgentHomeDir(cfg, agentId), { recursive: true });
   await mkdir(resolveAgentProfileDir(cfg, agentId), { recursive: true });
-  await mkdir(resolveSessionsDir(cfg, agentId), { recursive: true });
-  await mkdir(join(resolveSessionsDir(cfg, agentId), 'archive'), { recursive: true });
   await mkdir(resolveAgentDir(cfg, agentId), { recursive: true });
   await mkdir(join(resolveAgentDir(cfg, agentId), 'credentials'), { recursive: true });
   const wsRoot = resolveAgentWorkspaceDir(cfg, agentId);

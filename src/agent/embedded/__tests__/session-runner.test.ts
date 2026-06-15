@@ -17,7 +17,7 @@ describe('EmbeddedSessionRunner fingerprint', () => {
 
   it('changes when model, tools, or system prompt change', () => {
     const base = {
-      sessionFile: '/tmp/s.jsonl',
+      sessionId: 'aaa2f53e-7cc1-43bf-8581-84f4254cb335',
       workspaceDir: '/tmp/ws',
       modelRef: 'openai/gpt-4o',
       toolNames: ['read', 'write'],
@@ -37,7 +37,7 @@ describe('EmbeddedSessionRunner fingerprint', () => {
 
   it('is stable for identical inputs regardless of tool order', () => {
     const inputA = {
-      sessionFile: '/tmp/s.jsonl',
+      sessionId: 'aaa2f53e-7cc1-43bf-8581-84f4254cb335',
       workspaceDir: '/tmp/ws',
       modelRef: 'openai/gpt-4o',
       toolNames: ['b', 'a'],
