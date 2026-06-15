@@ -258,7 +258,7 @@ export function resolveCronLogsDir(): string {
 }
 
 /**
- * Directory for persisted cron run history (one JSONL file per job id).
+ * Legacy cron run JSONL directory (`cron/runs/`). Run history now lives in `xopc.db` (`cron_runs`).
  */
 export function resolveCronRunsDir(): string {
   return join(resolveCronDir(), 'runs');

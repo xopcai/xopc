@@ -30,7 +30,7 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 | `credentials/` | 全局凭据；`auth-profiles.json`；OAuth 令牌 `oauth/<provider>.json`。 |
 | `extensions/` | 已安装扩展与 `extensions-lock.json`。 |
 | `skills/` | 技能包目录（每个技能为含 `SKILL.md` 的文件夹）。 |
-| `cron/` | `jobs.json` 定时任务；`logs/` 按日 JSONL；`runs/` 按任务运行历史。 |
+| `cron/` | `jobs.json` 定时任务；`logs/` 按日 JSONL。已完成运行历史在 **`xopc.db`**（`cron_runs` 表）。 |
 | `logs/` | 进程日志（`xopc-<date>.log`），可被 `XOPC_LOG_DIR` 覆盖。 |
 | `bin/` | 托管的 CLI 包装（如 `xopc`）。 |
 | `tools/` | 内置工具运行时（例如 `tools/node/current/` 下的 Node/npm）。 |
