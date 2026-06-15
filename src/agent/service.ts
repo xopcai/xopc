@@ -202,7 +202,7 @@ export class AgentService {
     onSessionTranscriptUpdate((update) => {
       void this.sessionStore.syncEmbeddedTranscriptUpdate(update).catch((err) => {
         log.warn(
-          { err, sessionFile: update.sessionFile, sessionKey: update.sessionKey },
+          { err, sessionKey: update.sessionKey },
           'Transcript index sync failed',
         );
       });
@@ -489,7 +489,6 @@ export class AgentService {
     return new SessionStore(
       {
         config: appCfg,
-        agentId: resolveDefaultAgentId(appCfg),
       },
       windowConfig,
       compactionConfig,

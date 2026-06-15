@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 import { escapeFts5Query } from './fts.js';
-import { getSqliteDatabase, withSqliteWriteTransaction } from './transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 export type MemorySearchHit = {
   path: string;
@@ -13,6 +13,14 @@ export type MemorySearchHit = {
 };
 
 const CURATED_MEMORY_FILENAMES = new Set(['MEMORY.md', 'USER.md']);
+const MEMORY_SYNC_CACHE_TTL_MS = 30_000;
+
+type MemorySyncCache = {
+  timestamp: number;
+  paths: string[];
+};
+
+const memorySyncCache = new Map<string, MemorySyncCache>();
 
 export function resolveAgentIdFromMemoriesDir(memoriesDir: string | undefined): string {
   if (!memoriesDir) return 'main';
@@ -137,8 +145,16 @@ export function syncMemoryIndex(params: {
   workspaceDir: string;
   memoriesDir?: string;
 }): void {
+  const cacheKey = `${params.agentId}:${params.workspaceDir}:${params.memoriesDir ?? ''}`;
+  const now = Date.now();
+  const cached = memorySyncCache.get(cacheKey);
+  if (cached && now - cached.timestamp < MEMORY_SYNC_CACHE_TTL_MS) {
+    return;
+  }
+
   const paths = collectMemoryPaths(params.workspaceDir, params.memoriesDir);
-  withSqliteWriteTransaction((db) => {
+  memorySyncCache.set(cacheKey, { timestamp: now, paths });
+  runSqliteWriteTransaction((db) => {
     const seen = new Set<string>();
     for (const absPath of paths) {
       seen.add(`${params.agentId}:${displayPath(params.workspaceDir, params.memoriesDir, absPath)}`);
@@ -203,5 +219,5 @@ export function searchMemoryIndex(params: {
   }
 
   results.sort((a, b) => b.score - a.score);
-  return results.slice(0, maxResults * 3);
+  return results.slice(0, maxResults);
 }

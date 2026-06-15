@@ -7,9 +7,8 @@ import { createLogger } from '../utils/logger.js';
 import {
   deleteNoteRecord,
   getNoteRecord,
-  isXopcDatabaseOpen,
   listNoteRecords,
-  openXopcDatabase,
+  requireXopcDatabase,
   upsertNoteRecord,
 } from '../storage/sqlite/index.js';
 import { buildNoteIndexMeta } from './note-index-meta.js';
@@ -28,26 +27,20 @@ const log = createLogger('NotesStore');
 export class NotesStore {
   private initialized = false;
 
-  private ensureDatabase(): void {
-    if (!isXopcDatabaseOpen()) {
-      openXopcDatabase();
-    }
-  }
-
   async initialize(): Promise<void> {
     if (this.initialized) return;
-    this.ensureDatabase();
+    requireXopcDatabase();
     this.initialized = true;
     log.debug('NotesStore initialized');
   }
 
   async addNote(note: Note): Promise<void> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     upsertNoteRecord(note);
   }
 
   async getNote(id: string): Promise<Note | null> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     return getNoteRecord(id);
   }
 
@@ -63,13 +56,13 @@ export class NotesStore {
       updatedAt: Date.now(),
     };
 
-    this.ensureDatabase();
+    requireXopcDatabase();
     upsertNoteRecord(updated);
     return updated;
   }
 
   async deleteNote(id: string): Promise<boolean> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     const deleted = deleteNoteRecord(id);
     if (!deleted) {
       return false;
@@ -87,7 +80,7 @@ export class NotesStore {
     offset: number;
     hasMore: boolean;
   }> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     return listNoteRecords(query);
   }
 

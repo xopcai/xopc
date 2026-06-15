@@ -1,8 +1,6 @@
 import { normalizeOptionalString } from '../utils/string-coerce.js';
 
 export type SessionTranscriptUpdate = {
-  /** @deprecated File path no longer used after SQLite Phase 4. */
-  sessionFile?: string;
   sessionKey?: string;
   message?: unknown;
   messageId?: string;
@@ -19,27 +17,16 @@ export function onSessionTranscriptUpdate(listener: SessionTranscriptListener): 
   };
 }
 
-export function emitSessionTranscriptUpdate(update: string | SessionTranscriptUpdate): void {
-  const normalized =
-    typeof update === 'string'
-      ? { sessionFile: update }
-      : {
-          sessionFile: update.sessionFile,
-          sessionKey: update.sessionKey,
-          message: update.message,
-          messageId: update.messageId,
-        };
-  const sessionKey = normalizeOptionalString(normalized.sessionKey);
-  const sessionFile = normalizeOptionalString(normalized.sessionFile);
-  if (!sessionKey && !sessionFile) {
+export function emitSessionTranscriptUpdate(update: SessionTranscriptUpdate): void {
+  const sessionKey = normalizeOptionalString(update.sessionKey);
+  if (!sessionKey) {
     return;
   }
   const nextUpdate: SessionTranscriptUpdate = {
-    ...(sessionFile ? { sessionFile } : {}),
     ...(sessionKey ? { sessionKey } : {}),
-    ...(normalized.message !== undefined ? { message: normalized.message } : {}),
-    ...(normalizeOptionalString(normalized.messageId)
-      ? { messageId: normalizeOptionalString(normalized.messageId) }
+    ...(update.message !== undefined ? { message: update.message } : {}),
+    ...(normalizeOptionalString(update.messageId)
+      ? { messageId: normalizeOptionalString(update.messageId) }
       : {}),
   };
   for (const listener of SESSION_TRANSCRIPT_LISTENERS) {

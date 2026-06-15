@@ -3,8 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { SessionConfigSchema, type Config } from '../config/schema.js';
 import { parseSessionKey } from '../routing/session-key.js';
 import { createLogger } from '../utils/logger.js';
-import { getSessionMetadata, isXopcDatabaseOpen, openXopcDatabase } from '../storage/sqlite/index.js';
-
+import { getSessionMetadata, requireXopcDatabase } from '../storage/sqlite/index.js';
 import { resolveSessionLifecycleTimestamps } from './lifecycle-timestamps.js';
 import {
   evaluateSessionFreshness,
@@ -47,9 +46,7 @@ export type InitSessionTurnOptions = {
 export async function initSessionTurn(
   opts: InitSessionTurnOptions,
 ): Promise<InitSessionTurnResult> {
-  if (!isXopcDatabaseOpen()) {
-    openXopcDatabase();
-  }
+  requireXopcDatabase();
 
   const sessionCfg = opts.cfg.session ?? SessionConfigSchema.parse({});
   const triggers = resolveResetTriggers(sessionCfg.resetTriggers);

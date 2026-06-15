@@ -2,9 +2,8 @@ import { SessionManager, type FileEntry } from '@earendil-works/pi-coding-agent'
 
 import {
   ensureSessionRecord,
-  isXopcDatabaseOpen,
   loadTranscriptRowsForSession,
-  openXopcDatabase,
+  requireXopcDatabase,
 } from '../../storage/sqlite/index.js';
 import { storedRowsToFileEntries } from '../../session/stored-rows-to-file-entries.js';
 import { repairAssistantUsageInSessionManager } from './session-manager-init.js';
@@ -28,9 +27,7 @@ export function openSqliteHydratingSessionManager(params: {
   sessionId: string;
   cwd: string;
 }): SessionManager {
-  if (!isXopcDatabaseOpen()) {
-    openXopcDatabase();
-  }
+  requireXopcDatabase();
 
   ensureSessionRecord(params.sessionKey, params.cwd);
   const rows = loadTranscriptRowsForSession(params.sessionKey);

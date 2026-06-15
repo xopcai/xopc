@@ -6,6 +6,7 @@ import TaskItem from '@tiptap/extension-task-item';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import { Markdown } from 'tiptap-markdown';
+import { TextSelection } from '@tiptap/pm/state';
 
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -46,6 +47,7 @@ export function BlockEditor({
   const [imageUploading, setImageUploading] = useState(false);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const editor = useEditor({
     extensions: [
@@ -97,6 +99,21 @@ export function BlockEditor({
           .chain()
           .focus()
           .setImage({ src: noteAttachmentRef(noteId, attachment.id), alt: file.name })
+          .command(({ tr }) => {
+            // After block-image insertion the cursor may land between
+            // blocks (gapcursor position). Resolve it into the next
+            // textblock so typing immediately works.
+            const { from } = tr.selection;
+            const $pos = tr.doc.resolve(from);
+            if (!$pos.parent.isTextblock) {
+              const nextPos = Math.min(from + 1, tr.doc.content.size);
+              const $next = tr.doc.resolve(nextPos);
+              if ($next.parent.isTextblock) {
+                tr.setSelection(TextSelection.near($next));
+              }
+            }
+            return true;
+          })
           .run();
       } catch (err) {
         showToast({
@@ -161,8 +178,8 @@ export function BlockEditor({
         onImageUpload={noteId ? handleImageUpload : undefined}
         imageUploading={imageUploading}
       />
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-        <SlashMenu editor={editor} onImageUpload={noteId ? handleImageUpload : undefined} />
+      <div ref={scrollContainerRef} className="relative min-h-0 flex-1 overflow-y-auto px-6 py-4">
+        <SlashMenu editor={editor} onImageUpload={noteId ? handleImageUpload : undefined} containerRef={scrollContainerRef} />
         <EditorContent editor={editor} />
       </div>
     </div>

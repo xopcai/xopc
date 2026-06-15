@@ -30,7 +30,7 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 | `credentials/` | 全局凭据；`auth-profiles.json`；OAuth 令牌 `oauth/<provider>.json`。 |
 | `extensions/` | 已安装扩展与 `extensions-lock.json`。 |
 | `skills/` | 技能包目录（每个技能为含 `SKILL.md` 的文件夹）。 |
-| `cron/` | `jobs.json` 定时任务；`logs/` 按日 JSONL。已完成运行历史在 **`xopc.db`**（`cron_runs` 表）。 |
+| `cron/` | `jobs.json` 定时任务。运行历史存储在 **`xopc.db`**（`cron_runs` 表）。 |
 | `logs/` | 进程日志（`xopc-<date>.log`），可被 `XOPC_LOG_DIR` 覆盖。 |
 | `bin/` | 托管的 CLI 包装（如 `xopc`）。 |
 | `tools/` | 内置工具运行时（例如 `tools/node/current/` 下的 Node/npm）。 |
@@ -42,10 +42,9 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 
 | 路径 | 作用 |
 |------|------|
-| `sessions/` | 遗留目录（可选）；transcript 存储在 `~/.xopc/xopc.db`。 |
 | `agent/` | **agent 状态目录**（非 Markdown 工作区）：`agent.json`、`credentials/`、文件收件箱（`inbox/pending`、`inbox/processed`）及易失文件（`pid`、`status.json`、`agent.sock`），**无**单独顶层 `run/`。 |
 
-会话元数据与 transcript 存储在 **`~/.xopc/xopc.db`**（SQLite），而非 `agents/<agentId>/sessions/`。
+会话元数据与 transcript 存储在 **`~/.xopc/xopc.db`**（SQLite）中。
 
 ## 工作空间目录（Markdown 根）
 
@@ -119,5 +118,5 @@ xopc profile switch staging   # 输出 export XOPC_PROFILE=staging
 ## 另见
 
 - [工作空间模板](reference/templates.md) — 各 Markdown 模板说明
-- [会话管理](session.md) — 会话位于 `agents/<id>/sessions/`
+- [会话管理](session.md) — 会话元数据和转录记录存储在 `~/.xopc/xopc.db`（SQLite）中
 - [架构设计](architecture.md) — 组件如何消费这些路径

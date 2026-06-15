@@ -4,9 +4,8 @@ import { loadConfig } from '../../../../config/loader.js';
 import {
   getCurrentTranscriptId,
   getSqliteDatabase,
-  isXopcDatabaseOpen,
+  requireXopcDatabase,
   listSessionMetadata,
-  openXopcDatabase,
 } from '../../../../storage/sqlite/index.js';
 import type { CheckResult, DoctorContext } from '../types.js';
 
@@ -43,13 +42,7 @@ export async function checkSessionIntegrity(ctx: DoctorContext): Promise<CheckRe
     };
   }
 
-  if (!isXopcDatabaseOpen()) {
-    openXopcDatabase();
-  }
-
-  if (!isXopcDatabaseOpen()) {
-    openXopcDatabase();
-  }
+  requireXopcDatabase();
 
   const issues: string[] = [];
   const db = getSqliteDatabase();

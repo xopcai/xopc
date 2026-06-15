@@ -7,7 +7,7 @@ import {
   resolveProfileMarkdownPathIfBareName,
 } from '../agent/tools/tool-paths.js';
 import { extractProfileAgentId } from '../config/agent-profile.js';
-import { resolveConfigPath, resolveSessionsDir, resolveSkillsDir } from '../config/paths.js';
+import { resolveConfigPath, resolveSkillsDir } from '../config/paths.js';
 import { resolveStateDir } from '../config/paths-state.js';
 import type { Config } from '../config/schema.js';
 import { isPathUnderWorkspace, resolveWorkspaceSafePath } from './workspace-editor-path.js';
@@ -22,7 +22,6 @@ export interface FilePathClassifierContext {
   skillsDir: string;
   configFilePath: string;
   agentsHomeDir: string;
-  sessionsDir: string;
   agentId: string;
 }
 
@@ -36,7 +35,6 @@ export function buildFilePathClassifierContext(cfg: Config, sessionKeyRaw?: stri
     skillsDir: resolveSkillsDir(),
     configFilePath: resolveConfigPath(),
     agentsHomeDir: resolve(stateDir, 'agents'),
-    sessionsDir: resolveSessionsDir(cfg, agentId),
     agentId,
   };
 }
@@ -83,15 +81,6 @@ export function classifyFileLocation(absPath: string, ctx: FilePathClassifierCon
       scope: 'external',
       locationKind: 'xopc-skills',
       manageRoute: '/settings/skills',
-    };
-  }
-
-  const sessionsRoot = resolve(ctx.sessionsDir);
-  if (isPathUnderWorkspace(sessionsRoot, p)) {
-    return {
-      scope: 'session-artifact',
-      locationKind: 'xopc-sessions',
-      manageRoute: '/settings/sessions',
     };
   }
 

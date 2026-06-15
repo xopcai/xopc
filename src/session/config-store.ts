@@ -4,8 +4,7 @@ import {
   deleteSessionConfig as deleteSqliteSessionConfig,
   getSessionConfig as getSqliteSessionConfig,
   hasSessionConfig,
-  isXopcDatabaseOpen,
-  openXopcDatabase,
+  requireXopcDatabase,
   setSessionConfig as setSqliteSessionConfig,
   updateSessionConfig as updateSqliteSessionConfig,
 } from '../storage/sqlite/index.js';
@@ -34,48 +33,46 @@ export class SessionConfigStore {
     this.cwd = cwd;
   }
 
-  private ensureDatabase(): void {
-    if (!isXopcDatabaseOpen()) {
-      openXopcDatabase();
-    }
+  private requireDatabase(): void {
+    requireXopcDatabase();
   }
 
   async initialize(): Promise<void> {
-    this.ensureDatabase();
+    this.requireDatabase();
     log.debug('Session config store initialized (SQLite)');
   }
 
   async get(sessionKey: string): Promise<SessionAgentConfig | null> {
-    this.ensureDatabase();
+    this.requireDatabase();
     return getSqliteSessionConfig(sessionKey);
   }
 
   async set(sessionKey: string, config: SessionAgentConfig): Promise<void> {
-    this.ensureDatabase();
+    this.requireDatabase();
     setSqliteSessionConfig(sessionKey, config, this.cwd);
     log.debug({ sessionKey }, 'Session config saved');
   }
 
   async update(sessionKey: string, partial: Partial<SessionAgentConfig>): Promise<SessionAgentConfig> {
-    this.ensureDatabase();
+    this.requireDatabase();
     const updated = updateSqliteSessionConfig(sessionKey, partial, this.cwd);
     log.debug({ sessionKey }, 'Session config updated');
     return updated;
   }
 
   async delete(sessionKey: string): Promise<void> {
-    this.ensureDatabase();
+    this.requireDatabase();
     deleteSqliteSessionConfig(sessionKey);
     log.debug({ sessionKey }, 'Session config deleted');
   }
 
   async has(sessionKey: string): Promise<boolean> {
-    this.ensureDatabase();
+    this.requireDatabase();
     return hasSessionConfig(sessionKey);
   }
 
   async getAll(): Promise<Map<string, SessionAgentConfig>> {
-    this.ensureDatabase();
+    this.requireDatabase();
     const configs = new Map<string, SessionAgentConfig>();
     const { listSessionMetadata } = await import('../storage/sqlite/index.js');
     const { items } = listSessionMetadata({ limit: 100_000 });
@@ -89,7 +86,7 @@ export class SessionConfigStore {
   }
 
   async clear(): Promise<void> {
-    this.ensureDatabase();
+    this.requireDatabase();
     const { listSessionMetadata } = await import('../storage/sqlite/index.js');
     const { items } = listSessionMetadata({ limit: 100_000 });
     for (const item of items) {

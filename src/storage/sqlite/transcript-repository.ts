@@ -17,7 +17,7 @@ import {
   type TranscriptEntryRow,
 } from './row-mappers.js';
 import { getCurrentTranscriptId, readCurrentTranscriptId } from './session-repository.js';
-import { getSqliteDatabase, withSqliteWriteTransaction } from './transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 const MAX_CHECKPOINTS_PER_TRANSCRIPT = 15;
 
@@ -73,7 +73,7 @@ export function appendTranscriptEntry(
   row: TranscriptStoredRow,
   opts?: { transcriptId?: string; tokenDelta?: number },
 ): TranscriptEntryRow {
-  return withSqliteWriteTransaction((db) => {
+  return runSqliteWriteTransaction((db) => {
     const transcriptId = opts?.transcriptId ?? readCurrentTranscriptId(db, sessionKey);
     if (!transcriptId) {
       throw new Error(`Session not found: ${sessionKey}`);
@@ -127,7 +127,7 @@ export function replaceTranscriptRows(
   rows: TranscriptStoredRow[],
   opts?: { appendCompaction?: TranscriptCompactionRecord },
 ): void {
-  withSqliteWriteTransaction((db) => {
+  runSqliteWriteTransaction((db) => {
     const transcriptId = readCurrentTranscriptId(db, sessionKey);
     if (!transcriptId) {
       throw new Error(`Session not found: ${sessionKey}`);
@@ -227,9 +227,13 @@ export function paginateTranscriptMessages(
     rows = db
       .prepare(
         `SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at
-         FROM transcript_entries
-         WHERE transcript_id = ? AND entry_kind IN (${kindPlaceholders})
-           AND seq > ? AND seq <= ?
+         FROM (
+           SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at,
+                  ROW_NUMBER() OVER (ORDER BY seq ASC) - 1 AS idx
+           FROM transcript_entries
+           WHERE transcript_id = ? AND entry_kind IN (${kindPlaceholders})
+         )
+         WHERE idx >= ? AND idx < ?
          ORDER BY seq ASC`,
       )
       .all(transcriptId, ...kinds, startInclusive, endExclusive) as TranscriptEntryRow[];
@@ -265,7 +269,7 @@ export function paginateTranscriptMessages(
 }
 
 export function captureCompactionCheckpoint(sessionKey: string): string | null {
-  return withSqliteWriteTransaction((db) => {
+  return runSqliteWriteTransaction((db) => {
     const transcriptId = readCurrentTranscriptId(db, sessionKey);
     if (!transcriptId) {
       return null;
@@ -383,7 +387,7 @@ export function getCompactionCheckpointDetail(
 }
 
 export function restoreCompactionCheckpoint(sessionKey: string, checkpointId: string): void {
-  withSqliteWriteTransaction((db) => {
+  runSqliteWriteTransaction((db) => {
     const transcriptId = readCurrentTranscriptId(db, sessionKey);
     if (!transcriptId) {
       throw new Error(`Session not found: ${sessionKey}`);

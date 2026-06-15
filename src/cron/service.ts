@@ -263,7 +263,7 @@ export class CronService {
   }
 
   /**
-   * Execution history for one job: merged in-memory (incl. running) + persisted JSONL.
+   * Execution history for one job: merged in-memory (incl. running) + persisted SQLite rows.
    */
   async getJobHistory(jobId: string, limit?: number): Promise<JobExecution[]> {
     const cap = Math.min(Math.max(limit ?? 10, 1), 500);

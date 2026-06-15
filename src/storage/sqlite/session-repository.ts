@@ -13,7 +13,7 @@ import {
   sessionRowToMetadata,
   type SessionRow,
 } from './row-mappers.js';
-import { getSqliteDatabase, withSqliteWriteTransaction } from './transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 const SESSION_COLUMNS = `
   session_key, agent_id, current_transcript_id, status, name, tags_json,
@@ -107,7 +107,7 @@ export function ensureSessionInTransaction(
 }
 
 export function ensureSessionRecord(sessionKey: string, cwd: string): SessionMetadata {
-  return withSqliteWriteTransaction((db) => ensureSessionInTransaction(db, sessionKey, cwd));
+  return runSqliteWriteTransaction((db) => ensureSessionInTransaction(db, sessionKey, cwd));
 }
 
 export function readCurrentTranscriptId(db: DatabaseSync, sessionKey: string): string | null {
@@ -254,7 +254,7 @@ export function patchSessionMetadata(
   sessionKey: string,
   updates: Partial<SessionMetadata>,
 ): SessionMetadata {
-  return withSqliteWriteTransaction((db) => {
+  return runSqliteWriteTransaction((db) => {
     const existing = readSessionRow(db, sessionKey);
     if (!existing) {
       throw new Error(`Session not found: ${sessionKey}`);
@@ -319,7 +319,7 @@ export function updateSessionStats(
   sessionKey: string,
   stats: { messageCount: number; estimatedTokens: number; lastInteractionAt?: number },
 ): void {
-  withSqliteWriteTransaction((db) => {
+  runSqliteWriteTransaction((db) => {
     const now = stats.lastInteractionAt ?? Date.now();
     db.prepare(
       `UPDATE sessions SET
@@ -334,7 +334,7 @@ export function updateSessionStats(
 }
 
 export function incrementSessionStatsOnAppend(sessionKey: string, tokenDelta = 0): void {
-  withSqliteWriteTransaction((db) => {
+  runSqliteWriteTransaction((db) => {
     const now = Date.now();
     db.prepare(
       `UPDATE sessions SET
@@ -352,7 +352,7 @@ export function resetSessionRecord(
   sessionKey: string,
   cwd: string,
 ): { sessionId: string; previousSessionId: string } | null {
-  return withSqliteWriteTransaction((db) => {
+  return runSqliteWriteTransaction((db) => {
     const existing = readSessionRow(db, sessionKey);
     if (!existing) {
       return null;
@@ -387,7 +387,7 @@ export function resetSessionRecord(
 }
 
 export function deleteSessionRecord(sessionKey: string): boolean {
-  return withSqliteWriteTransaction((db) => {
+  return runSqliteWriteTransaction((db) => {
     const existing = readSessionRow(db, sessionKey);
     if (!existing) {
       return false;

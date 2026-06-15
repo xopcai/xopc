@@ -3,7 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 import type { SessionAgentConfig } from '../../session/config-store.js';
 import { sessionConfigRowToConfig, type SessionConfigRow } from './row-mappers.js';
 import { ensureSessionInTransaction } from './session-repository.js';
-import { getSqliteDatabase, withSqliteWriteTransaction } from './transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 function readConfigRow(db: DatabaseSync, sessionKey: string): SessionConfigRow | undefined {
   return db
@@ -25,7 +25,7 @@ export function getSessionConfig(sessionKey: string): SessionAgentConfig | null 
 }
 
 export function setSessionConfig(sessionKey: string, config: SessionAgentConfig, cwd: string): SessionAgentConfig {
-  return withSqliteWriteTransaction((db) => {
+  return runSqliteWriteTransaction((db) => {
     ensureSessionInTransaction(db, sessionKey, cwd);
     const updatedAt = Date.now();
     const next = { ...config, updatedAt };
@@ -68,7 +68,7 @@ export function updateSessionConfig(
 }
 
 export function deleteSessionConfig(sessionKey: string): void {
-  withSqliteWriteTransaction((db) => {
+  runSqliteWriteTransaction((db) => {
     db.prepare(`DELETE FROM session_config WHERE session_key = ?`).run(sessionKey);
   });
 }

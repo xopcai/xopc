@@ -23,7 +23,6 @@ import {
   resolveAgentHomeDir,
   resolveAgentProfileDir,
   resolveAgentProfileMarkdownPath,
-  resolveSessionsDir,
   resolveDefaultAgentId,
 } from '../../agent/agent-scope.js';
 import {
@@ -148,12 +147,6 @@ describe('Layout alignment: Phase 2 — Agent Internal Paths', () => {
     const cfg = makeMultiAgentConfig();
     expect(resolveAgentHomeDir(cfg, 'main')).toBe(join(STATE_DIR, 'agents', 'main'));
     expect(resolveAgentHomeDir(cfg, 'helper')).toBe(join(STATE_DIR, 'agents', 'helper'));
-  });
-
-  it('resolveSessionsDir returns agents/<id>/sessions/', () => {
-    const cfg = makeMultiAgentConfig();
-    expect(resolveSessionsDir(cfg, 'main')).toBe(join(STATE_DIR, 'agents', 'main', 'sessions'));
-    expect(resolveSessionsDir(cfg, 'helper')).toBe(join(STATE_DIR, 'agents', 'helper', 'sessions'));
   });
 
   it('resolveXopcDatabasePath returns ~/.xopc/xopc.db', () => {

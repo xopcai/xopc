@@ -10,7 +10,6 @@ import {
   resolveAgentProfileDir as resolveAgentProfileDirScoped,
   resolveAgentProfileMarkdownPath as resolveAgentProfileMarkdownPathScoped,
   resolveAgentWorkspaceDir,
-  resolveSessionsDir as resolveSessionsDirScoped,
 } from '../agent/agent-scope.js';
 import { ENV_VARS, resolveStateDir } from './paths-state.js';
 
@@ -20,7 +19,6 @@ export {
   resolveAgentWorkspaceDir,
   resolveAgentDir as resolveAgentDirFromConfig,
   resolveAgentHomeDir as resolveAgentHomeDirFromConfig,
-  resolveSessionsDir as resolveSessionsDirFromConfig,
 } from '../agent/agent-scope.js';
 
 // ============================================
@@ -127,14 +125,6 @@ export function resolveWorkspaceFile(config: Config, filename: string, agentId: 
  */
 export function resolveAgentAuthProfilesPath(config: Config, agentId: string): string {
   return join(resolveAgentDir(config, agentId), FILENAMES.CREDENTIALS_PROFILES);
-}
-
-/**
- * Legacy agent-home `sessions/` directory (`stateDir/agents/<id>/sessions/`).
- * Transcripts live in SQLite (`xopc.db`); this path remains for file-reference classification.
- */
-export function resolveSessionsDir(config: Config, agentId: string): string {
-  return resolveSessionsDirScoped(config, agentId);
 }
 
 /**
@@ -248,27 +238,6 @@ export function resolveCronDir(): string {
  */
 export function resolveCronJobsPath(): string {
   return join(resolveCronDir(), FILENAMES.CRON_JOBS);
-}
-
-/**
- * Resolve the cron logs directory
- */
-export function resolveCronLogsDir(): string {
-  return join(resolveCronDir(), 'logs');
-}
-
-/**
- * Legacy cron run JSONL directory (`cron/runs/`). Run history now lives in `xopc.db` (`cron_runs`).
- */
-export function resolveCronRunsDir(): string {
-  return join(resolveCronDir(), 'runs');
-}
-
-/**
- * Resolve a specific cron log file path
- */
-export function resolveCronLogPath(date: string): string {
-  return join(resolveCronLogsDir(), `${date}.jsonl`);
 }
 
 /**

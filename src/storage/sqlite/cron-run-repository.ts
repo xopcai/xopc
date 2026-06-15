@@ -1,5 +1,5 @@
 import type { JobExecution } from '../../cron/types.js';
-import { getSqliteDatabase, withSqliteWriteTransaction } from './transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 const MAX_RUNS_PER_JOB = 2000;
 const TRIM_TO_RUNS = 1500;
@@ -91,7 +91,7 @@ export function appendCronRun(execution: JobExecution): void {
     return;
   }
   const row = executionToInsert(execution);
-  withSqliteWriteTransaction((db) => {
+  runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT OR REPLACE INTO cron_runs (
         run_id, job_id, status, started_at, ended_at, duration_ms,
@@ -159,7 +159,7 @@ export function readAllCronRuns(limit: number): JobExecution[] {
 }
 
 export function deleteCronRunsForJob(jobId: string): void {
-  withSqliteWriteTransaction((db) => {
+  runSqliteWriteTransaction((db) => {
     db.prepare(`DELETE FROM cron_runs WHERE job_id = ?`).run(jobId);
   });
 }
