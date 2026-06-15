@@ -1,6 +1,6 @@
 import type { DatabaseSync } from 'node:sqlite';
 
-import type { SessionAgentConfig } from '../../session/config-store.js';
+import type { SessionAgentConfig } from '../../session/config-types.js';
 import { sessionConfigRowToConfig, type SessionConfigRow } from './row-mappers.js';
 import { ensureSessionInTransaction } from './session-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';

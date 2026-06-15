@@ -1,6 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-import type { SessionAgentConfig } from '../../session/config-store.js';
+import type { SessionAgentConfig } from '../../session/config-types.js';
 import {
   isTranscriptContextEntry,
   type TranscriptStoredRow,
