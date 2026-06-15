@@ -7,12 +7,8 @@ export {
   type GuardedPiTranscriptManager,
   type ToolResultGuardOptions,
 } from './session-tool-result-guard.js';
-export { prepareSessionManagerForRun } from './session-manager-init.js';
-export {
-  trackSessionManagerAccess,
-  prewarmSessionFile,
-  isSessionManagerCached,
-} from './session-manager-cache.js';
+export { repairAssistantUsageInSessionManager } from './session-manager-init.js';
+export { openSqliteHydratingSessionManager } from './sqlite-hydrating-session-manager.js';
 export {
   acquireEmbeddedSessionRunner,
   buildEmbeddedRunnerFingerprint,

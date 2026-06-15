@@ -200,7 +200,7 @@ export class AgentService {
 
     this.sessionStore = config.sessionStore ?? this.createSessionStore();
     onSessionTranscriptUpdate((update) => {
-      void this.sessionStore.syncSessionsJsonFromTranscriptUpdate(update).catch((err) => {
+      void this.sessionStore.syncEmbeddedTranscriptUpdate(update).catch((err) => {
         log.warn(
           { err, sessionFile: update.sessionFile, sessionKey: update.sessionKey },
           'Transcript index sync failed',

@@ -2,7 +2,7 @@
 
 **profile Markdown、agent 主目录与 Markdown 工作区**的简明路径表见 [磁盘与目录布局](disk-layout.md)。
 
-xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；其下有 **按智能体划分** 的目录树（会话、收件箱、入站/TTS、托管记忆、运行时文件等）。**工作空间（workspace）** 是 Markdown 根目录：工具 `cwd`、按日的 `memory/` 笔记、用户文件，以及其下的扩展安装路径。
+xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；其下有 **按智能体划分** 的目录树（收件箱、入站/TTS、托管记忆、运行时文件等）。**会话 transcript** 存储在状态根下的 **`xopc.db`**（SQLite）。**工作空间（workspace）** 是 Markdown 根目录：工具 `cwd`、按日的 `memory/` 笔记、用户文件，以及其下的扩展安装路径。
 
 路径由 **主配置文件**（默认 `<状态目录>/xopc.json`）及环境变量决定。**`xopc init`** 与 **`xopc agents add`** 会创建目录并写入模板。**Markdown 工作区**（工具 `cwd` 与项目文件）与 **`agents/<id>/` 状态目录** 不是同一棵树：默认在状态根下 **`<状态目录>/workspace/<agentId>/`**（默认智能体 id 为 `main`），或按 **`agents.defaults.workspace` 作为父目录** 解析为 **`<展开路径>/<agentId>/`**，或由列表项显式 **`workspace`** 指定。
 
@@ -26,6 +26,7 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 | 路径 | 作用 |
 |------|------|
 | `xopc.json` | 主配置（服务商、网关、通道、`agents.defaults` 等）。 |
+| `xopc.db` | SQLite 数据库：会话、transcript、会话级配置、压缩检查点、FTS5 检索。 |
 | `credentials/` | 全局凭据；`auth-profiles.json`；OAuth 令牌 `oauth/<provider>.json`。 |
 | `extensions/` | 已安装扩展与 `extensions-lock.json`。 |
 | `skills/` | 技能包目录（每个技能为含 `SKILL.md` 的文件夹）。 |
@@ -41,10 +42,10 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 
 | 路径 | 作用 |
 |------|------|
-| `sessions/` | 会话存储：分片 transcript、`index.json`、`archive/` 归档目录。 |
+| `sessions/` | 遗留目录（可选）；transcript 存储在 `~/.xopc/xopc.db`。 |
 | `agent/` | **agent 状态目录**（非 Markdown 工作区）：`agent.json`、`credentials/`、文件收件箱（`inbox/pending`、`inbox/processed`）及易失文件（`pid`、`status.json`、`agent.sock`），**无**单独顶层 `run/`。 |
 
-会话数据 **不在** Markdown 工作空间目录下，固定使用 `agents/<agentId>/sessions/`。
+会话元数据与 transcript 存储在 **`~/.xopc/xopc.db`**（SQLite），而非 `agents/<agentId>/sessions/`。
 
 ## 工作空间目录（Markdown 根）
 
@@ -77,7 +78,7 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 | `.state/` | 机器状态：`workspace.json`（引导种子信息）、`skills-cache.json` 等。 |
 | `.extensions/` | 与工作空间绑定的扩展安装/缓存（扩展加载器使用）。 |
 
-按会话的配置覆盖（`sessions/config/` 下的 JSON）、**入站**附件（`inbound/`）、**TTS** 缓存（`tts/`）与 **托管** 存储（`memories/`）均在 **`agents/<agentId>/`**（agent 主目录）下，不在本 Markdown 树内。
+按会话的配置覆盖（SQLite `session_config`）、**入站**附件（`inbound/`）、**TTS** 缓存（`tts/`）与 **托管** 存储（`memories/`）与 **`agents/<agentId>/`**（agent 主目录）或 **`xopc.db`** 相关，不在本 Markdown 树内。
 
 ### 托管记忆（`agents/<agentId>/memories/`） {#curated-memory}
 

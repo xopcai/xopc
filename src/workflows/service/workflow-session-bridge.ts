@@ -2,10 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { renderWorkflowText } from '../../agent/workflow/snapshot.js';
-import {
-  appendPiTranscriptContextEntry,
-  appendPiTranscriptMessage,
-} from '../../session/parity/jsonl-transcript-io.js';
+import type { SessionStore } from '../../session/store.js';
 import { SessionStatus } from '../../session/types.js';
 import type { WorkflowRunView } from '../domain/index.js';
 import { isTerminalWorkflowRunStatus } from '../domain/index.js';
@@ -53,16 +50,10 @@ export class WorkflowSessionBridge {
       },
     });
 
-    const { absPath } = await store.resolveTranscriptPath(sessionKey);
-    await appendPiTranscriptMessage({
-      absPath,
-      cwd: process.cwd(),
-      sessionKey,
-      message: {
-        role: 'user',
-        content: [{ type: 'text', text: goalText }],
-        timestamp: Date.now(),
-      },
+    await store.appendTranscriptMessage(sessionKey, {
+      role: 'user',
+      content: [{ type: 'text', text: goalText }],
+      timestamp: Date.now(),
     });
 
     if (params.parentSessionKey?.trim()) {
@@ -108,7 +99,6 @@ export class WorkflowSessionBridge {
 
   private async persistTerminalTranscript(sessionKey: string, view: WorkflowRunView): Promise<void> {
     const store = this.gateway.sessionIndexInstance.getStore();
-    const { absPath } = await store.resolveTranscriptPath(sessionKey);
     const snapshot = runViewToSnapshot(view);
     const toolCallId = randomUUID();
     const completed = view.run.status === 'succeeded';
@@ -119,37 +109,27 @@ export class WorkflowSessionBridge {
     };
     const isError = view.run.status === 'failed' || view.run.status === 'timeout';
 
-    await appendPiTranscriptMessage({
-      absPath,
-      cwd: process.cwd(),
-      sessionKey,
-      message: {
-        role: 'assistant',
-        content: [
-          {
-            type: 'toolCall',
-            id: toolCallId,
-            name: 'workflow',
-            arguments: { name: view.run.definitionId },
-          },
-        ],
-        timestamp: Date.now(),
-      } as unknown as Parameters<typeof appendPiTranscriptMessage>[0]['message'],
-    });
+    await store.appendTranscriptMessage(sessionKey, {
+      role: 'assistant',
+      content: [
+        {
+          type: 'toolCall',
+          id: toolCallId,
+          name: 'workflow',
+          arguments: { name: view.run.definitionId },
+        },
+      ],
+      timestamp: Date.now(),
+    } as unknown as Parameters<SessionStore['appendTranscriptMessage']>[1]);
 
-    await appendPiTranscriptMessage({
-      absPath,
-      cwd: process.cwd(),
-      sessionKey,
-      message: {
-        role: 'toolResult',
-        toolCallId,
-        content: [{ type: 'text', text: JSON.stringify(envelope) }],
-        details: snapshot,
-        isError,
-        timestamp: Date.now(),
-      } as Parameters<typeof appendPiTranscriptMessage>[0]['message'],
-    });
+    await store.appendTranscriptMessage(sessionKey, {
+      role: 'toolResult',
+      toolCallId,
+      content: [{ type: 'text', text: JSON.stringify(envelope) }],
+      details: snapshot,
+      isError,
+      timestamp: Date.now(),
+    } as unknown as Parameters<SessionStore['appendTranscriptMessage']>[1]);
 
     await store.updateMetadata(sessionKey, {
       status: SessionStatus.ACTIVE,
@@ -165,26 +145,20 @@ export class WorkflowSessionBridge {
     status: WorkflowRunView['run']['status'];
   }): Promise<void> {
     const store = this.gateway.sessionIndexInstance.getStore();
-    const { absPath } = await store.resolveTranscriptPath(params.parentSessionKey);
     const text = formatParentRunLinkText(params);
-    await appendPiTranscriptContextEntry({
-      absPath,
-      cwd: process.cwd(),
-      sessionKey: params.parentSessionKey,
-      entry: {
-        kind: 'context',
-        id: `workflow-run-link:${params.runId}`,
-        text,
-        data: {
-          kind: WORKFLOW_RUN_LINK_CONTEXT_KIND,
-          runId: params.runId,
-          workflowSessionKey: params.workflowSessionKey,
-          definitionId: params.definitionId,
-          goal: params.goal,
-          status: params.status,
-        },
-        createdAt: new Date().toISOString(),
+    await store.appendTranscriptContextEntry(params.parentSessionKey, {
+      kind: 'context',
+      id: `workflow-run-link:${params.runId}`,
+      text,
+      data: {
+        kind: WORKFLOW_RUN_LINK_CONTEXT_KIND,
+        runId: params.runId,
+        workflowSessionKey: params.workflowSessionKey,
+        definitionId: params.definitionId,
+        goal: params.goal,
+        status: params.status,
       },
+      createdAt: new Date().toISOString(),
     });
   }
 }

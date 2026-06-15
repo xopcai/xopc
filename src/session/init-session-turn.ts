@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { SessionConfigSchema, type Config } from '../config/schema.js';
 import { parseSessionKey } from '../routing/session-key.js';
 import { createLogger } from '../utils/logger.js';
+import { getSessionMetadata, isXopcDatabaseOpen, openXopcDatabase } from '../storage/sqlite/index.js';
 
 import { resolveSessionLifecycleTimestamps } from './lifecycle-timestamps.js';
 import {
@@ -40,29 +41,26 @@ export type InitSessionTurnOptions = {
   sessionKey: string;
   body?: string;
   resetSession: SessionResetFn;
-  /** When true, skip idle/daily implicit rollover (provider-owned CLI sessions). */
   skipImplicitExpiry?: boolean;
 };
 
-/**
- * Turn-start session init: match `resetTriggers`, evaluate freshness, archive +
- * assign new `sessionId` when stale or explicitly reset. OpenClaw `initSessionState`
- * equivalent for xopc direct + channel paths.
- */
 export async function initSessionTurn(
   opts: InitSessionTurnOptions,
 ): Promise<InitSessionTurnResult> {
+  if (!isXopcDatabaseOpen()) {
+    openXopcDatabase();
+  }
+
   const sessionCfg = opts.cfg.session ?? SessionConfigSchema.parse({});
   const triggers = resolveResetTriggers(sessionCfg.resetTriggers);
   const rawBody = opts.body ?? '';
   const triggerMatch = matchResetTriggers(rawBody, triggers);
 
-  const { sessionKey, sessionStore } = await resolveSessionKeyForRequest({
+  const { sessionKey, sessionMetadata } = await resolveSessionKeyForRequest({
     cfg: opts.cfg,
     sessionKey: opts.sessionKey,
   });
   const key = sessionKey?.trim() ?? opts.sessionKey.trim();
-  const sessionEntry = key ? sessionStore[key] : undefined;
 
   const parsed = key ? parseSessionKey(key) : null;
   const peerKind = parsed?.peerKind;
@@ -71,21 +69,32 @@ export async function initSessionTurn(
     isGroup: peerKind === 'group' || peerKind === 'channel',
     isThread: Boolean(parsed?.threadId),
   });
-  const meta = sessionEntry?.pluginExtensions?.xopc?.metadata;
   const channelReset = resolveChannelResetConfig({
     sessionCfg,
-    channel: parsed?.source ?? meta?.sourceChannel,
+    channel: parsed?.source ?? sessionMetadata?.sourceChannel,
   });
   const resetPolicy = resolveSessionResetPolicy({
     sessionCfg,
     resetType,
     resetOverride: channelReset,
   });
-  const lifecycle = resolveSessionLifecycleTimestamps({ entry: sessionEntry });
+  const lifecycle = resolveSessionLifecycleTimestamps({
+    entry: sessionMetadata
+      ? {
+          updatedAt: Date.parse(sessionMetadata.updatedAt),
+          sessionStartedAt: sessionMetadata.sessionStartedAt
+            ? Date.parse(sessionMetadata.sessionStartedAt)
+            : undefined,
+          lastInteractionAt: sessionMetadata.lastInteractionAt
+            ? Date.parse(sessionMetadata.lastInteractionAt)
+            : undefined,
+        }
+      : undefined,
+  });
   const now = Date.now();
-  const freshness = sessionEntry
+  const freshness = sessionMetadata
     ? evaluateSessionFreshness({
-        updatedAt: sessionEntry.updatedAt,
+        updatedAt: Date.parse(sessionMetadata.updatedAt),
         ...lifecycle,
         now,
         policy: resetPolicy,
@@ -93,14 +102,14 @@ export async function initSessionTurn(
     : { fresh: false };
 
   const skipImplicit = opts.skipImplicitExpiry ?? false;
-  const staleRollover = Boolean(sessionEntry && !skipImplicit && !freshness.fresh);
+  const staleRollover = Boolean(sessionMetadata && !skipImplicit && !freshness.fresh);
   const needsRollover = triggerMatch.resetTriggered || staleRollover;
 
-  let sessionId = sessionEntry?.sessionId;
+  let sessionId = sessionMetadata?.transcriptId;
   let previousSessionId: string | undefined;
   let isNewSession = false;
 
-  if (needsRollover && sessionEntry?.sessionId) {
+  if (needsRollover && sessionMetadata?.transcriptId) {
     const outcome = await opts.resetSession(key);
     if (outcome) {
       previousSessionId = outcome.previousSessionId;
@@ -124,7 +133,7 @@ export async function initSessionTurn(
       sessionId = randomUUID();
       isNewSession = true;
     }
-  } else if (!sessionEntry) {
+  } else if (!sessionMetadata) {
     isNewSession = true;
     sessionId = randomUUID();
   }

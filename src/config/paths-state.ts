@@ -37,3 +37,10 @@ export function resolveUpdateCheckStatePath(env: NodeJS.ProcessEnv = process.env
 export function resolveUpdateLockPath(env: NodeJS.ProcessEnv = process.env): string {
   return join(resolveStateDir(env), 'update.lock');
 }
+
+/** Primary SQLite state database (`~/.xopc/xopc.db`). */
+export const XOPC_DB_FILENAME = 'xopc.db';
+
+export function resolveXopcDatabasePath(env: NodeJS.ProcessEnv = process.env): string {
+  return join(resolveStateDir(env), XOPC_DB_FILENAME);
+}

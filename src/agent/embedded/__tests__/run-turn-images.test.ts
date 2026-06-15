@@ -24,9 +24,7 @@ vi.mock('../session-runner.js', () => ({
   }),
   resolveEmbeddedTranscriptInputs: vi.fn().mockResolvedValue({
     sessionId: 'session-1',
-    sessionFile: '/tmp/session.jsonl',
-    sessionsDir: '/tmp',
-    hadSessionFile: false,
+    sessionKey: 'agent:main:test',
   }),
 }));
 

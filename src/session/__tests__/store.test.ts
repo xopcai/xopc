@@ -1,10 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
 import { ConfigSchema } from '../../config/schema.js';
-import { FILENAMES } from '../../config/paths.js';
+import {
+  closeXopcDatabase,
+  openXopcDatabase,
+  patchSessionMetadata,
+  resetXopcDatabaseSingletonForTest,
+} from '../../storage/sqlite/index.js';
 import { SessionStore } from '../store.js';
 
 const testConfig = ConfigSchema.parse({});
@@ -12,14 +17,26 @@ const testConfig = ConfigSchema.parse({});
 describe('SessionStore', () => {
   let tempDir: string;
   let store: SessionStore;
+  let previousStateDir: string | undefined;
 
   beforeEach(async () => {
+    previousStateDir = process.env.XOPC_STATE_DIR;
     tempDir = await mkdtemp(join(tmpdir(), 'xopc-session-test-'));
-    store = new SessionStore({ config: testConfig, sessionsDir: join(tempDir, '.sessions') });
+    process.env.XOPC_STATE_DIR = tempDir;
+    resetXopcDatabaseSingletonForTest();
+    openXopcDatabase({ path: join(tempDir, 'xopc.db') });
+    store = new SessionStore({ config: testConfig });
     await store.initialize();
   });
 
   afterEach(async () => {
+    closeXopcDatabase();
+    resetXopcDatabaseSingletonForTest();
+    if (previousStateDir === undefined) {
+      delete process.env.XOPC_STATE_DIR;
+    } else {
+      process.env.XOPC_STATE_DIR = previousStateDir;
+    }
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -69,7 +86,7 @@ describe('SessionStore', () => {
     });
   });
 
-  describe('message persistence (JSONL + sessions.json)', () => {
+  describe('message persistence (SQLite)', () => {
     it('should reset in place with archived transcript and new session id', async () => {
       const key = 'agent:main:webchat:default:direct:reset-test';
       await store.saveMessages(key, [{ role: 'user', content: 'hello', timestamp: Date.now() }]);
@@ -199,65 +216,32 @@ describe('SessionStore', () => {
       expect(telegramSessions.items[0].sourceChannel).toBe('telegram');
     });
 
-    it('lists webchat when sessions.json metadata omits sourceChannel (rehydrate from session key)', async () => {
+    it('lists webchat when metadata omits sourceChannel (rehydrate from session key)', async () => {
       const key = 'agent:main:webchat:default:direct:meta-gap';
       await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
-      const mapPath = join(store.getSessionsRoot(), FILENAMES.SESSIONS_MAP);
-      const raw = JSON.parse(await readFile(mapPath, 'utf-8')) as Record<string, { pluginExtensions?: { xopc?: { metadata?: Record<string, unknown> } } }>;
-      const meta = raw[key]?.pluginExtensions?.xopc?.metadata;
-      expect(meta).toBeDefined();
-      delete meta!.sourceChannel;
-      await writeFile(mapPath, JSON.stringify(raw));
+      patchSessionMetadata(key, { sourceChannel: '' });
 
       const listed = await store.list({ channel: 'webchat,gateway' });
       expect(listed.items.some((s) => s.key === key)).toBe(true);
     });
 
-    it('lists webchat sessions from standalone agent directories outside agents.list', async () => {
-      const previousStateDir = process.env.XOPC_STATE_DIR;
-      process.env.XOPC_STATE_DIR = join(tempDir, '.state');
-      try {
-        const aggregateStore = new SessionStore({ config: testConfig });
-        await aggregateStore.initialize();
-        await mkdir(join(tempDir, '.state', 'agents', 'empty-agent', 'sessions'), { recursive: true });
+    it('lists webchat sessions from other agents in the shared database', async () => {
+      const key = 'agent:coder:webchat:default:direct:standalone';
+      await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
 
-        const standaloneStore = new SessionStore({ config: testConfig, agentId: 'coder' });
-        await standaloneStore.initialize();
-        const key = 'agent:coder:webchat:default:direct:standalone';
-        await standaloneStore.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
-
-        const listed = await aggregateStore.list({ channel: 'webchat,gateway' });
-        expect(listed.items.some((session) => session.key === key)).toBe(true);
-      } finally {
-        if (previousStateDir === undefined) {
-          delete process.env.XOPC_STATE_DIR;
-        } else {
-          process.env.XOPC_STATE_DIR = previousStateDir;
-        }
-      }
+      const listed = await store.list({ channel: 'webchat,gateway' });
+      expect(listed.items.some((session) => session.key === key)).toBe(true);
     });
 
     it('invalidates aggregate cache when a session is written through the same store', async () => {
-      const previousStateDir = process.env.XOPC_STATE_DIR;
-      process.env.XOPC_STATE_DIR = join(tempDir, '.state');
-      try {
-        const aggregateStore = new SessionStore({ config: testConfig });
-        await aggregateStore.initialize();
-        const before = await aggregateStore.list({ channel: 'webchat' });
-        expect(before.items).toHaveLength(0);
+      const before = await store.list({ channel: 'webchat' });
+      expect(before.items).toHaveLength(0);
 
-        const key = 'agent:main:webchat:default:direct:cache-write';
-        await aggregateStore.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
+      const key = 'agent:main:webchat:default:direct:cache-write';
+      await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
 
-        const after = await aggregateStore.list({ channel: 'webchat' });
-        expect(after.items.some((session) => session.key === key)).toBe(true);
-      } finally {
-        if (previousStateDir === undefined) {
-          delete process.env.XOPC_STATE_DIR;
-        } else {
-          process.env.XOPC_STATE_DIR = previousStateDir;
-        }
-      }
+      const after = await store.list({ channel: 'webchat' });
+      expect(after.items.some((session) => session.key === key)).toBe(true);
     });
 
     it('should list sessions with status filter', async () => {

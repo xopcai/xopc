@@ -13,7 +13,6 @@ import {
   type SessionConfigStore,
   type SessionStore,
 } from '../../session/index.js';
-import { appendPiTranscriptMessage } from '../../session/parity/jsonl-transcript-io.js';
 import type { SessionContext } from '../session/index.js';
 import { applyReasoningVisibilityToSseEvent } from '../streaming/reasoning-visibility-sse.js';
 import type { ReasoningLevel } from '../transcript/thinking-types.js';
@@ -330,31 +329,19 @@ export async function* runProcessDirectStreaming(
 
     if (channel === 'webchat' && ranSlashCommand) {
       try {
-        const { absPath } = await deps.sessionStore.resolveTranscriptPath(sessionKey);
-        const workspaceDir = deps.agentManager.getResolvedWorkspaceForSession(sessionKey);
         const userMsg = {
           role: 'user' as const,
           content: [{ type: 'text' as const, text: mergedUserText }],
           timestamp: Date.now(),
         } as AgentMessage;
-        await appendPiTranscriptMessage({
-          absPath,
-          cwd: workspaceDir,
-          message: userMsg,
-          sessionKey,
-        });
+        await deps.sessionStore.appendTranscriptMessage(sessionKey, userMsg);
         if (webchatSlashReceipt?.trim()) {
           const assistantMsg = {
             role: 'assistant' as const,
             content: [{ type: 'text' as const, text: webchatSlashReceipt.trim() }],
             timestamp: Date.now(),
           } as AgentMessage;
-          await appendPiTranscriptMessage({
-            absPath,
-            cwd: workspaceDir,
-            message: assistantMsg,
-            sessionKey,
-          });
+          await deps.sessionStore.appendTranscriptMessage(sessionKey, assistantMsg);
         }
         deps.reloadWebchatTranscript?.(sessionKey);
       } catch (err) {

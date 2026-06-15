@@ -24,20 +24,21 @@ xopc provides comprehensive session management for conversation history via CLI 
 
 | Property | Value |
 |----------|-------|
-| Storage directory | `agents/<agentId>/sessions/` (under the state directory; sharded transcript files) |
-| Index file | `agents/<agentId>/sessions/index.json` |
-| File format | JSON |
-| Archive directory | `agents/<agentId>/sessions/archive/` |
-| Session overrides | `agents/<agentId>/sessions/config/<sanitized-session-key>.json` |
+| Database | `~/.xopc/xopc.db` (SQLite, WAL) |
+| Tables | `sessions`, `transcripts`, `transcript_entries`, `session_config`, `compaction_checkpoints`, `transcript_fts` (FTS5) |
+| Per-session overrides | SQLite `session_config` (model, thinking, verbose, …) |
+| Legacy path | `agents/<agentId>/sessions/` may exist from older installs; new installs do not write transcripts there |
+
+Session metadata, transcript rows, compaction checkpoints, and full-text search are stored in SQLite. The gateway opens the database on startup (`openXopcDatabase()`).
 
 ---
 
 ## Reset vs delete
 
-| Action | Session key | Transcript | Overrides (`sessions/config/`, thinking on disk) |
-|--------|-------------|------------|--------------------------------------------------|
-| **Reset** (`/new`, `POST /api/sessions/:key/reset`) | Same key | Current JSONL archived as `*.reset.*`; new `sessionId` + empty transcript | Preserved |
-| **Delete** (`DELETE /api/sessions/:key`) | Removed from index | Archived as `*.deleted.*` | Config file removed with session |
+| Action | Session key | Transcript | Overrides (`session_config`, thinking on session row) |
+|--------|-------------|------------|------------------------------------------------------|
+| **Reset** (`/new`, `POST /api/sessions/:key/reset`) | Same key | Current transcript archived in SQLite; new `sessionId` + empty transcript | Preserved |
+| **Delete** (`DELETE /api/sessions/:key`) | Removed from index | Transcript rows removed with session | Config removed with session |
 
 Channel slash **`/new`** (aliases `/reset`, `/restart`) uses reset semantics, not delete. TUI **`/new`** / **`/reset`** call the same reset API in gateway mode (`POST /api/sessions/:key/reset` via `performSessionReset`).
 
@@ -58,7 +59,7 @@ Runtime session keys use the OpenClaw-aligned form **`agent:{agentId}:{rest}`**:
 | Channel peer | `agent:main:telegram:default:direct:123456` | Routed inbound/outbound chats |
 | Shorthand | `mytopic` on CLI/TUI | Expanded to `agent:{currentAgentId}:mytopic` |
 
-The `agentId` segment selects which **`agents.list`** entry (merged over `agents.defaults`) owns workspace, model defaults, and on-disk `agents/<id>/sessions/`. Prefer full `agent:…` keys in scripts; shorthand is fine for interactive TUI.
+The `agentId` segment selects which **`agents.list`** entry (merged over `agents.defaults`) owns workspace, model defaults, and on-disk agent home (`agents/<id>/`). Prefer full `agent:…` keys in scripts; shorthand is fine for interactive TUI.
 
 ---
 
@@ -232,28 +233,6 @@ interface Message {
 
 ---
 
-## Session Index
-
-The `index.json` file maintains a cache of all session metadata:
-
-```json
-{
-  "version": "1.0",
-  "lastUpdated": "2026-02-14T10:00:00Z",
-  "sessions": [
-    {
-      "key": "telegram:123456",
-      "status": "active",
-      "tags": ["work"],
-      "messageCount": 42,
-      ...
-    }
-  ]
-}
-```
-
----
-
 ## Automatic Maintenance
 
 ### Compaction
@@ -313,26 +292,25 @@ To prevent memory issues:
 2. In the browser devtools **Network** tab, confirm REST calls to `/api/sessions` succeed and, if the UI uses live updates, that **`GET /api/events`** (SSE) stays connected
 3. Check for errors in gateway logs
 
-### Session Index Corrupted
+### Session store issues
 
-The index will be automatically rebuilt on next access. To force rebuild:
+Run deep integrity checks:
 
 ```bash
-# Delete index file (replace <agentId> with your agent id, e.g. main)
-rm ~/.xopc/agents/<agentId>/sessions/index.json
-
-# It will be rebuilt on next session list
-xopc session list
+xopc doctor --deep
 ```
 
-### Missing Sessions
+This validates SQLite linkage between `sessions` and `transcripts`, scans for orphan transcripts, and runs `PRAGMA integrity_check`.
 
-If sessions exist on disk under `agents/<agentId>/sessions/` but don't appear:
+### Missing sessions
+
+If sessions were created but do not appear in the UI:
 
 ```bash
-# Force index rebuild
 xopc session list --limit 1000
 ```
+
+Check gateway logs and confirm `~/.xopc/xopc.db` exists and is writable.
 
 ---
 

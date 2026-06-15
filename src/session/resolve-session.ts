@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
 import { SessionConfigSchema, type Config } from '../config/schema.js';
-import { resolveSessionsMapPath } from '../config/paths.js';
 import { resolveDefaultAgentId } from '../agent/agent-scope.js';
 import {
   normalizeAgentId,
@@ -15,24 +14,28 @@ import {
   type VerboseLevel,
 } from '../agent/transcript/thinking-types.js';
 import { createLogger } from '../utils/logger.js';
+import {
+  findSessionKeyByTranscriptId,
+  getSessionMetadata,
+  getSessionPersistedLevels,
+  isXopcDatabaseOpen,
+  openXopcDatabase,
+} from '../storage/sqlite/index.js';
 
 import { resolveSessionLifecycleTimestamps } from './lifecycle-timestamps.js';
-import { readSessionsJsonFile } from './parity/sessions-json-file.js';
-import type { XopcSessionDiskEntry } from './parity/xopc-session-disk-entry.js';
 import {
   evaluateSessionFreshness,
   resolveSessionResetPolicy,
 } from './reset-policy.js';
 import { resolveChannelResetConfig, resolveSessionResetType } from './reset-type.js';
+import type { SessionMetadata } from './types.js';
 
 const log = createLogger('ResolveSession');
 
 export type SessionResolution = {
   sessionId: string;
   sessionKey?: string;
-  sessionEntry?: XopcSessionDiskEntry;
-  sessionStore: Record<string, XopcSessionDiskEntry>;
-  storePath: string;
+  sessionMetadata?: SessionMetadata | null;
   isNewSession: boolean;
   persistedThinking?: ThinkLevel;
   persistedVerbose?: VerboseLevel;
@@ -40,9 +43,14 @@ export type SessionResolution = {
 
 export type SessionKeyResolution = {
   sessionKey?: string;
-  sessionStore: Record<string, XopcSessionDiskEntry>;
-  storePath: string;
+  sessionMetadata?: SessionMetadata | null;
 };
+
+function ensureDatabase(): void {
+  if (!isXopcDatabaseOpen()) {
+    openXopcDatabase();
+  }
+}
 
 export async function resolveSessionKeyForRequest(opts: {
   cfg: Config;
@@ -50,31 +58,25 @@ export async function resolveSessionKeyForRequest(opts: {
   sessionId?: string;
   agentId?: string;
 }): Promise<SessionKeyResolution> {
-  const defaultAgentId = resolveDefaultAgentId(opts.cfg);
+  ensureDatabase();
   const explicitKey = opts.sessionKey?.trim();
   const requestedSessionId = opts.sessionId?.trim();
-  const storeAgentId = explicitKey
-    ? resolveAgentIdFromSessionKey(explicitKey)
-    : opts.agentId?.trim()
-      ? normalizeAgentId(opts.agentId)
-      : defaultAgentId;
-  const storePath = resolveSessionsMapPath(opts.cfg, storeAgentId);
-  const sessionStore = await readSessionsJsonFile<XopcSessionDiskEntry>(storePath);
 
   let sessionKey = explicitKey;
   if (requestedSessionId && !sessionKey) {
-    for (const [key, entry] of Object.entries(sessionStore)) {
-      if (entry?.sessionId === requestedSessionId) {
-        sessionKey = key;
-        break;
-      }
-    }
+    sessionKey = findSessionKeyByTranscriptId(requestedSessionId) ?? undefined;
   }
   if (requestedSessionId && !sessionKey) {
+    const storeAgentId = explicitKey
+      ? resolveAgentIdFromSessionKey(explicitKey)
+      : opts.agentId?.trim()
+        ? normalizeAgentId(opts.agentId)
+        : resolveDefaultAgentId(opts.cfg);
     sessionKey = `agent:${normalizeAgentId(opts.agentId ?? storeAgentId)}:explicit:${requestedSessionId}`;
   }
 
-  return { sessionKey, sessionStore, storePath };
+  const sessionMetadata = sessionKey ? getSessionMetadata(sessionKey) : null;
+  return { sessionKey, sessionMetadata };
 }
 
 export async function resolveSession(opts: {
@@ -84,9 +86,8 @@ export async function resolveSession(opts: {
   agentId?: string;
 }): Promise<SessionResolution> {
   const sessionCfg = opts.cfg.session ?? SessionConfigSchema.parse({});
-  const { sessionKey, sessionStore, storePath } = await resolveSessionKeyForRequest(opts);
+  const { sessionKey, sessionMetadata } = await resolveSessionKeyForRequest(opts);
   const now = Date.now();
-  const sessionEntry = sessionKey ? sessionStore[sessionKey] : undefined;
 
   const parsed = sessionKey ? parseSessionKey(sessionKey) : null;
   const peerKind = parsed?.peerKind;
@@ -95,20 +96,31 @@ export async function resolveSession(opts: {
     isGroup: peerKind === 'group' || peerKind === 'channel',
     isThread: Boolean(parsed?.threadId),
   });
-  const meta = sessionEntry?.pluginExtensions?.xopc?.metadata;
   const channelReset = resolveChannelResetConfig({
     sessionCfg,
-    channel: parsed?.source ?? meta?.sourceChannel,
+    channel: parsed?.source ?? sessionMetadata?.sourceChannel,
   });
   const resetPolicy = resolveSessionResetPolicy({
     sessionCfg,
     resetType,
     resetOverride: channelReset,
   });
-  const lifecycle = resolveSessionLifecycleTimestamps({ entry: sessionEntry });
-  const freshness = sessionEntry
+  const lifecycle = resolveSessionLifecycleTimestamps({
+    entry: sessionMetadata
+      ? {
+          updatedAt: Date.parse(sessionMetadata.updatedAt),
+          sessionStartedAt: sessionMetadata.sessionStartedAt
+            ? Date.parse(sessionMetadata.sessionStartedAt)
+            : undefined,
+          lastInteractionAt: sessionMetadata.lastInteractionAt
+            ? Date.parse(sessionMetadata.lastInteractionAt)
+            : undefined,
+        }
+      : undefined,
+  });
+  const freshness = sessionMetadata
     ? evaluateSessionFreshness({
-        updatedAt: sessionEntry.updatedAt,
+        updatedAt: Date.parse(sessionMetadata.updatedAt),
         ...lifecycle,
         now,
         policy: resetPolicy,
@@ -116,31 +128,29 @@ export async function resolveSession(opts: {
     : { fresh: false };
   const fresh = freshness.fresh;
   const sessionId =
-    opts.sessionId?.trim() || (fresh ? sessionEntry?.sessionId : undefined) || randomUUID();
+    opts.sessionId?.trim() || (fresh ? sessionMetadata?.transcriptId : undefined) || randomUUID();
   const isNewSession = !fresh && !opts.sessionId?.trim();
 
   if (isNewSession && sessionKey) {
     log.debug(
-      { sessionKey, previousSessionId: sessionEntry?.sessionId, sessionId, resetType },
+      { sessionKey, previousSessionId: sessionMetadata?.transcriptId, sessionId, resetType },
       'Session reset boundary — new transcript id for turn',
     );
   }
 
   const persistedThinking =
-    fresh && sessionEntry?.thinkingLevel
-      ? normalizeThinkLevel(sessionEntry.thinkingLevel)
+    fresh && sessionKey
+      ? normalizeThinkLevel(getSessionPersistedLevels(sessionKey)?.thinkingLevel ?? undefined)
       : undefined;
   const persistedVerbose =
-    fresh && sessionEntry?.verboseLevel
-      ? normalizeVerboseLevel(sessionEntry.verboseLevel)
+    fresh && sessionKey
+      ? normalizeVerboseLevel(getSessionPersistedLevels(sessionKey)?.verboseLevel ?? undefined)
       : undefined;
 
   return {
     sessionId,
     sessionKey,
-    sessionEntry,
-    sessionStore,
-    storePath,
+    sessionMetadata,
     isNewSession,
     persistedThinking,
     persistedVerbose,

@@ -24,7 +24,6 @@ import type { ModelManager } from '../models/index.js';
 import type { SessionStore } from '../../session/store.js';
 import type { SessionStateBag } from '../session/index.js';
 import { parseSessionKey as parseRoutingSessionKey } from '../../routing/session-key.js';
-import { appendPiTranscriptMessage } from '../../session/parity/jsonl-transcript-io.js';
 import { createLogger } from '../../utils/logger.js';
 import type { PersistentGoalApis } from './persistent-goal-apis.js';
 import { handlePersistentGoalPostTurn } from './post-turn.js';
@@ -122,18 +121,11 @@ export class PersistentGoalService {
       appendAssistantReceipt: async (k, text) => {
         const trimmed = text.trim();
         if (!trimmed) return;
-        const { absPath } = await this.opts.sessionStore.resolveTranscriptPath(k);
-        const workspaceDir = this.opts.getResolvedWorkspaceForSession(k);
-        await appendPiTranscriptMessage({
-          absPath,
-          cwd: workspaceDir,
-          message: {
-            role: 'assistant',
-            content: [{ type: 'text', text: trimmed }],
-            timestamp: Date.now(),
-          } as AgentMessage,
-          sessionKey: k,
-        });
+        await this.opts.sessionStore.appendTranscriptMessage(k, {
+          role: 'assistant',
+          content: [{ type: 'text', text: trimmed }],
+          timestamp: Date.now(),
+        } as AgentMessage);
         this.opts.notifyWebchatTranscriptAppend(k, trimmed);
       },
       scheduleContinuation: (sk, msg) => {

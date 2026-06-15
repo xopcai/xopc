@@ -2,12 +2,19 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 import { initSessionTurn } from '../init-session-turn.js';
 import type { Config } from '../../config/schema.js';
+import { SessionStatus, type SessionMetadata } from '../types.js';
 
-vi.mock('../parity/sessions-json-file.js', () => ({
-  readSessionsJsonFile: vi.fn(),
-}));
+vi.mock('../../storage/sqlite/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../storage/sqlite/index.js')>();
+  return {
+    ...actual,
+    isXopcDatabaseOpen: vi.fn(() => true),
+    openXopcDatabase: vi.fn(),
+    getSessionMetadata: vi.fn(),
+  };
+});
 
-import { readSessionsJsonFile } from '../parity/sessions-json-file.js';
+import { getSessionMetadata } from '../../storage/sqlite/index.js';
 
 const baseCfg = {
   session: {
@@ -20,28 +27,40 @@ const baseCfg = {
 
 const sessionKey = 'agent:main:telegram:default:direct:1';
 
+function baseMetadata(overrides: Partial<SessionMetadata> = {}): SessionMetadata {
+  const now = new Date().toISOString();
+  return {
+    key: sessionKey,
+    status: SessionStatus.ACTIVE,
+    tags: [],
+    createdAt: now,
+    updatedAt: now,
+    lastAccessedAt: now,
+    messageCount: 0,
+    estimatedTokens: 0,
+    compactedCount: 0,
+    sourceChannel: 'telegram',
+    sourceChatId: 'default:direct:1',
+    stats: { messageCount: 0, tokenCount: 0 },
+    ...overrides,
+  };
+}
+
 function mockExistingEntry(sessionStartedAt: number) {
-  vi.mocked(readSessionsJsonFile).mockResolvedValue({
-    [sessionKey]: {
-      sessionId: 'old-id',
-      sessionFile: 'old-id.jsonl',
-      updatedAt: Date.now(),
-      sessionStartedAt,
-      pluginExtensions: {
-        xopc: {
-          metadata: {
-            updatedAt: new Date().toISOString(),
-            sourceChannel: 'telegram',
-          },
-        },
-      },
-    },
-  } as never);
+  vi.mocked(getSessionMetadata).mockImplementation((key) => {
+    if (key !== sessionKey) {
+      return null;
+    }
+    return baseMetadata({
+      transcriptId: 'old-id',
+      sessionStartedAt: new Date(sessionStartedAt).toISOString(),
+    });
+  });
 }
 
 describe('initSessionTurn', () => {
   beforeEach(() => {
-    vi.mocked(readSessionsJsonFile).mockResolvedValue({});
+    vi.mocked(getSessionMetadata).mockReturnValue(null);
   });
 
   it('calls resetSession on explicit /new trigger when session exists', async () => {

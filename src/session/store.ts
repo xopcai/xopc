@@ -1,26 +1,40 @@
-import { randomUUID } from 'node:crypto';
-import { performance } from 'node:perf_hooks';
-import { copyFile, mkdir, readdir, stat, unlink } from 'fs/promises';
-import { join } from 'path';
-import { existsSync } from 'fs';
+import { join } from 'node:path';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import type { CompactionEntry } from '@earendil-works/pi-coding-agent';
-
-import { loadEntriesFromFile } from './parity/load-jsonl-entries.js';
 
 import type { Config } from '../config/schema.js';
-import { resolveSessionsDir, resolveStateDir, FILENAMES } from '../config/paths.js';
-import { resolveDefaultAgentId, listAgentEntries } from '../agent/agent-scope.js';
+import { resolveStateDir } from '../config/paths-state.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { readPostCompactionContext } from '../agent/reply/post-compaction-context.js';
-import { parseSessionKey as parseRoutingSessionKey } from '../routing/session-key.js';
 import { createLogger } from '../utils/logger.js';
 import { SessionCompactor, type CompactionConfig, type CompactionResult } from '../agent/memory/compaction.js';
 import { SlidingWindow, type WindowConfig } from '../agent/memory/window.js';
-import { invalidateSessionSearchIndexCache } from './search-index-cache.js';
+import {
+  isXopcDatabaseOpen,
+  openXopcDatabase,
+  appendTranscriptEntry,
+  captureCompactionCheckpoint,
+  deleteSessionRecord,
+  ensureSessionRecord,
+  estimateTokensFromMessages,
+  getCompactionCheckpointDetail,
+  getCurrentTranscriptId,
+  getGlobalSessionStats,
+  getSessionMetadata,
+  listCompactionCheckpoints,
+  listSessionMetadata,
+  listSessionsByAgent,
+  loadCheckpointRows,
+  loadLlmMessagesForSession,
+  loadTranscriptRowsForSession,
+  patchSessionMetadata,
+  replaceTranscriptRows,
+  resetSessionRecord,
+  restoreCompactionCheckpoint,
+} from '../storage/sqlite/index.js';
 import type { TranscriptCompactionRecord, XopcSessionTranscriptV1 } from './transcript-format.js';
 import {
+  buildSessionContextForLlm,
   mergeLlmMessagesPreservingContextRows,
   type TranscriptStoredRow,
   type XopcTranscriptContextEntry,
@@ -40,100 +54,44 @@ import type {
 } from './types.js';
 import { SessionStatus } from './types.js';
 import type { Message } from './types.js';
-import { parseCompactionCheckpointTranscriptFileName } from './parity/artifacts.js';
-import { archiveFileOnDisk, resolveSessionFilePath, resolveSessionTranscriptPathInDir } from './parity/transcript-paths.js';
-import { validateSessionId } from './parity/session-id.js';
-import { readSessionsJsonFile, withSessionsJsonLock } from './parity/sessions-json-file.js';
-import {
-  buildSessionsJsonStatsPatch,
-  incrementSessionsJsonStatsForAppend,
-  isAppendOnlyLlmTranscriptMessage,
-  patchSessionsJsonEntryStats,
-} from './parity/sessions-json-patch.js';
-import {
-  countTranscriptMessageRows,
-  readDisplayMessagePageFromTranscriptFile,
-} from './parity/transcript-pagination.js';
-import type { XopcSessionDiskEntry } from './parity/xopc-session-disk-entry.js';
-import {
-  appendPiTranscriptContextEntry,
-  persistMergedTranscriptRows,
-  readTranscriptRowsFromFile,
-  rowsToLlmMessages,
-  writeTranscriptJsonl,
-} from './parity/jsonl-transcript-io.js';
 import type { SessionTranscriptUpdate } from './transcript-events.js';
+import { isAppendOnlyLlmTranscriptMessage } from './transcript-stats.js';
 
 const log = createLogger('SessionStore');
 
 const INDEX_VERSION = '1.0';
-const DELETED_MARKER = '.jsonl.deleted.';
-const ALL_SESSIONS_MAP_CACHE_TTL_MS = 2_000;
 
 export interface SessionStoreOptions {
   config: Config;
+  /** @deprecated SQLite is global; ignored. */
   agentId?: string;
+  /** @deprecated SQLite is global; ignored. */
   sessionsDir?: string;
 }
 
 export class SessionStore {
-  private sessionsDir: string;
-  private archiveDir: string;
-  private storePath: string;
   private window: SlidingWindow;
   private compactor: SessionCompactor;
   private storeMutationDepth = 0;
   private storeMutationChain: Promise<void> = Promise.resolve();
-  private allSessionsMapCache?: {
-    expiresAtMs: number;
-    map: Record<string, XopcSessionDiskEntry>;
-  };
-  /** Cache of per-agent sessions dirs to avoid re-resolution on every call. */
-  private agentSessionsDirCache = new Map<string, string>();
 
   constructor(
     private options: SessionStoreOptions,
     windowConfig?: Partial<WindowConfig>,
     compactionConfig?: Partial<CompactionConfig>,
   ) {
-    const agentId = options.agentId ?? resolveDefaultAgentId(options.config);
-    this.sessionsDir = options.sessionsDir ?? resolveSessionsDir(options.config, agentId);
-    this.archiveDir = join(this.sessionsDir, 'archive');
-    this.storePath = join(this.sessionsDir, FILENAMES.SESSIONS_MAP);
     this.window = new SlidingWindow(windowConfig);
     this.compactor = new SessionCompactor(compactionConfig);
   }
 
-  getSessionsRoot(): string {
-    return this.sessionsDir;
+  private resolveWorkspaceCwd(sessionKey: string): string {
+    return resolveEffectiveAgentProfileForSession(this.options.config, sessionKey).resolvedWorkspacePath;
   }
 
-  /**
-   * OpenClaw-aligned: resolve the sessions directory for a given session key.
-   * Extracts agentId from the session key and routes to `agents/<agentId>/sessions/`.
-   * Falls back to the default sessions directory when agentId cannot be parsed
-   * or when `sessionsDir` was explicitly provided in options.
-   */
-  private resolveSessionsDirForKey(sessionKey: string): string {
-    if (this.options.sessionsDir) {
-      return this.sessionsDir;
+  private ensureDatabase(): void {
+    if (!isXopcDatabaseOpen()) {
+      openXopcDatabase();
     }
-    const parsed = parseRoutingSessionKey(sessionKey);
-    if (!parsed) {
-      return this.sessionsDir;
-    }
-    const agentId = parsed.agentId;
-    const cached = this.agentSessionsDirCache.get(agentId);
-    if (cached) {
-      return cached;
-    }
-    const resolved = resolveSessionsDir(this.options.config, agentId);
-    this.agentSessionsDirCache.set(agentId, resolved);
-    return resolved;
-  }
-
-  private resolveStorePathForKey(sessionKey: string): string {
-    return join(this.resolveSessionsDirForKey(sessionKey), FILENAMES.SESSIONS_MAP);
   }
 
   private async runStoreMutation<T>(fn: () => Promise<T>): Promise<T> {
@@ -153,394 +111,67 @@ export class SessionStore {
   }
 
   async initialize(): Promise<void> {
-    await mkdir(this.sessionsDir, { recursive: true });
-    await mkdir(this.archiveDir, { recursive: true });
-    if (!existsSync(this.storePath)) {
-      await withSessionsJsonLock(this.storePath, async () => undefined);
-    }
-    log.debug('Session store initialized (sessions.json + JSONL)');
+    this.ensureDatabase();
+    log.debug('Session store initialized (SQLite)');
   }
 
-  private transcriptPathForEntry(entry: XopcSessionDiskEntry, sessionsDir?: string): string {
-    return resolveSessionFilePath(entry.sessionId, entry, { sessionsDir: sessionsDir ?? this.sessionsDir });
+  getSessionsRoot(): string {
+    return resolveStateDir();
   }
 
-  private async readMapForKey(sessionKey: string): Promise<Record<string, XopcSessionDiskEntry>> {
-    const storePath = this.resolveStorePathForKey(sessionKey);
-    return readSessionsJsonFile<XopcSessionDiskEntry>(storePath);
-  }
-
-  private async readMap(): Promise<Record<string, XopcSessionDiskEntry>> {
-    return readSessionsJsonFile<XopcSessionDiskEntry>(this.storePath);
-  }
-
-  private invalidateAllSessionsMapCache(): void {
-    this.allSessionsMapCache = undefined;
-  }
-
-  private async discoverSessionMapPaths(): Promise<Array<{ agentId: string; mapPath: string }>> {
-    const agents = listAgentEntries(this.options.config);
-    const defaultId = resolveDefaultAgentId(this.options.config);
-    const agentIds = new Set<string>([defaultId, ...agents.map((agent) => agent.id)]);
-
-    const agentsRoot = join(resolveStateDir(process.env), 'agents');
-    if (existsSync(agentsRoot)) {
-      const entries = await readdir(agentsRoot, { withFileTypes: true }).catch(() => []);
-      for (const entry of entries) {
-        if (entry.isDirectory()) {
-          agentIds.add(entry.name);
-        }
-      }
-    }
-
-    return [...agentIds].map((agentId) => ({
-      agentId,
-      mapPath: join(resolveSessionsDir(this.options.config, agentId), FILENAMES.SESSIONS_MAP),
-    }));
-  }
-
-  /**
-   * Unified cross-agent aggregation entry for global session views.
-   * Reads configured agents plus existing per-agent session maps under the state directory.
-   */
-  private async readAllMaps(): Promise<Record<string, XopcSessionDiskEntry>> {
-    if (this.options.sessionsDir) {
-      return this.readMap();
-    }
-
-    const nowMs = Date.now();
-    if (this.allSessionsMapCache && this.allSessionsMapCache.expiresAtMs > nowMs) {
-      log.debug(
-        { sessionCount: Object.keys(this.allSessionsMapCache.map).length },
-        'All session maps cache hit',
-      );
-      return this.allSessionsMapCache.map;
-    }
-
-    const startedAt = performance.now();
-    const paths = await this.discoverSessionMapPaths();
-    const merged: Record<string, XopcSessionDiskEntry> = {};
-    let scannedMapCount = 0;
-    for (const { mapPath } of paths) {
-      if (!existsSync(mapPath)) {
-        continue;
-      }
-      const map = await readSessionsJsonFile<XopcSessionDiskEntry>(mapPath);
-      Object.assign(merged, map);
-      scannedMapCount++;
-    }
-
-    this.allSessionsMapCache = {
-      expiresAtMs: nowMs + ALL_SESSIONS_MAP_CACHE_TTL_MS,
-      map: merged,
-    };
-    log.debug(
-      {
-        candidateAgentCount: paths.length,
-        scannedMapCount,
-        sessionCount: Object.keys(merged).length,
-        durationMs: Math.round(performance.now() - startedAt),
-      },
-      'All session maps scanned',
-    );
-    return merged;
-  }
-
-  private async getDiskEntry(sessionKey: string): Promise<XopcSessionDiskEntry | undefined> {
-    const map = await this.readMapForKey(sessionKey);
-    return map[sessionKey];
-  }
-
-  private buildDefaultMetadata(key: string): SessionMetadata {
-    const { channel, chatId } = this.parseSessionKey(key);
-    const routing = this.extractRoutingFromKey(key);
-    const isCronSession = channel === 'cron';
-    const isHeartbeatSession = channel === 'heartbeat';
-    const now = new Date().toISOString();
-    return {
-      key,
-      status: SessionStatus.ACTIVE,
-      tags: [],
-      createdAt: now,
-      updatedAt: now,
-      lastAccessedAt: now,
-      messageCount: 0,
-      estimatedTokens: 0,
-      compactedCount: 0,
-      sourceChannel: channel,
-      sourceChatId: chatId,
-      routing,
-      ...(isCronSession
-        ? { sessionType: 'cron', customData: { cronJobId: chatId } }
-        : {}),
-      ...(isHeartbeatSession
-        ? { sessionType: 'heartbeat', customData: { heartbeatTarget: chatId } }
-        : {}),
-      stats: { messageCount: 0, tokenCount: 0 },
-    };
-  }
-
-  private parseSessionKey(key: string): { channel: string; chatId: string } {
-    const parts = key.split(':');
-    if (parts.length >= 2 && parts[0] === 'heartbeat') {
-      return { channel: 'heartbeat', chatId: parts.slice(1).join(':') };
-    }
-    const parsed = parseRoutingSessionKey(key);
-    if (parsed) {
-      if (parsed.source === 'cron') {
-        return { channel: 'cron', chatId: parsed.peerId };
-      }
-      return {
-        channel: parsed.source,
-        chatId: [parsed.accountId, parsed.peerKind, parsed.peerId].join(':'),
-      };
-    }
-    return { channel: 'unknown', chatId: key };
-  }
-
-  private extractRoutingFromKey(key: string): SessionMetadata['routing'] {
-    const parsed = parseRoutingSessionKey(key);
-    if (!parsed) {
-      return undefined;
-    }
-    return {
-      agentId: parsed.agentId?.toLowerCase() || 'main',
-      source: parsed.source?.toLowerCase() || 'unknown',
-      accountId: parsed.accountId?.toLowerCase() || 'default',
-      peerKind: parsed.peerKind?.toLowerCase() || 'dm',
-      peerId: parsed.peerId?.toLowerCase() || 'unknown',
-      threadId: parsed.threadId,
-      scopeId: parsed.scopeId,
-    };
-  }
-
-  /** Resolve on-disk transcript path; creates session row + empty JSONL when missing. */
   async resolveTranscriptPath(
     sessionKey: string,
-  ): Promise<{ sessionId: string; absPath: string; sessionsDir: string }> {
-    const entry = await this.ensureSession(sessionKey);
-    const sessionsDir = this.resolveSessionsDirForKey(sessionKey);
-    const absPath = this.transcriptPathForEntry(entry, sessionsDir);
-    return { sessionId: entry.sessionId, absPath, sessionsDir };
+  ): Promise<{ sessionId: string; sessionKey: string }> {
+    this.ensureDatabase();
+    const cwd = this.resolveWorkspaceCwd(sessionKey);
+    const meta = ensureSessionRecord(sessionKey, cwd);
+    return { sessionId: meta.transcriptId!, sessionKey };
   }
 
-  /** Ensure sessions.json has an entry and transcript file exist for `sessionKey`. */
-  private async ensureSession(sessionKey: string): Promise<XopcSessionDiskEntry> {
-    const keyStorePath = this.resolveStorePathForKey(sessionKey);
-    const keySessionsDir = this.resolveSessionsDirForKey(sessionKey);
-    await mkdir(keySessionsDir, { recursive: true });
-    let changed = false;
-    const entry = await withSessionsJsonLock(keyStorePath, async (map) => {
-      const existing = map[sessionKey] as XopcSessionDiskEntry | undefined;
-      if (existing?.pluginExtensions?.xopc?.metadata) {
-        return existing;
-      }
-      let nextEntry = existing;
-      if (!nextEntry) {
-        const sessionId = randomUUID();
-        validateSessionId(sessionId);
-        const sessionFile = `${sessionId}.jsonl`;
-        const now = Date.now();
-        const metadata = this.buildDefaultMetadata(sessionKey);
-        metadata.transcriptId = sessionId;
-        nextEntry = {
-          sessionId,
-          updatedAt: now,
-          sessionStartedAt: now,
-          sessionFile,
-          pluginExtensions: { xopc: { metadata } },
-        };
-        map[sessionKey] = nextEntry as Record<string, unknown>;
-        const abs = resolveSessionTranscriptPathInDir(sessionId, keySessionsDir);
-        await writeTranscriptJsonl({
-          absPath: abs,
-          sessionId,
-          cwd: process.cwd(),
-          rows: [],
-        });
-        changed = true;
-      } else if (!nextEntry.pluginExtensions?.xopc?.metadata) {
-        const metadata = this.buildDefaultMetadata(sessionKey);
-        metadata.transcriptId = nextEntry.sessionId;
-        nextEntry.pluginExtensions = { xopc: { metadata } };
-        map[sessionKey] = nextEntry as Record<string, unknown>;
-        changed = true;
-      }
-      return nextEntry!;
+  async appendTranscriptMessage(sessionKey: string, message: AgentMessage): Promise<void> {
+    return this.runStoreMutation(async () => {
+      this.ensureDatabase();
+      const cwd = this.resolveWorkspaceCwd(sessionKey);
+      ensureSessionRecord(sessionKey, cwd);
+      appendTranscriptEntry(sessionKey, message);
     });
-    if (changed) {
-      this.invalidateAllSessionsMapCache();
-    }
-    return entry;
-  }
-
-  private metadataFromEntry(sessionKey: string, entry: XopcSessionDiskEntry): SessionMetadata {
-    const base = entry.pluginExtensions?.xopc?.metadata ?? this.buildDefaultMetadata(sessionKey);
-    const { channel: keySource, chatId: keyChatId } = this.parseSessionKey(sessionKey);
-    const diskSc = typeof base.sourceChannel === 'string' ? base.sourceChannel.trim() : '';
-    const diskChat = typeof base.sourceChatId === 'string' ? base.sourceChatId.trim() : '';
-    return {
-      ...base,
-      key: sessionKey,
-      transcriptId: entry.sessionId,
-      sourceChannel: diskSc || keySource,
-      sourceChatId: diskChat || keyChatId,
-    };
   }
 
   async getByAgent(agentId: string): Promise<SessionMetadata[]> {
-    const map = await this.readAllMaps();
-    const out: SessionMetadata[] = [];
-    for (const [key, e] of Object.entries(map)) {
-      const m = this.metadataFromEntry(key, e);
-      if (m.routing?.agentId?.toLowerCase() === agentId.toLowerCase()) {
-        out.push(m);
-      }
-    }
-    return out;
+    this.ensureDatabase();
+    return listSessionsByAgent(agentId);
   }
 
   async getByAccount(accountId: string): Promise<SessionMetadata[]> {
-    const map = await this.readAllMaps();
-    const out: SessionMetadata[] = [];
-    for (const [key, e] of Object.entries(map)) {
-      const m = this.metadataFromEntry(key, e);
-      if (m.routing?.accountId === accountId) {
-        out.push(m);
-      }
-    }
-    return out;
+    const { items } = await this.list({ limit: 100_000 });
+    return items.filter((m) => m.routing?.accountId === accountId);
   }
 
   async getByPeer(peerKind: string, peerId: string): Promise<SessionMetadata[]> {
-    const map = await this.readAllMaps();
-    const out: SessionMetadata[] = [];
-    for (const [key, e] of Object.entries(map)) {
-      const m = this.metadataFromEntry(key, e);
-      if (m.routing?.peerKind === peerKind && m.routing.peerId === peerId) {
-        out.push(m);
-      }
-    }
-    return out;
+    const { items } = await this.list({ limit: 100_000 });
+    return items.filter((m) => m.routing?.peerKind === peerKind && m.routing.peerId === peerId);
   }
 
   async getMainSession(channel: string, accountId: string): Promise<SessionMetadata | null> {
-    const map = await this.readAllMaps();
-    for (const [key, e] of Object.entries(map)) {
-      const m = this.metadataFromEntry(key, e);
-      if (
-        m.routing?.source === channel &&
-        m.routing.accountId === accountId &&
-        m.routing.peerKind === 'dm' &&
-        m.routing.peerId === 'main'
-      ) {
-        return m;
-      }
-    }
-    return null;
-  }
-
-  async refreshIndex(): Promise<void> {
-    /* no-op: sessions.json is authoritative */
-  }
-
-  async list(query: SessionListQuery = {}): Promise<PaginatedResult<SessionMetadata>> {
-    const map = await this.readAllMaps();
-    let sessions = Object.entries(map).map(([k, e]) => this.metadataFromEntry(k, e));
-
-    if (query.status) {
-      const statuses = Array.isArray(query.status) ? query.status : [query.status];
-      sessions = sessions.filter((s) => statuses.includes(s.status));
-    }
-    if (query.channel) {
-      const rawChannels = query.channel
-        .split(',')
-        .map((c) => c.trim().toLowerCase())
-        .filter(Boolean);
-      /**
-       * `ui` is a legacy console source; treat as webchat when filtering web sessions.
-       * `webui` matches slash-command normalization to `gateway` (see `chat-commands/session-key.ts`).
-       */
-      const channels = [
-        ...new Set(
-          rawChannels.flatMap((c) => {
-            if (c === 'webchat') return ['webchat', 'ui'];
-            if (c === 'gateway') return ['gateway', 'webui'];
-            return [c];
-          }),
-        ),
-      ];
-      if (channels.length === 0) {
-        sessions = [];
-      } else if (channels.length === 1) {
-        const ch = channels[0]!;
-        sessions = sessions.filter((s) => (s.sourceChannel ?? '').toLowerCase() === ch);
-      } else {
-        sessions = sessions.filter((s) => channels.includes((s.sourceChannel ?? '').toLowerCase()));
-      }
-    }
-    if (query.tags?.length) {
-      sessions = sessions.filter((s) => query.tags!.some((t) => s.tags.includes(t)));
-    }
-    if (query.search) {
-      const q = query.search.toLowerCase();
-      const metadataMatches = sessions.filter((session) => this.sessionMetadataMatchesSearch(session, q));
-      const metadataMatchedKeys = new Set(metadataMatches.map((session) => session.key));
-      const contentMatches: SessionMetadata[] = [];
-      const candidates = sessions.filter((session) => !metadataMatchedKeys.has(session.key));
-      for (const candidate of candidates) {
-        if (await this.sessionContentMatchesSearch(candidate.key, q)) {
-          contentMatches.push(candidate);
-        }
-      }
-      sessions = [...metadataMatches, ...contentMatches];
-    }
-
-    const sortBy = query.sortBy || 'updatedAt';
-    const sortOrder = query.sortOrder || 'desc';
-    sessions.sort((a, b) => {
-      const av = a[sortBy];
-      const bv = b[sortBy];
-      const c = av < bv ? -1 : av > bv ? 1 : 0;
-      return sortOrder === 'asc' ? c : -c;
-    });
-
-    const total = sessions.length;
-    const limit = query.limit || 50;
-    const offset = query.offset || 0;
-    const items = sessions.slice(offset, offset + limit);
-    return { items, total, limit, offset, hasMore: offset + limit < total };
-  }
-
-  private sessionMetadataMatchesSearch(session: SessionMetadata, query: string): boolean {
-    return Boolean(
-      session.key.toLowerCase().includes(query) ||
-      session.name?.toLowerCase().includes(query) ||
-      session.sourceChannel.toLowerCase().includes(query) ||
-      session.sourceChatId.toLowerCase().includes(query) ||
-      session.tags.some((tag) => tag.toLowerCase().includes(query)),
+    const { items } = await this.list({ limit: 100_000 });
+    return (
+      items.find(
+        (m) =>
+          m.routing?.source === channel &&
+          m.routing.accountId === accountId &&
+          m.routing.peerKind === 'dm' &&
+          m.routing.peerId === 'main',
+      ) ?? null
     );
   }
 
-  private async sessionContentMatchesSearch(sessionKey: string, query: string): Promise<boolean> {
-    const messages = await this.loadDisplayMessages(sessionKey);
-    return messages.some((message) => {
-      const content = this.extractTextContent(this.messageContent(message)).toLowerCase();
-      if (content.includes(query)) {
-        return true;
-      }
-      const attachments = (message as unknown as Record<string, unknown>).attachments;
-      if (!Array.isArray(attachments)) {
-        return false;
-      }
-      return attachments.some((attachment) => {
-        if (!attachment || typeof attachment !== 'object') {
-          return false;
-        }
-        const name = (attachment as { name?: string }).name;
-        return typeof name === 'string' && name.toLowerCase().includes(query);
-      });
-    });
+  async refreshIndex(): Promise<void> {
+    /* no-op: SQLite is authoritative */
+  }
+
+  async list(query: SessionListQuery = {}): Promise<PaginatedResult<SessionMetadata>> {
+    this.ensureDatabase();
+    return listSessionMetadata(query);
   }
 
   async get(
@@ -552,8 +183,7 @@ export class SessionStore {
       return null;
     }
     const messages = await this.loadDisplayMessages(key);
-    const detail = await this.buildSessionDetail(key, metadata, messages, options);
-    return detail;
+    return this.buildSessionDetail(key, metadata, messages, options);
   }
 
   async getMessagePage(
@@ -586,53 +216,24 @@ export class SessionStore {
     const parsedBefore = options.before ? Number.parseInt(options.before, 10) : undefined;
     const hasBeforeCursor = parsedBefore !== undefined && Number.isFinite(parsedBefore);
 
-    const checkpoints = await this.listCompactionCheckpoints(key);
-    if (checkpoints.length === 0) {
-      const entry = await this.getDiskEntry(key);
-      if (!entry) {
-        return null;
-      }
-      const keySessionsDir = this.resolveSessionsDirForKey(key);
-      const primary = this.transcriptPathForEntry(entry, keySessionsDir);
-      const page = await readDisplayMessagePageFromTranscriptFile(primary, {
-        limit,
-        offset: hasBeforeCursor ? undefined : offset,
-        beforeIndex: hasBeforeCursor ? parsedBefore : undefined,
-      });
-      const session = await this.buildSessionDetail(key, metadata, page.messages, options);
-      const nextBeforeCursor = page.startIndex > 0 ? String(page.startIndex) : undefined;
+    const displayMessages = await this.loadDisplayMessages(key);
+    const page = this.paginateDisplayMessages(displayMessages, {
+      limit,
+      offset: hasBeforeCursor ? undefined : offset,
+      beforeEndIndex: hasBeforeCursor ? parsedBefore : undefined,
+    });
 
-      return {
-        session,
-        pagination: {
-          total: page.total,
-          limit,
-          offset,
-          hasMore: page.startIndex > 0,
-          ...(hasBeforeCursor ? { before: String(page.endIndex) } : {}),
-          ...(nextBeforeCursor ? { nextBeforeCursor } : {}),
-        },
-      };
-    }
-
-    const messages = await this.loadDisplayMessages(key);
-    const total = messages.length;
-    const endExclusive = hasBeforeCursor
-      ? Math.min(total, Math.max(0, Math.trunc(parsedBefore!)))
-      : Math.max(0, total - offset);
-    const startInclusive = Math.max(0, endExclusive - limit);
-    const pageMessages = messages.slice(startInclusive, endExclusive);
-    const session = await this.buildSessionDetail(key, metadata, pageMessages, options);
-    const nextBeforeCursor = startInclusive > 0 ? String(startInclusive) : undefined;
+    const session = await this.buildSessionDetail(key, metadata, page.messages, options);
+    const nextBeforeCursor = page.startIndex > 0 ? String(page.startIndex) : undefined;
 
     return {
       session,
       pagination: {
-        total,
+        total: page.total,
         limit,
         offset,
-        hasMore: startInclusive > 0,
-        ...(hasBeforeCursor ? { before: String(endExclusive) } : {}),
+        hasMore: hasBeforeCursor ? page.startIndex > 0 : offset + limit < page.total,
+        ...(hasBeforeCursor ? { before: String(page.endIndex) } : {}),
         ...(nextBeforeCursor ? { nextBeforeCursor } : {}),
       },
     };
@@ -670,123 +271,43 @@ export class SessionStore {
   }
 
   async loadTranscriptRows(key: string): Promise<TranscriptStoredRow[]> {
-    const entry = await this.getDiskEntry(key);
-    if (!entry) {
-      return [];
-    }
-    const path = this.transcriptPathForEntry(entry, this.resolveSessionsDirForKey(key));
-    return readTranscriptRowsFromFile(path);
+    this.ensureDatabase();
+    return loadTranscriptRowsForSession(key);
   }
 
   async getMetadata(key: string): Promise<SessionMetadata | null> {
-    const entry = await this.getDiskEntry(key);
-    if (!entry) {
-      return null;
-    }
-    return this.metadataFromEntry(key, entry);
+    this.ensureDatabase();
+    return getSessionMetadata(key);
   }
 
   async updateMetadata(key: string, updates: Partial<SessionMetadata>): Promise<void> {
     return this.runStoreMutation(async () => {
-      const keyStorePath = this.resolveStorePathForKey(key);
-      await withSessionsJsonLock(keyStorePath, async (map) => {
-        const entry = map[key] as XopcSessionDiskEntry | undefined;
-        if (!entry?.pluginExtensions?.xopc?.metadata) {
-          throw new Error(`Session not found: ${key}`);
-        }
-        const meta = { ...entry.pluginExtensions.xopc.metadata, ...updates, updatedAt: new Date().toISOString() };
-        entry.pluginExtensions.xopc.metadata = meta;
-        entry.updatedAt = Date.now();
-        map[key] = entry as Record<string, unknown>;
-      });
-      this.invalidateAllSessionsMapCache();
-      invalidateSessionSearchIndexCache();
+      this.ensureDatabase();
+      patchSessionMetadata(key, updates);
       log.debug({ key, updates }, 'Session metadata updated');
     });
   }
 
-  /**
-   * Reset transcript for an existing session key: archive the current JSONL as
-   * `*.reset.*`, assign a new `sessionId`, and preserve per-session overrides
-   * on the disk entry (thinking/verbose) and in `sessions/config/*.json`.
-   */
   async reset(key: string): Promise<{ sessionId: string; previousSessionId: string } | null> {
     return this.runStoreMutation(async () => {
-      const existing = await this.getDiskEntry(key);
-      if (!existing?.pluginExtensions?.xopc?.metadata) {
-        return null;
+      this.ensureDatabase();
+      const cwd = this.resolveWorkspaceCwd(key);
+      const outcome = resetSessionRecord(key, cwd);
+      if (outcome) {
+        log.info({ key, ...outcome }, 'Session reset');
       }
-
-      const previousSessionId = existing.sessionId;
-      const keySessionsDir = this.resolveSessionsDirForKey(key);
-      const abs = this.transcriptPathForEntry(existing, keySessionsDir);
-      if (existsSync(abs)) {
-        try {
-          archiveFileOnDisk(abs, 'reset');
-        } catch (err) {
-          log.warn({ err, key }, 'Transcript archive on reset failed');
-        }
-      }
-
-      const sessionId = randomUUID();
-      validateSessionId(sessionId);
-      const now = Date.now();
-      const nextAbs = resolveSessionTranscriptPathInDir(sessionId, keySessionsDir);
-      await writeTranscriptJsonl({
-        absPath: nextAbs,
-        sessionId,
-        cwd: process.cwd(),
-        rows: [],
-      });
-
-      const keyStorePath = this.resolveStorePathForKey(key);
-      await withSessionsJsonLock(keyStorePath, async (map) => {
-        const e = map[key] as XopcSessionDiskEntry | undefined;
-        if (!e?.pluginExtensions?.xopc?.metadata) {
-          return;
-        }
-        e.sessionId = sessionId;
-        e.sessionFile = `${sessionId}.jsonl`;
-        e.updatedAt = now;
-        e.sessionStartedAt = now;
-        e.lastInteractionAt = undefined;
-        patchSessionsJsonEntryStats(e, buildSessionsJsonStatsPatch(0, 0));
-        const meta = e.pluginExtensions.xopc.metadata;
-        meta.transcriptId = sessionId;
-        meta.updatedAt = new Date(now).toISOString();
-        map[key] = e as Record<string, unknown>;
-      });
-
-      this.invalidateAllSessionsMapCache();
-      invalidateSessionSearchIndexCache();
-      log.info({ key, previousSessionId, sessionId }, 'Session reset');
-      return { sessionId, previousSessionId };
+      return outcome;
     });
   }
 
   async delete(key: string): Promise<boolean> {
     return this.runStoreMutation(async () => {
-      const entry = await this.getDiskEntry(key);
-      if (!entry) {
-        return false;
+      this.ensureDatabase();
+      const ok = deleteSessionRecord(key);
+      if (ok) {
+        log.info({ key }, 'Session deleted');
       }
-      const keySessionsDir = this.resolveSessionsDirForKey(key);
-      const abs = this.transcriptPathForEntry(entry, keySessionsDir);
-      const keyStorePath = this.resolveStorePathForKey(key);
-      await withSessionsJsonLock(keyStorePath, async (map) => {
-        delete map[key];
-      });
-      try {
-        if (existsSync(abs)) {
-          archiveFileOnDisk(abs, 'deleted');
-        }
-      } catch (err) {
-        log.warn({ err, key }, 'Transcript archive on delete failed');
-      }
-      this.invalidateAllSessionsMapCache();
-      invalidateSessionSearchIndexCache();
-      log.info({ key }, 'Session deleted');
-      return true;
+      return ok;
     });
   }
 
@@ -809,11 +330,6 @@ export class SessionStore {
 
   async setStatus(key: string, status: SessionStatus): Promise<void> {
     await this.updateMetadata(key, { status });
-    if (status === SessionStatus.ARCHIVED) {
-      await this.moveToArchive(key);
-    } else {
-      await this.moveFromArchive(key);
-    }
   }
 
   async archive(key: string): Promise<void> {
@@ -832,221 +348,54 @@ export class SessionStore {
     await this.setStatus(key, SessionStatus.ACTIVE);
   }
 
-  private async moveToArchive(key: string): Promise<void> {
-    const entry = await this.getDiskEntry(key);
-    if (!entry) {
-      return;
-    }
-    const keySessionsDir = this.resolveSessionsDirForKey(key);
-    const abs = this.transcriptPathForEntry(entry, keySessionsDir);
-    if (existsSync(abs)) {
-      try {
-        archiveFileOnDisk(abs, 'deleted');
-      } catch (err) {
-        log.warn({ err, key }, 'Archive transcript rename failed');
-      }
-    }
-  }
-
-  private async findMostRecentDeletedTranscript(sessionId: string, sessionsDir: string): Promise<string | null> {
-    let names: string[];
-    try {
-      names = await readdir(sessionsDir);
-    } catch {
-      return null;
-    }
-    const prefix = `${sessionId}${DELETED_MARKER}`;
-    const hits = names.filter((n) => n.startsWith(prefix) && n.endsWith('Z'));
-    hits.sort().reverse();
-    const first = hits[0];
-    return first ? join(sessionsDir, first) : null;
-  }
-
-  private async moveFromArchive(key: string): Promise<void> {
-    const entry = await this.getDiskEntry(key);
-    if (!entry) {
-      return;
-    }
-    const keySessionsDir = this.resolveSessionsDirForKey(key);
-    const target = resolveSessionTranscriptPathInDir(entry.sessionId, keySessionsDir);
-    if (existsSync(target)) {
-      return;
-    }
-    const src = await this.findMostRecentDeletedTranscript(entry.sessionId, keySessionsDir);
-    if (!src) {
-      return;
-    }
-    try {
-      const { rename } = await import('fs/promises');
-      await rename(src, target);
-    } catch (err) {
-      log.warn({ err, key, src, target }, 'Unarchive transcript rename failed');
-    }
-  }
-
-  async loadMessages(key: string, options?: { fromArchive?: boolean }): Promise<AgentMessage[]> {
-    const entry = await this.getDiskEntry(key);
-    if (!entry) {
-      return [];
-    }
-    const keySessionsDir = this.resolveSessionsDirForKey(key);
-    const primary = this.transcriptPathForEntry(entry, keySessionsDir);
-    if (existsSync(primary)) {
-      const rows = await readTranscriptRowsFromFile(primary);
-      return rowsToLlmMessages(rows);
-    }
-    if (options?.fromArchive) {
-      const archived = await this.findMostRecentDeletedTranscript(entry.sessionId, keySessionsDir);
-      if (!archived) {
-        return [];
-      }
-      const rows = await readTranscriptRowsFromFile(archived);
-      return rowsToLlmMessages(rows);
-    }
-    return [];
-  }
-
-  private async loadDisplayMessages(key: string): Promise<AgentMessage[]> {
-    const entry = await this.getDiskEntry(key);
-    if (!entry) {
-      return [];
-    }
-    const keySessionsDir = this.resolveSessionsDirForKey(key);
-    const primary = this.transcriptPathForEntry(entry, keySessionsDir);
-    const transcriptPaths: string[] = [];
-    const checkpoints = await this.listCompactionCheckpoints(key);
-    for (const checkpoint of [...checkpoints].reverse()) {
-      transcriptPaths.push(join(keySessionsDir, `${this.checkpointBasename(entry.sessionId)}${checkpoint.id}.jsonl`));
-    }
-    transcriptPaths.push(primary);
-
-    const messages: AgentMessage[] = [];
-    const seenMessages = new Set<string>();
-    for (const transcriptPath of transcriptPaths) {
-      if (!existsSync(transcriptPath)) {
-        continue;
-      }
-      const rows = await readTranscriptRowsFromFile(transcriptPath);
-      for (const message of rowsToLlmMessages(rows)) {
-        if (this.isCompactionSummaryMessage(message)) {
-          continue;
-        }
-        const key = this.displayMessageIdentity(message);
-        if (seenMessages.has(key)) {
-          continue;
-        }
-        seenMessages.add(key);
-        messages.push(message);
-      }
-    }
-    return messages;
+  async loadMessages(_key: string, _options?: { fromArchive?: boolean }): Promise<AgentMessage[]> {
+    this.ensureDatabase();
+    return loadLlmMessagesForSession(_key);
   }
 
   async loadTranscriptDocument(key: string): Promise<XopcSessionTranscriptV1 | null> {
-    const entry = await this.getDiskEntry(key);
-    if (!entry) {
+    const metadata = await this.getMetadata(key);
+    if (!metadata?.transcriptId) {
       return null;
     }
-    const path = this.transcriptPathForEntry(entry, this.resolveSessionsDirForKey(key));
-    if (!existsSync(path)) {
-      return null;
+    const rows = await this.loadTranscriptRows(key);
+    const compactions: TranscriptCompactionRecord[] = [];
+    for (const row of rows) {
+      if ((row as { type?: string }).type === 'compaction') {
+        const c = row as unknown as TranscriptCompactionRecord & { type: 'compaction' };
+        compactions.push({
+          at: c.at ?? new Date().toISOString(),
+          summary: c.summary ?? '',
+          firstKeptIndex: Number(c.firstKeptIndex ?? 0),
+          tokensBefore: c.tokensBefore ?? 0,
+          tokensAfter: (c as { tokensAfter?: number }).tokensAfter ?? 0,
+        });
+      }
     }
-    const entries = loadEntriesFromFile(path);
-    const header = entries.find((e) => e.type === 'session');
-    if (!header || typeof (header as { id?: unknown }).id !== 'string') {
-      return null;
-    }
-    const sessionHeader = header as { type: 'session'; id: string; timestamp?: string };
-    const rows = await readTranscriptRowsFromFile(path);
-    const compactions = entries
-      .filter((e): e is CompactionEntry => e.type === 'compaction')
-      .map((c) => ({
-        at: c.timestamp,
-        summary: c.summary,
-        firstKeptIndex: Number.parseInt(String(c.firstKeptEntryId), 10) || 0,
-        tokensBefore: c.tokensBefore,
-        tokensAfter:
-          typeof c.details === 'object' &&
-          c.details &&
-          'tokensAfter' in c.details &&
-          typeof (c.details as { tokensAfter?: unknown }).tokensAfter === 'number'
-            ? (c.details as { tokensAfter: number }).tokensAfter
-            : 0,
-      }));
     return {
       type: 'xopc_session_transcript',
       version: 1,
-      id: sessionHeader.id,
-      createdAt: sessionHeader.timestamp ?? new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      id: metadata.transcriptId,
+      createdAt: metadata.createdAt,
+      updatedAt: metadata.updatedAt,
       messages: rows,
       ...(compactions.length > 0 ? { compactions } : {}),
     };
   }
 
-  private async writeTranscriptAndSyncIndex(
-    key: string,
-    rows: TranscriptStoredRow[],
-    opts?: { appendCompaction?: TranscriptCompactionRecord },
-  ): Promise<void> {
-    const entry = await this.ensureSession(key);
-    const keySessionsDir = this.resolveSessionsDirForKey(key);
-    const abs = this.transcriptPathForEntry(entry, keySessionsDir);
-    const llm = rowsToLlmMessages(rows);
-    await persistMergedTranscriptRows({
-      absPath: abs,
-      sessionId: entry.sessionId,
-      cwd: process.cwd(),
-      rows,
-      appendCompaction: opts?.appendCompaction,
-    });
-    const keyStorePath = this.resolveStorePathForKey(key);
-    await withSessionsJsonLock(keyStorePath, async (map) => {
-      const e = map[key] as XopcSessionDiskEntry | undefined;
-      if (!e?.pluginExtensions?.xopc?.metadata) {
-        return;
-      }
-      patchSessionsJsonEntryStats(
-        e,
-        buildSessionsJsonStatsPatch(llm.length, this.estimateTokens(llm)),
-      );
-      map[key] = e as Record<string, unknown>;
-    });
-    this.invalidateAllSessionsMapCache();
-    invalidateSessionSearchIndexCache();
-  }
-
-  /** Incremental sessions.json stats after guard append (OpenClaw transcript-events). */
-  async syncSessionsJsonFromTranscriptUpdate(update: SessionTranscriptUpdate): Promise<void> {
+  async syncEmbeddedTranscriptUpdate(update: SessionTranscriptUpdate): Promise<void> {
     const sessionKey = update.sessionKey?.trim();
-    if (!sessionKey || !existsSync(update.sessionFile)) {
+    if (!sessionKey) {
       return;
     }
     return this.runStoreMutation(async () => {
-      const keyStorePath = this.resolveStorePathForKey(sessionKey);
-      await withSessionsJsonLock(keyStorePath, async (map) => {
-        const e = map[sessionKey] as XopcSessionDiskEntry | undefined;
-        if (!e?.pluginExtensions?.xopc?.metadata) {
-          return;
-        }
+      this.ensureDatabase();
+      const cwd = this.resolveWorkspaceCwd(sessionKey);
+      ensureSessionRecord(sessionKey, cwd);
 
-        if (update.message && isAppendOnlyLlmTranscriptMessage(update.message)) {
-          incrementSessionsJsonStatsForAppend(e);
-          map[sessionKey] = e as Record<string, unknown>;
-          return;
-        }
-
-        const messageCount = await countTranscriptMessageRows(update.sessionFile);
-        const rows = await readTranscriptRowsFromFile(update.sessionFile);
-        const llm = rowsToLlmMessages(rows);
-        patchSessionsJsonEntryStats(
-          e,
-          buildSessionsJsonStatsPatch(messageCount, this.estimateTokens(llm)),
-        );
-        map[sessionKey] = e as Record<string, unknown>;
-      });
-      this.invalidateAllSessionsMapCache();
-      invalidateSessionSearchIndexCache();
+      if (update.message && isAppendOnlyLlmTranscriptMessage(update.message)) {
+        appendTranscriptEntry(sessionKey, update.message as AgentMessage);
+      }
     });
   }
 
@@ -1055,13 +404,9 @@ export class SessionStore {
     entry: Omit<XopcTranscriptContextEntry, 'kind'> & Partial<Pick<XopcTranscriptContextEntry, 'kind'>>,
   ): Promise<void> {
     return this.runStoreMutation(async () => {
-      await this.ensureSession(key);
-      const disk = await this.getDiskEntry(key);
-      if (!disk) {
-        return;
-      }
-      const keySessionsDir = this.resolveSessionsDirForKey(key);
-      const absPath = this.transcriptPathForEntry(disk, keySessionsDir);
+      this.ensureDatabase();
+      const cwd = this.resolveWorkspaceCwd(key);
+      ensureSessionRecord(key, cwd);
       const row: XopcTranscriptContextEntry = {
         kind: 'context',
         id: typeof entry.id === 'string' ? entry.id : undefined,
@@ -1069,41 +414,18 @@ export class SessionStore {
         data: entry.data,
         createdAt: entry.createdAt ?? new Date().toISOString(),
       };
-      await appendPiTranscriptContextEntry({
-        absPath,
-        cwd: process.cwd(),
-        entry: row,
-        sessionKey: key,
-      });
-      const rows = existsSync(absPath) ? await readTranscriptRowsFromFile(absPath) : [];
-      const llm = rowsToLlmMessages(rows);
-      const keyStorePath = this.resolveStorePathForKey(key);
-      await withSessionsJsonLock(keyStorePath, async (map) => {
-        const e = map[key] as XopcSessionDiskEntry | undefined;
-        if (!e?.pluginExtensions?.xopc?.metadata) {
-          return;
-        }
-        patchSessionsJsonEntryStats(
-          e,
-          buildSessionsJsonStatsPatch(llm.length, this.estimateTokens(llm)),
-        );
-        map[key] = e as Record<string, unknown>;
-      });
-      this.invalidateAllSessionsMapCache();
-      invalidateSessionSearchIndexCache();
+      appendTranscriptEntry(key, row);
     });
   }
 
-  /**
-   * Bulk write entry point used by compaction, tests, and admin tools.
-   * Runtime agent turns must persist via {@link guardSessionManager} + appendMessage.
-   */
   async saveMessages(key: string, messages: AgentMessage[]): Promise<void> {
     return this.runStoreMutation(async () => {
-      await this.ensureSession(key);
+      this.ensureDatabase();
+      const cwd = this.resolveWorkspaceCwd(key);
+      ensureSessionRecord(key, cwd);
       const prev = await this.loadTranscriptRows(key);
       const merged = mergeLlmMessagesPreservingContextRows(prev, messages);
-      await this.writeTranscriptAndSyncIndex(key, merged);
+      replaceTranscriptRows(key, merged);
     });
   }
 
@@ -1115,65 +437,9 @@ export class SessionStore {
     return this.compactor.needsCompaction(messages, contextWindow);
   }
 
-  prepareCompaction(
-    key: string,
-    messages: AgentMessage[],
-    contextWindow: number,
-  ): { needsCompaction: boolean; messages: AgentMessage[]; stats?: ReturnType<typeof this.compactor.needsCompaction> } {
+  prepareCompaction(key: string, messages: AgentMessage[], contextWindow: number) {
     const result = this.compactor.needsCompaction(messages, contextWindow);
     return { needsCompaction: result.needed, messages, stats: result };
-  }
-
-  private checkpointBasename(sessionId: string): string {
-    return `${sessionId}.checkpoint.`;
-  }
-
-  private async pruneCompactionCheckpoints(sessionId: string, sessionsDir: string): Promise<void> {
-    const MAX = 15;
-    const prefix = this.checkpointBasename(sessionId);
-    let names: string[];
-    try {
-      names = await readdir(sessionsDir);
-    } catch {
-      return;
-    }
-    const candidates = names.filter((n) => n.startsWith(prefix) && n.endsWith('.jsonl'));
-    if (candidates.length <= MAX) {
-      return;
-    }
-    const stats = await Promise.all(
-      candidates.map(async (name) => {
-        const p = join(sessionsDir, name);
-        try {
-          const s = await stat(p);
-          return { p, mtimeMs: s.mtimeMs };
-        } catch {
-          return { p: join(sessionsDir, name), mtimeMs: 0 };
-        }
-      }),
-    );
-    stats.sort((a, b) => a.mtimeMs - b.mtimeMs);
-    for (let i = 0; i < stats.length - MAX; i++) {
-      try {
-        await unlink(stats[i]!.p);
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  private async captureCompactionCheckpoint(sessionId: string, transcriptAbs: string, sessionsDir: string): Promise<void> {
-    if (!existsSync(transcriptAbs)) {
-      return;
-    }
-    const id = randomUUID();
-    const dest = join(sessionsDir, `${sessionId}.checkpoint.${id}.jsonl`);
-    try {
-      await copyFile(transcriptAbs, dest);
-      await this.pruneCompactionCheckpoints(sessionId, sessionsDir);
-    } catch (err) {
-      log.warn({ err, sessionId }, 'Compaction checkpoint copy failed');
-    }
   }
 
   async applyCompaction(
@@ -1183,16 +449,10 @@ export class SessionStore {
   ): Promise<AgentMessage[]> {
     const compacted = this.compactor.applyCompaction(messages, result);
     return this.runStoreMutation(async () => {
-      const entry = await this.getDiskEntry(key);
-      if (!entry) {
-        return compacted;
-      }
-      const keySessionsDir = this.resolveSessionsDirForKey(key);
-      const abs = this.transcriptPathForEntry(entry, keySessionsDir);
-      await this.captureCompactionCheckpoint(entry.sessionId, abs, keySessionsDir);
       const prev = await this.loadTranscriptRows(key);
       const merged = mergeLlmMessagesPreservingContextRows(prev, compacted);
-      await this.writeTranscriptAndSyncIndex(key, merged, {
+      captureCompactionCheckpoint(key);
+      replaceTranscriptRows(key, merged, {
         appendCompaction: {
           at: new Date().toISOString(),
           summary: result.summary,
@@ -1221,6 +481,7 @@ export class SessionStore {
     instructions?: string,
     force?: boolean,
   ): Promise<CompactionResult> {
+    void contextWindow;
     const result = await this.compactor.compact(messages, instructions, force);
     if (result.compacted) {
       await this.applyCompaction(key, messages, result);
@@ -1242,98 +503,30 @@ export class SessionStore {
   }
 
   async listCompactionCheckpoints(key: string): Promise<CompactionCheckpointSummary[]> {
-    const entry = await this.getDiskEntry(key);
-    if (!entry) {
-      return [];
-    }
-    const keySessionsDir = this.resolveSessionsDirForKey(key);
-    const sessionId = entry.sessionId;
-    const prefix = this.checkpointBasename(sessionId);
-    let names: string[];
-    try {
-      names = await readdir(keySessionsDir);
-    } catch {
-      return [];
-    }
-    const files = names.filter((n) => n.startsWith(prefix) && n.endsWith('.jsonl'));
-    const rows = await Promise.all(
-      files.map(async (name) => {
-        const p = join(keySessionsDir, name);
-        const parsed = parseCompactionCheckpointTranscriptFileName(name);
-        const id = parsed?.checkpointId;
-        if (!id || !normalizeCompactionCheckpointId(id)) {
-          return null;
-        }
-        try {
-          const s = await stat(p);
-          return {
-            id: normalizeCompactionCheckpointId(id)!,
-            sizeBytes: s.size,
-            modifiedAt: new Date(s.mtimeMs).toISOString(),
-          } satisfies CompactionCheckpointSummary;
-        } catch {
-          return null;
-        }
-      }),
-    );
-    const valid = rows.filter((r): r is CompactionCheckpointSummary => r !== null);
-    valid.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
-    return valid;
+    this.ensureDatabase();
+    return listCompactionCheckpoints(key);
   }
 
   async getCompactionCheckpointDetail(
     key: string,
     checkpointId: string,
   ): Promise<CompactionCheckpointDetail | null> {
+    this.ensureDatabase();
     const id = normalizeCompactionCheckpointId(checkpointId);
     if (!id) {
       return null;
     }
-    const entry = await this.getDiskEntry(key);
-    if (!entry) {
-      return null;
-    }
-    const keySessionsDir = this.resolveSessionsDirForKey(key);
-    const fname = `${this.checkpointBasename(entry.sessionId)}${id}.jsonl`;
-    const cpPath = join(keySessionsDir, fname);
-    if (!existsSync(cpPath)) {
-      return null;
-    }
-    try {
-      const rows = await readTranscriptRowsFromFile(cpPath);
-      const llm = rowsToLlmMessages(rows);
-      const s = await stat(cpPath);
-      return {
-        id,
-        sizeBytes: s.size,
-        modifiedAt: new Date(s.mtimeMs).toISOString(),
-        messageCount: llm.length,
-      };
-    } catch {
-      return null;
-    }
+    return getCompactionCheckpointDetail(key, id);
   }
 
   async restoreCompactionCheckpoint(key: string, checkpointId: string): Promise<void> {
-    const id = normalizeCompactionCheckpointId(checkpointId);
-    if (!id) {
-      throw new Error('Invalid checkpoint id');
-    }
     return this.runStoreMutation(async () => {
-      const entry = await this.getDiskEntry(key);
-      if (!entry) {
-        throw new Error(`Session not found: ${key}`);
+      this.ensureDatabase();
+      const id = normalizeCompactionCheckpointId(checkpointId);
+      if (!id) {
+        throw new Error(`Invalid checkpoint id: ${checkpointId}`);
       }
-      const keySessionsDir = this.resolveSessionsDirForKey(key);
-      const cpPath = join(keySessionsDir, `${this.checkpointBasename(entry.sessionId)}${id}.jsonl`);
-      if (!existsSync(cpPath)) {
-        throw new Error(`Checkpoint not found: ${id}`);
-      }
-      const target = this.transcriptPathForEntry(entry, keySessionsDir);
-      await copyFile(cpPath, target);
-      const messages = await this.loadMessages(key);
-      await this.saveMessages(key, messages);
-      log.info({ key, checkpointId: id }, 'Session transcript restored from compaction checkpoint');
+      restoreCompactionCheckpoint(key, id);
     });
   }
 
@@ -1351,82 +544,45 @@ export class SessionStore {
 
   async searchInSession(key: string, keyword: string): Promise<Message[]> {
     const messages = await this.loadDisplayMessages(key);
-    const keywordLower = keyword.toLowerCase();
+    const q = keyword.toLowerCase();
     return this.convertMessages(
-      messages.filter((m) => {
-        const content = this.extractTextContent(this.messageContent(m));
-        return content.toLowerCase().includes(keywordLower);
-      }),
+      messages.filter((m) => this.extractTextContent(this.messageContent(m)).toLowerCase().includes(q)),
     );
   }
 
   async exportSession(key: string, format: ExportFormat): Promise<string> {
-    const detail = await this.get(key);
-    if (!detail) {
+    const metadata = await this.getMetadata(key);
+    if (!metadata) {
       throw new Error(`Session not found: ${key}`);
     }
+    const rows = await this.loadTranscriptRows(key);
+    const messages = this.convertMessages(buildSessionContextForLlm(rows));
+    const payload: SessionExport = {
+      version: INDEX_VERSION,
+      exportedAt: new Date().toISOString(),
+      metadata,
+      messages,
+      transcriptRows: rows,
+    };
     if (format === 'json') {
-      const transcriptRows = await this.loadTranscriptRows(key);
-      const exportData: SessionExport = {
-        version: INDEX_VERSION,
-        exportedAt: new Date().toISOString(),
-        metadata: detail,
-        messages: detail.messages,
-        transcriptRows,
-      };
-      return JSON.stringify(exportData, null, 2);
+      return JSON.stringify(payload, null, 2);
     }
-    const lines = [
-      `# ${detail.name || detail.key}`,
-      '',
-      `- **Channel:** ${detail.sourceChannel}`,
-      `- **Created:** ${detail.createdAt}`,
-      `- **Messages:** ${detail.messageCount}`,
-      `- **Tags:** ${detail.tags.join(', ') || 'none'}`,
-      '',
-      '---',
-      '',
-    ];
-    for (const msg of detail.messages) {
-      const role = msg.role === 'assistant' ? 'Assistant' : msg.role === 'user' ? 'User' : msg.role;
-      lines.push(`## ${role}`, '');
-      const body = typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content, null, 2);
-      lines.push(body, '', '---', '');
+    const lines = [`# ${metadata.name ?? metadata.key}`, '', `Exported: ${payload.exportedAt}`, ''];
+    for (const msg of messages) {
+      lines.push(`## ${msg.role}`, '', typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content), '');
     }
     return lines.join('\n');
   }
 
   async getStats(): Promise<GlobalSessionStats> {
-    const list = await this.list({ limit: 100000 });
-    const sessions = list.items;
-    const byChannel: Record<string, number> = {};
-    for (const s of sessions) {
-      byChannel[s.sourceChannel] = (byChannel[s.sourceChannel] || 0) + 1;
-    }
-    let oldestSession: string | undefined;
-    let newestSession: string | undefined;
-    if (sessions.length > 0) {
-      const sorted = [...sessions].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      oldestSession = sorted[0]!.createdAt;
-      newestSession = sorted[sorted.length - 1]!.createdAt;
-    }
-    return {
-      totalSessions: sessions.length,
-      activeSessions: sessions.filter((s) => s.status === SessionStatus.ACTIVE || s.status === SessionStatus.IDLE).length,
-      archivedSessions: sessions.filter((s) => s.status === SessionStatus.ARCHIVED).length,
-      pinnedSessions: sessions.filter((s) => s.status === SessionStatus.PINNED).length,
-      totalMessages: sessions.reduce((sum, s) => sum + s.messageCount, 0),
-      totalTokens: sessions.reduce((sum, s) => sum + s.estimatedTokens, 0),
-      oldestSession,
-      newestSession,
-      byChannel,
-    };
+    this.ensureDatabase();
+    return getGlobalSessionStats();
   }
 
   async archiveOld(olderThanDays: number): Promise<number> {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - olderThanDays);
-    const list = await this.list({ limit: 100000 });
+    const list = await this.list({ limit: 100_000 });
     let archived = 0;
     for (const session of list.items) {
       if (session.status !== SessionStatus.ARCHIVED && session.status !== SessionStatus.PINNED) {
@@ -1441,11 +597,74 @@ export class SessionStore {
   }
 
   estimateTokens(messages: AgentMessage[]): number {
-    let total = 0;
-    for (const msg of messages) {
-      total += Math.ceil(this.extractTextContent(this.messageContent(msg)).length / 4);
+    return estimateTokensFromMessages(messages);
+  }
+
+  private async loadDisplayMessages(key: string): Promise<AgentMessage[]> {
+    const checkpoints = listCompactionCheckpoints(key);
+    const rowSets: TranscriptStoredRow[][] = [];
+    for (const checkpoint of [...checkpoints].reverse()) {
+      rowSets.push(loadCheckpointRows(key, checkpoint.id));
     }
-    return total;
+    rowSets.push(await this.loadTranscriptRows(key));
+
+    const messages: AgentMessage[] = [];
+    const seen = new Set<string>();
+    for (const rows of rowSets) {
+      for (const message of buildSessionContextForLlm(rows)) {
+        if (this.isCompactionSummaryMessage(message)) {
+          continue;
+        }
+        const identity = this.displayMessageIdentity(message);
+        if (seen.has(identity)) {
+          continue;
+        }
+        seen.add(identity);
+        messages.push(message);
+      }
+    }
+    return messages;
+  }
+
+  private paginateDisplayMessages(
+    messages: AgentMessage[],
+    options: {
+      offset?: number;
+      limit?: number;
+      beforeEndIndex?: number;
+    } = {},
+  ): { messages: AgentMessage[]; total: number; startIndex: number; endIndex: number } {
+    const total = messages.length;
+    const limit = Math.min(200, Math.max(1, Math.trunc(options.limit ?? 50)));
+    const offset = Math.max(0, Math.trunc(options.offset ?? 0));
+
+    let startIndex: number;
+    let endIndex: number;
+    if (options.beforeEndIndex !== undefined && Number.isFinite(options.beforeEndIndex)) {
+      endIndex = Math.min(total, Math.max(0, Math.trunc(options.beforeEndIndex)));
+      startIndex = Math.max(0, endIndex - limit);
+    } else {
+      endIndex = Math.max(0, total - offset);
+      startIndex = Math.max(0, endIndex - limit);
+    }
+
+    return {
+      messages: messages.slice(startIndex, endIndex),
+      total,
+      startIndex,
+      endIndex,
+    };
+  }
+
+  private displayMessageIdentity(message: AgentMessage): string {
+    const record = message as unknown as Record<string, unknown>;
+    return JSON.stringify({
+      role: message.role,
+      timestamp: record.timestamp,
+      toolCallId: record.toolCallId ?? record.tool_call_id,
+      toolName: record.toolName,
+      content: this.messageContent(message),
+    });
   }
 
   private messageContent(msg: AgentMessage): unknown {
@@ -1458,17 +677,6 @@ export class SessionStore {
     }
     const text = this.extractTextContent(this.messageContent(msg)).trim();
     return /^\[Previous conversation summary\]/i.test(text);
-  }
-
-  private displayMessageIdentity(message: AgentMessage): string {
-    const record = message as unknown as Record<string, unknown>;
-    return JSON.stringify({
-      role: message.role,
-      timestamp: record.timestamp,
-      toolCallId: record.toolCallId ?? record.tool_call_id,
-      toolName: record.toolName,
-      content: this.messageContent(message),
-    });
   }
 
   private extractTextContent(content: unknown): string {
@@ -1501,24 +709,11 @@ export class SessionStore {
     if (!contextText?.trim()) {
       return;
     }
-    const entry = await this.getDiskEntry(key);
-    if (!entry) {
-      return;
-    }
-    const keySessionsDir = this.resolveSessionsDirForKey(key);
-    const abs = this.transcriptPathForEntry(entry, keySessionsDir);
-    const workspaceDir = resolveEffectiveAgentProfileForSession(this.options.config, key).resolvedWorkspacePath;
     try {
-      await appendPiTranscriptContextEntry({
-        absPath: abs,
-        cwd: workspaceDir,
-        sessionKey: key,
-        entry: {
-          kind: 'context',
-          id: `post-compaction-${Date.now()}`,
-          text: contextText,
-          createdAt: new Date().toISOString(),
-        },
+      await this.appendTranscriptContextEntry(key, {
+        id: `post-compaction-${Date.now()}`,
+        text: contextText,
+        createdAt: new Date().toISOString(),
       });
     } catch (err) {
       log.warn({ err, key }, 'Post-compaction context injection failed');
@@ -1550,7 +745,7 @@ export class SessionStore {
           : typeof rawUsage.total === 'number'
             ? rawUsage.total
             : undefined;
-        if (inputTokens != null || outputTokens != null || totalTokens != null) {
+        if (inputTokens !== undefined || outputTokens !== undefined || totalTokens !== undefined) {
           row.usage = { inputTokens, outputTokens, totalTokens };
         }
       }
