@@ -10,11 +10,12 @@ export {
   getXopcDatabase,
   isXopcDatabaseOpen,
   openXopcDatabase,
+  requireXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   type OpenXopcDatabaseOptions,
   type XopcDatabase,
 } from './connection.js';
-export { getSqliteDatabase, withSqliteWriteTransaction } from './transaction.js';
+export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
   buildDefaultSessionMetadata,
   extractRoutingFromSessionKey,

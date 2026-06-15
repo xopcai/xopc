@@ -1,7 +1,7 @@
 import type { Note, NoteIndexEntry, NotesListQuery } from '../../notes/types.js';
 import { buildNoteIndexMeta, notePlainText } from '../../notes/note-index-meta.js';
 import { escapeFts5Query } from './fts.js';
-import { getSqliteDatabase, withSqliteWriteTransaction } from './transaction.js';
+import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 type NoteRow = {
   note_id: string;
@@ -106,7 +106,7 @@ function upsertNoteFts(db: ReturnType<typeof getSqliteDatabase>, note: Note): vo
 
 export function upsertNoteRecord(note: Note): void {
   const row = noteToRow(note);
-  withSqliteWriteTransaction((db) => {
+  runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT INTO notes (
         note_id, title, kind, status, payload_json, created_at, updated_at,
@@ -171,7 +171,7 @@ export function getNoteRecord(noteId: string): Note | null {
 }
 
 export function deleteNoteRecord(noteId: string): boolean {
-  return withSqliteWriteTransaction((db) => {
+  return runSqliteWriteTransaction((db) => {
     const existing = db.prepare(`SELECT note_id FROM notes WHERE note_id = ?`).get(noteId);
     if (!existing) {
       return false;
@@ -180,15 +180,6 @@ export function deleteNoteRecord(noteId: string): boolean {
     db.prepare(`DELETE FROM notes WHERE note_id = ?`).run(noteId);
     return true;
   });
-}
-
-function noteIndexEntryMatchesSearch(entry: NoteIndexEntry, term: string): boolean {
-  return Boolean(
-    entry.title?.toLowerCase().includes(term) ||
-      entry.snippet?.toLowerCase().includes(term) ||
-      entry.tags?.some((tag) => tag.toLowerCase().includes(term)) ||
-      entry.attachmentNames?.some((name) => name.toLowerCase().includes(term)),
-  );
 }
 
 export function listNoteRecords(
@@ -243,7 +234,6 @@ export function listNoteRecords(
   }
 
   if (query.search) {
-    const term = query.search.toLowerCase();
     const ftsQuery = escapeFts5Query(query.search);
     const ftsIds = new Set<string>();
     if (ftsQuery) {
@@ -256,21 +246,7 @@ export function listNoteRecords(
         ftsIds.add(row.note_id);
       }
     }
-    const indexMatches = entries.filter(
-      (entry) => noteIndexEntryMatchesSearch(entry, term) || ftsIds.has(entry.id),
-    );
-    const matchedIds = new Set(indexMatches.map((entry) => entry.id));
-    const contentMatches: NoteIndexEntry[] = [];
-    for (const candidate of entries) {
-      if (matchedIds.has(candidate.id)) continue;
-      const note = getNoteRecord(candidate.id);
-      if (!note) continue;
-      const content = noteSearchContent(note).toLowerCase();
-      if (content.includes(term)) {
-        contentMatches.push(candidate);
-      }
-    }
-    entries = [...indexMatches, ...contentMatches];
+    entries = entries.filter((entry) => ftsIds.has(entry.id));
   }
 
   const sortField = query.sortBy || 'createdAt';

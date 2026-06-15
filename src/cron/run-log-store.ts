@@ -3,8 +3,7 @@ import { createLogger } from '../utils/logger.js';
 import {
   appendCronRun,
   deleteCronRunsForJob,
-  isXopcDatabaseOpen,
-  openXopcDatabase,
+  requireXopcDatabase,
   readAllCronRuns,
   readCronJobHistory,
 } from '../storage/sqlite/index.js';
@@ -20,10 +19,8 @@ export class CronRunLogStore {
     this.dbPath = dbPath;
   }
 
-  private ensureDatabase(): void {
-    if (!isXopcDatabaseOpen()) {
-      openXopcDatabase(this.dbPath ? { path: this.dbPath } : undefined);
-    }
+  private requireDatabase(): void {
+    requireXopcDatabase(this.dbPath ? { path: this.dbPath } : undefined);
   }
 
   async appendCompleted(execution: JobExecution): Promise<void> {
@@ -31,7 +28,7 @@ export class CronRunLogStore {
       return;
     }
     try {
-      this.ensureDatabase();
+      this.requireDatabase();
       appendCronRun(execution);
     } catch (err) {
       log.error({ jobId: execution.jobId, err: err as Error }, 'Failed to persist cron run');
@@ -39,12 +36,12 @@ export class CronRunLogStore {
   }
 
   async readJobHistory(jobId: string, limit: number): Promise<JobExecution[]> {
-    this.ensureDatabase();
+    this.requireDatabase();
     return readCronJobHistory(jobId, limit);
   }
 
   async readAllRuns(limit: number, jobNames: Map<string, string | undefined>): Promise<CronRunHistoryRow[]> {
-    this.ensureDatabase();
+    this.requireDatabase();
     const rows = readAllCronRuns(limit);
     return rows.map((execution) => ({
       ...execution,
@@ -54,7 +51,7 @@ export class CronRunLogStore {
 
   async deleteJobRuns(jobId: string): Promise<void> {
     try {
-      this.ensureDatabase();
+      this.requireDatabase();
       deleteCronRunsForJob(jobId);
     } catch (err) {
       log.warn({ jobId, err: err as Error }, 'Failed to delete cron runs');

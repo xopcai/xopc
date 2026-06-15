@@ -205,11 +205,6 @@ export function resolveAgentProfileMarkdownPath(cfg: Config, agentId: string, fi
   return join(resolveAgentProfileDir(cfg, agentId), base);
 }
 
-/** Legacy agent-home subdir; session transcripts are stored in SQLite (`xopc.db`). */
-export function resolveSessionsDir(cfg: Config, agentId: string): string {
-  return join(resolveAgentHomeDir(cfg, agentId), 'sessions');
-}
-
 function normalizePathForComparison(input: string): string {
   const resolved = resolve(resolveUserPath(input));
   let normalized = resolved;
