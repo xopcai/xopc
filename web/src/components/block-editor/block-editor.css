@@ -169,14 +169,20 @@
   border-radius: 0.5rem;
 }
 
-/* Placeholder */
-.block-editor-content p.is-editor-empty:first-child::before {
+/* Placeholder — first empty block and trailing empty paragraph after block nodes */
+.block-editor-content p.is-editor-empty:first-child::before,
+.block-editor-content p.is-editor-empty:last-child::before {
   content: attr(data-placeholder);
   float: left;
   color: var(--color-fg-muted);
   opacity: 0.5;
   pointer-events: none;
   height: 0;
+}
+
+/* Slash command trigger decoration */
+.block-editor-content .suggestion {
+  color: var(--color-fg-muted);
 }
 
 /* ProseMirror gap cursor */

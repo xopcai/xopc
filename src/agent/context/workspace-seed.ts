@@ -13,6 +13,10 @@ import { DEFAULT_AGENT_ID, resolveAgentProfileDir, resolveAgentWorkspaceDir } fr
 import { WORKSPACE_FILES } from '../../config/paths.js';
 import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from './workspace.js';
 import { createLogger } from '../../utils/logger.js';
+import {
+  markBootstrapSeeded,
+  resolveWorkspaceStatePathForMarkdownWorkspace,
+} from './workspace-state.js';
 
 const log = createLogger('WorkspaceSeed');
 
@@ -116,6 +120,10 @@ export function seedAgentProfileMarkdownFiles(
       name === WORKSPACE_FILES.IDENTITY ? personalizeIdentityTemplate(tpl, options?.displayName) : tpl;
     if (writeFileIfMissing(targetPath, body)) {
       seeded++;
+      // Track bootstrap seeding in workspace state
+      if (name === WORKSPACE_FILES.BOOTSTRAP) {
+        markBootstrapSeeded(resolveWorkspaceStatePathForMarkdownWorkspace(markdownWorkspaceDir));
+      }
     }
   }
 

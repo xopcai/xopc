@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -42,7 +42,7 @@ describe('openXopcDatabase', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
-  it('creates schema v2 tables and sets schema version', () => {
+  it('creates all schema tables and sets schema version', () => {
     const opened = openXopcDatabase({ path: dbPath });
     expect(opened.path).toBe(dbPath);
     expect(readSchemaVersionForTest(opened.db)).toBe(XOPC_DB_SCHEMA_VERSION);
