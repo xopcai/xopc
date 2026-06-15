@@ -4,8 +4,7 @@ import { join } from 'path';
 
 import { createLogger } from '../../../utils/logger.js';
 import {
-  isXopcDatabaseOpen,
-  openXopcDatabase,
+  requireXopcDatabase,
   resolveAgentIdFromMemoriesDir,
   searchMemoryIndex,
   syncMemoryIndex,
@@ -35,9 +34,7 @@ export interface MemorySearchOptions {
 const CURATED_MEMORY_FILENAMES = new Set(['MEMORY.md', 'USER.md']);
 
 function ensureMemoryDatabase(): void {
-  if (!isXopcDatabaseOpen()) {
-    openXopcDatabase();
-  }
+  requireXopcDatabase();
 }
 
 // =============================================================================

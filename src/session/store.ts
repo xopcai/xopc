@@ -10,8 +10,7 @@ import { createLogger } from '../utils/logger.js';
 import { SessionCompactor, type CompactionConfig, type CompactionResult } from '../agent/memory/compaction.js';
 import { SlidingWindow, type WindowConfig } from '../agent/memory/window.js';
 import {
-  isXopcDatabaseOpen,
-  openXopcDatabase,
+  requireXopcDatabase,
   appendTranscriptEntry,
   captureCompactionCheckpoint,
   deleteSessionRecord,
@@ -63,17 +62,11 @@ const INDEX_VERSION = '1.0';
 
 export interface SessionStoreOptions {
   config: Config;
-  /** @deprecated SQLite is global; ignored. */
-  agentId?: string;
-  /** @deprecated SQLite is global; ignored. */
-  sessionsDir?: string;
 }
 
 export class SessionStore {
   private window: SlidingWindow;
   private compactor: SessionCompactor;
-  private storeMutationDepth = 0;
-  private storeMutationChain: Promise<void> = Promise.resolve();
 
   constructor(
     private options: SessionStoreOptions,
@@ -88,30 +81,12 @@ export class SessionStore {
     return resolveEffectiveAgentProfileForSession(this.options.config, sessionKey).resolvedWorkspacePath;
   }
 
-  private ensureDatabase(): void {
-    if (!isXopcDatabaseOpen()) {
-      openXopcDatabase();
-    }
-  }
-
   private async runStoreMutation<T>(fn: () => Promise<T>): Promise<T> {
-    if (this.storeMutationDepth > 0) {
-      return fn();
-    }
-    const run = this.storeMutationChain.then(async () => {
-      this.storeMutationDepth++;
-      try {
-        return await fn();
-      } finally {
-        this.storeMutationDepth--;
-      }
-    });
-    this.storeMutationChain = run.then(() => undefined).catch(() => undefined);
-    return run as Promise<T>;
+    return fn();
   }
 
   async initialize(): Promise<void> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     log.debug('Session store initialized (SQLite)');
   }
 
@@ -122,7 +97,7 @@ export class SessionStore {
   async resolveTranscriptPath(
     sessionKey: string,
   ): Promise<{ sessionId: string; sessionKey: string }> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     const cwd = this.resolveWorkspaceCwd(sessionKey);
     const meta = ensureSessionRecord(sessionKey, cwd);
     return { sessionId: meta.transcriptId!, sessionKey };
@@ -130,7 +105,7 @@ export class SessionStore {
 
   async appendTranscriptMessage(sessionKey: string, message: AgentMessage): Promise<void> {
     return this.runStoreMutation(async () => {
-      this.ensureDatabase();
+      requireXopcDatabase();
       const cwd = this.resolveWorkspaceCwd(sessionKey);
       ensureSessionRecord(sessionKey, cwd);
       appendTranscriptEntry(sessionKey, message);
@@ -138,7 +113,7 @@ export class SessionStore {
   }
 
   async getByAgent(agentId: string): Promise<SessionMetadata[]> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     return listSessionsByAgent(agentId);
   }
 
@@ -170,7 +145,7 @@ export class SessionStore {
   }
 
   async list(query: SessionListQuery = {}): Promise<PaginatedResult<SessionMetadata>> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     return listSessionMetadata(query);
   }
 
@@ -271,18 +246,18 @@ export class SessionStore {
   }
 
   async loadTranscriptRows(key: string): Promise<TranscriptStoredRow[]> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     return loadTranscriptRowsForSession(key);
   }
 
   async getMetadata(key: string): Promise<SessionMetadata | null> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     return getSessionMetadata(key);
   }
 
   async updateMetadata(key: string, updates: Partial<SessionMetadata>): Promise<void> {
     return this.runStoreMutation(async () => {
-      this.ensureDatabase();
+      requireXopcDatabase();
       patchSessionMetadata(key, updates);
       log.debug({ key, updates }, 'Session metadata updated');
     });
@@ -290,7 +265,7 @@ export class SessionStore {
 
   async reset(key: string): Promise<{ sessionId: string; previousSessionId: string } | null> {
     return this.runStoreMutation(async () => {
-      this.ensureDatabase();
+      requireXopcDatabase();
       const cwd = this.resolveWorkspaceCwd(key);
       const outcome = resetSessionRecord(key, cwd);
       if (outcome) {
@@ -302,7 +277,7 @@ export class SessionStore {
 
   async delete(key: string): Promise<boolean> {
     return this.runStoreMutation(async () => {
-      this.ensureDatabase();
+      requireXopcDatabase();
       const ok = deleteSessionRecord(key);
       if (ok) {
         log.info({ key }, 'Session deleted');
@@ -349,7 +324,7 @@ export class SessionStore {
   }
 
   async loadMessages(_key: string, _options?: { fromArchive?: boolean }): Promise<AgentMessage[]> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     return loadLlmMessagesForSession(_key);
   }
 
@@ -389,7 +364,7 @@ export class SessionStore {
       return;
     }
     return this.runStoreMutation(async () => {
-      this.ensureDatabase();
+      requireXopcDatabase();
       const cwd = this.resolveWorkspaceCwd(sessionKey);
       ensureSessionRecord(sessionKey, cwd);
 
@@ -404,7 +379,7 @@ export class SessionStore {
     entry: Omit<XopcTranscriptContextEntry, 'kind'> & Partial<Pick<XopcTranscriptContextEntry, 'kind'>>,
   ): Promise<void> {
     return this.runStoreMutation(async () => {
-      this.ensureDatabase();
+      requireXopcDatabase();
       const cwd = this.resolveWorkspaceCwd(key);
       ensureSessionRecord(key, cwd);
       const row: XopcTranscriptContextEntry = {
@@ -420,7 +395,7 @@ export class SessionStore {
 
   async saveMessages(key: string, messages: AgentMessage[]): Promise<void> {
     return this.runStoreMutation(async () => {
-      this.ensureDatabase();
+      requireXopcDatabase();
       const cwd = this.resolveWorkspaceCwd(key);
       ensureSessionRecord(key, cwd);
       const prev = await this.loadTranscriptRows(key);
@@ -503,7 +478,7 @@ export class SessionStore {
   }
 
   async listCompactionCheckpoints(key: string): Promise<CompactionCheckpointSummary[]> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     return listCompactionCheckpoints(key);
   }
 
@@ -511,7 +486,7 @@ export class SessionStore {
     key: string,
     checkpointId: string,
   ): Promise<CompactionCheckpointDetail | null> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     const id = normalizeCompactionCheckpointId(checkpointId);
     if (!id) {
       return null;
@@ -521,7 +496,7 @@ export class SessionStore {
 
   async restoreCompactionCheckpoint(key: string, checkpointId: string): Promise<void> {
     return this.runStoreMutation(async () => {
-      this.ensureDatabase();
+      requireXopcDatabase();
       const id = normalizeCompactionCheckpointId(checkpointId);
       if (!id) {
         throw new Error(`Invalid checkpoint id: ${checkpointId}`);
@@ -575,7 +550,7 @@ export class SessionStore {
   }
 
   async getStats(): Promise<GlobalSessionStats> {
-    this.ensureDatabase();
+    requireXopcDatabase();
     return getGlobalSessionStats();
   }
 
@@ -601,6 +576,7 @@ export class SessionStore {
   }
 
   private async loadDisplayMessages(key: string): Promise<AgentMessage[]> {
+    requireXopcDatabase();
     const checkpoints = listCompactionCheckpoints(key);
     const rowSets: TranscriptStoredRow[][] = [];
     for (const checkpoint of [...checkpoints].reverse()) {

@@ -18,8 +18,7 @@ import {
   findSessionKeyByTranscriptId,
   getSessionMetadata,
   getSessionPersistedLevels,
-  isXopcDatabaseOpen,
-  openXopcDatabase,
+  requireXopcDatabase,
 } from '../storage/sqlite/index.js';
 
 import { resolveSessionLifecycleTimestamps } from './lifecycle-timestamps.js';
@@ -46,19 +45,13 @@ export type SessionKeyResolution = {
   sessionMetadata?: SessionMetadata | null;
 };
 
-function ensureDatabase(): void {
-  if (!isXopcDatabaseOpen()) {
-    openXopcDatabase();
-  }
-}
-
 export async function resolveSessionKeyForRequest(opts: {
   cfg: Config;
   sessionKey?: string;
   sessionId?: string;
   agentId?: string;
 }): Promise<SessionKeyResolution> {
-  ensureDatabase();
+  requireXopcDatabase();
   const explicitKey = opts.sessionKey?.trim();
   const requestedSessionId = opts.sessionId?.trim();
 

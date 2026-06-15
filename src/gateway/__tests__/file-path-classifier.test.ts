@@ -55,7 +55,6 @@ describe('classifyFileLocation', () => {
     skillsDir: skills,
     configFilePath: join(stateDir, 'xopc.json'),
     agentsHomeDir: join(stateDir, 'agents'),
-    sessionsDir: join(stateDir, 'agents', 'main', 'sessions'),
     agentId: 'main',
   });
 
@@ -105,7 +104,6 @@ describe('resolveFileReferenceCandidate', () => {
       stateDir: root,
       skillsDir: join(root, 'skills'),
       agentsHomeDir: join(root, 'agents'),
-      sessionsDir: join(root, 'agents', 'a', 'sessions'),
     };
 
     const { candidate, invalid } = await resolveFileReferenceCandidate('IDENTITY.md', workspace, ctx);

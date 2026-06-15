@@ -24,8 +24,6 @@ const log = createLogger('SessionIndex');
 
 export interface SessionIndexConfig {
   config: Config;
-  agentId?: string;
-  sessionsDir?: string;
   windowConfig?: Partial<WindowConfig>;
   compactionConfig?: Partial<CompactionConfig>;
 }
@@ -38,8 +36,6 @@ export class SessionIndex extends EventEmitter {
     this.store = new SessionStore(
       {
         config: config.config,
-        agentId: config.agentId,
-        sessionsDir: config.sessionsDir,
       },
       config.windowConfig,
       config.compactionConfig

@@ -105,9 +105,11 @@ export interface SlashMenuProps {
   editor: Editor;
   /** Called when user picks the Image slash command — triggers file upload flow. */
   onImageUpload?: (file: File) => Promise<void>;
+  /** The scroll container that owns the positioning context (position: relative). */
+  containerRef?: React.RefObject<HTMLDivElement | null>;
 }
 
-export function SlashMenu({ editor, onImageUpload }: SlashMenuProps) {
+export function SlashMenu({ editor, onImageUpload, containerRef }: SlashMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -151,20 +153,25 @@ export function SlashMenu({ editor, onImageUpload }: SlashMenuProps) {
 
   const executeItem = useCallback(
     (item: SlashMenuItem) => {
+      // Capture slash position before closeMenu() resets it.
+      const slashFrom = slashPosRef.current;
+
       // Delete the slash command text
-      if (slashPosRef.current !== null) {
+      if (slashFrom !== null) {
         const currentPos = editor.state.selection.from;
         editor
           .chain()
           .focus()
-          .deleteRange({ from: slashPosRef.current, to: currentPos })
+          .deleteRange({ from: slashFrom, to: currentPos })
           .run();
       }
 
-      // Image item triggers file upload instead of a direct editor command
+      // Image item triggers file upload instead of a direct editor command.
+      // Defer the click so the editor's synchronous .focus() above settles first —
+      // without this, browsers may block the file picker as a non-user gesture.
       if (item.id === 'image' && onImageUpload) {
         closeMenu();
-        imageInputRef.current?.click();
+        setTimeout(() => imageInputRef.current?.click(), 0);
         return;
       }
 
@@ -201,6 +208,39 @@ export function SlashMenu({ editor, onImageUpload }: SlashMenuProps) {
     return () => editorElement.removeEventListener('keydown', handleKeyDown, true);
   }, [editor, isOpen, filteredItems, selectedIndex, executeItem, closeMenu]);
 
+  // Recalculate menu position when images inside the editor finish loading.
+  // ProseMirror doesn't fire an 'update' event on img.onload, but the layout
+  // reflows when an image's intrinsic size resolves, making the cached position stale.
+  useEffect(() => {
+    if (!editor || !isOpen) return;
+
+    const handleImageLoad = () => {
+      if (!isOpen) return;
+      const { state } = editor;
+      const { from } = state.selection;
+      const coords = editor.view.coordsAtPos(from);
+      const containerEl = containerRef?.current;
+      if (containerEl) {
+        const containerRect = containerEl.getBoundingClientRect();
+        const scrollTop = containerEl.scrollTop;
+        const cursorTopInContainer = coords.bottom - containerRect.top - scrollTop + 4;
+        const cursorLeftInContainer = coords.left - containerRect.left;
+        const maxMenuHeight = Math.min(SLASH_ITEMS.length * 52 + 8, 296);
+        const showBelow = coords.bottom + 4 + maxMenuHeight <= window.innerHeight;
+        setPosition({
+          top: showBelow
+            ? cursorTopInContainer
+            : cursorTopInContainer - maxMenuHeight - 8,
+          left: cursorLeftInContainer,
+        });
+      }
+    };
+
+    const editorEl = editor.view.dom;
+    editorEl.addEventListener('load', handleImageLoad, true);
+    return () => editorEl.removeEventListener('load', handleImageLoad, true);
+  }, [editor, isOpen, containerRef]);
+
   // Watch for '/' typed at the start of a line or after whitespace
   useEffect(() => {
     if (!editor) return;
@@ -208,24 +248,106 @@ export function SlashMenu({ editor, onImageUpload }: SlashMenuProps) {
     const handleUpdate = () => {
       const { state } = editor;
       const { from } = state.selection;
-      const currentLineStart = state.doc.resolve(from).start();
-      const textBeforeCursor = state.doc.textBetween(currentLineStart, from);
 
-      const slashMatch = textBeforeCursor.match(/\/([^\s]*)$/);
+      // Detect '/' slash commands by extracting text from block start to cursor.
+      // textBetween() safely skips non-text nodes (images, etc.).
+      //
+      // After block-image insertion, the cursor may sit at a gapcursor position
+      // (between the image node and the next paragraph). In that case
+      // `$cursor.parent` is `doc`, which is NOT a textblock. We resolve
+      // forward to find the nearest textblock so slash detection still works
+      // when the user starts typing in the auto-created paragraph.
+      let $cursor = state.doc.resolve(from);
+      let blockStart = from;
 
-      if (slashMatch && (slashMatch.index === 0 || textBeforeCursor[slashMatch.index! - 1] === ' ')) {
-        const slashStartPos = currentLineStart + slashMatch.index!;
+      if ($cursor.parent.isTextblock) {
+        blockStart = $cursor.start();
+      } else {
+        // Cursor is between blocks (gapcursor position — common after
+        // inserting a block image). Try resolving one position forward
+        // into the next textblock (the empty paragraph that TrailingNode
+        // or ProseMirror creates after the block node).
+        const nextPos = Math.min(from + 1, state.doc.content.size);
+        const $next = state.doc.resolve(nextPos);
+        if ($next.parent.isTextblock) {
+          $cursor = $next;
+          blockStart = $cursor.start();
+        } else {
+          if (isOpen) closeMenu();
+          return;
+        }
+      }
+
+      // When the cursor sits at a gapcursor position and the user hasn't
+      // typed yet, blockStart (next paragraph start) can be > from.
+      // In that case there is no text to search, so bail out early.
+      if (blockStart >= from) {
+        if (isOpen) closeMenu();
+        return;
+      }
+      const textBefore = state.doc.textBetween(blockStart, from, undefined, '\ufffc');
+
+      const slashIdx = textBefore.search(/\/[^\/\s]*$/);
+      const isValidSlash =
+        slashIdx >= 0 &&
+        (slashIdx === 0 || /\s/.test(textBefore[slashIdx - 1]));
+
+      if (isValidSlash) {
+        // Convert text-space offset to document position by iterating
+        // through the parent's children, counting positions for non-text
+        // nodes (images use nodeSize, text uses text length).
+        const targetTextOff = slashIdx;
+        let docPos = blockStart;
+        let textOff = 0;
+        let slashStartPos = blockStart + slashIdx; // fallback
+        const paragraph = $cursor.parent;
+        for (let n = 0; n < paragraph.childCount; n++) {
+          const child = paragraph.child(n);
+          if (child.isText) {
+            const len = child.text!.length;
+            if (textOff + len > targetTextOff) {
+              slashStartPos = docPos + (targetTextOff - textOff);
+              break;
+            }
+            textOff += len;
+            docPos += len;
+          } else {
+            docPos += child.nodeSize;
+          }
+        }
+
         slashPosRef.current = slashStartPos;
-        setQuery(slashMatch[1]);
+        setQuery(textBefore.slice(slashIdx + 1));
         setSelectedIndex(0);
 
-        // Calculate menu position
+        // Calculate menu position relative to the scroll container (position: absolute).
+        // Use container border-box top minus scrollTop to get content-relative coords,
+        // which correctly handles any scroll offset regardless of editor layout changes.
         const coords = editor.view.coordsAtPos(from);
-        const editorRect = editor.view.dom.getBoundingClientRect();
-        setPosition({
-          top: coords.bottom - editorRect.top + 4,
-          left: coords.left - editorRect.left,
-        });
+        const containerEl = containerRef?.current;
+        if (containerEl) {
+          const containerRect = containerEl.getBoundingClientRect();
+          const scrollTop = containerEl.scrollTop;
+          const cursorTopInContainer = coords.bottom - containerRect.top - scrollTop + 4;
+          const cursorLeftInContainer = coords.left - containerRect.left;
+
+          // Flip above cursor when menu would overflow the viewport bottom.
+          const maxMenuHeight = Math.min(SLASH_ITEMS.length * 52 + 8, 296);
+          const showBelow = coords.bottom + 4 + maxMenuHeight <= window.innerHeight;
+          setPosition({
+            top: showBelow
+              ? cursorTopInContainer
+              : cursorTopInContainer - maxMenuHeight - 8,
+            left: cursorLeftInContainer,
+          });
+        } else {
+          // Fallback: position relative to the editor DOM element itself.
+          const editorRect = editor.view.dom.getBoundingClientRect();
+          setPosition({
+            top: coords.bottom - editorRect.top + 4,
+            left: coords.left - editorRect.left,
+          });
+        }
 
         setIsOpen(true);
       } else if (isOpen) {
@@ -242,40 +364,42 @@ export function SlashMenu({ editor, onImageUpload }: SlashMenuProps) {
     };
   }, [editor, isOpen, closeMenu]);
 
-  if (!isOpen || !position || filteredItems.length === 0) return null;
-
+  // Always render the hidden file input so it stays in the DOM when
+  // executeItem calls closeMenu() before triggering the click.
   return (
     <>
-      <div
-        ref={menuRef}
-        className="absolute z-50 w-64 overflow-hidden rounded-lg border border-edge bg-surface-base shadow-lg"
-        style={{ top: position.top, left: position.left }}
-      >
-        <div className="max-h-72 overflow-y-auto p-1">
-          {filteredItems.map((item, index) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => executeItem(item)}
-              className={cn(
-                'flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors',
-                index === selectedIndex
-                  ? 'bg-surface-hover text-fg'
-                  : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-              )}
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-md border border-edge bg-surface-raised">
-                {item.icon}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{item.label}</span>
-                <span className="block truncate text-xs text-fg-muted">{item.description}</span>
-              </span>
-            </button>
-          ))}
+      {isOpen && position && filteredItems.length > 0 && (
+        <div
+          ref={menuRef}
+          className="absolute z-50 w-64 overflow-hidden rounded-lg border border-edge bg-surface-base shadow-lg"
+          style={{ top: position.top, left: position.left }}
+        >
+          <div className="max-h-72 overflow-y-auto p-1">
+            {filteredItems.map((item, index) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => executeItem(item)}
+                className={cn(
+                  'flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors',
+                  index === selectedIndex
+                    ? 'bg-surface-hover text-fg'
+                    : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+                )}
+              >
+                <span className="flex h-8 w-8 items-center justify-center rounded-md border border-edge bg-surface-raised">
+                  {item.icon}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium">{item.label}</span>
+                  <span className="block truncate text-xs text-fg-muted">{item.description}</span>
+                </span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
-      {/* Hidden file input for image upload via slash command */}
+      )}
+      {/* Hidden file input — always mounted so closeMenu()+click() works for image upload. */}
       <input
         ref={imageInputRef}
         type="file"

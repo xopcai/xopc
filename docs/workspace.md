@@ -30,7 +30,7 @@ These are shared across agents unless noted.
 | `credentials/` | Global secrets; `auth-profiles.json`; `oauth/<provider>.json` for OAuth tokens. |
 | `extensions/` | Installed extensions and `extensions-lock.json`. |
 | `skills/` | Skill packages (each skill is a folder with `SKILL.md`). |
-| `cron/` | `jobs.json` scheduled jobs; `logs/` daily JSONL logs. Completed run history is in **`xopc.db`** (`cron_runs`). |
+| `cron/` | `jobs.json` scheduled jobs. Run history is in **`xopc.db`** (`cron_runs`). |
 | `logs/` | Process logs (`xopc-<date>.log`), unless `XOPC_LOG_DIR` overrides. |
 | `bin/` | Managed CLI shim (e.g. `xopc`). |
 | `tools/` | Bundled tool runtimes (e.g. `tools/node/current/` for Node/npm used by tools). |
@@ -42,10 +42,9 @@ For a given **`agentId`**, the **agent home** is `~/.xopc/agents/<id>/` by defau
 
 | Path | Role |
 |------|------|
-| `sessions/` | Legacy directory (optional); transcripts are stored in `~/.xopc/xopc.db`. |
 | `agent/` | **Agent state** (not the Markdown workspace): `agent.json`, `credentials/`, file inbox (`inbox/pending`, `inbox/processed`), and volatile files (`pid`, `status.json`, `agent.sock`) — no separate top-level `run/`. |
 
-Session metadata and transcripts live in **`~/.xopc/xopc.db`** (SQLite), not under `agents/<agentId>/sessions/`.
+Session metadata and transcripts live in **`~/.xopc/xopc.db`** (SQLite).
 
 ## Agent workspace directory (Markdown root)
 
@@ -94,7 +93,7 @@ Two related ideas:
 
 2. **CLI** (no explicit `--workspace` on the root command) — **`XOPC_WORKSPACE`** if set, otherwise **`<stateDir>/workspace/main`** (or your profile/state dir equivalent).
 
-After `xopc init`, profile Markdown for `main` lives under **`~/.xopc/agents/main/profile/`** by default (alongside `sessions/`, `memories/`, …). The Markdown workspace remains **`agents.defaults.workspace/main`** when that parent is set (schema default `~/.xopc/workspace` → `~/.xopc/workspace/main`), or **`<stateDir>/workspace/main`** when it is not. Per-list **`agents.list[].workspace`** overrides the derived Markdown path for that agent only.
+After `xopc init`, profile Markdown for `main` lives under **`~/.xopc/agents/main/profile/`** by default. The Markdown workspace remains **`agents.defaults.workspace/main`** when that parent is set (schema default `~/.xopc/workspace` → `~/.xopc/workspace/main`), or **`<stateDir>/workspace/main`** when it is not. Per-list **`agents.list[].workspace`** overrides the derived Markdown path for that agent only.
 
 ## Environment variables (quick reference)
 
@@ -121,5 +120,5 @@ xopc profile switch staging   # prints export XOPC_PROFILE=staging
 ## See also
 
 - [Workspace templates](reference/templates.md) — what each Markdown file is for
-- [Session management](session.md) — sessions live under `agents/<id>/sessions/`
+- [Session management](session.md) — session metadata and transcripts live in `~/.xopc/xopc.db` (SQLite)
 - [Architecture](architecture.md) — how components use these paths
