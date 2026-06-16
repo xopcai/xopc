@@ -21,11 +21,10 @@ import { extractAgentUserPlainText } from '../memory/user-message-text.js';
 import { abortEmbeddedRun } from '../embedded/runs.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
-import {
-  persistInboundAttachments,
-} from '../../channels/attachments/inbound-persist.js';
+import { persistInboundAttachments } from '../../channels/attachments/inbound-persist.js';
 import {
   buildTranscriptUserMessage,
+  clearPendingTranscriptUserMessage,
   hydrateUserTurnForLlm,
   setPendingTranscriptUserMessage,
 } from '../inbound/attachment-pipeline.js';
@@ -212,18 +211,24 @@ export class AgentOrchestrator {
 
       this.feedbackCoordinator.startTask();
 
-      const turnResult = await runEmbeddedTurnForSession({
-        sessionKey,
-        userMessage: userMessageForModel,
-        llmImages: llmTurn.images,
-        sessionStore: this.sessionStore,
-        agentManager: this.agentManager,
-        modelManager: this.modelManager,
-        thinkingOverride: thinkingLevel,
-        getConfig: this.getConfig,
-        beforeTurn: () => this.agentManager.beginBackgroundReviewUserTurn(sessionKey),
-        onEvent: (event) => this.onEmbeddedStreamEvent?.(sessionKey, event),
-      });
+      const turnResult = await (async () => {
+        try {
+          return await runEmbeddedTurnForSession({
+            sessionKey,
+            userMessage: userMessageForModel,
+            llmImages: llmTurn.images,
+            sessionStore: this.sessionStore,
+            agentManager: this.agentManager,
+            modelManager: this.modelManager,
+            thinkingOverride: thinkingLevel,
+            getConfig: this.getConfig,
+            beforeTurn: () => this.agentManager.beginBackgroundReviewUserTurn(sessionKey),
+            onEvent: (event) => this.onEmbeddedStreamEvent?.(sessionKey, event),
+          });
+        } finally {
+          clearPendingTranscriptUserMessage(sessionKey, userMessage);
+        }
+      })();
 
       this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory);
       this.agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);

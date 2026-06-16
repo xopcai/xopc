@@ -20,6 +20,7 @@ import {
   tryRunSlashCommand,
 } from './direct-turn-helpers.js';
 import {
+  clearPendingTranscriptUserMessage,
   setPendingTranscriptUserMessage,
   type TranscriptUserMessage,
 } from '../inbound/attachment-pipeline.js';
@@ -105,15 +106,22 @@ export async function runProcessDirect(
       modelManager: deps.modelManager,
     });
 
-    setPendingTranscriptUserMessage(input.sessionKey, userMessage as TranscriptUserMessage);
+    const pendingUserMessage = userMessage as TranscriptUserMessage;
+    setPendingTranscriptUserMessage(input.sessionKey, pendingUserMessage);
 
-    const result = await runDirectAgentTurn(
-      { ...deps, config: deps.config },
-      {
-        sessionKey: input.sessionKey,
-        userMessage,
-      },
-    );
+    const result = await (async () => {
+      try {
+        return await runDirectAgentTurn(
+          { ...deps, config: deps.config },
+          {
+            sessionKey: input.sessionKey,
+            userMessage,
+          },
+        );
+      } finally {
+        clearPendingTranscriptUserMessage(input.sessionKey, pendingUserMessage);
+      }
+    })();
 
     if (result.lastAssistantText) {
       deps.onTurnComplete?.(input.sessionKey, result.lastAssistantText);

@@ -119,7 +119,7 @@ describe('attachment-pipeline', () => {
     expect(turn.images[0]!.data).toBe(Buffer.from('img').toString('base64'));
   });
 
-  it('transformUserMessageForPersistence uses pending transcript row', () => {
+  it('transformUserMessageForPersistence uses matching pending transcript row', () => {
     const pending = {
       role: 'user' as const,
       content: 'stored',
@@ -129,8 +129,23 @@ describe('attachment-pipeline', () => {
     setPendingTranscriptUserMessage('sk', pending);
     const out = transformUserMessageForPersistence('sk', {
       role: 'user',
-      content: [{ type: 'text', text: 'runtime' }],
+      content: [{ type: 'text', text: 'stored\n\n<context>runtime enrichment</context>' }],
     });
     expect(out).toEqual(pending);
+  });
+
+  it('transformUserMessageForPersistence does not consume stale pending rows', () => {
+    const pending = {
+      role: 'user' as const,
+      content: 'old turn',
+      timestamp: 1,
+      media: [],
+    };
+    const runtime = {
+      role: 'user' as const,
+      content: [{ type: 'text' as const, text: 'new turn' }],
+    };
+    setPendingTranscriptUserMessage('sk-stale', pending);
+    expect(transformUserMessageForPersistence('sk-stale', runtime)).toEqual(runtime);
   });
 });

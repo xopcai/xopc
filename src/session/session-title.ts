@@ -42,7 +42,24 @@ function firstUserText(messages: AgentMessage[]): string {
   const u = messages.find((m) => m.role === 'user');
   if (!u) return '';
   const raw = extractTextFromMessage(u);
-  return stripEnvelopeTimestampPrefix(stripSessionStartupContextFromUserText(raw));
+  return stripMediaClaimChecks(stripEnvelopeTimestampPrefix(stripSessionStartupContextFromUserText(raw)));
+}
+
+function stripMediaClaimChecks(text: string): string {
+  if (!text.includes('[media attached:') && !text.includes('xopc-media-uri:')) {
+    return text;
+  }
+  return text
+    .replace(
+      /\s*\[media attached:[^\]]+\]\s*\r?\nxopc-media-uri:[^\r\n]+\r?\n\s*xopc-media-path:[^\r\n]+(?:\r?\n\s*Use the read_media tool[^\r\n]*)?/g,
+      '',
+    )
+    .replace(/\s*\[media attached:[^\]]+\]\s*/g, ' ')
+    .replace(/\s*xopc-media-uri:[^\r\n]+/g, '')
+    .replace(/\s*xopc-media-path:[^\r\n]+/g, '')
+    .replace(/\s*Use the read_media tool[^\r\n]*/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 /** First assistant message that has visible text (skips tool-only assistant rows). */

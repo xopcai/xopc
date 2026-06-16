@@ -10,10 +10,11 @@ export type FetchMediaUriBinaryResult =
 /** Load persisted media via `GET /api/media/read?uri=media://…`. */
 export async function fetchMediaUriBlob(params: {
   uri: string;
+  sessionKey?: string | null;
 }): Promise<FetchMediaUriBinaryResult> {
-  const { uri } = params;
+  const { uri, sessionKey } = params;
   try {
-    const url = apiUrl(mediaUriToReadUrl(uri));
+    const url = apiUrl(mediaUriToReadUrl(uri, sessionKey));
     const res = await apiFetch(url);
     if (!res.ok) {
       return { ok: false, reason: 'http', status: res.status };
@@ -26,6 +27,7 @@ export async function fetchMediaUriBlob(params: {
 
 export async function fetchMediaUriBuffer(params: {
   uri: string;
+  sessionKey?: string | null;
 }): Promise<
   | { ok: true; buffer: ArrayBuffer }
   | { ok: false; reason: 'http'; status: number }
@@ -41,6 +43,7 @@ export async function fetchMediaUriBuffer(params: {
 /** @deprecated Use fetchMediaUriBlob */
 export async function fetchWorkspaceRelativeFileBlob(params: {
   uri: string;
+  sessionKey?: string | null;
 }): Promise<FetchMediaUriBinaryResult> {
   return fetchMediaUriBlob(params);
 }
@@ -48,6 +51,7 @@ export async function fetchWorkspaceRelativeFileBlob(params: {
 /** @deprecated Use fetchMediaUriBuffer */
 export async function fetchWorkspaceRelativeFileBuffer(params: {
   uri: string;
+  sessionKey?: string | null;
 }): Promise<
   | { ok: true; buffer: ArrayBuffer }
   | { ok: false; reason: 'http'; status: number }
