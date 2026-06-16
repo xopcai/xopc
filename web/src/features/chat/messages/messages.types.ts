@@ -56,6 +56,12 @@ export type MessageAttachment = {
   extractedText?: string;
   /** Persisted media URI — fetch via `GET /api/media/read?uri=`. */
   uri?: string;
+  /** Media store bucket (`inbound`, `tts`, `outbound`) when provided by the gateway. */
+  bucket?: string;
+  /** Absolute media-store path from persisted transcript metadata. Do not expose as a download URL. */
+  path?: string;
+  /** Workspace-relative generated artifact path, used for assistant output de-dupe. */
+  workspaceRelativePath?: string;
   /** Known clip length (sec). Set for recorded voice; HTML audio may omit WebM duration. */
   durationSeconds?: number;
 };

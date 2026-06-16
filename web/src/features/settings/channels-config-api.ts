@@ -173,13 +173,13 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
       groupPolicy: (tg?.groupPolicy as GroupPolicy) || 'open',
       replyToMode: (tg?.replyToMode as ReplyToMode) || 'off',
       streamMode:
-        ((defaultAcc.streaming as { mode?: StreamMode } | undefined)?.mode as StreamMode) ??
-        ((tg?.streaming as { mode?: StreamMode } | undefined)?.mode as StreamMode) ??
+        defaultAcc.streaming?.mode ??
+        (tg?.streaming as { mode?: StreamMode } | undefined)?.mode ??
         'partial',
       streaming: {
         mode:
-          ((defaultAcc.streaming as { mode?: StreamMode } | undefined)?.mode as StreamMode) ??
-          ((tg?.streaming as { mode?: StreamMode } | undefined)?.mode as StreamMode) ??
+          defaultAcc.streaming?.mode ??
+          (tg?.streaming as { mode?: StreamMode } | undefined)?.mode ??
           'partial',
       },
       historyLimit: typeof tg?.historyLimit === 'number' ? tg.historyLimit : 50,
