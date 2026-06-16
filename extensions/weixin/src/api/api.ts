@@ -3,7 +3,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { Agent, type Dispatcher, fetch as undiciFetch } from "undici";
+import { Agent, EnvHttpProxyAgent, type Dispatcher, fetch as undiciFetch } from "undici";
+
+import { hasProxyEnv } from "../../../../src/infra/http-proxy-env.js";
 
 import { logger } from "../util/logger.js";
 import { redactBody, redactUrl } from "../util/redact.js";
@@ -248,11 +250,12 @@ export async function getUpdates(
 ): Promise<GetUpdatesResp> {
   const timeout = params.timeoutMs ?? DEFAULT_LONG_POLL_TIMEOUT_MS;
   const headersTimeout = timeout + LONG_POLL_HEADERS_SLACK_MS;
-  const agent = new Agent({
+  const agentOpts = {
     connectTimeout: 60_000,
     headersTimeout,
     bodyTimeout: headersTimeout,
-  });
+  };
+  const agent = hasProxyEnv() ? new EnvHttpProxyAgent(agentOpts) : new Agent(agentOpts);
   try {
     const rawText = await apiPostFetch({
       baseUrl: params.baseUrl,
