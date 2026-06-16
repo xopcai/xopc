@@ -104,7 +104,14 @@ async function readImageBase64FromRef(ref: MediaRef): Promise<{ data: string; mi
 function appendMediaAttachedLines(textParts: string[], media: MediaRef[]): void {
   for (const ref of media) {
     if (!isImageInboundAttachment(ref)) {
-      textParts.push(`[media attached: ${ref.uri} (${ref.mimeType}, ${ref.size} bytes)]`);
+      textParts.push(
+        [
+          `[media attached: ${ref.name} (${ref.mimeType}, ${ref.size} bytes)]`,
+          `xopc-media-uri:${ref.uri}`,
+          `xopc-media-path:${ref.path}`,
+          'Use the read_media tool with the xopc-media-uri value when you need to inspect this attachment.',
+        ].join('\n'),
+      );
     }
   }
 }
@@ -203,6 +210,22 @@ export async function hydrateUserTurnForLlm(opts: {
 
 const pendingTranscriptBySession = new Map<string, TranscriptUserMessage>();
 
+function messageTextForPendingCompare(message: AgentMessage): string {
+  return joinTextBlocks(textBlocksFromContent(readAgentMessageContent(message)));
+}
+
+function pendingMatchesMessage(pending: TranscriptUserMessage, message: AgentMessage): boolean {
+  const pendingText = messageTextForPendingCompare(pending);
+  const actualText = messageTextForPendingCompare(message);
+  if (!pendingText) {
+    return true;
+  }
+  if (!actualText) {
+    return false;
+  }
+  return actualText.includes(pendingText) || pendingText.includes(actualText);
+}
+
 export function setPendingTranscriptUserMessage(sessionKey: string, message: TranscriptUserMessage): void {
   assertTranscriptUserMessage(message);
   pendingTranscriptBySession.set(sessionKey, message);
@@ -214,6 +237,22 @@ export function takePendingTranscriptUserMessage(sessionKey: string): Transcript
   return msg;
 }
 
+export function clearPendingTranscriptUserMessage(sessionKey: string, message?: TranscriptUserMessage): void {
+  const existing = pendingTranscriptBySession.get(sessionKey);
+  if (!existing) {
+    return;
+  }
+  if (message && existing !== message) {
+    return;
+  }
+  pendingTranscriptBySession.delete(sessionKey);
+}
+
+export function pendingTranscriptReferencesMediaUri(sessionKey: string, uri: string): boolean {
+  const pending = pendingTranscriptBySession.get(sessionKey);
+  return pending?.media?.some((ref) => ref.uri === uri.trim()) === true;
+}
+
 export function transformUserMessageForPersistence(
   sessionKey: string | undefined,
   message: AgentMessage,
@@ -222,8 +261,9 @@ export function transformUserMessageForPersistence(
     return message;
   }
   if (sessionKey) {
-    const pending = takePendingTranscriptUserMessage(sessionKey);
-    if (pending) {
+    const pending = pendingTranscriptBySession.get(sessionKey);
+    if (pending && pendingMatchesMessage(pending, message)) {
+      pendingTranscriptBySession.delete(sessionKey);
       return pending;
     }
   }

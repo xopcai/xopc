@@ -17,6 +17,7 @@ import { retireSessionMcpRuntimeForSessionKey } from '../../agent/mcp/bundle-mcp
 import { SessionIndex } from '../../session/index.js';
 import type { ExportFormat, SessionListQuery } from '../../session/types.js';
 import type { SessionPatchBody } from '../../session/patch-metadata.js';
+import { collectMediaUrisFromMessages, deleteMediaUris } from '../../media/session-references.js';
 import { getDistinctSessionChatIds } from './session-chat-ids.js';
 import { performSessionReset, type SessionResetResult } from '../session-reset-service.js';
 
@@ -141,8 +142,10 @@ export class GatewaySessionsApi {
   // ── Lifecycle (delete / rename / tag / pin / archive) ─────────────────
 
   async delete(key: string): Promise<{ deleted: boolean }> {
+    const messages = await this.opts.sessionIndex.loadMessages(key).catch(() => []);
     const result = await this.opts.sessionIndex.deleteSession(key);
     if (result) {
+      await deleteMediaUris(collectMediaUrisFromMessages(messages));
       this.opts.getAgentService().evictSessionAgent(key);
       await retireSessionMcpRuntimeForSessionKey({ sessionKey: key, reason: 'session-delete' });
     }

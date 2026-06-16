@@ -44,7 +44,7 @@ export function useAttachmentImageSrc(
     let cancelled = false;
 
     void (async () => {
-      const result = await fetchMediaUriBlob({ uri: attachment.uri! });
+      const result = await fetchMediaUriBlob({ uri: attachment.uri!, sessionKey: opts.sessionKey });
       if (!result.ok || cancelled) return;
       const u = URL.createObjectURL(result.blob);
       revoke = u;
@@ -55,7 +55,7 @@ export function useAttachmentImageSrc(
       cancelled = true;
       if (revoke) URL.revokeObjectURL(revoke);
     };
-  }, [inlineSrc, attachment.uri, isImage, opts.authToken]);
+  }, [inlineSrc, attachment.uri, isImage, opts.authToken, opts.sessionKey]);
 
   return inlineSrc ?? blobUrl ?? '';
 }
