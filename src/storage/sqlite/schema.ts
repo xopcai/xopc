@@ -4,13 +4,30 @@ import { fileURLToPath } from 'node:url';
 
 import type { DatabaseSync } from 'node:sqlite';
 
-export const XOPC_DB_SCHEMA_VERSION = 1;
+import {
+  applyPendingMigrations,
+  XOPC_DB_BASELINE_SCHEMA_VERSION,
+  XOPC_DB_SCHEMA_VERSION,
+} from './migrations/runner.js';
+import {
+  ensureSchemaMetaTable,
+  readSchemaVersion,
+  readSchemaVersionForTest,
+  SCHEMA_META_SCHEMA_VERSION_KEY,
+  setSchemaVersion,
+} from './schema-version.js';
 
-export const SCHEMA_META_SCHEMA_VERSION_KEY = 'schema_version';
-
-type TableInfoRow = {
-  name: string;
-};
+export {
+  SCHEMA_META_SCHEMA_VERSION_KEY,
+  readSchemaVersionForTest,
+  readSchemaVersion,
+  setSchemaVersion,
+  ensureSchemaMetaTable,
+} from './schema-version.js';
+export {
+  XOPC_DB_BASELINE_SCHEMA_VERSION,
+  XOPC_DB_SCHEMA_VERSION,
+} from './migrations/runner.js';
 
 const SCHEMA_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -18,50 +35,33 @@ function readSchemaSql(): string {
   return readFileSync(join(SCHEMA_DIR, 'schema.sql'), 'utf8');
 }
 
-export function ensureXopcDatabaseSchema(db: DatabaseSync): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS schema_meta (
-      key   TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-  `);
-
-  const currentVersion = readSchemaVersion(db);
-  if (currentVersion === 0) {
+function bootstrapFreshDatabase(db: DatabaseSync): void {
+  db.exec('BEGIN IMMEDIATE');
+  try {
     db.exec(readSchemaSql());
-    setSchemaVersion(db, XOPC_DB_SCHEMA_VERSION);
-    return;
-  }
-
-  if (currentVersion !== XOPC_DB_SCHEMA_VERSION) {
-    throw new Error(
-      `Unsupported xopc database schema version ${currentVersion} (expected ${XOPC_DB_SCHEMA_VERSION})`,
-    );
+    setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+    db.exec('COMMIT');
+  } catch (error) {
+    try {
+      db.exec('ROLLBACK');
+    } catch {
+      /* preserve original error */
+    }
+    throw error;
   }
 }
 
-function readSchemaVersion(db: DatabaseSync): number {
-  const row = db
-    .prepare(`SELECT value FROM schema_meta WHERE key = ?`)
-    .get(SCHEMA_META_SCHEMA_VERSION_KEY) as { value?: string } | undefined;
-  if (!row?.value) {
-    return 0;
-  }
-  const parsed = Number.parseInt(row.value, 10);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
-}
+/**
+ * Ensure schema_meta exists, apply baseline schema.sql on first open, then run pending migrations.
+ */
+export function ensureXopcDatabaseSchema(db: DatabaseSync): void {
+  ensureSchemaMetaTable(db);
 
-function setSchemaVersion(db: DatabaseSync, version: number): void {
-  db.prepare(
-    `INSERT INTO schema_meta (key, value) VALUES (?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
-  ).run(SCHEMA_META_SCHEMA_VERSION_KEY, String(version));
-}
-
-export function readSchemaVersionForTest(db: DatabaseSync): number {
-  const rows = db.prepare(`PRAGMA table_info(schema_meta)`).all() as TableInfoRow[];
-  if (rows.length === 0) {
-    return 0;
+  let currentVersion = readSchemaVersion(db);
+  if (currentVersion === 0) {
+    bootstrapFreshDatabase(db);
+    currentVersion = XOPC_DB_BASELINE_SCHEMA_VERSION;
   }
-  return readSchemaVersion(db);
+
+  applyPendingMigrations(db, { targetVersion: XOPC_DB_SCHEMA_VERSION });
 }

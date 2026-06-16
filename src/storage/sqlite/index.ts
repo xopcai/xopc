@@ -1,10 +1,23 @@
 export { resolveXopcDatabasePath, XOPC_DB_FILENAME } from './paths.js';
 export {
   XOPC_DB_SCHEMA_VERSION,
+  XOPC_DB_BASELINE_SCHEMA_VERSION,
   SCHEMA_META_SCHEMA_VERSION_KEY,
   ensureXopcDatabaseSchema,
   readSchemaVersionForTest,
+  readSchemaVersion,
 } from './schema.js';
+export {
+  applyPendingMigrations,
+  inspectSchemaMigrationStatus,
+  resolveMigrationsDir,
+  type SchemaMigrationStatus,
+} from './migrations/runner.js';
+export {
+  DatabaseSchemaMigrationGapError,
+  DatabaseSchemaTooNewError,
+} from './migrations/errors.js';
+export { discoverSqlMigrations, listRegisteredMigrationTargets } from './migrations/discover.js';
 export {
   closeXopcDatabase,
   getXopcDatabase,

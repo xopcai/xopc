@@ -72,6 +72,18 @@ if (schemaSrc) {
   process.exit(1);
 }
 
+const migrationsCandidates = [
+  join(root, 'dist/src/storage/sqlite/migrations'),
+  join(root, 'src/storage/sqlite/migrations'),
+];
+const migrationsSrc = migrationsCandidates.find((p) => existsSync(p));
+const migrationsDest = join(root, 'out/server/migrations');
+if (migrationsSrc) {
+  mkdirSync(dirname(migrationsDest), { recursive: true });
+  cpSync(migrationsSrc, migrationsDest, { recursive: true });
+  console.log(`[build-electron-server] Copied SQLite migrations to ${migrationsDest}`);
+}
+
 // workspace-seed.ts resolves bundled templates next to the running module (`__dirname/workspace-templates`).
 // The esbuild bundle is a single file under out/server/, so copy templates beside index.js for packaged Electron.
 const tplCandidates = [
