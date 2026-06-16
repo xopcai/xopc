@@ -15,6 +15,9 @@ import { createSkillConfigManager } from '../skills/config.js';
 import { selectSkillsVisibleInPrompt } from '../skills/format-skills-prompt.js';
 import { resolveStateDir } from '../../config/paths.js';
 import { buildSystemPrompt as buildBaseSystemPrompt } from './system-prompt.js';
+import { resolveSystemPromptBuildParams } from './system-prompt-params.js';
+import type { PromptMode, SilentReplyPromptMode } from './types.js';
+import type { ProviderSystemPromptContribution } from './contribution.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { buildTtsSystemPromptHint } from '../../voice/tts/directives.js';
 import { createLogger } from '../../utils/logger.js';
@@ -29,6 +32,15 @@ export interface SystemPromptBuildOptions {
   skillPromptText?: string;
   skillAllowlist?: string[];
   registeredToolNames?: string[];
+  toolSummaries?: Record<string, string>;
+  sessionKey?: string;
+  promptMode?: PromptMode;
+  modelRef?: string;
+  agentId?: string;
+  thinkingLevel?: string;
+  extraSystemPrompt?: string;
+  silentReplyPromptMode?: SilentReplyPromptMode;
+  promptContribution?: ProviderSystemPromptContribution;
 }
 
 export interface SystemPromptBuilderConfig {
@@ -91,16 +103,43 @@ export class SystemPromptBuilder {
       textToSpeechTool: ttsMerged.enabled && reg.includes('text_to_speech'),
     });
 
-    const basePrompt = buildBaseSystemPrompt(ws, {
-      contextFiles,
-      heartbeatEnabled,
-      availableTools: this.getSkillNamesForSkillsSection({
-        skillAllowlist: options.skillAllowlist,
-        registeredToolNames: options.registeredToolNames,
-      }),
+    const resolved = resolveSystemPromptBuildParams(this.config, {
+      workspaceDir: ws,
+      sessionKey: options.sessionKey,
+      toolNames: options.registeredToolNames,
+      toolSummaries: options.toolSummaries,
       userTimezone,
       externalMemoryInstructions: options.externalMemoryInstructions,
+      heartbeatEnabled,
       ttsSystemHint,
+      extraSystemPrompt: options.extraSystemPrompt,
+      modelRef: options.modelRef,
+      agentId: options.agentId,
+      thinkingLevel: options.thinkingLevel,
+      promptMode: options.promptMode,
+      silentReplyPromptMode: options.silentReplyPromptMode,
+      promptContribution: options.promptContribution,
+    });
+
+    const basePrompt = buildBaseSystemPrompt(ws, {
+      contextFiles,
+      promptMode: resolved.promptMode,
+      heartbeatEnabled: resolved.heartbeatEnabled,
+      heartbeatPrompt: resolved.heartbeatPrompt,
+      toolNames: resolved.toolNames,
+      toolSummaries: resolved.toolSummaries,
+      memoryCitationsMode: resolved.memoryCitationsMode,
+      includeMemorySection: resolved.includeMemorySection,
+      userTimezone: resolved.userTimezone,
+      runtime: resolved.runtimeInfo,
+      channels: resolved.channels,
+      externalMemoryInstructions: resolved.externalMemoryInstructions,
+      ttsSystemHint: resolved.ttsSystemHint,
+      extraSystemPrompt: resolved.extraSystemPrompt,
+      silentReplyPromptMode: resolved.silentReplyPromptMode,
+      promptContribution: resolved.promptContribution,
+      includeProblemSolving: resolved.includeProblemSolving,
+      includeToneSection: resolved.includeToneSection,
     });
 
     const skillPrompt =
@@ -119,6 +158,8 @@ export class SystemPromptBuilder {
         skillLength: skillPrompt?.length || 0,
         totalLength: fullPrompt.length,
         contextFileCount: contextFiles.length,
+        promptMode: resolved.promptMode,
+        toolCount: resolved.toolNames?.length ?? 0,
       },
       'System prompt built',
     );
@@ -179,15 +220,29 @@ export class SystemPromptBuilder {
       externalMemoryInstructions?: string;
       workspaceOverride?: string;
       profileMarkdownPathRoot?: string;
+      registeredToolNames?: string[];
+      sessionKey?: string;
     },
   ): string {
     const ws = options?.workspaceOverride ?? this.workspace;
     const profilePathRoot = options?.profileMarkdownPathRoot ?? ws;
-    return buildBaseSystemPrompt(ws, {
-      contextFiles,
-      heartbeatEnabled: this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false,
+    const resolved = resolveSystemPromptBuildParams(this.config, {
+      workspaceDir: ws,
+      sessionKey: options?.sessionKey,
+      toolNames: options?.registeredToolNames,
       userTimezone: this.extractTimezone(contextFiles, profilePathRoot),
       externalMemoryInstructions: options?.externalMemoryInstructions,
+      heartbeatEnabled: this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false,
+    });
+    return buildBaseSystemPrompt(ws, {
+      contextFiles,
+      promptMode: resolved.promptMode,
+      heartbeatEnabled: resolved.heartbeatEnabled,
+      toolNames: resolved.toolNames,
+      userTimezone: resolved.userTimezone,
+      runtime: resolved.runtimeInfo,
+      channels: resolved.channels,
+      externalMemoryInstructions: resolved.externalMemoryInstructions,
     });
   }
 }
