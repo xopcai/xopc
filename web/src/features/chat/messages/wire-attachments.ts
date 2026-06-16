@@ -45,7 +45,12 @@ function normalizeName(raw: unknown): string {
 }
 
 function normalizeMediaMimeType(raw: unknown, name: string): string {
-  if (typeof raw === 'string' && raw.trim().length > 0) return raw.trim();
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    const mime = raw.trim();
+    if (mime.toLowerCase().split(';')[0]?.trim() !== 'application/octet-stream') {
+      return mime;
+    }
+  }
   return inferMimeTypeFromFileName(name) ?? 'application/octet-stream';
 }
 
