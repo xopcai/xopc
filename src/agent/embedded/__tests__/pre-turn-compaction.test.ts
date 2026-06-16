@@ -69,6 +69,7 @@ function createMockAgentManager() {
       },
     }),
     getResolvedWorkspaceForSession: vi.fn().mockReturnValue('/tmp/workspace'),
+    setModelForSession: vi.fn().mockReturnValue(true),
     removeAgent: vi.fn().mockReturnValue(true),
   };
 }
