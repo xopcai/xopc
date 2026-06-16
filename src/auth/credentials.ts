@@ -110,7 +110,6 @@ export class CredentialResolver {
       return envKey;
     }
 
-    log.debug({ provider }, 'No API key found');
     return null;
   }
 

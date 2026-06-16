@@ -846,6 +846,32 @@ export class AgentManager implements AgentInstanceGateway {
     try {
       const model = resolveModel(modelId);
       instance.agent.state.model = model;
+
+      const cfg = this.config.config!;
+      const rt = this.workspaceRuntimes.getOrCreate(instance.resolvedWorkspacePath);
+      const contextFiles = this.resolveContextFilesForSession(
+        sessionKey,
+        instance.effectiveProfile,
+      );
+      const thinkingLevel =
+        (instance.agent.state.thinkingLevel as ThinkingLevel | undefined) ??
+        (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
+        this.config.thinkingLevel ??
+        'medium';
+
+      instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
+        externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+        workspaceOverride: instance.resolvedWorkspacePath,
+        profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
+        systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
+        skillAllowlist: instance.effectiveProfile.skillsAllowlist,
+        registeredToolNames: instance.registeredToolNames,
+        sessionKey,
+        modelRef: modelId,
+        agentId: instance.effectiveProfile.agentId,
+        thinkingLevel,
+      });
+
       log.info({ sessionKey, modelId }, 'Model set for session');
       return true;
     } catch (err) {
