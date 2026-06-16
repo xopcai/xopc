@@ -134,6 +134,10 @@ jobs:
             echo "❌ Electron main bundle still includes validate-channel-configs chunk"
             exit 1
           fi
+          if grep -E 'from["'\''](zod|pino|dotenv|electron-updater)["'\'']' out/main/index.js out/main/chunks/*.js 2>/dev/null; then
+            echo "❌ Electron main bundle externalizes runtime npm deps (set main.build.externalizeDeps=false)"
+            exit 1
+          fi
           # Same as local `pnpm run electron:build`: bundle gateway CLI to out/server/index.js for packaged apps.
           pnpm run electron:server:build
           # electron-builder.mjs hides pnpm workspace markers + verifies asar node_modules size on success.
