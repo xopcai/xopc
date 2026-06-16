@@ -34,8 +34,10 @@ export function wireTelegramUpdateOffsetPersistence(
 ): void {
   const savedOffset = readTelegramUpdateOffset(params);
   if (savedOffset != null) {
+    let restored = false;
     bot.api.config.use(async (prev, method, payload, signal) => {
-      if (method === 'getUpdates') {
+      if (method === 'getUpdates' && !restored) {
+        restored = true;
         const nextPayload = { ...(payload as object), offset: savedOffset + 1 } as typeof payload;
         return prev(method, nextPayload, signal);
       }

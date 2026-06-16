@@ -51,9 +51,8 @@ export interface TelegramAccountConfig {
   groups?: Record<string, TelegramGroupConfig>;
   historyLimit?: number;
   textChunkLimit?: number;
-  streamMode?: 'off' | 'partial' | 'block';
   streaming?: {
-    mode?: 'off' | 'partial' | 'block' | 'progress';
+    mode?: 'off' | 'partial' | 'block';
     preview?: { toolProgress?: boolean };
     block?: { coalesce?: { minChars?: number; idleMs?: number } };
   };
@@ -63,9 +62,6 @@ export interface TelegramAccountConfig {
   reactionLevel?: 'off' | 'ack' | 'minimal' | 'extensive';
   reactionNotifications?: 'off' | 'own' | 'all';
   ackReaction?: string;
-  webhookUrl?: string;
-  webhookSecret?: string;
-  webhookPath?: string;
 }
 
 export interface TelegramChannelConfig {
@@ -77,7 +73,11 @@ export interface TelegramChannelConfig {
   dmPolicy?: DmPolicy;
   groupPolicy?: GroupPolicy;
   replyToMode?: ReplyToMode;
-  streamMode?: 'off' | 'partial' | 'block';
+  streaming?: {
+    mode?: 'off' | 'partial' | 'block';
+    preview?: { toolProgress?: boolean };
+    block?: { coalesce?: { minChars?: number; idleMs?: number } };
+  };
   historyLimit?: number;
   textChunkLimit?: number;
   proxy?: string;

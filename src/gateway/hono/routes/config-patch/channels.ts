@@ -40,12 +40,12 @@ export function applyChannelsPatch(config: Config, body: any): void {
                 replyToMode: 'off' as const,
                 historyLimit: 50,
                 textChunkLimit: 4000,
-                streamMode: 'partial' as const,
               },
             },
             dmPolicy: 'pairing' as const,
             groupPolicy: 'open' as const,
             replyToMode: 'off' as const,
+            streaming: { mode: 'partial' as const },
             historyLimit: 50,
             textChunkLimit: 4000,
           },
@@ -71,8 +71,8 @@ export function applyChannelsPatch(config: Config, body: any): void {
       if (bodyTg.debug !== undefined) {
         tg.debug = bodyTg.debug;
       }
-      if (bodyTg.streamMode !== undefined) {
-        tg.streamMode = bodyTg.streamMode;
+      if (bodyTg.streaming !== undefined) {
+        tg.streaming = bodyTg.streaming;
       }
       if ('groupAllowFrom' in bodyTg) {
         const ga = bodyTg.groupAllowFrom;
@@ -107,20 +107,6 @@ export function applyChannelsPatch(config: Config, body: any): void {
       }
       if (bodyTg.accounts !== undefined) {
         tg.accounts = bodyTg.accounts;
-      }
-      if (bodyTg.reactionLevel !== undefined) {
-        tg.reactionLevel = bodyTg.reactionLevel;
-      }
-      if (bodyTg.reactionNotifications !== undefined) {
-        tg.reactionNotifications = bodyTg.reactionNotifications;
-      }
-      if ('ackReaction' in bodyTg) {
-        const ar = bodyTg.ackReaction;
-        if (ar === null || ar === undefined || (typeof ar === 'string' && !ar.trim())) {
-          delete tg.ackReaction;
-        } else {
-          tg.ackReaction = String(ar).trim();
-        }
       }
     }
   }

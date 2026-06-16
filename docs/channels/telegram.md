@@ -22,7 +22,7 @@ When the gateway is running, the React console includes a dedicated **IM channel
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
-          "streamMode": "partial"
+          "streaming": { "mode": "partial" }
         },
         "work": {
           "name": "Work Bot",
@@ -58,7 +58,7 @@ When the gateway is running, the React console includes a dedicated **IM channel
 
 ## Streaming configuration
 
-**Stream Modes** (`streamMode`):
+**Stream Modes** (`streaming.mode`):
 
 | Mode | Description |
 |------|-------------|
@@ -107,4 +107,3 @@ Connection is automatically verified on startup.
 - **Polling mode**: Uses long polling, ~1-2 second delay
 - **Voice messages**: 60 second limit for STT (Telegram)
 - **TTS text**: limited by `tts.maxTextLength` (schema default 512; configurable)
-

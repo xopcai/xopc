@@ -101,37 +101,6 @@ export function TelegramAdvanced({
         <FieldHint>{ch.telegramAckReactionDesc}</FieldHint>
       </div>
       <div className="space-y-3 rounded-lg border border-edge-subtle p-3 dark:border-edge">
-        <p className="text-sm font-medium text-fg">{ch.telegramWebhookTitle}</p>
-        <div className="flex flex-col gap-1.5">
-          <FieldLabel>{ch.telegramWebhookUrl}</FieldLabel>
-          <input
-            className={inputClassName()}
-            value={tg.webhookUrl ?? ''}
-            onChange={(e) => updateTelegram({ webhookUrl: e.target.value })}
-            placeholder="https://example.com/telegram/webhook"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <FieldLabel>{ch.telegramWebhookSecret}</FieldLabel>
-          <input
-            className={inputClassName()}
-            type="password"
-            value={tg.webhookSecret ?? ''}
-            onChange={(e) => updateTelegram({ webhookSecret: e.target.value })}
-          />
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <FieldLabel>{ch.telegramWebhookPath}</FieldLabel>
-          <input
-            className={inputClassName()}
-            value={tg.webhookPath ?? ''}
-            onChange={(e) => updateTelegram({ webhookPath: e.target.value })}
-            placeholder="/telegram/webhook"
-          />
-          <FieldHint>{ch.telegramWebhookDesc}</FieldHint>
-        </div>
-      </div>
-      <div className="space-y-3 rounded-lg border border-edge-subtle p-3 dark:border-edge">
         <p className="text-sm font-medium text-fg">{ch.telegramExecApprovalsTitle}</p>
         <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
           <input
@@ -206,7 +175,7 @@ export function TelegramAdvanced({
           value={tgAccountsDraft}
           onChange={(e) => setTgAccountsDraft(e.target.value)}
           onBlur={onTgAccountsBlur}
-          placeholder='{ "personal": { "accountId": "personal", "botToken": "...", ... } }'
+          placeholder='{ "personal": { "botToken": "...", ... } }'
         />
         {tgAccountsError ? (
           <p className="text-xs text-red-600 dark:text-red-400">{tgAccountsError}</p>
