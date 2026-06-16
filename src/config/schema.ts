@@ -151,6 +151,19 @@ export const AgentDefaultsSchema = z.object({
     headKeepRatio: z.number().default(0.3),
     tailKeepRatio: z.number().default(0.3),
   }).optional(),
+  memoryFlush: z.object({
+    enabled: z.boolean().default(true),
+    /** Trigger flush when usagePercent exceeds this threshold (relative to contextWindow). */
+    threshold: z.number().min(0.5).max(1.0).default(0.88),
+    /** Soft threshold: extra token buffer subtracted from contextWindow when computing threshold. */
+    softThresholdTokens: z.number().int().min(0).default(4000),
+    /** Force flush after this many compactions in the current session. */
+    afterCompactions: z.number().int().min(1).default(2),
+    /** Max characters per flush entry written to daily notes. */
+    maxEntryChars: z.number().int().positive().default(2000),
+    /** Include tool call history from structuredSummary in flush entry. */
+    includeToolHistory: z.boolean().default(true),
+  }).optional(),
   /**
    * Curated memory (`agents/<id>/memories/`) + pluggable external provider.
    * Only one external provider at a time.
@@ -437,6 +450,14 @@ export const AgentsConfigSchema = z.object({
       maxToolResultChars: 10000,
       headKeepRatio: 0.3,
       tailKeepRatio: 0.3,
+    },
+    memoryFlush: {
+      enabled: true,
+      threshold: 0.88,
+      softThresholdTokens: 4000,
+      afterCompactions: 2,
+      maxEntryChars: 2000,
+      includeToolHistory: true,
     },
     browser: {
       enabled: true,
@@ -1406,6 +1427,14 @@ export const ConfigSchema = z.object({
         maxToolResultChars: 10000,
         headKeepRatio: 0.3,
         tailKeepRatio: 0.3,
+      },
+      memoryFlush: {
+        enabled: true,
+        threshold: 0.88,
+        softThresholdTokens: 4000,
+        afterCompactions: 2,
+        maxEntryChars: 2000,
+        includeToolHistory: true,
       },
       browser: {
         backend: 'extension',

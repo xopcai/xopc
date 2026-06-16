@@ -142,6 +142,14 @@ export interface ElectronCronDisplayWakeAPI {
   setDisplaySleepPrevented(enabled: boolean): Promise<void>;
 }
 
+export interface ElectronFullscreenAPI {
+  enter(): Promise<void>;
+  exit(): Promise<void>;
+  toggle(): Promise<void>;
+  isFullscreen(): Promise<boolean>;
+  onChange(callback: (isFullscreen: boolean) => void): () => void;
+}
+
 export interface ElectronSystemSettingsAPI {
   getBehavior(): Promise<SystemSettingsBehavior>;
   setBehavior(patch: {
@@ -175,6 +183,7 @@ export interface ElectronAPI {
   platform: 'darwin' | 'win32' | 'linux';
   menu?: ElectronMenuAPI;
   cron?: ElectronCronDisplayWakeAPI;
+  fullscreen?: ElectronFullscreenAPI;
   system?: ElectronSystemSettingsAPI;
 }
 

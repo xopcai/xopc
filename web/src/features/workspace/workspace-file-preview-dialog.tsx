@@ -124,6 +124,9 @@ export function WorkspaceFilePreviewPanel({
           ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-0.5">
+          {state.loading ? (
+            <Loader2 className="size-4 animate-spin text-fg-muted" aria-hidden />
+          ) : null}
           {(isMd || (isHtml && state.htmlCodeMode)) && state.saveStatus !== 'idle' ? (
             <span className="shrink-0 text-xs leading-tight text-fg-muted">
               {state.saveStatus === 'saving' ? m.workspace.saving : m.workspace.saved}

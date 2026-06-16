@@ -78,6 +78,12 @@ function joinComposerWireParts(parts: string[]): string {
   return out;
 }
 
+function isBlockLike(node: Node): boolean {
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+  const tag = (node as HTMLElement).tagName;
+  return tag === 'DIV' || tag === 'P' || tag === 'PRE' || tag === 'BLOCKQUOTE';
+}
+
 function serializeWalk(node: Node, out: string[]): void {
   if (node.nodeType === Node.TEXT_NODE) {
     out.push((node.textContent ?? '').replaceAll(ZWSP, ''));
@@ -100,9 +106,21 @@ function serializeWalk(node: Node, out: string[]): void {
   }
 }
 
+function serializeRootChildren(root: HTMLElement, out: string[]): void {
+  const children = Array.from(root.childNodes);
+  for (let i = 0; i < children.length; i++) {
+    serializeWalk(children[i], out);
+    // Preserve line breaks between consecutive block-level siblings; browsers
+    // represent contenteditable multi-line input as <div> lines, not <br>.
+    if (i < children.length - 1 && isBlockLike(children[i])) {
+      out.push('\n');
+    }
+  }
+}
+
 export function serializeEditorToWire(root: HTMLElement): string {
   const parts: string[] = [];
-  root.childNodes.forEach((c) => serializeWalk(c, parts));
+  serializeRootChildren(root, parts);
   return joinComposerWireParts(parts).replaceAll(CARET_PROBE, '');
 }
 
@@ -159,7 +177,7 @@ export function getWireCaretOffset(root: HTMLElement): number {
   }
 
   const parts: string[] = [];
-  root.childNodes.forEach((c) => serializeWalk(c, parts));
+  serializeRootChildren(root, parts);
   const raw = joinComposerWireParts(parts);
   marker.parentNode?.removeChild(marker);
 

@@ -103,7 +103,7 @@ function previewLoadReducer(state: PreviewLoadState, action: PreviewLoadAction):
     case 'clear':
       return emptyPreviewLoad;
     case 'loadStart':
-      return { ...emptyPreviewLoad, loading: true };
+      return { ...state, loading: true, loadError: null };
     case 'loadSuccess':
       return {
         textContent: action.payload.textContent ?? null,
