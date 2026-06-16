@@ -51,6 +51,8 @@ export function TelegramChannelSettingsDialog({
   groupOpts,
   replyOpts,
   streamOpts,
+  reactionLevelOpts,
+  reactionNotifyOpts,
   chatAgents,
   saving,
   dirty,
@@ -82,6 +84,14 @@ export function TelegramChannelSettingsDialog({
   groupOpts: { value: GroupPolicy; label: string }[];
   replyOpts: { value: ReplyToMode; label: string }[];
   streamOpts: { value: StreamMode; label: string }[];
+  reactionLevelOpts: {
+    value: import('@/features/settings/channels-settings.types').TelegramReactionLevel;
+    label: string;
+  }[];
+  reactionNotifyOpts: {
+    value: import('@/features/settings/channels-settings.types').TelegramReactionNotifications;
+    label: string;
+  }[];
   chatAgents: ChatAgentsPayload | undefined;
   saving: boolean;
   dirty: boolean;
@@ -243,6 +253,8 @@ export function TelegramChannelSettingsDialog({
                 groupOpts={groupOpts}
                 replyOpts={replyOpts}
                 streamOpts={streamOpts}
+                reactionLevelOpts={reactionLevelOpts}
+                reactionNotifyOpts={reactionNotifyOpts}
                 tgAccountsDraft={tgAccountsDraft}
                 setTgAccountsDraft={setTgAccountsDraft}
                 tgAccountsError={tgAccountsError}

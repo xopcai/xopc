@@ -166,6 +166,7 @@ describe('inbound-processor', () => {
         isGroup: false,
         threadId: undefined,
         accountId: 'default',
+        agentId: 'main',
       });
     });
 

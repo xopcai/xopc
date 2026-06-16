@@ -9,6 +9,7 @@ import {
   weixinRoutingAccountIds,
   type BindingRuleWire,
 } from './channel-bindings-merge';
+import { parseIdList } from './channels/utils';
 import type {
   ChannelsSettingsState,
   DmPolicy,
@@ -16,6 +17,8 @@ import type {
   ReplyToMode,
   StreamMode,
   TelegramAccount,
+  TelegramReactionLevel,
+  TelegramReactionNotifications,
   WeixinAccount,
 } from './channels-settings.types';
 
@@ -23,6 +26,8 @@ export type {
   ChannelsSettingsState,
   TelegramConfig,
   WeixinConfig,
+  TelegramReactionLevel,
+  TelegramReactionNotifications,
 } from './channels-settings.types';
 
 export type { DmPolicy, GroupPolicy, ReplyToMode, StreamMode };
@@ -68,6 +73,14 @@ export function defaultChannelsState(): ChannelsSettingsState {
       historyLimit: 50,
       textChunkLimit: 4000,
       proxy: '',
+      reactionLevel: 'ack',
+      reactionNotifications: 'own',
+      ackReaction: '',
+      webhookUrl: '',
+      webhookSecret: '',
+      webhookPath: '',
+      execApprovalsEnabled: false,
+      execApprovalsApprovers: '',
       accounts: { default: emptyTelegramAccount('default') },
     },
     weixin: {
@@ -161,6 +174,8 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
       ? agents.defaultId.trim().toLowerCase()
       : 'main';
 
+  const defaultAcc = accounts.default ?? emptyTelegramAccount('default');
+
   const base = {
     telegram: {
       enabled: Boolean(tg?.enabled),
@@ -175,6 +190,23 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
       historyLimit: typeof tg?.historyLimit === 'number' ? tg.historyLimit : 50,
       textChunkLimit: typeof tg?.textChunkLimit === 'number' ? tg.textChunkLimit : 4000,
       proxy: typeof tg?.proxy === 'string' ? tg.proxy : '',
+      reactionLevel:
+        (defaultAcc.reactionLevel as TelegramReactionLevel) ??
+        (tg?.reactionLevel as TelegramReactionLevel) ??
+        'ack',
+      reactionNotifications:
+        (defaultAcc.reactionNotifications as TelegramReactionNotifications) ??
+        (tg?.reactionNotifications as TelegramReactionNotifications) ??
+        'own',
+      ackReaction: defaultAcc.ackReaction ?? (typeof tg?.ackReaction === 'string' ? tg.ackReaction : ''),
+      webhookUrl: defaultAcc.webhookUrl ?? (typeof tg?.webhookUrl === 'string' ? tg.webhookUrl : ''),
+      webhookSecret:
+        defaultAcc.webhookSecret ?? (typeof tg?.webhookSecret === 'string' ? tg.webhookSecret : ''),
+      webhookPath: defaultAcc.webhookPath ?? (typeof tg?.webhookPath === 'string' ? tg.webhookPath : ''),
+      execApprovalsEnabled: defaultAcc.execApprovals?.enabled === true,
+      execApprovalsApprovers: (defaultAcc.execApprovals?.approvers ?? [])
+        .map(String)
+        .join(', '),
       accounts: { ...accounts },
     },
     weixin: {
@@ -282,6 +314,23 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
     return /^\d+$/.test(raw) ? Number(raw) : raw;
   })();
 
+  const execApprovers = parseIdList(tg.execApprovalsApprovers ?? '');
+  const defaultAcc: TelegramAccount = {
+    ...(tg.accounts.default ?? emptyTelegramAccount('default')),
+    reactionLevel: tg.reactionLevel ?? 'ack',
+    reactionNotifications: tg.reactionNotifications ?? 'own',
+    ackReaction: tg.ackReaction?.trim() || undefined,
+    webhookUrl: tg.webhookUrl?.trim() || undefined,
+    webhookSecret: tg.webhookSecret?.trim() || undefined,
+    webhookPath: tg.webhookPath?.trim() || undefined,
+    execApprovals: tg.execApprovalsEnabled
+      ? {
+          enabled: true,
+          approvers: execApprovers.length > 0 ? execApprovers : undefined,
+        }
+      : { enabled: false },
+  };
+
   const channelsPayload = {
     telegram: {
       enabled: tg.enabled,
@@ -296,7 +345,13 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
       historyLimit: tg.historyLimit,
       textChunkLimit: tg.textChunkLimit,
       proxy: tg.proxy.trim() ? tg.proxy.trim() : null,
-      accounts: tg.accounts,
+      reactionLevel: tg.reactionLevel,
+      reactionNotifications: tg.reactionNotifications,
+      ackReaction: tg.ackReaction?.trim() ? tg.ackReaction.trim() : null,
+      accounts: {
+        ...tg.accounts,
+        default: defaultAcc,
+      },
     },
     weixin: {
       enabled: wx.enabled,

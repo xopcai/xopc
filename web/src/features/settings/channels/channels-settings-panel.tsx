@@ -88,6 +88,8 @@ export function ChannelsSettingsPanel() {
     groupOpts,
     replyOpts,
     streamOpts,
+    reactionLevelOpts,
+    reactionNotifyOpts,
   } = ctx;
 
   const [refreshing, setRefreshing] = useState(false);
@@ -349,6 +351,8 @@ export function ChannelsSettingsPanel() {
           groupOpts={groupOpts}
           replyOpts={replyOpts}
           streamOpts={streamOpts}
+          reactionLevelOpts={reactionLevelOpts}
+          reactionNotifyOpts={reactionNotifyOpts}
           chatAgents={chatAgents}
           saving={saving}
           dirty={dirty}
