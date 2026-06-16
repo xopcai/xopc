@@ -50,8 +50,20 @@ export interface TelegramAccountConfig {
   historyLimit?: number;
   textChunkLimit?: number;
   streamMode?: 'off' | 'partial' | 'block';
+  streaming?: {
+    mode?: 'off' | 'partial' | 'block' | 'progress';
+    preview?: { toolProgress?: boolean };
+    block?: { coalesce?: { minChars?: number; idleMs?: number } };
+  };
   proxy?: string;
   apiRoot?: string;
+  pollingStallThresholdMs?: number;
+  reactionLevel?: 'off' | 'ack' | 'minimal' | 'extensive';
+  reactionNotifications?: 'off' | 'own' | 'all';
+  ackReaction?: string;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  webhookPath?: string;
 }
 
 export interface TelegramChannelConfig {

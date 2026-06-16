@@ -8,7 +8,6 @@
 import { isDeepStrictEqual } from 'node:util';
 
 import { Bot, type Context } from 'grammy';
-import { run } from '@grammyjs/runner';
 
 import type { Config } from '@xopcai/xopc/config/index.js';
 import type {
@@ -65,17 +64,22 @@ import { normalizeTelegramDeliveryChatId } from './delivery-chat-id.js';
 import { telegramConfigSurface } from './adapters/config-surface.js';
 import { telegramOnboardAdapter } from './adapters/onboard-cli.js';
 import { TelegramConfigSchema } from './config-schema.js';
+import { normalizeTelegramApiRoot } from './api-root.js';
+import { resolveTelegramBotToken } from './token-resolver.js';
+import { formatTelegramStartupError, isTelegramUnauthorizedTokenError } from './startup-errors.js';
+import { startTelegramPollingSession } from './polling-session.js';
+import { createProxyFetch } from './proxy-fetch.js';
+import { runTelegramDoctorChecks } from './doctor.js';
+import { telegramReplyTracker } from './reply-params.js';
+import { createTelegramInboundCoalescer } from './inbound-coalescer.js';
+import { sendTelegramAckReaction, handleTelegramMessageReaction } from './reactions.js';
+import { startTelegramWebhookServer } from './webhook.js';
+import { handleTelegramChannelAction } from './actions/message-actions.js';
 
 /** Bound initial `getMe` so a bad `apiRoot` or unreachable API cannot block gateway startup for minutes. */
 const TELEGRAM_GETME_TIMEOUT_MS = 20_000;
 /** grammY per-request ceiling; must exceed long-poll `getUpdates` (~30s) but avoid multi-minute hangs on bad hosts. */
 const TELEGRAM_CLIENT_TIMEOUT_SECONDS = 75;
-
-function trimOptionalRootUrl(value: string | undefined): string | undefined {
-  const t = value?.trim();
-  if (!t) return undefined;
-  return t.replace(/\/$/, '');
-}
 
 const log = createLogger('TelegramPlugin');
 
@@ -127,6 +131,10 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
 
   readonly onboard = telegramOnboardAdapter;
 
+  readonly doctor = {
+    check: (params: { cfg: Config }) => runTelegramDoctorChecks(params),
+  };
+
   readonly pairing = createStandardPairingAdapter('telegram');
 
   private bus!: NonNullable<ChannelPluginInitOptions['bus']>;
@@ -140,6 +148,12 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   private sessionModelHooks?: ChannelPluginSessionModelHooks;
   /** Unregister fn for the workflow-progress capability registered against the global broker. */
   private workflowProgressUnregister: (() => void) | null = null;
+  private inboundCoalescer = createTelegramInboundCoalescer();
+  private webhookStoppers = new Map<string, () => Promise<void>>();
+
+  readonly actions = {
+    handleAction: handleTelegramChannelAction,
+  };
 
   config!: import('@xopcai/xopc/channels/plugin-types.js').ChannelConfigAdapter<TelegramResolvedAccount>;
   security!: import('@xopcai/xopc/channels/plugin-types.js').ChannelSecurityAdapter<TelegramResolvedAccount>;
@@ -238,7 +252,10 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       mediaUtils: { getMimeType },
     });
 
-    const sends = createTelegramOutboundSendMethods((opts) => this.outboundSender.send(opts));
+    const sends = createTelegramOutboundSendMethods(
+      (opts) => this.outboundSender.send(opts),
+      this.accountManager,
+    );
     this.outbound = {
       deliveryMode: 'direct',
       chunker: telegramTextChunker,
@@ -302,29 +319,65 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       return;
     }
 
-    const accounts = telegramCfg.accounts as Record<string, any> | undefined;
+    const accounts = telegramCfg.accounts as Record<string, Record<string, unknown>> | undefined;
     if (!accounts || Object.keys(accounts).length === 0) return;
 
-    const channelApiRoot = trimOptionalRootUrl(
-      typeof telegramCfg.apiRoot === 'string' ? telegramCfg.apiRoot : undefined,
-    );
+    const channelApiRoot =
+      typeof telegramCfg.apiRoot === 'string'
+        ? normalizeTelegramApiRoot(telegramCfg.apiRoot)
+        : undefined;
     const channelProxy =
       typeof telegramCfg.proxy === 'string' && telegramCfg.proxy.trim()
         ? telegramCfg.proxy.trim()
         : undefined;
+    const channelReplyToMode = telegramCfg.replyToMode as TelegramResolvedAccount['replyToMode'];
+    const channelStreamMode = telegramCfg.streamMode as TelegramResolvedAccount['streamMode'];
+    const channelStreaming = telegramCfg.streaming as TelegramResolvedAccount['streaming'];
+
+    const tokenOwners = new Map<string, string[]>();
 
     for (const [id, account] of Object.entries(accounts)) {
-      const accApiRoot = trimOptionalRootUrl(
-        typeof account.apiRoot === 'string' ? account.apiRoot : undefined,
-      );
+      const { token, source } = resolveTelegramBotToken({
+        botToken: typeof account.botToken === 'string' ? account.botToken : undefined,
+        tokenFile: typeof account.tokenFile === 'string' ? account.tokenFile : undefined,
+      });
+      if (token) {
+        const owners = tokenOwners.get(token) ?? [];
+        owners.push(id);
+        tokenOwners.set(token, owners);
+      }
+
+      const accApiRoot =
+        typeof account.apiRoot === 'string'
+          ? normalizeTelegramApiRoot(account.apiRoot)
+          : undefined;
       const accProxy =
         typeof account.proxy === 'string' && account.proxy.trim() ? account.proxy.trim() : undefined;
+
       this.accountManager.registerAccount({
         ...account,
         accountId: id,
+        botToken: token,
+        tokenFile: typeof account.tokenFile === 'string' ? account.tokenFile : undefined,
+        tokenSource: source,
         ...(accApiRoot || channelApiRoot ? { apiRoot: accApiRoot || channelApiRoot } : {}),
         ...(accProxy || channelProxy ? { proxy: accProxy || channelProxy } : {}),
-      });
+        replyToMode:
+          (account.replyToMode as TelegramResolvedAccount['replyToMode']) ?? channelReplyToMode,
+        streamMode:
+          (account.streamMode as TelegramResolvedAccount['streamMode']) ?? channelStreamMode,
+        streaming:
+          (account.streaming as TelegramResolvedAccount['streaming']) ?? channelStreaming,
+      } as import('@xopcai/xopc/channels/channel-domain.js').TelegramAccountConfig);
+    }
+
+    for (const [token, owners] of tokenOwners) {
+      if (owners.length > 1) {
+        log.error(
+          { accountIds: owners, tokenPreview: `${token.slice(0, 8)}…` },
+          `Duplicate Telegram bot token across accounts: ${owners.join(', ')}`,
+        );
+      }
     }
   }
 
@@ -355,6 +408,11 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     if (!this.config) return;
     const ids = accountId ? [accountId] : this.config.listAccountIds(this.cfg);
     for (const id of ids) {
+      const stopWebhook = this.webhookStoppers.get(id);
+      if (stopWebhook) {
+        await stopWebhook();
+        this.webhookStoppers.delete(id);
+      }
       await this.accountManager.stopRunner(id);
       log.info({ accountId: id }, 'Telegram account stopped');
     }
@@ -369,16 +427,48 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
 
   private async startAccount(account: TelegramResolvedAccount): Promise<void> {
     if (this.accountManager.isRunning(account.accountId)) return;
-    if (!account.botToken) return;
+
+    const resolved = resolveTelegramBotToken({
+      botToken: account.botToken,
+      tokenFile: account.tokenFile,
+    });
+    if (!resolved.token) return;
+
+    const duplicateAccounts = this.accountManager
+      .getAllAccounts()
+      .filter((a) => {
+        const t = resolveTelegramBotToken({
+          botToken: a.botToken,
+          tokenFile: a.tokenFile,
+        }).token;
+        return t === resolved.token && a.accountId !== account.accountId;
+      })
+      .map((a) => a.accountId);
+    if (duplicateAccounts.length > 0) {
+      const em = `Duplicate bot token shared with account(s): ${duplicateAccounts.join(', ')}`;
+      log.error({ accountId: account.accountId, duplicateAccounts }, em);
+      this.accountManager.updateStatus({
+        accountId: account.accountId,
+        running: false,
+        mode: 'stopped',
+        lastError: em,
+      });
+      return;
+    }
 
     this.accountManager.markStarting(account.accountId);
 
     try {
-      const client = {
+      const client: {
+        timeoutSeconds: number;
+        apiRoot?: string;
+        fetch?: typeof fetch;
+      } = {
         timeoutSeconds: TELEGRAM_CLIENT_TIMEOUT_SECONDS,
         ...(account.apiRoot ? { apiRoot: account.apiRoot } : {}),
+        ...(account.proxy ? { fetch: createProxyFetch(account.proxy) } : {}),
       };
-      const bot = new Bot(account.botToken, { client });
+      const bot = new Bot(resolved.token, { client });
       const getMeSignal = createTimeoutAbortSignal(TELEGRAM_GETME_TIMEOUT_MS);
       let me;
       try {
@@ -387,33 +477,54 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         getMeSignal.dispose();
       }
 
-      const runner = run(bot, {
-        runner: {
-          fetch: { timeout: 30 },
-          silent: true,
-          maxRetryTime: Number.POSITIVE_INFINITY,
-          retryInterval: 'exponential',
-        },
-      });
-
       this.accountManager.registerBot(account.accountId, bot);
-      this.accountManager.registerRunner(account.accountId, runner);
-      this.attachRunnerExitHandler(account.accountId, runner);
       this.accountManager.setBotUsername(account.accountId, me.username);
-      this.accountManager.updateStatus({
-        accountId: account.accountId,
-        running: true,
-        mode: 'polling',
-      });
-
       this.setupMessageHandler(account.accountId, bot);
+
+      if (account.webhookUrl?.trim() && account.webhookSecret?.trim()) {
+        const stopWebhook = await startTelegramWebhookServer({
+          accountId: account.accountId,
+          bot,
+          webhookUrl: account.webhookUrl.trim(),
+          webhookSecret: account.webhookSecret.trim(),
+          webhookPath: account.webhookPath,
+        });
+        this.webhookStoppers.set(account.accountId, stopWebhook);
+        this.accountManager.updateStatus({
+          accountId: account.accountId,
+          running: true,
+          mode: 'webhook',
+        });
+      } else {
+        const session = startTelegramPollingSession({
+          accountId: account.accountId,
+          botToken: resolved.token,
+          bot,
+          stallThresholdMs: account.pollingStallThresholdMs,
+          onExit: () => {
+            void this.accountManager.stopRunner(account.accountId);
+          },
+        });
+        this.accountManager.registerPollingSession(account.accountId, session);
+        this.accountManager.updateStatus({
+          accountId: account.accountId,
+          running: true,
+          mode: 'polling',
+        });
+      }
 
       log.info({ accountId: account.accountId, username: me.username }, 'Telegram account started');
     } catch (err) {
-      const em = err instanceof Error ? err.message : String(err);
-      log.warn(
-        { accountId: account.accountId, apiRootConfigured: !!account.apiRoot, errorMessage: em },
-        `Telegram account not started (check token, network, or apiRoot): ${em}`,
+      const em = formatTelegramStartupError(err);
+      const level = isTelegramUnauthorizedTokenError(err) ? 'error' : 'warn';
+      log[level](
+        {
+          accountId: account.accountId,
+          apiRootConfigured: !!account.apiRoot,
+          unauthorized: isTelegramUnauthorizedTokenError(err),
+          errorMessage: em,
+        },
+        `Telegram account not started: ${em}`,
       );
       this.accountManager.updateStatus({
         accountId: account.accountId,
@@ -426,41 +537,76 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     }
   }
 
-  private attachRunnerExitHandler(accountId: string, runner: ReturnType<typeof run>): void {
-    const task = runner.task();
-    if (!task) return;
-    void task.catch((err) => {
-      log.error({ err, accountId }, 'Telegram polling runner exited');
-      void this.accountManager.stopRunner(accountId).catch((e) => {
-        log.error({ err: e, accountId }, 'Telegram runner cleanup failed');
-      });
-    });
+  private attachRunnerExitHandler(_accountId: string, _runner: unknown): void {
+    // Polling exit is handled by startTelegramPollingSession.onExit.
   }
 
   private setupMessageHandler(accountId: string, bot: Bot): void {
+    const account = this.config.resolveAccount(this.cfg, accountId);
+
+    const handleInboundMessage = async (ctx: Context) => {
+      const text = ctx.message?.text ?? ctx.message?.caption ?? ctx.channelPost?.text ?? ctx.channelPost?.caption ?? '';
+      const command = text.trim().split(' ')[0].split('@')[0].toLowerCase();
+
+      if (command === '/models') {
+        await this.commandHandler.handleModels(ctx);
+        return;
+      }
+      if (command === '/start') {
+        await this.commandHandler.handleStart(ctx);
+        return;
+      }
+      if (command === '/cleanup') {
+        await this.commandHandler.handleCleanup(ctx);
+        return;
+      }
+
+      const message = ctx.message ?? ctx.channelPost;
+      if (!message) return;
+
+      await this.inboundCoalescer.enqueue({
+        ctx,
+        accountId,
+        message,
+        onReady: async (batch) => {
+          for (const msg of batch.messages) {
+            const batchCtx = batch.ctx;
+            await this.debouncer.enqueue({
+              ctx: { ...batchCtx, message: msg } as Context,
+              accountId: batch.accountId,
+              message: msg,
+            });
+          }
+        },
+      });
+    };
+
     bot.on('message', async (ctx) => {
       try {
-        const text = ctx.message.text ?? ctx.message.caption ?? '';
-        const command = text.trim().split(' ')[0].split('@')[0].toLowerCase();
-
-        if (command === '/models') {
-          await this.commandHandler.handleModels(ctx);
-          return;
-        }
-
-        if (command === '/start') {
-          await this.commandHandler.handleStart(ctx);
-          return;
-        }
-
-        if (command === '/cleanup') {
-          await this.commandHandler.handleCleanup(ctx);
-          return;
-        }
-
-        await this.debouncer.enqueue({ ctx, accountId, message: ctx.message });
+        await handleInboundMessage(ctx);
       } catch (err) {
         log.error({ accountId, err }, 'Message handler error');
+      }
+    });
+
+    bot.on('channel_post', async (ctx) => {
+      try {
+        await handleInboundMessage(ctx);
+      } catch (err) {
+        log.error({ accountId, err }, 'Channel post handler error');
+      }
+    });
+
+    bot.on('message_reaction', async (ctx) => {
+      try {
+        await handleTelegramMessageReaction({
+          ctx,
+          accountId,
+          bus: this.bus,
+          mode: account.reactionNotifications as 'off' | 'own' | 'all' | undefined,
+        });
+      } catch (err) {
+        log.error({ accountId, err }, 'Message reaction handler error');
       }
     });
 
@@ -545,6 +691,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     const senderId = ctx.from?.id?.toString() ?? '';
     const senderUsername = ctx.from?.username;
     const chatId = ctx.chat?.id?.toString() ?? '';
+    telegramReplyTracker.reset(accountId, chatId);
 
     const securityCtx: ChannelSecurityContext = {
       accountId,
@@ -593,6 +740,25 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         'Telegram: message dropped by channel security (check dmPolicy/groupPolicy and allowFrom)',
       );
       return;
+    }
+
+    const bot = this.accountManager.getBot(accountId);
+    const messageId = ctx.message?.message_id;
+    const reactionLevel = (account as { reactionLevel?: string }).reactionLevel ?? 'ack';
+    const ackEmoji = (account as { ackReaction?: string }).ackReaction ?? '👀';
+    if (
+      bot &&
+      messageId &&
+      reactionLevel !== 'off' &&
+      ctx.chat?.id != null &&
+      !ctx.channelPost
+    ) {
+      void sendTelegramAckReaction({
+        bot,
+        chatId: ctx.chat.id,
+        messageId,
+        emoji: ackEmoji,
+      });
     }
 
     await this.inboundProcessor(ctx, accountId);

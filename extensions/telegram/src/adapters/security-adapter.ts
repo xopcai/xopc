@@ -36,6 +36,7 @@ export function createTelegramSecurityAdapter(): ChannelSecurityAdapter<Telegram
         groupPolicy: account.groupPolicy as GroupPolicy | undefined,
         allowFrom,
         groupAllowFrom: account.groupAllowFrom,
+        allowNameMatching: true,
       });
       return { allowed: result.allowed, reason: result.reason };
     },

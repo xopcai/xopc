@@ -150,6 +150,7 @@ export class OutboundCoordinator {
       metadata: {
         accountId: msg.metadata?.accountId,
         threadId: msg.metadata?.threadId,
+        inboundMessageId: msg.metadata?.messageId,
         transcribedVoice: sessionContext.metadata?.transcribedVoice,
         sessionWebhook: msg.metadata?.sessionWebhook,
         conversationId: msg.metadata?.conversationId,

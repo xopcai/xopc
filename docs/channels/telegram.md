@@ -64,7 +64,7 @@ When the gateway is running, the React console includes a dedicated **IM channel
 |------|-------------|
 | `off` | Send complete message at once |
 | `partial` | Stream AI response, show progress for tools |
-| `block` | Full streaming with all updates |
+| `block` | Coalesced block streaming (updates after min chars / idle window) |
 
 ## Get bot token
 
