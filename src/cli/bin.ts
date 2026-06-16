@@ -4,6 +4,7 @@
  * (Bundlers may reorder imports in `index.ts`; this file stays dependency-minimal.)
  */
 import './cli-log-level-preset.js';
+import '../infra/http-proxy-env.js';
 
 import pkg from '../../package.json' with { type: 'json' };
 import { ensureXopcCliOnPath } from '../infra/path-env.js';
