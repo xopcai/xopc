@@ -50,6 +50,10 @@ describe('MemoryFlushService', () => {
     },
   };
 
+  const readFlushFile = (workspaceDir: string, result: { entryPath: string }): string => {
+    return readFileSync(join(workspaceDir, result.entryPath), 'utf-8');
+  };
+
   it('returns not flushed when disabled', async () => {
     const result = await service.flush({
       workspaceDir: '/tmp',
@@ -94,7 +98,7 @@ describe('MemoryFlushService', () => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-flush-'));
     const memoryDir = join(dir, 'memory');
     mkdirSync(memoryDir, { recursive: true });
-    const day = new Date().toISOString().slice(0, 10);
+    const day = new Intl.DateTimeFormat('en-CA').format(new Date());
     writeFileSync(join(memoryDir, `${day}.md`), '# Daily Notes — existing\n\nExisting content.\n', 'utf-8');
 
     const result = await service.flush({
@@ -106,7 +110,7 @@ describe('MemoryFlushService', () => {
 
     expect(result.flushed).toBe(true);
 
-    const content = readFileSync(join(memoryDir, `${day}.md`), 'utf-8');
+    const content = readFlushFile(dir, result);
     expect(content).toContain('Existing content.');
     expect(content).toContain('## Session Flush [agent:main:webchat:default:direct:test2]');
   });
@@ -122,9 +126,7 @@ describe('MemoryFlushService', () => {
 
     expect(result.flushed).toBe(true);
 
-    const memoryDir = join(dir, 'memory');
-    const day = new Date().toISOString().slice(0, 10);
-    const content = readFileSync(join(memoryDir, `${day}.md`), 'utf-8');
+    const content = readFlushFile(dir, result);
     expect(content).not.toContain('**Tool Calls:**');
     expect(content).toContain('**User Requests:**');
   });
@@ -145,9 +147,7 @@ describe('MemoryFlushService', () => {
 
     expect(result.flushed).toBe(true);
 
-    const memoryDir = join(dir, 'memory');
-    const day = new Date().toISOString().slice(0, 10);
-    const content = readFileSync(join(memoryDir, `${day}.md`), 'utf-8');
+    const content = readFlushFile(dir, result);
     expect(content).toContain('Entry truncated due to length limit');
     expect(content.length).toBeLessThanOrEqual(550); // allow small overhead
   });
@@ -171,9 +171,7 @@ describe('MemoryFlushService', () => {
 
     expect(result.flushed).toBe(true);
 
-    const memoryDir = join(dir, 'memory');
-    const day = new Date().toISOString().slice(0, 10);
-    const content = readFileSync(join(memoryDir, `${day}.md`), 'utf-8');
+    const content = readFlushFile(dir, result);
     expect(content).toContain('**Summary (text only):**');
     expect(content).toContain('Plain text summary only');
     expect(content).not.toContain('**User Requests:**');

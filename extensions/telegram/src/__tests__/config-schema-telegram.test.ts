@@ -3,26 +3,26 @@ import { describe, it, expect } from 'vitest';
 import { TelegramConfigSchema } from '../config-schema.js';
 
 describe('TelegramConfigSchema', () => {
-  it('migrates legacy top-level botToken into accounts.default', () => {
+  it('accepts account ids from accounts map keys', () => {
     const r = TelegramConfigSchema.safeParse({
       enabled: true,
-      botToken: '123:LEGACY',
-      accounts: {},
+      accounts: {
+        personal: { botToken: '123:TOKEN' },
+      },
     });
     expect(r.success).toBe(true);
     if (!r.success) return;
-    expect('botToken' in r.data).toBe(false);
-    expect(r.data.accounts?.default?.botToken).toBe('123:LEGACY');
+    expect(r.data.accounts?.personal?.accountId).toBeUndefined();
+    expect(r.data.accounts?.personal?.botToken).toBe('123:TOKEN');
   });
 
-  it('does not overwrite accounts.default.botToken when legacy top-level is present', () => {
+  it('rejects old top-level token and streamMode fields', () => {
     const r = TelegramConfigSchema.safeParse({
       enabled: true,
-      botToken: 'legacy:SHOULD_NOT_WIN',
-      accounts: { default: { accountId: 'default', botToken: '999:KEEP' } },
+      botToken: '123:TOP',
+      streamMode: 'partial',
+      accounts: { default: { botToken: '999:KEEP' } },
     });
-    expect(r.success).toBe(true);
-    if (!r.success) return;
-    expect(r.data.accounts?.default?.botToken).toBe('999:KEEP');
+    expect(r.success).toBe(false);
   });
 });

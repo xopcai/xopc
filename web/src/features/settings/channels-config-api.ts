@@ -51,7 +51,7 @@ export function emptyTelegramAccount(accountId: string): TelegramAccount {
     proxy: '',
     historyLimit: 50,
     textChunkLimit: 4000,
-    streamMode: 'partial',
+    streaming: { mode: 'partial' },
   };
 }
 
@@ -70,15 +70,13 @@ export function defaultChannelsState(): ChannelsSettingsState {
       groupPolicy: 'open',
       replyToMode: 'off',
       streamMode: 'partial',
+      streaming: { mode: 'partial' },
       historyLimit: 50,
       textChunkLimit: 4000,
       proxy: '',
       reactionLevel: 'ack',
       reactionNotifications: 'own',
       ackReaction: '',
-      webhookUrl: '',
-      webhookSecret: '',
-      webhookPath: '',
       execApprovalsEnabled: false,
       execApprovalsApprovers: '',
       accounts: { default: emptyTelegramAccount('default') },
@@ -136,18 +134,6 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
       ? { ...(telegramAccounts as Record<string, TelegramAccount>) }
       : {};
 
-  const legacyTopToken = typeof tg?.botToken === 'string' ? tg.botToken.trim() : '';
-  const defaultTok = accounts.default?.botToken?.trim() ?? '';
-  if (legacyTopToken && !defaultTok) {
-    accounts = {
-      ...accounts,
-      default: {
-        ...(accounts.default ?? emptyTelegramAccount('default')),
-        accountId: 'default',
-        botToken: legacyTopToken,
-      },
-    };
-  }
   if (!accounts.default) {
     accounts = { ...accounts, default: emptyTelegramAccount('default') };
   }
@@ -186,23 +172,24 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
       dmPolicy: (tg?.dmPolicy as DmPolicy) || 'pairing',
       groupPolicy: (tg?.groupPolicy as GroupPolicy) || 'open',
       replyToMode: (tg?.replyToMode as ReplyToMode) || 'off',
-      streamMode: (tg?.streamMode as StreamMode) ?? 'partial',
+      streamMode:
+        ((defaultAcc.streaming as { mode?: StreamMode } | undefined)?.mode as StreamMode) ??
+        ((tg?.streaming as { mode?: StreamMode } | undefined)?.mode as StreamMode) ??
+        'partial',
+      streaming: {
+        mode:
+          ((defaultAcc.streaming as { mode?: StreamMode } | undefined)?.mode as StreamMode) ??
+          ((tg?.streaming as { mode?: StreamMode } | undefined)?.mode as StreamMode) ??
+          'partial',
+      },
       historyLimit: typeof tg?.historyLimit === 'number' ? tg.historyLimit : 50,
       textChunkLimit: typeof tg?.textChunkLimit === 'number' ? tg.textChunkLimit : 4000,
       proxy: typeof tg?.proxy === 'string' ? tg.proxy : '',
       reactionLevel:
-        (defaultAcc.reactionLevel as TelegramReactionLevel) ??
-        (tg?.reactionLevel as TelegramReactionLevel) ??
-        'ack',
+        (defaultAcc.reactionLevel as TelegramReactionLevel) ?? 'ack',
       reactionNotifications:
-        (defaultAcc.reactionNotifications as TelegramReactionNotifications) ??
-        (tg?.reactionNotifications as TelegramReactionNotifications) ??
-        'own',
-      ackReaction: defaultAcc.ackReaction ?? (typeof tg?.ackReaction === 'string' ? tg.ackReaction : ''),
-      webhookUrl: defaultAcc.webhookUrl ?? (typeof tg?.webhookUrl === 'string' ? tg.webhookUrl : ''),
-      webhookSecret:
-        defaultAcc.webhookSecret ?? (typeof tg?.webhookSecret === 'string' ? tg.webhookSecret : ''),
-      webhookPath: defaultAcc.webhookPath ?? (typeof tg?.webhookPath === 'string' ? tg.webhookPath : ''),
+        (defaultAcc.reactionNotifications as TelegramReactionNotifications) ?? 'own',
+      ackReaction: defaultAcc.ackReaction ?? '',
       execApprovalsEnabled: defaultAcc.execApprovals?.enabled === true,
       execApprovalsApprovers: (defaultAcc.execApprovals?.approvers ?? [])
         .map(String)
@@ -320,9 +307,7 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
     reactionLevel: tg.reactionLevel ?? 'ack',
     reactionNotifications: tg.reactionNotifications ?? 'own',
     ackReaction: tg.ackReaction?.trim() || undefined,
-    webhookUrl: tg.webhookUrl?.trim() || undefined,
-    webhookSecret: tg.webhookSecret?.trim() || undefined,
-    webhookPath: tg.webhookPath?.trim() || undefined,
+    streaming: { mode: tg.streamMode },
     execApprovals: tg.execApprovalsEnabled
       ? {
           enabled: true,
@@ -341,13 +326,10 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
       dmPolicy: tg.dmPolicy,
       groupPolicy: tg.groupPolicy,
       replyToMode: tg.replyToMode,
-      streamMode: tg.streamMode,
+      streaming: { mode: tg.streamMode },
       historyLimit: tg.historyLimit,
       textChunkLimit: tg.textChunkLimit,
       proxy: tg.proxy.trim() ? tg.proxy.trim() : null,
-      reactionLevel: tg.reactionLevel,
-      reactionNotifications: tg.reactionNotifications,
-      ackReaction: tg.ackReaction?.trim() ? tg.ackReaction.trim() : null,
       accounts: {
         ...tg.accounts,
         default: defaultAcc,

@@ -73,7 +73,6 @@ import { runTelegramDoctorChecks } from './doctor.js';
 import { telegramReplyTracker } from './reply-params.js';
 import { createTelegramInboundCoalescer } from './inbound-coalescer.js';
 import { sendTelegramAckReaction, handleTelegramMessageReaction } from './reactions.js';
-import { startTelegramWebhookServer } from './webhook.js';
 import { handleTelegramChannelAction, bindTelegramMessageActionAccountManager } from './actions/message-actions.js';
 import { registerChannelExecApprovalHandler } from '@xopcai/xopc/channels/exec-approval-runtime.js';
 import { createTelegramExecApprovalHandler } from './exec-approval-handler.js';
@@ -154,7 +153,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   /** Unregister fn for the workflow-progress capability registered against the global broker. */
   private workflowProgressUnregister: (() => void) | null = null;
   private inboundCoalescer = createTelegramInboundCoalescer();
-  private webhookStoppers = new Map<string, () => Promise<void>>();
   private execApprovalUnregister: (() => void) | null = null;
 
   readonly actions = {
@@ -346,7 +344,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         ? telegramCfg.proxy.trim()
         : undefined;
     const channelReplyToMode = telegramCfg.replyToMode as TelegramResolvedAccount['replyToMode'];
-    const channelStreamMode = telegramCfg.streamMode as TelegramResolvedAccount['streamMode'];
     const channelStreaming = telegramCfg.streaming as TelegramResolvedAccount['streaming'];
 
     const tokenOwners = new Map<string, string[]>();
@@ -379,8 +376,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         ...(accProxy || channelProxy ? { proxy: accProxy || channelProxy } : {}),
         replyToMode:
           (account.replyToMode as TelegramResolvedAccount['replyToMode']) ?? channelReplyToMode,
-        streamMode:
-          (account.streamMode as TelegramResolvedAccount['streamMode']) ?? channelStreamMode,
         streaming:
           (account.streaming as TelegramResolvedAccount['streaming']) ?? channelStreaming,
       } as import('@xopcai/xopc/channels/channel-domain.js').TelegramAccountConfig);
@@ -423,11 +418,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     if (!this.config) return;
     const ids = accountId ? [accountId] : this.config.listAccountIds(this.cfg);
     for (const id of ids) {
-      const stopWebhook = this.webhookStoppers.get(id);
-      if (stopWebhook) {
-        await stopWebhook();
-        this.webhookStoppers.delete(id);
-      }
       await this.accountManager.stopRunner(id);
       log.info({ accountId: id }, 'Telegram account stopped');
     }
@@ -498,37 +488,21 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       this.accountManager.setBotUsername(account.accountId, me.username);
       this.setupMessageHandler(account.accountId, bot);
 
-      if (account.webhookUrl?.trim() && account.webhookSecret?.trim()) {
-        const stopWebhook = await startTelegramWebhookServer({
-          accountId: account.accountId,
-          bot,
-          webhookUrl: account.webhookUrl.trim(),
-          webhookSecret: account.webhookSecret.trim(),
-          webhookPath: account.webhookPath,
-        });
-        this.webhookStoppers.set(account.accountId, stopWebhook);
-        this.accountManager.updateStatus({
-          accountId: account.accountId,
-          running: true,
-          mode: 'webhook',
-        });
-      } else {
-        const session = startTelegramPollingSession({
-          accountId: account.accountId,
-          botToken: resolved.token,
-          bot,
-          stallThresholdMs: account.pollingStallThresholdMs,
-          onExit: () => {
-            void this.accountManager.stopRunner(account.accountId);
-          },
-        });
-        this.accountManager.registerPollingSession(account.accountId, session);
-        this.accountManager.updateStatus({
-          accountId: account.accountId,
-          running: true,
-          mode: 'polling',
-        });
-      }
+      const session = startTelegramPollingSession({
+        accountId: account.accountId,
+        botToken: resolved.token,
+        bot,
+        stallThresholdMs: account.pollingStallThresholdMs,
+        onExit: () => {
+          void this.accountManager.stopRunner(account.accountId);
+        },
+      });
+      this.accountManager.registerPollingSession(account.accountId, session);
+      this.accountManager.updateStatus({
+        accountId: account.accountId,
+        running: true,
+        mode: 'polling',
+      });
 
       log.info({ accountId: account.accountId, username: me.username }, 'Telegram account started');
     } catch (err) {

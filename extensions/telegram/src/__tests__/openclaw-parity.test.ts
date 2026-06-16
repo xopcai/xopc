@@ -27,12 +27,12 @@ describe('api-root', () => {
   });
 });
 
-describe('TelegramConfigSchema streaming migration', () => {
-  it('migrates streamMode block to streaming.mode', () => {
+describe('TelegramConfigSchema streaming config', () => {
+  it('accepts streaming.mode block', () => {
     const r = TelegramConfigSchema.safeParse({
       enabled: true,
       accounts: {
-        default: { accountId: 'default', botToken: '1:tok', streamMode: 'block' },
+        default: { botToken: '1:tok', streaming: { mode: 'block' } },
       },
     });
     expect(r.success).toBe(true);
@@ -40,10 +40,8 @@ describe('TelegramConfigSchema streaming migration', () => {
     expect(r.data.accounts?.default?.streaming?.mode).toBe('block');
   });
 
-  it('resolveTelegramStreamingMode prefers streaming.mode', () => {
-    expect(
-      resolveTelegramStreamingMode({ streamMode: 'off', streaming: { mode: 'partial' } }),
-    ).toBe('partial');
+  it('resolveTelegramStreamingMode uses streaming.mode', () => {
+    expect(resolveTelegramStreamingMode({ streaming: { mode: 'partial' } })).toBe('partial');
   });
 });
 

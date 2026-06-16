@@ -16,14 +16,10 @@ export interface TelegramResolvedAccount {
   groupAllowFrom?: Array<string | number>;
   requireMention?: boolean;
   replyToMode?: 'off' | 'first' | 'all';
-  streamMode?: 'off' | 'partial' | 'block';
   streaming?: import('../config-schema.js').TelegramStreamingConfig;
   pollingStallThresholdMs?: number;
   reactionLevel?: 'off' | 'ack' | 'minimal' | 'extensive';
   reactionNotifications?: 'off' | 'own' | 'all';
   ackReaction?: string;
-  webhookUrl?: string;
-  webhookSecret?: string;
-  webhookPath?: string;
   groups?: Record<string, unknown>;
 }
