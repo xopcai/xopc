@@ -18,6 +18,7 @@ export interface TelegramTopicConfig {
   enabled?: boolean;
   allowFrom?: Array<string | number>;
   systemPrompt?: string;
+  agentId?: string;
   groupPolicy?: GroupPolicy;
 }
 
@@ -32,6 +33,7 @@ export interface TelegramGroupConfig {
   enabled?: boolean;
   allowFrom?: Array<string | number>;
   systemPrompt?: string;
+  agentId?: string;
   topics?: Record<string, TelegramTopicConfig>;
 }
 

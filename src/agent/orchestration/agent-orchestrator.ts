@@ -167,6 +167,15 @@ export class AgentOrchestrator {
     try {
       await this.sessionHydrator.model(sessionKey);
 
+      const channelSystemPrompt =
+        typeof context.metadata?.channelSystemPrompt === 'string'
+          ? context.metadata.channelSystemPrompt.trim()
+          : '';
+      if (channelSystemPrompt) {
+        this.agentManager.getOrCreateAgent(sessionKey);
+        this.agentManager.applyTurnChannelSystemPrompt(sessionKey, channelSystemPrompt);
+      }
+
       const thinkingDefault =
         this.getThinkingDefaultForSession?.(sessionKey) ?? this.getThinkingDefault();
       const thinkingLevel = await resolveEffectiveThinkingLevel(

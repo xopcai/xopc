@@ -74,7 +74,12 @@ import { telegramReplyTracker } from './reply-params.js';
 import { createTelegramInboundCoalescer } from './inbound-coalescer.js';
 import { sendTelegramAckReaction, handleTelegramMessageReaction } from './reactions.js';
 import { startTelegramWebhookServer } from './webhook.js';
-import { handleTelegramChannelAction } from './actions/message-actions.js';
+import { handleTelegramChannelAction, bindTelegramMessageActionAccountManager } from './actions/message-actions.js';
+import { registerChannelExecApprovalHandler } from '@xopcai/xopc/channels/exec-approval-runtime.js';
+import { createTelegramExecApprovalHandler } from './exec-approval-handler.js';
+import { handleTelegramFocusCommand } from './focus-handler.js';
+import { resolveTelegramApproval } from './approval-store.js';
+import { isTelegramExecApprovalApprover } from './exec-approvals.js';
 
 /** Bound initial `getMe` so a bad `apiRoot` or unreachable API cannot block gateway startup for minutes. */
 const TELEGRAM_GETME_TIMEOUT_MS = 20_000;
@@ -150,6 +155,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   private workflowProgressUnregister: (() => void) | null = null;
   private inboundCoalescer = createTelegramInboundCoalescer();
   private webhookStoppers = new Map<string, () => Promise<void>>();
+  private execApprovalUnregister: (() => void) | null = null;
 
   readonly actions = {
     handleAction: handleTelegramChannelAction,
@@ -175,6 +181,15 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     this.accountManager = new TelegramAccountManager();
     this.loadAccounts();
     this.bindOutboundComponents();
+    bindTelegramMessageActionAccountManager(this.accountManager);
+    this.execApprovalUnregister?.();
+    this.execApprovalUnregister = registerChannelExecApprovalHandler(
+      'telegram',
+      createTelegramExecApprovalHandler({
+        accountManager: this.accountManager,
+        getConfig: () => this.cfg,
+      }),
+    );
 
     // Workflow progress is fed from the agent-side broker (subscribes to
     // tool_execution_update for the `workflow` tool); the capability turns
@@ -422,6 +437,8 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     if (!accountId) {
       this.workflowProgressUnregister?.();
       this.workflowProgressUnregister = null;
+      this.execApprovalUnregister?.();
+      this.execApprovalUnregister = null;
     }
   }
 
@@ -560,6 +577,10 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         await this.commandHandler.handleCleanup(ctx);
         return;
       }
+      if (command === '/focus') {
+        await handleTelegramFocusCommand({ ctx, accountId, config: this.cfg });
+        return;
+      }
 
       const message = ctx.message ?? ctx.channelPost;
       if (!message) return;
@@ -663,6 +684,28 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         }
       }
       await ctx.answerCallbackQuery('No pending question');
+      return;
+    }
+
+    if (data.startsWith('approval:approve:') || data.startsWith('approval:deny:')) {
+      const approved = data.startsWith('approval:approve:');
+      const approvalId = data.slice(approved ? 'approval:approve:'.length : 'approval:deny:'.length);
+      const senderId = String(ctx.from?.id ?? '');
+      if (
+        !isTelegramExecApprovalApprover({
+          cfg: this.cfg,
+          accountId: _accountId,
+          senderId,
+        })
+      ) {
+        await ctx.answerCallbackQuery('Not authorized');
+        return;
+      }
+      if (resolveTelegramApproval(approvalId, approved)) {
+        await ctx.answerCallbackQuery(approved ? 'Approved' : 'Denied');
+      } else {
+        await ctx.answerCallbackQuery('Approval expired or already resolved');
+      }
       return;
     }
 

@@ -19,7 +19,11 @@ import { telegramUpdateDedupe, buildTelegramUpdateKey } from './dedupe.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopc/chat-commands/command-parse.js';
 import { tryConsumeTelegramClarifyFreeText } from '@xopcai/xopc/gateway/clarify-runtime.js';
-import { checkMentionInTranscription } from '@xopcai/xopc/voice/stt/preflight.js';
+import { resolveRoute } from '@xopcai/xopc/routing/index.js';
+import { resolveTelegramGroupContext } from './group-config-resolver.js';
+import { resolveTelegramFocusedSessionKey } from './focus-handler.js';
+import { buildTelegramConversationId } from './conversation-id.js';
+import { checkMentionInTranscription } from '@xopcai/xopc/voice/stt/index.js';
 
 const log = createLogger('TelegramInboundProcessor');
 
@@ -66,6 +70,7 @@ export interface SessionKeyService {
     isGroup: boolean;
     threadId?: string;
     accountId?: string;
+    agentId?: string;
   }): string;
 }
 
@@ -107,6 +112,7 @@ interface QueuedMessage {
 interface MediaItem {
   type: string;
   fileId: string;
+  emoji?: string;
 }
 
 interface ProcessedAttachment {
@@ -142,7 +148,10 @@ function extractMediaItems(message: Message): MediaItem[] {
   if (message.voice) {
     media.push({ type: 'voice', fileId: message.voice.file_id });
   }
-  
+  if (message.sticker) {
+    media.push({ type: 'sticker', fileId: message.sticker.file_id, emoji: message.sticker.emoji });
+  }
+
   return media;
 }
 
@@ -407,7 +416,7 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
       return;
     }
 
-    const message = ctx.message;
+    const message = ctx.message ?? ctx.channelPost;
     if (!message) return;
 
     const chatId = String(ctx.chat?.id);
@@ -507,15 +516,34 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
 
     const cleanContent = isGroup ? accessControl.removeBotMention(content, botUsername) : content;
 
-    // Generate session key
-    const sessionKey = sessionKeyService.generateSessionKey({
+    const groupCtx = resolveTelegramGroupContext({ account, chatId, threadId });
+    const route = resolveRoute({
+      config,
+      channel: 'telegram',
+      accountId,
+      peerKind: isGroup ? 'group' : 'dm',
+      peerId: isGroup ? chatId : senderId,
+      threadId: threadId ? String(threadId) : null,
+    });
+    const routedAgentId = groupCtx.agentId ?? route.agentId;
+
+    const defaultSessionKey = sessionKeyService.generateSessionKey({
       source: 'telegram',
       chatId,
       senderId,
       isGroup,
       threadId: threadId ? String(threadId) : undefined,
       accountId,
+      agentId: routedAgentId,
     });
+
+    const sessionKey = resolveTelegramFocusedSessionKey({
+      chatId,
+      threadId: threadId ? String(threadId) : undefined,
+      defaultSessionKey,
+    });
+
+    const conversationId = buildTelegramConversationId(chatId, threadId);
 
     // Collect and process media
     const media = extractMediaItems(message);
@@ -545,11 +573,18 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
     // Combine transcribed text with content. If the user caption is a slash command, put it first
     // so routing and logs match a normal `/cmd` message (STT prefix no longer hides the command).
     const captionIsCommand = cleanContent.trim().startsWith('/');
-    const finalContent = transcribedText
+    let finalContent = transcribedText
       ? captionIsCommand && cleanContent
         ? cleanContent.trim() + (transcribedText ? `\n\n${transcribedText}` : '')
         : transcribedText + (cleanContent ? '\n\n' + cleanContent : '')
       : cleanContent;
+
+    const stickerItem = media.find((m) => m.type === 'sticker');
+    if (stickerItem && !finalContent.trim()) {
+      finalContent = stickerItem.emoji?.trim()
+        ? `[Sticker ${stickerItem.emoji}]`
+        : '[Sticker]';
+    }
 
     const isCommand = cleanContent.trim().startsWith('/');
 
@@ -586,6 +621,9 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
         isGroup,
         isCommand,
         threadId: threadId ? String(threadId) : undefined,
+        conversationId,
+        channelSystemPrompt: groupCtx.systemPrompt,
+        channelAgentId: routedAgentId,
         media: media.length > 0 ? media : undefined,
         transcribedVoice: !!transcribedText || undefined,
       },

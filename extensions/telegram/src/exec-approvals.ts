@@ -1,8 +1,3 @@
-/**
- * Native exec approval routing — scaffold for OpenClaw parity (Phase 5).
- * Wire to gateway approval store + callback_query handlers.
- */
-
 import type { Config } from '@xopcai/xopc/config/index.js';
 
 export function isTelegramExecApprovalEnabled(cfg: Config, accountId = 'default'): boolean {
@@ -20,10 +15,31 @@ export function resolveTelegramExecApprovers(
   const tg = cfg.channels?.telegram as
     | {
         allowFrom?: Array<string | number>;
-        accounts?: Record<string, { execApprovals?: { approvers?: Array<string | number> }; allowFrom?: Array<string | number> }>;
+        accounts?: Record<
+          string,
+          {
+            execApprovals?: { approvers?: Array<string | number> };
+            allowFrom?: Array<string | number>;
+          }
+        >;
       }
     | undefined;
   const acc = tg?.accounts?.[accountId];
-  const approvers = acc?.execApprovals?.approvers ?? acc?.allowFrom ?? tg?.allowFrom ?? [];
-  return approvers.map((a) => String(a));
+  const explicit = acc?.execApprovals?.approvers ?? [];
+  const fallback = acc?.allowFrom ?? tg?.allowFrom ?? [];
+  const merged = explicit.length > 0 ? explicit : fallback;
+  return merged
+    .map((v) => String(v).trim())
+    .filter((v) => v && v !== '*' && /^\d+$/.test(v.replace(/^(telegram|tg):/i, '')))
+    .map((v) => v.replace(/^(telegram|tg):/i, ''));
+}
+
+export function isTelegramExecApprovalApprover(params: {
+  cfg: Config;
+  accountId: string;
+  senderId: string;
+}): boolean {
+  const approvers = resolveTelegramExecApprovers(params.cfg, params.accountId);
+  const sid = params.senderId.replace(/^(telegram|tg):/i, '');
+  return approvers.includes(sid);
 }
