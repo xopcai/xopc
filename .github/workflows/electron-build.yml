@@ -140,6 +140,10 @@ jobs:
           fi
           # Same as local `pnpm run electron:build`: bundle gateway CLI to out/server/index.js for packaged apps.
           pnpm run electron:server:build
+          if [ ! -f out/server/schema.sql ]; then
+            echo "❌ out/server/schema.sql missing (build-electron-server must copy SQLite DDL beside index.js)"
+            exit 1
+          fi
           # electron-builder.mjs hides pnpm workspace markers + verifies asar node_modules size on success.
           # macOS: build architectures sequentially to avoid DMG temp file conflicts
           if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
