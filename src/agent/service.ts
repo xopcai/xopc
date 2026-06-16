@@ -76,6 +76,8 @@ import {
   resolveEffectiveAgentProfileForSession,
 } from '../config/agent-profile.js';
 import { cleanTrailingErrors } from './memory/message-sanitizer.js';
+import { MemoryFlushService } from './memory/memory-flush.js';
+import type { MemoryFlushConfig } from './memory/memory-flush.js';
 import { tryApplySessionTranscriptHygiene } from './transcript/transcript-hygiene.js';
 import {
   persistInboundAttachmentsToWorkspace,
@@ -164,6 +166,7 @@ export class AgentService {
   private workflowProgressBrokerHandle: BrokerListenerHandle | null = null;
   private feedbackCoordinator: FeedbackCoordinator;
   private agentManager: AgentManager;
+  private memoryFlushService: MemoryFlushService;
 
   /**
    * Unified per-session state container (replaces six ad-hoc Maps). Owns webchat
@@ -241,6 +244,8 @@ export class AgentService {
     });
 
     // Initialize AgentManager
+    this.memoryFlushService = new MemoryFlushService();
+
     this.agentManager = new AgentManager({
       workspace: config.workspace,
       model: config.model,
@@ -994,6 +999,60 @@ export class AgentService {
       compactedCount: messages.length - result.firstKeptIndex,
     });
     log.info({ sessionKey, tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter }, 'Session compacted');
+
+    await this.checkAndFlush(sessionKey, messages, result, contextWindow);
+  }
+
+  private resolveMemoryFlushConfig(): MemoryFlushConfig {
+    const defaults = this.config.agentDefaults || this.config.config?.agents?.defaults;
+    const raw = defaults?.memoryFlush;
+    return {
+      enabled: raw?.enabled ?? true,
+      threshold: raw?.threshold ?? 0.88,
+      softThresholdTokens: raw?.softThresholdTokens ?? 4000,
+      afterCompactions: raw?.afterCompactions ?? 2,
+      maxEntryChars: raw?.maxEntryChars ?? 2000,
+      includeToolHistory: raw?.includeToolHistory ?? true,
+    };
+  }
+
+  private async checkAndFlush(
+    sessionKey: string,
+    messages: AgentMessage[],
+    compactionResult: import('./memory/compaction.js').CompactionResult,
+    contextWindow: number,
+  ): Promise<void> {
+    const cfg = this.resolveMemoryFlushConfig();
+    if (!cfg.enabled) return;
+
+    const metadata = await this.sessionStore.getMetadata(sessionKey);
+    const compactedCount = metadata?.compactedCount ?? 0;
+
+    const totalTokens = await this.sessionStore.estimateTokenUsage(sessionKey, messages);
+    const usagePercent = totalTokens / contextWindow;
+    const effectiveThreshold = Math.max(0.5, cfg.threshold - cfg.softThresholdTokens / contextWindow);
+    const exceedsThreshold = usagePercent >= effectiveThreshold;
+
+    const tooManyCompactions = compactedCount >= cfg.afterCompactions;
+
+    if (!exceedsThreshold && !tooManyCompactions) return;
+
+    const workspaceDir = this.agentManager.getResolvedWorkspaceForSession(sessionKey);
+    const flushResult = await this.memoryFlushService.flush({
+      workspaceDir,
+      sessionKey,
+      compactionResult,
+      config: cfg,
+    });
+
+    if (flushResult.flushed) {
+      log.info({ sessionKey, entryPath: flushResult.entryPath, entryLength: flushResult.entryLength }, 'Memory flushed to daily notes');
+      const currentMeta = await this.sessionStore.getMetadata(sessionKey);
+      await this.sessionStore.updateMetadata(sessionKey, {
+        lastFlushedAt: new Date().toISOString(),
+        flushCount: (currentMeta?.flushCount ?? 0) + 1,
+      });
+    }
   }
 
   private getContextWindow(): number {

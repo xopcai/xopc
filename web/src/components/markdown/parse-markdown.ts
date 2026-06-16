@@ -1,6 +1,7 @@
 import { marked, type MarkedOptions } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js';
+import { replaceMermaidBlocks } from './mermaid-render';
 
 marked.use(
   markedHighlight({
@@ -28,5 +29,6 @@ export function parseMarkdown(
   text: string,
   overrides?: Partial<Omit<MarkedOptions, 'async'>>,
 ): string {
-  return marked.parse(text, { ...MARKED_OPTIONS, ...overrides, async: false });
+  const html = marked.parse(text, { ...MARKED_OPTIONS, ...overrides, async: false });
+  return replaceMermaidBlocks(html);
 }

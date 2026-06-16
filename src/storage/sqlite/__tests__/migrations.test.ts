@@ -60,7 +60,7 @@ describe('SQLite migrations', () => {
 
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
-    setSchemaVersion(db, XOPC_DB_BASELINE_SCHEMA_VERSION);
+    setSchemaVersion(db, 1);
 
     const finalVersion = applyPendingMigrations(db, {
       migrationsDir,

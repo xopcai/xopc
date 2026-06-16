@@ -347,6 +347,18 @@ function createWindow(): void {
     });
   }
 
+  // Notify renderer of OS-level fullscreen changes so the file-preview pane can sync its UI state.
+  win.on('enter-full-screen', () => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('window:fullscreen-changed', true);
+    }
+  });
+  win.on('leave-full-screen', () => {
+    if (!win.isDestroyed()) {
+      win.webContents.send('window:fullscreen-changed', false);
+    }
+  });
+
   Menu.setApplicationMenu(buildAppMenu(win));
 
   const trayIconDir = app.isPackaged
@@ -485,6 +497,26 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('clipboard:read-text', () => clipboard.readText());
+
+  ipcMain.handle('window:fullscreen-enter', () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) win.setFullScreen(true);
+  });
+
+  ipcMain.handle('window:fullscreen-exit', () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) win.setFullScreen(false);
+  });
+
+  ipcMain.handle('window:fullscreen-toggle', () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) win.setFullScreen(!win.isFullScreen());
+  });
+
+  ipcMain.handle('window:fullscreen-is', () => {
+    const win = BrowserWindow.getFocusedWindow();
+    return win ? win.isFullScreen() : false;
+  });
 
   ipcMain.handle('gateway:restart', async () => {
     if (!shouldEmbedGateway()) {

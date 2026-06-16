@@ -83,6 +83,7 @@ function mountMarkdownCodeBlocks(root: HTMLElement, labels: { copy: string; copi
 
   for (const pre of pres) {
     if (pre.closest('[data-md-code-block]')) continue;
+    if (pre.closest('[data-mermaid-fallback]')) continue;
     const parent = pre.parentNode;
     if (!parent) continue;
 
@@ -172,7 +173,20 @@ function MarkdownViewImpl({
   const safeHtml = useMemo(() => {
     if (!content.trim()) return '';
     const raw = parseMarkdown(content, breaks ? { breaks: true } : undefined);
-    return DOMPurify.sanitize(raw, { USE_PROFILES: { html: true } });
+    return DOMPurify.sanitize(raw, {
+      USE_PROFILES: { html: true, svg: true },
+      ADD_ATTR: [
+        'viewBox', 'xmlns', 'd', 'fill', 'stroke', 'transform',
+        'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray',
+        'x', 'y', 'width', 'height', 'rx', 'ry', 'cx', 'cy', 'r',
+        'x1', 'y1', 'x2', 'y2', 'offset', 'stop-color', 'stop-opacity',
+        'points', 'text-anchor', 'dominant-baseline', 'font-size',
+        'font-family', 'font-weight', 'font-style', 'class', 'id', 'style',
+        'markerWidth', 'markerHeight', 'refX', 'refY', 'orient', 'markerUnits',
+        'text-decoration', 'opacity', 'clip-path', 'mask', 'filter',
+        'preserveAspectRatio', 'xmlns:xlink', 'xlink:href', 'xml:space',
+      ],
+    });
   }, [content, breaks]);
 
   const hostRef = useRef<HTMLDivElement>(null);

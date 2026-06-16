@@ -37,7 +37,7 @@ export const UserMessageSegments = memo(function UserMessageSegments({ text }: {
   if (!hasPill) {
     return (
       <div className="markdown-content min-w-0">
-        <MarkdownView content={text} compact />
+        <MarkdownView content={text} compact breaks />
       </div>
     );
   }

@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 
 import type { Config } from '../../config/schema.js';
 import { ConfigSchema } from '../../config/schema.js';
@@ -83,7 +83,6 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
   }
 
   mkdirSync(workspacePath, { recursive: true });
-  mkdirSync(join(workspacePath, 'memory'), { recursive: true });
 
   const configCreated = !configExisted;
   const workspaceCreated = !workspaceExisted;

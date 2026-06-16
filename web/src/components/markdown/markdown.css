@@ -303,6 +303,43 @@ html.dark .markdown-code-copy-btn:hover {
   margin-bottom: 0;
 }
 
+/* Mermaid diagram blocks */
+.markdown-mermaid {
+  margin: 0 0 1em;
+  padding: 1em;
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-xl);
+  background: var(--color-surface-hover);
+  overflow-x: auto;
+  text-align: center;
+}
+
+.markdown-mermaid svg {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+}
+
+/* Fallback: raw source display when render fails */
+.markdown-mermaid-fallback {
+  text-align: left;
+}
+
+.markdown-mermaid-fallback pre {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.markdown-body.markdown-compact .markdown-mermaid {
+  margin-bottom: 0.75em;
+}
+
+html.dark .markdown-mermaid {
+  background: #0d1117;
+}
+
 /* GitHub Dark hljs when app shell is dark (`html.dark`), scoped to markdown preview */
 html.dark .markdown-body pre code.hljs {
   display: block;
@@ -404,4 +441,8 @@ html.dark .markdown-body .hljs-addition {
 html.dark .markdown-body .hljs-deletion {
   color: #ffdcd7;
   background-color: #67060c;
+}
+
+html.dark .markdown-mermaid-fallback {
+  background: #0d1117;
 }
