@@ -25,6 +25,7 @@ import {
   createWebExtractTool,
   createMessageTool,
   createSendMediaTool,
+  createReadMediaTool,
   createCreateShareTool,
   isShareToolAvailable,
   createMemorySearchTool,
@@ -346,6 +347,7 @@ export class AgentToolsFactory {
           ]
         : []),
       createSendMediaTool(workspace, bus, () => this.deps.getCurrentContext()),
+      createReadMediaTool(),
       ...(isShareToolAvailable(cfg)
         ? [
             createCreateShareTool({

@@ -44,7 +44,7 @@ export function useAttachmentPreviewResolved({
   open,
   attachment,
   authToken,
-  sessionKey: _sessionKey,
+  sessionKey,
   language,
 }: {
   open: boolean;
@@ -73,7 +73,7 @@ export function useAttachmentPreviewResolved({
   const gatewayFetch = useAsyncResource(
     async () => {
       const L = messages(language).chat;
-      const result = await fetchMediaUriBuffer({ uri: mediaUri! });
+      const result = await fetchMediaUriBuffer({ uri: mediaUri!, sessionKey });
       if (!result.ok) {
         if (result.reason === 'http') {
           throw new Error(`${L.attachmentPreviewLoadError} (HTTP ${result.status})`);
@@ -82,7 +82,7 @@ export function useAttachmentPreviewResolved({
       }
       return result.buffer;
     },
-    [open, mediaUri, authToken, language, inlinePayload],
+    [open, mediaUri, authToken, language, inlinePayload, sessionKey],
     { enabled: fetchEnabled, initial: null as ArrayBuffer | null, errorData: null },
   );
 

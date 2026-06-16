@@ -31,6 +31,7 @@ import {
   tryRunSlashCommand,
 } from './direct-turn-helpers.js';
 import {
+  clearPendingTranscriptUserMessage,
   setPendingTranscriptUserMessage,
   type TranscriptUserMessage,
 } from '../inbound/attachment-pipeline.js';
@@ -268,36 +269,41 @@ export async function* runProcessDirectStreaming(
         }
       }
 
-      setPendingTranscriptUserMessage(sessionKey, userMessage as TranscriptUserMessage);
+      const pendingUserMessage = userMessage as TranscriptUserMessage;
+      setPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
 
-      const result = await runDirectAgentTurn(
-        {
-          sessionStore: deps.sessionStore,
-          agentManager: deps.agentManager,
-          modelManager: deps.modelManager,
-          config: deps.getConfig(),
-        },
-        {
-          sessionKey,
-          userMessage,
-          abortSignal: signal,
-          onEvent: (embeddedEvent) => {
-            const mapped = mapEmbeddedEventToGatewaySse(embeddedEvent);
-            if (mapped) {
-              if (mapped.type === 'error' && typeof mapped.content === 'string') {
-                mapped.content = formatStreamError(mapped.content);
-              }
-              pushVisible(mapped);
-            }
+      try {
+        const result = await runDirectAgentTurn(
+          {
+            sessionStore: deps.sessionStore,
+            agentManager: deps.agentManager,
+            modelManager: deps.modelManager,
+            config: deps.getConfig(),
           },
-        },
-      );
+          {
+            sessionKey,
+            userMessage,
+            abortSignal: signal,
+            onEvent: (embeddedEvent) => {
+              const mapped = mapEmbeddedEventToGatewaySse(embeddedEvent);
+              if (mapped) {
+                if (mapped.type === 'error' && typeof mapped.content === 'string') {
+                  mapped.content = formatStreamError(mapped.content);
+                }
+                pushVisible(mapped);
+              }
+            },
+          },
+        );
 
-      if (result.lastAssistantText) {
-        deps.onTurnComplete?.(sessionKey, result.lastAssistantText);
-      }
-      if (!result.ok && result.errorMessage && !abortHandled) {
-        pushVisible({ type: 'error', content: formatStreamError(result.errorMessage) });
+        if (result.lastAssistantText) {
+          deps.onTurnComplete?.(sessionKey, result.lastAssistantText);
+        }
+        if (!result.ok && result.errorMessage && !abortHandled) {
+          pushVisible({ type: 'error', content: formatStreamError(result.errorMessage) });
+        }
+      } finally {
+        clearPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
       }
     } catch (err) {
       if (!abortHandled) {

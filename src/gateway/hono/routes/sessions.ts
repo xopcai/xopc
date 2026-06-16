@@ -6,6 +6,7 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
 import { computeUserRoundDeleteRange } from '../../../session/user-round-delete.js';
+import { deleteMediaUrisNoLongerReferenced } from '../../../media/session-references.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js';
 
@@ -414,8 +415,10 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ error: 'Index out of range' }, 400);
     }
     const deleteCount = Math.min(count, loaded.length - startIndex);
+    const removed = loaded.slice(startIndex, startIndex + deleteCount);
     const next = loaded.slice(0, startIndex).concat(loaded.slice(startIndex + deleteCount));
     await service.sessionIndexInstance.saveMessages(key, next);
+    await deleteMediaUrisNoLongerReferenced({ removed, remaining: next });
     return c.json({ ok: true, deleted: deleteCount });
   });
 

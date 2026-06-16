@@ -86,7 +86,7 @@ export function VoiceMessageBar({
       }
       if (!att.uri) return;
       try {
-        const res = await apiFetch(apiUrl(mediaUriToReadUrl(att.uri)));
+        const res = await apiFetch(apiUrl(mediaUriToReadUrl(att.uri, sessionKey)));
         if (!res.ok || cancelled) return;
         const blob = await res.blob();
         const u = URL.createObjectURL(blob);
