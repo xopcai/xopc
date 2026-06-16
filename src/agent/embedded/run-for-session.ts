@@ -57,6 +57,7 @@ export async function runEmbeddedTurnForSession(
   await mm.applyModelForSession(agent, sessionKey);
 
   const modelRef = String(mm.getModelForSession(sessionKey));
+  agentManager.setModelForSession(sessionKey, modelRef);
   const model = mm.getResolvedModelForSession(sessionKey) as RunXopcEmbeddedTurnParams['model'];
   const tools = agent.state.tools;
   const systemPrompt = agent.state.systemPrompt ?? '';
