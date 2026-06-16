@@ -536,6 +536,24 @@ export function useChannelsSettingsPanel() {
     [ch.policy.stream],
   );
 
+  const reactionLevelOpts = useMemo(
+    () =>
+      (['off', 'ack', 'minimal', 'extensive'] as const).map((value) => ({
+        value,
+        label: ch.telegramReactionLevelOptions[value],
+      })),
+    [ch.telegramReactionLevelOptions],
+  );
+
+  const reactionNotifyOpts = useMemo(
+    () =>
+      (['off', 'own', 'all'] as const).map((value) => ({
+        value,
+        label: ch.telegramReactionNotifyOptions[value],
+      })),
+    [ch.telegramReactionNotifyOptions],
+  );
+
   return {
     language,
     m,
@@ -592,5 +610,7 @@ export function useChannelsSettingsPanel() {
     groupOpts,
     replyOpts,
     streamOpts,
+    reactionLevelOpts,
+    reactionNotifyOpts,
   };
 }

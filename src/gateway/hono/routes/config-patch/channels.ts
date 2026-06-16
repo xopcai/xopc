@@ -108,6 +108,20 @@ export function applyChannelsPatch(config: Config, body: any): void {
       if (bodyTg.accounts !== undefined) {
         tg.accounts = bodyTg.accounts;
       }
+      if (bodyTg.reactionLevel !== undefined) {
+        tg.reactionLevel = bodyTg.reactionLevel;
+      }
+      if (bodyTg.reactionNotifications !== undefined) {
+        tg.reactionNotifications = bodyTg.reactionNotifications;
+      }
+      if ('ackReaction' in bodyTg) {
+        const ar = bodyTg.ackReaction;
+        if (ar === null || ar === undefined || (typeof ar === 'string' && !ar.trim())) {
+          delete tg.ackReaction;
+        } else {
+          tg.ackReaction = String(ar).trim();
+        }
+      }
     }
   }
 

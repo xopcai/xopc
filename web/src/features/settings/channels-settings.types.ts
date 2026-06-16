@@ -8,6 +8,8 @@ export type DmPolicy = 'pairing' | 'allowlist' | 'open' | 'disabled';
 export type GroupPolicy = 'open' | 'disabled' | 'allowlist';
 export type StreamMode = 'off' | 'partial' | 'block';
 export type ReplyToMode = 'off' | 'first' | 'all';
+export type TelegramReactionLevel = 'off' | 'ack' | 'minimal' | 'extensive';
+export type TelegramReactionNotifications = 'off' | 'own' | 'all';
 export type FeishuDomain = 'feishu' | 'lark' | string;
 export type FeishuRenderMode = 'auto' | 'raw' | 'card';
 export type FeishuReactionNotifications = 'off' | 'own' | 'all';
@@ -29,6 +31,13 @@ export interface TelegramAccount {
   textChunkLimit: number;
   streamMode: StreamMode;
   groups?: Record<string, unknown>;
+  reactionLevel?: TelegramReactionLevel;
+  reactionNotifications?: TelegramReactionNotifications;
+  ackReaction?: string;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  webhookPath?: string;
+  execApprovals?: { enabled?: boolean; approvers?: (string | number)[] };
 }
 
 export interface TelegramConfig {
@@ -45,6 +54,14 @@ export interface TelegramConfig {
   textChunkLimit: number;
   proxy: string;
   accounts: Record<string, TelegramAccount>;
+  reactionLevel?: TelegramReactionLevel;
+  reactionNotifications?: TelegramReactionNotifications;
+  ackReaction?: string;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  webhookPath?: string;
+  execApprovalsEnabled?: boolean;
+  execApprovalsApprovers?: string;
 }
 
 export interface WeixinAccount {

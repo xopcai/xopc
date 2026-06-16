@@ -60,6 +60,7 @@ import type { MemoryManager } from './memory/manager.js';
 import { MemoryPrefetchCoordinator } from './memory/prefetch-coordinator.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
+import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
 
 const log = createLogger('AgentManager');
 
@@ -627,6 +628,40 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   /**
+   * Merge per-turn channel system prompt (e.g. Telegram group/topic override) into the agent.
+   */
+  applyTurnChannelSystemPrompt(sessionKey: string, channelSystemPrompt: string): void {
+    const trimmed = channelSystemPrompt.trim();
+    if (!trimmed) return;
+
+    const instance = this.agents.get(sessionKey);
+    if (!instance) return;
+
+    const cfg = this.config.config!;
+    const rt = this.workspaceRuntimes.getOrCreate(instance.resolvedWorkspacePath);
+    const contextFiles = this.resolveContextFilesForSession(sessionKey, instance.effectiveProfile);
+    const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
+    const thinkingLevel =
+      (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
+      this.config.thinkingLevel ??
+      'medium';
+
+    instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
+      externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+      workspaceOverride: instance.resolvedWorkspacePath,
+      profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
+      systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
+      skillAllowlist: instance.effectiveProfile.skillsAllowlist,
+      registeredToolNames: instance.registeredToolNames,
+      sessionKey,
+      modelRef,
+      agentId: instance.effectiveProfile.agentId,
+      thinkingLevel,
+      extraSystemPrompt: trimmed,
+    });
+  }
+
+  /**
    * Set thinking level for a session's agent
    */
   setThinkingLevel(sessionKey: string, level: ThinkingLevel): void {
@@ -740,10 +775,42 @@ export class AgentManager implements AgentInstanceGateway {
       streamFn: createExtensionAwareStreamFn(),
       getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
       beforeToolCall: async ({ toolCall, args }) => {
+        const toolName = toolCall.name;
+
+        if (toolName === 'shell') {
+          const ctx = this.config.getCurrentContext();
+          const cfg = this.mergedConfig();
+          if (ctx && cfg) {
+            const command =
+              typeof (args as { command?: unknown })?.command === 'string'
+                ? (args as { command: string }).command
+                : JSON.stringify(args ?? {});
+            const accountId =
+              typeof ctx.metadata?.accountId === 'string' ? ctx.metadata.accountId : undefined;
+            const approval = await maybeRequestChannelExecApproval({
+              cfg,
+              payload: {
+                sessionKey: ctx.sessionKey,
+                channel: ctx.channel,
+                chatId: ctx.chatId,
+                accountId,
+                toolName,
+                summary: command.slice(0, 500),
+                details: { command: command.slice(0, 2000) },
+              },
+            });
+            if (approval.required && !approval.approved) {
+              return {
+                block: true,
+                reason: approval.reason ?? 'Exec approval denied or timed out.',
+              };
+            }
+          }
+        }
+
         if (!this.config.hookRunner) {
           return undefined;
         }
-        const toolName = toolCall.name;
         const parsed = parseMcpToolName(toolName);
         const hookResult = await this.config.hookRunner.runBeforeToolCall(
           toolName,
