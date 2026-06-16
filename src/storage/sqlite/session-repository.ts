@@ -20,6 +20,7 @@ const SESSION_COLUMNS = `
   created_at, updated_at, last_accessed_at, session_started_at, last_interaction_at,
   source_channel, source_chat_id, session_type, routing_json, custom_data_json,
   abort_cutoff_timestamp, message_count, estimated_tokens, compacted_count,
+  last_flushed_at, flush_count,
   thinking_level, verbose_level
 `;
 
@@ -45,12 +46,13 @@ function insertSessionAndTranscript(
       created_at, updated_at, last_accessed_at, session_started_at, last_interaction_at,
       source_channel, source_chat_id, session_type, routing_json, custom_data_json,
       abort_cutoff_timestamp, message_count, estimated_tokens, compacted_count,
+      last_flushed_at, flush_count,
       thinking_level, verbose_level
     ) VALUES (
       ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?,
-      ?, ?, ?, ?,
+      ?, ?, ?, ?, ?, ?,
       ?, ?
     )`,
   ).run(
@@ -74,6 +76,8 @@ function insertSessionAndTranscript(
     row.messageCount,
     row.estimatedTokens,
     row.compactedCount,
+    row.lastFlushedAt,
+    row.flushCount,
     row.thinkingLevel,
     row.verboseLevel,
   );
@@ -282,6 +286,8 @@ export function patchSessionMetadata(
         message_count = ?,
         estimated_tokens = ?,
         compacted_count = ?,
+        last_flushed_at = ?,
+        flush_count = ?,
         thinking_level = ?,
         verbose_level = ?
       WHERE session_key = ?`,
@@ -302,6 +308,8 @@ export function patchSessionMetadata(
       merged.messageCount,
       merged.estimatedTokens,
       merged.compactedCount,
+      merged.lastFlushedAt ?? null,
+      merged.flushCount ?? 0,
       existing.thinking_level,
       existing.verbose_level,
       sessionKey,

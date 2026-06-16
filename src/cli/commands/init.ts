@@ -1,28 +1,14 @@
 import { mkdir, writeFile } from 'fs/promises';
-import { writeTextAtomic } from '../../infra/write-file-atomic.js';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import {
   resolveStateDir,
-  resolveCredentialsDir,
-  resolveExtensionsDir,
-  resolveSkillsDir,
-  resolveCronDir,
-  resolveLogsDir,
-  resolveBinDir,
-  resolveToolsDir,
   resolveAgentDir,
   resolveAgentWorkspaceDir,
-  resolveInboxDir,
   resolveConfigPath,
-  resolveAgentMetadataPath,
-  resolveInboxPendingDir,
-  resolveInboxProcessedDir,
   resolveAgentHomeDir,
   resolveAgentProfileDir,
-  resolveWorkspaceStateDir,
-  resolveWorkspaceStatePath,
   WORKSPACE_FILES,
 } from '../../config/paths.js';
 import { loadConfig, saveConfig } from '../../config/loader.js';
@@ -58,72 +44,22 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
     }
   }
 
-  // ============================================
-  // Create global directories
-  // ============================================
   await mkdir(stateDir, { recursive: true });
-  await mkdir(resolveCredentialsDir(), { recursive: true });
-  await mkdir(join(resolveCredentialsDir(), 'oauth'), { recursive: true });
-  await mkdir(resolveExtensionsDir(), { recursive: true });
-  await mkdir(resolveSkillsDir(), { recursive: true });
-  await mkdir(resolveCronDir(), { recursive: true });
-  await mkdir(join(resolveCronDir(), 'logs'), { recursive: true });
-  await mkdir(resolveLogsDir(), { recursive: true });
-  await mkdir(resolveBinDir(), { recursive: true });
-  await mkdir(resolveToolsDir(), { recursive: true });
 
   const configPath = resolveConfigPath();
   const cfg = loadConfig(configPath);
 
-  // ============================================
-  // Create agent directory structure: agents/<id>/agent/, workspace aside
-  // ============================================
+  // Agent directory structure
   await mkdir(resolveAgentHomeDir(cfg, agentId), { recursive: true });
   await mkdir(resolveAgentProfileDir(cfg, agentId), { recursive: true });
   await mkdir(resolveAgentDir(cfg, agentId), { recursive: true });
-  await mkdir(join(resolveAgentDir(cfg, agentId), 'credentials'), { recursive: true });
   const wsRoot = resolveAgentWorkspaceDir(cfg, agentId);
   await mkdir(wsRoot, { recursive: true });
-  await mkdir(resolveWorkspaceStateDir(cfg, agentId), { recursive: true });
-  await mkdir(join(wsRoot, 'memory'), { recursive: true });
-  await mkdir(resolveInboxDir(cfg, agentId), { recursive: true });
-  await mkdir(resolveInboxPendingDir(cfg, agentId), { recursive: true });
-  await mkdir(resolveInboxProcessedDir(cfg, agentId), { recursive: true });
 
-  // ============================================
-  // Create initial config file if not exists
-  // ============================================
+  // Config file
   if (!existsSync(configPath) || options.force) {
     await saveConfig(cfg, configPath);
     log.info({ configPath }, 'Created initial configuration');
-  }
-
-  // ============================================
-  // Create agent metadata file
-  // ============================================
-  const agentMetadataPath = resolveAgentMetadataPath(cfg, agentId);
-  if (!existsSync(agentMetadataPath) || options.force) {
-    const agentMetadata = {
-      version: 1,
-      id: agentId,
-      name: agentId === 'main' ? 'Main Agent' : `Agent ${agentId}`,
-      description: agentId === 'main' ? 'Primary agent for daily tasks' : `Specialized agent for ${agentId}`,
-      model: 'anthropic/claude-sonnet-4-5',
-      createdAt: new Date().toISOString(),
-      lastActiveAt: new Date().toISOString(),
-      config: {
-        maxTokens: 8192,
-        temperature: 0.7,
-        compaction: {
-          enabled: true,
-          mode: 'default',
-        },
-      },
-      channels: ['gateway'],
-      tags: agentId === 'main' ? ['personal', 'primary'] : [],
-    };
-    await writeTextAtomic(agentMetadataPath, JSON.stringify(agentMetadata, null, 2));
-    log.info({ agentId, agentMetadataPath }, 'Created agent metadata');
   }
 
   // ============================================
@@ -326,18 +262,6 @@ _Review and update this periodically from daily memory files._
 `;
     await writeFile(memoryPath, memoryContent, 'utf-8');
     log.info({ path: memoryPath }, 'Created MEMORY.md');
-  }
-
-  // Workspace state file (per-agent machine state, not under markdown workspace)
-  const workspaceStatePath = resolveWorkspaceStatePath(cfg, agentId);
-  if (!existsSync(workspaceStatePath)) {
-    const workspaceState = {
-      version: 1,
-      agentId,
-      profileMarkdownSeededAt: new Date().toISOString(),
-    };
-    await writeTextAtomic(workspaceStatePath, JSON.stringify(workspaceState, null, 2));
-    log.info({ path: workspaceStatePath }, 'Created workspace state');
   }
 }
 

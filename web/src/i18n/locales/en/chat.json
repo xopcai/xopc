@@ -421,6 +421,8 @@
     "sourceNoteTaskFallbackTitle": "Task from discussion",
     "codeBlockCopy": "Copy",
     "messageCopied": "Copied",
+    "mermaidRenderError": "Diagram render failed",
+    "mermaidSourceLabel": "mermaid",
     "userMessageCopy": "Copy message",
     "userMessageRetry": "Retry",
     "userMessageEdit": "Edit in composer",

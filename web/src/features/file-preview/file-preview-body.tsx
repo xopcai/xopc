@@ -195,7 +195,7 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
 
   let body: ReactNode = null;
 
-  if (loading) {
+  if (loading && previewKind == null) {
     body = <p className="px-4 py-6 text-sm text-fg-muted">{m.chat.loading}</p>;
   } else if (loadError) {
     body = (

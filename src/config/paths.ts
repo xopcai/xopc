@@ -27,7 +27,6 @@ export {
 export const FILENAMES = {
   CONFIG: 'xopc.json',
   MODELS_JSON: 'models.json',
-  AGENT_JSON: 'agent.json',
   /** Primary SQLite state database (`~/.xopc/xopc.db`). */
   XOPC_DB: 'xopc.db',
   EXTENSIONS_LOCK: 'extensions-lock.json',
@@ -310,13 +309,6 @@ export function resolveModelsJsonPath(): string {
 }
 
 /**
- * Resolve the agent metadata file path
- */
-export function resolveAgentMetadataPath(config: Config, agentId: string): string {
-  return join(resolveAgentDir(config, agentId), FILENAMES.AGENT_JSON);
-}
-
-/**
  * OpenClaw-aligned: workspace setup state directory (`<workspace>/.xopc/`).
  */
 export function resolveWorkspaceStateDir(config: Config, agentId: string): string {
@@ -335,20 +327,6 @@ export function resolveWorkspaceStatePath(config: Config, agentId: string): stri
  */
 export function resolveSkillsCachePath(config: Config, agentId: string): string {
   return join(resolveAgentDir(config, agentId), 'state', FILENAMES.SKILLS_CACHE);
-}
-
-/**
- * Resolve the memory directory
- */
-export function resolveMemoryDir(config: Config, agentId: string): string {
-  return join(resolveAgentWorkspaceDir(config, agentId), 'memory');
-}
-
-/**
- * Resolve a specific memory file path
- */
-export function resolveMemoryPath(config: Config, date: string, agentId: string): string {
-  return join(resolveMemoryDir(config, agentId), `${date}.md`);
 }
 
 /**

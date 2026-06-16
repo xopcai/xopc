@@ -856,6 +856,12 @@ html.dark[data-color-scheme='clay'] {
   box-sizing: border-box;
 }
 
+.markdown-content .markdown-mermaid {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
 .markdown-content .markdown-body pre code.hljs {
   max-width: 100%;
   box-sizing: border-box;

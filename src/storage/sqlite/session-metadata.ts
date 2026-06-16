@@ -56,6 +56,7 @@ export function buildDefaultSessionMetadata(sessionKey: string): SessionMetadata
     messageCount: 0,
     estimatedTokens: 0,
     compactedCount: 0,
+    flushCount: 0,
     sourceChannel: channel,
     sourceChatId: chatId,
     routing,

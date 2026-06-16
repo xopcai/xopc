@@ -17,12 +17,13 @@ import { GlobalCommandPaletteHost } from '@/features/search/global-command-palet
 import { GlobalQuickCaptureHost } from '@/features/notes/global-quick-capture';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { DreamingOverlay } from '@/features/dreaming/dreaming-overlay';
-import { WorkspacePreviewDialog } from '@/features/workspace/workspace-preview-dialog';
+import { WorkspacePreviewPane } from '@/features/workspace/workspace-preview-pane';
 import { OnboardingDialog } from '@/components/shell/onboarding-dialog';
 import { TopBannerStack } from '@/components/shell/top-banner-stack';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 /** Align with `ui` `navigate-to-chat` custom event from session manager. */
 function NavigateToChatListener() {
@@ -63,6 +64,7 @@ export function AppShell() {
   const isSettingsRoute = pathname.startsWith('/settings');
   const language = useLocaleStore((s) => s.language);
   const updateReminder = useUpdateReminder();
+  const previewPath = useWorkspacePreviewStore((s) => s.path);
 
   if (!token) {
     return (
@@ -111,21 +113,25 @@ export function AppShell() {
           <div className="flex min-h-0 min-w-0 flex-1 min-w-0 flex-col overflow-hidden bg-surface-panel">
             <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                {!isSettingsRoute ? <PrimaryAppHeader /> : null}
+                {!isSettingsRoute && !previewPath ? <PrimaryAppHeader /> : null}
                 <main id="app-main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                  <div
-                    key={routeKey}
-                    className={cn(
-                      'page-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden',
-                      routeKey === 'settings'
-                        ? 'page-enter--gentle overflow-hidden'
-                        : routeUsesInternalScroll
-                          ? 'overflow-hidden'
-                          : 'overflow-y-auto overscroll-contain [scrollbar-gutter:stable_both-edges]',
-                    )}
-                  >
-                    <Outlet />
-                  </div>
+                  {previewPath != null ? (
+                    <WorkspacePreviewPane />
+                  ) : (
+                    <div
+                      key={routeKey}
+                      className={cn(
+                        'page-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden',
+                        routeKey === 'settings'
+                          ? 'page-enter--gentle overflow-hidden'
+                          : routeUsesInternalScroll
+                            ? 'overflow-hidden'
+                            : 'overflow-y-auto overscroll-contain [scrollbar-gutter:stable_both-edges]',
+                      )}
+                    >
+                      <Outlet />
+                    </div>
+                  )}
                 </main>
               </div>
               {!isSettingsRoute ? <WorkspaceColumn /> : null}
@@ -133,7 +139,6 @@ export function AppShell() {
           </div>
         </div>
       </div>
-      {!isSettingsRoute ? <WorkspacePreviewDialog /> : null}
     </div>
   );
 }

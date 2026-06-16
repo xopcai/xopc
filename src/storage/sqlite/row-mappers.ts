@@ -34,6 +34,8 @@ export type SessionRow = {
   message_count: number;
   estimated_tokens: number;
   compacted_count: number;
+  last_flushed_at: string | null;
+  flush_count: number;
   thinking_level: string | null;
   verbose_level: string | null;
 };
@@ -110,6 +112,8 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
     messageCount: row.message_count,
     estimatedTokens: row.estimated_tokens,
     compactedCount: row.compacted_count,
+    lastFlushedAt: row.last_flushed_at ?? undefined,
+    flushCount: row.flush_count,
     transcriptId: row.current_transcript_id,
     stats: {
       messageCount: row.message_count,
@@ -146,6 +150,8 @@ export function metadataToSessionInsert(
   messageCount: number;
   estimatedTokens: number;
   compactedCount: number;
+  lastFlushedAt: string | null;
+  flushCount: number;
   thinkingLevel: string | null;
   verboseLevel: string | null;
 } {
@@ -171,6 +177,8 @@ export function metadataToSessionInsert(
     messageCount: metadata.messageCount,
     estimatedTokens: metadata.estimatedTokens,
     compactedCount: metadata.compactedCount,
+    lastFlushedAt: metadata.lastFlushedAt ?? null,
+    flushCount: metadata.flushCount ?? 0,
     thinkingLevel: thinkingLevel ?? null,
     verboseLevel: verboseLevel ?? null,
   };

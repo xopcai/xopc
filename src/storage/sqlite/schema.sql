@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   message_count            INTEGER NOT NULL DEFAULT 0,
   estimated_tokens         INTEGER NOT NULL DEFAULT 0,
   compacted_count          INTEGER NOT NULL DEFAULT 0,
+  last_flushed_at          TEXT,
+  flush_count              INTEGER NOT NULL DEFAULT 0,
   thinking_level           TEXT,
   verbose_level            TEXT
 );

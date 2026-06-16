@@ -1,7 +1,7 @@
 import { Command } from 'commander';
+import { existsSync } from 'fs';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
-import { getWorkspaceStatus } from '../utils/workspace.js';
 import { initWorkspace } from '../utils/init-workspace.js';
 
 function createSetupCommand(ctx: CLIContext): Command {
@@ -24,11 +24,12 @@ function createSetupCommand(ctx: CLIContext): Command {
       console.log('═'.repeat(40));
 
       // Check current status
-      const status = getWorkspaceStatus(configPath, workspacePath);
+      const configExists = existsSync(configPath);
+      const workspaceExists = existsSync(workspacePath);
 
       console.log('\n📊 Current Status:');
-      console.log(`   Config: ${status.configExists ? '✅ exists' : '❌ not found'}`);
-      console.log(`   Workspace: ${status.workspaceSetup ? '✅ setup' : '❌ not found'}`);
+      console.log(`   Config: ${configExists ? '✅ exists' : '❌ not found'}`);
+      console.log(`   Workspace: ${workspaceExists ? '✅ setup' : '❌ not found'}`);
 
       const result = await initWorkspace({ configPath, workspacePath });
 
@@ -39,7 +40,7 @@ function createSetupCommand(ctx: CLIContext): Command {
       }
 
       if (result.workspaceCreated) {
-        console.log('\n📁 Created workspace + memory/.');
+        console.log('\n📁 Created workspace.');
       } else {
         console.log('\n📁 Workspace already present (verified).');
       }

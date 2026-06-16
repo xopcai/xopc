@@ -117,6 +117,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setDisplaySleepPrevented: (enabled: boolean) =>
       ipcRenderer.invoke('cron:set-prevent-display-sleep', enabled) as Promise<void>,
   },
+  fullscreen: {
+    enter: () => ipcRenderer.invoke('window:fullscreen-enter'),
+    exit: () => ipcRenderer.invoke('window:fullscreen-exit'),
+    toggle: () => ipcRenderer.invoke('window:fullscreen-toggle'),
+    isFullscreen: () => ipcRenderer.invoke('window:fullscreen-is') as Promise<boolean>,
+    onChange: (callback: (isFullscreen: boolean) => void) => {
+      const handler = (_: unknown, isFullscreen: boolean) => callback(isFullscreen);
+      ipcRenderer.on('window:fullscreen-changed', handler);
+      return () => ipcRenderer.removeListener('window:fullscreen-changed', handler);
+    },
+  },
   system: {
     getBehavior: () => ipcRenderer.invoke('system-settings:get-behavior'),
     setBehavior: (patch: {

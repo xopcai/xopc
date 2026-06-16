@@ -90,6 +90,8 @@ export interface SessionMetadata {
   messageCount: number;
   estimatedTokens: number;
   compactedCount: number;
+  lastFlushedAt?: string;
+  flushCount?: number;
   sourceChannel: string;
   sourceChatId: string;
   customData?: Record<string, unknown>;
