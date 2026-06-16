@@ -11,7 +11,7 @@
  * stops at appDir and only ships our minimal runtime deps.
  *
  * Layout:
- *   out/{main,preload,server}      app code
+ *   out/{main,preload,server}      app code (+ out/server/schema.sql, workspace-templates/)
  *   dist/gateway/static/root       gateway-served UI
  *   skills/                        bundled SKILL.md files
  *   package.json                   minimal — only runtime externals as dependencies
