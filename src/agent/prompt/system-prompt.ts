@@ -7,283 +7,104 @@
  */
 
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
-import { DEFAULT_HEARTBEAT_FILENAME } from '../context/workspace.js';
-import { PROMPT_CACHE_BOUNDARY } from './cache-boundary.js';
-import type { PromptMode } from './types.js';
+import { PROMPT_CACHE_BOUNDARY, splitPromptCacheBoundary } from './cache-boundary.js';
+import type { ProviderSystemPromptContribution } from './contribution.js';
+import {
+  buildAestheticSection,
+  buildExecutionBiasSection,
+  buildProblemSolvingSection,
+  buildSafetySection,
+  buildToolCallStyleSection,
+} from './sections/behavior.js';
+import {
+  buildExternalMemorySection,
+  buildMemorySection,
+  buildSkillsSection,
+} from './sections/memory-skills.js';
+import {
+  buildHeartbeatBehaviorSection,
+  buildMessagingSection,
+  buildOutputDirectivesSection,
+  buildSilentRepliesSection,
+  buildTimeSection,
+} from './sections/messaging-runtime.js';
+import {
+  buildProjectContextSection,
+  getContextFileBasename,
+  isDynamicContextFile,
+  isHeartbeatContextFile,
+  sortContextFilesForPrompt,
+} from './sections/project-context.js';
+import { buildToolingSection, hasSkillsTools } from './sections/tooling.js';
+import {
+  buildRuntimeSection,
+  buildWorkspaceFilesIntroSection,
+  buildWorkspaceSection,
+  type RuntimeInfoInput,
+} from './sections/workspace-runtime.js';
+import { buildOverridablePromptSection } from './system-prompt-params.js';
+import type { MemoryCitationsMode, PromptMode, SilentReplyPromptMode } from './types.js';
 
-export type MemoryCitationsMode = 'on' | 'off' | 'source-only';
-
-const CONTEXT_FILE_ORDER = new Map<string, number>([
-  ['agents.md', 10],
-  ['soul.md', 20],
-  ['identity.md', 30],
-  ['user.md', 40],
-  ['tools.md', 50],
-  ['memory.md', 70],
-]);
-
-const DYNAMIC_CONTEXT_FILE_BASENAMES = new Set(['heartbeat.md']);
-
-const DEFAULT_HEARTBEAT_PROMPT_CONTEXT_BLOCK =
-  'Default heartbeat prompt:\n`Read HEARTBEAT.md if it exists (workspace context). Follow it strictly. Do not infer or repeat old tasks from prior chats. If nothing needs attention, reply HEARTBEAT_OK.`';
-
-function normalizeContextFilePath(pathValue: string): string {
-  return pathValue.trim().replace(/\\/g, '/');
-}
-
-function getContextFileBasename(pathValue: string): string {
-  const normalizedPath = normalizeContextFilePath(pathValue);
-  return (normalizedPath.split('/').pop() ?? normalizedPath).toLowerCase();
-}
-
-function isDynamicContextFile(pathValue: string): boolean {
-  return DYNAMIC_CONTEXT_FILE_BASENAMES.has(getContextFileBasename(pathValue));
-}
-
-function sanitizeContextFileContentForPrompt(content: string): string {
-  return content.replaceAll(DEFAULT_HEARTBEAT_PROMPT_CONTEXT_BLOCK, '').replace(/\n{3,}/g, '\n\n');
-}
-
-function sortContextFilesForPrompt(contextFiles: EmbeddedContextFile[]): EmbeddedContextFile[] {
-  return [...contextFiles].sort((a, b) => {
-    const aBase = getContextFileBasename(a.path);
-    const bBase = getContextFileBasename(b.path);
-    const aOrder = CONTEXT_FILE_ORDER.get(aBase) ?? Number.MAX_SAFE_INTEGER;
-    const bOrder = CONTEXT_FILE_ORDER.get(bBase) ?? Number.MAX_SAFE_INTEGER;
-    if (aOrder !== bOrder) {
-      return aOrder - bOrder;
-    }
-    if (aBase !== bBase) {
-      return aBase.localeCompare(bBase);
-    }
-    return normalizeContextFilePath(a.path).localeCompare(normalizeContextFilePath(b.path));
-  });
-}
-
-function buildProjectContextSection(params: {
-  files: EmbeddedContextFile[];
-  heading: string;
-  dynamic: boolean;
-}): string[] {
-  if (params.files.length === 0) {
-    return [];
-  }
-  const lines: string[] = [params.heading, ''];
-  if (params.dynamic) {
-    lines.push(
-      'The following frequently-changing project context files are kept below the cache boundary when possible:',
-      '',
-    );
-  } else {
-    const hasSoulFile = params.files.some((file) => getContextFileBasename(file.path) === 'soul.md');
-    lines.push('The following project context files have been loaded:');
-    if (hasSoulFile) {
-      lines.push(
-        'If SOUL.md is present, embody its persona and tone. Avoid stiff, generic replies; follow its guidance unless higher-priority instructions override it.',
-      );
-    }
-    lines.push('');
-  }
-  for (const file of params.files) {
-    lines.push(`## ${file.path}`, '', sanitizeContextFileContentForPrompt(file.content), '');
-  }
-  return lines;
-}
-
-function buildMemorySection(
-  citationsMode: MemoryCitationsMode = 'on',
-  hasProfileMemory = false,
-): string {
-  if (!hasProfileMemory) {
-    return '';
-  }
-
-  const citationInstruction =
-    citationsMode === 'off'
-      ? 'Citations are disabled: do not mention file paths or line numbers in replies.'
-      : citationsMode === 'source-only'
-        ? 'Citations: mention file path when it helps (e.g., Source: MEMORY.md).'
-        : 'Citations: include Source: <path#line> when it helps the user verify memory snippets.';
-
-  return `## Memory Recall
-
-${citationInstruction}
-
-Startup profile files (SOUL, USER, MEMORY, etc.) are already in Project Context above. Do not re-read them unless the user asks or you need lines beyond what was injected.
-
-Before answering anything about prior work, decisions, dates, people, preferences, or todos:
-1. Run \`memory_search\` on profile MEMORY.md and workspace \`memory/*.md\`
-2. For **other chat sessions** / cross-session history, use \`session_search\` with keywords (or omit \`query\` to list recent sessions)
-3. Use \`memory_get\` to pull only the needed lines from files
-4. For structured curated notes under agent home \`memories/\`, use \`curated_memory\`
-5. If low confidence after search, say you checked
-
-### Memory Files
-
-- **Daily notes:** \`memory/YYYY-MM-DD.md\` — raw logs (runtime may preload recent days on /new or /reset)
-- **Long-term:** profile \`MEMORY.md\` — curated memories in Project Context when present
-- **Curated store:** agent home \`memories/MEMORY.md\` and \`memories/USER.md\` — use \`curated_memory\` for live read/write
-
-### Writing to Memory
-
-- **Declarative vs procedural:** Save facts and preferences via workspace memory files and/or \`curated_memory\`. Save reusable task playbooks with \`skill_manage\` as skills.
-- **Memory is limited** — if you want to remember something, WRITE IT TO A FILE
-- When someone says "remember this" → update \`memory/YYYY-MM-DD.md\` or relevant file
-- **Text > Brain**
-`;
-}
-
-function buildSkillsSection(availableTools: string[] = []): string {
-  if (availableTools.length === 0) {
-    return '';
-  }
-
-  return `## Skills
-
-When a solution already exists, do not reinvent the wheel.
-
-**How to use:**
-1. Skim <available_skills> — is anything clearly relevant?
-2. Only one match? → Confirm with skills_list, then load the full text with skill_view(name) and follow it.
-3. Need sub-documents or scripts? → skill_view(name, "references/…"), etc.
-4. No match? → Solve it yourself; do not force-fit a skill.
-
-**Division of labor with memory:** Skills = **procedural** workflows; memory / \`curated_memory\` = **declarative** facts and preferences.
-`;
-}
-
-function buildSafetySection(): string {
-  return `## Safety
-
-- You have no independent goals: do not pursue self-preservation, replication, resource acquisition, or power-seeking; avoid long-term plans beyond the user's request.
-- Prioritize safety and human oversight over completion; if instructions conflict, pause and ask; comply with stop/pause/audit requests and never bypass safeguards.
-- Do not manipulate or persuade anyone to expand access or disable safeguards. Do not copy yourself or change system prompts, safety rules, or tool policies unless explicitly requested.`;
-}
-
-function buildProblemSolvingSection(): string {
-  return `## Problem Solving
-
-**Simple tasks** (< 5 minutes or a single-file change): Do them directly; run a quick verification after changes.
-
-**Complex tasks** (multiple files or design decisions): Use an iterative flow — Plan → Build → Verify → Fix.
-
-**Core principle: Match the complexity; reject ritual for its own sake. Verification matters, but do not verify just to tick a box.**`;
-}
-
-function buildAestheticSection(): string {
-  return `## Tone & Style
-
-**Default voice:** Direct, concise, concrete.
-
-**SOUL.md takes precedence:** If SOUL.md defines a specific tone, defer to it over the above.`;
-}
-
-function buildHeartbeatBehaviorSection(params: {
-  enabled: boolean;
-  customPrompt?: string;
-  userTimezone?: string;
-}): string {
-  if (!params.enabled) {
-    return '';
-  }
-  if (params.customPrompt?.trim()) {
-    return `## Heartbeats\n\n${params.customPrompt.trim()}\n`;
-  }
-  let quietHoursNote = '';
-  if (params.userTimezone) {
-    quietHoursNote = `\n\n> Quiet hours: The user is in **${params.userTimezone}**. Avoid proactive checks during late night (23:00-08:00) unless urgent.`;
-  }
-  return `## Heartbeats
-
-If the current user message is a heartbeat poll and nothing needs attention, reply exactly: HEARTBEAT_OK
-
-If something needs attention, do NOT include "HEARTBEAT_OK"; reply with the alert text instead.${quietHoursNote}
-`;
-}
-
-function buildMessagingSection(channels: string[] = [], isMinimal: boolean = false): string {
-  if (isMinimal || channels.length === 0) {
-    return '';
-  }
-  const channelList = channels.join(', ');
-  return `## Messaging
-
-- Reply in current session → automatically routes to the source channel (${channelList})
-- Use \`message\` for proactive sends + channel actions
-- If you use \`message\` to deliver your user-visible reply, respond with ONLY: NO_REPLY (avoid duplicate replies)
-`;
-}
-
-function buildTimeSection(timezone?: string): string {
-  if (!timezone) {
-    return '';
-  }
-  return `## Current Date & Time
-
-Time zone: ${timezone}
-
-If you need the current date/time/day-of-week, use the \`session_status\` tool or the inbound message timestamp envelope (when present).
-`;
-}
-
-function buildRuntimeSection(runtime?: { version?: string; model?: string; channel?: string }): string {
-  if (!runtime) {
-    return '';
-  }
-  const parts: string[] = [];
-  if (runtime.version) parts.push(`v${runtime.version}`);
-  if (runtime.model) parts.push(`model=${runtime.model.split('/').pop()}`);
-  if (runtime.channel) parts.push(`ch=${runtime.channel}`);
-  return parts.length > 0 ? `[${parts.join(' | ')}]` : '';
-}
-
-function buildWorkingDirSection(workspaceDir: string): string {
-  return `Working directory: ${workspaceDir}`;
-}
-
-function buildExternalMemorySection(text: string | undefined): string {
-  const t = text?.trim();
-  if (!t) {
-    return '';
-  }
-  return `## External memory provider\n\n${t}`;
-}
+export type { MemoryCitationsMode } from './types.js';
+export {
+  getContextFileBasename,
+  isDynamicContextFile,
+  isHeartbeatContextFile,
+  sortContextFilesForPrompt,
+} from './sections/project-context.js';
 
 export interface SystemPromptOptions {
-  /** Bootstrap context files from profile Markdown (Project Context). */
   contextFiles?: EmbeddedContextFile[];
   promptMode?: PromptMode;
   heartbeatEnabled?: boolean;
   heartbeatPrompt?: string;
+  /** Registered tool names for Tooling section and memory/skills gating. */
+  toolNames?: string[];
+  toolSummaries?: Record<string, string>;
+  /** @deprecated Prefer toolNames — kept for skill-section gating compatibility. */
   availableTools?: string[];
   memoryCitationsMode?: MemoryCitationsMode;
+  includeMemorySection?: boolean;
   userTimezone?: string;
-  runtime?: {
-    version?: string;
-    model?: string;
-    channel?: string;
-  };
+  runtime?: RuntimeInfoInput;
   channels?: string[];
   externalMemoryInstructions?: string;
   ttsSystemHint?: string;
+  extraSystemPrompt?: string;
+  silentReplyPromptMode?: SilentReplyPromptMode;
+  promptContribution?: ProviderSystemPromptContribution;
+  includeProblemSolving?: boolean;
+  includeToneSection?: boolean;
+}
+
+function joinSections(sections: Array<string | undefined>): string {
+  return sections.filter((section): section is string => Boolean(section?.trim())).join('\n\n');
 }
 
 /**
  * Build system prompt with bootstrap Project Context integration.
  */
-export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOptions): string {
+export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOptions = {}): string {
   const {
     contextFiles = [],
     promptMode = 'full',
     heartbeatEnabled = false,
     heartbeatPrompt,
+    toolNames: toolNamesOption,
+    toolSummaries,
     availableTools = [],
     memoryCitationsMode = 'on',
+    includeMemorySection,
     userTimezone,
     runtime,
     channels = [],
     externalMemoryInstructions,
     ttsSystemHint,
+    extraSystemPrompt,
+    silentReplyPromptMode = 'generic',
+    promptContribution,
+    includeProblemSolving = true,
+    includeToneSection = true,
   } = options;
 
   if (promptMode === 'none') {
@@ -291,6 +112,10 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   }
 
   const isMinimal = promptMode === 'minimal';
+  const toolNames = toolNamesOption ?? availableTools;
+  const normalizedTools = new Set(toolNames.map((tool) => tool.toLowerCase()));
+  const sectionOverrides = promptContribution?.sectionOverrides ?? {};
+
   const orderedContextFiles = sortContextFilesForPrompt(
     contextFiles.filter((file) => file.path.trim().length > 0),
   );
@@ -300,61 +125,139 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
     (file) => getContextFileBasename(file.path) === 'memory.md',
   );
 
-  const sections: string[] = [
+  const stableSections: string[] = [
     'You are a personal AI assistant running inside xopc.',
-    '',
-    '## Workspace Files (injected)',
-    '',
-    'Profile bootstrap files are injected below as Project Context. Do not manually reread them at session start unless the user asks or injected content is insufficient.',
-    '',
+    buildToolingSection({ toolNames, toolSummaries }),
+    buildOverridablePromptSection({
+      override: sectionOverrides.tool_call_style,
+      fallback: buildToolCallStyleSection(),
+    }),
   ];
 
   if (!isMinimal) {
-    sections.push(buildTimeSection(userTimezone));
-    sections.push(buildExternalMemorySection(externalMemoryInstructions));
-    sections.push(buildMemorySection(memoryCitationsMode, hasProfileMemory));
+    stableSections.push(
+      buildOverridablePromptSection({
+        override: sectionOverrides.execution_bias,
+        fallback: buildExecutionBiasSection(),
+      }),
+    );
   }
 
-  sections.push(buildSkillsSection(availableTools));
+  const providerStablePrefix = buildOverridablePromptSection({
+    override: promptContribution?.stablePrefix,
+    fallback: '',
+  });
+  if (providerStablePrefix) {
+    stableSections.push(providerStablePrefix);
+  }
+
+  stableSections.push(buildSafetySection());
+
+  if (hasSkillsTools(toolNames)) {
+    stableSections.push(buildSkillsSection(true));
+  }
 
   if (!isMinimal) {
-    sections.push(buildSafetySection());
-    sections.push(buildProblemSolvingSection());
-    sections.push(buildAestheticSection());
+    stableSections.push(
+      buildMemorySection({
+        availableTools: normalizedTools,
+        citationsMode: memoryCitationsMode,
+        hasProfileMemory,
+        includeMemorySection,
+      }),
+      buildExternalMemorySection(externalMemoryInstructions),
+    );
+    if (includeProblemSolving) {
+      stableSections.push(buildProblemSolvingSection());
+    }
+    if (includeToneSection) {
+      stableSections.push(buildAestheticSection());
+    }
+    stableSections.push(buildTimeSection(userTimezone));
   }
 
-  sections.push(
-    ...buildProjectContextSection({
-      files: stableContextFiles,
-      heading: '# Project Context',
-      dynamic: false,
-    }),
+  stableSections.push(
+    buildWorkspaceSection(workspaceDir),
+    buildWorkspaceFilesIntroSection(),
   );
 
-  sections.push(PROMPT_CACHE_BOUNDARY);
+  if (!isMinimal) {
+    stableSections.push(buildOutputDirectivesSection(isMinimal));
+  }
 
-  sections.push(
-    ...buildProjectContextSection({
-      files: dynamicContextFiles,
-      heading: stableContextFiles.length > 0 ? '# Dynamic Project Context' : '# Project Context',
-      dynamic: true,
+  stableSections.push(
+    buildMessagingSection({
+      channels,
+      isMinimal,
+      hasSendMessage: normalizedTools.has('send_message'),
     }),
   );
-
-  sections.push(buildHeartbeatBehaviorSection({ enabled: heartbeatEnabled, customPrompt: heartbeatPrompt, userTimezone }));
-  sections.push(buildWorkingDirSection(workspaceDir));
-  sections.push(buildMessagingSection(channels, isMinimal));
 
   if (!isMinimal && ttsSystemHint?.trim()) {
-    sections.push(`## Voice (TTS)\n\n${ttsSystemHint.trim()}`);
+    stableSections.push(`## Voice (TTS)\n\n${ttsSystemHint.trim()}`);
   }
 
-  sections.push(buildRuntimeSection(runtime));
+  stableSections.push(
+    joinSections(
+      buildProjectContextSection({
+        files: stableContextFiles,
+        heading: '# Project Context',
+        dynamic: false,
+      }),
+    ),
+  );
 
-  return sections.filter(Boolean).join('\n\n');
+  if (!isMinimal) {
+    stableSections.push(
+      buildSilentRepliesSection({ isMinimal, silentReplyPromptMode }),
+    );
+  }
+
+  const dynamicSections: string[] = [];
+
+  dynamicSections.push(
+    joinSections(
+      buildProjectContextSection({
+        files: dynamicContextFiles,
+        heading: stableContextFiles.length > 0 ? '# Dynamic Project Context' : '# Project Context',
+        dynamic: true,
+      }),
+    ),
+  );
+
+  if (extraSystemPrompt?.trim()) {
+    const contextHeader = isMinimal ? '## Subagent Context' : '## Group Chat Context';
+    dynamicSections.push(`${contextHeader}\n\n${extraSystemPrompt.trim()}`);
+  }
+
+  const providerDynamicSuffix = buildOverridablePromptSection({
+    override: promptContribution?.dynamicSuffix,
+    fallback: '',
+  });
+  if (providerDynamicSuffix) {
+    dynamicSections.push(providerDynamicSuffix);
+  }
+
+  dynamicSections.push(
+    buildHeartbeatBehaviorSection({
+      enabled: heartbeatEnabled,
+      customPrompt: heartbeatPrompt,
+      userTimezone,
+    }),
+    buildRuntimeSection(runtime),
+  );
+
+  const stablePrefix = joinSections(stableSections);
+  const dynamicSuffix = joinSections(dynamicSections);
+
+  if (!dynamicSuffix.trim()) {
+    return `${stablePrefix}\n\n${PROMPT_CACHE_BOUNDARY}`.trim();
+  }
+
+  return `${stablePrefix}\n\n${PROMPT_CACHE_BOUNDARY}\n\n${dynamicSuffix}`.trim();
 }
 
-/** Whether HEARTBEAT.md is injected as dynamic context (vs behavior-only section). */
-export function isHeartbeatContextFile(pathValue: string): boolean {
-  return getContextFileBasename(pathValue) === DEFAULT_HEARTBEAT_FILENAME.toLowerCase();
+/** Split a built prompt at the cache boundary (for tests and provider adapters). */
+export function splitBuiltSystemPrompt(text: string) {
+  return splitPromptCacheBoundary(text);
 }
