@@ -24,6 +24,10 @@ const skipRenderer = process.env['ELECTRON_VITE_SKIP_RENDERER'] === '1';
 export default defineConfig({
   main: {
     build: {
+      // Packaged asar only ships minimal node_modules for the gateway subprocess (see
+      // scripts/electron-runtime-externals.mjs). Main-process deps (zod, pino, dotenv, …) must
+      // be bundled — electron-vite defaults to externalizeDeps=true which leaves bare imports.
+      externalizeDeps: false,
       // electron-vite leaves main/preload unminified by default (~907KB readable JS for 25k+ lines).
       // Node-side bundles don't need a debuggable shape in production; esbuild minify halves it.
       minify: 'esbuild',
