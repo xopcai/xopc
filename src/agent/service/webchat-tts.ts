@@ -1,18 +1,17 @@
 import type { Config } from '../../config/schema.js';
 import { persistOutboundTtsAudio } from '../../channels/attachments/outbound-tts-persist.js';
+import type { MediaRef } from '../../media/types.js';
 import { compressAudio } from '../../voice/tts/audio.js';
 import { speak } from '../../voice/tts/index.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { shouldUseTTS, getChannelOutputFormat } from '../../voice/tts/service.js';
 import { isTTSAvailable } from '../../voice/tts/factory.js';
-import { resolveAgentHomeDir } from '../agent-scope.js';
-import { extractProfileAgentId } from '../../config/agent-profile.js';
 import type { SessionStore } from '../../session/index.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 export type WebchatTtsResult = {
   type: 'tts_audio';
-  workspaceRelativePath: string;
+  uri: string;
   mimeType: string;
   name: string;
 };
@@ -25,7 +24,7 @@ export type WebchatTtsDeps = {
 };
 
 /**
- * Generate TTS for webchat when config allows; persist under agent home `tts/`.
+ * Generate TTS for webchat when config allows; persist under `{stateDir}/media/tts/`.
  */
 export async function maybeEmitWebchatTts(
   deps: WebchatTtsDeps,
@@ -64,23 +63,11 @@ export async function maybeEmitWebchatTts(
           : format === 'wav'
             ? 'audio/wav'
             : `audio/${format}`;
-    const cfg = deps.config!;
-    const persisted = await persistOutboundTtsAudio(
-      resolveAgentHomeDir(cfg, extractProfileAgentId(sessionKey, cfg)),
-      sessionKey,
-      buffer,
-      format,
-    );
-    await appendAttachmentToLastAssistant(deps.sessionStore, sessionKey, {
-      type: 'audio',
-      mimeType: normalizedMime,
-      name: persisted.name,
-      size: persisted.size,
-      workspaceRelativePath: persisted.workspaceRelativePath,
-    });
+    const persisted = await persistOutboundTtsAudio(buffer, format);
+    await appendMediaToLastAssistant(deps.sessionStore, sessionKey, persisted);
     return {
       type: 'tts_audio',
-      workspaceRelativePath: persisted.workspaceRelativePath,
+      uri: persisted.uri,
       mimeType: normalizedMime,
       name: persisted.name,
     };
@@ -90,27 +77,20 @@ export async function maybeEmitWebchatTts(
   }
 }
 
-export async function appendAttachmentToLastAssistant(
+export async function appendMediaToLastAssistant(
   sessionStore: SessionStore,
   sessionKey: string,
-  att: {
-    type: string;
-    mimeType: string;
-    name: string;
-    size: number;
-    workspaceRelativePath: string;
-  },
+  ref: MediaRef,
 ): Promise<void> {
   const loaded = await sessionStore.load(sessionKey);
   for (let i = loaded.length - 1; i >= 0; i--) {
-    const m = loaded[i] as { role?: string; attachments?: unknown[] };
+    const m = loaded[i] as { role?: string; media?: MediaRef[] };
     if (m.role === 'assistant') {
-      const prev = (m.attachments ?? []) as Array<{ workspaceRelativePath?: string }>;
-      if (prev.some((x) => x.workspaceRelativePath === att.workspaceRelativePath)) {
+      const prev = m.media ?? [];
+      if (prev.some((x) => x.uri === ref.uri)) {
         return;
       }
-      const next = [...prev, att];
-      loaded[i] = { ...m, attachments: next } as unknown as AgentMessage;
+      loaded[i] = { ...m, media: [...prev, ref] } as unknown as AgentMessage;
       await sessionStore.saveMessages(sessionKey, loaded);
       return;
     }

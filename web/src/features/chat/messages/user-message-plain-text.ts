@@ -1,6 +1,6 @@
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import type { Message, MessageAttachment, MessageContent } from '@/features/chat/messages/messages.types';
-import { stripStartupContextForDisplay } from '@/features/chat/messages/wire-text-scrub';
+import { stripUserMessageForDisplay } from '@/features/chat/messages/wire-text-scrub';
 
 export function stripEnvelopeTimestampPrefix(text: string): string {
   return text.replace(/^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}[^\]]*\]\s+/, '');
@@ -9,7 +9,7 @@ export function stripEnvelopeTimestampPrefix(text: string): string {
 export function extractUserMessagePlainText(content: MessageContent[] | undefined): string {
   return (content ?? [])
     .filter((b): b is { type: 'text'; text: string } => b.type === 'text' && Boolean(b.text))
-    .map((b) => stripEnvelopeTimestampPrefix(stripStartupContextForDisplay(b.text)))
+    .map((b) => stripUserMessageForDisplay(stripEnvelopeTimestampPrefix(b.text)))
     .join('\n\n')
     .trim();
 }
@@ -17,10 +17,10 @@ export function extractUserMessagePlainText(content: MessageContent[] | undefine
 export function isLastUserMessageInThread(messages: Message[], index: number): boolean {
   const msg = messages[index];
   if (!msg) return false;
-  if (msg.role !== 'user' && msg.role !== 'user-with-attachments') return false;
+  if (msg.role !== 'user') return false;
   for (let j = index + 1; j < messages.length; j++) {
     const r = messages[j].role;
-    if (r === 'user' || r === 'user-with-attachments') return false;
+    if (r === 'user') return false;
   }
   return true;
 }
@@ -35,7 +35,7 @@ export function messageAttachmentsToWire(
     data: a.data ?? a.content,
     name: a.name,
     size: a.size,
-    workspaceRelativePath: a.workspaceRelativePath,
+    uri: a.uri,
     durationSeconds: a.durationSeconds,
   }));
 }

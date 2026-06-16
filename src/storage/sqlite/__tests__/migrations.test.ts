@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { requireNodeSqlite } from '../../../infra/node-sqlite.js';
-import { discoverSqlMigrations, validateMigrationSequence } from '../migrations/discover.js';
+import { validateMigrationSequence } from '../migrations/discover.js';
 import {
   DatabaseSchemaMigrationGapError,
   DatabaseSchemaTooNewError,
@@ -12,7 +12,6 @@ import {
 import {
   applyPendingMigrations,
   inspectSchemaMigrationStatus,
-  XOPC_DB_BASELINE_SCHEMA_VERSION,
   XOPC_DB_SCHEMA_VERSION,
 } from '../migrations/runner.js';
 import {

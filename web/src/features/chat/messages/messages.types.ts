@@ -54,8 +54,8 @@ export type MessageAttachment = {
   /** Thumbnail / first-page preview (base64), optional */
   preview?: string;
   extractedText?: string;
-  /** Persisted under agent home `inbound/` — fetch via gateway for preview */
-  workspaceRelativePath?: string;
+  /** Persisted media URI — fetch via `GET /api/media/read?uri=`. */
+  uri?: string;
   /** Known clip length (sec). Set for recorded voice; HTML audio may omit WebM duration. */
   durationSeconds?: number;
 };
@@ -64,7 +64,7 @@ export type MessageAttachment = {
 export type Attachment = MessageAttachment;
 
 export interface Message {
-  role: 'user' | 'assistant' | 'user-with-attachments';
+  role: 'user' | 'assistant';
   content: MessageContent[];
   attachments?: MessageAttachment[];
   usage?: {

@@ -103,7 +103,7 @@ export const MessageBubble = memo(function MessageBubble({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
 
-  const isUser = message.role === 'user' || message.role === 'user-with-attachments';
+  const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const roleLabel = isUser ? m.chat.you : isAssistant ? m.chat.assistant : m.chat.tool;
 
@@ -174,13 +174,13 @@ export const MessageBubble = memo(function MessageBubble({
     return (message.content ?? []).filter((b) => b.type !== 'thinking');
   }, [message.content, reasoningHidden]);
 
-  /** Assistant model images: show in the “Message output” strip below, not in the main column. */
+  /** User/assistant images: grid via AttachmentRenderer, not stacked inline blocks in the text column. */
   const displayForFlow = useMemo(() => {
-    if (!isAssistant) {
+    if (!isUser && !isAssistant) {
       return displayContent;
     }
     return (displayContent ?? []).filter((b) => b.type !== 'image');
-  }, [isAssistant, displayContent]);
+  }, [isUser, isAssistant, displayContent]);
 
   const assistantWorkspacePaths = useMemo(
     () => (isAssistant ? collectAssistantWorkspaceOutputPaths(message.content) : []),
@@ -205,11 +205,13 @@ export const MessageBubble = memo(function MessageBubble({
     (assistantWorkspacePaths.length > 0 || assistantImageAttachments.length > 0);
 
   const attachmentsForBubble = useMemo(() => {
-    if (!isAssistant) return message.attachments;
-    return filterAssistantAttachmentsDedupedAgainstWorkspacePaths(
-      message.attachments,
-      assistantWorkspacePaths,
-    );
+    if (isAssistant) {
+      return filterAssistantAttachmentsDedupedAgainstWorkspacePaths(
+        message.attachments,
+        assistantWorkspacePaths,
+      );
+    }
+    return message.attachments;
   }, [isAssistant, message.attachments, assistantWorkspacePaths]);
 
   const progressForMeta =

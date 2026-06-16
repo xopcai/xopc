@@ -48,7 +48,7 @@ export function useComposerAttachments(options: UseComposerAttachmentsOptions): 
       data: a.content,
       name: a.name,
       size: a.size,
-      ...(a.workspaceRelativePath ? { workspaceRelativePath: a.workspaceRelativePath } : {}),
+      ...(a.uri ? { uri: a.uri } : {}),
       ...(typeof a.durationSeconds === 'number' &&
       Number.isFinite(a.durationSeconds) &&
       a.durationSeconds > 0

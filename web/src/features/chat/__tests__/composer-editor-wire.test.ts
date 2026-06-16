@@ -126,6 +126,45 @@ describe('normalizeOrphanComposerDom', () => {
     expect(serializeEditorToWire(root)).toBe('\n');
   });
 
+  it('preserves newlines between sibling block divs (Chrome multi-line input)', () => {
+    const root = document.createElement('div');
+    const d1 = document.createElement('div');
+    d1.textContent = 'line1';
+    const d2 = document.createElement('div');
+    d2.textContent = 'line2';
+    root.appendChild(d1);
+    root.appendChild(d2);
+    expect(serializeEditorToWire(root)).toBe('line1\nline2');
+  });
+
+  it('preserves newlines when text is followed by a nested block div', () => {
+    const root = document.createElement('div');
+    root.appendChild(document.createTextNode('line1'));
+    const inner = document.createElement('div');
+    inner.appendChild(document.createTextNode('line2'));
+    root.appendChild(inner);
+    expect(serializeEditorToWire(root)).toBe('line1\nline2');
+  });
+
+  it('preserves newlines inside nested block divs', () => {
+    const root = document.createElement('div');
+    const outer = document.createElement('div');
+    outer.appendChild(document.createTextNode('line1'));
+    const inner = document.createElement('div');
+    inner.appendChild(document.createTextNode('line2'));
+    outer.appendChild(inner);
+    root.appendChild(outer);
+    expect(serializeEditorToWire(root)).toBe('line1\nline2');
+  });
+
+  it('preserves newlines from br inside a single div', () => {
+    const root = document.createElement('div');
+    root.appendChild(document.createTextNode('line1'));
+    root.appendChild(document.createElement('br'));
+    root.appendChild(document.createTextNode('line2'));
+    expect(serializeEditorToWire(root)).toBe('line1\nline2');
+  });
+
   it('preserves text with non-whitespace characters', () => {
     const root = document.createElement('div');
     root.appendChild(document.createTextNode(' hi '));

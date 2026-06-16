@@ -23,7 +23,7 @@ function parseAttachment(x: unknown): PendingFollowUpAttachment | null {
   if (typeof x.mimeType === 'string') out.mimeType = x.mimeType;
   if (typeof x.name === 'string') out.name = x.name;
   if (typeof x.size === 'number' && Number.isFinite(x.size)) out.size = x.size;
-  if (typeof x.workspaceRelativePath === 'string') out.workspaceRelativePath = x.workspaceRelativePath;
+  if (typeof x.uri === 'string') out.uri = x.uri;
   if (typeof x.durationSeconds === 'number' && Number.isFinite(x.durationSeconds)) {
     out.durationSeconds = x.durationSeconds;
   }

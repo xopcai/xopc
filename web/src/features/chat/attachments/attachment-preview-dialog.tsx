@@ -59,15 +59,24 @@ export function AttachmentPreviewDialog({
 
   const handleDownload = () => {
     if (!preview) return;
-    const payload = getAttachmentBinaryPayload(preview);
-    if (!payload) return;
-    const byteCharacters = atob(payload);
-    const byteNumbers = new Array(byteCharacters.length);
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    const mime = preview.mimeType || 'application/octet-stream';
+    let blob: Blob | null = null;
+    if (resolved.binaryBuffer) {
+      blob = new Blob([resolved.binaryBuffer], { type: mime });
+    } else {
+      const payload = getAttachmentBinaryPayload(preview);
+      if (!payload) return;
+      try {
+        const binary = atob(payload.replace(/\s/g, ''));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        blob = new Blob([bytes], { type: mime });
+      } catch {
+        return;
+      }
     }
-    const byteArray = new Uint8Array(byteNumbers);
-    const blob = new Blob([byteArray], { type: preview.mimeType || 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -77,6 +86,8 @@ export function AttachmentPreviewDialog({
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
+
+  const canDownload = Boolean(resolved.binaryBuffer || getAttachmentBinaryPayload(preview ?? {}));
 
   const sideStripClass = cn(
     'min-h-0 min-w-0 flex-1 cursor-pointer border-0 p-0',
@@ -203,7 +214,7 @@ export function AttachmentPreviewDialog({
                   extractedTextTruncated={resolved.extractedTextTruncated}
                   actions={{
                     onDownload: handleDownload,
-                    canDownload: Boolean(getAttachmentBinaryPayload(preview)),
+                    canDownload,
                   }}
                 />
               ) : null}

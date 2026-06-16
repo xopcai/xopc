@@ -4,7 +4,10 @@ import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/mes
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
 import { mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
 import { mergeMissingUserMessagesFromServer } from '@/features/chat/messages/merge-missing-user-messages';
-import { userMessagesEquivalent } from '@/features/chat/messages/user-message-from-sse';
+import {
+  shouldReplaceOptimisticUserRow,
+  userMessagesEquivalent,
+} from '@/features/chat/messages/user-message-from-sse';
 import { isUiUserMessage } from '@/features/chat/messages/user-round-index';
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
@@ -381,6 +384,20 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
                 messages: cloneMessages([message]),
                 hasMore: false,
                 ...IDLE_STREAM,
+              },
+            },
+          };
+        }
+        const last = current.messages[current.messages.length - 1];
+        if (last && shouldReplaceOptimisticUserRow(last, message)) {
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: {
+                ...current,
+                messages: cloneMessages(
+                  mergeConsecutiveAssistantMessages([...current.messages.slice(0, -1), message]),
+                ),
               },
             },
           };

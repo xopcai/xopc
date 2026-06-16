@@ -11,7 +11,7 @@ describe('userRoundIndexFromUiMessageIndex', () => {
     const messages: Message[] = [
       { role: 'user', content: [{ type: 'text', text: 'a' }] },
       { role: 'assistant', content: [{ type: 'text', text: 'A' }] },
-      { role: 'user-with-attachments', content: [{ type: 'text', text: 'b' }], attachments: [] },
+      { role: 'user', content: [{ type: 'text', text: 'b' }], attachments: [] },
     ];
     expect(userRoundIndexFromUiMessageIndex(messages, 0)).toBe(0);
     expect(userRoundIndexFromUiMessageIndex(messages, 2)).toBe(1);

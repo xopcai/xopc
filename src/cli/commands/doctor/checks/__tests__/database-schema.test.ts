@@ -34,7 +34,7 @@ describe('checkDatabaseSchema', () => {
       });
 
       expect(result.status).toBe('pass');
-      expect(result.message).toMatch(/SQLite schema v1/);
+      expect(result.message).toMatch(/SQLite schema v2/);
     } finally {
       if (previousStateDir === undefined) {
         delete process.env.XOPC_STATE_DIR;

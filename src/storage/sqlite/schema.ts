@@ -12,8 +12,6 @@ import {
 import {
   ensureSchemaMetaTable,
   readSchemaVersion,
-  readSchemaVersionForTest,
-  SCHEMA_META_SCHEMA_VERSION_KEY,
   setSchemaVersion,
 } from './schema-version.js';
 

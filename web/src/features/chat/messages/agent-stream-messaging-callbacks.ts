@@ -143,16 +143,16 @@ export function createAgentStreamMessagingCallbacks(opts: {
     onTtsAudio: (p) => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
-        const rel = p.workspaceRelativePath?.replace(/\\/g, '/').trim();
+        const uri = p.uri?.trim();
         const existing = msg.attachments ?? [];
-        if (rel && existing.some((a) => a.workspaceRelativePath?.replace(/\\/g, '/').trim() === rel)) {
+        if (uri && existing.some((a) => a.uri?.trim() === uri)) {
           return;
         }
         const nextAtt = {
           name: p.name,
           mimeType: p.mimeType,
           type: 'voice' as const,
-          workspaceRelativePath: p.workspaceRelativePath,
+          uri: p.uri,
           size: 0,
         };
         msg.attachments = [...existing, nextAtt];

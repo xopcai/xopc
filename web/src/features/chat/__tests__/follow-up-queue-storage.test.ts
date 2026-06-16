@@ -69,7 +69,7 @@ describe('follow-up-queue-storage', () => {
               type: 'image',
               name: 'a.png',
               data: 'data:image/png;base64,AAAA',
-              workspaceRelativePath: 'inbound/foo.png',
+              uri: 'media://inbound/foo---uuid.png',
             },
           ],
         },
@@ -77,6 +77,6 @@ describe('follow-up-queue-storage', () => {
       editingId: null,
     });
     expect(snap.pending[0]?.attachments?.[0]).not.toHaveProperty('data');
-    expect(snap.pending[0]?.attachments?.[0]?.workspaceRelativePath).toBe('inbound/foo.png');
+    expect(snap.pending[0]?.attachments?.[0]?.uri).toBe('media://inbound/foo---uuid.png');
   });
 });

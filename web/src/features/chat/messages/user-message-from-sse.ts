@@ -2,7 +2,8 @@ import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages
 import type { Message } from '@/features/chat/messages/messages.types';
 import { extractUserMessagePlainText } from '@/features/chat/messages/user-message-plain-text';
 import { isUiUserMessage } from '@/features/chat/messages/user-round-index';
-import { normalizeWireAttachments } from '@/features/chat/messages/wire-attachments';
+import { normalizeWireAttachments, normalizeWireMedia } from '@/features/chat/messages/wire-attachments';
+import { stripUserMessageForDisplay } from '@/features/chat/messages/wire-text-scrub';
 
 /** Parse `user_message` / `user_transcript` SSE payloads into a UI user row. */
 export function userMessageFromSsePayload(parsed: Record<string, unknown>): Message | null {
@@ -11,11 +12,12 @@ export function userMessageFromSsePayload(parsed: Record<string, unknown>): Mess
       ? parsed.timestamp
       : Date.now();
 
-  if (Array.isArray(parsed.content)) {
+  if (Array.isArray(parsed.content) || typeof parsed.content === 'string') {
     const [msg] = sessionWireToUiMessages([
       {
         role: 'user',
         content: parsed.content,
+        media: parsed.media,
         attachments: parsed.attachments,
         timestamp,
       },
@@ -24,23 +26,45 @@ export function userMessageFromSsePayload(parsed: Record<string, unknown>): Mess
   }
 
   const text =
-    typeof parsed.text === 'string'
-      ? parsed.text
-      : typeof parsed.content === 'string'
-        ? parsed.content
-        : '';
-  if (!text.trim() && !parsed.attachments) {
+    typeof parsed.text === 'string' ? stripUserMessageForDisplay(parsed.text.trim()) : '';
+  const media = normalizeWireMedia(parsed.media);
+  const attachments = normalizeWireAttachments(parsed.attachments);
+  const merged = [...(media ?? []), ...(attachments ?? [])];
+  if (!text && merged.length === 0) {
     return null;
   }
 
-  const attachments = normalizeWireAttachments(parsed.attachments);
-  const role = attachments?.length ? 'user-with-attachments' : 'user';
   return {
-    role,
-    content: text.trim() ? [{ type: 'text', text: text.trim() }] : [],
-    attachments,
+    role: 'user',
+    content: text ? [{ type: 'text', text }] : [],
+    attachments: merged.length ? merged : undefined,
     timestamp,
   };
+}
+
+const OPTIMISTIC_USER_REPLACE_WINDOW_MS = 120_000;
+
+/** True when the server row should replace the last optimistic user bubble from send(). */
+export function shouldReplaceOptimisticUserRow(optimistic: Message, server: Message): boolean {
+  if (!isUiUserMessage(optimistic.role) || !isUiUserMessage(server.role)) return false;
+
+  const optText = extractUserMessagePlainText(optimistic.content).trim();
+  const srvText = extractUserMessagePlainText(server.content).trim();
+
+  if (optText && srvText && (optText === srvText || srvText.startsWith(optText))) {
+    return true;
+  }
+
+  const optAtt = optimistic.attachments?.length ?? 0;
+  const srvAtt = server.attachments?.length ?? 0;
+  if (optAtt > 0 && srvAtt > 0) {
+    const tsDelta = Math.abs((server.timestamp ?? 0) - (optimistic.timestamp ?? 0));
+    if (tsDelta <= OPTIMISTIC_USER_REPLACE_WINDOW_MS) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 export function userMessagesEquivalent(a: Message, b: Message): boolean {

@@ -158,7 +158,10 @@ function attachmentOverlapsWorkspaceOutputPaths(
   att: MessageAttachment,
   paths: readonly ExtractedFilePath[],
 ): boolean {
-  const attRel = normalizeWorkspaceRel(att.workspaceRelativePath);
+  if (att.uri?.startsWith('media://')) {
+    return false;
+  }
+  const attRel = normalizeWorkspaceRel(undefined);
   const attName = (att.name ?? '').trim().toLowerCase();
   for (const p of paths) {
     const pr = normalizeWorkspaceRel(p.workspaceRelativePath);

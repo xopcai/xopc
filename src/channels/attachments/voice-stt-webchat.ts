@@ -2,16 +2,14 @@
  * STT for webchat voice attachments: merge transcripts into user text and track inbound voice for TTS trigger.
  */
 
-import { readFile } from 'fs/promises';
-
 import type { STTConfig } from '../../voice/stt/types.js';
 import { DEFAULT_STT_CONFIG } from '../../voice/stt/types.js';
 import { isSTTAvailable, transcribe } from '../../voice/stt/index.js';
 import {
-  resolveSafeInboundFilePath,
-  type InboundAttachmentInput,
-  type InternalAttachmentRoots,
   decodeInboundAttachmentBase64,
+  readInboundAttachmentBuffer,
+  type InboundAttachmentInput,
+  type MediaRef,
 } from './inbound-persist.js';
 
 const STT_MAX_BYTES = 25 * 1024 * 1024;
@@ -42,15 +40,14 @@ export function mergeSttConfigFromAppConfig(
   };
 }
 
-export function isVoiceLikeAttachment(att: InboundAttachmentInput): boolean {
+export function isVoiceLikeAttachment(att: InboundAttachmentInput | MediaRef): boolean {
   if (att.type === 'voice') return true;
   const m = att.mimeType?.toLowerCase() ?? '';
   return m.startsWith('audio/');
 }
 
 export async function mergeVoiceTranscriptsIntoUserText(
-  attachmentRoots: InternalAttachmentRoots,
-  prepared: InboundAttachmentInput[] | undefined,
+  prepared: (InboundAttachmentInput | MediaRef)[] | undefined,
   userText: string,
   sttConfig: STTConfig,
   opts?: { skipVoiceTranscription?: boolean },
@@ -78,16 +75,13 @@ export async function mergeVoiceTranscriptsIntoUserText(
     if (!isVoiceLikeAttachment(att)) continue;
 
     let buf: Buffer | null = null;
-    if (att.workspaceRelativePath) {
-      const abs = resolveSafeInboundFilePath(attachmentRoots, att.workspaceRelativePath);
-      if (abs) {
-        try {
-          buf = await readFile(abs);
-        } catch {
-          buf = null;
-        }
+    if ('uri' in att && att.uri?.trim()) {
+      try {
+        buf = await readInboundAttachmentBuffer(att.uri.trim());
+      } catch {
+        buf = null;
       }
-    } else if (att.data) {
+    } else if ('data' in att && att.data) {
       try {
         buf = decodeInboundAttachmentBase64(att.data);
       } catch {

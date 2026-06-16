@@ -72,7 +72,7 @@ export type MessagingCallbacks = {
   /** Context compaction in progress (pre-turn automatic or manual). */
   onCompaction?: (state: CompactionState) => void;
   /** Assistant TTS audio persisted under agent home `tts/` (before `result`). */
-  onTtsAudio?: (payload: { workspaceRelativePath: string; mimeType: string; name: string }) => void;
+  onTtsAudio?: (payload: { uri: string; mimeType: string; name: string }) => void;
   /** Agent `clarify` tool — user must answer via POST /api/clarify/:requestId */
   onClarifyRequest?: (payload: {
     requestId: string;
@@ -428,7 +428,7 @@ export class MessageSender {
         break;
       case 'tts_audio':
         cb?.onTtsAudio?.({
-          workspaceRelativePath: String(parsed.workspaceRelativePath || ''),
+          uri: String(parsed.uri || ''),
           mimeType: String(parsed.mimeType || 'audio/mpeg'),
           name: String(parsed.name || 'voice.mp3'),
         });

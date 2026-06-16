@@ -6,13 +6,23 @@ import type { ModelManager } from '../models/index.js';
 import type { SessionStore } from '../../session/index.js';
 import type { Config } from '../../config/schema.js';
 import { initSessionTurn } from '../../session/index.js';
-import { buildDirectUserMessageContent, type DirectInboundAttachment } from './build-direct-message-content.js';
+import {
+  buildDirectUserMessageContent,
+} from './build-direct-message-content.js';
 import type { ProcessDirectStreamLog } from './process-direct-streaming.js';
+import type {
+  InboundAttachmentInput,
+  MediaRef,
+} from '../../channels/attachments/inbound-persist.js';
 import {
   hydratePerTurnState,
   runDirectAgentTurn,
   tryRunSlashCommand,
 } from './direct-turn-helpers.js';
+import {
+  setPendingTranscriptUserMessage,
+  type TranscriptUserMessage,
+} from '../inbound/attachment-pipeline.js';
 
 export type RunProcessDirectDeps = {
   log: ProcessDirectStreamLog;
@@ -27,8 +37,8 @@ export type RunProcessDirectDeps = {
   applyResolvedThinkingLevel: (sessionKey: string, thinking?: string | null) => Promise<void>;
   prepareInboundAttachments: (
     sessionKey: string,
-    attachments?: DirectInboundAttachment[],
-  ) => Promise<DirectInboundAttachment[] | undefined>;
+    attachments?: InboundAttachmentInput[],
+  ) => Promise<MediaRef[] | undefined>;
   commandHandler: Pick<CommandHandler, 'executeCommandAndAggregateReply'>;
   onTurnComplete?: (sessionKey: string, lastAssistantText?: string) => void;
   endDirectRequestContext: () => void;
@@ -40,7 +50,7 @@ export async function runProcessDirect(
   input: {
     content: string;
     sessionKey: string;
-    attachments?: DirectInboundAttachment[];
+    attachments?: InboundAttachmentInput[];
     thinking?: string;
   },
 ): Promise<string> {
@@ -86,7 +96,7 @@ export async function runProcessDirect(
     const textForDirect = turnBody.trimStart().startsWith('/skill:')
       ? deps.agentManager.expandSkillUserText(turnBody)
       : turnBody;
-    const messageContent = await buildDirectUserMessageContent({
+    const userMessage = await buildDirectUserMessageContent({
       content: textForDirect,
       attachments: prepared,
       sessionKey: input.sessionKey,
@@ -95,15 +105,14 @@ export async function runProcessDirect(
       modelManager: deps.modelManager,
     });
 
-    const userMessage = {
-      role: 'user' as const,
-      content: messageContent,
-      timestamp: Date.now(),
-    };
+    setPendingTranscriptUserMessage(input.sessionKey, userMessage as TranscriptUserMessage);
 
     const result = await runDirectAgentTurn(
       { ...deps, config: deps.config },
-      { sessionKey: input.sessionKey, userMessage },
+      {
+        sessionKey: input.sessionKey,
+        userMessage,
+      },
     );
 
     if (result.lastAssistantText) {

@@ -706,8 +706,8 @@ export class SessionStore {
         tool_calls: m.tool_calls as Message['tool_calls'],
         name: m.name as string | undefined,
       };
-      if (Array.isArray(m.attachments) && m.attachments.length > 0) {
-        row.attachments = m.attachments as Message['attachments'];
+      if (Array.isArray(m.media) && m.media.length > 0) {
+        row.media = m.media as Message['media'];
       }
       const rawUsage = m.usage as { input?: number; output?: number; totalTokens?: number; total?: number } | undefined;
       if (rawUsage && typeof rawUsage === 'object') {

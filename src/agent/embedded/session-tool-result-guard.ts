@@ -131,6 +131,7 @@ export function guardSessionManager(
     allowSyntheticToolResults?: boolean;
     missingToolResultText?: string;
     allowedToolNames?: Iterable<string>;
+    transformMessageForPersistence?: (message: AgentMessage) => AgentMessage;
   },
 ): GuardedPiTranscriptManager {
   if (typeof (sessionManager as GuardedPiTranscriptManager).flushPendingToolResults === 'function') {
@@ -139,6 +140,7 @@ export function guardSessionManager(
 
   const result = installSessionToolResultGuard(sessionManager, {
     sessionKey: opts?.sessionKey,
+    transformMessageForPersistence: opts?.transformMessageForPersistence,
     allowSyntheticToolResults: opts?.allowSyntheticToolResults,
     missingToolResultText: opts?.missingToolResultText,
     allowedToolNames: opts?.allowedToolNames,

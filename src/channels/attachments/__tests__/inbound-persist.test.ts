@@ -1,49 +1,89 @@
-import { describe, it, expect } from 'vitest';
+import { mkdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { afterEach, describe, expect, it } from 'vitest';
+
 import {
-  resolveSafeInboundFilePath,
-  formatInboundFileTextBlock,
-  stripInboundFileMetadataFromText,
+  decodeInboundAttachmentBase64,
+  persistInboundAttachments,
+  readInboundAttachmentBuffer,
 } from '../inbound-persist.js';
+import { readMediaBuffer } from '../../../media/store.js';
 
-describe('inbound-persist', () => {
-  const agentHome = '/home/user/.xopc/agents/main';
-  const roots = { agentHome };
+describe('persistInboundAttachments', () => {
+  let prevStateDir: string | undefined;
 
-  it('resolveSafeInboundFilePath rejects traversal and non-inbound paths', () => {
-    expect(resolveSafeInboundFilePath(roots, 'inbound/s/doc.txt')).toBeTruthy();
-    expect(resolveSafeInboundFilePath(roots, '../inbound/s/doc.txt')).toBeNull();
-    expect(resolveSafeInboundFilePath(roots, 'other/file.txt')).toBeNull();
-    expect(resolveSafeInboundFilePath(roots, '.xopc/inbound/s/doc.txt')).toBeNull();
+  afterEach(async () => {
+    if (prevStateDir === undefined) {
+      delete process.env.XOPC_STATE_DIR;
+    } else {
+      process.env.XOPC_STATE_DIR = prevStateDir;
+    }
   });
 
-  it('formatInboundFileTextBlock includes abs path when persisted', () => {
-    const text = formatInboundFileTextBlock(
+  it('writes binary data to global media store and returns MediaRef', async () => {
+    prevStateDir = process.env.XOPC_STATE_DIR;
+    const work = join(tmpdir(), `xopc-inbound-${Date.now()}`);
+    process.env.XOPC_STATE_DIR = work;
+    await mkdir(work, { recursive: true });
+
+    const b64 = Buffer.from('hello-doc').toString('base64');
+    const prepared = await persistInboundAttachments([
       {
         type: 'document',
         mimeType: 'text/plain',
-        name: 'a.md',
-        size: 10,
-        workspaceRelativePath: 'inbound/k/a.md',
+        name: 'doc.txt',
+        data: b64,
       },
-      agentHome,
-    );
-    expect(text).toContain('[File: a.md (text/plain, 10 bytes)]');
-    expect(text).toContain('xopc-path:rel:inbound/k/a.md');
-    expect(text).toContain('xopc-path:abs:');
+    ]);
+
+    expect(prepared).toHaveLength(1);
+    const att = prepared![0]!;
+    expect(att.uri).toMatch(/^media:\/\/inbound\//);
+    expect(att.name).toBe('doc.txt');
+    expect(att.mimeType).toBe('text/plain');
+
+    const buf = await readInboundAttachmentBuffer(att.uri);
+    expect(buf.toString()).toBe('hello-doc');
   });
 
-  it('stripInboundFileMetadataFromText removes file blocks for session titles', () => {
-    const block = formatInboundFileTextBlock(
+  it('passes through existing media URI without re-writing', async () => {
+    prevStateDir = process.env.XOPC_STATE_DIR;
+    const work = join(tmpdir(), `xopc-inbound-${Date.now()}`);
+    process.env.XOPC_STATE_DIR = work;
+    await mkdir(work, { recursive: true });
+
+    const { saveMediaBuffer } = await import('../../../media/store.js');
+    const saved = await saveMediaBuffer(Buffer.from('cached'), {
+      contentType: 'image/png',
+      originalFilename: 'x.png',
+    });
+
+    const prepared = await persistInboundAttachments([
       {
-        type: 'document',
-        mimeType: 'text/plain',
-        name: 'design-system.md',
-        size: 34298,
-        workspaceRelativePath: 'inbound/k/f.md',
+        type: 'photo',
+        mimeType: 'image/png',
+        name: 'x.png',
+        uri: saved.uri,
       },
-      agentHome,
-    );
-    const joined = `分析 ${block}`;
-    expect(stripInboundFileMetadataFromText(joined)).toBe('分析');
+    ]);
+
+    expect(prepared![0]!.uri).toBe(saved.uri);
+    const read = await readMediaBuffer(saved.id, 'inbound');
+    expect(read.buffer.toString()).toBe('cached');
+    await rm(work, { recursive: true, force: true });
+  });
+
+  it('throws when attachment has neither data nor uri', async () => {
+    prevStateDir = process.env.XOPC_STATE_DIR;
+    process.env.XOPC_STATE_DIR = join(tmpdir(), `xopc-inbound-${Date.now()}`);
+    await expect(
+      persistInboundAttachments([{ type: 'document', name: 'x.txt' }]),
+    ).rejects.toThrow(/missing data and uri/i);
+  });
+
+  it('decodeInboundAttachmentBase64 handles data URLs', () => {
+    const buf = decodeInboundAttachmentBase64('data:text/plain;base64,aGVsbG8=');
+    expect(buf.toString()).toBe('hello');
   });
 });

@@ -6,7 +6,6 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { complete, type UserMessage } from '@earendil-works/pi-ai';
 
 import { stripSessionStartupContextFromUserText } from '../agent/reply/startup-context.js';
-import { stripInboundFileMetadataFromText } from '../channels/attachments/inbound-persist.js';
 import { stripEnvelopeTimestampPrefix } from '../channels/envelope-timestamp.js';
 import { isCronSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { resolveModel } from '../providers/index.js';
@@ -43,11 +42,7 @@ function firstUserText(messages: AgentMessage[]): string {
   const u = messages.find((m) => m.role === 'user');
   if (!u) return '';
   const raw = extractTextFromMessage(u);
-  // User turns include `formatInboundFileTextBlock` text blocks; do not feed [File:…] into title LLM / fallback.
-  // Inbound pipeline / webchat prepends `[YYYY-MM-DD HH:MM TZ]`; strip so titles are not timestamp-led.
-  return stripInboundFileMetadataFromText(
-    stripEnvelopeTimestampPrefix(stripSessionStartupContextFromUserText(raw)),
-  );
+  return stripEnvelopeTimestampPrefix(stripSessionStartupContextFromUserText(raw));
 }
 
 /** First assistant message that has visible text (skips tool-only assistant rows). */
@@ -99,8 +94,8 @@ export function getSessionTitleSource(
 
 /** Title from a single user message (first line), for immediate sidebar labels. */
 export function provisionalTitleFromUserText(raw: string): string | null {
-  const text = stripInboundFileMetadataFromText(
-    stripEnvelopeTimestampPrefix(stripSessionStartupContextFromUserText((raw ?? '').trim())),
+  const text = stripEnvelopeTimestampPrefix(
+    stripSessionStartupContextFromUserText((raw ?? '').trim()),
   );
   if (!text) return null;
   const line = text.split(/\n/)[0]?.trim();

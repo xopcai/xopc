@@ -11,6 +11,7 @@ import type { Model, Api } from '@earendil-works/pi-ai';
 
 import { createLogger } from '../../utils/logger.js';
 import { guardSessionManager, type GuardedPiTranscriptManager } from './session-tool-result-guard.js';
+import { transformUserMessageForPersistence } from '../inbound/attachment-pipeline.js';
 import { openSqliteHydratingSessionManager } from './sqlite-hydrating-session-manager.js';
 import { applyXopcProviderApiKey, createEmbeddedAuthStorage } from './xopc-auth-storage.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
@@ -256,6 +257,8 @@ export class EmbeddedSessionRunnerPool {
       {
         sessionKey,
         contextWindowTokens: model.contextWindow ?? 128_000,
+        transformMessageForPersistence: (message) =>
+          transformUserMessageForPersistence(sessionKey, message),
       },
     );
 

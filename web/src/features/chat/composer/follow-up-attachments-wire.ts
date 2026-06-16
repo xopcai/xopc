@@ -19,7 +19,7 @@ export function wireFollowUpAttachmentsToComposer(
     content: w.data ?? '',
     name: w.name ?? 'file',
     size: w.size ?? 0,
-    workspaceRelativePath: w.workspaceRelativePath,
+    uri: w.uri,
     ...(typeof w.durationSeconds === 'number' &&
     Number.isFinite(w.durationSeconds) &&
     w.durationSeconds > 0

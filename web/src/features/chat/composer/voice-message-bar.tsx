@@ -2,7 +2,7 @@ import { Mic, Pause, Play } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
-import { workspaceRelativePathToApiPath } from '@/features/chat/attachments/attachment-utils-core';
+import { mediaUriToReadUrl } from '@/features/chat/attachments/attachment-utils-core';
 import { apiFetch } from '@/lib/fetch';
 import { cn } from '@/lib/cn';
 import { apiUrl } from '@/lib/url';
@@ -66,7 +66,7 @@ export function VoiceMessageBar({
     }
   }, []);
 
-  const attPlaybackKey = `${att.workspaceRelativePath ?? ''}:${att.content?.length ?? 0}:${att.mimeType ?? ''}:${sessionKey ?? ''}`;
+  const attPlaybackKey = `${att.uri ?? ''}:${att.content?.length ?? 0}:${att.mimeType ?? ''}`;
   const trackedAttPlaybackRef = useRef(attPlaybackKey);
   if (trackedAttPlaybackRef.current !== attPlaybackKey) {
     trackedAttPlaybackRef.current = attPlaybackKey;
@@ -84,11 +84,9 @@ export function VoiceMessageBar({
         setSrc(`data:${mime};base64,${raw.replace(/\s/g, '')}`);
         return;
       }
-      if (!att.workspaceRelativePath) return;
+      if (!att.uri) return;
       try {
-        const res = await apiFetch(
-          apiUrl(workspaceRelativePathToApiPath(att.workspaceRelativePath, { sessionKey })),
-        );
+        const res = await apiFetch(apiUrl(mediaUriToReadUrl(att.uri)));
         if (!res.ok || cancelled) return;
         const blob = await res.blob();
         const u = URL.createObjectURL(blob);

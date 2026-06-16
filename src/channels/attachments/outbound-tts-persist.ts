@@ -1,80 +1,50 @@
 /**
- * Persist outbound TTS audio under `<agentHome>/tts/<session>/`.
+ * Persist outbound TTS audio to `{stateDir}/media/tts/`.
  */
 
-import { mkdir, writeFile } from 'fs/promises';
-import { join, resolve } from 'path';
-import { randomBytes } from 'crypto';
 import { createLogger } from '../../utils/logger.js';
-import type { InternalAttachmentRoots } from './inbound-persist.js';
+import { saveMediaBuffer } from '../../media/index.js';
+import type { MediaRef } from '../../media/types.js';
 
 const log = createLogger('OutboundTtsPersist');
 
-export const TTS_REL_ROOT = 'tts';
-
-function sanitizeSessionSegment(sessionKey: string): string {
-  return sessionKey.replace(/[^a-zA-Z0-9_.-]+/g, '_').slice(0, 180) || 'session';
-}
-
 function extForFormat(format: string): string {
   const f = format.toLowerCase();
-  if (f === 'opus' || f === 'ogg') return 'ogg';
-  if (f === 'mp3' || f === 'mpeg') return 'mp3';
-  if (f === 'wav') return 'wav';
-  return 'bin';
+  if (f === 'opus' || f === 'ogg') return '.ogg';
+  if (f === 'mp3' || f === 'mpeg') return '.mp3';
+  if (f === 'wav') return '.wav';
+  return '.bin';
 }
 
-function resolveUnderRoot(root: string, rel: string, requiredPrefix: string): string | null {
-  const normalized = rel.replace(/\\/g, '/').replace(/^\/+/, '');
-  if (normalized.includes('..') || !normalized.startsWith(requiredPrefix)) {
-    return null;
-  }
-  const abs = resolve(root, ...normalized.split('/'));
-  const rootResolved = resolve(root);
-  if (!abs.startsWith(rootResolved)) {
-    return null;
-  }
-  return abs;
+function mimeForFormat(format: string): string {
+  const f = format.toLowerCase();
+  if (f === 'opus' || f === 'ogg') return 'audio/ogg';
+  if (f === 'mp3' || f === 'mpeg') return 'audio/mpeg';
+  if (f === 'wav') return 'audio/wav';
+  return 'application/octet-stream';
 }
 
 export async function persistOutboundTtsAudio(
-  agentHomeRoot: string,
-  sessionKey: string,
   audioBuffer: Buffer,
   format: string,
-): Promise<{
-  workspaceRelativePath: string;
-  name: string;
-  size: number;
-}> {
-  const sessionSeg = sanitizeSessionSegment(sessionKey);
-  const dirAbs = resolve(agentHomeRoot, TTS_REL_ROOT, sessionSeg);
-  await mkdir(dirAbs, { recursive: true });
+): Promise<MediaRef> {
   const ext = extForFormat(format);
-  const fname = `assist_${Date.now()}_${randomBytes(4).toString('hex')}.${ext}`;
-  const absFile = join(dirAbs, fname);
-  await writeFile(absFile, audioBuffer);
-  const workspaceRelativePath = [TTS_REL_ROOT, sessionSeg, fname].join('/');
-  log.debug({ sessionKey, workspaceRelativePath, bytes: audioBuffer.length }, 'TTS audio persisted');
+  const saved = await saveMediaBuffer(audioBuffer, {
+    contentType: mimeForFormat(format),
+    bucket: 'tts',
+    originalFilename: `assist${ext}`,
+  });
+
+  log.debug({ uri: saved.uri, bytes: saved.size }, 'TTS audio persisted');
+
   return {
-    workspaceRelativePath,
-    name: fname,
-    size: audioBuffer.length,
+    id: saved.id,
+    bucket: 'tts',
+    type: 'voice',
+    mimeType: saved.contentType,
+    name: saved.id,
+    size: saved.size,
+    uri: saved.uri,
+    path: saved.path,
   };
-}
-
-/**
- * Resolve a stored relative path under `tts/`.
- */
-export function resolveSafeTtsFilePath(roots: InternalAttachmentRoots, relRaw: string): string | null {
-  const rel = relRaw.replace(/\\/g, '/').replace(/^\/+/, '');
-  if (rel.includes('..')) {
-    return null;
-  }
-
-  if (rel.startsWith(`${TTS_REL_ROOT}/`)) {
-    return resolveUnderRoot(roots.agentHome, rel, `${TTS_REL_ROOT}/`);
-  }
-
-  return null;
 }
