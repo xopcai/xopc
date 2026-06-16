@@ -16,16 +16,10 @@ import {
 } from '@/features/chat/messages/wire-format';
 import {
   dedupeAttachments,
-  extractAttachmentsFromUserContent,
-  mergeUserAttachments,
   normalizeWireAttachments,
+  normalizeWireMedia,
 } from '@/features/chat/messages/wire-attachments';
-import {
-  collapseExpandedSkillBlockForDisplay,
-  stripExpandedAtFileBlocks,
-  stripInboundFileMachineText,
-  stripStartupContextForDisplay,
-} from '@/features/chat/messages/wire-text-scrub';
+import { stripUserMessageForDisplay } from '@/features/chat/messages/wire-text-scrub';
 
 /** Plain text for search / previews over wire-format or UI message content. */
 export function messageWireSearchText(content: unknown): string {
@@ -257,7 +251,7 @@ export function sessionWireToUiMessages(raw: readonly unknown[]): Message[] {
       continue;
     }
 
-    if (role === 'user' || role === 'user-with-attachments') {
+    if (role === 'user') {
       out.push(buildUserMessage(m));
       continue;
     }
@@ -271,17 +265,12 @@ export function sessionWireToUiMessages(raw: readonly unknown[]): Message[] {
   return mergeConsecutiveAssistantMessages(out);
 }
 
-function applyStripToUserContent(
-  role: Message['role'],
-  blocks: MessageContent[],
-): MessageContent[] {
-  if (role !== 'user' && role !== 'user-with-attachments') return blocks;
-  const mapped = blocks.map((b) => {
+function applyStripToUserContent(blocks: MessageContent[]): MessageContent[] {
+  const mapped = blocks
+    .filter((b) => b.type !== 'image')
+    .map((b) => {
     if (b.type === 'text' && typeof b.text === 'string') {
-      let stripped = stripStartupContextForDisplay(b.text);
-      stripped = stripExpandedAtFileBlocks(stripped);
-      stripped = stripInboundFileMachineText(stripped);
-      return { ...b, text: collapseExpandedSkillBlockForDisplay(stripped) };
+      return { ...b, text: stripUserMessageForDisplay(b.text) };
     }
     return b;
   });
@@ -291,19 +280,29 @@ function applyStripToUserContent(
   });
 }
 
-function buildUserMessage(m: WireMessage): Message {
-  const roleRaw = String(m.role ?? 'user');
-  const role: Message['role'] =
-    roleRaw === 'user' || roleRaw === 'user-with-attachments'
-      ? (roleRaw)
-      : 'assistant';
+function wireAttachmentsFromMessage(m: WireMessage): Message['attachments'] {
+  const fromMedia = normalizeWireMedia(m.media);
+  const fromLegacy = normalizeWireAttachments(m.attachments);
+  if (fromMedia?.length && fromLegacy?.length) {
+    return dedupeAttachments([...fromMedia, ...fromLegacy]);
+  }
+  return dedupeAttachments(fromMedia ?? fromLegacy);
+}
 
-  const fromContent = extractAttachmentsFromUserContent(m.content);
+function buildUserMessage(m: WireMessage): Message {
+  const contentRaw = m.content;
+  const blocks =
+    typeof contentRaw === 'string'
+      ? (() => {
+          const stripped = stripUserMessageForDisplay(contentRaw);
+          return stripped.trim() ? [{ type: 'text' as const, text: stripped }] : [];
+        })()
+      : applyStripToUserContent(normalizeContentBlocks(contentRaw));
 
   return {
-    role,
-    content: applyStripToUserContent(role, normalizeContentBlocks(m.content)),
-    attachments: mergeUserAttachments(normalizeWireAttachments(m.attachments), fromContent),
+    role: 'user',
+    content: blocks,
+    attachments: wireAttachmentsFromMessage(m),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     usage: m.usage as Message['usage'],
   };
@@ -314,7 +313,7 @@ function buildAssistantMessage(m: WireMessage): Message {
   return {
     role: 'assistant',
     content,
-    attachments: dedupeAttachments(normalizeWireAttachments(m.attachments)),
+    attachments: wireAttachmentsFromMessage(m),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     usage: m.usage as Message['usage'],
   };

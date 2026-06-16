@@ -24,6 +24,14 @@ function startsWithAny(path: string, prefixes: readonly string[]): boolean {
 
 export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBundle[] = [
   {
+    id: 'media',
+    match: (path) => startsWithAny(path, ['/api/media']),
+    load: async () => {
+      const { registerMediaRoutes } = await import('./media.js');
+      return { register: registerMediaRoutes };
+    },
+  },
+  {
     id: 'workspace',
     match: (path) => startsWithAny(path, ['/api/workspace']),
     load: async () => {

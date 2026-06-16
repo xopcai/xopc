@@ -29,10 +29,12 @@ import type {
   SessionStateBag,
 } from '../session/index.js';
 import { queueEmbeddedSteer } from '../embedded/runs.js';
-import type { InternalAttachmentRoots } from '../../channels/attachments/inbound-persist.js';
+import type {
+  InboundAttachmentInput,
+  MediaRef,
+} from '../../channels/attachments/inbound-persist.js';
 import {
   buildDirectUserMessageContent,
-  type DirectInboundAttachment,
 } from '../service/build-direct-message-content.js';
 import {
   runProcessDirectStreaming,
@@ -61,11 +63,10 @@ export interface TurnDispatcherConfig {
   initSessionContext: (sessionKey: string, channel: string, chatId: string) => SessionContext;
   /** Per-session config hydration: workspace, model, thinking. */
   sessionHydrator: SessionHydrator;
-  attachmentRootsForSession: (sessionKey: string) => InternalAttachmentRoots;
   prepareInboundAttachments: (
     sessionKey: string,
-    attachments?: DirectInboundAttachment[],
-  ) => Promise<DirectInboundAttachment[] | undefined>;
+    attachments?: InboundAttachmentInput[],
+  ) => Promise<MediaRef[] | undefined>;
   enqueueMaybeAutoTitleAfterPersist: (sessionKey: string) => void;
   enqueueProvisionalSessionTitle?: (sessionKey: string, userText: string) => void;
   endDirectRequestContext: () => void;
@@ -74,7 +75,7 @@ export interface TurnDispatcherConfig {
   resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
 }
 
-export type DirectAttachment = DirectInboundAttachment;
+export type DirectAttachment = InboundAttachmentInput;
 
 export class TurnDispatcher {
   private readonly cfg: TurnDispatcherConfig;
@@ -170,10 +171,9 @@ export class TurnDispatcher {
       applyResolvedThinkingLevel: (sk, t) => c.sessionHydrator.thinking(sk, t),
       getConfig: c.getConfig,
       sessionConfigStore: c.sessionConfigStore,
-      attachmentRootsForSession: c.attachmentRootsForSession,
       commandHandler: c.commandHandler,
       prepareInboundAttachments: c.prepareInboundAttachments,
-      buildMessageContent: (text, prepared, sk) =>
+      buildTranscriptUserMessage: async (text, prepared, sk) =>
         buildDirectUserMessageContent({
           content: text,
           attachments: prepared,

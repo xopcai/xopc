@@ -21,6 +21,7 @@ export type RunEmbeddedForSessionParams = {
   sessionKey: string;
   runId?: string;
   userMessage: AgentMessage;
+  llmImages?: import('@earendil-works/pi-ai').ImageContent[];
   sessionStore: SessionStore;
   agentManager: AgentInstanceGateway;
   modelManager: ModelManager;
@@ -100,6 +101,7 @@ export async function runEmbeddedTurnForSession(
         sessionKey,
         runId,
         userMessage: userMessageForTurn,
+        images: params.llmImages,
         model,
         modelRef,
         tools: turnTools,

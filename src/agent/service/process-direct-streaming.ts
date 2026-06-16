@@ -1,7 +1,8 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
-import type { InternalAttachmentRoots } from '../../channels/attachments/inbound-persist.js';
+import type { InboundAttachmentInput, MediaRef } from '../../channels/attachments/inbound-persist.js';
+import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import {
   isVoiceLikeAttachment,
   mergeVoiceTranscriptsIntoUserText,
@@ -29,15 +30,12 @@ import {
   runDirectAgentTurn,
   tryRunSlashCommand,
 } from './direct-turn-helpers.js';
+import {
+  setPendingTranscriptUserMessage,
+  type TranscriptUserMessage,
+} from '../inbound/attachment-pipeline.js';
 
-export type DirectStreamInboundAttachment = {
-  type: string;
-  mimeType?: string;
-  data?: string;
-  name?: string;
-  size?: number;
-  workspaceRelativePath?: string;
-};
+export type DirectStreamInboundAttachment = InboundAttachmentInput;
 
 export type ProcessDirectStreamLog = {
   info: (obj: Record<string, unknown>, msg: string) => void;
@@ -66,17 +64,16 @@ export interface ProcessDirectStreamingDeps {
   applyResolvedThinkingLevel: (sessionKey: string, thinking?: string | null) => Promise<void>;
   getConfig: () => Config | undefined;
   sessionConfigStore: SessionConfigStore;
-  attachmentRootsForSession: (sessionKey: string) => InternalAttachmentRoots;
   commandHandler: Pick<CommandHandler, 'executeCommandAndAggregateReply'>;
   prepareInboundAttachments: (
     sessionKey: string,
     attachments?: DirectStreamInboundAttachment[],
-  ) => Promise<DirectStreamInboundAttachment[] | undefined>;
-  buildMessageContent: (
+  ) => Promise<MediaRef[] | undefined>;
+  buildTranscriptUserMessage: (
     content: string,
-    attachments: DirectStreamInboundAttachment[] | undefined,
+    prepared: MediaRef[] | undefined,
     sessionKey: string,
-  ) => Promise<Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>>;
+  ) => Promise<TranscriptUserMessage>;
   recordPersistentGoalStreamOutcome?: (
     sessionKey: string,
     outcome: { skipPersistentGoalPostTurn: boolean },
@@ -88,7 +85,7 @@ export interface ProcessDirectStreamingDeps {
   maybeEmitWebchatTts: (
     sessionKey: string,
     hadInboundVoice: boolean,
-  ) => Promise<{ type: 'tts_audio'; workspaceRelativePath: string; mimeType: string; name: string } | null>;
+  ) => Promise<{ type: 'tts_audio'; uri: string; mimeType: string; name: string } | null>;
   endDirectRequestContext: () => void;
   resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
 }
@@ -146,8 +143,6 @@ export async function* runProcessDirectStreaming(
   let mergedUserText = input.content;
   let webchatSlashReceipt: string | undefined;
 
-  // Kick off the agent task in the background; events stream into `queue` as they happen
-  // and the generator below drains `queue` until the task closes it.
   const taskPromise = (async () => {
     try {
       const cfg = deps.getConfig();
@@ -191,12 +186,7 @@ export async function* runProcessDirectStreaming(
       const prepared = await deps.prepareInboundAttachments(sessionKey, input.attachments);
 
       const sttCfg = mergeSttConfigFromAppConfig(deps.getConfig()?.tools?.media?.audio, deps.getConfig()?.tools?.media);
-      const voiceMerge = await mergeVoiceTranscriptsIntoUserText(
-        deps.attachmentRootsForSession(sessionKey),
-        prepared,
-        turnBody,
-        sttCfg,
-      );
+      const voiceMerge = await mergeVoiceTranscriptsIntoUserText(prepared, turnBody, sttCfg);
       mergedUserText = voiceMerge.text;
       inboundVoice = voiceMerge.inboundVoice;
 
@@ -205,15 +195,15 @@ export async function* runProcessDirectStreaming(
           voiceMerge.voiceTranscripts.filter(Boolean).join('\n'),
           turnBody.trim(),
         ].filter(Boolean);
-        const voiceAttachments = (prepared ?? []).filter(isVoiceLikeAttachment).map((att) => ({
-          workspaceRelativePath: att.workspaceRelativePath,
+        const voiceMedia = (prepared ?? []).filter(isVoiceLikeAttachment).map((att) => ({
+          uri: att.uri,
           mimeType: att.mimeType,
           name: att.name,
         }));
         pushVisible({
           type: 'user_transcript',
           text: transcriptParts.join('\n\n'),
-          attachments: voiceAttachments,
+          media: voiceMedia,
         });
       }
 
@@ -236,7 +226,14 @@ export async function* runProcessDirectStreaming(
 
       const slash = await tryRunSlashCommand(
         deps,
-        { sessionKey, channel, chatId, senderId: context.senderId, isGroup: context.isGroup },
+        {
+          sessionKey,
+          channel,
+          chatId,
+          senderId: context.senderId,
+          isGroup: context.isGroup,
+          inboundMetadata: context.metadata,
+        },
         mergedUserText,
         { skipResetCommands: resetTriggeredAtInit },
       );
@@ -257,30 +254,21 @@ export async function* runProcessDirectStreaming(
       const textForAgent = mergedUserText.trimStart().startsWith('/skill:')
         ? deps.agentManager.expandSkillUserText(mergedUserText)
         : mergedUserText;
-      const messageContent = await deps.buildMessageContent(textForAgent, prepared, sessionKey);
+      const userMessage = await deps.buildTranscriptUserMessage(textForAgent, prepared, sessionKey);
 
-      const userMessage = {
-        role: 'user' as const,
-        content: messageContent,
-        timestamp: Date.now(),
-      };
       if (channel === 'webchat') {
         pushVisible({
           type: 'user_message',
-          timestamp: userMessage.timestamp,
-          content: userMessage.content,
-          attachments: prepared?.map((att) => ({
-            type: att.type,
-            mimeType: att.mimeType,
-            name: att.name,
-            size: att.size,
-            workspaceRelativePath: att.workspaceRelativePath,
-          })),
+          timestamp: userMessage.timestamp ?? Date.now(),
+          content: readAgentMessageContent(userMessage),
+          media: userMessage.media,
         });
         if (textForAgent.trim()) {
           deps.enqueueProvisionalSessionTitle?.(sessionKey, textForAgent);
         }
       }
+
+      setPendingTranscriptUserMessage(sessionKey, userMessage as TranscriptUserMessage);
 
       const result = await runDirectAgentTurn(
         {
@@ -325,7 +313,7 @@ export async function* runProcessDirectStreaming(
     for await (const event of queue) {
       yield event;
     }
-    await taskPromise; // surface unexpected throws
+    await taskPromise;
 
     if (channel === 'webchat' && ranSlashCommand) {
       try {

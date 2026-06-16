@@ -9,7 +9,7 @@ import {
   PPTX_PREVIEW_MAX_CHARS,
   type AttachmentPreviewFileType,
 } from '@/features/chat/attachments/attachment-utils-core';
-import { fetchWorkspaceRelativeFileAsBase64 } from '@/features/file-preview/fetch-workspace-relative-file-base64';
+import { fetchMediaUriBuffer } from '@/features/file-preview/fetch-workspace-relative-file';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 import type { FilePreviewKind } from '@/features/file-preview/types';
@@ -37,14 +37,14 @@ export type AttachmentPreviewResolved = {
 };
 
 function attachmentSourceKey(attachment: MessageAttachment): string {
-  return attachment.id ? String(attachment.id) : `${attachment.name}:${attachment.workspaceRelativePath ?? ''}`;
+  return attachment.id ? String(attachment.id) : `${attachment.name}:${attachment.uri ?? ''}`;
 }
 
 export function useAttachmentPreviewResolved({
   open,
   attachment,
   authToken,
-  sessionKey,
+  sessionKey: _sessionKey,
   language,
 }: {
   open: boolean;
@@ -66,31 +66,28 @@ export function useAttachmentPreviewResolved({
     setErrorDismissed(false);
   }
 
-  const path = previewBase?.workspaceRelativePath;
-  const hasPayload = previewBase ? Boolean(getAttachmentBinaryPayload(previewBase)) : false;
-  const fetchEnabled = Boolean(open && path && !hasPayload && authToken);
+  const mediaUri = previewBase?.uri;
+  const inlinePayload = previewBase ? getAttachmentBinaryPayload(previewBase) : undefined;
+  const fetchEnabled = Boolean(open && mediaUri && !inlinePayload && authToken);
 
   const gatewayFetch = useAsyncResource(
     async () => {
       const L = messages(language).chat;
-      const result = await fetchWorkspaceRelativeFileAsBase64({
-        workspaceRelativePath: path!,
-        sessionKey,
-      });
+      const result = await fetchMediaUriBuffer({ uri: mediaUri! });
       if (!result.ok) {
         if (result.reason === 'http') {
           throw new Error(`${L.attachmentPreviewLoadError} (HTTP ${result.status})`);
         }
         throw new Error(result.message);
       }
-      return result.base64;
+      return result.buffer;
     },
-    [open, path, authToken, language, sessionKey, hasPayload],
-    { enabled: fetchEnabled, initial: null as string | null, errorData: null },
+    [open, mediaUri, authToken, language, inlinePayload],
+    { enabled: fetchEnabled, initial: null as ArrayBuffer | null, errorData: null },
   );
 
   const missingAuthError =
-    open && path && !hasPayload && !authToken ? messages(language).chat.attachmentPreviewMissingAuth : null;
+    open && mediaUri && !inlinePayload && !authToken ? messages(language).chat.attachmentPreviewMissingAuth : null;
 
   const fetchError = useMemo(() => {
     if (gatewayFetch.error == null) return null;
@@ -98,29 +95,26 @@ export function useAttachmentPreviewResolved({
     return String(gatewayFetch.error);
   }, [gatewayFetch.error]);
 
-  const preview = useMemo(() => {
-    if (!previewBase) return null;
-    const base64 = gatewayFetch.loading ? null : gatewayFetch.data;
-    if (base64 && !getAttachmentBinaryPayload(previewBase)) {
-      return { ...previewBase, content: base64, data: base64 };
-    }
-    return previewBase;
-  }, [previewBase, gatewayFetch.data, gatewayFetch.loading]);
+  const preview = previewBase;
 
   const rawLoadError = missingAuthError ?? fetchError;
   const loadError = errorDismissed ? null : rawLoadError;
 
   const fileType = preview ? inferAttachmentFileType(preview) : 'text';
 
-  const payload = preview ? getAttachmentBinaryPayload(preview) : null;
   const binaryBuffer = useMemo(() => {
-    if (!payload) return null;
-    try {
-      return base64ToArrayBuffer(payload);
-    } catch {
+    if (inlinePayload) {
+      try {
+        return base64ToArrayBuffer(inlinePayload);
+      } catch {
+        return null;
+      }
+    }
+    if (fetchEnabled && gatewayFetch.loading) {
       return null;
     }
-  }, [payload]);
+    return gatewayFetch.data ?? null;
+  }, [inlinePayload, fetchEnabled, gatewayFetch.loading, gatewayFetch.data]);
 
   const extractedTextRaw = preview ? (extractTextForPreview(preview) ?? '') : '';
   const hasExtractedText = Boolean(preview?.extractedText);
@@ -144,7 +138,7 @@ export function useAttachmentPreviewResolved({
   }, [extractedTextRaw, fileType, language, preview]);
 
   const fileName = preview?.name ?? '';
-  const fileKey = preview?.id ? String(preview.id) : `${fileName}:${preview?.workspaceRelativePath ?? ''}`;
+  const fileKey = preview?.id ? String(preview.id) : `${fileName}:${preview?.uri ?? ''}`;
 
   return {
     preview,

@@ -12,7 +12,7 @@ export type PendingFollowUpAttachment = {
   name?: string;
   size?: number;
   /** Session-backed file (inbound/tts) when the queue row has no base64 `data` yet. */
-  workspaceRelativePath?: string;
+  uri?: string;
   durationSeconds?: number;
 };
 

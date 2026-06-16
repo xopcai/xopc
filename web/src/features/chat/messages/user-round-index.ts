@@ -1,7 +1,7 @@
 import type { Message } from '@/features/chat/messages/messages.types';
 
-export function isUiUserMessage(role: Message['role']): boolean {
-  return role === 'user' || role === 'user-with-attachments';
+export function isUiUserMessage(role: Message['role'] | string): boolean {
+  return role === 'user';
 }
 
 /** 0-based index among user messages only (matches server `userRoundIndex`). */

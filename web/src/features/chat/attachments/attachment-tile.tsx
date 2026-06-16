@@ -1,9 +1,9 @@
 import { FileSpreadsheet, FileText, X } from 'lucide-react';
-import { useEffect, useId, useState } from 'react';
+import { useId } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
-import { getAttachmentBinaryPayload, resolveDataUrlForDisplay } from '@/features/chat/attachments/attachment-utils-core';
-import { fetchWorkspaceRelativeFileAsBase64 } from '@/features/file-preview/fetch-workspace-relative-file-base64';
+import { getAttachmentBinaryPayload } from '@/features/chat/attachments/attachment-utils-core';
+import { useAttachmentImageSrc } from '@/features/chat/attachments/use-attachment-image-src';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -17,8 +17,10 @@ type AttachmentTileProps = {
   onDelete?: () => void;
   /** How image thumbnails are sized inside attachment grids. */
   imageSize?: 'thumbnail' | 'single' | 'grid-cell';
-  /** Grid-cell aspect: square tiles vs filling a tall mosaic slot. */
+  /** Grid-cell aspect (legacy; grid tiles always use square cells). */
   gridCellFill?: 'square' | 'stretch';
+  /** Smaller thumbnails for user message bubbles. */
+  compact?: boolean;
   className?: string;
   /** Shown over the thumbnail when the album truncates extra images. */
   overflowLabel?: string;
@@ -32,7 +34,8 @@ export function AttachmentTile({
   showDelete = false,
   onDelete,
   imageSize = 'thumbnail',
-  gridCellFill = 'square',
+  compact = false,
+  gridCellFill: _gridCellFill = 'square',
   className,
   overflowLabel,
   onOpen,
@@ -40,61 +43,20 @@ export function AttachmentTile({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const missingAuthHintId = useId();
-  // Hydration is keyed by the attachment reference: when the prop changes we
-  // simply ignore stale hydrated data instead of round-tripping through a reset effect.
-  const [hydration, setHydration] = useState<{ src: MessageAttachment; data: MessageAttachment } | null>(null);
 
-  const effective = hydration?.src === attachment ? hydration.data : attachment;
+  const isImageMime = attachment.mimeType?.startsWith('image/') || attachment.type === 'image';
+  const thumbSrc = useAttachmentImageSrc(attachment, { authToken, sessionKey });
+  const showImageThumb = isImageMime && Boolean(thumbSrc);
 
-  const needsGatewayBinary =
-    Boolean(attachment.workspaceRelativePath) && !getAttachmentBinaryPayload(attachment);
+  const needsGatewayBinary = Boolean(attachment.uri) && !getAttachmentBinaryPayload(attachment);
   const showMissingAuthHint = needsGatewayBinary && !String(authToken ?? '').trim();
 
-  useEffect(() => {
-    const base = attachment;
-    if (!base?.workspaceRelativePath || getAttachmentBinaryPayload(base)) {
-      return;
-    }
-    if (!String(authToken ?? '').trim()) return;
-
-    let cancelled = false;
-    void (async () => {
-      const result = await fetchWorkspaceRelativeFileAsBase64({
-        workspaceRelativePath: base.workspaceRelativePath!,
-        sessionKey,
-      });
-      if (!result.ok || cancelled) return;
-      const b64 = result.base64;
-      const isImg = base.mimeType?.startsWith('image/') || base.type === 'image';
-      setHydration({
-        src: base,
-        data: {
-          ...base,
-          content: b64,
-          data: b64,
-          preview: isImg ? b64 : base.preview,
-          type: isImg ? 'image' : 'document',
-        },
-      });
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [attachment, authToken, sessionKey]);
-
-  const previewBase64 = effective.preview ?? getAttachmentBinaryPayload(effective);
-  const isImageMime = effective.mimeType?.startsWith('image/') || effective.type === 'image';
-  const isPdf = effective.mimeType === 'application/pdf';
+  const isPdf = attachment.mimeType === 'application/pdf';
   const isExcel =
-    effective.mimeType?.includes('spreadsheetml') ||
-    effective.name?.toLowerCase().endsWith('.xlsx') ||
-    effective.name?.toLowerCase().endsWith('.xls');
-  const displayName = effective.name ?? 'file';
-  const imgMime = effective.mimeType?.startsWith('image/') ? effective.mimeType : 'image/png';
-  const thumbSrc =
-    previewBase64 && isImageMime ? resolveDataUrlForDisplay(imgMime, previewBase64) : '';
-  const showImageThumb = Boolean(thumbSrc);
+    attachment.mimeType?.includes('spreadsheetml') ||
+    attachment.name?.toLowerCase().endsWith('.xlsx') ||
+    attachment.name?.toLowerCase().endsWith('.xls');
+  const displayName = attachment.name ?? 'file';
 
   const mainLabel = showMissingAuthHint
     ? `${displayName} — ${m.chat.attachmentPreviewMissingAuth}`
@@ -104,37 +66,32 @@ export function AttachmentTile({
 
   const imageThumbClass =
     imageSize === 'single'
-      ? 'max-h-48 w-full max-w-xs object-contain'
+      ? compact
+        ? 'max-h-28 w-full max-w-[9rem] object-contain'
+        : 'max-h-36 w-full max-w-44 object-contain'
       : imageSize === 'grid-cell'
         ? 'size-full object-cover'
         : 'max-h-16 w-full object-cover';
 
   const imageWrapperClass =
     imageSize === 'single'
-      ? 'max-w-xs'
+      ? compact
+        ? 'max-w-[9rem]'
+        : 'max-w-44'
       : imageSize === 'grid-cell'
-        ? gridCellFill === 'stretch'
-          ? 'h-full min-h-0 w-full'
-          : 'min-h-0 w-full'
+        ? 'min-h-0 w-full'
         : 'max-w-[10rem]';
 
   const imageButtonClass =
     imageSize === 'grid-cell'
-      ? cn(
-          'relative block w-full overflow-hidden rounded-md border border-edge dark:border-edge',
-          gridCellFill === 'stretch' ? 'h-full min-h-0' : 'aspect-square',
-        )
+      ? 'relative block aspect-square w-full min-w-0 overflow-hidden rounded-md border border-edge dark:border-edge'
       : 'block w-full overflow-hidden rounded-md border border-edge dark:border-edge';
 
   return (
     <div
       className={cn(
-        'group relative',
-        imageSize === 'grid-cell'
-          ? gridCellFill === 'stretch'
-            ? 'h-full min-h-0'
-            : 'min-h-0'
-          : 'inline-block',
+        'group relative min-w-0',
+        imageSize === 'grid-cell' ? 'w-full min-h-0' : 'inline-block',
         className,
       )}
     >
@@ -149,7 +106,7 @@ export function AttachmentTile({
                 interaction.press,
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
               )}
-              onClick={() => onOpen(effective)}
+              onClick={() => onOpen(attachment)}
               title={mainLabel}
               aria-label={mainLabel}
               aria-describedby={showMissingAuthHint ? missingAuthHintId : undefined}
@@ -183,7 +140,7 @@ export function AttachmentTile({
         <div className="max-w-[14rem]">
           <button
             type="button"
-            onClick={() => onOpen(effective)}
+            onClick={() => onOpen(attachment)}
             title={mainLabel}
             aria-label={mainLabel}
             aria-describedby={showMissingAuthHint ? missingAuthHintId : undefined}

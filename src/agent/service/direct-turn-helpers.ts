@@ -8,9 +8,12 @@
 
 import crypto from 'node:crypto';
 
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+
 import { commandRegistry } from '../../chat-commands/index.js';
 import { parseSlashCommand } from '../../chat-commands/command-parse.js';
 import { shouldSkipResetOverlapCommand } from '../../session/reset-triggers.js';
+import { hydrateUserTurnForLlm, type TranscriptUserMessage } from '../inbound/attachment-pipeline.js';
 import type { CommandHandler } from '../messaging/command-handler.js';
 import type { SessionStore } from '../../session/index.js';
 import type { Config } from '../../config/schema.js';
@@ -19,7 +22,6 @@ import type { ModelManager } from '../models/index.js';
 import { extractAgentUserPlainText } from '../memory/user-message-text.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
-import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 export interface HydratePerTurnStateDeps {
   hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
@@ -138,10 +140,18 @@ export async function runDirectAgentTurn(
     input.sessionKey,
   );
 
+  const modelRef = deps.modelManager.getModelForSession(input.sessionKey);
+  const llmTurn = await hydrateUserTurnForLlm({
+    message: input.userMessage as TranscriptUserMessage,
+    modelRef,
+  });
+  const llmImages = llmTurn.images;
+
   const result = await runEmbeddedTurnForSession({
     sessionKey: input.sessionKey,
     runId: crypto.randomUUID(),
     userMessage: userMessageForModel,
+    llmImages,
     sessionStore: deps.sessionStore,
     agentManager: deps.agentManager,
     modelManager: deps.modelManager,

@@ -11,8 +11,8 @@ export interface InboundMessage {
     data?: string;
     name?: string;
     size?: number;
-    /** Relative to configured workspace (`agents.defaults.workspace`), POSIX `/`. */
-    workspaceRelativePath?: string;
+    /** Already persisted — pass-through by URI. */
+    uri?: string;
   }>;
   metadata?: Record<string, unknown>;
 }

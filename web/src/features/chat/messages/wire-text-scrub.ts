@@ -76,6 +76,23 @@ export function stripExpandedAtFileBlocks(text: string): string {
     .trim();
 }
 
+/** Remove persisted media claim-check lines from bubble text (thumbnails use `media[]`). */
+export function stripMediaAttachedClaimCheck(text: string): string {
+  if (!text.includes('[media attached:')) return text;
+  return text
+    .replace(/\s*\[media attached:\s*media:\/\/[^\]]+\][^\n]*/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** Full user-bubble scrub for persisted transcript text. */
+export function stripUserMessageForDisplay(text: string): string {
+  let out = stripStartupContextForDisplay(text);
+  out = stripExpandedAtFileBlocks(out);
+  out = stripMediaAttachedClaimCheck(out);
+  return collapseExpandedSkillBlockForDisplay(out);
+}
+
 /** Remove persisted inbound machine lines from bubble text (attachments show separately). */
 export function stripInboundFileMachineText(text: string): string {
   if (!text.includes('xopc-path:')) return text;

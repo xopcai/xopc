@@ -22,18 +22,15 @@ vi.mock('../../../voice/tts/audio.js', () => ({
 
 vi.mock('../../../channels/attachments/outbound-tts-persist.js', () => ({
   persistOutboundTtsAudio: vi.fn(async () => ({
+    id: 'reply---uuid.mp3',
+    bucket: 'tts',
+    type: 'voice',
+    mimeType: 'audio/mpeg',
     name: 'reply.mp3',
     size: 6,
-    workspaceRelativePath: 'tts/reply.mp3',
+    uri: 'media://tts/reply---uuid.mp3',
+    path: '/tmp/reply.mp3',
   })),
-}));
-
-vi.mock('../../agent-scope.js', () => ({
-  resolveAgentHomeDir: vi.fn(() => '/tmp/xopc-agent'),
-}));
-
-vi.mock('../../../config/agent-profile.js', () => ({
-  extractProfileAgentId: vi.fn(() => 'main'),
 }));
 
 describe('maybeEmitWebchatTts', () => {
@@ -76,7 +73,7 @@ describe('maybeEmitWebchatTts', () => {
 
     expect(result).toEqual({
       type: 'tts_audio',
-      workspaceRelativePath: 'tts/reply.mp3',
+      uri: 'media://tts/reply---uuid.mp3',
       mimeType: 'audio/mpeg',
       name: 'reply.mp3',
     });
@@ -89,11 +86,10 @@ describe('maybeEmitWebchatTts', () => {
     expect(sessionStore.saveMessages).toHaveBeenCalledOnce();
     expect(savedMessages.at(-1)).toMatchObject({
       role: 'assistant',
-      attachments: [
+      media: [
         expect.objectContaining({
-          type: 'audio',
-          mimeType: 'audio/mpeg',
-          workspaceRelativePath: 'tts/reply.mp3',
+          type: 'voice',
+          uri: 'media://tts/reply---uuid.mp3',
         }),
       ],
     });

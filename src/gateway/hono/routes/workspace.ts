@@ -4,16 +4,12 @@ import { constants as fsConstants } from 'node:fs';
 import { copyFile, link, mkdir, readdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 
-import { extractProfileAgentId } from '../../../config/agent-profile.js';
 import { type Config } from '../../../config/schema.js';
 import { getWorkspacePath } from '../../../config/workspace-path-helpers.js';
 import { validateWritePath } from '../../../agent/sandbox/path-policy.js';
-import { resolveSafeInboundFilePath } from '../../../channels/attachments/inbound-persist.js';
-import { resolveSafeTtsFilePath } from '../../../channels/attachments/outbound-tts-persist.js';
 import {
   listAgentEntries,
   normalizeAgentId,
-  resolveAgentHomeDir,
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
 } from '../../../agent/agent-scope.js';
@@ -43,13 +39,6 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
 
 const log = createGatewayRouteLogger('Workspace');
-
-/** Agent home for persisted `inbound/` and `tts/` attachments (matches `persistOutboundTtsAudio` / `prepareInboundAttachments`). */
-function resolvePersistedAttachmentAgentHome(cfg: Config, sessionKeyRaw: string | undefined): string {
-  const sk = typeof sessionKeyRaw === 'string' ? sessionKeyRaw.trim() : '';
-  const agentId = sk ? extractProfileAgentId(sk, cfg) : resolveDefaultAgentId(cfg);
-  return resolveAgentHomeDir(cfg, agentId);
-}
 
 const FILE_SEARCH_MAX_LIMIT = 50;
 
@@ -242,86 +231,6 @@ function isFileReferenceAction(action: unknown): action is 'openExternal' | 'rev
 
 export function registerWorkspaceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
-
-  authenticated.get('/api/workspace/inbound-file', async (c) => {
-    const rel = c.req.query('rel');
-    if (!rel || typeof rel !== 'string') {
-      return c.json({ ok: false, error: { message: 'Missing rel' } }, 400);
-    }
-    const cfg = service.currentConfig;
-    const agentHome = resolvePersistedAttachmentAgentHome(cfg, c.req.query('sessionKey'));
-    const abs = resolveSafeInboundFilePath({ agentHome }, rel);
-    if (!abs) {
-      return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);
-    }
-    try {
-      const buf = await readFile(abs);
-      const ext = rel.split('.').pop()?.toLowerCase() ?? '';
-      const mimeByExt: Record<string, string> = {
-        pdf: 'application/pdf',
-        png: 'image/png',
-        jpg: 'image/jpeg',
-        jpeg: 'image/jpeg',
-        webp: 'image/webp',
-        gif: 'image/gif',
-        md: 'text/markdown',
-        txt: 'text/plain',
-        json: 'application/json',
-        html: 'text/html',
-        css: 'text/css',
-        js: 'text/javascript',
-        ts: 'text/typescript',
-        webm: 'audio/webm',
-        ogg: 'audio/ogg',
-        opus: 'audio/ogg',
-        mp3: 'audio/mpeg',
-        wav: 'audio/wav',
-        m4a: 'audio/mp4',
-      };
-      const contentType = mimeByExt[ext] || 'application/octet-stream';
-      return new Response(buf, {
-        headers: {
-          'Content-Type': contentType,
-          'Cache-Control': 'private, max-age=3600',
-        },
-      });
-    } catch {
-      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
-    }
-  });
-
-  authenticated.get('/api/workspace/tts-file', async (c) => {
-    const rel = c.req.query('rel');
-    if (!rel || typeof rel !== 'string') {
-      return c.json({ ok: false, error: { message: 'Missing rel' } }, 400);
-    }
-    const cfg = service.currentConfig;
-    const agentHome = resolvePersistedAttachmentAgentHome(cfg, c.req.query('sessionKey'));
-    const abs = resolveSafeTtsFilePath({ agentHome }, rel);
-    if (!abs) {
-      return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);
-    }
-    try {
-      const buf = await readFile(abs);
-      const ext = rel.split('.').pop()?.toLowerCase() ?? '';
-      const mimeByExt: Record<string, string> = {
-        ogg: 'audio/ogg',
-        opus: 'audio/ogg',
-        mp3: 'audio/mpeg',
-        wav: 'audio/wav',
-        m4a: 'audio/mp4',
-      };
-      const contentType = mimeByExt[ext] || 'application/octet-stream';
-      return new Response(buf, {
-        headers: {
-          'Content-Type': contentType,
-          'Cache-Control': 'private, max-age=3600',
-        },
-      });
-    } catch {
-      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
-    }
-  });
 
   authenticated.get('/api/workspace/heartbeat-md', async (c) => {
     const abs = resolveHeartbeatMdPath(service.currentConfig);

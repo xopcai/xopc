@@ -67,13 +67,10 @@ describe('runXopcEmbeddedTurn image input', () => {
     mocks.waitForIdle.mockResolvedValue(undefined);
   });
 
-  it('passes image blocks from userMessage.content to session.prompt options', async () => {
+  it('passes hydrated params.images to session.prompt (not inline content blocks)', async () => {
     const userMessage = {
       role: 'user',
-      content: [
-        { type: 'text', text: 'What is in this image?' },
-        { type: 'image', data: 'aW1hZ2U=', mimeType: 'image/png' },
-      ],
+      content: 'What is in this image?',
       timestamp: 1,
     } as AgentMessage;
 
@@ -88,6 +85,7 @@ describe('runXopcEmbeddedTurn image input', () => {
       workspaceDir: '/tmp/workspace',
       sessionStore: {} as any,
       timeoutMs: 60_000,
+      images: [{ type: 'image', data: 'aW1hZ2U=', mimeType: 'image/png' }],
     });
 
     expect(mocks.prompt).toHaveBeenCalledWith('What is in this image?', {
@@ -95,7 +93,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     });
   });
 
-  it('keeps explicit params.images and appends user message image blocks', async () => {
+  it('ignores legacy inline image blocks on userMessage.content', async () => {
     const userMessage = {
       role: 'user',
       content: [{ type: 'image', data: 'ZnJvbS11c2Vy', mimeType: 'image/jpeg' }],
@@ -117,10 +115,7 @@ describe('runXopcEmbeddedTurn image input', () => {
     });
 
     expect(mocks.prompt).toHaveBeenCalledWith('', {
-      images: [
-        { type: 'image', data: 'ZnJvbS1wYXJhbXM=', mimeType: 'image/png' },
-        { type: 'image', data: 'ZnJvbS11c2Vy', mimeType: 'image/jpeg' },
-      ],
+      images: [{ type: 'image', data: 'ZnJvbS1wYXJhbXM=', mimeType: 'image/png' }],
     });
   });
 });

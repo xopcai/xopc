@@ -3,10 +3,11 @@ import { useMemo, useRef, type ReactNode } from 'react';
 import { HtmlWorkspaceEditor } from '@/components/html/html-workspace-editor';
 import { MarkdownSplit } from '@/components/markdown/markdown-split';
 import { MarkdownView } from '@/components/markdown/markdown-view';
-import { arrayBufferToBase64, inferMimeTypeFromFileName, PPTX_PREVIEW_MAX_CHARS } from '@/features/chat/attachments/attachment-utils-core';
+import { inferMimeTypeFromFileName, PPTX_PREVIEW_MAX_CHARS } from '@/features/chat/attachments/attachment-utils-core';
 import { PreviewOpenAlternativesBar } from '@/features/preview/preview-open-alternatives';
 import { PptxPreviewView } from '@/features/preview/pptx-preview-view';
 import { useBinaryPreviewInContainer } from '@/features/file-preview/use-binary-preview-in-container';
+import { useBlobObjectUrl } from '@/features/file-preview/use-blob-object-url';
 import type { FilePreviewKind } from '@/features/file-preview/types';
 import { getFileExtension } from '@/features/file-preview/utils';
 import { messages } from '@/i18n/messages';
@@ -170,6 +171,13 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
     containerEl: binaryContainerRef.current,
   });
 
+  const imageBlob = useMemo(() => {
+    if (!binaryBuffer || previewKind !== 'image') return null;
+    const mime = inferMimeTypeFromFileName(fileName) ?? 'image/png';
+    return new Blob([binaryBuffer], { type: mime });
+  }, [binaryBuffer, previewKind, fileName]);
+  const imageObjectUrl = useBlobObjectUrl(imageBlob);
+
   const showSystemOpen =
     Boolean(actions.onOpenWithSystemApp) && (actions.canOpenWithSystemApp ?? true) && context === 'workspace';
 
@@ -249,13 +257,11 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
         />
       </div>
     );
-  } else if (binaryBuffer && previewKind === 'image') {
-    const mime = inferMimeTypeFromFileName(fileName) ?? 'image/png';
-    const src = `data:${mime};base64,${arrayBufferToBase64(binaryBuffer)}`;
+  } else if (binaryBuffer && previewKind === 'image' && imageObjectUrl) {
     body = (
       <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-surface-base px-3 py-4 dark:bg-surface-hover/20">
         <img
-          src={src}
+          src={imageObjectUrl}
           alt=""
           className={
             context === 'workspace' ? 'max-h-[min(100%,calc(100dvh-9rem))] w-auto max-w-full object-contain' : 'max-h-full max-w-full object-contain'

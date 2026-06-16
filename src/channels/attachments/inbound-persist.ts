@@ -1,172 +1,78 @@
 /**
- * Persist inbound channel / Web UI uploads under the agent home dir so the markdown
- * workspace stays user-visible; session transcripts reference stable relative paths.
+ * Persist inbound uploads to the global media store (`{stateDir}/media/inbound/`).
  */
 
-import { mkdir, writeFile } from 'fs/promises';
-import { join, resolve } from 'path';
-import { randomBytes } from 'crypto';
 import { createLogger } from '../../utils/logger.js';
+import {
+  MEDIA_MAX_BYTES,
+  parseMediaUri,
+  readMediaReference,
+  resolveMediaReference,
+  saveMediaBuffer,
+} from '../../media/index.js';
+import type { InboundAttachmentInput, MediaRef } from '../../media/types.js';
+import { mediaRefFromUri, toMediaRef } from './inbound-types.js';
+
 const log = createLogger('InboundPersist');
 
-/** New layout: `<agentHome>/inbound/<session>/` — rel paths use this prefix. */
-export const INBOUND_REL_ROOT = 'inbound';
+export type { InboundAttachmentInput, MediaRef } from '../../media/types.js';
+export { isImageInboundAttachment, isVoiceInboundAttachment } from './attachment-classifiers.js';
+export { toMediaRef, mediaRefFromUri } from './inbound-types.js';
 
-export interface InboundAttachmentInput {
-  type: string;
-  mimeType?: string;
-  data?: string;
-  name?: string;
-  size?: number;
-  /** Set after persist (relative to agent home). */
-  workspaceRelativePath?: string;
-}
-
-export type InternalAttachmentRoots = {
-  /** `…/agents/<id>/` — primary storage */
-  agentHome: string;
-};
-
-function sanitizeSessionSegment(sessionKey: string): string {
-  return sessionKey.replace(/[^a-zA-Z0-9_.-]+/g, '_').slice(0, 180) || 'session';
-}
-
-function sanitizeFilename(name: string): string {
-  const base = name.replace(/[/\\?%*:|"<>]/g, '_').trim() || 'file';
-  return base.slice(0, 200);
-}
-
-function isImageAttachment(att: InboundAttachmentInput): boolean {
-  return att.type === 'image' || att.type === 'photo' || att.mimeType?.startsWith('image/') === true;
-}
-
-/** Decode base64 or data-URL payload for inbound attachments (also used by voice STT). */
+/** Decode base64 or data-URL payload (composer wire + voice STT). */
 export function decodeInboundAttachmentBase64(data: string): Buffer {
   const trimmed = data.trim();
   const b64 = trimmed.startsWith('data:') ? (trimmed.split(/base64,/)[1] ?? trimmed) : trimmed;
   return Buffer.from(b64.replace(/\s/g, ''), 'base64');
 }
 
-function resolveUnderRoot(root: string, rel: string, requiredPrefix: string): string | null {
-  const normalized = rel.replace(/\\/g, '/').replace(/^\/+/, '');
-  if (normalized.includes('..') || !normalized.startsWith(requiredPrefix)) {
-    return null;
-  }
-  const abs = resolve(root, ...normalized.split('/'));
-  const rootResolved = resolve(root);
-  if (!abs.startsWith(rootResolved)) {
-    return null;
-  }
-  return abs;
-}
-
 /**
- * Write non-image attachments with binary data to disk; returns a shallow copy
- * of each attachment with `workspaceRelativePath` set (POSIX-style, `/` separators).
+ * Write attachments with binary `data` to the media store; returns metadata-only refs.
  */
-export async function persistInboundAttachmentsToWorkspace(
-  agentHomeRoot: string,
-  sessionKey: string,
+export async function persistInboundAttachments(
   attachments: InboundAttachmentInput[] | undefined,
-): Promise<InboundAttachmentInput[] | undefined> {
-  if (!attachments?.length) return attachments;
+  opts?: { maxBytes?: number },
+): Promise<MediaRef[] | undefined> {
+  if (!attachments?.length) return undefined;
 
-  const sessionSeg = sanitizeSessionSegment(sessionKey);
-  const inboundAbs = resolve(agentHomeRoot, INBOUND_REL_ROOT, sessionSeg);
-  await mkdir(inboundAbs, { recursive: true });
-
-  const out: InboundAttachmentInput[] = [];
+  const maxBytes = opts?.maxBytes ?? MEDIA_MAX_BYTES;
+  const out: MediaRef[] = [];
 
   for (const att of attachments) {
-    if (att.workspaceRelativePath) {
-      out.push({ ...att });
+    if (att.uri?.trim()) {
+      const resolved = await resolveMediaReference(att.uri.trim());
+      out.push(
+        mediaRefFromUri(att, resolved.uri, resolved.path, resolved.bucket, resolved.id),
+      );
       continue;
     }
-    if (isImageAttachment(att)) {
-      out.push({ ...att });
-      continue;
-    }
+
     if (!att.data || att.data.length === 0) {
-      out.push({ ...att });
-      continue;
+      throw new Error(`Inbound attachment "${att.name ?? 'file'}" is missing data and uri`);
     }
 
-    try {
-      const buf = decodeInboundAttachmentBase64(att.data);
-      const id = randomBytes(8).toString('hex');
-      const fname = `${id}_${sanitizeFilename(att.name || 'file')}`;
-      const absFile = join(inboundAbs, fname);
-      await writeFile(absFile, buf);
+    const buf = decodeInboundAttachmentBase64(att.data);
+    const saved = await saveMediaBuffer(buf, {
+      contentType: att.mimeType,
+      bucket: 'inbound',
+      maxBytes,
+      originalFilename: att.name,
+    });
 
-      const workspaceRelativePath = [INBOUND_REL_ROOT, sessionSeg, fname].join('/');
+    log.debug({ uri: saved.uri, bytes: saved.size, name: att.name }, 'Inbound attachment persisted');
 
-      log.debug({ sessionKey, workspaceRelativePath, bytes: buf.length }, 'Inbound file persisted');
-
-      out.push({
-        ...att,
-        workspaceRelativePath,
-        size: att.size ?? buf.length,
-      });
-    } catch (err) {
-      log.warn({ err, sessionKey, name: att.name }, 'Failed to persist inbound attachment');
-      out.push({ ...att });
-    }
+    out.push(toMediaRef(att, saved));
   }
 
-  return out;
+  return out.length ? out : undefined;
 }
 
-/**
- * Build transcript text for a non-image file for the LLM (includes machine-readable path lines).
- */
-export function formatInboundFileTextBlock(
-  att: InboundAttachmentInput,
-  storageRootAbs: string,
-): string {
-  const name = att.name || 'unknown';
-  const mime = att.mimeType || 'unknown type';
-  const size = att.size ?? 0;
-  const head = `[File: ${name} (${mime}, ${size} bytes)]`;
-  if (!att.workspaceRelativePath) {
-    return head;
-  }
-  const rel = att.workspaceRelativePath.replace(/\\/g, '/');
-  const abs = resolve(storageRootAbs, ...rel.split('/').filter(Boolean));
-  return `${head}\nxopc-path:rel:${rel}\nxopc-path:abs:${abs}`;
+/** Read attachment bytes by media URI (voice STT, tools). */
+export async function readInboundAttachmentBuffer(uri: string): Promise<Buffer> {
+  const { buffer } = await readMediaReference(uri);
+  return buffer;
 }
 
-/**
- * Remove inbound file transcript blocks from a string (e.g. auto session titles).
- * Matches Web UI `stripInboundFileMachineText`, plus bare `[File: …]` lines when paths are absent.
- */
-export function stripInboundFileMetadataFromText(text: string): string {
-  if (!text.includes('[File:') && !text.includes('xopc-path:')) return text;
-  let out = text;
-  out = out.replace(
-    /\s*\[File:[^\]]+\]\s*\r?\nxopc-path:rel:[^\r\n]+\r?\n\s*xopc-path:abs:[^\r\n]+/g,
-    '',
-  );
-  out = out.replace(/\s*\[File:[^\]]+\]\s+xopc-path:rel:\S+\s+xopc-path:abs:\S+/g, '');
-  out = out.replace(/\s*\[File:[^\]]+\]\s*xopc-path:rel:\S+\s*xopc-path:abs:\S+/g, '');
-  out = out.replace(/\s*\[File:[^\]]+\]\s*/g, ' ');
-  return out.replace(/\n{3,}/g, '\n\n').replace(/\s{2,}/g, ' ').trim();
-}
-
-/**
- * Resolve a stored relative path under `inbound/`.
- */
-export function resolveSafeInboundFilePath(
-  roots: InternalAttachmentRoots,
-  relRaw: string,
-): string | null {
-  const rel = relRaw.replace(/\\/g, '/').replace(/^\/+/, '');
-  if (rel.includes('..')) {
-    return null;
-  }
-
-  if (rel.startsWith(`${INBOUND_REL_ROOT}/`)) {
-    return resolveUnderRoot(roots.agentHome, rel, `${INBOUND_REL_ROOT}/`);
-  }
-
-  return null;
+export function assertMediaUri(uri: string): void {
+  parseMediaUri(uri);
 }
