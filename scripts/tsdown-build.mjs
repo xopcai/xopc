@@ -30,6 +30,9 @@ const root = join(__dirname, '..');
 const schemaSrc = join(root, 'src/storage/sqlite');
 const schemaDist = join(root, 'dist/src/storage/sqlite');
 cpSync(join(schemaSrc, 'schema.sql'), join(schemaDist, 'schema.sql'));
+if (existsSync(join(schemaSrc, 'migrations'))) {
+  cpSync(join(schemaSrc, 'migrations'), join(schemaDist, 'migrations'), { recursive: true });
+}
 
 const srcTpl = join(root, 'src/agent/context/workspace-templates');
 const distTpl = join(root, 'dist/src/agent/context/workspace-templates');
