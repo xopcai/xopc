@@ -405,6 +405,7 @@ export interface ChannelPollResult {
 
 export interface ChannelStreamHandle {
   update: (text: string) => void;
+  updateReasoning?: (text: string) => void;
   updateProgress?: (text: string, stage: string, detail?: string) => void;
   setProgress?: (stage: string, detail?: string) => void;
   end: () => Promise<void>;

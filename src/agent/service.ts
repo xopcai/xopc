@@ -101,6 +101,7 @@ export class AgentService {
   private channelManagerRef: ChannelManager | null = null;
   private bus: MessageBus;
   private config: AgentServiceConfig;
+  private embeddedReasoningBySession = new Map<string, string>();
 
   private sessionTracker: SessionTracker;
   private modelManager: ModelManager;
@@ -315,12 +316,19 @@ export class AgentService {
           const next = this.sessionState.appendEmbeddedStreamText(sessionKey, event.content);
           this.streamManager.update(next);
         }
+        if (event.type === 'thinking' && event.content) {
+          const prev = this.embeddedReasoningBySession.get(sessionKey) ?? '';
+          const next = prev + event.content;
+          this.embeddedReasoningBySession.set(sessionKey, next);
+          this.streamManager.updateReasoning(next);
+        }
       },
       onEmbeddedTurnComplete: (sessionKey, text) => {
         if (text) {
           this.sessionState.setLastAssistantText(sessionKey, text);
         }
         this.sessionState.clearEmbeddedStreamText(sessionKey);
+        this.embeddedReasoningBySession.delete(sessionKey);
       },
     });
 

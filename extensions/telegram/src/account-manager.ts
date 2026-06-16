@@ -10,13 +10,13 @@
  */
 
 import type { Bot, Context } from 'grammy';
-import { run } from '@grammyjs/runner';
 import type { TelegramAccountConfig, ChannelStatus } from '@xopcai/xopc/channels/channel-domain.js';
+import type { TelegramPollingSession } from './polling-session.js';
 
 export class TelegramAccountManager {
   private accounts = new Map<string, TelegramAccountConfig>();
   private bots = new Map<string, Bot>();
-  private runners = new Map<string, ReturnType<typeof run>>();
+  private pollingSessions = new Map<string, TelegramPollingSession>();
   private statuses = new Map<string, ChannelStatus>();
   private botUsernames = new Map<string, string>();
   private startingAccounts = new Set<string>();
@@ -42,7 +42,7 @@ export class TelegramAccountManager {
   reset(): void {
     this.accounts.clear();
     this.bots.clear();
-    this.runners.clear();
+    this.pollingSessions.clear();
     this.statuses.clear();
     this.botUsernames.clear();
     this.startingAccounts.clear();
@@ -56,19 +56,19 @@ export class TelegramAccountManager {
     return this.bots.get(accountId);
   }
 
-  registerRunner(accountId: string, runner: ReturnType<typeof run>): void {
-    this.runners.set(accountId, runner);
+  registerPollingSession(accountId: string, session: TelegramPollingSession): void {
+    this.pollingSessions.set(accountId, session);
   }
 
   async stopRunner(accountId: string): Promise<void> {
-    const runner = this.runners.get(accountId);
+    const session = this.pollingSessions.get(accountId);
     const bot = this.bots.get(accountId);
-    
-    if (runner) {
-      await runner.stop();
-      this.runners.delete(accountId);
+
+    if (session) {
+      await session.stop();
+      this.pollingSessions.delete(accountId);
     }
-    
+
     if (bot) {
       bot.stop();
       this.bots.delete(accountId);

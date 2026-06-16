@@ -9,6 +9,8 @@ import type {
 } from '@xopcai/xopc/channels/plugin-types.js';
 import type { ChannelSendOptions, ChannelSendResult } from '@xopcai/xopc/channels/channel-domain.js';
 import type { OutboundMessage } from '@xopcai/xopc/channels/transport-types.js';
+import type { TelegramAccountManager } from '../account-manager.js';
+import { telegramReplyTracker } from '../reply-params.js';
 import { TELEGRAM_CHANNEL_DEFAULTS } from '../plugin-defaults.js';
 
 export function telegramTextChunker(text: string, limit: number): string[] {
@@ -38,11 +40,29 @@ function toDelivery(r: ChannelSendResult): OutboundDeliveryResult {
 
 export function createTelegramOutboundSendMethods(
   send: (options: ChannelSendOptions) => Promise<ChannelSendResult>,
+  accountManager?: TelegramAccountManager,
 ): {
   sendText: (ctx: ChannelOutboundContext) => Promise<OutboundDeliveryResult>;
   sendMedia: (ctx: ChannelOutboundContext) => Promise<OutboundDeliveryResult>;
   sendPayload: (ctx: ChannelOutboundPayloadContext) => Promise<OutboundDeliveryResult>;
 } {
+  const resolveReply = (ctx: ChannelOutboundContext): string | undefined => {
+    if (ctx.replyToId != null && String(ctx.replyToId).trim()) {
+      return String(ctx.replyToId);
+    }
+    const accountId = ctx.accountId ?? 'default';
+    const account = accountManager?.getAccount(accountId);
+    const meta = ctx.outboundMetadata;
+    const inboundMessageId =
+      meta && typeof meta.inboundMessageId === 'string' ? meta.inboundMessageId : undefined;
+    return telegramReplyTracker.resolveReplyToMessageId({
+      mode: account?.replyToMode,
+      inboundMessageId,
+      accountId,
+      chatId: ctx.to,
+    });
+  };
+
   return {
     sendText: async (ctx: ChannelOutboundContext) => {
       const result = await send({
@@ -50,7 +70,7 @@ export function createTelegramOutboundSendMethods(
         content: ctx.text,
         accountId: ctx.accountId,
         threadId: ctx.threadId?.toString(),
-        replyToMessageId: ctx.replyToId?.toString(),
+        replyToMessageId: resolveReply(ctx),
         silent: ctx.silent,
       });
       return toDelivery(result);
@@ -64,7 +84,7 @@ export function createTelegramOutboundSendMethods(
         type: payload.type,
         accountId: ctx.accountId,
         threadId: ctx.threadId?.toString(),
-        replyToMessageId: ctx.replyToId?.toString(),
+        replyToMessageId: resolveReply(ctx),
         silent: ctx.silent,
         mediaUrl: ctx.mediaUrl,
         audioAsVoice: ctx.audioAsVoice,
@@ -82,7 +102,7 @@ export function createTelegramOutboundSendMethods(
         content: ctx.text ?? '',
         accountId: ctx.accountId,
         threadId: ctx.threadId?.toString(),
-        replyToMessageId: ctx.replyToId?.toString(),
+        replyToMessageId: resolveReply(ctx),
         silent: ctx.silent,
         mediaUrl,
         mediaType: ctx.mediaType,

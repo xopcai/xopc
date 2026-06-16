@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TelegramAccountManager } from '../account-manager.js';
 import type { TelegramAccountConfig, ChannelStatus } from '@xopcai/xopc/channels/channel-domain.js';
 import type { Bot } from 'grammy';
-import type { run } from '@grammyjs/runner';
 
 describe('TelegramAccountManager', () => {
   let manager: TelegramAccountManager;
@@ -122,23 +121,21 @@ describe('TelegramAccountManager', () => {
     });
   });
 
-  describe('registerRunner / stopRunner', () => {
-    it('should register runner', () => {
-      const mockRunner = { stop: vi.fn() } as unknown as ReturnType<typeof run>;
+  describe('registerPollingSession / stopRunner', () => {
+    it('should register polling session', () => {
+      const mockSession = { stop: vi.fn().mockResolvedValue(undefined) };
 
-      manager.registerRunner('test', mockRunner);
+      manager.registerPollingSession('test', mockSession);
     });
 
-    it('should stop and remove runner', async () => {
+    it('should stop and remove polling session', async () => {
       const mockStop = vi.fn().mockResolvedValue(undefined);
-      const mockRunner = { stop: mockStop } as unknown as ReturnType<typeof run>;
+      const mockSession = { stop: mockStop };
 
-      manager.registerRunner('test', mockRunner);
+      manager.registerPollingSession('test', mockSession);
       await manager.stopRunner('test');
 
       expect(mockStop).toHaveBeenCalledTimes(1);
-      // After stopping, runner should be removed
-      // (can't directly test this, but coverage will show)
     });
 
     it('should handle stopping non-existent runner gracefully', async () => {
