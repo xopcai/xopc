@@ -29,13 +29,19 @@ export function messageAttachmentsToWire(
   attachments?: MessageAttachment[],
 ): WireAttachment[] | undefined {
   if (!attachments?.length) return undefined;
-  return attachments.map((a) => ({
-    type: a.type ?? 'document',
-    mimeType: a.mimeType,
-    data: a.data ?? a.content,
-    name: a.name,
-    size: a.size,
-    uri: a.uri,
-    durationSeconds: a.durationSeconds,
-  }));
+  return attachments.map((a) => {
+    const data = a.data ?? a.content;
+    return {
+      id: a.id,
+      type: a.type ?? (a.mimeType?.startsWith('image/') ? 'image' : 'document'),
+      mimeType: a.mimeType,
+      ...(data ? { data } : {}),
+      name: a.name,
+      size: a.size,
+      ...(a.uri ? { uri: a.uri } : {}),
+      ...(a.bucket ? { bucket: a.bucket } : {}),
+      ...(a.path ? { path: a.path } : {}),
+      durationSeconds: a.durationSeconds,
+    };
+  });
 }

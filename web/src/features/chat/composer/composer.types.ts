@@ -9,12 +9,15 @@ export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhi
 // ── Wire attachment (API payload shape) ─────────────────────────────
 
 export interface WireAttachment {
+  id?: string;
   type: string;
   mimeType?: string;
   data?: string;
   name?: string;
   size?: number;
   uri?: string;
+  bucket?: string;
+  path?: string;
   /** Recorder / client-known length (seconds). Helps WebMs that report NaN duration in `<audio>`. */
   durationSeconds?: number;
 }

@@ -2,7 +2,7 @@ import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages
 import type { Message } from '@/features/chat/messages/messages.types';
 import { extractUserMessagePlainText } from '@/features/chat/messages/user-message-plain-text';
 import { isUiUserMessage } from '@/features/chat/messages/user-round-index';
-import { normalizeWireAttachments, normalizeWireMedia } from '@/features/chat/messages/wire-attachments';
+import { normalizeWireMedia } from '@/features/chat/messages/wire-attachments';
 import { stripUserMessageForDisplay } from '@/features/chat/messages/wire-text-scrub';
 
 /** Parse `user_message` / `user_transcript` SSE payloads into a UI user row. */
@@ -18,7 +18,6 @@ export function userMessageFromSsePayload(parsed: Record<string, unknown>): Mess
         role: 'user',
         content: parsed.content,
         media: parsed.media,
-        attachments: parsed.attachments,
         timestamp,
       },
     ]);
@@ -28,16 +27,14 @@ export function userMessageFromSsePayload(parsed: Record<string, unknown>): Mess
   const text =
     typeof parsed.text === 'string' ? stripUserMessageForDisplay(parsed.text.trim()) : '';
   const media = normalizeWireMedia(parsed.media);
-  const attachments = normalizeWireAttachments(parsed.attachments);
-  const merged = [...(media ?? []), ...(attachments ?? [])];
-  if (!text && merged.length === 0) {
+  if (!text && !media?.length) {
     return null;
   }
 
   return {
     role: 'user',
     content: text ? [{ type: 'text', text }] : [],
-    attachments: merged.length ? merged : undefined,
+    attachments: media,
     timestamp,
   };
 }
