@@ -23,6 +23,8 @@ export interface WireMessage {
   toolCalls?: Array<{ id?: string; name: string; args?: Record<string, unknown> }>;
   /** Persisted media refs (`media://…`) on user/assistant turns. */
   media?: unknown;
+  /** Inline / legacy attachment payloads on user/assistant turns. */
+  attachments?: unknown;
   usage?: unknown;
   timestamp?: string | number;
   tool_call_id?: string;
