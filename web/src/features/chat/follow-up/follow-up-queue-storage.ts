@@ -58,7 +58,7 @@ function parsePendingFollowUps(raw: unknown): PendingFollowUp[] {
 
 /**
  * Shape safe for localStorage: never persist inline `data` (base64).
- * Rows may still carry `workspaceRelativePath` / metadata so session-backed files survive refresh.
+ * Rows may still carry media URI metadata so session-backed files survive refresh.
  */
 export function sanitizeFollowUpQueueSnapshot(snap: FollowUpQueueSnapshot): FollowUpQueueSnapshot {
   return {

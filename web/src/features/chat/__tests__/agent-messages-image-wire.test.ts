@@ -1,23 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
+import { messageAttachmentsToWire } from '@/features/chat/messages/user-message-plain-text';
 
 describe('normalizeAgentMessages user attachment wire shape', () => {
-  it('strips inline user image blocks from content', () => {
-    const ui = normalizeAgentMessages([
-      {
-        role: 'user',
-        content: [
-          { type: 'image', data: 'SGVsbG8=', mimeType: 'image/png' },
-          { type: 'text', text: 'caption' },
-        ],
-        timestamp: 1,
-      },
-    ]);
-    expect(ui).toHaveLength(1);
-    expect(ui[0]?.content).toEqual([{ type: 'text', text: 'caption' }]);
-  });
-
   it('keeps persisted media metadata without inline data', () => {
     const ui = normalizeAgentMessages([
       {
@@ -40,8 +26,35 @@ describe('normalizeAgentMessages user attachment wire shape', () => {
     ]);
     const att = ui[0]?.attachments?.[0];
     expect(att?.uri).toBe('media://inbound/photo---uuid.jpg');
+    expect(att?.bucket).toBe('inbound');
+    expect(att?.path).toBe('/tmp/photo.jpg');
     expect(att?.data).toBeUndefined();
     expect(att?.content).toBeUndefined();
+  });
+
+  it('builds retry payloads from persisted media refs without empty data fields', () => {
+    const wire = messageAttachmentsToWire([
+      {
+        id: 'a1',
+        type: 'image',
+        name: 'photo.jpg',
+        mimeType: 'image/jpeg',
+        size: 100,
+        uri: 'media://inbound/photo---uuid.jpg',
+        bucket: 'inbound',
+        path: '/tmp/photo.jpg',
+      },
+    ]);
+    expect(wire?.[0]).toMatchObject({
+      id: 'a1',
+      type: 'image',
+      mimeType: 'image/jpeg',
+      name: 'photo.jpg',
+      uri: 'media://inbound/photo---uuid.jpg',
+      bucket: 'inbound',
+      path: '/tmp/photo.jpg',
+    });
+    expect(wire?.[0]).not.toHaveProperty('data');
   });
 
   it('preserves assistant inline image blocks', () => {

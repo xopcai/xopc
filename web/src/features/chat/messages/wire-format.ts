@@ -11,7 +11,6 @@ export interface WireContentBlock {
   function?: { name?: string; arguments?: string | unknown };
   result?: string;
   source?: { data?: string; media_type?: string };
-  /** Pi / gateway user turns: `{ type: 'image', data: base64, mimeType }` (no `source`). */
   data?: string;
   mimeType?: string;
   id?: string;
@@ -22,7 +21,6 @@ export interface WireMessage {
   content?: unknown;
   tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
   toolCalls?: Array<{ id?: string; name: string; args?: Record<string, unknown> }>;
-  attachments?: unknown;
   /** Persisted media refs (`media://…`) on user/assistant turns. */
   media?: unknown;
   usage?: unknown;

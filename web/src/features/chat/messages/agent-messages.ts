@@ -16,7 +16,6 @@ import {
 } from '@/features/chat/messages/wire-format';
 import {
   dedupeAttachments,
-  normalizeWireAttachments,
   normalizeWireMedia,
 } from '@/features/chat/messages/wire-attachments';
 import { stripUserMessageForDisplay } from '@/features/chat/messages/wire-text-scrub';
@@ -267,26 +266,17 @@ export function sessionWireToUiMessages(raw: readonly unknown[]): Message[] {
 
 function applyStripToUserContent(blocks: MessageContent[]): MessageContent[] {
   const mapped = blocks
-    .filter((b) => b.type !== 'image')
+    .filter((b): b is Extract<MessageContent, { type: 'text' }> => b.type === 'text')
     .map((b) => {
-    if (b.type === 'text' && typeof b.text === 'string') {
       return { ...b, text: stripUserMessageForDisplay(b.text) };
-    }
-    return b;
   });
   return mapped.filter((b) => {
-    if (b.type === 'text' && (!b.text || !b.text.trim())) return false;
-    return true;
+    return Boolean(b.text?.trim());
   });
 }
 
 function wireAttachmentsFromMessage(m: WireMessage): Message['attachments'] {
-  const fromMedia = normalizeWireMedia(m.media);
-  const fromLegacy = normalizeWireAttachments(m.attachments);
-  if (fromMedia?.length && fromLegacy?.length) {
-    return dedupeAttachments([...fromMedia, ...fromLegacy]);
-  }
-  return dedupeAttachments(fromMedia ?? fromLegacy);
+  return dedupeAttachments(normalizeWireMedia(m.media));
 }
 
 function buildUserMessage(m: WireMessage): Message {
