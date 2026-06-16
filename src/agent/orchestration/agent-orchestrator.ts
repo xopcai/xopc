@@ -5,7 +5,6 @@
  * to response generation.
  */
 
-import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import type { InboundMessage } from '../../infra/bus/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
@@ -23,11 +22,13 @@ import { abortEmbeddedRun } from '../embedded/runs.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
 import {
-  persistInboundAttachmentsToWorkspace,
-  formatInboundFileTextBlock,
+  persistInboundAttachments,
 } from '../../channels/attachments/inbound-persist.js';
-import { expandAtFileMentionsInPlainText } from '../context/expand-at-file-mentions.js';
-import { resolveInboundImageContentParts } from '../image/inbound-image-handling.js';
+import {
+  buildTranscriptUserMessage,
+  hydrateUserTurnForLlm,
+  setPendingTranscriptUserMessage,
+} from '../inbound/attachment-pipeline.js';
 import {
   DREAMING_SWEEP_TOKEN,
   DREAMING_LIGHT_SWEEP_TOKEN,
@@ -186,31 +187,35 @@ export class AgentOrchestrator {
       );
       this.agentManager.setThinkingLevel(sessionKey, thinkingLevel);
 
-      // Persist inbound files (Telegram, etc.) under agent home, then build user message
-      const storageRoot = this.getAgentInternalStorageRootForSession(sessionKey);
-      const persistedAttachments = await persistInboundAttachmentsToWorkspace(
-        storageRoot,
+      const persistedAttachments = await persistInboundAttachments(msg.attachments);
+      const modelRef = this.modelManager.getModelForSession(sessionKey);
+      const userMessage = await buildTranscriptUserMessage({
+        text: msg.content,
+        prepared: persistedAttachments,
         sessionKey,
-        msg.attachments,
-      );
-      const userMessage = await this.buildUserMessage(
-        {
-          ...msg,
-          attachments: persistedAttachments ?? msg.attachments,
-        },
-        sessionKey,
-      );
+        modelRef,
+        config: this.getConfig?.(),
+        agentManager: this.agentManager,
+      });
+      setPendingTranscriptUserMessage(sessionKey, userMessage);
+
       const userPlainForMemory = extractAgentUserPlainText(userMessage);
       const userMessageForModel = await this.agentManager.applyMemoryPrefetchToUserMessage(
         userMessage,
         sessionKey,
       );
 
+      const llmTurn = await hydrateUserTurnForLlm({
+        message: userMessage,
+        modelRef,
+      });
+
       this.feedbackCoordinator.startTask();
 
       const turnResult = await runEmbeddedTurnForSession({
         sessionKey,
         userMessage: userMessageForModel,
+        llmImages: llmTurn.images,
         sessionStore: this.sessionStore,
         agentManager: this.agentManager,
         modelManager: this.modelManager,
@@ -237,113 +242,6 @@ export class AgentOrchestrator {
       this.feedbackCoordinator.endTask();
       throw error;
     }
-  }
-
-  /**
-   * Build an agent message from an inbound message
-   */
-  private async buildUserMessage(msg: InboundMessage, sessionKey: string): Promise<AgentMessage> {
-    const storageRootAbs = this.getAgentInternalStorageRootForSession(sessionKey);
-    let textBody = msg.content.trimStart().startsWith('/skill:')
-      ? this.agentManager.expandSkillUserText(msg.content)
-      : msg.content;
-
-    if (/@file:/.test(textBody)) {
-      const root = this.agentManager.getResolvedWorkspaceForSession(sessionKey);
-      textBody = await expandAtFileMentionsInPlainText(textBody, root);
-    }
-
-    if (!msg.attachments || msg.attachments.length === 0) {
-      return {
-        role: 'user',
-        content: textBody,
-        timestamp: Date.now(),
-      };
-    }
-
-    const modelRef = this.modelManager.getModelForSession(sessionKey);
-    const cfg = this.getConfig?.();
-
-    const messageContent: Array<
-      { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
-    > = [];
-
-    if (msg.content.trim()) {
-      messageContent.push({ type: 'text', text: textBody });
-    }
-
-    const attachments = msg.attachments;
-    let i = 0;
-    while (i < attachments.length) {
-      const att = attachments[i]!;
-      const isImage =
-        att.type === 'image' || att.type === 'photo' || Boolean(att.mimeType?.startsWith('image/'));
-
-      if (isImage) {
-        const group: Array<{ data: string; mimeType: string }> = [];
-        while (i < attachments.length) {
-          const a = attachments[i]!;
-          const img =
-            a.type === 'image' || a.type === 'photo' || Boolean(a.mimeType?.startsWith('image/'));
-          if (!img) {
-            break;
-          }
-          if (!a.data || a.data.length === 0) {
-            log.warn({ type: a.type, name: a.name }, 'Empty image data, skipping');
-            i += 1;
-            continue;
-          }
-          group.push({ data: a.data, mimeType: a.mimeType || 'image/jpeg' });
-          i += 1;
-        }
-        if (group.length > 0) {
-          const parts = await resolveInboundImageContentParts({
-            modelRef,
-            cfg,
-            userTextForContext: msg.content.trim() ? textBody : '',
-            images: group,
-          });
-          messageContent.push(...parts);
-        }
-      } else {
-        const fileBlock = formatInboundFileTextBlock(
-          {
-            type: att.type,
-            mimeType: att.mimeType,
-            name: att.name,
-            size: att.size,
-            workspaceRelativePath: att.workspaceRelativePath,
-          },
-          storageRootAbs,
-        );
-        messageContent.push({ type: 'text', text: fileBlock });
-        i += 1;
-      }
-    }
-
-    const hasText = messageContent.some((item) => item.type === 'text');
-    const hasImage = messageContent.some((item) => item.type === 'image');
-    if (hasImage && !hasText) {
-      messageContent.unshift({ type: 'text', text: 'Please analyze the image(s) I sent.' });
-    }
-
-    if (messageContent.length === 0) {
-      log.warn(
-        { attachmentCount: msg.attachments.length },
-        'All attachments were skipped, falling back to text message',
-      );
-      return {
-        role: 'user',
-        content: textBody || '[Image attachment could not be processed]',
-        timestamp: Date.now(),
-      };
-    }
-
-    return {
-      role: 'user',
-      content: messageContent,
-      timestamp: Date.now(),
-    };
   }
 
   /**

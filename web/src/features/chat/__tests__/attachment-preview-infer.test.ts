@@ -43,7 +43,7 @@ describe('normalizeAgentMessages attachment mime from filename', () => {
   it('upgrades octet-stream to application/pdf when name ends with .pdf', () => {
     const ui = normalizeAgentMessages([
       {
-        role: 'user-with-attachments',
+        role: 'user',
         content: [{ type: 'text', text: 'hi' }],
         attachments: [
           {

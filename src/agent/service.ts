@@ -80,8 +80,9 @@ import { MemoryFlushService } from './memory/memory-flush.js';
 import type { MemoryFlushConfig } from './memory/memory-flush.js';
 import { tryApplySessionTranscriptHygiene } from './transcript/transcript-hygiene.js';
 import {
-  persistInboundAttachmentsToWorkspace,
-  type InternalAttachmentRoots,
+  persistInboundAttachments,
+  type InboundAttachmentInput,
+  type MediaRef,
 } from '../channels/attachments/inbound-persist.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
 
@@ -424,7 +425,6 @@ export class AgentService {
       parseSessionKey: (sk) => this.parseSessionKey(sk),
       initSessionContext: (sk, channel, chatId) => this.initSessionContext(sk, channel, chatId),
       sessionHydrator: this.sessionHydrator,
-      attachmentRootsForSession: (sk) => this.attachmentRootsForSession(sk),
       prepareInboundAttachments: (sk, att) => this.prepareInboundAttachments(sk, att),
       enqueueMaybeAutoTitleAfterPersist: (sk) => this.enqueueMaybeAutoTitleAfterPersist(sk),
       enqueueProvisionalSessionTitle: (sk, text) => this.enqueueProvisionalSessionTitle(sk, text),
@@ -469,13 +469,6 @@ export class AgentService {
     }
 
     log.info('AgentService initialized');
-  }
-
-  private attachmentRootsForSession(sessionKey: string): InternalAttachmentRoots {
-    const cfg = this.config.config!;
-    return {
-      agentHome: resolveAgentHomeDir(cfg, extractProfileAgentId(sessionKey, cfg)),
-    };
   }
 
   private createSessionStore(): SessionStore {
@@ -829,33 +822,13 @@ export class AgentService {
   }
 
   /**
-   * Persist inbound file attachments under agent home `inbound/` (non-images with data).
-   * Idempotent if `workspaceRelativePath` is already set on an attachment.
+   * Persist inbound file attachments to the global media store.
    */
   async prepareInboundAttachments(
-    sessionKey: string,
-    attachments?: Array<{
-      type: string;
-      mimeType?: string;
-      data?: string;
-      name?: string;
-      size?: number;
-      workspaceRelativePath?: string;
-    }>,
-  ): Promise<
-    | Array<{
-        type: string;
-        mimeType?: string;
-        data?: string;
-        name?: string;
-        size?: number;
-        workspaceRelativePath?: string;
-      }>
-    | undefined
-  > {
-    const cfg = this.config.config!;
-    const storageRoot = resolveAgentHomeDir(cfg, extractProfileAgentId(sessionKey, cfg));
-    return persistInboundAttachmentsToWorkspace(storageRoot, sessionKey, attachments);
+    _sessionKey: string,
+    attachments?: InboundAttachmentInput[],
+  ): Promise<MediaRef[] | undefined> {
+    return persistInboundAttachments(attachments);
   }
 
   private endDirectRequestContext(): void {

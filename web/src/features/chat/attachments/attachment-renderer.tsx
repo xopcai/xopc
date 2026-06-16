@@ -16,47 +16,49 @@ function isAudioAttachment(att: MessageAttachment): boolean {
 
 const IMAGE_GRID_MAX_VISIBLE = 9;
 
-function imageGridLayout(count: number): {
+function imageGridLayout(
+  count: number,
+  compact: boolean,
+): {
   container: string;
   tileSize: 'single' | 'grid-cell';
-  itemClass?: (index: number) => string | undefined;
-  gridCellFill?: (index: number) => 'square' | 'stretch' | undefined;
   overflowCount?: number;
 } {
+  const maxW = compact ? 'max-w-[11rem]' : 'max-w-52';
+  const gap = 'gap-1';
+
   if (count === 1) {
     return {
-      container: 'grid max-w-xs grid-cols-1 gap-1.5',
+      container: `grid grid-cols-1 ${maxW} ${gap}`,
       tileSize: 'single',
     };
   }
   if (count === 2) {
     return {
-      container: 'grid max-w-xs grid-cols-2 gap-1.5',
+      container: `grid grid-cols-2 ${maxW} ${gap}`,
       tileSize: 'grid-cell',
     };
   }
   if (count === 3) {
     return {
-      container: 'grid h-44 max-w-xs grid-cols-2 grid-rows-2 gap-1.5 sm:h-48',
+      container: `grid grid-cols-3 ${maxW} ${gap}`,
       tileSize: 'grid-cell',
-      itemClass: (index) => (index === 0 ? 'row-span-2 min-h-0' : undefined),
-      gridCellFill: (index) => (index === 0 ? 'stretch' : 'square'),
     };
   }
   if (count === 4) {
     return {
-      container: 'grid max-w-xs grid-cols-2 gap-1.5',
+      container: `grid grid-cols-2 ${maxW} ${gap}`,
       tileSize: 'grid-cell',
     };
   }
   if (count <= IMAGE_GRID_MAX_VISIBLE) {
     return {
-      container: 'grid max-w-xs grid-cols-3 gap-1.5',
+      container: `grid grid-cols-3 ${maxW} ${gap}`,
       tileSize: 'grid-cell',
     };
   }
   return {
-    container: 'grid max-w-xs grid-cols-3 gap-1.5',
+    container: `grid grid-cols-3 ${maxW} ${gap}`,
     tileSize: 'grid-cell',
     overflowCount: count - (IMAGE_GRID_MAX_VISIBLE - 1),
   };
@@ -98,30 +100,29 @@ export function AttachmentRenderer({
       <div className="flex flex-col gap-2">
         {images.length > 0 ? (
           (() => {
-            const layout = imageGridLayout(images.length);
+            const grid = imageGridLayout(images.length, layout === 'user');
             const visibleImages =
-              layout.overflowCount != null
+              grid.overflowCount != null
                 ? images.slice(0, IMAGE_GRID_MAX_VISIBLE - 1)
                 : images;
 
             return (
-              <div className={cn('w-full', layout.container)}>
+              <div className={cn('w-full min-w-0', grid.container)}>
                 {visibleImages.map((img, i) => (
                   <AttachmentTile
                     key={img.id ?? `${img.name}-${i}`}
                     attachment={img}
                     authToken={authToken}
                     sessionKey={sessionKey}
-                    imageSize={layout.tileSize}
-                    gridCellFill={layout.gridCellFill?.(i)}
-                    className={layout.itemClass?.(i)}
+                    imageSize={grid.tileSize}
+                    compact={layout === 'user'}
                     onOpen={(att) => {
                       setActive(att);
                       setOpen(true);
                     }}
                   />
                 ))}
-                {layout.overflowCount != null ? (
+                {grid.overflowCount != null ? (
                   <AttachmentTile
                     key={
                       images[IMAGE_GRID_MAX_VISIBLE - 1]?.id ??
@@ -131,8 +132,9 @@ export function AttachmentRenderer({
                     authToken={authToken}
                     sessionKey={sessionKey}
                     imageSize="grid-cell"
+                    compact={layout === 'user'}
                     gridCellFill="square"
-                    overflowLabel={`+${layout.overflowCount}`}
+                    overflowLabel={`+${grid.overflowCount}`}
                     onOpen={(att) => {
                       setActive(att);
                       setOpen(true);

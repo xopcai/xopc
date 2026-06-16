@@ -32,7 +32,6 @@ import {
   buildProjectContextSection,
   getContextFileBasename,
   isDynamicContextFile,
-  isHeartbeatContextFile,
   sortContextFilesForPrompt,
 } from './sections/project-context.js';
 import { buildToolingSection, hasSkillsTools } from './sections/tooling.js';
@@ -49,7 +48,6 @@ export type { MemoryCitationsMode } from './types.js';
 export {
   getContextFileBasename,
   isDynamicContextFile,
-  isHeartbeatContextFile,
   sortContextFilesForPrompt,
 } from './sections/project-context.js';
 

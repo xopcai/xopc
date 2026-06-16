@@ -26,13 +26,16 @@ export interface Message {
     outputTokens?: number;
     totalTokens?: number;
   };
-  /** Webchat early-save / UI: inbound file metadata (no base64). Omitted when absent. */
-  attachments?: Array<{
-    type?: string;
-    mimeType?: string;
-    name?: string;
-    size?: number;
-    workspaceRelativePath?: string;
+  /** Inbound attachment metadata (no base64). */
+  media?: Array<{
+    id: string;
+    bucket: string;
+    type: string;
+    mimeType: string;
+    name: string;
+    size: number;
+    uri: string;
+    path: string;
   }>;
 }
 

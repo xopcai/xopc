@@ -101,21 +101,28 @@ function serializeWalk(node: Node, out: string[]): void {
     } else if (el.tagName === 'BR') {
       out.push('\n');
     } else {
-      el.childNodes.forEach((c) => serializeWalk(c, out));
+      serializeElementChildren(el, out);
+    }
+  }
+}
+
+function serializeElementChildren(parent: HTMLElement, out: string[]): void {
+  const children = Array.from(parent.childNodes);
+  for (let i = 0; i < children.length; i++) {
+    const child = children[i];
+    const next = children[i + 1];
+    serializeWalk(child, out);
+    if (next == null) continue;
+    // Block siblings and inline→block transitions represent visual line breaks in
+    // contenteditable (browsers often nest <div> lines instead of inserting <br>).
+    if (isBlockLike(child) || isBlockLike(next)) {
+      out.push('\n');
     }
   }
 }
 
 function serializeRootChildren(root: HTMLElement, out: string[]): void {
-  const children = Array.from(root.childNodes);
-  for (let i = 0; i < children.length; i++) {
-    serializeWalk(children[i], out);
-    // Preserve line breaks between consecutive block-level siblings; browsers
-    // represent contenteditable multi-line input as <div> lines, not <br>.
-    if (i < children.length - 1 && isBlockLike(children[i])) {
-      out.push('\n');
-    }
-  }
+  serializeElementChildren(root, out);
 }
 
 export function serializeEditorToWire(root: HTMLElement): string {

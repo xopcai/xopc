@@ -8,19 +8,9 @@ export const EXCEL_PREVIEW_MAX_COLS = 64;
 /** PPTX: cap text shown in preview dialog to avoid freezing the browser on huge decks. */
 export const PPTX_PREVIEW_MAX_CHARS = 300_000;
 
-/** Path for gateway `GET` (inbound vs TTS); `rel` is relative to agent home (`inbound/…`, `tts/…`). */
-export function workspaceRelativePathToApiPath(
-  rel: string,
-  opts?: { sessionKey?: string | null },
-): string {
-  const norm = rel.replace(/\\/g, '/');
-  const q = encodeURIComponent(norm);
-  const base = norm.startsWith('tts/')
-    ? `/api/workspace/tts-file?rel=${q}`
-    : `/api/workspace/inbound-file?rel=${q}`;
-  const sk = opts?.sessionKey?.trim();
-  if (!sk) return base;
-  return `${base}&sessionKey=${encodeURIComponent(sk)}`;
+/** Build gateway read URL for a `media://` URI. */
+export function mediaUriToReadUrl(uri: string): string {
+  return `/api/media/read?uri=${encodeURIComponent(uri.trim())}`;
 }
 
 export interface Attachment {
@@ -34,8 +24,8 @@ export interface Attachment {
   data?: string;
   extractedText?: string; // For documents: extracted text content
   preview?: string; // base64 image preview (first page for PDFs, or same as content for images)
-  /** Server-persisted path under agent home (`inbound/…` or `tts/…`; gateway with `?sessionKey=` when needed) */
-  workspaceRelativePath?: string;
+  /** Persisted media URI (`media://inbound/…`, `media://tts/…`). */
+  uri?: string;
   durationSeconds?: number;
 }
 
