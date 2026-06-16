@@ -23,32 +23,11 @@ import type { ToolExecutorConfig } from './tools/executor.js';
 
 const log = createLogger('delegate-child');
 
+import { buildSubagentSystemPrompt } from './prompt/subagent-context.js';
+
+/** @deprecated Use buildSubagentSystemPrompt */
 export function buildChildSystemPrompt(goal: string, context?: string, workspace?: string): string {
-  const parts = [
-    'You are a focused sub-agent working on a specific delegated task.',
-    '',
-    `YOUR TASK:\n${goal}`,
-  ];
-
-  if (context?.trim()) {
-    parts.push(`\nCONTEXT:\n${context.trim()}`);
-  }
-
-  if (workspace?.trim()) {
-    parts.push(`\nWORKSPACE: ${workspace.trim()}`);
-  }
-
-  parts.push(
-    '\nComplete this task using only the tools available to you. ' +
-      'When finished, reply with a clear, concise summary covering:\n' +
-      '- What you did\n' +
-      '- What you found or accomplished\n' +
-      '- Files created or modified\n' +
-      '- Issues encountered\n\n' +
-      'Your final reply is returned to the parent agent — be thorough but compact.',
-  );
-
-  return parts.join('\n');
+  return buildSubagentSystemPrompt({ goal, context, workspace });
 }
 
 export interface BuildChildToolsOptions {
@@ -136,7 +115,12 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
 
   const agent = new Agent({
     initialState: {
-      systemPrompt: buildChildSystemPrompt(options.goal, options.context, options.workspace),
+      systemPrompt: buildSubagentSystemPrompt({
+        goal: options.goal,
+        context: options.context,
+        workspace: options.workspace,
+        toolNames: filteredTools.map((t) => t.name),
+      }),
       model: options.model,
       thinkingLevel: 'low' as ThinkingLevel,
       tools: filteredTools,

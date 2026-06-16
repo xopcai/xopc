@@ -464,6 +464,13 @@ export class AgentManager implements AgentInstanceGateway {
         systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
+        sessionKey: instance.sessionKey,
+        modelRef: instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel,
+        agentId: instance.effectiveProfile.agentId,
+        thinkingLevel:
+          (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
+          this.config.thinkingLevel ??
+          'medium',
       });
       instance.agent.state.systemPrompt = newPrompt;
     }
@@ -499,6 +506,13 @@ export class AgentManager implements AgentInstanceGateway {
         systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
+        sessionKey: instance.sessionKey,
+        modelRef: instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel,
+        agentId: instance.effectiveProfile.agentId,
+        thinkingLevel:
+          (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
+          this.config.thinkingLevel ??
+          'medium',
       });
       instance.agent.state.systemPrompt = newPrompt;
     }
@@ -713,6 +727,10 @@ export class AgentManager implements AgentInstanceGateway {
           systemPromptOverride: profile.systemPromptOverride,
           skillAllowlist: profile.skillsAllowlist,
           registeredToolNames,
+          sessionKey,
+          modelRef,
+          agentId: profile.agentId,
+          thinkingLevel,
         }),
         model,
         thinkingLevel,

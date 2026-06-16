@@ -1,0 +1,148 @@
+const CORE_TOOL_ORDER = [
+  'read_file',
+  'write_file',
+  'edit_file',
+  'grep',
+  'find',
+  'list_dir',
+  'shell',
+  'web_search',
+  'web_fetch',
+  'web_extract',
+  'browser_use',
+  'send_message',
+  'send_media',
+  'memory_search',
+  'memory_get',
+  'session_search',
+  'curated_memory',
+  'session_status',
+  'delegate_task',
+  'workflow',
+  'cronjob',
+  'skills_list',
+  'skill_view',
+  'skill_manage',
+  'todo',
+  'clarify',
+  'text_to_speech',
+  'image',
+  'image_generate',
+  'create_share',
+  'execute_code',
+] as const;
+
+const CORE_TOOL_SUMMARIES: Record<string, string> = {
+  read_file: 'Read file contents',
+  write_file: 'Create or overwrite files',
+  edit_file: 'Make precise edits to files',
+  grep: 'Search file contents for patterns',
+  find: 'Find files by glob pattern',
+  list_dir: 'List directory contents',
+  shell: 'Run shell commands (supports background via yieldMs/background)',
+  web_search: 'Search the web',
+  web_fetch: 'Fetch and extract readable content from a URL',
+  web_extract: 'Extract structured content from a URL',
+  browser_use: 'Control the configured browser',
+  send_message: 'Send messages to the current channel',
+  send_media: 'Send media attachments to the current channel',
+  memory_search: 'Semantic search over workspace and profile memory files',
+  memory_get: 'Read specific lines from memory files',
+  session_search: 'Search other chat sessions or list recent sessions',
+  curated_memory: 'Read/write structured notes under agent home memories/',
+  session_status: 'Show session usage/time/model state',
+  delegate_task: 'Spawn an isolated sub-agent for a delegated task',
+  workflow: 'Start a persisted multi-phase workflow run',
+  cronjob: 'Manage scheduled cron jobs',
+  skills_list: 'List available skills',
+  skill_view: 'Load a skill SKILL.md or sub-documents',
+  skill_manage: 'Create or update skills on disk',
+  todo: 'Manage in-session todo items',
+  clarify: 'Ask the user a blocking clarification question',
+  text_to_speech: 'Send a standalone voice message',
+  image: 'Analyze an image with the configured vision model',
+  image_generate: 'Generate images with the configured image model',
+  create_share: 'Create a shareable link for workspace files',
+  execute_code: 'Run code in a sandbox with a restricted tool subset',
+};
+
+export function buildToolingSection(params: {
+  toolNames?: string[];
+  toolSummaries?: Record<string, string>;
+}): string {
+  const rawToolNames = (params.toolNames ?? []).map((tool) => tool.trim()).filter(Boolean);
+  const canonicalByNormalized = new Map<string, string>();
+  for (const name of rawToolNames) {
+    const normalized = name.toLowerCase();
+    if (!canonicalByNormalized.has(normalized)) {
+      canonicalByNormalized.set(normalized, name);
+    }
+  }
+  const resolveToolName = (normalized: string) =>
+    canonicalByNormalized.get(normalized) ?? normalized;
+
+  const normalizedTools = rawToolNames.map((tool) => tool.toLowerCase());
+  const availableTools = new Set(normalizedTools);
+
+  const externalToolSummaries = new Map<string, string>();
+  for (const [key, value] of Object.entries(params.toolSummaries ?? {})) {
+    const normalized = key.trim().toLowerCase();
+    if (!normalized || !value?.trim()) {
+      continue;
+    }
+    externalToolSummaries.set(normalized, value.trim());
+  }
+
+  const extraTools = Array.from(
+    new Set(normalizedTools.filter((tool) => !CORE_TOOL_ORDER.includes(tool as (typeof CORE_TOOL_ORDER)[number]))),
+  );
+  const enabledTools = CORE_TOOL_ORDER.filter((tool) => availableTools.has(tool));
+  const toolLines = enabledTools.map((tool) => {
+    const summary = CORE_TOOL_SUMMARIES[tool] ?? externalToolSummaries.get(tool);
+    const name = resolveToolName(tool);
+    return summary ? `- ${name}: ${summary}` : `- ${name}`;
+  });
+  for (const tool of extraTools.toSorted()) {
+    const summary = CORE_TOOL_SUMMARIES[tool] ?? externalToolSummaries.get(tool);
+    const name = resolveToolName(tool);
+    toolLines.push(summary ? `- ${name}: ${summary}` : `- ${name}`);
+  }
+
+  const shellToolName = resolveToolName('shell');
+  const hasDelegate = availableTools.has('delegate_task');
+  const hasWorkflow = availableTools.has('workflow');
+
+  const orchestrationLines: string[] = [];
+  if (hasDelegate) {
+    orchestrationLines.push(
+      '- Sub-agent delegation → use `delegate_task(goal, context?, toolset?)` for focused parallel work; results return to you automatically.',
+    );
+  }
+  if (hasWorkflow) {
+    orchestrationLines.push(
+      '- Multi-phase workflows → use `workflow` to start persisted runs with subagents when a script defines phases.',
+    );
+  }
+
+  return [
+    '## Tooling',
+    'Tool availability (filtered by policy):',
+    'Tool names are case-sensitive. Call tools exactly as listed.',
+    toolLines.length > 0
+      ? toolLines.join('\n')
+      : '- No tools are registered for this session.',
+    `For long waits, avoid rapid poll loops: use \`${shellToolName}\` with enough yieldMs or poll in reasonable intervals.`,
+    hasDelegate
+      ? 'If a task is complex or long-running, delegate it. Completion is push-based: the sub-agent result returns when done.'
+      : '',
+    ...orchestrationLines,
+    'Do not poll delegate/workflow status in a tight loop; check on-demand or wait for completion.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+export function hasSkillsTools(toolNames: string[]): boolean {
+  const normalized = new Set(toolNames.map((t) => t.toLowerCase()));
+  return normalized.has('skills_list') || normalized.has('skill_view');
+}

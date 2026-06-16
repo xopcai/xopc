@@ -10,7 +10,7 @@ xopc builds a custom system prompt for every agent run. The prompt is **xopc-own
 
 ## Structure
 
-Fixed sections include Tooling, Skills, Safety, Problem Solving, Messaging, Runtime, and optional Voice (TTS). Profile Markdown is injected as **Project Context**:
+Fixed sections include **Tooling**, Tool Call Style, Execution Bias, Skills, Safety, Problem Solving, Messaging, Silent Replies, Runtime, and optional Voice (TTS). Profile Markdown is injected as **Project Context**:
 
 ```
 # Project Context
