@@ -7,6 +7,7 @@
  */
 
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import type { GatewayService } from '../service.js';
 import { 
   type OAuthProviderInterface, 
@@ -23,8 +24,10 @@ import {
   googleAntigravityOAuthProvider,
   openaiCodexOAuthProvider,
 } from '../../auth/oauth/index.js';
-import { createLogger } from '../../utils/logger.js';
 import { CredentialResolver } from '../../auth/credentials.js';
+import { isLoopbackHost } from '../host.js';
+import { resolveReverseProxyPublicUrl } from '../public-url.js';
+import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('OAuthAsync');
 
@@ -64,6 +67,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = {
 interface OAuthSession {
   id: string;
   provider: string;
+  preferredLoginMethod?: string;
   status: 'pending' | 'waiting_auth' | 'waiting_code' | 'completed' | 'failed' | 'cancelled';
   authUrl?: string;
   instructions?: string;
@@ -114,6 +118,49 @@ function cancelOAuthSession(session: OAuthSession, message = 'OAuth flow cancell
   session.message = message;
 }
 
+function hostWithoutPort(value: string | undefined): string | undefined {
+  const raw = value?.split(',')[0]?.trim();
+  if (!raw) return undefined;
+
+  try {
+    return new URL(raw.includes('://') ? raw : `http://${raw}`).hostname.replace(/^\[/, '').replace(/\]$/, '');
+  } catch {
+    const unbracketed = raw.replace(/^\[/, '').replace(/\]$/, '');
+    return unbracketed.includes(':') && !unbracketed.includes('.') ? unbracketed : unbracketed.split(':')[0];
+  }
+}
+
+function requestLooksRemote(c: Context): boolean {
+  const originHost = hostWithoutPort(c.req.header('origin'));
+  const forwardedHost = hostWithoutPort(c.req.header('x-forwarded-host'));
+  const host = hostWithoutPort(c.req.header('host'));
+
+  return [originHost, forwardedHost, host].some((candidate) => candidate && !isLoopbackHost(candidate));
+}
+
+function preferredOAuthLoginMethod(params: {
+  provider: string;
+  requestedMethod?: unknown;
+  c: Context;
+  service: GatewayService;
+}): string | undefined {
+  if (typeof params.requestedMethod === 'string' && params.requestedMethod.trim()) {
+    return params.requestedMethod.trim();
+  }
+
+  if (params.provider !== 'openai-codex') {
+    return undefined;
+  }
+
+  const publicUrl = resolveReverseProxyPublicUrl(params.service.currentConfig);
+  const publicHost = hostWithoutPort(publicUrl ?? undefined);
+  if ((publicHost && !isLoopbackHost(publicHost)) || requestLooksRemote(params.c)) {
+    return 'device_code';
+  }
+
+  return undefined;
+}
+
 export function createOAuthAsyncHandler(service: GatewayService) {
   const oauth = new Hono();
 
@@ -122,7 +169,8 @@ export function createOAuthAsyncHandler(service: GatewayService) {
    * Start async OAuth flow - returns immediately with session ID
    */
   oauth.post('/start', async (c) => {
-    const { provider } = await c.req.json().catch(() => ({}));
+    const body = await c.req.json().catch(() => ({}));
+    const { provider } = body;
     
     if (!provider) {
       return c.json({ error: 'Provider is required' }, 400);
@@ -137,6 +185,12 @@ export function createOAuthAsyncHandler(service: GatewayService) {
     const session: OAuthSession = {
       id: sessionId,
       provider,
+      preferredLoginMethod: preferredOAuthLoginMethod({
+        provider,
+        requestedMethod: body.loginMethod,
+        c,
+        service,
+      }),
       status: 'pending',
       createdAt: Date.now(),
       expiresAt: Date.now() + SESSION_TTL_MS,
@@ -337,9 +391,12 @@ async function runOAuthFlow(
       return '';
     },
     onSelect: async (prompt) => {
+      const preferredOption = session.preferredLoginMethod
+        ? prompt.options.find((option) => option.id === session.preferredLoginMethod)
+        : undefined;
       const browserOption = prompt.options.find((option) => option.id === 'browser');
       const firstOption = prompt.options[0];
-      const selectedOption = browserOption ?? firstOption;
+      const selectedOption = preferredOption ?? browserOption ?? firstOption;
       if (!selectedOption) {
         throw new Error('OAuth login did not provide any selectable auth method');
       }
