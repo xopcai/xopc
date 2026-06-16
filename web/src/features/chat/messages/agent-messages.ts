@@ -276,7 +276,10 @@ function applyStripToUserContent(blocks: MessageContent[]): MessageContent[] {
 }
 
 function wireAttachmentsFromMessage(m: WireMessage): Message['attachments'] {
-  return dedupeAttachments(normalizeWireMedia(m.media));
+  return dedupeAttachments([
+    ...(normalizeWireMedia(m.media) ?? []),
+    ...(normalizeWireMedia(m.attachments) ?? []),
+  ]);
 }
 
 function buildUserMessage(m: WireMessage): Message {
