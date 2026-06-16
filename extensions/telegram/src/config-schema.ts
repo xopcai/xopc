@@ -3,40 +3,41 @@ import { z } from 'zod';
 export const TelegramStreamingBlockCoalesceSchema = z.object({
   minChars: z.number().default(800),
   idleMs: z.number().default(1000),
-});
+}).strict();
 
 export const TelegramStreamingPreviewSchema = z.object({
   toolProgress: z.boolean().default(true),
-});
+}).strict();
 
 export const TelegramStreamingConfigSchema = z.object({
-  mode: z.enum(['off', 'partial', 'block', 'progress']).default('partial'),
+  mode: z.enum(['off', 'partial', 'block']).default('partial'),
   preview: TelegramStreamingPreviewSchema.optional(),
   block: z
     .object({
       coalesce: TelegramStreamingBlockCoalesceSchema.optional(),
     })
+    .strict()
     .optional(),
-});
+}).strict();
 
 export const TelegramTopicConfigSchema = z.object({
-  topicId: z.string(),
+  topicId: z.string().optional(),
   requireMention: z.boolean().optional(),
   enabled: z.boolean().optional(),
   allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
   systemPrompt: z.string().optional(),
   agentId: z.string().optional(),
-});
+}).strict();
 
 export const TelegramGroupConfigSchema = z.object({
-  groupId: z.string(),
+  groupId: z.string().optional(),
   requireMention: z.boolean().optional(),
   enabled: z.boolean().optional(),
   allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
   systemPrompt: z.string().optional(),
   agentId: z.string().optional(),
   topics: z.record(z.string(), TelegramTopicConfigSchema).optional(),
-});
+}).strict();
 
 export const TelegramActionsConfigSchema = z.object({
   reactions: z.boolean().default(true),
@@ -46,21 +47,21 @@ export const TelegramActionsConfigSchema = z.object({
   poll: z.boolean().default(false),
   sticker: z.boolean().default(false),
   createForumTopic: z.boolean().default(false),
-});
+}).strict();
 
 export const TelegramExecApprovalsConfigSchema = z.object({
   enabled: z.boolean().default(false),
   approvers: z.array(z.union([z.string(), z.number()])).optional(),
-});
+}).strict();
 
 export const TelegramThreadBindingsConfigSchema = z.object({
   enabled: z.boolean().default(false),
   idleTimeoutMs: z.number().optional(),
   maxAgeMs: z.number().optional(),
-});
+}).strict();
 
 export const TelegramAccountConfigSchema = z.object({
-  accountId: z.string(),
+  accountId: z.string().optional(),
   name: z.string().optional(),
   enabled: z.boolean().default(true),
   botToken: z.string().default(''),
@@ -73,7 +74,6 @@ export const TelegramAccountConfigSchema = z.object({
   groups: z.record(z.string(), TelegramGroupConfigSchema).optional(),
   historyLimit: z.number().default(50),
   textChunkLimit: z.number().default(4000),
-  streamMode: z.enum(['off', 'partial', 'block']).optional(),
   streaming: TelegramStreamingConfigSchema.optional(),
   proxy: z.string().optional(),
   apiRoot: z.string().optional(),
@@ -81,76 +81,12 @@ export const TelegramAccountConfigSchema = z.object({
   reactionLevel: z.enum(['off', 'ack', 'minimal', 'extensive']).default('ack'),
   reactionNotifications: z.enum(['off', 'own', 'all']).default('own'),
   ackReaction: z.string().optional(),
-  webhookUrl: z.string().optional(),
-  webhookSecret: z.string().optional(),
-  webhookPath: z.string().optional(),
   actions: TelegramActionsConfigSchema.optional(),
   execApprovals: TelegramExecApprovalsConfigSchema.optional(),
   threadBindings: TelegramThreadBindingsConfigSchema.optional(),
-});
+}).strict();
 
-function migrateStreamModeToStreaming(record: Record<string, unknown>): void {
-  if (record.streaming && typeof record.streaming === 'object') return;
-  const legacy = record.streamMode;
-  if (typeof legacy !== 'string') return;
-  const mode =
-    legacy === 'block' ? 'block' : legacy === 'off' ? 'off' : legacy === 'partial' ? 'partial' : 'partial';
-  record.streaming = { mode, preview: { toolProgress: true } };
-}
-
-function preprocessAccountRecord(record: Record<string, unknown>): void {
-  migrateStreamModeToStreaming(record);
-}
-
-/** Migrate legacy top-level `botToken` into `accounts.default`; implicit enable when token is set. */
-function preprocessTelegramConfigInput(raw: unknown): unknown {
-  if (raw === null || raw === undefined) return raw;
-  if (typeof raw !== 'object' || Array.isArray(raw)) return raw;
-  const o = { ...(raw as Record<string, unknown>) };
-
-  const legacyToken = typeof o.botToken === 'string' ? o.botToken.trim() : '';
-  if (legacyToken) {
-    const prev =
-      o.accounts && typeof o.accounts === 'object' && !Array.isArray(o.accounts)
-        ? (o.accounts as Record<string, unknown>)
-        : {};
-    const acc = { ...prev };
-    const rawDef = acc.default;
-    const def =
-      rawDef && typeof rawDef === 'object' && !Array.isArray(rawDef)
-        ? { ...(rawDef as Record<string, unknown>) }
-        : {};
-    const defToken = typeof def.botToken === 'string' ? def.botToken.trim() : '';
-    if (!defToken) {
-      acc.default = { ...def, accountId: 'default', botToken: legacyToken };
-    }
-    o.accounts = acc;
-  }
-  delete o.botToken;
-
-  migrateStreamModeToStreaming(o);
-
-  const accounts = o.accounts as Record<string, Record<string, unknown>> | undefined;
-  if (accounts) {
-    for (const acc of Object.values(accounts)) {
-      if (acc && typeof acc === 'object') {
-        preprocessAccountRecord(acc);
-      }
-    }
-  }
-
-  const defaultAcc = accounts?.default;
-  const token =
-    defaultAcc && typeof defaultAcc === 'object' && typeof defaultAcc.botToken === 'string'
-      ? defaultAcc.botToken
-      : '';
-  if (o.enabled === undefined && token.trim().length > 0) {
-    o.enabled = true;
-  }
-  return o;
-}
-
-const TelegramConfigSchemaInner = z.object({
+export const TelegramConfigSchema = z.object({
   enabled: z.boolean().default(false),
   allowFrom: z.array(z.union([z.string(), z.number()])).default([]),
   groupAllowFrom: z.array(z.union([z.string(), z.number()])).default([]),
@@ -160,27 +96,18 @@ const TelegramConfigSchemaInner = z.object({
   dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
   groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('open'),
   replyToMode: z.enum(['off', 'first', 'all']).default('off'),
-  streamMode: z.enum(['off', 'partial', 'block']).optional(),
   streaming: TelegramStreamingConfigSchema.optional(),
   historyLimit: z.number().default(50),
   textChunkLimit: z.number().default(4000),
   proxy: z.string().optional(),
-});
-
-export const TelegramConfigSchema = z.preprocess(preprocessTelegramConfigInput, TelegramConfigSchemaInner);
+}).strict();
 
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
 export type TelegramStreamingConfig = z.infer<typeof TelegramStreamingConfigSchema>;
 
-/** Resolve effective streaming mode for an account (streaming.mode wins over legacy streamMode). */
+/** Resolve effective streaming mode for an account. */
 export function resolveTelegramStreamingMode(account: {
-  streamMode?: 'off' | 'partial' | 'block';
-  streaming?: { mode?: 'off' | 'partial' | 'block' | 'progress' };
-}): 'off' | 'partial' | 'block' | 'progress' {
-  const fromStreaming = account.streaming?.mode;
-  if (fromStreaming) {
-    return fromStreaming === 'progress' ? 'partial' : fromStreaming;
-  }
-  const legacy = account.streamMode ?? 'partial';
-  return legacy;
+  streaming?: { mode?: 'off' | 'partial' | 'block' };
+}): 'off' | 'partial' | 'block' {
+  return account.streaming?.mode ?? 'partial';
 }

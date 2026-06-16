@@ -29,14 +29,11 @@ export interface TelegramAccount {
   proxy: string;
   historyLimit: number;
   textChunkLimit: number;
-  streamMode: StreamMode;
+  streaming?: { mode?: StreamMode };
   groups?: Record<string, unknown>;
   reactionLevel?: TelegramReactionLevel;
   reactionNotifications?: TelegramReactionNotifications;
   ackReaction?: string;
-  webhookUrl?: string;
-  webhookSecret?: string;
-  webhookPath?: string;
   execApprovals?: { enabled?: boolean; approvers?: (string | number)[] };
 }
 
@@ -50,6 +47,7 @@ export interface TelegramConfig {
   groupPolicy: GroupPolicy;
   replyToMode: ReplyToMode;
   streamMode: StreamMode;
+  streaming?: { mode?: StreamMode };
   historyLimit: number;
   textChunkLimit: number;
   proxy: string;
@@ -57,9 +55,6 @@ export interface TelegramConfig {
   reactionLevel?: TelegramReactionLevel;
   reactionNotifications?: TelegramReactionNotifications;
   ackReaction?: string;
-  webhookUrl?: string;
-  webhookSecret?: string;
-  webhookPath?: string;
   execApprovalsEnabled?: boolean;
   execApprovalsApprovers?: string;
 }

@@ -4,7 +4,9 @@ import type { ChannelConfigSurfaceAdapter } from '@xopcai/xopc/channels/plugins/
 export const telegramConfigSurface: ChannelConfigSurfaceAdapter = {
   buildConfigSurface(cfg: Config): Record<string, unknown> {
     const telegram = cfg.channels?.telegram as Record<string, unknown> | undefined;
-    const accounts = telegram?.accounts as Record<string, { botToken?: string }> | undefined;
+    const accounts = telegram?.accounts as
+      | Record<string, { botToken?: string; streaming?: { mode?: string } }>
+      | undefined;
     const defTok =
       accounts?.default && typeof accounts.default === 'object'
         ? accounts.default.botToken
@@ -21,7 +23,9 @@ export const telegramConfigSurface: ChannelConfigSurfaceAdapter = {
       dmPolicy: telegram?.dmPolicy || 'pairing',
       groupPolicy: telegram?.groupPolicy || 'open',
       replyToMode: telegram?.replyToMode || 'off',
-      streamMode: telegram?.streamMode || 'partial',
+      streamMode:
+        (accounts?.default?.streaming as { mode?: string } | undefined)?.mode ||
+        (telegram?.streaming as { mode?: string } | undefined)?.mode || 'partial',
       historyLimit: telegram?.historyLimit || 50,
       textChunkLimit: telegram?.textChunkLimit || 4000,
       proxy: telegram?.proxy || '',
