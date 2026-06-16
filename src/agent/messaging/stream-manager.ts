@@ -9,6 +9,7 @@ import type { ProgressStage } from '../lifecycle/progress.js';
 
 export interface StreamHandle {
   update: (text: string) => void;
+  updateReasoning?: (text: string) => void;
   updateProgress?: (text: string, stage: ProgressStage, detail?: string) => void;
   setProgress?: (stage: ProgressStage, detail?: string) => void;
   end: () => Promise<void>;
@@ -54,6 +55,10 @@ export class StreamManager {
    */
   update(text: string): void {
     this.currentHandle?.update(text);
+  }
+
+  updateReasoning(text: string): void {
+    this.currentHandle?.updateReasoning?.(text);
   }
 
   /**
