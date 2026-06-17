@@ -7,4 +7,12 @@ export interface TreeEntry {
   children?: TreeEntry[];
 }
 
-export type FileTreeAction = 'preview' | 'download' | 'copyPath' | 'share';
+export type FileTreeAction =
+  | 'preview'
+  | 'download'
+  | 'copyPath'
+  | 'share'
+  | 'openDefault'
+  | 'openWith'
+  | 'openWithApp'
+  | 'revealInFolder';

@@ -41,9 +41,39 @@ export interface ElectronGatewayShellAPI {
   restart(): Promise<{ ok: boolean; message?: string; token?: string; port?: number }>;
 }
 
+export type ElectronShellOpenResult =
+  | { ok: true; error?: undefined; code?: undefined }
+  | {
+      ok: false;
+      error: string;
+      code?: 'CANCELED' | 'INVALID_PATH' | 'NOT_FOUND' | 'NOT_FILE' | 'INVALID_APP' | 'OPEN_FAILED' | string;
+    };
+
+export type ElectronRecentOpenWithApp = {
+  name: string;
+  path: string;
+  platform: 'darwin' | 'win32' | 'linux' | string;
+  lastUsedAt: number;
+};
+
+export type ElectronRecommendedOpenWithApp = {
+  name: string;
+  path: string;
+  platform: 'darwin' | 'win32' | 'linux' | string;
+  source: 'known';
+};
+
 export interface ElectronShellAPI {
-  openPath(filePath: string): Promise<{ error?: string }>;
+  openPath(filePath: string): Promise<ElectronShellOpenResult>;
   showItemInFolder(filePath: string): Promise<{ success: boolean }>;
+  chooseAppAndOpenPath(filePath: string): Promise<ElectronShellOpenResult>;
+  openPathWithApp(filePath: string, appPath: string): Promise<ElectronShellOpenResult>;
+  getRecentOpenWithApps(): Promise<ElectronRecentOpenWithApp[]>;
+  getOpenWithAppsForPath(filePath: string): Promise<{
+    recommended: ElectronRecommendedOpenWithApp[];
+    recent: ElectronRecentOpenWithApp[];
+  }>;
+  clearRecentOpenWithApps(): Promise<{ ok: true }>;
 }
 
 export interface ElectronClipboardAPI {

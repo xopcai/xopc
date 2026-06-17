@@ -11,8 +11,11 @@ type PreviewOpenAlternativesBarProps = {
   /** Electron: open file with the OS default application (requires host absolute path). */
   openSystemLabel?: string;
   onOpenWithSystemApp?: () => void | Promise<void>;
+  chooseAppLabel?: string;
+  onChooseOpenWithApp?: () => void | Promise<void>;
   /** When false, hides the system-app button even if the callback is set. */
   canOpenWithSystemApp?: boolean;
+  canChooseOpenWithApp?: boolean;
 };
 
 export function PreviewOpenAlternativesBar({
@@ -21,7 +24,10 @@ export function PreviewOpenAlternativesBar({
   onDownload,
   openSystemLabel,
   onOpenWithSystemApp,
+  chooseAppLabel,
+  onChooseOpenWithApp,
   canOpenWithSystemApp = true,
+  canChooseOpenWithApp = true,
 }: PreviewOpenAlternativesBarProps) {
   const showSystem =
     isElectron() &&
@@ -29,6 +35,12 @@ export function PreviewOpenAlternativesBar({
     typeof onOpenWithSystemApp === 'function' &&
     typeof openSystemLabel === 'string' &&
     openSystemLabel.length > 0;
+  const showChoose =
+    isElectron() &&
+    canChooseOpenWithApp &&
+    typeof onChooseOpenWithApp === 'function' &&
+    typeof chooseAppLabel === 'string' &&
+    chooseAppLabel.length > 0;
 
   return (
     <div
@@ -51,6 +63,21 @@ export function PreviewOpenAlternativesBar({
           >
             <ExternalLink className="size-3.5 shrink-0" aria-hidden />
             {openSystemLabel}
+          </button>
+        ) : null}
+        {showChoose ? (
+          <button
+            type="button"
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-md border border-edge bg-surface-panel px-3 py-1.5 text-xs font-medium text-fg shadow-sm dark:border-edge',
+              interaction.transition,
+              interaction.press,
+              interaction.focusRingPanel,
+            )}
+            onClick={() => void onChooseOpenWithApp?.()}
+          >
+            <ExternalLink className="size-3.5 shrink-0" aria-hidden />
+            {chooseAppLabel}
           </button>
         ) : null}
         <button

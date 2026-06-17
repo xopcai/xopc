@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { useDebouncedCallback } from 'use-debounce';
 
 import {
@@ -56,6 +56,11 @@ export type WorkspaceFilePreviewState = {
 
   canOpenWithSystemApp: boolean;
   onOpenWithSystemApp: () => Promise<void>;
+  canChooseOpenWithApp: boolean;
+  onChooseOpenWithApp: () => Promise<void>;
+  recommendedOpenWithApps: Array<{ name: string; path: string }>;
+  recentOpenWithApps: Array<{ name: string; path: string; lastUsedAt: number }>;
+  onOpenWithRecentApp: (appPath: string) => Promise<void>;
 
   canRevealInFolder: boolean;
   onRevealInFolder: () => Promise<void>;
@@ -199,6 +204,12 @@ export function useWorkspaceFilePreviewState({
   const [preview, dispatchPreview] = useReducer(previewLoadReducer, emptyPreviewLoad);
   const [pptxPreview, dispatchPptx] = useReducer(pptxPreviewReducer, emptyPptxPreview);
   const [editorUi, dispatchEditorUi] = useReducer(editorUiReducer, emptyEditorUi);
+  const [recentOpenWithApps, setRecentOpenWithApps] = useState<
+    Array<{ name: string; path: string; lastUsedAt: number }>
+  >([]);
+  const [recommendedOpenWithApps, setRecommendedOpenWithApps] = useState<
+    Array<{ name: string; path: string }>
+  >([]);
   const saveStatusClearRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const trackedFilePathRef = useRef(filePath);
@@ -373,12 +384,68 @@ export function useWorkspaceFilePreviewState({
 
   const canOpenWithSystemApp =
     isElectron() && Boolean(preview.hostAbsolutePath) && Boolean(window.electronAPI?.shell?.openPath);
+  const canChooseOpenWithApp =
+    isElectron() &&
+    Boolean(preview.hostAbsolutePath) &&
+    Boolean(window.electronAPI?.shell?.chooseAppAndOpenPath);
+
+  const refreshOpenWithApps = useCallback(async () => {
+    const p = preview.hostAbsolutePath;
+    if (!isElectron() || !p || !window.electronAPI?.shell) {
+      setRecommendedOpenWithApps([]);
+      setRecentOpenWithApps([]);
+      return;
+    }
+    try {
+      if (window.electronAPI.shell.getOpenWithAppsForPath) {
+        const apps = await window.electronAPI.shell.getOpenWithAppsForPath(p);
+        setRecommendedOpenWithApps(
+          apps.recommended.map((app) => ({ name: app.name, path: app.path })),
+        );
+        setRecentOpenWithApps(
+          apps.recent.map((app) => ({ name: app.name, path: app.path, lastUsedAt: app.lastUsedAt })),
+        );
+        return;
+      }
+      if (window.electronAPI.shell.getRecentOpenWithApps) {
+        const apps = await window.electronAPI.shell.getRecentOpenWithApps();
+        setRecommendedOpenWithApps([]);
+        setRecentOpenWithApps(
+          apps.map((app) => ({ name: app.name, path: app.path, lastUsedAt: app.lastUsedAt })),
+        );
+      }
+    } catch {
+      setRecommendedOpenWithApps([]);
+      setRecentOpenWithApps([]);
+    }
+  }, [preview.hostAbsolutePath]);
+
+  useEffect(() => {
+    void refreshOpenWithApps();
+  }, [refreshOpenWithApps]);
 
   const onOpenWithSystemApp = useCallback(async () => {
     const p = preview.hostAbsolutePath;
     if (!p || !window.electronAPI?.shell?.openPath) return;
     await window.electronAPI.shell.openPath(p);
   }, [preview.hostAbsolutePath]);
+
+  const onChooseOpenWithApp = useCallback(async () => {
+    const p = preview.hostAbsolutePath;
+    if (!p || !window.electronAPI?.shell?.chooseAppAndOpenPath) return;
+    const result = await window.electronAPI.shell.chooseAppAndOpenPath(p);
+    if (result.ok) void refreshOpenWithApps();
+  }, [preview.hostAbsolutePath, refreshOpenWithApps]);
+
+  const onOpenWithRecentApp = useCallback(
+    async (appPath: string) => {
+      const p = preview.hostAbsolutePath;
+      if (!p || !appPath || !window.electronAPI?.shell?.openPathWithApp) return;
+      const result = await window.electronAPI.shell.openPathWithApp(p, appPath);
+      if (result.ok) void refreshOpenWithApps();
+    },
+    [preview.hostAbsolutePath, refreshOpenWithApps],
+  );
 
   const canRevealInFolder =
     isElectron() && Boolean(preview.hostAbsolutePath) && Boolean(window.electronAPI?.shell?.showItemInFolder);
@@ -430,6 +497,11 @@ export function useWorkspaceFilePreviewState({
 
     canOpenWithSystemApp,
     onOpenWithSystemApp,
+    canChooseOpenWithApp,
+    onChooseOpenWithApp,
+    recommendedOpenWithApps,
+    recentOpenWithApps,
+    onOpenWithRecentApp,
 
     canRevealInFolder,
     onRevealInFolder,

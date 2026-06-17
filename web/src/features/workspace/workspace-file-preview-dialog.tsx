@@ -1,4 +1,18 @@
-import { Check, Copy, Download, Eye, FolderOpen, Link2, Loader2, Maximize2, Minimize2, Pencil, X } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  Download,
+  ExternalLink,
+  Eye,
+  FolderOpen,
+  Link2,
+  Loader2,
+  Maximize2,
+  Minimize2,
+  MoreHorizontal,
+  Pencil,
+  X,
+} from 'lucide-react';
 import { useCallback, useState } from 'react';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -57,6 +71,7 @@ export function WorkspaceFilePreviewPanel({
   const { rootRef, active, enter, exit } = useFilePreviewFullscreen();
   const { dialogOpen, loading, result, error, createShareLink, handleOpenChange } = useShareLink();
   const [pathCopied, setPathCopied] = useState(false);
+  const [openWithMenuOpen, setOpenWithMenuOpen] = useState(false);
 
   const ext = filePath ? getFileExtension(filePath) : '';
   const name = filePath ? getFileName(filePath) : '';
@@ -167,6 +182,116 @@ export function WorkspaceFilePreviewPanel({
               {active ? <Minimize2 className="size-4" strokeWidth={1.75} /> : <Maximize2 className="size-4" strokeWidth={1.75} />}
             </button>
           ) : null}
+          {state.canOpenWithSystemApp ? (
+            <button
+              type="button"
+              className={cn(
+                'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+                interaction.focusRingPanel,
+              )}
+              title={m.workspace.openSystemApp}
+              aria-label={m.workspace.openSystemApp}
+              onClick={() => void state.onOpenWithSystemApp()}
+            >
+              <ExternalLink className="size-4" />
+            </button>
+          ) : null}
+          {state.canChooseOpenWithApp ||
+          state.recommendedOpenWithApps.length > 0 ||
+          state.recentOpenWithApps.length > 0 ? (
+            <div className="relative shrink-0">
+              {openWithMenuOpen ? (
+                <button
+                  type="button"
+                  className="fixed inset-0 z-40 cursor-default bg-transparent"
+                  aria-hidden
+                  tabIndex={-1}
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    setOpenWithMenuOpen(false);
+                  }}
+                />
+              ) : null}
+              <button
+                type="button"
+                className={cn(
+                  'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+                  interaction.focusRingPanel,
+                )}
+                title={m.workspace.openWith}
+                aria-label={m.workspace.openWith}
+                aria-haspopup="menu"
+                aria-expanded={openWithMenuOpen}
+                onClick={() => setOpenWithMenuOpen((v) => !v)}
+              >
+                <MoreHorizontal className="size-4" />
+              </button>
+              {openWithMenuOpen ? (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-50 mt-1 min-w-[13rem] rounded-md border border-edge bg-surface-panel py-1 shadow-popover"
+                >
+                  {state.canChooseOpenWithApp ? (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+                      onClick={() => {
+                        setOpenWithMenuOpen(false);
+                        void state.onChooseOpenWithApp();
+                      }}
+                    >
+                      {m.workspace.chooseApp}
+                    </button>
+                  ) : null}
+                  {state.recommendedOpenWithApps.length > 0 ? (
+                    <div className="border-t border-edge-subtle py-1 dark:border-edge">
+                      <p className="px-3 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-normal text-fg-subtle">
+                        {m.workspace.recommendedApps}
+                      </p>
+                      {state.recommendedOpenWithApps.map((app) => (
+                        <button
+                          key={app.path}
+                          type="button"
+                          role="menuitem"
+                          className="block w-full min-w-0 px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+                          title={app.path}
+                          onClick={() => {
+                            setOpenWithMenuOpen(false);
+                            void state.onOpenWithRecentApp(app.path);
+                          }}
+                        >
+                          <span className="block truncate">{app.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  {state.recentOpenWithApps.length > 0 ? (
+                    <div className="border-t border-edge-subtle py-1 dark:border-edge">
+                      <p className="px-3 pb-1 pt-0.5 text-[11px] font-medium uppercase tracking-normal text-fg-subtle">
+                        {m.workspace.recentApps}
+                      </p>
+                      {state.recentOpenWithApps.map((app) => (
+                        <button
+                          key={app.path}
+                          type="button"
+                          role="menuitem"
+                          className="block w-full min-w-0 px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+                          title={app.path}
+                          onClick={() => {
+                            setOpenWithMenuOpen(false);
+                            void state.onOpenWithRecentApp(app.path);
+                          }}
+                        >
+                          <span className="block truncate">{app.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <button
             type="button"
             className={cn(
@@ -250,6 +375,8 @@ export function WorkspaceFilePreviewPanel({
           canDownload: state.canDownload,
           onOpenWithSystemApp: () => void state.onOpenWithSystemApp(),
           canOpenWithSystemApp: state.canOpenWithSystemApp,
+          onChooseOpenWithApp: () => void state.onChooseOpenWithApp(),
+          canChooseOpenWithApp: state.canChooseOpenWithApp,
         }}
       />
     </div>

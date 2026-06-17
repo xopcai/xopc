@@ -25,6 +25,7 @@ import { useShareLink } from '@/features/shares/use-share-link';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { isElectron } from '@/lib/electron-env';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
@@ -145,7 +146,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
   );
 
   const handleAction = useCallback(
-    async (action: FileTreeAction, entry: TreeEntry) => {
+    async (action: FileTreeAction, entry: TreeEntry, appPath?: string) => {
       switch (action) {
         case 'preview':
           if (entry.isDirectory) return;
@@ -177,6 +178,22 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
           } catch {
             /* ignore */
           }
+          break;
+        case 'openDefault':
+          if (!entry.absolutePath || !window.electronAPI?.shell?.openPath) return;
+          await window.electronAPI.shell.openPath(entry.absolutePath);
+          break;
+        case 'openWith':
+          if (!entry.absolutePath || !window.electronAPI?.shell?.chooseAppAndOpenPath) return;
+          await window.electronAPI.shell.chooseAppAndOpenPath(entry.absolutePath);
+          break;
+        case 'openWithApp':
+          if (!entry.absolutePath || !appPath || !window.electronAPI?.shell?.openPathWithApp) return;
+          await window.electronAPI.shell.openPathWithApp(entry.absolutePath, appPath);
+          break;
+        case 'revealInFolder':
+          if (!entry.absolutePath || !window.electronAPI?.shell?.showItemInFolder) return;
+          await window.electronAPI.shell.showItemInFolder(entry.absolutePath);
           break;
         case 'share':
           await createShareLink({
@@ -295,6 +312,14 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
                 download: m.workspace.download,
                 copyPath: m.workspace.copyPath,
                 share: m.workspace.shareLink,
+                ...(isElectron()
+                  ? {
+                      openDefault: m.workspace.openSystemApp,
+                      openWith: m.workspace.chooseApp,
+                      revealInFolder: m.workspace.revealInFolder,
+                      recommendedApps: m.workspace.recommendedApps,
+                    }
+                  : {}),
               }}
               emptyHint={m.workspace.emptyDir}
             />

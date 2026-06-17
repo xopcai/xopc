@@ -1,9 +1,21 @@
 import { ChevronRight, FileText, Folder, MoreHorizontal } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { fileExtColor } from '@/features/file-tree/file-tree-utils';
 import { cn } from '@/lib/cn';
+import { isElectron } from '@/lib/electron-env';
+
+type FileTreeActionLabels = {
+  preview: string;
+  download: string;
+  copyPath: string;
+  share: string;
+  openDefault?: string;
+  openWith?: string;
+  revealInFolder?: string;
+  recommendedApps?: string;
+};
 
 function ActionMenu({
   entry,
@@ -11,19 +23,72 @@ function ActionMenu({
   onAction,
 }: {
   entry: TreeEntry;
-  labels: { preview: string; download: string; copyPath: string; share: string };
-  onAction: (action: FileTreeAction, entry: TreeEntry) => void;
+  labels: FileTreeActionLabels;
+  onAction: (action: FileTreeAction, entry: TreeEntry, appPath?: string) => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [recommendedApps, setRecommendedApps] = useState<Array<{ name: string; path: string }>>([]);
   const close = () => setMenuOpen(false);
 
+  useEffect(() => {
+    if (
+      !menuOpen ||
+      entry.isDirectory ||
+      !entry.absolutePath ||
+      !isElectron() ||
+      !window.electronAPI?.shell?.getOpenWithAppsForPath
+    ) {
+      setRecommendedApps([]);
+      return;
+    }
+    let cancelled = false;
+    void window.electronAPI.shell
+      .getOpenWithAppsForPath(entry.absolutePath)
+      .then((apps) => {
+        if (!cancelled) {
+          setRecommendedApps(apps.recommended.map((app) => ({ name: app.name, path: app.path })));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setRecommendedApps([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [entry.absolutePath, entry.isDirectory, menuOpen]);
+
   // Directories only get share + copy-path; preview/download have no sensible meaning.
-  const items: { action: FileTreeAction; label: string }[] = entry.isDirectory
+  const recommendedItems: { action: FileTreeAction; label: string; appPath: string }[] =
+    entry.absolutePath && !entry.isDirectory
+      ? recommendedApps.map((app) => ({
+          action: 'openWithApp' as const,
+          label: app.name,
+          appPath: app.path,
+        }))
+      : [];
+
+  const localItems: { action: FileTreeAction; label: string; appPath?: string }[] = entry.absolutePath
     ? [
+        ...(entry.isDirectory || !labels.openDefault
+          ? []
+          : [{ action: 'openDefault' as const, label: labels.openDefault }]),
+        ...(entry.isDirectory || !labels.openWith
+          ? []
+          : [{ action: 'openWith' as const, label: labels.openWith }]),
+        ...(labels.revealInFolder
+          ? [{ action: 'revealInFolder' as const, label: labels.revealInFolder }]
+          : []),
+      ]
+    : [];
+
+  const items: { action: FileTreeAction; label: string; appPath?: string }[] = entry.isDirectory
+    ? [
+        ...localItems,
         { action: 'share', label: labels.share },
         { action: 'copyPath', label: labels.copyPath },
       ]
     : [
+        ...localItems,
         { action: 'preview', label: labels.preview },
         { action: 'download', label: labels.download },
         { action: 'share', label: labels.share },
@@ -69,18 +134,58 @@ function ActionMenu({
             className="absolute right-0 top-full z-50 mt-0.5 min-w-[9rem] rounded-md border border-edge bg-surface-panel py-1 shadow-popover"
             onPointerDown={(e) => e.stopPropagation()}
           >
-            {items.map(({ action, label }) => (
+            {localItems.slice(0, labels.openDefault && !entry.isDirectory ? 1 : 0).map(({ action, label, appPath }) => (
               <button
-                key={action}
+                key={appPath ? `${action}:${appPath}` : action}
                 type="button"
                 role="menuitem"
                 className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+                title={appPath}
                 onClick={() => {
-                  onAction(action, entry);
+                  onAction(action, entry, appPath);
                   close();
                 }}
               >
-                {label}
+                <span className="block truncate">{label}</span>
+              </button>
+            ))}
+            {labels.recommendedApps && recommendedItems.length > 0 ? (
+              <>
+                <p className="border-t border-edge-subtle px-3 pb-1 pt-2 text-[11px] font-medium uppercase tracking-normal text-fg-subtle dark:border-edge">
+                  {labels.recommendedApps}
+                </p>
+                {recommendedItems.map(({ action, label, appPath }) => (
+                  <button
+                    key={`${action}:${appPath}`}
+                    type="button"
+                    role="menuitem"
+                    className="block w-full min-w-0 px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+                    title={appPath}
+                    onClick={() => {
+                      onAction(action, entry, appPath);
+                      close();
+                    }}
+                  >
+                    <span className="block truncate">{label}</span>
+                  </button>
+                ))}
+              </>
+            ) : null}
+            {items
+              .filter((item) => item.action !== 'openDefault')
+              .map(({ action, label, appPath }) => (
+              <button
+                key={appPath ? `${action}:${appPath}` : action}
+                type="button"
+                role="menuitem"
+                className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+                title={appPath}
+                onClick={() => {
+                  onAction(action, entry, appPath);
+                  close();
+                }}
+              >
+                <span className="block truncate">{label}</span>
               </button>
             ))}
           </div>
@@ -104,8 +209,8 @@ function TreeRow({
   selectedPath: string | null;
   onSelect: (path: string, isDir: boolean) => void;
   onExpandDir?: (dirPath: string) => void;
-  onAction?: (action: FileTreeAction, entry: TreeEntry) => void;
-  actionLabels?: { preview: string; download: string; copyPath: string; share: string };
+  onAction?: (action: FileTreeAction, entry: TreeEntry, appPath?: string) => void;
+  actionLabels?: FileTreeActionLabels;
 }) {
   /** Collapsed by default; chevron must match visibility of children (incl. lazy-loaded empty → []). */
   const [open, setOpen] = useState(false);
@@ -200,8 +305,8 @@ export function FileTree({
   /** Optional — fires on every row click (file or directory). Useful for pickers. */
   onSelectEntry?: (path: string, isDirectory: boolean) => void;
   onExpandDir?: (dirPath: string) => void;
-  onAction?: (action: FileTreeAction, entry: TreeEntry) => void;
-  actionLabels?: { preview: string; download: string; copyPath: string; share: string };
+  onAction?: (action: FileTreeAction, entry: TreeEntry, appPath?: string) => void;
+  actionLabels?: FileTreeActionLabels;
   emptyHint: string;
 }) {
   const handleSelect = (path: string, isDir: boolean) => {
