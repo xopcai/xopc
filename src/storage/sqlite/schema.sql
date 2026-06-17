@@ -149,7 +149,11 @@ CREATE TABLE IF NOT EXISTS notes (
   group_id              TEXT,
   last_opened_at        INTEGER,
   task_done             INTEGER,
-  task_due_at           INTEGER
+  task_due_at           INTEGER,
+  heading_count         INTEGER,
+  task_count            INTEGER,
+  unchecked_task_count  INTEGER,
+  link_count            INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_notes_status_updated

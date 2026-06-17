@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { ConfigSchema } from '../../../../../config/schema.js';
 import { SessionStore } from '../../../../../session/store.js';
+import { XOPC_DB_SCHEMA_VERSION } from '../../../../../storage/sqlite/migrations/runner.js';
 import { checkDatabaseSchema } from '../database-schema.js';
 
 const testConfig = ConfigSchema.parse({});
@@ -34,7 +35,9 @@ describe('checkDatabaseSchema', () => {
       });
 
       expect(result.status).toBe('pass');
-      expect(result.message).toMatch(/SQLite schema v2/);
+      expect(result.message).toBe(
+        `SQLite schema v${XOPC_DB_SCHEMA_VERSION} (current release v${XOPC_DB_SCHEMA_VERSION}).`,
+      );
     } finally {
       if (previousStateDir === undefined) {
         delete process.env.XOPC_STATE_DIR;

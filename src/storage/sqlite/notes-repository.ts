@@ -22,6 +22,10 @@ type NoteRow = {
   last_opened_at: number | null;
   task_done: number | null;
   task_due_at: number | null;
+  heading_count: number | null;
+  task_count: number | null;
+  unchecked_task_count: number | null;
+  link_count: number | null;
 };
 
 function parseTags(json: string): string[] {
@@ -62,6 +66,10 @@ function rowToIndexEntry(row: NoteRow): NoteIndexEntry {
     lastOpenedAt: row.last_opened_at ?? undefined,
     taskDone: row.task_done != null ? Boolean(row.task_done) : undefined,
     taskDueAt: row.task_due_at ?? undefined,
+    headingCount: row.heading_count ?? undefined,
+    taskCount: row.task_count ?? undefined,
+    uncheckedTaskCount: row.unchecked_task_count ?? undefined,
+    linkCount: row.link_count ?? undefined,
   };
 }
 
@@ -93,6 +101,10 @@ function noteToRow(note: Note): Omit<NoteRow, 'payload_json'> & { payload_json: 
     last_opened_at: note.lastOpenedAt ?? null,
     task_done: note.taskMeta?.done != null ? (note.taskMeta.done ? 1 : 0) : null,
     task_due_at: note.taskMeta?.dueAt ?? null,
+    heading_count: meta.headingCount ?? null,
+    task_count: meta.taskCount ?? null,
+    unchecked_task_count: meta.uncheckedTaskCount ?? null,
+    link_count: meta.linkCount ?? null,
   };
 }
 
@@ -113,8 +125,8 @@ export function upsertNoteRecord(note: Note): void {
         note_id, title, kind, status, payload_json, created_at, updated_at,
         pinned, tags_json, snippet, cover_attachment_id, voice_attachment_id,
         voice_duration_sec, attachment_names_json, group_id, last_opened_at,
-        task_done, task_due_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        task_done, task_due_at, heading_count, task_count, unchecked_task_count, link_count
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(note_id) DO UPDATE SET
         title = excluded.title,
         kind = excluded.kind,
@@ -131,7 +143,11 @@ export function upsertNoteRecord(note: Note): void {
         group_id = excluded.group_id,
         last_opened_at = excluded.last_opened_at,
         task_done = excluded.task_done,
-        task_due_at = excluded.task_due_at`,
+        task_due_at = excluded.task_due_at,
+        heading_count = excluded.heading_count,
+        task_count = excluded.task_count,
+        unchecked_task_count = excluded.unchecked_task_count,
+        link_count = excluded.link_count`,
     ).run(
       row.note_id,
       row.title,
@@ -151,6 +167,10 @@ export function upsertNoteRecord(note: Note): void {
       row.last_opened_at,
       row.task_done,
       row.task_due_at,
+      row.heading_count,
+      row.task_count,
+      row.unchecked_task_count,
+      row.link_count,
     );
     upsertNoteFts(db, note);
   });
@@ -223,7 +243,7 @@ export function listNoteRecords(
       `SELECT note_id, title, kind, status, payload_json, created_at, updated_at,
               pinned, tags_json, snippet, cover_attachment_id, voice_attachment_id,
               voice_duration_sec, attachment_names_json, group_id, last_opened_at,
-              task_done, task_due_at
+              task_done, task_due_at, heading_count, task_count, unchecked_task_count, link_count
        FROM notes ${where}`,
     )
     .all(...params) as NoteRow[];
