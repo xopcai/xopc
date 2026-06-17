@@ -20,18 +20,18 @@ const SCHEME_PREVIEW: Record<
 > = {
   default: {
     light: {
-      canvas: '#f5f5f7',
-      panel: '#ffffff',
-      accent: '#2563eb',
-      fg: '#1d1d1f',
-      muted: '#d2d2d7',
+      canvas: '#ffffff',
+      panel: '#fafafa',
+      accent: '#3a6bff',
+      fg: '#111111',
+      muted: '#ececec',
     },
     dark: {
-      canvas: '#1c1c1e',
-      panel: '#2c2c2e',
-      accent: '#3b82f6',
-      fg: '#f5f5f7',
-      muted: '#48484a',
+      canvas: '#0a0a0a',
+      panel: '#121212',
+      accent: '#3a6bff',
+      fg: '#f5f5f5',
+      muted: '#222222',
     },
   },
   emerald: {

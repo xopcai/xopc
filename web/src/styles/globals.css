@@ -1,7 +1,7 @@
 /**
- * xopc workstation — design tokens (see docs/design/ui-design-system.md).
+ * xopc workstation — design tokens (see DESIGN.md).
  * Tailwind v4: semantic --color-* names map to bg-*, text-*, border-* utilities.
- * Neutrals + motion tuned toward Apple system UI (SF stack, grouped grays, soft elevation).
+ * Default theme: Calm Intelligence — quiet neutrals, Loop Blue signals, restrained elevation.
  */
 
 @import "tailwindcss";
@@ -15,28 +15,30 @@
     "Microsoft YaHei", 微软雅黑, sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Surfaces — light: Apple-style grouped background + white content */
-  --color-surface-base: #f5f5f7;
-  --color-surface-panel: #ffffff;
-  --color-surface-hover: #e8e8ed;
-  --color-surface-active: #dcdcde;
+  /* Surfaces — light: quiet white canvas + soft operational surface */
+  --color-surface-base: #ffffff;
+  --color-surface-panel: #fafafa;
+  --color-surface-hover: #f4f6ff;
+  --color-surface-active: #eef2ff;
 
-  /* Foreground — Apple label hierarchy (light) */
-  --color-fg: #1d1d1f;
-  --color-fg-muted: #6e6e73;
-  --color-fg-subtle: #86868b;
-  --color-fg-disabled: #aeaeb2;
+  /* Foreground — calm label hierarchy (light) */
+  --color-fg: #111111;
+  --color-fg-muted: #666666;
+  --color-fg-subtle: #999999;
+  --color-fg-disabled: #b8b8b8;
 
   /* Borders */
-  --color-edge-subtle: #ebebed;
-  --color-edge: #d2d2d7;
-  --color-edge-strong: #bcbcc0;
+  --color-edge-subtle: #f2f2f2;
+  --color-edge: #ececec;
+  --color-edge-strong: #d8dce8;
 
-  /* Brand (unchanged — xopc accent) */
-  --color-accent: #2563eb;
-  --color-accent-hover: #1d4ed8;
-  --color-accent-soft: #eff6ff;
-  --color-accent-fg: #2563eb;
+  /* Brand — Loop Blue, with Indigo/Cyan available for rare brand details */
+  --color-accent: #3a6bff;
+  --color-accent-hover: #315ce6;
+  --color-accent-soft: #eef3ff;
+  --color-accent-fg: #2f5ef6;
+  --color-loop-indigo: #5b57ff;
+  --color-momentum-cyan: #2ed8ff;
 
   /**
    * Checkbox checked fill (used with custom `appearance: none` + tick).
@@ -47,12 +49,12 @@
   --checkbox-icon-tick: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' fill='none'%3E%3Cpath d='M2.5 6.2 5 8.7 9.5 3.8' stroke='%23ffffff' stroke-width='1.85' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
   /* Semantic */
-  --color-success: #059669;
-  --color-success-soft: #d1fae5;
-  --color-danger: #dc2626;
-  --color-danger-soft: #fee2e2;
-  --color-warning: #d97706;
-  --color-warning-soft: #fef3c7;
+  --color-success: #2ccb7f;
+  --color-success-soft: #e7fbf1;
+  --color-danger: #ff5d5d;
+  --color-danger-soft: #fff0f0;
+  --color-warning: #ffb84d;
+  --color-warning-soft: #fff7e8;
 
   /* Modal / drawer dimming */
   --color-scrim: rgb(0 0 0 / 0.36);
@@ -64,11 +66,11 @@
   --radius-xl: 1.125rem;
   --radius-pill: 9999px;
 
-  /* Elevation — soft layered shadows (light); dark relies more on borders */
-  --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 6px rgb(0 0 0 / 0.06);
-  --shadow-elevated: 0 2px 8px rgb(0 0 0 / 0.06), 0 4px 24px rgb(0 0 0 / 0.08);
-  --shadow-float: 0 4px 16px rgb(0 0 0 / 0.1), 0 12px 40px rgb(0 0 0 / 0.08);
-  --shadow-popover: 0 8px 32px rgb(0 0 0 / 0.12), 0 2px 12px rgb(0 0 0 / 0.08);
+  /* Elevation — nearly flat; hierarchy comes from surfaces, borders, and spacing */
+  --shadow-surface: 0 1px 2px rgb(17 17 17 / 0.03), 0 1px 8px rgb(58 107 255 / 0.04);
+  --shadow-elevated: 0 2px 10px rgb(17 17 17 / 0.05), 0 8px 32px rgb(58 107 255 / 0.06);
+  --shadow-float: 0 8px 24px rgb(17 17 17 / 0.08), 0 18px 56px rgb(58 107 255 / 0.07);
+  --shadow-popover: 0 10px 34px rgb(17 17 17 / 0.1), 0 2px 12px rgb(58 107 255 / 0.06);
 
   /* Main column under AppShell <main> — docs/design/ui-design-system.md §13.1 Web */
   --max-width-app-main: 72rem;
@@ -76,43 +78,45 @@
   --max-width-chat: var(--max-width-app-main);
 }
 
-/* Dark — Apple-style elevated grays + rim light via borders (see design spec §2.3) */
+/* Dark — spacecraft-black base, restrained rim light, Loop Blue signals */
 html.dark {
-  --color-surface-base: #1c1c1e;
-  --color-surface-panel: #2c2c2e;
-  --color-surface-hover: #3a3a3c;
-  --color-surface-active: #48484a;
+  --color-surface-base: #0a0a0a;
+  --color-surface-panel: #121212;
+  --color-surface-hover: #1a1a1a;
+  --color-surface-active: #202020;
 
-  --color-fg: #f5f5f7;
-  --color-fg-muted: #a1a1a6;
-  --color-fg-subtle: #8e8e93;
-  --color-fg-disabled: #636366;
+  --color-fg: #f5f5f5;
+  --color-fg-muted: #a1a1a1;
+  --color-fg-subtle: #666666;
+  --color-fg-disabled: #4d4d4d;
 
-  --color-edge-subtle: #3a3a3c;
-  --color-edge: #48484a;
-  --color-edge-strong: #636366;
+  --color-edge-subtle: #1a1a1a;
+  --color-edge: #222222;
+  --color-edge-strong: #333333;
 
-  --color-accent: #3b82f6;
-  --color-accent-hover: #60a5fa;
-  --color-accent-soft: rgb(30 58 138 / 0.55);
-  --color-accent-fg: #60a5fa;
+  --color-accent: #3a6bff;
+  --color-accent-hover: #6f91ff;
+  --color-accent-soft: rgb(58 107 255 / 0.18);
+  --color-accent-fg: #92a8ff;
+  --color-loop-indigo: #7b78ff;
+  --color-momentum-cyan: #64e3ff;
 
   /* Dark: mid neutral (not near-white) so a white tick stays legible without another blue hotspot. */
   --color-checkbox-accent: #6a6a72;
 
-  --color-success: #34d399;
-  --color-success-soft: rgb(6 78 59 / 0.5);
-  --color-danger: #f87171;
-  --color-danger-soft: rgb(127 29 29 / 0.5);
-  --color-warning: #fbbf24;
-  --color-warning-soft: rgb(113 63 18 / 0.5);
+  --color-success: #2ccb7f;
+  --color-success-soft: rgb(44 203 127 / 0.16);
+  --color-danger: #ff5d5d;
+  --color-danger-soft: rgb(255 93 93 / 0.16);
+  --color-warning: #ffb84d;
+  --color-warning-soft: rgb(255 184 77 / 0.16);
 
-  --color-scrim: rgb(0 0 0 / 0.52);
+  --color-scrim: rgb(0 0 0 / 0.58);
 
-  --shadow-surface: 0 0 0 1px rgb(255 255 255 / 0.06);
-  --shadow-elevated: 0 8px 32px rgb(0 0 0 / 0.45);
-  --shadow-float: 0 12px 48px rgb(0 0 0 / 0.55);
-  --shadow-popover: 0 16px 48px rgb(0 0 0 / 0.5);
+  --shadow-surface: 0 0 0 1px rgb(255 255 255 / 0.05);
+  --shadow-elevated: 0 10px 34px rgb(0 0 0 / 0.48), 0 0 0 1px rgb(58 107 255 / 0.04);
+  --shadow-float: 0 16px 56px rgb(0 0 0 / 0.58), 0 0 0 1px rgb(58 107 255 / 0.06);
+  --shadow-popover: 0 18px 58px rgb(0 0 0 / 0.56), 0 0 0 1px rgb(58 107 255 / 0.08);
 }
 
 @layer base {
