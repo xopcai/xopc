@@ -35,7 +35,7 @@ type SendMediaParams = {
 // Detect media type from file extension
 function detectMediaType(filePath: string): 'photo' | 'video' | 'audio' | 'document' {
   const ext = filePath.split('.').pop()?.toLowerCase();
-  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
   const videoExts = ['mp4', 'mov', 'avi', 'webm', 'mkv'];
   const audioExts = ['mp3', 'wav', 'ogg', 'm4a', 'flac'];
 

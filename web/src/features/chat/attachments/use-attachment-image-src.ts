@@ -7,6 +7,17 @@ import {
 } from '@/features/chat/attachments/attachment-utils-core';
 import { fetchMediaUriBlob } from '@/features/file-preview/fetch-workspace-relative-file';
 
+function blobWithAttachmentMime(blob: Blob, mimeType: string | undefined): Blob {
+  const normalized = mimeType?.split(';')[0]?.trim();
+  if (!normalized?.startsWith('image/')) {
+    return blob;
+  }
+  if (blob.type === normalized) {
+    return blob;
+  }
+  return new Blob([blob], { type: normalized });
+}
+
 /**
  * Image thumbnail src for chat attachments.
  * - Composer / optimistic: in-memory base64 → data URL
@@ -46,7 +57,7 @@ export function useAttachmentImageSrc(
     void (async () => {
       const result = await fetchMediaUriBlob({ uri: attachment.uri!, sessionKey: opts.sessionKey });
       if (!result.ok || cancelled) return;
-      const u = URL.createObjectURL(result.blob);
+      const u = URL.createObjectURL(blobWithAttachmentMime(result.blob, attachment.mimeType));
       revoke = u;
       setBlobUrl(u);
     })();

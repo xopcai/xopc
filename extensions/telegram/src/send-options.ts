@@ -65,25 +65,32 @@ export function parseDataUrl(dataUrl: string): { mimeType: string; buffer: Buffe
  * Resolve media method based on mime type or category
  */
 export function resolveMediaMethod(mimeTypeOrCategory: string): TelegramMediaMethod {
+  const fullNormalized = mimeTypeOrCategory.trim().toLowerCase();
+  const normalized = fullNormalized.split(';')[0]?.trim() || fullNormalized;
+
   // Handle category-based resolution
-  if (mimeTypeOrCategory === 'image' || mimeTypeOrCategory.startsWith('image/')) {
+  if (normalized === 'image/svg+xml') {
+    return 'sendDocument';
+  }
+
+  if (normalized === 'image' || normalized.startsWith('image/')) {
     return 'sendPhoto';
   }
 
-  if (mimeTypeOrCategory === 'video' || mimeTypeOrCategory.startsWith('video/')) {
+  if (normalized === 'video' || normalized.startsWith('video/')) {
     return 'sendVideo';
   }
 
-  if (mimeTypeOrCategory === 'voice') {
+  if (normalized === 'voice') {
     return 'sendVoice';
   }
 
   // Opus codec in OGG is typically voice
-  if (mimeTypeOrCategory.includes('opus')) {
+  if (fullNormalized.includes('opus')) {
     return 'sendVoice';
   }
 
-  if (mimeTypeOrCategory === 'audio' || mimeTypeOrCategory.startsWith('audio/')) {
+  if (normalized === 'audio' || normalized.startsWith('audio/')) {
     return 'sendAudio';
   }
 

@@ -119,6 +119,60 @@ describe('attachment-pipeline', () => {
     expect(turn.images[0]!.data).toBe(Buffer.from('img').toString('base64'));
   });
 
+  it('hydrateUserTurnForLlm does not pass svg attachments to native vision models', async () => {
+    const uri = await seedMedia(Buffer.from('<svg/>'), 'x.svg');
+
+    const turn = await hydrateUserTurnForLlm({
+      message: {
+        role: 'user',
+        content: 'see',
+        media: [
+          {
+            id: '1',
+            bucket: 'inbound',
+            type: 'image',
+            mimeType: 'image/svg+xml',
+            name: 'x.svg',
+            size: 6,
+            uri,
+            path: '/tmp/x.svg',
+          },
+        ],
+      },
+      modelRef: 'openai/gpt-4o',
+    });
+
+    expect(turn.images).toHaveLength(0);
+  });
+
+  it('buildTranscriptUserMessage keeps svg attachments as readable media refs', async () => {
+    const uri = await seedMedia(Buffer.from('<svg/>'), 'icon.svg');
+
+    const message = await buildTranscriptUserMessage({
+      text: 'Check this',
+      prepared: [
+        {
+          id: 'att-1',
+          bucket: 'inbound',
+          type: 'image',
+          mimeType: 'image/svg+xml',
+          name: 'icon.svg',
+          size: 6,
+          uri,
+          path: '/tmp/icon.svg',
+        },
+      ],
+      sessionKey: 'agent:main:webchat:1',
+      modelRef: 'openai/gpt-4o',
+      config: undefined,
+      agentManager,
+    });
+
+    expect(message.media).toHaveLength(1);
+    expect(message.content).toContain('xopc-media-uri:');
+    expect(message.content).toContain('Use the read_media tool');
+  });
+
   it('transformUserMessageForPersistence uses matching pending transcript row', () => {
     const pending = {
       role: 'user' as const,

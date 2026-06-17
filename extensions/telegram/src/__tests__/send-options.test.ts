@@ -143,6 +143,10 @@ describe('send-options', () => {
       });
     });
 
+    it('should return sendDocument for svg image data URLs', () => {
+      expect(resolveMediaMethod('image/svg+xml')).toBe('sendDocument');
+    });
+
     it('should return sendVideo for video mime types', () => {
       const videoTypes = [
         'video/mp4',
