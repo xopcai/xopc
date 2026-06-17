@@ -68,7 +68,7 @@ describe('sqlite phase-6 repositories', () => {
       id: 'note-1',
       kind: 'thought',
       status: 'inbox',
-      text: 'unique-alpha-keyword in body',
+      markdown: 'unique-alpha-keyword in body',
       createdAt: 100,
       updatedAt: 100,
       capturedVia: { channel: 'web' },
@@ -76,7 +76,7 @@ describe('sqlite phase-6 repositories', () => {
     };
     upsertNoteRecord(note);
 
-    expect(getNoteRecord('note-1')?.text).toContain('unique-alpha-keyword');
+    expect(getNoteRecord('note-1')?.markdown).toContain('unique-alpha-keyword');
 
     const listed = listNoteRecords({ search: 'unique-alpha-keyword' });
     expect(listed.items.map((item) => item.id)).toEqual(['note-1']);

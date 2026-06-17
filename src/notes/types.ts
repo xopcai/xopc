@@ -2,55 +2,13 @@ export type NoteKind = 'thought' | 'todo' | 'voice' | 'media' | 'bookmark' | 'mi
 export type NoteStatus = 'inbox' | 'processed' | 'archived' | 'trashed';
 export type CaptureChannel = 'app' | 'web' | 'electron' | 'tui' | 'telegram' | 'wechat' | 'feishu';
 
-export type NoteBlockType =
-  | 'paragraph'
-  | 'heading'
-  | 'todo'
-  | 'bulletList'
-  | 'numberedList'
-  | 'quote'
-  | 'code'
-  | 'divider'
-  | 'image'
-  | 'aiSuggestion';
-
-export interface BaseNoteBlock {
-  id: string;
-  type: NoteBlockType;
-  createdAt: number;
-  updatedAt: number;
-}
-
-export interface TextNoteBlock extends BaseNoteBlock {
-  type: 'paragraph' | 'heading' | 'bulletList' | 'numberedList' | 'quote' | 'code' | 'aiSuggestion';
-  text: string;
-  level?: 1 | 2 | 3;
-  indent?: number;
-}
-
-export interface TodoNoteBlock extends BaseNoteBlock {
-  type: 'todo';
-  text: string;
-  checked: boolean;
-}
-
-export interface DividerNoteBlock extends BaseNoteBlock {
-  type: 'divider';
-}
-
-export interface ImageNoteBlock extends BaseNoteBlock {
-  type: 'image';
-  attachmentId: string;
-  alt?: string;
-  width?: number;
-}
-
-export type NoteBlock = TextNoteBlock | TodoNoteBlock | DividerNoteBlock | ImageNoteBlock;
-
 export type NotePatchOperation =
-  | { type: 'replaceBlocks'; blocks: NoteBlock[] }
-  | { type: 'insertBlocksAfter'; afterBlockId: string; blocks: NoteBlock[] }
-  | { type: 'updateBlock'; blockId: string; patch: Partial<NoteBlock> }
+  | { type: 'replaceRange'; from: number; to: number; markdown: string }
+  | { type: 'insertAt'; offset: number; markdown: string }
+  | { type: 'replaceSection'; sectionId: string; markdown: string }
+  | { type: 'appendSection'; heading: string; markdown: string }
+  | { type: 'prependSection'; heading: string; markdown: string }
+  | { type: 'updateFrontmatter'; patch: Record<string, unknown> }
   | { type: 'updateMetadata'; title?: string; tags?: string[]; status?: NoteStatus };
 
 export interface NoteAiPatch {
@@ -128,9 +86,7 @@ export interface NoteTaskMeta {
   done: boolean;
   dueAt?: number;
   priority?: 'high' | 'medium' | 'low';
-  /** Session key of the thread that created this task. */
   sourceSessionKey?: string;
-  /** Note id of the page this task was extracted from. */
   sourceNoteId?: string;
 }
 
@@ -139,8 +95,8 @@ export interface Note {
   title?: string;
   kind: NoteKind;
   status: NoteStatus;
-  text?: string;
-  blocks?: NoteBlock[];
+  /** Canonical note body. Markdown is the only content truth. */
+  markdown: string;
   attachments?: NoteAttachment[];
   createdAt: number;
   updatedAt: number;
@@ -151,11 +107,8 @@ export interface Note {
   pinned?: boolean;
   localVersion?: number;
   remoteVersion?: number;
-  /** Space grouping — null means ungrouped (appears in root). */
   groupId?: string;
-  /** Last time the user explicitly opened this note. */
   lastOpenedAt?: number;
-  /** Task lifecycle metadata (only when kind === 'task'). */
   taskMeta?: NoteTaskMeta;
 }
 
@@ -169,22 +122,18 @@ export interface NoteIndexEntry {
   pinned?: boolean;
   tags?: string[];
   snippet?: string;
-  /** First image attachment id for list thumbnails. */
   coverAttachmentId?: string;
-  /** First audio attachment id for inline voice playback. */
   voiceAttachmentId?: string;
-  /** Duration in seconds of the voice attachment (when available). */
   voiceDurationSec?: number;
-  /** Lowercased attachment file names for list search. */
   attachmentNames?: string[];
-  /** Space group id. */
   groupId?: string;
-  /** Last opened timestamp for "continue" rail. */
   lastOpenedAt?: number;
-  /** Task done flag (only when kind === 'task'). */
   taskDone?: boolean;
-  /** Task due timestamp (only when kind === 'task'). */
   taskDueAt?: number;
+  headingCount?: number;
+  taskCount?: number;
+  uncheckedTaskCount?: number;
+  linkCount?: number;
 }
 
 export interface NotesIndexFile {
@@ -199,8 +148,7 @@ export interface NoteSnapshot {
   timestamp: number;
   trigger: SnapshotTrigger;
   title?: string;
-  text?: string;
-  blocks?: NoteBlock[];
+  markdown: string;
   tags?: string[];
   kind: NoteKind;
   status: NoteStatus;
@@ -222,16 +170,13 @@ export interface NotesListQuery {
   offset?: number;
   sortBy?: 'createdAt' | 'updatedAt' | 'lastOpenedAt';
   sortOrder?: 'asc' | 'desc';
-  /** Filter by space group id. Use `'ungrouped'` for root-level notes. */
   groupId?: string;
-  /** Filter to only task notes with done === false. */
   pendingTasksOnly?: boolean;
 }
 
 export interface CreateNoteParams {
   title?: string;
-  text?: string;
-  blocks?: NoteBlock[];
+  markdown?: string;
   kind?: NoteKind;
   tags?: string[];
   capturedVia: CaptureSource;
@@ -240,7 +185,6 @@ export interface CreateNoteParams {
   taskMeta?: NoteTaskMeta;
 }
 
-/** A lightweight space group (persisted as a note with kind='mixed', used for grouping). */
 export interface NoteGroup {
   id: string;
   name: string;

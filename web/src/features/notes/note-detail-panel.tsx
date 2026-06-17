@@ -302,7 +302,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
       debounceRef.current = setTimeout(async () => {
         setSaving(true);
         try {
-          await updateNote(noteId, { text: content });
+          await updateNote(noteId, { markdown: content });
           await mutate();
           onSaved?.();
         } catch (err) {
@@ -350,7 +350,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
 
   const isPreviewingSnapshot = previewSnapshot !== null;
   const displayTitle = isPreviewingSnapshot ? (previewSnapshot.title ?? '') : title;
-  const displayText = isPreviewingSnapshot ? (previewSnapshot.text ?? '') : (note.text ?? '');
+  const displayText = isPreviewingSnapshot ? (previewSnapshot.markdown ?? '') : (note.markdown ?? '');
 
   return (
     <div className="flex h-full min-h-0 gap-3 p-4 sm:px-5">
@@ -398,7 +398,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
                   <div className="min-h-0 flex-1">
                     <BlockEditor
                       key={`wysiwyg-${noteId}`}
-                      initialContent={note.text ?? ''}
+                      initialContent={note.markdown ?? ''}
                       onChange={handleSave}
                       noteId={noteId}
                     />
@@ -419,7 +419,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
                   <div className="min-h-0 flex-1">
                     <MarkdownEditor
                       key={`source-${noteId}`}
-                      initialContent={note.text ?? ''}
+                      initialContent={note.markdown ?? ''}
                       onChange={handleSave}
                       isDark={isDark}
                     />
@@ -438,10 +438,10 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
                   {title && (
                     <h1 className="mb-4 text-2xl font-bold text-fg">{title}</h1>
                   )}
-                  {note.text ? (
+                  {note.markdown ? (
                     <NoteMarkdownView
                       noteId={noteId}
-                      content={note.text}
+                      content={note.markdown}
                       className="[&_img]:cursor-zoom-in"
                     />
                   ) : (
