@@ -10,13 +10,13 @@ const DEFAULT_COLOR_SCHEME: ColorScheme = 'default';
 
 const THEME_META_COLOR: Record<'light' | 'dark', Record<ColorScheme, string>> = {
   light: {
-    default: '#f5f5f7',
+    default: '#ffffff',
     emerald: '#f0fdf4',
     mono: '#ffffff',
     clay: '#fffaf0',
   },
   dark: {
-    default: '#1c1c1e',
+    default: '#0a0a0a',
     emerald: '#000000',
     mono: '#101010',
     clay: '#0a1a1a',
