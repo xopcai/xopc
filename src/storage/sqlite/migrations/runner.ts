@@ -16,10 +16,10 @@ import type { ApplyMigrationsOptions, SqlMigration } from './types.js';
 const log = createLogger('Sqlite:Migrations');
 
 /** Baseline schema version applied from schema.sql on first open. */
-export const XOPC_DB_BASELINE_SCHEMA_VERSION = 2;
+export const XOPC_DB_BASELINE_SCHEMA_VERSION = 3;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 2;
+export const XOPC_DB_SCHEMA_VERSION = 3;
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 

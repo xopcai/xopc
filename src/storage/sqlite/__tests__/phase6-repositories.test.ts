@@ -68,7 +68,7 @@ describe('sqlite phase-6 repositories', () => {
       id: 'note-1',
       kind: 'thought',
       status: 'inbox',
-      markdown: 'unique-alpha-keyword in body',
+      markdown: '# Heading\nunique-alpha-keyword in body\n- [ ] todo\n- [x] done\n[[related]]',
       createdAt: 100,
       updatedAt: 100,
       capturedVia: { channel: 'web' },
@@ -80,6 +80,12 @@ describe('sqlite phase-6 repositories', () => {
 
     const listed = listNoteRecords({ search: 'unique-alpha-keyword' });
     expect(listed.items.map((item) => item.id)).toEqual(['note-1']);
+    expect(listed.items[0]).toMatchObject({
+      headingCount: 1,
+      taskCount: 2,
+      uncheckedTaskCount: 1,
+      linkCount: 1,
+    });
 
     expect(deleteNoteRecord('note-1')).toBe(true);
     expect(getNoteRecord('note-1')).toBeNull();
