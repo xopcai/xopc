@@ -15,7 +15,7 @@ const MINIMAX_OAUTH_CLIENT_ID = 'your_client_id'; // Users need to register thei
 export const minimaxOAuthProvider: OAuthProviderInterface = {
 	id: 'minimax',
 	name: 'MiniMax',
-	usesCallbackServer: true,
+	usesCallbackServer: false,
 
 	async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
 		// MiniMax uses authorization code flow

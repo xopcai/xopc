@@ -5,7 +5,6 @@
  */
 
 import { Command } from 'commander';
-import { type OAuthLoginCallbacks } from '../../auth/index.js';
 import {
 	listProfilesForProvider,
 	listAllProfiles,
@@ -13,11 +12,13 @@ import {
 	removeAuthProfile,
 	type AuthProfileCredential,
 } from '../../auth/profiles/index.js';
+import { CredentialResolver } from '../../auth/credentials.js';
 import { getAllProviders } from '../../providers/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors, colorizeStatus } from '../utils/colors.js';
 import { getOAuthProvider, getSupportedOAuthProviders } from '../utils/oauth-providers.js';
+import { runCliOAuthLogin } from '../utils/oauth-login.js';
 
 const log = createLogger('AuthCommand');
 
@@ -42,8 +43,8 @@ function createAuthCommand(_ctx: CLIContext): Command {
 	cmd
 		.command('list')
 		.description('List all configured authentication credentials')
-		.action(() => {
-			listAuthProfiles();
+		.action(async () => {
+			await listAuthProfiles();
 		});
 
 	// Set command
@@ -97,7 +98,7 @@ function createAuthCommand(_ctx: CLIContext): Command {
 		.command('remove <provider>')
 		.description('Remove authentication for a provider')
 		.option('-p, --profile <profileId>', 'Profile ID to remove')
-		.action((provider: string, options: { profile?: string }) => {
+		.action(async (provider: string, options: { profile?: string }) => {
 			if (options.profile) {
 				const removed = removeAuthProfile(options.profile);
 				if (removed) {
@@ -108,12 +109,8 @@ function createAuthCommand(_ctx: CLIContext): Command {
 				return;
 			}
 			
-			// Remove all profiles for provider
-			const profiles = listProfilesForProvider(provider);
-			for (const profile of profiles) {
-				removeAuthProfile(profile.profileId);
-			}
-			log.info(`All profiles removed for provider: ${provider}`);
+			await new CredentialResolver().deleteProviderCredential(provider);
+			log.info(`All credentials removed for provider: ${provider}`);
 		});
 
 	// Login command (OAuth)
@@ -121,7 +118,7 @@ function createAuthCommand(_ctx: CLIContext): Command {
 		.command('login <provider>')
 		.description('Login to a provider using OAuth')
 		.option('-p, --profile <profileId>', 'Profile ID (default: provider:default)')
-		.action(async (provider: string, options: { profile?: string }) => {
+		.action(async (provider: string, _options: { profile?: string }) => {
 			const oauthConfig = getOAuthProvider(provider);
 			
 			if (!oauthConfig) {
@@ -132,44 +129,10 @@ function createAuthCommand(_ctx: CLIContext): Command {
 			}
 
 			log.info(`Starting ${oauthConfig.displayName} OAuth login...`);
-			
-			const callbacks: OAuthLoginCallbacks = {
-				onAuth: (info) => {
-					console.log('\n' + oauthConfig.urlPrompt);
-					console.log(info.url);
-					if (info.instructions) {
-						console.log('\n' + info.instructions);
-					}
-					console.log('\n');
-				},
-				onDeviceCode: (info) => {
-					console.log(`\nOpen ${info.verificationUri} and enter code ${info.userCode}\n`);
-				},
-				onPrompt: async (prompt) => {
-					const { input } = await import('@inquirer/prompts');
-					return input({ message: prompt.message });
-				},
-				onProgress: (message) => {
-					log.info(message);
-				},
-				onSelect: async (prompt) => {
-					const browserOption = prompt.options.find((option) => option.id === 'browser');
-					return browserOption?.id ?? prompt.options[0]?.id;
-				},
-			};
 
 			try {
-				const creds = await oauthConfig.provider.login(callbacks);
-				const profileId = options.profile || oauthConfig.profileId;
-				upsertAuthProfile({
-					profileId,
-					credential: {
-						type: 'oauth',
-						provider,
-						...creds,
-					},
-				});
-				log.info(`✅ OAuth login successful! Profile: ${profileId}`);
+				await runCliOAuthLogin({ provider, onProgress: (message) => log.info(message) });
+				log.info(`✅ OAuth login successful for ${provider}`);
 			} catch (error) {
 				log.error(`OAuth login failed: ${error}`);
 				process.exit(1);
@@ -181,7 +144,7 @@ function createAuthCommand(_ctx: CLIContext): Command {
 		.command('logout <provider>')
 		.description('Logout from a provider (remove credentials)')
 		.option('-p, --profile <profileId>', 'Profile ID to remove')
-		.action((provider: string, options: { profile?: string }) => {
+		.action(async (provider: string, options: { profile?: string }) => {
 			if (options.profile) {
 				const removed = removeAuthProfile(options.profile);
 				if (removed) {
@@ -192,16 +155,7 @@ function createAuthCommand(_ctx: CLIContext): Command {
 				return;
 			}
 			
-			// Remove all profiles for provider
-			const profiles = listProfilesForProvider(provider);
-			if (profiles.length === 0) {
-				log.warn(`No profiles found for provider: ${provider}`);
-				return;
-			}
-			
-			for (const profile of profiles) {
-				removeAuthProfile(profile.profileId);
-			}
+			await new CredentialResolver().deleteProviderCredential(provider);
 			log.info(`Logged out from provider: ${provider}`);
 		});
 
@@ -213,8 +167,8 @@ function createAuthCommand(_ctx: CLIContext): Command {
 	profilesCmd
 		.command('list')
 		.description('List all auth profiles')
-		.action(() => {
-			listAuthProfiles();
+		.action(async () => {
+			await listAuthProfiles();
 		});
 
 	profilesCmd
@@ -254,10 +208,15 @@ function createAuthCommand(_ctx: CLIContext): Command {
 	cmd
 		.command('clear')
 		.description('Clear all authentication credentials')
-		.action(() => {
+		.action(async () => {
+			const resolver = new CredentialResolver();
 			const profiles = listAllProfiles();
-			for (const profile of profiles) {
-				removeAuthProfile(profile.profileId);
+			const oauthTokens = await resolver.listOAuthTokens();
+			const providers = new Set<string>();
+			for (const profile of profiles) providers.add(profile.provider);
+			for (const token of oauthTokens) providers.add(token.provider);
+			for (const provider of providers) {
+				await resolver.deleteProviderCredential(provider);
 			}
 			
 			log.info('All authentication credentials cleared.');
@@ -284,10 +243,11 @@ function createAuthCommand(_ctx: CLIContext): Command {
 	return cmd;
 }
 
-function listAuthProfiles(): void {
+async function listAuthProfiles(): Promise<void> {
 	const profiles = listAllProfiles();
+	const oauthTokens = await new CredentialResolver().listOAuthTokens();
 	
-	if (profiles.length === 0) {
+	if (profiles.length === 0 && oauthTokens.length === 0) {
 		log.info('No auth profiles configured.');
 		log.info('Set an API key: xopc auth set <provider> <key>');
 		log.info('Or login with OAuth: xopc auth login <provider>');
@@ -309,6 +269,19 @@ function listAuthProfiles(): void {
 		if (profile.expires) {
 			const expDate = new Date(profile.expires);
 			const isExpired = Date.now() >= profile.expires;
+			console.log(`    Expires: ${isExpired ? colors.red('') : ''}${expDate.toLocaleString()}`);
+		}
+		console.log('');
+	}
+
+	for (const token of oauthTokens) {
+		const status = colorizeStatus(token.hasAccess);
+		console.log(`  ${token.provider}:oauth`);
+		console.log(`    Type: ${colors.yellow('oauth')}`);
+		console.log(`    Status: ${status} ${token.hasAccess ? 'Configured' : 'Missing'}`);
+		if (token.expiresAt) {
+			const expDate = new Date(token.expiresAt);
+			const isExpired = Date.now() >= token.expiresAt;
 			console.log(`    Expires: ${isExpired ? colors.red('') : ''}${expDate.toLocaleString()}`);
 		}
 		console.log('');

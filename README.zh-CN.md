@@ -107,7 +107,7 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 ## 为什么选 xopc
 
 - 🏠 **你的机器** — 配置与数据在 **`~/.xopc/`**，无强制云端、无意外账单。
-- 🔑 **自带钥匙** — DeepSeek（推荐）、OpenAI、Anthropic、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端本地可混用，一行配置换模型。详见 **[模型](https://xopcai.github.io/xopc/zh/models)**。
+- 🔑 **自带钥匙** — OpenAI、Anthropic、Google、DeepSeek、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端本地可混用，一行配置切换目录模型。详见 **[模型](https://xopcai.github.io/xopc/zh/models)**。
 - 📱 **一个大脑，处处可用** — 终端、浏览器、桌面、手机、IM 同一套助手，无需另做同步。
 - 🧩 **随你长大** — **`xopc skills install`** · **`xopc extensions install`** 扩展工具、频道与 UI；多 Agent 按场景隔离。
 - ⏰ **能主动干活** — **Cron** 定时摘要与提醒；**工作流**扇出多子 Agent 任务；**多 Agent** 各自工作区、工具与系统提示词。

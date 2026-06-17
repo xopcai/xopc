@@ -1,5 +1,5 @@
 /**
- * GitHub Copilot OAuth — delegated to @earendil-works/pi-ai (device code flow).
+ * GitHub Copilot OAuth device code flow.
  */
 
 export {

@@ -95,7 +95,7 @@ const switchCommand: CommandDefinition = {
   category: 'model',
   scope: ['global', 'private', 'group'],
   acceptsArgs: true,
-  examples: ['/switch openai/gpt-4o', '/switch minimax/minimax-m2.1'],
+  examples: ['/switch openai/gpt-5.5', '/switch minimax/minimax-m2.7'],
   handler: async (ctx: CommandContext, args: string) => {
     if (!args.trim()) {
       return {
@@ -103,7 +103,7 @@ const switchCommand: CommandDefinition = {
           '❌ Missing model ref.',
           '**Usage:** `/switch provider/model-id`',
           'Run `/models` — each line shows a display name and a `provider/model` ref in backticks. Copy that ref.',
-          '**Example:** `/switch openai/gpt-4o`',
+          '**Example:** `/switch openai/gpt-5.5`',
         ),
         success: false,
       };

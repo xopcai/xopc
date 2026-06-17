@@ -26,6 +26,10 @@ import { defaultWorkflowCardLabels } from '@/features/chat/workflow/workflow-car
 import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
 import { ProviderSetupRequiredCard } from '@/features/chat/messages/provider-setup-required-banner';
 import { parseProviderSetupRequired } from '@/features/chat/messages/provider-setup-required.parser';
+import {
+  mergeConsecutiveTextBlocks,
+  prepareStreamingMarkdown,
+} from '@/features/chat/messages/streaming-markdown';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
@@ -33,6 +37,7 @@ function renderTextOrImageBlock(
   block: MessageContent,
   key: string,
   isUser: boolean,
+  isAssistantMessageStreaming: boolean,
   imagePreviewLabel: string,
   onImagePreview?: (block: ImageContent, index: number) => void,
   contentIndex?: number,
@@ -61,7 +66,10 @@ function renderTextOrImageBlock(
 
     return (
       <div key={key} className="markdown-content min-w-0">
-        <MarkdownView content={block.text} compact />
+        <MarkdownView
+          content={isAssistantMessageStreaming ? prepareStreamingMarkdown(block.text) : block.text}
+          compact
+        />
       </div>
     );
   }
@@ -145,13 +153,14 @@ export function renderChunkedContent(
   sessionKey: string | null | undefined,
   workflowOptions?: WorkflowRenderOptions,
 ) {
+  const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
   const nodes: ReactNode[] = [];
   const wfOpts = workflowOptions ?? {};
   const wfLabels = wfOpts.labels ?? defaultWorkflowCardLabels();
   let i = 0;
   let imageOrdinal = 0;
-  while (i < content.length) {
-    const b = content[i];
+  while (i < renderContent.length) {
+    const b = renderContent[i];
 
     // Workflow tool_use is rendered as its own block (independent card) and
     // breaks the surrounding steps run so the steps drawer above/below stays
@@ -174,8 +183,8 @@ export function renderChunkedContent(
 
     if (b.type === 'thinking' || b.type === 'tool_use') {
       const start = i;
-      while (i < content.length) {
-        const c = content[i];
+      while (i < renderContent.length) {
+        const c = renderContent[i];
         if (c.type === 'thinking') {
           i++;
           continue;
@@ -186,9 +195,9 @@ export function renderChunkedContent(
         }
         break;
       }
-      const slice = content.slice(start, i) as Array<ThinkingContent | ToolUseContent>;
+      const slice = renderContent.slice(start, i) as Array<ThinkingContent | ToolUseContent>;
       if (slice.length > 0) {
-        const finalAnswerStarted = !isUser && hasAssistantTextAfter(content, i);
+        const finalAnswerStarted = !isUser && hasAssistantTextAfter(renderContent, i);
         nodes.push(
           <AssistantStepsBlock
             key={`steps-${start}`}
@@ -209,6 +218,7 @@ export function renderChunkedContent(
         b,
         `block-${i}`,
         isUser,
+        isAssistantMessageStreaming,
         imagePreviewLabel,
         onImagePreview,
         b.type === 'image' ? imgIdx : i,

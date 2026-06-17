@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { PROVIDER_META } from '../../../providers/index.js';
 import { listProviders, maskKey, planSetKey } from '../providers.js';
 
 describe('xopc providers helpers', () => {
@@ -36,6 +37,12 @@ describe('xopc providers helpers', () => {
     it('attaches an env var hint for each provider', () => {
       for (const entry of listProviders()) {
         expect(entry.envVar).toMatch(/^[A-Z][A-Z0-9_]+$/);
+      }
+    });
+
+    it('keeps provider display names free of model identifiers', () => {
+      for (const meta of Object.values(PROVIDER_META)) {
+        expect(meta.name).not.toMatch(/\b(?:gpt|GPT|claude|Claude|o\d+)\b|GPT-|gpt-/);
       }
     });
   });

@@ -21,6 +21,14 @@ export { getApiKeyFromEnv, PROVIDER_ENV_MAP } from './env-keys.js';
 
 /** Sentinel base URL: model is served by an extension {@link ProviderPluginRegistry} provider. */
 export const EXTENSION_PROVIDER_BASE_URL = 'extension://provider-plugin';
+const OPENAI_CODEX_CANONICAL_BASE_URL = 'https://chatgpt.com/backend-api/codex';
+
+function normalizeProviderModel(model: Model<Api>): Model<Api> {
+	if (model.provider === 'openai-codex' && model.api === 'openai-codex-responses') {
+		return { ...model, baseUrl: OPENAI_CODEX_CANONICAL_BASE_URL } as Model<Api>;
+	}
+	return model;
+}
 
 /** Map a plugin registry model to the pi-ai {@link Model} shape. */
 export function pluginModelToModel(providerId: string, definition: ProviderModelDefinition): Model<Api> {
@@ -76,7 +84,7 @@ export function resolveModel(ref: string): Model<Api> {
 	if (ref.includes('/')) {
 		const [provider, modelId] = ref.split('/');
 		const piAiModel = getPiAiModel(provider as any, modelId as any);
-		if (piAiModel) return piAiModel as Model<Api>;
+		if (piAiModel) return normalizeProviderModel(piAiModel as Model<Api>);
 
 		const pluginRegistry = getProviderRegistry();
 		const plugin = pluginRegistry.get(provider);
@@ -91,7 +99,7 @@ export function resolveModel(ref: string): Model<Api> {
 		try {
 			const models = getPiAiModels(provider);
 			const found = models.find(m => m.id === ref);
-			if (found) return found as Model<Api>;
+			if (found) return normalizeProviderModel(found as Model<Api>);
 		} catch {
 			continue;
 		}
@@ -108,7 +116,7 @@ export function resolveModel(ref: string): Model<Api> {
 
 export function getModelsByProvider(provider: string): readonly Model<Api>[] {
 	const registry = getModelRegistry();
-	const fromRegistry = registry.getAll().filter(m => m.provider === provider);
+	const fromRegistry = registry.getAll().filter(m => m.provider === provider).map(normalizeProviderModel);
 	const plugin = getProviderRegistry().get(provider);
 	if (!plugin) return fromRegistry;
 	const pluginModels = plugin.models.map(m => pluginModelToModel(provider, m));
@@ -254,7 +262,7 @@ export async function getConfiguredProviders(): Promise<string[]> {
 
 export function getAllModels(): readonly Model<Api>[] {
 	const registry = getModelRegistry();
-	const registryModels = registry.getAll();
+	const registryModels = registry.getAll().map(normalizeProviderModel);
 	const pluginProviders = getProviderRegistry().listAll();
 	if (pluginProviders.length === 0) return registryModels;
 
@@ -299,18 +307,18 @@ export interface ProviderMeta {
 }
 
 export const PROVIDER_META: Record<string, ProviderMeta> = {
-  'openai': { name: 'OpenAI (GPT-4, o1, o3)', category: 'common', supportsApiKey: true },
-  'anthropic': { name: 'Anthropic Claude', category: 'common', supportsApiKey: true, supportsOAuth: true },
+  'openai': { name: 'OpenAI', category: 'common', supportsApiKey: true },
+  'anthropic': { name: 'Anthropic', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'deepseek': { name: 'DeepSeek', category: 'common', supportsApiKey: true },
-  'google': { name: 'Google Gemini', category: 'common', supportsApiKey: true },
-  'groq': { name: 'Groq (Fast Inference)', category: 'common', supportsApiKey: true },
+  'google': { name: 'Google AI', category: 'common', supportsApiKey: true },
+  'groq': { name: 'Groq', category: 'common', supportsApiKey: true },
   'minimax': { name: 'MiniMax', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'minimax-cn': { name: 'MiniMax CN', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'kimi-coding': { name: 'Kimi For Coding', category: 'common', supportsApiKey: true, supportsOAuth: true },
-  'xai': { name: 'xAI (Grok)', category: 'specialty', supportsApiKey: true },
+  'xai': { name: 'xAI', category: 'specialty', supportsApiKey: true },
   'mistral': { name: 'Mistral AI', category: 'specialty', supportsApiKey: true },
   'cerebras': { name: 'Cerebras', category: 'specialty', supportsApiKey: true },
-  'openrouter': { name: 'OpenRouter (Multi-provider)', category: 'specialty', supportsApiKey: true },
+  'openrouter': { name: 'OpenRouter', category: 'specialty', supportsApiKey: true },
   'huggingface': { name: 'Hugging Face', category: 'specialty', supportsApiKey: true },
   moonshotai: { name: 'Moonshot AI (Kimi · International)', category: 'common', supportsApiKey: true },
   'moonshotai-cn': { name: 'Moonshot AI (Kimi · China)', category: 'common', supportsApiKey: true },
@@ -372,13 +380,13 @@ export function providerSupportsApiKey(provider: string): boolean {
 // ============================================
 
 /** Preferred default model when no explicit model is configured. */
-const DEFAULT_FALLBACK_MODEL = 'deepseek/deepseek-v4-flash';
+const DEFAULT_FALLBACK_MODEL = 'openai/gpt-5.5';
 
 /**
  * Get a default model reference.
  * Priority:
  * 1. Explicitly configured model in agents.defaults.model (if set and available)
- * 2. Default fallback: deepseek/deepseek-v4-flash
+ * 2. Default fallback: openai/gpt-5.5
  */
 export async function getDefaultModel(config?: Config | null | undefined): Promise<string> {
   const defaultModel = config?.agents?.defaults?.model;
@@ -405,8 +413,8 @@ export async function getDefaultModel(config?: Config | null | undefined): Promi
  * Uses catalog/registry only (no async credential checks).
  *
  * When no model is explicitly configured, returns the preferred default
- * (`deepseek/deepseek-v4-flash`) rather than picking an arbitrary first
- * model from the full catalog.
+ * (`openai/gpt-5.5`) rather than picking an arbitrary first model from the
+ * full catalog.
  */
 export function getDefaultModelSync(config?: Config | null | undefined): string {
   const defaultModel = config?.agents?.defaults?.model;

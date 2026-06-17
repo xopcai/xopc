@@ -74,7 +74,12 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
     dispatch({ type: 'patch', patch: { modelsLoading: true, error: null } });
     try {
       const list = await fetchConfiguredModelsCached(true);
-      const filtered = list.filter((m) => m.provider === providerId);
+      const filtered = list
+        .filter((m) => m.provider === providerId)
+        .sort((a, b) => {
+          if (a.recommended !== b.recommended) return a.recommended ? -1 : 1;
+          return (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' });
+        });
       dispatch({
         type: 'patch',
         patch: { models: filtered, selectedModelId: filtered[0]?.id ?? null },

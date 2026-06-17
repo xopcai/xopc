@@ -426,6 +426,8 @@
     "userMessageCopy": "Copy message",
     "userMessageRetry": "Retry",
     "userMessageEdit": "Edit in composer",
+    "userMessageExpand": "Show more",
+    "userMessageCollapse": "Show less",
     "userMessageRetryDisabledHint": "Only your latest message can be retried.",
     "userMessageActionsWait": "Wait until sending or streaming finishes.",
     "userMessageDelete": "Delete this round",

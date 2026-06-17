@@ -1,4 +1,4 @@
-import { readFile, mkdir, rm } from 'fs/promises';
+import { readFile, mkdir, rm, readdir } from 'fs/promises';
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { join, dirname } from 'path';
 import { createLogger } from '../utils/logger.js';
@@ -259,6 +259,34 @@ export class CredentialResolver {
   }
 
   /**
+   * List persisted OAuth tokens without exposing access/refresh values.
+   */
+  async listOAuthTokens(): Promise<Array<Omit<OAuthToken, 'access' | 'refresh'> & { hasAccess: boolean; hasRefresh: boolean }>> {
+    const oauthDir = join(this.credentialsDir, 'oauth');
+    let files: string[];
+    try {
+      files = await readdir(oauthDir);
+    } catch {
+      return [];
+    }
+
+    const tokens: Array<Omit<OAuthToken, 'access' | 'refresh'> & { hasAccess: boolean; hasRefresh: boolean }> = [];
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue;
+      try {
+        const content = await readFile(join(oauthDir, file), 'utf-8');
+        const token = JSON.parse(content) as OAuthToken;
+        if (token.type !== 'oauth' || !token.provider) continue;
+        const { access, refresh, ...safe } = token;
+        tokens.push({ ...safe, hasAccess: Boolean(access?.trim()), hasRefresh: Boolean(refresh?.trim()) });
+      } catch {
+        continue;
+      }
+    }
+    return tokens.sort((a, b) => a.provider.localeCompare(b.provider));
+  }
+
+  /**
    * Save OAuth token for a provider.
    */
   async saveOAuthToken(provider: string, token: Omit<OAuthToken, 'type' | 'provider' | 'updatedAt'>): Promise<void> {
@@ -293,7 +321,14 @@ export class CredentialResolver {
    */
   async deleteProviderCredential(provider: string): Promise<void> {
     const normalizedProvider = provider.toLowerCase();
-    await this.deleteProfile(`${normalizedProvider}:default`);
+    const file = await this.loadAuthProfilesFile();
+    await mkdir(dirname(resolveAuthProfilesPath()), { recursive: true });
+    for (const [profileId, profile] of Object.entries(file.profiles)) {
+      if (profile.provider === normalizedProvider) {
+        delete file.profiles[profileId];
+      }
+    }
+    await writeTextAtomic(resolveAuthProfilesPath(), JSON.stringify(file, null, 2));
     await this.deleteOAuthToken(normalizedProvider);
   }
 

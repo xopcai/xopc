@@ -22,6 +22,13 @@ import {
   isProviderConfigured,
   PROVIDER_META,
 } from '../../../providers/index.js';
+import {
+  getProviderHint,
+  getRecommendedModelsForProvider,
+  isRecommendedModel,
+  sortModelsForPicker,
+  sortProvidersForPicker,
+} from '../../../providers/presentation.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
@@ -70,6 +77,7 @@ function mapPluginModel(providerId: string, model: ProviderModelDefinition, avai
     vision: model.supportsImages ?? false,
     cost: { input: model.pricing?.input ?? 0, output: model.pricing?.output ?? 0 },
     available,
+    recommended: isRecommendedModel(providerId, model.id),
     source: 'extension' as const,
   };
 }
@@ -178,7 +186,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       return respondStartupUnavailable(c, 'models.list');
     }
     const pluginRegistry = getProviderRegistry();
-    const models = (await getAvailableModels()).map(m => ({
+    const models = sortModelsForPicker(await getAvailableModels()).map(m => ({
       id: `${m.provider}/${m.id}`,
       name: m.name,
       provider: m.provider,
@@ -186,6 +194,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       maxTokens: m.maxTokens ?? 4096,
       reasoning: m.reasoning ?? false,
       vision: m.input?.includes('image') ?? false,
+      recommended: isRecommendedModel(m.provider, m.id),
       cost: {
         input: m.cost?.input ?? 0,
         output: m.cost?.output ?? 0,
@@ -204,10 +213,10 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
     }
 
-    // Sort by provider then name
     models.sort((a, b) => {
+      if (a.recommended !== b.recommended) return a.recommended ? -1 : 1;
       if (a.provider !== b.provider) return a.provider.localeCompare(b.provider);
-      return a.name.localeCompare(b.name);
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     });
 
     return c.json({ ok: true, payload: { models } });
@@ -297,7 +306,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     const availableModels = await getAvailableModels();
     const configured = new Set(availableModels.map(m => `${m.provider}/${m.id}`));
 
-    const models = allModels.map(m => ({
+    const models = sortModelsForPicker(allModels).map(m => ({
       id: `${m.provider}/${m.id}`,
       name: m.name,
       provider: m.provider,
@@ -305,6 +314,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       maxTokens: m.maxTokens ?? 4096,
       reasoning: m.reasoning ?? false,
       vision: m.input?.includes('image') ?? false,
+      recommended: isRecommendedModel(m.provider, m.id),
       cost: {
         input: m.cost?.input ?? 0,
         output: m.cost?.output ?? 0,
@@ -324,10 +334,10 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
     }
 
-    // Sort by provider then name
     models.sort((a, b) => {
+      if (a.recommended !== b.recommended) return a.recommended ? -1 : 1;
       if (a.provider !== b.provider) return a.provider.localeCompare(b.provider);
-      return a.name.localeCompare(b.name);
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     });
 
     return c.json({ ok: true, payload: { models } });
@@ -335,7 +345,7 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   // GET /api/providers/meta - Get provider metadata (categories, display names)
   authenticated.get('/api/providers/meta', async (c) => {
-    const providers = getAllProviders();
+    const providers = sortProvidersForPicker(getAllProviders());
     const pluginRegistry = getProviderRegistry();
 
     const meta = await Promise.all(
@@ -353,6 +363,10 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
           supportsOAuth: plugin ? false : (PROVIDER_META[provider]?.supportsOAuth ?? false),
           supportsApiKey: plugin ? false : (PROVIDER_META[provider]?.supportsApiKey ?? true),
           configured,
+          onboardingFeatured: ['openai', 'anthropic', 'xai', 'google', 'openrouter', 'deepseek'].includes(provider),
+          recommendedModels: getRecommendedModelsForProvider(provider),
+          modelCount: getAllModels().filter((m) => m.provider === provider).length,
+          ...(getProviderHint(provider) ? { hint: getProviderHint(provider) } : {}),
           activeKeySource: authState.authMode,
           authMode: authState.authMode,
           authStatus: authState.authStatus,
@@ -374,6 +388,9 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
           supportsOAuth: false,
           supportsApiKey: false,
           configured: true,
+          onboardingFeatured: false,
+          recommendedModels: getRecommendedModelsForProvider(plugin.id),
+          modelCount: plugin.models.length,
           activeKeySource: 'extension',
           authMode: 'extension',
           authStatus: 'connected',
