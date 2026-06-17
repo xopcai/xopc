@@ -75,7 +75,7 @@ export interface Note {
   title?: string;
   kind: NoteKind;
   status: NoteStatus;
-  text?: string;
+  markdown: string;
   attachments?: NoteAttachment[];
   createdAt: number;
   updatedAt: number;
@@ -238,12 +238,12 @@ export async function uploadNoteMedia(noteId: string, file: File): Promise<NoteA
 
 export async function createNoteWithMedia(
   file: File,
-  opts?: { text?: string; channel?: string; kind?: NoteKind; duration?: number },
+  opts?: { markdown?: string; channel?: string; kind?: NoteKind; duration?: number },
 ): Promise<Note> {
   const form = new FormData();
   form.append('file', file);
-  if (opts?.text) {
-    form.append('text', opts.text);
+  if (opts?.markdown) {
+    form.append('markdown', opts.markdown);
   }
   form.append('channel', opts?.channel ?? 'web');
   if (opts?.kind) {
@@ -262,9 +262,9 @@ export async function quickCaptureImage(file: File, channel = 'web'): Promise<No
   const attachment = note.attachments?.find((a) => a.type === 'image') ?? note.attachments?.[0];
   if (!attachment) return note;
 
-  const text = `![${attachment.fileName}](${noteAttachmentRef(note.id, attachment.id)})`;
-  if (note.text !== text) {
-    note = await updateNote(note.id, { text });
+  const markdown = `![${attachment.fileName}](${noteAttachmentRef(note.id, attachment.id)})`;
+  if (note.markdown !== markdown) {
+    note = await updateNote(note.id, { markdown });
   }
   return note;
 }
@@ -280,9 +280,9 @@ export async function quickCaptureVoice(
   if (!attachment) return note;
 
   const label = formatVoiceMemoLabel(durationSec);
-  const text = `[${label}](${noteAttachmentRef(note.id, attachment.id)})`;
-  if (note.text !== text) {
-    note = await updateNote(note.id, { text, kind: 'voice' });
+  const markdown = `[${label}](${noteAttachmentRef(note.id, attachment.id)})`;
+  if (note.markdown !== markdown) {
+    note = await updateNote(note.id, { markdown, kind: 'voice' });
   }
   return note;
 }
@@ -300,7 +300,7 @@ export interface NoteSnapshot {
   timestamp: number;
   trigger: SnapshotTrigger;
   title?: string;
-  text?: string;
+  markdown: string;
   tags?: string[];
   kind: NoteKind;
   status: NoteStatus;

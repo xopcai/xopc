@@ -1,9 +1,6 @@
 import type { Note } from './types.js';
-import {
-  attachmentIdFromTarget,
-  buildNoteAttachmentRef,
-  parseNoteAttachmentTarget,
-} from './attachment-ref.js';
+import { attachmentIdFromTarget, parseNoteAttachmentTarget } from './attachment-ref.js';
+import { parseNoteMarkdown } from './note-markdown.js';
 
 const SNIPPET_LENGTH = 100;
 const MARKDOWN_IMAGE = /!\[([^\]]*)\]\(([^)]+)\)/g;
@@ -12,21 +9,8 @@ const BARE_ATTACHMENT_REF = /xopc-attachment:\/\/notes\/[^/]+\/[^/?#"'\s)]+/gi;
 
 export { parseNoteAttachmentTarget, buildNoteAttachmentRef } from './attachment-ref.js';
 
-export function notePlainText(note: Pick<Note, 'id' | 'text' | 'blocks'>): string {
-  if (note.text?.trim()) return note.text;
-  return (
-    note.blocks
-      ?.map((block) => {
-        if (block.type === 'divider') return '';
-        if (block.type === 'todo') return block.text;
-        if (block.type === 'image') {
-          const alt = block.alt ?? '';
-          return `![${alt}](${buildNoteAttachmentRef(note.id, block.attachmentId)})`;
-        }
-        return block.text;
-      })
-      .join(' ') ?? ''
-  );
+export function notePlainText(note: Pick<Note, 'id' | 'markdown'>): string {
+  return note.markdown ?? '';
 }
 
 function isNoteMediaTarget(target: string): boolean {
@@ -50,12 +34,6 @@ export function extractAttachmentFileNames(note: Pick<Note, 'attachments'>): str
 }
 
 export function extractCoverAttachmentId(note: Note): string | undefined {
-  for (const block of note.blocks ?? []) {
-    if (block.type !== 'image') continue;
-    const attachment = note.attachments?.find((item) => item.id === block.attachmentId);
-    if (!attachment || attachment.type === 'image') return block.attachmentId;
-  }
-
   const text = notePlainText(note);
   if (!text.trim()) return undefined;
 
@@ -78,10 +56,10 @@ export function extractCoverAttachmentId(note: Note): string | undefined {
   return undefined;
 }
 
-export function buildNoteSnippet(note: Pick<Note, 'id' | 'text' | 'blocks'>): string | undefined {
-  const text = notePlainText(note);
-  if (!text.trim()) return undefined;
-  const clean = stripMediaFromPlainText(text);
+export function buildNoteSnippet(note: Pick<Note, 'id' | 'markdown'>): string | undefined {
+  const parsed = parseNoteMarkdown(note.markdown, note.id);
+  if (!parsed.plainText.trim()) return undefined;
+  const clean = stripMediaFromPlainText(parsed.plainText);
   if (!clean) return undefined;
   return clean.length > SNIPPET_LENGTH ? `${clean.slice(0, SNIPPET_LENGTH)}…` : clean;
 }
@@ -98,7 +76,12 @@ export function buildNoteIndexMeta(note: Note): {
   voiceAttachmentId?: string;
   voiceDurationSec?: number;
   attachmentNames?: string[];
+  headingCount?: number;
+  taskCount?: number;
+  uncheckedTaskCount?: number;
+  linkCount?: number;
 } {
+  const parsed = parseNoteMarkdown(note.markdown, note.id);
   const coverAttachmentId = extractCoverAttachmentId(note);
   const snippet = buildNoteSnippet(note);
   const attachmentNames = extractAttachmentFileNames(note);
@@ -109,5 +92,9 @@ export function buildNoteIndexMeta(note: Note): {
     voiceAttachmentId,
     voiceDurationSec,
     attachmentNames,
+    headingCount: parsed.headings.length,
+    taskCount: parsed.tasks.length,
+    uncheckedTaskCount: parsed.tasks.filter((task) => !task.checked).length,
+    linkCount: parsed.wikilinks.length,
   };
 }

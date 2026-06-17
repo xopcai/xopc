@@ -41,7 +41,7 @@ describe('NotesStore deleteNote', () => {
       id: 'note-delete-me',
       kind: 'thought',
       status: 'inbox',
-      text: 'to delete',
+      markdown: 'to delete',
       createdAt: 1,
       updatedAt: 1,
       capturedVia: { channel: 'web' },
@@ -65,7 +65,7 @@ describe('NotesStore deleteNote', () => {
       id: 'active-note',
       kind: 'thought',
       status: 'inbox',
-      text: 'active',
+      markdown: 'active',
       createdAt: 2,
       updatedAt: 2,
       capturedVia: { channel: 'web' },
@@ -74,7 +74,7 @@ describe('NotesStore deleteNote', () => {
       id: 'trashed-note',
       kind: 'thought',
       status: 'trashed',
-      text: 'trashed',
+      markdown: 'trashed',
       createdAt: 1,
       updatedAt: 1,
       capturedVia: { channel: 'web' },
@@ -92,7 +92,7 @@ describe('NotesStore deleteNote', () => {
       id: 'note-with-image',
       kind: 'media',
       status: 'inbox',
-      text: `![photo.jpg](${buildNoteAttachmentRef('note-with-image', 'att-1')})`,
+      markdown: `![photo.jpg](${buildNoteAttachmentRef('note-with-image', 'att-1')})`,
       attachments: [
         {
           id: 'att-1',
@@ -134,7 +134,7 @@ describe('NotesStore deleteNote', () => {
       id: 'note-prune',
       kind: 'media',
       status: 'inbox',
-      text: `![photo.jpg](${buildNoteAttachmentRef('note-prune', 'att-keep')})`,
+      markdown: `![photo.jpg](${buildNoteAttachmentRef('note-prune', 'att-keep')})`,
       attachments: [
         {
           id: 'att-keep',
@@ -165,7 +165,7 @@ describe('NotesStore deleteNote', () => {
     await writeFile(join(mediaDir, 'orphan.jpg'), Buffer.from('orphan'));
     await store.flush();
 
-    await service.updateNote('note-prune', { text: 'Plain text only' });
+    await service.updateNote('note-prune', { markdown: 'Plain text only' });
     await store.flush();
 
     const updated = await store.getNote('note-prune');
@@ -189,7 +189,7 @@ describe('NotesStore deleteNote', () => {
       id: 'note-search-file',
       kind: 'media',
       status: 'inbox',
-      text: `![scan.jpg](${buildNoteAttachmentRef('note-search-file', 'att-1')})`,
+      markdown: `![scan.jpg](${buildNoteAttachmentRef('note-search-file', 'att-1')})`,
       attachments: [
         {
           id: 'att-1',
@@ -220,7 +220,7 @@ describe('NotesStore deleteNote', () => {
       id: 'note-search-body',
       kind: 'thought',
       status: 'inbox',
-      text: `${'prefix '.repeat(40)}deep-body-keyword`,
+      markdown: `${'prefix '.repeat(40)}deep-body-keyword`,
       createdAt: 4,
       updatedAt: 4,
       capturedVia: { channel: 'web' },
@@ -239,11 +239,11 @@ describe('NotesStore snapshots', () => {
   let previousStateDir: string | undefined;
   let store: NotesStore;
 
-  const makeNote = (id: string, text: string): Note => ({
+  const makeNote = (id: string, markdown: string): Note => ({
     id,
     kind: 'thought',
     status: 'inbox',
-    text,
+    markdown,
     createdAt: 1,
     updatedAt: 1,
     capturedVia: { channel: 'web' },
@@ -281,7 +281,7 @@ describe('NotesStore snapshots', () => {
     const snapshot = await store.getSnapshot('snap-1', entries[0].timestamp);
     expect(snapshot).toMatchObject({
       noteId: 'snap-1',
-      text: 'hello world',
+      markdown: 'hello world',
       trigger: 'edit',
     });
   });
@@ -290,9 +290,9 @@ describe('NotesStore snapshots', () => {
     const note = makeNote('snap-order', 'v1');
     await store.addNote(note);
 
-    await store.saveSnapshot({ ...note, text: 'v1' }, 'edit');
+    await store.saveSnapshot({ ...note, markdown: 'v1' }, 'edit');
     await new Promise((r) => setTimeout(r, 10));
-    await store.saveSnapshot({ ...note, text: 'v2' }, 'ai_edit');
+    await store.saveSnapshot({ ...note, markdown: 'v2' }, 'ai_edit');
 
     const entries = await store.listSnapshots('snap-order');
     expect(entries).toHaveLength(2);
@@ -306,7 +306,7 @@ describe('NotesStore snapshots', () => {
     await store.addNote(note);
 
     for (let i = 0; i < 5; i++) {
-      await store.saveSnapshot({ ...note, text: `v${i}` }, 'edit');
+      await store.saveSnapshot({ ...note, markdown: `v${i}` }, 'edit');
       await new Promise((r) => setTimeout(r, 5));
     }
 

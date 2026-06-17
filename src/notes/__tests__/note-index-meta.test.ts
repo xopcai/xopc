@@ -18,6 +18,7 @@ function baseNote(overrides: Partial<Note> = {}): Note {
     createdAt: 1,
     updatedAt: 1,
     capturedVia: { channel: 'web' },
+    markdown: '',
     ...overrides,
   };
 }
@@ -30,37 +31,11 @@ describe('note-index-meta', () => {
     expect(stripMediaFromPlainText(`[Voice · 30s](${ref})`)).toBe('');
   });
 
-  it('extracts cover from image blocks and canonical markdown refs', () => {
+  it('extracts cover from canonical markdown refs', () => {
     expect(
       extractCoverAttachmentId(
         baseNote({
-          blocks: [
-            {
-              id: 'b1',
-              type: 'image',
-              attachmentId: 'att-block',
-              createdAt: 1,
-              updatedAt: 1,
-            },
-          ],
-          attachments: [
-            {
-              id: 'att-block',
-              type: 'image',
-              mimeType: 'image/png',
-              fileName: 'a.png',
-              size: 1,
-              relativePath: 'a.png',
-            },
-          ],
-        }),
-      ),
-    ).toBe('att-block');
-
-    expect(
-      extractCoverAttachmentId(
-        baseNote({
-          text: `![photo.jpg](${buildNoteAttachmentRef('note-1', 'att-canonical')})`,
+          markdown: `![photo.jpg](${buildNoteAttachmentRef('note-1', 'att-canonical')})`,
           attachments: [
             {
               id: 'att-canonical',
@@ -125,7 +100,7 @@ describe('note-index-meta', () => {
   it('builds empty snippet for image-only notes but keeps cover id', () => {
     const meta = buildNoteIndexMeta(
       baseNote({
-        text: `![photo.jpg](${buildNoteAttachmentRef('note-1', 'att-1')})`,
+        markdown: `![photo.jpg](${buildNoteAttachmentRef('note-1', 'att-1')})`,
         attachments: [
           {
             id: 'att-1',
@@ -141,7 +116,7 @@ describe('note-index-meta', () => {
 
     expect(meta.snippet).toBeUndefined();
     expect(meta.coverAttachmentId).toBe('att-1');
-    expect(buildNoteSnippet(baseNote({ text: 'Remember to call Sam tomorrow' }))).toBe(
+    expect(buildNoteSnippet(baseNote({ markdown: 'Remember to call Sam tomorrow' }))).toBe(
       'Remember to call Sam tomorrow',
     );
   });
