@@ -18,6 +18,8 @@ const MIME_BY_EXT: Record<string, string> = {
   '.jpeg': 'image/jpeg',
   '.gif': 'image/gif',
   '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.svgz': 'image/svg+xml',
   '.pdf': 'application/pdf',
   '.txt': 'text/plain',
   '.md': 'text/markdown',
@@ -42,6 +44,7 @@ function extFromMime(mimeType: string | undefined, fallbackName?: string): strin
     if (m === 'image/png') return '.png';
     if (m === 'image/webp') return '.webp';
     if (m === 'image/gif') return '.gif';
+    if (m === 'image/svg+xml') return '.svg';
     if (m === 'application/pdf') return '.pdf';
     if (m === 'audio/ogg') return '.ogg';
     if (m === 'audio/mpeg') return '.mp3';

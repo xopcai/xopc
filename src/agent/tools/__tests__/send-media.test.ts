@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { readFile } from 'fs/promises';
+import { createSendMediaTool } from '../send-media.js';
 
 // Mock fs/promises
 vi.mock('fs/promises', () => ({
@@ -58,7 +59,7 @@ describe('SendMediaTool', () => {
   describe('Media Type Detection', () => {
     const detectMediaType = (filePath: string): 'photo' | 'video' | 'audio' | 'document' => {
       const ext = filePath.split('.').pop()?.toLowerCase();
-      const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg'];
+      const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
       const videoExts = ['mp4', 'mov', 'avi', 'webm', 'mkv'];
       const audioExts = ['mp3', 'wav', 'ogg', 'm4a', 'flac'];
 
@@ -72,6 +73,10 @@ describe('SendMediaTool', () => {
       expect(detectMediaType('/path/to/photo.jpg')).toBe('photo');
       expect(detectMediaType('/path/to/photo.png')).toBe('photo');
       expect(detectMediaType('/path/to/image.gif')).toBe('photo');
+    });
+
+    it('should treat svg files as documents, not photos', () => {
+      expect(detectMediaType('/path/to/icon.svg')).toBe('document');
     });
 
     it('should auto-detect video files', () => {
@@ -243,6 +248,24 @@ describe('SendMediaTool', () => {
       };
 
       expect(result.content[0].text).toContain('Error sending media');
+    });
+
+    it('should publish svg files as documents', async () => {
+      mockReadFile.mockResolvedValue(Buffer.from('<svg/>'));
+      const publishOutbound = vi.fn().mockResolvedValue(undefined);
+      const tool = createSendMediaTool(
+        '/tmp/workspace',
+        { publishOutbound } as any,
+        () => ({ channel: 'telegram', chatId: '123456' }),
+      );
+
+      const result = await tool.execute('call-1', { filePath: '/tmp/workspace/icon.svg' });
+
+      expect(publishOutbound).toHaveBeenCalledWith(expect.objectContaining({
+        mediaType: 'document',
+        mediaUrl: expect.stringMatching(/^data:image\/svg\+xml;base64,/),
+      }));
+      expect(result.content[0]!.text).toContain('(document)');
     });
   });
 
