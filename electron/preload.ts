@@ -7,9 +7,30 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   shell: {
     openPath: (filePath: string) =>
-      ipcRenderer.invoke('shell:open-path', filePath) as Promise<{ error?: string }>,
+      ipcRenderer.invoke('shell:open-path', filePath) as Promise<
+        { ok: true } | { ok: false; error: string; code?: string }
+      >,
     showItemInFolder: (filePath: string) =>
       ipcRenderer.invoke('shell:show-item-in-folder', filePath) as Promise<{ success: boolean }>,
+    chooseAppAndOpenPath: (filePath: string) =>
+      ipcRenderer.invoke('shell:choose-app-and-open-path', filePath) as Promise<
+        { ok: true } | { ok: false; error: string; code?: string }
+      >,
+    openPathWithApp: (filePath: string, appPath: string) =>
+      ipcRenderer.invoke('shell:open-path-with-app', filePath, appPath) as Promise<
+        { ok: true } | { ok: false; error: string; code?: string }
+      >,
+    getRecentOpenWithApps: () =>
+      ipcRenderer.invoke('shell:get-recent-open-with-apps') as Promise<
+        Array<{ name: string; path: string; platform: string; lastUsedAt: number }>
+      >,
+    getOpenWithAppsForPath: (filePath: string) =>
+      ipcRenderer.invoke('shell:get-open-with-apps-for-path', filePath) as Promise<{
+        recommended: Array<{ name: string; path: string; platform: string; source: 'known' }>;
+        recent: Array<{ name: string; path: string; platform: string; lastUsedAt: number }>;
+      }>,
+    clearRecentOpenWithApps: () =>
+      ipcRenderer.invoke('shell:clear-recent-open-with-apps') as Promise<{ ok: true }>,
   },
   file: {
     readFile: (filePath: string) => ipcRenderer.invoke('file:read', filePath) as Promise<string>,
