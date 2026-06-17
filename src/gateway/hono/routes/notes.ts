@@ -7,7 +7,7 @@ import { stream } from 'hono/streaming';
 
 import { buildSessionKey } from '../../../routing/session-key.js';
 import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
-import type { CaptureChannel, CaptureSource, Note, NoteBlock, NoteKind, NoteStatus, SnapshotTrigger } from '../../../notes/types.js';
+import type { CaptureChannel, CaptureSource, Note, NoteKind, NoteStatus, SnapshotTrigger } from '../../../notes/types.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const VALID_KINDS = new Set<NoteKind>(['thought', 'todo', 'voice', 'media', 'bookmark', 'mixed', 'task']);
@@ -22,24 +22,10 @@ function parseCaptureSource(body: Record<string, unknown>): CaptureSource {
   return { channel, platform };
 }
 
-function parseBlocks(value: unknown): NoteBlock[] | undefined {
-  if (!Array.isArray(value)) return undefined;
-  return value.filter((block): block is NoteBlock => {
-    if (!block || typeof block !== 'object') return false;
-    const candidate = block as Record<string, unknown>;
-    if (typeof candidate.id !== 'string' || typeof candidate.type !== 'string') return false;
-    if (candidate.type === 'image') {
-      return typeof candidate.attachmentId === 'string';
-    }
-    return true;
-  });
-}
-
 function buildNotePatch(body: Record<string, unknown>): Partial<Note> {
   const patch: Partial<Note> = {};
   if (typeof body.title === 'string') patch.title = body.title;
-  if (typeof body.text === 'string') patch.text = body.text;
-  if (Array.isArray(body.blocks)) patch.blocks = parseBlocks(body.blocks);
+  if (typeof body.markdown === 'string') patch.markdown = body.markdown;
   if (typeof body.kind === 'string' && VALID_KINDS.has(body.kind as NoteKind)) patch.kind = body.kind as NoteKind;
   if (typeof body.status === 'string' && VALID_STATUSES.has(body.status as NoteStatus)) patch.status = body.status as NoteStatus;
   if (Array.isArray(body.tags)) patch.tags = body.tags.filter((tag): tag is string => typeof tag === 'string');
@@ -52,12 +38,12 @@ function buildNotePatch(body: Record<string, unknown>): Partial<Note> {
 
 function buildNoteThreadContext(note: Note): string {
   const title = note.title?.trim() || '未命名笔记';
-  const body = note.text?.trim() || '这条笔记暂无正文。';
+  const body = note.markdown.trim() || '这条笔记暂无正文。';
   return [`来源 Note：${title}`, '', body].join('\n');
 }
 
 function noteThreadName(note: Note): string {
-  const title = note.title?.trim() || note.text?.trim()?.slice(0, 28) || '未命名笔记';
+  const title = note.title?.trim() || note.markdown.trim().slice(0, 28) || '未命名笔记';
   return `讨论：${title}`;
 }
 
@@ -114,13 +100,13 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
         return c.json({ error: 'Invalid multipart body' }, 400);
       }
 
-      const text = typeof body.text === 'string' ? body.text.trim() : undefined;
+      const markdown = typeof body.markdown === 'string' ? body.markdown.trim() : undefined;
       const kindRaw = typeof body.kind === 'string' ? body.kind : undefined;
       const tagsRaw = typeof body.tags === 'string' ? body.tags : undefined;
       const source = parseCaptureSource(body as Record<string, unknown>);
 
       const note = await service.notesServiceInstance.createNote({
-        text,
+        markdown,
         kind: kindRaw && VALID_KINDS.has(kindRaw as NoteKind) ? (kindRaw as NoteKind) : undefined,
         tags: tagsRaw ? tagsRaw.split(',').map((t) => t.trim()).filter(Boolean) : undefined,
         capturedVia: source,
@@ -163,15 +149,13 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
 
     // JSON body
     const body = await c.req.json().catch(() => ({}));
-    const text = typeof body.text === 'string' ? body.text.trim() : undefined;
-    const blocks = parseBlocks(body.blocks);
+    const markdown = typeof body.markdown === 'string' ? body.markdown.trim() : undefined;
     const kindRaw = typeof body.kind === 'string' ? body.kind : undefined;
     const tagsRaw = Array.isArray(body.tags) ? body.tags.filter((t: unknown) => typeof t === 'string') : undefined;
     const source = parseCaptureSource(body);
 
     const note = await service.notesServiceInstance.createNote({
-      text,
-      blocks,
+      markdown,
       kind: kindRaw && VALID_KINDS.has(kindRaw as NoteKind) ? (kindRaw as NoteKind) : undefined,
       tags: tagsRaw,
       capturedVia: source,
@@ -180,7 +164,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     return c.json({ note }, 201);
   });
 
-  // POST /api/notes/sync — local-first block sync with optimistic conflict check
+  // POST /api/notes/sync — local-first markdown sync with optimistic conflict check
   authenticated.post('/api/notes/sync', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const noteId = typeof body.noteId === 'string' ? body.noteId : '';
@@ -388,7 +372,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     return c.json({ note });
   });
 
-  // POST /api/notes/:id/ai/edit — generate previewable block-level AI patch
+  // POST /api/notes/:id/ai/edit — generate previewable markdown AI patch
   authenticated.post('/api/notes/:id/ai/edit', async (c) => {
     const id = c.req.param('id');
     const body = await c.req.json().catch(() => ({}));
@@ -397,8 +381,8 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       return c.json({ error: 'Missing required field: instruction' }, 400);
     }
 
-    const blocks = parseBlocks(body.blocks);
-    const result = await service.notesServiceInstance.createAiEditPatch(id, instruction, blocks);
+    const markdown = typeof body.markdown === 'string' ? body.markdown : undefined;
+    const result = await service.notesServiceInstance.createAiEditPatch(id, instruction, markdown);
     if (!result) {
       return c.json({ error: 'Note not found' }, 404);
     }

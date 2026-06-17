@@ -15,6 +15,7 @@ function baseNote(overrides: Partial<Note> = {}): Note {
     createdAt: 1,
     updatedAt: 1,
     capturedVia: { channel: 'web' },
+    markdown: '',
     ...overrides,
   };
 }
@@ -32,7 +33,7 @@ describe('note-attachment-sync', () => {
   it('collects attachment ids referenced in canonical markdown', () => {
     const ids = collectReferencedAttachmentIds(
       baseNote({
-        text: `Hello ![x](${buildNoteAttachmentRef('note-1', 'att-1')}) and ![y](${buildNoteAttachmentRef('note-1', 'att-2')})`,
+        markdown: `Hello ![x](${buildNoteAttachmentRef('note-1', 'att-1')}) and ![y](${buildNoteAttachmentRef('note-1', 'att-2')})`,
       }),
     );
     expect([...ids]).toEqual(['att-1', 'att-2']);
@@ -41,33 +42,25 @@ describe('note-attachment-sync', () => {
   it('collects attachment ids referenced in canonical markdown links', () => {
     const ids = collectReferencedAttachmentIds(
       baseNote({
-        text: `[Voice · 30s](${buildNoteAttachmentRef('note-1', 'att-voice')})`,
+        markdown: `[Voice · 30s](${buildNoteAttachmentRef('note-1', 'att-voice')})`,
       }),
     );
     expect([...ids]).toEqual(['att-voice']);
   });
 
-  it('collects attachment ids from image blocks', () => {
+  it('collects attachment ids from bare canonical refs', () => {
     const ids = collectReferencedAttachmentIds(
       baseNote({
-        blocks: [
-          {
-            id: 'b1',
-            type: 'image',
-            attachmentId: 'att-block',
-            createdAt: 1,
-            updatedAt: 1,
-          },
-        ],
+        markdown: buildNoteAttachmentRef('note-1', 'att-bare'),
       }),
     );
-    expect([...ids]).toEqual(['att-block']);
+    expect([...ids]).toEqual(['att-bare']);
   });
 
   it('partitions attachments into kept vs orphan sets', () => {
     const { kept, removed } = partitionAttachmentsByReference(
       baseNote({
-        text: `![photo](${buildNoteAttachmentRef('note-1', 'att-1')})`,
+        markdown: `![photo](${buildNoteAttachmentRef('note-1', 'att-1')})`,
         attachments: [
           imageAttachment,
           { ...imageAttachment, id: 'att-2', relativePath: 'other.png', fileName: 'other.png' },

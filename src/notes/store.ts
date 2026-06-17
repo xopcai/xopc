@@ -116,8 +116,7 @@ export class NotesStore {
       timestamp: Date.now(),
       trigger,
       title: note.title,
-      text: note.text,
-      blocks: note.blocks,
+      markdown: note.markdown,
       tags: note.tags,
       kind: note.kind,
       status: note.status,
@@ -143,7 +142,7 @@ export class NotesStore {
       try {
         const content = await readFile(join(historyDir, file), 'utf-8');
         const snapshot = JSON.parse(content) as NoteSnapshot;
-        const rawText = snapshot.text ?? '';
+        const rawText = snapshot.markdown ?? '';
         entries.push({
           timestamp: snapshot.timestamp,
           trigger: snapshot.trigger,
