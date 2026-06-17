@@ -97,7 +97,7 @@ async function readImageBase64FromRef(ref: MediaRef): Promise<{ data: string; mi
   const loaded = await readMediaReferenceBase64(ref.uri, VISION_INLINE_MAX_BYTES);
   return {
     data: loaded.data,
-    mimeType: ref.mimeType?.startsWith('image/') ? ref.mimeType : loaded.mimeType,
+    mimeType: ref.mimeType || loaded.mimeType,
   };
 }
 
@@ -155,9 +155,7 @@ export async function buildTranscriptUserMessage(opts: {
 
   const strategy = resolveImageHandlingStrategy(opts.modelRef);
 
-  if (strategy !== 'native') {
-    appendMediaAttachedLines(textParts, prepared.filter((m) => !isImageInboundAttachment(m)));
-  }
+  appendMediaAttachedLines(textParts, prepared.filter((m) => !isImageInboundAttachment(m)));
 
   if (imageRefs.length > 0 && strategy !== 'native') {
     const images = await Promise.all(imageRefs.map((ref) => readImageBase64FromRef(ref)));
