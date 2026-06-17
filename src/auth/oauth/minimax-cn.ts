@@ -18,7 +18,7 @@ const MINIMAX_CN_OAUTH_CLIENT_ID = 'your_client_id'; // Users need to register t
 export const minimaxCnOAuthProvider: OAuthProviderInterface = {
 	id: 'minimax-cn',
 	name: 'MiniMax 国内版',
-	usesCallbackServer: true,
+	usesCallbackServer: false,
 
 	async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
 		// MiniMax CN uses authorization code flow

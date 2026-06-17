@@ -1,5 +1,5 @@
 /**
- * Kimi Coding (Moonshot AI) OAuth — device code flow for pi-ai `kimi-coding` provider.
+ * Kimi Coding (Moonshot AI) OAuth device code flow.
  * @see https://auth.kimi.com
  */
 
@@ -13,7 +13,7 @@ const KIMI_OAUTH_CLIENT_ID = '17e5f671-d194-4dfb-9706-5516cb48c098';
 export const kimiCodingOAuthProvider: OAuthProviderInterface = {
 	id: 'kimi-coding',
 	name: 'Kimi For Coding (月之暗面)',
-	usesCallbackServer: true,
+	usesCallbackServer: false,
 
 	async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
 		const deviceResponse = await fetch(KIMI_OAUTH_DEVICE_URL, {

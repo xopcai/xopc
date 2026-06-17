@@ -426,6 +426,8 @@
     "userMessageCopy": "复制消息",
     "userMessageRetry": "重试",
     "userMessageEdit": "在输入框中编辑",
+    "userMessageExpand": "展开",
+    "userMessageCollapse": "收起",
     "userMessageRetryDisabledHint": "仅可重试最新一条自己的消息。",
     "userMessageActionsWait": "请等待发送或回复结束后再操作。",
     "userMessageDelete": "删除本轮对话",

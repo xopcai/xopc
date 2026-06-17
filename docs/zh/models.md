@@ -8,7 +8,7 @@ xopc 通过 `~/.xopc/models.json` 支持自定义模型服务商。
 
 内置 **provider id** 与 pi-ai 一致；环境变量名以仓库内 **`src/providers/env-keys.ts`** 的 **`PROVIDER_ENV_MAP`** 为准。与 **`xopc.json` → `providers`** 对应的汇总表见 [配置说明 — `providers`](/zh/configuration#providers)。
 
-**默认对话模型**：文档与向导里常把 **DeepSeek** 作为优先推荐；密钥写在 **`~/.xopc/xopc.json`** 的 **`providers.deepseek`** 或对应环境变量即可（BYOK，详见 [配置](/zh/configuration)）。
+**默认对话模型**：未显式配置时，xopc 使用目录驱动的基线 **`openai/gpt-5.5`**。可通过 `xopc onboard` 或网关控制台选择任意目录模型并配置对应凭据。
 
 当前内置覆盖（节选）：**DeepSeek**、**OpenAI**、**Anthropic**、**Google / Vertex**、**Azure OpenAI**、**AWS Bedrock**、**Groq**、**xAI**、**Mistral**、**Cerebras**、**OpenRouter**、**Vercel AI Gateway**、**智谱 z.ai**、**MiniMax**（国际/国内）、**Kimi Coding**、**Moonshot**（`moonshotai` / `moonshotai-cn`）、**Hugging Face**、**Fireworks**、**Together**、**OpenCode / OpenCode Go**、**Cloudflare Workers AI** 与 **Cloudflare AI Gateway**、**GitHub Copilot**、**OpenAI Codex**（OAuth）、**Google Gemini CLI / Antigravity**、**小米 MiMo**（见下）。**`dashscope`** 为 xopc 侧文生图/语音等 HTTP 能力的环境 id，不是 pi-ai 的 LLM `KnownProvider`。
 

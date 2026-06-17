@@ -16,7 +16,13 @@ export function OnboardingModelSelect({
 
   return (
     <div className="flex max-h-[min(50vh,22rem)] flex-col gap-2 overflow-y-auto pr-1" role="radiogroup">
-      {models.map((mod) => {
+      {models
+        .slice()
+        .sort((a, b) => {
+          if (a.recommended !== b.recommended) return a.recommended ? -1 : 1;
+          return (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' });
+        })
+        .map((mod) => {
         const checked = selectedId === mod.id;
         return (
           <label
@@ -35,7 +41,14 @@ export function OnboardingModelSelect({
               aria-label={mod.name || mod.id}
             />
             <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium text-fg">{mod.name || mod.id}</span>
+              <span className="flex items-center gap-2 text-sm font-medium text-fg">
+                <span>{mod.name || mod.id}</span>
+                {mod.recommended ? (
+                  <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold text-accent-fg">
+                    Recommended
+                  </span>
+                ) : null}
+              </span>
               <span className="block text-xs text-fg-muted">{mod.id}</span>
             </span>
           </label>

@@ -107,7 +107,7 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 ## Why xopc
 
 - 🏠 **Your machine** — Data and config under **`~/.xopc/`**. No mandatory cloud or surprise bills.
-- 🔑 **Bring your own keys** — DeepSeek (recommended), OpenAI, Anthropic, Ollama, LM Studio, vLLM, and **20+** providers. Mix cloud and local; switch models in one config line. See **[Models](https://xopcai.github.io/xopc/models)**.
+- 🔑 **Bring your own keys** — OpenAI, Anthropic, Google, DeepSeek, Ollama, LM Studio, vLLM, and **20+** providers. Mix cloud and local; switch catalog models in one config line. See **[Models](https://xopcai.github.io/xopc/models)**.
 - 📱 **One brain, every screen** — Same assistant in terminal, browser, desktop, phone, and IM. No sync layer — one system.
 - 🧩 **Grows with you** — **`xopc skills install`** · **`xopc extensions install`** for tools, channels, and UI panels; multi-agent routing per context.
 - ⏰ **Proactive** — **Cron** for scheduled summaries and reminders; **workflows** for fan-out subagent tasks; **multi-agent** routing with isolated workspaces, tools, and prompts.

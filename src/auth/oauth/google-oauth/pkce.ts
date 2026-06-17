@@ -16,7 +16,7 @@ function base64urlEncode(bytes: Uint8Array): string {
 
 /**
  * Generate PKCE code verifier and challenge.
- * Uses Web Crypto API for cross-platform compatibility.
+ * Uses Web Crypto API.
  */
 export async function generatePKCE(): Promise<{ verifier: string; challenge: string }> {
 	// Generate random verifier

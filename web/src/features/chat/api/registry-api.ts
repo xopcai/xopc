@@ -9,6 +9,7 @@ export type ConfiguredModel = {
   maxTokens?: number;
   reasoning?: boolean;
   vision?: boolean;
+  recommended?: boolean;
 };
 
 async function fetchConfiguredModels(): Promise<ConfiguredModel[]> {

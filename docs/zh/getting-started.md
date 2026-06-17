@@ -57,7 +57,7 @@ xopc onboard
 
 1. 创建主 Markdown 工作区（默认常见路径如 `~/.xopc/workspace/main/`）
 2. 生成默认 **`~/.xopc/xopc.json`**
-3. 选择大模型厂商并填 API Key（**DeepSeek** 对多数场景很合适）
+3. 选择目录中的模型/厂商并填写 API Key（向导会展示当前推荐模型）
 4. 按需配置 **Telegram、微信、飞书/Lark** 等机器人（可跳过）
 5. 网关网页控制台，以及结束时可选 **TUI** 或 **网关** 用法提示
 

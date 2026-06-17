@@ -24,6 +24,17 @@ export type ProviderActiveKeySource =
 export type ProviderAuthMode = ProviderActiveKeySource;
 export type ProviderAuthStatus = 'connected' | 'expired' | 'not_connected';
 
+export interface ProviderRecommendedModel {
+  ref: string;
+  provider: string;
+  id: string;
+  name: string;
+  reasoning?: boolean;
+  vision?: boolean;
+  contextWindow?: number;
+  maxTokens?: number;
+}
+
 export interface ProviderMeta {
   id: string;
   name: string;
@@ -31,6 +42,10 @@ export interface ProviderMeta {
   supportsOAuth: boolean;
   supportsApiKey: boolean;
   configured: boolean;
+  onboardingFeatured?: boolean;
+  recommendedModels?: ProviderRecommendedModel[];
+  modelCount?: number;
+  hint?: string;
   activeKeySource?: ProviderActiveKeySource;
   authMode?: ProviderAuthMode;
   authStatus?: ProviderAuthStatus;
