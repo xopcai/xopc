@@ -18,6 +18,8 @@ type CommonActions = {
   canDownload: boolean;
   onOpenWithSystemApp?: () => void | Promise<void>;
   canOpenWithSystemApp?: boolean;
+  onChooseOpenWithApp?: () => void | Promise<void>;
+  canChooseOpenWithApp?: boolean;
 };
 
 type WorkspaceTextEditing = {
@@ -86,6 +88,9 @@ function FilePreviewPptxSlidePane({
   openSystemLabel,
   onOpenWithSystemApp,
   canOpenWithSystemApp,
+  chooseAppLabel,
+  onChooseOpenWithApp,
+  canChooseOpenWithApp,
 }: {
   layout: PptxSlidePaneLayout;
   text: string;
@@ -99,6 +104,9 @@ function FilePreviewPptxSlidePane({
   openSystemLabel?: string;
   onOpenWithSystemApp?: () => void | Promise<void>;
   canOpenWithSystemApp?: boolean;
+  chooseAppLabel?: string;
+  onChooseOpenWithApp?: () => void | Promise<void>;
+  canChooseOpenWithApp?: boolean;
 }) {
   const outerClass =
     layout === 'workspace'
@@ -120,6 +128,9 @@ function FilePreviewPptxSlidePane({
           openSystemLabel={openSystemLabel}
           onOpenWithSystemApp={onOpenWithSystemApp}
           canOpenWithSystemApp={canOpenWithSystemApp}
+          chooseAppLabel={chooseAppLabel}
+          onChooseOpenWithApp={onChooseOpenWithApp}
+          canChooseOpenWithApp={canChooseOpenWithApp}
         />
       ) : null}
       <div className={innerScrollClass}>
@@ -187,6 +198,7 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
   const downloadLabel = m.chat.attachmentPreviewDownloadFull;
 
   const openSystemLabel = context === 'workspace' ? m.workspace.openSystemApp : undefined;
+  const chooseAppLabel = context === 'workspace' ? m.workspace.chooseApp : undefined;
 
   const pptxSlideLabel = (n: number) => m.chat.attachmentPreviewPptxSlide.replaceAll('{n}', String(n));
 
@@ -198,6 +210,9 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
       openSystemLabel={openSystemLabel}
       onOpenWithSystemApp={actions.onOpenWithSystemApp}
       canOpenWithSystemApp={showSystemOpen}
+      chooseAppLabel={chooseAppLabel}
+      onChooseOpenWithApp={actions.onChooseOpenWithApp}
+      canChooseOpenWithApp={actions.canChooseOpenWithApp}
     />
   );
 
@@ -254,6 +269,9 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
           openSystemLabel={openSystemLabel}
           onOpenWithSystemApp={actions.onOpenWithSystemApp}
           canOpenWithSystemApp={showSystemOpen}
+          chooseAppLabel={chooseAppLabel}
+          onChooseOpenWithApp={actions.onChooseOpenWithApp}
+          canChooseOpenWithApp={actions.canChooseOpenWithApp}
         />
       </div>
     );
@@ -314,6 +332,9 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
           openSystemLabel={openSystemLabel}
           onOpenWithSystemApp={actions.onOpenWithSystemApp}
           canOpenWithSystemApp={showSystemOpen}
+          chooseAppLabel={chooseAppLabel}
+          onChooseOpenWithApp={actions.onChooseOpenWithApp}
+          canChooseOpenWithApp={actions.canChooseOpenWithApp}
         />
       );
     }
@@ -353,6 +374,9 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
                 openSystemLabel={openSystemLabel}
                 onOpenWithSystemApp={actions.onOpenWithSystemApp}
                 canOpenWithSystemApp={showSystemOpen}
+                chooseAppLabel={chooseAppLabel}
+                onChooseOpenWithApp={actions.onChooseOpenWithApp}
+                canChooseOpenWithApp={actions.canChooseOpenWithApp}
               />
             ) : null}
             <div
@@ -432,4 +456,3 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
 
   return <div className="flex min-h-0 flex-1 flex-col">{body}</div>;
 }
-
