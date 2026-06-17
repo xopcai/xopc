@@ -8,7 +8,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { writeTextAtomicSync } from '../../infra/write-file-atomic.js';
-import { homedir } from 'os';
+import { resolveCredentialsDir } from '../../config/paths.js';
 import type { AuthProfileCredential, AuthProfileStore, ProfileUsageStats } from './types.js';
 
 const AUTH_STORE_VERSION = 1;
@@ -16,7 +16,7 @@ const AUTH_STORE_FILENAME = 'auth-profiles.json';
 
 /** Get the auth profiles file path */
 export function resolveAuthStorePath(dataDir?: string): string {
-	const dir = dataDir ?? path.join(homedir(), '.xopc');
+	const dir = dataDir ?? resolveCredentialsDir();
 	return path.join(dir, AUTH_STORE_FILENAME);
 }
 

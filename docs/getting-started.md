@@ -58,7 +58,7 @@ xopc onboard
 The wizard will guide you through:
 1. Creating the primary Markdown workspace directory (typically `~/.xopc/workspace/main/` when using default config)
 2. Generating default **`~/.xopc/xopc.json`**
-3. Choosing an LLM provider and API key (**DeepSeek** is a good default for many setups)
+3. Choosing a catalog model/provider and API key (the wizard highlights current recommended models)
 4. Optional messaging channels (**Telegram**, **WeChat (Weixin)**, **Feishu/Lark**)
 5. Gateway Web console (and optional **`xopc tui`** vs gateway choice at the end)
 

@@ -11,7 +11,7 @@ const readyInput: ModelSetupDerivationInput = {
     agents: { defaults: { model: 'openai/gpt-4o' } },
     providers: { openai: '***' },
   },
-  modelsData: [{ id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai' }],
+  modelsData: [{ id: 'openai/gpt-5.5', name: 'GPT-5.5', provider: 'openai' }],
 };
 
 describe('computeNeedsModelSetup', () => {

@@ -1,5 +1,5 @@
-import { memo, useCallback, useMemo, useState } from 'react';
-import { Check, Copy, FileCode2, FileText, ListTodo, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Check, ChevronDown, ChevronUp, Copy, FileCode2, FileText, ListTodo, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 
 import type {
   ImageContent,
@@ -243,6 +243,9 @@ export const MessageBubble = memo(function MessageBubble({
   const [assistantActionBusy, setAssistantActionBusy] = useState<'save-note' | 'extract-task' | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [inlineImagePreview, setInlineImagePreview] = useState<MessageAttachment | null>(null);
+  const [userMessageExpanded, setUserMessageExpanded] = useState(false);
+  const [userMessageCanExpand, setUserMessageCanExpand] = useState(false);
+  const userMessageContentRef = useRef<HTMLDivElement | null>(null);
   const openInlineImagePreview = useCallback((block: ImageContent, index: number) => {
     const att = imageBlockToMessageAttachment(block, index);
     if (att) {
@@ -325,6 +328,30 @@ export const MessageBubble = memo(function MessageBubble({
     return blocks;
   }, [message, reasoningHidden]);
 
+  useLayoutEffect(() => {
+    if (!isUser) return;
+    const el = userMessageContentRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const style = window.getComputedStyle(el);
+      const lineHeightRaw = Number.parseFloat(style.lineHeight);
+      const fontSize = Number.parseFloat(style.fontSize) || 14;
+      const lineHeight = Number.isFinite(lineHeightRaw) ? lineHeightRaw : fontSize * 1.625;
+      setUserMessageCanExpand(el.scrollHeight > lineHeight * 10 + 1);
+    };
+
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(el);
+    return () => resizeObserver.disconnect();
+  }, [isUser, displayForFlow, userCopyText]);
+
+  useLayoutEffect(() => {
+    setUserMessageExpanded(false);
+  }, [isUser, userCopyText]);
+
   const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
 
   return (
@@ -392,27 +419,52 @@ export const MessageBubble = memo(function MessageBubble({
           <div className="flex min-w-0 flex-col gap-2">
             {(displayForFlow?.length ?? 0) > 0 ? (
               <>
-                {renderChunkedContent(
-                  displayForFlow,
-                  isUser,
-                  isAssistant && isStreaming,
-                  toolLabels,
-                  stepLabels,
-                  clusterLabels,
-                  cardLabels,
-                  m.chat.attachmentPreviewImage,
-                  openInlineImagePreview,
-                  sessionKey,
-                  {
-                    labels: workflowCardLabels(language),
-                    // Only the streaming row owns the abort handler — for
-                    // completed/historical rows it would point at an unrelated
-                    // turn, so we leave it undefined and the cancel button
-                    // stays hidden.
-                    onAbort: isAssistant && isStreaming ? onAbortCurrentTurn : undefined,
-                    onSendChatMessage: onSendUserMessage,
-                  },
-                )}
+                <div
+                  ref={isUser ? userMessageContentRef : undefined}
+                  className={cn(
+                    'min-w-0',
+                    isUser && 'flex flex-col gap-2',
+                    isUser && !userMessageExpanded && 'overflow-hidden',
+                  )}
+                  style={isUser && !userMessageExpanded ? { maxHeight: 'calc(10lh)' } : undefined}
+                >
+                  {renderChunkedContent(
+                    displayForFlow,
+                    isUser,
+                    isAssistant && isStreaming,
+                    toolLabels,
+                    stepLabels,
+                    clusterLabels,
+                    cardLabels,
+                    m.chat.attachmentPreviewImage,
+                    openInlineImagePreview,
+                    sessionKey,
+                    {
+                      labels: workflowCardLabels(language),
+                      // Only the streaming row owns the abort handler — for
+                      // completed/historical rows it would point at an unrelated
+                      // turn, so we leave it undefined and the cancel button
+                      // stays hidden.
+                      onAbort: isAssistant && isStreaming ? onAbortCurrentTurn : undefined,
+                      onSendChatMessage: onSendUserMessage,
+                    },
+                  )}
+                </div>
+                {isUser && userMessageCanExpand ? (
+                  <button
+                    type="button"
+                    className="inline-flex w-fit items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+                    onClick={() => setUserMessageExpanded((expanded) => !expanded)}
+                    aria-expanded={userMessageExpanded}
+                  >
+                    {userMessageExpanded ? (
+                      <ChevronUp className="size-3.5" strokeWidth={1.75} aria-hidden />
+                    ) : (
+                      <ChevronDown className="size-3.5" strokeWidth={1.75} aria-hidden />
+                    )}
+                    <span>{userMessageExpanded ? m.chat.userMessageCollapse : m.chat.userMessageExpand}</span>
+                  </button>
+                ) : null}
                 {isStreaming ? (
                   <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
                 ) : null}
