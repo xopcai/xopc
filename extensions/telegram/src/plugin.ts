@@ -61,6 +61,7 @@ import type { TelegramResolvedAccount } from './adapters/index.js';
 import type { ChannelCronDeliveryAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import { normalizeTelegramDeliveryChatId } from './delivery-chat-id.js';
 import { telegramOnboardAdapter } from './adapters/onboard-cli.js';
+import { telegramGatewaySetupActions } from './adapters/gateway-setup.js';
 import { TelegramConfigSchema } from './config-schema.js';
 import { normalizeTelegramApiRoot } from './api-root.js';
 import { resolveTelegramBotToken } from './token-resolver.js';
@@ -84,6 +85,20 @@ const TELEGRAM_GETME_TIMEOUT_MS = 20_000;
 const TELEGRAM_CLIENT_TIMEOUT_SECONDS = 75;
 
 const log = createLogger('TelegramPlugin');
+
+function contextWithMessage(ctx: Context, message: import('@grammyjs/types').Message): Context {
+  if (ctx.message === message) return ctx;
+
+  const clone = Object.create(Object.getPrototypeOf(ctx)) as Context;
+  Object.defineProperties(clone, Object.getOwnPropertyDescriptors(ctx));
+  Object.defineProperty(clone, 'message', {
+    configurable: true,
+    enumerable: true,
+    value: message,
+    writable: true,
+  });
+  return clone;
+}
 
 export type { TelegramResolvedAccount as TelegramAccount } from './channel.js';
 
@@ -136,6 +151,8 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   };
 
   readonly onboard = telegramOnboardAdapter;
+
+  readonly runtimeActions = telegramGatewaySetupActions;
 
   readonly doctor = {
     check: (params: { cfg: Config }) => runTelegramDoctorChecks(params),
@@ -569,7 +586,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
           for (const msg of batch.messages) {
             const batchCtx = batch.ctx;
             await this.debouncer.enqueue({
-              ctx: { ...batchCtx, message: msg } as Context,
+              ctx: contextWithMessage(batchCtx, msg),
               accountId: batch.accountId,
               message: msg,
             });
