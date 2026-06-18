@@ -4,6 +4,46 @@ import { createXopcTuiKeybindingsManager } from '../tui-keybindings-file.js';
 import { createTuiCommandHandler } from '../tui-commands.js';
 
 describe('tui command handler controls', () => {
+  it('routes recover and retry commands to runtime controls', async () => {
+    const keybindings = createXopcTuiKeybindingsManager();
+    const calls: string[] = [];
+    const handler = createTuiCommandHandler({
+      state: {
+        currentSessionKey: 'agent:main:main',
+        toolsExpanded: false,
+        showThinking: false,
+        messageFollowUpQueue: [],
+        steeringQueue: [],
+      } as never,
+      chatLog: {
+        addSystem: () => {},
+        setToolsExpanded: () => {},
+      } as never,
+      tui: { requestRender: () => {} } as never,
+      assembler: { clear: () => {} } as never,
+      isLocalMode: true,
+      abortActive: async () => {},
+      sendMessage: () => {
+        throw new Error('recover/retry should not be sent to the assistant');
+      },
+      requestExit: () => {},
+      updateFooter: () => {},
+      keybindings,
+      recoverStream: async () => {
+        calls.push('recover');
+      },
+      retryLastMessage: async () => {
+        calls.push('retry');
+      },
+    });
+
+    handler('/recover');
+    handler('/retry');
+    await Promise.resolve();
+
+    expect(calls).toEqual(['recover', 'retry']);
+  });
+
 it('handles thinking command through native TUI controls', async () => {
     const keybindings = createXopcTuiKeybindingsManager();
     const systems: string[] = [];
@@ -40,6 +80,7 @@ it('handles thinking command through native TUI controls', async () => {
           opened += 1;
         },
         openSettings: () => {},
+        openProjectTrust: () => {},
         reloadKeybindings: () => {},
       },
       setThinkingLevel: async (next) => {
@@ -340,6 +381,7 @@ it('handles thinking command through native TUI controls', async () => {
         openScopedModels: () => {},
         openThinkingSelector: () => {},
         openSettings: () => {},
+        openProjectTrust: () => {},
         reloadKeybindings: () => {},
       },
       listSessions: async () => [

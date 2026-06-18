@@ -1,13 +1,22 @@
 import type { TUI } from '@earendil-works/pi-tui';
 
 import { parseAgentSessionKey } from '../routing/agent-session-key.js';
-import { appendHistoryToChatLog } from './chat-history.js';
+import {
+  appendHistoryToChatLog,
+  historyKeysHaveAppendOnlyPrefix,
+  historyMessageKey,
+} from './chat-history.js';
 import type { ChatLog } from './components/chat-log.js';
 import { clearPendingToolCallIds } from './tui-agent-events.js';
 import type { TuiBackend } from './tui-backend.js';
 import type { StreamAssembler } from './stream-assembler.js';
 import type { TuiState } from './tui-types.js';
 import type { TuiSessionSnapshot } from './tui-session-snapshot.js';
+import {
+  markRunAborting,
+  markRunIdleAfterAbort,
+  resetRunStatus,
+} from './tui-run-state.js';
 
 export type SessionActionsContext = {
   client: TuiBackend;
@@ -41,6 +50,7 @@ export function createSessionActions(context: SessionActionsContext) {
   } = context;
 
   let refreshSessionInfoPromise: Promise<void> = Promise.resolve();
+  let lastHistoryKeys: string[] = [];
 
   const updateAgentFromSessionKey = (key: string) => {
     const parsed = parseAgentSessionKey(key);
@@ -73,20 +83,37 @@ export function createSessionActions(context: SessionActionsContext) {
     chatLog.clearAll();
     clearPendingToolCallIds();
     sessionSnapshot?.clear();
+    lastHistoryKeys = [];
+    resetRunStatus(state);
     state.historyLoaded = false;
     state.messageFollowUpQueue.length = 0;
     state.steeringQueue.length = 0;
   };
 
-  const loadHistory = async () => {
+  const loadHistory = async (opts?: { merge?: boolean }) => {
     try {
       const { messages } = await client.loadHistory({
         sessionKey: state.currentSessionKey,
         limit: historyLimit,
       });
       sessionSnapshot?.replaceFromHistory(messages);
-      chatLog.clearAll();
-      appendHistoryToChatLog(chatLog, messages, state.toolsExpanded, state.showThinking);
+      const nextKeys = messages.map(historyMessageKey);
+      const canAppend =
+        opts?.merge === true &&
+        historyKeysHaveAppendOnlyPrefix(lastHistoryKeys, nextKeys);
+      if (canAppend) {
+        appendHistoryToChatLog(
+          chatLog,
+          messages.slice(lastHistoryKeys.length),
+          state.toolsExpanded,
+          state.showThinking,
+          { startIndex: lastHistoryKeys.length },
+        );
+      } else {
+        chatLog.clearAll();
+        appendHistoryToChatLog(chatLog, messages, state.toolsExpanded, state.showThinking);
+      }
+      lastHistoryKeys = nextKeys;
     } catch {
       // ignore; footer already hints on disconnect
     } finally {
@@ -113,12 +140,14 @@ export function createSessionActions(context: SessionActionsContext) {
       return;
     }
     const runId = state.activeRunId;
+    markRunAborting(state, runId);
     state.activeRunId = null;
     assembler.drop(runId);
     if (opts?.clearUi !== false) {
       chatLog.dropAssistant(runId);
     }
     setActivityStatus('idle');
+    markRunIdleAfterAbort(state);
     tui.requestRender();
     await client.abortChat({ sessionKey: state.currentSessionKey, runId }).catch(() => {});
   };

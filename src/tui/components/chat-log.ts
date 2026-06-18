@@ -180,7 +180,7 @@ export class ChatLog extends Container {
     }
   }
 
-  addUser(text: string): void {
+  addUser(text: string | unknown[]): void {
     this.assistantAnchorByRunId.clear();
     this.append(new UserMessageComponent(text));
   }

@@ -21,9 +21,26 @@ describe('session-context-for-llm', () => {
     expect(buildSessionContextForLlm(rows)).toEqual([u]);
   });
 
-  it('buildSessionContextForLlm drops bash execution audit rows', () => {
+  it('buildSessionContextForLlm maps included bash execution rows into user context', () => {
     const u = { role: 'user', content: [{ type: 'text', text: 'x' }] } as AgentMessage;
     const bash = { role: 'bashExecution', command: 'pwd', output: '/repo\n', exitCode: 0 } as const;
+    const messages = buildSessionContextForLlm([u, bash]);
+    expect(messages[0]).toEqual(u);
+    expect(messages[1]?.role).toBe('user');
+    expect(JSON.stringify(messages[1]?.content)).toContain('<local_shell>');
+    expect(JSON.stringify(messages[1]?.content)).toContain('$ pwd');
+    expect(JSON.stringify(messages[1]?.content)).toContain('/repo');
+  });
+
+  it('buildSessionContextForLlm drops excluded bash execution audit rows', () => {
+    const u = { role: 'user', content: [{ type: 'text', text: 'x' }] } as AgentMessage;
+    const bash = {
+      role: 'bashExecution',
+      command: 'pwd',
+      output: '/repo\n',
+      exitCode: 0,
+      excludeFromContext: true,
+    } as const;
     expect(buildSessionContextForLlm([u, bash])).toEqual([u]);
   });
 

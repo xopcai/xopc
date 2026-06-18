@@ -6,7 +6,7 @@ import { transcriptRowsToClientHistory } from '../../session/client-history.js';
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
-import { getAllProviders, getModelsByProvider } from '../../providers/index.js';
+import { getAvailableModels } from '../../providers/index.js';
 import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
 import type { ExportFormat } from '../../session/types.js';
 import { createLogger } from '../../utils/logger.js';
@@ -104,7 +104,7 @@ export class EmbeddedBackend implements TuiBackend {
     this.chatAbort = new AbortController();
     const signal = this.chatAbort.signal;
 
-    this.onEvent?.({ event: 'status', data: { status: 'started', runId } });
+    this.onEvent?.({ event: 'status', data: { status: 'started', runId }, source: 'embedded' });
 
     // Run the stream in background so the TUI event loop stays responsive.
     void (async () => {
@@ -119,26 +119,27 @@ export class EmbeddedBackend implements TuiBackend {
         const stream = this.agent!.turnDispatcher.processDirectStreaming(
           messageForAgent,
           opts.sessionKey,
-          undefined,
+          opts.attachments,
           opts.thinking,
           { signal },
         );
 
         for await (const event of stream) {
           if (signal.aborted) break;
-          this.onEvent?.({ event: event.type, data: event });
+          this.onEvent?.({ event: event.type, data: event, source: 'embedded' });
         }
 
         if (!signal.aborted) {
           this.onEvent?.({
             event: 'result',
             data: { ok: true },
+            source: 'embedded',
           });
         }
       } catch (error) {
         if (signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        this.onEvent?.({ event: 'error', data: { content: errorMessage } });
+        this.onEvent?.({ event: 'error', data: { content: errorMessage }, source: 'embedded' });
       }
     })();
 
@@ -273,17 +274,13 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async listModels(): Promise<TuiModelChoice[]> {
-    const choices: TuiModelChoice[] = [];
-    for (const provider of getAllProviders()) {
-      for (const model of getModelsByProvider(provider)) {
-        choices.push({
-          id: model.id,
-          name: model.name ?? model.id,
-          provider,
-        });
-      }
-    }
-    return choices;
+    const models = await getAvailableModels();
+    return models.map((model) => ({
+      id: model.id,
+      name: model.name ?? model.id,
+      provider: model.provider,
+      contextWindow: model.contextWindow,
+    }));
   }
 
   async resetSession(sessionKey: string): Promise<void> {
@@ -482,6 +479,26 @@ export class EmbeddedBackend implements TuiBackend {
     }
     await this.agent.sessionStore.appendTranscriptCustomMessageEntry(sessionKey, message);
     evictEmbeddedSessionRunner(sessionKey, 'tui_custom_message_appended');
+    return { ok: true };
+  }
+
+  async appendBashExecution(
+    sessionKey: string,
+    entry: {
+      command: string;
+      output?: string;
+      exitCode?: number | null;
+      signal?: string | null;
+      excludeFromContext?: boolean;
+      truncated?: boolean;
+      fullOutputPath?: string;
+    },
+  ): Promise<{ ok: boolean }> {
+    if (!this.agent) {
+      throw new Error('Agent not started');
+    }
+    await this.agent.sessionStore.appendTranscriptBashExecutionEntry(sessionKey, entry);
+    evictEmbeddedSessionRunner(sessionKey, 'tui_bash_execution_appended');
     return { ok: true };
   }
 

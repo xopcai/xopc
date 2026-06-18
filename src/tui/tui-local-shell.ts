@@ -30,6 +30,14 @@ type LocalShellDeps = {
   resumeStdioFilter?: () => void;
   /** Wrap work while the TUI is stopped (full-screen subprocess). */
   runWithInheritedStdio?: (work: () => Promise<void>) => Promise<void>;
+  onComplete?: (entry: {
+    command: string;
+    output?: string;
+    exitCode?: number | null;
+    signal?: string | null;
+    excludeFromContext: boolean;
+    truncated?: boolean;
+  }) => void | Promise<void>;
 };
 
 export function formatLocalShellConsentHint(keybindings?: KeybindingsManager): string {
@@ -141,10 +149,17 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
               env: { ...env, XOPC_SHELL: 'tui-local' },
               stdio: 'inherit',
             });
-            child.on('close', (code, signal) => {
+            child.on('close', async (code, signal) => {
               deps.chatLog.addSystem(
                 `[local] !! $ ${cmd} — exit ${code ?? '?'}${signal ? ` (signal ${signal})` : ''} (excluded from agent context)`,
               );
+              await deps.onComplete?.({
+                command: cmd,
+                output: '',
+                exitCode: code,
+                signal,
+                excludeFromContext: true,
+              });
               resolve();
             });
             child.on('error', (err) => {
@@ -180,10 +195,19 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
       });
 
       let totalChars = 0;
+      let output = '';
+      let truncated = false;
       const appendCapped = (chunk: string) => {
-        if (totalChars >= maxChars) return;
+        if (totalChars >= maxChars) {
+          truncated = true;
+          return;
+        }
         const slice = chunk.slice(0, maxChars - totalChars);
         totalChars += slice.length;
+        output += slice;
+        if (slice.length < chunk.length) {
+          truncated = true;
+        }
         bashBlock.appendOutput(slice);
         deps.tui.requestRender();
       };
@@ -191,13 +215,28 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
       child.stdout?.on('data', (buf) => appendCapped(buf.toString('utf8')));
       child.stderr?.on('data', (buf) => appendCapped(buf.toString('utf8')));
 
-      child.on('close', (code, signal) => {
+      child.on('close', async (code, signal) => {
+        await deps.onComplete?.({
+          command: cmd,
+          output,
+          exitCode: code,
+          signal,
+          excludeFromContext: false,
+          truncated,
+        });
         bashBlock.setComplete(code, signal);
         deps.tui.requestRender();
         resolve();
       });
 
-      child.on('error', (err) => {
+      child.on('error', async (err) => {
+        await deps.onComplete?.({
+          command: cmd,
+          output: String(err),
+          exitCode: null,
+          signal: null,
+          excludeFromContext: false,
+        });
         bashBlock.setError(String(err));
         deps.tui.requestRender();
         resolve();

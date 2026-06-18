@@ -265,7 +265,7 @@ xopc tui -s <sessionKey> -m "Hello"   # resume session + optional first message
 |--------|-------------|
 | `--url <url>` | Gateway base URL |
 | `--token <token>` | Gateway bearer token |
-| `-s, --session <key>` | Session key (default: `cli:tui`) |
+| `-s, --session <key>` | Session key to resume (omitted: start a fresh `tui-<uuid>` session) |
 | `-m, --message <text>` | Send once after connect |
 | `--local` | Embedded mode (no gateway) |
 | `--thinking <level>` | Thinking level override |
