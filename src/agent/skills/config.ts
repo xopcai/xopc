@@ -9,6 +9,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import { writeTextAtomicSync } from '../../infra/write-file-atomic.js';
+import { hasBinary } from './installer.js';
 import type { SkillConfig, SkillsConfig, Skill } from './types.js';
 
 const log = createLogger('SkillConfig');
@@ -237,7 +238,6 @@ export function isSkillEnabled(
   // Check if skill has requirements that are not met
   const requires = skill.metadata.xopc?.requires || skill.metadata.requires;
   if (requires?.bins) {
-    const { hasBinary } = require('./installer.js');
     for (const bin of requires.bins) {
       if (!hasBinary(bin)) {
         log.debug({ skill: skill.name, bin }, 'Skill requirement not met');

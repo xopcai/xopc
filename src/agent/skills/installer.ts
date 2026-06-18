@@ -7,8 +7,8 @@
 
 import { exec } from 'child_process';
 import { promisify } from 'util';
-import { existsSync } from 'fs';
-import { join } from 'path';
+import { accessSync, constants, existsSync } from 'fs';
+import { delimiter, join } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import type { SkillEntry, SkillInstallResult, SkillInstallSpec } from './types.js';
 
@@ -33,19 +33,28 @@ export interface InstallContext {
  * Check if a binary exists
  */
 export function hasBinary(name: string): boolean {
-  try {
-    const { which } = require('which');
-    return !!which.sync(name, { nothrow: true });
-  } catch {
-    // Fallback: try to execute the command
-    try {
-      const { execSync } = require('child_process');
-      execSync(`which ${name}`, { stdio: 'ignore' });
-      return true;
-    } catch {
-      return false;
+  if (!name || name.includes('/') || name.includes('\\')) {
+    return false;
+  }
+
+  const pathEntries = (process.env.PATH || '').split(delimiter).filter(Boolean);
+  const extensions = process.platform === 'win32'
+    ? (process.env.PATHEXT || '.EXE;.CMD;.BAT;.COM').split(';').filter(Boolean)
+    : [''];
+
+  for (const dir of pathEntries) {
+    for (const ext of extensions) {
+      const candidate = join(dir, `${name}${ext}`);
+      try {
+        accessSync(candidate, constants.X_OK);
+        return true;
+      } catch {
+        // Continue searching PATH.
+      }
     }
   }
+
+  return false;
 }
 
 /**
