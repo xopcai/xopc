@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
+import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -114,13 +115,23 @@ function payloadQrImage(payload: ActionPayload | null): string | null {
 export function ChannelSetupCard({
   entry,
   locale,
+  messages: ch,
   onChanged,
 }: {
   entry: ChannelCatalogEntry;
   locale: string;
+  messages: ChannelsSettingsMessages;
   onChanged: () => Promise<void> | void;
 }) {
   const primary = useMemo(() => choosePrimaryAction(entry), [entry]);
+  const schemaLabels = useMemo(() => ({
+    defaultBooleanLabel: ch.schemaBooleanDefault,
+    unsupportedArrayType: ch.schemaUnsupportedArrayType,
+    arrayAddPlaceholder: ch.schemaArrayAddPlaceholder,
+    unsupportedFieldType: (title: string, type?: string) => ch.schemaUnsupportedFieldType
+      .replace('{{title}}', title)
+      .replace('{{type}}', type ? ` (${type})` : ''),
+  }), [ch]);
   const [state, setState] = useState<ActionState>({
     payload: null,
     poll: null,
@@ -222,8 +233,8 @@ export function ChannelSetupCard({
     };
   }, [entry.id, locale, onChanged, state.poll]);
 
-  const primaryLabel = primary?.[1].label ?? (entry.configured ? 'Reconnect' : 'Connect');
-  const doctorLabel = entry.actions?.['doctor.run']?.label ?? 'Diagnose';
+  const primaryLabel = primary?.[1].label ?? (entry.configured ? ch.reconnect : ch.connect);
+  const doctorLabel = entry.actions?.['doctor.run']?.label ?? ch.diagnose;
   const message = payloadMessage(state.payload);
   const qrContent = payloadQrContent(state.payload, entry.id);
   const qrImage = qrContent ? state.generatedQr : payloadQrImage(state.payload);
@@ -234,9 +245,9 @@ export function ChannelSetupCard({
     <div className="rounded-lg border border-edge-subtle bg-surface-panel p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-fg">Setup</h3>
+          <h3 className="text-sm font-semibold text-fg">{ch.setupTitle}</h3>
           <p className="mt-1 text-sm text-fg-muted">
-            {entry.configured ? 'Channel config exists. Use actions below to reconnect or verify it.' : 'Use the fastest setup path for this channel.'}
+            {entry.configured ? ch.setupConfiguredHint : ch.setupEmptyHint}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -274,7 +285,7 @@ export function ChannelSetupCard({
             <img src={qrImage} alt={`${entry.label} setup QR`} className="h-52 w-52 object-contain" />
           </div>
           <div className="max-w-sm text-sm text-fg-muted">
-            <p>Waiting for confirmation...</p>
+            <p>{ch.waitingConfirmation}</p>
             {qrContent ? (
               <a
                 className="mt-2 inline-flex items-center gap-1 text-accent hover:underline"
@@ -282,7 +293,7 @@ export function ChannelSetupCard({
                 target="_blank"
                 rel="noreferrer"
               >
-                Open setup link
+                {ch.openSetupLink}
                 <ExternalLink className="size-3.5" />
               </a>
             ) : null}
@@ -294,7 +305,7 @@ export function ChannelSetupCard({
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-edge-subtle bg-surface-base px-3 py-2 text-sm">
           <CheckCircle2 className={state.payload.ok ? 'size-4 text-green-600' : 'size-4 text-red-600'} />
           <span className={state.payload.ok ? 'text-fg' : 'text-red-600 dark:text-red-400'}>
-            {state.payload.message ?? (state.payload.ok ? 'Complete' : 'Failed')}
+            {state.payload.message ?? (state.payload.ok ? ch.complete : ch.failed)}
           </span>
         </div>
       ) : null}
@@ -306,6 +317,7 @@ export function ChannelSetupCard({
             values={state.formDraft}
             onChange={(next) => setState((prev) => ({ ...prev, formDraft: next }))}
             disabled={state.busy}
+            labels={schemaLabels}
           />
           <Button
             type="button"
@@ -313,7 +325,7 @@ export function ChannelSetupCard({
             disabled={state.busy}
             onClick={() => void runAction(formPayload.submitAction, state.formDraft)}
           >
-            Save setup
+            {ch.saveSetup}
           </Button>
         </div>
       ) : null}
@@ -323,7 +335,7 @@ export function ChannelSetupCard({
           {diagnostics.map((check, index) => (
             <div key={check.id ?? index} className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-2">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-fg">{check.label ?? check.id ?? `Check ${index + 1}`}</p>
+                <p className="text-sm font-medium text-fg">{check.label ?? check.id ?? ch.diagnosticCheckFallback.replace('{{index}}', String(index + 1))}</p>
                 <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">
                   {check.status ?? 'unknown'}
                 </span>

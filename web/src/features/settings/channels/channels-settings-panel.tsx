@@ -63,6 +63,15 @@ export function ChannelsSettingsPanel() {
 
   const effectiveConfig = draft ?? remoteConfig ?? {};
   const ch = m.channelsSettings;
+  const schemaLabels = useMemo(() => ({
+    defaultBooleanLabel: ch.schemaBooleanDefault,
+    unsupportedArrayType: ch.schemaUnsupportedArrayType,
+    arrayAddPlaceholder: ch.schemaArrayAddPlaceholder,
+    unsupportedFieldType: (title: string, type?: string) => ch.schemaUnsupportedFieldType
+      .replace('{{title}}', title)
+      .replace('{{type}}', type ? ` (${type})` : ''),
+  }), [ch]);
+
   const headerEnd = useMemo(
     () => hasToken ? (
       <ChannelsPageHeaderActions
@@ -126,7 +135,7 @@ export function ChannelsSettingsPanel() {
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <p className="text-sm text-fg-muted">Gateway token is required.</p>
+        <p className="text-sm text-fg-muted">{ch.tokenRequired}</p>
       </div>
     );
   }
@@ -135,7 +144,7 @@ export function ChannelsSettingsPanel() {
     <div className="mx-auto grid w-full max-w-app-main gap-4 px-4 py-6 lg:grid-cols-[320px_minmax(0,1fr)]">
       <section className="min-w-0">
         {catalog.isLoading ? (
-          <p className="text-sm text-fg-muted">Loading channels...</p>
+          <p className="text-sm text-fg-muted">{ch.loadingChannels}</p>
         ) : catalog.error ? (
           <p className="text-sm text-red-600 dark:text-red-400">{String(catalog.error)}</p>
         ) : (
@@ -168,7 +177,7 @@ export function ChannelsSettingsPanel() {
 
       <section className="min-w-0 rounded-lg border border-edge-subtle bg-surface-base p-4">
         {!activeEntry ? (
-          <p className="text-sm text-fg-muted">Select a channel to configure it.</p>
+          <p className="text-sm text-fg-muted">{ch.selectChannel}</p>
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -183,12 +192,12 @@ export function ChannelsSettingsPanel() {
                 {activeEntry.docsPath ? (
                   <Button type="button" variant="secondary" asChild>
                     <a href={activeEntry.docsPath} target="_blank" rel="noreferrer">
-                      Docs
+                      {ch.docs}
                       <ExternalLink className="ml-2 size-3.5" />
                     </a>
                   </Button>
                 ) : null}
-                <Button type="button" variant="ghost" onClick={closeChannel}>Close</Button>
+                <Button type="button" variant="ghost" onClick={closeChannel}>{ch.close}</Button>
               </div>
             </div>
 
@@ -196,6 +205,7 @@ export function ChannelsSettingsPanel() {
               key={activeEntry.id}
               entry={activeEntry}
               locale={language}
+              messages={ch}
               onChanged={async () => {
                 await mutateConfig();
                 await catalog.mutate();
@@ -205,7 +215,7 @@ export function ChannelsSettingsPanel() {
             <details className="group rounded-lg border border-edge-subtle bg-surface-panel">
               <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fg marker:hidden [&::-webkit-details-marker]:hidden">
                 <Settings2 className="size-4 text-fg-muted" />
-                Advanced configuration
+                {ch.advancedConfiguration}
               </summary>
               <div className="border-t border-edge-subtle p-4">
                 <SchemaForm
@@ -213,15 +223,16 @@ export function ChannelsSettingsPanel() {
                   values={effectiveConfig}
                   onChange={(next) => setDraft(next)}
                   disabled={saving}
+                  labels={schemaLabels}
                 />
 
                 {error ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
                 <div className="mt-4 flex justify-end gap-2">
                   <Button type="button" variant="ghost" disabled={!draft || saving} onClick={() => setDraft(null)}>
-                    Discard
+                    {ch.discard}
                   </Button>
                   <Button type="button" variant="primary" disabled={!draft || saving} onClick={() => void saveConfig()}>
-                    {saving ? 'Saving...' : 'Save'}
+                    {saving ? ch.saving : ch.save}
                   </Button>
                 </div>
               </div>

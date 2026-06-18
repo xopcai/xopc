@@ -28,9 +28,16 @@ export function WorkflowsPageHeaderActions({ vm }: { vm: ReturnType<typeof useWo
         <Plus className="size-4" aria-hidden />
         {labels.addWorkflow}
       </Button>
-      <Button variant="secondary" onClick={refreshAll} disabled={loading}>
-        <RefreshCw className={cn('size-4', loading && 'animate-spin')} aria-hidden />
-        {labels.refresh}
+      <Button
+        type="button"
+        variant="ghost"
+        className="size-9 shrink-0 p-0"
+        onClick={refreshAll}
+        disabled={loading}
+        title={labels.refresh}
+        aria-label={labels.refresh}
+      >
+        <RefreshCw className={cn('size-4', loading && 'animate-spin')} strokeWidth={1.75} aria-hidden />
       </Button>
     </div>
   );

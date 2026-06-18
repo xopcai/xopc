@@ -6,12 +6,20 @@ import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
 
 export type JsonSchema = Record<string, unknown>;
 
+export type SchemaFormLabels = {
+  defaultBooleanLabel?: string;
+  unsupportedArrayType?: string;
+  arrayAddPlaceholder?: string;
+  unsupportedFieldType?: (title: string, type?: string) => string;
+};
+
 type SchemaFormProps = {
   schema: JsonSchema;
   values: Record<string, unknown>;
   onChange: (values: Record<string, unknown>) => void;
   disabled?: boolean;
   className?: string;
+  labels?: SchemaFormLabels;
 };
 
 function isRecord(x: unknown): x is Record<string, unknown> {
@@ -168,15 +176,17 @@ function BooleanField({
   value,
   onChange,
   disabled,
+  labels,
 }: {
   s: JsonSchema;
   value: boolean;
   onChange: (v: boolean) => void;
   disabled: boolean;
+  labels?: SchemaFormLabels;
 }) {
   const desc = typeof s.description === 'string' ? s.description : undefined;
   const labelText =
-    desc ?? (typeof s.title === 'string' && s.title.length > 0 ? s.title : 'Enable');
+    desc ?? (typeof s.title === 'string' && s.title.length > 0 ? s.title : labels?.defaultBooleanLabel ?? 'Enable');
   return (
     <label className="flex items-center gap-2 text-sm text-fg">
       <input
@@ -196,28 +206,32 @@ function ArrayStringField({
   value,
   onChange,
   disabled,
+  labels,
 }: {
   s: JsonSchema;
   value: string[];
   onChange: (v: string[]) => void;
   disabled: boolean;
+  labels?: SchemaFormLabels;
 }) {
   const desc = typeof s.description === 'string' ? s.description : undefined;
   const items = s.items;
-  const isStringItems = isRecord(items) && items.type === 'string';
-  if (!isStringItems) {
-    return <p className="text-xs text-fg-muted">Unsupported array type</p>;
+  const itemType = isRecord(items) ? items.type : undefined;
+  const acceptsString = itemType === 'string' || (Array.isArray(itemType) && itemType.includes('string'));
+  if (!acceptsString) {
+    return <p className="text-xs text-fg-muted">{labels?.unsupportedArrayType ?? 'Unsupported array type'}</p>;
   }
+  const normalizedValue = value.map(String);
   const add = (t: string) => {
     const n = t.trim();
-    if (!n || value.includes(n)) return;
-    onChange([...value, n]);
+    if (!n || normalizedValue.includes(n)) return;
+    onChange([...normalizedValue, n]);
   };
   return (
     <div className="flex flex-col gap-1.5">
       {desc ? <label className="text-xs text-fg-muted">{desc}</label> : null}
       <div className="flex flex-wrap gap-1">
-        {value.map((t) => (
+        {normalizedValue.map((t) => (
           <span
             key={t}
             className="inline-flex items-center gap-1 rounded-md border border-edge bg-surface-panel px-2 py-0.5 text-sm"
@@ -227,7 +241,7 @@ function ArrayStringField({
               type="button"
               className="text-fg-muted hover:text-fg"
               disabled={disabled}
-              onClick={() => onChange(value.filter((x) => x !== t))}
+              onClick={() => onChange(normalizedValue.filter((x) => x !== t))}
             >
               ×
             </button>
@@ -237,7 +251,7 @@ function ArrayStringField({
       <input
         className="ui-input h-9 rounded-md border border-edge bg-surface-base px-2.5 text-sm"
         disabled={disabled}
-        placeholder="Add and press Enter"
+        placeholder={labels?.arrayAddPlaceholder ?? 'Add and press Enter'}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
             e.preventDefault();
@@ -256,12 +270,14 @@ function FieldRow({
   value,
   onValue,
   disabled,
+  labels,
 }: {
   k: string;
   sub: JsonSchema;
   value: unknown;
   onValue: (next: unknown) => void;
   disabled: boolean;
+  labels?: SchemaFormLabels;
 }) {
   const t = sub.type;
   const title =
@@ -275,6 +291,7 @@ function FieldRow({
           value={value === true}
           disabled={disabled}
           onChange={(b) => onValue(b)}
+          labels={labels}
         />
       </div>
     );
@@ -308,24 +325,45 @@ function FieldRow({
   }
   if (t === 'array') {
     const items = sub.items;
-    if (isRecord(items) && items.type === 'string') {
+    const itemType = isRecord(items) ? items.type : undefined;
+    const acceptsString = itemType === 'string' || (Array.isArray(itemType) && itemType.includes('string'));
+    if (acceptsString) {
       return (
         <div className="space-y-1.5">
           <p className="text-sm font-medium text-fg">{title}</p>
           <ArrayStringField
             s={sub}
-            value={Array.isArray(value) && value.every((x) => typeof x === 'string') ? value : []}
+            value={Array.isArray(value) && value.every((x) => typeof x === 'string' || typeof x === 'number') ? value.map(String) : []}
             disabled={disabled}
             onChange={onValue}
+            labels={labels}
           />
         </div>
       );
     }
   }
+  if (t === 'object') {
+    const nestedValues = isRecord(value) ? value : {};
+    return (
+      <details className="group rounded-lg border border-edge bg-surface-panel/40 open:bg-surface-base" open>
+        <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-fg group-open:rounded-b-none">
+          {title}
+        </summary>
+        <div className="border-t border-edge p-3">
+          <SchemaForm
+            schema={sub}
+            values={nestedValues}
+            onChange={onValue as (values: Record<string, unknown>) => void}
+            disabled={disabled}
+            labels={labels}
+          />
+        </div>
+      </details>
+    );
+  }
   return (
     <p className="text-xs text-fg-muted">
-      {title}: unsupported field type
-      {typeof t === 'string' ? ` (${t})` : ''}
+      {labels?.unsupportedFieldType?.(title, typeof t === 'string' ? t : undefined) ?? `${title}: unsupported field type${typeof t === 'string' ? ` (${t})` : ''}`}
     </p>
   );
 }
@@ -333,7 +371,7 @@ function FieldRow({
 /**
  * Renders a JSON Schema (type: object) as a form using Gateway Console design tokens.
  */
-export function SchemaForm({ schema, values, onChange, disabled = false, className }: SchemaFormProps) {
+export function SchemaForm({ schema, values, onChange, disabled = false, className, labels }: SchemaFormProps) {
   const fields = useMemo(() => {
     if (schema.type !== 'object') return [];
     return sortedFields(schema);
@@ -373,6 +411,7 @@ export function SchemaForm({ schema, values, onChange, disabled = false, classNa
             value={values[f.key]}
             onValue={(v) => setKey(f.key, v)}
             disabled={disabled}
+            labels={labels}
           />
         ));
         if (gk === '') {
