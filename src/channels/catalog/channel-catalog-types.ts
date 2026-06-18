@@ -2,6 +2,7 @@ import type {
   ChannelActionDescriptor,
   ChannelConfigUiHint,
   ChannelContributionCapabilities,
+  ChannelContributionUiDeclaration,
 } from '../../extensions/types/manifest.js';
 
 export type ChannelCatalogSource = 'workspace' | 'global' | 'bundled' | 'config';
@@ -20,6 +21,7 @@ export interface ChannelCatalogEntry {
   configSchema: Record<string, unknown>;
   uiHints: Record<string, ChannelConfigUiHint>;
   actions: Record<string, ChannelActionDescriptor>;
+  ui?: ChannelContributionUiDeclaration;
 }
 
 export interface ChannelCatalog {

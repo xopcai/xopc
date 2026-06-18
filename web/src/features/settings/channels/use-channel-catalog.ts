@@ -23,6 +23,20 @@ export type ChannelCatalogEntry = {
   configSchema?: Record<string, unknown>;
   uiHints?: Record<string, unknown>;
   actions?: Record<string, ChannelActionDescriptor>;
+  ui?: {
+    icon?: string;
+    card?: {
+      primaryAction?: string;
+      summaryFields?: string[];
+    };
+    modal?: {
+      entrypoint?: string;
+      minHeight?: number;
+      maxHeight?: number;
+      permissions?: string[];
+      placement?: 'before-config' | 'after-setup' | 'replace-config';
+    };
+  };
   enabled?: boolean;
   configured?: boolean;
   runtime?: string;
