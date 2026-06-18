@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   buildStartupUnavailablePayload,
   GatewayReadiness,
   parseStartupRetryAfterMs,
 } from '../startup-readiness.js';
+import { GatewayService } from '../service.js';
 
 describe('GatewayReadiness', () => {
   it('tracks ready and httpListening transitions', () => {
@@ -28,6 +29,42 @@ describe('GatewayReadiness', () => {
     readiness.markReady();
     readiness.markReady();
     expect(readiness.getSnapshot().readyAtMs).not.toBeNull();
+  });
+});
+
+describe('GatewayService startup readiness', () => {
+  it('marks ready before deferred channel connects finish', async () => {
+    let finishDeferred!: () => void;
+    const deferredConnect = new Promise<void>((resolve) => {
+      finishDeferred = resolve;
+    });
+    const service = Object.create(GatewayService.prototype) as any;
+
+    service.serviceConfig = { deferChannelConnectUntilAfterHttp: true };
+    service.readiness = new GatewayReadiness();
+    service.readiness.markStarting(Date.now());
+    service.startupTrace = null;
+    service.channelManager = {
+      startDeferredConnects: vi.fn(() => deferredConnect),
+      replayPendingOutboundMessages: vi.fn(async () => {}),
+    };
+    service.startOutboundProcessor = vi.fn(async () => {});
+    service.emit = vi.fn();
+    service.getChannelsStatus = vi.fn(() => ({}));
+    service.runExposureAutoStartIfConfigured = vi.fn(async () => {});
+    service.applyStartupReadyDelayForTesting = vi.fn(async () => {});
+    service.schedulePostReadySidecars = vi.fn();
+    service.lastChannelConnectDeferMode = 'auto';
+    service.lastChannelConnectDeferSource = 'meta';
+    service.lastDeferredChannelConnectIds = ['telegram'];
+
+    const pending = service.onHttpListening();
+    await vi.waitFor(() => expect(service.channelManager.startDeferredConnects).toHaveBeenCalled());
+
+    expect(service.isGatewayReady()).toBe(true);
+
+    finishDeferred();
+    await pending;
   });
 });
 
