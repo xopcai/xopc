@@ -11,6 +11,7 @@ import {
 import {
   buildChannelCatalogForConfig,
   buildChannelCatalogFromSnapshot,
+  isChannelConfigured,
 } from '../../../channels/catalog/channel-catalog-service.js';
 import type { Config } from '../../../config/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -44,7 +45,7 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
         channels: catalog.entries.map((entry) => ({
           ...entry,
           enabled: channelsCfg?.[entry.id]?.enabled === true,
-          configured: Boolean(channelsCfg?.[entry.id]),
+          configured: isChannelConfigured(service.currentConfig, entry.id),
           runtime: running.has(entry.id) ? 'loaded' : 'missing',
         })),
       },

@@ -110,6 +110,7 @@
     },
     "detailModalBanner": "Metadata comes from SKILL.md YAML frontmatter; the instruction body below excludes that block.",
     "detailModalBannerStore": "Preview below is the markdown published with this package on the skill store (same content as the package readme).",
+    "detailDisabledNotice": "This skill is installed but disabled by your settings, so agents cannot use it until you enable it.",
     "detailSummaryHeading": "Summary",
     "detailInstructionsHeading": "Instructions",
     "detailNoInstructionsBody": "No instruction body after frontmatter.",

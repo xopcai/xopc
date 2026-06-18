@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ExternalLink, Info, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Info, Trash2, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { SkillCardIcon } from '@/features/skills/skill-card-icon';
@@ -149,7 +149,15 @@ export function SkillsPageDetailDialog(p: Props) {
             ) : detailError ? (
               <p className="text-sm text-red-600 dark:text-red-400">{detailError}</p>
             ) : detailSource === 'catalog' && detailCatalogPreview ? (
-              <SkillCatalogStructuredPreview preview={detailCatalogPreview} sk={sk} />
+              <>
+                {!detailEnabled ? (
+                  <div className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+                    <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" strokeWidth={1.75} aria-hidden />
+                    <p className="leading-relaxed">{sk.detailDisabledNotice}</p>
+                  </div>
+                ) : null}
+                <SkillCatalogStructuredPreview preview={detailCatalogPreview} sk={sk} />
+              </>
             ) : detailSource === 'store' && detailMarketplacePreview ? (
               <SkillCatalogStructuredPreview preview={detailMarketplacePreview} sk={sk} />
             ) : (

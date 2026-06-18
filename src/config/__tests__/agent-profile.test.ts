@@ -85,6 +85,25 @@ describe('agent-profile', () => {
     expect(p.tools.disable.has('grep')).toBe(true);
     expect(p.tools.disable.has('shell')).toBe(true);
   });
+
+  it('defaults to all enabled skills when no skill allowlist is configured', () => {
+    const cfg = minimalConfig();
+    const p = resolveEffectiveAgentProfile(cfg, 'main');
+    expect(p.skillsAllowlist).toBeUndefined();
+  });
+
+  it('keeps an explicit empty skill allowlist as no skills', () => {
+    const base = minimalConfig();
+    const cfg: Config = {
+      ...base,
+      agents: {
+        ...base.agents!,
+        defaults: { ...base.agents!.defaults!, skills: [] },
+      },
+    };
+    const p = resolveEffectiveAgentProfile(cfg, 'main');
+    expect(p.skillsAllowlist).toEqual([]);
+  });
   it('extractProfileAgentId falls back to main for unknown agent id', () => {
     const cfg = minimalConfig();
     expect(extractProfileAgentId('nope:webchat:default:direct:x', cfg)).toBe('main');

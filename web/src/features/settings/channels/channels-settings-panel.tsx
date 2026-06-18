@@ -1,5 +1,5 @@
-import { ExternalLink, RefreshCw, Settings2 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { ExternalLink, Settings2 } from 'lucide-react';
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -11,9 +11,11 @@ import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { CHANNELS_HUB_PATH, channelDetailPath, normalizeChannelRouteId } from './channels-routes';
 import { ChannelSetupCard } from './channel-setup-card';
+import { ChannelsPageHeaderActions } from './channels-page-header-actions';
 import { useChannelCatalog, type ChannelCatalogEntry } from './use-channel-catalog';
 
 function configSwrKey(channelId: string | null): string | null {
@@ -44,6 +46,8 @@ export function ChannelsSettingsPanel() {
 
   const catalog = useChannelCatalog(hasToken);
   const entries = catalog.entries;
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const activeEntry = useMemo(
     () => entries.find((entry) => entry.id === activeChannelId),
     [activeChannelId, entries],
@@ -58,6 +62,30 @@ export function ChannelsSettingsPanel() {
   const [error, setError] = useState<string | null>(null);
 
   const effectiveConfig = draft ?? remoteConfig ?? {};
+  const headerEnd = useMemo(
+    () => hasToken ? (
+      <ChannelsPageHeaderActions
+        ch={m.channelsSettings}
+        refreshing={catalog.isValidating}
+        saveOk={false}
+        onRefresh={() => void catalog.mutate()}
+      />
+    ) : null,
+    [catalog, hasToken, m.channelsSettings],
+  );
+
+  useLayoutEffect(() => {
+    setPageHeader({
+      startExtra: null,
+      main: (
+        <div className="min-w-0">
+          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
+        </div>
+      ),
+      end: headerEnd,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, headerEnd, m.settingsSections.channels, setPageHeader]);
 
   const openChannel = useCallback((id: string) => {
     navigate(channelDetailPath(id));
@@ -97,7 +125,6 @@ export function ChannelsSettingsPanel() {
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <h1 className="text-lg font-semibold text-fg">{m.settingsSections.channels}</h1>
         <p className="text-sm text-fg-muted">Gateway token is required.</p>
       </div>
     );
@@ -106,12 +133,6 @@ export function ChannelsSettingsPanel() {
   return (
     <div className="mx-auto grid w-full max-w-app-main gap-4 px-4 py-6 lg:grid-cols-[320px_minmax(0,1fr)]">
       <section className="min-w-0">
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <h1 className="text-lg font-semibold text-fg">{m.settingsSections.channels}</h1>
-          <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => void catalog.mutate()}>
-            <RefreshCw className="size-4" />
-          </Button>
-        </div>
         {catalog.isLoading ? (
           <p className="text-sm text-fg-muted">Loading channels...</p>
         ) : catalog.error ? (

@@ -31,7 +31,7 @@ export interface EffectiveAgentProfile {
   reasoningDefault?: ReasoningLevel;
   verboseDefault?: VerboseLevel;
   systemPromptOverride?: string;
-  /** Skill names visible in `<available_skills>`; empty means a clean skill-free default context. */
+  /** Skill names visible in `<available_skills>`; undefined means all enabled skills, empty means none. */
   skillsAllowlist?: string[];
   tools: EffectiveAgentTools;
   params: Record<string, unknown>;
@@ -134,7 +134,7 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
       : defaults?.systemPromptOverride?.trim()
         ? defaults.systemPromptOverride
         : undefined,
-    skillsAllowlist: entry?.skills !== undefined ? [...entry.skills] : defaults?.skills !== undefined ? [...defaults.skills] : [],
+    skillsAllowlist: entry?.skills !== undefined ? [...entry.skills] : defaults?.skills !== undefined ? [...defaults.skills] : undefined,
     tools: { disable },
     params,
   };
