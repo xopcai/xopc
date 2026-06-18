@@ -9,6 +9,9 @@ const ajv = new Ajv({
   useDefaults: false,
 });
 
+// `password` is a UI hint used by extension manifests, not a validation constraint.
+ajv.addFormat('password', true);
+
 function formatAjvError(channelId: string, err: { instancePath?: string; message?: string }): string {
   const path = err.instancePath ? err.instancePath.replaceAll('/', '.') : '';
   const suffix = path ? path : '<root>';
