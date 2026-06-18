@@ -953,18 +953,22 @@ export class GatewayService {
       log.info({ port, host }, 'Browser extension WS server started');
     } catch (err) {
       const code = err && typeof err === 'object' && 'code' in err ? (err as { code: unknown }).code : undefined;
+      if (code === 'EADDRINUSE') {
+        log.warn(
+          {
+            err,
+            phase: 'browser_extension_ws',
+            bindPort: port,
+            bindHost: host,
+            hint: 'Another process holds this port (default 19820). Stop it or set agents.defaults.browser.extension.port.',
+          },
+          `Browser extension WS server port is already in use: ${host}:${port}`,
+        );
+        return;
+      }
+
       log.error(
-        {
-          err,
-          phase: 'browser_extension_ws',
-          ...(code === 'EADDRINUSE'
-            ? {
-                bindPort: port,
-                bindHost: host,
-                hint: 'Another process holds this port (default 19820). Stop it or set agents.defaults.browser.extension.port.',
-              }
-            : {}),
-        },
+        { err, phase: 'browser_extension_ws' },
         `Failed to start browser extension WS server: ${err instanceof Error ? err.message : String(err)}`,
       );
     }

@@ -6,7 +6,6 @@ import { existsSync, readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 
 import { resolveDefaultAgentId } from '../agent/agent-scope.js';
-import { loadConfig } from '../config/loader.js';
 import type { Config } from '../config/schema.js';
 import {
   resolveBundledExtensionsDir,
@@ -157,17 +156,17 @@ function resolveDiscoveryPaths(
 ): {
   bundledDir: string | null;
   globalDir: string;
-  workspaceExtensionsDir: string;
+  workspaceExtensionsDir: string | null;
 } {
-  const cfg = asSchemaConfig(config ?? loadConfig());
-  const aid = resolveDefaultAgentId(cfg);
+  const cfg = config ? asSchemaConfig(config) : null;
+  const aid = cfg ? resolveDefaultAgentId(cfg) : null;
 
   return {
     bundledDir: resolveBundledExtensionsDir(),
     globalDir: options.extensionsDir ?? resolveExtensionsDir(),
     workspaceExtensionsDir:
       options.workspaceExtensionsDir ??
-      resolveWorkspaceExtensionsDir(cfg, aid),
+      (cfg && aid ? resolveWorkspaceExtensionsDir(cfg, aid) : null),
   };
 }
 
@@ -186,7 +185,9 @@ export function discoverExtensionsFromDisk(
   }
 
   discoverInDirectory(paths.globalDir, 'global', discovered);
-  discoverInDirectory(paths.workspaceExtensionsDir, 'workspace', discovered);
+  if (paths.workspaceExtensionsDir) {
+    discoverInDirectory(paths.workspaceExtensionsDir, 'workspace', discovered);
+  }
 
   return Array.from(discovered.values());
 }
