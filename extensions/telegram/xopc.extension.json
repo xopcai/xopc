@@ -23,6 +23,38 @@
         "streaming": true,
         "media": true
       },
+      "actions": {
+        "doctor.run": {
+          "label": "Diagnose",
+          "description": "Check Bot API connectivity and token validity.",
+          "result": "diagnostics"
+        },
+        "setup.start": {
+          "label": "Configure",
+          "description": "Set up Telegram private chat with a bot token.",
+          "result": "form"
+        }
+      },
+      "uiHints": {
+        "accounts.*.botToken": {
+          "sensitive": true,
+          "help": "Telegram bot token"
+        },
+        "enabled": {
+          "tags": [
+            "basic"
+          ]
+        },
+        "accounts": {
+          "advanced": true
+        },
+        "groupPolicy": {
+          "advanced": true
+        },
+        "groupAllowFrom": {
+          "advanced": true
+        }
+      },
       "configSchema": {
         "type": "object",
         "additionalProperties": false,
@@ -73,7 +105,7 @@
               "open",
               "disabled"
             ],
-            "default": "pairing",
+            "default": "open",
             "title": "DM policy"
           },
           "groupPolicy": {
@@ -183,7 +215,7 @@
                       "open",
                       "disabled"
                     ],
-                    "default": "pairing",
+                    "default": "open",
                     "title": "DM policy"
                   },
                   "groupPolicy": {
@@ -245,18 +277,6 @@
               }
             }
           }
-        }
-      },
-      "uiHints": {
-        "accounts.*.botToken": {
-          "sensitive": true,
-          "help": "Telegram bot token"
-        }
-      },
-      "actions": {
-        "doctor.run": {
-          "label": "Run doctor",
-          "result": "diagnostics"
         }
       },
       "i18n": {
@@ -376,6 +396,11 @@
           "actions": {
             "doctor.run": {
               "label": "诊断"
+            },
+            "setup.start": {
+              "label": "配置",
+              "description": "填写 Bot Token，默认启用私聊。",
+              "result": "form"
             }
           }
         }
