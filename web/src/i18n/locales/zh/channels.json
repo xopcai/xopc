@@ -23,6 +23,8 @@
     "docs": "文档",
     "close": "关闭",
     "advancedConfiguration": "高级配置",
+    "basicConfiguration": "基础配置",
+    "basicConfigurationHint": "配置此通道启动并接收消息所需的必要字段。",
     "setupTitle": "设置",
     "setupConfiguredHint": "此通道已有配置。可使用下方操作重新连接或检查状态。",
     "setupEmptyHint": "使用此通道最快的设置方式。",

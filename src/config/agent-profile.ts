@@ -7,6 +7,7 @@ import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/transcri
 import type { Config } from './schema.js';
 import type { AgentModelConfig } from './schema.js';
 import { getAgentDefaultModelRef } from './schema.js';
+import { isBuiltinAgentId } from '../agent/builtin-agent-ids.js';
 import { resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { getDefaultAgentId, agentExists } from '../routing/resolve-route.js';
 import { parseSessionKey } from '../routing/session-key.js';
@@ -134,7 +135,13 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
       : defaults?.systemPromptOverride?.trim()
         ? defaults.systemPromptOverride
         : undefined,
-    skillsAllowlist: entry?.skills !== undefined ? [...entry.skills] : defaults?.skills !== undefined ? [...defaults.skills] : undefined,
+    skillsAllowlist: isBuiltinAgentId(agentId)
+      ? undefined
+      : entry?.skills !== undefined
+        ? [...entry.skills]
+        : defaults?.skills !== undefined
+          ? [...defaults.skills]
+          : undefined,
     tools: { disable },
     params,
   };
