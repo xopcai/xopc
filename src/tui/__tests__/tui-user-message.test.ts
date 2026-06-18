@@ -54,4 +54,14 @@ describe('user message rendering', () => {
     expect(rendered).toContain('structured user');
     expect(rendered).toContain('[image]');
   });
+
+  it('renders image names for attached user images', () => {
+    const component = new UserMessageComponent([
+      { type: 'text', text: 'look' },
+      { type: 'image', name: 'clipboard-1.png' },
+    ]);
+    const rendered = stripAnsi(component.render(80).join('\n'));
+    expect(rendered).toContain('look');
+    expect(rendered).toContain('[image:clipboard-1.png]');
+  });
 });

@@ -1,10 +1,53 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ExtensionRegistryImpl } from '../../extensions/loader.js';
+import { ChainedAutocompleteProvider } from '../extension-host/autocomplete.js';
 import { createTuiExtensionRuntime } from '../extension-host/runtime.js';
 import { XopcKeybindingsManager } from '../tui-keybindings-file.js';
 
 describe('createTuiExtensionRuntime overlays and lifecycle', () => {
+  it('merges @file primary autocomplete with extension @ suggestions', async () => {
+    const primary = {
+      async getSuggestions() {
+        return {
+          prefix: '@re',
+          items: [
+            { value: '@README.md', label: 'README.md', description: 'file' },
+          ],
+        };
+      },
+      applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
+        return { lines, cursorLine, cursorCol: cursorCol + item.value.length - prefix.length };
+      },
+      shouldTriggerFileCompletion() {
+        return true;
+      },
+    };
+    const provider = new ChainedAutocompleteProvider(
+      primary,
+      [
+        async () => [
+          { name: 'review', description: 'skill' },
+          { name: 'README.md', description: 'duplicate file-shaped value' },
+        ],
+      ],
+      [],
+      new Set(),
+      () => 'agent:main:main',
+      '/tmp/work',
+    );
+
+    const suggestions = await provider.getSuggestions(['@re'], 0, 3, {
+      signal: new AbortController().signal,
+    });
+
+    expect(suggestions?.prefix).toBe('@re');
+    expect(suggestions?.items.map((item) => item.value)).toEqual([
+      '@README.md',
+      '@review',
+    ]);
+  });
+
 it('exposes async select, confirm, and input dialogs to TUI extensions', async () => {
     const registry = new ExtensionRegistryImpl();
     const results: unknown[] = [];

@@ -3,9 +3,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { ChatLog } from '../components/chat-log.js';
 import {
   createTuiCommandHandler,
+} from '../tui-commands.js';
+import {
   formatTuiShareResult,
   parseTuiShareRequest,
-} from '../tui-commands.js';
+} from '../tui-command-formatters.js';
 import { XopcKeybindingsManager } from '../tui-keybindings-file.js';
 import { createInitialState } from '../tui-types.js';
 import { StreamAssembler } from '../stream-assembler.js';
@@ -330,6 +332,90 @@ describe('TUI session slash commands', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
+  it('/trust opens the project trust overlay when available', () => {
+    const openProjectTrust = vi.fn();
+    const { handler, sendMessage } = makeHandler({
+      uiOverlays: {
+        openModelPicker: () => {},
+        openSessionPicker: () => {},
+        openSessionTree: () => {},
+        openTranscriptTree: () => {},
+        openUserMessageFork: () => {},
+        openScopedModels: () => {},
+        openThinkingSelector: () => {},
+        openSettings: () => {},
+        openProjectTrust,
+        reloadKeybindings: () => {},
+      },
+    });
+
+    handler('/trust');
+
+    expect(openProjectTrust).toHaveBeenCalledOnce();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('opens built-in overlays without forwarding slash commands to the agent', () => {
+    const overlayFns = {
+      openModelPicker: vi.fn(),
+      openSessionPicker: vi.fn(),
+      openSessionTree: vi.fn(),
+      openTranscriptTree: vi.fn(),
+      openUserMessageFork: vi.fn(),
+      openScopedModels: vi.fn(),
+      openThinkingSelector: vi.fn(),
+      openSettings: vi.fn(),
+      openProjectTrust: vi.fn(),
+      reloadKeybindings: vi.fn(),
+    };
+    const { handler, sendMessage } = makeHandler({ uiOverlays: overlayFns });
+
+    handler('/model claude');
+    expect(overlayFns.openModelPicker).toHaveBeenCalledWith('claude');
+
+    handler('/resume');
+    handler('/sessions');
+    expect(overlayFns.openSessionPicker).toHaveBeenCalledTimes(2);
+
+    handler('/tree');
+    expect(overlayFns.openTranscriptTree).toHaveBeenCalledOnce();
+
+    handler('/fork');
+    expect(overlayFns.openUserMessageFork).toHaveBeenCalledOnce();
+
+    handler('/scoped-models');
+    handler('/scopedmodels');
+    expect(overlayFns.openScopedModels).toHaveBeenCalledTimes(2);
+
+    handler('/think');
+    expect(overlayFns.openThinkingSelector).toHaveBeenCalledOnce();
+
+    handler('/settings');
+    expect(overlayFns.openSettings).toHaveBeenCalledOnce();
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('/login runs supported OAuth provider login locally', async () => {
+    const runLogin = vi.fn(async () => {});
+    const { handler, sendMessage } = makeHandler({ runLogin });
+
+    handler('/login anthropic');
+
+    await vi.waitFor(() => expect(runLogin).toHaveBeenCalledWith('anthropic'));
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('/login without provider opens the local provider picker', async () => {
+    const runLogin = vi.fn(async () => {});
+    const { handler, sendMessage } = makeHandler({ runLogin });
+
+    handler('/login');
+
+    await vi.waitFor(() => expect(runLogin).toHaveBeenCalledWith(undefined));
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
   it('/reload runs the TUI reload callback without forwarding to agent', async () => {
     const systems: string[] = [];
     const reloadKeybindings = vi.fn(async () => {});
@@ -347,6 +433,7 @@ describe('TUI session slash commands', () => {
         openScopedModels: () => {},
         openThinkingSelector: () => {},
         openSettings: () => {},
+        openProjectTrust: () => {},
         reloadKeybindings,
       },
     });
@@ -410,7 +497,7 @@ describe('TUI session slash commands', () => {
 
     handler('/login anthropic');
 
-    expect(systems.at(-1)).toContain('OAuth: xopc auth login anthropic');
+    expect(systems.at(-1)).toContain('OAuth: /login anthropic');
     expect(systems.at(-1)).toContain('API key: xopc auth set anthropic <key>');
     expect(sendMessage).not.toHaveBeenCalled();
   });

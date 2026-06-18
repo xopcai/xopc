@@ -1,19 +1,31 @@
 import type { ClientHistoryMessage } from '../session/client-history.js';
 import type { ExportFormat } from '../session/types.js';
 
-import type { SessionInfo } from './tui-types.js';
+import type { SessionInfo, TuiEventSource } from './tui-types.js';
 
 /** Options for sending a chat message. */
 export interface ChatSendOptions {
   sessionKey: string;
   message: string;
+  attachments?: TuiInboundAttachment[];
   thinking?: string;
+}
+
+export interface TuiInboundAttachment {
+  id?: string;
+  type: string;
+  mimeType?: string;
+  data?: string;
+  name?: string;
+  size?: number;
+  uri?: string;
 }
 
 /** SSE event from the agent stream or broadcast channel. */
 export interface TuiEvent {
   event: string;
   data: unknown;
+  source?: TuiEventSource;
 }
 
 /** Minimal session list item. */
@@ -142,6 +154,9 @@ export interface TuiBackend {
   /** Send a chat message, returns the run id. */
   sendChat(opts: ChatSendOptions): Promise<{ runId: string }>;
 
+  /** Reattach to a live gateway/webchat run when the original response stream stalled. */
+  resumeChat?(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean; reason?: string }>;
+
   /** Abort an active run. */
   abortChat(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean }>;
 
@@ -244,6 +259,20 @@ export interface TuiBackend {
       content?: string | unknown[];
       display?: boolean;
       details?: unknown;
+    },
+  ): Promise<{ ok: boolean }>;
+
+  /** Persist a local TUI shell execution for replay and optional LLM context. */
+  appendBashExecution(
+    sessionKey: string,
+    entry: {
+      command: string;
+      output?: string;
+      exitCode?: number | null;
+      signal?: string | null;
+      excludeFromContext?: boolean;
+      truncated?: boolean;
+      fullOutputPath?: string;
     },
   ): Promise<{ ok: boolean }>;
 }

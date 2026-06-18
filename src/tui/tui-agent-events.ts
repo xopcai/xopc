@@ -3,12 +3,24 @@ import type { TUI } from '@earendil-works/pi-tui';
 import { formatAgentRunErrorForDisplay } from '../agent/client-error-format.js';
 import type { ChatLog } from './components/chat-log.js';
 import type { StreamAssembler } from './stream-assembler.js';
-import type { TuiState } from './tui-types.js';
+import { markRunEvent, markRunIdleAfterCompletion } from './tui-run-state.js';
+import type { TuiEventSource, TuiState } from './tui-types.js';
 
 const pendingToolCallIds = new Map<string, string[]>();
+const seenStreamEventKeys = new Set<string>();
 
 export function clearPendingToolCallIds(): void {
   pendingToolCallIds.clear();
+  seenStreamEventKeys.clear();
+}
+
+export function clearSeenStreamEventsForRun(runId: string): void {
+  const prefix = `${runId}:`;
+  for (const key of Array.from(seenStreamEventKeys)) {
+    if (key.startsWith(prefix)) {
+      seenStreamEventKeys.delete(key);
+    }
+  }
 }
 
 function removePendingToolCallId(toolName: string, toolCallId: string): void {
@@ -29,6 +41,60 @@ const STREAM_TOUCH_EVENTS = new Set([
   'progress',
 ]);
 
+const DIRECT_RESPONSE_OWNED_EVENTS = new Set([
+  'token',
+  'thinking',
+  'tool_start',
+  'tool_update',
+  'tool_end',
+  'progress',
+  'error',
+  'result',
+]);
+
+function resolveEventRunId(
+  data: Record<string, unknown>,
+  state: TuiState,
+): string | null {
+  if (typeof data.runId === 'string' && data.runId) return data.runId;
+  return state.activeRunId ?? state.runStatus.runId ?? state.runStatus.lastCompletedRunId;
+}
+
+export function shouldSkipDuplicateBroadcastEvent(
+  event: string,
+  data: Record<string, unknown>,
+  state: TuiState,
+  source: TuiEventSource,
+): boolean {
+  if (source !== 'broadcast') return false;
+  if (!DIRECT_RESPONSE_OWNED_EVENTS.has(event)) return false;
+  const directRunId = state.runStatus.directStreamRunId;
+  if (!directRunId) return false;
+  return resolveEventRunId(data, state) === directRunId;
+}
+
+function streamEventKey(data: Record<string, unknown>, state: TuiState): string | null {
+  const runId = resolveEventRunId(data, state);
+  const seq = data.seq;
+  if (!runId || typeof seq !== 'number' || !Number.isFinite(seq)) return null;
+  return `${runId}:${seq}`;
+}
+
+function shouldSkipSeenStreamEvent(
+  data: Record<string, unknown>,
+  state: TuiState,
+  source: TuiEventSource,
+): boolean {
+  if (source !== 'agent-response' && source !== 'agent-resume' && source !== 'broadcast') {
+    return false;
+  }
+  const key = streamEventKey(data, state);
+  if (!key) return false;
+  if (seenStreamEventKeys.has(key)) return true;
+  seenStreamEventKeys.add(key);
+  return false;
+}
+
 export function dispatchAgentSSE(
   event: string,
   data: Record<string, unknown>,
@@ -41,7 +107,15 @@ export function dispatchAgentSSE(
   /** Called when a run ends (result/error) so the TUI can flush follow-up queue, etc. */
   onRunEnded?: () => void,
   onAssistantFinalized?: (text: string, options?: { errorMessage?: string }) => void,
+  source: TuiEventSource = 'unknown',
 ): void {
+  if (shouldSkipSeenStreamEvent(data, state, source)) {
+    return;
+  }
+  if (shouldSkipDuplicateBroadcastEvent(event, data, state, source)) {
+    return;
+  }
+
   if (STREAM_TOUCH_EVENTS.has(event)) {
     touchStreamingActivity?.();
   }
@@ -52,6 +126,7 @@ export function dispatchAgentSSE(
     case 'status': {
       const newRunId = typeof data.runId === 'string' ? data.runId : runId;
       state.activeRunId = newRunId;
+      markRunEvent(state, 'waiting', newRunId, event, source);
       setActivityStatus('waiting');
       break;
     }
@@ -65,6 +140,7 @@ export function dispatchAgentSSE(
               ? data.text
               : '';
       if (!content) break;
+      markRunEvent(state, 'streaming', runId, event, source);
       setActivityStatus('streaming');
       const display = assembler.ingestToken(runId, content, state.showThinking);
       if (display !== null) {
@@ -77,6 +153,7 @@ export function dispatchAgentSSE(
       const thinkContent = String(data.content ?? '');
       const isDelta = Boolean(data.delta);
       if (data.status === 'started') break;
+      markRunEvent(state, 'streaming', runId, event, source);
       setActivityStatus('streaming');
       const display = assembler.ingestThinking(runId, thinkContent, isDelta, state.showThinking);
       if (display !== null) {
@@ -94,6 +171,7 @@ export function dispatchAgentSSE(
       const stack = pendingToolCallIds.get(toolName) ?? [];
       stack.push(toolCallId);
       pendingToolCallIds.set(toolName, stack);
+      markRunEvent(state, 'tool', runId, event, source);
       setActivityStatus('running');
       chatLog.startTool(toolCallId, toolName, data.args, runId);
       tui.requestRender();
@@ -116,6 +194,7 @@ export function dispatchAgentSSE(
           removePendingToolCallId(toolName, toolCallId);
         }
       }
+      markRunEvent(state, 'streaming', runId, event, source);
       setActivityStatus('streaming');
       tui.requestRender();
       break;
@@ -137,6 +216,7 @@ export function dispatchAgentSSE(
         }
         chatLog.updateToolDetails(toolCallId, data.details);
       }
+      markRunEvent(state, 'streaming', runId, event, source);
       setActivityStatus('streaming');
       tui.requestRender();
       break;
@@ -149,7 +229,9 @@ export function dispatchAgentSSE(
         errorMessage: errorContent,
       });
       onAssistantFinalized?.(finalText || errorContent, { errorMessage: errorContent });
+      const completedRunId = runId;
       state.activeRunId = null;
+      markRunIdleAfterCompletion(state, completedRunId, event, source);
       setActivityStatus('idle');
       onRunEnded?.();
       tui.requestRender();
@@ -161,7 +243,9 @@ export function dispatchAgentSSE(
         chatLog.finalizeAssistant(finalText, runId);
         onAssistantFinalized?.(finalText);
       }
+      const completedRunId = runId;
       state.activeRunId = null;
+      markRunIdleAfterCompletion(state, completedRunId, event, source);
       setActivityStatus('idle');
       onRunEnded?.();
       tui.requestRender();
@@ -171,6 +255,7 @@ export function dispatchAgentSSE(
       const stage = typeof data.stage === 'string' ? data.stage : '';
       const message = typeof data.message === 'string' ? data.message : stage;
       state.progressMessage = message || null;
+      markRunEvent(state, 'progress', runId, event, source);
       setActivityStatus(message ? `progress: ${message}` : 'running');
       tui.requestRender();
       break;

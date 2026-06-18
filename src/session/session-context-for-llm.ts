@@ -207,6 +207,43 @@ function customMessageRowToLlmMessage(
   } as AgentMessage;
 }
 
+function bashExecutionRowToLlmMessage(row: XopcTranscriptBashExecutionEntry): AgentMessage | null {
+  if (row.excludeFromContext === true || row.excludedFromContext === true) {
+    return null;
+  }
+  const command = row.command?.trim();
+  if (!command) {
+    return null;
+  }
+  const output = typeof row.output === 'string'
+    ? row.output
+    : Array.isArray(row.output)
+      ? row.output
+        .filter((part): part is { type: string; text?: string } =>
+          typeof part === 'object' && part !== null && 'type' in part)
+        .map((part) => (part.type === 'text' && typeof part.text === 'string' ? part.text : ''))
+        .join('')
+      : '';
+  const exit = row.exitCode == null ? '?' : String(row.exitCode);
+  const signal = row.signal ? ` signal=${row.signal}` : '';
+  const truncated = row.truncated ? '\n[output truncated]' : '';
+  return {
+    role: 'user',
+    content: [{
+      type: 'text',
+      text: [
+        '<local_shell>',
+        `$ ${command}`,
+        `exit=${exit}${signal}`,
+        output ? 'output:' : 'output: (empty)',
+        output.trimEnd(),
+        `${truncated}</local_shell>`,
+      ].join('\n'),
+    }],
+    timestamp: parseTimestampValue(row.timestamp),
+  } as AgentMessage;
+}
+
 /**
  * Normalize a JSON array from on-disk transcript into stored rows (drops unrecognized objects).
  */
@@ -256,6 +293,11 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
       continue;
     }
     if ((r as { type?: string }).type === 'compaction') {
+      continue;
+    }
+    if (isTranscriptBashExecutionEntry(r)) {
+      const msg = bashExecutionRowToLlmMessage(r);
+      if (msg) out.push(msg);
       continue;
     }
     if (isTranscriptCustomMessageEntry(r)) {

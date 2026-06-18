@@ -312,6 +312,31 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true });
   });
 
+  // POST /api/sessions/:key/transcript/bash — append local TUI shell execution.
+  authenticated.post('/api/sessions/:key/transcript/bash', async (c) => {
+    const key = c.req.param('key');
+    const meta = await service.sessionIndexInstance.getSessionMetadata(key);
+    if (!meta) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const command = typeof body.command === 'string' ? body.command.trim() : '';
+    if (!command) {
+      return c.json({ ok: false, error: 'command is required' }, 400);
+    }
+    await service.sessionIndexInstance.appendTranscriptBashExecutionEntry(key, {
+      command,
+      output: typeof body.output === 'string' ? body.output : '',
+      exitCode: typeof body.exitCode === 'number' ? body.exitCode : body.exitCode === null ? null : undefined,
+      signal: typeof body.signal === 'string' ? body.signal : body.signal === null ? null : undefined,
+      excludeFromContext: body.excludeFromContext === true,
+      truncated: body.truncated === true,
+      fullOutputPath: typeof body.fullOutputPath === 'string' ? body.fullOutputPath : undefined,
+    });
+    evictEmbeddedSessionRunner(key, 'gateway_bash_execution_appended');
+    return c.json({ ok: true });
+  });
+
   // GET /api/sessions/:key/compaction/checkpoints — list pre-compaction snapshots (OpenClaw-style)
   authenticated.get('/api/sessions/:key/compaction/checkpoints', async (c) => {
     const key = c.req.param('key');

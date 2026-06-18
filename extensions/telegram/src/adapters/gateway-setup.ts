@@ -45,6 +45,7 @@ function buildTelegramConfig(config: Config, input: Record<string, unknown>): Co
     enabled: true,
     botToken,
     dmPolicy,
+    allowFrom: dmPolicy === 'open' ? ['*'] : (previousDefault.allowFrom ?? []),
     groupPolicy: previousDefault.groupPolicy ?? existing.groupPolicy ?? 'open',
     replyToMode: previousDefault.replyToMode ?? existing.replyToMode ?? 'off',
     historyLimit: previousDefault.historyLimit ?? existing.historyLimit ?? 50,
@@ -55,6 +56,8 @@ function buildTelegramConfig(config: Config, input: Record<string, unknown>): Co
   if (apiRoot) defaultAccount.apiRoot = apiRoot;
   if (proxy) defaultAccount.proxy = proxy;
 
+  const topAllowFrom = dmPolicy === 'open' ? ['*'] : (existing.allowFrom ?? []);
+
   return {
     ...config,
     channels: {
@@ -63,6 +66,7 @@ function buildTelegramConfig(config: Config, input: Record<string, unknown>): Co
         ...existing,
         enabled: true,
         dmPolicy,
+        allowFrom: topAllowFrom,
         groupPolicy: existing.groupPolicy ?? 'open',
         replyToMode: existing.replyToMode ?? 'off',
         streaming: existing.streaming ?? { mode: 'partial' },
@@ -114,7 +118,7 @@ function formPayload(config: Config, locale?: string) {
     },
     values: {
       botToken: pickString(account.botToken),
-      dmPolicy: pickDmPolicy(account.dmPolicy ?? telegram.dmPolicy),
+      dmPolicy: pickDmPolicy(account.dmPolicy ?? telegram.dmPolicy ?? 'open'),
       apiRoot: pickString(account.apiRoot ?? telegram.apiRoot),
       proxy: pickString(account.proxy ?? telegram.proxy),
     },

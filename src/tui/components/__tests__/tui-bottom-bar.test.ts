@@ -101,6 +101,30 @@ describe('TuiBottomBar', () => {
     expect(bar.render(120).join('\n')).toContain('S1');
   });
 
+  it('renders stream recovery run status', () => {
+    const state = createInitialState('agent:main:main');
+    state.connectionStatus = 'connected';
+    state.activityStatus = 'stalled';
+    state.runStatus = {
+      ...state.runStatus,
+      phase: 'stalled',
+      runId: 'run-1',
+    };
+    const bar = new TuiBottomBar(() => state, () => 'medium');
+
+    expect(bar.render(120).join('\n')).toContain('run:stalled');
+
+    state.activityStatus = 'recovering';
+    state.runStatus.phase = 'recovering';
+    expect(bar.render(120).join('\n')).toContain('run:recovering');
+
+    state.activityStatus = 'streaming';
+    state.activeRunId = 'run-1';
+    state.runStatus.phase = 'streaming';
+    state.runStatus.source = 'agent-resume';
+    expect(bar.render(120).join('\n')).toContain('run:resumed');
+  });
+
   it('renders queued message previews below the status line', () => {
     const state = createInitialState('agent:main:main');
     state.connectionStatus = 'connected';

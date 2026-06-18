@@ -25,7 +25,8 @@ export function normalizeUserContent(content: string | unknown[]): string {
     if ((type === 'text' || type === 'input_text') && typeof block.text === 'string') {
       parts.push(block.text);
     } else if (type === 'image' || type === 'image_url' || type === 'input_image') {
-      parts.push('[image]');
+      const name = typeof block.name === 'string' && block.name.trim() ? `:${block.name}` : '';
+      parts.push(`[image${name}]`);
     } else if (type === 'file') {
       const name = typeof block.name === 'string' && block.name.trim() ? `:${block.name}` : '';
       parts.push(`[file${name}]`);

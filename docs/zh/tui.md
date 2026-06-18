@@ -59,7 +59,7 @@ xopc tui --local
 |------|------|
 | `--url <url>` | 网关根 URL（不要带路径后缀）。 |
 | `--token <token>` | 网关 `Authorization: Bearer` 令牌。 |
-| `-s, --session <key>` | 会话键（省略时默认为 `cli:tui`）。 |
+| `-s, --session <key>` | 要恢复的会话键；省略时新建 `agent:{currentAgent}:tui-<uuid>` 会话，并在退出后打印恢复命令。 |
 | `-m, --message <text>` | 连接成功后自动发送一条消息，界面保持打开。 |
 | `--local` | 嵌入式模式（不连网关）。 |
 | `--thinking <level>` | 思考等级覆盖，语义与网关 / `agent` 一致。 |
@@ -70,6 +70,12 @@ xopc tui --local
 xopc tui -s telegram:dm:123456
 xopc tui -m "帮我总结收件箱"
 xopc tui --url http://192.168.1.10:18790 --token "$TOKEN"
+```
+
+退出后会打印类似下面的命令：
+
+```bash
+To resume this session: xopc tui --session agent:main:tui-019eddd8-d108-7554-b971-33366f99dd27
 ```
 
 ---

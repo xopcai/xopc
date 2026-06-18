@@ -63,7 +63,7 @@ describe('agents-admin', () => {
     expect(agents[0]?.typedModels.effective).toEqual([]);
   });
 
-  it('listGatewayAgents ignores legacy builtin agent skills allowlists', async () => {
+  it('listGatewayAgents reports builtin agent skill allowlists from runtime profile', async () => {
     const cfg = minimalConfig({
       agents: {
         ...minimalConfig().agents,
@@ -73,9 +73,9 @@ describe('agents-admin', () => {
     } as Partial<Config>);
     const { agents } = await listGatewayAgents(cfg);
     const coder = agents.find((a) => a.id === 'coder');
-    expect(coder?.skills.defaults).toEqual([]);
-    expect(coder?.skills.entry).toBeUndefined();
-    expect(coder?.skills.effectiveAllowlist).toBeUndefined();
+    expect(coder?.skills.defaults).toEqual(['default-only']);
+    expect(coder?.skills.entry).toEqual(['old']);
+    expect(coder?.skills.effectiveAllowlist).toEqual(['old']);
   });
 
   it('listGatewayAgents exposes default, entry, and effective typed models', async () => {

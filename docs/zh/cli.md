@@ -281,7 +281,7 @@ xopc tui -s <sessionKey> -m "你好"     # 指定会话 + 可选首条消息
 |------|------|
 | `--url <url>` | 网关根 URL |
 | `--token <token>` | 网关 Bearer 令牌 |
-| `-s, --session <key>` | 会话键（默认：`cli:tui`） |
+| `-s, --session <key>` | 要恢复的会话键；省略时新建 `tui-<uuid>` 会话 |
 | `-m, --message <text>` | 连接成功后自动发送一条 |
 | `--local` | 嵌入式模式（不连网关） |
 | `--thinking <level>` | 思考等级覆盖 |

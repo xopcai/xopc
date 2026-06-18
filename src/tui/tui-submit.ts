@@ -17,10 +17,13 @@ export function createEditorSubmitHandler(params: {
   handleBangLine: (value: string) => void | Promise<void>;
   isAgentBusy?: () => boolean;
   steerWhileBusy?: (value: string) => void | Promise<void>;
+  hasPendingAttachments?: () => boolean;
+  defaultAttachmentMessage?: string;
 }) {
   return (text: string) => {
     const raw = text;
-    const value = raw.trim();
+    const hasAttachments = params.hasPendingAttachments?.() === true;
+    const value = raw.trim() || (hasAttachments ? (params.defaultAttachmentMessage ?? 'Please analyze the attachment(s).') : '');
     params.editor.setText('');
 
     if (!value) {

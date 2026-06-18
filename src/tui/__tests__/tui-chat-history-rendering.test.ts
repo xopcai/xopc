@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendHistoryToChatLog } from '../chat-history.js';
+import { appendHistoryToChatLog, historyKeysHaveAppendOnlyPrefix } from '../chat-history.js';
 import { ChatLog } from '../components/chat-log.js';
 
 function stripAnsi(text: string): string {
@@ -10,6 +10,12 @@ function stripAnsi(text: string): string {
 }
 
 describe('history replay rendering', () => {
+  it('detects append-only history key updates', () => {
+    expect(historyKeysHaveAppendOnlyPrefix(['a', 'b'], ['a', 'b', 'c'])).toBe(true);
+    expect(historyKeysHaveAppendOnlyPrefix(['a', 'b'], ['a', 'x', 'c'])).toBe(false);
+    expect(historyKeysHaveAppendOnlyPrefix([], ['a'])).toBe(false);
+  });
+
   it('renders assistant error state even when no tokens streamed', () => {
     const chatLog = new ChatLog();
     chatLog.finalizeAssistant('', 'run-error', {

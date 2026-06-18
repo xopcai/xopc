@@ -284,11 +284,19 @@ export async function getAvailableModels(): Promise<readonly Model<Api>[]> {
 	const allModels = getAllModels();
 	const pluginRegistry = getProviderRegistry();
 	const available: Model<Api>[] = [];
+	const configuredByProvider = new Map<string, boolean>();
 
 	for (const model of allModels) {
 		if (pluginRegistry.has(model.provider)) {
 			available.push(model);
-		} else if (await isProviderConfigured(model.provider)) {
+			continue;
+		}
+		let configured = configuredByProvider.get(model.provider);
+		if (configured === undefined) {
+			configured = await isProviderConfigured(model.provider);
+			configuredByProvider.set(model.provider, configured);
+		}
+		if (configured) {
 			available.push(model);
 		}
 	}

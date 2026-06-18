@@ -35,6 +35,24 @@ describe('createEditorSubmitHandler', () => {
     submit('/abort');
     expect(handleCommand).toHaveBeenCalledWith('/abort');
   });
+
+  it('sends a default prompt when only attachments are pending', () => {
+    const sendMessage = vi.fn();
+    const addToHistory = vi.fn();
+    const submit = createEditorSubmitHandler({
+      editor: { setText: vi.fn(), addToHistory },
+      handleCommand: vi.fn(),
+      sendMessage,
+      handleBangLine: vi.fn(),
+      hasPendingAttachments: () => true,
+      defaultAttachmentMessage: 'Please analyze the attached image.',
+    });
+
+    submit('');
+
+    expect(addToHistory).toHaveBeenCalledWith('Please analyze the attached image.');
+    expect(sendMessage).toHaveBeenCalledWith('Please analyze the attached image.');
+  });
 });
 
 describe('createSubmitBurstCoalescer', () => {

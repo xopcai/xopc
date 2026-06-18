@@ -151,6 +151,13 @@ export class TuiBottomBar implements Component {
     } else if (state.compactionQueue.length > 0) {
       leftParts.push(`C${state.compactionQueue.length}`);
     }
+    if (state.runStatus?.phase === 'stalled') {
+      leftParts.push('run:stalled');
+    } else if (state.runStatus?.phase === 'recovering') {
+      leftParts.push('run:recovering');
+    } else if (state.runStatus?.source === 'agent-resume' && state.activeRunId) {
+      leftParts.push('run:resumed');
+    }
     if (state.messageFollowUpQueue.length > 0) {
       leftParts.push(`Q${state.messageFollowUpQueue.length}`);
     }

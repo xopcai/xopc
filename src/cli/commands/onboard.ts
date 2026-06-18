@@ -186,7 +186,7 @@ async function startGatewayAsService(config: Config, ctx: CLIContext): Promise<v
 async function promptLaunchAfterOnboard(
   config: Config,
   ctx: CLIContext,
-  flags: { doChannels: boolean },
+  _flags: { doChannels: boolean },
 ): Promise<void> {
   console.log('');
   const choice = await select<'tui' | 'gateway' | 'none'>({

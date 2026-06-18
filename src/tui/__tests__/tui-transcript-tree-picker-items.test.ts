@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   sessionTreeSelectItems,
+} from '../tui-picker-overlay.js';
+import {
   transcriptTreeSelectItems,
   userMessageForkSelectItems,
-} from '../tui-picker-overlay.js';
+} from '../tui-transcript-tree-picker.js';
 import { buildTuiTranscriptTree } from '../tui-transcript-tree.js';
 
 describe('tui transcript tree picker items', () => {

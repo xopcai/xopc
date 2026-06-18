@@ -8,13 +8,14 @@ export function createOverlayHandlers(host: OverlayHost, fallbackFocus: Componen
     component: Component,
     options?: OverlayOptions,
   ): OverlayHandle => {
-    return host.showOverlay(component, options);
+    const handle = host.showOverlay(component, options);
+    host.setFocus(component);
+    return handle;
   };
 
   const closeOverlay = () => {
     if (host.hasOverlay()) {
       host.hideOverlay();
-      return;
     }
     host.setFocus(typeof fallbackFocus === 'function' ? fallbackFocus() : fallbackFocus);
   };

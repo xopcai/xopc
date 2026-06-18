@@ -69,13 +69,13 @@ function pickSchemaPaths(schema: JsonSchema, paths: string[]): JsonSchema {
       if (!isRecord(srcProps) || !isRecord(srcProps[part])) break;
       const dstProps = isRecord(dst.properties) ? dst.properties : {};
       dst.properties = dstProps;
-      if (!dstProps[part]) dstProps[part] = { ...cloneSchema(srcProps[part] as JsonSchema), properties: {} };
+      if (!dstProps[part]) dstProps[part] = { ...cloneSchema(srcProps[part]), properties: {} };
       if (index === parts.length - 1) {
-        dstProps[part] = cloneSchema(srcProps[part] as JsonSchema);
+        dstProps[part] = cloneSchema(srcProps[part]);
         break;
       }
-      src = srcProps[part] as Record<string, unknown>;
-      dst = dstProps[part] as Record<string, unknown>;
+      src = srcProps[part];
+      dst = dstProps[part];
     }
   }
   return out;
@@ -86,7 +86,7 @@ function removeEmptyObjectFields(schema: JsonSchema): boolean {
   if (!isRecord(props)) return false;
   for (const [key, value] of Object.entries(props)) {
     if (!isRecord(value)) continue;
-    if (value.type === 'object' && removeEmptyObjectFields(value as JsonSchema)) {
+    if (value.type === 'object' && removeEmptyObjectFields(value)) {
       delete props[key];
     }
   }
@@ -106,7 +106,7 @@ function omitSchemaPaths(schema: JsonSchema, paths: string[]): JsonSchema {
         break;
       }
       if (!isRecord(props[part])) break;
-      cur = props[part] as Record<string, unknown>;
+      cur = props[part];
     }
   }
   removeEmptyObjectFields(out);

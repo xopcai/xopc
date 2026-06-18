@@ -117,4 +117,38 @@ describe('GatewaySseBackend session list mapping', () => {
       model: 'openai/gpt-4.1',
     });
   });
+
+  it('normalizes /api/models composite ids for TUI provider/model formatting', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            ok: true,
+            payload: {
+              models: [
+                {
+                  id: 'openai/gpt-5',
+                  name: 'GPT-5',
+                  provider: 'openai',
+                  contextWindow: 400000,
+                },
+              ],
+            },
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+
+    const backend = new GatewaySseBackend({ url: 'http://gateway.test' });
+    await expect(backend.listModels()).resolves.toEqual([
+      {
+        id: 'gpt-5',
+        name: 'GPT-5',
+        provider: 'openai',
+        contextWindow: 400000,
+      },
+    ]);
+  });
 });

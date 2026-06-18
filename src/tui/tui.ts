@@ -7,7 +7,10 @@ import {
   TUI,
   type Component,
   type EditorComponent,
+  type OverlayHandle,
+  type OverlayOptions,
 } from '@earendil-works/pi-tui';
+import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -22,6 +25,10 @@ import type {
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { loadConfig } from '../config/index.js';
 import { resolveStateDir, resolveXopcDatabasePath } from '../config/paths.js';
+import {
+  MAX_CHAT_ATTACHMENTS,
+  MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,
+} from '../gateway/chat-limits.js';
 import { resolveTuiSessionKey, resolveTuiStartupSessionKey } from '../routing/resolve-tui-session-key.js';
 import { parseAgentSessionKey } from '../routing/agent-session-key.js';
 import type {
@@ -29,6 +36,7 @@ import type {
   TuiCompactionResult,
   TuiEvent,
   TuiExportFormat,
+  TuiInboundAttachment,
   TuiModelChoice,
   TuiShareRequest,
 } from './tui-backend.js';
@@ -36,6 +44,7 @@ import { EmbeddedBackend } from './backends/embedded-backend.js';
 import { GatewaySseBackend } from './backends/gateway-sse-backend.js';
 import {
   clearPendingToolCallIds,
+  clearSeenStreamEventsForRun,
   DEFAULT_STREAMING_WATCHDOG_MS,
   dispatchAgentSSE,
 } from './tui-agent-events.js';
@@ -46,12 +55,14 @@ import { TuiHeader } from './components/tui-header.js';
 import { StreamAssembler } from './stream-assembler.js';
 import {
   createTuiCommandHandler,
+  getSlashCommands,
+} from './tui-commands.js';
+import {
   formatTuiCompactionResult,
   formatTuiShareResult,
-  getSlashCommands,
   type TuiExportRequest,
   type TuiImportRequest,
-} from './tui-commands.js';
+} from './tui-command-formatters.js';
 import { createLocalShellRunner } from './tui-local-shell.js';
 import { drainFollowUpQueue, restoreQueuedMessages } from './tui-follow-up-queue.js';
 import {
@@ -60,7 +71,7 @@ import {
   resolveCtrlCAction,
 } from './tui-lifecycle.js';
 import {
-  openModelPickerOverlay,
+  openProjectTrustOverlay,
   openScopedModelsOverlay,
   openSessionPickerOverlay,
   openSessionTreeOverlay,
@@ -69,7 +80,8 @@ import {
   openThinkingSelectorOverlay,
   openUserMessageForkOverlay,
 } from './tui-picker-overlay.js';
-import { createOverlayHandlers } from './tui-overlays.js';
+import { openModelPickerOverlay } from './tui-model-picker.js';
+import { runTuiOAuthLogin } from './tui-oauth-login.js';
 import {
   createEditorSubmitHandler,
   createSubmitBurstCoalescer,
@@ -77,7 +89,7 @@ import {
 } from './tui-submit.js';
 import { installTuiStdioFilter } from './tui-stdio-filter.js';
 import { withTuiSuspended } from './tui-suspend.js';
-import { saveClipboardImageToTempFile } from './clipboard-image.js';
+import { extensionForImageMimeType, readClipboardImage } from './clipboard-image.js';
 import { copyTextToClipboard } from './clipboard-text.js';
 import {
   applyThemeById,
@@ -137,7 +149,18 @@ import type {
   TuiVerboseLevel,
 } from '../extensions/types/tui.js';
 import { getAllModels, getAllProviders, getApiKey, isProviderConfiguredSync } from '../providers/index.js';
+import {
+  hasTrustRequiringProjectResources,
+  ProjectTrustStore,
+} from '../project-trust/trust-store.js';
 import { transcriptTreeEntryIdToRowNumber } from './tui-transcript-tree.js';
+import {
+  isActiveRunStreamStale,
+  markActiveRunStalled,
+  markRunSending,
+  markRunRecovering,
+  markRunRecoveryComplete,
+} from './tui-run-state.js';
 
 export type { TuiOptions, TuiResult };
 
@@ -211,6 +234,44 @@ function defaultExportPath(sessionKey: string, format: TuiExportFormat): string 
   return resolve(process.cwd(), `xopc-session-${safeKey}-${stamp}.${exportExtension(format)}`);
 }
 
+function userDisplayContentForAttachments(
+  text: string,
+  attachments: readonly TuiInboundAttachment[] | undefined,
+): string | unknown[] {
+  if (!attachments?.length) return text;
+  const blocks: unknown[] = [];
+  if (text.trim()) {
+    blocks.push({ type: 'text', text });
+  }
+  for (const att of attachments) {
+    if (att.mimeType?.startsWith('image/') || att.type === 'image' || att.type === 'photo') {
+      blocks.push({ type: 'image', name: att.name });
+      continue;
+    }
+    blocks.push({ type: 'file', name: att.name });
+  }
+  return blocks;
+}
+
+function shellQuote(value: string): string {
+  if (/^[A-Za-z0-9_/:@%+=,.-]+$/.test(value)) {
+    return value;
+  }
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function formatTuiResumeCommand(opts: TuiOptions, sessionKey: string): string {
+  const parts = ['xopc', 'tui'];
+  if (opts.local === true) {
+    parts.push('--local');
+  }
+  if (opts.url) {
+    parts.push('--url', shellQuote(opts.url));
+  }
+  parts.push('--session', shellQuote(sessionKey));
+  return parts.join(' ');
+}
+
 export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const stdioFilter = installTuiStdioFilter();
   const restoreStdio = () => stdioFilter.restore();
@@ -235,6 +296,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   let tuiSettings = loadTuiSettings();
   initTuiTheme({ themeId: opts.theme ?? tuiSettings.theme });
   const state = createInitialState(startup.sessionKey);
+  const projectTrustStore = new ProjectTrustStore();
+  let projectTrustSessionDecision: boolean | null = null;
+  const isCurrentProjectTrusted = () => {
+    if (projectTrustSessionDecision !== null) return projectTrustSessionDecision;
+    if (!hasTrustRequiringProjectResources(process.cwd())) return true;
+    return projectTrustStore.get(process.cwd()) === true;
+  };
+  let projectTrustPromptShown = false;
   const sessionStateDir = resolveStateDir();
   const sessionDatabasePath = resolveXopcDatabasePath();
   const sessionSnapshot = new TuiSessionSnapshot(
@@ -247,8 +316,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   state.scopedModelRefs = loadScopedModelRefs();
   state.showThinking = tuiSettings.showThinking;
   state.toolsExpanded = tuiSettings.toolsExpanded;
+  let pendingImageAttachments: TuiInboundAttachment[] = [];
   const assembler = new StreamAssembler();
   const pendingNextTurnCustomMessages: string[] = [];
+  let lastRetryMessageText: string | null = null;
   let setExtensionLabel = (_entryId: string, _label: string | undefined): void => {};
   let sendExtensionUserMessage = (
     _content: ExtensionUserMessageContent,
@@ -515,7 +586,57 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     tui.requestRender();
   };
 
-  const { openOverlay, closeOverlay } = createOverlayHandlers(tui, () => editor as Component);
+  let activeEditorSelectorClose: (() => void) | null = null;
+
+  const closeEditorSelector = () => {
+    const close = activeEditorSelectorClose;
+    close?.();
+  };
+
+  const openEditorSelector = (component: Component, focus: Component = component) => {
+    closeEditorSelector();
+    editorContainer.clear();
+    editorContainer.addChild(component);
+    tui.setFocus(focus);
+    tui.requestRender();
+    const close = () => {
+      if (activeEditorSelectorClose !== close) return;
+      activeEditorSelectorClose = null;
+      editorContainer.clear();
+      editorContainer.addChild(editor as Component);
+      tui.setFocus(editor as Component);
+      tui.requestRender();
+    };
+    activeEditorSelectorClose = close;
+    return close;
+  };
+
+  const openCommandOverlay = (
+    component: Component,
+    _options?: OverlayOptions,
+  ): OverlayHandle => {
+    let hidden = false;
+    let closeCurrent = openEditorSelector(component, component);
+    return {
+      hide: () => closeCurrent(),
+      setHidden: (nextHidden: boolean) => {
+        hidden = nextHidden;
+        if (nextHidden) {
+          closeCurrent();
+        } else {
+          closeCurrent = openEditorSelector(component, component);
+        }
+      },
+      isHidden: () => hidden,
+      focus: () => tui.setFocus(component),
+      unfocus: () => tui.setFocus(editor as Component),
+      isFocused: () => false,
+    };
+  };
+
+  const closeCommandOverlay = () => {
+    closeEditorSelector();
+  };
 
   const slashCommands = getSlashCommands(isLocalMode, keybindings);
   let extensionWorkingMessage: string | undefined;
@@ -675,7 +796,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       model,
       cwd: process.cwd(),
       sessionKey: state.currentSessionKey,
-      isProjectTrusted: () => false,
+      isProjectTrusted: isCurrentProjectTrusted,
       isIdle: () => !state.activeRunId && !state.isCompacting,
       hasPendingMessages: () =>
         state.messageFollowUpQueue.length > 0 ||
@@ -699,7 +820,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       navigateTree: (targetId, options) => runExtensionNavigateTree(targetId, options),
       switchSession: (sessionPath, options) => runExtensionSwitchSession(sessionPath, options),
       reload: async () => {
-        await loadSessionHistory();
+        await loadSessionHistory({ merge: true });
         await refreshSessionInfoWithBorder();
       },
       getModel: () => model,
@@ -836,7 +957,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     },
     getAvailableProviderCount,
     getActiveSignal: () => client.getActiveSignal?.(),
-    isProjectTrusted: () => false,
+    isProjectTrusted: isCurrentProjectTrusted,
     getSessionManager: () => sessionSnapshot.manager(),
     getSystemPrompt: getExtensionSystemPrompt,
     getSystemPromptOptions: () => ({
@@ -869,8 +990,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     sendMessage: async (message, options) => sendExtensionMessage(message, options),
     cwd: process.cwd(),
     fdPath: resolveFdPath(),
-    openOverlay,
-    closeOverlay,
+    openOverlay: openCommandOverlay,
+    closeOverlay: closeCommandOverlay,
     onInvalidate: () => {
       updateHeader();
       updateFooter();
@@ -908,7 +1029,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   let statusStartedAt: number | null = null;
   let lastActivityStatus = '';
   let elapsedTimerId: ReturnType<typeof setInterval> | null = null;
-  const busyStates = new Set(['sending', 'waiting', 'streaming', 'running', 'compacting']);
+  const busyStates = new Set(['sending', 'waiting', 'streaming', 'running', 'compacting', 'recovering']);
 
   const syncTerminalProgress = () => {
     if (!tuiSettings.showTerminalProgress) {
@@ -923,6 +1044,13 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const touchStreamingActivity = () => {
     lastStreamActivityAt = Date.now();
+    if (state.activeRunId && state.runStatus.lastActivityAt == null) {
+      state.runStatus = {
+        ...state.runStatus,
+        runId: state.activeRunId,
+        lastActivityAt: lastStreamActivityAt,
+      };
+    }
   };
 
   const formatElapsed = (startMs: number) => {
@@ -1040,6 +1168,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     tui.terminal.setProgress(false);
     void drainAndStopTuiSafely(tui).then(() => {
       restoreStdio();
+      process.stdout.write(
+        `\nTo resume this session: ${formatTuiResumeCommand(opts, state.currentSessionKey)}\n`,
+      );
       finishTui?.();
       process.exit(0);
     });
@@ -1073,6 +1204,64 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const refreshSessionInfoWithBorder = async () => {
     await refreshSessionInfo();
     updateEditorBorderColor();
+  };
+
+  let streamRecoveryPromise: Promise<void> | null = null;
+  const recoverActiveRunFromHistory = (reason: string) => {
+    if (!state.activeRunId) return Promise.resolve();
+    if (streamRecoveryPromise) return streamRecoveryPromise;
+    const runId = state.activeRunId;
+    markRunRecovering(state, Date.now());
+    state.progressMessage = 'recovering stream history';
+    setActivityStatus('recovering');
+    streamRecoveryPromise = (async () => {
+      try {
+        await loadSessionHistory();
+        await refreshSessionInfoWithBorder();
+        if (state.activeRunId === runId) {
+          assembler.drop(runId);
+          clearSeenStreamEventsForRun(runId);
+          if (client.resumeChat) {
+            const resumed = await client.resumeChat({ sessionKey: state.currentSessionKey, runId });
+            if (resumed.ok) {
+              state.progressMessage = 'resuming stream';
+              setActivityStatus('recovering');
+              chatLog.addSystem(theme.dim(`Reattached to active run after ${reason}.`));
+            } else {
+              markRunRecoveryComplete(state, Date.now());
+              state.progressMessage = 'stream stalled; resume unavailable';
+              setActivityStatus('stalled');
+              chatLog.addSystem(
+                theme.dim(
+                  `Recovered persisted history after ${reason}, but could not resume stream: ${resumed.reason ?? 'run relay unavailable'}. Press Escape or /abort to stop it.`,
+                ),
+              );
+            }
+          } else {
+            markRunRecoveryComplete(state, Date.now());
+            state.progressMessage = 'stream stalled; waiting for new events or abort';
+            setActivityStatus('stalled');
+            chatLog.addSystem(
+              theme.dim(
+                `Recovered persisted history after ${reason}. Active run is still marked stalled; press Escape or /abort to stop it.`,
+              ),
+            );
+          }
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        chatLog.addSystem(theme.dim(`Stream recovery failed after ${reason}: ${errorMessage}`));
+        if (state.activeRunId === runId) {
+          markRunRecoveryComplete(state, Date.now());
+          setActivityStatus('stalled');
+        }
+      } finally {
+        streamRecoveryPromise = null;
+        updateFooter();
+        tui.requestRender();
+      }
+    })();
+    return streamRecoveryPromise;
   };
 
   const setThinkingLevel = async (level: ThinkLevel) => {
@@ -1460,10 +1649,22 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const sendMessage = (text: string) => {
+    if (state.activeRunId && pendingImageAttachments.length > 0) {
+      chatLog.addSystem(
+        theme.dim('Image attachments cannot be steered into an active run. Wait for this reply to finish, then send.'),
+      );
+      tui.requestRender();
+      return;
+    }
     const pendingCustomText = pendingNextTurnCustomMessages.splice(0).join('\n\n').trim();
     const messageText = [text, pendingCustomText].filter(Boolean).join('\n\n');
+    const attachments = pendingImageAttachments;
+    pendingImageAttachments = [];
     if (state.isCompacting) {
       state.compactionQueue.push(messageText);
+      if (attachments.length > 0) {
+        pendingImageAttachments.unshift(...attachments);
+      }
       chatLog.addSystem(
         theme.dim(`Queued during compaction (${state.compactionQueue.length}). Sends when compact finishes.`),
       );
@@ -1479,12 +1680,17 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       if (pendingCustomText) {
         pendingNextTurnCustomMessages.unshift(pendingCustomText);
       }
+      if (attachments.length > 0) {
+        pendingImageAttachments.unshift(...attachments);
+      }
       tui.requestRender();
       return;
     }
 
-    chatLog.addUser(text);
+    chatLog.addUser(userDisplayContentForAttachments(text, attachments));
     sessionSnapshot.appendMessage('user', messageText);
+    lastRetryMessageText = messageText;
+    markRunSending(state);
     setActivityStatus('sending');
     touchStreamingActivity();
     tui.requestRender();
@@ -1493,10 +1699,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       .sendChat({
         sessionKey: state.currentSessionKey,
         message: messageText,
+        attachments: attachments.length > 0 ? attachments : undefined,
         thinking: opts.thinking,
       })
       .catch((error: unknown) => {
         const errorMessage = error instanceof Error ? error.message : String(error);
+        if (attachments.length > 0) {
+          pendingImageAttachments.unshift(...attachments);
+        }
         chatLog.addSystem(`❌ Failed to send: ${errorMessage}`);
         setActivityStatus('idle');
         tui.requestRender();
@@ -1639,7 +1849,31 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     openScopedModels: () => {},
     openThinkingSelector: () => {},
     openSettings: () => {},
+    openProjectTrust: () => {},
     reloadKeybindings: () => reloadTuiRuntime(),
+  };
+
+  const recoverCurrentStream = async () => {
+    if (state.activeRunId) {
+      await recoverActiveRunFromHistory('manual recover');
+      return;
+    }
+    await loadSessionHistory({ merge: true });
+    await refreshSessionInfoWithBorder();
+    chatLog.addSystem(theme.dim('Reloaded persisted history; no active run to recover.'));
+    tui.requestRender();
+  };
+
+  const retryLastMessage = async () => {
+    const message = lastRetryMessageText?.trim();
+    if (!message) {
+      chatLog.addSystem('No previous user message to retry.');
+      return;
+    }
+    if (state.activeRunId) {
+      await abortActive({ clearUi: false });
+    }
+    sendMessage(message);
   };
 
   const handleCommand = createTuiCommandHandler({
@@ -1653,6 +1887,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     requestExit,
     updateFooter,
     keybindings,
+    recoverStream: recoverCurrentStream,
+    retryLastMessage,
     uiOverlays,
     setThinkingLevel,
     setReasoningLevel,
@@ -1675,20 +1911,48 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     currentAgentId,
     setSession,
     resetSession: resetCurrentSession,
+    projectTrust: {
+      cwd: process.cwd(),
+      hasProjectResources: () => hasTrustRequiringProjectResources(process.cwd()),
+      getStorePath: () => projectTrustStore.getPath(),
+      getEntry: () => projectTrustStore.getEntry(process.cwd()),
+      getSessionDecision: () => projectTrustSessionDecision,
+    },
+    runLogin: (provider) =>
+      runTuiOAuthLogin(provider, {
+        chatLog,
+        tui,
+        editor,
+        openOverlay: openCommandOverlay,
+        closeOverlay: closeCommandOverlay,
+        keybindings,
+      }),
   });
 
   const { runLocalShellLine } = createLocalShellRunner({
     chatLog,
     tui,
     editor,
-    openOverlay,
-    closeOverlay,
+    openOverlay: openCommandOverlay,
+    closeOverlay: closeCommandOverlay,
     pauseStdioFilter: () => stdioFilter.pause(),
     resumeStdioFilter: () => stdioFilter.resume(),
     runWithInheritedStdio: async (work) => {
       await withTuiSuspended(tui, work);
     },
     keybindings,
+    onComplete: async (entry) => {
+      await client
+        .appendBashExecution(state.currentSessionKey, entry)
+        .catch((err: unknown) => {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          chatLog.addSystem(`Bash transcript append failed: ${errorMessage}`);
+        })
+        .finally(() => {
+          updateFooter();
+          tui.requestRender();
+        });
+    },
   });
 
   const submitCore = createEditorSubmitHandler({
@@ -1701,6 +1965,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     handleBangLine: runLocalShellLine,
     isAgentBusy,
     steerWhileBusy: steerMessage,
+    hasPendingAttachments: () => pendingImageAttachments.length > 0,
+    defaultAttachmentMessage: 'Please analyze the attached image.',
   });
 
   const submitBurst = createSubmitBurstCoalescer({
@@ -1719,8 +1985,15 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const handleFollowUp = () => {
     const text = editor.getText().trim();
-    if (!text) return;
+    if (!text && pendingImageAttachments.length === 0) return;
     if (isAgentBusy()) {
+      if (pendingImageAttachments.length > 0) {
+        chatLog.addSystem(
+          theme.dim('Image attachments cannot be queued while the agent is busy. Wait for this reply to finish, then send.'),
+        );
+        tui.requestRender();
+        return;
+      }
       editor.addToHistory(text);
       state.messageFollowUpQueue.push(text);
       editor.setText('');
@@ -1807,11 +2080,13 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const pickerSvc = {
     tui,
     editor,
-    openOverlay,
-    closeOverlay,
+    openOverlay: openCommandOverlay,
+    closeOverlay: closeCommandOverlay,
     chatLog,
     client,
     sendMessage,
+    switchModel: switchCurrentModel,
+    openEditorSelector,
     refreshSessionInfo,
     updateHeader,
     state,
@@ -1831,6 +2106,11 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     previewTheme,
     reloadKeybindings: reloadTuiRuntime,
     setThinkingLevel,
+    getProjectTrustStore: () => projectTrustStore,
+    getProjectTrustSessionDecision: () => projectTrustSessionDecision,
+    setProjectTrustSessionDecision: (decision: boolean | null) => {
+      projectTrustSessionDecision = decision;
+    },
     keybindings,
   };
 
@@ -1843,6 +2123,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   uiOverlays.openScopedModels = () => void openScopedModelsOverlay(pickerSvc);
   uiOverlays.openThinkingSelector = () => openThinkingSelectorOverlay(pickerSvc);
   uiOverlays.openSettings = () => openSettingsOverlay(pickerSvc);
+  uiOverlays.openProjectTrust = () => openProjectTrustOverlay(pickerSvc);
 
   const showSessionTree = () => {
     uiOverlays.openTranscriptTree();
@@ -1915,14 +2196,38 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   defaultEditor.onAction('app.editor.external', openExternalEditor);
   defaultEditor.onPasteImage = () => {
     void (async () => {
-      const filePath = await saveClipboardImageToTempFile();
-      if (!filePath) return;
-      if (editor.insertTextAtCursor) {
-        editor.insertTextAtCursor(filePath);
-      } else {
-        editor.setText(`${editor.getText()}${filePath}`);
+      const image = await readClipboardImage();
+      if (!image) {
+        chatLog.addStatus(theme.dim('No image found on clipboard.'));
+        tui.requestRender();
+        return;
       }
-      chatLog.addStatus(theme.dim(`Pasted image path: ${filePath}`));
+      if (pendingImageAttachments.length >= MAX_CHAT_ATTACHMENTS) {
+        chatLog.addSystem(`Attachment limit reached (${MAX_CHAT_ATTACHMENTS}). Send or clear the current draft first.`);
+        tui.requestRender();
+        return;
+      }
+      if (image.bytes.byteLength > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES) {
+        chatLog.addSystem(
+          `Clipboard image is too large (${image.bytes.byteLength} bytes; max ${MAX_WEBCHAT_ATTACHMENT_FILE_BYTES}).`,
+        );
+        tui.requestRender();
+        return;
+      }
+      const ext = extensionForImageMimeType(image.mimeType) ?? 'png';
+      const name = `clipboard-${pendingImageAttachments.length + 1}.${ext}`;
+      pendingImageAttachments.push({
+        type: 'image',
+        mimeType: image.mimeType,
+        data: Buffer.from(image.bytes).toString('base64'),
+        name,
+        size: image.bytes.byteLength,
+      });
+      chatLog.addStatus(
+        theme.dim(
+          `Attached image: ${name} (${pendingImageAttachments.length} pending). Send a message to include it.`,
+        ),
+      );
       tui.requestRender();
     })();
   };
@@ -1930,27 +2235,16 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   defaultEditor.onAction('app.message.dequeue', handleDequeue);
 
   streamWatchdogId = setInterval(() => {
-    if (!state.activeRunId) return;
-    if (!busyStates.has(state.activityStatus)) return;
-    if (Date.now() - lastStreamActivityAt < DEFAULT_STREAMING_WATCHDOG_MS) return;
-
-    const rid = state.activeRunId;
-    const finalText = assembler.finalize(rid, state.showThinking);
-    if (finalText) {
-      chatLog.finalizeAssistant(finalText, rid);
-    }
+    const now = Date.now();
+    if (!isActiveRunStreamStale(state, now, DEFAULT_STREAMING_WATCHDOG_MS)) return;
+    if (!markActiveRunStalled(state, now)) return;
     chatLog.addSystem(
-      '⚠️ No stream activity for 30s; UI reset (connection may have stalled). Retry or check gateway.',
+      theme.dim(
+        'No stream activity for 30s; preserving active run and reloading persisted history.',
+      ),
     );
-    state.activeRunId = null;
-    steeringInFlightForRunId = null;
-    setActivityStatus('idle');
-    void refreshSessionInfoWithBorder().finally(() => {
-      updateFooter();
-      tui.requestRender();
-    });
-    flushSteeringQueue();
-    flushFollowUpQueue();
+    setActivityStatus('stalled');
+    void recoverActiveRunFromHistory('stream watchdog');
     tui.requestRender();
   }, 5000);
 
@@ -1978,6 +2272,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       touchStreamingActivity,
       onAgentRunEnded,
       (text) => sessionSnapshot.appendMessage('assistant', text),
+      evt.source,
     );
   };
 
@@ -1988,7 +2283,22 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     void (async () => {
       await refreshSessionInfoWithBorder();
       await refreshModelChoices();
-      await loadSessionHistory();
+      await loadSessionHistory({ merge: true });
+      if (state.activeRunId) {
+        void recoverActiveRunFromHistory('broadcast reconnect');
+      }
+      if (
+        !projectTrustPromptShown &&
+        isLocalMode &&
+        projectTrustSessionDecision === null &&
+        hasTrustRequiringProjectResources(process.cwd()) &&
+        projectTrustStore.get(process.cwd()) === null
+      ) {
+        projectTrustPromptShown = true;
+        chatLog.addSystem(
+          'Project-local xopc resources detected. Use /trust to trust this folder, trust a parent folder, or keep it untrusted.',
+        );
+      }
       updateHeader();
       updateFooter();
       tui.requestRender();
@@ -2027,6 +2337,11 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       `⚠️ Event gap: expected ${info.expected}, received ${info.received}. Some updates may be missing.`,
     );
     setConnectionStatus(`event gap: expected ${info.expected}, got ${info.received}`);
+    if (state.activeRunId) {
+      void recoverActiveRunFromHistory('broadcast event gap');
+    } else {
+      void loadSessionHistory({ merge: true });
+    }
     tui.requestRender();
   };
 

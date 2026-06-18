@@ -85,12 +85,31 @@ describe('resolveTuiStartupSessionKey', () => {
     session: { scope: 'per-sender', mainKey: 'main' },
   } as Config;
 
-  it('defaults to agent main when session option omitted', () => {
-    expect(resolveTuiStartupSessionKey({ cfg, cwd: '/tmp/xopc' })).toEqual({
-      sessionKey: 'agent:main:main',
+  it('defaults to a fresh TUI session when session option is omitted', () => {
+    expect(
+      resolveTuiStartupSessionKey({
+        cfg,
+        cwd: '/tmp/xopc',
+        createSessionKeySuffix: () => 'tui-test-id',
+      }),
+    ).toEqual({
+      sessionKey: 'agent:main:tui-test-id',
       agentId: 'main',
       sessionScope: 'per-sender',
       sessionMainKey: 'main',
+    });
+  });
+
+  it('can still resume the agent main session explicitly', () => {
+    expect(
+      resolveTuiStartupSessionKey({
+        cfg,
+        sessionOption: 'main',
+        cwd: '/tmp/xopc',
+      }),
+    ).toMatchObject({
+      sessionKey: 'agent:main:main',
+      agentId: 'main',
     });
   });
 

@@ -23,6 +23,10 @@ allowBuilds:
 
 # Exempt recently-published @earendil-works/pi-* from minimumReleaseAge policy
 minimumReleaseAgeExclude:
+  - '@earendil-works/pi-agent-core'
+  - '@earendil-works/pi-ai'
+  - '@earendil-works/pi-coding-agent'
+  - '@earendil-works/pi-tui'
   - '@earendil-works/pi-agent-core@0.77.0'
   - '@earendil-works/pi-ai@0.77.0'
   - '@earendil-works/pi-coding-agent@0.77.0'

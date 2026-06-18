@@ -1,18 +1,43 @@
 import type { HistoryMessage } from './tui-backend.js';
 import { ChatLog } from './components/chat-log.js';
 
+export function historyMessageKey(message: HistoryMessage, index: number): string {
+  if (message.id) return `id:${message.id}`;
+  return [
+    'fallback',
+    index,
+    message.kind ?? 'message',
+    message.role,
+    message.timestamp ?? '',
+    message.content,
+  ].join(':');
+}
+
+export function historyKeysHaveAppendOnlyPrefix(
+  previousKeys: readonly string[],
+  nextKeys: readonly string[],
+): boolean {
+  return (
+    previousKeys.length > 0 &&
+    previousKeys.length <= nextKeys.length &&
+    previousKeys.every((key, index) => nextKeys[index] === key)
+  );
+}
+
 /** Replay persisted transcript into the scroll log (synthetic run ids per assistant row). */
 export function appendHistoryToChatLog(
   chatLog: ChatLog,
   messages: HistoryMessage[],
   toolsExpanded: boolean,
   showThinking = true,
+  opts?: { startIndex?: number },
 ): void {
   chatLog.setToolsExpanded(toolsExpanded);
   chatLog.setShowThinking(showThinking);
 
   messages.forEach((hm, idx) => {
-    const runId = `history:${idx}`;
+    const historyIndex = (opts?.startIndex ?? 0) + idx;
+    const runId = `history:${historyIndex}`;
 
     if (hm.kind === 'bash') {
       if (hm.bash) {
@@ -73,7 +98,7 @@ export function appendHistoryToChatLog(
     const tools = hm.toolCalls ?? [];
     for (let t = 0; t < tools.length; t++) {
       const tc = tools[t]!;
-      const tid = `history:${idx}:t:${t}`;
+      const tid = `history:${historyIndex}:t:${t}`;
       chatLog.startTool(tid, tc.name, tc.args ?? {}, runId);
       if (tc.result !== undefined) {
         chatLog.updateToolResult(tid, tc.result, tc.isError ?? false);

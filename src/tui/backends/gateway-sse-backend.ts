@@ -29,6 +29,14 @@ interface GatewaySSEOptions {
   token?: string;
 }
 
+function normalizeGatewayModelChoice(model: TuiModelChoice): TuiModelChoice {
+  const providerPrefix = `${model.provider}/`;
+  const id = model.id.startsWith(providerPrefix)
+    ? model.id.slice(providerPrefix.length)
+    : model.id;
+  return { ...model, id };
+}
+
 /** Fetch wrapper that adds auth headers. */
 async function gatewayFetch(
   baseUrl: string,
@@ -97,7 +105,7 @@ export class GatewaySseBackend implements TuiBackend {
 
     // Match EmbeddedBackend: set activeRunId before any token/tool events so TUI state stays on one
     // runId (avoids assistant under "default" and tools under the real uuid).
-    this.onEvent?.({ event: 'status', data: { status: 'started', runId } });
+    this.onEvent?.({ event: 'status', data: { status: 'started', runId }, source: 'agent-response' });
 
     // Fire-and-forget: run the HTTP request + SSE consumption in background
     // so the TUI event loop stays responsive for keyboard input.
@@ -115,6 +123,7 @@ export class GatewaySseBackend implements TuiBackend {
               : prependEnvelopeTimestamp(opts.message),
             channel: 'webchat',
             sessionKey: opts.sessionKey,
+            attachments: opts.attachments,
             thinking: opts.thinking,
           }),
           signal,
@@ -125,6 +134,7 @@ export class GatewaySseBackend implements TuiBackend {
           this.onEvent?.({
             event: 'error',
             data: { content: body.error?.message ?? `Gateway error: ${res.status}` },
+            source: 'agent-response',
           });
           return;
         }
@@ -138,7 +148,7 @@ export class GatewaySseBackend implements TuiBackend {
               if (signal.aborted) return;
               const data = parseSSEData<Record<string, unknown>>(sseEvent.data);
               if (!data) return;
-              this.onEvent?.({ event: sseEvent.event, data });
+              this.onEvent?.({ event: sseEvent.event, data, source: 'agent-response' });
             },
             signal,
           );
@@ -148,18 +158,75 @@ export class GatewaySseBackend implements TuiBackend {
             this.onEvent?.({
               event: 'token',
               data: { content: json.payload.content },
+              source: 'agent-response',
             });
-            this.onEvent?.({ event: 'result', data: { ok: true } });
+            this.onEvent?.({ event: 'result', data: { ok: true }, source: 'agent-response' });
           }
         }
       } catch (error) {
         if (signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        this.onEvent?.({ event: 'error', data: { content: errorMessage } });
+        this.onEvent?.({ event: 'error', data: { content: errorMessage }, source: 'agent-response' });
       }
     })();
 
     return { runId };
+  }
+
+  async resumeChat(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean; reason?: string }> {
+    this.chatAbort?.abort();
+    this.chatAbort = new AbortController();
+    const signal = this.chatAbort.signal;
+    this.onEvent?.({
+      event: 'status',
+      data: { status: 'resuming', runId: opts.runId },
+      source: 'agent-resume',
+    });
+
+    let res: Response;
+    try {
+      res = await gatewayFetch(this.baseUrl, '/api/agent/resume', this.token, {
+        method: 'POST',
+        headers: { Accept: 'text/event-stream' },
+        body: JSON.stringify({ runId: opts.runId, chatId: opts.sessionKey }),
+        signal,
+      });
+    } catch (error) {
+      if (signal.aborted) return { ok: false, reason: 'resume aborted' };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { ok: false, reason: errorMessage };
+    }
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      return { ok: false, reason: body.error?.message ?? `Resume failed: ${res.status}` };
+    }
+
+    const contentType = res.headers.get('Content-Type') ?? '';
+    if (!contentType.includes('text/event-stream') || !res.body) {
+      return { ok: false, reason: 'Resume endpoint did not return an SSE stream' };
+    }
+
+    void (async () => {
+      try {
+        await consumeSSEStream(
+          res.body,
+          (sseEvent) => {
+            if (signal.aborted) return;
+            const data = parseSSEData<Record<string, unknown>>(sseEvent.data);
+            if (!data) return;
+            this.onEvent?.({ event: sseEvent.event, data, source: 'agent-resume' });
+          },
+          signal,
+        );
+      } catch (error) {
+        if (signal.aborted) return;
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        this.onEvent?.({ event: 'error', data: { content: errorMessage }, source: 'agent-resume' });
+      }
+    })();
+
+    return { ok: true };
   }
 
   async abortChat(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean }> {
@@ -407,7 +474,7 @@ export class GatewaySseBackend implements TuiBackend {
         ok?: boolean;
         payload?: { models?: TuiModelChoice[] };
       };
-      return json.payload?.models ?? [];
+      return (json.payload?.models ?? []).map(normalizeGatewayModelChoice);
     } catch {
       return [];
     }
@@ -680,6 +747,31 @@ export class GatewaySseBackend implements TuiBackend {
     return { ok: true };
   }
 
+  async appendBashExecution(
+    sessionKey: string,
+    entry: {
+      command: string;
+      output?: string;
+      exitCode?: number | null;
+      signal?: string | null;
+      excludeFromContext?: boolean;
+      truncated?: boolean;
+      fullOutputPath?: string;
+    },
+  ): Promise<{ ok: boolean }> {
+    const res = await gatewayFetch(
+      this.baseUrl,
+      `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/bash`,
+      this.token,
+      { method: 'POST', body: JSON.stringify(entry) },
+    );
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || json.ok === false) {
+      throw new Error(json.error ?? `Bash execution append failed (${res.status})`);
+    }
+    return { ok: true };
+  }
+
   async patchSession(sessionKey: string, patch: Record<string, unknown>): Promise<void> {
     await gatewayFetch(
       this.baseUrl,
@@ -763,7 +855,7 @@ export class GatewaySseBackend implements TuiBackend {
             }
             const data = parseSSEData(sseEvent.data);
             if (data !== null) {
-              this.onEvent?.({ event: sseEvent.event, data });
+              this.onEvent?.({ event: sseEvent.event, data, source: 'broadcast' });
             }
           },
           this.eventAbort!.signal,

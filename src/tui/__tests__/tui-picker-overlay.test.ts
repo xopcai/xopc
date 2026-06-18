@@ -1,23 +1,29 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import type { Component } from '@earendil-works/pi-tui';
 import { setKeybindings } from '@earendil-works/pi-tui';
 
 import { SearchableSelectList } from '../components/searchable-select-list.js';
 import { XopcKeybindingsManager } from '../tui-keybindings-file.js';
 import {
   formatModelPickerHint,
+  ModelPickerSelectList,
+  modelPickerSelectItems,
+  openModelPickerOverlay,
+} from '../tui-model-picker.js';
+import {
   formatScopedModelsOpenedHint,
   formatScopedModelsSavedHint,
   formatSettingsOpenedHint,
   formatSessionTreeOpenedHint,
+  formatThinkingLevelSavedHint,
+  formatThinkingSelectorHint,
+} from '../tui-picker-overlay.js';
+import {
   formatTranscriptTreeHelpLines,
   formatTranscriptTreeFilterHint,
   formatTranscriptTreeOpenedHint,
   formatUserMessageForkOpenedHint,
-  formatThinkingLevelSavedHint,
-  formatThinkingSelectorHint,
-  ModelPickerSelectList,
-  modelPickerSelectItems,
-} from '../tui-picker-overlay.js';
+} from '../tui-transcript-tree-picker.js';
 
 const testSelectTheme = {
   selectedText: (text: string) => text,
@@ -300,6 +306,39 @@ it('prefilters searchable picker rows from an initial query', () => {
 
     picker.handleInput('\t');
     expect(picker.getSelectedItem()?.value).toBe('openai/gpt-5');
+  });
+
+  it('switches the selected model locally instead of sending a slash command to the agent', async () => {
+    let selector: Component | undefined;
+    const sendMessage = vi.fn();
+    const switchModel = vi.fn(async () => {});
+    const svc = {
+      client: {
+        listModels: vi.fn(async () => [
+          { provider: 'openai', id: 'gpt-5', name: 'GPT-5' },
+        ]),
+      },
+      state: { sessionInfo: {} },
+      setModelChoices: vi.fn(),
+      getScopedModelRefs: () => null,
+      openEditorSelector: (component: Component) => {
+        selector = component;
+        return vi.fn();
+      },
+      closeOverlay: vi.fn(),
+      tui: { requestRender: vi.fn(), setFocus: vi.fn() },
+      editor: { handleInput: vi.fn() },
+      chatLog: { addSystem: vi.fn(), addBranchSummary: vi.fn() },
+      sendMessage,
+      switchModel,
+      keybindings: new XopcKeybindingsManager(),
+    } as never;
+
+    await openModelPickerOverlay(svc);
+    selector?.handleInput?.('\r');
+
+    await vi.waitFor(() => expect(switchModel).toHaveBeenCalledWith('openai/gpt-5'));
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 
   it('uses resolved keybindings in picker system hints', () => {

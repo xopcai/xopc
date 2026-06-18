@@ -453,6 +453,36 @@ export class SessionStore {
     });
   }
 
+  async appendTranscriptBashExecutionEntry(
+    key: string,
+    entry: {
+      command: string;
+      output?: string;
+      exitCode?: number | null;
+      signal?: string | null;
+      excludeFromContext?: boolean;
+      truncated?: boolean;
+      fullOutputPath?: string;
+    },
+  ): Promise<void> {
+    return this.runStoreMutation(async () => {
+      requireXopcDatabase();
+      const cwd = this.resolveWorkspaceCwd(key);
+      ensureSessionRecord(key, cwd);
+      appendTranscriptEntry(key, {
+        role: 'bashExecution',
+        command: entry.command,
+        output: entry.output ?? '',
+        exitCode: entry.exitCode ?? null,
+        signal: entry.signal ?? null,
+        excludeFromContext: entry.excludeFromContext === true,
+        truncated: entry.truncated === true,
+        fullOutputPath: entry.fullOutputPath,
+        timestamp: Date.now(),
+      });
+    });
+  }
+
   async saveMessages(key: string, messages: AgentMessage[]): Promise<void> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();

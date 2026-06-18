@@ -11,13 +11,13 @@ function createTuiCommand(_ctx: CLIContext): Command {
         'xopc tui                                    # Connect to local gateway (default)',
         'xopc tui --local                            # Embedded mode, no gateway needed',
         'xopc tui --url http://host:3120 --token xxx # Connect to remote gateway',
-        'xopc tui -s telegram:dm:123456              # Resume a session',
+        'xopc tui -s agent:main:tui-...              # Resume a session',
         'xopc tui -m "Summarize my inbox"            # Send a message on launch',
       ]),
     )
     .option('--url <url>', 'Gateway URL (default: http://localhost:3120)')
     .option('--token <token>', 'Gateway bearer token')
-    .option('-s, --session <key>', 'Session key to resume')
+    .option('-s, --session <key>', 'Session key to resume (omitted: start a fresh TUI session)')
     .option('-m, --message <text>', 'Send a message on launch')
     .option('--local', 'Run in embedded mode (no gateway required)')
     .option('--theme <name>', 'Theme: auto, dark, light, or custom name from ~/.xopc/themes/')
