@@ -122,6 +122,7 @@ export const ChatComposer = memo(function ChatComposer({
 
   const editor = useComposerEditor({
     disabled,
+    autoFocusKey: sessionKey,
     welcomeDraftSeed,
     onExternalTextReplace,
     shouldSyncSelectionRef,
