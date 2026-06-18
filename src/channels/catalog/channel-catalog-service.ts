@@ -26,6 +26,33 @@ function normalizeConfigPath(channelId: string, raw: string | undefined): `chann
   return trimmed as `channels.${string}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function hasNonEmptyString(value: unknown): boolean {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function hasConfiguredTelegramCredential(raw: unknown): boolean {
+  if (!isRecord(raw)) return false;
+  if (hasNonEmptyString(raw.botToken) || hasNonEmptyString(raw.tokenFile)) return true;
+  const accounts = raw.accounts;
+  if (!isRecord(accounts)) return false;
+  return Object.values(accounts).some((account) => {
+    if (!isRecord(account) || account.enabled === false) return false;
+    return hasNonEmptyString(account.botToken) || hasNonEmptyString(account.tokenFile);
+  });
+}
+
+function hasConfiguredWeixinAccount(raw: unknown): boolean {
+  if (!isRecord(raw)) return false;
+  if (raw.enabled === true) return true;
+  const accounts = raw.accounts;
+  if (!isRecord(accounts)) return false;
+  return Object.values(accounts).some((account) => isRecord(account) && account.enabled !== false);
+}
+
 function toCatalogEntry(params: {
   extension: ManifestRegistryEntry;
   channelId: string;
@@ -70,6 +97,17 @@ export function buildChannelCatalogForConfig(config: Config): ChannelCatalog {
   return buildChannelCatalogFromSnapshot(snapshot);
 }
 
+export function isChannelConfigured(config: Config, channelId: string): boolean {
+  const id = normalizeChannelId(channelId);
+  const raw = (config.channels as Record<string, unknown> | undefined)?.[id];
+  if (!raw) return false;
+  if (id === 'telegram') return hasConfiguredTelegramCredential(raw);
+  if (id === 'weixin') return hasConfiguredWeixinAccount(raw);
+  return isRecord(raw) ? raw.enabled === true || Object.keys(raw).length > 0 : true;
+}
+
 export function getConfiguredChannelIds(config: Config): string[] {
-  return Object.keys(config.channels ?? {}).map(normalizeChannelId).filter(Boolean);
+  return Object.keys(config.channels ?? {})
+    .map(normalizeChannelId)
+    .filter((id) => id && isChannelConfigured(config, id));
 }

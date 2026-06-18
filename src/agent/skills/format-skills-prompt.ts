@@ -8,7 +8,7 @@ import type { Skill } from './types.js';
 import type { SkillsConfig } from './types.js';
 
 export interface FormatSkillsForPromptOptions {
-  /** Explicit skill names visible in this context. Omitted/empty means no visible skills. */
+  /** Explicit skill names visible in this context. Omitted means all enabled skills; empty means no visible skills. */
   skillAllowlist?: string[];
   /** When set (including empty array), applies tool gating from skill frontmatter. */
   registeredToolNames?: string[];
@@ -21,14 +21,13 @@ export function selectSkillsVisibleInPrompt(
 ): Skill[] {
   let list = skills;
 
-  if (options?.skillAllowlist === undefined) {
-    return [];
+  if (options?.skillAllowlist !== undefined) {
+    if (options.skillAllowlist.length === 0) {
+      return [];
+    }
+    const allow = new Set(options.skillAllowlist.map((s) => s.toLowerCase()));
+    list = list.filter((s) => allow.has(s.name.toLowerCase()));
   }
-  if (options.skillAllowlist.length === 0) {
-    return [];
-  }
-  const allow = new Set(options.skillAllowlist.map((s) => s.toLowerCase()));
-  list = list.filter((s) => allow.has(s.name.toLowerCase()));
 
   list = list.filter((s) => !s.disableModelInvocation && isSkillEnabled(s, skillsConfig));
 

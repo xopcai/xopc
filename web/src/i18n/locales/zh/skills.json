@@ -110,6 +110,7 @@
     },
     "detailModalBanner": "元数据来自 SKILL.md 的 YAML frontmatter；下方为去掉该段后的正文说明。",
     "detailModalBannerStore": "以下为技能商店中该包发布的 Markdown 正文（与商店中的包说明一致）。",
+    "detailDisabledNotice": "该技能已安装，但已被你的设置停用；在启用前，智能体无法使用它。",
     "detailSummaryHeading": "概要",
     "detailInstructionsHeading": "使用说明",
     "detailNoInstructionsBody": "该技能暂无详细说明。",
