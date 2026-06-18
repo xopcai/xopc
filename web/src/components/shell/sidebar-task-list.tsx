@@ -492,7 +492,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="flex flex-col gap-1.5 px-4 pt-2">
-          <div className="pl-3 text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
           <div className="rounded-xl bg-surface-panel p-3">
             <p className="text-xs leading-relaxed text-fg-muted">{sb.taskListNeedToken}</p>
             <Button
@@ -522,7 +521,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         onScroll={onScroll}
       >
         <div className="sticky top-0 z-[1] bg-surface-base px-4 pb-1 pt-2">
-          <div className="pl-3 text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
           <div className="mt-2">
             <SlidingSegmented
               value={sessionFilter}

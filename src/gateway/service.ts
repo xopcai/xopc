@@ -736,6 +736,9 @@ export class GatewayService {
   }
 
   private markGatewayReady(): void {
+    if (this.readiness.isReady()) {
+      return;
+    }
     this.readiness.markReady();
     this.startupTrace?.mark('ready');
     this.schedulePostReadySidecars();
@@ -752,6 +755,9 @@ export class GatewayService {
    * opted into `meta.deferConnectUntilAfterListen`, then replays outbound queue.
    */
   async onHttpListening(): Promise<void> {
+    await this.applyStartupReadyDelayForTesting();
+    this.markGatewayReady();
+
     await this.runExposureAutoStartIfConfigured();
 
     if (this.serviceConfig.deferChannelConnectUntilAfterHttp !== true) {
@@ -760,8 +766,6 @@ export class GatewayService {
     const listenStartedAt = performance.now();
     const trace = this.startupTrace;
     try {
-      await this.applyStartupReadyDelayForTesting();
-
       const tDef = performance.now();
       if (trace) {
         await trace.measure('channels.deferred-connect', () => this.channelManager.startDeferredConnects());
