@@ -584,7 +584,7 @@
       "bundle-mcp": "从已配置的 MCP 服务器加载工具（全局 mcp.servers 与扩展 .mcp.json）。"
     },
     "skillsTitle": "技能白名单",
-    "skillsHint": "可选的 <available_skills> 白名单。「继承默认」仅使用 agents.defaults；「自定义」写入本智能体的 skills 数组。",
+    "skillsHint": "这些技能会出现在该智能体的 Chat / 菜单和 <available_skills> 中。未加入白名单的技能不会被该智能体看到，也不会在 Chat / 菜单中默认展示。「继承默认」仅使用 agents.defaults；「自定义」写入本智能体的 skills 数组。",
     "skillsInherit": "继承默认",
     "skillsCustomize": "自定义白名单",
     "skillsSave": "保存技能",

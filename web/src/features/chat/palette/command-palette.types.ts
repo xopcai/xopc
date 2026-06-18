@@ -12,6 +12,8 @@ export interface CommandEntry {
   examples: string[];
 }
 
+export type SkillAvailabilityStatus = 'available' | 'agent-denied' | 'disabled' | 'requirements-unmet' | 'model-invocation-disabled';
+
 export interface PaletteItem {
   kind: PaletteItemKind;
   id: string;
@@ -22,6 +24,11 @@ export interface PaletteItem {
   source?: string;
   aliases?: string[];
   acceptsArgs?: boolean;
+  /** Current agent skill availability; only set for `kind === 'skill'`. */
+  availability?: {
+    status: SkillAvailabilityStatus;
+    reason?: string;
+  };
   /** Agent avatar URL (only used by `kind === 'agent'` rows). */
   avatar?: string;
 }

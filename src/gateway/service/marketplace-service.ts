@@ -22,7 +22,7 @@ import type { Config } from '../../config/schema.js';
 import type { AgentService } from '../../agent/service.js';
 import type { ChannelManager } from '../../channels/manager.js';
 import type { ExtensionLoader } from '../../extensions/loader.js';
-import type { SkillCatalogEntry } from '../../agent/agent-manager.js';
+import type { AgentSkillAvailabilityPayload, SkillCatalogEntry } from '../../agent/agent-manager.js';
 import type {
   ManagedSkillListItem,
 } from '../../agent/skills/managed-store.js';
@@ -89,6 +89,10 @@ export class GatewayMarketplaceService {
       catalog: this.opts.getAgentService().getSkillCatalog(),
       managed: listManagedSkillDirs(),
     };
+  }
+
+  getAgentSkillsApi(agentId: string): AgentSkillAvailabilityPayload {
+    return this.opts.getAgentService().getAgentSkillAvailability(agentId);
   }
 
   getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
