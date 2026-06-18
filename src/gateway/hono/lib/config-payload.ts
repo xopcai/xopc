@@ -155,14 +155,14 @@ export function buildSafeBrowserConfigForWeb(browser: Config['agents']['defaults
 }
 
 /** Sanitized config snapshot for GET/PATCH `/api/config` (matches persisted `service.currentConfig`). */
-export async function buildSafeWebConfigPayload(service: GatewayService) {
+export async function buildSafeWebConfigPayload(service: GatewayService, options: { locale?: string } = {}) {
   const config = service.currentConfig;
   const extensionLoader =
     typeof service.getExtensionLoader === 'function' ? service.getExtensionLoader() : undefined;
   const snapshot = extensionLoader?.getManifestSnapshot();
   const catalog = snapshot
-    ? buildChannelCatalogFromSnapshot(snapshot)
-    : buildChannelCatalogForConfig(config);
+    ? buildChannelCatalogFromSnapshot(snapshot, { locale: options.locale })
+    : buildChannelCatalogForConfig(config, { locale: options.locale });
   const channelsPayload = Object.fromEntries(
     catalog.entries.map((entry) => {
       const channelCfg = config.channels?.[entry.id] as Record<string, unknown> | undefined;

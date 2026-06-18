@@ -48,6 +48,27 @@
         "setup.status": { "label": "Setup status", "result": "poll" },
         "setup.manual": { "label": "Manual setup", "result": "form" },
         "doctor.run": { "label": "Run doctor", "result": "diagnostics" }
+      },
+      "i18n": {
+        "zh": {
+          "label": "飞书 / Lark",
+          "description": "飞书 / Lark 消息通道与工作区工具",
+          "configSchema": {
+            "properties": {
+              "enabled": { "title": "启用" },
+              "accounts": { "title": "账号" },
+              "appId": { "title": "App ID" },
+              "appSecret": { "title": "App Secret" },
+              "domain": { "title": "域名" }
+            }
+          },
+          "actions": {
+            "setup.start": { "label": "扫码配置" },
+            "setup.status": { "label": "配置状态" },
+            "setup.manual": { "label": "手动配置" },
+            "doctor.run": { "label": "诊断" }
+          }
+        }
       }
     }
   },

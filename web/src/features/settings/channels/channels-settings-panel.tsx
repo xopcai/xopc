@@ -29,11 +29,11 @@ async function fetchChannelConfig(channelId: string): Promise<Record<string, unk
   return data.payload?.config ?? {};
 }
 
-function statusLabel(entry: ChannelCatalogEntry): string {
-  if (entry.enabled && entry.runtime === 'loaded') return 'Running';
-  if (entry.enabled) return 'Enabled';
-  if (entry.configured) return 'Configured';
-  return 'Not configured';
+function statusLabel(entry: ChannelCatalogEntry, ch: ReturnType<typeof messages>['channelsSettings']): string {
+  if (entry.enabled && entry.runtime === 'loaded') return ch.hubStatusRunning;
+  if (entry.enabled) return ch.hubStatusEnabled;
+  if (entry.configured) return ch.hubStatusConfigured;
+  return ch.hubStatusNotConfigured;
 }
 
 export function ChannelsSettingsPanel() {
@@ -44,7 +44,7 @@ export function ChannelsSettingsPanel() {
   const { channelId: routeChannelId } = useParams<{ channelId?: string }>();
   const activeChannelId = normalizeChannelRouteId(routeChannelId);
 
-  const catalog = useChannelCatalog(hasToken);
+  const catalog = useChannelCatalog(hasToken, language);
   const entries = catalog.entries;
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
@@ -62,16 +62,17 @@ export function ChannelsSettingsPanel() {
   const [error, setError] = useState<string | null>(null);
 
   const effectiveConfig = draft ?? remoteConfig ?? {};
+  const ch = m.channelsSettings;
   const headerEnd = useMemo(
     () => hasToken ? (
       <ChannelsPageHeaderActions
-        ch={m.channelsSettings}
+        ch={ch}
         refreshing={catalog.isValidating}
         saveOk={false}
         onRefresh={() => void catalog.mutate()}
       />
     ) : null,
-    [catalog, hasToken, m.channelsSettings],
+    [catalog, ch, hasToken],
   );
 
   useLayoutEffect(() => {
@@ -155,7 +156,7 @@ export function ChannelsSettingsPanel() {
                       <p className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{entry.description ?? entry.id}</p>
                     </div>
                     <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">
-                      {statusLabel(entry)}
+                      {statusLabel(entry, ch)}
                     </span>
                   </div>
                 </button>
@@ -194,6 +195,7 @@ export function ChannelsSettingsPanel() {
             <ChannelSetupCard
               key={activeEntry.id}
               entry={activeEntry}
+              locale={language}
               onChanged={async () => {
                 await mutateConfig();
                 await catalog.mutate();

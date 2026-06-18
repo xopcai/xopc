@@ -38,6 +38,23 @@
       "actions": {
         "login.start": { "label": "Log in", "result": "qr" },
         "login.status": { "label": "Login status", "result": "poll" }
+      },
+      "i18n": {
+        "zh": {
+          "label": "微信",
+          "description": "通过扫码登录的个人微信消息通道",
+          "configSchema": {
+            "properties": {
+              "enabled": { "title": "启用" },
+              "accounts": { "title": "账号" },
+              "dmPolicy": { "title": "私聊策略" }
+            }
+          },
+          "actions": {
+            "login.start": { "label": "微信扫码登录" },
+            "login.status": { "label": "登录状态" }
+          }
+        }
       }
     }
   },

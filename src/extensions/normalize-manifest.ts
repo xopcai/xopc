@@ -96,7 +96,27 @@ function normalizeChannelContributions(raw: unknown): Record<string, ChannelCont
       configSchema: isRecord(value.configSchema) ? value.configSchema : undefined,
       uiHints: normalizeChannelUiHints(value.uiHints),
       actions: normalizeChannelActions(value.actions),
+      i18n: normalizeChannelContributionI18n(value.i18n),
     };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function normalizeChannelContributionI18n(raw: unknown): ChannelContributionDeclaration['i18n'] {
+  if (!isRecord(raw)) return undefined;
+  const out: NonNullable<ChannelContributionDeclaration['i18n']> = {};
+  for (const [locale, value] of Object.entries(raw)) {
+    if (!locale.trim() || !isRecord(value)) continue;
+    const entry = {
+      label: typeof value.label === 'string' ? value.label : undefined,
+      description: typeof value.description === 'string' ? value.description : undefined,
+      configSchema: isRecord(value.configSchema) ? value.configSchema : undefined,
+      uiHints: normalizeChannelUiHints(value.uiHints),
+      actions: normalizeChannelActions(value.actions),
+    };
+    if (entry.label || entry.description || entry.configSchema || entry.uiHints || entry.actions) {
+      out[locale.trim().toLowerCase().replace('_', '-')] = entry;
+    }
   }
   return Object.keys(out).length > 0 ? out : undefined;
 }

@@ -88,17 +88,23 @@ function buildFeishuConfig(config: Config, result: AppRegistrationResult): Confi
   };
 }
 
+function isZh(locale: string | undefined): boolean {
+  return locale?.toLowerCase().startsWith('zh') === true;
+}
+
 function statusPayload(
   state: FeishuGatewaySetupDone | undefined,
   active: FeishuGatewaySetupActive | undefined,
+  locale?: string,
 ): ChannelRuntimeActionPayload {
+  const zh = isZh(locale);
   if (!state && active) {
     return {
       type: 'poll',
       phase: 'pending',
       ok: undefined,
       qrPayload: active.qrPayload,
-      message: 'Waiting for Feishu/Lark confirmation...',
+      message: zh ? '等待飞书 / Lark 确认…' : 'Waiting for Feishu/Lark confirmation...',
     };
   }
   if (!state) {
@@ -106,7 +112,7 @@ function statusPayload(
       type: 'poll',
       phase: 'unknown',
       ok: false,
-      message: 'No active Feishu setup session. Start again or the QR may have expired.',
+      message: zh ? '没有活动的飞书配置会话。请重新开始，二维码可能已过期。' : 'No active Feishu setup session. Start again or the QR may have expired.',
     };
   }
   if (state.ok === false) {
@@ -124,13 +130,14 @@ function statusPayload(
     accountId: state.accountId,
     appId: state.appId,
     domain: state.domain,
-    message: 'Feishu setup complete.',
+    message: zh ? '飞书配置完成。' : 'Feishu setup complete.',
     configChanged: true,
   };
 }
 
 export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
-  async runAction({ actionId, input }) {
+  async runAction({ actionId, input, locale }) {
+    const zh = isZh(locale);
     if (actionId === 'setup.start') {
       const raw = readInput(input);
       const domain = normalizeDomain(raw.domain);
@@ -141,13 +148,13 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
           payload: {
             type: 'form',
             submitAction: 'setup.manual',
-            message: 'Feishu scan-to-create is unavailable. Enter app credentials manually in Advanced configuration.',
+            message: zh ? '飞书扫码创建不可用。请在高级配置中手动填写应用凭据。' : 'Feishu scan-to-create is unavailable. Enter app credentials manually in Advanced configuration.',
             schema: {
               type: 'object',
               properties: {
                 appId: { type: 'string', title: 'App ID' },
                 appSecret: { type: 'string', title: 'App Secret', format: 'password' },
-                domain: { type: 'string', enum: ['feishu', 'lark'], default: domain, title: 'Domain' },
+                domain: { type: 'string', enum: ['feishu', 'lark'], default: domain, title: zh ? '域名' : 'Domain' },
               },
               required: ['appId', 'appSecret'],
             },
@@ -174,12 +181,12 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
         if (outcome.status !== 'success') {
           const message =
             outcome.status === 'access_denied'
-              ? 'User denied authorization.'
+              ? (zh ? '用户拒绝授权。' : 'User denied authorization.')
               : outcome.status === 'expired'
-                ? 'Setup session expired.'
+                ? (zh ? '配置会话已过期。' : 'Setup session expired.')
                 : outcome.status === 'timeout'
-                  ? 'Setup timed out.'
-                  : outcome.message ?? 'Feishu setup failed.';
+                  ? (zh ? '配置超时。' : 'Setup timed out.')
+                  : outcome.message ?? (zh ? '飞书配置失败。' : 'Feishu setup failed.');
           rememberCompleted(sessionKey, { phase: 'done', ok: false, message });
           return;
         }
@@ -198,7 +205,7 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
           rememberCompleted(sessionKey, {
             phase: 'done',
             ok: false,
-            message: `Config save failed: ${String(err)}`,
+            message: `${zh ? '配置保存失败' : 'Config save failed'}: ${String(err)}`,
           });
         }
       })();
@@ -212,7 +219,7 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
           statusAction: 'setup.status',
           pollIntervalMs: Math.max(1000, begin.intervalSec * 1000),
           expiresInSec: begin.expireInSec,
-          message: 'Scan with Feishu/Lark to create and authorize an app.',
+          message: zh ? '请使用飞书 / Lark 扫码创建并授权应用。' : 'Scan with Feishu/Lark to create and authorize an app.',
         },
       };
     }
@@ -220,8 +227,8 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
     if (actionId === 'setup.status') {
       const raw = readInput(input);
       const sessionKey = typeof raw.sessionKey === 'string' ? raw.sessionKey : '';
-      if (!sessionKey) return { ok: false, message: 'Missing setup sessionKey' };
-      return { ok: true, payload: statusPayload(completedSessions.get(sessionKey), activeSessions.get(sessionKey)) };
+      if (!sessionKey) return { ok: false, message: zh ? '缺少配置 sessionKey' : 'Missing setup sessionKey' };
+      return { ok: true, payload: statusPayload(completedSessions.get(sessionKey), activeSessions.get(sessionKey), locale) };
     }
 
     if (actionId === 'setup.manual') {
@@ -230,7 +237,7 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
       const appSecret = typeof raw.appSecret === 'string' ? raw.appSecret.trim() : '';
       const domain = normalizeDomain(raw.domain);
       if (!appId || !appSecret) {
-        return { ok: false, message: 'App ID and App Secret are required.' };
+        return { ok: false, message: zh ? 'App ID 和 App Secret 为必填项。' : 'App ID and App Secret are required.' };
       }
       const current = loadConfig();
       await saveConfig(buildFeishuConfig(current, { appId, appSecret, domain }));
@@ -238,12 +245,12 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
         ok: true,
         payload: {
           type: 'ok',
-          message: 'Feishu configuration saved.',
+          message: zh ? '飞书配置已保存。' : 'Feishu configuration saved.',
           configChanged: true,
         },
       };
     }
 
-    return { ok: false, message: `Unsupported Feishu action: ${actionId}` };
+    return { ok: false, message: `${zh ? '不支持的飞书操作' : 'Unsupported Feishu action'}: ${actionId}` };
   },
 };
