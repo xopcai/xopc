@@ -1,6 +1,11 @@
 {
   "sessions": {
     "title": "会话",
+    "tabsAriaLabel": "会话分区",
+    "tabsSessions": "会话",
+    "tabsSessionsHint": "浏览、筛选、继续、归档、导出和删除对话会话。",
+    "tabsSettings": "设置",
+    "tabsSettingsHint": "配置会话键名范围和元数据清理策略。",
     "needToken": "请先保存网关访问令牌后再管理会话。",
     "searchPlaceholder": "搜索会话…",
     "filterAll": "全部",

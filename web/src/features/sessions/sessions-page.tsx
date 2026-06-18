@@ -8,8 +8,9 @@ import {
   LayoutList,
   Pin,
   Search,
+  Settings,
 } from 'lucide-react';
-import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { type ReactNode, useCallback, useEffect, useReducer, useRef } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
@@ -53,9 +54,114 @@ function interpolate(template: string, params: Record<string, string | number>):
 
 type StatusFilter = 'all' | 'active' | 'pinned' | 'archived';
 type SessionsViewMode = 'grid' | 'list';
+type SessionsTabId = 'sessions' | 'settings';
 
 const SESSION_STATUS_FILTER_SET = new Set<StatusFilter>(['all', 'active', 'pinned', 'archived']);
 const SESSION_VIEW_MODE_SET = new Set<SessionsViewMode>(['grid', 'list']);
+const SESSIONS_TABS: readonly SessionsTabId[] = ['sessions', 'settings'];
+
+function parseSessionsTab(raw: string | null): SessionsTabId {
+  return raw && SESSIONS_TABS.includes(raw as SessionsTabId) ? (raw as SessionsTabId) : 'sessions';
+}
+
+type SessionsMessages = ReturnType<typeof messages>['sessions'];
+
+function sessionsTabLabel(s: SessionsMessages, tab: SessionsTabId): string {
+  return tab === 'sessions' ? s.tabsSessions : s.tabsSettings;
+}
+
+function sessionsTabHint(s: SessionsMessages, tab: SessionsTabId): string {
+  return tab === 'sessions' ? s.tabsSessionsHint : s.tabsSettingsHint;
+}
+
+function SessionsTabs({
+  s,
+  activeTab,
+  onChange,
+}: {
+  s: SessionsMessages;
+  activeTab: SessionsTabId;
+  onChange: (tab: SessionsTabId) => void;
+}) {
+  return (
+    <nav
+      aria-label={s.tabsAriaLabel}
+      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
+      role="tablist"
+      onKeyDown={(event) => {
+        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+        event.preventDefault();
+        const currentIndex = SESSIONS_TABS.indexOf(activeTab);
+        if (currentIndex < 0) return;
+        const delta = event.key === 'ArrowRight' ? 1 : -1;
+        const nextIndex = (currentIndex + delta + SESSIONS_TABS.length) % SESSIONS_TABS.length;
+        onChange(SESSIONS_TABS[nextIndex]);
+      }}
+    >
+      {SESSIONS_TABS.map((tab) => {
+        const Icon = tab === 'sessions' ? Layers : Settings;
+        const selected = tab === activeTab;
+        return (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={selected}
+            aria-controls={`sessions-panel-${tab}`}
+            id={`sessions-tab-${tab}`}
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+              interaction.press,
+              selected ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+            )}
+            onClick={() => onChange(tab)}
+          >
+            <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            <span>{sessionsTabLabel(s, tab)}</span>
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
+function SessionsTabPanel({
+  s,
+  id,
+  activeTab,
+  plain = false,
+  children,
+}: {
+  s: SessionsMessages;
+  id: SessionsTabId;
+  activeTab: SessionsTabId;
+  plain?: boolean;
+  children: ReactNode;
+}) {
+  if (activeTab !== id) return null;
+
+  return (
+    <section
+      id={`sessions-panel-${id}`}
+      role="tabpanel"
+      aria-labelledby={`sessions-tab-${id}`}
+      className={plain ? 'contents' : 'rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5'}
+    >
+      {plain ? (
+        children
+      ) : (
+        <>
+          <div className="mb-5">
+            <div className="text-sm font-semibold text-fg">{sessionsTabLabel(s, id)}</div>
+            <p className="mt-1 text-xs text-fg-subtle">{sessionsTabHint(s, id)}</p>
+          </div>
+          <div className="space-y-4">{children}</div>
+        </>
+      )}
+    </section>
+  );
+}
 
 type SessionsUi = {
   searchInput: string;
@@ -115,6 +221,16 @@ export function SessionsPage() {
   const defaultAgentId = chatAgents?.defaultId ?? 'main';
   const agentItems = chatAgents?.items ?? [];
   const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = parseSessionsTab(searchParams.get('tab'));
+  const setActiveTab = useCallback(
+    (tab: SessionsTabId) => {
+      const params = new URLSearchParams(searchParams);
+      if (tab === 'sessions') params.delete('tab');
+      else params.set('tab', tab);
+      setSearchParams(params, { replace: true });
+    },
+    [searchParams, setSearchParams],
+  );
 
   const [ui, dispatch] = useReducer(uiPatchReducer<SessionsUi>, searchParams, initSessionsUi);
   const {
@@ -192,7 +308,7 @@ export function SessionsPage() {
   }, [debouncedSearch, searchParams, setSearchParams, statusFilter, viewMode, channelFilter]);
 
   useEffect(() => {
-    if (!hasToken) return;
+    if (!hasToken || activeTab !== 'sessions') return;
     let cancelled = false;
     (async () => {
       dispatch({ type: 'patch', patch: { loading: true, error: null } });
@@ -223,24 +339,24 @@ export function SessionsPage() {
     return () => {
       cancelled = true;
     };
-  }, [hasToken, debouncedSearch, statusFilter, channelFilter, s.loadError]);
+  }, [hasToken, activeTab, debouncedSearch, statusFilter, channelFilter, s.loadError]);
 
   useEffect(() => {
-    if (!hasToken) return;
+    if (!hasToken || activeTab !== 'sessions') return;
     void getSessionStats()
       .then((st) => dispatch({ type: 'patch', patch: { stats: st } }))
       .catch(() => {});
-  }, [hasToken]);
+  }, [hasToken, activeTab]);
 
   useEffect(() => {
-    if (!hasToken) return;
+    if (!hasToken || activeTab !== 'sessions') return;
     const onConfigReload = () => void mutateChatAgents();
     window.addEventListener('config-reload', onConfigReload);
     return () => window.removeEventListener('config-reload', onConfigReload);
-  }, [hasToken, mutateChatAgents]);
+  }, [hasToken, activeTab, mutateChatAgents]);
 
   useEffect(() => {
-    if (!hasToken) return;
+    if (!hasToken || activeTab !== 'sessions') return;
     const handler = (e: Event) => {
       const detail = (e as CustomEvent<{ key?: string; name?: string }>).detail;
       if (!detail?.key || detail.name === undefined) return;
@@ -261,7 +377,7 @@ export function SessionsPage() {
     return () => {
       window.removeEventListener('session-updated', handler);
     };
-  }, [hasToken, sessions, detailSession]);
+  }, [hasToken, activeTab, sessions, detailSession]);
 
   const loadMore = useCallback(async () => {
     if (!hasToken || loading || !hasMore) return;
@@ -454,12 +570,43 @@ export function SessionsPage() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-surface-panel">
-      <div className="mx-auto flex w-full min-w-0 max-w-2xl flex-col gap-4 px-4 py-6 sm:px-6 lg:max-w-app-main lg:px-8">
-        <SessionConfigSection hasToken={hasToken} />
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
+        <header className="flex flex-col gap-2">
+          <h1 className="text-lg font-semibold tracking-tight text-fg">{s.title}</h1>
+        </header>
 
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <h1 className="text-xl font-semibold tracking-tight text-fg">{s.title}</h1>
-          <div className="flex w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base px-3 py-2 transition-colors sm:max-w-md dark:bg-surface-hover/40">
+        <SessionsTabs s={s} activeTab={activeTab} onChange={setActiveTab} />
+
+        <SessionsTabPanel s={s} id="settings" activeTab={activeTab} plain>
+          <SessionConfigSection hasToken={hasToken} />
+        </SessionsTabPanel>
+
+        <SessionsTabPanel s={s} id="sessions" activeTab={activeTab} plain>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {filters.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={statusFilter === key}
+                onClick={() => dispatch({ type: 'patch', patch: { statusFilter: key } })}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium',
+                  interaction.transition,
+                  /* Filter chips (selection): no press scale. */
+                  interaction.focusRingPanel,
+                  statusFilter === key
+                    ? 'bg-accent-soft text-accent-fg'
+                    : 'bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/35',
+                )}
+              >
+                <Icon className="size-4" strokeWidth={1.75} aria-hidden />
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base px-3 py-2 transition-colors lg:max-w-md dark:bg-surface-hover/40">
             <Search className="size-4 shrink-0 text-fg-disabled" strokeWidth={1.75} aria-hidden />
             <input
               type="search"
@@ -470,29 +617,6 @@ export function SessionsPage() {
               className="min-w-0 flex-1 border-0 bg-transparent text-sm text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0"
             />
           </div>
-        </header>
-
-        <div className="flex flex-wrap gap-2">
-          {filters.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={statusFilter === key}
-              onClick={() => dispatch({ type: 'patch', patch: { statusFilter: key } })}
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium',
-                interaction.transition,
-                /* Filter chips (selection): no press scale. */
-                interaction.focusRingPanel,
-                statusFilter === key
-                  ? 'bg-accent-soft text-accent-fg'
-                  : 'bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/35',
-              )}
-            >
-              <Icon className="size-4" strokeWidth={1.75} aria-hidden />
-              {label}
-            </button>
-          ))}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -656,6 +780,7 @@ export function SessionsPage() {
             ) : null}
           </>
         )}
+        </SessionsTabPanel>
       </div>
 
       <SessionDetailDrawer

@@ -1,6 +1,11 @@
 {
   "sessions": {
     "title": "Sessions",
+    "tabsAriaLabel": "Session sections",
+    "tabsSessions": "Sessions",
+    "tabsSessionsHint": "Browse, filter, continue, archive, export, and delete conversation sessions.",
+    "tabsSettings": "Settings",
+    "tabsSettingsHint": "Configure session key scope and metadata cleanup behavior.",
     "needToken": "Save a gateway token to manage sessions.",
     "searchPlaceholder": "Search sessions…",
     "filterAll": "All",
