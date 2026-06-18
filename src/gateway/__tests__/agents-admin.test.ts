@@ -63,6 +63,21 @@ describe('agents-admin', () => {
     expect(agents[0]?.typedModels.effective).toEqual([]);
   });
 
+  it('listGatewayAgents ignores legacy builtin agent skills allowlists', async () => {
+    const cfg = minimalConfig({
+      agents: {
+        ...minimalConfig().agents,
+        defaults: { ...minimalConfig().agents!.defaults!, skills: ['default-only'] },
+        list: [{ id: 'coder', enabled: true, workspace: '/tmp/c', skills: ['old'] }],
+      },
+    } as Partial<Config>);
+    const { agents } = await listGatewayAgents(cfg);
+    const coder = agents.find((a) => a.id === 'coder');
+    expect(coder?.skills.defaults).toEqual([]);
+    expect(coder?.skills.entry).toBeUndefined();
+    expect(coder?.skills.effectiveAllowlist).toBeUndefined();
+  });
+
   it('listGatewayAgents exposes default, entry, and effective typed models', async () => {
     const cfg = minimalConfig({
       agents: {
@@ -100,11 +115,30 @@ describe('agents-admin', () => {
     expect(extractAvatarFromIdentityMarkdown('')).toBeUndefined();
     expect(extractAvatarFromIdentityMarkdown('- **Avatar:**  \n')).toBeUndefined();
   });
-  it('prepareUpdateAgent sets skills and tools.disable on list entry', () => {
+  it('prepareUpdateAgent sets skills and tools.disable on custom list entry', () => {
     const cfg = minimalConfig({
       agents: {
         ...minimalConfig().agents,
-        list: [{ id: 'coder', enabled: true, workspace: '/tmp/c' }],
+        list: [{ id: 'note-taker', enabled: true, workspace: '/tmp/c' }],
+      },
+    } as Partial<Config>);
+    const r = prepareUpdateAgent(cfg, 'note-taker', {
+      skills: ['note'],
+      tools: { disable: ['shell'] },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const list = r.data.nextConfig.agents?.list ?? [];
+    const e = list.find((x) => x.id === 'note-taker');
+    expect(e?.skills).toEqual(['note']);
+    expect(e?.tools?.disable).toEqual(['shell']);
+  });
+
+  it('prepareUpdateAgent removes builtin agent skills instead of setting a special allowlist', () => {
+    const cfg = minimalConfig({
+      agents: {
+        ...minimalConfig().agents,
+        list: [{ id: 'coder', enabled: true, workspace: '/tmp/c', skills: ['old'] }],
       },
     } as Partial<Config>);
     const r = prepareUpdateAgent(cfg, 'coder', {
@@ -113,9 +147,8 @@ describe('agents-admin', () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const list = r.data.nextConfig.agents?.list ?? [];
-    const e = list.find((x) => x.id === 'coder');
-    expect(e?.skills).toEqual(['note']);
+    const e = r.data.nextConfig.agents?.list?.find((x) => x.id === 'coder');
+    expect(e?.skills).toBeUndefined();
     expect(e?.tools?.disable).toEqual(['shell']);
   });
   it('prepareCreateAgent uses explicit id seed for agent id without writing display fields to config', () => {
@@ -214,10 +247,10 @@ describe('agents-admin', () => {
     expect(e?.tools?.disable).toEqual(['shell', 'image_generate']);
   });
 
-  it('prepareCreateAgent sets models and skills on new entry', () => {
+  it('prepareCreateAgent sets models and skills on custom new entry', () => {
     const cfg = minimalConfig();
     const r = prepareCreateAgent(cfg, {
-      id: 'researcher',
+      id: 'custom-researcher',
       workspace: '/tmp/researcher',
       profileFiles: { 'IDENTITY.md': identityMarkdown('Researcher') },
       skills: ['research'],
@@ -228,7 +261,7 @@ describe('agents-admin', () => {
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const e = r.data.nextConfig.agents?.list?.find((x) => x.id === 'researcher');
+    const e = r.data.nextConfig.agents?.list?.find((x) => x.id === 'custom-researcher');
     expect(e?.skills).toEqual(['research']);
     expect(e?.models).toEqual({
       chat: { primary: 'openai/gpt-4.1' },

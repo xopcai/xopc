@@ -23,6 +23,8 @@
     "docs": "Docs",
     "close": "Close",
     "advancedConfiguration": "Advanced configuration",
+    "basicConfiguration": "Basic configuration",
+    "basicConfigurationHint": "Set the fields required for this channel to start and receive messages.",
     "setupTitle": "Setup",
     "setupConfiguredHint": "Channel config exists. Use actions below to reconnect or verify it.",
     "setupEmptyHint": "Use the fastest setup path for this channel.",

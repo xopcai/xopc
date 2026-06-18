@@ -76,7 +76,6 @@ export function PresetAgentsSetup({ existingAgentIds, onComplete, onSkip }: Pres
           profileFiles: localizedProfileFiles(preset.profileFiles, language),
           tools: preset.tools,
           ...(preset.models ? { models: preset.models } : {}),
-          ...(preset.skills ? { skills: preset.skills } : {}),
         })),
       );
       setProgress({ current: toCreate.length, total: toCreate.length });

@@ -36,6 +36,7 @@ import { useAgentOverviewProfileMarkdown } from './hooks/use-agent-overview-prof
 import { useAgentProfileFiles } from './hooks/use-agent-profile-files';
 import { useAgentsChannelBindings } from './hooks/use-agents-channel-bindings';
 import { useAgentsCronJobs } from './hooks/use-agents-cron-jobs';
+import { isBuiltinAgentId } from './builtin-agent-ids';
 import { useAgentsSkillsCatalog } from './hooks/use-agents-skills-catalog';
 import { useAgentsToolsSkillsLocalState } from './hooks/use-agents-tools-skills-local-state';
 import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-defaults';
@@ -577,7 +578,7 @@ export function useAgentsSettingsPanel() {
   }
 
   async function onSaveSkills() {
-    if (!selected) {
+    if (!selected || isBuiltinAgentId(selected.id)) {
       return;
     }
     setBusy(true);

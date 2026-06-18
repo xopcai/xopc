@@ -12,7 +12,6 @@ export interface PresetAgentSpec {
   models?: {
     roles?: Record<string, { model: string; description?: string }>;
   };
-  skills?: string[];
 }
 
 export const PRESET_AGENTS_SKIPPED_KEY = 'xopc-preset-agents-skipped';
@@ -47,7 +46,6 @@ export const PRESET_AGENTS: readonly PresetAgentSpec[] = [
     tools: {
       disable: ['image_generate', 'send_message', 'send_media', 'cronjob'],
     },
-    skills: ['diagnose', 'tdd', 'github', 'webapp-testing'],
     profileFiles: {
       'IDENTITY.md': {
         en: commonIdentity({
@@ -152,7 +150,6 @@ You are a software engineering agent. Your job is to understand the codebase, ma
     tools: {
       disable: ['shell', 'browser_use', 'send_message', 'send_media', 'cronjob', 'bundle-mcp'],
     },
-    skills: ['summarize'],
     profileFiles: {
       'IDENTITY.md': {
         en: commonIdentity({
@@ -253,7 +250,6 @@ You are a writing and editing agent. Your job is to improve clarity, structure, 
     tools: {
       disable: ['shell', 'write_file', 'edit_file', 'send_message', 'send_media', 'cronjob'],
     },
-    skills: ['summarize'],
     profileFiles: {
       'IDENTITY.md': {
         en: commonIdentity({
@@ -356,7 +352,6 @@ You are a research agent. Your job is to find reliable evidence, compare sources
     tools: {
       disable: ['browser_use', 'send_message', 'send_media', 'cronjob'],
     },
-    skills: ['xlsx', 'summarize'],
     profileFiles: {
       'IDENTITY.md': {
         en: commonIdentity({
@@ -459,7 +454,6 @@ You are a data analysis agent. Your job is to inspect data, explain assumptions,
     tools: {
       disable: ['shell', 'send_message', 'send_media', 'cronjob'],
     },
-    skills: ['frontend-design', 'theme-factory'],
     profileFiles: {
       'IDENTITY.md': {
         en: commonIdentity({

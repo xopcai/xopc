@@ -36,6 +36,86 @@ function statusLabel(entry: ChannelCatalogEntry, ch: ReturnType<typeof messages>
   return ch.hubStatusNotConfigured;
 }
 
+const BASIC_CONFIG_PATHS_BY_CHANNEL: Record<string, string[]> = {
+  telegram: [
+    'enabled',
+    'accounts.default.enabled',
+    'accounts.default.botToken',
+    'accounts.default.tokenFile',
+    'dmPolicy',
+    'groupPolicy',
+  ],
+  weixin: ['enabled', 'dmPolicy'],
+  feishu: ['enabled', 'appId', 'appSecret', 'domain'],
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function cloneSchema(schema: JsonSchema | undefined): JsonSchema {
+  return JSON.parse(JSON.stringify(schema ?? { type: 'object', properties: {} })) as JsonSchema;
+}
+
+function pickSchemaPaths(schema: JsonSchema, paths: string[]): JsonSchema {
+  const out = { ...cloneSchema(schema), properties: {} as Record<string, unknown> };
+  for (const path of paths) {
+    const parts = path.split('.');
+    let src: Record<string, unknown> = schema;
+    let dst: Record<string, unknown> = out;
+    for (const [index, part] of parts.entries()) {
+      const srcProps = src.properties;
+      if (!isRecord(srcProps) || !isRecord(srcProps[part])) break;
+      const dstProps = isRecord(dst.properties) ? dst.properties : {};
+      dst.properties = dstProps;
+      if (!dstProps[part]) dstProps[part] = { ...cloneSchema(srcProps[part] as JsonSchema), properties: {} };
+      if (index === parts.length - 1) {
+        dstProps[part] = cloneSchema(srcProps[part] as JsonSchema);
+        break;
+      }
+      src = srcProps[part] as Record<string, unknown>;
+      dst = dstProps[part] as Record<string, unknown>;
+    }
+  }
+  return out;
+}
+
+function removeEmptyObjectFields(schema: JsonSchema): boolean {
+  const props = schema.properties;
+  if (!isRecord(props)) return false;
+  for (const [key, value] of Object.entries(props)) {
+    if (!isRecord(value)) continue;
+    if (value.type === 'object' && removeEmptyObjectFields(value as JsonSchema)) {
+      delete props[key];
+    }
+  }
+  return Object.keys(props).length === 0;
+}
+
+function omitSchemaPaths(schema: JsonSchema, paths: string[]): JsonSchema {
+  const out = cloneSchema(schema);
+  for (const path of paths) {
+    const parts = path.split('.');
+    let cur: Record<string, unknown> = out;
+    for (const [index, part] of parts.entries()) {
+      const props = cur.properties;
+      if (!isRecord(props)) break;
+      if (index === parts.length - 1) {
+        delete props[part];
+        break;
+      }
+      if (!isRecord(props[part])) break;
+      cur = props[part] as Record<string, unknown>;
+    }
+  }
+  removeEmptyObjectFields(out);
+  return out;
+}
+
+function hasSchemaFields(schema: JsonSchema): boolean {
+  return schema.type === 'object' && isRecord(schema.properties) && Object.keys(schema.properties).length > 0;
+}
+
 export function ChannelsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -63,6 +143,19 @@ export function ChannelsSettingsPanel() {
 
   const effectiveConfig = draft ?? remoteConfig ?? {};
   const ch = m.channelsSettings;
+  const fullConfigSchema = useMemo(
+    () => (activeEntry?.configSchema ?? { type: 'object', properties: {} }) as JsonSchema,
+    [activeEntry?.configSchema],
+  );
+  const basicConfigPaths = activeEntry ? BASIC_CONFIG_PATHS_BY_CHANNEL[activeEntry.id] ?? ['enabled'] : ['enabled'];
+  const basicConfigSchema = useMemo(
+    () => pickSchemaPaths(fullConfigSchema, basicConfigPaths),
+    [basicConfigPaths, fullConfigSchema],
+  );
+  const advancedConfigSchema = useMemo(
+    () => omitSchemaPaths(fullConfigSchema, basicConfigPaths),
+    [basicConfigPaths, fullConfigSchema],
+  );
   const schemaLabels = useMemo(() => ({
     defaultBooleanLabel: ch.schemaBooleanDefault,
     unsupportedArrayType: ch.schemaUnsupportedArrayType,
@@ -131,6 +224,19 @@ export function ChannelsSettingsPanel() {
       setSaving(false);
     }
   }, [activeEntry, catalog, draft, mutateConfig]);
+
+  const renderSetupCard = () => activeEntry ? (
+    <ChannelSetupCard
+      key={activeEntry.id}
+      entry={activeEntry}
+      locale={language}
+      messages={ch}
+      onChanged={async () => {
+        await mutateConfig();
+        await catalog.mutate();
+      }}
+    />
+  ) : null;
 
   if (!hasToken) {
     return (
@@ -201,42 +307,49 @@ export function ChannelsSettingsPanel() {
               </div>
             </div>
 
-            <ChannelSetupCard
-              key={activeEntry.id}
-              entry={activeEntry}
-              locale={language}
-              messages={ch}
-              onChanged={async () => {
-                await mutateConfig();
-                await catalog.mutate();
-              }}
-            />
+            {renderSetupCard()}
 
-            <details className="group rounded-lg border border-edge-subtle bg-surface-panel">
-              <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fg marker:hidden [&::-webkit-details-marker]:hidden">
-                <Settings2 className="size-4 text-fg-muted" />
-                {ch.advancedConfiguration}
-              </summary>
-              <div className="border-t border-edge-subtle p-4">
-                <SchemaForm
-                  schema={(activeEntry.configSchema ?? { type: 'object', properties: {} }) as JsonSchema}
-                  values={effectiveConfig}
-                  onChange={(next) => setDraft(next)}
-                  disabled={saving}
-                  labels={schemaLabels}
-                />
-
-                {error ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-                <div className="mt-4 flex justify-end gap-2">
-                  <Button type="button" variant="ghost" disabled={!draft || saving} onClick={() => setDraft(null)}>
-                    {ch.discard}
-                  </Button>
-                  <Button type="button" variant="primary" disabled={!draft || saving} onClick={() => void saveConfig()}>
-                    {saving ? ch.saving : ch.save}
-                  </Button>
-                </div>
+            <section className="rounded-lg border border-edge-subtle bg-surface-panel p-4">
+              <div className="mb-4">
+                <h3 className="text-sm font-semibold text-fg">{ch.basicConfiguration}</h3>
+                <p className="mt-1 text-sm text-fg-muted">{ch.basicConfigurationHint}</p>
               </div>
-            </details>
+              <SchemaForm
+                schema={basicConfigSchema}
+                values={effectiveConfig}
+                onChange={(next) => setDraft(next)}
+                disabled={saving}
+                labels={schemaLabels}
+              />
+            </section>
+
+            {hasSchemaFields(advancedConfigSchema) ? (
+              <details className="group rounded-lg border border-edge-subtle bg-surface-panel">
+                <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fg marker:hidden [&::-webkit-details-marker]:hidden">
+                  <Settings2 className="size-4 text-fg-muted" />
+                  {ch.advancedConfiguration}
+                </summary>
+                <div className="border-t border-edge-subtle p-4">
+                  <SchemaForm
+                    schema={advancedConfigSchema}
+                    values={effectiveConfig}
+                    onChange={(next) => setDraft(next)}
+                    disabled={saving}
+                    labels={schemaLabels}
+                  />
+                </div>
+              </details>
+            ) : null}
+
+            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" disabled={!draft || saving} onClick={() => setDraft(null)}>
+                {ch.discard}
+              </Button>
+              <Button type="button" variant="primary" disabled={!draft || saving} onClick={() => void saveConfig()}>
+                {saving ? ch.saving : ch.save}
+              </Button>
+            </div>
           </div>
         )}
       </section>
