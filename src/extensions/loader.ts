@@ -656,10 +656,7 @@ export class ExtensionLoader {
       'memory': 'memory',
       'tts': 'tts',
       'speech-provider': 'tts',
-      'image-generation': 'imageGeneration',
-      'imageGeneration': 'imageGeneration',
       'web-search': 'webSearch',
-      'webSearch': 'webSearch',
     };
     
     const slotKey = slotMap[kind];
