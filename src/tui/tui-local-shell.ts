@@ -1,9 +1,10 @@
 import { spawn } from 'node:child_process';
 
-import type { Component, TUI } from '@earendil-works/pi-tui';
+import type { Component, KeybindingsManager, TUI } from '@earendil-works/pi-tui';
 import { SelectList } from '@earendil-works/pi-tui';
 
 import type { BashExecutionComponent } from './components/bash-execution.js';
+import { formatKeyIds } from './format-tui-hotkeys.js';
 import { selectListTheme } from './theme.js';
 
 type LocalShellDeps = {
@@ -23,12 +24,23 @@ type LocalShellDeps = {
   getCwd?: () => string;
   env?: NodeJS.ProcessEnv;
   maxOutputChars?: number;
+  keybindings?: KeybindingsManager;
   /** Pause stdout/stderr filtering before handing the terminal to a child (`stdio: 'inherit'`). */
   pauseStdioFilter?: () => void;
   resumeStdioFilter?: () => void;
   /** Wrap work while the TUI is stopped (full-screen subprocess). */
   runWithInheritedStdio?: (work: () => Promise<void>) => Promise<void>;
 };
+
+export function formatLocalShellConsentHint(keybindings?: KeybindingsManager): string {
+  const confirm = keybindings
+    ? formatKeyIds(keybindings, 'tui.select.confirm', { capitalize: true })
+    : 'Enter';
+  const cancel = keybindings
+    ? formatKeyIds(keybindings, 'tui.select.cancel', { capitalize: true })
+    : 'Esc';
+  return `↑/↓ + ${confirm} to choose, ${cancel} to cancel.`;
+}
 
 /** `!command` runs on the local machine (gated by in-session consent). `!!command` uses inherited stdio. */
 export function createLocalShellRunner(deps: LocalShellDeps) {
@@ -53,7 +65,7 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
       deps.chatLog.addSystem(
         'Runs on YOUR machine (not the gateway); may delete files or expose secrets.',
       );
-      deps.chatLog.addSystem('↑/↓ + Enter to choose, Esc to cancel.');
+      deps.chatLog.addSystem(formatLocalShellConsentHint(deps.keybindings));
       const selector = new SelectList(
         [
           { value: 'no', label: 'No' },

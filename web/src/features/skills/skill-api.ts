@@ -20,9 +20,8 @@ async function readErrorMessage(res: Response): Promise<string> {
   return `HTTP ${res.status}`;
 }
 
-export async function getSkills(lang?: string): Promise<SkillsPayload> {
-  const qs = lang && lang !== 'en' ? `?lang=${encodeURIComponent(lang)}` : '';
-  const res = await apiFetch(apiUrl(`/api/skills${qs}`), { cache: 'no-store' });
+export async function getSkills(): Promise<SkillsPayload> {
+  const res = await apiFetch(apiUrl('/api/skills'), { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));
   }
@@ -178,10 +177,22 @@ export async function getMarketplacePackageDetail(
     throw new Error(await readErrorMessage(res));
   }
   const data = (await res.json()) as { ok?: boolean; payload?: MarketplacePackageDetailPayload };
-  if (!data.payload?.name) {
+  const p = data.payload;
+  if (
+    !p?.name ||
+    !p.skillDocPreview ||
+    typeof p.skillDocPreview.name !== 'string' ||
+    typeof p.skillDocPreview.description !== 'string' ||
+    typeof p.skillDocPreview.bodyMarkdown !== 'string' ||
+    typeof p.skillDocPreview.disableModelInvocation !== 'boolean' ||
+    !p.skillDocPreview.metadata ||
+    typeof p.skillDocPreview.metadata !== 'object' ||
+    typeof p.skillDocPreview.metadata.name !== 'string' ||
+    typeof p.skillDocPreview.metadata.description !== 'string'
+  ) {
     throw new Error('Invalid response');
   }
-  return data.payload;
+  return p;
 }
 
 export async function installMarketplaceSkill(opts: {
@@ -209,9 +220,8 @@ export async function installMarketplaceSkill(opts: {
   return data.payload;
 }
 
-export async function getSkillMarkdown(skillName: string, lang?: string): Promise<SkillMarkdownPreviewPayload> {
-  const qs = lang ? `?lang=${encodeURIComponent(lang)}` : '';
-  const res = await apiFetch(apiUrl(`/api/skills/${encodeURIComponent(skillName)}/content${qs}`), {
+export async function getSkillMarkdown(skillName: string): Promise<SkillMarkdownPreviewPayload> {
+  const res = await apiFetch(apiUrl(`/api/skills/${encodeURIComponent(skillName)}/content`), {
     cache: 'no-store',
   });
   if (!res.ok) {

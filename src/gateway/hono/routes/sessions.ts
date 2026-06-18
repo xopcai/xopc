@@ -5,14 +5,22 @@ import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.j
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
+import type { SessionType } from '../../../session/types.js';
 import { computeUserRoundDeleteRange } from '../../../session/user-round-delete.js';
 import { deleteMediaUrisNoLongerReferenced } from '../../../media/session-references.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 import type { StartupUnavailableGatewayMethod } from '../../startup-readiness.js';
+import { evictEmbeddedSessionRunner } from '../../../agent/embedded/session-runner.js';
 
 const log = createGatewayRouteLogger('Sessions');
 
 type SessionsStartupMethod = StartupUnavailableGatewayMethod;
+
+const SESSION_TYPES = new Set<SessionType>(['chat', 'workflow-run', 'workflow-subagent', 'cron', 'heartbeat']);
+
+function isSessionType(value: string): value is SessionType {
+  return SESSION_TYPES.has(value as SessionType);
+}
 
 function ensureGatewayReadyForSessions(
   c: Parameters<typeof respondStartupUnavailable>[0],
@@ -103,10 +111,16 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return blocked;
     }
     const query = c.req.query();
+    const sessionTypes = query.types
+      ?.split(',')
+      .map((value) => value.trim())
+      .filter(isSessionType);
     const result = await service.sessions.listSessions({
       status: query.status as any,
       search: query.search,
       channel: query.channel,
+      sessionTypes: sessionTypes?.length ? sessionTypes : undefined,
+      includeHidden: query.includeHidden === 'true',
       limit: query.limit ? parseInt(query.limit) : undefined,
       offset: query.offset ? parseInt(query.offset) : undefined,
     });
@@ -235,6 +249,66 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
         ? (body.data as Record<string, unknown>)
         : undefined;
     await service.sessionIndexInstance.appendTranscriptContextEntry(key, { id, text, data });
+    return c.json({ ok: true });
+  });
+
+  // POST /api/sessions/:key/transcript/label — append label change for a transcript entry.
+  authenticated.post('/api/sessions/:key/transcript/label', async (c) => {
+    const key = c.req.param('key');
+    const meta = await service.sessionIndexInstance.getSessionMetadata(key);
+    if (!meta) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const targetId = typeof body.targetId === 'string' ? body.targetId.trim() : '';
+    if (!targetId) {
+      return c.json({ ok: false, error: 'targetId is required' }, 400);
+    }
+    const label = typeof body.label === 'string' && body.label.trim() ? body.label.trim() : undefined;
+    await service.sessionIndexInstance.appendTranscriptLabelEntry(key, { targetId, label });
+    return c.json({ ok: true });
+  });
+
+  // POST /api/sessions/:key/transcript/custom — append extension state for TUI replay.
+  authenticated.post('/api/sessions/:key/transcript/custom', async (c) => {
+    const key = c.req.param('key');
+    const meta = await service.sessionIndexInstance.getSessionMetadata(key);
+    if (!meta) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const customType = typeof body.customType === 'string' ? body.customType.trim() : '';
+    if (!customType) {
+      return c.json({ ok: false, error: 'customType is required' }, 400);
+    }
+    await service.sessionIndexInstance.appendTranscriptCustomEntry(key, {
+      customType,
+      data: body.data,
+    });
+    return c.json({ ok: true });
+  });
+
+  // POST /api/sessions/:key/transcript/custom-message — append visible extension custom message.
+  authenticated.post('/api/sessions/:key/transcript/custom-message', async (c) => {
+    const key = c.req.param('key');
+    const meta = await service.sessionIndexInstance.getSessionMetadata(key);
+    if (!meta) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const customType = typeof body.customType === 'string' ? body.customType.trim() : '';
+    if (!customType) {
+      return c.json({ ok: false, error: 'customType is required' }, 400);
+    }
+    const content =
+      typeof body.content === 'string' || Array.isArray(body.content) ? body.content : '';
+    await service.sessionIndexInstance.appendTranscriptCustomMessageEntry(key, {
+      customType,
+      content,
+      display: typeof body.display === 'boolean' ? body.display : undefined,
+      details: body.details,
+    });
+    evictEmbeddedSessionRunner(key, 'gateway_custom_message_appended');
     return c.json({ ok: true });
   });
 
@@ -380,6 +454,69 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const format = c.req.query('format') as any || 'json';
     const result = await service.sessions.export(key, format);
     return c.json(result);
+  });
+
+  authenticated.post('/api/sessions/import', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const targetKey = typeof body.targetKey === 'string' ? body.targetKey : '';
+    const content = typeof body.content === 'string' ? body.content : '';
+    if (!targetKey.trim()) {
+      return c.json({ ok: false, error: 'targetKey is required' }, 400);
+    }
+    if (!content.trim()) {
+      return c.json({ ok: false, error: 'content is required' }, 400);
+    }
+    try {
+      const result = await service.sessions.importExport(targetKey, content);
+      return c.json({ ok: true, ...result });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: errorMessage }, 400);
+    }
+  });
+
+  authenticated.post('/api/sessions/:key/btw', async (c) => {
+    const key = c.req.param('key');
+    const body = await c.req.json().catch(() => ({}));
+    const question = typeof body.question === 'string' ? body.question : '';
+    const result = await service.sessions.btwQuery(key, question);
+    return c.json(result);
+  });
+
+  authenticated.post('/api/sessions/:key/fork', async (c) => {
+    const key = c.req.param('key');
+    const body = await c.req.json().catch(() => ({}));
+    const targetKey = typeof body.targetKey === 'string' ? body.targetKey : '';
+    if (!targetKey.trim()) {
+      return c.json({ ok: false, error: 'targetKey is required' }, 400);
+    }
+    try {
+      const result = await service.sessions.fork(key, targetKey);
+      return c.json({ ok: true, ...result });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: errorMessage }, 400);
+    }
+  });
+
+  authenticated.post('/api/sessions/:key/fork-row', async (c) => {
+    const key = c.req.param('key');
+    const body = await c.req.json().catch(() => ({}));
+    const targetKey = typeof body.targetKey === 'string' ? body.targetKey : '';
+    const throughRow = typeof body.throughRow === 'number' ? Math.trunc(body.throughRow) : NaN;
+    if (!targetKey.trim()) {
+      return c.json({ ok: false, error: 'targetKey is required' }, 400);
+    }
+    if (!Number.isFinite(throughRow) || throughRow < 1) {
+      return c.json({ ok: false, error: 'throughRow must be a positive integer' }, 400);
+    }
+    try {
+      const result = await service.sessions.forkRows(key, targetKey, { throughRow });
+      return c.json({ ok: true, ...result });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: errorMessage }, 400);
+    }
   });
 
   // DELETE /api/sessions/:key/messages — delete LLM rows by range or by user turn.

@@ -12,8 +12,6 @@ import {
 } from '../../storage/sqlite/index.js';
 import { SessionStore } from '../store.js';
 
-const testConfig = ConfigSchema.parse({});
-
 describe('SessionStore', () => {
   let tempDir: string;
   let store: SessionStore;
@@ -25,7 +23,9 @@ describe('SessionStore', () => {
     process.env.XOPC_STATE_DIR = tempDir;
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(tempDir, 'xopc.db') });
-    store = new SessionStore({ config: testConfig });
+    store = new SessionStore({
+      config: ConfigSchema.parse({ agents: { defaults: { workspace: tempDir } } }),
+    });
     await store.initialize();
   });
 
@@ -87,6 +87,15 @@ describe('SessionStore', () => {
   });
 
   describe('message persistence (SQLite)', () => {
+    it('includes active transcript cwd in listed metadata', async () => {
+      const key = 'agent:main:webchat:default:direct:cwd-list';
+      await store.saveMessages(key, [{ role: 'user', content: 'hello', timestamp: Date.now() }]);
+
+      const result = await store.list({ search: 'cwd-list' });
+
+      expect(result.items[0]?.cwd).toBe(join(tempDir, 'main'));
+    });
+
     it('should reset in place with archived transcript and new session id', async () => {
       const key = 'agent:main:webchat:default:direct:reset-test';
       await store.saveMessages(key, [{ role: 'user', content: 'hello', timestamp: Date.now() }]);
@@ -113,6 +122,33 @@ describe('SessionStore', () => {
       expect(loaded).toHaveLength(2);
       expect(loaded[0].role).toBe('user');
       expect(loaded[1].role).toBe('assistant');
+    });
+
+    it('should preserve cache token usage on assistant transcript rows', async () => {
+      const key = 'agent:main:webchat:default:direct:usage-cache';
+      await store.saveMessages(key, [
+        {
+          role: 'assistant',
+          content: 'cached response',
+          usage: {
+            input: 10,
+            output: 5,
+            cacheRead: 3,
+            cacheWrite: 2,
+            total: 20,
+          },
+        },
+      ] as any[]);
+
+      const rows = await store.loadTranscriptRows(key);
+
+      expect((rows[0] as { usage?: unknown }).usage).toEqual({
+        input: 10,
+        output: 5,
+        cacheRead: 3,
+        cacheWrite: 2,
+        total: 20,
+      });
     });
 
     it('should hide compaction summary messages from display history', async () => {
@@ -378,6 +414,56 @@ describe('SessionStore', () => {
       expect(row.kind).toBe('context');
     });
 
+    it('appendTranscriptLabelEntry keeps row on disk but loadMessages returns LLM only', async () => {
+      const key = 'agent:main:webchat:default:direct:labelrow1';
+      await store.saveMessages(key, [{ id: 'u1', role: 'user', content: 'hi' }]);
+      await store.appendTranscriptLabelEntry(key, { targetId: 'u1', label: 'important' });
+      const llm = await store.loadMessages(key);
+      expect(llm).toHaveLength(1);
+      const rows = await store.loadTranscriptRows(key);
+      expect(rows).toHaveLength(2);
+      expect(rows[1]).toMatchObject({ type: 'label', targetId: 'u1', label: 'important' });
+    });
+
+    it('appendTranscriptCustomEntry keeps extension state on disk but loadMessages returns LLM only', async () => {
+      const key = 'agent:main:webchat:default:direct:customrow1';
+      await store.saveMessages(key, [{ role: 'user', content: 'hi' }]);
+      await store.appendTranscriptCustomEntry(key, { customType: 'preset-state', data: { name: 'fast' } });
+      const llm = await store.loadMessages(key);
+      expect(llm).toHaveLength(1);
+      const rows = await store.loadTranscriptRows(key);
+      expect(rows).toHaveLength(2);
+      expect(rows[1]).toMatchObject({
+        type: 'custom',
+        customType: 'preset-state',
+        data: { name: 'fast' },
+      });
+    });
+
+    it('appendTranscriptCustomMessageEntry keeps visible custom message on disk and injects LLM context', async () => {
+      const key = 'agent:main:webchat:default:direct:custommsg1';
+      await store.saveMessages(key, [{ role: 'user', content: 'hi' }]);
+      await store.appendTranscriptCustomMessageEntry(key, {
+        customType: 'status-update',
+        content: 'ready',
+        details: { level: 'info' },
+      });
+      const llm = await store.loadMessages(key);
+      expect(llm).toEqual([
+        { role: 'user', content: 'hi' },
+        { role: 'user', content: [{ type: 'text', text: 'ready' }], timestamp: expect.any(Number) },
+      ]);
+      const rows = await store.loadTranscriptRows(key);
+      expect(rows).toHaveLength(2);
+      expect(rows[1]).toMatchObject({
+        role: 'custom',
+        customType: 'status-update',
+        content: 'ready',
+        display: true,
+        details: { level: 'info' },
+      });
+    });
+
     it('json exportSession includes transcriptRows', async () => {
       const key = 'agent:main:webchat:default:direct:exportctx';
       await store.saveMessages(key, [{ role: 'user', content: 'hi' }]);
@@ -386,6 +472,70 @@ describe('SessionStore', () => {
       const parsed = JSON.parse(json) as { transcriptRows?: unknown[]; messages?: unknown[] };
       expect(parsed.transcriptRows?.length).toBe(2);
       expect(parsed.messages?.length).toBe(1);
+    });
+
+    it('importSessionExport restores transcript rows into a new session', async () => {
+      const source = 'agent:main:webchat:default:direct:import-source';
+      const target = 'agent:main:webchat:default:direct:import-target';
+      await store.saveMessages(source, [{ role: 'user', content: 'hi' }]);
+      await store.appendTranscriptContextEntry(source, { text: 'import_note', id: 'i1' });
+      patchSessionMetadata(source, { name: 'Import Source', tags: ['demo'] });
+
+      const json = await store.exportSession(source, 'json');
+      const result = await store.importSessionExport(target, json);
+
+      expect(result).toEqual({ sessionKey: target, rowCount: 2 });
+      expect(await store.loadMessages(target)).toHaveLength(1);
+      const rows = await store.loadTranscriptRows(target);
+      expect(rows).toHaveLength(2);
+      const targetMeta = await store.getMetadata(target);
+      expect(targetMeta?.name).toBe('Import of Import Source');
+      expect(targetMeta?.tags).toContain('demo');
+      expect(targetMeta?.tags).toContain('import');
+      expect(targetMeta?.customData?.importedFromSessionKey).toBe(source);
+      expect(targetMeta?.customData?.importedAt).toEqual(expect.any(String));
+    });
+
+    it('forkSession clones transcript rows into a new session', async () => {
+      const source = 'agent:main:webchat:default:direct:fork-source';
+      const target = 'agent:main:webchat:default:direct:fork-target';
+      await store.saveMessages(source, [{ role: 'user', content: 'hi' }]);
+      await store.appendTranscriptContextEntry(source, { text: 'fork_note', id: 'f1' });
+      patchSessionMetadata(source, { name: 'Source Session', tags: ['demo'] });
+
+      const result = await store.forkSession(source, target);
+
+      expect(result).toEqual({ sessionKey: target, rowCount: 2 });
+      expect(await store.loadMessages(target)).toHaveLength(1);
+      const targetDoc = await store.loadTranscriptDocument(target);
+      expect(targetDoc?.messages).toHaveLength(2);
+      const targetMeta = await store.getMetadata(target);
+      expect(targetMeta?.name).toBe('Fork of Source Session');
+      expect(targetMeta?.tags).toContain('demo');
+      expect(targetMeta?.tags).toContain('fork');
+      expect(targetMeta?.customData?.forkedFromSessionKey).toBe(source);
+      expect(targetMeta?.customData?.forkedFromTranscriptId).toBeTruthy();
+      expect(targetMeta?.customData?.forkedAt).toEqual(expect.any(String));
+    });
+
+    it('forkSessionRows clones transcript rows through the selected row', async () => {
+      const source = 'agent:main:webchat:default:direct:fork-row-source';
+      const target = 'agent:main:webchat:default:direct:fork-row-target';
+      await store.saveMessages(source, [
+        { role: 'user', content: 'first' },
+        { role: 'assistant', content: 'answer' },
+        { role: 'user', content: 'second' },
+      ]);
+
+      const result = await store.forkSessionRows(source, target, { throughRow: 2 });
+
+      expect(result).toEqual({ sessionKey: target, rowCount: 2 });
+      const rows = await store.loadTranscriptRows(target);
+      expect(rows).toHaveLength(2);
+      expect(await store.loadMessages(target)).toHaveLength(2);
+      const targetMeta = await store.getMetadata(target);
+      expect(targetMeta?.customData?.forkedFromSessionKey).toBe(source);
+      expect(targetMeta?.customData?.forkedFromRow).toBe(2);
     });
   });
 });

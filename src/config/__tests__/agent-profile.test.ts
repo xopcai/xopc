@@ -25,7 +25,7 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
           id: 'coder',
           enabled: true,
           workspace: '~/coder-ws',
-          model: { primary: 'anthropic/claude-3-5-sonnet-20241022' },
+          models: { chat: { primary: 'anthropic/claude-3-5-sonnet-20241022' } },
           tools: { disable: ['shell'] },
         },
       ],

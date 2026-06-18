@@ -105,7 +105,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopc config get agents.defaults.model',
+        'xopc config get agents.defaults.models.chat',
         'xopc config set agents.defaults.temperature 0.8',
         'xopc config unset agents.defaults.max_tokens',
         'xopc config show',
@@ -299,7 +299,7 @@ register({
   metadata: {
     category: 'utility',
     examples: [
-      'xopc config get agents.defaults.model',
+      'xopc config get agents.defaults.models.chat',
       'xopc config set agents.defaults.temperature 0.8',
       'xopc config show',
       'xopc config validate',

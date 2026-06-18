@@ -11,6 +11,8 @@
 
 export interface IdentityFields {
   name: string;
+  description: string;
+  language: string;
   creature: string;
   emoji: string;
   avatar: string;
@@ -18,6 +20,8 @@ export interface IdentityFields {
 
 const IDENTITY_DEFAULTS: IdentityFields = {
   name: '',
+  description: '',
+  language: '',
   creature: '',
   emoji: '',
   avatar: '',
@@ -28,8 +32,9 @@ const IDENTITY_DEFAULTS: IdentityFields = {
  *
  * Handles the template format:
  *   - **Name:** value
+ *   - **Description:** value
+ *   - **Language:** value
  *   - **Creature:** value
- *   - **Vibe:** value
  *   - **Emoji:** value
  *   - **Avatar:** value
  */
@@ -41,6 +46,8 @@ export function parseIdentityMarkdown(content: string): IdentityFields {
 
   const fieldMap: Record<string, keyof IdentityFields> = {
     name: 'name',
+    description: 'description',
+    language: 'language',
     creature: 'creature',
     emoji: 'emoji',
     avatar: 'avatar',
@@ -75,6 +82,8 @@ export function serializeIdentityMarkdown(fields: IdentityFields): string {
     '# IDENTITY.md - Who Am I?',
     '',
     `- **Name:** ${fields.name}`,
+    `- **Description:** ${fields.description}`,
+    `- **Language:** ${fields.language}`,
     `- **Creature:** ${fields.creature}`,
     `- **Emoji:** ${fields.emoji}`,
     `- **Avatar:** ${fields.avatar}`,

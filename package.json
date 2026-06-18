@@ -31,9 +31,8 @@
     "access": "public"
   },
   "scripts": {
-    "generate:bundled-channels": "node scripts/generate-bundled-channel-plugins.mjs",
     "generate:bundled-image-providers": "node scripts/generate-bundled-image-providers.mjs",
-    "generate:bundled": "pnpm run generate:bundled-channels && pnpm run generate:bundled-image-providers",
+    "generate:bundled": "pnpm run generate:bundled-image-providers",
     "build:node": "node scripts/tsdown-build.mjs",
     "build:types": "tsc -p tsconfig.dts.json",
     "build:ci": "pnpm run generate:bundled && pnpm run build:node && pnpm run build:web",

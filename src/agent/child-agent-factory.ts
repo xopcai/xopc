@@ -1,4 +1,4 @@
-import { Agent, type AgentEvent, type ThinkingLevel } from '@earendil-works/pi-agent-core';
+import { Agent, type AgentEvent, type AgentMessage, type ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import type { Config } from '../config/schema.js';
@@ -70,11 +70,14 @@ export interface DelegateChildHandleOptions {
   buildChildTools: (opts: BuildChildToolsOptions) => AgentTool<any, any>[];
   /** Optional live progress for workflow subagents. */
   progressHooks?: DelegateChildProgressHooks;
+  /** Optional persisted transcript snapshots for hidden workflow subagent sessions. */
+  onTranscriptSnapshot?: (messages: AgentMessage[]) => void | Promise<void>;
 }
 
 export interface DelegateChildRunResult {
   summary: string;
   toolIterations: number;
+  messages: AgentMessage[];
 }
 
 export interface DelegateChildHandle {
@@ -103,6 +106,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
         return {
           summary: 'No tools matched the allowlist after factory registration.',
           toolIterations: 0,
+          messages: [],
         };
       },
       abort() {},
@@ -172,21 +176,32 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
     async run(): Promise<DelegateChildRunResult> {
       toolIterations = 0;
       aborted = false;
-      const unsub =
-        progress?.mode === 'full'
-          ? agent.subscribe((ev: AgentEvent) => {
-              if (ev.type === 'message_update') {
-                const u = ev as Extract<AgentEvent, { type: 'message_update' }>;
-                const delta = u.assistantMessageEvent;
-                if (delta?.type === 'text_delta' && typeof delta.delta === 'string' && delta.delta) {
-                  progress.onProgress({ type: 'text_delta', delta: delta.delta });
-                }
-                if (delta?.type === 'thinking_delta' && typeof delta.delta === 'string' && delta.delta) {
-                  progress.onProgress({ type: 'thinking_delta', delta: delta.delta });
-                }
-              }
-            })
-          : undefined;
+      const unsub = agent.subscribe((ev: AgentEvent) => {
+        if (progress?.mode === 'full' && ev.type === 'message_update') {
+          const u = ev as Extract<AgentEvent, { type: 'message_update' }>;
+          const delta = u.assistantMessageEvent;
+          if (delta?.type === 'text_delta' && typeof delta.delta === 'string' && delta.delta) {
+            progress.onProgress({ type: 'text_delta', delta: delta.delta });
+          }
+          if (delta?.type === 'thinking_delta' && typeof delta.delta === 'string' && delta.delta) {
+            progress.onProgress({ type: 'thinking_delta', delta: delta.delta });
+          }
+        }
+        if (
+          options.onTranscriptSnapshot &&
+          (ev.type === 'message_end' || ev.type === 'tool_execution_end')
+        ) {
+          try {
+            void Promise.resolve(options.onTranscriptSnapshot(agent.state.messages)).catch((err) => {
+              const msg = err instanceof Error ? err.message : String(err);
+              log.warn({ err, errorMessage: msg }, `Failed to persist child transcript snapshot: ${msg}`);
+            });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            log.warn({ err, errorMessage: msg }, `Failed to persist child transcript snapshot: ${msg}`);
+          }
+        }
+      });
       try {
         await runAgentTurnWithTimeout(
           agent,
@@ -203,13 +218,14 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
           if (msg.role === 'assistant') {
             const content: unknown = msg.content;
             if (typeof content === 'string') {
-              return { summary: content.trim() || '(empty assistant message)', toolIterations };
+              return { summary: content.trim() || '(empty assistant message)', toolIterations, messages };
             }
             if (Array.isArray(content)) {
               const text = extractTextContent(content as Array<{ type: string; text?: string }>);
               return {
                 summary: text.trim() || '(empty assistant message)',
                 toolIterations,
+                messages,
               };
             }
           }
@@ -220,6 +236,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
             ? 'Sub-agent was aborted before producing a result.'
             : 'Sub-agent completed but produced no assistant text.',
           toolIterations,
+          messages,
         };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
@@ -239,6 +256,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
         return {
           summary: `Sub-agent error: ${msg}`,
           toolIterations,
+          messages: agent.state.messages,
         };
       } finally {
         unsub?.();

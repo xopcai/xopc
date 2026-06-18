@@ -17,7 +17,7 @@ export interface SetupError {
 export interface SetupOutcome {
   ok: boolean;
   action: SetupAction;
-  /** Logical domain — `providers`, `channels.telegram`, etc. */
+  /** Logical domain — `providers`, `channels.<id>`, etc. */
   domain: string;
   /** Specific target id within the domain (provider id, account id, etc.). */
   target?: string;

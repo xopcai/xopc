@@ -26,6 +26,8 @@ export function runViewToSnapshot(view: WorkflowRunView): WorkflowSnapshot {
     label: agent.label,
     phase: agent.phaseId ? phaseTitleById.get(agent.phaseId) : undefined,
     prompt: agent.prompt ?? '',
+    sessionKey: agent.sessionKey,
+    transcriptMessageCount: agent.transcriptMessageCount,
     status: agent.status,
     resultPreview: agent.resultPreview,
     error: agent.error,
@@ -54,6 +56,7 @@ export function runViewToSnapshot(view: WorkflowRunView): WorkflowSnapshot {
 
   const { metrics } = view.run;
   return {
+    runId: view.run.id,
     name: view.run.definitionId,
     description: view.run.goal || view.run.title,
     phases: view.phases.map((phase) => phase.title),

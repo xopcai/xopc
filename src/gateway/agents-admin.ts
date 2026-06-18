@@ -24,12 +24,11 @@ import {
   pruneAgentConfig,
   removeAgentDirsFromDisk,
 } from '../commands/agents.config.js';
-import type { Config } from '../config/schema.js';
-import type { LocalizedText } from '../config/localized-text.js';
-import { normalizeLocalizedText, resolveLocalizedText } from '../config/localized-text.js';
+import type { AgentModelsConfig, Config } from '../config/schema.js';
 import { WORKSPACE_FILES } from '../config/paths.js';
 import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
 import type { AgentTypedModel } from '../config/schema.js';
+import { resolveEffectiveTypedModels } from '../config/agent-typed-models.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
 import { isPathUnderWorkspace, resolveWorkspaceSafePath } from './workspace-editor-path.js';
 
@@ -37,6 +36,7 @@ const EDITABLE_PROFILE_MARKDOWN_NAMES = new Set<string>([...AGENT_PROFILE_MARKDO
 
 export type GatewayAgentTypedModelsInfo = {
   defaults: AgentTypedModel[];
+  entry?: AgentTypedModel[];
   effective: AgentTypedModel[];
 };
 
@@ -44,10 +44,7 @@ export type GatewayAgentRow = {
   id: string;
   name?: string;
   description?: string;
-  localized?: {
-    name?: LocalizedText;
-    description?: LocalizedText;
-  };
+  language?: string;
   /** Value from `IDENTITY.md` **Avatar:** line when present (may be URL, `xopc:…`, etc.). */
   avatar?: string;
   workspace: string;
@@ -88,16 +85,39 @@ function collectAgentIdsForList(cfg: Config): string[] {
   return [...ids];
 }
 
+function rolesToTypedModels(
+  roles: Record<string, { model: string; description?: string }> | undefined,
+): AgentTypedModel[] {
+  return Object.entries(roles ?? {})
+    .map(([id, role]) => ({ id, ...role }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+}
+
 /** Extract `**Avatar:**` value from profile IDENTITY.md (same line shape as the gateway console parser). */
 export function extractAvatarFromIdentityMarkdown(content: string): string | undefined {
+  return parseIdentityMarkdown(content).avatar || undefined;
+}
+
+export function parseIdentityMarkdown(content: string): {
+  name?: string;
+  description?: string;
+  language?: string;
+  avatar?: string;
+} {
+  const out: { name?: string; description?: string; language?: string; avatar?: string } = {};
   for (const line of content.split('\n')) {
-    const match = line.match(/^[-*]\s+\*\*Avatar:\*\*\s*(.*)/i);
+    const match = line.match(/^[-*]\s+\*\*(Name|Description|Language|Avatar):\*\*\s*(.*)/i);
     if (match) {
-      const v = match[1]?.trim() ?? '';
-      return v.length > 0 ? v : undefined;
+      const key = match[1]?.toLowerCase();
+      const v = match[2]?.trim() ?? '';
+      if (!v || /^_\(.*\)_$/.test(v)) continue;
+      if (key === 'name') out.name = v;
+      if (key === 'description') out.description = v;
+      if (key === 'language') out.language = v;
+      if (key === 'avatar') out.avatar = v;
     }
   }
-  return undefined;
+  return out;
 }
 
 export async function listGatewayAgents(
@@ -108,7 +128,7 @@ export async function listGatewayAgents(
   const agents: GatewayAgentRow[] = [];
   const defaultsSkills = cfg.agents?.defaults?.skills;
   const defaultsDisable = cfg.agents?.defaults?.tools?.disable ?? [];
-  const defaultsTypedModels = cfg.agents?.defaults?.models ?? [];
+  const defaultsTypedModels = rolesToTypedModels(cfg.agents?.defaults?.models?.roles);
   for (const id of collectAgentIdsForList(cfg)) {
     const profile = resolveEffectiveAgentProfile(cfg, id);
     const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
@@ -121,37 +141,30 @@ export async function listGatewayAgents(
         : undefined;
     const entrySkills = entry?.skills;
     const entryDisable = entry?.tools?.disable ?? [];
-    const effectiveTypedModels = [...defaultsTypedModels];
-    let avatar: string | undefined;
+    const entryTypedModels = rolesToTypedModels(entry?.models?.roles);
+    const effectiveTypedModels = [...resolveEffectiveTypedModels(cfg, id).values()].sort((a, b) =>
+      a.id.localeCompare(b.id),
+    );
+    let identity: ReturnType<typeof parseIdentityMarkdown> = {};
     try {
       const identityPath = join(resolveAgentProfileDir(cfg, id), WORKSPACE_FILES.IDENTITY);
       const content = await readFile(identityPath, 'utf-8');
-      avatar = extractAvatarFromIdentityMarkdown(content);
+      identity = parseIdentityMarkdown(content);
     } catch {
       /* missing IDENTITY.md or unreadable */
     }
-    const localizedName = normalizeLocalizedText(entry?.name);
-    const localizedDescription = normalizeLocalizedText(entry?.description);
-    const displayName = resolveLocalizedText(localizedName, options.locale);
-    const displayDescription = resolveLocalizedText(localizedDescription, options.locale);
     agents.push({
       id,
-      ...(displayName ? { name: displayName } : {}),
-      ...(displayDescription ? { description: displayDescription } : {}),
-      ...(localizedName || localizedDescription
-        ? {
-            localized: {
-              ...(localizedName ? { name: localizedName } : {}),
-              ...(localizedDescription ? { description: localizedDescription } : {}),
-            },
-          }
-        : {}),
-      ...(avatar ? { avatar } : {}),
+      ...(identity.name ? { name: identity.name } : {}),
+      ...(identity.description ? { description: identity.description } : {}),
+      ...(identity.language ? { language: identity.language } : {}),
+      ...(identity.avatar ? { avatar: identity.avatar } : {}),
       workspace: profile.resolvedWorkspacePath,
       profileDir: resolveAgentProfileDir(cfg, id),
       ...(model ? { model } : {}),
       typedModels: {
         defaults: [...defaultsTypedModels],
+        ...(entryTypedModels.length > 0 ? { entry: entryTypedModels } : {}),
         effective: effectiveTypedModels,
       },
       isDefault: id === defaultId,
@@ -174,16 +187,15 @@ export async function listGatewayAgents(
 }
 
 export type CreateAgentBody = {
-  /** Display name stored on the agent entry. */
-  name: LocalizedText;
-  /** Optional id seed; normalized agent id defaults from `name` when omitted. */
+  /** Optional id seed; normalized agent id defaults from `profileFiles["IDENTITY.md"]` name when omitted. */
   id?: string;
   workspace: string;
-  model?: string;
+  models?: AgentModelsConfig;
   agentDir?: string;
-  description?: LocalizedText;
-  /** Initial `agents.list[].tools.disable` for the new entry. */
-  toolsDisable?: string[];
+  /** Initial `agents.list[].skills` for the new entry. */
+  skills?: string[];
+  /** Initial `agents.list[].tools` for the new entry. */
+  tools?: { disable?: string[] };
   /** Profile markdown files to write after seeding (e.g. `IDENTITY.md`, `SOUL.md`). */
   profileFiles?: Record<string, string>;
   /** Clone from an existing agent id — copies config entry fields and profile directory. */
@@ -207,22 +219,9 @@ export function prepareCreateAgent(
   cfg: Config,
   body: CreateAgentBody,
 ): AgentAdminResult<{ nextConfig: Config; agentId: string; workspace: string }> {
-  const normalizedName = normalizeLocalizedText(body.name);
-  const nameSeed = resolveLocalizedText(normalizedName, 'en') ?? '';
-  if (!nameSeed) {
-    return { ok: false, error: 'name is required', status: 400 };
-  }
   const workspace = body.workspace?.trim() ?? '';
   if (!workspace) {
     return { ok: false, error: 'workspace is required', status: 400 };
-  }
-  const idRes = validateAgentIdForNewAgent(body.id, nameSeed);
-  if (idRes.ok === false) {
-    return { ok: false, error: idRes.error, status: 400 };
-  }
-  const agentId = idRes.agentId;
-  if (findAgentEntryIndex(listAgentEntries(cfg), agentId) >= 0) {
-    return { ok: false, error: `agent "${agentId}" already exists`, status: 409 };
   }
   if (body.profileFiles !== undefined) {
     if (typeof body.profileFiles !== 'object' || body.profileFiles === null || Array.isArray(body.profileFiles)) {
@@ -238,6 +237,22 @@ export function prepareCreateAgent(
       }
     }
   }
+  if (!body.cloneFrom && typeof body.profileFiles?.[WORKSPACE_FILES.IDENTITY] !== 'string') {
+    return { ok: false, error: `profileFiles["${WORKSPACE_FILES.IDENTITY}"] is required`, status: 400 };
+  }
+
+  const identity = body.profileFiles?.[WORKSPACE_FILES.IDENTITY]
+    ? parseIdentityMarkdown(body.profileFiles[WORKSPACE_FILES.IDENTITY])
+    : {};
+  const nameSeed = identity.name ?? body.id ?? '';
+  const idRes = validateAgentIdForNewAgent(body.id, nameSeed);
+  if (idRes.ok === false) {
+    return { ok: false, error: idRes.error, status: 400 };
+  }
+  const agentId = idRes.agentId;
+  if (findAgentEntryIndex(listAgentEntries(cfg), agentId) >= 0) {
+    return { ok: false, error: `agent "${agentId}" already exists`, status: 409 };
+  }
 
   // Resolve fields from cloneFrom source when present
   let cloneSourceEntry: ReturnType<typeof listAgentEntries>[number] | undefined;
@@ -251,53 +266,31 @@ export function prepareCreateAgent(
 
   const wsAbs = resolveUserPath(workspace);
 
-  // Inherit model from source if not explicitly provided
-  const effectiveModel = body.model?.trim()
-    ? body.model.trim()
-    : cloneSourceEntry?.model?.primary;
+  const effectiveModels = body.models ?? cloneSourceEntry?.models;
 
   let next = applyAgentConfig(cfg, {
     agentId,
-    name: normalizedName,
     workspace: wsAbs,
-    ...(effectiveModel ? { model: effectiveModel } : {}),
+    ...(effectiveModels ? { models: effectiveModels } : {}),
     ...(body.agentDir?.trim() ? { agentDir: body.agentDir.trim() } : {}),
-    ...(normalizeLocalizedText(body.description) ? { description: normalizeLocalizedText(body.description) } : {}),
+    ...(body.skills !== undefined
+      ? { skills: body.skills.map((s) => String(s).trim()).filter(Boolean) }
+      : cloneSourceEntry?.skills !== undefined && body.cloneFrom
+        ? { skills: [...cloneSourceEntry.skills] }
+        : {}),
   });
 
-  // Resolve tools.disable: explicit body > clone source > none
-  const toolsDisable = body.toolsDisable ?? cloneSourceEntry?.tools?.disable;
-  if (toolsDisable !== undefined) {
+  // Resolve tools: explicit body > clone source > none
+  const tools = body.tools ?? cloneSourceEntry?.tools;
+  if (tools !== undefined) {
     const list = [...listAgentEntries(next)];
     const idx = findAgentEntryIndex(list, agentId);
     if (idx >= 0) {
       type Entry = (typeof list)[number];
       const entry: Entry = { ...list[idx] };
-      const disable = toolsDisable.map((s) => String(s).trim()).filter(Boolean);
-      entry.tools = { ...entry.tools, disable };
+      const disable = tools.disable?.map((s) => String(s).trim()).filter(Boolean) ?? [];
+      entry.tools = { ...entry.tools, ...(disable.length > 0 ? { disable } : {}) };
 
-      if (cloneSourceEntry?.skills !== undefined && body.cloneFrom) {
-        entry.skills = [...cloneSourceEntry.skills];
-      }
-
-      list[idx] = entry;
-      next = {
-        ...next,
-        agents: {
-          ...next.agents,
-          list,
-        },
-      };
-    }
-  } else if (cloneSourceEntry && body.cloneFrom) {
-    const list = [...listAgentEntries(next)];
-    const idx = findAgentEntryIndex(list, agentId);
-    if (idx >= 0) {
-      type Entry = (typeof list)[number];
-      const entry: Entry = { ...list[idx] };
-      if (cloneSourceEntry.skills !== undefined) {
-        entry.skills = [...cloneSourceEntry.skills];
-      }
       list[idx] = entry;
       next = {
         ...next,
@@ -352,8 +345,9 @@ export async function finalizeCreateAgentDirs(
   await mkdir(profilePath, { recursive: true });
   await mkdir(adPath, { recursive: true });
   const id = normalizeAgentId(agentId);
-  const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
-  const displayName = resolveLocalizedText(normalizeLocalizedText(entry?.name), 'en') || id;
+  const displayName = opts?.profileFiles?.[WORKSPACE_FILES.IDENTITY]
+    ? (parseIdentityMarkdown(opts.profileFiles[WORKSPACE_FILES.IDENTITY]).name ?? id)
+    : id;
 
   // When cloning, copy the entire source profile directory instead of seeding
   if (opts?.cloneFrom) {
@@ -397,16 +391,17 @@ export async function finalizeCreateAgentDirs(
 }
 
 export type UpdateAgentBody = {
-  name?: LocalizedText;
-  description?: LocalizedText | null;
   workspace?: string;
-  model?: string | null;
+  models?: {
+    chat?: { primary: string; fallbacks?: string[] } | null;
+    roles?: Record<string, { model: string; description?: string }> | null;
+  } | null;
   agentDir?: string | null;
   setDefault?: boolean;
   /** Replace `agents.list[].skills`; `null` removes the key (inherit defaults). */
   skills?: string[] | null;
-  /** Replace `agents.list[].tools.disable`; `null` clears entry-level disables. */
-  toolsDisable?: string[] | null;
+  /** Replace `agents.list[].tools`; `null` removes the key (inherit defaults). */
+  tools?: { disable?: string[] | null } | null;
 };
 
 export function prepareUpdateAgent(
@@ -428,35 +423,61 @@ export function prepareUpdateAgent(
   type Entry = (typeof list)[number];
   const entry: Entry = { ...list[idx] };
 
-  if (body.name !== undefined) {
-    const nextName = normalizeLocalizedText(body.name);
-    if (nextName) {
-      entry.name = nextName;
-    }
-  }
-  if (body.description !== undefined) {
-    const nextDescription = body.description === null ? undefined : normalizeLocalizedText(body.description);
-    if (nextDescription) {
-      entry.description = nextDescription;
-    } else {
-      delete entry.description;
-    }
-  }
   if (body.workspace !== undefined) {
     const w = body.workspace.trim();
     if (w) {
       entry.workspace = resolveUserPath(w);
     }
   }
-  if (body.model !== undefined) {
-    if (body.model === null) {
-      delete entry.model;
+  if (body.models !== undefined) {
+    if (body.models === null) {
+      delete entry.models;
     } else {
-      const trimmed = String(body.model).trim();
-      if (!trimmed) {
-        return { ok: false, error: 'model must be a non-empty string or null', status: 400 };
+      if (Object.hasOwn(body.models, 'chat')) {
+        if (body.models.chat === null) {
+          if (entry.models) {
+            delete entry.models.chat;
+          }
+        } else if (body.models.chat !== undefined) {
+          const primary = body.models.chat.primary.trim();
+          if (!primary) {
+            return { ok: false, error: 'models.chat.primary must be a non-empty string', status: 400 };
+          }
+          const fallbacks = body.models.chat.fallbacks?.map((s) => s.trim()).filter(Boolean);
+          entry.models = {
+            ...entry.models,
+            chat: {
+              primary,
+              ...(fallbacks && fallbacks.length > 0 ? { fallbacks } : {}),
+            },
+          };
+        }
       }
-      entry.model = { primary: trimmed };
+      if (Object.hasOwn(body.models, 'roles')) {
+        if (body.models.roles === null) {
+          if (entry.models) {
+            delete entry.models.roles;
+          }
+        } else if (body.models.roles !== undefined) {
+          const roles = Object.fromEntries(
+            Object.entries(body.models.roles)
+              .map(([id, row]) => ({
+                id: id.trim(),
+                model: row.model.trim(),
+                description: row.description?.trim(),
+              }))
+              .filter((row) => row.id && row.model)
+              .map((row) => [
+                row.id,
+                row.description ? { model: row.model, description: row.description } : { model: row.model },
+              ]),
+          );
+          entry.models = { ...entry.models, roles };
+        }
+      }
+      if (entry.models && Object.keys(entry.models).length === 0) {
+        delete entry.models;
+      }
     }
   }
   if (body.agentDir !== undefined) {
@@ -480,17 +501,23 @@ export function prepareUpdateAgent(
     }
   }
 
-  if (body.toolsDisable !== undefined) {
-    if (body.toolsDisable === null) {
-      if (entry.tools) {
-        delete entry.tools.disable;
-        if (Object.keys(entry.tools).length === 0) {
-          delete entry.tools;
+  if (body.tools !== undefined) {
+    if (body.tools === null) {
+      delete entry.tools;
+    } else {
+      if (Object.hasOwn(body.tools, 'disable')) {
+        if (body.tools.disable === null) {
+          if (entry.tools) {
+            delete entry.tools.disable;
+            if (Object.keys(entry.tools).length === 0) {
+              delete entry.tools;
+            }
+          }
+        } else if (body.tools.disable !== undefined) {
+          const next = body.tools.disable.map((s) => String(s).trim()).filter(Boolean);
+          entry.tools = { ...entry.tools, disable: next };
         }
       }
-    } else {
-      const next = body.toolsDisable.map((s) => String(s).trim()).filter(Boolean);
-      entry.tools = { ...entry.tools, disable: next };
     }
   }
 

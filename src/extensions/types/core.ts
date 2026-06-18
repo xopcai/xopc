@@ -5,11 +5,13 @@
  */
 
 import type { Command } from 'commander';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
+import type { ImageContent, TextContent } from '@earendil-works/pi-ai';
+
 import type { Config } from '../../config/config-surface.js';
 import type { Config as FullConfig } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import type { TypedEventBus } from './events.js';
-import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { ExtensionHookEvent, ExtensionHookHandler, HookOptions, HookHandlerMap } from './hooks.js';
 import type { ChannelPlugin } from '../../channels/plugin-types.js';
 import type { SessionMetadata } from '../../session/types.js';
@@ -78,6 +80,38 @@ export interface ExtensionRuntime {
    * Only injected in the Gateway process.
    */
   scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
+  /** Set or clear a TUI transcript label, when running inside an interactive TUI host. */
+  setLabel?: (entryId: string, label: string | undefined) => void;
+  /** Send a user-visible message through the active interactive host. */
+  sendUserMessage?: (
+    content: ExtensionUserMessageContent,
+    options?: ExtensionSendUserMessageOptions,
+  ) => void;
+  /** Append extension state for replay by sessionManager APIs. */
+  appendEntry?: <T = unknown>(customType: string, data?: T) => void;
+  /** Append a visible extension custom message to the active interactive host. */
+  sendMessage?: <T = unknown>(
+    message: ExtensionCustomMessage<T>,
+    options?: ExtensionSendMessageOptions,
+  ) => void;
+}
+
+export type ExtensionUserMessageContent = string | (TextContent | ImageContent)[];
+
+export interface ExtensionSendUserMessageOptions {
+  deliverAs?: 'steer' | 'followUp';
+}
+
+export interface ExtensionCustomMessage<T = unknown> {
+  customType: string;
+  content?: string | unknown[];
+  display?: boolean;
+  details?: T;
+}
+
+export interface ExtensionSendMessageOptions {
+  triggerTurn?: boolean;
+  deliverAs?: 'steer' | 'followUp' | 'nextTurn';
 }
 
 export interface ExtensionCliRegistration {
@@ -201,6 +235,24 @@ export interface ExtensionApi {
    * Callback runs when `xopc tui` starts — not during gateway-only extension load.
    */
   registerTui(register: TuiExtensionRegistrar): void;
+
+  /** Set or clear a label on a TUI transcript entry. No-op outside an interactive TUI host. */
+  setLabel(entryId: string, label: string | undefined): void;
+
+  /** Send a user-visible message to the active interactive host. No-op outside an interactive host. */
+  sendUserMessage(
+    content: ExtensionUserMessageContent,
+    options?: ExtensionSendUserMessageOptions,
+  ): void;
+
+  /** Append extension state for replay by sessionManager APIs. No-op outside an interactive host. */
+  appendEntry<T = unknown>(customType: string, data?: T): void;
+
+  /** Append a visible extension custom message. No-op outside an interactive host. */
+  sendMessage<T = unknown>(
+    message: ExtensionCustomMessage<T>,
+    options?: ExtensionSendMessageOptions,
+  ): void;
 }
 
 // ============================================================================

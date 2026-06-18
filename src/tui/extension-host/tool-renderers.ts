@@ -1,23 +1,82 @@
 import type {
+  TuiTheme,
   TuiToolRenderContext,
-  TuiToolRenderer,
+  TuiToolRendererDefinition,
+  TuiToolRendererRegistration,
+  TuiToolRendererResult,
 } from '../../extensions/types/tui.js';
 
-const renderers = new Map<string, TuiToolRenderer>();
+const renderers = new Map<string, TuiToolRendererDefinition>();
 
-export function registerTuiToolRenderer(toolName: string, renderer: TuiToolRenderer): () => void {
-  renderers.set(toolName, renderer);
+function normalizeRenderer(renderer: TuiToolRendererRegistration): TuiToolRendererDefinition {
+  if (typeof renderer === 'function') return { render: renderer };
+  return renderer;
+}
+
+export function registerTuiToolRenderer(
+  toolName: string,
+  renderer: TuiToolRendererRegistration,
+): () => void {
+  const definition = normalizeRenderer(renderer);
+  renderers.set(toolName, definition);
   return () => {
-    if (renderers.get(toolName) === renderer) {
+    if (renderers.get(toolName) === definition) {
       renderers.delete(toolName);
     }
   };
 }
 
-export function renderToolWithExtensions(ctx: TuiToolRenderContext): string[] | null {
-  const renderer = renderers.get(ctx.toolName);
+export function renderToolWithExtensions(ctx: TuiToolRenderContext): TuiToolRendererResult {
+  const renderer = renderers.get(ctx.toolName)?.render;
   if (!renderer) return null;
-  return renderer(ctx);
+  try {
+    return renderer(ctx);
+  } catch {
+    return null;
+  }
+}
+
+export function renderToolCallWithExtensions(
+  ctx: TuiToolRenderContext,
+  theme: TuiTheme,
+): TuiToolRendererResult {
+  const renderer = renderers.get(ctx.toolName)?.renderCall;
+  if (!renderer) return null;
+  try {
+    return renderer(ctx.args, theme, ctx);
+  } catch {
+    return null;
+  }
+}
+
+export function renderToolResultWithExtensions(
+  ctx: TuiToolRenderContext,
+  theme: TuiTheme,
+): TuiToolRendererResult {
+  const renderer = renderers.get(ctx.toolName)?.renderResult;
+  if (!renderer) return null;
+  try {
+    return renderer(
+      {
+        content: ctx.content,
+        details: ctx.details,
+        text: ctx.resultText,
+      },
+      {
+        expanded: ctx.expanded,
+        isPartial: ctx.isPartial === true,
+      },
+      theme,
+      ctx,
+    );
+  } catch {
+    return null;
+  }
+}
+
+export function hasStructuredTuiToolRenderer(toolName: string): boolean {
+  const definition = renderers.get(toolName);
+  return Boolean(definition?.renderCall || definition?.renderResult);
 }
 
 export function clearTuiToolRenderers(): void {

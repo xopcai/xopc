@@ -30,17 +30,21 @@ describe('applyAgentsPatch typed models', () => {
     applyAgentsPatch(cfg, {
       agents: {
         defaults: {
-          models: [
-            { id: 'small', model: 'deepseek/flash' },
-            { id: 'large', model: 'anthropic/claude', description: 'Big' },
-          ],
+          models: {
+            roles: {
+              small: { model: 'deepseek/flash' },
+              large: { model: 'anthropic/claude', description: 'Big' },
+            },
+          },
         },
       },
     });
-    expect(cfg.agents?.defaults?.models).toEqual([
-      { id: 'small', model: 'deepseek/flash' },
-      { id: 'large', model: 'anthropic/claude', description: 'Big' },
-    ]);
+    expect(cfg.agents?.defaults?.models).toEqual({
+      roles: {
+        small: { model: 'deepseek/flash' },
+        large: { model: 'anthropic/claude', description: 'Big' },
+      },
+    });
 
     applyAgentsPatch(cfg, { agents: { defaults: { models: null } } });
     expect(cfg.agents?.defaults?.models).toBeUndefined();

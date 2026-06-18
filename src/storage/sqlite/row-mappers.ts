@@ -28,6 +28,12 @@ export type SessionRow = {
   source_channel: string;
   source_chat_id: string;
   session_type: string | null;
+  hidden_from_session_list: number | null;
+  parent_session_key: string | null;
+  workflow_run_id: string | null;
+  workflow_definition_id: string | null;
+  workflow_agent_id: string | null;
+  workflow_agent_label: string | null;
   routing_json: string | null;
   custom_data_json: string | null;
   abort_cutoff_timestamp: number | null;
@@ -38,6 +44,7 @@ export type SessionRow = {
   flush_count: number;
   thinking_level: string | null;
   verbose_level: string | null;
+  cwd?: string | null;
 };
 
 export type TranscriptEntryRow = {
@@ -105,7 +112,13 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
     lastInteractionAt: isoFromMs(row.last_interaction_at),
     sourceChannel: diskSc || keySource,
     sourceChatId: diskChat || keyChatId,
-    sessionType: row.session_type ?? defaults.sessionType,
+    sessionType: (row.session_type ?? defaults.sessionType) as SessionMetadata['sessionType'],
+    hiddenFromSessionList: Boolean(row.hidden_from_session_list),
+    parentSessionKey: row.parent_session_key ?? undefined,
+    workflowRunId: row.workflow_run_id ?? undefined,
+    workflowDefinitionId: row.workflow_definition_id ?? undefined,
+    workflowAgentId: row.workflow_agent_id ?? undefined,
+    workflowAgentLabel: row.workflow_agent_label ?? undefined,
     routing,
     customData,
     abortCutoffTimestamp: row.abort_cutoff_timestamp ?? undefined,
@@ -115,6 +128,7 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
     lastFlushedAt: row.last_flushed_at ?? undefined,
     flushCount: row.flush_count,
     transcriptId: row.current_transcript_id,
+    cwd: row.cwd ?? undefined,
     stats: {
       messageCount: row.message_count,
       tokenCount: row.estimated_tokens,
@@ -143,7 +157,13 @@ export function metadataToSessionInsert(
   lastInteractionAt: number | null;
   sourceChannel: string;
   sourceChatId: string;
-  sessionType: string | null;
+  sessionType: string;
+  hiddenFromSessionList: number;
+  parentSessionKey: string | null;
+  workflowRunId: string | null;
+  workflowDefinitionId: string | null;
+  workflowAgentId: string | null;
+  workflowAgentLabel: string | null;
   routingJson: string | null;
   customDataJson: string | null;
   abortCutoffTimestamp: number | null;
@@ -170,7 +190,13 @@ export function metadataToSessionInsert(
     lastInteractionAt: metadata.lastInteractionAt ? Date.parse(metadata.lastInteractionAt) : null,
     sourceChannel: metadata.sourceChannel,
     sourceChatId: metadata.sourceChatId,
-    sessionType: metadata.sessionType ?? null,
+    sessionType: metadata.sessionType,
+    hiddenFromSessionList: metadata.hiddenFromSessionList ? 1 : 0,
+    parentSessionKey: metadata.parentSessionKey ?? null,
+    workflowRunId: metadata.workflowRunId ?? null,
+    workflowDefinitionId: metadata.workflowDefinitionId ?? null,
+    workflowAgentId: metadata.workflowAgentId ?? null,
+    workflowAgentLabel: metadata.workflowAgentLabel ?? null,
     routingJson: metadata.routing ? JSON.stringify(metadata.routing) : null,
     customDataJson: metadata.customData ? JSON.stringify(metadata.customData) : null,
     abortCutoffTimestamp: metadata.abortCutoffTimestamp ?? null,

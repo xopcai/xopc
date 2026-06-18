@@ -1,9 +1,25 @@
+import type { Message } from '@/features/chat/messages/messages.types';
+import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export type WorkflowRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timeout';
 export type WorkflowPhaseStatus = 'pending' | 'running' | 'completed' | 'failed';
 export type WorkflowAgentStatus = 'queued' | 'running' | 'done' | 'error' | 'skipped';
+
+export interface JsonSchema {
+  type?: string | string[];
+  title?: string;
+  description?: string;
+  properties?: Record<string, JsonSchema>;
+  items?: JsonSchema | JsonSchema[];
+  required?: string[];
+  additionalProperties?: boolean | JsonSchema;
+  enum?: unknown[];
+  const?: unknown;
+  default?: unknown;
+  [key: string]: unknown;
+}
 
 export interface WorkflowDefinitionEstimatedAgents {
   min: number;
@@ -16,10 +32,27 @@ export interface WorkflowDefinition {
   title: string;
   description: string;
   version: string;
+  inputSchema?: JsonSchema;
+  outputSchema?: JsonSchema;
   phases: WorkflowPhaseDefinition[];
   runtime?: WorkflowRuntimeDefinition;
   defaults: WorkflowDefinitionDefaults;
+  permissions?: WorkflowPermissionPolicy;
+  resources?: WorkflowResourceRefs;
   metadata: WorkflowDefinitionMetadata;
+}
+
+export interface WorkflowPermissionPolicy {
+  tools?: string[];
+  network?: boolean;
+  fileSystem?: 'read' | 'write' | 'none';
+  approvalRequired?: boolean;
+}
+
+export interface WorkflowResourceRefs {
+  skills?: string[];
+  contextFiles?: string[];
+  promptTemplates?: string[];
 }
 
 export interface WorkflowRuntimeDefinition {
@@ -145,6 +178,34 @@ export interface WorkflowRunSummary {
   metrics: WorkflowRunMetrics;
 }
 
+export interface WorkflowArtifactRef {
+  id: string;
+  runId: string;
+  name: string;
+  title?: string;
+  mimeType: string;
+  sizeBytes: number;
+  createdAtMs: number;
+}
+
+export interface WorkflowFollowUp {
+  id: string;
+  title: string;
+  prompt?: string;
+  priority?: 'low' | 'medium' | 'high';
+}
+
+export interface WorkflowResultEnvelope {
+  title?: string;
+  summary: string;
+  sections?: unknown[];
+  actions?: unknown[];
+  artifacts?: WorkflowArtifactRef[];
+  followUps?: WorkflowFollowUp[];
+  structuredOutput?: unknown;
+  raw?: unknown;
+}
+
 export interface WorkflowRun {
   id: string;
   definitionId: string;
@@ -178,6 +239,8 @@ export interface WorkflowAgentView {
   phaseId?: string;
   status: WorkflowAgentStatus;
   prompt?: string;
+  sessionKey: string;
+  transcriptMessageCount: number;
   currentStep?: string;
   resultPreview?: string;
   error?: string;
@@ -238,6 +301,17 @@ export interface StartWorkflowRunResult {
   sessionKey: string;
 }
 
+export interface WorkflowAgentSession {
+  sessionKey: string;
+  metadata: {
+    sessionType: 'workflow-subagent';
+    workflowRunId?: string;
+    workflowAgentId?: string;
+    workflowAgentLabel?: string;
+  };
+  messages: Message[];
+}
+
 export type WorkflowDefinitionValidationIssueCode =
   | 'name_required'
   | 'script_required'
@@ -293,23 +367,58 @@ export async function deleteWorkflowDefinition(id: string): Promise<void> {
   await fetchJson(apiUrl(`/api/workflows/definitions/${encodeURIComponent(id)}`), { method: 'DELETE' });
 }
 
-export async function getWorkflowStats(definitionId?: string): Promise<WorkflowStats> {
+export interface WorkflowOwnerAgentOptions {
+  ownerAgentId?: string;
+}
+
+function appendOwnerAgentParam(params: URLSearchParams, options?: WorkflowOwnerAgentOptions): void {
+  const ownerAgentId = options?.ownerAgentId?.trim();
+  if (ownerAgentId) params.set('agentId', ownerAgentId);
+}
+
+export async function getWorkflowStats(definitionId?: string, options?: WorkflowOwnerAgentOptions): Promise<WorkflowStats> {
   const trimmedDefinitionId = definitionId?.trim();
   const searchParams = new URLSearchParams();
   if (trimmedDefinitionId) searchParams.set('definitionId', trimmedDefinitionId);
+  appendOwnerAgentParam(searchParams, options);
   const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
   const data = await fetchJson<{ stats: WorkflowStats }>(apiUrl(`/api/workflows/stats${suffix}`));
   return data.stats;
 }
 
-export async function listWorkflowRuns(limit = 50): Promise<WorkflowRunSummary[]> {
-  const data = await fetchJson<{ runs: WorkflowRunSummary[] }>(apiUrl(`/api/workflows/runs?limit=${limit}`));
+export async function listWorkflowRuns(limit = 50, options?: WorkflowOwnerAgentOptions): Promise<WorkflowRunSummary[]> {
+  const searchParams = new URLSearchParams({ limit: String(limit) });
+  appendOwnerAgentParam(searchParams, options);
+  const data = await fetchJson<{ runs: WorkflowRunSummary[] }>(apiUrl(`/api/workflows/runs?${searchParams.toString()}`));
   return data.runs ?? [];
 }
 
-export async function getWorkflowRun(runId: string): Promise<WorkflowRunView> {
-  const data = await fetchJson<{ view: WorkflowRunView }>(apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}`));
+export async function getWorkflowRun(runId: string, options?: WorkflowOwnerAgentOptions): Promise<WorkflowRunView> {
+  const searchParams = new URLSearchParams();
+  appendOwnerAgentParam(searchParams, options);
+  const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
+  const data = await fetchJson<{ view: WorkflowRunView }>(apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}${suffix}`));
   return data.view;
+}
+
+export async function getWorkflowAgentSession(
+  runId: string,
+  workflowAgentId: string | number,
+  options?: { ownerAgentId?: string },
+): Promise<WorkflowAgentSession> {
+  const params = new URLSearchParams();
+  const ownerAgentId = options?.ownerAgentId?.trim();
+  if (ownerAgentId) params.set('ownerAgentId', ownerAgentId);
+  const suffix = params.size > 0 ? `?${params.toString()}` : '';
+  const data = await fetchJson<Omit<WorkflowAgentSession, 'messages'> & { messages?: unknown[] }>(
+    apiUrl(
+      `/api/workflows/runs/${encodeURIComponent(runId)}/agents/${encodeURIComponent(String(workflowAgentId))}/session${suffix}`,
+    ),
+  );
+  return {
+    ...data,
+    messages: sessionWireToUiMessages(data.messages ?? []),
+  };
 }
 
 export async function startWorkflowRun(options: StartWorkflowRunOptions): Promise<StartWorkflowRunResult> {
@@ -319,21 +428,30 @@ export async function startWorkflowRun(options: StartWorkflowRunOptions): Promis
   });
 }
 
-export async function cancelWorkflowRun(runId: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/cancel`), { method: 'POST' });
+export async function cancelWorkflowRun(runId: string, options?: WorkflowOwnerAgentOptions): Promise<void> {
+  const searchParams = new URLSearchParams();
+  appendOwnerAgentParam(searchParams, options);
+  const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
+  await fetchJson(apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/cancel${suffix}`), { method: 'POST' });
 }
 
-export async function rebuildWorkflowRun(runId: string): Promise<WorkflowRunView> {
+export async function rebuildWorkflowRun(runId: string, options?: WorkflowOwnerAgentOptions): Promise<WorkflowRunView> {
+  const searchParams = new URLSearchParams();
+  appendOwnerAgentParam(searchParams, options);
+  const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
   const data = await fetchJson<{ view: WorkflowRunView }>(
-    apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/rebuild`),
+    apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/rebuild${suffix}`),
     { method: 'POST' },
   );
   return data.view;
 }
 
-export async function retryWorkflowRun(runId: string): Promise<StartWorkflowRunResult> {
+export async function retryWorkflowRun(runId: string, options?: WorkflowOwnerAgentOptions): Promise<StartWorkflowRunResult> {
+  const searchParams = new URLSearchParams();
+  appendOwnerAgentParam(searchParams, options);
+  const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
   return fetchJson<StartWorkflowRunResult>(
-    apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/retry`),
+    apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/retry${suffix}`),
     { method: 'POST' },
   );
 }

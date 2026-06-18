@@ -10,6 +10,7 @@ This page lists tools the xopc agent can call: read and edit files, run commands
 |------|-------|
 | Planning & clarification | `clarify`, `todo` |
 | Skills | `skills_list`, `skill_view`, `skill_manage` |
+| Tool manuals | `tool_manual` for built-in complex tool guides |
 | Workspace files | `read_file`, `write_file`, `edit_file`, `list_dir` |
 | Search in repo | `grep`, `find` |
 | Shell | `shell` |
@@ -337,7 +338,7 @@ Registered when `agents.defaults.browser.enabled` is true. Install browsers once
 
 | Tool | Purpose |
 |------|---------|
-| `browser_use` | Unified browser automation tool. Use `mode: "command"` with actions such as `open` / `navigate`, `snapshot`, `click`, `type`, `scroll`, `keys` / `press`, `screenshot`, `console` / `eval`, `images`, `dialog`, `cdp`, `close`, `wait`, and network helpers; or `mode: "pipeline"` for YAML pipelines. |
+| `browser_use` | Unified browser automation tool. Use `mode: "command"` with actions such as `open` / `navigate`, `snapshot`, `click`, `type`, `scroll`, `keys` / `press`, `screenshot`, `console` / `eval`, `images`, `dialog`, `cdp`, `close`, `wait`, and network helpers; or `mode: "pipeline"` for YAML pipelines. For complex tasks, call `tool_manual({ tool: "browser_use" })` first. |
 
 To disable browser automation for an agent, add `browser_use` to `agents.defaults.tools.disable` or `agents.list[].tools.disable`.
 

@@ -2,9 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { matchReloadRule, BASE_RELOAD_RULES } from '../rules.js';
 
 describe('matchReloadRule', () => {
-  it('matches longest channel prefix first', () => {
+  it('matches generic channels subtree for declared channel ids', () => {
     const r = matchReloadRule('channels.telegram.accounts.personal.botToken');
-    expect(r?.prefix).toBe('channels.telegram');
+    expect(r?.prefix).toBe('channels');
     expect(r?.kind).toBe('hot');
   });
 

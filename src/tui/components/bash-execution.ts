@@ -1,7 +1,16 @@
-import { Container, Loader, Spacer, Text, type TUI } from '@earendil-works/pi-tui';
+import {
+  Container,
+  type KeybindingsManager,
+  Loader,
+  Spacer,
+  Text,
+  type TUI,
+} from '@earendil-works/pi-tui';
 
 import { theme } from '../theme.js';
+import { formatKeyIds } from '../format-tui-hotkeys.js';
 import { DynamicBorder } from './dynamic-border.js';
+import { truncateToVisualLines } from './visual-truncate.js';
 
 const PREVIEW_LINES = 20;
 const MAX_OUTPUT_CHARS = 40_000;
@@ -23,6 +32,7 @@ export class BashExecutionComponent extends Container {
     command: string,
     ui: TUI,
     private readonly excludeFromContext: boolean,
+    private readonly keybindings?: KeybindingsManager,
   ) {
     super();
     const colorKey = excludeFromContext ? 'bashExclude' : 'bashMode';
@@ -97,13 +107,21 @@ export class BashExecutionComponent extends Container {
     const hidden = lines.length - visible.length;
 
     if (hidden > 0 && !this.expanded) {
+      const expandKey = this.keybindings
+        ? formatKeyIds(this.keybindings, 'app.tools.expand', { capitalize: true })
+        : 'Ctrl+O';
       this.contentContainer.addChild(
-        new Text(theme.dim(`… ${hidden} more line${hidden > 1 ? 's' : ''} (Ctrl+O to expand tools/output)`), 1, 0),
+        new Text(theme.dim(`… ${hidden} more line${hidden > 1 ? 's' : ''} (${expandKey} to expand tools/output)`), 1, 0),
       );
     }
 
-    for (const line of visible) {
-      this.contentContainer.addChild(new Text(theme.toolOutput(line), 1, 0));
+    if (visible.length > 0) {
+      const outputText = visible.map((line) => theme.toolOutput(line)).join('\n');
+      if (this.expanded) {
+        this.contentContainer.addChild(new Text(outputText, 1, 0));
+      } else {
+        this.contentContainer.addChild(createVisualTailComponent(outputText, PREVIEW_LINES, 1));
+      }
     }
 
     if (this.status !== 'running') {
@@ -114,4 +132,23 @@ export class BashExecutionComponent extends Container {
       this.contentContainer.addChild(new Text(theme.dim(suffix), 1, 0));
     }
   }
+}
+
+function createVisualTailComponent(text: string, maxVisualLines: number, paddingX: number) {
+  let cachedWidth: number | undefined;
+  let cachedLines: string[] | undefined;
+  return {
+    render(width: number): string[] {
+      if (cachedWidth !== width || cachedLines === undefined) {
+        const result = truncateToVisualLines(text, maxVisualLines, width, paddingX);
+        cachedWidth = width;
+        cachedLines = result.visualLines;
+      }
+      return cachedLines;
+    },
+    invalidate(): void {
+      cachedWidth = undefined;
+      cachedLines = undefined;
+    },
+  };
 }

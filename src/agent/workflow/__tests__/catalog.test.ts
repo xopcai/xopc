@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -64,6 +64,31 @@ describe('createWorkflowCatalog', () => {
   it('refuses to save when meta.name disagrees with save name', () => {
     const cat = createWorkflowCatalog({ userDir: dir });
     expect(() => cat.save('my_wf', VALID_HEADER)).toThrow(/disagrees|does not match/);
+  });
+
+  it('loads a directory workflow with manifest metadata', () => {
+    const wfDir = join(dir, 'packaged_wf');
+    mkdirSync(wfDir, { recursive: true });
+    writeFileSync(
+      join(wfDir, 'workflow.js'),
+      `export const meta = { name: 'packaged_wf', description: 'meta description' }\nawait agent('x', { label: 'x' })\n`,
+      'utf-8',
+    );
+    writeFileSync(
+      join(wfDir, 'manifest.json'),
+      JSON.stringify({ title: 'Packaged Workflow', description: 'manifest description', tags: ['packaged'] }),
+      'utf-8',
+    );
+
+    const cat = createWorkflowCatalog({ userDir: dir });
+    const listed = cat.list().find((e) => e.name === 'packaged_wf');
+    expect(listed).toMatchObject({
+      source: 'user',
+      title: 'Packaged Workflow',
+      description: 'manifest description',
+      tags: ['packaged'],
+    });
+    expect(cat.load('packaged_wf').manifest).toMatchObject({ title: 'Packaged Workflow' });
   });
 
   it('user workflow wins on name collision with a built-in', () => {

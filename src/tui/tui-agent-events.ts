@@ -11,11 +11,20 @@ export function clearPendingToolCallIds(): void {
   pendingToolCallIds.clear();
 }
 
+function removePendingToolCallId(toolName: string, toolCallId: string): void {
+  const stack = pendingToolCallIds.get(toolName);
+  if (!stack) return;
+  const idx = stack.indexOf(toolCallId);
+  if (idx >= 0) stack.splice(idx, 1);
+  if (stack.length === 0) pendingToolCallIds.delete(toolName);
+}
+
 const STREAM_TOUCH_EVENTS = new Set([
   'status',
   'token',
   'thinking',
   'tool_start',
+  'tool_update',
   'tool_end',
   'progress',
 ]);
@@ -31,6 +40,7 @@ export function dispatchAgentSSE(
   touchStreamingActivity?: () => void,
   /** Called when a run ends (result/error) so the TUI can flush follow-up queue, etc. */
   onRunEnded?: () => void,
+  onAssistantFinalized?: (text: string, options?: { errorMessage?: string }) => void,
 ): void {
   if (STREAM_TOUCH_EVENTS.has(event)) {
     touchStreamingActivity?.();
@@ -99,10 +109,33 @@ export function dispatchAgentSSE(
           if (stack.length === 0) pendingToolCallIds.delete(toolName);
         }
       }
-      const resultText = String(data.result ?? '');
       const isError = Boolean(data.isError);
       if (toolCallId) {
-        chatLog.updateToolResult(toolCallId, resultText, isError);
+        chatLog.updateToolResult(toolCallId, data.result, isError);
+        if (toolName) {
+          removePendingToolCallId(toolName, toolCallId);
+        }
+      }
+      setActivityStatus('streaming');
+      tui.requestRender();
+      break;
+    }
+    case 'tool_update': {
+      const toolName = String(data.toolName ?? '');
+      let toolCallId = typeof data.toolCallId === 'string' && data.toolCallId ? data.toolCallId : '';
+      if (!toolCallId && toolName) {
+        const stack = pendingToolCallIds.get(toolName);
+        if (stack && stack.length > 0) {
+          toolCallId = stack[0]!;
+        }
+      }
+      if (toolCallId) {
+        if ('args' in data) {
+          chatLog.updateToolArgs(toolCallId, data.args);
+        } else if ('arguments' in data) {
+          chatLog.updateToolArgs(toolCallId, data.arguments);
+        }
+        chatLog.updateToolDetails(toolCallId, data.details);
       }
       setActivityStatus('streaming');
       tui.requestRender();
@@ -111,10 +144,11 @@ export function dispatchAgentSSE(
     case 'error': {
       const errorContent = formatAgentRunErrorForDisplay(String(data.content ?? 'Unknown error'));
       const finalText = assembler.finalize(runId, state.showThinking);
-      if (finalText) {
-        chatLog.finalizeAssistant(finalText, runId);
-      }
-      chatLog.addSystem(`❌ ${errorContent}`);
+      chatLog.finalizeAssistant(finalText || '', runId, {
+        stopReason: 'error',
+        errorMessage: errorContent,
+      });
+      onAssistantFinalized?.(finalText || errorContent, { errorMessage: errorContent });
       state.activeRunId = null;
       setActivityStatus('idle');
       onRunEnded?.();
@@ -125,6 +159,7 @@ export function dispatchAgentSSE(
       const finalText = assembler.finalize(runId, state.showThinking);
       if (finalText) {
         chatLog.finalizeAssistant(finalText, runId);
+        onAssistantFinalized?.(finalText);
       }
       state.activeRunId = null;
       setActivityStatus('idle');

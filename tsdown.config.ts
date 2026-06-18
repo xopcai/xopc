@@ -14,6 +14,7 @@ export default defineConfig({
     './extensions/telegram/src/**/*.ts',
     '!./extensions/telegram/src/**/__tests__/**/*.ts',
     './extensions/weixin/src/**/*.ts',
+    '!./extensions/weixin/src/**/__tests__/**/*.ts',
     './extensions/feishu/src/**/*.ts',
     '!./extensions/feishu/src/**/__tests__/**/*.ts',
     './extensions/openai/src/**/*.ts',

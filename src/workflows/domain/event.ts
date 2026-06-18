@@ -64,6 +64,7 @@ export interface AgentQueuedPayload {
   label: string;
   phaseId?: string;
   prompt?: string;
+  sessionKey: string;
 }
 
 export interface AgentStartedPayload {

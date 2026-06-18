@@ -125,21 +125,20 @@ xopc onboard
 |------|------|------|
 | `default` | string | 可选。未在会话键/API 中指定 agent 时使用的默认 id。未设置时：取 **`list` 中带 `default: true` 的条目**，否则 **`list` 中第一个 enabled 的 id**，否则 **`main`**。 |
 | `defaults` | object | 全局基线，见下文 **agents.defaults**。 |
-| `list` | array | 多条 agent 身份；每条可覆盖字段，见 **agents.list 条目**。 |
+| `list` | array | 多个 agent id；每条可覆盖运行时字段。可读身份保存在 `agents/<id>/profile/IDENTITY.md`。 |
 
 #### `agents.list` 条目
 
-每条至少包含 **`id`**，其余字段均为可选覆盖（与 `defaults` 中同类字段形状一致）。
+每条至少包含 **`id`**，其余字段均为可选运行时覆盖（与 `defaults` 中同类字段形状一致）。显示名称、描述、语言、头像以及模型实际看到的身份都来自 **`agents/<id>/profile/IDENTITY.md`**，不写在 config 中。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `id` | string | 智能体 id（`agentId`，也是 session key 的第一段）。 |
 | `default` | boolean | 可选。为 `true` 时，在**未**设置顶层 **`agents.default`** 的情况下将该条目标记为默认 agent。 |
-| `name` | string | 显示名称。 |
 | `enabled` | boolean | 默认 `true`。为 `false` 时该 id 不参与路由默认，且有效配置解析会回退到默认 agent。 |
 | `workspace` | string | 可选。该 agent 的 **Markdown 工作区**根路径（支持 `~`）。工具 `cwd`、按日的 `memory/` 与用户文件在此。profile Markdown（`SOUL.md` 等）位于 **`agents/<id>/profile/`**。入站/TTS 与托管 `memories/` 解析在 **`agents/<id>/`**（agent 主目录），不在此目录内。 |
 | `agentDir` | string | 可选。覆盖 **内部** agent 状态目录（凭证、`agent.json`、收件箱、pid 等），默认 `<stateDir>/agents/<id>/agent`。 |
-| `model` | string \| object | 同 `agents.defaults.model`（字符串或 `{ primary, fallbacks }`）。 |
+| `models` | object | 每个智能体的聊天模型与命名模型角色覆盖。形状同 `agents.defaults.models`；`models.roles` 按角色 id 覆盖默认值。 |
 | `thinkingDefault` | string | 可选：`off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`adaptive`。 |
 | `reasoningDefault` | string | 可选：`off`、`on`、`stream`。 |
 | `verboseDefault` | string | 可选：`off`、`on`、`full`。 |
@@ -150,43 +149,46 @@ xopc onboard
 
 同类可选字段也可写在 **`agents.defaults`** 里作为全局默认（例如 `agents.defaults.tools.disable` 会与每条 list 的 disable **合并**）。
 
-**说明：** 磁盘路径（`~/.xopc/agents/<id>/` 下的会话与内部状态、以及各 agent 的 Markdown 工作区，即 **`agents.defaults.workspace/<agentId>`** 或 **`<状态目录>/workspace/<agentId>`**）均按 **`config.json`** 解析（`agents.list`、`agents.defaults`、可选的 `agentDir`）。请使用 **`xopc agents add`** / **`agents delete`** 管理列表与目录；**不存在**独立于配置之外的 agent「注册表」。
+**说明：** 磁盘路径（`~/.xopc/agents/<id>/` 下的会话与内部状态、以及各 agent 的 Markdown 工作区，即 **`agents.defaults.workspace/<agentId>`** 或 **`<状态目录>/workspace/<agentId>`**）均按 **`config.json`** 解析（`agents.list`、`agents.defaults`、可选的 `agentDir`）。用户编辑、模型读取的 agent 身份是 **`profile/IDENTITY.md`**。请使用 **`xopc agents add`** / **`agents delete`** 管理列表与目录；**不存在**独立于配置之外的 agent「注册表」。
 
 #### agents.defaults
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `workspace` | string | `~/.xopc/workspace` | Markdown 工作区的**父目录**；每个智能体解析为 `<展开路径>/<agentId>/`（如 `~/.xopc/workspace/main`） |
-| `model` | string/object | `anthropic/claude-sonnet-4-5` | 默认模型 |
+| `models` | object | — | 聊天模型链与命名模型角色。 |
 | `max_tokens` | number | `8192` | 最大输出 tokens |
 | `temperature` | number | `0.7` | 温度参数 (0-2) |
 | `max_tool_iterations` | number | `20` | 最大工具调用次数 |
-| `imageModel` | string \| object | — | `image`、`browser_use` 工具及**主模型不支持视觉**时对入站图做描述的视觉模型。格式与 `model` 相同（字符串或 `{ primary, fallbacks }`）。详见 [图像与视觉](image-multimodal.md)。 |
-| `imageGenerationModel` | string \| object | — | `image_generate` 的文生图模型链（如 `openai/gpt-image-1`、`dashscope/wan2.6-t2i`）。格式与 `model` 相同。详见 [图像与视觉](image-multimodal.md)。 |
+| `imageModel` | object | — | `image`、`browser_use` 工具及**主模型不支持视觉**时对入站图做描述的视觉模型。使用 `{ primary, fallbacks }`。详见 [图像与视觉](image-multimodal.md)。 |
+| `imageGenerationModel` | object | — | `image_generate` 的文生图模型链（如 `openai/gpt-image-1`、`dashscope/wan2.6-t2i`）。使用 `{ primary, fallbacks }`。详见 [图像与视觉](image-multimodal.md)。 |
 | `mediaMaxMb` | number | — | 可选。`image` 工具从路径或 URL 加载单张图片时的最大体积（**MB**）。 |
 
-#### agents.defaults.model
+#### agents.defaults.models
 
-模型配置支持两种格式：
-
-**简单格式：**
 ```json
 {
-  "model": "anthropic/claude-sonnet-4-5"
-}
-```
-
-**对象格式（带备用模型）：**
-```json
-{
-  "model": {
-    "primary": "anthropic/claude-sonnet-4-5",
-    "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
+  "models": {
+    "chat": {
+      "primary": "anthropic/claude-sonnet-4-5",
+      "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
+    },
+    "roles": {
+      "small": {
+        "model": "openai/gpt-4o-mini",
+        "description": "快速低成本模型"
+      },
+      "large": {
+        "model": "anthropic/claude-sonnet-4-5"
+      }
+    }
   }
 }
 ```
 
 模型 ID 格式：`provider/model-id`（如 `anthropic/claude-opus-4-5`）。
+
+每个智能体的 `agents.list[].models.roles` 会按 id 覆盖默认角色；`agents.list[].models.chat` 会覆盖默认聊天模型链。
 
 **`imageModel`**、**`imageGenerationModel`** 也可使用与 **`model`** 相同的 **`{ primary, fallbacks }`** 对象，以配置视觉或文生图的有序降级链。
 

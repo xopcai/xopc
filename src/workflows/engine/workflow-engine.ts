@@ -6,7 +6,8 @@ import type { WorkflowRun, WorkflowRunError, WorkflowRunMetadata, WorkflowRunSou
 import type { WorkflowResultEnvelope } from '../domain/result.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
-import { runWorkflowScript } from '../runtime/script-runtime.js';
+import { createScriptWorkflowRuntime } from '../runtime/script-workflow-runtime.js';
+import type { WorkflowRuntime } from '../runtime/workflow-runtime-port.js';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import { workflowStepLabel } from '../../agent/workflow/step-labels.js';
@@ -18,9 +19,45 @@ export interface WorkflowEngineOptions {
   eventStore: WorkflowEventStore;
   runStore: WorkflowRunStore;
   runner: WorkflowScriptSubagentRunner;
+  runtime?: WorkflowRuntime;
+  hooks?: WorkflowEngineHook[];
+  subagentSessionKeyFactory?: (ctx: { runId: string; agentId: string }) => string;
+  parentSessionKey?: string;
   onEventAppended?: (event: WorkflowEventEnvelope) => void;
   onRunViewUpdated?: (view: WorkflowRunView) => void;
   resolveModelId?: (modelId: string) => Model<Api>;
+}
+
+export interface WorkflowEngineHook {
+  beforeRun?(ctx: WorkflowRunHookContext): Promise<void> | void;
+  beforeAgent?(ctx: WorkflowAgentHookContext): Promise<void> | void;
+  afterAgent?(ctx: WorkflowAgentCompletedHookContext): Promise<void> | void;
+  afterRun?(ctx: WorkflowRunCompletedHookContext): Promise<void> | void;
+}
+
+export interface WorkflowRunHookContext {
+  definition: WorkflowDefinition;
+  run: WorkflowRun;
+}
+
+export interface WorkflowAgentHookContext {
+  runId: string;
+  agentId: string;
+  label: string;
+  phaseId?: string;
+  prompt: string;
+}
+
+export interface WorkflowAgentCompletedHookContext {
+  runId: string;
+  agentId: string;
+  status: 'done' | 'error' | 'skipped';
+  resultPreview?: string;
+}
+
+export interface WorkflowRunCompletedHookContext {
+  runId: string;
+  status: 'succeeded' | 'failed' | 'cancelled';
 }
 
 export interface StartWorkflowRunOptions {
@@ -45,6 +82,7 @@ export class WorkflowEngine {
     let currentPhaseId: string | undefined;
     let eventQueue = Promise.resolve();
     const progressRecorders = new Map<number, AgentProgressRecorder>();
+    const subagentSessionKeys = new Map<number, string>();
 
     const run: WorkflowRun = {
       id: runId,
@@ -87,10 +125,12 @@ export class WorkflowEngine {
     };
 
     await appendEvent('run_queued', { run }, createdAtMs);
+    await this.callHooks((hook) => hook.beforeRun?.({ definition, run }));
     await appendEvent('run_started', { startedAtMs: Date.now() });
 
     try {
-      const runtimeResult = await runWorkflowScript<unknown>(
+      const runtime = this.options.runtime ?? createScriptWorkflowRuntime();
+      const runtimeResult = await runtime.run<unknown>(
         definition.runtime.source,
         {
           runner: this.options.runner,
@@ -115,27 +155,45 @@ export class WorkflowEngine {
             void appendEvent('log_appended', { message });
           },
           onAgentQueued: (event) => {
+            const agentId = formatRuntimeAgentId(event.id);
+            const subagentSessionKey = this.options.subagentSessionKeyFactory?.({ runId, agentId }) ?? defaultSubagentSessionKey(runId, agentId);
+            subagentSessionKeys.set(event.id, subagentSessionKey);
             const phaseId = event.phase ? (phaseTitleToId.get(event.phase) ?? normalizePhaseId(event.phase)) : currentPhaseId;
-            void appendEvent('agent_queued', {
-              agentId: formatRuntimeAgentId(event.id),
+            void this.callHooks((hook) => hook.beforeAgent?.({
+              runId,
+              agentId,
               label: event.label,
               phaseId,
               prompt: event.prompt,
+            }));
+            void appendEvent('agent_queued', {
+              agentId,
+              label: event.label,
+              phaseId,
+              prompt: event.prompt,
+              sessionKey: subagentSessionKey,
             });
           },
           onAgentStart: (event) => {
             void appendEvent('agent_started', { agentId: formatRuntimeAgentId(event.id) });
           },
           onAgentEnd: (event) => {
+            const agentId = formatRuntimeAgentId(event.id);
             const completedStatus = normalizeCompletedAgentStatus(event.status);
+            const resultPreview = previewWorkflowValue(event.result);
             progressRecorders.get(event.id)?.completeOpenSteps(completedStatus === 'done' ? 'done' : 'error');
             progressRecorders.delete(event.id);
             void appendEvent('agent_completed', {
-              agentId: formatRuntimeAgentId(event.id),
+              agentId,
               status: completedStatus,
-              resultPreview: previewWorkflowValue(event.result),
+              resultPreview,
               error: completedStatus === 'error' ? 'Subagent failed' : undefined,
-            });
+            }).then(() => this.callHooks((hook) => hook.afterAgent?.({
+              runId,
+              agentId,
+              status: completedStatus,
+              resultPreview,
+            })).catch(() => undefined));
           },
           enhanceSubagentRun: (ctx) => {
             const recorder = new AgentProgressRecorder({
@@ -143,7 +201,22 @@ export class WorkflowEngine {
               appendEvent,
             });
             progressRecorders.set(ctx.id, recorder);
-            return { onProgress: (event) => recorder.onProgress(event) };
+            const agentId = formatRuntimeAgentId(ctx.id);
+            const sessionKey = subagentSessionKeys.get(ctx.id)
+              ?? this.options.subagentSessionKeyFactory?.({ runId, agentId })
+              ?? defaultSubagentSessionKey(runId, agentId);
+            subagentSessionKeys.set(ctx.id, sessionKey);
+            return {
+              sessionKey,
+              sessionMetadata: {
+                parentSessionKey: this.options.parentSessionKey,
+                workflowRunId: runId,
+                workflowDefinitionId: definition.id,
+                workflowAgentId: agentId,
+                workflowAgentLabel: ctx.label,
+              },
+              onProgress: (event) => recorder.onProgress(event),
+            };
           },
         },
       );
@@ -153,13 +226,16 @@ export class WorkflowEngine {
         await appendEvent('phase_completed', { phaseId: currentPhaseId });
       }
       await appendEvent('run_completed', { result: toWorkflowResultEnvelope(runtimeResult.result) });
+      await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'succeeded' }));
     } catch (err) {
       await eventQueue;
       const error = toWorkflowRunError(err, options.signal?.aborted === true);
       if (error.code === 'cancelled') {
         await appendEvent('run_cancelled', { reason: error.message });
+        await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'cancelled' }));
       } else {
         await appendEvent('run_failed', { error });
+        await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'failed' }));
       }
     }
 
@@ -168,6 +244,16 @@ export class WorkflowEngine {
       throw new Error(`workflow run view was not created for ${runId}`);
     }
     return view;
+  }
+
+  private async callHooks(call: (hook: WorkflowEngineHook) => Promise<void> | void | undefined): Promise<void> {
+    for (const hook of this.options.hooks ?? []) {
+      try {
+        await call(hook);
+      } catch {
+        // Hooks are extension points; workflow execution remains authoritative.
+      }
+    }
   }
 }
 
@@ -338,6 +424,10 @@ function normalizePhaseId(title: string): string {
 
 function formatRuntimeAgentId(id: number): string {
   return `agent-${id}`;
+}
+
+function defaultSubagentSessionKey(runId: string, agentId: string): string {
+  return `workflow:${runId}:subagent:${agentId}`;
 }
 
 function normalizeCompletedAgentStatus(status: string): 'done' | 'error' | 'skipped' {

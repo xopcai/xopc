@@ -131,7 +131,7 @@ describe('pairing-service', () => {
     } as any);
     expect(summary.telegram.pending).toBe(2);
     expect(summary.telegram.stale).toBe(0);
-    expect(summary.feishu.pending).toBe(0);
+    expect(summary.feishu).toBeUndefined();
   });
 
   it('approves pending request by sender id', () => {
@@ -180,7 +180,7 @@ describe('pairing-service', () => {
         telegram: { enabled: false, dmPolicy: 'pairing', accounts: { default: {} } },
       },
     } as any);
-    expect(summary.telegram.pending).toBe(0);
+    expect(summary.telegram).toBeUndefined();
 
     const issues = collectPairingPendingIssues({
       channels: {

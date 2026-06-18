@@ -1,10 +1,4 @@
-import { normalizeChannelsFromConfig } from '@/features/settings/channels-config-api';
 import { isMaskedSecret } from '@/lib/is-masked-secret';
-import {
-  isFeishuConfigured,
-  isTelegramConfigured,
-  isWeixinConfigured,
-} from '@/features/settings/channels/utils';
 
 export type SetupChecklistItemId =
   | 'gateway'
@@ -60,15 +54,21 @@ function readDefaultModel(config: unknown): string {
 }
 
 function isAnyChannelConfigured(config: unknown): boolean {
-  const channels = normalizeChannelsFromConfig(config);
-  return (
-    (channels.telegram.enabled && isTelegramConfigured(channels.telegram)) ||
-    (channels.weixin.enabled && isWeixinConfigured(channels.weixin)) ||
-    (channels.feishu.enabled && isFeishuConfigured(channels.feishu)) ||
-    isTelegramConfigured(channels.telegram) ||
-    isWeixinConfigured(channels.weixin) ||
-    isFeishuConfigured(channels.feishu)
-  );
+  if (!config || typeof config !== 'object') return false;
+  const channels = (config as Record<string, unknown>).channels;
+  if (!channels || typeof channels !== 'object' || Array.isArray(channels)) return false;
+  return Object.values(channels as Record<string, unknown>).some((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+    const record = entry as Record<string, unknown>;
+    if ('configured' in record || 'config' in record || 'schema' in record || 'uiHints' in record) {
+      if (record.configured === true) return true;
+      const channelConfig = record.config;
+      if (!channelConfig || typeof channelConfig !== 'object' || Array.isArray(channelConfig)) return false;
+      const channelRecord = channelConfig as Record<string, unknown>;
+      return channelRecord.enabled === true || Object.keys(channelRecord).length > 0;
+    }
+    return record.enabled === true || Object.keys(record).length > 0;
+  });
 }
 
 export function buildSetupStatusSnapshot(input: {

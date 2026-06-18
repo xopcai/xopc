@@ -1,7 +1,12 @@
 ---
 name: github
-description: "Interact with GitHub using the `gh` CLI. Use `gh issue`, `gh pr`, `gh run`, and `gh api` for issues, PRs, CI runs, and advanced queries."
+description: "Interact with GitHub using the `gh` CLI for issues, PRs, CI runs, and advanced API queries."
 license: MIT
+metadata:
+  xopc:
+    requires_toolsets: [terminal]
+    requires:
+      bins: [gh]
 ---
 
 # GitHub Skill

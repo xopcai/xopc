@@ -21,7 +21,35 @@ export interface WorkflowDefinition {
   phases: WorkflowPhaseDefinition[];
   runtime: WorkflowRuntimeDefinition;
   defaults: WorkflowDefinitionDefaults;
+  permissions?: WorkflowPermissionPolicy;
+  resources?: WorkflowResourceRefs;
   metadata: WorkflowDefinitionMetadata;
+}
+
+export interface WorkflowDefinitionManifest {
+  title?: string;
+  description?: string;
+  version?: string;
+  inputSchema?: JsonSchema;
+  outputSchema?: JsonSchema;
+  defaults?: Partial<WorkflowDefinitionDefaults>;
+  tags?: string[];
+  whenToUse?: string;
+  permissions?: WorkflowPermissionPolicy;
+  resources?: WorkflowResourceRefs;
+}
+
+export interface WorkflowPermissionPolicy {
+  tools?: string[];
+  network?: boolean;
+  fileSystem?: 'read' | 'write' | 'none';
+  approvalRequired?: boolean;
+}
+
+export interface WorkflowResourceRefs {
+  skills?: string[];
+  contextFiles?: string[];
+  promptTemplates?: string[];
 }
 
 export interface WorkflowPhaseDefinition {

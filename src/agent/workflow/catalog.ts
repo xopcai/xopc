@@ -2,8 +2,9 @@
  * Catalog for named workflows.
  *
  * Resolution order (built-ins are starting points, user workflows win):
- *   1. `~/.xopc/workflows/<name>.js` (or `<name>.workflow.js`)
- *   2. {@link BUILTIN_WORKFLOWS}
+ *   1. `~/.xopc/workflows/<name>/workflow.js` (+ optional `manifest.json`)
+ *   2. `~/.xopc/workflows/<name>.js` (or `<name>.workflow.js`)
+ *   3. {@link BUILTIN_WORKFLOWS}
  *
  * The user dir is discovered via {@link resolveStateDir}, so `XOPC_STATE_DIR`
  * overrides apply automatically (matches how skills / extensions are wired).
@@ -27,6 +28,8 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 
+import type { WorkflowDefinitionManifest } from '../../workflows/domain/definition.js';
+
 import { resolveStateDir } from '../../config/paths-state.js';
 
 import { BUILTIN_WORKFLOWS } from './builtins/index.js';
@@ -41,6 +44,8 @@ export interface CatalogEntry {
   /** Absolute path for user entries; null for built-ins (in-memory). */
   path: string | null;
   description: string;
+  title?: string;
+  version?: string;
   whenToUse?: string;
   tags?: string[];
   estimatedAgents?: { min: number; max: number };
@@ -52,6 +57,7 @@ export interface LoadedWorkflow {
   script: string;
   meta: WorkflowMeta;
   path: string | null;
+  manifest?: WorkflowDefinitionManifest;
 }
 
 export interface WorkflowCatalog {
@@ -85,19 +91,19 @@ export function createWorkflowCatalog(opts: { userDir?: string } = {}): Workflow
         estimatedAgents: meta?.estimatedAgents,
       });
     }
-    for (const file of safeListUserFiles(userDir)) {
-      const name = stripExt(file);
-      if (!isValidName(name)) continue;
-      const full = join(userDir, file);
-      const meta = safeMeta(readScript(full));
+    for (const entry of safeListUserEntries(userDir)) {
+      const meta = safeMeta(readScript(entry.path));
+      const manifest = readManifest(entry.manifestPath);
       // User wins on collision.
-      entries.set(name, {
-        name,
+      entries.set(entry.name, {
+        name: entry.name,
         source: 'user',
-        path: full,
-        description: meta?.description ?? '(unparseable)',
-        whenToUse: meta?.whenToUse,
-        tags: meta?.tags,
+        path: entry.path,
+        description: manifest?.description ?? meta?.description ?? '(unparseable)',
+        title: manifest?.title,
+        version: manifest?.version,
+        whenToUse: manifest?.whenToUse ?? meta?.whenToUse,
+        tags: manifest?.tags ?? meta?.tags,
         estimatedAgents: meta?.estimatedAgents,
       });
     }
@@ -106,12 +112,19 @@ export function createWorkflowCatalog(opts: { userDir?: string } = {}): Workflow
 
   const load = (name: string): LoadedWorkflow => {
     requireValidName(name);
-    const userPath = findUserPath(userDir, name);
-    if (userPath) {
-      const script = readScript(userPath);
+    const userEntry = findUserEntry(userDir, name);
+    if (userEntry) {
+      const script = readScript(userEntry.path);
       const { meta } = parseWorkflowScript(script);
-      ensureMetaNameMatches(meta, name, userPath);
-      return { name, source: 'user', script, meta, path: userPath };
+      ensureMetaNameMatches(meta, name, userEntry.path);
+      return {
+        name,
+        source: 'user',
+        script,
+        meta,
+        path: userEntry.path,
+        manifest: readManifest(userEntry.manifestPath),
+      };
     }
     const builtin = BUILTIN_WORKFLOWS.find((b) => b.name === name);
     if (builtin) {
@@ -144,9 +157,9 @@ export function createWorkflowCatalog(opts: { userDir?: string } = {}): Workflow
 
   const remove = (name: string): boolean => {
     requireValidName(name);
-    const userPath = findUserPath(userDir, name);
-    if (!userPath) return false;
-    unlinkSync(userPath);
+    const userEntry = findUserEntry(userDir, name);
+    if (!userEntry) return false;
+    unlinkSync(userEntry.path);
     return true;
   };
 
@@ -159,27 +172,64 @@ export function defaultUserDir(): string {
   return join(resolveStateDir(), 'workflows');
 }
 
-function safeListUserFiles(dir: string): string[] {
+interface UserWorkflowEntry {
+  name: string;
+  path: string;
+  manifestPath?: string;
+}
+
+function safeListUserEntries(dir: string): UserWorkflowEntry[] {
   try {
     if (!existsSync(dir)) return [];
     const st = statSync(dir);
     if (!st.isDirectory()) return [];
-    return readdirSync(dir).filter((f) => /\.(js|workflow\.js)$/i.test(f));
+    const entries: UserWorkflowEntry[] = [];
+    for (const file of readdirSync(dir)) {
+      const full = join(dir, file);
+      const fileStat = statSync(full);
+      if (fileStat.isDirectory()) {
+        const workflowPath = join(full, 'workflow.js');
+        if (existsSync(workflowPath) && isValidName(file)) {
+          entries.push({ name: file, path: workflowPath, manifestPath: join(full, 'manifest.json') });
+        }
+        continue;
+      }
+      if (!/\.(js|workflow\.js)$/i.test(file)) continue;
+      const name = stripExt(file);
+      if (!isValidName(name)) continue;
+      entries.push({ name, path: full });
+    }
+    return entries;
   } catch {
     return [];
   }
 }
 
-function findUserPath(dir: string, name: string): string | null {
+function findUserEntry(dir: string, name: string): UserWorkflowEntry | null {
+  const dirWorkflowPath = join(dir, name, 'workflow.js');
+  if (existsSync(dirWorkflowPath)) {
+    return { name, path: dirWorkflowPath, manifestPath: join(dir, name, 'manifest.json') };
+  }
   for (const candidate of [`${name}.js`, `${name}.workflow.js`]) {
     const full = join(dir, candidate);
-    if (existsSync(full)) return full;
+    if (existsSync(full)) return { name, path: full };
   }
   return null;
 }
 
 function readScript(path: string): string {
   return readFileSync(path, 'utf-8');
+}
+
+function readManifest(path: string | undefined): WorkflowDefinitionManifest | undefined {
+  if (!path || !existsSync(path)) return undefined;
+  try {
+    const value = JSON.parse(readFileSync(path, 'utf-8')) as WorkflowDefinitionManifest;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+    return value;
+  } catch {
+    return undefined;
+  }
 }
 
 function safeMeta(script: string): WorkflowMeta | null {

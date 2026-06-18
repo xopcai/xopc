@@ -7,14 +7,15 @@ import { getWorkflowRun, type WorkflowRunView } from './workflow-api';
 import { ACTIVE_RUN_STATUSES } from './workflow-page.constants';
 
 /** Live workflow run view for a dedicated workflow chat session (SSE + polling fallback). */
-export function useWorkflowRunLive(runId: string | null | undefined) {
+export function useWorkflowRunLive(runId: string | null | undefined, options?: { ownerAgentId?: string }) {
   const token = useGatewayStore((s) => s.token);
   const hasToken = Boolean(token);
   const trimmedRunId = runId?.trim() || null;
+  const ownerAgentId = options?.ownerAgentId?.trim() || undefined;
 
   const swr = useSWR(
-    hasToken && trimmedRunId ? ['workflow-run-live', trimmedRunId, token] : null,
-    () => getWorkflowRun(trimmedRunId!),
+    hasToken && trimmedRunId ? ['workflow-run-live', trimmedRunId, ownerAgentId ?? '', token] : null,
+    () => getWorkflowRun(trimmedRunId!, { ownerAgentId }),
     {
       revalidateOnFocus: false,
       refreshInterval: (latest) => {
@@ -29,6 +30,8 @@ export function useWorkflowRunLive(runId: string | null | undefined) {
     const handler = (event: Event) => {
       const detail = (event as CustomEvent<{ runId?: string; view?: WorkflowRunView }>).detail;
       if (detail?.runId !== trimmedRunId) return;
+      const eventAgentId = detail.view?.run.metadata?.agentId;
+      if (ownerAgentId && eventAgentId && eventAgentId !== ownerAgentId) return;
       if (detail.view) {
         void swr.mutate(detail.view, { revalidate: false });
         return;
@@ -37,7 +40,7 @@ export function useWorkflowRunLive(runId: string | null | undefined) {
     };
     window.addEventListener('workflow-run-updated', handler);
     return () => window.removeEventListener('workflow-run-updated', handler);
-  }, [swr.mutate, trimmedRunId]);
+  }, [ownerAgentId, swr.mutate, trimmedRunId]);
 
   return {
     view: swr.data,

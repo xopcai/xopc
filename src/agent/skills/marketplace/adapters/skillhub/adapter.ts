@@ -4,6 +4,7 @@
 
 import { basename } from 'node:path';
 
+import { buildSkillMarkdownPreviewFromRaw } from '../../../skill-markdown-preview-from-raw.js';
 import type { MarketplaceCategoryOption } from '../store/store-api-client.js';
 import type { SkillsMarketplaceAdapter } from '../../adapter.types.js';
 import { sortMarketplaceCategories } from '../../marketplace-category-order.js';
@@ -440,12 +441,16 @@ function packageDetailFromCuratedSkill(skill: CuratedIndexSkill) {
   const version = (skill.version ?? '').trim() || '1.0.0';
   const categories = (skill.categories ?? []).map((c) => String(c).trim()).filter(Boolean);
   const sourceLabel = sourceLabelFromHomepage(skill.homepage);
+  const name = (skill.name ?? slug).trim() || slug;
+  const description = (skill.description ?? '').trim();
+  const readme = curatedSkillFallbackReadmeMarkdown(skill);
   return {
     id: slug,
-    name: (skill.name ?? slug).trim() || slug,
+    name,
     type: 'skill',
-    description: (skill.description ?? '').trim(),
-    readme: curatedSkillFallbackReadmeMarkdown(skill),
+    description,
+    readme,
+    skillDocPreview: buildSkillMarkdownPreviewFromRaw(readme, { name, description }),
     downloads: typeof skill.downloads === 'number' ? skill.downloads : 0,
     author: {
       username: sourceLabel?.toLowerCase() ?? 'skillhub',
@@ -857,12 +862,19 @@ export const skillHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
       }
     }
 
+    const description = detail.skill.summary_zh || detail.skill.summary;
+    const skillDocPreview = buildSkillMarkdownPreviewFromRaw(readme, {
+      name: detail.skill.slug,
+      description,
+    });
+
     return {
       id: detail.skill.slug,
       name: detail.skill.slug,
       type: 'skill',
-      description: detail.skill.summary_zh || detail.skill.summary,
+      description,
       readme,
+      skillDocPreview,
       downloads: detail.skill.stats.downloads,
       author: {
         username: detail.owner.handle,

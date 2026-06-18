@@ -46,7 +46,6 @@ import type { SessionStore } from '../session/store.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import type { SessionContext } from './session/session-context.js';
 import type { Skill, SkillMarkdownPreviewPayload } from './skills/types.js';
-import { resolveLocalizedSkillMarkdown, resolveLocalizedSkillMeta } from './skills/skill-view-path.js';
 import { createSkillConfigManager } from './skills/config.js';
 import { isUnderManagedSkillsDir } from './skills/managed-store.js';
 import { loadSkillsLock, type SkillHubLockEntry } from './skills/hub-lock.js';
@@ -357,25 +356,21 @@ export class AgentManager implements AgentInstanceGateway {
    */
   expandSkillUserText(text: string): string {
     const ctx = this.config.getCurrentContext?.();
-    const path = ctx?.sessionKey
-      ? this.getResolvedWorkspaceForSession(ctx.sessionKey)
+    const sessionKey = ctx?.sessionKey;
+    const path = sessionKey
+      ? this.getResolvedWorkspaceForSession(sessionKey)
       : this.baseWorkspacePath;
-    return this.workspaceRuntimes.getOrCreate(path).skillManager.expandCommand(text);
+    const inst = sessionKey ? this.agents.get(sessionKey) : undefined;
+    return this.workspaceRuntimes.getOrCreate(path).skillManager.expandCommand(text, {
+      skillAllowlist: inst?.effectiveProfile.skillsAllowlist ?? [],
+      registeredToolNames: inst?.registeredToolNames,
+    });
   }
 
-  /**
-   * Structured SKILL.md preview for the gateway console.
-   * When `lang` is provided (e.g. "zh"), tries SKILL-{lang}.md first; falls back to SKILL.md.
-   */
-  getSkillMarkdownSource(skillName: string, lang?: string): SkillMarkdownPreviewPayload | null {
+  /** Structured SKILL.md preview for the gateway console. */
+  getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
     const skill = this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).skillManager.findSkill(skillName);
     if (!skill) return null;
-
-    // Try localized file for display
-    if (lang) {
-      const localized = resolveLocalizedSkillMarkdown(skill, lang);
-      if (localized) return localized;
-    }
 
     return {
       name: skill.name,
@@ -413,7 +408,7 @@ export class AgentManager implements AgentInstanceGateway {
     return contextFiles;
   }
 
-  getSkillCatalog(lang?: string): SkillCatalogEntry[] {
+  getSkillCatalog(): SkillCatalogEntry[] {
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
     return this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).skillManager.getSkills().map((s) => {
@@ -424,13 +419,10 @@ export class AgentManager implements AgentInstanceGateway {
       const hubKey = managed ? basename(base) : '';
       const hub = managed && hubKey ? lock.entries[hubKey] : undefined;
 
-      // Attempt localized name/description for display
-      const localized = lang ? resolveLocalizedSkillMeta(s, lang) : null;
-
       return {
         directoryId,
-        name: localized?.name ?? s.name,
-        description: localized?.description ?? s.description,
+        name: s.name,
+        description: s.description,
         category: s.category,
         source: s.source,
         path: s.baseDir,

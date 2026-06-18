@@ -59,7 +59,7 @@ These files are injected into the system prompt as **Project Context** (OpenClaw
 | File | Role |
 |------|------|
 | `SOUL.md` | Principles and “who you are” for the agent. |
-| `IDENTITY.md` | Name, tone, boundaries. |
+| `IDENTITY.md` | Name, description, language, avatar, tone, boundaries. This is the source of truth for UI display identity and model-visible identity. |
 | `USER.md` | Notes about the human user. |
 | `TOOLS.md` | Environment-specific tool hints (hosts, devices, …). |
 | `AGENTS.md` | Session Startup, Red Lines, and collaboration guidelines. |

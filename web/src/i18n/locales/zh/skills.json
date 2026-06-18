@@ -127,7 +127,6 @@
     "detailToolsetsFallbackList": "备用工具集",
     "detailEnvVarsLabel": "会话环境变量",
     "detailNotInjectedNote": "该技能不会注入到模型上下文（disable-model-invocation）。",
-    "marketplaceNoReadme": "该技能暂无说明正文。",
     "detailModalEnable": "启用",
     "detailModalDisable": "停用",
     "useRequiresEnabled": "请先启用该技能后再使用",

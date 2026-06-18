@@ -6,6 +6,51 @@
   "kind": "channel",
   "main": "src/index.ts",
   "channels": ["telegram"],
+  "channelContributions": {
+    "telegram": {
+      "label": "Telegram",
+      "description": "Telegram Bot API channel",
+      "docsPath": "/channels/telegram",
+      "order": 10,
+      "configPath": "channels.telegram",
+      "capabilities": {
+        "login": false,
+        "pairing": true,
+        "doctor": true,
+        "multiAccount": true,
+        "streaming": true,
+        "media": true
+      },
+      "configSchema": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "enabled": { "type": "boolean", "default": false, "title": "Enabled" },
+          "accounts": { "type": "object", "additionalProperties": true, "title": "Accounts" },
+          "botToken": { "type": "string", "format": "password", "title": "Bot token" },
+          "dmPolicy": {
+            "type": "string",
+            "enum": ["pairing", "allowlist", "open", "disabled"],
+            "default": "pairing",
+            "title": "DM policy"
+          },
+          "groupPolicy": {
+            "type": "string",
+            "enum": ["open", "disabled", "allowlist"],
+            "default": "open",
+            "title": "Group policy"
+          }
+        }
+      },
+      "uiHints": {
+        "botToken": { "sensitive": true, "help": "Telegram bot token" },
+        "accounts.*.botToken": { "sensitive": true, "help": "Telegram bot token" }
+      },
+      "actions": {
+        "doctor.run": { "label": "Run doctor", "result": "diagnostics" }
+      }
+    }
+  },
   "channelEnvVars": {
     "telegram": ["TELEGRAM_BOT_TOKEN"]
   },

@@ -56,7 +56,7 @@ export function useSetupChecklist(): {
     error: skillsError,
     isLoading: skillsLoading,
     mutate: mutateSkills,
-  } = useSWR(Boolean(token) ? ['setup-checklist-skills', language] : null, () => getSkills(language), {
+  } = useSWR(Boolean(token) ? 'setup-checklist-skills' : null, () => getSkills(), {
     revalidateOnFocus: false,
   });
 

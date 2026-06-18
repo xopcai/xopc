@@ -25,6 +25,10 @@ import type {
   ExtensionHookEvent,
   HookExecutionMode,
   TuiExtensionRegistrar,
+  ExtensionSendUserMessageOptions,
+  ExtensionUserMessageContent,
+  ExtensionCustomMessage,
+  ExtensionSendMessageOptions,
 } from './types/index.js';
 import type { CommandContribution } from './types/manifest.js';
 import type { CommandDefinition } from '../chat-commands/types.js';
@@ -399,6 +403,28 @@ export class ExtensionApiImpl implements ExtensionApi {
   registerTui(register: TuiExtensionRegistrar): void {
     this._registry.addTuiRegistration(this.id, register);
     this._logger.info('Registered TUI contributions (deferred until xopc tui starts)');
+  }
+
+  setLabel(entryId: string, label: string | undefined): void {
+    this._runtime.setLabel?.(entryId, label);
+  }
+
+  sendUserMessage(
+    content: ExtensionUserMessageContent,
+    options?: ExtensionSendUserMessageOptions,
+  ): void {
+    this._runtime.sendUserMessage?.(content, options);
+  }
+
+  appendEntry<T = unknown>(customType: string, data?: T): void {
+    this._runtime.appendEntry?.(customType, data);
+  }
+
+  sendMessage<T = unknown>(
+    message: ExtensionCustomMessage<T>,
+    options?: ExtensionSendMessageOptions,
+  ): void {
+    this._runtime.sendMessage?.(message, options);
   }
 
   // Internal methods for extension manager

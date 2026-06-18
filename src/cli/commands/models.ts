@@ -63,13 +63,16 @@ type ModelsAuthLoginOptions = {
 };
 
 function currentModelRef(config: Config): string | undefined {
-  return config.agents?.defaults?.model?.primary;
+  return config.agents?.defaults?.models?.chat?.primary;
 }
 
 function setDefaultModel(config: Config, modelRef: string): Config {
   config.agents = config.agents ?? {};
   config.agents.defaults = config.agents.defaults ?? {} as NonNullable<Config['agents']>['defaults'];
-  config.agents.defaults.model = { primary: modelRef, fallbacks: [] };
+  config.agents.defaults.models = {
+    ...config.agents.defaults.models,
+    chat: { primary: modelRef, fallbacks: [] },
+  };
   return config;
 }
 

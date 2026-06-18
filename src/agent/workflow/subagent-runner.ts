@@ -19,6 +19,8 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 
 import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
+import type { SessionStore } from '../../session/store.js';
+import { emitSessionTranscriptUpdate } from '../../session/transcript-events.js';
 import { createLogger } from '../../utils/logger.js';
 
 import {
@@ -50,6 +52,7 @@ export interface DelegateSubagentRunnerDeps {
   getDefaultModel: () => Model<Api>;
   getConfig: () => Config | undefined;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
+  sessionStore?: SessionStore;
   /**
    * Provided by the workflow tool from `AgentToolsFactory` — mirrors how
    * `delegate-tool` is wired (avoids importing `tools/factory.ts` here and
@@ -77,6 +80,28 @@ export class DelegateSubagentRunner implements SubagentRunner {
 
     const fullPrompt = buildPrompt(prompt, opts, wantStructured);
     const streamMode = resolveSubagentStreamMode(this.deps.getConfig);
+
+    let transcriptPersistQueue: Promise<void> = Promise.resolve();
+    const persistTranscriptSnapshot = opts.sessionKey && this.deps.sessionStore
+      ? (messages: Parameters<SessionStore['saveMessages']>[1]) => {
+          const store = this.deps.sessionStore;
+          const key = opts.sessionKey;
+          if (!store || !key) return;
+          const snapshot = cloneAgentMessages(messages);
+          transcriptPersistQueue = transcriptPersistQueue
+            .then(async () => {
+              await store.saveMessages(key, snapshot);
+              emitSessionTranscriptUpdate({ sessionKey: key });
+            })
+            .catch((err) => {
+              const msg = err instanceof Error ? err.message : String(err);
+              log.warn(
+                { err, sessionKey: key, errorMessage: msg },
+                `Failed to persist workflow subagent transcript snapshot: ${msg}`,
+              );
+            });
+        }
+      : undefined;
 
     const childOptions: DelegateChildHandleOptions = {
       workspace: this.deps.workspace,
@@ -106,14 +131,24 @@ export class DelegateSubagentRunner implements SubagentRunner {
               },
             }
           : undefined,
+      onTranscriptSnapshot: persistTranscriptSnapshot,
     };
+
+    if (opts.sessionKey && opts.sessionMetadata && this.deps.sessionStore) {
+      await this.preparePersistentSubagentSession(opts.sessionKey, opts.sessionMetadata);
+    }
 
     const handle = createDelegateChildHandle(childOptions);
     const onAbort = () => handle.abort();
     opts.signal?.addEventListener('abort', onAbort, { once: true });
 
     try {
-      const { summary } = await handle.run();
+      const { summary, messages } = await handle.run();
+      await transcriptPersistQueue;
+      if (opts.sessionKey && this.deps.sessionStore) {
+        await this.deps.sessionStore.saveMessages(opts.sessionKey, messages);
+        emitSessionTranscriptUpdate({ sessionKey: opts.sessionKey });
+      }
       if (opts.signal?.aborted) return null;
 
       if (wantStructured) {
@@ -133,6 +168,30 @@ export class DelegateSubagentRunner implements SubagentRunner {
       opts.signal?.removeEventListener('abort', onAbort);
     }
   }
+
+  private async preparePersistentSubagentSession(
+    sessionKey: string,
+    metadata: NonNullable<SubagentRunOptions['sessionMetadata']>,
+  ): Promise<void> {
+    const store = this.deps.sessionStore;
+    if (!store) return;
+    await store.resolveTranscriptPath(sessionKey);
+    await store.updateMetadata(sessionKey, {
+      sessionType: 'workflow-subagent',
+      hiddenFromSessionList: true,
+      parentSessionKey: metadata.parentSessionKey,
+      workflowRunId: metadata.workflowRunId,
+      workflowDefinitionId: metadata.workflowDefinitionId,
+      workflowAgentId: metadata.workflowAgentId,
+      workflowAgentLabel: metadata.workflowAgentLabel,
+      name: metadata.workflowAgentLabel,
+      tags: ['workflow-subagent', metadata.workflowDefinitionId],
+    });
+  }
+}
+
+function cloneAgentMessages(messages: Parameters<SessionStore['saveMessages']>[1]): Parameters<SessionStore['saveMessages']>[1] {
+  return messages.map((message) => structuredClone(message));
 }
 
 function resolveAllowedToolNames(

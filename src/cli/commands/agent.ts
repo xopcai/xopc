@@ -50,7 +50,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
         return;
       }
 
-      const modelFromConfig = config.agents?.defaults?.model?.primary;
+      const modelFromConfig = config.agents?.defaults?.models?.chat?.primary;
       const modelId = (options.model?.trim() || modelFromConfig) as string | undefined;
       const bus = new MessageBus();
 

@@ -148,8 +148,8 @@ export interface MarketplacePackageDetailPayload {
   type: string;
   description: string;
   readme: string | null;
-  /** Present for SkillHub SKILL.md (and similar) so the UI can render structured meta + body. */
-  skillDocPreview?: SkillMarkdownPreviewPayload;
+  /** Gateway-normalized structured meta + body. */
+  skillDocPreview: SkillMarkdownPreviewPayload;
   downloads: number;
   author: { username: string; avatarUrl: string | null };
   latestVersion: {

@@ -1,4 +1,4 @@
-import { Layers3, Play, Search, UsersRound } from 'lucide-react';
+import { Braces, Layers3, Play, Search, UsersRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -59,6 +59,12 @@ function WorkflowPickCard({
             >
               {isUser ? labels.badgeUser : labels.badgeBuiltin}
             </span>
+            {definition.inputSchema ? (
+              <span className="inline-flex items-center gap-1 rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-fg-subtle">
+                <Braces className="size-2.5" aria-hidden />
+                {labels.inputSchemaBadge}
+              </span>
+            ) : null}
             {definition.metadata.tags.slice(0, 2).map((tag) => (
               <span key={tag} className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-fg-subtle">
                 {tag}

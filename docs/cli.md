@@ -191,7 +191,7 @@ Manage **`agents.list`** in `config.json`. Paths for workspace and `~/.xopc/agen
 | Subcommand | Description |
 |------------|-------------|
 | `agents list` | Print configured agents and the resolved default agent id (`--json` supported). |
-| `agents add <name>` | **Requires** `--workspace <dir>`. Appends/updates `agents.list`, creates dirs, seeds Markdown profile files. Optional: `--model`, `--agent-dir`. |
+| `agents add <name>` | **Requires** `--workspace <dir>`. Uses `<name>` as the id/name seed, appends/updates `agents.list`, creates dirs, and seeds Markdown profile files including `profile/IDENTITY.md`. Optional: `--model`, `--agent-dir`. |
 | `agents delete <id>` | Removes the agent from `list` and strips matching **`bindings`**. Add **`--purge`** to delete on-disk agent home and workspace (not allowed for `main`). |
 
 Examples:

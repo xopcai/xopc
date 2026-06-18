@@ -193,7 +193,7 @@ export class ModelManager {
   }
 
   /**
-   * Ordered model candidates for the session (primary + `agents.defaults.model.fallbacks`).
+   * Ordered model candidates for the session (primary + `agents.defaults.models.chat.fallbacks`).
    */
   getFallbackCandidatesForSession(sessionKey: string): ModelCandidate[] {
     const ref = this.getModelForSession(sessionKey);

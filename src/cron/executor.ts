@@ -14,9 +14,7 @@ import { createLogger } from '../utils/logger.js';
 import {
   getChannelPlugin,
   listChannelPlugins,
-  syncChannelPluginsFromManager,
 } from '../channels/plugins/registry.js';
-import { bundledChannelPlugins } from '../generated/bundled-channel-plugins.js';
 import { getCronPayloadText } from './job-content.js';
 import type { SessionStore } from '../session/store.js';
 import type { CronRunLogStore } from './run-log-store.js';
@@ -93,9 +91,6 @@ export class DefaultJobExecutor implements JobExecutor {
     to: string,
     content: string,
   ): Promise<OutboundMessage> {
-    if (listChannelPlugins().length === 0) {
-      syncChannelPluginsFromManager(bundledChannelPlugins);
-    }
     const plugin = getChannelPlugin(channel);
     if (plugin?.cronDelivery) {
       const { chatId, accountId, metadata } = await plugin.cronDelivery.normalizeDeliveryTarget(
@@ -494,9 +489,6 @@ export class DefaultJobExecutor implements JobExecutor {
       const hasAtLeastThreeParts = parts.length >= 3;
       
       // Check if first part looks like a known channel
-      if (listChannelPlugins().length === 0) {
-        syncChannelPluginsFromManager(bundledChannelPlugins);
-      }
       const registeredChannelIds = listChannelPlugins().map((p) => p.id);
       const knownChannels = [...new Set([...registeredChannelIds, 'cli', 'gateway', 'local'])];
       const firstPartIsChannel = knownChannels.includes(parts[0]);
