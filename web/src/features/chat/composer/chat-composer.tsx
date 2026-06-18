@@ -11,7 +11,7 @@ import { MAX_PENDING_FOLLOW_UPS } from '@/features/chat/follow-up/pending-follow
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { AtMentionPicker } from '@/features/chat/palette/at-mention-picker';
 import { CommandPalette } from '@/features/chat/palette/command-palette';
-import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
+import { addSkillToAgentAllowlist, fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
 import { interpolate, type WireAttachment } from '@/features/chat/composer/composer.types';
 import { useComposerInputHistoryWalk } from '@/features/chat/composer/use-composer-input-history-walk';
@@ -120,6 +120,27 @@ export const ChatComposer = memo(function ChatComposer({
     att.clearAttachments();
   }, [att.clearAttachments]);
 
+  const onUnavailableSkill = useCallback(
+    (item: import('@/features/chat/palette/command-palette.types').PaletteItem) => {
+      const reason = item.availability?.status === 'agent-denied'
+        ? m.chat.commandPalette.skillAgentDeniedReason
+        : m.chat.commandPalette.skillDisabledReason;
+      const message = interpolate(m.chat.commandPalette.skillUnavailableMessage, {
+        name: item.name,
+        agent: currentAgentId || 'main',
+        reason,
+      });
+      if (item.availability?.status === 'agent-denied' && window.confirm(`${message}\n\n${m.chat.commandPalette.skillAddToAllowlistConfirm}`)) {
+        void addSkillToAgentAllowlist(currentAgentId, item.name).catch((err) => {
+          window.alert(err instanceof Error ? err.message : String(err));
+        });
+        return;
+      }
+      window.alert(message);
+    },
+    [currentAgentId, m.chat.commandPalette],
+  );
+
   const editor = useComposerEditor({
     disabled,
     autoFocusKey: sessionKey,
@@ -154,6 +175,8 @@ export const ChatComposer = memo(function ChatComposer({
     onSend,
     onUserTextCommitted,
     onChatAgentChange,
+    currentAgentId,
+    onUnavailableSkill,
     onAddPendingFollowUp,
     onAbort,
     pendingFollowUpsCount: pendingFollowUps.length,
@@ -399,6 +422,8 @@ export const ChatComposer = memo(function ChatComposer({
             queueBadgeLabel={m.chat.commandPalette.queueBadge}
             queueFullBadgeLabel={m.chat.commandPalette.queueFullBadge}
             queueFullTooltip={m.chat.commandPalette.queueFullTooltip}
+            skillUnavailableLabel={m.chat.commandPalette.skillUnavailableBadge}
+            skillAgentDeniedLabel={m.chat.commandPalette.skillAgentDeniedBadge}
             onSelectItem={pickers.applyPalette}
           />
           {voice.voiceActive ? (

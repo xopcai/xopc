@@ -584,7 +584,7 @@
       "bundle-mcp": "Load tools from configured MCP servers (global mcp.servers and extension .mcp.json)."
     },
     "skillsTitle": "Skill allowlist",
-    "skillsHint": "Optional allowlist for <available_skills>. Inherit uses agents.defaults only; customize sets this agent’s skills array.",
+    "skillsHint": "These skills appear in this agent’s Chat / menu and <available_skills>. Skills outside the allowlist are hidden from the agent and are not shown by default in Chat /. Inherit uses agents.defaults only; customize sets this agent’s skills array.",
     "skillsInherit": "Inherit defaults",
     "skillsCustomize": "Customize allowlist",
     "skillsSave": "Save skills",

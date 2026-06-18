@@ -48,6 +48,7 @@ export interface PaletteApplyContext {
     onAddPendingFollowUp?: (text: string, atts?: WireAttachment[]) => void | Promise<void>;
     /** Used when runBusy and command is abort-class: stop the current generation. */
     onAbort?: () => void;
+    onUnavailableSkill?: (item: PaletteItem) => void;
   };
 }
 
@@ -60,6 +61,10 @@ export function replaceRange(text: string, start: number, end: number, insert: s
 const applySkillItem: PaletteItemHandler = (item, ctx) => {
   const range = ctx.slashRange;
   if (!range) return;
+  if (item.availability?.status && item.availability.status !== 'available') {
+    ctx.callbacks.onUnavailableSkill?.(item);
+    return;
+  }
   const insert = `/skill:${item.name} `;
   const next = replaceRange(ctx.editor.valueRef.current, range.start, range.end, insert);
   const pos = range.start + insert.length;

@@ -134,7 +134,7 @@ describe('agents-admin', () => {
     expect(e?.tools?.disable).toEqual(['shell']);
   });
 
-  it('prepareUpdateAgent removes builtin agent skills instead of setting a special allowlist', () => {
+  it('prepareUpdateAgent sets skills on builtin agent list entries', () => {
     const cfg = minimalConfig({
       agents: {
         ...minimalConfig().agents,
@@ -148,7 +148,7 @@ describe('agents-admin', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const e = r.data.nextConfig.agents?.list?.find((x) => x.id === 'coder');
-    expect(e?.skills).toBeUndefined();
+    expect(e?.skills).toEqual(['note']);
     expect(e?.tools?.disable).toEqual(['shell']);
   });
   it('prepareCreateAgent uses explicit id seed for agent id without writing display fields to config', () => {

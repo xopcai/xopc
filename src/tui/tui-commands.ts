@@ -221,7 +221,6 @@ export function formatTuiStartText(
 
 import {
   formatModelLabel,
-  formatTuiCompactionResult,
   formatTuiConfigInfo,
   formatTuiContextInfo,
   formatTuiLoginInfo,

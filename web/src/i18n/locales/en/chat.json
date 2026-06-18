@@ -445,6 +445,12 @@
       "queueBadge": "queue",
       "queueFullBadge": "queue full",
       "queueFullTooltip": "Follow-up queue is full",
+      "skillUnavailableBadge": "Unavailable",
+      "skillAgentDeniedBadge": "Not allowlisted",
+      "skillUnavailableMessage": "Skill \"{{name}}\" is unavailable for agent \"{{agent}}\". Reason: {{reason}}. Enable it in Agent settings → Skills before using it.",
+      "skillAgentDeniedReason": "not in the current agent skill allowlist",
+      "skillDisabledReason": "the skill is disabled or requirements are not met",
+      "skillAddToAllowlistConfirm": "Add it to the current agent allowlist now?",
       "showGroupedMore": "Show {{count}} more"
     },
     "goal": {
