@@ -135,6 +135,7 @@ export interface ChannelRuntimeActionResult {
 export interface ChannelRuntimeActionAdapter {
   runAction(params: {
     cfg: Config;
+    locale?: string;
     actionId: string;
     accountId?: string;
     input?: unknown;
