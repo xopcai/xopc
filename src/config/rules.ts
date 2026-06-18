@@ -7,10 +7,6 @@
  * - none: Ignore changes (no action needed)
  */
 
-import type { ChannelPlugin } from '../channels/plugin-types.js';
-import { bundledChannelPlugins } from '../generated/bundled-channel-plugins.js';
-import { listChannelPlugins } from '../channels/plugins/registry.js';
-
 export type ReloadKind = 'hot' | 'restart' | 'none';
 
 export interface ReloadRule {
@@ -37,7 +33,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'models.mode', kind: 'hot', description: 'Model merge mode' },
   
   // Agent defaults - hot reload
-  { prefix: 'agents.defaults.model', kind: 'hot', description: 'Model configuration' },
+  { prefix: 'agents.defaults.models', kind: 'hot', description: 'Model configuration' },
   { prefix: 'agents.defaults.maxTaskDurationMs', kind: 'hot', description: 'Per-turn wall-clock timeout (ms)' },
   { prefix: 'agents.defaults.maxTokens', kind: 'hot', description: 'Max tokens' },
   { prefix: 'agents.defaults.temperature', kind: 'hot', description: 'Temperature' },
@@ -130,21 +126,8 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'tunnel', kind: 'hot', description: 'Tunnel broker and auto-start settings' },
 ];
 
-function pluginsForReloadRules(): ChannelPlugin[] {
-  const listed = listChannelPlugins();
-  return listed.length > 0 ? [...listed] : [...bundledChannelPlugins];
-}
-
 function getChannelReloadRules(): ReloadRule[] {
-  return pluginsForReloadRules()
-    .filter((plugin) => plugin.reload?.configPrefixes?.length)
-    .flatMap((plugin) =>
-      plugin.reload!.configPrefixes.map((prefix) => ({
-        prefix,
-        kind: 'hot' as const,
-        description: `${plugin.meta.label} settings`,
-      })),
-    );
+  return [];
 }
 
 function mergedReloadRules(): ReloadRule[] {

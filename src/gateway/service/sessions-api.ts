@@ -97,6 +97,7 @@ export class GatewaySessionsApi {
       thinkingLevel?: string;
       model?: string | null;
       reasoningLevel?: string;
+      verboseLevel?: string;
       workingDirectory?: string;
     },
   ) {
@@ -212,6 +213,32 @@ export class GatewaySessionsApi {
   async export(key: string, format: ExportFormat): Promise<{ content: string }> {
     const content = await this.opts.sessionIndex.exportSession(key, format);
     return { content };
+  }
+
+  importExport(
+    targetKey: string,
+    jsonContent: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    return this.opts.sessionIndex.importSessionExport(targetKey, jsonContent);
+  }
+
+  fork(
+    key: string,
+    targetKey: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    return this.opts.sessionIndex.forkSession(key, targetKey);
+  }
+
+  forkRows(
+    key: string,
+    targetKey: string,
+    options: { throughRow?: number } = {},
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    return this.opts.sessionIndex.forkSessionRows(key, targetKey, options);
+  }
+
+  btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {
+    return this.opts.getAgentService().sessionInspector.btwQuery(sessionKey, question);
   }
 
   stats() {

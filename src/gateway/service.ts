@@ -1,7 +1,10 @@
 import crypto from 'crypto';
 import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
-import { CHAT_CHANNEL_ORDER, getChatChannelMeta } from '../channels/registry.js';
+import {
+  buildChannelCatalogForConfig,
+  buildChannelCatalogFromSnapshot,
+} from '../channels/catalog/channel-catalog-service.js';
 import { setPairingBroadcastSink } from '../channels/pairing/pairing-events.js';
 import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
@@ -12,6 +15,8 @@ import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.
 import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
 import { WorkflowSessionBridge } from '../workflows/service/workflow-session-bridge.js';
 import { ExtensionLoader, areExtensionsGloballyDisabled, buildExtensionMetadataSnapshot } from '../extensions/index.js';
+import type { ManifestRegistryEntry } from '../extensions/manifest-registry.js';
+import type { ResolvedExtensionConfig } from '../extensions/types/index.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { SessionIndex } from '../session/index.js';
 import type { Config } from '../config/schema.js';
@@ -268,7 +273,7 @@ export class GatewayService {
     const cronRef: { service?: CronService } = { service: this.cronService };
     this._agentService = new AgentService(this.bus, {
       workspace: this.workspacePath,
-      model: this.config.agents?.defaults?.model?.primary,
+      model: this.config.agents?.defaults?.models?.chat?.primary,
       config: this.config,
       sessionStore: this.sessionIndex.getStore(),
       onSessionMetadataUpdated: (sessionKey, patch) => {
@@ -419,6 +424,49 @@ export class GatewayService {
     } catch (err) {
       log.warn({ err }, 'Failed to load startup-phase extensions');
     }
+  }
+
+  private findChannelContributionExtension(channelId: string): ManifestRegistryEntry | undefined {
+    const normalized = channelId.trim().toLowerCase();
+    const registry = this.extensionLoader?.getManifestRegistry();
+    if (!registry) return undefined;
+    return registry
+      .getAllEntries()
+      .find((entry) => Object.keys(entry.manifest.channelContributions ?? {}).some((id) => id.toLowerCase() === normalized));
+  }
+
+  async ensureChannelRuntimePlugin(channelId: string) {
+    const existing = this.channelManager.getPlugin(channelId);
+    if (existing) {
+      await this.channelManager.initializeChannel(channelId);
+      return this.channelManager.getPlugin(channelId);
+    }
+
+    if (!this.extensionLoader || areExtensionsGloballyDisabled(this.config)) {
+      return undefined;
+    }
+
+    const entry = this.findChannelContributionExtension(channelId);
+    if (!entry) {
+      return undefined;
+    }
+
+    const extensionConfig: ResolvedExtensionConfig = {
+      id: entry.id,
+      name: entry.manifest.name || entry.id,
+      source: entry.source,
+      path: entry.path,
+      enabled: true,
+      config: {},
+    };
+    await this.extensionLoader.loadExtension(extensionConfig);
+    this.registerExtensionChannelPlugins();
+    const plugin = this.channelManager.getPlugin(channelId);
+    if (!plugin) {
+      return undefined;
+    }
+    await this.channelManager.initializeChannel(channelId);
+    return this.channelManager.getPlugin(channelId);
   }
 
   private async loadDeferredExtensions(): Promise<void> {
@@ -1011,34 +1059,28 @@ export class GatewayService {
   }> {
     const runningChannels = new Set(this.channelManager.getRunningChannels());
     const channels = this.config.channels as Record<string, { enabled?: boolean } | undefined> | undefined;
-    const builtinOrder = CHAT_CHANNEL_ORDER as readonly string[];
+    const catalog = this.extensionMetadataSnapshot
+      ? buildChannelCatalogFromSnapshot(this.extensionMetadataSnapshot)
+      : buildChannelCatalogForConfig(this.config);
 
-    const rows: Array<{ name: string; enabled: boolean; connected: boolean }> = CHAT_CHANNEL_ORDER.map(
-      (name) => ({
-        name,
-        enabled: !!channels?.[name]?.enabled,
-        connected: runningChannels.has(name),
-      }),
-    );
+    return catalog.entries.map((entry) => ({
+      name: entry.id,
+      enabled: channels?.[entry.id]?.enabled === true,
+      connected: runningChannels.has(entry.id),
+    }));
+  }
 
-    const extReg = this.extensionLoader?.getRegistry();
-    const extraIds = extReg?.channelPlugins.map((p) => p.id).filter((id) => !builtinOrder.includes(id)) ?? [];
-    if (extraIds.length === 0) {
-      return rows;
-    }
+  getRunningChannelIds(): string[] {
+    return this.channelManager.getRunningChannels();
+  }
 
-    const seen = new Set(builtinOrder);
-    for (const name of extraIds) {
-      if (seen.has(name)) continue;
-      seen.add(name);
-      rows.push({
-        name,
-        enabled: channels?.[name]?.enabled !== false,
-        connected: runningChannels.has(name),
-      });
-    }
+  getChannelRuntimePlugin(channelId: string) {
+    return this.channelManager.getPlugin(channelId);
+  }
 
-    return rows;
+  async restartChannel(channelId: string): Promise<void> {
+    await this.channelManager.stopChannel(channelId);
+    await this.channelManager.startChannel(channelId);
   }
 
   /**
@@ -1051,35 +1093,17 @@ export class GatewayService {
     manageable: boolean;
     order: number;
   }> {
-    const manageableIds = new Set<string>(['telegram', 'weixin', 'feishu']);
-    const byId = new Map<
-      string,
-      { id: string; label: string; description: string; manageable: boolean; order: number }
-    >();
+    const catalog = this.extensionMetadataSnapshot
+      ? buildChannelCatalogFromSnapshot(this.extensionMetadataSnapshot)
+      : buildChannelCatalogForConfig(this.config);
 
-    for (const plugin of this.channelManager.getAllPlugins()) {
-      byId.set(plugin.id, {
-        id: plugin.id,
-        label: plugin.meta.label,
-        description: plugin.meta.blurb,
-        manageable: manageableIds.has(plugin.id),
-        order: plugin.meta.order ?? 999,
-      });
-    }
-
-    CHAT_CHANNEL_ORDER.forEach((id, index) => {
-      if (byId.has(id)) return;
-      const meta = getChatChannelMeta(id);
-      byId.set(id, {
-        id,
-        label: meta.label,
-        description: meta.description,
-        manageable: true,
-        order: index,
-      });
-    });
-
-    return Array.from(byId.values()).toSorted((a, b) => {
+    return catalog.entries.map((entry) => ({
+      id: entry.id,
+      label: entry.label,
+      description: entry.description ?? '',
+      manageable: true,
+      order: entry.order,
+    })).toSorted((a, b) => {
       if (a.order !== b.order) return a.order - b.order;
       return a.id.localeCompare(b.id);
     });

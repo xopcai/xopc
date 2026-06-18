@@ -108,9 +108,9 @@ describe('selectSkillsVisibleInPrompt tool gating', () => {
       fallbackForTools: [],
       fallbackForToolsets: [],
     });
-    const out = selectSkillsVisibleInPrompt([sk], { toolGating: true }, { registeredToolNames: [] });
+    const out = selectSkillsVisibleInPrompt([sk], { toolGating: true }, { skillAllowlist: ['s'], registeredToolNames: [] });
     expect(out).toHaveLength(0);
-    const out2 = selectSkillsVisibleInPrompt([sk], { toolGating: true }, { registeredToolNames: ['web_search'] });
+    const out2 = selectSkillsVisibleInPrompt([sk], { toolGating: true }, { skillAllowlist: ['s'], registeredToolNames: ['web_search'] });
     expect(out2).toHaveLength(1);
   });
 
@@ -121,7 +121,7 @@ describe('selectSkillsVisibleInPrompt tool gating', () => {
       fallbackForTools: [],
       fallbackForToolsets: [],
     });
-    const out = selectSkillsVisibleInPrompt([sk], { toolGating: false }, { registeredToolNames: [] });
+    const out = selectSkillsVisibleInPrompt([sk], { toolGating: false }, { skillAllowlist: ['s'], registeredToolNames: [] });
     expect(out).toHaveLength(1);
   });
 });

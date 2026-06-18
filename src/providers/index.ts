@@ -385,13 +385,13 @@ const DEFAULT_FALLBACK_MODEL = 'openai/gpt-5.5';
 /**
  * Get a default model reference.
  * Priority:
- * 1. Explicitly configured model in agents.defaults.model (if set and available)
+ * 1. Explicitly configured model in agents.defaults.models.chat (if set and available)
  * 2. Default fallback: openai/gpt-5.5
  */
 export async function getDefaultModel(config?: Config | null | undefined): Promise<string> {
-  const defaultModel = config?.agents?.defaults?.model;
+  const defaultModel = config?.agents?.defaults?.models?.chat;
   if (defaultModel) {
-    const modelRef = typeof defaultModel === 'string' ? defaultModel : defaultModel.primary;
+    const modelRef = defaultModel.primary;
     if (modelRef) {
       const availableModels = await getAvailableModels();
       const configured = availableModels.find(m => 
@@ -417,9 +417,9 @@ export async function getDefaultModel(config?: Config | null | undefined): Promi
  * full catalog.
  */
 export function getDefaultModelSync(config?: Config | null | undefined): string {
-  const defaultModel = config?.agents?.defaults?.model;
+  const defaultModel = config?.agents?.defaults?.models?.chat;
   if (defaultModel) {
-    const modelRef = typeof defaultModel === 'string' ? defaultModel : defaultModel.primary;
+    const modelRef = defaultModel.primary;
     if (modelRef) {
       return modelRef;
     }

@@ -287,7 +287,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
 
       const [commands, skillsPayload, sessions, files] = await Promise.all([
         fetchCommandsCached(),
-        getSkillsCached(language),
+        getSkillsCached(),
         listSessions({ search: q || undefined, limit: 8, offset: 0 }).catch(() => ({ items: [] })),
         (async () => {
           const sk = chatSessionKey?.trim();

@@ -148,7 +148,7 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       id: 'route:channels:telegram:pairing',
       title: `${ch.telegramTitle} — ${ch.hubPairingButton}`,
       subtitle: r.channelsSubtitle,
-      path: channelDetailPath('telegram', { pairing: true }),
+      path: channelDetailPath('telegram'),
       keywords: ['telegram', 'pairing', 'approve', 'dm'],
     },
     {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
+import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -21,6 +22,7 @@ import {
 } from './workflow-api';
 import {
   RUN_FETCH_LIMIT,
+  WORKFLOW_AGENT_PARAM,
   WORKFLOW_DEF_PARAM,
   WORKFLOW_RUN_PARAM,
   WORKFLOW_SEARCH_PARAM,
@@ -46,6 +48,7 @@ export function useWorkflowsPage() {
   const workflowFilterId = searchParams.get(WORKFLOW_WF_FILTER_PARAM)?.trim() ?? '';
   const triggerFilter = searchParams.get(WORKFLOW_TRIGGER_FILTER_PARAM)?.trim() || 'all';
   const runParam = searchParams.get(WORKFLOW_RUN_PARAM)?.trim() ?? '';
+  const ownerAgentParam = searchParams.get(WORKFLOW_AGENT_PARAM)?.trim() ?? '';
 
   const [startDefinition, setStartDefinition] = useState<WorkflowDefinition | null>(null);
   const [pickStartOpen, setPickStartOpen] = useState(false);
@@ -56,10 +59,20 @@ export function useWorkflowsPage() {
   const [starting, setStarting] = useState(false);
   const [savingWorkflow, setSavingWorkflow] = useState(false);
 
+  const agentsSwr = useSWR(hasToken ? ['workflow-agents', token] : null, fetchGatewayAgents, {
+    revalidateOnFocus: false,
+  });
+  const ownerAgentId = useMemo(() => {
+    const agents = agentsSwr.data?.agents ?? [];
+    if (ownerAgentParam && agents.some((agent) => agent.id === ownerAgentParam)) return ownerAgentParam;
+    if (ownerAgentParam && agents.length === 0) return ownerAgentParam;
+    return agentsSwr.data?.defaultId ?? (ownerAgentParam || undefined);
+  }, [agentsSwr.data, ownerAgentParam]);
+
   const definitionsSwr = useSWR(hasToken ? ['workflow-definitions', token] : null, listWorkflowDefinitions, {
     revalidateOnFocus: false,
   });
-  const runsSwr = useSWR(hasToken ? ['workflow-runs', token] : null, () => listWorkflowRuns(RUN_FETCH_LIMIT), {
+  const runsSwr = useSWR(hasToken && ownerAgentId ? ['workflow-runs', token, ownerAgentId] : null, () => listWorkflowRuns(RUN_FETCH_LIMIT, { ownerAgentId }), {
     revalidateOnFocus: false,
     refreshInterval: (latest) => {
       if (!latest?.length) return 0;
@@ -68,8 +81,8 @@ export function useWorkflowsPage() {
     },
   });
   const statsSwr = useSWR(
-    hasToken ? ['workflow-stats', token, workflowFilterId] : null,
-    () => getWorkflowStats(workflowFilterId),
+    hasToken && ownerAgentId ? ['workflow-stats', token, ownerAgentId, workflowFilterId] : null,
+    () => getWorkflowStats(workflowFilterId, { ownerAgentId }),
     { revalidateOnFocus: false },
   );
 
@@ -80,9 +93,10 @@ export function useWorkflowsPage() {
   }, [actionFeedback]);
 
   const definitions = definitionsSwr.data ?? [];
+  const agentOptions = agentsSwr.data?.agents ?? [];
   const runs = runsSwr.data ?? [];
   const selectedRunId = runParam || null;
-  const selectedRunLive = useWorkflowRunLive(selectedRunId);
+  const selectedRunLive = useWorkflowRunLive(selectedRunId, { ownerAgentId });
 
   const filteredDefinitions = useMemo(
     () => filterDefinitions(definitions, searchQuery, 'all', 'all'),
@@ -103,12 +117,34 @@ export function useWorkflowsPage() {
     [setSearchParams],
   );
 
+  useEffect(() => {
+    const agents = agentsSwr.data?.agents ?? [];
+    if (!ownerAgentParam || agents.length === 0 || agents.some((agent) => agent.id === ownerAgentParam)) return;
+    patchSearchParams((next) => {
+      if (agentsSwr.data?.defaultId) next.set(WORKFLOW_AGENT_PARAM, agentsSwr.data.defaultId);
+      else next.delete(WORKFLOW_AGENT_PARAM);
+      next.delete(WORKFLOW_RUN_PARAM);
+    });
+  }, [agentsSwr.data, ownerAgentParam, patchSearchParams]);
+
   const setSearchQuery = useCallback(
     (value: string) => {
       patchSearchParams((next) => {
         const trimmed = value.trim();
         if (trimmed) next.set(WORKFLOW_SEARCH_PARAM, trimmed);
         else next.delete(WORKFLOW_SEARCH_PARAM);
+      });
+    },
+    [patchSearchParams],
+  );
+
+  const setOwnerAgentId = useCallback(
+    (value: string) => {
+      patchSearchParams((next) => {
+        const trimmed = value.trim();
+        if (trimmed) next.set(WORKFLOW_AGENT_PARAM, trimmed);
+        else next.delete(WORKFLOW_AGENT_PARAM);
+        next.delete(WORKFLOW_RUN_PARAM);
       });
     },
     [patchSearchParams],
@@ -139,10 +175,11 @@ export function useWorkflowsPage() {
   const openRunDetails = useCallback(
     (run: WorkflowRunSummary) => {
       patchSearchParams((next) => {
+        if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
         next.set(WORKFLOW_RUN_PARAM, run.id);
       });
     },
-    [patchSearchParams],
+    [ownerAgentId, patchSearchParams],
   );
 
   const closeRunDetails = useCallback(() => {
@@ -201,10 +238,11 @@ export function useWorkflowsPage() {
   }, [runsSwr, statsSwr]);
 
   const refreshAll = useCallback(() => {
+    void agentsSwr.mutate();
     void definitionsSwr.mutate();
     void runsSwr.mutate();
     void statsSwr.mutate();
-  }, [definitionsSwr, runsSwr, statsSwr]);
+  }, [agentsSwr, definitionsSwr, runsSwr, statsSwr]);
 
   const submitStart = useCallback(
     async (payload: { goal: string; input?: unknown; concurrency?: number; maxSubagents?: number }) => {
@@ -216,6 +254,7 @@ export function useWorkflowsPage() {
           definitionId: startDefinition.id,
           goal: payload.goal,
           input: payload.input,
+          agentId: ownerAgentId,
           concurrency: payload.concurrency,
           maxSubagents: payload.maxSubagents,
         });
@@ -224,6 +263,7 @@ export function useWorkflowsPage() {
         await statsSwr.mutate();
         setActionFeedback(labels.startSuccess);
         patchSearchParams((next) => {
+          if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
           next.set(WORKFLOW_RUN_PARAM, result.runId);
         });
       } catch (err) {
@@ -232,13 +272,13 @@ export function useWorkflowsPage() {
         setStarting(false);
       }
     },
-    [labels.startFailed, labels.startSuccess, patchSearchParams, runsSwr, startDefinition, statsSwr],
+    [labels.startFailed, labels.startSuccess, ownerAgentId, patchSearchParams, runsSwr, startDefinition, statsSwr],
   );
 
   const cancelRun = useCallback(
     async (runId: string) => {
       try {
-        await cancelWorkflowRun(runId);
+        await cancelWorkflowRun(runId, { ownerAgentId });
         await runsSwr.mutate();
         await statsSwr.mutate();
       } catch (err) {
@@ -251,23 +291,24 @@ export function useWorkflowsPage() {
         setActionError(message);
       }
     },
-    [labels.cancelFailed, runsSwr, statsSwr],
+    [labels.cancelFailed, ownerAgentId, runsSwr, statsSwr],
   );
 
   const retryRun = useCallback(
     async (runId: string) => {
       try {
-        const result = await retryWorkflowRun(runId);
+        const result = await retryWorkflowRun(runId, { ownerAgentId });
         await runsSwr.mutate();
         await statsSwr.mutate();
         patchSearchParams((next) => {
+          if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
           next.set(WORKFLOW_RUN_PARAM, result.runId);
         });
       } catch (err) {
         setActionError(err instanceof Error ? err.message : labels.retryFailed);
       }
     },
-    [labels.retryFailed, patchSearchParams, runsSwr, statsSwr],
+    [labels.retryFailed, ownerAgentId, patchSearchParams, runsSwr, statsSwr],
   );
 
   const saveCustomWorkflow = useCallback(
@@ -304,8 +345,8 @@ export function useWorkflowsPage() {
     [definitionsSwr, labels],
   );
 
-  const loading = definitionsSwr.isLoading || runsSwr.isLoading;
-  const error = definitionsSwr.error?.message ?? runsSwr.error?.message ?? null;
+  const loading = agentsSwr.isLoading || definitionsSwr.isLoading || runsSwr.isLoading;
+  const error = agentsSwr.error?.message ?? definitionsSwr.error?.message ?? runsSwr.error?.message ?? null;
 
   return {
     language,
@@ -314,6 +355,9 @@ export function useWorkflowsPage() {
     hasToken,
     searchQuery,
     setSearchQuery,
+    ownerAgentId,
+    agentOptions,
+    setOwnerAgentId,
     workflowFilterId,
     setWorkflowFilterId,
     triggerFilter,

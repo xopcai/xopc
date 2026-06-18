@@ -1,22 +1,32 @@
 import type { ExtensionRegistryImpl } from '../../extensions/loader.js';
 import { AgentService } from '../../agent/index.js';
 import { parseModelRef } from '../../agent/models/selection.js';
-import { messagesToClientHistory } from '../../session/client-history.js';
+import { createCreateShareTool, isShareToolAvailable } from '../../agent/tools/create-share-tool.js';
+import { transcriptRowsToClientHistory } from '../../session/client-history.js';
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { getAllProviders, getModelsByProvider } from '../../providers/index.js';
+import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
+import type { ExportFormat } from '../../session/types.js';
 import { createLogger } from '../../utils/logger.js';
 import type {
   ChatSendOptions,
   HistoryMessage,
   TuiBackend,
+  TuiCompactionResult,
   TuiEvent,
   TuiModelChoice,
+  TuiShareRequest,
+  TuiShareResult,
+  TuiSessionStats,
   TuiSessionItem,
+  TuiTranscriptTreeEntry,
 } from '../tui-backend.js';
 import type { SessionInfo } from '../tui-types.js';
 import { sessionMetadataToTuiItem } from '../tui-session-format.js';
+import { computeTuiSessionStats } from '../tui-session-stats.js';
+import { buildTuiTranscriptTree, transcriptTreeEntryIdToRowNumber } from '../tui-transcript-tree.js';
 
 const log = createLogger('TUI:Embedded');
 
@@ -50,7 +60,7 @@ export class EmbeddedBackend implements TuiBackend {
 
     const config = loadConfig();
     const workspace = getWorkspacePath(config);
-    const modelId = config.agents?.defaults?.model?.primary;
+    const modelId = config.agents?.defaults?.models?.chat?.primary;
 
     this.agent = new AgentService(this.bus, {
       workspace: workspace ?? process.cwd(),
@@ -79,6 +89,11 @@ export class EmbeddedBackend implements TuiBackend {
     this.bus.shutdown();
     void this.agent?.stop();
     this.agent = null;
+  }
+
+  getActiveSignal(): AbortSignal | undefined {
+    const signal = this.chatAbort?.signal;
+    return signal && !signal.aborted ? signal : undefined;
   }
 
   async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {
@@ -153,17 +168,38 @@ export class EmbeddedBackend implements TuiBackend {
       return { messages: [] };
     }
     try {
-      const detail = await this.agent.sessionStore.get(opts.sessionKey);
-      if (!detail) {
-        return { messages: [] };
-      }
+      const rows = await this.agent.sessionStore.loadTranscriptRows(opts.sessionKey);
       return {
-        messages: messagesToClientHistory(detail.messages, { limit: opts.limit }),
+        messages: transcriptRowsToClientHistory(rows, { limit: opts.limit }),
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, errorMessage }, `Embedded loadHistory failed: ${errorMessage}`);
       return { messages: [] };
+    }
+  }
+
+  async loadTranscriptTree(sessionKey: string): Promise<TuiTranscriptTreeEntry[]> {
+    if (!this.agent) return [];
+    try {
+      const rows = await this.agent.sessionStore.loadTranscriptRows(sessionKey);
+      return buildTuiTranscriptTree(rows);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn({ err: error, sessionKey, errorMessage }, `Embedded loadTranscriptTree failed: ${errorMessage}`);
+      return [];
+    }
+  }
+
+  async getSessionStats(sessionKey: string): Promise<TuiSessionStats> {
+    if (!this.agent) return computeTuiSessionStats([]);
+    try {
+      const rows = await this.agent.sessionStore.loadTranscriptRows(sessionKey);
+      return computeTuiSessionStats(rows);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn({ err: error, sessionKey, errorMessage }, `Embedded getSessionStats failed: ${errorMessage}`);
+      return computeTuiSessionStats([]);
     }
   }
 
@@ -210,7 +246,7 @@ export class EmbeddedBackend implements TuiBackend {
   async getSessionInfo(sessionKey: string): Promise<SessionInfo> {
     if (!this.agent) {
       const config = loadConfig();
-      const model = config.agents?.defaults?.model?.primary;
+      const model = config.agents?.defaults?.models?.chat?.primary;
       return { model: model ?? undefined };
     }
     try {
@@ -221,6 +257,8 @@ export class EmbeddedBackend implements TuiBackend {
         model: parsed?.model ?? cfg.model,
         modelProvider: parsed?.provider,
         thinkingLevel: cfg.thinkingLevel,
+        reasoningLevel: cfg.reasoningLevel,
+        verboseLevel: cfg.verboseLevel,
         totalTokens: usage.estimatedTokens,
         contextWindow: usage.contextWindow,
         contextUsagePercent: usage.usagePercent,
@@ -229,7 +267,7 @@ export class EmbeddedBackend implements TuiBackend {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.warn({ err, sessionKey, errorMessage }, `getSessionInfo failed: ${errorMessage}`);
       const config = loadConfig();
-      const model = config.agents?.defaults?.model?.primary;
+      const model = config.agents?.defaults?.models?.chat?.primary;
       return { model: model ?? undefined };
     }
   }
@@ -254,27 +292,197 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async patchSession(
-    _sessionKey: string,
-    _patch: Record<string, unknown>,
+    sessionKey: string,
+    patch: Record<string, unknown>,
   ): Promise<void> {
-    // Not supported in embedded mode
+    if (!this.agent) return;
+    const result = await this.agent.sessionConfig.patch(sessionKey, {
+      model: typeof patch.model === 'string' ? patch.model : undefined,
+      thinkingLevel: typeof patch.thinkingLevel === 'string' ? patch.thinkingLevel : undefined,
+      reasoningLevel: typeof patch.reasoningLevel === 'string' ? patch.reasoningLevel : undefined,
+      verboseLevel: typeof patch.verboseLevel === 'string' ? patch.verboseLevel : undefined,
+      workingDirectory: typeof patch.workingDirectory === 'string' ? patch.workingDirectory : undefined,
+    });
+    if (!result.ok) {
+      throw new Error(result.error);
+    }
   }
 
   async compactSession(
     sessionKey: string,
-    options?: { force?: boolean },
-  ): Promise<{ compacted: boolean; summary?: string }> {
+    options?: { force?: boolean; instructions?: string },
+  ): Promise<TuiCompactionResult> {
     if (!this.agent) return { compacted: false, summary: 'Agent not started' };
     try {
-      const result = await this.agent.sessionInspector.compact(sessionKey, { force: options?.force ?? true });
-      const summary = result.compacted
-        ? `Compacted (${result.tokensBefore ?? '?'} → ${result.tokensAfter ?? '?'} tokens)`
-        : 'Nothing to compact';
-      return { compacted: result.compacted, summary };
+      const result = await this.agent.sessionInspector.compact(sessionKey, {
+        force: options?.force ?? true,
+        instructions: options?.instructions,
+      });
+      if (!result.compacted) return { compacted: false, summary: 'Nothing to compact' };
+      return {
+        compacted: true,
+        summary: `Compacted (${result.tokensBefore ?? '?'} → ${result.tokensAfter ?? '?'} tokens)`,
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+        transcriptSummary: result.summary,
+      };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       return { compacted: false, summary: errorMessage };
     }
+  }
+
+  async exportSession(sessionKey: string, format: ExportFormat): Promise<string> {
+    if (!this.agent) {
+      throw new Error('Agent not started');
+    }
+    return this.agent.sessionStore.exportSession(sessionKey, format);
+  }
+
+  async importSession(
+    targetSessionKey: string,
+    jsonContent: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    if (!this.agent) {
+      throw new Error('Agent not started');
+    }
+    return this.agent.sessionStore.importSessionExport(targetSessionKey, jsonContent);
+  }
+
+  async createShare(
+    _sessionKey: string,
+    request: TuiShareRequest,
+    _options?: { agentId?: string },
+  ): Promise<TuiShareResult> {
+    if (!this.agent) {
+      throw new Error('Agent not started');
+    }
+    const config = loadConfig();
+    if (!isShareToolAvailable(config)) {
+      throw new Error('Sharing is disabled in gateway config');
+    }
+    const workspace = getWorkspacePath(config) ?? process.cwd();
+    const tool = createCreateShareTool({
+      workspace,
+      getConfig: () => config,
+      getAgentId: () => 'tui',
+    });
+    const result = await tool.execute(
+      'tui-share',
+      {
+        filePath: request.path,
+        audience: request.audience,
+        mode: request.mode,
+        title: request.title,
+        description: request.description,
+      },
+    );
+    const details = (result.details ?? {}) as Record<string, unknown>;
+    const error = typeof details.error === 'string' ? details.error : undefined;
+    if (error) {
+      throw new Error(error);
+    }
+    const shareUrl = typeof details.shareUrl === 'string' ? details.shareUrl : undefined;
+    if (!shareUrl) {
+      const text = result.content
+        .map((part) => (part.type === 'text' ? part.text : ''))
+        .join('\n')
+        .trim();
+      throw new Error(text || 'Share failed');
+    }
+    return {
+      kind: typeof details.kind === 'string' ? details.kind : 'share',
+      shareUrl,
+      title: typeof details.title === 'string' ? details.title : undefined,
+      description: typeof details.description === 'string' ? details.description : undefined,
+      thumbnailUrl: typeof details.thumbnailUrl === 'string' ? details.thumbnailUrl : undefined,
+      reachability: typeof details.reachability === 'string' ? details.reachability : undefined,
+      reachabilityHint:
+        typeof details.reachabilityHint === 'string' ? details.reachabilityHint : undefined,
+      expiresAt: typeof details.expiresAt === 'string' ? details.expiresAt : undefined,
+      maxViews: typeof details.maxViews === 'number' ? details.maxViews : null,
+      routingReason:
+        typeof (details.routing as { reason?: unknown } | undefined)?.reason === 'string'
+          ? ((details.routing as { reason: string }).reason)
+          : undefined,
+      routingHint:
+        typeof (details.routing as { hint?: unknown } | undefined)?.hint === 'string'
+          ? ((details.routing as { hint: string }).hint)
+          : undefined,
+    };
+  }
+
+  async btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {
+    if (!this.agent) {
+      return { text: '', error: 'Agent not started' };
+    }
+    return this.agent.sessionInspector.btwQuery(sessionKey, question);
+  }
+
+  async forkSession(
+    sourceSessionKey: string,
+    targetSessionKey: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    if (!this.agent) {
+      throw new Error('Agent not started');
+    }
+    return this.agent.sessionStore.forkSession(sourceSessionKey, targetSessionKey);
+  }
+
+  async forkSessionAt(
+    sourceSessionKey: string,
+    targetSessionKey: string,
+    entryId: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    if (!this.agent) {
+      throw new Error('Agent not started');
+    }
+    const throughRow = transcriptTreeEntryIdToRowNumber(entryId);
+    if (throughRow == null) {
+      throw new Error(`Invalid transcript entry: ${entryId}`);
+    }
+    return this.agent.sessionStore.forkSessionRows(sourceSessionKey, targetSessionKey, { throughRow });
+  }
+
+  async setTranscriptLabel(
+    sessionKey: string,
+    entryId: string,
+    label: string | undefined,
+  ): Promise<{ ok: boolean }> {
+    if (!this.agent) {
+      throw new Error('Agent not started');
+    }
+    await this.agent.sessionStore.appendTranscriptLabelEntry(sessionKey, { targetId: entryId, label });
+    return { ok: true };
+  }
+
+  async appendCustomEntry(
+    sessionKey: string,
+    customType: string,
+    data?: unknown,
+  ): Promise<{ ok: boolean }> {
+    if (!this.agent) {
+      throw new Error('Agent not started');
+    }
+    await this.agent.sessionStore.appendTranscriptCustomEntry(sessionKey, { customType, data });
+    return { ok: true };
+  }
+
+  async appendCustomMessage(
+    sessionKey: string,
+    message: {
+      customType: string;
+      content?: string | unknown[];
+      display?: boolean;
+      details?: unknown;
+    },
+  ): Promise<{ ok: boolean }> {
+    if (!this.agent) {
+      throw new Error('Agent not started');
+    }
+    await this.agent.sessionStore.appendTranscriptCustomMessageEntry(sessionKey, message);
+    evictEmbeddedSessionRunner(sessionKey, 'tui_custom_message_appended');
+    return { ok: true };
   }
 
   private processOutbound(): void {

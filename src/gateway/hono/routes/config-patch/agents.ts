@@ -25,22 +25,9 @@ import {
 export function applyAgentsPatch(config: Config, body: any): void {
   if (!body.agents?.defaults) return;
 
-  if (!config.agents) config.agents = { defaults: { workspace: '~/.xopc/workspace', model: { primary: 'anthropic/claude-sonnet-4-5' }, maxTokens: 8192, temperature: 0.7, maxToolIterations: 20, maxRequestsPerTurn: 50, maxToolFailuresPerTurn: 3, thinkingDefault: 'medium', reasoningDefault: 'stream', verboseDefault: 'full' } };
+  if (!config.agents) config.agents = { defaults: { workspace: '~/.xopc/workspace', maxTokens: 8192, temperature: 0.7, maxToolIterations: 20, maxRequestsPerTurn: 50, maxToolFailuresPerTurn: 3, thinkingDefault: 'medium', reasoningDefault: 'stream', verboseDefault: 'full' } };
   if (!config.agents.defaults) config.agents.defaults = {} as any;
 
-  if (body.agents.defaults.model !== undefined) {
-    const v = body.agents.defaults.model;
-    if (v === null) {
-      delete (config.agents.defaults as Record<string, unknown>).model;
-    } else {
-      const normalized = normalizePatchAgentModel(v);
-      if (normalized === undefined) {
-        delete (config.agents.defaults as Record<string, unknown>).model;
-      } else {
-        config.agents.defaults.model = normalized as Config['agents']['defaults']['model'];
-      }
-    }
-  }
   if (body.agents.defaults.maxTokens !== undefined) {
     config.agents.defaults.maxTokens = body.agents.defaults.maxTokens;
   }
@@ -669,13 +656,50 @@ export function applyAgentsPatch(config: Config, body: any): void {
   }
 
   if (dPatch.models !== undefined) {
-    const normalized = normalizePatchTypedModels(dPatch.models);
-    if (normalized === undefined) {
-      // skip invalid shape
-    } else if (normalized === null) {
+    if (!def.models || typeof def.models !== 'object') {
+      def.models = {};
+    }
+    const modelsTarget = def.models as NonNullable<Config['agents']['defaults']['models']>;
+    const modelPatch = dPatch.models;
+    if (modelPatch === null) {
       delete def.models;
+    } else if (typeof modelPatch === 'object' && !Array.isArray(modelPatch)) {
+      const p = modelPatch as Record<string, unknown>;
+      if (Object.hasOwn(p, 'chat')) {
+        const chat = p.chat;
+        if (chat === null) {
+          delete modelsTarget.chat;
+        } else {
+          const normalizedChat = normalizePatchAgentModel(chat);
+          if (normalizedChat === undefined) {
+            delete modelsTarget.chat;
+          } else {
+            modelsTarget.chat = normalizedChat;
+          }
+        }
+      }
+      if (Object.hasOwn(p, 'roles')) {
+        const normalized = normalizePatchTypedModels({ roles: p.roles });
+        if (normalized === undefined) {
+          // skip invalid shape
+        } else if (normalized === null) {
+          delete modelsTarget.roles;
+        } else {
+          modelsTarget.roles = normalized;
+        }
+      }
     } else {
-      def.models = normalized;
+      const normalized = normalizePatchTypedModels(modelPatch);
+      if (normalized === undefined) {
+        // skip invalid shape
+      } else if (normalized === null) {
+        delete modelsTarget.roles;
+      } else {
+        modelsTarget.roles = normalized;
+      }
+    }
+    if (def.models && Object.keys(def.models).length === 0) {
+      delete def.models;
     }
   }
 

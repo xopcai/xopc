@@ -127,7 +127,6 @@
     "detailToolsetsFallbackList": "Fallback toolsets",
     "detailEnvVarsLabel": "Session environment variables",
     "detailNotInjectedNote": "This skill is not injected into model context (disable-model-invocation).",
-    "marketplaceNoReadme": "No readme text is available for this package.",
     "detailModalEnable": "Enable",
     "detailModalDisable": "Disable",
     "useRequiresEnabled": "Enable this skill before using it in chat",

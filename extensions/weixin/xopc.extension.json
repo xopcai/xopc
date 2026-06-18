@@ -6,6 +6,41 @@
   "kind": "channel",
   "main": "src/index.ts",
   "channels": ["weixin"],
+  "channelContributions": {
+    "weixin": {
+      "label": "Weixin",
+      "description": "Personal WeChat channel through QR login",
+      "docsPath": "/channels/weixin",
+      "order": 20,
+      "configPath": "channels.weixin",
+      "capabilities": {
+        "login": true,
+        "pairing": true,
+        "doctor": false,
+        "multiAccount": true,
+        "streaming": true,
+        "media": true
+      },
+      "configSchema": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "enabled": { "type": "boolean", "default": false, "title": "Enabled" },
+          "accounts": { "type": "object", "additionalProperties": true, "title": "Accounts" },
+          "dmPolicy": {
+            "type": "string",
+            "enum": ["pairing", "allowlist", "open", "disabled"],
+            "default": "open",
+            "title": "DM policy"
+          }
+        }
+      },
+      "actions": {
+        "login.start": { "label": "Log in", "result": "qr" },
+        "login.status": { "label": "Login status", "result": "poll" }
+      }
+    }
+  },
   "activation": {
     "onChannels": ["weixin"],
     "onCapabilities": ["channel"]

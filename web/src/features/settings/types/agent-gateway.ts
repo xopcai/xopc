@@ -1,5 +1,3 @@
-export type LocalizedText = string | Record<string, string>;
-
 export type GatewayAgentSkillsInfo = {
   defaults: string[];
   entry?: string[];
@@ -14,6 +12,7 @@ export type GatewayAgentToolsInfo = {
 
 export type GatewayAgentTypedModelsInfo = {
   defaults: Array<{ id: string; model: string; description?: string }>;
+  entry?: Array<{ id: string; model: string; description?: string }>;
   effective: Array<{ id: string; model: string; description?: string }>;
 };
 
@@ -21,10 +20,7 @@ export type GatewayAgentRow = {
   id: string;
   name?: string;
   description?: string;
-  localized?: {
-    name?: LocalizedText;
-    description?: LocalizedText;
-  };
+  language?: string;
   /** From `IDENTITY.md` when gateway enriches `/api/agents`. */
   avatar?: string;
   workspace: string;

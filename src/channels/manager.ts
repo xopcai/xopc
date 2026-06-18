@@ -117,6 +117,10 @@ export class ChannelManager {
     return this.lifecycle.initialize();
   }
 
+  initializeChannel(channelId: string): Promise<boolean> {
+    return this.lifecycle.initializeChannel(channelId);
+  }
+
   start(options?: { deferConnectPluginIds?: ReadonlySet<string> }): Promise<void> {
     return this.lifecycle.start(options);
   }

@@ -347,8 +347,8 @@ export interface UnifiedMarketplaceListResponse {
  */
 export interface UnifiedMarketplacePackageDetail extends MarketplacePackageDetail {
   provider: string;
-  /** When set (e.g. SkillHub SKILL.md), gateway console renders structured meta + body like installed skills. */
-  skillDocPreview?: SkillMarkdownPreviewPayload;
+  /** Gateway-normalized structured meta + body rendered by the console. */
+  skillDocPreview: SkillMarkdownPreviewPayload;
   /** SkillHub-specific fields */
   skillHubInfo?: {
     category: string;

@@ -7,7 +7,12 @@ import { createLogger } from '../../utils/logger.js';
 const log = createLogger('TUI:Extensions');
 
 /** Load activated extensions for embedded TUI (shared registry with AgentService). */
-export async function loadExtensionsForTuiLocalMode(): Promise<ExtensionRegistryImpl> {
+export async function loadExtensionsForTuiLocalMode(runtime?: {
+  setLabel?: (entryId: string, label: string | undefined) => void;
+  sendUserMessage?: import('../../extensions/types/core.js').ExtensionRuntime['sendUserMessage'];
+  appendEntry?: import('../../extensions/types/core.js').ExtensionRuntime['appendEntry'];
+  sendMessage?: import('../../extensions/types/core.js').ExtensionRuntime['sendMessage'];
+}): Promise<ExtensionRegistryImpl> {
   const config = loadConfig();
   const workspaceDir = getWorkspacePath(config) ?? process.cwd();
   const loader = new ExtensionLoader({
@@ -15,6 +20,9 @@ export async function loadExtensionsForTuiLocalMode(): Promise<ExtensionRegistry
     extensionsDir: resolveExtensionsDir(),
   });
   loader.setConfig(config);
+  if (runtime) {
+    loader.setRuntimeContext(runtime);
+  }
   try {
     await loader.loadByActivationPlan();
     const registry = loader.getRegistry();

@@ -31,7 +31,7 @@ export interface EffectiveAgentProfile {
   reasoningDefault?: ReasoningLevel;
   verboseDefault?: VerboseLevel;
   systemPromptOverride?: string;
-  /** When set, only these skill names appear in `<available_skills>`. */
+  /** Skill names visible in `<available_skills>`; empty means a clean skill-free default context. */
   skillsAllowlist?: string[];
   tools: EffectiveAgentTools;
   params: Record<string, unknown>;
@@ -106,7 +106,7 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
 
   const resolvedWorkspacePath = resolveAgentWorkspaceDir(config, agentId);
 
-  const mergedModel = mergeModelConfig(defaults?.model, entry?.model);
+  const mergedModel = mergeModelConfig(defaults?.models?.chat, entry?.models?.chat);
   const { primary: primaryFromMerged, fallbacks: fallbacksFromMerged } = primaryAndFallbacksFromModelConfig(mergedModel);
   const globalDefault = getAgentDefaultModelRef(config);
   const primaryModelRef = primaryFromMerged?.trim() || globalDefault;
@@ -134,7 +134,7 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
       : defaults?.systemPromptOverride?.trim()
         ? defaults.systemPromptOverride
         : undefined,
-    skillsAllowlist: entry?.skills?.length ? [...entry.skills] : defaults?.skills?.length ? [...defaults.skills] : undefined,
+    skillsAllowlist: entry?.skills !== undefined ? [...entry.skills] : defaults?.skills !== undefined ? [...defaults.skills] : [],
     tools: { disable },
     params,
   };

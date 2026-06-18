@@ -24,6 +24,8 @@ export interface Message {
   usage?: {
     inputTokens?: number;
     outputTokens?: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
     totalTokens?: number;
   };
   /** Inbound attachment metadata (no base64). */
@@ -81,6 +83,8 @@ export interface GlobalSessionStats {
   byChannel: Record<string, number>;
 }
 
+export type SessionType = 'chat' | 'workflow-run' | 'workflow-subagent' | 'cron' | 'heartbeat';
+
 /** Session metadata (stored in index) */
 export interface SessionMetadata {
   key: string;
@@ -106,11 +110,19 @@ export interface SessionMetadata {
    * High-level origin for filtering/UI (e.g. `cron`, `heartbeat`, `webchat`).
    * Distinct from `sourceChannel` (routing namespace).
    */
-  sessionType?: string;
+  sessionType: SessionType;
+  hiddenFromSessionList?: boolean;
+  parentSessionKey?: string;
+  workflowRunId?: string;
+  workflowDefinitionId?: string;
+  workflowAgentId?: string;
+  workflowAgentLabel?: string;
   /**
    * Stable transcript document id (wrapped on-disk format), aligned with OpenClaw `sessionId`.
    */
   transcriptId?: string;
+  /** Workspace/cwd recorded for the active transcript. */
+  cwd?: string;
   /** First activity time for this session row (ISO), from transcript header when available. */
   sessionStartedAt?: string;
   /** Last transcript write / interaction (ISO), updated on each persist. */
@@ -147,6 +159,8 @@ export interface SessionListQuery {
   channel?: string;
   tags?: string[];
   search?: string;
+  sessionTypes?: SessionType[];
+  includeHidden?: boolean;
   sortBy?: 'updatedAt' | 'createdAt' | 'messageCount' | 'lastAccessedAt';
   sortOrder?: 'asc' | 'desc';
   limit?: number;

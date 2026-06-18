@@ -189,7 +189,7 @@ export type ChannelPairingSummaryEntry = {
   atCapacity: boolean;
 };
 
-export type ChannelPairingSummary = Record<PairingCliChannel, ChannelPairingSummaryEntry>;
+export type ChannelPairingSummary = Record<string, ChannelPairingSummaryEntry>;
 
 export type PairingPendingIssue = {
   channel: PairingCliChannel;
@@ -220,14 +220,11 @@ function resolvePairingAccountIds(config: Config | undefined, channel: PairingCl
 }
 
 export function listChannelPairingSummary(config?: Config): ChannelPairingSummary {
-  const channels: PairingCliChannel[] = ['telegram', 'feishu', 'weixin'];
-  const summary: ChannelPairingSummary = {
-    telegram: { pending: 0, stale: 0, atCapacity: false },
-    feishu: { pending: 0, stale: 0, atCapacity: false },
-    weixin: { pending: 0, stale: 0, atCapacity: false },
-  };
+  const channels = Object.keys(config?.channels ?? {});
+  const summary: ChannelPairingSummary = {};
   for (const channel of channels) {
     if (!resolveChannelEnabled(config, channel)) continue;
+    summary[channel] = { pending: 0, stale: 0, atCapacity: false };
     const accountIds = resolvePairingAccountIds(config, channel);
     for (const accountId of accountIds) {
       if (!resolveAccountEnabled(config, channel, accountId)) continue;
@@ -237,9 +234,9 @@ export function listChannelPairingSummary(config?: Config): ChannelPairingSummar
         (r) => requestAccountId(r) === accountId,
       );
       const stats = pendingEntryStats(pendingRaw);
-      summary[channel].pending += stats.pending;
-      summary[channel].stale += stats.stale;
-      summary[channel].atCapacity ||= stats.atCapacity;
+      summary[channel]!.pending += stats.pending;
+      summary[channel]!.stale += stats.stale;
+      summary[channel]!.atCapacity ||= stats.atCapacity;
     }
   }
   return summary;
@@ -247,7 +244,7 @@ export function listChannelPairingSummary(config?: Config): ChannelPairingSummar
 
 export function collectPairingPendingIssues(config?: Config): PairingPendingIssue[] {
   const issues: PairingPendingIssue[] = [];
-  for (const channel of ['telegram', 'feishu', 'weixin'] as const) {
+  for (const channel of Object.keys(config?.channels ?? {})) {
     if (!resolveChannelEnabled(config, channel)) continue;
     const accountIds = resolvePairingAccountIds(config, channel);
     for (const accountId of accountIds) {

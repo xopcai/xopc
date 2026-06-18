@@ -13,9 +13,16 @@ function isValidProviderModelRef(ref: string): boolean {
 }
 
 export function parseTypedModelsFromConfig(raw: unknown): AgentTypedModelRow[] {
-  if (!Array.isArray(raw)) return [];
+  const rows =
+    raw && typeof raw === 'object' && !Array.isArray(raw) && 'roles' in raw
+      ? Object.entries((raw as { roles?: Record<string, unknown> }).roles ?? {}).map(([id, role]) => ({
+          id,
+          ...(role && typeof role === 'object' && !Array.isArray(role) ? role : {}),
+        }))
+      : raw;
+  if (!Array.isArray(rows)) return [];
   const out: AgentTypedModelRow[] = [];
-  for (const item of raw) {
+  for (const item of rows) {
     if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
     const o = item as Record<string, unknown>;
     const id = typeof o.id === 'string' ? o.id.trim() : '';
@@ -29,17 +36,17 @@ export function parseTypedModelsFromConfig(raw: unknown): AgentTypedModelRow[] {
 
 export function cleanTypedModelsForPatch(
   rows: AgentTypedModelRow[],
-): Array<{ id: string; description?: string; model: string }> | null {
-  const byId = new Map<string, { id: string; description?: string; model: string }>();
+): { roles: Record<string, { description?: string; model: string }> } | null {
+  const byId = new Map<string, { description?: string; model: string }>();
   for (const row of rows) {
     const id = row.id.trim();
     const model = row.model.trim();
     if (!id || !TYPED_MODEL_ID_RE.test(id) || !model || !isValidProviderModelRef(model)) continue;
     const description = row.description.trim();
-    byId.set(id, description ? { id, description, model } : { id, model });
+    byId.set(id, description ? { description, model } : { model });
   }
   if (byId.size === 0) return null;
-  return [...byId.values()];
+  return { roles: Object.fromEntries(byId.entries()) };
 }
 
 export function validateTypedModelsForSave(

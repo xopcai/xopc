@@ -10,7 +10,7 @@ import { isTerminalWorkflowRunStatus } from '../domain/index.js';
 import { runViewToSnapshot } from './run-view-to-snapshot.js';
 import { buildWorkflowRunSessionKey } from './workflow-session-key.js';
 
-export const WORKFLOW_SESSION_TYPE = 'workflow';
+export const WORKFLOW_SESSION_TYPE = 'workflow-run';
 export const WORKFLOW_RUN_LINK_CONTEXT_KIND = 'workflow-run-link';
 
 export interface PrepareWorkflowRunSessionParams {
@@ -40,6 +40,9 @@ export class WorkflowSessionBridge {
     await store.resolveTranscriptPath(sessionKey);
     await store.updateMetadata(sessionKey, {
       sessionType: WORKFLOW_SESSION_TYPE,
+      hiddenFromSessionList: true,
+      workflowRunId: params.runId,
+      workflowDefinitionId: params.definitionId,
       name: sessionName,
       tags: ['workflow', params.definitionId],
       customData: {

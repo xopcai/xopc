@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 
 import type { AgentPanel } from '../utils';
+import { typedModelsRowsFromEntry, type AgentTypedModelRow } from '../typed-models-lib';
 
 function toolDisableFromSelected(selected: GatewayAgentRow): Set<string> {
   return new Set(selected.tools.entryDisable);
@@ -26,6 +27,7 @@ export function useAgentsToolsSkillsLocalState(options: {
   const [toolEntryDisable, setToolEntryDisable] = useState<Set<string>>(() => new Set());
   const [skillsPick, setSkillsPick] = useState<Set<string>>(() => new Set());
   const [skillsInherit, setSkillsInherit] = useState(true);
+  const [modelRows, setModelRows] = useState<AgentTypedModelRow[]>(() => []);
 
   if (trackedSyncRef.current !== syncKey) {
     trackedSyncRef.current = syncKey;
@@ -37,6 +39,9 @@ export function useAgentsToolsSkillsLocalState(options: {
       setSkillsInherit(next.inherit);
       setSkillsPick(next.pick);
     }
+    if (selected && panel === 'models') {
+      setModelRows(typedModelsRowsFromEntry(selected.typedModels.entry));
+    }
   }
 
   return {
@@ -46,5 +51,7 @@ export function useAgentsToolsSkillsLocalState(options: {
     setSkillsPick,
     skillsInherit,
     setSkillsInherit,
+    modelRows,
+    setModelRows,
   };
 }

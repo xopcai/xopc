@@ -6,8 +6,6 @@ import { rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 
 import type { Config } from '../config/schema.js';
-import type { LocalizedText } from '../config/localized-text.js';
-import { normalizeLocalizedText } from '../config/localized-text.js';
 import {
   listAgentEntries,
   normalizeAgentId,
@@ -30,27 +28,27 @@ export function applyAgentConfig(
   cfg: Config,
   params: {
     agentId: string;
-    name?: LocalizedText;
-    description?: LocalizedText;
     workspace?: string;
     agentDir?: string;
     model?: string;
+    models?: AgentEntry['models'];
+    skills?: string[];
+    tools?: AgentEntry['tools'];
   },
 ): Config {
   const agentId = normalizeAgentId(params.agentId);
-  const name = normalizeLocalizedText(params.name);
-  const description = normalizeLocalizedText(params.description);
   const list = listAgentEntries(cfg);
   const index = findAgentEntryIndex(list, agentId);
   const base = index >= 0 ? list[index] : { id: agentId, enabled: true as const };
   const nextEntry: AgentEntry = {
     ...base,
     enabled: base.enabled ?? true,
-    ...(name ? { name } : {}),
-    ...(description ? { description } : {}),
     ...(params.workspace ? { workspace: params.workspace } : {}),
     ...(params.agentDir ? { agentDir: params.agentDir } : {}),
-    ...(params.model ? { model: { primary: params.model } } : {}),
+    ...(params.models ? { models: params.models } : {}),
+    ...(params.model ? { models: { ...base.models, chat: { primary: params.model } } } : {}),
+    ...(params.skills ? { skills: params.skills } : {}),
+    ...(params.tools ? { tools: params.tools } : {}),
   };
   const nextList = [...list];
   if (index >= 0) {

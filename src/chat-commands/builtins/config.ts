@@ -96,8 +96,8 @@ const configCommand: CommandDefinition = {
   acceptsArgs: true,
   examples: [
     '/config show',
-    '/config show agents.defaults.model',
-    '/config set agents.defaults.model=anthropic/claude-opus-4-5',
+    '/config show agents.defaults.models.chat',
+    '/config set agents.defaults.models.chat.primary=anthropic/claude-opus-4-5',
     '/config set agents.defaults.temperature=0.5',
     '/config unset tts',
   ],
@@ -229,7 +229,7 @@ const configCommand: CommandDefinition = {
         '`/config set path=value` — update a config value\n' +
         '`/config unset path` — remove a config key\n\n' +
         'Examples:\n' +
-        '`/config show agents.defaults.model`\n' +
+        '`/config show agents.defaults.models.chat`\n' +
         '`/config set agents.defaults.temperature=0.5`\n' +
         '`/config set agents.defaults.thinkingDefault=medium`\n' +
         '`/config unset tts`',

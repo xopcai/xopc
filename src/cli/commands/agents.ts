@@ -44,12 +44,11 @@ export function registerAgentsCli(program: Command): void {
       const cfg = loadConfig();
       const rows = listAgentEntries(cfg).map((a) => ({
         id: normalizeAgentId(a.id),
-        name: a.name,
         default: a.default === true,
         enabled: a.enabled !== false,
         workspace: a.workspace,
         agentDir: a.agentDir,
-        model: a.model,
+        model: a.models?.chat,
       }));
       const def = resolveDefaultAgentId(cfg);
       if (opts.json) {
@@ -63,7 +62,7 @@ export function registerAgentsCli(program: Command): void {
       }
       for (const r of rows) {
         const mark = r.id === def ? ' (default routing)' : '';
-        console.log(`- ${r.id}${mark}${r.name ? ` — ${r.name}` : ''}`);
+        console.log(`- ${r.id}${mark}`);
       }
     });
 
@@ -91,7 +90,6 @@ export function registerAgentsCli(program: Command): void {
         const workspace = opts.workspace!.trim();
         const next = applyAgentConfig(cfg, {
           agentId,
-          name,
           workspace,
           ...(opts.model?.trim() ? { model: opts.model.trim() } : {}),
           ...(opts.agentDir?.trim() ? { agentDir: opts.agentDir.trim() } : {}),

@@ -59,6 +59,7 @@ export function buildDefaultSessionMetadata(sessionKey: string): SessionMetadata
     flushCount: 0,
     sourceChannel: channel,
     sourceChatId: chatId,
+    sessionType: 'chat',
     routing,
     ...(isCronSession ? { sessionType: 'cron', customData: { cronJobId: chatId } } : {}),
     ...(isHeartbeatSession ? { sessionType: 'heartbeat', customData: { heartbeatTarget: chatId } } : {}),

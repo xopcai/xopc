@@ -6,16 +6,7 @@
 
 export * from './channel-domain.js';
 
-export {
-  CHAT_CHANNEL_ORDER,
-  getChatChannelMeta,
-  isChatChannelId,
-  listChatChannelMeta,
-  type ChatChannelId,
-  type ChatChannelMeta,
-} from './registry.js';
-
-export { getChannelDock, getDockForBuiltinChannel, type ChannelDock } from './dock.js';
+export { type ChannelDock } from './dock.js';
 
 // ChannelPlugin v2 types
 export type {
@@ -80,8 +71,6 @@ export {
   getChannelRegistryVersion,
   syncChannelPluginsFromManager,
 } from './plugins/registry.js';
-
-export { bundledChannelPlugins } from './plugins/bundled.js';
 
 // Generic markdown helpers (Telegram HTML: `./telegram/format.js`)
 export * from './format.js';

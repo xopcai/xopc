@@ -7,6 +7,7 @@ import { clearPendingToolCallIds } from './tui-agent-events.js';
 import type { TuiBackend } from './tui-backend.js';
 import type { StreamAssembler } from './stream-assembler.js';
 import type { TuiState } from './tui-types.js';
+import type { TuiSessionSnapshot } from './tui-session-snapshot.js';
 
 export type SessionActionsContext = {
   client: TuiBackend;
@@ -20,6 +21,7 @@ export type SessionActionsContext = {
   setActivityStatus: (status: string) => void;
   historyLimit?: number;
   onAgentIdChange?: (agentId: string) => void;
+  sessionSnapshot?: TuiSessionSnapshot;
 };
 
 export function createSessionActions(context: SessionActionsContext) {
@@ -35,6 +37,7 @@ export function createSessionActions(context: SessionActionsContext) {
     setActivityStatus,
     historyLimit = 200,
     onAgentIdChange,
+    sessionSnapshot,
   } = context;
 
   let refreshSessionInfoPromise: Promise<void> = Promise.resolve();
@@ -69,8 +72,10 @@ export function createSessionActions(context: SessionActionsContext) {
     assembler.clear();
     chatLog.clearAll();
     clearPendingToolCallIds();
+    sessionSnapshot?.clear();
     state.historyLoaded = false;
     state.messageFollowUpQueue.length = 0;
+    state.steeringQueue.length = 0;
   };
 
   const loadHistory = async () => {
@@ -79,8 +84,9 @@ export function createSessionActions(context: SessionActionsContext) {
         sessionKey: state.currentSessionKey,
         limit: historyLimit,
       });
+      sessionSnapshot?.replaceFromHistory(messages);
       chatLog.clearAll();
-      appendHistoryToChatLog(chatLog, messages, state.toolsExpanded);
+      appendHistoryToChatLog(chatLog, messages, state.toolsExpanded, state.showThinking);
     } catch {
       // ignore; footer already hints on disconnect
     } finally {

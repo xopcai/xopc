@@ -52,7 +52,7 @@ async function configureWeixin(config: Config): Promise<Config> {
     });
     if (!proceed) {
       console.log('ℹ️  Weixin onboarding skipped.');
-      console.log('   Configure later with: xopc channels login --channel weixin\n');
+      console.log('   Configure later with: xopc onboard --channels\n');
       return config;
     }
   }
@@ -66,7 +66,7 @@ async function configureWeixin(config: Config): Promise<Config> {
 
   if (!result.ok || !result.accountId) {
     console.log(`\n⚠️  ${result.message || 'Weixin login did not complete.'}`);
-    console.log('   You can retry from channel setup or run: xopc channels login --channel weixin\n');
+    console.log('   You can retry from channel setup with: xopc onboard --channels\n');
     return config;
   }
 

@@ -225,9 +225,9 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 
 ### Multiple agents (`agents.list`)
 
-Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by the main config file (`xopc.json` by default) — `agents.defaults` merged with the matching entry in **`agents.list`**. Default agent id: **`agents.default`**, else a `list` entry with **`default: true`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopc/agents/<id>/` including **`profile/`** Markdown, Markdown workspace roots) resolve from the same config via **`src/agent/agent-scope.ts`**.
+Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by the main config file (`xopc.json` by default) — `agents.defaults` merged with the matching entry in **`agents.list`**. Default agent id: **`agents.default`**, else a `list` entry with **`default: true`**, else the first enabled entry, else **`main`**. Display identity (name, description, language, avatar) is read from **`~/.xopc/agents/<id>/profile/IDENTITY.md`**. On-disk paths (`~/.xopc/agents/<id>/` including **`profile/`** Markdown, Markdown workspace roots) resolve from the same config via **`src/agent/agent-scope.ts`**.
 
-**Typed model roles** (`agents.defaults.models` only): named slots like `small` / `large` mapping to `provider/model` refs. Workflows reference them in `agent({ model: 'small' })` or `meta.phases[].model`. Resolution: `src/config/agent-typed-models.ts`.
+**Typed model roles** (`agents.defaults.models.roles` and per-agent `agents.list[].models.roles`): named slots like `small` / `large` mapping to `provider/model` refs. Per-agent roles override defaults by id. Workflows reference them in `agent({ model: 'small' })` or `meta.phases[].model`. Resolution: `src/config/agent-typed-models.ts`.
 
 Use **`xopc agents list`**, **`xopc agents add`**, **`xopc agents delete`** to manage `agents.list` and initialize directories — there is no separate agent registry outside config.
 

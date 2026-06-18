@@ -1,448 +1,211 @@
-import { ExternalLink } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { ExternalLink, RefreshCw, Settings2 } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
-import { docsGuidePageUrl } from '@/navigation';
-import type { ChannelsSettingsMessages } from '@/i18n/messages';
-import { usePageHeaderStore } from '@/stores/page-header-store';
+import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
+import { apiFetch, fetchJson } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
+import { cn } from '@/lib/cn';
+import { messages } from '@/i18n/messages';
+import { useGatewayStore } from '@/stores/gateway-store';
+import { useLocaleStore } from '@/stores/locale-store';
 
-import { ChannelsHubGrid, type OpenChannelOptions } from './channels-hub-grid';
-import { ChannelsHubGridSkeleton } from './channels-hub-card-skeleton';
-import {
-  CHANNELS_HUB_PATH,
-  channelDetailPath,
-  isManageableChannelId,
-  normalizeChannelRouteId,
-} from './channels-routes';
-import { ExtensionChannelDetailPanel } from './extension-channel-detail-panel';
-import { ChannelsPageHeaderActions } from './channels-page-header-actions';
-import { FeishuMoreSettingsSection } from './feishu-more-settings-section';
-import { FeishuQrSetupDialog } from './feishu-qr-setup-dialog';
-import { TelegramChannelSettingsDialog } from './telegram-channel-settings-dialog';
-import { useChannelCatalog } from './use-channel-catalog';
-import { useChannelsHubData } from './use-channels-hub-data';
-import { useChannelsSettingsPanel } from './use-channels-settings-panel';
-import { WeixinQrLoginDialog } from './weixin-qr-login-dialog';
-import { WeixinMoreSettingsSection } from './weixin-more-settings-section';
+import { CHANNELS_HUB_PATH, channelDetailPath, normalizeChannelRouteId } from './channels-routes';
+import { ChannelSetupCard } from './channel-setup-card';
+import { useChannelCatalog, type ChannelCatalogEntry } from './use-channel-catalog';
+
+function configSwrKey(channelId: string | null): string | null {
+  return channelId ? apiUrl(`/api/channels/${encodeURIComponent(channelId)}/config`) : null;
+}
+
+async function fetchChannelConfig(channelId: string): Promise<Record<string, unknown>> {
+  const data = await fetchJson<{ ok?: boolean; payload?: { config?: Record<string, unknown> } }>(
+    apiUrl(`/api/channels/${encodeURIComponent(channelId)}/config`),
+  );
+  return data.payload?.config ?? {};
+}
+
+function statusLabel(entry: ChannelCatalogEntry): string {
+  if (entry.enabled && entry.runtime === 'loaded') return 'Running';
+  if (entry.enabled) return 'Enabled';
+  if (entry.configured) return 'Configured';
+  return 'Not configured';
+}
 
 export function ChannelsSettingsPanel() {
+  const language = useLocaleStore((s) => s.language);
+  const m = messages(language);
+  const hasToken = useGatewayStore((s) => Boolean(s.token));
   const navigate = useNavigate();
   const { channelId: routeChannelId } = useParams<{ channelId?: string }>();
-  const [searchParams] = useSearchParams();
-
-  const ctx = useChannelsSettingsPanel();
-  const {
-    language,
-    m,
-    ch,
-    hasToken,
-    loading,
-    fetchError,
-    mutate,
-    form,
-    baseline,
-    dirty,
-    saving,
-    error,
-    saveOk,
-    weixinSuccessBanner,
-    setWeixinSuccessBanner,
-    feishuSetupSuccessBanner,
-    tgAdvanced,
-    setTgAdvanced,
-    showToken,
-    setShowToken,
-    showFeishuSecret,
-    setShowFeishuSecret,
-    showFeishuWebhookSecrets,
-    setShowFeishuWebhookSecrets,
-    copied,
-    feishuCopied,
-    feishuWebhookCopied,
-    tgAccountsDraft,
-    setTgAccountsDraft,
-    tgAccountsError,
-    wxAccountsDraft,
-    setWxAccountsDraft,
-    wxAccountsError,
-    feishuAccountsDraft,
-    setFeishuAccountsDraft,
-    feishuAccountsError,
-    chatAgents,
-    updateChannelAgentRoute,
-    updateTelegram,
-    updateWeixin,
-    updateFeishu,
-    save,
-    discard,
-    toggleChannelEnabled,
-    copyToken,
-    handleFeishuQrSetupSuccess,
-    copyFeishuSecret,
-    copyFeishuWebhookConfig,
-    onTgAccountsBlur,
-    onWxAccountsBlur,
-    onFeishuAccountsBlur,
-    dmOpts,
-    groupOpts,
-    replyOpts,
-    streamOpts,
-    reactionLevelOpts,
-    reactionNotifyOpts,
-  } = ctx;
-
-  const [refreshing, setRefreshing] = useState(false);
-
-  const { entries: catalogEntries } = useChannelCatalog(hasToken, ch);
-  const catalogById = useMemo(() => new Map(catalogEntries.map((e) => [e.id, e])), [catalogEntries]);
-
   const activeChannelId = normalizeChannelRouteId(routeChannelId);
-  const scrollToPairing = searchParams.get('pairing') === '1';
-  const detailOpen = Boolean(activeChannelId && catalogById.has(activeChannelId));
 
-  const { cards, refreshAll } = useChannelsHubData({
-    hasToken,
-    form,
-    ch,
-  });
-
-  const activeEntry = activeChannelId ? catalogById.get(activeChannelId) : undefined;
-  const activeCard = activeChannelId ? cards.find((c) => c.id === activeChannelId) : undefined;
-
-  useEffect(() => {
-    if (!activeChannelId || catalogEntries.length === 0) return;
-    if (!catalogById.has(activeChannelId)) {
-      navigate(CHANNELS_HUB_PATH, { replace: true });
-    }
-  }, [activeChannelId, catalogById, catalogEntries.length, navigate]);
-
-  const openChannel = useCallback(
-    (id: string, opts?: OpenChannelOptions) => {
-      navigate(channelDetailPath(id, { pairing: opts?.scrollToPairing }));
-    },
-    [navigate],
+  const catalog = useChannelCatalog(hasToken);
+  const entries = catalog.entries;
+  const activeEntry = useMemo(
+    () => entries.find((entry) => entry.id === activeChannelId),
+    [activeChannelId, entries],
   );
+
+  const { data: remoteConfig, mutate: mutateConfig } = useSWR(
+    hasToken && activeEntry ? configSwrKey(activeEntry.id) : null,
+    () => fetchChannelConfig(activeEntry!.id),
+  );
+  const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const effectiveConfig = draft ?? remoteConfig ?? {};
+
+  const openChannel = useCallback((id: string) => {
+    navigate(channelDetailPath(id));
+    setDraft(null);
+    setError(null);
+  }, [navigate]);
 
   const closeChannel = useCallback(() => {
     navigate(CHANNELS_HUB_PATH);
+    setDraft(null);
+    setError(null);
   }, [navigate]);
 
-  const handleWeixinOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      if (!nextOpen) closeChannel();
-    },
-    [closeChannel],
-  );
-
-  const handleWeixinLoginSuccess = useCallback(async () => {
-    await mutate();
-    setWeixinSuccessBanner(ch.weixinQrLoginSuccess);
-    window.setTimeout(() => setWeixinSuccessBanner(null), 4000);
-  }, [ch.weixinQrLoginSuccess, mutate, setWeixinSuccessBanner]);
-
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
+  const saveConfig = useCallback(async () => {
+    if (!activeEntry || !draft) return;
+    setSaving(true);
+    setError(null);
     try {
-      refreshAll();
-      await mutate();
+      const res = await apiFetch(apiUrl('/api/config'), {
+        method: 'PATCH',
+        body: JSON.stringify({ channels: { [activeEntry.id]: draft } }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        throw new Error(body.error?.message ?? res.statusText);
+      }
+      await mutateConfig(draft, false);
+      await catalog.mutate();
+      setDraft(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setRefreshing(false);
+      setSaving(false);
     }
-  }, [mutate, refreshAll]);
+  }, [activeEntry, catalog, draft, mutateConfig]);
 
   if (!hasToken) {
     return (
-      <>
-        <ChannelsPageHeaderRegistration
-          title={m.settingsSections.channels}
-          hasToken={hasToken}
-          ch={ch}
-          refreshing={refreshing}
-          saveOk={saveOk}
-          onRefresh={handleRefresh}
-        />
-        <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-          <h1 className="text-lg font-semibold text-fg">{m.settingsSections.channels}</h1>
-          <p className="text-sm text-fg-muted">{ch.needToken}</p>
-        </div>
-      </>
-    );
-  }
-
-  if (loading) {
-    return (
-      <>
-        <ChannelsPageHeaderRegistration
-          title={m.settingsSections.channels}
-          hasToken={hasToken}
-          ch={ch}
-          refreshing={refreshing}
-          saveOk={saveOk}
-          onRefresh={handleRefresh}
-        />
-        <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-        <div className="space-y-2">
-          <div className="h-7 w-40 animate-pulse rounded-md bg-surface-hover motion-reduce:animate-none dark:bg-surface-active/50" />
-          <div className="h-4 w-full max-w-md animate-pulse rounded-md bg-surface-hover motion-reduce:animate-none dark:bg-surface-active/50" />
-        </div>
-        <ChannelsHubGridSkeleton />
-        <p className="text-sm text-fg-muted">{ch.loading}</p>
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+        <h1 className="text-lg font-semibold text-fg">{m.settingsSections.channels}</h1>
+        <p className="text-sm text-fg-muted">Gateway token is required.</p>
       </div>
-      </>
     );
   }
-
-  if (!form) {
-    return (
-      <>
-        <ChannelsPageHeaderRegistration
-          title={m.settingsSections.channels}
-          hasToken={hasToken}
-          ch={ch}
-          refreshing={refreshing}
-          saveOk={saveOk}
-          onRefresh={handleRefresh}
-        />
-        <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-          <p className="text-sm text-fg-muted">{error ?? fetchError ?? ch.loadError}</p>
-          <Button type="button" variant="secondary" onClick={() => void mutate()}>
-            {ch.retry}
-          </Button>
-        </div>
-      </>
-    );
-  }
-
-  const wx = form.weixin;
-  const pairingFocusWeixin = scrollToPairing && activeChannelId === 'weixin';
-  const pairingFocusFeishu = scrollToPairing && activeChannelId === 'feishu';
-
-  const weixinMoreSettings = (
-    <WeixinMoreSettingsSection
-      ch={ch}
-      wx={wx}
-      updateWeixin={updateWeixin}
-      dmOpts={dmOpts}
-      streamOpts={streamOpts}
-      wxAccountsDraft={wxAccountsDraft}
-      setWxAccountsDraft={setWxAccountsDraft}
-      wxAccountsError={wxAccountsError}
-      onWxAccountsBlur={onWxAccountsBlur}
-      form={form}
-      chatAgents={chatAgents}
-      onAgentRouteChange={(acc, aid) => updateChannelAgentRoute('weixin', acc, aid)}
-      saving={saving}
-      language={language}
-      dialogOpen={detailOpen && activeChannelId === 'weixin'}
-      pairingFocus={pairingFocusWeixin}
-    />
-  );
-
-  const feishuMoreSettings = (
-    <FeishuMoreSettingsSection
-      ch={ch}
-      form={form}
-      baseline={baseline}
-      showFeishuSecret={showFeishuSecret}
-      setShowFeishuSecret={setShowFeishuSecret}
-      showFeishuWebhookSecrets={showFeishuWebhookSecrets}
-      setShowFeishuWebhookSecrets={setShowFeishuWebhookSecrets}
-      feishuCopied={feishuCopied}
-      feishuWebhookCopied={feishuWebhookCopied}
-      copyFeishuSecret={copyFeishuSecret}
-      copyFeishuWebhookConfig={copyFeishuWebhookConfig}
-      updateFeishu={updateFeishu}
-      updateChannelAgentRoute={updateChannelAgentRoute}
-      feishuAccountsDraft={feishuAccountsDraft}
-      setFeishuAccountsDraft={setFeishuAccountsDraft}
-      feishuAccountsError={feishuAccountsError}
-      onFeishuAccountsBlur={onFeishuAccountsBlur}
-      dmOpts={dmOpts}
-      groupOpts={groupOpts}
-      chatAgents={chatAgents}
-      saving={saving}
-      language={language}
-      dialogOpen={detailOpen && activeChannelId === 'feishu'}
-      pairingFocus={pairingFocusFeishu}
-    />
-  );
 
   return (
-    <>
-      <ChannelsPageHeaderRegistration
-        title={m.settingsSections.channels}
-        hasToken={hasToken}
-        ch={ch}
-        refreshing={refreshing}
-        saveOk={saveOk}
-        onRefresh={handleRefresh}
-      />
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-      <a
-        href={docsGuidePageUrl(language, 'channels')}
-        target="_blank"
-        rel="noreferrer"
-        className="inline-flex w-fit items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-      >
-        {ch.docsLink}
-        <ExternalLink className="size-3.5" />
-      </a>
-
-      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-      {weixinSuccessBanner ? <p className="text-xs text-accent">{weixinSuccessBanner}</p> : null}
-      {feishuSetupSuccessBanner ? (
-        <div className="rounded-xl border border-success/30 bg-success-soft px-4 py-3 text-sm text-success">
-          {feishuSetupSuccessBanner}
+    <div className="mx-auto grid w-full max-w-app-main gap-4 px-4 py-6 lg:grid-cols-[320px_minmax(0,1fr)]">
+      <section className="min-w-0">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h1 className="text-lg font-semibold text-fg">{m.settingsSections.channels}</h1>
+          <Button type="button" variant="ghost" className="h-8 px-2" onClick={() => void catalog.mutate()}>
+            <RefreshCw className="size-4" />
+          </Button>
         </div>
-      ) : null}
+        {catalog.isLoading ? (
+          <p className="text-sm text-fg-muted">Loading channels...</p>
+        ) : catalog.error ? (
+          <p className="text-sm text-red-600 dark:text-red-400">{String(catalog.error)}</p>
+        ) : (
+          <ul className="space-y-2">
+            {entries.map((entry) => (
+              <li key={entry.id}>
+                <button
+                  type="button"
+                  onClick={() => openChannel(entry.id)}
+                  className={cn(
+                    'w-full rounded-lg border border-edge-subtle bg-surface-panel px-3 py-3 text-left transition-colors hover:border-edge',
+                    activeEntry?.id === entry.id && 'border-accent/60 bg-accent-soft/40',
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-fg">{entry.label}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{entry.description ?? entry.id}</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">
+                      {statusLabel(entry)}
+                    </span>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      {refreshing ? (
-        <ChannelsHubGridSkeleton count={Math.max(catalogEntries.length, 3)} />
-      ) : (
-        <ChannelsHubGrid
-          catalog={catalogEntries}
-          cards={cards}
-          ch={ch}
-          saving={saving}
-          onOpenChannel={openChannel}
-          onToggleChannel={(id, enabled) => {
-            if (isManageableChannelId(id)) void toggleChannelEnabled(id, enabled);
-          }}
-        />
-      )}
+      <section className="min-w-0 rounded-lg border border-edge-subtle bg-surface-base p-4">
+        {!activeEntry ? (
+          <p className="text-sm text-fg-muted">Select a channel to configure it.</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold text-fg">{activeEntry.label}</h2>
+                <p className="mt-1 text-sm text-fg-muted">{activeEntry.description}</p>
+                <p className="mt-1 text-xs text-fg-muted">
+                  {activeEntry.extensionId} · {activeEntry.source}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {activeEntry.docsPath ? (
+                  <Button type="button" variant="secondary" asChild>
+                    <a href={activeEntry.docsPath} target="_blank" rel="noreferrer">
+                      Docs
+                      <ExternalLink className="ml-2 size-3.5" />
+                    </a>
+                  </Button>
+                ) : null}
+                <Button type="button" variant="ghost" onClick={closeChannel}>Close</Button>
+              </div>
+            </div>
 
-      {activeChannelId === 'weixin' ? (
-        <WeixinQrLoginDialog
-          open={detailOpen}
-          onOpenChange={handleWeixinOpenChange}
-          ch={ch}
-          onLoginSuccess={handleWeixinLoginSuccess}
-          moreSettings={weixinMoreSettings}
-          settingsDirty={dirty}
-          settingsSaving={saving}
-          onSettingsDiscard={discard}
-          onSettingsSave={save}
-        />
-      ) : null}
+            <ChannelSetupCard
+              key={activeEntry.id}
+              entry={activeEntry}
+              onChanged={async () => {
+                await mutateConfig();
+                await catalog.mutate();
+              }}
+            />
 
-      {activeChannelId === 'telegram' ? (
-        <TelegramChannelSettingsDialog
-          open={detailOpen}
-          onOpenChange={(open) => {
-            if (!open) closeChannel();
-          }}
-          ch={ch}
-          form={form}
-          baseline={baseline}
-          tgAdvanced={tgAdvanced}
-          setTgAdvanced={setTgAdvanced}
-          showToken={showToken}
-          setShowToken={setShowToken}
-          copied={copied}
-          copyToken={copyToken}
-          updateTelegram={updateTelegram}
-          updateChannelAgentRoute={updateChannelAgentRoute}
-          tgAccountsDraft={tgAccountsDraft}
-          setTgAccountsDraft={setTgAccountsDraft}
-          tgAccountsError={tgAccountsError}
-          onTgAccountsBlur={onTgAccountsBlur}
-          dmOpts={dmOpts}
-          groupOpts={groupOpts}
-          replyOpts={replyOpts}
-          streamOpts={streamOpts}
-          reactionLevelOpts={reactionLevelOpts}
-          reactionNotifyOpts={reactionNotifyOpts}
-          chatAgents={chatAgents}
-          saving={saving}
-          dirty={dirty}
-          save={save}
-          discard={discard}
-          language={language}
-          scrollToPairingOnOpen={scrollToPairing}
-          closeOnSave={false}
-        />
-      ) : null}
+            <details className="group rounded-lg border border-edge-subtle bg-surface-panel">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fg marker:hidden [&::-webkit-details-marker]:hidden">
+                <Settings2 className="size-4 text-fg-muted" />
+                Advanced configuration
+              </summary>
+              <div className="border-t border-edge-subtle p-4">
+                <SchemaForm
+                  schema={(activeEntry.configSchema ?? { type: 'object', properties: {} }) as JsonSchema}
+                  values={effectiveConfig}
+                  onChange={(next) => setDraft(next)}
+                  disabled={saving}
+                />
 
-      {activeChannelId === 'feishu' ? (
-        <FeishuQrSetupDialog
-          open={detailOpen}
-          onOpenChange={(open) => {
-            if (!open) closeChannel();
-          }}
-          ch={ch}
-          onSetupSuccess={handleFeishuQrSetupSuccess}
-          moreSettings={feishuMoreSettings}
-          settingsDirty={dirty}
-          settingsSaving={saving}
-          onSettingsDiscard={discard}
-          onSettingsSave={save}
-        />
-      ) : null}
-
-      {activeEntry && activeCard && !activeEntry.manageable ? (
-        <ExtensionChannelDetailPanel
-          open={detailOpen}
-          onOpenChange={(open) => {
-            if (!open) closeChannel();
-          }}
-          entry={activeEntry}
-          vm={activeCard}
-          ch={ch}
-          language={language}
-        />
-      ) : null}
+                {error ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button type="button" variant="ghost" disabled={!draft || saving} onClick={() => setDraft(null)}>
+                    Discard
+                  </Button>
+                  <Button type="button" variant="primary" disabled={!draft || saving} onClick={() => void saveConfig()}>
+                    {saving ? 'Saving...' : 'Save'}
+                  </Button>
+                </div>
+              </div>
+            </details>
+          </div>
+        )}
+      </section>
     </div>
-    </>
   );
-}
-
-function ChannelsPageHeaderRegistration({
-  title,
-  hasToken,
-  ch,
-  refreshing,
-  saveOk,
-  onRefresh,
-}: {
-  title: string;
-  hasToken: boolean;
-  ch: ChannelsSettingsMessages;
-  refreshing: boolean;
-  saveOk: boolean;
-  onRefresh: () => void | Promise<void>;
-}) {
-  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
-  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
-
-  const channelsHeaderEnd = useMemo(
-    () => (
-      <ChannelsPageHeaderActions
-        ch={ch}
-        refreshing={refreshing}
-        saveOk={saveOk}
-        onRefresh={onRefresh}
-      />
-    ),
-    [ch, onRefresh, refreshing, saveOk],
-  );
-
-  useLayoutEffect(() => {
-    if (!hasToken) {
-      clearPageHeader();
-      return () => clearPageHeader();
-    }
-    setPageHeader({
-      startExtra: null,
-      main: (
-        <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{title}</h1>
-        </div>
-      ),
-      end: channelsHeaderEnd,
-    });
-    return () => clearPageHeader();
-  }, [channelsHeaderEnd, clearPageHeader, hasToken, setPageHeader, title]);
-
-  return null;
 }

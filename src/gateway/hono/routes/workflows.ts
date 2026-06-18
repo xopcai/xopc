@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import { createWorkflowCatalog } from '../../../agent/workflow/catalog.js';
+import { messagesToClientHistory } from '../../../session/client-history.js';
 import type {
   WorkflowDefinition,
   WorkflowRunInputEnvelope,
@@ -172,6 +173,40 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     });
   });
 
+  authenticated.get('/api/workflows/runs/:runId/agents/:agentId/session', async (c) => {
+    const ownerAgentId = getAgentId(c.req.query('ownerAgentId') ?? c.req.query('agentId'), service.currentConfig);
+    const runId = c.req.param('runId');
+    const workflowAgentId = c.req.param('agentId');
+    const runStore = workflowRunService.createRunStore(ownerAgentId);
+    const view = await runStore.readRunView(runId);
+    if (!view) {
+      return c.json({ error: 'Workflow run not found' }, 404);
+    }
+    const normalizedWorkflowAgentId = workflowAgentId.startsWith('agent-')
+      ? workflowAgentId
+      : `agent-${workflowAgentId}`;
+    const agent = view.agents.find(
+      (item) => item.id === workflowAgentId || item.id === normalizedWorkflowAgentId,
+    );
+    if (!agent) {
+      return c.json({ error: 'Workflow agent not found' }, 404);
+    }
+    const session = await service.sessions.getSession(agent.sessionKey);
+    if (!session || session.sessionType !== 'workflow-subagent') {
+      return c.json({ error: 'Workflow agent session not found' }, 404);
+    }
+    return c.json({
+      sessionKey: agent.sessionKey,
+      metadata: {
+        sessionType: session.sessionType,
+        workflowRunId: session.workflowRunId,
+        workflowAgentId: session.workflowAgentId,
+        workflowAgentLabel: session.workflowAgentLabel,
+      },
+      messages: messagesToClientHistory(session.messages),
+    });
+  });
+
   authenticated.get('/api/workflows/runs/:runId', async (c) => {
     const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
     const runId = c.req.param('runId');
@@ -221,6 +256,7 @@ function toWorkflowDefinition(loaded: ReturnType<ReturnType<typeof createWorkflo
     source: loaded.source,
     script: loaded.script,
     meta: loaded.meta,
+    manifest: loaded.manifest,
   });
 }
 

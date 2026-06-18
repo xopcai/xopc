@@ -9,7 +9,7 @@ import type { PairingPendingView } from '../pairing/pairing-types.js';
 
 export interface ChannelPairingAdapter {
   /** Credential-store channel key (`telegram` | `feishu` | `weixin`). */
-  pairingChannel: 'telegram' | 'feishu' | 'weixin';
+  pairingChannel: string;
   listPending(params: { cfg: Config; accountId?: string }): PairingPendingView[];
   approveByCode(params: {
     cfg: Config;
@@ -81,6 +81,66 @@ export interface ChannelAgentPromptAdapter {
   augmentSystemPrompt?(params: { cfg: Config; accountId?: string }): string | undefined;
 }
 
+export type ChannelRuntimeActionPayload =
+  | {
+      type: 'ok';
+      message?: string;
+      configChanged?: boolean;
+      [key: string]: unknown;
+    }
+  | {
+      type: 'qr';
+      sessionKey: string;
+      qrcodeUrl?: string;
+      qrPayload?: string;
+      statusAction?: string;
+      pollIntervalMs?: number;
+      expiresInSec?: number;
+      message?: string;
+      [key: string]: unknown;
+    }
+  | {
+      type: 'poll';
+      phase: 'pending' | 'done' | 'unknown';
+      ok?: boolean;
+      message?: string;
+      accountId?: string;
+      qrcodeUrl?: string;
+      qrPayload?: string;
+      qrStatus?: string;
+      configChanged?: boolean;
+      [key: string]: unknown;
+    }
+  | {
+      type: 'diagnostics';
+      checks: unknown[];
+      [key: string]: unknown;
+    }
+  | {
+      type: 'form';
+      schema: Record<string, unknown>;
+      values?: Record<string, unknown>;
+      submitAction: string;
+      message?: string;
+      [key: string]: unknown;
+    };
+
+export interface ChannelRuntimeActionResult {
+  ok: boolean;
+  payload?: ChannelRuntimeActionPayload;
+  message?: string;
+}
+
+/** Gateway/CLI control-plane actions declared by extension manifests. */
+export interface ChannelRuntimeActionAdapter {
+  runAction(params: {
+    cfg: Config;
+    actionId: string;
+    accountId?: string;
+    input?: unknown;
+  }): Promise<ChannelRuntimeActionResult>;
+}
+
 /**
  * Resolves a cron job `delivery.to` string into a normalized chat target for outbound.
  */
@@ -91,7 +151,7 @@ export interface ChannelCronDeliveryAdapter {
   ): Promise<{ chatId: string; accountId?: string; metadata?: Record<string, unknown> }>;
 }
 
-/** CLI `xopc channels login --channel` for channels that support interactive login. */
+/** Interactive credential login for channels that support terminal setup. */
 export interface ChannelCliLoginAdapter {
   runLogin(params: {
     configPath: string;

@@ -19,6 +19,7 @@ export class CustomEditor extends Editor {
   onCtrlD?: () => void;
   onCtrlC?: () => void;
   onPasteImage?: () => void;
+  onExtensionShortcut?: (data: string) => boolean;
 
   constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager, options?: EditorOptions) {
     super(tui, theme, options);
@@ -30,6 +31,10 @@ export class CustomEditor extends Editor {
   }
 
   handleInput(data: string): void {
+    if (this.onExtensionShortcut?.(data)) {
+      return;
+    }
+
     if (this.keybindings.matches(data, 'app.clipboard.pasteImage')) {
       this.onPasteImage?.();
       return;

@@ -1,7 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ExternalLink, Info, Trash2, X } from 'lucide-react';
 
-import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
 import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import { SkillCatalogStructuredPreview } from '@/features/skills/skill-catalog-structured-preview';
@@ -31,8 +30,6 @@ type Props = Pick<
   | 'setDetailSource'
   | 'detailTitle'
   | 'setDetailTitle'
-  | 'detailMarkdown'
-  | 'setDetailMarkdown'
   | 'detailCatalogPreview'
   | 'setDetailCatalogPreview'
   | 'detailMarketplacePreview'
@@ -64,8 +61,6 @@ export function SkillsPageDetailDialog(p: Props) {
     setDetailSource,
     detailTitle,
     setDetailTitle,
-    detailMarkdown,
-    setDetailMarkdown,
     detailCatalogPreview,
     setDetailCatalogPreview,
     detailMarketplacePreview,
@@ -95,7 +90,6 @@ export function SkillsPageDetailDialog(p: Props) {
         setDetailOpen(open);
         if (!open) {
           setDetailSource('catalog');
-          setDetailMarkdown('');
           setDetailCatalogPreview(null);
           setDetailMarketplacePreview(null);
           setDetailError(null);
@@ -159,9 +153,7 @@ export function SkillsPageDetailDialog(p: Props) {
             ) : detailSource === 'store' && detailMarketplacePreview ? (
               <SkillCatalogStructuredPreview preview={detailMarketplacePreview} sk={sk} />
             ) : (
-              <div className="markdown-content min-w-0 break-words">
-                <MarkdownView content={detailMarkdown} />
-              </div>
+              <p className="text-sm text-red-600 dark:text-red-400">{sk.detailLoadFailed}</p>
             )}
           </div>
           <div className="flex shrink-0 items-center justify-between gap-2 border-t border-edge px-4 py-3">

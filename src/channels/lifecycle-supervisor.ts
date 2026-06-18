@@ -125,6 +125,20 @@ export class ChannelLifecycleSupervisor {
     log.info('All channel plugins initialized');
   }
 
+  async initializeChannel(channelId: string): Promise<boolean> {
+    const plugin = this.opts.registry.get(channelId);
+    if (!plugin) {
+      log.warn({ channel: channelId }, 'Unknown channel');
+      return false;
+    }
+    if (this.initializedPluginIds.has(channelId)) {
+      return true;
+    }
+    const cfg = this.opts.getConfig();
+    await this.initializePlugin(plugin, asChannelConfig(cfg.channels?.[channelId]) ?? {});
+    return this.initializedPluginIds.has(channelId);
+  }
+
   /** Phase 1: start every enabled channel except those in `deferConnectPluginIds`. */
   async start(options?: { deferConnectPluginIds?: ReadonlySet<string> }): Promise<void> {
     if (!this.initialized) {

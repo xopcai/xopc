@@ -5,6 +5,7 @@ import {
   CURRENT_SESSION_VERSION,
   type CompactionEntry,
   type CustomEntry,
+  type CustomMessageEntry,
   type FileEntry,
   type SessionMessageEntry,
 } from '@earendil-works/pi-coding-agent';
@@ -12,8 +13,13 @@ import {
 import type { TranscriptCompactionRecord } from './transcript-format.js';
 import {
   isTranscriptContextEntry,
+  isTranscriptCustomMessageEntry,
+  isTranscriptCustomStateEntry,
   type TranscriptStoredRow,
   type XopcTranscriptContextEntry,
+  type XopcTranscriptCustomMessageEntry,
+  type XopcTranscriptCustomMessageFileEntry,
+  type XopcTranscriptCustomStateEntry,
 } from './session-context-for-llm.js';
 
 export const XOPC_CONTEXT_CUSTOM_TYPE = 'xopc:transcript-row';
@@ -46,6 +52,44 @@ function contextRowToCustomEntry(
       data: row.data,
       createdAt: row.createdAt,
     },
+  };
+}
+
+function customStateRowToCustomEntry(
+  row: XopcTranscriptCustomStateEntry,
+  parentId: string | null,
+  byId: Set<string>,
+): CustomEntry {
+  return {
+    type: 'custom',
+    customType: row.customType?.trim() || 'xopc:custom',
+    id: generateShortId(byId),
+    parentId,
+    timestamp: typeof row.timestamp === 'string' ? row.timestamp : new Date().toISOString(),
+    data: row.data,
+  };
+}
+
+function customMessageRowToEntry(
+  row: XopcTranscriptCustomMessageEntry | XopcTranscriptCustomMessageFileEntry,
+  parentId: string | null,
+  byId: Set<string>,
+): CustomMessageEntry {
+  return {
+    type: 'custom_message',
+    customType: row.customType?.trim() || 'xopc:custom-message',
+    id: generateShortId(byId),
+    parentId,
+    timestamp: typeof row.timestamp === 'string'
+      ? row.timestamp
+      : typeof row.timestamp === 'number'
+        ? new Date(row.timestamp).toISOString()
+        : new Date().toISOString(),
+    content: typeof row.content === 'string' || Array.isArray(row.content)
+      ? row.content as CustomMessageEntry['content']
+      : '',
+    display: row.display ?? true,
+    details: row.details,
   };
 }
 
@@ -103,6 +147,20 @@ export function storedRowsToFileEntries(params: {
   for (const row of params.rows) {
     if (isTranscriptContextEntry(row)) {
       const entry = contextRowToCustomEntry(row, parentId, byId);
+      byId.add(entry.id);
+      entries.push(entry);
+      parentId = entry.id;
+      continue;
+    }
+    if (isTranscriptCustomStateEntry(row)) {
+      const entry = customStateRowToCustomEntry(row, parentId, byId);
+      byId.add(entry.id);
+      entries.push(entry);
+      parentId = entry.id;
+      continue;
+    }
+    if (isTranscriptCustomMessageEntry(row)) {
+      const entry = customMessageRowToEntry(row, parentId, byId);
       byId.add(entry.id);
       entries.push(entry);
       parentId = entry.id;

@@ -31,10 +31,9 @@ let _commandsCache: CommandEntry[] | null = null;
 let _commandsExpiry = 0;
 let _commandsInflight: Promise<CommandEntry[]> | null = null;
 
-const _skillsCache = new Map<string, Awaited<ReturnType<typeof getSkills>>>();
-const _skillsExpiry = new Map<string, number>();
+let _skillsCache: Awaited<ReturnType<typeof getSkills>> | null = null;
+let _skillsExpiry = 0;
 let _skillsInflight: ReturnType<typeof getSkills> | null = null;
-let _skillsInflightLang: string | undefined;
 
 export async function fetchCommandsCached(forceRefresh = false): Promise<CommandEntry[]> {
   const now = Date.now();
@@ -63,26 +62,22 @@ export async function fetchCommandsCached(forceRefresh = false): Promise<Command
 }
 
 export async function getSkillsCached(
-  lang?: string,
   forceRefresh = false,
 ): Promise<Awaited<ReturnType<typeof getSkills>>> {
-  const key = lang ?? 'en';
   const now = Date.now();
-  if (!forceRefresh && _skillsCache.has(key) && now < (_skillsExpiry.get(key) ?? 0)) {
-    return _skillsCache.get(key)!;
+  if (!forceRefresh && _skillsCache && now < _skillsExpiry) {
+    return _skillsCache;
   }
-  if (_skillsInflight && _skillsInflightLang === key) return _skillsInflight;
+  if (_skillsInflight) return _skillsInflight;
 
-  _skillsInflightLang = key;
-  _skillsInflight = getSkills(lang)
+  _skillsInflight = getSkills()
     .then((payload) => {
-      _skillsCache.set(key, payload);
-      _skillsExpiry.set(key, Date.now() + CACHE_TTL_MS);
+      _skillsCache = payload;
+      _skillsExpiry = Date.now() + CACHE_TTL_MS;
       return payload;
     })
     .finally(() => {
       _skillsInflight = null;
-      _skillsInflightLang = undefined;
     });
 
   return _skillsInflight;

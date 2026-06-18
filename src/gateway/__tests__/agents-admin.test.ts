@@ -17,7 +17,7 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
     agents: {
       defaults: {
         workspace: '/tmp/ws-default',
-        model: 'anthropic/claude-sonnet-4-5',
+        models: { chat: { primary: 'anthropic/claude-sonnet-4-5' } },
         maxTokens: 8192,
         temperature: 0.7,
         maxToolIterations: 20,
@@ -32,6 +32,20 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
     channels: {},
     ...overrides,
   } as Config;
+}
+
+function identityMarkdown(name: string, description = ''): string {
+  return [
+    '# IDENTITY.md - Who Am I?',
+    '',
+    `- **Name:** ${name}`,
+    `- **Description:** ${description}`,
+    '- **Language:** en',
+    '- **Creature:** assistant',
+    '- **Emoji:**',
+    '- **Avatar:**',
+    '',
+  ].join('\n');
 }
 
 describe('agents-admin', () => {
@@ -49,22 +63,35 @@ describe('agents-admin', () => {
     expect(agents[0]?.typedModels.effective).toEqual([]);
   });
 
-  it('listGatewayAgents exposes only global typed models', async () => {
+  it('listGatewayAgents exposes default, entry, and effective typed models', async () => {
     const cfg = minimalConfig({
       agents: {
         ...minimalConfig().agents,
         defaults: {
           ...minimalConfig().agents!.defaults!,
-          models: [{ id: 'small', model: 'deepseek/flash' }],
+          models: { roles: { small: { model: 'deepseek/flash' } } },
         },
-        list: [{ id: 'coder', enabled: true, workspace: '/tmp/c' }],
+        list: [
+          {
+            id: 'coder',
+            enabled: true,
+            workspace: '/tmp/c',
+            models: { roles: { small: { model: 'openai/mini' }, review: { model: 'anthropic/review' } } },
+          },
+        ],
       },
     } as Partial<Config>);
     const { agents } = await listGatewayAgents(cfg);
     const coder = agents.find((a) => a.id === 'coder');
     expect(coder?.typedModels.defaults).toEqual([{ id: 'small', model: 'deepseek/flash' }]);
-    expect(coder?.typedModels.effective).toEqual([{ id: 'small', model: 'deepseek/flash' }]);
-    expect('entry' in (coder?.typedModels ?? {})).toBe(false);
+    expect(coder?.typedModels.entry).toEqual([
+      { id: 'review', model: 'anthropic/review' },
+      { id: 'small', model: 'openai/mini' },
+    ]);
+    expect(coder?.typedModels.effective).toEqual([
+      { id: 'review', model: 'anthropic/review' },
+      { id: 'small', model: 'openai/mini' },
+    ]);
   });
 
   it('extractAvatarFromIdentityMarkdown reads Avatar line', () => {
@@ -73,26 +100,6 @@ describe('agents-admin', () => {
     expect(extractAvatarFromIdentityMarkdown('')).toBeUndefined();
     expect(extractAvatarFromIdentityMarkdown('- **Avatar:**  \n')).toBeUndefined();
   });
-  it('prepareUpdateAgent sets description and can clear it', () => {
-    const cfg = minimalConfig({
-      agents: {
-        ...minimalConfig().agents,
-        list: [{ id: 'coder', enabled: true, workspace: '/tmp/c', description: 'old' }],
-      },
-    } as Partial<Config>);
-    const set = prepareUpdateAgent(cfg, 'coder', { description: 'Builds features' });
-    expect(set.ok).toBe(true);
-    if (!set.ok) return;
-    const e = set.data.nextConfig.agents?.list?.find((x) => x.id === 'coder');
-    expect(e?.description).toBe('Builds features');
-
-    const cleared = prepareUpdateAgent(set.data.nextConfig, 'coder', { description: null });
-    expect(cleared.ok).toBe(true);
-    if (!cleared.ok) return;
-    const e2 = cleared.data.nextConfig.agents?.list?.find((x) => x.id === 'coder');
-    expect(e2?.description).toBeUndefined();
-  });
-
   it('prepareUpdateAgent sets skills and tools.disable on list entry', () => {
     const cfg = minimalConfig({
       agents: {
@@ -102,7 +109,7 @@ describe('agents-admin', () => {
     } as Partial<Config>);
     const r = prepareUpdateAgent(cfg, 'coder', {
       skills: ['note'],
-      toolsDisable: ['shell'],
+      tools: { disable: ['shell'] },
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -111,32 +118,52 @@ describe('agents-admin', () => {
     expect(e?.skills).toEqual(['note']);
     expect(e?.tools?.disable).toEqual(['shell']);
   });
-  it('prepareCreateAgent uses explicit id seed for agent id and keeps display name', () => {
+  it('prepareCreateAgent uses explicit id seed for agent id without writing display fields to config', () => {
     const cfg = minimalConfig();
     const r = prepareCreateAgent(cfg, {
-      name: 'Nice Label',
       id: 'nice-bot',
       workspace: '/tmp/ws-nice',
+      profileFiles: { 'IDENTITY.md': identityMarkdown('Nice Label') },
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const list = r.data.nextConfig.agents?.list ?? [];
     const e = list.find((x) => x.id === 'nice-bot');
-    expect(e?.name).toBe('Nice Label');
+    expect(e).toMatchObject({ id: 'nice-bot', workspace: '/tmp/ws-nice' });
+    expect('name' in (e ?? {})).toBe(false);
+    expect('description' in (e ?? {})).toBe(false);
   });
 
   it('prepareCreateAgent rejects invalid explicit agent id', () => {
     const cfg = minimalConfig();
-    const r = prepareCreateAgent(cfg, { name: 'Label', id: 'bad id', workspace: '/tmp/w' });
+    const r = prepareCreateAgent(cfg, {
+      id: 'bad id',
+      workspace: '/tmp/w',
+      profileFiles: { 'IDENTITY.md': identityMarkdown('Label') },
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.status).toBe(400);
     }
   });
 
+  it('prepareCreateAgent rejects create without IDENTITY.md unless cloning', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgent(cfg, { id: 'plain', workspace: '/tmp/plain' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(400);
+      expect(r.error).toContain('IDENTITY.md');
+    }
+  });
+
   it('prepareCreateAgent rejects Windows reserved explicit id', () => {
     const cfg = minimalConfig();
-    const r = prepareCreateAgent(cfg, { name: 'Label', id: 'con', workspace: '/tmp/w' });
+    const r = prepareCreateAgent(cfg, {
+      id: 'con',
+      workspace: '/tmp/w',
+      profileFiles: { 'IDENTITY.md': identityMarkdown('Label') },
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.status).toBe(400);
@@ -145,7 +172,10 @@ describe('agents-admin', () => {
 
   it('prepareCreateAgent rejects display name that cannot yield a folder-safe id', () => {
     const cfg = minimalConfig();
-    const r = prepareCreateAgent(cfg, { name: '!!!', workspace: '/tmp/w' });
+    const r = prepareCreateAgent(cfg, {
+      workspace: '/tmp/w',
+      profileFiles: { 'IDENTITY.md': identityMarkdown('!!!') },
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.status).toBe(400);
@@ -159,33 +189,58 @@ describe('agents-admin', () => {
         list: [{ id: 'coder', enabled: true, workspace: '/tmp/c' }],
       },
     } as Partial<Config>);
-    const r = prepareCreateAgent(cfg, { name: 'coder', workspace: '/tmp/x' });
+    const r = prepareCreateAgent(cfg, {
+      id: 'coder',
+      workspace: '/tmp/x',
+      profileFiles: { 'IDENTITY.md': identityMarkdown('Coder') },
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.status).toBe(409);
     }
   });
 
-  it('prepareCreateAgent sets toolsDisable on new entry', () => {
+  it('prepareCreateAgent sets tools.disable on new entry', () => {
     const cfg = minimalConfig();
     const r = prepareCreateAgent(cfg, {
-      name: 'Coder',
       id: 'coder',
       workspace: '/tmp/c',
-      toolsDisable: ['shell', 'image_generate'],
+      profileFiles: { 'IDENTITY.md': identityMarkdown('Coder') },
+      tools: { disable: ['shell', 'image_generate'] },
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const e = r.data.nextConfig.agents?.list?.find((x) => x.id === 'coder');
     expect(e?.tools?.disable).toEqual(['shell', 'image_generate']);
   });
+
+  it('prepareCreateAgent sets models and skills on new entry', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgent(cfg, {
+      id: 'researcher',
+      workspace: '/tmp/researcher',
+      profileFiles: { 'IDENTITY.md': identityMarkdown('Researcher') },
+      skills: ['research'],
+      models: {
+        chat: { primary: 'openai/gpt-4.1' },
+        roles: { deep: { model: 'anthropic/claude-sonnet-4', description: 'Deep synthesis' } },
+      },
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const e = r.data.nextConfig.agents?.list?.find((x) => x.id === 'researcher');
+    expect(e?.skills).toEqual(['research']);
+    expect(e?.models).toEqual({
+      chat: { primary: 'openai/gpt-4.1' },
+      roles: { deep: { model: 'anthropic/claude-sonnet-4', description: 'Deep synthesis' } },
+    });
+  });
   it('prepareCreateAgent rejects unsupported profileFiles name', () => {
     const cfg = minimalConfig();
     const r = prepareCreateAgent(cfg, {
-      name: 'Coder',
       id: 'coder',
       workspace: '/tmp/c',
-      profileFiles: { '../../../etc/passwd': 'x' },
+      profileFiles: { 'IDENTITY.md': identityMarkdown('Coder'), '../../../etc/passwd': 'x' },
     });
     expect(r.ok).toBe(false);
     if (!r.ok) {
@@ -196,10 +251,9 @@ describe('agents-admin', () => {
   it('prepareCreateAgent rejects non-string profileFiles content', () => {
     const cfg = minimalConfig();
     const r = prepareCreateAgent(cfg, {
-      name: 'Coder',
       id: 'coder',
       workspace: '/tmp/c',
-      profileFiles: { 'SOUL.md': 42 as unknown as string },
+      profileFiles: { 'IDENTITY.md': identityMarkdown('Coder'), 'SOUL.md': 42 as unknown as string },
     });
     expect(r.ok).toBe(false);
     if (!r.ok) {
@@ -210,8 +264,17 @@ describe('agents-admin', () => {
   it('prepareCreateAgentsBatch adds multiple agents in one config pass', () => {
     const cfg = minimalConfig();
     const r = prepareCreateAgentsBatch(cfg, [
-      { name: 'Coder', id: 'coder', workspace: '/tmp/coder' },
-      { name: 'Writer', id: 'writer', workspace: '/tmp/writer', toolsDisable: ['shell'] },
+      {
+        id: 'coder',
+        workspace: '/tmp/coder',
+        profileFiles: { 'IDENTITY.md': identityMarkdown('Coder') },
+      },
+      {
+        id: 'writer',
+        workspace: '/tmp/writer',
+        profileFiles: { 'IDENTITY.md': identityMarkdown('Writer') },
+        tools: { disable: ['shell'] },
+      },
     ]);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -235,8 +298,8 @@ describe('agents-admin', () => {
   it('prepareCreateAgentsBatch fails fast on duplicate id in batch', () => {
     const cfg = minimalConfig();
     const r = prepareCreateAgentsBatch(cfg, [
-      { name: 'A', id: 'dup', workspace: '/tmp/a' },
-      { name: 'B', id: 'dup', workspace: '/tmp/b' },
+      { id: 'dup', workspace: '/tmp/a', profileFiles: { 'IDENTITY.md': identityMarkdown('A') } },
+      { id: 'dup', workspace: '/tmp/b', profileFiles: { 'IDENTITY.md': identityMarkdown('B') } },
     ]);
     expect(r.ok).toBe(false);
     if (!r.ok) {

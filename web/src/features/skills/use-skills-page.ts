@@ -107,7 +107,6 @@ export function useSkillsPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailSource, setDetailSource] = useState<'catalog' | 'store'>('catalog');
   const [detailTitle, setDetailTitle] = useState('');
-  const [detailMarkdown, setDetailMarkdown] = useState('');
   const [detailCatalogPreview, setDetailCatalogPreview] = useState<SkillMarkdownPreviewPayload | null>(null);
   const [detailMarketplacePreview, setDetailMarketplacePreview] = useState<SkillMarkdownPreviewPayload | null>(
     null,
@@ -151,10 +150,10 @@ export function useSkillsPage() {
 
   const catalogResource = useAsyncResource(
     () =>
-      getSkills(language !== 'en' ? language : undefined).then((data) =>
+      getSkills().then((data) =>
         data.catalog.map(normalizeCatalogEntry),
       ),
-    [hasToken, language],
+    [hasToken],
     { enabled: hasToken, initial: [] as SkillCatalogEntry[], errorData: [] },
   );
   const { data: catalog, loading: catalogLoading, setData: setCatalogData } = catalogResource;
@@ -529,7 +528,7 @@ export function useSkillsPage() {
       }
       setError(null);
       try {
-        const data = await getSkills(language !== 'en' ? language : undefined);
+        const data = await getSkills();
         setCatalogData(data.catalog.map(normalizeCatalogEntry));
         return { ok: true };
       } catch (e) {
@@ -542,7 +541,7 @@ export function useSkillsPage() {
         }
       }
     },
-    [language, setCatalogData, sk.loadFailed],
+    [setCatalogData, sk.loadFailed],
   );
 
   const catalogFetchError =
@@ -599,13 +598,12 @@ export function useSkillsPage() {
       setDetailSource('catalog');
       setDetailOpen(true);
       setDetailTitle(row.name);
-      setDetailMarkdown('');
       setDetailCatalogPreview(null);
       setDetailMarketplacePreview(null);
       setDetailError(null);
       setDetailLoading(true);
       try {
-        const preview = await getSkillMarkdown(row.name, language !== 'en' ? language : undefined);
+        const preview = await getSkillMarkdown(row.name);
         setDetailCatalogPreview(preview);
         setDetailTitle(preview.name);
       } catch (e) {
@@ -615,7 +613,7 @@ export function useSkillsPage() {
         setDetailLoading(false);
       }
     },
-    [language, sk.detailLoadFailed],
+    [sk.detailLoadFailed],
   );
 
   const openMarketplaceDetail = useCallback(
@@ -626,7 +624,6 @@ export function useSkillsPage() {
       setDetailSource('store');
       setDetailOpen(true);
       setDetailTitle(listTitle?.trim() || packageId);
-      setDetailMarkdown('');
       setDetailCatalogPreview(null);
       setDetailMarketplacePreview(null);
       setDetailError(null);
@@ -634,20 +631,7 @@ export function useSkillsPage() {
       try {
         const pkg = await getMarketplacePackageDetail(packageId, { provider });
         setDetailTitle(pkg.name);
-        if (pkg.skillDocPreview) {
-          setDetailMarketplacePreview(pkg.skillDocPreview);
-          setDetailMarkdown('');
-        } else {
-          setDetailMarketplacePreview(null);
-          const readme = pkg.readme?.trim();
-          if (readme) {
-            setDetailMarkdown(readme);
-          } else if (pkg.description?.trim()) {
-            setDetailMarkdown(`## ${pkg.name}\n\n${pkg.description.trim()}`);
-          } else {
-            setDetailMarkdown(`*${sk.marketplaceNoReadme}*`);
-          }
-        }
+        setDetailMarketplacePreview(pkg.skillDocPreview);
       } catch (e) {
         setDetailMarketplacePreview(null);
         setDetailError(e instanceof Error ? e.message : sk.detailLoadFailed);
@@ -655,7 +639,7 @@ export function useSkillsPage() {
         setDetailLoading(false);
       }
     },
-    [marketBrowseProvider, sk.detailLoadFailed, sk.marketplaceNoReadme],
+    [marketBrowseProvider, sk.detailLoadFailed],
   );
 
   const onSkillToggle = useCallback(
@@ -1063,8 +1047,6 @@ export function useSkillsPage() {
     setDetailSource,
     detailTitle,
     setDetailTitle,
-    detailMarkdown,
-    setDetailMarkdown,
     detailCatalogPreview,
     setDetailCatalogPreview,
     detailMarketplacePreview,

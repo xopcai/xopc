@@ -1,6 +1,7 @@
 export * from './domain/index.js';
 export * from './engine/index.js';
 export * from './runtime/index.js';
+export * from './registry/index.js';
 export * from './service/workflow-run-service.js';
 export * from './service/workflow-session-bridge.js';
 export * from './service/workflow-session-key.js';

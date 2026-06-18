@@ -98,13 +98,8 @@ export function AgentsSettingsPanel() {
           if (!open) {
             vm.createWorkspaceSuggestedRef.current = '';
             vm.setCreateDisplayName('');
-            vm.setCreateNameZh('');
-            vm.setCreateNameEn('');
-            vm.setCreateLocalizedOpen(false);
             vm.setCreateAgentId('');
             vm.setCreateDescription('');
-            vm.setCreateDescriptionZh('');
-            vm.setCreateDescriptionEn('');
             vm.setCreateWorkspace('');
             vm.setCreateModel('');
             vm.setCreateModalError(null);
@@ -115,23 +110,13 @@ export function AgentsSettingsPanel() {
         chat={vm.chat}
         busy={vm.busy}
         modalError={vm.createModalError}
-        localizedLanguageLabel={vm.currentLanguageLabel}
+        profileLanguageLabel={vm.currentLanguageLabel}
         createDisplayName={vm.createDisplayName}
         setCreateDisplayName={vm.setCreateDisplayName}
-        createNameZh={vm.createNameZh}
-        setCreateNameZh={vm.setCreateNameZh}
-        createNameEn={vm.createNameEn}
-        setCreateNameEn={vm.setCreateNameEn}
-        createLocalizedOpen={vm.createLocalizedOpen}
-        setCreateLocalizedOpen={vm.setCreateLocalizedOpen}
         createAgentId={vm.createAgentId}
         setCreateAgentId={vm.setCreateAgentId}
         createDescription={vm.createDescription}
         setCreateDescription={vm.setCreateDescription}
-        createDescriptionZh={vm.createDescriptionZh}
-        setCreateDescriptionZh={vm.setCreateDescriptionZh}
-        createDescriptionEn={vm.createDescriptionEn}
-        setCreateDescriptionEn={vm.setCreateDescriptionEn}
         createWorkspace={vm.createWorkspace}
         setCreateWorkspace={vm.setCreateWorkspace}
         createModel={vm.createModel}

@@ -22,6 +22,7 @@ export const WORKFLOW_SOURCE_FILTER_SET = new Set<string>(WORKFLOW_SOURCE_FILTER
 
 export const WORKFLOW_SEARCH_PARAM = 'q';
 export const WORKFLOW_WF_FILTER_PARAM = 'wf';
+export const WORKFLOW_AGENT_PARAM = 'agent';
 /** @deprecated Legacy deep links — cleaned on load */
 export const WORKFLOW_TAB_PARAM = 'tab';
 export const WORKFLOW_RUN_PARAM = 'run';

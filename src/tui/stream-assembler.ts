@@ -11,9 +11,12 @@ interface RunStreamState {
   displayText: string;
 }
 
+const HIDDEN_THINKING_LABEL = 'Thinking...';
+
 function composeDisplay(thinking: string, content: string, showThinking: boolean): string {
-  if (!showThinking || !thinking) return content;
-  const thinkingBlock = `<thinking>\n${thinking}\n</thinking>\n\n`;
+  if (!thinking) return content;
+  const thinkingText = showThinking ? thinking : HIDDEN_THINKING_LABEL;
+  const thinkingBlock = `<thinking>\n${thinkingText}\n</thinking>\n\n`;
   return content ? `${thinkingBlock}${content}` : thinkingBlock;
 }
 
@@ -64,8 +67,13 @@ export class StreamAssembler {
   }
 
   /** Get current display text for a run. */
-  getDisplayText(runId: string): string {
-    return this.runs.get(runId)?.displayText ?? '';
+  getDisplayText(runId: string, showThinking?: boolean): string {
+    const state = this.runs.get(runId);
+    if (!state) return '';
+    if (typeof showThinking === 'boolean') {
+      state.displayText = composeDisplay(state.thinkingText, state.contentText, showThinking);
+    }
+    return state.displayText;
   }
 
   /** Drop a run without finalizing. */

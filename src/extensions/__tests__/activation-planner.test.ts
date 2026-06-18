@@ -71,6 +71,26 @@ describe('ActivationPlanner', () => {
     expect(planner.getActivatedIds({ env: {} })).toContain('x');
   });
 
+  it('activates channel contribution extensions so setup actions are available before config', () => {
+    const planner = new ActivationPlanner(
+      regFrom([
+        {
+          id: 'weixin',
+          path: '/weixin',
+          source: 'bundled',
+          manifest: {
+            id: 'weixin',
+            name: 'Weixin',
+            channelContributions: {
+              weixin: { label: 'Weixin' },
+            },
+          },
+        },
+      ]),
+    );
+    expect(planner.getActivatedIds({ env: {} })).toContain('weixin');
+  });
+
   it('normalizes activation.onStartup', () => {
     const planner = new ActivationPlanner(
       regFrom([

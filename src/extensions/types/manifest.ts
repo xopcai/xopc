@@ -34,6 +34,7 @@ export interface ExtensionManifest {
 
   channels?: string[];
   channelEnvVars?: Record<string, string[]>;
+  channelContributions?: Record<string, ChannelContributionDeclaration>;
 
   activation?: ActivationDeclaration;
   contracts?: ContractDeclaration;
@@ -56,6 +57,45 @@ export interface ExtensionManifest {
 
   /** Frontend UI declaration — enables extensions to render custom UI in the Gateway Console. */
   ui?: ExtensionUiManifest;
+}
+
+export interface ChannelConfigUiHint {
+  label?: string;
+  help?: string;
+  tags?: string[];
+  advanced?: boolean;
+  sensitive?: boolean;
+  placeholder?: string;
+  itemTemplate?: unknown;
+}
+
+export interface ChannelContributionCapabilities {
+  login?: boolean;
+  pairing?: boolean;
+  doctor?: boolean;
+  multiAccount?: boolean;
+  streaming?: boolean;
+  media?: boolean;
+  [key: string]: unknown;
+}
+
+export interface ChannelActionDescriptor {
+  label?: string;
+  description?: string;
+  result?: 'ok' | 'qr' | 'poll' | 'diagnostics' | 'form';
+  schema?: Record<string, unknown>;
+}
+
+export interface ChannelContributionDeclaration {
+  label: string;
+  description?: string;
+  docsPath?: string;
+  order?: number;
+  configPath?: string;
+  capabilities?: ChannelContributionCapabilities;
+  configSchema?: Record<string, unknown>;
+  uiHints?: Record<string, ChannelConfigUiHint>;
+  actions?: Record<string, ChannelActionDescriptor>;
 }
 
 export interface ExtensionManifestCommand {

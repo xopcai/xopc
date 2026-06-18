@@ -1,4 +1,4 @@
-import { ArrowRight, Eye, Layers3, Play, Sparkles, Trash2, UsersRound } from 'lucide-react';
+import { ArrowRight, Braces, Eye, Layers3, Play, ShieldCheck, Sparkles, Trash2, UsersRound } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
@@ -24,6 +24,15 @@ function phaseSummary(definition: WorkflowDefinition, labels: WorkflowsMessages)
   return interpolate(labels.phaseCount, { count: definition.phases.length });
 }
 
+function buildCapabilityChips(definition: WorkflowDefinition, labels: WorkflowsMessages): string[] {
+  const chips: string[] = [];
+  if (definition.inputSchema) chips.push(labels.inputSchemaBadge);
+  if (definition.outputSchema) chips.push(labels.outputSchemaBadge);
+  if (definition.permissions?.network) chips.push(`${labels.permissionsNetwork}: ${labels.networkEnabled}`);
+  if (definition.permissions?.approvalRequired) chips.push(labels.permissionsApproval);
+  return chips.slice(0, 3);
+}
+
 export function WorkflowCatalogCard({
   definition,
   language,
@@ -44,6 +53,7 @@ export function WorkflowCatalogCard({
   const examplePrompt = localized.examplePrompts[0]?.text;
   const visiblePhases = definition.phases.slice(0, 3);
   const hiddenPhaseCount = Math.max(0, definition.phases.length - visiblePhases.length);
+  const capabilityChips = buildCapabilityChips(definition, labels);
 
   return (
     <article className="group flex h-full flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-surface transition-colors hover:border-accent/40">
@@ -59,6 +69,11 @@ export function WorkflowCatalogCard({
               >
                 {isUser ? labels.badgeUser : labels.badgeBuiltin}
               </span>
+              {definition.version ? (
+                <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-fg-subtle">
+                  {interpolate(labels.versionLabel, { version: definition.version })}
+                </span>
+              ) : null}
               {definition.metadata.tags.slice(0, 2).map((tag) => (
                 <span key={tag} className="rounded-full bg-surface-hover px-2 py-0.5 text-[10px] text-fg-subtle">
                   {tag}
@@ -81,6 +96,17 @@ export function WorkflowCatalogCard({
             {localized.whenToUse ?? localized.description}
           </p>
         </div>
+
+        {capabilityChips.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {capabilityChips.map((chip) => (
+              <span key={chip} className="inline-flex items-center gap-1 rounded-lg border border-edge-subtle bg-surface-base px-2 py-1 text-[11px] text-fg-muted">
+                {chip === labels.inputSchemaBadge ? <Braces className="size-3" aria-hidden /> : <ShieldCheck className="size-3" aria-hidden />}
+                {chip}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         <div className="mt-4 grid gap-2 text-xs text-fg-muted sm:grid-cols-2">
           <div className="flex items-center gap-2 rounded-lg bg-surface-hover px-2.5 py-2">

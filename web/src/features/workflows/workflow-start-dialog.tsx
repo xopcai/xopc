@@ -14,6 +14,7 @@ import {
 } from './workflow-meta-locale';
 import { WORKFLOW_ARG_FIELDS } from './workflow-page.constants';
 import { buildWorkflowInput, interpolate } from './workflow-page.utils';
+import { supportsWorkflowSchemaForm, WorkflowSchemaInputForm } from './workflow-schema-input-form';
 
 type WorkflowsMessages = ReturnType<typeof messages>['workflows'];
 
@@ -93,6 +94,7 @@ export function WorkflowStartDialog({
   const labels = messages(language).workflows;
   const [goal, setGoal] = useState('');
   const [argValues, setArgValues] = useState<Record<string, string>>({});
+  const [schemaInput, setSchemaInput] = useState<Record<string, unknown>>({});
   const [concurrency, setConcurrency] = useState('');
   const [maxSubagents, setMaxSubagents] = useState('');
   const [advancedOpen, setAdvancedOpen] = useState(false);
@@ -108,17 +110,21 @@ export function WorkflowStartDialog({
   );
 
   const examples = localized?.examplePrompts ?? [];
-  const hasArgFields = argFields.length > 0;
+  const hasSchemaForm = supportsWorkflowSchemaForm(definition?.inputSchema);
+  const hasArgFields = !hasSchemaForm && argFields.length > 0;
   const effectiveConcurrency = concurrency.trim() ? Number(concurrency) : definition?.defaults.concurrency;
   const effectiveMaxSubagents = maxSubagents.trim() ? Number(maxSubagents) : definition?.defaults.maxSubagents;
   const inputSummary = definition && localized
-    ? summarizeInput(goal, argValues, localized.description, labels)
+    ? hasSchemaForm && Object.keys(schemaInput).length > 0
+      ? Object.entries(schemaInput).map(([key, value]) => `${key}: ${String(value)}`).join(' · ')
+      : summarizeInput(goal, argValues, localized.description, labels)
     : labels.noInputSummary;
 
   useEffect(() => {
     if (!open || !definition) return;
     setGoal('');
     setArgValues({});
+    setSchemaInput({});
     setConcurrency('');
     setMaxSubagents('');
     setAdvancedOpen(false);
@@ -131,7 +137,7 @@ export function WorkflowStartDialog({
   };
 
   const submit = () => {
-    const input = buildWorkflowInput(argValues);
+    const input = hasSchemaForm && Object.keys(schemaInput).length > 0 ? schemaInput : buildWorkflowInput(argValues);
     onStart({
       goal: goal.trim() || localized.description,
       input,
@@ -204,7 +210,22 @@ export function WorkflowStartDialog({
               ) : null}
             </section>
 
-            {argFields.map((field) => (
+            {hasSchemaForm && definition.inputSchema ? (
+              <WorkflowSchemaInputForm
+                schema={definition.inputSchema}
+                value={schemaInput}
+                onChange={setSchemaInput}
+                labels={{
+                  inputSchemaHeading: labels.inputSchemaHeading,
+                  rawJson: labels.rawJson,
+                  rawJsonInvalid: labels.rawJsonInvalid,
+                  booleanTrue: labels.booleanTrue,
+                  booleanFalse: labels.booleanFalse,
+                }}
+              />
+            ) : null}
+
+            {!hasSchemaForm && argFields.map((field) => (
               <label key={field.key} className="block">
                 <span className="text-xs font-medium text-fg">
                   {resolveArgLabel(labels, field.labelKey)}

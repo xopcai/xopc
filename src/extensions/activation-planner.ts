@@ -155,6 +155,19 @@ export class ActivationPlanner {
 
     for (const entry of this.registry.getAllEntries()) {
       if (decided.has(entry.id)) continue;
+      if (entry.manifest.channelContributions && Object.keys(entry.manifest.channelContributions).length > 0) {
+        decisions.push({
+          extensionId: entry.id,
+          activated: true,
+          reason: 'activation_trigger',
+          trigger: 'channel-contribution',
+        });
+        decided.add(entry.id);
+      }
+    }
+
+    for (const entry of this.registry.getAllEntries()) {
+      if (decided.has(entry.id)) continue;
 
       if (entry.manifest.enabledByDefault) {
         decisions.push({

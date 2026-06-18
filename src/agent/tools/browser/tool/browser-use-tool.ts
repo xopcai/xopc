@@ -108,7 +108,7 @@ export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<
     name: 'browser_use',
     label: '🌐 Browser',
     description:
-      'Use a persistent browser for web navigation, page inspection, interaction, screenshots, network capture, and scripted browser pipelines. For non-trivial browser tasks, load the "browser" skill first with skill_view.',
+      'Use a persistent browser for web navigation, page inspection, interaction, screenshots, network capture, and scripted browser pipelines. For non-trivial browser tasks, load the built-in manual first with tool_manual({ tool: "browser_use" }).',
     parameters: BrowserUseSchema,
 
     async execute(_toolCallId, params: any, signal, _onUpdate) {

@@ -4,7 +4,24 @@ export interface WorkflowResultEnvelope {
   sections: WorkflowResultSection[];
   actions?: WorkflowNextAction[];
   artifacts?: WorkflowArtifactRef[];
+  followUps?: WorkflowFollowUp[];
+  structuredOutput?: unknown;
   raw?: unknown;
+}
+
+/** Product-level outcome contract for reusable workflow deliverables. */
+export interface WorkflowOutcome {
+  summary: string;
+  artifacts?: WorkflowArtifactRef[];
+  followUps?: WorkflowFollowUp[];
+  structuredOutput?: unknown;
+}
+
+export interface WorkflowFollowUp {
+  id: string;
+  title: string;
+  prompt?: string;
+  priority?: 'low' | 'medium' | 'high';
 }
 
 export type WorkflowResultSection =

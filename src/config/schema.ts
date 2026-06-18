@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import { checkCacheDir } from '../browser/cache-dir-policy.js';
-import { LocalizedTextSchema } from './localized-text.js';
 import { validatePublicUrl } from './public-url.js';
 
 // ============================================
@@ -21,6 +20,40 @@ export const AgentModelRefSchema = z
   .strict();
 
 export type AgentModelConfig = z.infer<typeof AgentModelRefSchema>;
+
+export const AgentTypedModelRoleSchema = z
+  .object({
+    description: z.string().max(500).optional(),
+    model: z.string().min(1),
+  })
+  .strict()
+  .superRefine((entry, ctx) => {
+    const trimmed = entry.model.trim();
+    const idx = trimmed.indexOf('/');
+    if (idx <= 0 || idx === trimmed.length - 1) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `model must be provider/model format (got '${entry.model}')`,
+        path: ['model'],
+      });
+    }
+  });
+
+export type AgentTypedModelRole = z.infer<typeof AgentTypedModelRoleSchema>;
+
+const AgentTypedModelRolesSchema = z
+  .record(z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/), AgentTypedModelRoleSchema)
+  .optional();
+
+export const AgentModelsSchema = z
+  .object({
+    chat: AgentModelRefSchema.optional(),
+    roles: AgentTypedModelRolesSchema,
+  })
+  .strict()
+  .optional();
+
+export type AgentModelsConfig = z.infer<typeof AgentModelsSchema>;
 
 /**
  * Image-generation model ref. {@link AgentModelRefSchema} plus runtime knobs
@@ -42,54 +75,13 @@ export const AgentImageGenerationModelSchema = z
 
 export type AgentImageGenerationModelConfig = z.infer<typeof AgentImageGenerationModelSchema>;
 
-/** Named model role for workflows (e.g. `small`, `large`). Maps to a concrete `provider/model` ref. */
-export const AgentTypedModelSchema = z
-  .object({
-    id: z.string().min(1).regex(/^[a-z][a-z0-9_-]{0,63}$/),
-    description: z.string().max(500).optional(),
-    model: z.string().min(1),
-  })
-  .strict()
-  .superRefine((entry, ctx) => {
-    const trimmed = entry.model.trim();
-    const idx = trimmed.indexOf('/');
-    if (idx <= 0 || idx === trimmed.length - 1) {
-      ctx.addIssue({
-        code: 'custom',
-        message: `model must be provider/model format (got '${entry.model}')`,
-        path: ['model'],
-      });
-    }
-  });
-
-export type AgentTypedModel = z.infer<typeof AgentTypedModelSchema>;
-
-const AgentTypedModelsArraySchema = z
-  .array(AgentTypedModelSchema)
-  .optional()
-  .superRefine((arr, ctx) => {
-    if (!arr) return;
-    const seen = new Set<string>();
-    for (let i = 0; i < arr.length; i++) {
-      const id = arr[i]!.id;
-      if (seen.has(id)) {
-        ctx.addIssue({
-          code: 'custom',
-          message: `duplicate typed model id '${id}'`,
-          path: [i, 'id'],
-        });
-      }
-      seen.add(id);
-    }
-  });
+export type AgentTypedModel = AgentTypedModelRole & { id: string };
 
 export const AgentDefaultsSchema = z.object({
   /** Parent directory: each agent’s Markdown root is `<expanded>/<agentId>/` (e.g. `.../workspace/main`). */
   workspace: z.string().default('~/.xopc/workspace'),
-  /** Default model for new sessions. Optional — runtime resolves a fallback when unset. */
-  model: AgentModelRefSchema.optional(),
-  /** Named model roles (e.g. `small`, `large`) for workflows and other callers. */
-  models: AgentTypedModelsArraySchema,
+  /** Chat model and named model roles. */
+  models: AgentModelsSchema,
   /** Vision / image understanding model (provider/model). Falls back to heuristics when unset. */
   imageModel: AgentModelRefSchema.optional(),
   /** Image generation model (provider/model), e.g. openai/gpt-image-1. Supports plugin-based providers (OpenAI / DashScope / MiniMax / Google / Fal). */
@@ -377,7 +369,7 @@ export const AgentDefaultsSchema = z.object({
     .optional(),
   /** Optional full system prompt replacement (merged with per-agent entry; entry wins). */
   systemPromptOverride: z.string().optional(),
-  /** Optional allowlist of skill names for `<available_skills>`; when set, replaces unfiltered list. */
+  /** Skill names visible to agents that inherit defaults. Omitted/empty means no default-visible skills. */
   skills: z.array(z.string()).optional(),
   /** Disable built-in tools by name (e.g. `shell`, `web_search`). */
   tools: z
@@ -393,9 +385,6 @@ export const AgentConfigSchema = z.object({
   id: z.string(),
   /** When true, this entry is the default routing agent. */
   default: z.boolean().optional(),
-  name: LocalizedTextSchema.optional(),
-  /** Short human-readable summary for UIs (gateway console, pickers). */
-  description: LocalizedTextSchema.optional(),
   enabled: z.boolean().default(true),
   /** Per-agent workspace root (`~` expanded at runtime). */
   workspace: z.string().optional(),
@@ -404,11 +393,12 @@ export const AgentConfigSchema = z.object({
    * Default: `<stateDir>/agents/<id>/agent`.
    */
   agentDir: z.string().optional(),
-  model: AgentModelRefSchema.optional(),
+  models: AgentModelsSchema,
   thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive']).optional(),
   reasoningDefault: z.enum(['off', 'on', 'stream']).optional(),
   verboseDefault: z.enum(['off', 'on', 'full']).optional(),
   systemPromptOverride: z.string().optional(),
+  /** Skill names visible to this agent in `<available_skills>`. Omitted means inherit defaults. */
   skills: z.array(z.string()).optional(),
   tools: z
     .object({
@@ -1275,7 +1265,7 @@ export const GoalsConfigSchema = z
   .object({
     /** Max continuation turns before auto-pause (Hermes default 20). */
     maxTurns: z.number().int().min(1).max(500).default(20),
-    /** Optional judge model ref; defaults to `agents.defaults.model`. */
+    /** Optional judge model ref; defaults to `agents.defaults.models.chat`. */
     judgeModelRef: z.string().optional(),
     /**
      * When true (default), first post-turn runs a decomposition judge to build a checklist;
@@ -1555,10 +1545,10 @@ export interface ParsedModelRef {
 }
 
 /**
- * Primary model ref from `agents.defaults.model`. Returns undefined when unset.
+ * Primary chat model ref from `agents.defaults.models.chat`. Returns undefined when unset.
  */
 export function getAgentDefaultModelRef(config: Config): string | undefined {
-  const ref = config.agents?.defaults?.model?.primary?.trim();
+  const ref = config.agents?.defaults?.models?.chat?.primary?.trim();
   return ref || undefined;
 }
 

@@ -8,12 +8,14 @@ import {
 } from '../typed-models-lib';
 
 describe('typed-models-lib', () => {
-  it('parseTypedModelsFromConfig maps config array', () => {
+  it('parseTypedModelsFromConfig maps config roles', () => {
     expect(
-      parseTypedModelsFromConfig([
-        { id: 'small', model: 'deepseek/flash', description: 'Fast' },
-        { id: 'bad', model: '' },
-      ]),
+      parseTypedModelsFromConfig({
+        roles: {
+          small: { model: 'deepseek/flash', description: 'Fast' },
+          bad: { model: '' },
+        },
+      }),
     ).toEqual([{ id: 'small', model: 'deepseek/flash', description: 'Fast' }]);
   });
 
@@ -23,7 +25,7 @@ describe('typed-models-lib', () => {
         { id: 'small', model: 'openai/a', description: '' },
         { id: 'small', model: 'openai/b', description: 'x' },
       ]),
-    ).toEqual([{ id: 'small', description: 'x', model: 'openai/b' }]);
+    ).toEqual({ roles: { small: { description: 'x', model: 'openai/b' } } });
     expect(cleanTypedModelsForPatch([])).toBeNull();
   });
 

@@ -170,8 +170,8 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
   const handleProviderSelect = async (ctx: Context, providerId: string): Promise<void> => {
     try {
       const sessionKey = getSessionKeyFromCtx(ctx);
-      const modelConfig = config.agents?.defaults?.model;
-      const defaultModel = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary || getDefaultModelSync(config);
+      const modelConfig = config.agents?.defaults?.models?.chat;
+      const defaultModel = modelConfig?.primary || getDefaultModelSync(config);
       const currentModel = getSessionModel(sessionKey) || defaultModel;
 
       const models = getModelsForProvider(providerId);

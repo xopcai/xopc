@@ -1,4 +1,9 @@
+import { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
+
+import { weixinPlugin } from './plugin.js';
+
 export { weixinPlugin, WeixinChannelPlugin } from './plugin.js';
+export { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';
 export {
   normalizeWeixinCronDeliveryTo,
   normalizeWeixinCronDeliveryToResolved,
@@ -15,3 +20,10 @@ export type {
   WeixinGatewayQrLoginStartOptions,
   WeixinGatewayQrLoginStatus,
 } from './cli/gateway-qr-login.js';
+
+export default defineChannelPluginEntry({
+  id: 'weixin',
+  name: 'Weixin',
+  description: 'Personal WeChat channel through QR login',
+  plugin: weixinPlugin,
+});

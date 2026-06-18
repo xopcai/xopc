@@ -13,7 +13,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
@@ -29,7 +29,7 @@ import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 
 import { runViewToSnapshot } from './run-view-to-snapshot';
-import type { WorkflowRunView } from './workflow-api';
+import type { WorkflowArtifactRef, WorkflowFollowUp, WorkflowResultEnvelope, WorkflowRunView } from './workflow-api';
 import { ACTIVE_RUN_STATUSES } from './workflow-page.constants';
 import {
   formatDuration,
@@ -100,6 +100,7 @@ export function WorkflowRunPanel({
   localeTag,
   onCancel,
   onRetry,
+  ownerAgentId,
   onClose,
 }: {
   view: WorkflowRunView | undefined;
@@ -108,6 +109,7 @@ export function WorkflowRunPanel({
   localeTag: string;
   onCancel: () => void;
   onRetry: () => void;
+  ownerAgentId?: string;
   onClose: () => void;
 }) {
   const labels = messages(language).workflows;
@@ -152,6 +154,7 @@ export function WorkflowRunPanel({
     setDrawerAgentId(agent.id);
   }, []);
 
+  const outcome = view ? resolveWorkflowOutcome(view.run.result) : null;
   const resultForDisplay = view ? resolveWorkflowResultForDisplay(view.run.result) : undefined;
   const resultText = stringifyWorkflowResult(resultForDisplay);
   const hasResult = resultText.trim().length > 0;
@@ -318,6 +321,7 @@ export function WorkflowRunPanel({
               {labels.noResult}
             </div>
           )}
+          <WorkflowOutcomePanel outcome={outcome} labels={labels} onCopyText={(text) => void copyTextToClipboard(text)} />
         </div>
 
         <div className="mt-6 rounded-2xl border border-edge bg-surface-base/35">
@@ -411,6 +415,7 @@ export function WorkflowRunPanel({
         agent={drawerAgent}
         snapshot={snapshot}
         sessionKey={null}
+        ownerAgentId={ownerAgentId}
         pinnedAgentId={null}
         onPinAgent={() => {}}
         onClose={() => setDrawerAgentId(null)}
@@ -418,6 +423,92 @@ export function WorkflowRunPanel({
       />
     </>
   );
+}
+
+function WorkflowOutcomePanel({
+  outcome,
+  labels,
+  onCopyText,
+}: {
+  outcome: WorkflowOutcomeView | null;
+  labels: WorkflowsMessages;
+  onCopyText: (text: string) => void;
+}) {
+  if (!outcome || (!outcome.artifacts.length && !outcome.followUps.length && outcome.structuredOutput === undefined)) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 grid gap-3 lg:grid-cols-3">
+      {outcome.artifacts.length > 0 ? (
+        <OutcomeCard title={labels.outcomeArtifacts}>
+          <ul className="space-y-2">
+            {outcome.artifacts.map((artifact) => (
+              <li key={artifact.id} className="min-w-0 rounded-lg bg-surface-base px-2.5 py-2">
+                <div className="truncate text-sm font-medium text-fg" title={artifact.title ?? artifact.name}>
+                  {artifact.title ?? artifact.name}
+                </div>
+                <div className="mt-0.5 text-xs text-fg-subtle">{artifact.mimeType}</div>
+              </li>
+            ))}
+          </ul>
+        </OutcomeCard>
+      ) : null}
+
+      {outcome.followUps.length > 0 ? (
+        <OutcomeCard title={labels.outcomeFollowUps}>
+          <ul className="space-y-2">
+            {outcome.followUps.map((followUp) => (
+              <li key={followUp.id} className="rounded-lg bg-surface-base px-2.5 py-2">
+                <div className="text-sm font-medium text-fg">{followUp.title}</div>
+                {followUp.prompt ? (
+                  <button
+                    type="button"
+                    className="mt-1 text-xs font-medium text-accent-fg hover:underline"
+                    onClick={() => onCopyText(followUp.prompt ?? '')}
+                  >
+                    {labels.copyPrompt}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </OutcomeCard>
+      ) : null}
+
+      {outcome.structuredOutput !== undefined ? (
+        <OutcomeCard title={labels.outcomeStructuredOutput}>
+          <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-base p-2 font-mono text-xs leading-5 text-fg-muted">
+            {stringifyWorkflowResult(outcome.structuredOutput)}
+          </pre>
+        </OutcomeCard>
+      ) : null}
+    </div>
+  );
+}
+
+function OutcomeCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="min-w-0 rounded-xl border border-edge-subtle bg-surface-base/35 p-3">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{title}</h4>
+      <div className="mt-2">{children}</div>
+    </section>
+  );
+}
+
+interface WorkflowOutcomeView {
+  artifacts: WorkflowArtifactRef[];
+  followUps: WorkflowFollowUp[];
+  structuredOutput?: unknown;
+}
+
+function resolveWorkflowOutcome(result: unknown): WorkflowOutcomeView | null {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return null;
+  const envelope = result as Partial<WorkflowResultEnvelope>;
+  const artifacts = Array.isArray(envelope.artifacts) ? envelope.artifacts : [];
+  const followUps = Array.isArray(envelope.followUps) ? envelope.followUps : [];
+  if (artifacts.length === 0 && followUps.length === 0 && envelope.structuredOutput === undefined) return null;
+  return { artifacts, followUps, structuredOutput: envelope.structuredOutput };
 }
 
 function AgentInputOutputOverview({

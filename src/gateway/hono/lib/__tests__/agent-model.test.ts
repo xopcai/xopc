@@ -123,28 +123,25 @@ describe('normalizePatchAgentImageGenerationModel', () => {
 describe('normalizePatchTypedModels', () => {
   it('returns null for null and empty after filtering', () => {
     expect(normalizePatchTypedModels(null)).toBeNull();
-    expect(normalizePatchTypedModels([])).toBeNull();
-    expect(normalizePatchTypedModels([{ id: 'Bad', model: 'openai/x' }])).toBeNull();
+    expect(normalizePatchTypedModels({ roles: {} })).toBeNull();
+    expect(normalizePatchTypedModels({ roles: { Bad: { model: 'openai/x' } } })).toBeNull();
   });
 
   it('validates id and provider/model', () => {
     expect(
-      normalizePatchTypedModels([
-        { id: 'small', model: 'deepseek/flash', description: 'Fast' },
-        { id: 'large', model: 'anthropic/claude' },
-      ]),
-    ).toEqual([
-      { id: 'small', description: 'Fast', model: 'deepseek/flash' },
-      { id: 'large', model: 'anthropic/claude' },
-    ]);
+      normalizePatchTypedModels({
+        roles: {
+          small: { model: 'deepseek/flash', description: 'Fast' },
+          large: { model: 'anthropic/claude' },
+        },
+      }),
+    ).toEqual({
+      small: { description: 'Fast', model: 'deepseek/flash' },
+      large: { model: 'anthropic/claude' },
+    });
   });
 
-  it('dedupes by id keeping last valid entry', () => {
-    expect(
-      normalizePatchTypedModels([
-        { id: 'small', model: 'openai/a' },
-        { id: 'small', model: 'openai/b' },
-      ]),
-    ).toEqual([{ id: 'small', model: 'openai/b' }]);
+  it('does not accept row arrays', () => {
+    expect(normalizePatchTypedModels([{ id: 'small', model: 'openai/a' }])).toBeUndefined();
   });
 });

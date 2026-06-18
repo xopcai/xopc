@@ -10,6 +10,7 @@
 |------|------|
 | 规划与澄清 | `clarify`, `todo` |
 | Skills | `skills_list`, `skill_view`, `skill_manage` |
+| 工具手册 | `tool_manual`，用于加载内置复杂工具说明 |
 | 工作区文件 | `read_file`, `write_file`, `edit_file`, `list_dir` |
 | 仓库内搜索 | `grep`, `find` |
 | Shell | `shell` |
@@ -335,7 +336,7 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 | 工具 | 作用 |
 |------|------|
-| `browser_use` | 统一的浏览器自动化工具。可用 `mode: "command"` 执行 `open` / `navigate`、`snapshot`、`click`、`type`、`scroll`、`keys` / `press`、`screenshot`、`console` / `eval`、`images`、`dialog`、`cdp`、`close`、`wait`、网络辅助等动作；也可用 `mode: "pipeline"` 执行 YAML pipeline。 |
+| `browser_use` | 统一的浏览器自动化工具。可用 `mode: "command"` 执行 `open` / `navigate`、`snapshot`、`click`、`type`、`scroll`、`keys` / `press`、`screenshot`、`console` / `eval`、`images`、`dialog`、`cdp`、`close`、`wait`、网络辅助等动作；也可用 `mode: "pipeline"` 执行 YAML pipeline。复杂任务先调用 `tool_manual({ tool: "browser_use" })`。 |
 
 如需为某个 agent 禁用浏览器自动化，在 `agents.defaults.tools.disable` 或 `agents.list[].tools.disable` 中加入 `browser_use`。
 

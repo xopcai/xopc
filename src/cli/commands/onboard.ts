@@ -11,7 +11,6 @@ import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed
 import { resolveGatewayLocalClientHost } from '../../config/gateway-bind.js';
 import { initWorkspace } from '../utils/init-workspace.js';
 import { ConfigSchema } from '../../config/schema.js';
-import { isWeixinOnboardConfigured } from '../../../extensions/weixin/src/adapters/onboard-cli.js';
 
 function isInteractive(): boolean {
   return process.stdin.isTTY && process.stdout.isTTY;
@@ -19,7 +18,7 @@ function isInteractive(): boolean {
 
 async function setupNonInteractive(_configPath: string, existingConfig: Config): Promise<Config> {
   console.log('\n🤖 AI Model Configuration (Non-Interactive Mode)\n');
-  console.log('Current config:', JSON.stringify(existingConfig.agents?.defaults?.model, null, 2));
+  console.log('Current config:', JSON.stringify(existingConfig.agents?.defaults?.models?.chat, null, 2));
   console.log('\n💡 To configure in interactive mode, run: xopc onboard');
   console.log('💡 Or set up manually in:', _configPath);
   return existingConfig;
@@ -33,7 +32,7 @@ function createOnboardCommand(ctx: CLIContext): Command {
       formatExamples([
         'xopc onboard              # Full interactive setup',
         'xopc onboard --model      # Configure LLM model only',
-        'xopc onboard --channels   # Configure channels (incl. Weixin QR)',
+        'xopc onboard --channels   # Configure messaging channels',
         'xopc onboard --gateway    # Apply default gateway settings (quiet)',
       ])
     )
@@ -105,7 +104,7 @@ async function runOnboard(
     }
 
     if (doChannels) {
-      const channelIds = getChannelConfigurators().map(c => c.id);
+      const channelIds = (await getChannelConfigurators(config)).map(c => c.id);
       console.log(colors.gray(`\nChannel onboarding: ${channelIds.join(', ')}\n`));
       config = await runChannelOnboard(config);
     }
@@ -218,13 +217,6 @@ async function promptLaunchAfterOnboard(
   }
 
   if (choice === 'tui') {
-    if (flags.doChannels && !isWeixinOnboardConfigured(config)) {
-      console.log(
-        colors.gray(
-          '\n💡 Weixin is not logged in yet. When ready run: xopc channels login --channel weixin\n',
-        ),
-      );
-    }
     const { runTui } = await import('../../tui/tui.js');
     await runTui({ local: true });
     return;

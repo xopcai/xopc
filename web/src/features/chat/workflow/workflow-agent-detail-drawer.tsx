@@ -9,14 +9,12 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { memo, useCallback, useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { X } from 'lucide-react';
 
-import { MarkdownView } from '@/features/chat/markdown/markdown-view';
-import { AssistantStepsTimeline } from '@/features/chat/messages/assistant-steps-block';
+import type { Message } from '@/features/chat/messages/messages.types';
+import { ReadonlyMessageThread } from '@/features/chat/messages/readonly-message-thread';
+import { getWorkflowAgentSession } from '@/features/workflows/workflow-api';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
-import { messages } from '@/i18n/messages';
-import { useLocaleStore } from '@/stores/locale-store';
 
-import { buildWorkflowAgentExecutionBlocks } from './workflow-agent-execution-blocks';
 import type { WorkflowAgentSnapshot, WorkflowSnapshot } from './workflow.types';
 import { formatAgentElapsed } from './workflow.utils';
 
@@ -77,6 +75,7 @@ export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer
   agent,
   snapshot,
   sessionKey,
+  ownerAgentId,
   pinnedAgentId,
   onPinAgent,
   onClose,
@@ -86,36 +85,12 @@ export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer
   agent: WorkflowAgentSnapshot | null;
   snapshot: WorkflowSnapshot | null;
   sessionKey?: string | null;
+  ownerAgentId?: string;
   pinnedAgentId: number | null;
   onPinAgent: (id: number | null) => void;
   onClose: () => void;
   labels: WorkflowAgentDetailDrawerLabels;
 }) {
-  const language = useLocaleStore((s) => s.language);
-  const m = messages(language);
-
-  const toolLabels = useMemo(
-    () => ({ input: m.chat.toolInput, output: m.chat.toolOutput, noOutput: m.chat.noOutput }),
-    [m.chat.toolInput, m.chat.toolOutput, m.chat.noOutput],
-  );
-  const stepLabels = useMemo(
-    () => ({
-      thoughts: m.chat.thoughts,
-      thoughtsStreaming: m.chat.thoughtsStreaming,
-      searchedWeb: m.chat.stepSearchedWeb,
-      readFile: m.chat.stepReadFile,
-      stepDetails: m.chat.stepDetails,
-      runCommand: m.chat.stepRunCommand,
-      listDirectory: m.chat.stepListDirectory,
-      writeFile: m.chat.stepWriteFile,
-      editFile: m.chat.stepEditFile,
-      openUrl: m.chat.stepOpenUrl,
-      fetchUrl: m.chat.stepFetchUrl,
-      unknownTool: m.chat.stepUnknownTool,
-    }),
-    [m],
-  );
-  const cardLabels = m.chat.toolCard;
   const [drawerWidth, setDrawerWidth] = useState(DEFAULT_DRAWER_WIDTH);
 
   const handleResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
@@ -142,10 +117,51 @@ export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer
     window.addEventListener('pointerup', handlePointerUp, { once: true });
   }, [drawerWidth]);
 
-  const executionBlocks = useMemo(
-    () => (agent ? buildWorkflowAgentExecutionBlocks(agent) : []),
-    [agent],
-  );
+  const [sessionMessages, setSessionMessages] = useState<Message[]>([]);
+  const [sessionLoadError, setSessionLoadError] = useState<string | null>(null);
+
+  const runId = snapshot?.runId;
+  const agentId = agent?.id;
+  const agentSessionKey = agent?.sessionKey;
+
+  useEffect(() => {
+    if (!open || !runId || agentId == null || !agentSessionKey) {
+      setSessionMessages([]);
+      setSessionLoadError(null);
+      return;
+    }
+
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const data = await getWorkflowAgentSession(runId, agentId, { ownerAgentId });
+        if (cancelled) return;
+        setSessionMessages(data.messages);
+        setSessionLoadError(null);
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof Error ? err.message : String(err);
+        setSessionLoadError(message);
+      }
+    };
+
+    const onTranscriptUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ key?: string; sessionKey?: string }>).detail;
+      const updatedKey = detail?.key ?? detail?.sessionKey;
+      if (updatedKey === agentSessionKey) {
+        void load();
+      }
+    };
+
+    void load();
+    window.addEventListener('session-transcript-updated', onTranscriptUpdated);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('session-transcript-updated', onTranscriptUpdated);
+    };
+  }, [open, runId, agentId, agentSessionKey, ownerAgentId]);
+
+  const readonlyMessages = useMemo(() => sessionMessages, [sessionMessages]);
 
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -156,10 +172,10 @@ export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer
 
   const elapsed = agent ? formatAgentElapsed(agent) : '';
   const isPinned = agent != null && pinnedAgentId === agent.id;
-  const showExecutionPlaceholder =
+  const showTranscriptPlaceholder =
     agent != null &&
     agent.status === 'running' &&
-    executionBlocks.length === 0 &&
+    readonlyMessages.length === 0 &&
     !agent.currentStep;
 
   return (
@@ -254,22 +270,6 @@ export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer
                   </div>
                 </section>
 
-                {agent.resultPreview || agent.error ? (
-                  <section className="min-w-0 rounded-lg border border-edge-subtle bg-surface-panel p-3">
-                    <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                      {labels.outputHeading}
-                    </div>
-                    {agent.error ? (
-                      <div className="max-h-32 overflow-y-auto whitespace-pre-wrap wrap-break-word font-mono text-xs text-rose-600 dark:text-rose-400">
-                        {agent.error}
-                      </div>
-                    ) : (
-                      <div className="markdown-content max-h-40 min-w-0 overflow-y-auto text-sm text-fg-muted">
-                        <MarkdownView content={agent.resultPreview ?? ''} compact />
-                      </div>
-                    )}
-                  </section>
-                ) : null}
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
@@ -277,43 +277,46 @@ export const WorkflowAgentDetailDrawer = memo(function WorkflowAgentDetailDrawer
                   <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
                     {labels.executionHeading}
                   </div>
-                  {showExecutionPlaceholder ? (
+                  {showTranscriptPlaceholder ? (
                     <div className="text-xs text-fg-subtle">{labels.runningPlaceholder}</div>
                   ) : null}
-                  {executionBlocks.length > 0 ? (
-                    <AssistantStepsTimeline
-                      blocks={executionBlocks}
-                      toolLabels={toolLabels}
-                      stepLabels={stepLabels}
-                      cardLabels={cardLabels}
-                      sessionKey={sessionKey}
-                      className="pb-2"
+                  {sessionLoadError ? (
+                    <div className="mb-2 rounded-md border border-edge-subtle bg-surface-hover/30 px-2 py-1 text-xs text-fg-subtle">
+                      {sessionLoadError}
+                    </div>
+                  ) : null}
+                  {readonlyMessages.length > 0 ? (
+                    <ReadonlyMessageThread
+                      messages={readonlyMessages}
+                      sessionKey={agentSessionKey ?? sessionKey}
+                      reasoningLevel="stream"
+                      compact
                     />
                   ) : null}
                 </section>
 
-                <section className="mt-4 min-w-0 border-t border-edge-subtle pt-3">
-                  <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                <details className="mt-4 min-w-0 border-t border-edge-subtle pt-3">
+                  <summary className="cursor-pointer select-none text-[10px] font-medium uppercase tracking-wide text-fg-subtle hover:text-fg-muted">
                     {labels.promptHeading}
-                  </div>
-                  <pre className="max-h-[min(28vh,12rem)] min-w-0 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-edge-subtle bg-surface-hover/30 p-2 font-mono text-xs text-fg-muted">
+                  </summary>
+                  <pre className="mt-2 max-h-[min(28vh,12rem)] min-w-0 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-edge-subtle bg-surface-hover/30 p-2 font-mono text-xs text-fg-muted">
                     {agent.prompt}
                   </pre>
-                </section>
+                </details>
 
                 {snapshot && snapshot.logs.length > 0 ? (
-                  <section className="mt-4 min-w-0 border-t border-edge-subtle pt-3">
-                    <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                  <details className="mt-4 min-w-0 border-t border-edge-subtle pt-3">
+                    <summary className="cursor-pointer select-none text-[10px] font-medium uppercase tracking-wide text-fg-subtle hover:text-fg-muted">
                       {labels.logsHeading}
-                    </div>
-                    <div className="space-y-0.5 font-mono text-xs text-fg-subtle">
+                    </summary>
+                    <div className="mt-2 space-y-0.5 font-mono text-xs text-fg-subtle">
                       {snapshot.logs.map((line) => (
                         <div key={line} className="wrap-break-word">
                           {line}
                         </div>
                       ))}
                     </div>
-                  </section>
+                  </details>
                 ) : null}
               </div>
             </>

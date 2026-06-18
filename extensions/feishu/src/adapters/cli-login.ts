@@ -1,7 +1,7 @@
 /**
  * Feishu CLI Login adapter — implements `ChannelCliLoginAdapter`.
  *
- * Provides `xopc channels login --channel feishu` interactive credential setup.
+ * Provides interactive credential setup for Feishu channel onboarding.
  * Supports QR scan-to-create and manual credential input.
  */
 

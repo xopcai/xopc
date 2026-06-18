@@ -4,12 +4,11 @@ import {
   resolveDefaultAgentId,
 } from '../../../agent/agent-scope.js';
 import {
-  listChannelPlugins,
-  syncChannelPluginsFromManager,
-} from '../../../channels/plugins/registry.js';
+  buildChannelCatalogForConfig,
+  buildChannelCatalogFromSnapshot,
+} from '../../../channels/catalog/channel-catalog-service.js';
 import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
 import type { Config } from '../../../config/schema.js';
-import { bundledChannelPlugins } from '../../../generated/bundled-channel-plugins.js';
 import {
   GENERIC_MASKED_SECRET,
   maskSecretLength,
@@ -157,20 +156,23 @@ export function buildSafeBrowserConfigForWeb(browser: Config['agents']['defaults
 /** Sanitized config snapshot for GET/PATCH `/api/config` (matches persisted `service.currentConfig`). */
 export async function buildSafeWebConfigPayload(service: GatewayService) {
   const config = service.currentConfig;
-  if (listChannelPlugins().length === 0) {
-    syncChannelPluginsFromManager(bundledChannelPlugins);
-  }
+  const extensionLoader =
+    typeof service.getExtensionLoader === 'function' ? service.getExtensionLoader() : undefined;
+  const snapshot = extensionLoader?.getManifestSnapshot();
+  const catalog = snapshot
+    ? buildChannelCatalogFromSnapshot(snapshot)
+    : buildChannelCatalogForConfig(config);
   const channelsPayload = Object.fromEntries(
-    listChannelPlugins().map((plugin) => {
-      if (plugin.configSurface) {
-        return [plugin.id, plugin.configSurface.buildConfigSurface(config)];
-      }
-      const channelCfg = config.channels?.[plugin.id] as Record<string, unknown> | undefined;
+    catalog.entries.map((entry) => {
+      const channelCfg = config.channels?.[entry.id] as Record<string, unknown> | undefined;
       return [
-        plugin.id,
+        entry.id,
         {
           enabled: channelCfg?.enabled ?? false,
-          configured: plugin.config.listAccountIds(config).length > 0,
+          configured: Boolean(channelCfg),
+          config: channelCfg ?? {},
+          schema: entry.configSchema,
+          uiHints: entry.uiHints,
         },
       ];
     }),
@@ -182,11 +184,10 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
         .filter((e) => e.enabled !== false)
         .map((e) => ({
           id: normalizeAgentId(e.id),
-          ...(typeof e.name === 'string' && e.name.trim() ? { name: e.name.trim() } : {}),
         })),
       defaults: {
-        model: agentModelRefToString(config.agents?.defaults?.model) ?? '',
-        modelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.model),
+        model: agentModelRefToString(config.agents?.defaults?.models?.chat) ?? '',
+        modelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.models?.chat),
         imageModel: agentModelRefToString(config.agents?.defaults?.imageModel) ?? null,
         imageModelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.imageModel),
         imageGenerationModel: agentModelRefToString(config.agents?.defaults?.imageGenerationModel) ?? null,

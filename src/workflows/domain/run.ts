@@ -171,6 +171,8 @@ export interface WorkflowAgentView {
   phaseId?: string;
   status: WorkflowAgentStatus;
   prompt?: string;
+  sessionKey: string;
+  transcriptMessageCount: number;
   currentStep?: string;
   resultPreview?: string;
   error?: string;

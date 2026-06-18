@@ -6,6 +6,9 @@ import { resolveStateDir } from '../config/paths.js';
 export type TuiThemeId = 'auto' | 'dark' | 'light' | (string & {});
 
 export type DoubleEscapeAction = 'none' | 'tree' | 'fork';
+export type FollowUpMode = 'one-at-a-time' | 'all';
+export type SteeringMode = 'one-at-a-time' | 'all';
+export type TreeFilterMode = 'default' | 'no-tools' | 'user-only' | 'labeled-only' | 'all';
 
 export interface TuiSettings {
   /** `auto` follows terminal background detection; `dark`/`light` or custom theme name. */
@@ -16,6 +19,24 @@ export interface TuiSettings {
   showTerminalProgress: boolean;
   /** Show expanded startup hints under the header title. */
   showStartupHints: boolean;
+  /** Render image content blocks inline when the terminal supports images. */
+  showImages: boolean;
+  /** Preferred inline image width in terminal cells. */
+  imageWidthCells: number;
+  /** Show the terminal hardware cursor at the editor cursor for IME support. */
+  showHardwareCursor: boolean;
+  /** Horizontal padding for the input editor. */
+  editorPaddingX: number;
+  /** Maximum visible autocomplete rows before the completion menu scrolls. */
+  autocompleteMaxVisible: number;
+  /** Clear empty terminal rows when rendered content shrinks. */
+  clearOnShrink: boolean;
+  /** How queued follow-up messages are delivered after an agent run ends. */
+  followUpMode: FollowUpMode;
+  /** How queued steering messages are delivered across active runs. */
+  steeringMode: SteeringMode;
+  /** Default transcript filter when opening `/tree`. */
+  treeFilterMode: TreeFilterMode;
 }
 
 export const DEFAULT_TUI_SETTINGS: TuiSettings = {
@@ -25,12 +46,39 @@ export const DEFAULT_TUI_SETTINGS: TuiSettings = {
   doubleEscapeAction: 'none',
   showTerminalProgress: false,
   showStartupHints: true,
+  showImages: true,
+  imageWidthCells: 60,
+  showHardwareCursor: false,
+  editorPaddingX: 0,
+  autocompleteMaxVisible: 5,
+  clearOnShrink: false,
+  followUpMode: 'one-at-a-time',
+  steeringMode: 'one-at-a-time',
+  treeFilterMode: 'default',
 };
 
 const SETTINGS_PATH = join(resolveStateDir(), 'tui-settings.json');
 
 function isDoubleEscapeAction(value: unknown): value is DoubleEscapeAction {
   return value === 'none' || value === 'tree' || value === 'fork';
+}
+
+function isFollowUpMode(value: unknown): value is FollowUpMode {
+  return value === 'one-at-a-time' || value === 'all';
+}
+
+function isSteeringMode(value: unknown): value is SteeringMode {
+  return value === 'one-at-a-time' || value === 'all';
+}
+
+function isTreeFilterMode(value: unknown): value is TreeFilterMode {
+  return (
+    value === 'default' ||
+    value === 'no-tools' ||
+    value === 'user-only' ||
+    value === 'labeled-only' ||
+    value === 'all'
+  );
 }
 
 function normalizeSettings(raw: unknown): TuiSettings {
@@ -50,6 +98,33 @@ function normalizeSettings(raw: unknown): TuiSettings {
   }
   if (typeof obj.showStartupHints === 'boolean') {
     base.showStartupHints = obj.showStartupHints;
+  }
+  if (typeof obj.showImages === 'boolean') {
+    base.showImages = obj.showImages;
+  }
+  if (typeof obj.imageWidthCells === 'number' && Number.isFinite(obj.imageWidthCells)) {
+    base.imageWidthCells = Math.max(1, Math.floor(obj.imageWidthCells));
+  }
+  if (typeof obj.showHardwareCursor === 'boolean') {
+    base.showHardwareCursor = obj.showHardwareCursor;
+  }
+  if (typeof obj.editorPaddingX === 'number' && Number.isFinite(obj.editorPaddingX)) {
+    base.editorPaddingX = Math.max(0, Math.min(3, Math.floor(obj.editorPaddingX)));
+  }
+  if (typeof obj.autocompleteMaxVisible === 'number' && Number.isFinite(obj.autocompleteMaxVisible)) {
+    base.autocompleteMaxVisible = Math.max(3, Math.min(20, Math.floor(obj.autocompleteMaxVisible)));
+  }
+  if (typeof obj.clearOnShrink === 'boolean') {
+    base.clearOnShrink = obj.clearOnShrink;
+  }
+  if (isFollowUpMode(obj.followUpMode)) {
+    base.followUpMode = obj.followUpMode;
+  }
+  if (isSteeringMode(obj.steeringMode)) {
+    base.steeringMode = obj.steeringMode;
+  }
+  if (isTreeFilterMode(obj.treeFilterMode)) {
+    base.treeFilterMode = obj.treeFilterMode;
   }
   return base;
 }

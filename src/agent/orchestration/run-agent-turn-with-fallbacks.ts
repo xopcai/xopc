@@ -1,5 +1,5 @@
 /**
- * Primary chat model + `agents.defaults.model.fallbacks`: one user turn with rollback on failure.
+ * Primary chat model + `agents.defaults.models.chat.fallbacks`: one user turn with rollback on failure.
  * Used by channel orchestrator, gateway webchat stream, and direct CLI-style turns.
  */
 
@@ -47,7 +47,7 @@ export async function runAgentTurnWithModelFallbacks(params: {
   const candidates = modelManager.getFallbackCandidatesForSession(sessionKey);
   if (candidates.length === 0) {
     throw new Error(
-      'No model candidates available. Configure agents.defaults.model and provider API keys.',
+      'No model candidates available. Configure agents.defaults.models.chat and provider API keys.',
     );
   }
 

@@ -36,7 +36,7 @@ export function AgentSkillsTab(props: {
     hideInlineSave,
   } = props;
 
-  /** When inheriting defaults, checkboxes reflect the effective allowlist (undefined = all catalog skills). */
+  /** When inheriting defaults, checkboxes reflect the effective visible-skill list. */
   function isCheckedInheritMode(id: string): boolean {
     const eff = selected.skills.effectiveAllowlist;
     if (eff === undefined) {
@@ -95,7 +95,7 @@ export function AgentSkillsTab(props: {
         {a.skillsEffectiveLabel}{' '}
         {selected.skills.effectiveAllowlist?.length
           ? selected.skills.effectiveAllowlist.join(', ')
-          : a.skillsAllFromCatalog}
+          : '—'}
       </p>
       {skillsCatalogLoading ? (
         <p className="shrink-0 text-sm text-fg-muted">{a.skillsCatalogLoading}</p>

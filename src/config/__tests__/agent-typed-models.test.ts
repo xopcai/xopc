@@ -11,15 +11,22 @@ import {
 const baseConfig = {
   agents: {
     defaults: {
-      models: [
-        { id: 'small', description: 'Fast', model: 'deepseek/deepseek-v4-flash' },
-        { id: 'large', model: 'anthropic/claude-sonnet-4' },
-      ],
+      models: {
+        roles: {
+          small: { description: 'Fast', model: 'deepseek/deepseek-v4-flash' },
+          large: { model: 'anthropic/claude-sonnet-4' },
+        },
+      },
     },
     list: [
       {
         id: 'research',
         enabled: true,
+        models: {
+          roles: {
+            small: { model: 'openai/gpt-4o-mini' },
+          },
+        },
       },
     ],
   },
@@ -29,7 +36,7 @@ describe('resolveEffectiveTypedModels', () => {
     const mainMap = resolveEffectiveTypedModels(baseConfig, 'main');
     const researchMap = resolveEffectiveTypedModels(baseConfig, 'research');
     expect(mainMap.get('small')?.model).toBe('deepseek/deepseek-v4-flash');
-    expect(researchMap.get('small')?.model).toBe('deepseek/deepseek-v4-flash');
+    expect(researchMap.get('small')?.model).toBe('openai/gpt-4o-mini');
     expect(researchMap.get('large')?.model).toBe('anthropic/claude-sonnet-4');
   });
 });
@@ -47,8 +54,8 @@ describe('resolveModelRef', () => {
     expect(resolveModelRef(baseConfig, 'main', '@large')).toBe('anthropic/claude-sonnet-4');
   });
 
-  it('resolves typed ids from global defaults for all agents', () => {
-    expect(resolveModelRef(baseConfig, 'research', 'small')).toBe('deepseek/deepseek-v4-flash');
+  it('resolves typed ids from per-agent overrides', () => {
+    expect(resolveModelRef(baseConfig, 'research', 'small')).toBe('openai/gpt-4o-mini');
   });
 
   it('throws for unknown typed id with available hint', () => {
@@ -70,19 +77,25 @@ describe('resolveTypedModelRef', () => {
 });
 
 describe('AgentTypedModelSchema', () => {
-  it('rejects duplicate ids in the same scope', () => {
+  it('accepts per-agent role overrides in the same scope', () => {
+    const parsed = ConfigSchema.parse(baseConfig);
+    expect(resolveModelRef(parsed, 'research', 'small')).toBe('openai/gpt-4o-mini');
+  });
+
+  it('rejects invalid role ids', () => {
     expect(() =>
       ConfigSchema.parse({
         agents: {
           defaults: {
-            models: [
-              { id: 'small', model: 'openai/gpt-4o-mini' },
-              { id: 'small', model: 'deepseek/deepseek-v4-flash' },
-            ],
+            models: {
+              roles: {
+                Bad: { model: 'openai/gpt-4o-mini' },
+              },
+            },
           },
         },
       }),
-    ).toThrow(/duplicate typed model id 'small'/);
+    ).toThrow(/Invalid key in record/);
   });
 
   it('rejects invalid model ref format', () => {
@@ -90,7 +103,7 @@ describe('AgentTypedModelSchema', () => {
       ConfigSchema.parse({
         agents: {
           defaults: {
-            models: [{ id: 'small', model: 'not-valid' }],
+            models: { roles: { small: { model: 'not-valid' } } },
           },
         },
       }),

@@ -81,18 +81,18 @@ export class GatewayMarketplaceService {
 
   // ── Local skills (managed dir) ────────────────────────────────────────
 
-  getSkillsApi(lang?: string): {
+  getSkillsApi(): {
     catalog: SkillCatalogEntry[];
     managed: ManagedSkillListItem[];
   } {
     return {
-      catalog: this.opts.getAgentService().getSkillCatalog(lang),
+      catalog: this.opts.getAgentService().getSkillCatalog(),
       managed: listManagedSkillDirs(),
     };
   }
 
-  getSkillMarkdownSource(skillName: string, lang?: string): SkillMarkdownPreviewPayload | null {
-    return this.opts.getAgentService().getSkillMarkdownSource(skillName, lang);
+  getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
+    return this.opts.getAgentService().getSkillMarkdownSource(skillName);
   }
 
   deleteSkill(skillId: string): void {

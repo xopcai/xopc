@@ -23,7 +23,11 @@ import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import { restoreContextTokens } from './messaging/inbound.js';
 import { monitorWeixinProvider } from './monitor/monitor.js';
-import type { ChannelCliLoginAdapter, ChannelCronDeliveryAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
+import type {
+  ChannelCliLoginAdapter,
+  ChannelCronDeliveryAdapter,
+  ChannelRuntimeActionAdapter,
+} from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import {
   listWeixinAccountIds,
   resolveWeixinAccount,
@@ -94,6 +98,89 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
         account: params.accountId,
         writeConfig: params.writeConfig,
       });
+    },
+  };
+
+  readonly runtimeActions: ChannelRuntimeActionAdapter = {
+    runAction: async ({ actionId, accountId, input }) => {
+      if (actionId === 'login.start') {
+        const { startWeixinGatewayQrLogin } = await import('./cli/gateway-qr-login.js');
+        const inputRecord =
+          input && typeof input === 'object' && !Array.isArray(input)
+            ? (input as Record<string, unknown>)
+            : {};
+        const timeoutMs = typeof inputRecord.timeoutMs === 'number' ? inputRecord.timeoutMs : 480_000;
+        const start = await startWeixinGatewayQrLogin({
+          account: accountId,
+          timeoutMs,
+          onPersisted: async (result) => {
+            if (!result.ok) return;
+            const { loadConfig } = await import('@xopcai/xopc/config/loader.js');
+            await this.reloadMonitorsWithConfig(loadConfig(), this.bus);
+          },
+        });
+        if (start.ok === false) {
+          return { ok: false, message: start.message };
+        }
+        return {
+          ok: true,
+          payload: {
+            type: 'qr',
+            sessionKey: start.sessionKey,
+            qrcodeUrl: start.qrcodeUrl,
+            statusAction: 'login.status',
+            pollIntervalMs: 2500,
+            message: 'Scan the QR code with WeChat.',
+          },
+        };
+      }
+
+      if (actionId === 'login.status') {
+        const inputRecord =
+          input && typeof input === 'object' && !Array.isArray(input)
+            ? (input as Record<string, unknown>)
+            : {};
+        const sessionKey = typeof inputRecord.sessionKey === 'string' ? inputRecord.sessionKey : '';
+        if (!sessionKey) return { ok: false, message: 'Missing login sessionKey' };
+        const { getWeixinGatewayQrLoginStatus } = await import('./cli/gateway-qr-login.js');
+        const status = getWeixinGatewayQrLoginStatus(sessionKey);
+        if (status.phase === 'polling') {
+          return {
+            ok: true,
+            payload: {
+              type: 'poll',
+              phase: 'pending',
+              qrcodeUrl: status.qrcodeUrl,
+              qrStatus: status.qrStatus,
+              message: status.qrStatus,
+            },
+          };
+        }
+        if (status.phase === 'done') {
+          return {
+            ok: true,
+            payload: {
+              type: 'poll',
+              phase: 'done',
+              ok: status.ok,
+              accountId: status.ok ? status.accountId : undefined,
+              message: status.ok === true ? 'Weixin login complete.' : status.message,
+              configChanged: status.ok,
+            },
+          };
+        }
+        return {
+          ok: true,
+          payload: {
+            type: 'poll',
+            phase: 'unknown',
+            ok: false,
+            message: status.message,
+          },
+        };
+      }
+
+      return { ok: false, message: `Unsupported Weixin action: ${actionId}` };
     },
   };
 

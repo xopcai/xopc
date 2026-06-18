@@ -1,20 +1,36 @@
-import type { Config } from './schema.js';
-import { bundledChannelPlugins } from '../generated/bundled-channel-plugins.js';
+import Ajv from 'ajv';
 
-/**
- * Run each registered channel plugin's optional `configSchema.validate` on the matching subtree.
- */
+import type { Config } from './schema.js';
+import { buildChannelCatalogForConfig } from '../channels/catalog/channel-catalog-service.js';
+
+const ajv = new Ajv({
+  allErrors: true,
+  strict: false,
+  useDefaults: false,
+});
+
+function formatAjvError(channelId: string, err: { instancePath?: string; message?: string }): string {
+  const path = err.instancePath ? err.instancePath.replaceAll('/', '.') : '';
+  const suffix = path ? path : '<root>';
+  return `channels.${channelId}.${suffix}: ${err.message ?? 'invalid value'}`;
+}
+
 export function validateChannelPluginConfigs(config: Config): string[] {
   const errors: string[] = [];
   const channelsCfg = config.channels ?? {};
-  for (const [channelId, raw] of Object.entries(channelsCfg)) {
-    const plugin = bundledChannelPlugins.find((p) => p.id === channelId);
-    const validate = plugin?.configSchema?.validate;
-    if (typeof validate !== 'function') continue;
-    const result = validate(raw);
-    if (!result.ok) {
-      for (const e of result.errors ?? ['Invalid configuration']) {
-        errors.push(`channels.${channelId}: ${e}`);
+  const catalog = buildChannelCatalogForConfig(config);
+
+  for (const [rawChannelId, raw] of Object.entries(channelsCfg)) {
+    const channelId = rawChannelId.trim().toLowerCase();
+    const entry = catalog.byId.get(channelId);
+    if (!entry) {
+      errors.push(`channels.${rawChannelId}: unknown channel; install or declare a channel extension contribution`);
+      continue;
+    }
+    const validate = ajv.compile(entry.configSchema);
+    if (!validate(raw)) {
+      for (const err of validate.errors ?? []) {
+        errors.push(formatAjvError(channelId, err));
       }
     }
   }

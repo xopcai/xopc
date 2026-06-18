@@ -22,6 +22,7 @@ import type { SessionConfigStore, SessionStore } from '../../session/index.js';
 import {
   normalizeThinkLevel,
   normalizeReasoningLevel,
+  normalizeVerboseLevel,
 } from '../transcript/thinking-types.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
@@ -42,6 +43,7 @@ export interface PatchSessionAgentConfigInput {
   thinkingLevel?: string;
   model?: string | null;
   reasoningLevel?: string;
+  verboseLevel?: string;
   workingDirectory?: string;
 }
 
@@ -95,6 +97,14 @@ export class SessionConfigService {
         return { ok: false, error: 'Invalid reasoning level' };
       }
       await this.opts.sessionConfigStore.update(sessionKey, { reasoningLevel: normalized });
+    }
+
+    if (partial.verboseLevel !== undefined) {
+      const normalized = normalizeVerboseLevel(partial.verboseLevel);
+      if (!normalized) {
+        return { ok: false, error: 'Invalid verbose level' };
+      }
+      await this.opts.sessionConfigStore.update(sessionKey, { verboseLevel: normalized });
     }
 
     if (partial.workingDirectory !== undefined) {

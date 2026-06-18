@@ -1,8 +1,11 @@
 import {
   Input,
+  getKeybindings,
   isKeyRelease,
   matchesKey,
   type Component,
+  type Focusable,
+  type Keybinding,
   type SelectItem,
   type SelectListTheme,
   truncateToWidth,
@@ -24,11 +27,22 @@ export interface SearchableSelectListTheme extends SelectListTheme {
   matchHighlight: (text: string) => string;
 }
 
+export interface SearchableSelectListOptions {
+  initialQuery?: string;
+  wrapNavigation?: boolean;
+  searchPromptText?: string;
+  filterItems?: (items: SelectItem[], query: string) => SelectItem[];
+}
+
 function stripAnsi(raw: string): string {
   return raw.replace(/\x1b\[[0-9;]*m/g, '');
 }
 
-export class SearchableSelectList implements Component {
+function normalizeSingleLine(text: string): string {
+  return text.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export class SearchableSelectList implements Component, Focusable {
   private items: SelectItem[];
   private filteredItems: SelectItem[];
   private selectedIndex = 0;
@@ -36,6 +50,10 @@ export class SearchableSelectList implements Component {
   private theme: SearchableSelectListTheme;
   private searchInput: Input;
   private regexCache = new Map<string, RegExp>();
+  private _focused = false;
+  private readonly wrapNavigation: boolean;
+  private readonly searchPromptText: string;
+  private readonly filterItems?: (items: SelectItem[], query: string) => SelectItem[];
 
   onSelect?: (item: SelectItem) => void;
   onCancel?: () => void;
@@ -46,12 +64,34 @@ export class SearchableSelectList implements Component {
   private static readonly DESCRIPTION_SPACING_WIDTH = 2;
   private static readonly RIGHT_MARGIN_WIDTH = 2;
 
-  constructor(items: SelectItem[], maxVisible: number, theme: SearchableSelectListTheme) {
+  constructor(
+    items: SelectItem[],
+    maxVisible: number,
+    theme: SearchableSelectListTheme,
+    options: SearchableSelectListOptions = {},
+  ) {
     this.items = items;
     this.filteredItems = items;
     this.maxVisible = maxVisible;
     this.theme = theme;
+    this.wrapNavigation = options.wrapNavigation ?? false;
+    this.searchPromptText = options.searchPromptText ?? 'search: ';
+    this.filterItems = options.filterItems;
     this.searchInput = new Input();
+    const initialQuery = options.initialQuery?.trim();
+    if (initialQuery) {
+      this.searchInput.setValue(initialQuery);
+      this.updateFilter();
+    }
+  }
+
+  get focused(): boolean {
+    return this._focused;
+  }
+
+  set focused(value: boolean) {
+    this._focused = value;
+    this.searchInput.focused = value;
   }
 
   private getCachedRegex(pattern: string): RegExp {
@@ -68,6 +108,8 @@ export class SearchableSelectList implements Component {
 
     if (!query) {
       this.filteredItems = this.items;
+    } else if (this.filterItems) {
+      this.filteredItems = this.filterItems(this.items, query);
     } else {
       this.filteredItems = this.smartFilter(query);
     }
@@ -196,6 +238,44 @@ export class SearchableSelectList implements Component {
 
   setSelectedIndex(index: number) {
     this.selectedIndex = Math.max(0, Math.min(index, this.filteredItems.length - 1));
+    this.notifySelectionChange();
+  }
+
+  setSelectedValue(value: string): boolean {
+    const index = this.filteredItems.findIndex((item) => item.value === value);
+    if (index < 0) return false;
+    this.selectedIndex = index;
+    this.notifySelectionChange();
+    return true;
+  }
+
+  setItems(items: SelectItem[]): void {
+    this.items = items;
+    this.updateFilter();
+  }
+
+  setSearchQuery(query: string, options: { selectedValue?: string } = {}): void {
+    this.searchInput.setValue(query);
+    this.updateFilter();
+    if (options.selectedValue) {
+      this.setSelectedValue(options.selectedValue);
+    }
+  }
+
+  clearSearch(options: { selectedValue?: string } = {}): void {
+    this.setSearchQuery('', options);
+  }
+
+  getSearchQuery(): string {
+    return this.searchInput.getValue();
+  }
+
+  getSelectionStats(): { selected: number; total: number } {
+    const total = this.filteredItems.length;
+    return {
+      selected: total === 0 ? 0 : this.selectedIndex + 1,
+      total,
+    };
   }
 
   invalidate() {
@@ -205,8 +285,7 @@ export class SearchableSelectList implements Component {
   render(width: number): string[] {
     const lines: string[] = [];
 
-    const promptText = 'search: ';
-    const prompt = this.theme.searchPrompt(promptText);
+    const prompt = this.theme.searchPrompt(this.searchPromptText);
     const inputWidth = Math.max(1, width - visibleWidth(prompt));
     const inputLines = this.searchInput.render(inputWidth);
     const inputText = inputLines[0] ?? '';
@@ -256,7 +335,7 @@ export class SearchableSelectList implements Component {
     const prefixWidth = prefix.length;
     const displayValue = this.getItemLabel(item);
 
-    const description = item.description;
+    const description = item.description ? normalizeSingleLine(item.description) : undefined;
     if (description) {
       const descriptionLayout = this.getDescriptionLayout(width, prefixWidth);
       if (descriptionLayout) {
@@ -313,24 +392,56 @@ export class SearchableSelectList implements Component {
     };
   }
 
+  private moveSelection(delta: number): void {
+    if (this.filteredItems.length === 0) return;
+    this.selectedIndex = Math.max(
+      0,
+      Math.min(this.filteredItems.length - 1, this.selectedIndex + delta),
+    );
+    this.notifySelectionChange();
+  }
+
+  private matchesSelectAction(keyData: string, action: Keybinding, aliases: string[] = []): boolean {
+    if (getKeybindings().matches(keyData, action)) return true;
+    return aliases.some((key) => keyData === key || matchesKey(keyData, key as never));
+  }
+
   handleInput(keyData: string): void {
     if (isKeyRelease(keyData)) {
       return;
     }
 
-    if (matchesKey(keyData, 'up') || matchesKey(keyData, 'ctrl+p')) {
-      this.selectedIndex = Math.max(0, this.selectedIndex - 1);
+    if (this.matchesSelectAction(keyData, 'tui.select.up', ['up', 'ctrl+p'])) {
+      if (this.filteredItems.length === 0) return;
+      this.selectedIndex =
+        this.wrapNavigation && this.selectedIndex === 0
+          ? this.filteredItems.length - 1
+          : Math.max(0, this.selectedIndex - 1);
       this.notifySelectionChange();
       return;
     }
 
-    if (matchesKey(keyData, 'down') || matchesKey(keyData, 'ctrl+n')) {
-      this.selectedIndex = Math.min(this.filteredItems.length - 1, this.selectedIndex + 1);
+    if (this.matchesSelectAction(keyData, 'tui.select.down', ['down', 'ctrl+n'])) {
+      if (this.filteredItems.length === 0) return;
+      this.selectedIndex =
+        this.wrapNavigation && this.selectedIndex === this.filteredItems.length - 1
+          ? 0
+          : Math.min(this.filteredItems.length - 1, this.selectedIndex + 1);
       this.notifySelectionChange();
       return;
     }
 
-    if (matchesKey(keyData, 'enter')) {
+    if (this.matchesSelectAction(keyData, 'tui.select.pageUp', ['pageUp'])) {
+      this.moveSelection(-this.maxVisible);
+      return;
+    }
+
+    if (this.matchesSelectAction(keyData, 'tui.select.pageDown', ['pageDown'])) {
+      this.moveSelection(this.maxVisible);
+      return;
+    }
+
+    if (this.matchesSelectAction(keyData, 'tui.select.confirm', ['enter'])) {
       const item = this.filteredItems[this.selectedIndex];
       if (item && this.onSelect) {
         this.onSelect(item);
@@ -338,7 +449,7 @@ export class SearchableSelectList implements Component {
       return;
     }
 
-    if (matchesKey(keyData, 'escape') || keyData === '\u0003') {
+    if (this.matchesSelectAction(keyData, 'tui.select.cancel', ['escape', 'ctrl+c'])) {
       if (this.onCancel) {
         this.onCancel();
       }

@@ -32,8 +32,11 @@ import type { TranscriptCompactionRecord, XopcSessionTranscriptV1 } from './tran
 import {
   buildSessionContextForLlm,
   mergeLlmMessagesPreservingContextRows,
+  transcriptRowsFromJsonArray,
   type TranscriptStoredRow,
   type XopcTranscriptContextEntry,
+  type XopcTranscriptCustomMessageEntry,
+  type XopcTranscriptCustomStateEntry,
 } from './session-context-for-llm.js';
 import { normalizeCompactionCheckpointId } from './compaction-checkpoints.js';
 import type {
@@ -390,6 +393,66 @@ export class SessionStore {
     });
   }
 
+  async appendTranscriptLabelEntry(
+    key: string,
+    entry: { targetId: string; label?: string },
+  ): Promise<void> {
+    return this.runStoreMutation(async () => {
+      requireXopcDatabase();
+      const cwd = this.resolveWorkspaceCwd(key);
+      ensureSessionRecord(key, cwd);
+      appendTranscriptEntry(key, {
+        type: 'label',
+        targetId: entry.targetId,
+        label: entry.label?.trim() || undefined,
+        timestamp: new Date().toISOString(),
+      });
+    });
+  }
+
+  async appendTranscriptCustomEntry(
+    key: string,
+    entry: { customType: string; data?: unknown },
+  ): Promise<void> {
+    return this.runStoreMutation(async () => {
+      requireXopcDatabase();
+      const cwd = this.resolveWorkspaceCwd(key);
+      ensureSessionRecord(key, cwd);
+      const row: XopcTranscriptCustomStateEntry = {
+        type: 'custom',
+        customType: entry.customType.trim(),
+        data: entry.data,
+        timestamp: new Date().toISOString(),
+      };
+      appendTranscriptEntry(key, row);
+    });
+  }
+
+  async appendTranscriptCustomMessageEntry(
+    key: string,
+    entry: {
+      customType: string;
+      content?: string | unknown[];
+      display?: boolean;
+      details?: unknown;
+    },
+  ): Promise<void> {
+    return this.runStoreMutation(async () => {
+      requireXopcDatabase();
+      const cwd = this.resolveWorkspaceCwd(key);
+      ensureSessionRecord(key, cwd);
+      const row: XopcTranscriptCustomMessageEntry = {
+        role: 'custom',
+        customType: entry.customType.trim(),
+        content: entry.content ?? '',
+        display: entry.display ?? true,
+        details: entry.details,
+        timestamp: Date.now(),
+      };
+      appendTranscriptEntry(key, row);
+    });
+  }
+
   async saveMessages(key: string, messages: AgentMessage[]): Promise<void> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
@@ -544,6 +607,106 @@ export class SessionStore {
       lines.push(`## ${msg.role}`, '', typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content), '');
     }
     return lines.join('\n');
+  }
+
+  async importSessionExport(
+    targetKey: string,
+    jsonContent: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    return this.runStoreMutation(async () => {
+      requireXopcDatabase();
+      const existing = await this.getMetadata(targetKey);
+      if (existing) {
+        throw new Error(`Target session already exists: ${targetKey}`);
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(jsonContent);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        throw new Error(`Invalid session export JSON: ${errorMessage}`);
+      }
+
+      const record = parsed && typeof parsed === 'object' ? parsed as Record<string, unknown> : {};
+      const rowsSource = Array.isArray(record.transcriptRows) ? record.transcriptRows : undefined;
+      const rows = rowsSource ? transcriptRowsFromJsonArray(rowsSource) : [];
+      if (rows.length === 0) {
+        throw new Error('Session export contains no importable transcript rows');
+      }
+
+      const cwd = this.resolveWorkspaceCwd(targetKey);
+      ensureSessionRecord(targetKey, cwd);
+      replaceTranscriptRows(targetKey, rows);
+
+      const metadata = record.metadata && typeof record.metadata === 'object'
+        ? record.metadata as Partial<SessionMetadata>
+        : {};
+      const sourceKey = typeof metadata.key === 'string' ? metadata.key : undefined;
+      const sourceName = typeof metadata.name === 'string' ? metadata.name.trim() : '';
+      patchSessionMetadata(targetKey, {
+        name: sourceName ? `Import of ${sourceName}` : 'Imported session',
+        tags: [...new Set([...(Array.isArray(metadata.tags) ? metadata.tags.filter((tag): tag is string => typeof tag === 'string') : []), 'import'])],
+        customData: {
+          ...(metadata.customData && typeof metadata.customData === 'object'
+            ? metadata.customData as Record<string, unknown>
+            : {}),
+          ...(sourceKey ? { importedFromSessionKey: sourceKey } : {}),
+          importedAt: new Date().toISOString(),
+        },
+      });
+      return { sessionKey: targetKey, rowCount: rows.length };
+    });
+  }
+
+  async forkSession(
+    sourceKey: string,
+    targetKey: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    return this.forkSessionRows(sourceKey, targetKey);
+  }
+
+  async forkSessionRows(
+    sourceKey: string,
+    targetKey: string,
+    options: { throughRow?: number } = {},
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    return this.runStoreMutation(async () => {
+      requireXopcDatabase();
+      const sourceMetadata = await this.getMetadata(sourceKey);
+      if (!sourceMetadata) {
+        throw new Error(`Session not found: ${sourceKey}`);
+      }
+      const existing = await this.getMetadata(targetKey);
+      if (existing) {
+        throw new Error(`Target session already exists: ${targetKey}`);
+      }
+      const rows = await this.loadTranscriptRows(sourceKey);
+      if (
+        options.throughRow !== undefined &&
+        (options.throughRow < 1 || options.throughRow > rows.length)
+      ) {
+        throw new Error(`Invalid fork row: ${options.throughRow}`);
+      }
+      const selectedRows =
+        options.throughRow === undefined ? rows : rows.slice(0, Math.max(0, Math.trunc(options.throughRow)));
+      const cwd = this.resolveWorkspaceCwd(targetKey);
+      ensureSessionRecord(targetKey, cwd);
+      replaceTranscriptRows(targetKey, selectedRows);
+      const label = sourceMetadata.name?.trim() || sourceKey;
+      patchSessionMetadata(targetKey, {
+        name: `Fork of ${label}`,
+        tags: [...new Set([...(sourceMetadata.tags ?? []), 'fork'])],
+        customData: {
+          ...(sourceMetadata.customData ?? {}),
+          forkedFromSessionKey: sourceKey,
+          forkedFromTranscriptId: sourceMetadata.transcriptId,
+          ...(options.throughRow !== undefined ? { forkedFromRow: selectedRows.length } : {}),
+          forkedAt: new Date().toISOString(),
+        },
+      });
+      return { sessionKey: targetKey, rowCount: selectedRows.length };
+    });
   }
 
   async getStats(): Promise<GlobalSessionStats> {
@@ -709,17 +872,38 @@ export class SessionStore {
       if (Array.isArray(m.media) && m.media.length > 0) {
         row.media = m.media as Message['media'];
       }
-      const rawUsage = m.usage as { input?: number; output?: number; totalTokens?: number; total?: number } | undefined;
+      const rawUsage = m.usage as {
+        input?: number;
+        output?: number;
+        cacheRead?: number;
+        cacheWrite?: number;
+        totalTokens?: number;
+        total?: number;
+      } | undefined;
       if (rawUsage && typeof rawUsage === 'object') {
         const inputTokens = typeof rawUsage.input === 'number' ? rawUsage.input : undefined;
         const outputTokens = typeof rawUsage.output === 'number' ? rawUsage.output : undefined;
+        const cacheReadTokens = typeof rawUsage.cacheRead === 'number' ? rawUsage.cacheRead : undefined;
+        const cacheWriteTokens = typeof rawUsage.cacheWrite === 'number' ? rawUsage.cacheWrite : undefined;
         const totalTokens = typeof rawUsage.totalTokens === 'number'
           ? rawUsage.totalTokens
           : typeof rawUsage.total === 'number'
             ? rawUsage.total
             : undefined;
-        if (inputTokens !== undefined || outputTokens !== undefined || totalTokens !== undefined) {
-          row.usage = { inputTokens, outputTokens, totalTokens };
+        if (
+          inputTokens !== undefined ||
+          outputTokens !== undefined ||
+          cacheReadTokens !== undefined ||
+          cacheWriteTokens !== undefined ||
+          totalTokens !== undefined
+        ) {
+          row.usage = {
+            inputTokens,
+            outputTokens,
+            cacheReadTokens,
+            cacheWriteTokens,
+            totalTokens,
+          };
         }
       }
       return row;

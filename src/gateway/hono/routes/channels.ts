@@ -1,9 +1,5 @@
-import { readFileSync } from 'node:fs';
-
 import type { Hono } from 'hono';
 
-import { mergeDistinctSenderIds } from '../../../channels/pairing/index.js';
-import type { PairingCliChannel } from '../../../channels/pairing/pairing-channel.js';
 import {
   approveChannelPairing,
   approveChannelPairingBySender,
@@ -12,110 +8,48 @@ import {
   listChannelPairingSummary,
   revokeChannelPairingPaired,
 } from '../../../channels/pairing/pairing-service.js';
+import {
+  buildChannelCatalogForConfig,
+  buildChannelCatalogFromSnapshot,
+} from '../../../channels/catalog/channel-catalog-service.js';
 import type { Config } from '../../../config/index.js';
-import { writeTextAtomic } from '../../../infra/write-file-atomic.js';
-import type { GatewayService } from '../../service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import type { ChannelRuntimeActionPayload } from '../../../channels/plugins/types.adapters.js';
 
-type FeishuSetupDomain = 'feishu' | 'lark';
-
-interface FeishuSetupSession {
-  deviceCode: string;
-  domain: FeishuSetupDomain;
-  intervalSec: number;
-  expireInSec: number;
-  createdAt: number;
-  phase: 'idle' | 'polling' | 'scanned' | 'done' | 'error';
-  result?: {
-    appId: string;
-    appSecret: string;
-    domain: FeishuSetupDomain;
-    openId?: string;
-  };
-  error?: string;
+function channelIdParam(raw: string | undefined): string {
+  return (raw ?? '').trim().toLowerCase();
 }
 
-const feishuSetupSessions = new Map<string, FeishuSetupSession>();
-
-async function startFeishuSetupPolling(sessionKey: string, service: GatewayService): Promise<void> {
-  const session = feishuSetupSessions.get(sessionKey);
-  if (!session) return;
-
-  const { pollAppRegistration } = await import(
-    '../../../../extensions/feishu/src/auth/app-registration.js'
-  );
-
-  session.phase = 'polling';
-
-  const outcome = await pollAppRegistration({
-    deviceCode: session.deviceCode,
-    intervalSec: session.intervalSec,
-    expireInSec: session.expireInSec,
-    initialDomain: session.domain,
-  });
-
-  if (outcome.status === 'success') {
-    session.phase = 'done';
-    session.result = outcome.result;
-    try {
-      const configPath = service.getHealth().configPath;
-      const raw = readFileSync(configPath, 'utf8');
-      const config = JSON.parse(raw) as {
-        channels?: Record<string, unknown>;
-      };
-      const existingFeishu = (config.channels?.feishu ?? {}) as Record<string, unknown>;
-      const dmPolicy =
-        typeof existingFeishu.dmPolicy === 'string' && existingFeishu.dmPolicy.trim()
-          ? existingFeishu.dmPolicy
-          : 'open';
-      const preseedOpenId = outcome.result.openId?.trim();
-      const allowFrom = mergeDistinctSenderIds(existingFeishu.allowFrom, preseedOpenId ? [preseedOpenId] : []);
-
-      config.channels = {
-        ...config.channels,
-        feishu: {
-          ...existingFeishu,
-          enabled: true,
-          appId: outcome.result.appId,
-          appSecret: outcome.result.appSecret,
-          domain: outcome.result.domain,
-          connectionMode: (existingFeishu.connectionMode as string) || 'websocket',
-          dmPolicy,
-          allowFrom,
-        },
-      };
-
-      await writeTextAtomic(configPath, `${JSON.stringify(config, null, 2)}\n`);
-      await service.afterFeishuCredentialsPersisted();
-    } catch {
-      // Config write / reload failure is non-blocking; session still carries credentials for debugging.
-    }
-  } else {
-    session.phase = 'error';
-    session.error =
-      outcome.status === 'access_denied'
-        ? 'User denied authorization.'
-        : outcome.status === 'expired'
-          ? 'Session expired.'
-          : outcome.status === 'timeout'
-            ? 'Scan timed out.'
-            : 'message' in outcome
-              ? outcome.message
-              : 'Unknown error.';
-  }
-
-  setTimeout(() => feishuSetupSessions.delete(sessionKey), 30_000);
+function accountIdFromQuery(raw: string | undefined): string {
+  return raw?.trim() || 'default';
 }
 
-const PAIRING_CHANNELS = new Set<PairingCliChannel>(['telegram', 'feishu', 'weixin']);
-
-function parsePairingChannel(raw: string | undefined): PairingCliChannel | null {
-  const ch = (raw ?? '').trim().toLowerCase() as PairingCliChannel;
-  return PAIRING_CHANNELS.has(ch) ? ch : null;
+function actionPayloadChangedConfig(payload: ChannelRuntimeActionPayload | undefined): boolean {
+  return Boolean(payload && 'configChanged' in payload && payload.configChanged === true);
 }
 
 export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
+
+  authenticated.get('/api/channels/catalog', (c) => {
+    const snapshot = service.getExtensionLoader()?.getManifestSnapshot();
+    const catalog = snapshot
+      ? buildChannelCatalogFromSnapshot(snapshot)
+      : buildChannelCatalogForConfig(service.currentConfig);
+    const channelsCfg = service.currentConfig.channels as Record<string, { enabled?: boolean } | undefined> | undefined;
+    const running = new Set(service.getRunningChannelIds());
+    return c.json({
+      ok: true,
+      payload: {
+        channels: catalog.entries.map((entry) => ({
+          ...entry,
+          enabled: channelsCfg?.[entry.id]?.enabled === true,
+          configured: Boolean(channelsCfg?.[entry.id]),
+          runtime: running.has(entry.id) ? 'loaded' : 'missing',
+        })),
+      },
+    });
+  });
 
   authenticated.get('/api/channels/status', (c) => {
     const channels = service.getChannelsStatus();
@@ -127,193 +61,74 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     return c.json({ ok: true, payload: { channels } });
   });
 
-  authenticated.post('/api/channels/weixin/login/start', strictRateLimitMiddleware, async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    const account =
-      body && typeof body === 'object' && typeof (body as { account?: unknown }).account === 'string'
-        ? (body as { account: string }).account.trim() || undefined
-        : undefined;
-    const rawTimeout =
-      body && typeof body === 'object' ? (body as { timeoutMs?: unknown }).timeoutMs : undefined;
-    const timeoutMs =
-      typeof rawTimeout === 'number' && Number.isFinite(rawTimeout) ? Math.max(60_000, rawTimeout) : undefined;
-
-    const { startWeixinGatewayQrLogin } = await import('../../../channels/weixin/index.js');
-    const result = await startWeixinGatewayQrLogin({
-      configPath: service.getHealth().configPath,
-      account,
-      timeoutMs,
-      onPersisted: async (r) => {
-        if (r.ok) {
-          await service.afterWeixinCredentialsPersisted();
-        }
-      },
-    });
-
-    if (result.ok === false) {
-      return c.json(
-        { ok: false, error: { code: 'WEIXIN_LOGIN_FAILED', message: result.message } },
-        400,
-      );
-    }
-    return c.json({
-      ok: true,
-      payload: { sessionKey: result.sessionKey, qrcodeUrl: result.qrcodeUrl },
-    });
-  });
-
-  authenticated.get('/api/channels/weixin/login/:sessionKey', async (c) => {
-    const sessionKey = c.req.param('sessionKey')?.trim() ?? '';
-    if (!sessionKey) {
-      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing sessionKey' } }, 400);
-    }
-    const { getWeixinGatewayQrLoginStatus } = await import('../../../channels/weixin/index.js');
-    const status = getWeixinGatewayQrLoginStatus(sessionKey);
-    return c.json({ ok: true, payload: { status } });
-  });
-
-  authenticated.post('/api/channels/feishu/setup/start', strictRateLimitMiddleware, async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    const rawDomain =
-      body && typeof body === 'object' && typeof (body as { domain?: unknown }).domain === 'string'
-        ? (body as { domain: string }).domain.trim().toLowerCase()
-        : '';
-    const domain: FeishuSetupDomain = rawDomain === 'lark' ? 'lark' : 'feishu';
-
-    const { initAppRegistration, beginAppRegistration } = await import(
-      '../../../../extensions/feishu/src/auth/app-registration.js'
-    );
-
-    const supported = await initAppRegistration(domain);
-    if (!supported) {
-      return c.json(
-        {
-          ok: false,
-          error: { code: 'FEISHU_SCAN_NOT_SUPPORTED', message: 'Scan-to-create is not available.' },
-        },
-        400,
-      );
-    }
-
-    const begin = await beginAppRegistration(domain);
-
-    const sessionKey = `feishu-setup-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-    feishuSetupSessions.set(sessionKey, {
-      deviceCode: begin.deviceCode,
-      domain,
-      intervalSec: begin.intervalSec,
-      expireInSec: begin.expireInSec,
-      createdAt: Date.now(),
-      phase: 'idle',
-    });
-
-    void startFeishuSetupPolling(sessionKey, service);
-
-    return c.json({
-      ok: true,
-      payload: { sessionKey, qrUrl: begin.qrUrl },
-    });
-  });
-
-  authenticated.get('/api/channels/feishu/setup/:sessionKey', async (c) => {
-    const sessionKey = c.req.param('sessionKey')?.trim() ?? '';
-    if (!sessionKey) {
-      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing sessionKey' } }, 400);
-    }
-
-    const session = feishuSetupSessions.get(sessionKey);
-    if (!session) {
-      return c.json({
-        ok: true,
-        payload: {
-          status: { phase: 'unknown' as const, message: 'Session not found or expired.' },
-        },
-      });
-    }
-
-    if (session.phase === 'done' && session.result) {
-      return c.json({
-        ok: true,
-        payload: {
-          status: {
-            phase: 'done' as const,
-            ok: true,
-            appId: session.result.appId,
-            domain: session.result.domain,
-            openId: session.result.openId,
-          },
-        },
-      });
-    }
-
-    if (session.phase === 'error') {
-      return c.json({
-        ok: true,
-        payload: {
-          status: {
-            phase: 'done' as const,
-            ok: false,
-            message: session.error ?? 'Setup failed.',
-          },
-        },
-      });
-    }
-
-    return c.json({
-      ok: true,
-      payload: {
-        status: { phase: 'polling' as const },
-      },
-    });
-  });
-
-  authenticated.get('/api/channels/pairing', (c) => {
-    const channel = parsePairingChannel(c.req.query('channel'));
+  authenticated.get('/api/channels/:channelId/config', (c) => {
+    const channel = channelIdParam(c.req.param('channelId'));
     if (!channel) {
-      return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: 'Query param channel is required (telegram|feishu|weixin).' } },
-        400,
-      );
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing channel id' } }, 400);
     }
-    const accountRaw = c.req.query('account')?.trim();
-    const accountId = accountRaw || 'default';
+    const value = (service.currentConfig.channels as Record<string, unknown> | undefined)?.[channel] ?? {};
+    return c.json({ ok: true, payload: { config: value } });
+  });
+
+  authenticated.post('/api/channels/:channelId/actions/:actionId', strictRateLimitMiddleware, async (c) => {
+    const channel = channelIdParam(c.req.param('channelId'));
+    const action = c.req.param('actionId')?.trim() ?? '';
+    if (!channel || !action) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing channel/action id' } }, 400);
+    }
+    const plugin = await service.ensureChannelRuntimePlugin(channel);
+    if (!plugin) {
+      return c.json({ ok: false, error: { code: 'CHANNEL_RUNTIME_MISSING', message: 'Channel runtime is not loaded' } }, 404);
+    }
+    const body = await c.req.json().catch(() => ({}));
+    const accountId =
+      body && typeof body === 'object' && typeof (body as { accountId?: unknown }).accountId === 'string'
+        ? (body as { accountId: string }).accountId.trim()
+        : undefined;
+    const input = body && typeof body === 'object' ? (body as { input?: unknown }).input : undefined;
+
+    if (plugin.runtimeActions) {
+      const result = await plugin.runtimeActions.runAction({
+        cfg: service.currentConfig,
+        actionId: action,
+        accountId,
+        input,
+      });
+      if (!result.ok) {
+        return c.json({ ok: false, error: { code: 'CHANNEL_ACTION_FAILED', message: result.message ?? 'Channel action failed' } }, 400);
+      }
+      if (actionPayloadChangedConfig(result.payload)) {
+        await service.reloadConfig();
+      }
+      return c.json({ ok: true, payload: result.payload ?? {} });
+    }
+
+    if (action === 'doctor.run' && plugin.doctor) {
+      const checks = await plugin.doctor.check({ cfg: service.currentConfig });
+      return c.json({ ok: true, payload: { type: 'diagnostics', checks } });
+    }
+
+    return c.json(
+      {
+        ok: false,
+        error: {
+          code: 'ACTION_NOT_IMPLEMENTED',
+          message: `Channel action "${channel}.${action}" is not implemented by the runtime adapter.`,
+        },
+      },
+      501,
+    );
+  });
+
+  authenticated.get('/api/channels/:channelId/pairing', (c) => {
+    const channel = channelIdParam(c.req.param('channelId'));
+    if (!channel) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing channel id' } }, 400);
+    }
+    const accountId = accountIdFromQuery(c.req.query('account'));
     const config = service.currentConfig as Config | undefined;
     const state = listChannelPairingState({ channel, accountId, config });
     return c.json({ ok: true, payload: state });
-  });
-
-  authenticated.post('/api/channels/pairing/approve', strictRateLimitMiddleware, async (c) => {
-    const body = await c.req.json().catch(() => ({}));
-    const channel =
-      body && typeof body === 'object' && typeof (body as { channel?: unknown }).channel === 'string'
-        ? parsePairingChannel((body as { channel: string }).channel)
-        : null;
-    if (!channel) {
-      return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: 'Body field channel is required (telegram|feishu|weixin).' } },
-        400,
-      );
-    }
-    const accountRaw =
-      body && typeof body === 'object' && typeof (body as { accountId?: unknown }).accountId === 'string'
-        ? (body as { accountId: string }).accountId.trim()
-        : 'default';
-    const code =
-      body && typeof body === 'object' && typeof (body as { code?: unknown }).code === 'string'
-        ? (body as { code: string }).code.trim()
-        : '';
-    const result = approveChannelPairing({ channel, accountId: accountRaw || 'default', code });
-    if (result.ok === false) {
-      return c.json(
-        { ok: false, error: { code: 'PAIRING_INVALID', message: result.error } },
-        400,
-      );
-    }
-    return c.json({
-      ok: true,
-      payload: { senderId: result.senderId, alreadyPaired: result.alreadyPaired },
-    });
   });
 
   authenticated.get('/api/channels/pairing/summary', (c) => {
@@ -322,56 +137,28 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     return c.json({ ok: true, payload: { summary } });
   });
 
-  authenticated.post('/api/channels/pairing/approve-sender', strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/channels/:channelId/pairing/approve', strictRateLimitMiddleware, async (c) => {
+    const channel = channelIdParam(c.req.param('channelId'));
     const body = await c.req.json().catch(() => ({}));
-    const channel =
-      body && typeof body === 'object' && typeof (body as { channel?: unknown }).channel === 'string'
-        ? parsePairingChannel((body as { channel: string }).channel)
-        : null;
-    if (!channel) {
-      return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: 'Body field channel is required (telegram|feishu|weixin).' } },
-        400,
-      );
-    }
-    const accountRaw =
+    const accountId =
       body && typeof body === 'object' && typeof (body as { accountId?: unknown }).accountId === 'string'
         ? (body as { accountId: string }).accountId.trim()
         : 'default';
-    const senderId =
-      body && typeof body === 'object' && typeof (body as { senderId?: unknown }).senderId === 'string'
-        ? (body as { senderId: string }).senderId.trim()
+    const code =
+      body && typeof body === 'object' && typeof (body as { code?: unknown }).code === 'string'
+        ? (body as { code: string }).code.trim()
         : '';
-    const result = approveChannelPairingBySender({
-      channel,
-      accountId: accountRaw || 'default',
-      senderId,
-    });
+    const result = approveChannelPairing({ channel, accountId, code });
     if (result.ok === false) {
-      return c.json(
-        { ok: false, error: { code: 'PAIRING_INVALID', message: result.error } },
-        400,
-      );
+      return c.json({ ok: false, error: { code: 'PAIRING_INVALID', message: result.error } }, 400);
     }
-    return c.json({
-      ok: true,
-      payload: { senderId: result.senderId, alreadyPaired: result.alreadyPaired },
-    });
+    return c.json({ ok: true, payload: { senderId: result.senderId, alreadyPaired: result.alreadyPaired } });
   });
 
-  authenticated.delete('/api/channels/pairing/paired', strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/channels/:channelId/pairing/approve-sender', strictRateLimitMiddleware, async (c) => {
+    const channel = channelIdParam(c.req.param('channelId'));
     const body = await c.req.json().catch(() => ({}));
-    const channel =
-      body && typeof body === 'object' && typeof (body as { channel?: unknown }).channel === 'string'
-        ? parsePairingChannel((body as { channel: string }).channel)
-        : null;
-    if (!channel) {
-      return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: 'Body field channel is required (telegram|feishu|weixin).' } },
-        400,
-      );
-    }
-    const accountRaw =
+    const accountId =
       body && typeof body === 'object' && typeof (body as { accountId?: unknown }).accountId === 'string'
         ? (body as { accountId: string }).accountId.trim()
         : 'default';
@@ -379,33 +166,35 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
       body && typeof body === 'object' && typeof (body as { senderId?: unknown }).senderId === 'string'
         ? (body as { senderId: string }).senderId.trim()
         : '';
-    const result = revokeChannelPairingPaired({
-      channel,
-      accountId: accountRaw || 'default',
-      senderId,
-    });
+    const result = approveChannelPairingBySender({ channel, accountId, senderId });
     if (result.ok === false) {
-      return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: result.error } },
-        400,
-      );
+      return c.json({ ok: false, error: { code: 'PAIRING_INVALID', message: result.error } }, 400);
+    }
+    return c.json({ ok: true, payload: { senderId: result.senderId, alreadyPaired: result.alreadyPaired } });
+  });
+
+  authenticated.delete('/api/channels/:channelId/pairing/paired', strictRateLimitMiddleware, async (c) => {
+    const channel = channelIdParam(c.req.param('channelId'));
+    const body = await c.req.json().catch(() => ({}));
+    const accountId =
+      body && typeof body === 'object' && typeof (body as { accountId?: unknown }).accountId === 'string'
+        ? (body as { accountId: string }).accountId.trim()
+        : 'default';
+    const senderId =
+      body && typeof body === 'object' && typeof (body as { senderId?: unknown }).senderId === 'string'
+        ? (body as { senderId: string }).senderId.trim()
+        : '';
+    const result = revokeChannelPairingPaired({ channel, accountId, senderId });
+    if (result.ok === false) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: result.error } }, 400);
     }
     return c.json({ ok: true, payload: { changed: result.changed } });
   });
 
-  authenticated.delete('/api/channels/pairing/pending', strictRateLimitMiddleware, async (c) => {
+  authenticated.delete('/api/channels/:channelId/pairing/pending', strictRateLimitMiddleware, async (c) => {
+    const channel = channelIdParam(c.req.param('channelId'));
     const body = await c.req.json().catch(() => ({}));
-    const channel =
-      body && typeof body === 'object' && typeof (body as { channel?: unknown }).channel === 'string'
-        ? parsePairingChannel((body as { channel: string }).channel)
-        : null;
-    if (!channel) {
-      return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: 'Body field channel is required (telegram|feishu|weixin).' } },
-        400,
-      );
-    }
-    const accountRaw =
+    const accountId =
       body && typeof body === 'object' && typeof (body as { accountId?: unknown }).accountId === 'string'
         ? (body as { accountId: string }).accountId.trim()
         : 'default';
@@ -413,17 +202,26 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
       body && typeof body === 'object' && typeof (body as { senderId?: unknown }).senderId === 'string'
         ? (body as { senderId: string }).senderId.trim()
         : '';
-    const result = dismissChannelPairingPending({
-      channel,
-      accountId: accountRaw || 'default',
-      senderId,
-    });
+    const result = dismissChannelPairingPending({ channel, accountId, senderId });
     if (result.ok === false) {
-      return c.json(
-        { ok: false, error: { code: 'PAIRING_INVALID', message: result.error } },
-        400,
-      );
+      return c.json({ ok: false, error: { code: 'PAIRING_INVALID', message: result.error } }, 400);
     }
     return c.json({ ok: true, payload: { senderId: result.senderId } });
+  });
+
+  authenticated.get('/api/channels/:channelId/doctor', async (c) => {
+    const channel = channelIdParam(c.req.param('channelId'));
+    const plugin = service.getChannelRuntimePlugin(channel);
+    if (!plugin?.doctor) {
+      return c.json({ ok: true, payload: { checks: [] } });
+    }
+    const checks = await plugin.doctor.check({ cfg: service.currentConfig });
+    return c.json({ ok: true, payload: { checks } });
+  });
+
+  authenticated.post('/api/channels/:channelId/restart', strictRateLimitMiddleware, async (c) => {
+    const channel = channelIdParam(c.req.param('channelId'));
+    await service.restartChannel(channel);
+    return c.json({ ok: true, payload: { restarted: true } });
   });
 }

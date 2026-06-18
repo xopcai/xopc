@@ -221,7 +221,7 @@ export function useCommandPalette(
     async () => {
       const [commands, skillsPayload, agentsPayload] = await Promise.all([
         fetchCommandsCached(),
-        getSkillsCached(language),
+        getSkillsCached(),
         fetchChatAgents().catch(() => null),
       ]);
       const commandItems: PaletteItem[] = commands.map((c) => ({

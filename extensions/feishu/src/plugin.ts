@@ -24,7 +24,10 @@ import type {
   ChannelStatusAdapter,
   ChatType,
 } from '@xopcai/xopc/channels/plugin-types.js';
-import type { ChannelCliLoginAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
+import type {
+  ChannelCliLoginAdapter,
+  ChannelRuntimeActionAdapter,
+} from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { evaluateAccess, resolveDmPolicy, resolveGroupPolicy } from '@xopcai/xopc/channels/security.js';
 import { createStandardPairingAdapter } from '@xopcai/xopc/channels/pairing/pairing-store-adapter.js';
@@ -53,6 +56,7 @@ import { createFeishuDirectoryAdapter } from './directory/directory-adapter.js';
 import { feishuWhoAmI } from './tools/tools.js';
 import { feishuCliLoginAdapter } from './adapters/cli-login.js';
 import { feishuOnboardAdapter } from './adapters/onboard-cli.js';
+import { feishuGatewaySetupActions } from './adapters/gateway-setup.js';
 import { handleFeishuChannelMessageAction } from './actions/message-action-handler.js';
 import { createFeishuInboundPipeline, type FeishuInboundWork } from './transport/reliability/inbound-pipeline.js';
 import { getWorkflowProgressBroker } from '@xopcai/xopc/agent/workflow/index.js';
@@ -115,6 +119,8 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
   onboard = feishuOnboardAdapter;
 
   readonly cliLogin: ChannelCliLoginAdapter = feishuCliLoginAdapter;
+
+  readonly runtimeActions: ChannelRuntimeActionAdapter = feishuGatewaySetupActions;
 
   private bus!: MessageBus;
   private cfg!: Config;
@@ -424,4 +430,3 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
 }
 
 export const feishuPlugin = new FeishuChannelPlugin();
-

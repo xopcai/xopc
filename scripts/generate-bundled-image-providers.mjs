@@ -5,7 +5,7 @@
  * module exporting `bundledImageGenerationProviderBuilders` so the runtime
  * can register every provider in one pass).
  *
- * Mirrors scripts/generate-bundled-channel-plugins.mjs.
+ * Mirrors the extension-manifest driven bundled discovery layout.
  */
 import fs from 'node:fs';
 import path from 'node:path';

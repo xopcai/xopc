@@ -1,10 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { Braces, ShieldCheck } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 
-import type { WorkflowDefinition } from './workflow-api';
+import type { JsonSchema, WorkflowDefinition } from './workflow-api';
 import { resolveWorkflowLocalizedCopy } from './workflow-meta-locale';
 
 export function WorkflowDefinitionDetailDialog({
@@ -42,6 +43,16 @@ export function WorkflowDefinitionDetailDialog({
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.whenToUseHeading}</h3>
                 <p className="mt-2 text-sm leading-6 text-fg-muted">{localized.whenToUse}</p>
               </section>
+            ) : null}
+
+            <DefinitionCapabilities definition={definition} labels={labels} />
+
+            {definition.inputSchema ? (
+              <SchemaPreview title={labels.inputsHeading} schema={definition.inputSchema} />
+            ) : null}
+
+            {definition.outputSchema ? (
+              <SchemaPreview title={labels.outputsHeading} schema={definition.outputSchema} />
             ) : null}
 
             {definition.phases.length > 0 ? (
@@ -83,5 +94,73 @@ export function WorkflowDefinitionDetailDialog({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
+  );
+}
+
+function DefinitionCapabilities({
+  definition,
+  labels,
+}: {
+  definition: WorkflowDefinition;
+  labels: ReturnType<typeof messages>['workflows'];
+}) {
+  const permissions = definition.permissions;
+  const resources = definition.resources;
+  const rows = [
+    permissions?.tools?.length ? [labels.permissionsTools, permissions.tools.join(', ')] : null,
+    permissions?.network != null ? [labels.permissionsNetwork, permissions.network ? labels.networkEnabled : labels.networkDisabled] : null,
+    permissions?.fileSystem ? [labels.permissionsFileSystem, permissions.fileSystem] : null,
+    permissions?.approvalRequired ? [labels.permissionsApproval, labels.permissionsApproval] : null,
+    resources?.skills?.length ? [labels.resourcesSkills, resources.skills.join(', ')] : null,
+    resources?.contextFiles?.length ? [labels.resourcesContextFiles, resources.contextFiles.join(', ')] : null,
+    resources?.promptTemplates?.length ? [labels.resourcesPromptTemplates, resources.promptTemplates.join(', ')] : null,
+  ].filter(Boolean) as Array<[string, string]>;
+
+  return (
+    <section>
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.capabilitiesHeading}</h3>
+      {rows.length > 0 ? (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {rows.map(([label, value]) => (
+            <div key={`${label}:${value}`} className="rounded-xl border border-edge bg-surface-base/40 px-3 py-2">
+              <div className="flex items-center gap-2 text-xs font-medium text-fg-muted">
+                <ShieldCheck className="size-3.5 text-fg-subtle" aria-hidden />
+                {label}
+              </div>
+              <div className="mt-1 break-words text-sm text-fg">{value}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-fg-muted">{labels.capabilityNone}</p>
+      )}
+    </section>
+  );
+}
+
+function SchemaPreview({ title, schema }: { title: string; schema: JsonSchema }) {
+  const propertyNames = Object.keys(schema.properties ?? {});
+  return (
+    <section>
+      <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-fg-subtle">
+        <Braces className="size-3.5" aria-hidden />
+        {title}
+      </h3>
+      {propertyNames.length > 0 ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {propertyNames.map((name) => (
+            <span key={name} className="rounded-lg border border-edge-subtle bg-surface-base px-2 py-1 text-xs text-fg-muted">
+              {name}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <details className="mt-2">
+        <summary className="cursor-pointer text-xs text-fg-subtle hover:text-fg-muted">JSON</summary>
+        <pre className="mt-2 max-h-48 overflow-auto rounded-xl border border-edge bg-surface-base/50 p-3 font-mono text-xs leading-5 text-fg-muted">
+          {JSON.stringify(schema, null, 2)}
+        </pre>
+      </details>
+    </section>
   );
 }

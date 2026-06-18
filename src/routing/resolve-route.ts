@@ -6,7 +6,6 @@
 
 import { resolveDefaultAgentId as resolveDefaultAgentIdFromConfig } from '../agent/agent-scope.js';
 import type { Config } from '../config/schema.js';
-import type { LocalizedText } from '../config/localized-text.js';
 import type { BindingRule, RouteInput, RouteResult } from './bindings.js';
 
 /**
@@ -67,8 +66,6 @@ export interface AgentConfig {
   /** Registered agents */
   list?: Array<{
     id: string;
-    name?: LocalizedText;
-    description?: LocalizedText;
     enabled?: boolean;
     [key: string]: unknown;
   }>;

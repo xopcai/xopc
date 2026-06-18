@@ -124,21 +124,20 @@ Agent configuration has three parts: optional **`default`** id, shared **`defaul
 |-------|------|-------------|
 | `default` | string | Optional. Default agent id when the session key or API does not specify one. If omitted: first `list` entry with **`default: true`**, else first **enabled** entry in `list`, else `main`. |
 | `defaults` | object | Baseline settings merged into every agent (see **agents.defaults** below). |
-| `list` | array | Registered identities; each object can override fields for that id. |
+| `list` | array | Registered agent ids; each object can override runtime fields for that id. Human-readable identity lives in `agents/<id>/profile/IDENTITY.md`. |
 
 #### `agents.list` entries
 
-Each entry must include **`id`**. Other fields are optional overrides (same shapes as in `defaults` where applicable).
+Each entry must include **`id`**. Other fields are optional runtime overrides (same shapes as in `defaults` where applicable). Display name, description, language, avatar, and model-visible identity are read from **`agents/<id>/profile/IDENTITY.md`**, not from config.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | Agent id (also the first segment of the session key). |
 | `default` | boolean | Optional. When `true`, marks this entry as the default agent when top-level **`agents.default`** is unset. |
-| `name` | string | Display name. |
 | `enabled` | boolean | Default `true`. When `false`, the id is ignored for routing defaults and effective profile resolution falls back to the default agent. |
 | `workspace` | string | Per-agent **Markdown workspace** root (`~` expanded). Tool `cwd`, daily `memory/`, and user files. Profile Markdown (`SOUL.md`, …) lives under **`agents/<id>/profile/`**. Inbound/TTS blobs and curated `memories/` live under **`agents/<id>/`** (agent home), not as siblings of unrelated trees inside this directory. |
 | `agentDir` | string | Optional. Overrides the **internal** agent state directory (`credentials`, `agent.json`, inbox, pid) — default `<stateDir>/agents/<id>/agent`. |
-| `model` | string \| object | Same as `agents.defaults.model` (string or `{ primary, fallbacks }`). |
+| `models` | object | Per-agent chat model and named model role overrides. Same shape as `agents.defaults.models`; `models.roles` merges over defaults by role id. |
 | `thinkingDefault` | string | Optional. One of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `adaptive`. |
 | `reasoningDefault` | string | Optional. `off`, `on`, `stream`. |
 | `verboseDefault` | string | Optional. `off`, `on`, `full`. |
@@ -149,45 +148,46 @@ Each entry must include **`id`**. Other fields are optional overrides (same shap
 
 The same optional keys can appear under **`agents.defaults`** for global defaults (e.g. `agents.defaults.tools.disable` merged with per-agent disables).
 
-**Note:** On-disk paths (`~/.xopc/agents/<id>/` for sessions and internal state, per-agent Markdown workspace under **`agents.defaults.workspace/<agentId>`** or `<stateDir>/workspace/<agentId>`) are **derived from `config.json`** (`agents.list`, `agents.defaults`, optional `agentDir` overrides). Use **`xopc agents add`** / **`agents delete`** to manage entries and directories; there is no separate agent “registry” outside config.
+**Note:** On-disk paths (`~/.xopc/agents/<id>/` for sessions and internal state, per-agent Markdown workspace under **`agents.defaults.workspace/<agentId>`** or `<stateDir>/workspace/<agentId>`) are **derived from `config.json`** (`agents.list`, `agents.defaults`, optional `agentDir` overrides). The agent identity users edit and the model sees is **`profile/IDENTITY.md`**. Use **`xopc agents add`** / **`agents delete`** to manage entries and directories; there is no separate agent “registry” outside config.
 
 #### agents.defaults
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `workspace` | string | `~/.xopc/workspace` | **Parent** directory for Markdown workspaces; each agent resolves to `<expanded>/<agentId>/` (e.g. `~/.xopc/workspace/main`) |
-| `model` | string/object | `anthropic/claude-sonnet-4-5` | Default model |
+| `models` | object | — | Chat model chain and named model roles. |
 | `max_tokens` | number | `8192` | Maximum output tokens |
 | `temperature` | number | `0.7` | Temperature (0-2) |
 | `max_tool_iterations` | number | `20` | Max tool call iterations |
-| `imageModel` | string \| object | — | Vision model for the `image` and `browser_use` tools and for **describing** inbound images when the session model does not support vision. Same formats as `model` (string or `{ primary, fallbacks }`). See [Image & vision](image-multimodal.md). |
-| `imageGenerationModel` | string \| object | — | Image generation chain for `image_generate` (e.g. `openai/gpt-image-1`, `dashscope/wan2.6-t2i`). Same formats as `model`. See [Image & vision](image-multimodal.md). |
+| `imageModel` | object | — | Vision model for the `image` and `browser_use` tools and for **describing** inbound images when the session model does not support vision. Uses `{ primary, fallbacks }`. See [Image & vision](image-multimodal.md). |
+| `imageGenerationModel` | object | — | Image generation chain for `image_generate` (e.g. `openai/gpt-image-1`, `dashscope/wan2.6-t2i`). Uses `{ primary, fallbacks }`. See [Image & vision](image-multimodal.md). |
 | `mediaMaxMb` | number | — | Optional. Max size in **MB** when the `image` tool loads files from disk or URLs. |
 
-#### agents.defaults.model
+#### agents.defaults.models
 
-Model configuration supports two formats:
-
-**Simple format:**
 ```json
 {
-  "model": "anthropic/claude-sonnet-4-5"
-}
-```
-
-**Object format (with fallbacks):**
-```json
-{
-  "model": {
-    "primary": "anthropic/claude-sonnet-4-5",
-    "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
+  "models": {
+    "chat": {
+      "primary": "anthropic/claude-sonnet-4-5",
+      "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
+    },
+    "roles": {
+      "small": {
+        "model": "openai/gpt-4o-mini",
+        "description": "Fast low-cost model"
+      },
+      "large": {
+        "model": "anthropic/claude-sonnet-4-5"
+      }
+    }
   }
 }
 ```
 
 Model ID format: `provider/model-id` (e.g., `anthropic/claude-opus-4-5`).
 
-The same **`{ primary, fallbacks }`** object shape applies to **`imageModel`** and **`imageGenerationModel`** when you want ordered fallbacks for vision or image generation.
+Per-agent `agents.list[].models.roles` merges over default roles by id; `agents.list[].models.chat` overrides the default chat model chain.
 
 #### agents.defaults.memory
 

@@ -7,8 +7,9 @@ import { extractProfileAgentId } from '../../config/agent-profile.js';
 import { resolveModelRef } from '../../config/agent-typed-models.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { resolveModel as resolveModelById } from '../../providers/index.js';
-import { createWorkflowCatalog } from '../../agent/workflow/catalog.js';
 import { DelegateSubagentRunner } from '../../agent/workflow/subagent-runner.js';
+import { CatalogWorkflowDefinitionRegistry } from '../registry/catalog-workflow-definition-registry.js';
+import type { WorkflowDefinitionRegistry } from '../registry/workflow-definition-registry.js';
 import type {
   WorkflowDefinition,
   WorkflowRunDefinitionSnapshot,
@@ -16,7 +17,7 @@ import type {
   WorkflowRunMetadata,
   WorkflowRunSource,
 } from '../domain/index.js';
-import { buildWorkflowDefinition, isTerminalWorkflowRunStatus } from '../domain/index.js';
+import { isTerminalWorkflowRunStatus } from '../domain/index.js';
 import { WorkflowEngine } from '../engine/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
@@ -45,15 +46,19 @@ export interface WorkflowRunServiceOptions {
   service: GatewayWorkflowHost;
   sessionBridge: WorkflowSessionBridge;
   buildChildTools: (childOptions: BuildChildToolsOptions) => AgentTool<any, any>[];
+  definitionRegistry?: WorkflowDefinitionRegistry;
 }
 
 export class WorkflowRunService {
   private readonly activeRuns = new Map<string, AbortController>();
+  private readonly definitionRegistry: WorkflowDefinitionRegistry;
 
-  constructor(private readonly options: WorkflowRunServiceOptions) {}
+  constructor(private readonly options: WorkflowRunServiceOptions) {
+    this.definitionRegistry = options.definitionRegistry ?? new CatalogWorkflowDefinitionRegistry();
+  }
 
   async startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult> {
-    const definition = this.loadDefinition(params.definitionId);
+    const definition = await this.loadDefinition(params.definitionId);
     if (!definition) {
       return {
         ok: false,
@@ -187,19 +192,8 @@ export class WorkflowRunService {
     return this.createRunStore(agentId).readRunView(runId);
   }
 
-  private loadDefinition(definitionId: string): WorkflowDefinition | null {
-    const catalog = createWorkflowCatalog();
-    try {
-      const loaded = catalog.load(definitionId);
-      return buildWorkflowDefinition({
-        name: loaded.name,
-        source: loaded.source,
-        script: loaded.script,
-        meta: loaded.meta,
-      });
-    } catch {
-      return null;
-    }
+  private loadDefinition(definitionId: string): Promise<WorkflowDefinition | null> {
+    return this.definitionRegistry.get(definitionId);
   }
 
   private createWorkflowEngine(params: {
@@ -213,6 +207,7 @@ export class WorkflowRunService {
       bus: gatewayService.messageBusInstance,
       getDefaultModel: () => resolveModelById(gatewayService.agentService.getModelForSession(params.sessionKey)),
       getConfig: () => gatewayService.currentConfig,
+      sessionStore: gatewayService.sessionIndexInstance.getStore(),
       buildChildTools: (childOptions) => this.options.buildChildTools(childOptions),
     });
 
@@ -224,6 +219,11 @@ export class WorkflowRunService {
       resolveModelId: (modelId) => {
         const agentId = extractProfileAgentId(params.sessionKey, gatewayService.currentConfig);
         return resolveModelById(resolveModelRef(gatewayService.currentConfig, agentId, modelId));
+      },
+      parentSessionKey: params.sessionKey,
+      subagentSessionKeyFactory: ({ runId, agentId }) => {
+        const profileAgentId = extractProfileAgentId(params.sessionKey, gatewayService.currentConfig);
+        return `agent:${profileAgentId}:workflow:${runId}:subagent:${agentId}`;
       },
       onEventAppended: (event) => {
         gatewayService.emit('workflow.event.appended', { runId: event.runId, event });

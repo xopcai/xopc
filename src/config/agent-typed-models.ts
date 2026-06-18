@@ -1,15 +1,32 @@
 /**
- * Named model roles from `agents.defaults.models`.
+ * Named model roles from `agents.defaults.models.roles` plus per-agent overrides.
  */
 
 import type { AgentTypedModel, Config } from './schema.js';
 import { parseModelRef } from './schema.js';
+import { listAgentEntries, normalizeAgentId } from '../agent/agent-scope.js';
 
 export type { AgentTypedModel };
 
-export function resolveEffectiveTypedModels(config: Config, _agentId: string): Map<string, AgentTypedModel> {
+function rolesToEntries(
+  roles: Record<string, { model: string; description?: string }> | undefined,
+): AgentTypedModel[] {
+  return Object.entries(roles ?? {}).map(([id, role]) => ({
+    id,
+    ...role,
+  }));
+}
+
+export function resolveEffectiveTypedModels(config: Config, agentId: string): Map<string, AgentTypedModel> {
   const out = new Map<string, AgentTypedModel>();
-  for (const modelRole of config.agents?.defaults?.models ?? []) {
+  for (const modelRole of rolesToEntries(config.agents?.defaults?.models?.roles)) {
+    out.set(modelRole.id, modelRole);
+  }
+  const id = normalizeAgentId(agentId);
+  const entry = listAgentEntries(config).find(
+    (candidate) => candidate.enabled !== false && normalizeAgentId(candidate.id) === id,
+  );
+  for (const modelRole of rolesToEntries(entry?.models?.roles)) {
     out.set(modelRole.id, modelRole);
   }
   return out;

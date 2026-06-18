@@ -74,4 +74,50 @@ describe('buildSetupStatusSnapshot', () => {
     expect(snapshot.checklist.find((i) => i.id === 'provider')?.detail).toBe('3/23 ready');
     expect(snapshot.checklist.find((i) => i.id === 'presets')?.done).toBe(true);
   });
+
+  it('does not count channel catalog metadata as configured', () => {
+    const snapshot = buildSetupStatusSnapshot({
+      hasToken: true,
+      sseConnected: true,
+      config: {
+        channels: {
+          telegram: {
+            configured: false,
+            config: {},
+            schema: { type: 'object' },
+            uiHints: {},
+          },
+        },
+      },
+      skillCount: 0,
+      presetsDone: false,
+      agentCount: 1,
+      labels,
+    });
+
+    expect(snapshot.channelConfigured).toBe(false);
+    expect(snapshot.checklist.find((i) => i.id === 'channel')?.done).toBe(false);
+  });
+
+  it('counts actual channel config from catalog payload', () => {
+    const snapshot = buildSetupStatusSnapshot({
+      hasToken: true,
+      sseConnected: true,
+      config: {
+        channels: {
+          telegram: {
+            configured: true,
+            config: { enabled: true },
+            schema: { type: 'object' },
+          },
+        },
+      },
+      skillCount: 0,
+      presetsDone: false,
+      agentCount: 1,
+      labels,
+    });
+
+    expect(snapshot.channelConfigured).toBe(true);
+  });
 });

@@ -1,3 +1,5 @@
+import { isAbsolute, relative, resolve, sep } from 'node:path';
+
 import type { Component } from '@earendil-works/pi-tui';
 import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 
@@ -17,11 +19,63 @@ export function formatTokens(count: number): string {
   return `${Math.round(count / 1_000_000)}M`;
 }
 
-function shortenPath(cwd: string): string {
-  const home = process.env.HOME || process.env.USERPROFILE;
-  if (home && cwd.startsWith(home)) {
-    return `~${cwd.slice(home.length)}`;
+export function sanitizeStatusText(text: string): string {
+  return text
+    .replace(/[\r\n\t]/g, ' ')
+    .replace(/ +/g, ' ')
+    .trim();
+}
+
+export function formatQueuedMessageLines(
+  state: TuiState,
+  width: number,
+  dequeueHint: string,
+): string[] {
+  const lines: string[] = [];
+  const add = (label: string, text: string) => {
+    const sanitized = sanitizeStatusText(text);
+    if (!sanitized) return;
+    lines.push(
+      truncateToWidth(theme.dim(`${label}: ${sanitized}`), width, theme.dim('…')),
+    );
+  };
+
+  for (const message of state.steeringQueue) {
+    add('Steering', message);
   }
+  for (const message of state.messageFollowUpQueue) {
+    add('Follow-up', message);
+  }
+  for (const message of state.compactionQueue) {
+    add('Queued', message);
+  }
+  if (lines.length > 0) {
+    lines.push(
+      truncateToWidth(theme.dim(`↳ ${dequeueHint} to edit all queued messages`), width, theme.dim('…')),
+    );
+  }
+  return lines;
+}
+
+export function formatCwdForFooter(cwd: string, home: string | undefined): string {
+  if (!home) return cwd;
+
+  const resolvedCwd = resolve(cwd);
+  const resolvedHome = resolve(home);
+  const relativeToHome = relative(resolvedHome, resolvedCwd);
+  const isInsideHome =
+    relativeToHome === '' ||
+    (relativeToHome !== '..' &&
+      !relativeToHome.startsWith(`..${sep}`) &&
+      !isAbsolute(relativeToHome));
+
+  if (!isInsideHome) return cwd;
+  return relativeToHome === '' ? '~' : `~${sep}${relativeToHome}`;
+}
+
+function shortenPath(cwd: string): string {
+  const formatted = formatCwdForFooter(cwd, process.env.HOME || process.env.USERPROFILE);
+  if (formatted !== cwd) return formatted;
   return cwd;
 }
 
@@ -31,24 +85,40 @@ function shortenPath(cwd: string): string {
  */
 export class TuiBottomBar implements Component {
   private extensionLines: string[] = [];
+  private extensionComponents: Component[] = [];
   private extensionStatusParts: string[] = [];
+  private customComponent: Component | undefined;
 
   constructor(
     private readonly getState: () => TuiState,
     private readonly getThinkingDefault: () => string | undefined,
+    private readonly getDequeueHint: () => string = () => 'Alt+Up',
   ) {}
 
   setExtensionLines(lines: string[]): void {
     this.extensionLines = lines;
   }
 
+  setExtensionComponents(components: Component[]): void {
+    this.extensionComponents = components;
+  }
+
   setExtensionStatusParts(parts: string[]): void {
     this.extensionStatusParts = parts;
+  }
+
+  setCustomComponent(component: Component | undefined): void {
+    this.customComponent = component;
   }
 
   invalidate(): void {}
 
   render(width: number): string[] {
+    if (this.customComponent) {
+      const rendered = this.customComponent.render(width);
+      return rendered.map((line) => truncateToWidth(line, width, theme.dim('…')));
+    }
+
     const state = this.getState();
     const cwdRaw = process.cwd();
     const cwd = shortenPath(cwdRaw);
@@ -69,7 +139,10 @@ export class TuiBottomBar implements Component {
     if (state.sessionInfo.totalTokens != null) {
       leftParts.push(formatTokens(state.sessionInfo.totalTokens));
     }
-    const ctxLabel = formatContextUsageLabel(state.sessionInfo.contextUsagePercent ?? null);
+    const ctxLabel = formatContextUsageLabel(
+      state.sessionInfo.contextUsagePercent ?? null,
+      state.sessionInfo.contextWindow ?? null,
+    );
     if (ctxLabel) {
       leftParts.push(ctxLabel);
     }
@@ -81,8 +154,8 @@ export class TuiBottomBar implements Component {
     if (state.messageFollowUpQueue.length > 0) {
       leftParts.push(`Q${state.messageFollowUpQueue.length}`);
     }
-    for (const part of this.extensionStatusParts) {
-      leftParts.push(part);
+    if (state.steeringQueue.length > 0) {
+      leftParts.push(`S${state.steeringQueue.length}`);
     }
     let statsLeft = leftParts.join(' · ');
 
@@ -122,8 +195,23 @@ export class TuiBottomBar implements Component {
 
     const statsDimmed = theme.dim(statsLine);
     const lines = [pwdLine, statsDimmed];
+    if (this.extensionStatusParts.length > 0) {
+      const statusLine = this.extensionStatusParts
+        .map((part) => sanitizeStatusText(part))
+        .filter(Boolean)
+        .join(' ');
+      if (statusLine) {
+        lines.push(truncateToWidth(theme.dim(statusLine), width, theme.dim('…')));
+      }
+    }
+    lines.push(...formatQueuedMessageLines(state, width, this.getDequeueHint()));
     for (const extLine of this.extensionLines) {
-      lines.push(truncateToWidth(theme.dim(extLine), width, theme.dim('…')));
+      lines.push(truncateToWidth(theme.dim(sanitizeStatusText(extLine)), width, theme.dim('…')));
+    }
+    for (const component of this.extensionComponents) {
+      for (const line of component.render(width)) {
+        lines.push(truncateToWidth(line, width, theme.dim('…')));
+      }
     }
     return lines;
   }
