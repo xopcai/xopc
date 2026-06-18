@@ -124,7 +124,7 @@ export interface ChannelDoctorCheckResult {
 }
 
 export interface ChannelDoctorAdapter {
-  check(params: { cfg: Config }): Promise<ChannelDoctorCheckResult[]>;
+  check(params: { cfg: Config; locale?: string }): Promise<ChannelDoctorCheckResult[]>;
 }
 
 export interface ChannelPlugin<ResolvedAccount = any> {

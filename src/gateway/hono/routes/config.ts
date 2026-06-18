@@ -11,6 +11,10 @@ import {
   validateGatewayAfterPatch,
 } from './config-patch/index.js';
 
+function localeFromRequest(c: { req: { query(name: string): string | undefined; header(name: string): string | undefined } }): string | undefined {
+  return c.req.query('locale') ?? c.req.header('X-XOPC-Locale') ?? c.req.header('Accept-Language')?.split(',')[0];
+}
+
 export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
@@ -35,7 +39,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.get('/api/config', async (c) => {
-    const safeConfig = await buildSafeWebConfigPayload(service);
+    const safeConfig = await buildSafeWebConfigPayload(service, { locale: localeFromRequest(c) });
     return c.json({ ok: true, payload: { config: safeConfig } });
   });
 
@@ -75,7 +79,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       service.reloadHeartbeatFromCurrentConfig();
     }
 
-    const safeConfig = await buildSafeWebConfigPayload(service);
+    const safeConfig = await buildSafeWebConfigPayload(service, { locale: localeFromRequest(c) });
     return c.json({ ok: true, payload: { config: safeConfig } });
   });
 

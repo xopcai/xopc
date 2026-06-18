@@ -48,6 +48,28 @@
       },
       "actions": {
         "doctor.run": { "label": "Run doctor", "result": "diagnostics" }
+      },
+      "i18n": {
+        "zh": {
+          "label": "Telegram",
+          "description": "Telegram Bot API 消息通道",
+          "configSchema": {
+            "properties": {
+              "enabled": { "title": "启用" },
+              "accounts": { "title": "账号" },
+              "botToken": { "title": "Bot Token" },
+              "dmPolicy": { "title": "私聊策略" },
+              "groupPolicy": { "title": "群聊策略" }
+            }
+          },
+          "uiHints": {
+            "botToken": { "help": "Telegram Bot Token" },
+            "accounts.*.botToken": { "help": "Telegram Bot Token" }
+          },
+          "actions": {
+            "doctor.run": { "label": "诊断" }
+          }
+        }
       }
     }
   },

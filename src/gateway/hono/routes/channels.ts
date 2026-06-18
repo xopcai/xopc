@@ -29,14 +29,19 @@ function actionPayloadChangedConfig(payload: ChannelRuntimeActionPayload | undef
   return Boolean(payload && 'configChanged' in payload && payload.configChanged === true);
 }
 
+function localeFromRequest(c: { req: { query(name: string): string | undefined; header(name: string): string | undefined } }): string | undefined {
+  return c.req.query('locale') ?? c.req.header('X-XOPC-Locale') ?? c.req.header('Accept-Language')?.split(',')[0];
+}
+
 export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
 
   authenticated.get('/api/channels/catalog', (c) => {
     const snapshot = service.getExtensionLoader()?.getManifestSnapshot();
+    const locale = localeFromRequest(c);
     const catalog = snapshot
-      ? buildChannelCatalogFromSnapshot(snapshot)
-      : buildChannelCatalogForConfig(service.currentConfig);
+      ? buildChannelCatalogFromSnapshot(snapshot, { locale })
+      : buildChannelCatalogForConfig(service.currentConfig, { locale });
     const channelsCfg = service.currentConfig.channels as Record<string, { enabled?: boolean } | undefined> | undefined;
     const running = new Set(service.getRunningChannelIds());
     return c.json({
@@ -88,9 +93,15 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
         : undefined;
     const input = body && typeof body === 'object' ? (body as { input?: unknown }).input : undefined;
 
+    if (action === 'doctor.run' && plugin.doctor) {
+      const checks = await plugin.doctor.check({ cfg: service.currentConfig, locale: localeFromRequest(c) });
+      return c.json({ ok: true, payload: { type: 'diagnostics', checks } });
+    }
+
     if (plugin.runtimeActions) {
       const result = await plugin.runtimeActions.runAction({
         cfg: service.currentConfig,
+        locale: localeFromRequest(c),
         actionId: action,
         accountId,
         input,
@@ -102,11 +113,6 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
         await service.reloadConfig();
       }
       return c.json({ ok: true, payload: result.payload ?? {} });
-    }
-
-    if (action === 'doctor.run' && plugin.doctor) {
-      const checks = await plugin.doctor.check({ cfg: service.currentConfig });
-      return c.json({ ok: true, payload: { type: 'diagnostics', checks } });
     }
 
     return c.json(

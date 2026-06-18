@@ -102,7 +102,8 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   };
 
   readonly runtimeActions: ChannelRuntimeActionAdapter = {
-    runAction: async ({ actionId, accountId, input }) => {
+    runAction: async ({ actionId, accountId, input, locale }) => {
+      const zh = locale?.toLowerCase().startsWith('zh') === true;
       if (actionId === 'login.start') {
         const { startWeixinGatewayQrLogin } = await import('./cli/gateway-qr-login.js');
         const inputRecord =
@@ -130,7 +131,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
             qrcodeUrl: start.qrcodeUrl,
             statusAction: 'login.status',
             pollIntervalMs: 2500,
-            message: 'Scan the QR code with WeChat.',
+            message: zh ? '请使用微信扫描二维码。' : 'Scan the QR code with WeChat.',
           },
         };
       }
@@ -141,7 +142,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
             ? (input as Record<string, unknown>)
             : {};
         const sessionKey = typeof inputRecord.sessionKey === 'string' ? inputRecord.sessionKey : '';
-        if (!sessionKey) return { ok: false, message: 'Missing login sessionKey' };
+        if (!sessionKey) return { ok: false, message: zh ? '缺少登录 sessionKey' : 'Missing login sessionKey' };
         const { getWeixinGatewayQrLoginStatus } = await import('./cli/gateway-qr-login.js');
         const status = getWeixinGatewayQrLoginStatus(sessionKey);
         if (status.phase === 'polling') {
@@ -164,7 +165,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
               phase: 'done',
               ok: status.ok,
               accountId: status.ok ? status.accountId : undefined,
-              message: status.ok === true ? 'Weixin login complete.' : status.message,
+              message: status.ok === true ? (zh ? '微信登录完成。' : 'Weixin login complete.') : status.message,
               configChanged: status.ok,
             },
           };

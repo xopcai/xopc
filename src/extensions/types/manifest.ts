@@ -86,6 +86,14 @@ export interface ChannelActionDescriptor {
   schema?: Record<string, unknown>;
 }
 
+export interface ChannelContributionI18n {
+  label?: string;
+  description?: string;
+  configSchema?: Record<string, unknown>;
+  uiHints?: Record<string, ChannelConfigUiHint>;
+  actions?: Record<string, ChannelActionDescriptor>;
+}
+
 export interface ChannelContributionDeclaration {
   label: string;
   description?: string;
@@ -96,6 +104,7 @@ export interface ChannelContributionDeclaration {
   configSchema?: Record<string, unknown>;
   uiHints?: Record<string, ChannelConfigUiHint>;
   actions?: Record<string, ChannelActionDescriptor>;
+  i18n?: Record<string, ChannelContributionI18n>;
 }
 
 export interface ExtensionManifestCommand {

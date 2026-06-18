@@ -66,10 +66,11 @@ function choosePrimaryAction(entry: ChannelCatalogEntry): [string, ChannelAction
 async function runChannelAction(params: {
   channelId: string;
   actionId: string;
+  locale: string;
   accountId?: string;
   input?: unknown;
 }): Promise<ActionPayload> {
-  const res = await apiFetch(apiUrl(`/api/channels/${encodeURIComponent(params.channelId)}/actions/${encodeURIComponent(params.actionId)}`), {
+  const res = await apiFetch(apiUrl(`/api/channels/${encodeURIComponent(params.channelId)}/actions/${encodeURIComponent(params.actionId)}?locale=${encodeURIComponent(params.locale)}`), {
     method: 'POST',
     body: JSON.stringify({
       ...(params.accountId ? { accountId: params.accountId } : {}),
@@ -112,9 +113,11 @@ function payloadQrImage(payload: ActionPayload | null): string | null {
 
 export function ChannelSetupCard({
   entry,
+  locale,
   onChanged,
 }: {
   entry: ChannelCatalogEntry;
+  locale: string;
   onChanged: () => Promise<void> | void;
 }) {
   const primary = useMemo(() => choosePrimaryAction(entry), [entry]);
@@ -141,7 +144,7 @@ export function ChannelSetupCard({
   const runAction = useCallback(async (actionId: string, input?: unknown) => {
     setState((prev) => ({ ...prev, busy: true, error: null }));
     try {
-      const payload = await runChannelAction({ channelId: entry.id, actionId, input });
+      const payload = await runChannelAction({ channelId: entry.id, actionId, locale, input });
       setState((prev) => ({
         ...prev,
         payload,
@@ -162,7 +165,7 @@ export function ChannelSetupCard({
     } catch (err) {
       setState((prev) => ({ ...prev, busy: false, error: err instanceof Error ? err.message : String(err) }));
     }
-  }, [entry.id, onChanged]);
+  }, [entry.id, locale, onChanged]);
 
   useEffect(() => {
     const content = payloadQrContent(state.payload, entry.id);
@@ -189,6 +192,7 @@ export function ChannelSetupCard({
       void runChannelAction({
         channelId: entry.id,
         actionId: poll.actionId,
+        locale,
         input: { sessionKey: poll.sessionKey },
       })
         .then(async (next) => {
@@ -216,9 +220,10 @@ export function ChannelSetupCard({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [entry.id, onChanged, state.poll]);
+  }, [entry.id, locale, onChanged, state.poll]);
 
   const primaryLabel = primary?.[1].label ?? (entry.configured ? 'Reconnect' : 'Connect');
+  const doctorLabel = entry.actions?.['doctor.run']?.label ?? 'Diagnose';
   const message = payloadMessage(state.payload);
   const qrContent = payloadQrContent(state.payload, entry.id);
   const qrImage = qrContent ? state.generatedQr : payloadQrImage(state.payload);
@@ -254,7 +259,7 @@ export function ChannelSetupCard({
               onClick={() => void runAction('doctor.run')}
             >
               <Stethoscope className="size-4" />
-              Diagnose
+              {doctorLabel}
             </Button>
           ) : null}
         </div>

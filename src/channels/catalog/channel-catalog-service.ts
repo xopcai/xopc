@@ -9,6 +9,10 @@ import type { ChannelContributionDeclaration } from '../../extensions/types/mani
 
 import type { ChannelCatalog, ChannelCatalogEntry } from './channel-catalog-types.js';
 
+type BuildChannelCatalogOptions = {
+  locale?: string;
+};
+
 const DEFAULT_CONFIG_SCHEMA: Record<string, unknown> = {
   type: 'object',
   additionalProperties: true,
@@ -16,6 +20,18 @@ const DEFAULT_CONFIG_SCHEMA: Record<string, unknown> = {
 
 function normalizeChannelId(raw: string): string {
   return raw.trim().toLowerCase();
+}
+
+function normalizeLocale(raw: string | undefined): string | undefined {
+  const value = raw?.trim().toLowerCase().replace('_', '-');
+  return value || undefined;
+}
+
+function localeCandidates(raw: string | undefined): string[] {
+  const locale = normalizeLocale(raw);
+  if (!locale) return [];
+  const base = locale.split('-')[0];
+  return base && base !== locale ? [locale, base] : [locale];
 }
 
 function normalizeConfigPath(channelId: string, raw: string | undefined): `channels.${string}` {
@@ -53,35 +69,94 @@ function hasConfiguredWeixinAccount(raw: unknown): boolean {
   return Object.values(accounts).some((account) => isRecord(account) && account.enabled !== false);
 }
 
+function withoutUndefined(value: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
+}
+
+function mergeObjectMap<T extends Record<string, unknown>>(base: T | undefined, override: T | undefined): T | undefined {
+  if (!base && !override) return undefined;
+  if (!base) return override ? withoutUndefined(override) as T : undefined;
+  if (!override) return base;
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    if (value === undefined) continue;
+    out[key] = isRecord(out[key]) && isRecord(value)
+      ? { ...out[key], ...withoutUndefined(value) }
+      : value;
+  }
+  return out as T;
+}
+
+function mergeRecordDeep(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    if (value === undefined) continue;
+    out[key] = isRecord(out[key]) && isRecord(value)
+      ? mergeRecordDeep(out[key], value)
+      : value;
+  }
+  return out;
+}
+
+function mergeJsonSchema(base: Record<string, unknown> | undefined, override: Record<string, unknown> | undefined) {
+  if (!base && !override) return undefined;
+  if (!base) return override ? withoutUndefined(override) : undefined;
+  if (!override) return base;
+  return mergeRecordDeep(base, override);
+}
+
+function localizeContribution(
+  contribution: ChannelContributionDeclaration,
+  locale: string | undefined,
+): ChannelContributionDeclaration {
+  const i18n = contribution.i18n;
+  if (!i18n) return contribution;
+  const override = localeCandidates(locale).map((key) => i18n[key]).find(Boolean);
+  if (!override) return contribution;
+  return {
+    ...contribution,
+    label: override.label ?? contribution.label,
+    description: override.description ?? contribution.description,
+    configSchema: mergeJsonSchema(contribution.configSchema, override.configSchema),
+    uiHints: mergeObjectMap(contribution.uiHints, override.uiHints),
+    actions: mergeObjectMap(contribution.actions, override.actions),
+  };
+}
+
 function toCatalogEntry(params: {
   extension: ManifestRegistryEntry;
   channelId: string;
   contribution: ChannelContributionDeclaration;
+  locale?: string;
 }): ChannelCatalogEntry {
+  const contribution = localizeContribution(params.contribution, params.locale);
   const id = normalizeChannelId(params.channelId);
   return {
     id,
     extensionId: params.extension.id,
     source: params.extension.source,
     path: params.extension.path,
-    label: params.contribution.label,
-    description: params.contribution.description,
-    docsPath: params.contribution.docsPath,
-    order: params.contribution.order ?? 999,
-    configPath: normalizeConfigPath(id, params.contribution.configPath),
-    capabilities: params.contribution.capabilities ?? {},
-    configSchema: params.contribution.configSchema ?? DEFAULT_CONFIG_SCHEMA,
-    uiHints: params.contribution.uiHints ?? {},
-    actions: params.contribution.actions ?? {},
+    label: contribution.label,
+    description: contribution.description,
+    docsPath: contribution.docsPath,
+    order: contribution.order ?? 999,
+    configPath: normalizeConfigPath(id, contribution.configPath),
+    capabilities: contribution.capabilities ?? {},
+    configSchema: contribution.configSchema ?? DEFAULT_CONFIG_SCHEMA,
+    uiHints: contribution.uiHints ?? {},
+    actions: contribution.actions ?? {},
   };
 }
 
-export function buildChannelCatalogFromSnapshot(snapshot: ExtensionMetadataSnapshot): ChannelCatalog {
+export function buildChannelCatalogFromSnapshot(
+  snapshot: ExtensionMetadataSnapshot,
+  options: BuildChannelCatalogOptions = {},
+): ChannelCatalog {
   const byId = new Map<string, ChannelCatalogEntry>();
   for (const extension of snapshot.manifestRegistry.getAllEntries()) {
     const contributions = extension.manifest.channelContributions ?? {};
     for (const [channelId, contribution] of Object.entries(contributions)) {
-      const entry = toCatalogEntry({ extension, channelId, contribution });
+      const entry = toCatalogEntry({ extension, channelId, contribution, locale: options.locale });
       byId.set(entry.id, entry);
     }
   }
@@ -92,9 +167,9 @@ export function buildChannelCatalogFromSnapshot(snapshot: ExtensionMetadataSnaps
   return { entries, byId };
 }
 
-export function buildChannelCatalogForConfig(config: Config): ChannelCatalog {
+export function buildChannelCatalogForConfig(config: Config, options: BuildChannelCatalogOptions = {}): ChannelCatalog {
   const snapshot = buildExtensionMetadataSnapshot(resolveExtensionLoaderOptionsFromConfig(config), config);
-  return buildChannelCatalogFromSnapshot(snapshot);
+  return buildChannelCatalogFromSnapshot(snapshot, options);
 }
 
 export function isChannelConfigured(config: Config, channelId: string): boolean {

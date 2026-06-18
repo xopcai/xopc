@@ -28,21 +28,21 @@ export type ChannelCatalogEntry = {
   runtime?: string;
 };
 
-export function channelCatalogSwrKey(): string {
-  return apiUrl('/api/channels/catalog');
+export function channelCatalogSwrKey(locale: string): string {
+  return apiUrl(`/api/channels/catalog?locale=${encodeURIComponent(locale)}`);
 }
 
-export async function fetchChannelCatalog(): Promise<ChannelCatalogEntry[]> {
+export async function fetchChannelCatalog(locale: string): Promise<ChannelCatalogEntry[]> {
   const data = await fetchJson<{ ok?: boolean; payload?: { channels?: ChannelCatalogEntry[] } }>(
-    channelCatalogSwrKey(),
+    channelCatalogSwrKey(locale),
   );
   return data.payload?.channels ?? [];
 }
 
-export function useChannelCatalog(hasToken: boolean) {
+export function useChannelCatalog(hasToken: boolean, locale: string) {
   const { data, error, isLoading, isValidating, mutate } = useSWR(
-    hasToken ? channelCatalogSwrKey() : null,
-    fetchChannelCatalog,
+    hasToken ? channelCatalogSwrKey(locale) : null,
+    () => fetchChannelCatalog(locale),
     { revalidateOnFocus: false },
   );
   return { entries: data ?? [], isLoading, isValidating, error, mutate };
