@@ -1,19 +1,26 @@
 import type { Config } from '@xopcai/xopc/config/index.js';
 import type { ChannelDoctorCheckResult } from '@xopcai/xopc/channels/plugin-types.js';
 import { hasTelegramBotEndpointApiRoot, normalizeTelegramApiRoot } from './api-root.js';
+import { createProxyFetch } from './proxy-fetch.js';
+import { isTelegramUnauthorizedTokenError } from './startup-errors.js';
 import { resolveTelegramBotToken } from './token-resolver.js';
+
+const TELEGRAM_DOCTOR_GETME_TIMEOUT_MS = 10_000;
 
 type TelegramCfg = {
   enabled?: boolean;
   dmPolicy?: string;
   allowFrom?: Array<string | number>;
   apiRoot?: string;
+  proxy?: string;
   accounts?: Record<
     string,
     {
+      enabled?: boolean;
       botToken?: string;
       tokenFile?: string;
       apiRoot?: string;
+      proxy?: string;
       dmPolicy?: string;
       allowFrom?: Array<string | number>;
     }
@@ -36,8 +43,83 @@ function collectTokens(cfg: TelegramCfg): Map<string, string[]> {
   return map;
 }
 
+function formatGetMeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function createTimeoutSignal(timeoutMs: number): { signal: AbortSignal; dispose: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error(`Timed out after ${timeoutMs}ms`)), timeoutMs);
+  timer.unref?.();
+  return {
+    signal: controller.signal,
+    dispose: () => clearTimeout(timer),
+  };
+}
+
+async function checkGetMe(params: {
+  accountId: string;
+  token: string;
+  apiRoot?: string;
+  proxy?: string;
+  fetchImpl?: typeof fetch;
+}): Promise<ChannelDoctorCheckResult> {
+  const apiRoot = normalizeTelegramApiRoot(params.apiRoot);
+  const url = `${apiRoot}/bot${params.token}/getMe`;
+  const timeout = createTimeoutSignal(TELEGRAM_DOCTOR_GETME_TIMEOUT_MS);
+  const fetchImpl = params.proxy ? createProxyFetch(params.proxy) : (params.fetchImpl ?? fetch);
+
+  try {
+    const startedAt = Date.now();
+    const response = await fetchImpl(url, { signal: timeout.signal });
+    const elapsedMs = Date.now() - startedAt;
+    const body = (await response.json().catch(() => undefined)) as
+      | { ok?: boolean; result?: { username?: string }; description?: string }
+      | undefined;
+
+    if (response.ok && body?.ok === true) {
+      const username = body.result?.username ? ` @${body.result.username}` : '';
+      return {
+        id: `telegram-account-getme-${params.accountId}`,
+        label: `Telegram getMe (${params.accountId})`,
+        status: 'pass',
+        message: `getMe succeeded${username} in ${elapsedMs}ms.`,
+        hints: params.proxy ? [`Using proxy: ${params.proxy}`] : [],
+      };
+    }
+
+    const description = body?.description || `HTTP ${response.status}`;
+    return {
+      id: `telegram-account-getme-${params.accountId}`,
+      label: `Telegram getMe (${params.accountId})`,
+      status: isTelegramUnauthorizedTokenError(description) ? 'fail' : 'warn',
+      message: `getMe failed: ${description}`,
+      hints: isTelegramUnauthorizedTokenError(description)
+        ? ['Verify the bot token from @BotFather.']
+        : ['Check channels.telegram.apiRoot / account apiRoot and network access.'],
+    };
+  } catch (err) {
+    const message = formatGetMeError(err);
+    return {
+      id: `telegram-account-getme-${params.accountId}`,
+      label: `Telegram getMe (${params.accountId})`,
+      status: 'fail',
+      message: `getMe network check failed: ${message}`,
+      hints: [
+        'Verify this host can reach the Telegram Bot API.',
+        'If your shell uses HTTP(S)_PROXY, also set channels.telegram.proxy because Node fetch does not use env proxy automatically.',
+        `Effective apiRoot: ${apiRoot}`,
+      ],
+    };
+  } finally {
+    timeout.dispose();
+  }
+}
+
 export async function runTelegramDoctorChecks(params: {
   cfg: Config;
+  fetchImpl?: typeof fetch;
 }): Promise<ChannelDoctorCheckResult[]> {
   const results: ChannelDoctorCheckResult[] = [];
   const tg = params.cfg.channels?.telegram as TelegramCfg | undefined;
@@ -114,6 +196,18 @@ export async function runTelegramDoctorChecks(params: {
         message: `Account "${id}" bot token looks too short.`,
         hints: ['Verify the token from @BotFather.'],
       });
+    }
+
+    if (tg.enabled && token && acc.enabled !== false) {
+      results.push(
+        await checkGetMe({
+          accountId: id,
+          token,
+          apiRoot: acc.apiRoot || tg.apiRoot,
+          proxy: acc.proxy || tg.proxy,
+          fetchImpl: params.fetchImpl,
+        }),
+      );
     }
   }
 

@@ -127,6 +127,28 @@ function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global')
   return skills;
 }
 
+function deriveDescriptionFromMarkdown(content: string): string | undefined {
+  let fallbackHeading = '';
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+
+    const heading = line.match(/^#{1,6}\s+(.+)$/);
+    if (heading) {
+      fallbackHeading ||= heading[1]?.trim() ?? '';
+      continue;
+    }
+
+    return line
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
+      .replace(/[*_`~]/g, '')
+      .trim() || undefined;
+  }
+
+  return fallbackHeading || undefined;
+}
+
 function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | 'global', rootDir?: string): Skill | null {
   try {
     const rawContent = readFileSync(filePath, 'utf-8');
@@ -135,7 +157,8 @@ function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | '
     const parentDirName = basename(skillDir);
 
     const name = (frontmatter.name as string | undefined) || parentDirName;
-    const description = frontmatter.description as string | undefined;
+    const description =
+      (frontmatter.description as string | undefined)?.trim() || deriveDescriptionFromMarkdown(content);
     if (!description?.trim()) return null;
 
     // Derive category from directory path: skills/creative/algorithmic-art → 'creative'
@@ -150,6 +173,8 @@ function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | '
     }
 
     const metadata = parseSkillMetadata(frontmatter);
+    metadata.name ||= name;
+    metadata.description ||= description.trim();
     const toolConditions = parseSkillToolConditions(frontmatter);
     const requiredEnvVarNames = parseRequiredEnvVarNames(frontmatter);
 
