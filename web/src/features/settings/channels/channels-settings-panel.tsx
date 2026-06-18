@@ -36,18 +36,19 @@ function statusLabel(entry: ChannelCatalogEntry, ch: ReturnType<typeof messages>
   return ch.hubStatusNotConfigured;
 }
 
-const BASIC_CONFIG_PATHS_BY_CHANNEL: Record<string, string[]> = {
-  telegram: [
-    'enabled',
-    'accounts.default.enabled',
-    'accounts.default.botToken',
-    'accounts.default.tokenFile',
-    'dmPolicy',
-    'groupPolicy',
-  ],
-  weixin: ['enabled', 'dmPolicy'],
-  feishu: ['enabled', 'appId', 'appSecret', 'domain'],
-};
+function getBasicConfigPaths(entry: ChannelCatalogEntry | undefined): string[] {
+  if (!entry) return ['enabled'];
+  const hints = entry.uiHints ?? {};
+  const basic = Object.entries(hints)
+    .filter(([, hint]) => {
+      if (!isRecord(hint)) return false;
+      if (hint.advanced === true) return false;
+      const tags = Array.isArray(hint.tags) ? hint.tags.map(String) : [];
+      return tags.includes('basic') || hint.advanced === false;
+    })
+    .map(([path]) => path);
+  return basic.length > 0 ? basic : ['enabled'];
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -147,7 +148,7 @@ export function ChannelsSettingsPanel() {
     () => (activeEntry?.configSchema ?? { type: 'object', properties: {} }) as JsonSchema,
     [activeEntry?.configSchema],
   );
-  const basicConfigPaths = activeEntry ? BASIC_CONFIG_PATHS_BY_CHANNEL[activeEntry.id] ?? ['enabled'] : ['enabled'];
+  const basicConfigPaths = useMemo(() => getBasicConfigPaths(activeEntry), [activeEntry]);
   const basicConfigSchema = useMemo(
     () => pickSchemaPaths(fullConfigSchema, basicConfigPaths),
     [basicConfigPaths, fullConfigSchema],
