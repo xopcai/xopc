@@ -60,7 +60,6 @@ import {
 import type { TelegramResolvedAccount } from './adapters/index.js';
 import type { ChannelCronDeliveryAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import { normalizeTelegramDeliveryChatId } from './delivery-chat-id.js';
-import { telegramConfigSurface } from './adapters/config-surface.js';
 import { telegramOnboardAdapter } from './adapters/onboard-cli.js';
 import { TelegramConfigSchema } from './config-schema.js';
 import { normalizeTelegramApiRoot } from './api-root.js';
@@ -135,8 +134,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       return { chatId: normalizeTelegramDeliveryChatId(to) };
     },
   };
-
-  readonly configSurface = telegramConfigSurface;
 
   readonly onboard = telegramOnboardAdapter;
 

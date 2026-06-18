@@ -52,7 +52,6 @@ function hasNonEmptyString(value: unknown): boolean {
 
 function hasConfiguredTelegramCredential(raw: unknown): boolean {
   if (!isRecord(raw)) return false;
-  if (hasNonEmptyString(raw.botToken) || hasNonEmptyString(raw.tokenFile)) return true;
   const accounts = raw.accounts;
   if (!isRecord(accounts)) return false;
   return Object.values(accounts).some((account) => {

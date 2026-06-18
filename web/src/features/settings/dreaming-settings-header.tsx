@@ -102,13 +102,15 @@ export function DreamingHeader({
           </>
         ) : null}
         <Button
-          variant="secondary"
-          className="px-2.5 py-1.5 text-xs"
+          type="button"
+          variant="ghost"
+          className="size-9 shrink-0 p-0"
           disabled={!hasToken}
+          title={t.refresh}
+          aria-label={t.refresh}
           onClick={() => void doRefresh()}
         >
-          <RefreshCw className="mr-2 size-4" aria-hidden />
-          {t.refresh}
+          <RefreshCw className="size-4" strokeWidth={1.75} aria-hidden />
         </Button>
       </div>
     </header>
