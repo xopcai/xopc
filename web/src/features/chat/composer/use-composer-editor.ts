@@ -12,6 +12,8 @@ export function syncComposerPlaceholderClass(el: HTMLElement, wire: string): voi
 
 export interface UseComposerEditorOptions {
   disabled: boolean;
+  /** Route/session identity that should focus the editor when it changes. */
+  autoFocusKey?: string | null;
   /** Fills the editor when user picks a welcome scenario. */
   welcomeDraftSeed?: { id: number; text: string } | null;
   /** Run before full text replacement (welcome, fill) — e.g. clear attachments. */
@@ -40,7 +42,7 @@ export interface UseComposerEditorReturn {
 }
 
 export function useComposerEditor(options: UseComposerEditorOptions): UseComposerEditorReturn {
-  const { disabled, welcomeDraftSeed, onExternalTextReplace, shouldSyncSelectionRef } = options;
+  const { disabled, autoFocusKey, welcomeDraftSeed, onExternalTextReplace, shouldSyncSelectionRef } = options;
 
   const [value, setValue] = useState('');
   const [cursor, setCursor] = useState(0);
@@ -51,6 +53,7 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
   const lastWelcomeDraftIdRef = useRef(0);
 
   const pendingFocusAfterEnableRef = useRef(true);
+  const lastAutoFocusKeyRef = useRef<string | null>(null);
 
   valueRef.current = value;
   cursorRef.current = cursor;
@@ -101,8 +104,15 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
       pendingFocusAfterEnableRef.current = true;
       return;
     }
-    if (!pendingFocusAfterEnableRef.current) return;
+
+    const focusKey = autoFocusKey ?? null;
+    const shouldFocusAfterEnable = pendingFocusAfterEnableRef.current;
+    const shouldFocusForRoute = focusKey != null && focusKey !== lastAutoFocusKeyRef.current;
+    if (!shouldFocusAfterEnable && !shouldFocusForRoute) return;
+
     pendingFocusAfterEnableRef.current = false;
+    if (focusKey != null) lastAutoFocusKeyRef.current = focusKey;
+
     const id = requestAnimationFrame(() => {
       const allowAutoFocus =
         typeof globalThis.matchMedia === 'function' &&
@@ -111,7 +121,7 @@ export function useComposerEditor(options: UseComposerEditorOptions): UseCompose
       editorRef.current?.focus({ preventScroll: true });
     });
     return () => cancelAnimationFrame(id);
-  }, [disabled]);
+  }, [disabled, autoFocusKey]);
 
   useEffect(() => {
     const el = editorRef.current;
