@@ -612,12 +612,12 @@ export class AgentService {
     this.commandHandler.updateAgentConfig(config);
   }
 
-  getSkillCatalog(lang?: string): SkillCatalogEntry[] {
-    return this.agentManager.getSkillCatalog(lang);
+  getSkillCatalog(): SkillCatalogEntry[] {
+    return this.agentManager.getSkillCatalog();
   }
 
-  getSkillMarkdownSource(skillName: string, lang?: string): SkillMarkdownPreviewPayload | null {
-    return this.agentManager.getSkillMarkdownSource(skillName, lang);
+  getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
+    return this.agentManager.getSkillMarkdownSource(skillName);
   }
 
   refreshSkillsAfterDiskChange(): void {

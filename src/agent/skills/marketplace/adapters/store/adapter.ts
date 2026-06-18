@@ -1,3 +1,4 @@
+import { buildSkillMarkdownPreviewFromRaw } from '../../../skill-markdown-preview-from-raw.js';
 import {
   downloadSkillZipBuffer,
   fetchMarketplacePackageDetail,
@@ -30,7 +31,19 @@ export const storeMarketplaceAdapter: SkillsMarketplaceAdapter = {
   async getPackageDetail(config, packageName) {
     const base = resolveSkillsStoreBaseUrl(config);
     const detail = await fetchMarketplacePackageDetail(base, packageName);
-    return { ...detail, provider: 'store' };
+    const readme = detail.readme?.trim();
+    if (!readme) {
+      throw new Error(`Store skill package [${packageName}] did not include readme`);
+    }
+    return {
+      ...detail,
+      readme,
+      provider: 'store',
+      skillDocPreview: buildSkillMarkdownPreviewFromRaw(readme, {
+        name: detail.name,
+        description: detail.description,
+      }),
+    };
   },
 
   async downloadPackage(config, packageName, version) {

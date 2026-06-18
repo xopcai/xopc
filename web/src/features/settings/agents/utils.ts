@@ -7,6 +7,7 @@ export type AgentPanel =
   | 'overview'
   | 'profile'
   | 'files'
+  | 'models'
   | 'tools'
   | 'skills'
   | 'channels'

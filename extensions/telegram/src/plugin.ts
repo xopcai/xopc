@@ -31,7 +31,6 @@ import { issuePairingChallenge, resolveStandardPairingPath } from '@xopcai/xopc/
 import { createStandardPairingAdapter } from '@xopcai/xopc/channels/pairing/pairing-store-adapter.js';
 import { createTimeoutAbortSignal } from './timeout-abort.js';
 import { createInboundDebouncer } from '@xopcai/xopc/infra/debounce.js';
-import { getChatChannelMeta } from '@xopcai/xopc/channels/registry.js';
 import { getMimeType } from '@xopcai/xopc/channels/media.js';
 import { transcribe as sttTranscribe, isSTTAvailable } from '@xopcai/xopc/voice/stt/index.js';
 import type { STTConfig } from '@xopcai/xopc/voice/stt/types.js';
@@ -87,8 +86,6 @@ const TELEGRAM_CLIENT_TIMEOUT_SECONDS = 75;
 
 const log = createLogger('TelegramPlugin');
 
-const TELEGRAM_REGISTRY_META = getChatChannelMeta('telegram');
-
 export type { TelegramResolvedAccount as TelegramAccount } from './channel.js';
 
 export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAccount> {
@@ -99,16 +96,24 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   };
 
   readonly meta = {
-    id: TELEGRAM_REGISTRY_META.id,
-    label: TELEGRAM_REGISTRY_META.label,
+    id: 'telegram',
+    label: 'Telegram',
     selectionLabel: 'Telegram Bot',
     docsPath: '/channels/telegram',
-    blurb: TELEGRAM_REGISTRY_META.description,
+    blurb: 'Telegram Bot API channel',
     order: 0,
     deferConnectUntilAfterListen: true,
   } as const;
 
-  readonly capabilities = TELEGRAM_REGISTRY_META.capabilities;
+  readonly capabilities = {
+    chatTypes: ['direct', 'group', 'channel', 'thread'] as Array<'direct' | 'group' | 'channel' | 'thread'>,
+    reactions: true,
+    threads: true,
+    media: true,
+    polls: false,
+    nativeCommands: true,
+    blockStreaming: true,
+  } as const;
 
   readonly defaults: ChannelPluginDefaults = {
     queue: { debounceMs: TELEGRAM_CHANNEL_DEFAULTS.queue.debounceMs },

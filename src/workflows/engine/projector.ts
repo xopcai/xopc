@@ -98,13 +98,15 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
         break;
       }
       case 'agent_queued': {
-        const payload = event.payload as { agentId: string; label: string; phaseId?: string; prompt?: string };
+        const payload = event.payload as { agentId: string; label: string; phaseId?: string; prompt?: string; sessionKey: string };
         agentIdToAgent.set(payload.agentId, {
           id: payload.agentId,
           label: payload.label,
           phaseId: payload.phaseId,
           status: 'queued',
           prompt: payload.prompt,
+          sessionKey: payload.sessionKey,
+          transcriptMessageCount: 0,
           steps: [],
         });
         if (payload.phaseId) {
@@ -144,6 +146,7 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
           agentIdToAgent.set(payload.agentId, {
             ...existing,
             currentStep: payload.label,
+            transcriptMessageCount: existing.transcriptMessageCount + 1,
             steps: [
               ...existing.steps,
               {
@@ -202,6 +205,7 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
             currentStep: undefined,
             resultPreview: payload.resultPreview,
             error: payload.error,
+            transcriptMessageCount: existing.transcriptMessageCount + 1,
             completedAtMs: event.createdAtMs,
           });
         }

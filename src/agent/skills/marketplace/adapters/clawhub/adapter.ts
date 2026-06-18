@@ -2,6 +2,7 @@
  * ClawHub (clawhub.ai) skills marketplace adapter.
  */
 
+import { buildSkillMarkdownPreviewFromRaw } from '../../../skill-markdown-preview-from-raw.js';
 import type { SkillsMarketplaceAdapter } from '../../adapter.types.js';
 import { registerMarketplaceAdapter } from '../../registry.js';
 
@@ -478,12 +479,19 @@ export const clawHubMarketplaceAdapter: SkillsMarketplaceAdapter = {
       readme = `${readme}\n\n---\n\n## Changelog\n\n${changelog}`;
     }
 
+    const description = detail.skill.summary || '';
+    const skillDocPreview = buildSkillMarkdownPreviewFromRaw(readme, {
+      name: slug,
+      description,
+    });
+
     return {
       id: slug,
       name: slug,
       type: 'skill',
-      description: detail.skill.summary || '',
+      description,
       readme,
+      skillDocPreview,
       downloads: detail.skill.stats.downloads,
       author: {
         username: detail.owner.handle,

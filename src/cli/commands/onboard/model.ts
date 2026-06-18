@@ -52,7 +52,7 @@ function ensureAgentDefaults(config: Config, workspacePath: string): NonNullable
 
 function setPrimaryModel(config: Config, workspacePath: string, modelRef: string): Config {
   const defaults = ensureAgentDefaults(config, workspacePath);
-  defaults.model = { primary: modelRef, fallbacks: [] };
+  defaults.models = { ...defaults.models, chat: { primary: modelRef, fallbacks: [] } };
   return config;
 }
 
@@ -300,7 +300,7 @@ export async function setupModel(existingConfig: Config | null, ctx: CLIContext)
   console.log('\n🤖 Step: AI Model\n');
 
   const config = existingConfig || ({} as Config);
-  const currentModel = config?.agents?.defaults?.model?.primary;
+  const currentModel = config?.agents?.defaults?.models?.chat?.primary;
 
   if (currentModel) {
     console.log('Current model:', currentModel);

@@ -78,6 +78,7 @@ export { createCronjobTool, scanCronPrompt } from './cronjob-tool.js';
 
 export { createSkillsListTool, createSkillViewTool, type SkillsToolsDeps } from './skills-tools.js';
 export { createSkillManageTool, type SkillManageToolDeps } from './skill-manage-tool.js';
+export { createToolManualTool } from './tool-manual-tool.js';
 
 export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';
 export { createImageGenerateTool, resolveImageGenerationModelConfigForTool } from './image-generate-tool.js';

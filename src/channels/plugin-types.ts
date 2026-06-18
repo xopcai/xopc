@@ -28,6 +28,7 @@ import type {
   ChannelCliLoginAdapter,
   ChannelConfigSurfaceAdapter,
   ChannelOnboardAdapter,
+  ChannelRuntimeActionAdapter,
 } from './plugins/types.adapters.js';
 
 export type { ChannelId, ChatType, ChannelMeta, ChannelCapabilities } from './plugins/types.core.js';
@@ -201,6 +202,8 @@ export interface ChannelPlugin<ResolvedAccount = any> {
   commands?: ChannelCommandAdapter;
 
   actions?: ChannelMessageActionAdapter;
+
+  runtimeActions?: ChannelRuntimeActionAdapter;
 
   auth?: ChannelAuthAdapter;
 

@@ -199,7 +199,7 @@ xopc channels pairing approve --channel weixin AB12CD34
 | 子命令 | 说明 |
 |--------|------|
 | `agents list` | 列出已配置的 agent 与当前解析的默认 agent id（可加 `--json`）。 |
-| `agents add <name>` | **必须**提供 `--workspace <dir>`。写入/更新 `agents.list`，创建目录并种子化 Markdown 引导文件。可选：`--model`、`--agent-dir`。 |
+| `agents add <name>` | **必须**提供 `--workspace <dir>`。将 `<name>` 用作 id/name 种子，写入/更新 `agents.list`，创建目录并种子化包含 `profile/IDENTITY.md` 在内的 Markdown 引导文件。可选：`--model`、`--agent-dir`。 |
 | `agents delete <id>` | 从 `list` 移除该 id，并清理相关的 **`bindings`**。加 **`--purge`** 时同时删除磁盘上的 agent 主目录与工作区（**不可**删除 `main`）。 |
 
 示例：

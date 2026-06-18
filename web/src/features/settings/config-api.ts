@@ -64,7 +64,7 @@ export type AgentDefaultsExecuteCodeState = { enabled: boolean };
 
 export interface AgentDefaultsState {
   model: string;
-  /** provider/model refs tried when the primary fails (stored as `agents.defaults.model.fallbacks`). */
+  /** provider/model refs tried when the primary fails (stored as `agents.defaults.models.chat.fallbacks`). */
   modelFallbacks: string[];
   imageModel: string;
   imageModelFallbacks: string[];
@@ -643,9 +643,14 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     defaults && typeof defaults === 'object' && !Array.isArray(defaults)
       ? (defaults as Record<string, unknown>)
       : {};
+  const modelConfig =
+    d.models && typeof d.models === 'object' && !Array.isArray(d.models)
+      ? (d.models as Record<string, unknown>)
+      : {};
+  const chatModel = modelConfig.chat;
   const mf = d.modelFallbacks;
   const modelFallbacksFromApi =
-    Array.isArray(mf) && mf.every((x) => typeof x === 'string') ? mf : normalizeModelFallbacks(d.model);
+    Array.isArray(mf) && mf.every((x) => typeof x === 'string') ? mf : normalizeModelFallbacks(chatModel);
   const imf = d.imageModelFallbacks;
   const imageModelFallbacksFromApi =
     Array.isArray(imf) && imf.every((x) => typeof x === 'string')
@@ -665,7 +670,7 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     maxTaskMs !== undefined ? Math.round(maxTaskMs / 60_000) : undefined;
 
   return {
-    model: normalizeModelRef(d.model),
+    model: normalizeModelRef(chatModel),
     modelFallbacks: modelFallbacksFromApi,
     imageModel: normalizeModelRef(d.imageModel),
     imageModelFallbacks: imageModelFallbacksFromApi,
@@ -703,7 +708,7 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
       const dis = (t as { disable?: unknown }).disable;
       return parseStringList(dis);
     })(),
-    typedModels: parseTypedModelsFromConfig(d.models),
+    typedModels: parseTypedModelsFromConfig(modelConfig),
     paramsJson: parseParamsJson(d.params),
   };
 }
@@ -875,7 +880,10 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
   const typedModelsClean = cleanTypedModelsForPatch(state.typedModels);
 
   const defaults: Record<string, unknown> = {
-    model: modelField,
+    models: {
+      chat: modelField,
+      ...(typedModelsClean ?? {}),
+    },
     imageModel: imageModelField,
     imageGenerationModel: imageGenerationModelField,
     mediaMaxMb: state.mediaMaxMb ?? null,
@@ -913,7 +921,6 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
     systemPromptOverride: state.systemPromptOverride.trim() || null,
     skills: skillsClean.length > 0 ? skillsClean : null,
     tools: { disable: toolsDisableClean.length > 0 ? toolsDisableClean : null },
-    models: typedModelsClean,
     params,
   };
 

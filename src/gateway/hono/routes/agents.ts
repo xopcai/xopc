@@ -1,8 +1,6 @@
 import type { Hono } from 'hono';
 
-import { type Config, parseModelRef } from '../../../config/schema.js';
-import type { LocalizedText } from '../../../config/localized-text.js';
-import { normalizeLocalizedText } from '../../../config/localized-text.js';
+import { AgentModelsSchema, type Config, parseModelRef } from '../../../config/schema.js';
 import { getVoiceModelsConfig } from '../../../config/voice.js';
 import {
   isProviderConfigured,
@@ -61,49 +59,58 @@ function isParseError(value: unknown): value is { error: string } {
   );
 }
 
-function parseLocalizedText(raw: unknown, fieldName: string): LocalizedText | undefined | { error: string } {
-  if (raw === undefined) {
-    return undefined;
-  }
-  if (typeof raw === 'string') {
-    return raw;
-  }
-  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { error: `${fieldName} must be a string or locale map` };
-  }
-  const localized: Record<string, string> = {};
-  for (const [locale, text] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof text !== 'string') {
-      return { error: `${fieldName}.${locale} must be a string` };
-    }
-    localized[locale] = text;
-  }
-  const normalized = normalizeLocalizedText(localized);
-  return normalized;
-}
-
 function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string } {
   if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
     return { error: 'each agent must be an object' };
   }
   const body = raw as Record<string, unknown>;
-  const parsedName = parseLocalizedText(body.name, 'name');
-  if (isParseError(parsedName)) {
-    return parsedName;
+  if (Object.hasOwn(body, 'model')) {
+    return { error: 'model is not supported; use models.chat.primary' };
   }
-  const parsedDescription = parseLocalizedText(body.description, 'description');
-  if (isParseError(parsedDescription)) {
-    return parsedDescription;
+  if (Object.hasOwn(body, 'toolsDisable')) {
+    return { error: 'toolsDisable is not supported; use tools.disable' };
   }
-  const name = parsedName ?? '';
+  if (Object.hasOwn(body, 'typedModels')) {
+    return { error: 'typedModels is not supported; use models.roles' };
+  }
+  if (Object.hasOwn(body, 'name')) {
+    return { error: 'name is not supported; write IDENTITY.md in profileFiles' };
+  }
+  if (Object.hasOwn(body, 'description')) {
+    return { error: 'description is not supported; write IDENTITY.md in profileFiles' };
+  }
   const workspace = typeof body.workspace === 'string' ? body.workspace : '';
-  const model = typeof body.model === 'string' ? body.model : undefined;
-  const agentDir = typeof body.agentDir === 'string' ? body.agentDir : undefined;
-  const description = parsedDescription;
-  const id = typeof body.id === 'string' ? body.id : undefined;
-  const toolsDisable = Array.isArray(body.toolsDisable)
-    ? body.toolsDisable.map((x: unknown) => String(x).trim()).filter(Boolean)
+  const models = Object.hasOwn(body, 'models')
+    ? AgentModelsSchema.safeParse(body.models)
     : undefined;
+  if (models && !models.success) {
+    return { error: `models ${models.error.issues[0]?.message ?? 'is invalid'}` };
+  }
+  const agentDir = typeof body.agentDir === 'string' ? body.agentDir : undefined;
+  const id = typeof body.id === 'string' ? body.id : undefined;
+  const skills = Object.hasOwn(body, 'skills')
+    ? Array.isArray(body.skills)
+      ? body.skills.map((x: unknown) => String(x).trim()).filter(Boolean)
+      : null
+    : undefined;
+  if (skills === null) {
+    return { error: 'skills must be an array' };
+  }
+  const toolsRaw = Object.hasOwn(body, 'tools') ? body.tools : undefined;
+  let tools: CreateAgentBody['tools'] | undefined;
+  if (toolsRaw !== undefined) {
+    if (toolsRaw === null || typeof toolsRaw !== 'object' || Array.isArray(toolsRaw)) {
+      return { error: 'tools must be an object' };
+    }
+    const disableRaw = (toolsRaw as Record<string, unknown>).disable;
+    if (disableRaw !== undefined && !Array.isArray(disableRaw)) {
+      return { error: 'tools.disable must be an array' };
+    }
+    const disable = Array.isArray(disableRaw)
+      ? disableRaw.map((x: unknown) => String(x).trim()).filter(Boolean)
+      : undefined;
+    tools = disable !== undefined ? { disable } : {};
+  }
   let profileFiles: Record<string, string> | undefined;
   if (Object.hasOwn(body, 'profileFiles')) {
     const parsed = parseProfileFiles(body.profileFiles);
@@ -112,18 +119,62 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
     }
     profileFiles = parsed;
   }
+  if (!profileFiles?.['IDENTITY.md'] && typeof body.cloneFrom !== 'string') {
+    return { error: 'profileFiles.IDENTITY.md is required' };
+  }
   const cloneFrom = typeof body.cloneFrom === 'string' ? body.cloneFrom : undefined;
   return {
-    name,
     workspace,
-    ...(model !== undefined ? { model } : {}),
+    ...(models && models.data !== undefined ? { models: models.data } : {}),
     ...(agentDir !== undefined ? { agentDir } : {}),
     ...(id !== undefined ? { id } : {}),
-    ...(description !== undefined ? { description } : {}),
-    ...(toolsDisable !== undefined ? { toolsDisable } : {}),
+    ...(skills !== undefined ? { skills } : {}),
+    ...(tools !== undefined ? { tools } : {}),
     ...(profileFiles !== undefined ? { profileFiles } : {}),
     ...(cloneFrom !== undefined ? { cloneFrom } : {}),
   };
+}
+
+type PatchModels = {
+  chat?: { primary: string; fallbacks?: string[] } | null;
+  roles?: Record<string, { model: string; description?: string }> | null;
+};
+
+function parsePatchModels(raw: unknown): PatchModels | null | undefined | { error: string } {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (raw === null) {
+    return null;
+  }
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    return { error: 'models must be an object or null' };
+  }
+  const body = raw as Record<string, unknown>;
+  const out: PatchModels = {};
+  if (Object.hasOwn(body, 'chat')) {
+    if (body.chat === null) {
+      out.chat = null;
+    } else {
+      const parsed = AgentModelsSchema.safeParse({ chat: body.chat });
+      if (!parsed.success) {
+        return { error: `models.chat ${parsed.error.issues[0]?.message ?? 'is invalid'}` };
+      }
+      out.chat = parsed.data?.chat;
+    }
+  }
+  if (Object.hasOwn(body, 'roles')) {
+    if (body.roles === null) {
+      out.roles = null;
+    } else {
+      const parsed = AgentModelsSchema.safeParse({ roles: body.roles });
+      if (!parsed.success) {
+        return { error: `models.roles ${parsed.error.issues[0]?.message ?? 'is invalid'}` };
+      }
+      out.roles = parsed.data?.roles;
+    }
+  }
+  return out;
 }
 
 export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -232,50 +283,54 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     } catch {
       return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
     }
+    if (Object.hasOwn(body, 'model')) {
+      return c.json({ ok: false, error: { message: 'model is not supported; use models.chat' } }, 400);
+    }
+    if (Object.hasOwn(body, 'typedModels')) {
+      return c.json({ ok: false, error: { message: 'typedModels is not supported; use models.roles' } }, 400);
+    }
+    if (Object.hasOwn(body, 'toolsDisable')) {
+      return c.json({ ok: false, error: { message: 'toolsDisable is not supported; use tools.disable' } }, 400);
+    }
+    if (Object.hasOwn(body, 'name')) {
+      return c.json({ ok: false, error: { message: 'name is not supported; edit IDENTITY.md' } }, 400);
+    }
+    if (Object.hasOwn(body, 'description')) {
+      return c.json({ ok: false, error: { message: 'description is not supported; edit IDENTITY.md' } }, 400);
+    }
     const skillsPatch =
       body.skills === null
         ? null
         : Array.isArray(body.skills)
           ? body.skills.map((x: unknown) => String(x).trim()).filter(Boolean)
           : undefined;
-    const toolsDisablePatch =
-      body.toolsDisable === null
-        ? null
-        : Array.isArray(body.toolsDisable)
-          ? body.toolsDisable.map((x: unknown) => String(x).trim()).filter(Boolean)
-          : undefined;
-
-    let namePatch: LocalizedText | undefined;
-    if (Object.hasOwn(body, 'name')) {
-      const parsedName = parseLocalizedText(body.name, 'name');
-      if (isParseError(parsedName)) {
-        return c.json({ ok: false, error: { message: parsedName.error } }, 400);
-      }
-      namePatch = parsedName;
-    }
-    let descriptionPatch: LocalizedText | null | undefined;
-    if (Object.hasOwn(body, 'description')) {
-      if (body.description === null) {
-        descriptionPatch = null;
-      } else {
-        const parsedDescription = parseLocalizedText(body.description, 'description');
-        if (isParseError(parsedDescription)) {
-          return c.json({ ok: false, error: { message: parsedDescription.error } }, 400);
+    let toolsPatch: { disable?: string[] | null } | null | undefined;
+    if (Object.hasOwn(body, 'tools')) {
+      if (body.tools === null) {
+        toolsPatch = null;
+      } else if (typeof body.tools === 'object' && !Array.isArray(body.tools)) {
+        const disable = (body.tools as Record<string, unknown>).disable;
+        if (disable === null) {
+          toolsPatch = { disable: null };
+        } else if (disable === undefined) {
+          toolsPatch = {};
+        } else if (Array.isArray(disable)) {
+          toolsPatch = { disable: disable.map((x: unknown) => String(x).trim()).filter(Boolean) };
+        } else {
+          return c.json({ ok: false, error: { message: 'tools.disable must be an array or null' } }, 400);
         }
-        descriptionPatch = parsedDescription;
+      } else {
+        return c.json({ ok: false, error: { message: 'tools must be an object or null' } }, 400);
       }
+    }
+    const modelsPatch = Object.hasOwn(body, 'models') ? parsePatchModels(body.models) : undefined;
+    if (isParseError(modelsPatch)) {
+      return c.json({ ok: false, error: { message: modelsPatch.error } }, 400);
     }
 
     const prep = prepareUpdateAgent(service.currentConfig as Config, id, {
-      name: namePatch,
-      ...(descriptionPatch !== undefined ? { description: descriptionPatch } : {}),
       workspace: typeof body.workspace === 'string' ? body.workspace : undefined,
-      model:
-        body.model === null
-          ? null
-          : typeof body.model === 'string'
-            ? body.model
-            : undefined,
+      ...(modelsPatch !== undefined ? { models: modelsPatch } : {}),
       agentDir:
         body.agentDir === null
           ? null
@@ -284,7 +339,7 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
             : undefined,
       setDefault: body.setDefault === true,
       ...(skillsPatch !== undefined ? { skills: skillsPatch } : {}),
-      ...(toolsDisablePatch !== undefined ? { toolsDisable: toolsDisablePatch } : {}),
+      ...(toolsPatch !== undefined ? { tools: toolsPatch } : {}),
     });
     if (prep.ok === false) {
       return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);

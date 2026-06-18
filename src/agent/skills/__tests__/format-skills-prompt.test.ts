@@ -16,7 +16,7 @@ const baseSkill: Skill = {
 
 describe('formatSkillsForPrompt', () => {
   it('uses Hermes-style XML without disk paths', () => {
-    const xml = formatSkillsForPrompt([baseSkill], {});
+    const xml = formatSkillsForPrompt([baseSkill], {}, { skillAllowlist: ['alpha'] });
     expect(xml).toContain('<name>alpha</name>');
     expect(xml).toContain('skill_view');
     expect(xml).not.toContain('<location>');

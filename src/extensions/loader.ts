@@ -46,7 +46,6 @@ import { ManifestRegistry } from './manifest-registry.js';
 import { normalizeExtensionManifest } from './normalize-manifest.js';
 import { checkEngineCompatibility } from './engine-check.js';
 import { PACKAGE_VERSION } from '../package-version.js';
-import { bundledChannelPlugins } from '../channels/plugins/bundled.js';
 import { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
 import { validateSpeechProviderContracts } from './speech-provider-contracts.js';
 import { validateMediaUnderstandingProviderContracts } from './media-provider-contracts.js';
@@ -138,9 +137,13 @@ export class ExtensionLoader {
   private jiti: ReturnType<typeof createJiti>;
   private _appConfig?: Config;
   private _runtimeContext?: {
-    bus: MessageBus;
+    bus?: MessageBus;
     sessionManager?: SessionIndex;
     scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
+    setLabel?: (entryId: string, label: string | undefined) => void;
+    sendUserMessage?: import('./types/index.js').ExtensionRuntime['sendUserMessage'];
+    appendEntry?: import('./types/index.js').ExtensionRuntime['appendEntry'];
+    sendMessage?: import('./types/index.js').ExtensionRuntime['sendMessage'];
   };
   
   //  Security
@@ -163,9 +166,6 @@ export class ExtensionLoader {
 
   constructor(options?: ExtensionLoaderOptions) {
     this.registry = new ExtensionRegistryImpl();
-    for (const p of bundledChannelPlugins) {
-      this.registry.addChannelPlugin(p);
-    }
     this.options = options || (() => {
       const c = loadConfig();
       const aid = resolveDefaultAgentId(c);
@@ -291,9 +291,13 @@ export class ExtensionLoader {
    * Inject MessageBus and optional SessionManager for ExtensionApi.runtime (Gateway).
    */
   setRuntimeContext(ctx: {
-    bus: MessageBus;
+    bus?: MessageBus;
     sessionManager?: SessionIndex;
     scheduleWebchatContinuation?: (sessionKey: string, message: string) => void;
+    setLabel?: (entryId: string, label: string | undefined) => void;
+    sendUserMessage?: import('./types/index.js').ExtensionRuntime['sendUserMessage'];
+    appendEntry?: import('./types/index.js').ExtensionRuntime['appendEntry'];
+    sendMessage?: import('./types/index.js').ExtensionRuntime['sendMessage'];
   }): void {
     this._runtimeContext = ctx;
     // ExtensionApi snapshots `runtime` at construction and is tied to this loader's registry.
@@ -817,6 +821,10 @@ export class ExtensionLoader {
             log: logger,
             sessionManager: this._runtimeContext.sessionManager,
             scheduleWebchatContinuation: this._runtimeContext.scheduleWebchatContinuation,
+            setLabel: this._runtimeContext.setLabel,
+            sendUserMessage: this._runtimeContext.sendUserMessage,
+            appendEntry: this._runtimeContext.appendEntry,
+            sendMessage: this._runtimeContext.sendMessage,
           }
         : this._appConfig
           ? {

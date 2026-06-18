@@ -1,5 +1,5 @@
 import { Clock, Loader2 } from 'lucide-react';
-import { useCallback, useMemo, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useRef } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -102,11 +102,13 @@ export function CronGlobalsSection({ hasToken }: { hasToken: boolean }) {
   );
 
   const [ui, dispatch] = useReducer(globalsReducer, undefined as never, initialGlobalsUiState);
-  const trackedParsedRef = useRef(parsed);
-  if (hasToken && parsed !== null && !ui.dirty && trackedParsedRef.current !== parsed) {
+  const trackedParsedRef = useRef<CronGlobalsState | null>(null);
+
+  useEffect(() => {
+    if (!hasToken || parsed === null || ui.dirty || trackedParsedRef.current === parsed) return;
     trackedParsedRef.current = parsed;
     dispatch({ type: 'sync', parsed });
-  }
+  }, [hasToken, parsed, ui.dirty]);
 
   const dirty = useMemo(
     () => Boolean(ui.form && ui.baseline && JSON.stringify(ui.form) !== JSON.stringify(ui.baseline)),

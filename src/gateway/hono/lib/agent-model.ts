@@ -9,17 +9,22 @@ function isValidProviderModelRef(ref: string): boolean {
 }
 
 /**
- * Coerce PATCH body `models[]` into validated typed model entries.
- * Returns `null` to clear, `undefined` when input should be skipped, or cleaned array.
- * Empty array after filtering → `null` (same as clear).
+ * Coerce PATCH body `{ roles: Record<id, role> }` into validated typed model roles.
+ * Returns `null` to clear, `undefined` when input should be skipped, or cleaned roles.
+ * Empty roles after filtering → `null` (same as clear).
  */
-export function normalizePatchTypedModels(v: unknown): AgentTypedModel[] | null | undefined {
+export function normalizePatchTypedModels(
+  v: unknown,
+): Record<string, Omit<AgentTypedModel, 'id'>> | null | undefined {
   if (v === undefined) return undefined;
   if (v === null) return null;
-  if (!Array.isArray(v)) return undefined;
+  if (!v || typeof v !== 'object' || Array.isArray(v) || !('roles' in v)) return undefined;
+  const rawRoles = (v as { roles?: unknown }).roles;
+  if (!rawRoles || typeof rawRoles !== 'object' || Array.isArray(rawRoles)) return undefined;
+  const rows = Object.entries(rawRoles).map(([id, role]) => ({ id, ...(role as object) }));
 
-  const byId = new Map<string, AgentTypedModel>();
-  for (const raw of v) {
+  const byId = new Map<string, Omit<AgentTypedModel, 'id'>>();
+  for (const raw of rows) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
     const o = raw as Record<string, unknown>;
     const id = typeof o.id === 'string' ? o.id.trim() : '';
@@ -29,11 +34,11 @@ export function normalizePatchTypedModels(v: unknown): AgentTypedModel[] | null 
       typeof o.description === 'string' && o.description.trim()
         ? o.description.trim().slice(0, 500)
         : undefined;
-    byId.set(id, description ? { id, description, model } : { id, model });
+    byId.set(id, description ? { description, model } : { model });
   }
 
   if (byId.size === 0) return null;
-  return [...byId.values()];
+  return Object.fromEntries(byId.entries());
 }
 
 /** Read `primary` from an `AgentModelConfig` object. */

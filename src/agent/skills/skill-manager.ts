@@ -184,16 +184,17 @@ export class SkillManager {
   /**
    * Expand a skill command into a full skill block
    */
-  expandCommand(text: string): string {
+  expandCommand(text: string, options?: { skillAllowlist?: string[]; registeredToolNames?: string[] }): string {
     if (!text.startsWith('/skill:')) {
       return text;
     }
 
     const { skillName, args } = this.parseSkillCommand(text);
-    const skill = this.findSkill(skillName);
+    const visible = this.selectSkillsForAgentIndexing(options);
+    const skill = visible.find((s) => s.name === skillName);
 
     if (!skill) {
-      log.warn({ skillName }, 'Skill not found for expansion');
+      log.warn({ skillName }, 'Skill not visible for expansion');
       return text;
     }
 

@@ -9,7 +9,20 @@ import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import { PRESET_AGENTS, PRESET_AGENTS_SKIPPED_KEY, type PresetAgent } from './preset-agents';
+import { PRESET_AGENTS, PRESET_AGENTS_SKIPPED_KEY, type PresetAgentSpec } from './preset-agents';
+
+function localizedCatalogText(value: { en: string; zh: string }, language: 'en' | 'zh'): string {
+  return value[language] || value.en || value.zh || '';
+}
+
+function localizedProfileFiles(
+  files: Record<string, { en: string; zh: string }>,
+  language: 'en' | 'zh',
+): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(files).map(([name, content]) => [name, localizedCatalogText(content, language)]),
+  );
+}
 
 export interface PresetAgentsSetupProps {
   existingAgentIds: Set<string>;
@@ -58,17 +71,12 @@ export function PresetAgentsSetup({ existingAgentIds, onComplete, onSkip }: Pres
     try {
       await createGatewayAgentsBatch(
         toCreate.map((preset) => ({
-          name: preset.name,
           id: preset.id,
           workspace: `~/.xopc/workspace/${preset.id}`,
-          description: language === 'zh' ? preset.descriptionZh : preset.descriptionEn,
-          profileFiles: {
-            'IDENTITY.md': preset.identityMd,
-            'SOUL.md': preset.soulMd,
-          },
-          ...(preset.toolsDisable && preset.toolsDisable.length > 0
-            ? { toolsDisable: preset.toolsDisable }
-            : {}),
+          profileFiles: localizedProfileFiles(preset.profileFiles, language),
+          tools: preset.tools,
+          ...(preset.models ? { models: preset.models } : {}),
+          ...(preset.skills ? { skills: preset.skills } : {}),
         })),
       );
       setProgress({ current: toCreate.length, total: toCreate.length });
@@ -78,7 +86,7 @@ export function PresetAgentsSetup({ existingAgentIds, onComplete, onSkip }: Pres
         const failedPreset = toCreate[0];
         setError(
           a.presetCreateFailed
-            .replace('{{name}}', failedPreset?.name ?? '')
+            .replace('{{name}}', failedPreset ? localizedCatalogText(failedPreset.catalog.name, language) : '')
             .replace('{{message}}', message),
         );
         setCreating(false);
@@ -169,14 +177,15 @@ export function PresetAgentsSetup({ existingAgentIds, onComplete, onSkip }: Pres
 }
 
 function PresetAgentCard(props: {
-  preset: PresetAgent;
+  preset: PresetAgentSpec;
   checked: boolean;
   disabled: boolean;
   language: 'en' | 'zh';
   onToggle: () => void;
 }) {
   const { preset, checked, disabled, language, onToggle } = props;
-  const description = language === 'zh' ? preset.descriptionZh : preset.descriptionEn;
+  const description = localizedCatalogText(preset.catalog.description, language);
+  const name = localizedCatalogText(preset.catalog.name, language);
 
   return (
     <label
@@ -192,14 +201,14 @@ function PresetAgentCard(props: {
         disabled={disabled}
         onChange={onToggle}
         className="mt-1 shrink-0 accent-accent"
-        aria-label={preset.name}
+        aria-label={name}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="text-lg" aria-hidden>
             {preset.emoji}
           </span>
-          <span className="font-medium text-fg">{preset.name}</span>
+          <span className="font-medium text-fg">{name}</span>
         </div>
         <p className="mt-0.5 text-sm text-fg-muted">{description}</p>
       </div>

@@ -37,21 +37,10 @@ export function AgentOverviewTab(props: {
   chat: ChatMessages;
   selected: GatewayAgentRow | null;
   busy: boolean;
-  currentLanguageLabel: string;
   editName: string;
   setEditName: (v: string) => void;
-  editNameZh: string;
-  setEditNameZh: (v: string) => void;
-  editNameEn: string;
-  setEditNameEn: (v: string) => void;
-  editLocalizedOpen: boolean;
-  setEditLocalizedOpen: (v: boolean) => void;
   editDescription: string;
   setEditDescription: (v: string) => void;
-  editDescriptionZh: string;
-  setEditDescriptionZh: (v: string) => void;
-  editDescriptionEn: string;
-  setEditDescriptionEn: (v: string) => void;
   editWorkspace: string;
   setEditWorkspace: (v: string) => void;
   editModel: string;
@@ -76,21 +65,10 @@ export function AgentOverviewTab(props: {
     chat,
     selected,
     busy,
-    currentLanguageLabel,
     editName,
     setEditName,
-    editNameZh,
-    setEditNameZh,
-    editNameEn,
-    setEditNameEn,
-    editLocalizedOpen,
-    setEditLocalizedOpen,
     editDescription,
     setEditDescription,
-    editDescriptionZh,
-    setEditDescriptionZh,
-    editDescriptionEn,
-    setEditDescriptionEn,
     editWorkspace,
     setEditWorkspace,
     editModel,
@@ -114,7 +92,7 @@ export function AgentOverviewTab(props: {
   const language = useLocaleStore((s) => s.language);
   const isDark = useThemeStore((s) => s.resolved === 'dark');
 
-  const identity = profileDraft?.identity ?? { name: '', creature: '', emoji: '', avatar: '' };
+  const identity = profileDraft?.identity ?? { name: '', description: '', language: '', creature: '', emoji: '', avatar: '' };
   const soulTemplate = profileDraft?.soulTemplate ?? 'professional';
   const soulCustomContent = profileDraft?.soulCustomContent ?? '';
   const soulEditorNonce = profileDraft?.soulEditorNonce ?? 0;
@@ -214,7 +192,7 @@ export function AgentOverviewTab(props: {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium text-fg">{a.displayName} ({currentLanguageLabel})</span>
+            <span className="font-medium text-fg">{a.displayName}</span>
             <input
               className={inputClass}
               value={editName}
@@ -238,71 +216,15 @@ export function AgentOverviewTab(props: {
             />
           </label>
 
-          <div className="sm:col-span-2">
-            <button
-              type="button"
-              className="text-xs font-medium text-accent hover:underline"
-              onClick={() => setEditLocalizedOpen(!editLocalizedOpen)}
-            >
-              {editLocalizedOpen ? a.hideLocalizedText : a.editLocalizedText}
-            </button>
-          </div>
-
-          {editLocalizedOpen ? (
-            <div className="grid gap-3 rounded-lg border border-edge-subtle bg-surface-base/60 p-3 dark:border-edge sm:col-span-2 sm:grid-cols-2">
-              <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium text-fg">{a.displayName} · {a.languageChinese}</span>
-                <input
-                  className={inputClass}
-                  value={editNameZh}
-                  onChange={(e) => setEditNameZh(e.target.value)}
-                  placeholder={a.personaNamePlaceholder}
-                  autoComplete="off"
-                />
-              </label>
-              <label className="flex flex-col gap-1.5 text-sm">
-                <span className="font-medium text-fg">{a.displayName} · {a.languageEnglish}</span>
-                <input
-                  className={inputClass}
-                  value={editNameEn}
-                  onChange={(e) => setEditNameEn(e.target.value)}
-                  placeholder={a.personaNamePlaceholder}
-                  autoComplete="off"
-                />
-              </label>
-              <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-                <span className="font-medium text-fg">{a.agentDescription} · {a.languageChinese}</span>
-                <textarea
-                  className={cn(inputClass, 'min-h-16 resize-y text-sm leading-relaxed')}
-                  value={editDescriptionZh}
-                  onChange={(e) => setEditDescriptionZh(e.target.value)}
-                  placeholder={a.agentDescriptionPlaceholder}
-                  maxLength={4000}
-                  rows={2}
-                  spellCheck
-                />
-              </label>
-              <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-                <span className="font-medium text-fg">{a.agentDescription} · {a.languageEnglish}</span>
-                <textarea
-                  className={cn(inputClass, 'min-h-16 resize-y text-sm leading-relaxed')}
-                  value={editDescriptionEn}
-                  onChange={(e) => setEditDescriptionEn(e.target.value)}
-                  placeholder={a.agentDescriptionPlaceholder}
-                  maxLength={4000}
-                  rows={2}
-                  spellCheck
-                />
-              </label>
-            </div>
-          ) : null}
-
           <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
-            <span className="font-medium text-fg">{a.agentDescription} ({currentLanguageLabel})</span>
+            <span className="font-medium text-fg">{a.agentDescription}</span>
             <textarea
               className={cn(inputClass, 'min-h-16 resize-y text-sm leading-relaxed')}
               value={editDescription}
-              onChange={(e) => setEditDescription(e.target.value)}
+              onChange={(e) => {
+                setEditDescription(e.target.value);
+                updateIdentity({ description: e.target.value });
+              }}
               placeholder={a.agentDescriptionPlaceholder}
               maxLength={4000}
               rows={3}

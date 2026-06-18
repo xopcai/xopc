@@ -16,17 +16,25 @@ import {
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 const SESSION_COLUMNS = `
-  session_key, agent_id, current_transcript_id, status, name, tags_json,
-  created_at, updated_at, last_accessed_at, session_started_at, last_interaction_at,
-  source_channel, source_chat_id, session_type, routing_json, custom_data_json,
-  abort_cutoff_timestamp, message_count, estimated_tokens, compacted_count,
-  last_flushed_at, flush_count,
-  thinking_level, verbose_level
+  s.session_key, s.agent_id, s.current_transcript_id, s.status, s.name, s.tags_json,
+  s.created_at, s.updated_at, s.last_accessed_at, s.session_started_at, s.last_interaction_at,
+  s.source_channel, s.source_chat_id, s.session_type, s.hidden_from_session_list,
+  s.parent_session_key, s.workflow_run_id, s.workflow_definition_id, s.workflow_agent_id, s.workflow_agent_label,
+  s.routing_json, s.custom_data_json,
+  s.abort_cutoff_timestamp, s.message_count, s.estimated_tokens, s.compacted_count,
+  s.last_flushed_at, s.flush_count,
+  s.thinking_level, s.verbose_level,
+  t.cwd AS cwd
 `;
 
 import { escapeFts5Query } from './fts.js';
 
-const SELECT_SESSION = `SELECT ${SESSION_COLUMNS} FROM sessions WHERE session_key = ?`;
+const SESSION_FROM_JOIN = `
+  FROM sessions s
+  LEFT JOIN transcripts t ON t.transcript_id = s.current_transcript_id
+`;
+
+const SELECT_SESSION = `SELECT ${SESSION_COLUMNS} ${SESSION_FROM_JOIN} WHERE s.session_key = ?`;
 
 function readSessionRow(db: DatabaseSync, sessionKey: string): SessionRow | undefined {
   return db.prepare(SELECT_SESSION).get(sessionKey) as SessionRow | undefined;
@@ -44,14 +52,18 @@ function insertSessionAndTranscript(
     `INSERT INTO sessions (
       session_key, agent_id, current_transcript_id, status, name, tags_json,
       created_at, updated_at, last_accessed_at, session_started_at, last_interaction_at,
-      source_channel, source_chat_id, session_type, routing_json, custom_data_json,
+      source_channel, source_chat_id, session_type, hidden_from_session_list,
+      parent_session_key, workflow_run_id, workflow_definition_id, workflow_agent_id, workflow_agent_label,
+      routing_json, custom_data_json,
       abort_cutoff_timestamp, message_count, estimated_tokens, compacted_count,
       last_flushed_at, flush_count,
       thinking_level, verbose_level
     ) VALUES (
       ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?,
+      ?, ?, ?, ?,
       ?, ?, ?, ?, ?,
+      ?, ?,
       ?, ?, ?, ?, ?, ?,
       ?, ?
     )`,
@@ -70,6 +82,12 @@ function insertSessionAndTranscript(
     row.sourceChannel,
     row.sourceChatId,
     row.sessionType,
+    row.hiddenFromSessionList,
+    row.parentSessionKey,
+    row.workflowRunId,
+    row.workflowDefinitionId,
+    row.workflowAgentId,
+    row.workflowAgentLabel,
     row.routingJson,
     row.customDataJson,
     row.abortCutoffTimestamp,
@@ -139,9 +157,21 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
   const conditions: string[] = [];
   const params: Array<string | number> = [];
 
+  if (!query.includeHidden) {
+    conditions.push(`s.hidden_from_session_list = 0`);
+  }
+
+  if (query.sessionTypes?.length) {
+    conditions.push(`s.session_type IN (${query.sessionTypes.map(() => '?').join(', ')})`);
+    params.push(...query.sessionTypes);
+  } else if (!query.includeHidden) {
+    conditions.push(`s.session_type = ?`);
+    params.push('chat');
+  }
+
   if (query.status) {
     const statuses = Array.isArray(query.status) ? query.status : [query.status];
-    conditions.push(`status IN (${statuses.map(() => '?').join(', ')})`);
+    conditions.push(`s.status IN (${statuses.map(() => '?').join(', ')})`);
     params.push(...statuses);
   }
 
@@ -162,20 +192,20 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
     if (channels.length === 0) {
       return { items: [], total: 0, limit: query.limit ?? 50, offset: query.offset ?? 0, hasMore: false };
     }
-    const directMatch = `LOWER(source_channel) IN (${channels.map(() => '?').join(', ')})`;
+    const directMatch = `LOWER(s.source_channel) IN (${channels.map(() => '?').join(', ')})`;
     const keyPatterns = new Set<string>();
     for (const c of channels) {
       if (c === 'webchat' || c === 'ui') {
-        keyPatterns.add(`session_key LIKE 'agent:%:webchat:%'`);
+        keyPatterns.add(`s.session_key LIKE 'agent:%:webchat:%'`);
       } else if (c === 'gateway' || c === 'webui') {
-        keyPatterns.add(`session_key LIKE 'agent:%:gateway:%'`);
+        keyPatterns.add(`s.session_key LIKE 'agent:%:gateway:%'`);
       } else {
-        keyPatterns.add(`session_key LIKE 'agent:%:${c.replace(/'/g, "''")}:%'`);
+        keyPatterns.add(`s.session_key LIKE 'agent:%:${c.replace(/'/g, "''")}:%'`);
       }
     }
     const keyFallback =
       keyPatterns.size > 0
-        ? `(TRIM(COALESCE(source_channel, '')) = '' AND (${[...keyPatterns].join(' OR ')}))`
+        ? `(TRIM(COALESCE(s.source_channel, '')) = '' AND (${[...keyPatterns].join(' OR ')}))`
         : '';
     conditions.push(keyFallback ? `(${directMatch} OR ${keyFallback})` : directMatch);
     params.push(...channels);
@@ -183,7 +213,7 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
 
   if (query.tags?.length) {
     for (const tag of query.tags) {
-      conditions.push(`tags_json LIKE ?`);
+      conditions.push(`s.tags_json LIKE ?`);
       params.push(`%"${tag}"%`);
     }
   }
@@ -213,7 +243,7 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
     if (searchKeys.length === 0) {
       return { items: [], total: 0, limit: query.limit ?? 50, offset: query.offset ?? 0, hasMore: false };
     }
-    conditions.push(`session_key IN (${searchKeys.map(() => '?').join(', ')})`);
+    conditions.push(`s.session_key IN (${searchKeys.map(() => '?').join(', ')})`);
     params.push(...searchKeys);
   }
 
@@ -222,7 +252,7 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
   const sortOrder = query.sortOrder === 'asc' ? 'ASC' : 'DESC';
 
   const countRow = db
-    .prepare(`SELECT COUNT(*) AS total FROM sessions ${where}`)
+    .prepare(`SELECT COUNT(*) AS total FROM sessions s ${where}`)
     .get(...params) as { total: number };
   const total = countRow.total;
 
@@ -230,7 +260,7 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
   const offset = query.offset ?? 0;
   const rows = db
     .prepare(
-      `SELECT ${SESSION_COLUMNS} FROM sessions ${where}
+      `SELECT ${SESSION_COLUMNS} ${SESSION_FROM_JOIN} ${where}
        ORDER BY ${sortColumn} ${sortOrder}
        LIMIT ? OFFSET ?`,
     )
@@ -243,14 +273,14 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
 function sessionSortColumn(sortBy: SessionListQuery['sortBy']): string {
   switch (sortBy) {
     case 'createdAt':
-      return 'created_at';
+      return 's.created_at';
     case 'messageCount':
-      return 'message_count';
+      return 's.message_count';
     case 'lastAccessedAt':
-      return 'last_accessed_at';
+      return 's.last_accessed_at';
     case 'updatedAt':
     default:
-      return 'updated_at';
+      return 's.updated_at';
   }
 }
 
@@ -280,6 +310,12 @@ export function patchSessionMetadata(
         source_channel = ?,
         source_chat_id = ?,
         session_type = ?,
+        hidden_from_session_list = ?,
+        parent_session_key = ?,
+        workflow_run_id = ?,
+        workflow_definition_id = ?,
+        workflow_agent_id = ?,
+        workflow_agent_label = ?,
         routing_json = ?,
         custom_data_json = ?,
         abort_cutoff_timestamp = ?,
@@ -301,7 +337,13 @@ export function patchSessionMetadata(
       merged.lastInteractionAt ? Date.parse(merged.lastInteractionAt) : existing.last_interaction_at,
       merged.sourceChannel,
       merged.sourceChatId,
-      merged.sessionType ?? null,
+      merged.sessionType,
+      merged.hiddenFromSessionList ? 1 : 0,
+      merged.parentSessionKey ?? null,
+      merged.workflowRunId ?? null,
+      merged.workflowDefinitionId ?? null,
+      merged.workflowAgentId ?? null,
+      merged.workflowAgentLabel ?? null,
       merged.routing ? JSON.stringify(merged.routing) : null,
       merged.customData ? JSON.stringify(merged.customData) : null,
       merged.abortCutoffTimestamp ?? null,
@@ -416,7 +458,9 @@ export function listSessionsByAgent(agentId: string): SessionMetadata[] {
   const db = getSqliteDatabase();
   const rows = db
     .prepare(
-      `SELECT ${SESSION_COLUMNS} FROM sessions WHERE agent_id = ? ORDER BY updated_at DESC`,
+      `SELECT ${SESSION_COLUMNS} ${SESSION_FROM_JOIN}
+       WHERE s.agent_id = ?
+       ORDER BY s.updated_at DESC`,
     )
     .all(agentId.toLowerCase()) as SessionRow[];
   return rows.map((row) => sessionRowToMetadata(row.session_key, row));

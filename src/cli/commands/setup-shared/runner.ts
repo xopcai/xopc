@@ -31,7 +31,7 @@ export class SetupValidationError extends Error {
 }
 
 export interface SetupMutator {
-  /** Logical domain — `providers`, `channels.telegram`, etc. */
+  /** Logical domain — `providers`, `channels.<id>`, etc. */
   domain: string;
   /** Target id within the domain (provider id, account id, …). */
   target?: string;

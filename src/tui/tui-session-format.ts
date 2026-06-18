@@ -1,6 +1,18 @@
 import type { SessionMetadata } from '../session/types.js';
 import type { TuiSessionItem } from './tui-backend.js';
 
+function homeDir(): string | undefined {
+  return process.env.HOME || process.env.USERPROFILE;
+}
+
+export function shortenSessionPath(path: string): string {
+  const home = homeDir();
+  if (home && path.startsWith(home)) {
+    return `~${path.slice(home.length)}`;
+  }
+  return path;
+}
+
 /** Compact relative time for session picker rows (pi-style). */
 export function formatSessionAge(updatedAtMs: number | null | undefined): string {
   if (updatedAtMs == null || !Number.isFinite(updatedAtMs)) return '';
@@ -32,15 +44,25 @@ export function sessionMetadataToTuiItem(meta: SessionMetadata): TuiSessionItem 
     totalTokens: meta.estimatedTokens ?? null,
     messageCount: meta.messageCount,
     model: modelRef,
+    forkedFromSessionKey:
+      typeof cd?.forkedFromSessionKey === 'string' ? cd.forkedFromSessionKey : undefined,
+    cwd: meta.cwd,
   };
 }
 
-export function formatSessionPickerDescription(session: TuiSessionItem): string {
+export function formatSessionPickerDescription(
+  session: TuiSessionItem,
+  options: { showKey?: boolean } = {},
+): string {
   const parts: string[] = [];
   const age = formatSessionAge(session.updatedAt ?? null);
   if (age) parts.push(age);
   if (session.messageCount != null) parts.push(`${session.messageCount} msgs`);
   if (session.totalTokens != null) parts.push(`${session.totalTokens} tok`);
   if (session.model) parts.push(String(session.model));
+  if (options.showKey) {
+    if (session.cwd) parts.push(shortenSessionPath(session.cwd));
+    parts.push(session.key);
+  }
   return parts.join(' · ');
 }

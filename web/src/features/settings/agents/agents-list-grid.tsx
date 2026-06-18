@@ -6,7 +6,6 @@ import {
   agentListDisplayDescription,
   agentListDisplayName,
 } from '@/features/settings/agents/agent-display-names';
-import { collectLocalizedSearchText } from '@/features/settings/agents/localized-text';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
@@ -21,17 +20,11 @@ function filterAgents(agents: GatewayAgentRow[], query: string, a: AgentsSetting
     const id = ag.id.toLowerCase();
     const ws = ag.workspace.toLowerCase();
     const displayDesc = agentListDisplayDescription(ag, a).toLowerCase();
-    const localizedTexts = [
-      ...collectLocalizedSearchText(ag.localized?.name),
-      ...collectLocalizedSearchText(ag.localized?.description),
-      ag.description ?? '',
-    ].map((text) => text.toLowerCase());
     return (
       name.includes(q) ||
       id.includes(q) ||
       ws.includes(q) ||
-      displayDesc.includes(q) ||
-      localizedTexts.some((text) => text.includes(q))
+      displayDesc.includes(q)
     );
   });
 }

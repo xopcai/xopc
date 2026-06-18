@@ -18,7 +18,6 @@ import {
   updateGatewayAgent,
   type GatewayAgentRow,
   type GatewayAgentsPayload,
-  type LocalizedText,
 } from '@/features/settings/agents-admin-api';
 import { parseAgentDefaultsFromConfig } from '@/features/settings/config-api';
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
@@ -33,13 +32,6 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import type { AgentsEditorPanelContentProps } from './agents-editor-panel-content';
 import { AgentsSettingsToolbar } from './agents-settings-toolbar';
 import { agentListDisplayName } from './agent-display-names';
-import {
-  languageDisplayName,
-  languageToLocaleKey,
-  localizedTextEquals,
-  localizedTextForLanguage,
-  localizedTextToMap,
-} from './localized-text';
 import { useAgentOverviewProfileMarkdown } from './hooks/use-agent-overview-profile-markdown';
 import { useAgentProfileFiles } from './hooks/use-agent-profile-files';
 import { useAgentsChannelBindings } from './hooks/use-agents-channel-bindings';
@@ -50,47 +42,7 @@ import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-
 
 import { PRESET_AGENTS_SKIPPED_KEY } from './preset-agents';
 import type { AgentPanel } from './utils';
-
-function buildLocalizedTextForSave(
-  base: LocalizedText | undefined,
-  language: 'en' | 'zh',
-  currentValue: string,
-  zhValue: string,
-  enValue: string,
-): LocalizedText | undefined {
-  const localeKey = languageToLocaleKey(language);
-  const nextMap = localizedTextToMap(base);
-  const currentText = currentValue.trim();
-  const zhText = zhValue.trim();
-  const enText = enValue.trim();
-
-  if (zhText) {
-    nextMap.zh = zhText;
-  } else if (localeKey !== 'zh') {
-    delete nextMap.zh;
-  }
-
-  if (enText) {
-    nextMap.en = enText;
-  } else if (localeKey !== 'en') {
-    delete nextMap.en;
-  }
-
-  if (currentText) {
-    nextMap[localeKey] = currentText;
-  } else {
-    delete nextMap[localeKey];
-  }
-
-  const entries = Object.entries(nextMap).filter(([, text]) => text.trim().length > 0);
-  if (entries.length === 0) {
-    return undefined;
-  }
-  if (entries.length === 1 && entries[0]?.[0] === 'en') {
-    return entries[0][1].trim();
-  }
-  return Object.fromEntries(entries.map(([locale, text]) => [locale, text.trim()]));
-}
+import { cleanTypedModelsForPatch, validateTypedModelsForSave } from './typed-models-lib';
 
 export function useAgentsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
@@ -145,13 +97,8 @@ export function useAgentsSettingsPanel() {
   const [panel, setPanel] = useState<AgentPanel>('overview');
 
   const [createDisplayName, setCreateDisplayName] = useState('');
-  const [createNameZh, setCreateNameZh] = useState('');
-  const [createNameEn, setCreateNameEn] = useState('');
-  const [createLocalizedOpen, setCreateLocalizedOpen] = useState(false);
   const [createAgentId, setCreateAgentId] = useState('');
   const [createDescription, setCreateDescription] = useState('');
-  const [createDescriptionZh, setCreateDescriptionZh] = useState('');
-  const [createDescriptionEn, setCreateDescriptionEn] = useState('');
   const [createWorkspace, setCreateWorkspace] = useState('');
   const [createModel, setCreateModel] = useState('');
   const [createModalError, setCreateModalError] = useState<string | null>(null);
@@ -164,12 +111,7 @@ export function useAgentsSettingsPanel() {
   const [editWorkspace, setEditWorkspace] = useState('');
   const [editModel, setEditModel] = useState('');
   const [editName, setEditName] = useState('');
-  const [editNameZh, setEditNameZh] = useState('');
-  const [editNameEn, setEditNameEn] = useState('');
-  const [editLocalizedOpen, setEditLocalizedOpen] = useState(false);
   const [editDescription, setEditDescription] = useState('');
-  const [editDescriptionZh, setEditDescriptionZh] = useState('');
-  const [editDescriptionEn, setEditDescriptionEn] = useState('');
 
   const profileSaveRef = useRef<(() => Promise<void>) | null>(null);
   const overviewSaveProfileMarkdownRef = useRef<(() => Promise<void>) | null>(null);
@@ -273,35 +215,19 @@ export function useAgentsSettingsPanel() {
   );
 
   const trackedSelectedIdRef = useRef<string | null>(null);
-  const selectedTrackingKey = selected ? `${selected.id}:${language}` : null;
+  const selectedTrackingKey = selected ? selected.id : null;
   if (selected && trackedSelectedIdRef.current !== selectedTrackingKey) {
     trackedSelectedIdRef.current = selectedTrackingKey;
     setEditWorkspace(selected.workspace);
     setEditModel(selected.model?.primary ?? '');
-    const selectedNameValue = selected.localized?.name ?? selected.name;
-    const selectedDescriptionValue = selected.localized?.description ?? selected.description;
-    const selectedNameMap = localizedTextToMap(selectedNameValue);
-    const selectedDescriptionMap = localizedTextToMap(selectedDescriptionValue);
-    const currentName =
-      localizedTextForLanguage(selectedNameValue, language) ??
-      agentListDisplayName(selected, messages(language).agentsSettings);
-    const currentDescription = localizedTextForLanguage(selectedDescriptionValue, language) ?? '';
-    setEditName(currentName);
-    setEditNameZh(selectedNameMap.zh ?? (language === 'zh' ? currentName : ''));
-    setEditNameEn(selectedNameMap.en ?? (language === 'en' ? currentName : ''));
-    setEditDescription(currentDescription);
-    setEditDescriptionZh(selectedDescriptionMap.zh ?? (language === 'zh' ? currentDescription : ''));
-    setEditDescriptionEn(selectedDescriptionMap.en ?? (language === 'en' ? currentDescription : ''));
+    setEditName(agentListDisplayName(selected, messages(language).agentsSettings));
+    setEditDescription(selected.description ?? '');
   } else if (!selected && trackedSelectedIdRef.current !== null) {
     trackedSelectedIdRef.current = null;
     setEditWorkspace('');
     setEditModel('');
     setEditName('');
-    setEditNameZh('');
-    setEditNameEn('');
     setEditDescription('');
-    setEditDescriptionZh('');
-    setEditDescriptionEn('');
   }
 
   const overviewProfile = useAgentOverviewProfileMarkdown({
@@ -358,12 +284,8 @@ export function useAgentsSettingsPanel() {
   const openAddAgentModal = useCallback(() => {
     createWorkspaceSuggestedRef.current = '';
     setCreateDisplayName('');
-    setCreateNameZh('');
-    setCreateNameEn('');
     setCreateAgentId('');
     setCreateDescription('');
-    setCreateDescriptionZh('');
-    setCreateDescriptionEn('');
     setCreateWorkspace('');
     setCreateModel('');
     setCreateModalError(null);
@@ -405,27 +327,19 @@ export function useAgentsSettingsPanel() {
 
       const source = data?.agents.find((ag) => ag.id === sourceId);
       if (!source) return;
-      const sourceName =
-        localizedTextForLanguage(source.localized?.name ?? source.name, language) ?? source.name?.trim() ?? source.id;
+      const sourceName = source.name?.trim() ?? source.id;
       const duplicateName = a.duplicateName.replace('{{name}}', sourceName);
       const duplicateId = makeAvailableAgentId(source.id);
-      const sourceNameMap = localizedTextToMap(source.localized?.name ?? source.name);
-      const sourceDescriptionMap = localizedTextToMap(source.localized?.description ?? source.description);
-      const sourceDescription =
-        localizedTextForLanguage(source.localized?.description ?? source.description, language) ?? '';
+      const sourceDescription = source.description ?? '';
       createWorkspaceSuggestedRef.current = '';
       setCreateDisplayName(duplicateName);
-      setCreateNameZh(sourceNameMap.zh ?? (language === 'zh' ? duplicateName : ''));
-      setCreateNameEn(sourceNameMap.en ?? (language === 'en' ? duplicateName : ''));
       setCreateAgentId(duplicateId);
       setCreateDescription(sourceDescription);
-      setCreateDescriptionZh(sourceDescriptionMap.zh ?? (language === 'zh' ? sourceDescription : ''));
-      setCreateDescriptionEn(sourceDescriptionMap.en ?? (language === 'en' ? sourceDescription : ''));
       setCreateWorkspace(source.workspace);
       setCreateModel(source.model?.primary ?? '');
       setCreateModalError(null);
     },
-    [a.duplicateName, data, language, makeAvailableAgentId],
+    [a.duplicateName, data, makeAvailableAgentId],
   );
 
   const openDuplicateAgentModal = useCallback(
@@ -484,31 +398,29 @@ export function useAgentsSettingsPanel() {
     setBusy(true);
     setCreateModalError(null);
     try {
-      const nextName = buildLocalizedTextForSave(undefined, language, name, createNameZh, createNameEn) ?? name;
-      const nextDescription = buildLocalizedTextForSave(
-        undefined,
-        language,
-        createDescription,
-        createDescriptionZh,
-        createDescriptionEn,
-      );
+      const identityMd = [
+        '# IDENTITY.md - Who Am I?',
+        '',
+        `- **Name:** ${name}`,
+        `- **Description:** ${createDescription.trim()}`,
+        `- **Language:** ${language}`,
+        '- **Creature:** assistant',
+        '- **Emoji:**',
+        '- **Avatar:**',
+        '',
+      ].join('\n');
       const next = await createGatewayAgent({
-        name: nextName,
         workspace,
         ...(createAgentId.trim() ? { id: createAgentId.trim() } : {}),
-        ...(createModel.trim() ? { model: createModel.trim() } : {}),
-        ...(nextDescription ? { description: nextDescription } : {}),
+        ...(createModel.trim() ? { models: { chat: { primary: createModel.trim() } } } : {}),
+        profileFiles: { 'IDENTITY.md': identityMd },
         ...(duplicateSourceId ? { cloneFrom: duplicateSourceId } : {}),
       });
       const { createdAgentId, ...agentsPayload } = next;
       void mutateAgents(agentsPayload, { revalidate: false });
       setCreateDisplayName('');
-      setCreateNameZh('');
-      setCreateNameEn('');
       setCreateAgentId('');
       setCreateDescription('');
-      setCreateDescriptionZh('');
-      setCreateDescriptionEn('');
       setCreateWorkspace('');
       setCreateModel('');
       setCreateModalError(null);
@@ -529,25 +441,9 @@ export function useAgentsSettingsPanel() {
     setBusy(true);
     setError(null);
     try {
-      const nextName = buildLocalizedTextForSave(
-        selected.localized?.name ?? selected.name,
-        language,
-        editName,
-        editNameZh,
-        editNameEn,
-      );
-      const nextDescription = buildLocalizedTextForSave(
-        selected.localized?.description ?? selected.description,
-        language,
-        editDescription,
-        editDescriptionZh,
-        editDescriptionEn,
-      );
       const next = await updateGatewayAgent(selected.id, {
-        ...(nextName ? { name: nextName } : {}),
-        description: nextDescription ?? null,
         workspace: editWorkspace.trim() || undefined,
-        model: editModel.trim() || null,
+        models: { chat: editModel.trim() ? { primary: editModel.trim() } : null },
       });
       void mutateAgents(next, { revalidate: false });
     } catch (err) {
@@ -610,7 +506,7 @@ export function useAgentsSettingsPanel() {
     setError(null);
     try {
       const toolsDisable = Array.from(toolsSkills.toolEntryDisable).toSorted((x, y) => x.localeCompare(y));
-      const next = await updateGatewayAgent(selected.id, { toolsDisable });
+      const next = await updateGatewayAgent(selected.id, { tools: { disable: toolsDisable } });
       void mutateAgents(next, { revalidate: false });
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
@@ -626,9 +522,53 @@ export function useAgentsSettingsPanel() {
     setBusy(true);
     setError(null);
     try {
-      const next = await updateGatewayAgent(selected.id, { toolsDisable: null });
+      const next = await updateGatewayAgent(selected.id, { tools: { disable: null } });
       void mutateAgents(next, { revalidate: false });
       toolsSkills.setToolEntryDisable(new Set());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : a.saveError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSaveModels() {
+    if (!selected) {
+      return;
+    }
+    const typedErr = validateTypedModelsForSave(toolsSkills.modelRows, {
+      invalidId: a.typedModelsInvalidId,
+      duplicateId: a.typedModelsDuplicateId,
+      invalidModel: a.typedModelsInvalidModel,
+    });
+    if (typedErr) {
+      setError(typedErr);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await updateGatewayAgent(selected.id, {
+        models: { roles: cleanTypedModelsForPatch(toolsSkills.modelRows)?.roles ?? {} },
+      });
+      void mutateAgents(next, { revalidate: false });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : a.saveError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onClearModelsEntry() {
+    if (!selected) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await updateGatewayAgent(selected.id, { models: { roles: null } });
+      void mutateAgents(next, { revalidate: false });
+      toolsSkills.setModelRows([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
     } finally {
@@ -659,32 +599,9 @@ export function useAgentsSettingsPanel() {
 
   const overviewRestDirty = (() => {
     if (!selected || panel !== 'overview') return false;
-    const origName =
-      localizedTextForLanguage(selected.localized?.name ?? selected.name, language) ??
-      agentListDisplayName(selected, a);
-    const origDesc =
-      localizedTextForLanguage(selected.localized?.description ?? selected.description, language) ?? '';
-    const nextName = buildLocalizedTextForSave(
-      selected.localized?.name ?? selected.name,
-      language,
-      editName,
-      editNameZh,
-      editNameEn,
-    );
-    const nextDescription = buildLocalizedTextForSave(
-      selected.localized?.description ?? selected.description,
-      language,
-      editDescription,
-      editDescriptionZh,
-      editDescriptionEn,
-    );
     const origWorkspace = selected.workspace;
     const origModel = selected.model?.primary ?? '';
     return (
-      editName.trim() !== origName ||
-      editDescription.trim() !== origDesc ||
-      !localizedTextEquals(nextName, selected.localized?.name ?? selected.name) ||
-      !localizedTextEquals(nextDescription, selected.localized?.description ?? selected.description) ||
       editWorkspace.trim() !== origWorkspace ||
       editModel.trim() !== origModel
     );
@@ -725,6 +642,10 @@ export function useAgentsSettingsPanel() {
         break;
       case 'tools':
         await onSaveTools();
+        showSavedFlash();
+        break;
+      case 'models':
+        await onSaveModels();
         showSavedFlash();
         break;
       case 'skills':
@@ -770,21 +691,10 @@ export function useAgentsSettingsPanel() {
     panel,
     data,
     busy,
-    currentLanguageLabel: languageDisplayName(language),
     editName,
     setEditName,
-    editNameZh,
-    setEditNameZh,
-    editNameEn,
-    setEditNameEn,
-    editLocalizedOpen,
-    setEditLocalizedOpen,
     editDescription,
     setEditDescription,
-    editDescriptionZh,
-    setEditDescriptionZh,
-    editDescriptionEn,
-    setEditDescriptionEn,
     editWorkspace,
     setEditWorkspace,
     editModel,
@@ -820,6 +730,10 @@ export function useAgentsSettingsPanel() {
     setToolEntryDisable: toolsSkills.setToolEntryDisable,
     onSaveTools: () => void onSaveTools(),
     onClearToolsEntry: () => void onClearToolsEntry(),
+    modelRows: toolsSkills.modelRows,
+    setModelRows: toolsSkills.setModelRows,
+    onSaveModels: () => void onSaveModels(),
+    onClearModelsEntry: () => void onClearModelsEntry(),
     skillsCatalogLoading: skillsCatalog.skillsCatalogLoading,
     catalogForPick: skillsCatalog.catalogForPick,
     skillsInherit: toolsSkills.skillsInherit,
@@ -853,7 +767,6 @@ export function useAgentsSettingsPanel() {
     a,
     chat,
     language,
-    localizedLanguageLabel: languageDisplayName(language),
     data,
     loading,
     displayError,
@@ -883,26 +796,16 @@ export function useAgentsSettingsPanel() {
     setCreateModalError,
     createDisplayName,
     setCreateDisplayName,
-    createNameZh,
-    setCreateNameZh,
-    createNameEn,
-    setCreateNameEn,
-    createLocalizedOpen,
-    setCreateLocalizedOpen,
     createAgentId,
     setCreateAgentId,
     createDescription,
     setCreateDescription,
-    createDescriptionZh,
-    setCreateDescriptionZh,
-    createDescriptionEn,
-    setCreateDescriptionEn,
     createWorkspace,
     setCreateWorkspace,
     createModel,
     setCreateModel,
     onCreate,
-    currentLanguageLabel: languageDisplayName(language),
+    currentLanguageLabel: language === 'zh' ? '中文' : 'English',
     applyCreateWorkspaceSuggestion,
     deleteDialogOpen,
     setDeleteDialogOpen,

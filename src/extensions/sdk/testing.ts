@@ -274,6 +274,28 @@ class MockExtensionApiImpl implements MockExtensionApi {
   registerTui(_register: TuiExtensionRegistrar): void {
     /* noop */
   }
+
+  setLabel(_entryId: string, _label: string | undefined): void {
+    /* noop */
+  }
+
+  sendUserMessage(
+    _content: import('../types/core.js').ExtensionUserMessageContent,
+    _options?: import('../types/core.js').ExtensionSendUserMessageOptions,
+  ): void {
+    /* noop */
+  }
+
+  appendEntry<T = unknown>(_customType: string, _data?: T): void {
+    /* noop */
+  }
+
+  sendMessage<T = unknown>(
+    _message: import('../types/core.js').ExtensionCustomMessage<T>,
+    _options?: import('../types/core.js').ExtensionSendMessageOptions,
+  ): void {
+    /* noop */
+  }
 }
 
 export interface TestGateway {

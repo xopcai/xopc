@@ -9,7 +9,7 @@ export function buildPairingInstructionText(params: {
   const { channel, accountId, code, senderIdLine } = params;
   const acc =
     !accountId || accountId.trim().toLowerCase() === 'default' ? '' : ` --account ${accountId.trim()}`;
-  const approve = `xopc channels pairing approve --channel ${channel}${acc} ${code}`;
+  const approve = `xopc channels pairing approve ${channel}${acc} ${code}`;
   return [
     'XOPC: this bot is in pairing mode.',
     '',

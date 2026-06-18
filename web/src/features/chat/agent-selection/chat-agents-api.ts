@@ -1,6 +1,5 @@
 import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
 import { apiFetch } from '@/lib/fetch';
-import { getLanguage } from '@/lib/storage';
 import { apiUrl } from '@/lib/url';
 
 export type ChatAgentOption = { id: string; name?: string; description?: string; avatar?: string };
@@ -21,7 +20,7 @@ export async function fetchChatAgents(): Promise<ChatAgentsPayload> {
 }
 
 async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
-  const agentsRes = await apiFetch(apiUrl(`/api/agents?locale=${encodeURIComponent(getLanguage())}`));
+  const agentsRes = await apiFetch(apiUrl('/api/agents'));
   if (agentsRes.ok) {
     const data = (await agentsRes.json()) as {
       ok?: boolean;
@@ -52,7 +51,7 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
   const data = (await fetchGatewayConfigSwrResponse()) as {
     payload?: {
       config?: {
-        agents?: { defaultId?: string; list?: Array<{ id?: string; name?: string; avatar?: string }> };
+        agents?: { defaultId?: string; list?: Array<{ id?: string }> };
       };
     };
   };
@@ -60,15 +59,11 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
   const defaultId = (agents?.defaultId ?? 'main').trim().toLowerCase();
   const raw = Array.isArray(agents?.list) ? agents.list : [];
   const items: ChatAgentOption[] = raw
-    .filter((e): e is { id: string; name?: string; description?: string; avatar?: string } =>
+    .filter((e): e is { id: string } =>
       Boolean(e && typeof e.id === 'string' && e.id.trim()),
     )
     .map((e) => ({
       id: e.id.trim().toLowerCase(),
-      name: typeof e.name === 'string' && e.name.trim() ? e.name.trim() : undefined,
-      description:
-        typeof e.description === 'string' && e.description.trim() ? e.description.trim() : undefined,
-      ...(typeof e.avatar === 'string' && e.avatar.trim() ? { avatar: e.avatar.trim() } : {}),
     }));
   if (items.length === 0) {
     return { defaultId, items: [{ id: defaultId }] };

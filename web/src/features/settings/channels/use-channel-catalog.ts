@@ -1,95 +1,49 @@
-import { useMemo } from 'react';
 import useSWR from 'swr';
 
-import type { ChannelsSettingsMessages } from '@/i18n/messages';
+import { fetchJson } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
 
-import { BUILTIN_CHANNEL_CATALOG, type BuiltinChannelCatalogEntry } from './channel-catalog';
-import { channelsMetaSwrKey, fetchChannelsMeta, type ChannelHubMetaRow } from './channels-meta-api';
-
-const BUILTIN_CHANNEL_BY_ID = new Map(
-  BUILTIN_CHANNEL_CATALOG.map((entry) => [entry.id, entry] as const),
-);
-const BUILTIN_CHANNEL_ORDER_BY_ID = new Map(
-  BUILTIN_CHANNEL_CATALOG.map((entry, index) => [entry.id, index] as const),
-);
+export type ChannelActionDescriptor = {
+  label?: string;
+  description?: string;
+  result?: 'ok' | 'qr' | 'poll' | 'diagnostics' | 'form';
+  schema?: Record<string, unknown>;
+};
 
 export type ChannelCatalogEntry = {
   id: string;
-  title: string;
-  subtitle: string;
-  manageable: boolean;
+  extensionId: string;
+  source: string;
+  label: string;
+  description?: string;
+  docsPath?: string;
   order: number;
+  configPath: string;
+  capabilities?: Record<string, unknown>;
+  configSchema?: Record<string, unknown>;
+  uiHints?: Record<string, unknown>;
+  actions?: Record<string, ChannelActionDescriptor>;
+  enabled?: boolean;
+  configured?: boolean;
+  runtime?: string;
 };
 
-function resolveBuiltinCopy(
-  entry: BuiltinChannelCatalogEntry,
-  ch: ChannelsSettingsMessages,
-): { title: string; subtitle: string } {
-  return {
-    title: ch[entry.titleKey],
-    subtitle: ch[entry.subtitleKey],
-  };
+export function channelCatalogSwrKey(): string {
+  return apiUrl('/api/channels/catalog');
 }
 
-function mergeChannelCatalog(
-  metaRows: ChannelHubMetaRow[] | undefined,
-  ch: ChannelsSettingsMessages,
-): ChannelCatalogEntry[] {
-  const byId = new Map<string, ChannelCatalogEntry>();
-
-  for (const row of metaRows ?? []) {
-    const builtin = BUILTIN_CHANNEL_BY_ID.get(row.id as BuiltinChannelCatalogEntry['id']);
-    const copy = builtin
-      ? resolveBuiltinCopy(builtin, ch)
-      : { title: row.label, subtitle: row.description || ch.hubExtensionSubtitle };
-    byId.set(row.id, {
-      id: row.id,
-      title: copy.title,
-      subtitle: copy.subtitle,
-      manageable: row.manageable,
-      order: row.order,
-    });
-  }
-
-  if (byId.size === 0) {
-    return BUILTIN_CHANNEL_CATALOG.map((entry, index) => {
-      const copy = resolveBuiltinCopy(entry, ch);
-      return {
-        id: entry.id,
-        title: copy.title,
-        subtitle: copy.subtitle,
-        manageable: true,
-        order: index,
-      };
-    });
-  }
-
-  for (const entry of BUILTIN_CHANNEL_CATALOG) {
-    if (byId.has(entry.id)) continue;
-    const copy = resolveBuiltinCopy(entry, ch);
-    byId.set(entry.id, {
-      id: entry.id,
-      title: copy.title,
-      subtitle: copy.subtitle,
-      manageable: true,
-      order: BUILTIN_CHANNEL_ORDER_BY_ID.get(entry.id) ?? 0,
-    });
-  }
-
-  return Array.from(byId.values()).sort((a, b) => {
-    if (a.order !== b.order) return a.order - b.order;
-    return a.id.localeCompare(b.id);
-  });
+export async function fetchChannelCatalog(): Promise<ChannelCatalogEntry[]> {
+  const data = await fetchJson<{ ok?: boolean; payload?: { channels?: ChannelCatalogEntry[] } }>(
+    channelCatalogSwrKey(),
+  );
+  return data.payload?.channels ?? [];
 }
 
-export function useChannelCatalog(hasToken: boolean, ch: ChannelsSettingsMessages) {
+export function useChannelCatalog(hasToken: boolean) {
   const { data, error, isLoading, mutate } = useSWR(
-    hasToken ? channelsMetaSwrKey() : null,
-    fetchChannelsMeta,
+    hasToken ? channelCatalogSwrKey() : null,
+    fetchChannelCatalog,
     { revalidateOnFocus: false },
   );
-
-  const entries = useMemo(() => mergeChannelCatalog(data, ch), [data, ch]);
-
-  return { entries, isLoading, error, mutate };
+  return { entries: data ?? [], isLoading, error, mutate };
 }

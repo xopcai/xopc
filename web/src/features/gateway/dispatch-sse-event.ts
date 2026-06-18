@@ -14,8 +14,13 @@ export function dispatchGatewaySseEvent(eventName: string, rawData: string): voi
     dispatchConfigReload(detail);
     return;
   }
-  const hyphenName = eventName.replace(/\./g, '-');
+  const hyphenName = eventName.replace(/[._]/g, '-');
   window.dispatchEvent(new CustomEvent(hyphenName, { detail }));
+
+  const legacyHyphenName = eventName.replace(/\./g, '-');
+  if (legacyHyphenName !== hyphenName) {
+    window.dispatchEvent(new CustomEvent(legacyHyphenName, { detail }));
+  }
 
   // Extension UI: forward structured agent stream chunks to `ExtensionProvider` (Phase 5).
   if (eventName === 'agent.stream' && detail && typeof detail === 'object' && detail !== null) {

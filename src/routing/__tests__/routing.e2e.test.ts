@@ -61,8 +61,8 @@ describe('Routing E2E', () => {
         agents: {
           default: 'main',
           list: [
-            { id: 'main', name: 'Main' },
-            { id: 'researcher', name: 'Researcher' },
+            { id: 'main' },
+            { id: 'researcher' },
           ],
         },
         bindings: [

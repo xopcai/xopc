@@ -80,6 +80,8 @@ export interface SessionInfo {
   model?: string;
   modelProvider?: string;
   thinkingLevel?: string;
+  reasoningLevel?: string;
+  verboseLevel?: string;
   contextTokens?: number | null;
   totalTokens?: number | null;
   contextWindow?: number | null;
@@ -104,6 +106,8 @@ export interface TuiState {
   exitRequested: boolean;
   /** Queued via Alt+Enter while a run is active; flushed FIFO when the run ends. */
   messageFollowUpQueue: string[];
+  /** Queued Enter-while-busy steering messages after the first in-flight steer. */
+  steeringQueue: string[];
   /** Ctrl+P cycle filter; `null` = all models from catalog. */
   scopedModelRefs: string[] | null;
   /** Last Escape timestamp for double-press actions. */
@@ -131,6 +135,7 @@ export function createInitialState(sessionKey: string): TuiState {
     lastCtrlCAt: 0,
     exitRequested: false,
     messageFollowUpQueue: [],
+    steeringQueue: [],
     scopedModelRefs: null,
     lastEscapeAt: 0,
     progressMessage: null,

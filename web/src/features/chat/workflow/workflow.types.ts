@@ -28,6 +28,8 @@ export interface WorkflowAgentSnapshot {
   label: string;
   phase?: string;
   prompt: string;
+  sessionKey?: string;
+  transcriptMessageCount?: number;
   status: WorkflowAgentStatus;
   resultPreview?: string;
   error?: string;
@@ -41,6 +43,7 @@ export interface WorkflowAgentSnapshot {
 }
 
 export interface WorkflowSnapshot {
+  runId?: string;
   name: string;
   description?: string;
   phases: string[];

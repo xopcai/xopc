@@ -58,28 +58,12 @@ export class SessionIndex extends EventEmitter {
     return this.store.list(query);
   }
 
-  /**
-   * List all subagent sessions.
-   * Subagent sessions have keys starting with 'subagent:'.
-   */
   async listSubagents(query: SessionListQuery = {}): Promise<PaginatedResult<SessionMetadata>> {
-    // Filter for subagent sessions only
-    const subagentQuery: SessionListQuery = {
+    return this.store.list({
       ...query,
-      search: query.search ? `subagent:${query.search}` : 'subagent:',
-    };
-    
-    const result = await this.store.list(subagentQuery);
-    
-    // Additional filtering to ensure only subagent sessions
-    const subagentSessions = result.items.filter((s) => s.key.startsWith('subagent:'));
-    
-    return {
-      ...result,
-      items: subagentSessions,
-      total: subagentSessions.length,
-      hasMore: false, // Simplified for now
-    };
+      sessionTypes: ['workflow-subagent'],
+      includeHidden: true,
+    });
   }
 
   async getSession(
@@ -235,7 +219,7 @@ export class SessionIndex extends EventEmitter {
   // ========== Search ==========
 
   async searchSessions(query: string): Promise<SessionMetadata[]> {
-    const result = await this.store.list({ search: query, limit: 100 });
+    const result = await this.store.list({ search: query, sessionTypes: ['chat'], limit: 100 });
     return result.items;
   }
 
@@ -247,6 +231,43 @@ export class SessionIndex extends EventEmitter {
 
   async exportSession(key: string, format: ExportFormat): Promise<string> {
     return this.store.exportSession(key, format);
+  }
+
+  async importSessionExport(
+    targetKey: string,
+    jsonContent: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    const result = await this.store.importSessionExport(targetKey, jsonContent);
+    const metadata = await this.store.getMetadata(result.sessionKey);
+    if (metadata) {
+      this.emit('sessionCreated', metadata);
+    }
+    return result;
+  }
+
+  async forkSession(
+    sourceKey: string,
+    targetKey: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    const result = await this.store.forkSession(sourceKey, targetKey);
+    const metadata = await this.store.getMetadata(result.sessionKey);
+    if (metadata) {
+      this.emit('sessionCreated', metadata);
+    }
+    return result;
+  }
+
+  async forkSessionRows(
+    sourceKey: string,
+    targetKey: string,
+    options: { throughRow?: number } = {},
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    const result = await this.store.forkSessionRows(sourceKey, targetKey, options);
+    const metadata = await this.store.getMetadata(result.sessionKey);
+    if (metadata) {
+      this.emit('sessionCreated', metadata);
+    }
+    return result;
   }
 
   // ========== Statistics ==========
@@ -329,6 +350,35 @@ export class SessionIndex extends EventEmitter {
     entry: Omit<XopcTranscriptContextEntry, 'kind'> & Partial<Pick<XopcTranscriptContextEntry, 'kind'>>,
   ): Promise<void> {
     await this.store.appendTranscriptContextEntry(key, entry);
+    this.emit('sessionUpdated', { key });
+  }
+
+  async appendTranscriptLabelEntry(
+    key: string,
+    entry: { targetId: string; label?: string },
+  ): Promise<void> {
+    await this.store.appendTranscriptLabelEntry(key, entry);
+    this.emit('sessionUpdated', { key });
+  }
+
+  async appendTranscriptCustomEntry(
+    key: string,
+    entry: { customType: string; data?: unknown },
+  ): Promise<void> {
+    await this.store.appendTranscriptCustomEntry(key, entry);
+    this.emit('sessionUpdated', { key });
+  }
+
+  async appendTranscriptCustomMessageEntry(
+    key: string,
+    entry: {
+      customType: string;
+      content?: string | unknown[];
+      display?: boolean;
+      details?: unknown;
+    },
+  ): Promise<void> {
+    await this.store.appendTranscriptCustomMessageEntry(key, entry);
     this.emit('sessionUpdated', { key });
   }
 

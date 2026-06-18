@@ -74,6 +74,8 @@ export const MessageBubble = memo(function MessageBubble({
   onSendUserMessage,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
+  readonly = false,
+  density = 'normal',
 }: {
   message: Message;
   authToken?: string;
@@ -99,6 +101,8 @@ export const MessageBubble = memo(function MessageBubble({
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   /** Create a task Note from this assistant reply for note-bound chat threads. */
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
+  readonly?: boolean;
+  density?: 'normal' | 'compact';
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -355,10 +359,11 @@ export const MessageBubble = memo(function MessageBubble({
   const retryDisabled = deleteRoundDisabled || !userMessageCanRetry;
 
   return (
-    <article className={cn('group/msg flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
+    <article className={cn('group/msg flex w-full min-w-0', density === 'compact' && 'text-sm', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
           'min-w-0 max-w-[min(85%,var(--max-width-chat))]',
+          readonly && 'max-w-full',
           isUser ? 'flex w-full flex-col items-end' : 'w-full',
         )}
       >
@@ -523,7 +528,7 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         </div>
 
-        {isUser && !isStreaming ? (
+        {isUser && !isStreaming && !readonly ? (
           <div className="mt-1.5 flex h-8 w-full min-w-0 shrink-0 justify-end">
             <div
               className={cn(
@@ -592,7 +597,7 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         ) : null}
 
-        {isAssistant && copyMarkdown ? (
+        {isAssistant && copyMarkdown && !readonly ? (
           <div className="mt-2 flex shrink-0 flex-wrap items-center gap-2 overflow-visible">
             <button
               type="button"
@@ -658,7 +663,7 @@ export const MessageBubble = memo(function MessageBubble({
 
       </div>
 
-      {isUser && onDeleteRound && messageIndex != null ? (
+      {isUser && onDeleteRound && messageIndex != null && !readonly ? (
         <ConfirmDialog
           open={deleteConfirmOpen}
           title={m.chat.userMessageDeleteConfirmTitle}

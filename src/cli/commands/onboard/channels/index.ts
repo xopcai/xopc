@@ -60,7 +60,7 @@ export async function setupChannels(config: Config): Promise<Config> {
   console.log('═'.repeat(50));
 
   let currentConfig = config;
-  const configurators = getChannelConfigurators();
+  const configurators = await getChannelConfigurators(currentConfig);
 
   while (true) {
     const statuses = getChannelStatuses(currentConfig, configurators);

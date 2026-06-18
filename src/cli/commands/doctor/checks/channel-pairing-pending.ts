@@ -5,9 +5,10 @@ import { loadConfig } from '../../../../config/loader.js';
 import type { Config } from '../../../../config/schema.js';
 import type { CheckResult, DoctorContext } from '../types.js';
 
-function channelEnabled(cfg: Config, channel: 'telegram' | 'feishu' | 'weixin'): boolean {
-  const ch = cfg.channels?.[channel] as { enabled?: boolean } | undefined;
-  return ch?.enabled === true;
+function hasEnabledChannel(cfg: Config): boolean {
+  return Object.values(cfg.channels ?? {}).some((value) => {
+    return typeof value === 'object' && value !== null && !Array.isArray(value) && (value as { enabled?: unknown }).enabled === true;
+  });
 }
 
 export async function checkChannelPairingPending(ctx: DoctorContext): Promise<CheckResult> {
@@ -34,9 +35,7 @@ export async function checkChannelPairingPending(ctx: DoctorContext): Promise<Ch
     };
   }
 
-  const anyChannel =
-    channelEnabled(cfg, 'telegram') || channelEnabled(cfg, 'feishu') || channelEnabled(cfg, 'weixin');
-  if (!anyChannel) {
+  if (!hasEnabledChannel(cfg)) {
     return {
       id: 'channel-pairing-pending',
       label: 'Channel pairing',
@@ -74,7 +73,7 @@ export async function checkChannelPairingPending(ctx: DoctorContext): Promise<Ch
   }
 
   const hints = [
-    'Approve in the gateway console under Settings → Channels, or run: xopc channels pairing approve --channel <id> <CODE>',
+    'Approve in the gateway console under Settings → Channels, or run: xopc channels pairing approve <id> <CODE>',
   ];
   if (totalStale > 0) {
     hints.push('Stale requests may expire soon; ask users to send a fresh DM if approval fails.');

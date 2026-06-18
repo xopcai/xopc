@@ -17,25 +17,35 @@ function collectProviderIdsFromConfig(cfg: Config): Set<string> {
 
   addRef(getAgentDefaultModelRef(cfg));
 
-  const raw = cfg.agents?.defaults?.model;
-  if (raw && typeof raw === 'object' && 'fallbacks' in raw && Array.isArray(raw.fallbacks)) {
-    for (const f of raw.fallbacks) {
-      addRef(typeof f === 'string' ? f : undefined);
+  const addModelConfig = (raw: { primary?: string; fallbacks?: string[] } | undefined) => {
+    addRef(raw?.primary);
+    if (Array.isArray(raw?.fallbacks)) {
+      for (const f of raw.fallbacks) {
+        addRef(typeof f === 'string' ? f : undefined);
+      }
     }
-  }
+  };
+  const addRoles = (roles: Record<string, { model?: string }> | undefined) => {
+    for (const role of Object.values(roles ?? {})) {
+      addRef(role.model);
+    }
+  };
+
+  addModelConfig(cfg.agents?.defaults?.models?.chat);
+  addRoles(cfg.agents?.defaults?.models?.roles);
 
   const list = cfg.agents?.list;
   if (Array.isArray(list)) {
     for (const e of list) {
-      const m = e?.model;
-      if (typeof m === 'string') addRef(m);
-      else if (m && typeof m === 'object' && 'primary' in m) {
-        addRef(typeof m.primary === 'string' ? m.primary : undefined);
-        const fb = (m as { fallbacks?: string[] }).fallbacks;
-        if (Array.isArray(fb)) {
-          for (const f of fb) addRef(f);
-        }
-      }
+      addModelConfig(e?.models?.chat);
+      addRoles(e?.models?.roles);
+    }
+  }
+
+  const raw = cfg.agents?.defaults?.imageModel;
+  if (raw && typeof raw === 'object' && 'fallbacks' in raw && Array.isArray(raw.fallbacks)) {
+    for (const f of raw.fallbacks) {
+      addRef(typeof f === 'string' ? f : undefined);
     }
   }
 

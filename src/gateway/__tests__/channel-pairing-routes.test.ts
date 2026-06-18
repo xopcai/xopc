@@ -73,7 +73,7 @@ describe('channel pairing routes', () => {
 
   it('returns 401 without gateway token', async () => {
     const app = createHonoApp({ service: createMockService(), token: TOKEN });
-    const res = await app.request('/api/channels/pairing?channel=telegram');
+    const res = await app.request('/api/channels/telegram/pairing');
     expect(res.status).toBe(401);
   });
 
@@ -86,7 +86,7 @@ describe('channel pairing routes', () => {
     });
 
     const app = createHonoApp({ service: createMockService(), token: TOKEN });
-    const res = await app.request('/api/channels/pairing?channel=telegram&account=default', {
+    const res = await app.request('/api/channels/telegram/pairing?account=default', {
       headers: authHeaders(),
     });
 
@@ -111,11 +111,10 @@ describe('channel pairing routes', () => {
     });
 
     const app = createHonoApp({ service: createMockService(), token: TOKEN });
-    const res = await app.request('/api/channels/pairing/approve', {
+    const res = await app.request('/api/channels/telegram/pairing/approve', {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        channel: 'telegram',
         accountId: 'default',
         code: upserted.code,
       }),
@@ -139,11 +138,10 @@ describe('channel pairing routes', () => {
     });
 
     const app = createHonoApp({ service: createMockService(), token: TOKEN });
-    const res = await app.request('/api/channels/pairing/approve-sender', {
+    const res = await app.request('/api/channels/telegram/pairing/approve-sender', {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({
-        channel: 'telegram',
         accountId: 'default',
         senderId: '123456789',
       }),
@@ -184,10 +182,10 @@ describe('channel pairing routes', () => {
 
   it('rejects invalid channel on approve', async () => {
     const app = createHonoApp({ service: createMockService(), token: TOKEN });
-    const res = await app.request('/api/channels/pairing/approve', {
+    const res = await app.request('/api/channels/slack/pairing/approve', {
       method: 'POST',
       headers: authHeaders(),
-      body: JSON.stringify({ channel: 'slack', code: 'ABCDEFGH' }),
+      body: JSON.stringify({ code: 'ABCDEFGH' }),
     });
     expect(res.status).toBe(400);
   });
@@ -201,11 +199,10 @@ describe('channel pairing routes', () => {
     });
 
     const app = createHonoApp({ service: createMockService(), token: TOKEN });
-    const res = await app.request('/api/channels/pairing/pending', {
+    const res = await app.request('/api/channels/telegram/pairing/pending', {
       method: 'DELETE',
       headers: authHeaders(),
       body: JSON.stringify({
-        channel: 'telegram',
         accountId: 'default',
         senderId: '999888777',
       }),
@@ -216,7 +213,7 @@ describe('channel pairing routes', () => {
     expect(body.ok).toBe(true);
     expect(body.payload.senderId).toBe('999888777');
 
-    const listRes = await app.request('/api/channels/pairing?channel=telegram&account=default', {
+    const listRes = await app.request('/api/channels/telegram/pairing?account=default', {
       headers: authHeaders(),
     });
     const listBody = (await listRes.json()) as { payload: { pending: unknown[] } };

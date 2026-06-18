@@ -15,7 +15,7 @@ function createConfig(): Config {
   return {
     agents: {
       default: 'coder',
-      list: [{ id: 'coder', name: 'Coder', enabled: true }],
+      list: [{ id: 'coder', enabled: true }],
     },
   } as Config;
 }

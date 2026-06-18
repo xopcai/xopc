@@ -19,11 +19,158 @@ export interface XopcTranscriptContextEntry {
   createdAt?: string;
 }
 
-export type TranscriptStoredRow = AgentMessage | XopcTranscriptContextEntry;
+/** Persisted-only row for replaying local shell executions in clients. */
+export interface XopcTranscriptBashExecutionEntry {
+  role: 'bashExecution';
+  command?: string;
+  output?: string | unknown[];
+  exitCode?: number | null;
+  signal?: string | null;
+  excludeFromContext?: boolean;
+  excludedFromContext?: boolean;
+  truncated?: boolean;
+  fullOutputPath?: string;
+  timestamp?: string | number;
+}
+
+/** Persisted extension-injected message row for client replay. */
+export interface XopcTranscriptCustomMessageEntry {
+  role: 'custom';
+  customType?: string;
+  content?: string | unknown[];
+  display?: boolean;
+  details?: unknown;
+  timestamp?: string | number;
+}
+
+/** Persisted extension custom_message entry shape before conversion to an agent message. */
+export interface XopcTranscriptCustomMessageFileEntry {
+  type: 'custom_message';
+  customType?: string;
+  content?: string | unknown[];
+  display?: boolean;
+  details?: unknown;
+  timestamp?: string | number;
+}
+
+/** Persisted extension state entry for replay by extension sessionManager APIs. */
+export interface XopcTranscriptCustomStateEntry {
+  type: 'custom';
+  customType?: string;
+  data?: unknown;
+  timestamp?: string | number;
+}
+
+/** Persisted branch summary row generated when returning from a branch. */
+export interface XopcTranscriptBranchSummaryEntry {
+  role: 'branchSummary';
+  summary?: string;
+  fromId?: string;
+  timestamp?: string | number;
+}
+
+/** Persisted compaction summary row generated after transcript compaction. */
+export interface XopcTranscriptCompactionSummaryEntry {
+  role: 'compactionSummary';
+  summary?: string;
+  tokensBefore?: number;
+  timestamp?: string | number;
+}
+
+/** Persisted label change for a transcript entry. */
+export interface XopcTranscriptLabelEntry {
+  type: 'label';
+  id?: string;
+  parentId?: string | null;
+  targetId?: string;
+  label?: string;
+  timestamp?: string | number;
+}
+
+/** Persisted thinking level change metadata row. */
+export interface XopcTranscriptThinkingLevelChangeEntry {
+  type: 'thinking_level_change';
+  id?: string;
+  parentId?: string | null;
+  thinkingLevel?: string;
+  timestamp?: string | number;
+}
+
+/** Persisted model change metadata row. */
+export interface XopcTranscriptModelChangeEntry {
+  type: 'model_change';
+  id?: string;
+  parentId?: string | null;
+  provider?: string;
+  modelId?: string;
+  timestamp?: string | number;
+}
+
+/** Persisted session info metadata row. */
+export interface XopcTranscriptSessionInfoEntry {
+  type: 'session_info';
+  id?: string;
+  parentId?: string | null;
+  name?: string;
+  timestamp?: string | number;
+}
+
+export type TranscriptStoredRow =
+  | AgentMessage
+  | XopcTranscriptContextEntry
+  | XopcTranscriptBashExecutionEntry
+  | XopcTranscriptCustomMessageEntry
+  | XopcTranscriptCustomMessageFileEntry
+  | XopcTranscriptCustomStateEntry
+  | XopcTranscriptBranchSummaryEntry
+  | XopcTranscriptCompactionSummaryEntry
+  | XopcTranscriptLabelEntry
+  | XopcTranscriptThinkingLevelChangeEntry
+  | XopcTranscriptModelChangeEntry
+  | XopcTranscriptSessionInfoEntry;
 
 export function isTranscriptContextEntry(x: unknown): x is XopcTranscriptContextEntry {
   if (!x || typeof x !== 'object') return false;
   return (x as Record<string, unknown>).kind === 'context';
+}
+
+export function isTranscriptBashExecutionEntry(x: unknown): x is XopcTranscriptBashExecutionEntry {
+  if (!x || typeof x !== 'object') return false;
+  return (x as Record<string, unknown>).role === 'bashExecution';
+}
+
+export function isTranscriptCustomMessageEntry(
+  x: unknown,
+): x is XopcTranscriptCustomMessageEntry | XopcTranscriptCustomMessageFileEntry {
+  if (!x || typeof x !== 'object') return false;
+  const row = x as Record<string, unknown>;
+  return row.role === 'custom' || row.type === 'custom_message';
+}
+
+export function isTranscriptCustomStateEntry(x: unknown): x is XopcTranscriptCustomStateEntry {
+  if (!x || typeof x !== 'object') return false;
+  return (x as Record<string, unknown>).type === 'custom';
+}
+
+export function isTranscriptSummaryMessageEntry(
+  x: unknown,
+): x is XopcTranscriptBranchSummaryEntry | XopcTranscriptCompactionSummaryEntry {
+  if (!x || typeof x !== 'object') return false;
+  const role = (x as Record<string, unknown>).role;
+  return role === 'branchSummary' || role === 'compactionSummary';
+}
+
+export function isTranscriptLabelEntry(x: unknown): x is XopcTranscriptLabelEntry {
+  if (!x || typeof x !== 'object') return false;
+  return (x as Record<string, unknown>).type === 'label';
+}
+
+export function isTranscriptMetadataEntry(
+  x: unknown,
+): x is XopcTranscriptThinkingLevelChangeEntry | XopcTranscriptModelChangeEntry | XopcTranscriptSessionInfoEntry {
+  if (!x || typeof x !== 'object') return false;
+  const type = (x as Record<string, unknown>).type;
+  return type === 'thinking_level_change' || type === 'model_change' || type === 'session_info';
 }
 
 const LLM_ROLES = new Set(['user', 'assistant', 'system', 'tool', 'toolResult']);
@@ -34,6 +181,32 @@ function isLikelyAgentMessage(x: unknown): x is AgentMessage {
   return typeof role === 'string' && LLM_ROLES.has(role);
 }
 
+function parseTimestampValue(timestamp: string | number | undefined): number | undefined {
+  if (typeof timestamp === 'number') {
+    return Number.isFinite(timestamp) ? timestamp : undefined;
+  }
+  if (typeof timestamp !== 'string') {
+    return undefined;
+  }
+  const ms = Date.parse(timestamp);
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
+function customMessageRowToLlmMessage(
+  row: XopcTranscriptCustomMessageEntry | XopcTranscriptCustomMessageFileEntry,
+): AgentMessage {
+  const content = typeof row.content === 'string'
+    ? [{ type: 'text' as const, text: row.content }]
+    : Array.isArray(row.content)
+      ? row.content
+      : [{ type: 'text' as const, text: '' }];
+  return {
+    role: 'user',
+    content,
+    timestamp: parseTimestampValue(row.timestamp),
+  } as AgentMessage;
+}
+
 /**
  * Normalize a JSON array from on-disk transcript into stored rows (drops unrecognized objects).
  */
@@ -41,6 +214,30 @@ export function transcriptRowsFromJsonArray(arr: unknown[]): TranscriptStoredRow
   const out: TranscriptStoredRow[] = [];
   for (const x of arr) {
     if (isTranscriptContextEntry(x)) {
+      out.push(x);
+      continue;
+    }
+    if (isTranscriptBashExecutionEntry(x)) {
+      out.push(x);
+      continue;
+    }
+    if (isTranscriptCustomMessageEntry(x)) {
+      out.push(x);
+      continue;
+    }
+    if (isTranscriptCustomStateEntry(x)) {
+      out.push(x);
+      continue;
+    }
+    if (isTranscriptSummaryMessageEntry(x)) {
+      out.push(x);
+      continue;
+    }
+    if (isTranscriptLabelEntry(x)) {
+      out.push(x);
+      continue;
+    }
+    if (isTranscriptMetadataEntry(x)) {
       out.push(x);
       continue;
     }
@@ -59,6 +256,10 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
       continue;
     }
     if ((r as { type?: string }).type === 'compaction') {
+      continue;
+    }
+    if (isTranscriptCustomMessageEntry(r)) {
+      out.push(customMessageRowToLlmMessage(r));
       continue;
     }
     if (isLikelyAgentMessage(r)) {
@@ -80,7 +281,15 @@ export function mergeLlmMessagesPreservingContextRows(
   let i = 0;
   const out: TranscriptStoredRow[] = [];
   for (const r of prevRows) {
-    if (isTranscriptContextEntry(r)) {
+    if (
+      isTranscriptContextEntry(r) ||
+      isTranscriptBashExecutionEntry(r) ||
+      isTranscriptCustomMessageEntry(r) ||
+      isTranscriptCustomStateEntry(r) ||
+      isTranscriptSummaryMessageEntry(r) ||
+      isTranscriptLabelEntry(r) ||
+      isTranscriptMetadataEntry(r)
+    ) {
       out.push(r);
     } else {
       if (i < llmMessages.length) {

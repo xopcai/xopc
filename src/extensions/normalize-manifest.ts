@@ -6,6 +6,9 @@ import type {
   ContractDeclaration,
   EnginesDeclaration,
   ExtensionManifest,
+  ChannelContributionDeclaration,
+  ChannelActionDescriptor,
+  ChannelConfigUiHint,
   ExtensionManifestCommand,
   ExtensionUiContributions,
   ExtensionUiManifest,
@@ -76,6 +79,65 @@ function normalizeManifestCommands(raw: unknown): ExtensionManifestCommand[] | u
   return out.length > 0 ? out : undefined;
 }
 
+function normalizeChannelContributions(raw: unknown): Record<string, ChannelContributionDeclaration> | undefined {
+  if (!isRecord(raw)) return undefined;
+  const out: Record<string, ChannelContributionDeclaration> = {};
+  for (const [id, value] of Object.entries(raw)) {
+    if (!isRecord(value)) continue;
+    const label = typeof value.label === 'string' && value.label.trim() ? value.label.trim() : '';
+    if (!id.trim() || !label) continue;
+    out[id.trim()] = {
+      label,
+      description: typeof value.description === 'string' ? value.description : undefined,
+      docsPath: typeof value.docsPath === 'string' ? value.docsPath : undefined,
+      order: typeof value.order === 'number' && Number.isFinite(value.order) ? value.order : undefined,
+      configPath: typeof value.configPath === 'string' ? value.configPath : undefined,
+      capabilities: isRecord(value.capabilities) ? value.capabilities : undefined,
+      configSchema: isRecord(value.configSchema) ? value.configSchema : undefined,
+      uiHints: normalizeChannelUiHints(value.uiHints),
+      actions: normalizeChannelActions(value.actions),
+    };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function normalizeChannelUiHints(raw: unknown): Record<string, ChannelConfigUiHint> | undefined {
+  if (!isRecord(raw)) return undefined;
+  const out: Record<string, ChannelConfigUiHint> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!key.trim() || !isRecord(value)) continue;
+    out[key.trim()] = {
+      label: typeof value.label === 'string' ? value.label : undefined,
+      help: typeof value.help === 'string' ? value.help : undefined,
+      tags: Array.isArray(value.tags) ? value.tags.filter((x): x is string => typeof x === 'string') : undefined,
+      advanced: typeof value.advanced === 'boolean' ? value.advanced : undefined,
+      sensitive: typeof value.sensitive === 'boolean' ? value.sensitive : undefined,
+      placeholder: typeof value.placeholder === 'string' ? value.placeholder : undefined,
+      itemTemplate: value.itemTemplate,
+    };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+function normalizeChannelActions(raw: unknown): Record<string, ChannelActionDescriptor> | undefined {
+  if (!isRecord(raw)) return undefined;
+  const out: Record<string, ChannelActionDescriptor> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (!key.trim() || !isRecord(value)) continue;
+    const result = value.result;
+    out[key.trim()] = {
+      label: typeof value.label === 'string' ? value.label : undefined,
+      description: typeof value.description === 'string' ? value.description : undefined,
+      result:
+        result === 'ok' || result === 'qr' || result === 'poll' || result === 'diagnostics' || result === 'form'
+          ? result
+          : undefined,
+      schema: isRecord(value.schema) ? value.schema : undefined,
+    };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 /**
  * Normalize raw JSON manifest into ExtensionManifest with stable optional fields.
  */
@@ -113,6 +175,7 @@ export function normalizeExtensionManifest(raw: Record<string, unknown>): Extens
       ? raw.channels.filter((x): x is string => typeof x === 'string')
       : undefined,
     channelEnvVars: normalizeStringArrayMap(raw.channelEnvVars),
+    channelContributions: normalizeChannelContributions(raw.channelContributions),
 
     activation: normalizeActivation(raw.activation),
     contracts: normalizeContracts(raw.contracts),

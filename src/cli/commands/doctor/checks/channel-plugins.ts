@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 
 import type { CheckResult, DoctorContext } from '../types.js';
 import { loadConfig } from '../../../../config/loader.js';
-import { bundledChannelPlugins } from '../../../../generated/bundled-channel-plugins.js';
+import { listChannelPlugins } from '../../../../channels/plugins/registry.js';
 import type { ChannelDoctorCheckResult, ChannelPlugin } from '../../../../channels/plugin-types.js';
 
 function toCheckResults(plugin: ChannelPlugin, raw: ChannelDoctorCheckResult[]): CheckResult[] {
@@ -29,7 +29,7 @@ export async function checkChannelPlugins(ctx: DoctorContext): Promise<CheckResu
   }
 
   const out: CheckResult[] = [];
-  for (const plugin of bundledChannelPlugins) {
+  for (const plugin of listChannelPlugins()) {
     const doctor = plugin.doctor;
     if (!doctor?.check) continue;
     try {

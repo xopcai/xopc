@@ -64,13 +64,13 @@ export function modelRef(choice: TuiModelChoice): string {
   return `${choice.provider}/${choice.id}`;
 }
 
-/** Filter catalog by scoped refs; empty scoped array falls back to full catalog. */
+/** Filter catalog by scoped refs; `null` means full catalog, empty array means no scoped models. */
 export function filterModelsForCycle(
   catalog: TuiModelChoice[],
   scopedRefs: string[] | null,
 ): TuiModelChoice[] {
   if (scopedRefs === null) return catalog;
-  if (scopedRefs.length === 0) return catalog;
+  if (scopedRefs.length === 0) return [];
   const order = new Map(scopedRefs.map((ref, idx) => [ref, idx]));
   return catalog
     .filter((m) => order.has(modelRef(m)))

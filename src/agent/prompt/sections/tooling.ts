@@ -17,6 +17,7 @@ const CORE_TOOL_ORDER = [
   'session_search',
   'curated_memory',
   'session_status',
+  'tool_manual',
   'delegate_task',
   'workflow',
   'cronjob',
@@ -51,6 +52,7 @@ const CORE_TOOL_SUMMARIES: Record<string, string> = {
   session_search: 'Search other chat sessions or list recent sessions',
   curated_memory: 'Read/write structured notes under agent home memories/',
   session_status: 'Show session usage/time/model state',
+  tool_manual: 'Load built-in usage manuals for complex tools',
   delegate_task: 'Spawn an isolated sub-agent for a delegated task',
   workflow: 'Start a persisted multi-phase workflow run',
   cronjob: 'Manage scheduled cron jobs',
@@ -111,6 +113,7 @@ export function buildToolingSection(params: {
   const shellToolName = resolveToolName('shell');
   const hasDelegate = availableTools.has('delegate_task');
   const hasWorkflow = availableTools.has('workflow');
+  const hasToolManual = availableTools.has('tool_manual');
 
   const orchestrationLines: string[] = [];
   if (hasDelegate) {
@@ -132,6 +135,9 @@ export function buildToolingSection(params: {
       ? toolLines.join('\n')
       : '- No tools are registered for this session.',
     `For long waits, avoid rapid poll loops: use \`${shellToolName}\` with enough yieldMs or poll in reasonable intervals.`,
+    hasToolManual
+      ? 'Some complex tools have built-in manuals. Use `tool_manual(tool)` before non-trivial use.'
+      : '',
     hasDelegate
       ? 'If a task is complex or long-running, delegate it. Completion is push-based: the sub-agent result returns when done.'
       : '',

@@ -80,7 +80,7 @@ export interface ConfigInfo {
 
 function agentDefaultModelFromGatewayConfig(c: unknown): string {
   if (!c || typeof c !== 'object') return '';
-  const raw = (c as { agents?: { defaults?: { model?: unknown } } }).agents?.defaults?.model;
+  const raw = (c as { agents?: { defaults?: { models?: { chat?: unknown } } } }).agents?.defaults?.models?.chat;
   if (raw === undefined || raw === null) return '';
   if (typeof raw === 'string') return raw.trim();
   if (typeof raw === 'object' && raw !== null && 'primary' in raw) {

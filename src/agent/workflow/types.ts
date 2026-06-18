@@ -100,6 +100,7 @@ export interface WorkflowAgentSnapshot {
 }
 
 export interface WorkflowSnapshot {
+  runId?: string;
   name: string;
   description?: string;
   phases: string[];
@@ -131,6 +132,15 @@ export interface SubagentRunOptions<T = unknown> {
   rethrow?: boolean;
   /** Hint about which phase this agent belongs to (passed through for logging). */
   phase?: string;
+  /** Persistent hidden session for this workflow subagent. */
+  sessionKey?: string;
+  sessionMetadata?: {
+    parentSessionKey?: string;
+    workflowRunId: string;
+    workflowDefinitionId: string;
+    workflowAgentId: string;
+    workflowAgentLabel: string;
+  };
   /** Live progress from the child agent loop (workflow tool binds per agent id). */
   onProgress?: (event: SubagentProgressEvent) => void;
   /** Pre-bound capture for structured output (internal: created by the adapter when schema present). */

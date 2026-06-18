@@ -39,6 +39,7 @@ const APP_COPY_PATHS = [
   { from: 'out/main', to: 'out/main' },
   { from: 'out/preload', to: 'out/preload' },
   { from: 'out/server', to: 'out/server' },
+  { from: 'dist/extensions', to: 'dist/extensions' },
   { from: 'dist/gateway/static/root', to: 'dist/gateway/static/root' },
   { from: 'skills', to: 'skills' },
 ];

@@ -23,7 +23,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'setup [options]', description: 'Initialize config file and workspace directory' },
   { name: 'profile', description: 'Manage xopc state profiles (~/.xopc vs ~/.xopc-<name>)' },
   { name: 'onboard [options]', description: 'Interactive setup wizard for xopc (gateway uses schema defaults)' },
-  { name: 'channels', description: 'Messaging channel login and credentials' },
+  { name: 'channels', description: 'Messaging channel configuration' },
   { name: 'auth', description: 'Manage authentication credentials' },
   { name: 'agent [options]', description: 'Chat with the AI agent' },
   { name: 'tui [options]', description: 'Interactive terminal UI (pi-tui)' },

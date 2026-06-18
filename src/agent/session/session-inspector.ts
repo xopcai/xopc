@@ -22,6 +22,7 @@ import {
   effectiveWorkspacePathForSession,
   resolveEffectiveReasoningLevel,
   resolveEffectiveThinkingLevel,
+  resolveVerboseLevel,
   type SessionConfigStore,
 } from '../../session/index.js';
 import type { SessionStore } from '../../session/store.js';
@@ -30,7 +31,7 @@ import type { ModelManager } from '../models/index.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import { runBtwQuery } from '../service/btw-query.js';
 import { formatSessionContextReport } from '../service/session-context-report.js';
-import type { ReasoningLevel } from '../transcript/thinking-types.js';
+import type { ReasoningLevel, VerboseLevel } from '../transcript/thinking-types.js';
 import { createLogger } from '../../utils/logger.js';
 import type { SessionHydrator } from './session-hydrator.js';
 
@@ -61,6 +62,7 @@ export interface SessionAgentConfigView {
   thinkingLevel: ThinkingLevel;
   model: string;
   reasoningLevel: ReasoningLevel;
+  verboseLevel: VerboseLevel;
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
 }
@@ -198,11 +200,14 @@ export class SessionInspector {
     const level = await resolveEffectiveThinkingLevel(this.opts.sessionConfigStore, sessionKey, null, defThink);
     const defReason = (cfg.agents?.defaults?.reasoningDefault ?? 'stream') as ReasoningLevel;
     const reasoningLevel = await resolveEffectiveReasoningLevel(this.opts.sessionConfigStore, sessionKey, defReason);
+    const defVerbose = (cfg.agents?.defaults?.verboseDefault ?? 'full') as VerboseLevel;
+    const verboseLevel = await resolveVerboseLevel(this.opts.sessionConfigStore, sessionKey, defVerbose);
     const model = this.opts.modelManager.getModelForSession(sessionKey);
     return {
       thinkingLevel: level,
       model,
       reasoningLevel,
+      verboseLevel,
       effectiveWorkspacePath: effectiveWorkspacePathForSession(cfg, sessionKey, sc),
       workingDirectoryLocked: Boolean(sc?.workingDirectoryOverride?.trim()),
     };

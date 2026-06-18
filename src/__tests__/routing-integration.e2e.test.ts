@@ -63,9 +63,9 @@ describe('Complete Routing E2E Flow', () => {
         agents: {
           default: 'main',
           list: [
-            { id: 'main', name: 'Main Assistant' },
-            { id: 'coder', name: 'Coding Assistant' },
-            { id: 'researcher', name: 'Research Assistant' },
+            { id: 'main' },
+            { id: 'coder' },
+            { id: 'researcher' },
           ],
         },
         bindings: [
@@ -417,10 +417,10 @@ describe('Complete Routing E2E Flow', () => {
         agents: {
           default: 'main',
           list: [
-            { id: 'main', name: 'Main Assistant' },
-            { id: 'coder', name: 'Coding Bot' },
-            { id: 'support', name: 'Support Bot' },
-            { id: 'admin', name: 'Admin Bot' },
+            { id: 'main' },
+            { id: 'coder' },
+            { id: 'support' },
+            { id: 'admin' },
           ],
         },
         bindings: [

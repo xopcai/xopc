@@ -2,7 +2,9 @@ import { useLayoutEffect } from 'react';
 import { GitBranch, Play } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { cn } from '@/lib/cn';
+import { messages } from '@/i18n/messages';
 import { interaction } from '@/lib/interaction';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
@@ -25,6 +27,9 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     definitions,
     runs,
     searchQuery,
+    ownerAgentId,
+    agentOptions,
+    setOwnerAgentId,
     workflowFilterId,
     setWorkflowFilterId,
     triggerFilter,
@@ -102,6 +107,23 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     <main className="min-h-0 flex-1 overflow-auto bg-surface-base">
       <div className="mx-auto flex w-full max-w-400 flex-col gap-5 px-4 py-6 lg:px-6">
         <div className="flex flex-wrap items-center justify-end gap-2">
+            {agentOptions.length > 1 ? (
+              <select
+                value={ownerAgentId ?? ''}
+                aria-label="Agent"
+                onChange={(event) => setOwnerAgentId(event.target.value)}
+                className={cn(
+                  'h-9 min-w-36 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
+                  interaction.focusRingPanel,
+                )}
+              >
+                {agentOptions.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agentListDisplayName(agent, messages(language).agentsSettings)}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <select
               value={triggerFilter}
               aria-label={labels.boardTriggerFilterAria}
@@ -195,6 +217,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
         onRetry={() => {
           if (selectedRunId) void retryRun(selectedRunId);
         }}
+        ownerAgentId={ownerAgentId}
         onClose={closeRunDetails}
       />
 

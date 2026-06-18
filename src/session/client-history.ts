@@ -1,10 +1,35 @@
 import type { Message } from './types.js';
+import type { TranscriptStoredRow } from './session-context-for-llm.js';
 
 /** Transcript row for TUI and HTTP clients (flattened from persisted session messages). */
 export interface ClientHistoryMessage {
+  id?: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  rawContent?: string | unknown[];
   timestamp?: number;
+  kind?: 'message' | 'compaction' | 'context' | 'bash' | 'custom' | 'branch';
+  tokensBefore?: number;
+  tokensAfter?: number;
+  bash?: {
+    command: string;
+    output?: string;
+    exitCode?: number | null;
+    signal?: string | null;
+    excludeFromContext?: boolean;
+    truncated?: boolean;
+    fullOutputPath?: string;
+  };
+  custom?: {
+    customType: string;
+    details?: unknown;
+    state?: boolean;
+    display?: boolean;
+  };
+  branch?: {
+    summary: string;
+    fromId?: string;
+  };
   toolCalls?: Array<{ name: string; args?: unknown; result?: string; isError?: boolean }>;
 }
 
@@ -111,6 +136,298 @@ export function messagesToClientHistory(
         toolCalls,
       });
     }
+  }
+
+  return out;
+}
+
+type HistoryMessageRow = {
+  role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
+  content?: string | unknown[];
+  timestamp?: string | number;
+  tool_call_id?: string;
+  toolCallId?: string;
+  tool_calls?: Message['tool_calls'];
+  toolCalls?: Message['tool_calls'];
+  isError?: boolean;
+};
+
+function asHistoryMessageRow(row: TranscriptStoredRow): HistoryMessageRow | null {
+  const role = (row as { role?: unknown }).role;
+  if (
+    typeof role !== 'string' ||
+    !['system', 'user', 'assistant', 'tool', 'toolResult'].includes(role)
+  ) {
+    return null;
+  }
+  return row as unknown as HistoryMessageRow;
+}
+
+function parseTimestampValue(ts: string | number | undefined): number | undefined {
+  if (typeof ts === 'number') return Number.isFinite(ts) ? ts : undefined;
+  return parseTimestamp(ts);
+}
+
+function collectHistoryToolResults(messages: HistoryMessageRow[]): Map<string, { text: string; isError?: boolean }> {
+  const map = new Map<string, { text: string; isError?: boolean }>();
+  for (const m of messages) {
+    if (m.role !== 'tool' && m.role !== 'toolResult') continue;
+    const id = m.tool_call_id ?? m.toolCallId;
+    if (!id || typeof id !== 'string') continue;
+    map.set(id, {
+      text: flattenMessageContent(m.content ?? ''),
+      isError: m.isError,
+    });
+  }
+  return map;
+}
+
+function isCompactionRow(row: TranscriptStoredRow): row is TranscriptStoredRow & {
+  type: 'compaction';
+  summary?: string;
+  at?: string;
+  tokensBefore?: number;
+  tokensAfter?: number;
+} {
+  return (row as { type?: unknown }).type === 'compaction';
+}
+
+function compactionSummaryRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessage | null {
+  const r = row as unknown as Record<string, unknown>;
+  if (r.role !== 'compactionSummary') return null;
+  const summary = optionalString(r.summary) ?? '';
+  return {
+    role: 'system',
+    kind: 'compaction',
+    content: summary,
+    timestamp: parseTimestampValue(
+      typeof r.timestamp === 'string' || typeof r.timestamp === 'number' ? r.timestamp : undefined,
+    ),
+    tokensBefore: typeof r.tokensBefore === 'number' ? r.tokensBefore : undefined,
+  };
+}
+
+function contextRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessage | null {
+  if ((row as { kind?: unknown }).kind !== 'context') return null;
+  const text = (row as { text?: unknown }).text;
+  if (typeof text !== 'string' || !text.trim()) return null;
+  const createdAt = (row as { createdAt?: unknown }).createdAt;
+  return {
+    role: 'system',
+    kind: 'context',
+    content: text,
+    timestamp: typeof createdAt === 'string' ? parseTimestamp(createdAt) : undefined,
+  };
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function bashRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessage | null {
+  const r = row as unknown as Record<string, unknown>;
+  if (r.role !== 'bashExecution') return null;
+
+  const command = optionalString(r.command) ?? optionalString(r.content)?.trim();
+  if (!command) return null;
+  const output = Array.isArray(r.output) || typeof r.output === 'string'
+    ? flattenMessageContent(r.output)
+    : optionalString(r.output);
+  const exitCode = typeof r.exitCode === 'number' ? r.exitCode : r.exitCode === null ? null : undefined;
+  const signal = typeof r.signal === 'string' ? r.signal : r.signal === null ? null : undefined;
+  const excludeFromContext =
+    typeof r.excludeFromContext === 'boolean'
+      ? r.excludeFromContext
+      : typeof r.excludedFromContext === 'boolean'
+        ? r.excludedFromContext
+        : undefined;
+
+  return {
+    role: 'system',
+    kind: 'bash',
+    content: output || command,
+    timestamp: parseTimestampValue(
+      typeof r.timestamp === 'string' || typeof r.timestamp === 'number' ? r.timestamp : undefined,
+    ),
+    bash: {
+      command,
+      output,
+      exitCode,
+      signal,
+      excludeFromContext,
+      truncated: typeof r.truncated === 'boolean' ? r.truncated : undefined,
+      fullOutputPath: optionalString(r.fullOutputPath),
+    },
+  };
+}
+
+function customRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessage | null {
+  const r = row as unknown as Record<string, unknown>;
+  if (r.role !== 'custom' && r.type !== 'custom_message') return null;
+
+  const customType = optionalString(r.customType)?.trim();
+  if (!customType) return null;
+  const content = Array.isArray(r.content) || typeof r.content === 'string'
+    ? flattenMessageContent(r.content)
+    : '';
+  const timestamp = parseTimestampValue(
+    typeof r.timestamp === 'string' || typeof r.timestamp === 'number' ? r.timestamp : undefined,
+  );
+
+  return {
+    role: 'system',
+    kind: 'custom',
+    content,
+    rawContent: Array.isArray(r.content) || typeof r.content === 'string' ? r.content : undefined,
+    timestamp,
+    custom: {
+      customType,
+      details: r.details,
+      display: r.display === false ? false : true,
+    },
+  };
+}
+
+function customStateRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessage | null {
+  const r = row as unknown as Record<string, unknown>;
+  if (r.type !== 'custom') return null;
+
+  const customType = optionalString(r.customType)?.trim();
+  if (!customType) return null;
+  return {
+    role: 'system',
+    kind: 'custom',
+    content: '',
+    timestamp: parseTimestampValue(
+      typeof r.timestamp === 'string' || typeof r.timestamp === 'number' ? r.timestamp : undefined,
+    ),
+    custom: {
+      customType,
+      details: r.data,
+      state: true,
+    },
+  };
+}
+
+function branchSummaryRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessage | null {
+  const r = row as unknown as Record<string, unknown>;
+  if (r.role !== 'branchSummary') return null;
+  const summary = optionalString(r.summary)?.trim();
+  if (!summary) return null;
+  const fromId = optionalString(r.fromId);
+
+  return {
+    role: 'system',
+    kind: 'branch',
+    content: summary,
+    timestamp: parseTimestampValue(
+      typeof r.timestamp === 'string' || typeof r.timestamp === 'number' ? r.timestamp : undefined,
+    ),
+    branch: {
+      summary,
+      fromId,
+    },
+  };
+}
+
+/**
+ * Maps persisted transcript rows into linear chat history, preserving non-LLM
+ * audit rows that the TUI can render as dedicated components.
+ */
+export function transcriptRowsToClientHistory(
+  rows: TranscriptStoredRow[],
+  opts?: { limit?: number },
+): ClientHistoryMessage[] {
+  const startIndex =
+    opts?.limit !== undefined && rows.length > opts.limit
+      ? rows.length - opts.limit
+      : 0;
+  const slice =
+    opts?.limit !== undefined && rows.length > opts.limit
+      ? rows.slice(-opts.limit)
+      : rows;
+  const messages = slice
+    .map(asHistoryMessageRow)
+    .filter((row): row is HistoryMessageRow => row !== null);
+  const results = collectHistoryToolResults(messages);
+  const out: ClientHistoryMessage[] = [];
+
+  for (const [offset, row] of slice.entries()) {
+    const id = `row-${startIndex + offset + 1}`;
+    if (isCompactionRow(row)) {
+      out.push({
+        id,
+        role: 'system',
+        kind: 'compaction',
+        content: typeof row.summary === 'string' ? row.summary : '',
+        timestamp: parseTimestamp(row.at),
+        tokensBefore: row.tokensBefore,
+        tokensAfter: row.tokensAfter,
+      });
+      continue;
+    }
+
+    const compactionSummaryRow = compactionSummaryRowToClientHistory(row);
+    if (compactionSummaryRow) {
+      out.push({ id, ...compactionSummaryRow });
+      continue;
+    }
+
+    const contextRow = contextRowToClientHistory(row);
+    if (contextRow) {
+      out.push({ id, ...contextRow });
+      continue;
+    }
+
+    const bashRow = bashRowToClientHistory(row);
+    if (bashRow) {
+      out.push({ id, ...bashRow });
+      continue;
+    }
+
+    const customRow = customRowToClientHistory(row);
+    if (customRow) {
+      out.push({ id, ...customRow });
+      continue;
+    }
+
+    const customStateRow = customStateRowToClientHistory(row);
+    if (customStateRow) {
+      out.push({ id, ...customStateRow });
+      continue;
+    }
+
+    const branchSummaryRow = branchSummaryRowToClientHistory(row);
+    if (branchSummaryRow) {
+      out.push({ id, ...branchSummaryRow });
+      continue;
+    }
+
+    const messageRow = asHistoryMessageRow(row);
+    if (!messageRow) continue;
+    if (messageRow.role === 'tool' || messageRow.role === 'toolResult') {
+      continue;
+    }
+
+    if (messageRow.role === 'user' || messageRow.role === 'system') {
+      out.push({
+        id,
+        role: messageRow.role,
+        kind: 'message',
+        content: flattenMessageContent(messageRow.content ?? ''),
+        timestamp: parseTimestampValue(messageRow.timestamp),
+      });
+      continue;
+    }
+
+    out.push({
+      id,
+      role: 'assistant',
+      kind: 'message',
+      content: flattenMessageContent(messageRow.content ?? ''),
+      timestamp: parseTimestampValue(messageRow.timestamp),
+      toolCalls: toolCallsWithResults(messageRow.tool_calls ?? messageRow.toolCalls, results),
+    });
   }
 
   return out;

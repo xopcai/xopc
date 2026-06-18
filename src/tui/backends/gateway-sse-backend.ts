@@ -1,16 +1,26 @@
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { parseModelRef } from '../../agent/models/selection.js';
+import type { ExportFormat } from '../../session/types.js';
+import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
+import { transcriptRowsToClientHistory } from '../../session/client-history.js';
 import { createLogger } from '../../utils/logger.js';
 import { consumeSSEStream, parseSSEData } from '../sse-consumer.js';
 import type {
   ChatSendOptions,
   HistoryMessage,
   TuiBackend,
+  TuiCompactionResult,
   TuiEvent,
   TuiModelChoice,
+  TuiShareRequest,
+  TuiShareResult,
+  TuiSessionStats,
   TuiSessionItem,
+  TuiTranscriptTreeEntry,
 } from '../tui-backend.js';
 import type { SessionInfo } from '../tui-types.js';
+import { computeTuiSessionStats } from '../tui-session-stats.js';
+import { buildTuiTranscriptTree, transcriptTreeEntryIdToRowNumber } from '../tui-transcript-tree.js';
 
 const log = createLogger('TUI:GatewaySSE');
 
@@ -70,6 +80,11 @@ export class GatewaySseBackend implements TuiBackend {
     this.eventAbort = null;
     this.chatAbort?.abort();
     this.chatAbort = null;
+  }
+
+  getActiveSignal(): AbortSignal | undefined {
+    const signal = this.chatAbort?.signal;
+    return signal && !signal.aborted ? signal : undefined;
   }
 
   // ── Agent chat (POST /api/agent → SSE response body) ──
@@ -183,21 +198,67 @@ export class GatewaySseBackend implements TuiBackend {
     limit?: number;
   }): Promise<{ messages: HistoryMessage[] }> {
     try {
-      const params = new URLSearchParams();
-      if (opts.limit) params.set('limit', String(opts.limit));
-      const qs = params.toString();
       const res = await gatewayFetch(
         this.baseUrl,
-        `/api/sessions/${encodeURIComponent(opts.sessionKey)}/messages${qs ? `?${qs}` : ''}`,
+        `/api/sessions/${encodeURIComponent(opts.sessionKey)}?include=transcriptRows`,
         this.token,
       );
       if (!res.ok) return { messages: [] };
-      const json = (await res.json()) as { ok?: boolean; payload?: { messages?: HistoryMessage[] } };
-      return { messages: json.payload?.messages ?? [] };
+      const json = (await res.json()) as {
+        session?: { transcriptRows?: unknown[] };
+      };
+      const rows = Array.isArray(json.session?.transcriptRows)
+        ? (json.session.transcriptRows as TranscriptStoredRow[])
+        : [];
+      return { messages: transcriptRowsToClientHistory(rows, { limit: opts.limit }) };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, errorMessage }, `Failed to load history: ${errorMessage}`);
       return { messages: [] };
+    }
+  }
+
+  async loadTranscriptTree(sessionKey: string): Promise<TuiTranscriptTreeEntry[]> {
+    try {
+      const res = await gatewayFetch(
+        this.baseUrl,
+        `/api/sessions/${encodeURIComponent(sessionKey)}?include=transcriptRows`,
+        this.token,
+      );
+      if (!res.ok) return [];
+      const json = (await res.json()) as {
+        session?: { transcriptRows?: unknown[] };
+      };
+      const rows = Array.isArray(json.session?.transcriptRows)
+        ? (json.session.transcriptRows as TranscriptStoredRow[])
+        : [];
+      return buildTuiTranscriptTree(rows);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn({ err: error, sessionKey, errorMessage }, `Failed to load transcript tree: ${errorMessage}`);
+      return [];
+    }
+  }
+
+  async getSessionStats(sessionKey: string): Promise<TuiSessionStats> {
+    try {
+      const res = await gatewayFetch(
+        this.baseUrl,
+        `/api/sessions/${encodeURIComponent(sessionKey)}?include=transcriptRows`,
+        this.token,
+      );
+      if (!res.ok) return computeTuiSessionStats([]);
+      const json = (await res.json()) as {
+        session?: { transcriptRows?: unknown[] };
+      };
+      const rows = Array.isArray(json.session?.transcriptRows)
+        ? (json.session.transcriptRows as TranscriptStoredRow[])
+        : [];
+      return computeTuiSessionStats(rows);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn({ err: error, sessionKey, errorMessage }, `Failed to load session stats: ${errorMessage}`);
+      return computeTuiSessionStats([]);
     }
   }
 
@@ -213,6 +274,7 @@ export class GatewaySseBackend implements TuiBackend {
           estimatedTokens?: number;
           messageCount?: number;
           customData?: Record<string, unknown>;
+          cwd?: string;
         }>;
       };
       return (json.items ?? []).map((s) => ({
@@ -227,6 +289,11 @@ export class GatewaySseBackend implements TuiBackend {
             : typeof s.customData?.modelRef === 'string'
               ? s.customData.modelRef
               : null,
+        forkedFromSessionKey:
+          typeof s.customData?.forkedFromSessionKey === 'string'
+            ? s.customData.forkedFromSessionKey
+            : undefined,
+        cwd: typeof s.cwd === 'string' ? s.cwd : undefined,
       }));
     } catch {
       return [];
@@ -261,7 +328,12 @@ export class GatewaySseBackend implements TuiBackend {
       if (agentCfgRes.ok) {
         const json = (await agentCfgRes.json()) as {
           ok?: boolean;
-          payload?: { model?: string; thinkingLevel?: string };
+          payload?: {
+            model?: string;
+            thinkingLevel?: string;
+            reasoningLevel?: string;
+            verboseLevel?: string;
+          };
         };
         const p = json.payload;
         if (p?.model && typeof p.model === 'string') {
@@ -275,6 +347,12 @@ export class GatewaySseBackend implements TuiBackend {
         }
         if (p?.thinkingLevel && typeof p.thinkingLevel === 'string') {
           out.thinkingLevel = p.thinkingLevel;
+        }
+        if (p?.reasoningLevel && typeof p.reasoningLevel === 'string') {
+          out.reasoningLevel = p.reasoningLevel;
+        }
+        if (p?.verboseLevel && typeof p.verboseLevel === 'string') {
+          out.verboseLevel = p.verboseLevel;
         }
       }
 
@@ -346,8 +424,8 @@ export class GatewaySseBackend implements TuiBackend {
 
   async compactSession(
     sessionKey: string,
-    options?: { force?: boolean },
-  ): Promise<{ compacted: boolean; summary?: string }> {
+    options?: { force?: boolean; instructions?: string },
+  ): Promise<TuiCompactionResult> {
     try {
       const res = await gatewayFetch(
         this.baseUrl,
@@ -355,7 +433,10 @@ export class GatewaySseBackend implements TuiBackend {
         this.token,
         {
           method: 'POST',
-          body: JSON.stringify({ force: options?.force ?? true }),
+          body: JSON.stringify({
+            force: options?.force ?? true,
+            instructions: options?.instructions,
+          }),
         },
       );
       if (!res.ok) {
@@ -363,7 +444,14 @@ export class GatewaySseBackend implements TuiBackend {
       }
       const json = (await res.json()) as {
         ok?: boolean;
-        payload?: { result?: { compacted?: boolean; tokensBefore?: number; tokensAfter?: number } };
+        payload?: {
+          result?: {
+            compacted?: boolean;
+            summary?: string;
+            tokensBefore?: number;
+            tokensAfter?: number;
+          };
+        };
       };
       const result = json.payload?.result;
       if (!result?.compacted) {
@@ -372,11 +460,224 @@ export class GatewaySseBackend implements TuiBackend {
       return {
         compacted: true,
         summary: `Compacted (${result.tokensBefore ?? '?'} → ${result.tokensAfter ?? '?'} tokens)`,
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+        transcriptSummary: result.summary,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       return { compacted: false, summary: errorMessage };
     }
+  }
+
+  async exportSession(sessionKey: string, format: ExportFormat): Promise<string> {
+    const params = new URLSearchParams({ format });
+    const res = await gatewayFetch(
+      this.baseUrl,
+      `/api/sessions/${encodeURIComponent(sessionKey)}/export?${params.toString()}`,
+      this.token,
+    );
+    if (!res.ok) {
+      throw new Error(`Export failed (${res.status})`);
+    }
+    const json = (await res.json()) as { content?: string };
+    return json.content ?? '';
+  }
+
+  async importSession(
+    targetSessionKey: string,
+    jsonContent: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    const res = await gatewayFetch(
+      this.baseUrl,
+      '/api/sessions/import',
+      this.token,
+      { method: 'POST', body: JSON.stringify({ targetKey: targetSessionKey, content: jsonContent }) },
+    );
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      sessionKey?: string;
+      rowCount?: number;
+    };
+    if (!res.ok || json.ok === false || !json.sessionKey) {
+      throw new Error(json.error ?? `Import failed (${res.status})`);
+    }
+    return { sessionKey: json.sessionKey, rowCount: json.rowCount ?? 0 };
+  }
+
+  async createShare(
+    sessionKey: string,
+    request: TuiShareRequest,
+    options?: { agentId?: string },
+  ): Promise<TuiShareResult> {
+    const res = await gatewayFetch(this.baseUrl, '/api/shares/auto', this.token, {
+      method: 'POST',
+      body: JSON.stringify({
+        path: request.path,
+        audience: request.audience,
+        mode: request.mode,
+        title: request.title,
+        description: request.description,
+        sessionKey,
+        agentId: options?.agentId,
+      }),
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: { message?: string };
+      payload?: {
+        share?: {
+          kind?: string;
+          title?: string;
+          description?: string;
+          shareUrl?: string;
+          reachability?: string;
+          reachabilityHint?: string | null;
+          expiresAt?: string;
+          maxViews?: number | null;
+        };
+        thumbnail?: { url?: string };
+        routing?: { reason?: string; hint?: string };
+      };
+    };
+    if (!res.ok || json.ok === false || !json.payload?.share?.shareUrl) {
+      throw new Error(json.error?.message ?? `Share failed (${res.status})`);
+    }
+    const share = json.payload.share;
+    return {
+      kind: share.kind ?? 'share',
+      shareUrl: share.shareUrl,
+      title: share.title,
+      description: share.description,
+      thumbnailUrl: json.payload.thumbnail?.url,
+      reachability: share.reachability,
+      reachabilityHint: share.reachabilityHint,
+      expiresAt: share.expiresAt,
+      maxViews: share.maxViews,
+      routingReason: json.payload.routing?.reason,
+      routingHint: json.payload.routing?.hint,
+    };
+  }
+
+  async btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {
+    const res = await gatewayFetch(
+      this.baseUrl,
+      `/api/sessions/${encodeURIComponent(sessionKey)}/btw`,
+      this.token,
+      { method: 'POST', body: JSON.stringify({ question }) },
+    );
+    if (!res.ok) {
+      return { text: '', error: `BTW failed (${res.status})` };
+    }
+    return (await res.json()) as { text: string; error?: string };
+  }
+
+  async forkSession(
+    sourceSessionKey: string,
+    targetSessionKey: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    const res = await gatewayFetch(
+      this.baseUrl,
+      `/api/sessions/${encodeURIComponent(sourceSessionKey)}/fork`,
+      this.token,
+      { method: 'POST', body: JSON.stringify({ targetKey: targetSessionKey }) },
+    );
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      sessionKey?: string;
+      rowCount?: number;
+    };
+    if (!res.ok || json.ok === false || !json.sessionKey) {
+      throw new Error(json.error ?? `Fork failed (${res.status})`);
+    }
+    return { sessionKey: json.sessionKey, rowCount: json.rowCount ?? 0 };
+  }
+
+  async forkSessionAt(
+    sourceSessionKey: string,
+    targetSessionKey: string,
+    entryId: string,
+  ): Promise<{ sessionKey: string; rowCount: number }> {
+    const throughRow = transcriptTreeEntryIdToRowNumber(entryId);
+    if (throughRow == null) {
+      throw new Error(`Invalid transcript entry: ${entryId}`);
+    }
+    const res = await gatewayFetch(
+      this.baseUrl,
+      `/api/sessions/${encodeURIComponent(sourceSessionKey)}/fork-row`,
+      this.token,
+      { method: 'POST', body: JSON.stringify({ targetKey: targetSessionKey, throughRow }) },
+    );
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+      sessionKey?: string;
+      rowCount?: number;
+    };
+    if (!res.ok || json.ok === false || !json.sessionKey) {
+      throw new Error(json.error ?? `Fork failed (${res.status})`);
+    }
+    return { sessionKey: json.sessionKey, rowCount: json.rowCount ?? 0 };
+  }
+
+  async setTranscriptLabel(
+    sessionKey: string,
+    entryId: string,
+    label: string | undefined,
+  ): Promise<{ ok: boolean }> {
+    const res = await gatewayFetch(
+      this.baseUrl,
+      `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/label`,
+      this.token,
+      { method: 'POST', body: JSON.stringify({ targetId: entryId, label }) },
+    );
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || json.ok === false) {
+      throw new Error(json.error ?? `Label update failed (${res.status})`);
+    }
+    return { ok: true };
+  }
+
+  async appendCustomEntry(
+    sessionKey: string,
+    customType: string,
+    data?: unknown,
+  ): Promise<{ ok: boolean }> {
+    const res = await gatewayFetch(
+      this.baseUrl,
+      `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/custom`,
+      this.token,
+      { method: 'POST', body: JSON.stringify({ customType, data }) },
+    );
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || json.ok === false) {
+      throw new Error(json.error ?? `Custom entry append failed (${res.status})`);
+    }
+    return { ok: true };
+  }
+
+  async appendCustomMessage(
+    sessionKey: string,
+    message: {
+      customType: string;
+      content?: string | unknown[];
+      display?: boolean;
+      details?: unknown;
+    },
+  ): Promise<{ ok: boolean }> {
+    const res = await gatewayFetch(
+      this.baseUrl,
+      `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/custom-message`,
+      this.token,
+      { method: 'POST', body: JSON.stringify(message) },
+    );
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || json.ok === false) {
+      throw new Error(json.error ?? `Custom message append failed (${res.status})`);
+    }
+    return { ok: true };
   }
 
   async patchSession(sessionKey: string, patch: Record<string, unknown>): Promise<void> {

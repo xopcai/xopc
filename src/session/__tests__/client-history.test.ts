@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { flattenMessageContent, messagesToClientHistory } from '../client-history.js';
+import { flattenMessageContent, messagesToClientHistory, transcriptRowsToClientHistory } from '../client-history.js';
+import type { TranscriptStoredRow } from '../session-context-for-llm.js';
 import type { Message } from '../types.js';
 
 describe('messagesToClientHistory', () => {
@@ -51,6 +52,210 @@ describe('messagesToClientHistory', () => {
     ];
     const out = messagesToClientHistory(messages, { limit: 2 });
     expect(out.map((m) => m.content)).toEqual(['b', 'c']);
+  });
+
+  it('preserves original transcript row ids when limiting transcript history', () => {
+    const rows = [
+      { role: 'user', content: 'a' },
+      { role: 'assistant', content: 'b' },
+      { role: 'user', content: 'c' },
+    ] as unknown as TranscriptStoredRow[];
+
+    const out = transcriptRowsToClientHistory(rows, { limit: 2 });
+    expect(out.map((m) => [m.id, m.content])).toEqual([
+      ['row-2', 'b'],
+      ['row-3', 'c'],
+    ]);
+  });
+
+  it('preserves compaction transcript rows for TUI replay', () => {
+    const rows = [
+      { role: 'user', content: 'before' },
+      {
+        type: 'compaction',
+        at: '2026-06-17T00:00:00.000Z',
+        summary: 'summary text',
+        tokensBefore: 9000,
+        tokensAfter: 1200,
+      },
+      { kind: 'context', text: 'audit note', createdAt: '2026-06-17T00:00:01.000Z' },
+    ] as unknown as TranscriptStoredRow[];
+
+    expect(transcriptRowsToClientHistory(rows)).toEqual([
+      { id: 'row-1', role: 'user', kind: 'message', content: 'before', timestamp: undefined },
+      {
+        id: 'row-2',
+        role: 'system',
+        kind: 'compaction',
+        content: 'summary text',
+        timestamp: Date.parse('2026-06-17T00:00:00.000Z'),
+        tokensBefore: 9000,
+        tokensAfter: 1200,
+      },
+      {
+        id: 'row-3',
+        role: 'system',
+        kind: 'context',
+        content: 'audit note',
+        timestamp: Date.parse('2026-06-17T00:00:01.000Z'),
+      },
+    ]);
+  });
+
+  it('preserves bash execution transcript rows for TUI replay', () => {
+    const rows = [
+      {
+        role: 'bashExecution',
+        command: 'pnpm test',
+        output: '\u001b[32mok\u001b[0m\n',
+        exitCode: 0,
+        excludeFromContext: true,
+        timestamp: '2026-06-17T00:00:02.000Z',
+      },
+    ] as unknown as TranscriptStoredRow[];
+
+    expect(transcriptRowsToClientHistory(rows)).toEqual([
+      {
+        id: 'row-1',
+        role: 'system',
+        kind: 'bash',
+        content: '\u001b[32mok\u001b[0m\n',
+        timestamp: Date.parse('2026-06-17T00:00:02.000Z'),
+        bash: {
+          command: 'pnpm test',
+          output: '\u001b[32mok\u001b[0m\n',
+          exitCode: 0,
+          signal: undefined,
+          excludeFromContext: true,
+          truncated: undefined,
+          fullOutputPath: undefined,
+        },
+      },
+    ]);
+  });
+
+  it('preserves visible custom message transcript rows for TUI replay', () => {
+    const rows = [
+      {
+        role: 'custom',
+        customType: 'skill',
+        content: [{ type: 'text', text: 'Loaded **skill**' }],
+        display: true,
+        details: { id: 'skill-a' },
+        timestamp: 123,
+      },
+      {
+        role: 'custom',
+        customType: 'hidden',
+        content: 'secret',
+        display: false,
+      },
+      {
+        type: 'custom_message',
+        customType: 'hook',
+        content: 'Hook note',
+        display: true,
+      },
+      {
+        type: 'custom',
+        customType: 'preset-state',
+        data: { name: 'fast' },
+        timestamp: 456,
+      },
+    ] as unknown as TranscriptStoredRow[];
+
+    expect(transcriptRowsToClientHistory(rows)).toEqual([
+      {
+        id: 'row-1',
+        role: 'system',
+        kind: 'custom',
+        content: 'Loaded **skill**',
+        rawContent: [{ type: 'text', text: 'Loaded **skill**' }],
+        timestamp: 123,
+        custom: {
+          customType: 'skill',
+          details: { id: 'skill-a' },
+          display: true,
+        },
+      },
+      {
+        id: 'row-2',
+        role: 'system',
+        kind: 'custom',
+        content: 'secret',
+        rawContent: 'secret',
+        timestamp: undefined,
+        custom: {
+          customType: 'hidden',
+          details: undefined,
+          display: false,
+        },
+      },
+      {
+        id: 'row-3',
+        role: 'system',
+        kind: 'custom',
+        content: 'Hook note',
+        rawContent: 'Hook note',
+        timestamp: undefined,
+        custom: {
+          customType: 'hook',
+          details: undefined,
+          display: true,
+        },
+      },
+      {
+        id: 'row-4',
+        role: 'system',
+        kind: 'custom',
+        content: '',
+        timestamp: 456,
+        custom: {
+          customType: 'preset-state',
+          details: { name: 'fast' },
+          state: true,
+        },
+      },
+    ]);
+  });
+
+  it('preserves pi-style branch and compaction summary rows for TUI replay', () => {
+    const rows = [
+      {
+        role: 'branchSummary',
+        summary: 'Returned from a side branch',
+        fromId: 'entry-7',
+        timestamp: 456,
+      },
+      {
+        role: 'compactionSummary',
+        summary: 'Earlier context was compacted',
+        tokensBefore: 12000,
+        timestamp: '2026-06-17T00:00:03.000Z',
+      },
+    ] as unknown as TranscriptStoredRow[];
+
+    expect(transcriptRowsToClientHistory(rows)).toEqual([
+      {
+        id: 'row-1',
+        role: 'system',
+        kind: 'branch',
+        content: 'Returned from a side branch',
+        timestamp: 456,
+        branch: {
+          summary: 'Returned from a side branch',
+          fromId: 'entry-7',
+        },
+      },
+      {
+        id: 'row-2',
+        role: 'system',
+        kind: 'compaction',
+        content: 'Earlier context was compacted',
+        timestamp: Date.parse('2026-06-17T00:00:03.000Z'),
+        tokensBefore: 12000,
+      },
+    ]);
   });
 });
 
