@@ -9,6 +9,8 @@ import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { pathForTab } from '@/navigation';
 
+import { isBuiltinAgentId } from '../builtin-agent-ids';
+
 export function AgentSkillsTab(props: {
   a: AgentsSettingsMessages;
   selected: GatewayAgentRow;
@@ -35,6 +37,8 @@ export function AgentSkillsTab(props: {
     onSaveSkills,
     hideInlineSave,
   } = props;
+
+  const builtinSkillsInheritAll = isBuiltinAgentId(selected.id);
 
   /** When inheriting defaults, checkboxes reflect the effective visible-skill list. */
   function isCheckedInheritMode(id: string): boolean {
@@ -66,13 +70,13 @@ export function AgentSkillsTab(props: {
       />
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" disabled={busy} onClick={() => setSkillsInherit(true)}>
+          <Button type="button" variant="secondary" disabled={busy || builtinSkillsInheritAll} onClick={() => setSkillsInherit(true)}>
             {a.skillsInherit}
           </Button>
           <Button
             type="button"
             variant="secondary"
-            disabled={busy}
+            disabled={busy || builtinSkillsInheritAll}
             onClick={() => {
               setSkillsInherit(false);
               setSkillsPick(initialPickForCustomize());
@@ -95,7 +99,9 @@ export function AgentSkillsTab(props: {
         {a.skillsEffectiveLabel}{' '}
         {selected.skills.effectiveAllowlist?.length
           ? selected.skills.effectiveAllowlist.join(', ')
-          : '—'}
+          : builtinSkillsInheritAll
+            ? a.skillsInherit
+            : '—'}
       </p>
       {skillsCatalogLoading ? (
         <p className="shrink-0 text-sm text-fg-muted">{a.skillsCatalogLoading}</p>
@@ -105,7 +111,7 @@ export function AgentSkillsTab(props: {
         <div
           className={cn(
             'mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5',
-            skillsInherit && 'opacity-50',
+            (skillsInherit || builtinSkillsInheritAll) && 'opacity-50',
           )}
         >
           <ul className="flex flex-col gap-2.5 text-sm">
@@ -124,7 +130,7 @@ export function AgentSkillsTab(props: {
                       type="checkbox"
                       className="shrink-0 rounded border-edge"
                       checked={on}
-                      disabled={skillsInherit || busy}
+                      disabled={skillsInherit || builtinSkillsInheritAll || busy}
                       onChange={() => {
                         setSkillsPick((prev) => {
                           const next = new Set(prev);
@@ -161,7 +167,7 @@ export function AgentSkillsTab(props: {
       )}
       {!hideInlineSave ? (
         <div className="mt-4 shrink-0">
-          <Button type="button" disabled={busy} onClick={() => void onSaveSkills()}>
+          <Button type="button" disabled={busy || builtinSkillsInheritAll} onClick={() => void onSaveSkills()}>
             {a.skillsSave}
           </Button>
         </div>

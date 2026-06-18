@@ -5,6 +5,7 @@
 import { cp, mkdir, readdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve as pathResolve } from 'node:path';
 
+import { isBuiltinAgentId } from '../agent/builtin-agent-ids.js';
 import {
   DEFAULT_AGENT_ID,
   listAgentEntries,
@@ -139,7 +140,7 @@ export async function listGatewayAgents(
             ...(profile.fallbacks.length > 0 ? { fallbacks: profile.fallbacks } : {}),
           }
         : undefined;
-    const entrySkills = entry?.skills;
+    const entrySkills = isBuiltinAgentId(id) ? undefined : entry?.skills;
     const entryDisable = entry?.tools?.disable ?? [];
     const entryTypedModels = rolesToTypedModels(entry?.models?.roles);
     const effectiveTypedModels = [...resolveEffectiveTypedModels(cfg, id).values()].sort((a, b) =>
@@ -169,7 +170,7 @@ export async function listGatewayAgents(
       },
       isDefault: id === defaultId,
       skills: {
-        defaults: defaultsSkills ? [...defaultsSkills] : [],
+        defaults: isBuiltinAgentId(id) ? [] : defaultsSkills ? [...defaultsSkills] : [],
         ...(entrySkills !== undefined ? { entry: [...entrySkills] } : {}),
         ...(profile.skillsAllowlist !== undefined
           ? { effectiveAllowlist: [...profile.skillsAllowlist] }
@@ -273,9 +274,9 @@ export function prepareCreateAgent(
     workspace: wsAbs,
     ...(effectiveModels ? { models: effectiveModels } : {}),
     ...(body.agentDir?.trim() ? { agentDir: body.agentDir.trim() } : {}),
-    ...(body.skills !== undefined
+    ...(!isBuiltinAgentId(agentId) && body.skills !== undefined
       ? { skills: body.skills.map((s) => String(s).trim()).filter(Boolean) }
-      : cloneSourceEntry?.skills !== undefined && body.cloneFrom
+      : !isBuiltinAgentId(agentId) && cloneSourceEntry?.skills !== undefined && body.cloneFrom
         ? { skills: [...cloneSourceEntry.skills] }
         : {}),
   });
@@ -422,6 +423,9 @@ export function prepareUpdateAgent(
 
   type Entry = (typeof list)[number];
   const entry: Entry = { ...list[idx] };
+  if (isBuiltinAgentId(agentId)) {
+    delete entry.skills;
+  }
 
   if (body.workspace !== undefined) {
     const w = body.workspace.trim();
@@ -488,7 +492,7 @@ export function prepareUpdateAgent(
     }
   }
 
-  if (body.skills !== undefined) {
+  if (body.skills !== undefined && !isBuiltinAgentId(agentId)) {
     if (body.skills === null) {
       delete entry.skills;
     } else {
