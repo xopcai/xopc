@@ -165,13 +165,17 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
     : buildChannelCatalogForConfig(config, { locale: options.locale });
   const channelsPayload = Object.fromEntries(
     catalog.entries.map((entry) => {
+      const plugin =
+        typeof service.getChannelRuntimePlugin === 'function'
+          ? service.getChannelRuntimePlugin(entry.id)
+          : undefined;
       const channelCfg = config.channels?.[entry.id] as Record<string, unknown> | undefined;
       return [
         entry.id,
         {
           enabled: channelCfg?.enabled ?? false,
           configured: isChannelConfigured(config, entry.id),
-          config: channelCfg ?? {},
+          config: plugin?.configSurface?.buildConfigSurface(config) ?? channelCfg ?? {},
           schema: entry.configSchema,
           uiHints: entry.uiHints,
         },

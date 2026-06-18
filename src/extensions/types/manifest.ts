@@ -92,6 +92,7 @@ export interface ChannelContributionI18n {
   configSchema?: Record<string, unknown>;
   uiHints?: Record<string, ChannelConfigUiHint>;
   actions?: Record<string, ChannelActionDescriptor>;
+  ui?: ChannelContributionUiDeclaration;
 }
 
 export interface ChannelContributionDeclaration {
@@ -104,7 +105,23 @@ export interface ChannelContributionDeclaration {
   configSchema?: Record<string, unknown>;
   uiHints?: Record<string, ChannelConfigUiHint>;
   actions?: Record<string, ChannelActionDescriptor>;
+  ui?: ChannelContributionUiDeclaration;
   i18n?: Record<string, ChannelContributionI18n>;
+}
+
+export interface ChannelContributionUiDeclaration {
+  icon?: string;
+  card?: {
+    primaryAction?: string;
+    summaryFields?: string[];
+  };
+  modal?: {
+    entrypoint?: string;
+    minHeight?: number;
+    maxHeight?: number;
+    permissions?: ExtensionUiPermission[];
+    placement?: 'before-config' | 'after-setup' | 'replace-config';
+  };
 }
 
 export interface ExtensionManifestCommand {

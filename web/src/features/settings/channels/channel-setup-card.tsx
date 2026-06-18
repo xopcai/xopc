@@ -7,10 +7,11 @@ import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { cn } from '@/lib/cn';
 
 import type { ChannelActionDescriptor, ChannelCatalogEntry } from './use-channel-catalog';
 
-type ActionPayload =
+export type ChannelActionPayload =
   | { type?: 'ok'; message?: string; configChanged?: boolean; [key: string]: unknown }
   | {
       type: 'qr';
@@ -45,7 +46,7 @@ type ActionPayload =
     };
 
 type ActionState = {
-  payload: ActionPayload | null;
+  payload: ChannelActionPayload | null;
   poll: { actionId: string; sessionKey: string; intervalMs: number } | null;
   busy: boolean;
   error: string | null;
@@ -53,14 +54,25 @@ type ActionState = {
   generatedQr: string | null;
 };
 
-function choosePrimaryAction(entry: ChannelCatalogEntry): [string, ChannelActionDescriptor] | null {
+export function choosePrimaryChannelAction(entry: ChannelCatalogEntry): [string, ChannelActionDescriptor] | null {
   const actions = entry.actions ?? {};
+  const preferredQr = ['login.start', 'setup.start'];
+  for (const id of preferredQr) {
+    const action = actions[id];
+    if (action?.result === 'qr') return [id, action];
+  }
+  const firstQr = Object.entries(actions).find(([, action]) => action.result === 'qr');
+  if (firstQr) return firstQr;
+
+  const declaredPrimary = entry.ui?.card?.primaryAction;
+  if (declaredPrimary && actions[declaredPrimary]) return [declaredPrimary, actions[declaredPrimary]];
+
   const preferred = ['login.start', 'setup.start'];
   for (const id of preferred) {
     const action = actions[id];
     if (action) return [id, action];
   }
-  const first = Object.entries(actions).find(([, action]) => action.result === 'qr' || action.result === 'form');
+  const first = Object.entries(actions).find(([, action]) => action.result === 'form');
   return first ?? null;
 }
 
@@ -70,7 +82,7 @@ async function runChannelAction(params: {
   locale: string;
   accountId?: string;
   input?: unknown;
-}): Promise<ActionPayload> {
+}): Promise<ChannelActionPayload> {
   const res = await apiFetch(apiUrl(`/api/channels/${encodeURIComponent(params.channelId)}/actions/${encodeURIComponent(params.actionId)}?locale=${encodeURIComponent(params.locale)}`), {
     method: 'POST',
     body: JSON.stringify({
@@ -80,7 +92,7 @@ async function runChannelAction(params: {
   });
   const body = (await res.json().catch(() => ({}))) as {
     ok?: boolean;
-    payload?: ActionPayload;
+    payload?: ChannelActionPayload;
     error?: { message?: string };
   };
   if (!res.ok || body.ok === false) {
@@ -89,17 +101,17 @@ async function runChannelAction(params: {
   return body.payload ?? { type: 'ok' };
 }
 
-function isTerminalPoll(payload: ActionPayload | null): boolean {
+function isTerminalPoll(payload: ChannelActionPayload | null): boolean {
   return payload?.type === 'poll' && payload.phase === 'done';
 }
 
-function payloadMessage(payload: ActionPayload | null): string | null {
+function payloadMessage(payload: ChannelActionPayload | null): string | null {
   if (!payload) return null;
   if ('message' in payload && typeof payload.message === 'string') return payload.message;
   return null;
 }
 
-function payloadQrContent(payload: ActionPayload | null, channelId: string): string | null {
+function payloadQrContent(payload: ChannelActionPayload | null, channelId: string): string | null {
   if (payload?.type !== 'qr' && payload?.type !== 'poll') return null;
   if (payload.qrPayload) return payload.qrPayload;
   // Weixin returns a scan URL, not an image URL; render it as a QR locally.
@@ -107,7 +119,7 @@ function payloadQrContent(payload: ActionPayload | null, channelId: string): str
   return null;
 }
 
-function payloadQrImage(payload: ActionPayload | null): string | null {
+function payloadQrImage(payload: ChannelActionPayload | null): string | null {
   if (payload?.type !== 'qr' && payload?.type !== 'poll') return null;
   return payload.qrcodeUrl ?? null;
 }
@@ -117,13 +129,17 @@ export function ChannelSetupCard({
   locale,
   messages: ch,
   onChanged,
+  autoStartPrimary = false,
+  compact = false,
 }: {
   entry: ChannelCatalogEntry;
   locale: string;
   messages: ChannelsSettingsMessages;
   onChanged: () => Promise<void> | void;
+  autoStartPrimary?: boolean;
+  compact?: boolean;
 }) {
-  const primary = useMemo(() => choosePrimaryAction(entry), [entry]);
+  const primary = useMemo(() => choosePrimaryChannelAction(entry), [entry]);
   const schemaLabels = useMemo(() => ({
     defaultBooleanLabel: ch.schemaBooleanDefault,
     unsupportedArrayType: ch.schemaUnsupportedArrayType,
@@ -177,6 +193,12 @@ export function ChannelSetupCard({
       setState((prev) => ({ ...prev, busy: false, error: err instanceof Error ? err.message : String(err) }));
     }
   }, [entry.id, locale, onChanged]);
+
+  useEffect(() => {
+    if (!autoStartPrimary || !primary || primary[1].result !== 'qr') return;
+    if (state.payload || state.busy || state.error) return;
+    void runAction(primary[0]);
+  }, [autoStartPrimary, primary, runAction, state.busy, state.error, state.payload]);
 
   useEffect(() => {
     const content = payloadQrContent(state.payload, entry.id);
@@ -242,14 +264,16 @@ export function ChannelSetupCard({
   const diagnostics = state.payload?.type === 'diagnostics' ? state.payload.checks : null;
 
   return (
-    <div className="rounded-lg border border-edge-subtle bg-surface-panel p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-fg">{ch.setupTitle}</h3>
-          <p className="mt-1 text-sm text-fg-muted">
-            {entry.configured ? ch.setupConfiguredHint : ch.setupEmptyHint}
-          </p>
-        </div>
+    <div className={compact ? 'space-y-3' : 'rounded-lg border border-edge-subtle bg-surface-panel p-4'}>
+      <div className={cn('flex flex-wrap items-start gap-3', compact ? 'justify-end' : 'justify-between')}>
+        {!compact ? (
+          <div>
+            <h3 className="text-sm font-semibold text-fg">{ch.setupTitle}</h3>
+            <p className="mt-1 text-sm text-fg-muted">
+              {entry.configured ? ch.setupConfiguredHint : ch.setupEmptyHint}
+            </p>
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           {primary ? (
             <Button
@@ -280,11 +304,11 @@ export function ChannelSetupCard({
       {state.error ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">{state.error}</p> : null}
 
       {qrImage ? (
-        <div className="mt-4 flex flex-wrap items-start gap-4">
+        <div className={cn('flex flex-wrap items-start gap-4', compact ? 'justify-center' : 'mt-4')}>
           <div className="rounded-lg border border-edge bg-white p-3">
             <img src={qrImage} alt={`${entry.label} setup QR`} className="h-52 w-52 object-contain" />
           </div>
-          <div className="max-w-sm text-sm text-fg-muted">
+          <div className={cn('max-w-sm text-sm text-fg-muted', compact && 'w-full text-center')}>
             <p>{ch.waitingConfirmation}</p>
             {qrContent ? (
               <a

@@ -104,6 +104,19 @@ function mergeJsonSchema(base: Record<string, unknown> | undefined, override: Re
   return mergeRecordDeep(base, override);
 }
 
+function mergeChannelUi(
+  base: ChannelContributionDeclaration['ui'],
+  override: ChannelContributionDeclaration['ui'],
+): ChannelContributionDeclaration['ui'] {
+  if (!base && !override) return undefined;
+  return {
+    ...(base ?? {}),
+    ...(override ?? {}),
+    card: mergeObjectMap(base?.card, override?.card),
+    modal: mergeObjectMap(base?.modal, override?.modal),
+  };
+}
+
 function localizeContribution(
   contribution: ChannelContributionDeclaration,
   locale: string | undefined,
@@ -119,6 +132,7 @@ function localizeContribution(
     configSchema: mergeJsonSchema(contribution.configSchema, override.configSchema),
     uiHints: mergeObjectMap(contribution.uiHints, override.uiHints),
     actions: mergeObjectMap(contribution.actions, override.actions),
+    ui: mergeChannelUi(contribution.ui, override.ui),
   };
 }
 
@@ -144,6 +158,7 @@ function toCatalogEntry(params: {
     configSchema: contribution.configSchema ?? DEFAULT_CONFIG_SCHEMA,
     uiHints: contribution.uiHints ?? {},
     actions: contribution.actions ?? {},
+    ui: contribution.ui,
   };
 }
 

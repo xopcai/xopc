@@ -72,7 +72,11 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     if (!channel) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing channel id' } }, 400);
     }
-    const value = (service.currentConfig.channels as Record<string, unknown> | undefined)?.[channel] ?? {};
+    const plugin = service.getChannelRuntimePlugin(channel);
+    const value =
+      plugin?.configSurface?.buildConfigSurface(service.currentConfig) ??
+      (service.currentConfig.channels as Record<string, unknown> | undefined)?.[channel] ??
+      {};
     return c.json({ ok: true, payload: { config: value } });
   });
 
