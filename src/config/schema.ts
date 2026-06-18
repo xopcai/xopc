@@ -369,7 +369,7 @@ export const AgentDefaultsSchema = z.object({
     .optional(),
   /** Optional full system prompt replacement (merged with per-agent entry; entry wins). */
   systemPromptOverride: z.string().optional(),
-  /** Skill names visible to agents that inherit defaults. Omitted/empty means no default-visible skills. */
+  /** Skill names visible to agents that inherit defaults. Omitted means all enabled skills; empty means none. */
   skills: z.array(z.string()).optional(),
   /** Disable built-in tools by name (e.g. `shell`, `web_search`). */
   tools: z
@@ -398,7 +398,7 @@ export const AgentConfigSchema = z.object({
   reasoningDefault: z.enum(['off', 'on', 'stream']).optional(),
   verboseDefault: z.enum(['off', 'on', 'full']).optional(),
   systemPromptOverride: z.string().optional(),
-  /** Skill names visible to this agent in `<available_skills>`. Omitted means inherit defaults. */
+  /** Skill names visible to this agent in `<available_skills>`. Omitted means inherit defaults (or all enabled skills). */
   skills: z.array(z.string()).optional(),
   tools: z
     .object({
@@ -546,34 +546,7 @@ export const SessionConfigSchema = z.object({
 });
 
 /** Channel buckets — shapes validated post-parse by registered channel plugins. */
-export const ChannelsConfigSchema = z.record(z.string(), z.unknown()).default({
-  telegram: {
-    enabled: false,
-    allowFrom: [],
-    groupAllowFrom: [],
-    debug: false,
-    accounts: {
-      default: {
-        accountId: 'default',
-        enabled: true,
-        botToken: '',
-        allowFrom: [],
-        dmPolicy: 'pairing' as const,
-        groupPolicy: 'open' as const,
-        replyToMode: 'off' as const,
-        historyLimit: 50,
-        textChunkLimit: 4000,
-        streaming: { mode: 'partial' as const },
-      },
-    },
-    dmPolicy: 'pairing' as const,
-    groupPolicy: 'open' as const,
-    replyToMode: 'off' as const,
-    streaming: { mode: 'partial' as const },
-    historyLimit: 50,
-    textChunkLimit: 4000,
-  },
-});
+export const ChannelsConfigSchema = z.record(z.string(), z.unknown()).default({});
 
 export const SearchProviderEntrySchema = z.object({
   type: z.enum(['brave', 'tavily', 'bing', 'searxng']),

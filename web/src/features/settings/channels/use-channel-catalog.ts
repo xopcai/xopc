@@ -40,10 +40,10 @@ export async function fetchChannelCatalog(): Promise<ChannelCatalogEntry[]> {
 }
 
 export function useChannelCatalog(hasToken: boolean) {
-  const { data, error, isLoading, mutate } = useSWR(
+  const { data, error, isLoading, isValidating, mutate } = useSWR(
     hasToken ? channelCatalogSwrKey() : null,
     fetchChannelCatalog,
     { revalidateOnFocus: false },
   );
-  return { entries: data ?? [], isLoading, error, mutate };
+  return { entries: data ?? [], isLoading, isValidating, error, mutate };
 }

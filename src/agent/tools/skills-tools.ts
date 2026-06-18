@@ -3,7 +3,7 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import { resolveStateDir } from '../../config/paths.js';
-import { createSkillConfigManager, isSkillEnabled } from '../skills/config.js';
+import { createSkillConfigManager, isSkillEnabled, resolveSkillConfig } from '../skills/config.js';
 import { resolveSkillReadablePath } from '../skills/skill-view-path.js';
 import type { SkillManager } from '../skills/skill-manager.js';
 import { truncateHead, formatSize, DEFAULT_MAX_BYTES } from './truncate.js';
@@ -128,6 +128,18 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool {
       }
 
       const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+      const skillConfig = resolveSkillConfig(skill, skillsConfig);
+      if (skillConfig.enabled === false) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Skill "${skill.name}" is installed but disabled by user settings. Enable it in Skills settings (or set entries.${skill.name}.enabled to true) before using skill_view.`,
+            },
+          ],
+          details: {},
+        };
+      }
       if (skill.disableModelInvocation || !isSkillEnabled(skill, skillsConfig)) {
         return {
           content: [{ type: 'text', text: `Skill "${skill.name}" is disabled or requirements are not met.` }],

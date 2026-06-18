@@ -97,6 +97,19 @@ function payloadMessage(payload: ActionPayload | null): string | null {
   return null;
 }
 
+function payloadQrContent(payload: ActionPayload | null, channelId: string): string | null {
+  if (payload?.type !== 'qr' && payload?.type !== 'poll') return null;
+  if (payload.qrPayload) return payload.qrPayload;
+  // Weixin returns a scan URL, not an image URL; render it as a QR locally.
+  if (channelId === 'weixin' && payload.qrcodeUrl) return payload.qrcodeUrl;
+  return null;
+}
+
+function payloadQrImage(payload: ActionPayload | null): string | null {
+  if (payload?.type !== 'qr' && payload?.type !== 'poll') return null;
+  return payload.qrcodeUrl ?? null;
+}
+
 export function ChannelSetupCard({
   entry,
   onChanged,
@@ -152,19 +165,20 @@ export function ChannelSetupCard({
   }, [entry.id, onChanged]);
 
   useEffect(() => {
-    const payload = state.payload;
-    if ((payload?.type !== 'qr' && payload?.type !== 'poll') || !payload.qrPayload) {
+    const content = payloadQrContent(state.payload, entry.id);
+    if (!content) {
       setState((prev) => (prev.generatedQr ? { ...prev, generatedQr: null } : prev));
       return;
     }
     let cancelled = false;
-    void QRCode.toDataURL(payload.qrPayload, { width: 220, margin: 1 }).then((url) => {
+    setState((prev) => (prev.generatedQr ? { ...prev, generatedQr: null } : prev));
+    void QRCode.toDataURL(content, { width: 220, margin: 1 }).then((url) => {
       if (!cancelled) setState((prev) => ({ ...prev, generatedQr: url }));
     });
     return () => {
       cancelled = true;
     };
-  }, [state.payload]);
+  }, [entry.id, state.payload]);
 
   useEffect(() => {
     const poll = state.poll;
@@ -206,12 +220,8 @@ export function ChannelSetupCard({
 
   const primaryLabel = primary?.[1].label ?? (entry.configured ? 'Reconnect' : 'Connect');
   const message = payloadMessage(state.payload);
-  const qrImage =
-    state.payload?.type === 'qr'
-      ? state.payload.qrcodeUrl ?? state.generatedQr
-      : state.payload?.type === 'poll'
-        ? state.payload.qrcodeUrl ?? state.generatedQr
-        : null;
+  const qrContent = payloadQrContent(state.payload, entry.id);
+  const qrImage = qrContent ? state.generatedQr : payloadQrImage(state.payload);
   const formPayload = state.payload?.type === 'form' ? state.payload : null;
   const diagnostics = state.payload?.type === 'diagnostics' ? state.payload.checks : null;
 
@@ -260,10 +270,10 @@ export function ChannelSetupCard({
           </div>
           <div className="max-w-sm text-sm text-fg-muted">
             <p>Waiting for confirmation...</p>
-            {state.payload?.type === 'qr' && state.payload.qrPayload ? (
+            {qrContent ? (
               <a
                 className="mt-2 inline-flex items-center gap-1 text-accent hover:underline"
-                href={state.payload.qrPayload}
+                href={qrContent}
                 target="_blank"
                 rel="noreferrer"
               >

@@ -6,6 +6,7 @@ import {
 import {
   buildChannelCatalogForConfig,
   buildChannelCatalogFromSnapshot,
+  isChannelConfigured,
 } from '../../../channels/catalog/channel-catalog-service.js';
 import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
 import type { Config } from '../../../config/schema.js';
@@ -169,7 +170,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService) {
         entry.id,
         {
           enabled: channelCfg?.enabled ?? false,
-          configured: Boolean(channelCfg),
+          configured: isChannelConfigured(config, entry.id),
           config: channelCfg ?? {},
           schema: entry.configSchema,
           uiHints: entry.uiHints,

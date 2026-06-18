@@ -362,7 +362,7 @@ export class AgentManager implements AgentInstanceGateway {
       : this.baseWorkspacePath;
     const inst = sessionKey ? this.agents.get(sessionKey) : undefined;
     return this.workspaceRuntimes.getOrCreate(path).skillManager.expandCommand(text, {
-      skillAllowlist: inst?.effectiveProfile.skillsAllowlist ?? [],
+      skillAllowlist: inst?.effectiveProfile.skillsAllowlist,
       registeredToolNames: inst?.registeredToolNames,
     });
   }
