@@ -22,6 +22,12 @@ export function applyReasoningVisibilityToSseEvent(
   if (event.type === 'thinking') {
     return null;
   }
+  if (
+    event.type === 'message_update' &&
+    (event.assistantMessageEvent as { type?: unknown } | undefined)?.type === 'thinking_delta'
+  ) {
+    return null;
+  }
   if (event.type === 'progress' && event.stage === 'thinking') {
     return null;
   }

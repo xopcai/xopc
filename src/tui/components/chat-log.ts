@@ -10,7 +10,7 @@ import { CompactionSummaryComponent } from './compaction-summary.js';
 import { CustomMessageComponent, type CustomMessageSummary } from './custom-message.js';
 import type { TuiMessageRenderer } from '../../extensions/types/tui.js';
 import { theme } from '../theme.js';
-import { AssistantMessageComponent, createAssistantMessageFromText } from './assistant-message.js';
+import { AssistantMessageComponent } from './assistant-message.js';
 import { ToolExecutionComponent, type ToolExecutionOptions } from './tool-execution.js';
 import { UserMessageComponent } from './user-message.js';
 import type { TuiBranchSummary, TuiCompactionResult } from '../tui-backend.js';
