@@ -382,6 +382,22 @@ export class SessionIndex extends EventEmitter {
     this.emit('sessionUpdated', { key });
   }
 
+  async appendTranscriptBashExecutionEntry(
+    key: string,
+    entry: {
+      command: string;
+      output?: string;
+      exitCode?: number | null;
+      signal?: string | null;
+      excludeFromContext?: boolean;
+      truncated?: boolean;
+      fullOutputPath?: string;
+    },
+  ): Promise<void> {
+    await this.store.appendTranscriptBashExecutionEntry(key, entry);
+    this.emit('sessionUpdated', { key });
+  }
+
   /** Delete session data */
   async delete(key: string): Promise<void> {
     await this.store.delete(key);

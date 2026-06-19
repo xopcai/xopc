@@ -12,6 +12,7 @@ import {
 import type { Config } from '../config/schema.js';
 
 const log = createLogger('Credentials');
+const warnedExpiredOAuthTokens = new Set<string>();
 
 // ============================================
 // Types
@@ -235,7 +236,11 @@ export class CredentialResolver {
     if (!token) return null;
 
     if (token.expiresAt && token.expiresAt < Date.now()) {
-      log.warn({ provider, expiresAt: token.expiresAt }, 'OAuth token is expired');
+      const warnKey = `${provider}:${token.expiresAt}`;
+      if (!warnedExpiredOAuthTokens.has(warnKey)) {
+        warnedExpiredOAuthTokens.add(warnKey);
+        log.warn({ provider, expiresAt: token.expiresAt }, 'OAuth token is expired');
+      }
       return null;
     }
 

@@ -353,7 +353,7 @@ function FieldRow({
           <SchemaForm
             schema={sub}
             values={nestedValues}
-            onChange={onValue as (values: Record<string, unknown>) => void}
+            onChange={onValue}
             disabled={disabled}
             labels={labels}
           />

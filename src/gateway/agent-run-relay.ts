@@ -13,6 +13,7 @@ export type RelayEvent = { type: string; [key: string]: unknown };
 type RunState = {
   sessionKey: string;
   events: RelayEvent[];
+  nextSeq: number;
   done: boolean;
   waiters: Array<() => void>;
   cleanupTimer?: ReturnType<typeof setTimeout>;
@@ -26,7 +27,7 @@ export class AgentRunRelay {
 
   ensureRun(runId: string, sessionKey: string): void {
     if (this.runs.has(runId)) return;
-    this.runs.set(runId, { sessionKey, events: [], done: false, waiters: [] });
+    this.runs.set(runId, { sessionKey, events: [], nextSeq: 1, done: false, waiters: [] });
   }
 
   getSessionKey(runId: string): string | undefined {
@@ -37,19 +38,25 @@ export class AgentRunRelay {
     return this.runs.has(runId);
   }
 
-  publish(runId: string, event: RelayEvent): void {
+  publish(runId: string, event: RelayEvent): RelayEvent | undefined {
     const state = this.runs.get(runId);
-    if (!state) return;
+    if (!state) return undefined;
+    const relayed = {
+      ...event,
+      runId,
+      seq: state.nextSeq++,
+    };
     if (state.events.length >= MAX_EVENTS) {
       log.warn(
-        { runId, max: MAX_EVENTS, droppedType: event.type },
+        { runId, max: MAX_EVENTS, droppedType: relayed.type },
         'Relay buffer full; dropping event (resume may miss tool_end/tokens)',
       );
     } else {
-      state.events.push(event);
+      state.events.push(relayed);
     }
     const waiters = state.waiters.splice(0);
     for (const w of waiters) w();
+    return relayed;
   }
 
   complete(runId: string): void {

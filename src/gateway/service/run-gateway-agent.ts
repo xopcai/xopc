@@ -24,6 +24,7 @@ export type RunGatewayAgentYield = {
   content?: string;
   status?: string;
   runId?: string;
+  seq?: number;
 };
 
 export type RunGatewayAgentDeps = {
@@ -99,8 +100,9 @@ export async function *runGatewayAgent(
   }
 
   const statusEvent = { type: 'status', status: 'accepted', runId };
-  if (channel === 'webchat') runRelay.publish(runId, statusEvent);
-  yield statusEvent;
+  const relayedStatusEvent =
+    channel === 'webchat' ? (runRelay.publish(runId, statusEvent) ?? statusEvent) : statusEvent;
+  yield relayedStatusEvent;
 
   try {
     if (channel === 'webchat' && webchatSessionKey) {
@@ -134,7 +136,7 @@ export async function *runGatewayAgent(
       activeWebchatRunBySession.set(sessionKey, runId);
       let streamError: string | undefined;
       try {
-        emit('agent.stream', { sessionKey, event: statusEvent });
+        emit('agent.stream', { sessionKey, event: relayedStatusEvent });
         const eventStream = agentService.turnDispatcher.processDirectStreaming(
           stampedMessage,
           sessionKey,
@@ -144,9 +146,9 @@ export async function *runGatewayAgent(
         );
 
         for await (const event of eventStream) {
-          runRelay.publish(runId, event);
-          emit('agent.stream', { sessionKey, event });
-          yield event as RunGatewayAgentYield;
+          const relayedEvent = runRelay.publish(runId, event) ?? event;
+          emit('agent.stream', { sessionKey, event: relayedEvent });
+          yield relayedEvent as RunGatewayAgentYield;
         }
 
         runRelay.complete(runId);
@@ -178,10 +180,10 @@ export async function *runGatewayAgent(
         streamError = em;
         const errorContent = formatAgentRunErrorForClient(streamError);
         const errorEvent = { type: 'error', content: errorContent };
-        runRelay.publish(runId, errorEvent);
-        emit('agent.stream', { sessionKey, event: errorEvent });
+        const relayedErrorEvent = runRelay.publish(runId, errorEvent) ?? errorEvent;
+        emit('agent.stream', { sessionKey, event: relayedErrorEvent });
         runRelay.complete(runId);
-        yield errorEvent;
+        yield relayedErrorEvent;
         return { status: 'error', summary: streamError };
       } finally {
         activeWebchatRunBySession.delete(sessionKey);

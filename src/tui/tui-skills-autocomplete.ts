@@ -17,7 +17,9 @@ export function createSkillsAutocompleteProvider(): TuiAutocompleteProvider {
     });
     cached = result.skills.map((skill) => ({
       name: skill.name,
-      description: skill.description?.slice(0, 120),
+      description: skill.description
+        ? `skill · ${skill.description.slice(0, 112)}`
+        : 'skill',
     }));
   };
 

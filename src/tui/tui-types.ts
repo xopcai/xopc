@@ -73,7 +73,35 @@ export type ActivityStatus =
   | 'waiting'
   | 'streaming'
   | 'running'
-  | 'compacting';
+  | 'compacting'
+  | 'stalled'
+  | 'recovering'
+  | 'aborting';
+
+export type TuiEventSource = 'agent-response' | 'agent-resume' | 'broadcast' | 'embedded' | 'unknown';
+
+export type TuiRunPhase =
+  | 'idle'
+  | 'sending'
+  | 'waiting'
+  | 'streaming'
+  | 'tool'
+  | 'progress'
+  | 'stalled'
+  | 'recovering'
+  | 'aborting';
+
+export interface TuiRunStatus {
+  phase: TuiRunPhase;
+  runId: string | null;
+  directStreamRunId: string | null;
+  lastCompletedRunId: string | null;
+  source: TuiEventSource;
+  lastEvent: string | null;
+  lastActivityAt: number | null;
+  stalledAt: number | null;
+  recoveredAt: number | null;
+}
 
 /** Session metadata shown in the TUI footer. */
 export interface SessionInfo {
@@ -95,6 +123,7 @@ export interface TuiState {
   activeRunId: string | null;
   isConnected: boolean;
   activityStatus: ActivityStatus;
+  runStatus: TuiRunStatus;
   connectionStatus: string;
   sessionInfo: SessionInfo;
   autoMessageSent: boolean;
@@ -126,6 +155,17 @@ export function createInitialState(sessionKey: string): TuiState {
     activeRunId: null,
     isConnected: false,
     activityStatus: 'idle',
+    runStatus: {
+      phase: 'idle',
+      runId: null,
+      directStreamRunId: null,
+      lastCompletedRunId: null,
+      source: 'unknown',
+      lastEvent: null,
+      lastActivityAt: null,
+      stalledAt: null,
+      recoveredAt: null,
+    },
     connectionStatus: 'connecting',
     sessionInfo: {},
     autoMessageSent: false,

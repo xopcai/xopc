@@ -123,7 +123,7 @@ export function parseIdentityMarkdown(content: string): {
 
 export async function listGatewayAgents(
   cfg: Config,
-  options: { locale?: string } = {},
+  _options: { locale?: string } = {},
 ): Promise<GatewayAgentsListResponse> {
   const defaultId = resolveDefaultAgentId(cfg);
   const agents: GatewayAgentRow[] = [];
@@ -140,7 +140,7 @@ export async function listGatewayAgents(
             ...(profile.fallbacks.length > 0 ? { fallbacks: profile.fallbacks } : {}),
           }
         : undefined;
-    const entrySkills = isBuiltinAgentId(id) ? undefined : entry?.skills;
+    const entrySkills = entry?.skills;
     const entryDisable = entry?.tools?.disable ?? [];
     const entryTypedModels = rolesToTypedModels(entry?.models?.roles);
     const effectiveTypedModels = [...resolveEffectiveTypedModels(cfg, id).values()].sort((a, b) =>
@@ -170,7 +170,7 @@ export async function listGatewayAgents(
       },
       isDefault: id === defaultId,
       skills: {
-        defaults: isBuiltinAgentId(id) ? [] : defaultsSkills ? [...defaultsSkills] : [],
+        defaults: defaultsSkills ? [...defaultsSkills] : [],
         ...(entrySkills !== undefined ? { entry: [...entrySkills] } : {}),
         ...(profile.skillsAllowlist !== undefined
           ? { effectiveAllowlist: [...profile.skillsAllowlist] }

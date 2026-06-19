@@ -13,16 +13,15 @@ import {
   formatTuiSessionListInfo,
   formatTuiSessionInfo,
   formatTuiSessionTreeInfo,
-  formatTuiStartText,
   formatTuiTranscriptTreeInfo,
   formatTuiTrustInfo,
   formatTuiUsageInfo,
   formatTuiWorkflowDetail,
   formatTuiWorkflowsInfo,
-  getSlashCommands,
   parseTuiExportRequest,
   parseTuiImportRequest,
-} from '../tui-commands.js';
+} from '../tui-command-formatters.js';
+import { formatTuiStartText, getSlashCommands } from '../tui-commands.js';
 
 describe('tui command formatters', () => {
 it('exposes native usage and context commands', () => {
@@ -64,6 +63,8 @@ it('exposes native usage and context commands', () => {
     });
 
     expect(text).toContain('Extension Trust');
+    expect(text).toContain('Project trust gates project-local xopc resources');
+    expect(text).toContain('Project Trust: not saved');
     expect(text).toContain('Allow Untrusted: no');
     expect(text).toContain('Allowlist: demo');
     expect(text).toContain('demo — workspace, manual');
@@ -74,7 +75,7 @@ it('exposes native usage and context commands', () => {
     expect(formatTuiLoginInfo()).toContain('OAuth providers:');
     const text = formatTuiLoginInfo('anthropic');
     expect(text).toContain('anthropic — Anthropic');
-    expect(text).toContain('OAuth: xopc auth login anthropic');
+    expect(text).toContain('OAuth: /login anthropic');
     expect(text).toContain('API key: xopc auth set anthropic <key>');
   });
 

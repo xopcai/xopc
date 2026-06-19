@@ -7,7 +7,6 @@ import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/transcri
 import type { Config } from './schema.js';
 import type { AgentModelConfig } from './schema.js';
 import { getAgentDefaultModelRef } from './schema.js';
-import { isBuiltinAgentId } from '../agent/builtin-agent-ids.js';
 import { resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { getDefaultAgentId, agentExists } from '../routing/resolve-route.js';
 import { parseSessionKey } from '../routing/session-key.js';
@@ -77,6 +76,16 @@ function mergeDisableLists(a?: string[], b?: string[]): Set<string> {
   return out;
 }
 
+function resolveSkillsAllowlist(defaultsSkills: string[] | undefined, entrySkills: string[] | undefined): string[] | undefined {
+  if (entrySkills !== undefined) {
+    return [...entrySkills];
+  }
+  if (defaultsSkills !== undefined) {
+    return [...defaultsSkills];
+  }
+  return undefined;
+}
+
 /**
  * Agent id used for config lookup from a session key (subagent keys → default agent).
  */
@@ -135,13 +144,7 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
       : defaults?.systemPromptOverride?.trim()
         ? defaults.systemPromptOverride
         : undefined,
-    skillsAllowlist: isBuiltinAgentId(agentId)
-      ? undefined
-      : entry?.skills !== undefined
-        ? [...entry.skills]
-        : defaults?.skills !== undefined
-          ? [...defaults.skills]
-          : undefined,
+    skillsAllowlist: resolveSkillsAllowlist(defaults?.skills, entry?.skills),
     tools: { disable },
     params,
   };

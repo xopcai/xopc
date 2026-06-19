@@ -11,10 +11,15 @@ export function isLikelyPinoJsonLogLine(line: string): boolean {
   if (!t.startsWith('{')) return false;
   try {
     const parsed = JSON.parse(t) as { level?: unknown };
-    return typeof parsed.level === 'number';
+    return typeof parsed.level === 'number' || typeof parsed.level === 'string';
   } catch {
     return false;
   }
+}
+
+export function isLikelyPinoJsonLogPrefix(text: string): boolean {
+  const t = text.trimStart();
+  return t.startsWith('{') && /"level"\s*:/.test(t);
 }
 
 export type TuiStdioFilterHandle = {
@@ -65,8 +70,9 @@ export function installTuiStdioFilter(): TuiStdioFilterHandle {
       if (text.includes('\x1b')) {
         let emit = takeEmitCompleteLines(buf);
         if (buf.s.length > 0) {
-          const tail = buf.s.trimStart();
-          if (!tail.startsWith('{')) {
+          if (isLikelyPinoJsonLogPrefix(buf.s)) {
+            buf.s = '';
+          } else {
             emit += buf.s;
             buf.s = '';
           }

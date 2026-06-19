@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { XopcKeybindingsManager } from '../tui-keybindings-file.js';
-import { TranscriptTreeSelectList } from '../tui-picker-overlay.js';
+import { TranscriptTreeSelectList } from '../tui-transcript-tree-picker.js';
 import { buildTuiTranscriptTree } from '../tui-transcript-tree.js';
 
 describe('tui transcript tree picker interactions', () => {

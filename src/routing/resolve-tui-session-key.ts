@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { Config } from '../config/schema.js';
 import {
   resolveAgentIdByWorkspacePath,
@@ -60,22 +62,28 @@ export function resolveInitialTuiAgentId(params: {
   return normalizeAgentId(params.fallbackAgentId);
 }
 
+export function createDefaultTuiSessionKeySuffix(): string {
+  return `tui-${randomUUID()}`;
+}
+
 /** Resolve TUI startup session key from CLI options and config. */
 export function resolveTuiStartupSessionKey(params: {
   cfg: Config;
   sessionOption?: string;
   cwd?: string;
+  createSessionKeySuffix?: () => string;
 }): { sessionKey: string; agentId: string; sessionScope: SessionScope; sessionMainKey: string } {
   const sessionScope = (params.cfg.session?.scope ?? 'per-sender') as SessionScope;
   const sessionMainKey = normalizeMainKey(params.cfg.session?.mainKey);
+  const sessionOption = (params.sessionOption ?? '').trim();
   const agentId = resolveInitialTuiAgentId({
     cfg: params.cfg,
     fallbackAgentId: resolveDefaultAgentId(params.cfg),
-    initialSessionInput: (params.sessionOption ?? '').trim(),
+    initialSessionInput: sessionOption,
     cwd: params.cwd ?? process.cwd(),
   });
   const sessionKey = resolveTuiSessionKey({
-    raw: params.sessionOption,
+    raw: sessionOption || (params.createSessionKeySuffix ?? createDefaultTuiSessionKeySuffix)(),
     sessionScope,
     currentAgentId: agentId,
     sessionMainKey,

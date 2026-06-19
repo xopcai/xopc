@@ -45,8 +45,8 @@ xopc tui --local
 
 **Limitations in embedded mode:**
 
-- Session list and model list APIs are not wired; `/sessions` and `/model` (without arguments) show empty or “not available” style results, and **`/model <id>`** does not change the model (patch is not supported).
-- Chat history is not loaded from disk in this iteration.
+- Embedded mode now uses the same SQLite-backed session store as the agent/gateway path for history, session list, model list, session config patching, compaction, import/export, fork, transcript tree labels, and share helpers.
+- Some gateway-only operational status still comes from the gateway broadcast stream and is not available when running in-process.
 - **`/reset`** and **`/new`** reset the session transcript (archive + new `sessionId`) while keeping the same session key and persisted overrides. Embedded mode uses the in-process reset path; gateway mode calls `POST /api/sessions/:key/reset`.
 
 For switching sessions and models from the TUI, prefer **gateway mode**.
@@ -59,7 +59,7 @@ For switching sessions and models from the TUI, prefer **gateway mode**.
 |--------|-------------|
 | `--url <url>` | Gateway base URL (no trailing path). |
 | `--token <token>` | `Authorization: Bearer` token for the gateway. |
-| `-s, --session <key>` | Session key. Omitted: `agent:{defaultAgentId}:{mainKey}` (usually `agent:main:main`; see [Session keys](./session.md#agent-session-keys)). Shorthand `mytopic` → `agent:{currentAgent}:mytopic`. |
+| `-s, --session <key>` | Session key to resume. Omitted: start a fresh `agent:{currentAgent}:tui-<uuid>` session and print a resume command on exit. Shorthand `mytopic` → `agent:{currentAgent}:mytopic`. |
 | `-m, --message <text>` | After connect, send this message once and keep the UI open. |
 | `--local` | Embedded mode (no gateway). |
 | `--theme <name>` | Theme: `auto`, `dark`, `light`, or a custom name from `~/.xopc/themes/`. |
@@ -72,6 +72,12 @@ xopc tui -s agent:main:telegram:default:direct:123456
 xopc tui -s mytopic
 xopc tui -m "Summarize my inbox"
 xopc tui --url http://192.168.1.10:18790 --token "$TOKEN"
+```
+
+On exit, TUI prints a command like:
+
+```bash
+To resume this session: xopc tui --session agent:main:tui-019eddd8-d108-7554-b971-33366f99dd27
 ```
 
 ---
@@ -89,6 +95,15 @@ xopc tui --url http://192.168.1.10:18790 --token "$TOKEN"
 | **Ctrl+Shift+P** | Session picker (search, rename, delete). |
 | **Ctrl+L** | Model picker. |
 | **Ctrl+P / Shift+Ctrl+P** | Cycle models (respects `/scoped-models` filter). |
+
+Local shell:
+
+| Input | Action |
+|-------|--------|
+| **`!cmd`** | Run a local shell command after an in-session confirmation prompt, stream output in the TUI, persist the execution in the transcript, and include the captured output in later LLM context. |
+| **`!!cmd`** | Run a full-screen local command with inherited stdio, persist an audit row, and exclude it from LLM context. |
+
+Both forms run on the machine where the TUI process is running, not necessarily on the gateway host.
 
 Settings and customization:
 
@@ -124,6 +139,9 @@ Lines starting with **`/`** are treated as **slash commands** (not sent to the m
 | `/settings` | Open TUI settings overlay (theme, thinking, tools, terminal progress). |
 | `/scoped-models` | Choose models for **Ctrl+P** cycling. |
 | `/resume` | Open session picker (**Ctrl+Shift+P**). |
+| `/trust` | Open project trust options: trust this folder, trust a parent folder, session-only trust, or keep untrusted. |
+| `/login <provider>` | Run supported OAuth provider login from the TUI; API-key providers still use `xopc auth set <provider> <key>`. |
+| `/logout [provider]` | List stored auth profiles or remove stored profiles for one provider. |
 | `/hotkeys` | Show resolved keyboard shortcuts. |
 | `/reload-keybindings` | Reload `~/.xopc/keybindings.json`. |
 | `/status` | Show connection and activity text (**gateway mode only**). |
@@ -168,6 +186,7 @@ export function register(api: ExtensionApi) {
 **Notes:**
 
 - **`--local` only** for full extension load (tools + hooks + TUI host share one registry with `AgentService`).
+- Project trust follows the pi-style trust store at `~/.xopc/trust.json`. Project-local `.xopc/` resources and `.agents/skills` trigger a `/trust` prompt; extension TUI contexts can read the current decision through `isProjectTrusted()`.
 - **Gateway mode** still gets built-in **`@skill`** autocomplete; extension `registerTui` callbacks run only when extensions are loaded in-process.
 - Types: `TuiExtensionHostContract` and related types are exported from `xopc/extension-sdk`.
 
