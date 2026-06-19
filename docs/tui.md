@@ -10,22 +10,23 @@ For CLI flags and one-liners, see also [CLI Reference — tui](./cli.md#tui).
 
 | Mode | Flag | Needs gateway? | Best for |
 |------|------|------------------|----------|
-| **Gateway** | _(default)_ | Yes — a running `xopc gateway` | Shared sessions with the Web UI, remote host, listing sessions/models via REST |
-| **Embedded** | `--local` | No | Quick local chat using the same config and workspace as the CLI agent; no HTTP |
+| **Embedded** | _(default)_ | No | Quick local chat using the same config and workspace as the CLI agent; no HTTP |
+| **Gateway** | `--gateway`, `--url`, `--token` | Yes — a running `xopc gateway` | Shared sessions with the Web UI, remote host, listing sessions/models via REST |
 
 ---
 
-## Gateway mode (default)
+## Gateway mode
 
 1. Start the gateway (see [Gateway](./gateway.md)).
 2. Point the TUI at its base URL and token if your gateway requires auth:
 
 ```bash
-xopc tui
 xopc tui --url http://localhost:18790 --token <your-gateway-token>
+xopc tui --gateway
 ```
 
-The CLI’s built-in default base URL is `http://localhost:3120`. If your `gateway.port` in config is different (the project default is often **18790**), pass **`--url`** explicitly.
+Gateway mode defaults to `http://localhost:3120` when no `--url` is provided.
+If your `gateway.port` in config is different (the project default is often **18790**), pass **`--url`** explicitly.
 
 Obtain or rotate a token with:
 
@@ -62,8 +63,11 @@ For switching sessions and models from the TUI, prefer **gateway mode**.
 | `-s, --session <key>` | Session key to resume. Omitted: start a fresh `agent:{currentAgent}:tui-<uuid>` session and print a resume command on exit. Shorthand `mytopic` → `agent:{currentAgent}:mytopic`. |
 | `-m, --message <text>` | After connect, send this message once and keep the UI open. |
 | `--local` | Embedded mode (no gateway). |
+| `--gateway` | Force gateway mode. |
 | `--theme <name>` | Theme: `auto`, `dark`, `light`, or a custom name from `~/.xopc/themes/`. |
 | `--thinking <level>` | Thinking level override passed through to the agent (same semantics as gateway/agent). |
+
+Note: if `--local` and gateway flags (`--gateway`, `--url`, `--token`) are both passed, `--local` wins.
 
 Examples:
 

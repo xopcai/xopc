@@ -255,16 +255,20 @@ Interactive terminal UI for chatting with the agent (streaming, tools, thinking)
 **Quick start:**
 
 ```bash
-xopc tui                              # gateway mode (default URL in CLI; override with --url)
+xopc tui                              # embedded mode (default)
 xopc tui --local                      # embedded AgentService, no gateway
+xopc tui --gateway                    # force gateway mode
 xopc tui --url http://localhost:18790 --token <token>
 xopc tui -s <sessionKey> -m "Hello"   # resume session + optional first message
 ```
+
+Note: if both `--local` and any gateway flag (`--gateway`, `--url`, `--token`) are provided, local mode wins.
 
 | Option | Description |
 |--------|-------------|
 | `--url <url>` | Gateway base URL |
 | `--token <token>` | Gateway bearer token |
+| `--gateway` | Force gateway mode |
 | `-s, --session <key>` | Session key to resume (omitted: start a fresh `tui-<uuid>` session) |
 | `-m, --message <text>` | Send once after connect |
 | `--local` | Embedded mode (no gateway) |
