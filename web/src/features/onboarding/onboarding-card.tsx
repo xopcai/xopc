@@ -122,8 +122,8 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
         body: JSON.stringify({
           agents: {
             defaults: {
-              // Backend PATCH expects object-form model refs (see patchAgentDefaults).
-              model: { primary: modelRef },
+              // Backend PATCH expects chat model refs under agents.defaults.models.chat.
+              models: { chat: { primary: modelRef } },
             },
           },
         }),
