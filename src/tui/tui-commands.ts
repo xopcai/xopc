@@ -10,6 +10,7 @@ import type {
   TuiSessionItem,
   TuiStartupResources,
   TuiTranscriptTreeEntry,
+  TuiAgentInfo,
 } from './tui-backend.js';
 import type { ChatLog } from './components/chat-log.js';
 import {
@@ -20,6 +21,11 @@ import {
 import { getTuiKeybindingsPath } from './tui-keybindings-file.js';
 import type { TuiState } from './tui-types.js';
 import { createWorkflowCatalog } from '../agent/workflow/catalog.js';
+import {
+  isValidAgentId,
+  normalizeAgentId,
+  parseAgentSessionKey,
+} from '../routing/agent-session-key.js';
 import {
   normalizeReasoningLevel,
   normalizeThinkLevel,
@@ -89,6 +95,8 @@ export function getSlashCommands(
     { name: 'logout', description: 'Remove stored provider auth profiles' },
     { name: 'usage', description: 'Show token usage statistics' },
     { name: 'session', description: 'Show current session info' },
+    { name: 'agent', description: 'Show or switch agent for this TUI session' },
+    { name: 'agents', description: 'List available agents' },
     { name: 'new', description: 'Start a new isolated TUI session (tui-{uuid})' },
     { name: 'fork', description: 'Fork current session transcript into a new session' },
     { name: 'clone', description: 'Duplicate current session transcript into a new session' },
@@ -244,6 +252,7 @@ export type CommandHandlerDeps = {
   keybindings: KeybindingsManager;
   uiOverlays?: {
     openModelPicker: (initialSearch?: string) => void;
+    openAgentPicker?: () => void;
     openSessionPicker: () => void;
     openSessionTree: () => void;
     openTranscriptTree: () => void;
@@ -263,6 +272,8 @@ export type CommandHandlerDeps = {
   listModels?: () => TuiModelChoice[] | Promise<TuiModelChoice[]>;
   switchModel?: (modelRef: string) => void | Promise<void>;
   listSessions?: () => TuiSessionItem[] | Promise<TuiSessionItem[]>;
+  listAgents?: () => TuiAgentInfo[] | Promise<TuiAgentInfo[]>;
+  switchAgentSession?: (sessionKey: string, agentId: string) => void | Promise<void>;
   getSessionStats?: () => TuiSessionStats | Promise<TuiSessionStats>;
   getStartupResources?: () => TuiStartupResources | undefined;
   loadTranscriptTree?: () => TuiTranscriptTreeEntry[] | Promise<TuiTranscriptTreeEntry[]>;
@@ -301,6 +312,47 @@ function defaultAuthProfiles(): NonNullable<CommandHandlerDeps['authProfiles']> 
     remove: (profileId) => removeAuthProfile(profileId),
     getStorePath: () => getAuthStorePath(),
   };
+}
+
+function formatAgentsList(agents: TuiAgentInfo[], currentAgentId?: string): string {
+  if (agents.length === 0) {
+    return 'No agents available.';
+  }
+  const current = currentAgentId?.trim().toLowerCase();
+  const sorted = [...agents].sort((a, b) => {
+    if (a.id === current && b.id !== current) return -1;
+    if (b.id === current && a.id !== current) return 1;
+    if (a.id === 'coder' && b.id !== 'coder') return -1;
+    if (b.id === 'coder' && a.id !== 'coder') return 1;
+    return a.id.localeCompare(b.id);
+  });
+  return [
+    'Available agents:',
+    ...sorted.map((agent) => {
+      const marker = agent.id === current ? '*' : ' ';
+      const label = agent.displayName ? ` — ${agent.displayName}` : '';
+      return `${marker} ${agent.id} (${agent.source})${label}`;
+    }),
+    '',
+    'Switch with: /agent <id>',
+  ].join('\n');
+}
+
+function formatCurrentAgent(state: TuiState): string {
+  const parsed = parseAgentSessionKey(state.currentSessionKey);
+  if (!parsed) {
+    return `Current session is not an agent session.\nSession: ${state.currentSessionKey}`;
+  }
+  const lines = [
+    `Current agent: ${parsed.agentId}`,
+    `Session: ${state.currentSessionKey}`,
+  ];
+  const workspace = state.sessionInfo.effectiveWorkspacePath?.trim();
+  if (workspace) lines.push(`Workspace: ${workspace}`);
+  const provider = state.sessionInfo.modelProvider?.trim();
+  const model = state.sessionInfo.model?.trim();
+  if (model) lines.push(`Model: ${provider ? `${provider}/${model}` : model}`);
+  return lines.join('\n');
 }
 
 export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: string) => void {
@@ -378,6 +430,75 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
             tui.requestRender();
           });
         return;
+      case 'agents':
+        if (uiOverlays?.openAgentPicker) {
+          uiOverlays.openAgentPicker();
+          return;
+        }
+        void Promise.resolve(deps.listAgents?.() ?? [])
+          .then((agents) => {
+            const current = parseAgentSessionKey(state.currentSessionKey)?.agentId;
+            chatLog.addSystem(formatAgentsList(agents, current));
+            tui.requestRender();
+          })
+          .catch((err: unknown) => {
+            const errorMessage = err instanceof Error ? err.message : String(err);
+            chatLog.addSystem(`Agents list failed: ${errorMessage}`);
+            tui.requestRender();
+          });
+        return;
+      case 'agent': {
+        const targetRaw = commandArgs.trim();
+        if (!targetRaw) {
+          chatLog.addSystem(formatCurrentAgent(state));
+          tui.requestRender();
+          return;
+        }
+        void (async () => {
+          const parsedCurrent = parseAgentSessionKey(state.currentSessionKey);
+          if (!parsedCurrent) {
+            chatLog.addSystem('Cannot switch agent: current session is not an agent session.');
+            tui.requestRender();
+            return;
+          }
+          if (state.activeRunId) {
+            chatLog.addSystem('Cannot switch agent while a run is active. Abort first.');
+            tui.requestRender();
+            return;
+          }
+          if (!isValidAgentId(targetRaw)) {
+            chatLog.addSystem(`Invalid agent id: ${targetRaw}`);
+            tui.requestRender();
+            return;
+          }
+          const targetAgentId = normalizeAgentId(targetRaw);
+          const agents = await Promise.resolve(deps.listAgents?.() ?? []);
+          if (!agents.some((agent) => agent.enabled !== false && agent.id === targetAgentId)) {
+            chatLog.addSystem(`Unknown agent: ${targetAgentId}`);
+            tui.requestRender();
+            return;
+          }
+          const targetSessionKey = `agent:${targetAgentId}:${parsedCurrent.rest}`;
+          if (targetSessionKey === state.currentSessionKey) {
+            chatLog.addSystem(`Already using agent: ${targetAgentId}`);
+            tui.requestRender();
+            return;
+          }
+          if (!deps.switchAgentSession) {
+            chatLog.addSystem('Agent switching is not available in this mode.');
+            tui.requestRender();
+            return;
+          }
+          await deps.switchAgentSession(targetSessionKey, targetAgentId);
+          chatLog.addSystem(`Switched to agent: ${targetAgentId}\nSession: ${targetSessionKey}`);
+          tui.requestRender();
+        })().catch((err: unknown) => {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          chatLog.addSystem(`Agent switch failed: ${errorMessage}`);
+          tui.requestRender();
+        });
+        return;
+      }
       case 'usage':
         void Promise.resolve(deps.getSessionStats?.())
           .catch(() => undefined)

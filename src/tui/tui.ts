@@ -72,6 +72,7 @@ import {
   resolveCtrlCAction,
 } from './tui-lifecycle.js';
 import {
+  openAgentPickerOverlay,
   openProjectTrustOverlay,
   openScopedModelsOverlay,
   openSessionPickerOverlay,
@@ -1915,6 +1916,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const uiOverlays = {
     openModelPicker: (_initialSearch?: string) => {},
+    openAgentPicker: () => {},
     openSessionPicker: () => {},
     openSessionTree: () => {},
     openTranscriptTree: () => {},
@@ -1949,6 +1951,26 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     sendMessage(message);
   };
 
+  const switchAgentSession = async (sessionKey: string, agentId: string) => {
+    const previousWorkspace = state.sessionInfo.effectiveWorkspacePath?.trim();
+    await setSession(sessionKey);
+    await refreshStartupResources();
+    if (previousWorkspace && state.sessionInfo.workingDirectoryLocked !== true) {
+      try {
+        await client.patchSession(state.currentSessionKey, { workingDirectory: previousWorkspace });
+        state.sessionInfo.effectiveWorkspacePath = previousWorkspace;
+        state.sessionInfo.workingDirectoryLocked = true;
+        await refreshSessionInfoWithBorder();
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        chatLog.addSystem(`Switched agent, but workspace was not copied: ${errorMessage}`);
+      }
+    }
+    currentAgentId = agentId;
+    updateHeader();
+    updateFooter();
+  };
+
   const handleCommand = createTuiCommandHandler({
     state,
     chatLog,
@@ -1971,6 +1993,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     listModels: listCurrentModels,
     switchModel: switchCurrentModel,
     listSessions: () => client.listSessions(),
+    listAgents: () => client.listAgents(),
+    switchAgentSession,
     getSessionStats: () => client.getSessionStats(state.currentSessionKey),
     getStartupResources: () => startupResources,
     loadTranscriptTree: () => client.loadTranscriptTree(state.currentSessionKey),
@@ -2174,6 +2198,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     updateHeader,
     state,
     setSessionKey,
+    switchAgentSession,
     clearChatForSessionSwitch,
     loadSessionHistory,
     setEditorText: (text: string) => editor.setText(text),
@@ -2199,6 +2224,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   uiOverlays.openModelPicker = (initialSearch?: string) =>
     void openModelPickerOverlay(pickerSvc, initialSearch);
+  uiOverlays.openAgentPicker = () => void openAgentPickerOverlay(pickerSvc);
   uiOverlays.openSessionPicker = () => void openSessionPickerOverlay(pickerSvc);
   uiOverlays.openSessionTree = () => void openSessionTreeOverlay(pickerSvc);
   uiOverlays.openTranscriptTree = () => void openTranscriptTreeOverlay(pickerSvc);

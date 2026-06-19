@@ -132,6 +132,8 @@ Lines starting with **`/`** are treated as **slash commands** (not sent to the m
 | `/models` | Same as `/model` without args. |
 | `/session <key>` | Switch session; clears the on-screen log. |
 | `/sessions` | List sessions (**gateway mode**). |
+| `/agent [id]` | Show current agent, or switch to `agent:<id>:<current-session-suffix>` without migrating transcript. |
+| `/agents` | Open an agent picker (arrow keys + Enter) for configured and built-in agents. |
 | `/new`, `/reset` | Abort if needed; reset transcript on the server (gateway: `POST …/reset`; embedded: `AgentService.resetSession`). Model/thinking overrides are preserved. |
 | `/abort` | Abort the current run. |
 | `/thinking` | Toggle thinking display (same effect as **Ctrl+T**). |

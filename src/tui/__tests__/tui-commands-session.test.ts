@@ -73,6 +73,108 @@ describe('TUI session slash commands', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
+  it('/agent switches to the same suffix under the target agent', async () => {
+    const systems: string[] = [];
+    const switchAgentSession = vi.fn(async () => {});
+    const { handler, sendMessage } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+      state: createInitialState('agent:coder:tui-123'),
+      listAgents: vi.fn(async () => [
+        { id: 'coder', source: 'builtin' as const, enabled: true },
+        { id: 'main', source: 'configured' as const, enabled: true },
+      ]),
+      switchAgentSession,
+    });
+
+    handler('/agent main');
+
+    await vi.waitFor(() => expect(switchAgentSession).toHaveBeenCalledWith('agent:main:tui-123', 'main'));
+    expect(systems.at(-1)).toContain('Switched to agent: main');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('/agent refuses non-agent current sessions without legacy migration', async () => {
+    const systems: string[] = [];
+    const switchAgentSession = vi.fn(async () => {});
+    const { handler } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+      state: createInitialState('global'),
+      listAgents: vi.fn(async () => [{ id: 'main', source: 'configured' as const, enabled: true }]),
+      switchAgentSession,
+    });
+
+    handler('/agent main');
+
+    await vi.waitFor(() => expect(systems.at(-1)).toContain('current session is not an agent session'));
+    expect(switchAgentSession).not.toHaveBeenCalled();
+  });
+
+  it('/agent refuses unknown agents without fallback', async () => {
+    const systems: string[] = [];
+    const switchAgentSession = vi.fn(async () => {});
+    const { handler } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+      listAgents: vi.fn(async () => [{ id: 'main', source: 'configured' as const, enabled: true }]),
+      switchAgentSession,
+    });
+
+    handler('/agent researcher');
+
+    await vi.waitFor(() => expect(systems.at(-1)).toContain('Unknown agent: researcher'));
+    expect(switchAgentSession).not.toHaveBeenCalled();
+  });
+
+  it('/agent refuses switching while a run is active', async () => {
+    const systems: string[] = [];
+    const state = createInitialState('agent:main:main');
+    state.activeRunId = 'run-1';
+    const switchAgentSession = vi.fn(async () => {});
+    const { handler } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+      state,
+      listAgents: vi.fn(async () => [{ id: 'coder', source: 'builtin' as const, enabled: true }]),
+      switchAgentSession,
+    });
+
+    handler('/agent coder');
+
+    await vi.waitFor(() => expect(systems.at(-1)).toContain('Cannot switch agent while a run is active'));
+    expect(switchAgentSession).not.toHaveBeenCalled();
+  });
+
+  it('/agents lists available agents', async () => {
+    const systems: string[] = [];
+    const { handler } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+      listAgents: vi.fn(async () => [
+        { id: 'main', source: 'configured' as const, enabled: true },
+        { id: 'coder', source: 'builtin' as const, enabled: true },
+      ]),
+    });
+
+    handler('/agents');
+
+    await vi.waitFor(() => expect(systems.at(-1)).toContain('Available agents:'));
+    expect(systems.at(-1)).toContain('coder (builtin)');
+    expect(systems.at(-1)).toContain('main (configured)');
+    expect(systems.at(-1)).toContain('Switch with: /agent <id>');
+  });
+
   it('/share parses and handles workspace share requests locally', async () => {
     const createShare = vi.fn(async () => {});
     const { handler, sendMessage } = makeHandler({ createShare });
@@ -335,6 +437,7 @@ describe('TUI session slash commands', () => {
     const { handler, sendMessage } = makeHandler({
       uiOverlays: {
         openModelPicker: () => {},
+        openAgentPicker: () => {},
         openSessionPicker: () => {},
         openSessionTree: () => {},
         openTranscriptTree: () => {},
@@ -356,6 +459,7 @@ describe('TUI session slash commands', () => {
   it('opens built-in overlays without forwarding slash commands to the agent', () => {
     const overlayFns = {
       openModelPicker: vi.fn(),
+      openAgentPicker: vi.fn(),
       openSessionPicker: vi.fn(),
       openSessionTree: vi.fn(),
       openTranscriptTree: vi.fn(),
@@ -370,6 +474,9 @@ describe('TUI session slash commands', () => {
 
     handler('/model claude');
     expect(overlayFns.openModelPicker).toHaveBeenCalledWith('claude');
+
+    handler('/agents');
+    expect(overlayFns.openAgentPicker).toHaveBeenCalledOnce();
 
     handler('/resume');
     handler('/sessions');
@@ -424,6 +531,7 @@ describe('TUI session slash commands', () => {
       } as never,
       uiOverlays: {
         openModelPicker: () => {},
+        openAgentPicker: () => {},
         openSessionPicker: () => {},
         openSessionTree: () => {},
         openTranscriptTree: () => {},
