@@ -30,6 +30,7 @@ import type { SessionInfo } from '../tui-types.js';
 import { sessionMetadataToTuiItem } from '../tui-session-format.js';
 import { computeTuiSessionStats } from '../tui-session-stats.js';
 import { buildTuiTranscriptTree, transcriptTreeEntryIdToRowNumber } from '../tui-transcript-tree.js';
+import { ChatStreamMapper } from '../../gateway/chat-stream/mapper.js';
 import { collectTuiStartupResources } from '../tui-startup-resources.js';
 
 const log = createLogger('TUI:Embedded');
@@ -111,7 +112,10 @@ export class EmbeddedBackend implements TuiBackend {
     this.chatAbort = new AbortController();
     const signal = this.chatAbort.signal;
 
-    this.onEvent?.({ event: 'agent_start', data: { runId }, source: 'embedded' });
+    const mapper = new ChatStreamMapper({ runId, sessionKey: opts.sessionKey, channel: 'tui' });
+    for (const event of mapper.start()) {
+      this.onEvent?.({ event: event.type, data: event, source: 'embedded' });
+    }
 
     // Run the stream in background so the TUI event loop stays responsive.
     void (async () => {
@@ -133,20 +137,25 @@ export class EmbeddedBackend implements TuiBackend {
 
         for await (const event of stream) {
           if (signal.aborted) break;
-          this.onEvent?.({ event: event.type, data: event, source: 'embedded' });
+          for (const mapped of mapper.map(event)) {
+            this.onEvent?.({ event: mapped.type, data: mapped, source: 'embedded' });
+          }
         }
 
         if (!signal.aborted) {
-          this.onEvent?.({
-            event: 'agent_end',
-            data: { runId },
-            source: 'embedded',
-          });
+          for (const mapped of mapper.end('success')) {
+            this.onEvent?.({ event: mapped.type, data: mapped, source: 'embedded' });
+          }
         }
       } catch (error) {
         if (signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        this.onEvent?.({ event: 'error', data: { runId, content: errorMessage }, source: 'embedded' });
+        for (const mapped of mapper.error(errorMessage)) {
+          this.onEvent?.({ event: mapped.type, data: mapped, source: 'embedded' });
+        }
+        for (const mapped of mapper.end('error', errorMessage)) {
+          this.onEvent?.({ event: mapped.type, data: mapped, source: 'embedded' });
+        }
       }
     })();
 

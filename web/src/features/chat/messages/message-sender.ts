@@ -71,7 +71,7 @@ export type MessagingCallbacks = {
   onProgress: (progress: ProgressState) => void;
   /** Context compaction in progress (pre-turn automatic or manual). */
   onCompaction?: (state: CompactionState) => void;
-  /** Assistant TTS audio persisted under agent home `tts/` (before `result`). */
+  /** Assistant TTS audio persisted under agent home `tts/` (before `run_end`). */
   onTtsAudio?: (payload: { uri: string; mimeType: string; name: string }) => void;
   /** Agent `clarify` tool — user must answer via POST /api/clarify/:requestId */
   onClarifyRequest?: (payload: {
@@ -93,7 +93,7 @@ export type MessagingCallbacks = {
 export class MessageSender {
   private _abort?: AbortController;
   private _sseChatId = '';
-  /** `runId` from the `status` / `agent_start` event for this POST/resume body; do not clear a newer pending run (scheduled continuation). */
+  /** `runId` from the `run_start` event for this POST/resume body; do not clear a newer pending run (scheduled continuation). */
   private _trackedRunId?: string;
 
   get isSending() {
@@ -152,7 +152,7 @@ export class MessageSender {
     if (ct.includes('text/event-stream') && res.body) {
       const terminal = this._wrapTerminalCallbacks(callbacks);
       await this._consumeSSE(res.body, terminal.wrapped);
-      // If the HTTP body closed without a `result` / `error` event (proxy drop, parse miss, etc.),
+      // If the HTTP body closed without a `run_end` / `error` event (proxy drop, parse miss, etc.),
       // the UI would otherwise keep `streaming` true and block the next send — see use-chat-session guard.
       if (!terminal.sawTerminal && !this._abort?.signal.aborted) {
         terminal.onMissingTerminal();
@@ -338,217 +338,117 @@ export class MessageSender {
     try {
       parsed = JSON.parse(data) as Record<string, unknown>;
     } catch {
-      // Still complete the turn so the chat does not stay in a permanent "streaming" state.
-      if (event === 'result' || event === 'agent_end') {
-        cb?.onResult();
-      }
+      if (event === 'run_end') cb?.onResult();
       return;
     }
 
-    const persistRunId = () => {
-      if (typeof parsed.runId === 'string' && this._sseChatId) {
-        this._trackedRunId = parsed.runId;
-        setPendingAgentRun(this._sseChatId, parsed.runId);
-      }
-    };
+    const payload = (parsed.payload && typeof parsed.payload === 'object'
+      ? parsed.payload
+      : {}) as Record<string, unknown>;
 
     switch (event) {
-      case 'status':
-      case 'agent_start':
-        persistRunId();
+      case 'run_start':
+        if (typeof parsed.runId === 'string' && this._sseChatId) {
+          this._trackedRunId = parsed.runId;
+          setPendingAgentRun(this._sseChatId, parsed.runId);
+        }
         cb?.onStreamStart();
         break;
-      case 'user_message':
-      case 'user_transcript': {
-        const userMsg = userMessageFromSsePayload(parsed);
+      case 'user_message': {
+        const userMsg = userMessageFromSsePayload(payload.message as Record<string, unknown>);
         if (userMsg) cb?.onUserMessage?.(userMsg);
         break;
       }
-      case 'token': {
-        const chunk =
-          typeof parsed.content === 'string'
-            ? parsed.content
-            : typeof parsed.delta === 'string'
-              ? parsed.delta
-              : typeof parsed.text === 'string'
-                ? parsed.text
-                : '';
-        if (chunk) cb?.onToken(chunk);
+      case 'user_transcript': {
+        const userMsg = userMessageFromSsePayload({
+          text: payload.text,
+          media: payload.media,
+          timestamp: parsed.timestamp,
+        });
+        if (userMsg) cb?.onUserMessage?.(userMsg);
         break;
       }
-      case 'thinking':
-        if (parsed.status === 'started') {
-          cb?.onThinking('', false);
-          break;
-        }
-        cb?.onThinking(String(parsed.content || ''), Boolean(parsed.delta));
-        break;
-      case 'thinking_end':
-        cb?.onThinkingEnd();
-        break;
-      case 'message_start':
+      case 'assistant_message_start':
         cb?.onStreamStart();
         break;
-      case 'message_update':
-        this._dispatchStructuredMessageUpdate(parsed, cb);
+      case 'assistant_delta':
+        if (typeof payload.delta === 'string' && payload.delta) cb?.onToken(payload.delta);
         break;
-      case 'message_end':
+      case 'thinking_delta':
+        if (typeof payload.delta === 'string' && payload.delta) cb?.onThinking(payload.delta, true);
+        break;
+      case 'thinking_end':
+      case 'assistant_message_end':
         cb?.onThinkingEnd();
         break;
       case 'tool_start': {
-        const toolName = String(parsed.toolName || 'unknown');
-        const toolCallId = typeof parsed.toolCallId === 'string' ? parsed.toolCallId : undefined;
-        // The `clarify` tool suspends the agent turn and will be followed by a
-        // `clarify_request` SSE event carrying the real requestId from the backend.
-        // Skip the tool card here so the UI does not show a permanently-pending
-        // tool call; the clarify prompt will appear when `clarify_request` arrives.
+        const toolName = String(payload.toolName || 'unknown');
+        const toolCallId = typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined;
         if (toolName === 'clarify') break;
-        cb?.onToolStart(toolName, parsed.args, toolCallId);
+        cb?.onToolStart(toolName, payload.args, toolCallId);
+        break;
+      }
+      case 'tool_update': {
+        const toolName = typeof payload.toolName === 'string' && payload.toolName ? payload.toolName : 'unknown';
+        const toolCallId = typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined;
+        if (payload.details !== undefined) cb?.onToolUpdate?.(toolName, toolCallId, payload.details);
+        if (typeof payload.textDelta === 'string' && payload.textDelta) cb?.onToolUpdate?.(toolName, toolCallId, { textDelta: payload.textDelta });
         break;
       }
       case 'tool_end':
         cb?.onToolEnd(
-          typeof parsed.toolName === 'string' && parsed.toolName ? parsed.toolName : 'unknown',
-          !!parsed.isError,
-          parsed.result as string | undefined,
-        );
-        break;
-      case 'tool_update': {
-        const toolName =
-          typeof parsed.toolName === 'string' && parsed.toolName ? parsed.toolName : 'unknown';
-        const toolCallId = typeof parsed.toolCallId === 'string' ? parsed.toolCallId : undefined;
-        cb?.onToolUpdate?.(toolName, toolCallId, parsed.details);
-        break;
-      }
-      case 'tool_execution_start': {
-        const toolName = String(parsed.toolName || 'unknown');
-        const toolCallId = typeof parsed.toolCallId === 'string' ? parsed.toolCallId : undefined;
-        if (toolName === 'clarify') break;
-        cb?.onToolStart(toolName, parsed.args, toolCallId);
-        break;
-      }
-      case 'tool_execution_update': {
-        const toolName =
-          typeof parsed.toolName === 'string' && parsed.toolName ? parsed.toolName : 'unknown';
-        const toolCallId = typeof parsed.toolCallId === 'string' ? parsed.toolCallId : undefined;
-        const details = extractToolResultDetails(parsed.partialResult);
-        if (details !== undefined) cb?.onToolUpdate?.(toolName, toolCallId, details);
-        break;
-      }
-      case 'tool_execution_end':
-        cb?.onToolEnd(
-          typeof parsed.toolName === 'string' && parsed.toolName ? parsed.toolName : 'unknown',
-          !!parsed.isError,
-          serializeToolResult(parsed.result),
+          typeof payload.toolName === 'string' && payload.toolName ? payload.toolName : 'unknown',
+          payload.status === 'error' || payload.status === 'cancelled',
+          serializeProtocolPayload(payload.result),
         );
         break;
       case 'progress':
         cb?.onProgress({
-          stage: String(parsed.stage || 'thinking'),
-          message: String(parsed.message || ''),
-          detail: parsed.detail as string | undefined,
-          toolName: parsed.toolName as string | undefined,
+          stage: String(payload.stage || 'thinking'),
+          message: String(payload.message || ''),
+          detail: payload.detail as string | undefined,
+          toolName: payload.toolName as string | undefined,
           timestamp: Date.now(),
         });
         break;
       case 'compaction':
         cb?.onCompaction?.({
-          status: (parsed.status as 'started' | 'completed' | 'skipped') || 'started',
-          tokensBefore: typeof parsed.tokensBefore === 'number' ? parsed.tokensBefore : undefined,
-          tokensAfter: typeof parsed.tokensAfter === 'number' ? parsed.tokensAfter : undefined,
-          summary: typeof parsed.summary === 'string' ? parsed.summary : undefined,
+          status: (payload.status as 'started' | 'completed' | 'skipped') || 'started',
+          tokensBefore: typeof payload.tokensBefore === 'number' ? payload.tokensBefore : undefined,
+          tokensAfter: typeof payload.tokensAfter === 'number' ? payload.tokensAfter : undefined,
+          summary: typeof payload.summary === 'string' ? payload.summary : undefined,
         });
         break;
       case 'tts_audio':
         cb?.onTtsAudio?.({
-          uri: String(parsed.uri || ''),
-          mimeType: String(parsed.mimeType || 'audio/mpeg'),
-          name: String(parsed.name || 'voice.mp3'),
+          uri: String(payload.uri || ''),
+          mimeType: String(payload.mimeType || 'audio/mpeg'),
+          name: String(payload.name || 'voice.mp3'),
         });
         break;
       case 'clarify_request': {
-        const requestId = typeof parsed.requestId === 'string' ? parsed.requestId.trim() : '';
-        const question = typeof parsed.question === 'string' ? parsed.question.trim() : '';
+        const requestId = typeof payload.requestId === 'string' ? payload.requestId.trim() : '';
+        const question = typeof payload.question === 'string' ? payload.question.trim() : '';
         if (requestId && question && cb?.onClarifyRequest) {
-          const choices = Array.isArray(parsed.choices)
-            ? (parsed.choices as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+          const choices = Array.isArray(payload.choices)
+            ? (payload.choices as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
             : undefined;
-          const def =
-            typeof parsed.default === 'string' && parsed.default.trim() ? parsed.default.trim() : undefined;
-          cb.onClarifyRequest({
-            requestId,
-            question,
-            choices: choices && choices.length >= 2 ? choices : undefined,
-            default: def,
-          });
+          const def = typeof payload.default === 'string' && payload.default.trim() ? payload.default.trim() : undefined;
+          cb.onClarifyRequest({ requestId, question, choices: choices && choices.length >= 2 ? choices : undefined, default: def });
         }
         break;
       }
-      case 'result':
-      case 'agent_end':
+      case 'run_end':
         cb?.onResult();
         break;
       case 'error':
-        cb?.onError(
-          String(
-            parsed.content ||
-              (parsed.error as { message?: string } | undefined)?.message ||
-              JSON.stringify(buildSendFailedErrorPayload()),
-          ),
-        );
+        cb?.onError(String(payload.message || JSON.stringify(buildSendFailedErrorPayload())));
         break;
-      default: {
-        const chunk =
-          typeof parsed.content === 'string'
-            ? parsed.content
-            : typeof parsed.delta === 'string'
-              ? parsed.delta
-              : typeof parsed.text === 'string'
-                ? parsed.text
-                : '';
-        if (chunk) cb?.onToken(chunk);
-        break;
-      }
     }
-  }
-
-  private _dispatchStructuredMessageUpdate(parsed: Record<string, unknown>, cb?: MessagingCallbacks): void {
-    const assistantMessageEvent = parsed.assistantMessageEvent as Record<string, unknown> | undefined;
-    if (assistantMessageEvent?.type === 'text_delta' && typeof assistantMessageEvent.delta === 'string') {
-      cb?.onToken(assistantMessageEvent.delta);
-      return;
-    }
-    if (assistantMessageEvent?.type === 'thinking_delta' && typeof assistantMessageEvent.delta === 'string') {
-      cb?.onThinking(assistantMessageEvent.delta, true);
-      return;
-    }
-
-    const message = parsed.message as { role?: unknown; content?: unknown } | undefined;
-    if (message?.role !== 'assistant') return;
-    const text = extractTextFromStructuredContent(message.content);
-    if (text) cb?.onToken(text);
   }
 }
 
-function extractTextFromStructuredContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .map((block) => {
-      if (!block || typeof block !== 'object') return '';
-      const rec = block as { type?: unknown; text?: unknown };
-      return rec.type === 'text' && typeof rec.text === 'string' ? rec.text : '';
-    })
-    .join('');
-}
-
-function extractToolResultDetails(result: unknown): unknown {
-  if (!result || typeof result !== 'object') return undefined;
-  const rec = result as Record<string, unknown>;
-  return rec.details ?? undefined;
-}
-
-function serializeToolResult(result: unknown): unknown {
+function serializeProtocolPayload(result: unknown): unknown {
   if (typeof result === 'string' || result == null) return result;
   try {
     return JSON.stringify(result);

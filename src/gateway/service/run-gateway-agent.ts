@@ -15,18 +15,13 @@ import { shouldSkipWebchatInboundByAbortCutoff } from '../../session/abort-cutof
 
 import { formatAgentRunErrorForClient } from '../../agent/client-error-format.js';
 
+import { ChatStreamMapper } from '../chat-stream/mapper.js';
+import type { ChatStreamEvent } from '../chat-stream/protocol.js';
 import type { AgentRunRelay } from '../agent-run-relay.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
 const log = createLogger('Gateway:Service');
 
-export type RunGatewayAgentYield = {
-  type: string;
-  content?: string;
-  status?: string;
-  runId?: string;
-  seq?: number;
-  [key: string]: unknown;
-};
+export type RunGatewayAgentYield = ChatStreamEvent;
 
 export type RunGatewayAgentDeps = {
   config: Config;
@@ -100,14 +95,26 @@ export async function *runGatewayAgent(
     runAbortControllers.set(runId, new AbortController());
   }
 
-  const statusEvent = { type: 'agent_start', runId };
-  const relayedStatusEvent =
-    channel === 'webchat' ? (runRelay.publish(runId, statusEvent) ?? statusEvent) : statusEvent;
-  yield relayedStatusEvent;
+  const streamSessionKey = webchatSessionKey ?? chatId;
+  const mapper = new ChatStreamMapper({ runId, sessionKey: streamSessionKey, channel });
+  const publishStreamEvent = (event: ChatStreamEvent): ChatStreamEvent =>
+    channel === 'webchat'
+      ? ((runRelay.publish(runId, event as unknown as import('../agent-run-relay.js').RelayEvent) as unknown as ChatStreamEvent | undefined) ?? event)
+      : event;
+  const emitAndYield = function *(events: ChatStreamEvent[]): Generator<ChatStreamEvent> {
+    for (const event of events) {
+      const relayedEvent = publishStreamEvent(event);
+      if (channel === 'webchat') emit('agent.stream', { sessionKey: streamSessionKey, event: relayedEvent });
+      yield relayedEvent;
+    }
+  };
+
+  yield* emitAndYield(mapper.start());
 
   try {
     if (channel === 'webchat' && webchatSessionKey) {
       if (webchatStaleSkip) {
+        yield* emitAndYield(mapper.end('cancelled', 'Stale inbound after abort (clientCreatedAtMs before cutoff)'));
         runRelay.complete(runId);
         runAbortControllers.delete(runId);
         return {
@@ -137,7 +144,6 @@ export async function *runGatewayAgent(
       activeWebchatRunBySession.set(sessionKey, runId);
       let streamError: string | undefined;
       try {
-        emit('agent.stream', { sessionKey, event: relayedStatusEvent });
         const eventStream = agentService.turnDispatcher.processDirectStreaming(
           stampedMessage,
           sessionKey,
@@ -147,11 +153,12 @@ export async function *runGatewayAgent(
         );
 
         for await (const event of eventStream) {
-          const relayedEvent = runRelay.publish(runId, event) ?? event;
-          emit('agent.stream', { sessionKey, event: relayedEvent });
-          yield relayedEvent as RunGatewayAgentYield;
+          yield* emitAndYield(mapper.map(event));
         }
 
+        const endStatus = mergedSignal.aborted ? 'cancelled' : 'success';
+        const endSummary = mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully';
+        yield* emitAndYield(mapper.end(endStatus, endSummary));
         runRelay.complete(runId);
         try {
           const metaAfter = await sessionIndex.getSessionMetadata(sessionKey);
@@ -180,11 +187,9 @@ export async function *runGatewayAgent(
         );
         streamError = em;
         const errorContent = formatAgentRunErrorForClient(streamError);
-        const errorEvent = { type: 'error', runId, content: errorContent };
-        const relayedErrorEvent = runRelay.publish(runId, errorEvent) ?? errorEvent;
-        emit('agent.stream', { sessionKey, event: relayedErrorEvent });
+        yield* emitAndYield(mapper.error(errorContent));
+        yield* emitAndYield(mapper.end('error', streamError));
         runRelay.complete(runId);
-        yield relayedErrorEvent;
         return { status: 'error', summary: streamError };
       } finally {
         activeWebchatRunBySession.delete(sessionKey);
@@ -222,21 +227,41 @@ export async function *runGatewayAgent(
       ...(correlationMeta ? { metadata: correlationMeta } : {}),
     });
 
-    const processingMessage = {
-      role: 'assistant',
-      content: [{ type: 'text', text: 'Processing...\n' }],
-      timestamp: Date.now(),
-    };
-    yield { type: 'message_start', runId, message: processingMessage };
-    yield { type: 'message_update', runId, message: processingMessage };
+    const messageId = `msg_${runId.replace(/[^a-zA-Z0-9_-]/g, '_')}_1`;
+    yield* emitAndYield([
+      {
+        type: 'assistant_message_start',
+        runId,
+        sessionKey: streamSessionKey,
+        timestamp: Date.now(),
+        payload: { messageId },
+      },
+      {
+        type: 'assistant_delta',
+        runId,
+        sessionKey: streamSessionKey,
+        timestamp: Date.now(),
+        payload: { messageId, delta: 'Processing...\n' },
+      },
+    ]);
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    const doneMessage = {
-      role: 'assistant',
-      content: [{ type: 'text', text: 'Done\n' }],
-      timestamp: Date.now(),
-    };
-    yield { type: 'message_update', runId, message: doneMessage };
-    yield { type: 'message_end', runId, message: doneMessage };
+    yield* emitAndYield([
+      {
+        type: 'assistant_delta',
+        runId,
+        sessionKey: streamSessionKey,
+        timestamp: Date.now(),
+        payload: { messageId, delta: 'Done\n' },
+      },
+      {
+        type: 'assistant_message_end',
+        runId,
+        sessionKey: streamSessionKey,
+        timestamp: Date.now(),
+        payload: { messageId },
+      },
+    ]);
+    yield* emitAndYield(mapper.end('success', 'Message processed'));
     return { status: 'ok', summary: 'Message processed' };
   } catch (error) {
     const em = error instanceof Error ? error.message : String(error);
