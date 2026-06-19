@@ -4,7 +4,7 @@ layout: home
 hero:
   name: xopc
   text: Goal Loop OS
-  tagline: 目标循环操作系统（Goal Loop OS）用于长期 AI 任务：本地优先、多表面接入，借助工作流自动化与多 Agent 路由，结合扩展能力持续迭代。
+  tagline: "目标循环操作系统（Goal Loop OS）用于长期 AI 任务：本地优先、多表面接入，借助工作流自动化与多 Agent 路由，结合扩展能力持续迭代。"
   image:
     src: /logo.svg
     alt: xopc

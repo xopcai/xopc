@@ -4,7 +4,7 @@ layout: home
 hero:
   name: xopc
   text: Goal Loop OS
-  tagline: Goal Loop OS for long-term AI work: a local-first, multi-surface agent system with workflow automation, multi-agent routing, and extensible extensions/skills.
+  tagline: "Goal Loop OS for long-term AI work: a local-first, multi-surface agent system with workflow automation, multi-agent routing, and extensible extensions/skills."
   image:
     src: /logo.svg
     alt: xopc
