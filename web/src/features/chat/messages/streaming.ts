@@ -172,7 +172,7 @@ export function completeTool(
   content: MessageContent[],
   toolName: string,
   isError: boolean,
-  result?: string,
+  result?: unknown,
 ): void {
   for (let i = content.length - 1; i >= 0; i--) {
     const b = content[i];
