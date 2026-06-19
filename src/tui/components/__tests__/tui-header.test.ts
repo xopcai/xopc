@@ -10,9 +10,10 @@ function stripAnsi(text: string): string {
 describe('TuiHeader', () => {
   it('renders startup hints with resolved app keybindings', () => {
     const keybindings = new XopcKeybindingsManager({
-      'app.session.resume': 'x',
-      'app.model.cycleForward': 'm',
-      'app.message.followUp': 'f',
+      'app.interrupt': 'x',
+      'app.clear': 'm',
+      'app.exit': 'f',
+      'app.tools.expand': 'o',
     });
     const header = new TuiHeader(
       () => ({
@@ -25,8 +26,9 @@ describe('TuiHeader', () => {
     );
 
     const rendered = stripAnsi(header.render(160).join('\n'));
-    expect(rendered).toContain('X sessions');
-    expect(rendered).toContain('M models');
-    expect(rendered).toContain('F follow-up');
+    expect(rendered).toContain('x interrupt');
+    expect(rendered).toContain('m/f clear/exit');
+    expect(rendered).toContain('o tools');
+    expect(rendered).toContain('Press /start to show full startup help and loaded resources.');
   });
 });

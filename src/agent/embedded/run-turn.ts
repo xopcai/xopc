@@ -163,7 +163,9 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
     session.agent.streamFn = loggingStreamFn;
 
     if (onEvent) {
-      unsubscribe = subscribeEmbeddedSessionEvents(session, onEvent);
+      unsubscribe = subscribeEmbeddedSessionEvents(session, (event) => {
+        onEvent({ ...event, runId });
+      });
     }
 
     const handle = {
@@ -220,7 +222,7 @@ export async function runXopcEmbeddedTurn(params: RunXopcEmbeddedTurnParams): Pr
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
     log.error({ err, sessionKey, runId }, `Embedded run failed: ${em}`);
-    onEvent?.({ type: 'error', content: em });
+    onEvent?.({ type: 'error', content: em, runId });
     return { ok: false, errorMessage: em };
   } finally {
     unsubscribe?.();

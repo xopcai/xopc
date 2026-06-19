@@ -14,7 +14,7 @@ export async function loadExtensionsForTuiLocalMode(runtime?: {
   sendMessage?: import('../../extensions/types/core.js').ExtensionRuntime['sendMessage'];
 }): Promise<ExtensionRegistryImpl> {
   const config = loadConfig();
-  const workspaceDir = getWorkspacePath(config) ?? process.cwd();
+  const workspaceDir = getWorkspacePath(config);
   const loader = new ExtensionLoader({
     workspaceDir,
     extensionsDir: resolveExtensionsDir(),

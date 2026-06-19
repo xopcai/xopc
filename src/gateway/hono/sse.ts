@@ -51,6 +51,18 @@ function maxBase64CharsForBinary(maxBinaryBytes: number): number {
   return 4 * Math.ceil(maxBinaryBytes / 3);
 }
 
+function extractTextFromStructuredContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((block) => {
+      if (!block || typeof block !== 'object') return '';
+      const rec = block as { type?: unknown; text?: unknown };
+      return rec.type === 'text' && typeof rec.text === 'string' ? rec.text : '';
+    })
+    .join('');
+}
+
 /**
  * POST /api/agent — Send a message to the agent, stream response via SSE.
  *
@@ -59,12 +71,12 @@ function maxBase64CharsForBinary(maxBinaryBytes: number): number {
  * Accept: application/json → wait for full response, return JSON
  *
  * SSE events:
- *   event: status   — { status, runId }
+ *   event: agent_start — { runId }
  *   event: user_message — { timestamp, content?, attachments? } (user turn accepted, before agent tokens)
  *   event: user_transcript — { text, attachments? } (voice STT complete, before agent tokens)
- *   event: token    — { content }
+ *   event: message_start / message_update / message_end — structured pi-agent messages
+ *   event: tool_execution_start / tool_execution_update / tool_execution_end — structured tool lifecycle
  *   event: error    — { content }
- *   event: result   — { ok, payload: { status, summary } }
  */
 export function createAgentSSEHandler(config: SSEHandlerConfig) {
   const { service } = config;
@@ -129,7 +141,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
     const clientAbort = new AbortController();
     const raw = c.req.raw;
     // Keep webchat runs alive across transient disconnects (page refresh / tab route switch)
-    // so the client can reattach via /api/agent/resume using runId from `status`.
+    // so the client can reattach via /api/agent/resume using runId from `agent_start`.
     // Explicit cancellation still goes through /api/agent/abort.
     if (channel !== 'webchat') {
       if (raw.signal.aborted) {
@@ -157,9 +169,9 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
             finalResult = value as { status: string; summary: string };
             break;
           }
-          const chunk = value as { type: string; content?: string; status?: string; runId?: string };
-          if (chunk.type === 'token' && chunk.content) {
-            tokens.push(chunk.content);
+          const chunk = value as { type: string; message?: { role?: string; content?: unknown } };
+          if (chunk.type === 'message_end' && chunk.message?.role === 'assistant') {
+            tokens.push(extractTextFromStructuredContent(chunk.message.content));
           }
         }
 
@@ -201,24 +213,28 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
       });
 
       let eventId = 0;
+      let runId: string | undefined;
+      let sawAgentEnd = false;
 
       try {
         while (true) {
           const { done, value } = await generator.next();
 
           if (done) {
-            // Final result
-            await stream.writeSSE({
-              id: String(++eventId),
-              event: 'result',
-              data: JSON.stringify({ ok: true, payload: value }),
-            });
+            if (!sawAgentEnd) {
+              await stream.writeSSE({
+                id: String(++eventId),
+                event: 'agent_end',
+                data: stringifySSEData({ type: 'agent_end', ...(runId ? { runId } : {}) }),
+              });
+            }
             break;
           }
 
-          const chunk = value as { type: string; content?: string; status?: string; runId?: string };
+          const chunk = value as { type: string; [key: string]: unknown };
+          if (typeof chunk.runId === 'string' && chunk.runId) runId = chunk.runId;
+          if (chunk.type === 'agent_end') sawAgentEnd = true;
 
-          // Intermediate events: status / token / error
           await stream.writeSSE({
             id: String(++eventId),
             event: chunk.type || 'message',
@@ -281,12 +297,6 @@ export function createAgentResumeHandler(config: SSEHandlerConfig) {
             data: stringifySSEData(event),
           });
         }
-        // Run completed — send a final result event
-        await stream.writeSSE({
-          id: String(++eventId),
-          event: 'result',
-          data: JSON.stringify({ ok: true, payload: { status: 'ok', summary: 'Resumed run completed' } }),
-        });
       } catch (error) {
         log.error({ err: error, runId }, 'Resume stream failed');
         await stream.writeSSE({

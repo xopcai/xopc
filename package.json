@@ -1,7 +1,7 @@
 {
   "name": "@xopcai/xopc",
   "version": "0.0.103",
-  "description": "The OPC workstation that grows with you: AI assistant for One Person Companies — CLI, gateway, multi-channel (Telegram/WeChat), 20+ LLM providers via pi-ai, extensions and skills.",
+  "description": "Goal Loop OS for long-term AI work: a local-first multi-surface agent system with workflow automation, multi-agent routing, and extensibility via extensions/skills.",
   "packageManager": "pnpm@11.6.0",
   "type": "module",
   "main": "dist/src/index.js",
@@ -84,15 +84,22 @@
     "electron:preview": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite preview"
   },
   "keywords": [
-    "ai",
-    "agent",
-    "chatbot",
-    "personal-assistant",
+    "agent-os",
+    "cli",
+    "cron",
+    "desktop",
+    "extensions",
+    "gateway",
+    "goal-loop-os",
     "llm",
-    "openai",
-    "claude",
+    "local-first",
+    "mcp",
+    "multi-agent",
+    "self-hosted",
     "telegram",
-    "automation"
+    "voice-ai",
+    "weixin",
+    "workflow"
   ],
   "author": "xopcai <lyxopc.ai@gmail.com>",
   "license": "MIT",

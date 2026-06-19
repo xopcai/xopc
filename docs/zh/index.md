@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: AI 工作站
-  tagline: 与你一起成长的 AI 工作站——为一人公司打造的本地优先 AI 助手。CLI、桌面、浏览器、手机、即时通讯——全平台覆盖。自带钥匙，无需 fork 即可扩展。
+  text: Goal Loop OS
+  tagline: 目标循环操作系统（Goal Loop OS）用于长期 AI 任务：本地优先、多表面接入，借助工作流自动化与多 Agent 路由，结合扩展能力持续迭代。
   image:
     src: /logo.svg
     alt: xopc
@@ -27,7 +27,7 @@ features:
     details: "同一个助手——终端、浏览器、桌面应用、手机、即时通讯。无需同步，因为本来就是同一个系统。"
     link: /zh/channels
   - title: 🧩 跟你一起长大，永远不会过时。
-    details: "xopc skills install · xopc extensions install——用 SKILL.md 教知识，增加工具、通道与 UI 面板，不必改核心代码。"
+    details: "xopc skills install · xopc extensions install——通过可复用的扩展模块不断补充能力，添加工具、通道和 UI 面板，免去改核心。"
     link: /zh/extensions
   - title: ⏰ Cron 定时
     details: 摘要、提醒与报告按时间表推送。在你专注别处时，Agent 也能主动运行。

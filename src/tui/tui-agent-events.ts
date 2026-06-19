@@ -1,61 +1,43 @@
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { TUI } from '@earendil-works/pi-tui';
 
 import { formatAgentRunErrorForDisplay } from '../agent/client-error-format.js';
 import type { ChatLog } from './components/chat-log.js';
-import type { StreamAssembler } from './stream-assembler.js';
+import { createAssistantMessageFromText } from './components/assistant-message.js';
 import { markRunEvent, markRunIdleAfterCompletion } from './tui-run-state.js';
 import type { TuiEventSource, TuiState } from './tui-types.js';
 
-const pendingToolCallIds = new Map<string, string[]>();
 const seenStreamEventKeys = new Set<string>();
 
-export function clearPendingToolCallIds(): void {
-  pendingToolCallIds.clear();
+export function clearSeenStreamEvents(): void {
   seenStreamEventKeys.clear();
 }
 
 export function clearSeenStreamEventsForRun(runId: string): void {
   const prefix = `${runId}:`;
   for (const key of Array.from(seenStreamEventKeys)) {
-    if (key.startsWith(prefix)) {
-      seenStreamEventKeys.delete(key);
-    }
+    if (key.startsWith(prefix)) seenStreamEventKeys.delete(key);
   }
 }
 
-function removePendingToolCallId(toolName: string, toolCallId: string): void {
-  const stack = pendingToolCallIds.get(toolName);
-  if (!stack) return;
-  const idx = stack.indexOf(toolCallId);
-  if (idx >= 0) stack.splice(idx, 1);
-  if (stack.length === 0) pendingToolCallIds.delete(toolName);
-}
-
 const STREAM_TOUCH_EVENTS = new Set([
-  'status',
-  'token',
-  'thinking',
-  'tool_start',
-  'tool_update',
-  'tool_end',
+  'agent_start',
+  'message_start',
+  'message_update',
+  'message_end',
+  'tool_execution_start',
+  'tool_execution_update',
+  'tool_execution_end',
   'progress',
 ]);
 
 const DIRECT_RESPONSE_OWNED_EVENTS = new Set([
-  'token',
-  'thinking',
-  'tool_start',
-  'tool_update',
-  'tool_end',
-  'progress',
+  ...STREAM_TOUCH_EVENTS,
+  'agent_end',
   'error',
-  'result',
 ]);
 
-function resolveEventRunId(
-  data: Record<string, unknown>,
-  state: TuiState,
-): string | null {
+function resolveEventRunId(data: Record<string, unknown>, state: TuiState): string | null {
   if (typeof data.runId === 'string' && data.runId) return data.runId;
   return state.activeRunId ?? state.runStatus.runId ?? state.runStatus.lastCompletedRunId;
 }
@@ -85,9 +67,7 @@ function shouldSkipSeenStreamEvent(
   state: TuiState,
   source: TuiEventSource,
 ): boolean {
-  if (source !== 'agent-response' && source !== 'agent-resume' && source !== 'broadcast') {
-    return false;
-  }
+  if (source !== 'agent-response' && source !== 'agent-resume' && source !== 'broadcast') return false;
   const key = streamEventKey(data, state);
   if (!key) return false;
   if (seenStreamEventKeys.has(key)) return true;
@@ -95,127 +75,126 @@ function shouldSkipSeenStreamEvent(
   return false;
 }
 
-export function dispatchAgentSSE(
+function isAgentMessage(value: unknown): value is AgentMessage {
+  return !!value && typeof value === 'object' && typeof (value as { role?: unknown }).role === 'string';
+}
+
+function assistantToolCalls(message: AgentMessage): Array<{ id: string; name: string; arguments: unknown }> {
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) return [];
+  const calls: Array<{ id: string; name: string; arguments: unknown }> = [];
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue;
+    const rec = block as { type?: unknown; id?: unknown; name?: unknown; arguments?: unknown; input?: unknown };
+    if (rec.type !== 'toolCall' && rec.type !== 'tool_use') continue;
+    if (typeof rec.id !== 'string' || !rec.id || typeof rec.name !== 'string' || !rec.name) continue;
+    calls.push({ id: rec.id, name: rec.name, arguments: rec.arguments ?? rec.input ?? {} });
+  }
+  return calls;
+}
+
+function errorAssistantMessage(errorContent: string): AgentMessage {
+  return {
+    ...createAssistantMessageFromText(''),
+    stopReason: 'error',
+    errorMessage: errorContent,
+  } as AgentMessage;
+}
+
+export function dispatchAgentEvent(
   event: string,
   data: Record<string, unknown>,
   state: TuiState,
   chatLog: ChatLog,
-  assembler: StreamAssembler,
   tui: TUI,
   setActivityStatus: (status: string) => void,
   touchStreamingActivity?: () => void,
-  /** Called when a run ends (result/error) so the TUI can flush follow-up queue, etc. */
   onRunEnded?: () => void,
-  onAssistantFinalized?: (text: string, options?: { errorMessage?: string }) => void,
+  onAssistantFinalized?: (message: AgentMessage, options?: { errorMessage?: string }) => void,
   source: TuiEventSource = 'unknown',
 ): void {
-  if (shouldSkipSeenStreamEvent(data, state, source)) {
-    return;
-  }
-  if (shouldSkipDuplicateBroadcastEvent(event, data, state, source)) {
-    return;
-  }
+  if (shouldSkipSeenStreamEvent(data, state, source)) return;
+  if (shouldSkipDuplicateBroadcastEvent(event, data, state, source)) return;
 
-  if (STREAM_TOUCH_EVENTS.has(event)) {
-    touchStreamingActivity?.();
-  }
+  if (STREAM_TOUCH_EVENTS.has(event)) touchStreamingActivity?.();
 
-  const runId = state.activeRunId ?? 'default';
+  const runId = resolveEventRunId(data, state) ?? state.activeRunId ?? 'default';
 
   switch (event) {
-    case 'status': {
-      const newRunId = typeof data.runId === 'string' ? data.runId : runId;
-      state.activeRunId = newRunId;
-      markRunEvent(state, 'waiting', newRunId, event, source);
+    case 'agent_start': {
+      state.activeRunId = runId;
+      markRunEvent(state, 'waiting', runId, event, source);
       setActivityStatus('waiting');
       break;
     }
-    case 'token': {
-      const content =
-        typeof data.content === 'string'
-          ? data.content
-          : typeof data.delta === 'string'
-            ? data.delta
-            : typeof data.text === 'string'
-              ? data.text
-              : '';
-      if (!content) break;
+    case 'message_start': {
+      if (!isAgentMessage(data.message)) break;
+      const message = data.message;
+      if (message.role === 'assistant') {
+        chatLog.startAssistant(message, runId);
+      } else if (message.role === 'user') {
+        chatLog.addUser((message as { content?: unknown }).content as string | unknown[]);
+      }
       markRunEvent(state, 'streaming', runId, event, source);
       setActivityStatus('streaming');
-      const display = assembler.ingestToken(runId, content, state.showThinking);
-      if (display !== null) {
-        chatLog.updateAssistant(display, runId);
-        tui.requestRender();
-      }
+      tui.requestRender();
       break;
     }
-    case 'thinking': {
-      const thinkContent = String(data.content ?? '');
-      const isDelta = Boolean(data.delta);
-      if (data.status === 'started') break;
+    case 'message_update': {
+      if (!isAgentMessage(data.message)) break;
+      const message = data.message;
+      if (message.role === 'assistant') {
+        chatLog.updateAssistant(message, runId);
+        for (const call of assistantToolCalls(message)) {
+          chatLog.startTool(call.id, call.name, call.arguments, runId);
+        }
+      }
       markRunEvent(state, 'streaming', runId, event, source);
       setActivityStatus('streaming');
-      const display = assembler.ingestThinking(runId, thinkContent, isDelta, state.showThinking);
-      if (display !== null) {
-        chatLog.updateAssistant(display, runId);
-        tui.requestRender();
-      }
+      tui.requestRender();
       break;
     }
-    case 'thinking_end':
-    case 'message_end':
+    case 'message_end': {
+      if (!isAgentMessage(data.message)) break;
+      const message = data.message;
+      if (message.role === 'assistant') {
+        chatLog.finalizeAssistant(message, runId);
+        for (const call of assistantToolCalls(message)) {
+          chatLog.markToolArgsComplete(call.id);
+        }
+        onAssistantFinalized?.(message);
+      }
+      markRunEvent(state, 'streaming', runId, event, source);
+      setActivityStatus('streaming');
+      tui.requestRender();
       break;
-    case 'tool_start': {
+    }
+    case 'tool_execution_start': {
       const toolName = String(data.toolName ?? 'unknown');
-      const toolCallId = String(data.toolCallId || crypto.randomUUID());
-      const stack = pendingToolCallIds.get(toolName) ?? [];
-      stack.push(toolCallId);
-      pendingToolCallIds.set(toolName, stack);
+      const toolCallId = String(data.toolCallId || '');
+      if (!toolCallId) break;
+      chatLog.startTool(toolCallId, toolName, data.args ?? {}, runId);
+      chatLog.markToolExecutionStarted(toolCallId);
       markRunEvent(state, 'tool', runId, event, source);
       setActivityStatus('running');
-      chatLog.startTool(toolCallId, toolName, data.args, runId);
       tui.requestRender();
       break;
     }
-    case 'tool_end': {
-      const toolName = String(data.toolName ?? '');
-      let toolCallId = typeof data.toolCallId === 'string' && data.toolCallId ? data.toolCallId : '';
-      if (!toolCallId && toolName) {
-        const stack = pendingToolCallIds.get(toolName);
-        if (stack && stack.length > 0) {
-          toolCallId = stack.shift()!;
-          if (stack.length === 0) pendingToolCallIds.delete(toolName);
-        }
-      }
-      const isError = Boolean(data.isError);
-      if (toolCallId) {
-        chatLog.updateToolResult(toolCallId, data.result, isError);
-        if (toolName) {
-          removePendingToolCallId(toolName, toolCallId);
-        }
-      }
-      markRunEvent(state, 'streaming', runId, event, source);
-      setActivityStatus('streaming');
+    case 'tool_execution_update': {
+      const toolName = String(data.toolName ?? 'unknown');
+      const toolCallId = String(data.toolCallId || '');
+      if (!toolCallId) break;
+      chatLog.startTool(toolCallId, toolName, data.args ?? {}, runId);
+      chatLog.updateToolResult(toolCallId, data.partialResult, false, true);
+      markRunEvent(state, 'tool', runId, event, source);
+      setActivityStatus('running');
       tui.requestRender();
       break;
     }
-    case 'tool_update': {
-      const toolName = String(data.toolName ?? '');
-      let toolCallId = typeof data.toolCallId === 'string' && data.toolCallId ? data.toolCallId : '';
-      if (!toolCallId && toolName) {
-        const stack = pendingToolCallIds.get(toolName);
-        if (stack && stack.length > 0) {
-          toolCallId = stack[0]!;
-        }
-      }
-      if (toolCallId) {
-        if ('args' in data) {
-          chatLog.updateToolArgs(toolCallId, data.args);
-        } else if ('arguments' in data) {
-          chatLog.updateToolArgs(toolCallId, data.arguments);
-        }
-        chatLog.updateToolDetails(toolCallId, data.details);
-      }
+    case 'tool_execution_end': {
+      const toolCallId = String(data.toolCallId || '');
+      if (!toolCallId) break;
+      chatLog.updateToolResult(toolCallId, data.result, Boolean(data.isError), false);
       markRunEvent(state, 'streaming', runId, event, source);
       setActivityStatus('streaming');
       tui.requestRender();
@@ -223,29 +202,19 @@ export function dispatchAgentSSE(
     }
     case 'error': {
       const errorContent = formatAgentRunErrorForDisplay(String(data.content ?? 'Unknown error'));
-      const finalText = assembler.finalize(runId, state.showThinking);
-      chatLog.finalizeAssistant(finalText || '', runId, {
-        stopReason: 'error',
-        errorMessage: errorContent,
-      });
-      onAssistantFinalized?.(finalText || errorContent, { errorMessage: errorContent });
-      const completedRunId = runId;
+      const message = errorAssistantMessage(errorContent);
+      chatLog.finalizeAssistant(message, runId);
+      onAssistantFinalized?.(message, { errorMessage: errorContent });
       state.activeRunId = null;
-      markRunIdleAfterCompletion(state, completedRunId, event, source);
+      markRunIdleAfterCompletion(state, runId, event, source);
       setActivityStatus('idle');
       onRunEnded?.();
       tui.requestRender();
       break;
     }
-    case 'result': {
-      const finalText = assembler.finalize(runId, state.showThinking);
-      if (finalText) {
-        chatLog.finalizeAssistant(finalText, runId);
-        onAssistantFinalized?.(finalText);
-      }
-      const completedRunId = runId;
+    case 'agent_end': {
       state.activeRunId = null;
-      markRunIdleAfterCompletion(state, completedRunId, event, source);
+      markRunIdleAfterCompletion(state, runId, event, source);
       setActivityStatus('idle');
       onRunEnded?.();
       tui.requestRender();

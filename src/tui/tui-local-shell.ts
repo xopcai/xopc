@@ -133,6 +133,16 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
       return;
     }
 
+    let cwd: string;
+    try {
+      cwd = getCwd();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      deps.chatLog.addSystem(`[local] workspace error: ${errorMessage}`);
+      deps.tui.requestRender();
+      return;
+    }
+
     if (
       inheritStdio &&
       deps.runWithInheritedStdio &&
@@ -145,7 +155,7 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
           await new Promise<void>((resolve, reject) => {
             const child = spawnCommand(cmd, {
               shell: true,
-              cwd: getCwd(),
+              cwd,
               env: { ...env, XOPC_SHELL: 'tui-local' },
               stdio: 'inherit',
             });
@@ -190,7 +200,7 @@ export function createLocalShellRunner(deps: LocalShellDeps) {
     await new Promise<void>((resolve) => {
       const child = spawnCommand(cmd, {
         shell: true,
-        cwd: getCwd(),
+        cwd,
         env: { ...env, XOPC_SHELL: 'tui-local' },
       });
 

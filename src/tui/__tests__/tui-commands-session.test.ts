@@ -10,7 +10,6 @@ import {
 } from '../tui-command-formatters.js';
 import { XopcKeybindingsManager } from '../tui-keybindings-file.js';
 import { createInitialState } from '../tui-types.js';
-import { StreamAssembler } from '../stream-assembler.js';
 
 function makeHandler(overrides: Partial<Parameters<typeof createTuiCommandHandler>[0]> = {}) {
   const state = createInitialState('agent:main:main');
@@ -27,7 +26,6 @@ function makeHandler(overrides: Partial<Parameters<typeof createTuiCommandHandle
     state,
     chatLog,
     tui,
-    assembler: new StreamAssembler(),
     isLocalMode: true,
     abortActive,
     sendMessage,

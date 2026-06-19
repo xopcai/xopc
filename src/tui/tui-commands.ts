@@ -8,6 +8,7 @@ import type {
   TuiShareRequest,
   TuiSessionStats,
   TuiSessionItem,
+  TuiStartupResources,
   TuiTranscriptTreeEntry,
 } from './tui-backend.js';
 import type { ChatLog } from './components/chat-log.js';
@@ -17,7 +18,6 @@ import {
   type TuiHotkeyExtensionShortcut,
 } from './format-tui-hotkeys.js';
 import { getTuiKeybindingsPath } from './tui-keybindings-file.js';
-import type { StreamAssembler } from './stream-assembler.js';
 import type { TuiState } from './tui-types.js';
 import { createWorkflowCatalog } from '../agent/workflow/catalog.js';
 import {
@@ -42,6 +42,7 @@ import type { ProjectTrustStoreEntry } from '../project-trust/trust-store.js';
 import { providerSupportsOAuth } from '../providers/index.js';
 
 import { rewriteUnknownSlashAsWorkflow } from './tui-workflow-slash.js';
+import { formatTuiStartupText } from './tui-startup-text.js';
 
 interface SlashCommandDef {
   name: string;
@@ -196,31 +197,18 @@ export function formatTuiStartText(
   state: TuiState,
   isLocal: boolean,
   keybindings?: KeybindingsManager,
+  resources?: TuiStartupResources,
 ): string {
-  const lines = [
-    'xopc TUI',
-    '',
-    `Session: ${state.currentSessionKey}`,
-    `Mode: ${isLocal ? 'local embedded' : 'gateway'}`,
-    `Model: ${formatModelLabel(state)}`,
-    '',
-    'Useful commands:',
-    '  /help — Show all commands and shortcuts',
-    '  /resume — Open session picker',
-    '  /models — List available models',
-    '  /settings — Open TUI settings',
-    '  /export — Export current session',
-    '',
-    'Shortcuts:',
-    `  ${keyLabel(keybindings, 'app.interrupt', 'Escape')} — Abort active run`,
-    `  ${keyLabel(keybindings, 'app.model.cycleForward', 'Ctrl+P')} — Next model`,
-    `  ${keyLabel(keybindings, 'app.session.resume', 'Ctrl+Shift+P')} — Session picker`,
-  ];
-  return lines.join('\n');
+  return formatTuiStartupText({
+    state,
+    isLocal,
+    keybindings,
+    resources,
+    expanded: true,
+  });
 }
 
 import {
-  formatModelLabel,
   formatTuiConfigInfo,
   formatTuiContextInfo,
   formatTuiLoginInfo,
@@ -248,7 +236,6 @@ export type CommandHandlerDeps = {
   state: TuiState;
   chatLog: ChatLog;
   tui: TUI;
-  assembler: StreamAssembler;
   isLocalMode: boolean;
   abortActive: () => Promise<void>;
   sendMessage: (text: string) => void;
@@ -277,6 +264,7 @@ export type CommandHandlerDeps = {
   switchModel?: (modelRef: string) => void | Promise<void>;
   listSessions?: () => TuiSessionItem[] | Promise<TuiSessionItem[]>;
   getSessionStats?: () => TuiSessionStats | Promise<TuiSessionStats>;
+  getStartupResources?: () => TuiStartupResources | undefined;
   loadTranscriptTree?: () => TuiTranscriptTreeEntry[] | Promise<TuiTranscriptTreeEntry[]>;
   exportSession?: (request: TuiExportRequest) => void | Promise<void>;
   importSession?: (request: TuiImportRequest) => void | Promise<void>;
@@ -320,7 +308,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
     state,
     chatLog,
     tui,
-    assembler,
     isLocalMode,
     abortActive,
     sendMessage,
@@ -340,7 +327,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
       await resetSession();
       chatLog.addSystem(`session ${state.currentSessionKey} reset`);
     } else {
-      assembler.clear();
       chatLog.clearAll();
       state.messageFollowUpQueue.length = 0;
       state.steeringQueue.length = 0;
@@ -361,7 +347,7 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         tui.requestRender();
         return;
       case 'start':
-        chatLog.addSystem(formatTuiStartText(state, isLocalMode, keybindings));
+        chatLog.addSystem(formatTuiStartText(state, isLocalMode, keybindings, deps.getStartupResources?.()));
         tui.requestRender();
         return;
       case 'hotkeys':
@@ -801,7 +787,6 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
               await setSession(uniqueKey);
               chatLog.addSystem(`new session: ${state.currentSessionKey}`);
             } else {
-              assembler.clear();
               chatLog.clearAll();
               state.messageFollowUpQueue.length = 0;
               state.steeringQueue.length = 0;

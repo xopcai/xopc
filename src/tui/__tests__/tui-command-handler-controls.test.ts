@@ -20,7 +20,6 @@ describe('tui command handler controls', () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {
@@ -62,7 +61,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {},
@@ -117,7 +115,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {
@@ -160,7 +157,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {
@@ -202,7 +198,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {},
@@ -238,7 +233,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {},
@@ -292,7 +286,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {
@@ -355,7 +348,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {
@@ -454,7 +446,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {
@@ -490,7 +481,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {
@@ -532,7 +522,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {
@@ -570,7 +559,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {
@@ -601,7 +589,6 @@ it('handles thinking command through native TUI controls', async () => {
         setToolsExpanded: () => {},
       } as never,
       tui: { requestRender: () => {} } as never,
-      assembler: { clear: () => {} } as never,
       isLocalMode: true,
       abortActive: async () => {},
       sendMessage: () => {
