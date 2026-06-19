@@ -16,6 +16,7 @@ import type {
   TuiShareResult,
   TuiSessionStats,
   TuiSessionItem,
+  TuiStartupResources,
   TuiTranscriptTreeEntry,
 } from '../tui-backend.js';
 import type { SessionInfo } from '../tui-types.js';
@@ -103,9 +104,9 @@ export class GatewaySseBackend implements TuiBackend {
     const signal = this.chatAbort.signal;
     const runId = crypto.randomUUID();
 
-    // Match EmbeddedBackend: set activeRunId before any token/tool events so TUI state stays on one
+    // Match EmbeddedBackend: set activeRunId before any message/tool events so TUI state stays on one
     // runId (avoids assistant under "default" and tools under the real uuid).
-    this.onEvent?.({ event: 'status', data: { status: 'started', runId }, source: 'agent-response' });
+    this.onEvent?.({ event: 'agent_start', data: { runId }, source: 'agent-response' });
 
     // Fire-and-forget: run the HTTP request + SSE consumption in background
     // so the TUI event loop stays responsive for keyboard input.
@@ -156,17 +157,24 @@ export class GatewaySseBackend implements TuiBackend {
           const json = (await res.json()) as { ok?: boolean; payload?: { content?: string } };
           if (json.ok && json.payload?.content) {
             this.onEvent?.({
-              event: 'token',
-              data: { content: json.payload.content },
+              event: 'message_end',
+              data: {
+                runId,
+                message: {
+                  role: 'assistant',
+                  content: [{ type: 'text', text: json.payload.content }],
+                  timestamp: Date.now(),
+                },
+              },
               source: 'agent-response',
             });
-            this.onEvent?.({ event: 'result', data: { ok: true }, source: 'agent-response' });
+            this.onEvent?.({ event: 'agent_end', data: { runId }, source: 'agent-response' });
           }
         }
       } catch (error) {
         if (signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        this.onEvent?.({ event: 'error', data: { content: errorMessage }, source: 'agent-response' });
+        this.onEvent?.({ event: 'error', data: { runId, content: errorMessage }, source: 'agent-response' });
       }
     })();
 
@@ -178,8 +186,8 @@ export class GatewaySseBackend implements TuiBackend {
     this.chatAbort = new AbortController();
     const signal = this.chatAbort.signal;
     this.onEvent?.({
-      event: 'status',
-      data: { status: 'resuming', runId: opts.runId },
+      event: 'agent_start',
+      data: { runId: opts.runId },
       source: 'agent-resume',
     });
 
@@ -222,7 +230,7 @@ export class GatewaySseBackend implements TuiBackend {
       } catch (error) {
         if (signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        this.onEvent?.({ event: 'error', data: { content: errorMessage }, source: 'agent-resume' });
+        this.onEvent?.({ event: 'error', data: { runId: opts.runId, content: errorMessage }, source: 'agent-resume' });
       }
     })();
 
@@ -259,6 +267,29 @@ export class GatewaySseBackend implements TuiBackend {
   }
 
   // ── REST helpers ──
+
+  async getStartupResources(sessionKey: string): Promise<TuiStartupResources> {
+    const empty: TuiStartupResources = { context: [], skills: [], workflows: [], connectors: [] };
+    try {
+      const res = await gatewayFetch(
+        this.baseUrl,
+        `/api/tui/startup-resources?sessionKey=${encodeURIComponent(sessionKey)}`,
+        this.token,
+      );
+      if (!res.ok) return empty;
+      const json = (await res.json()) as { payload?: Partial<TuiStartupResources> };
+      return {
+        context: Array.isArray(json.payload?.context) ? json.payload.context : [],
+        skills: Array.isArray(json.payload?.skills) ? json.payload.skills : [],
+        workflows: Array.isArray(json.payload?.workflows) ? json.payload.workflows : [],
+        connectors: Array.isArray(json.payload?.connectors) ? json.payload.connectors : [],
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn({ err: error, sessionKey, errorMessage }, `Failed to load startup resources: ${errorMessage}`);
+      return empty;
+    }
+  }
 
   async loadHistory(opts: {
     sessionKey: string;
@@ -400,6 +431,8 @@ export class GatewaySseBackend implements TuiBackend {
             thinkingLevel?: string;
             reasoningLevel?: string;
             verboseLevel?: string;
+            effectiveWorkspacePath?: string;
+            workingDirectoryLocked?: boolean;
           };
         };
         const p = json.payload;
@@ -420,6 +453,12 @@ export class GatewaySseBackend implements TuiBackend {
         }
         if (p?.verboseLevel && typeof p.verboseLevel === 'string') {
           out.verboseLevel = p.verboseLevel;
+        }
+        if (p?.effectiveWorkspacePath && typeof p.effectiveWorkspacePath === 'string') {
+          out.effectiveWorkspacePath = p.effectiveWorkspacePath;
+        }
+        if (typeof p?.workingDirectoryLocked === 'boolean') {
+          out.workingDirectoryLocked = p.workingDirectoryLocked;
         }
       }
 
@@ -773,12 +812,16 @@ export class GatewaySseBackend implements TuiBackend {
   }
 
   async patchSession(sessionKey: string, patch: Record<string, unknown>): Promise<void> {
-    await gatewayFetch(
+    const res = await gatewayFetch(
       this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sessionKey)}`,
+      `/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`,
       this.token,
       { method: 'PATCH', body: JSON.stringify(patch) },
-    ).catch(() => {});
+    );
+    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    if (!res.ok || json.ok === false) {
+      throw new Error(json.error ?? `Session config patch failed (${res.status})`);
+    }
   }
 
   async renameSession(sessionKey: string, name: string): Promise<{ ok: boolean }> {

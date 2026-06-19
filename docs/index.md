@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: The AI Workstation
-  tagline: The AI workstation that grows with you — a local-first personal AI for one-person companies. CLI, desktop, browser, mobile, and your favorite messengers. Bring your own keys. Extend without forking.
+  text: Goal Loop OS
+  tagline: Goal Loop OS for long-term AI work: a local-first, multi-surface agent system with workflow automation, multi-agent routing, and extensible extensions/skills.
   image:
     src: /logo.svg
     alt: xopc
@@ -27,7 +27,7 @@ features:
     details: "The same assistant — terminal, browser, desktop app, phone, and messengers. No sync needed. It's all one system."
     link: /channels
   - title: 🧩 Grows with you. Never outgrow it.
-    details: "xopc skills install · xopc extensions install — teach new domains, add tools, channels, and UI panels without forking core."
+    details: "xopc skills install · xopc extensions install — extend capabilities with reusable modules, tools, channels, and UI panels without forking core."
     link: /extensions
   - title: ⏰ Cron scheduling
     details: Summaries, reminders, and reports on a timetable. Your agent runs while you focus elsewhere.

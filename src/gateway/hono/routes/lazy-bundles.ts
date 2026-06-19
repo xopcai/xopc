@@ -262,6 +262,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'tui',
+    match: (path) => startsWithAny(path, ['/api/tui']),
+    load: async () => {
+      const { registerTuiRoutes } = await import('./tui.js');
+      return { register: registerTuiRoutes };
+    },
+  },
+  {
     id: 'mcp',
     match: (path) => startsWithAny(path, ['/api/mcp']),
     load: async () => {

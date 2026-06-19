@@ -10,6 +10,7 @@ import {
   type OverlayHandle,
   type OverlayOptions,
 } from '@earendil-works/pi-tui';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
@@ -39,20 +40,20 @@ import type {
   TuiInboundAttachment,
   TuiModelChoice,
   TuiShareRequest,
+  TuiStartupResources,
 } from './tui-backend.js';
 import { EmbeddedBackend } from './backends/embedded-backend.js';
 import { GatewaySseBackend } from './backends/gateway-sse-backend.js';
 import {
-  clearPendingToolCallIds,
+  clearSeenStreamEvents,
   clearSeenStreamEventsForRun,
   DEFAULT_STREAMING_WATCHDOG_MS,
-  dispatchAgentSSE,
+  dispatchAgentEvent,
 } from './tui-agent-events.js';
 import { ChatLog } from './components/chat-log.js';
 import { CustomEditor } from './components/custom-editor.js';
 import { TuiBottomBar } from './components/tui-bottom-bar.js';
 import { TuiHeader } from './components/tui-header.js';
-import { StreamAssembler } from './stream-assembler.js';
 import {
   createTuiCommandHandler,
   getSlashCommands,
@@ -110,6 +111,7 @@ import { createSessionActions } from './tui-session-actions.js';
 import { createInitialState, type TuiOptions, type TuiResult, type TuiState } from './tui-types.js';
 import { createXopcTuiKeybindingsManager } from './tui-keybindings-file.js';
 import { formatKeyIds } from './format-tui-hotkeys.js';
+import { formatTuiStartupText } from './tui-startup-text.js';
 import {
   filterModelsForCycle,
   loadScopedModelRefs,
@@ -272,6 +274,43 @@ function formatTuiResumeCommand(opts: TuiOptions, sessionKey: string): string {
   return parts.join(' ');
 }
 
+function isLoopbackGatewayUrl(rawUrl: string): boolean {
+  try {
+    const hostname = new URL(rawUrl).hostname.toLowerCase();
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
+function resolveStartupWorkingDirectory(opts: TuiOptions, isLocalMode: boolean): string | undefined {
+  const explicit = opts.workdir?.trim();
+  if (explicit) {
+    return resolve(explicit);
+  }
+  if (opts.useStartupCwd === false || opts.session?.trim()) {
+    return undefined;
+  }
+  const gatewayUrl = opts.url ?? 'http://localhost:3120';
+  if (isLocalMode || isLoopbackGatewayUrl(gatewayUrl)) {
+    return process.cwd();
+  }
+  return undefined;
+}
+
+function assistantMessagePlainText(message: AgentMessage): string {
+  const content = (message as { content?: unknown }).content;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((block) => {
+      if (!block || typeof block !== 'object') return '';
+      const rec = block as { type?: unknown; text?: unknown };
+      return rec.type === 'text' && typeof rec.text === 'string' ? rec.text : '';
+    })
+    .join('');
+}
+
 export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const stdioFilter = installTuiStdioFilter();
   const restoreStdio = () => stdioFilter.restore();
@@ -317,7 +356,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   state.showThinking = tuiSettings.showThinking;
   state.toolsExpanded = tuiSettings.toolsExpanded;
   let pendingImageAttachments: TuiInboundAttachment[] = [];
-  const assembler = new StreamAssembler();
   const pendingNextTurnCustomMessages: string[] = [];
   let lastRetryMessageText: string | null = null;
   let setExtensionLabel = (_entryId: string, _label: string | undefined): void => {};
@@ -344,6 +382,11 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const client: TuiBackend = isLocalMode
     ? new EmbeddedBackend({ extensionRegistry })
     : new GatewaySseBackend({ url: opts.url ?? 'http://localhost:3120', token: opts.token });
+  const startupWorkingDirectory = resolveStartupWorkingDirectory(opts, isLocalMode);
+  if (startupWorkingDirectory) {
+    state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
+  }
+  let startupWorkingDirectoryApplied = false;
 
   const keybindings = createXopcTuiKeybindingsManager();
   setKeybindings(keybindings);
@@ -382,6 +425,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     () => formatKeyIds(keybindings, 'app.message.dequeue', { capitalize: true }),
   );
   const chatLog = new ChatLog(keybindings);
+  let startupResources: TuiStartupResources | undefined;
+  let startupCardShown = false;
   chatLog.setShowThinking(state.showThinking);
   chatLog.setToolsExpanded(state.toolsExpanded);
   chatLog.setToolImageOptions({
@@ -1181,7 +1226,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     chatLog,
     tui,
     state,
-    assembler,
     resolveSessionKey,
     updateHeader,
     updateFooter,
@@ -1206,6 +1250,37 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     updateEditorBorderColor();
   };
 
+  const refreshStartupResources = async () => {
+    if (!client.getStartupResources) return;
+    try {
+      startupResources = await client.getStartupResources(state.currentSessionKey);
+    } catch {
+      startupResources = undefined;
+    }
+  };
+
+  const showStartupCardOnce = () => {
+    if (startupCardShown) return;
+    startupCardShown = true;
+    chatLog.addSystem(formatTuiStartupText({
+      state,
+      isLocal: isLocalMode,
+      keybindings,
+      resources: startupResources,
+      expanded: false,
+    }));
+  };
+
+  const applyStartupWorkingDirectory = async () => {
+    if (startupWorkingDirectoryApplied || !startupWorkingDirectory) return;
+    startupWorkingDirectoryApplied = true;
+    await client.patchSession(state.currentSessionKey, {
+      workingDirectory: startupWorkingDirectory,
+    });
+    state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
+    state.sessionInfo.workingDirectoryLocked = true;
+  };
+
   let streamRecoveryPromise: Promise<void> | null = null;
   const recoverActiveRunFromHistory = (reason: string) => {
     if (!state.activeRunId) return Promise.resolve();
@@ -1219,7 +1294,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         await loadSessionHistory();
         await refreshSessionInfoWithBorder();
         if (state.activeRunId === runId) {
-          assembler.drop(runId);
           clearSeenStreamEventsForRun(runId);
           if (client.resumeChat) {
             const resumed = await client.resumeChat({ sessionKey: state.currentSessionKey, runId });
@@ -1759,8 +1833,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     try {
       const result = await client.compactSession(state.currentSessionKey, { force: true, instructions });
       if (result.compacted) {
-        assembler.clear();
-        clearPendingToolCallIds();
+        clearSeenStreamEvents();
         state.historyLoaded = false;
         await loadSessionHistory();
         chatLog.addCompactionSummary(result);
@@ -1880,7 +1953,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     state,
     chatLog,
     tui,
-    assembler,
     isLocalMode,
     abortActive,
     sendMessage,
@@ -1900,6 +1972,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     switchModel: switchCurrentModel,
     listSessions: () => client.listSessions(),
     getSessionStats: () => client.getSessionStats(state.currentSessionKey),
+    getStartupResources: () => startupResources,
     loadTranscriptTree: () => client.loadTranscriptTree(state.currentSessionKey),
     exportSession: exportCurrentSession,
     importSession: importSessionExport,
@@ -1909,7 +1982,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     extensionSlashCommands: extensionRuntime.slashCommands,
     extensionShortcuts: extensionRuntime.shortcuts,
     currentAgentId,
-    setSession,
+    setSession: async (rawKey) => {
+      await setSession(rawKey);
+      await refreshStartupResources();
+    },
     resetSession: resetCurrentSession,
     projectTrust: {
       cwd: process.cwd(),
@@ -1941,6 +2017,13 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       await withTuiSuspended(tui, work);
     },
     keybindings,
+    getCwd: () => {
+      const workspace = state.sessionInfo.effectiveWorkspacePath?.trim();
+      if (!workspace) {
+        throw new Error('Workspace is not loaded yet.');
+      }
+      return workspace;
+    },
     onComplete: async (entry) => {
       await client
         .appendBashExecution(state.currentSessionKey, entry)
@@ -2184,12 +2267,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     tuiSettings = { ...tuiSettings, showThinking: state.showThinking };
     saveTuiSettings(tuiSettings);
     chatLog.setShowThinking(state.showThinking);
-    if (state.activeRunId) {
-      const display = assembler.getDisplayText(state.activeRunId, state.showThinking);
-      if (display) {
-        chatLog.updateAssistant(display, state.activeRunId);
-      }
-    }
     updateFooter();
     tui.requestRender();
   });
@@ -2261,17 +2338,16 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   client.onEvent = (evt: TuiEvent) => {
     const data = (evt.data ?? {}) as Record<string, unknown>;
-    dispatchAgentSSE(
+    dispatchAgentEvent(
       evt.event,
       data,
       state,
       chatLog,
-      assembler,
       tui,
       setActivityStatus,
       touchStreamingActivity,
       onAgentRunEnded,
-      (text) => sessionSnapshot.appendMessage('assistant', text),
+      (message) => sessionSnapshot.appendMessage('assistant', assistantMessagePlainText(message)),
       evt.source,
     );
   };
@@ -2281,9 +2357,17 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     setConnectionStatus(isLocalMode ? 'local ready' : 'gateway connected');
     touchStreamingActivity();
     void (async () => {
+      try {
+        await applyStartupWorkingDirectory();
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        chatLog.addSystem(`Working directory not changed: ${errorMessage}`);
+      }
       await refreshSessionInfoWithBorder();
       await refreshModelChoices();
+      await refreshStartupResources();
       await loadSessionHistory({ merge: true });
+      showStartupCardOnce();
       if (state.activeRunId) {
         void recoverActiveRunFromHistory('broadcast reconnect');
       }

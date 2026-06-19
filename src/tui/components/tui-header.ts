@@ -12,11 +12,11 @@ export type TuiHeaderModel = {
 };
 
 const COMPACT_HINTS =
-  'Esc abort · Ctrl+C×2 exit · /settings · /help · /hotkeys · Ctrl+Shift+P sessions';
+  'escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o tools';
 
 const EXPANDED_HINTS = [
-  'Enter steer while busy · Alt+Enter follow-up · Ctrl+P models · Ctrl+L picker',
-  '! / !! local shell · Ctrl+V paste image · /compact compact history',
+  'Press /start to show full startup help and loaded resources.',
+  'xopc can use skills, workflows, connectors, and project context.',
 ];
 
 /** Collapsible startup header (pi-style hints subset). */
@@ -45,24 +45,16 @@ export class TuiHeader implements Component {
 
   private getCompactHints(): string {
     if (!this.keybindings) return COMPACT_HINTS;
-    const abort = formatKeyIds(this.keybindings, 'app.interrupt', { capitalize: true });
-    const exit = formatKeyIds(this.keybindings, 'app.clear', { capitalize: true });
-    const sessions = formatKeyIds(this.keybindings, 'app.session.resume', { capitalize: true });
-    return `${abort} abort · ${exit}×2 exit · /settings · /help · /hotkeys · ${sessions} sessions`;
+    const interrupt = formatKeyIds(this.keybindings, 'app.interrupt', { capitalize: false });
+    const clear = formatKeyIds(this.keybindings, 'app.clear', { capitalize: false });
+    const exit = formatKeyIds(this.keybindings, 'app.exit', { capitalize: false });
+    const tools = formatKeyIds(this.keybindings, 'app.tools.expand', { capitalize: false });
+    return `${interrupt} interrupt · ${clear}/${exit} clear/exit · / commands · ! bash · ${tools} tools`;
   }
 
   private getExpandedHints(): string[] {
     if (!this.keybindings) return EXPANDED_HINTS;
-    const followUp = formatKeyIds(this.keybindings, 'app.message.followUp', { capitalize: true });
-    const models = formatKeyIds(this.keybindings, 'app.model.cycleForward', { capitalize: true });
-    const picker = formatKeyIds(this.keybindings, 'app.model.select', { capitalize: true });
-    const pasteImage = formatKeyIds(this.keybindings, 'app.clipboard.pasteImage', {
-      capitalize: true,
-    });
-    return [
-      `Enter steer while busy · ${followUp} follow-up · ${models} models · ${picker} picker`,
-      `! / !! local shell · ${pasteImage} paste image · /compact compact history`,
-    ];
+    return EXPANDED_HINTS;
   }
 
   render(width: number): string[] {

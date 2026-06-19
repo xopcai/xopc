@@ -1,51 +1,41 @@
-import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import type { ImageContent } from '@earendil-works/pi-ai';
-import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
-import type { Model, Api } from '@earendil-works/pi-ai';
+import type { AgentMessage, AgentToolResult, ThinkingLevel } from '@earendil-works/pi-agent-core';
+import type { AssistantMessageEvent, Model, Api, ImageContent } from '@earendil-works/pi-ai';
 
 import type { SessionStore } from '../../session/store.js';
 
 export type EmbeddedStreamEvent =
-  | { type: 'token'; content: string }
-  | { type: 'thinking'; content?: string; status?: string }
+  | { type: 'agent_start'; runId?: string }
+  | { type: 'agent_end'; runId?: string }
+  | { type: 'message_start'; runId?: string; message: AgentMessage }
   | {
-      type: 'tool_start';
+      type: 'message_update';
+      runId?: string;
+      message: AgentMessage;
+      assistantMessageEvent?: AssistantMessageEvent;
+    }
+  | { type: 'message_end'; runId?: string; message: AgentMessage }
+  | { type: 'tool_execution_start'; runId?: string; toolCallId: string; toolName: string; args: unknown }
+  | {
+      type: 'tool_execution_update';
+      runId?: string;
+      toolCallId: string;
       toolName: string;
-      toolCallId?: string;
-      args?: Record<string, unknown>;
+      args: unknown;
+      partialResult: AgentToolResult<any>;
     }
   | {
-      type: 'tool_end';
+      type: 'tool_execution_end';
+      runId?: string;
+      toolCallId: string;
       toolName: string;
-      toolCallId?: string;
-      isError?: boolean;
-      result?: unknown;
+      result: AgentToolResult<any>;
+      isError: boolean;
     }
-  | {
-      /**
-       * Mid-execution structured update for a tool whose `partialResult` is a
-       * {@link AgentToolResult}-shaped object (i.e. it carries `details`).
-       *
-       * The runtime only emits this when the upstream tool actually called
-       * `onUpdate` with structured details — so single-shot tools (read/write,
-       * shell, …) never produce this event, but the workflow tool — which
-       * pushes a fresh `WorkflowSnapshot` on every phase / agent state change
-       * — produces a steady stream that the client wires straight into the
-       * WorkflowCard's live progress tree.
-       *
-       * Carries `details` only (no `content` text) to keep the SSE payload
-       * tight — the final `tool_end` event still ships the full envelope.
-       */
-      type: 'tool_update';
-      toolName: string;
-      toolCallId?: string;
-      details: unknown;
-    }
-  | { type: 'message_end' }
-  | { type: 'progress'; stage: string; message: string }
-  | { type: 'error'; content: string }
+  | { type: 'progress'; runId?: string; stage: string; message: string }
+  | { type: 'error'; runId?: string; content: string }
   | {
       type: 'compaction';
+      runId?: string;
       status: 'started' | 'completed' | 'skipped';
       tokensBefore?: number;
       tokensAfter?: number;

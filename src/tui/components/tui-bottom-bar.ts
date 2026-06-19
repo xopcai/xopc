@@ -120,10 +120,14 @@ export class TuiBottomBar implements Component {
     }
 
     const state = this.getState();
-    const cwdRaw = process.cwd();
-    const cwd = shortenPath(cwdRaw);
-    const branch = getGitBranchCached(cwdRaw);
-    const cwdWithBranch = branch ? `${cwd} (${branch})` : cwd;
+    const cwdRaw = state.sessionInfo.effectiveWorkspacePath;
+    const cwdWithBranch = cwdRaw
+      ? (() => {
+          const cwd = shortenPath(cwdRaw);
+          const branch = getGitBranchCached(cwdRaw);
+          return branch ? `${cwd} (${branch})` : cwd;
+        })()
+      : 'workspace loading';
     const sessionLine = state.sessionInfo.displayName ?? `session ${state.currentSessionKey}`;
     const pwdLine = truncateToWidth(
       theme.dim(`${cwdWithBranch} · ${sessionLine}`),

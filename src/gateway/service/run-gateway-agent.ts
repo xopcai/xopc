@@ -25,6 +25,7 @@ export type RunGatewayAgentYield = {
   status?: string;
   runId?: string;
   seq?: number;
+  [key: string]: unknown;
 };
 
 export type RunGatewayAgentDeps = {
@@ -99,7 +100,7 @@ export async function *runGatewayAgent(
     runAbortControllers.set(runId, new AbortController());
   }
 
-  const statusEvent = { type: 'status', status: 'accepted', runId };
+  const statusEvent = { type: 'agent_start', runId };
   const relayedStatusEvent =
     channel === 'webchat' ? (runRelay.publish(runId, statusEvent) ?? statusEvent) : statusEvent;
   yield relayedStatusEvent;
@@ -142,7 +143,7 @@ export async function *runGatewayAgent(
           sessionKey,
           prepared,
           thinking,
-          { signal: mergedSignal },
+          { signal: mergedSignal, runId },
         );
 
         for await (const event of eventStream) {
@@ -179,7 +180,7 @@ export async function *runGatewayAgent(
         );
         streamError = em;
         const errorContent = formatAgentRunErrorForClient(streamError);
-        const errorEvent = { type: 'error', content: errorContent };
+        const errorEvent = { type: 'error', runId, content: errorContent };
         const relayedErrorEvent = runRelay.publish(runId, errorEvent) ?? errorEvent;
         emit('agent.stream', { sessionKey, event: relayedErrorEvent });
         runRelay.complete(runId);
@@ -221,9 +222,21 @@ export async function *runGatewayAgent(
       ...(correlationMeta ? { metadata: correlationMeta } : {}),
     });
 
-    yield { type: 'token', content: 'Processing...\n' };
+    const processingMessage = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Processing...\n' }],
+      timestamp: Date.now(),
+    };
+    yield { type: 'message_start', runId, message: processingMessage };
+    yield { type: 'message_update', runId, message: processingMessage };
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    yield { type: 'token', content: 'Done\n' };
+    const doneMessage = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Done\n' }],
+      timestamp: Date.now(),
+    };
+    yield { type: 'message_update', runId, message: doneMessage };
+    yield { type: 'message_end', runId, message: doneMessage };
     return { status: 'ok', summary: 'Message processed' };
   } catch (error) {
     const em = error instanceof Error ? error.message : String(error);

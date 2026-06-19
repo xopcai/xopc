@@ -95,7 +95,7 @@ export class GatewayAgentRunner {
     thinking?: string,
     runOptions?: { signal?: AbortSignal; clientCreatedAtMs?: number },
   ): AsyncGenerator<
-    { type: string; content?: string; status?: string; runId?: string },
+    { type: string; [key: string]: unknown },
     { status: string; summary: string },
     unknown
   > {
@@ -120,7 +120,7 @@ export class GatewayAgentRunner {
 
     let step = await iter.next();
     while (!step.done) {
-      yield step.value as { type: string; content?: string; status?: string; runId?: string };
+      yield step.value as { type: string; [key: string]: unknown };
       step = await iter.next();
     }
     return step.value;

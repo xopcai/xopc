@@ -107,6 +107,13 @@ export interface TuiShareResult {
   routingHint?: string;
 }
 
+export interface TuiStartupResources {
+  context: string[];
+  skills: string[];
+  workflows: string[];
+  connectors: string[];
+}
+
 /** Read-only transcript tree row for current-session navigation/inspection. */
 export interface TuiTranscriptTreeEntry {
   id: string;
@@ -162,6 +169,9 @@ export interface TuiBackend {
 
   /** Inject steering text into an active run (tool-boundary delivery). */
   steerChat(opts: { sessionKey: string; message: string }): Promise<{ ok: boolean }>;
+
+  /** Load startup resources shown in `/start` and initial help. */
+  getStartupResources?(sessionKey: string): Promise<TuiStartupResources>;
 
   /** Load chat history for a session. */
   loadHistory(opts: {

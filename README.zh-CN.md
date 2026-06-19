@@ -6,9 +6,8 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>与你一起成长的 AI 工作站。</strong><br />
-  可自托管的本地优先 AI——为一人公司准备；终端、浏览器、桌面、手机与 IM，一处配置，同一个大脑。<br />
-  自带钥匙，无需 fork 即可扩展。
+  <strong>Goal Loop OS，目标持续循环。</strong><br />
+  本地优先 · 多端联动 · 工作流 + 多 Agent + 可扩展。
 </p>
 
 <p align="center">
@@ -56,6 +55,8 @@ iex (irm https://xopc.ai/install.ps1)
 ```
 
 安装脚本会自动识别系统、在需要时安装 **Node.js ≥ 22**，并安装 **`@xopcai/xopc`**。国内镜像：bash 加 `--cn`，PowerShell 加 `-Cn`，或指定 `--registry https://registry.npmmirror.com`。
+
+> **30 秒启动：** 这是官网推荐路径，覆盖 macOS、Linux 与 Windows 的环境初始化。
 
 ### 配置并开聊
 
@@ -106,6 +107,8 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 
 ## 为什么选 xopc
 
+- 🔁 **循环驱动，而非一次性对话** — 把目标、行动与反馈持续连起来，目标不会因为对话断点就停住。
+
 - 🏠 **你的机器** — 配置与数据在 **`~/.xopc/`**，无强制云端、无意外账单。
 - 🔑 **自带钥匙** — OpenAI、Anthropic、Google、DeepSeek、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端本地可混用，一行配置切换目录模型。详见 **[模型](https://xopcai.github.io/xopc/zh/models)**。
 - 📱 **一个大脑，处处可用** — 终端、浏览器、桌面、手机、IM 同一套助手，无需另做同步。
@@ -122,7 +125,7 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | 脚本、最小终端环境 |
 | **网页** | `xopc gateway` → 打开控制台地址 | 聊天、设置、日志 |
 | **桌面** | [GitHub Releases](#desktop-app) 或 `pnpm run electron:build` | 原生应用（macOS / Windows / Linux） |
-| **手机** | 与网关配对（[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 外出也能用 |
+| **手机** | 与网关配对（[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在路上也能继续推进循环 |
 | **即时通讯** | 配置 `channels.*` 并启动网关 | Telegram、微信、飞书/Lark |
 
 ---

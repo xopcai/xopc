@@ -22,7 +22,7 @@ export interface ApiError {
 
 export interface SSEEvent {
   id: string;
-  event: string;        // e.g. "status", "token", "error", "result", "config.reload"
+  event: string;        // e.g. "agent_start", "message_update", "tool_execution_end", "config.reload"
   data: unknown;
 }
 

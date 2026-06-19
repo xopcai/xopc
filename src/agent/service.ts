@@ -90,6 +90,19 @@ export type { AgentServiceConfig, AgentContext, StreamHandle } from './service.t
 
 const log = createLogger('AgentService');
 
+function assistantMessageText(message: AgentMessage): string {
+  const content = (message as { content?: unknown }).content;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((block) => {
+      if (!block || typeof block !== 'object') return '';
+      const rec = block as { type?: unknown; text?: unknown };
+      return rec.type === 'text' && typeof rec.text === 'string' ? rec.text : '';
+    })
+    .join('');
+}
+
 export class AgentService {
   /**
    * Persistent transcript + session-metadata store. Public so the gateway/TUI
@@ -104,8 +117,6 @@ export class AgentService {
   private channelManagerRef: ChannelManager | null = null;
   private bus: MessageBus;
   private config: AgentServiceConfig;
-  private embeddedReasoningBySession = new Map<string, string>();
-
   private sessionTracker: SessionTracker;
   private modelManager: ModelManager;
   private progressManager: ProgressFeedbackManager;
@@ -318,15 +329,9 @@ export class AgentService {
         if (!ctx || ctx.sessionKey !== sessionKey) {
           return;
         }
-        if (event.type === 'token') {
-          const next = this.sessionState.appendEmbeddedStreamText(sessionKey, event.content);
+        if (event.type === 'message_update' && event.message.role === 'assistant') {
+          const next = assistantMessageText(event.message);
           this.streamManager.update(next);
-        }
-        if (event.type === 'thinking' && event.content) {
-          const prev = this.embeddedReasoningBySession.get(sessionKey) ?? '';
-          const next = prev + event.content;
-          this.embeddedReasoningBySession.set(sessionKey, next);
-          this.streamManager.updateReasoning(next);
         }
       },
       onEmbeddedTurnComplete: (sessionKey, text) => {
@@ -334,7 +339,6 @@ export class AgentService {
           this.sessionState.setLastAssistantText(sessionKey, text);
         }
         this.sessionState.clearEmbeddedStreamText(sessionKey);
-        this.embeddedReasoningBySession.delete(sessionKey);
       },
     });
 
@@ -694,7 +698,10 @@ export class AgentService {
       log.warn({ err, errorMessage: em }, `Dreaming cron reconcile failed: ${em}`);
     });
     log.debug('Agent service started');
-    await this.inboundLoop.start();
+    void this.inboundLoop.start().catch((err) => {
+      const em = err instanceof Error ? err.message : String(err);
+      log.error({ err, errorMessage: em }, `Inbound loop failed: ${em}`);
+    });
   }
 
   stop(): Promise<void> {

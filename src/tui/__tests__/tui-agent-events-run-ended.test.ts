@@ -1,80 +1,38 @@
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearPendingToolCallIds, dispatchAgentSSE } from '../tui-agent-events.js';
+import { clearSeenStreamEvents, dispatchAgentEvent } from '../tui-agent-events.js';
 import { createInitialState } from '../tui-types.js';
 
+function assistantMessage(text: string, extra: Partial<AgentMessage> = {}): AgentMessage {
+  return {
+    role: 'assistant',
+    content: [{ type: 'text', text }],
+    timestamp: 1,
+    ...extra,
+  } as AgentMessage;
+}
+
 beforeEach(() => {
-  clearPendingToolCallIds();
+  clearSeenStreamEvents();
 });
 
-describe('dispatchAgentSSE onRunEnded', () => {
-  it('invokes onRunEnded when result clears the run', () => {
-    const state = createInitialState('sk');
-    state.activeRunId = 'r1';
-    const onRunEnded = vi.fn();
-    const setActivityStatus = vi.fn();
-    dispatchAgentSSE(
-      'result',
-      {},
-      state,
-      { finalizeAssistant: vi.fn() } as never,
-      { finalize: vi.fn(() => null) } as never,
-      { requestRender: vi.fn() } as never,
-      setActivityStatus,
-      undefined,
-      onRunEnded,
-    );
-    expect(onRunEnded).toHaveBeenCalledTimes(1);
-    expect(state.activeRunId).toBeNull();
-    expect(state.runStatus.phase).toBe('idle');
-    expect(state.runStatus.runId).toBeNull();
-  });
-
-  it('invokes onRunEnded on error', () => {
-    const state = createInitialState('sk');
-    state.activeRunId = 'r1';
-    const onRunEnded = vi.fn();
-    const chatLog = {
-      finalizeAssistant: vi.fn(),
-      addSystem: vi.fn(),
-    };
-    dispatchAgentSSE(
-      'error',
-      { content: 'fail' },
-      state,
-      chatLog as never,
-      { finalize: vi.fn(() => null) } as never,
-      { requestRender: vi.fn() } as never,
-      vi.fn(),
-      undefined,
-      onRunEnded,
-    );
-    expect(onRunEnded).toHaveBeenCalledTimes(1);
-    expect(state.activeRunId).toBeNull();
-    expect(state.runStatus.phase).toBe('idle');
-    expect(chatLog.finalizeAssistant).toHaveBeenCalledWith('', 'r1', {
-      stopReason: 'error',
-      errorMessage: 'fail',
-    });
-    expect(chatLog.addSystem).not.toHaveBeenCalled();
-  });
-});
-
-describe('dispatchAgentSSE run status', () => {
-  it('tracks direct stream ownership from status and token events', () => {
+describe('dispatchAgentEvent lifecycle', () => {
+  it('tracks structured assistant messages through agent_start and message_update', () => {
     const state = createInitialState('sk');
     const chatLog = {
+      startAssistant: vi.fn(),
       updateAssistant: vi.fn(),
+      finalizeAssistant: vi.fn(),
     };
     const tui = { requestRender: vi.fn() };
     const setActivityStatus = vi.fn();
 
-    dispatchAgentSSE(
-      'status',
+    dispatchAgentEvent(
+      'agent_start',
       { runId: 'r1' },
       state,
       chatLog as never,
-      { ingestToken: vi.fn(() => 'hi') } as never,
       tui as never,
       setActivityStatus,
       undefined,
@@ -82,12 +40,11 @@ describe('dispatchAgentSSE run status', () => {
       undefined,
       'agent-response',
     );
-    dispatchAgentSSE(
-      'token',
-      { content: 'hi' },
+    dispatchAgentEvent(
+      'message_update',
+      { runId: 'r1', message: assistantMessage('hello') },
       state,
       chatLog as never,
-      { ingestToken: vi.fn(() => 'hi') } as never,
       tui as never,
       setActivityStatus,
       undefined,
@@ -101,11 +58,63 @@ describe('dispatchAgentSSE run status', () => {
     expect(state.runStatus.runId).toBe('r1');
     expect(state.runStatus.directStreamRunId).toBe('r1');
     expect(state.runStatus.source).toBe('agent-response');
-    expect(state.runStatus.lastEvent).toBe('token');
-    expect(state.runStatus.lastActivityAt).toEqual(expect.any(Number));
+    expect(state.runStatus.lastEvent).toBe('message_update');
+    expect(chatLog.updateAssistant).toHaveBeenCalledWith(assistantMessage('hello'), 'r1');
   });
 
-  it('skips duplicate broadcast stream events for a run owned by the direct response stream', () => {
+  it('finalizes the run on agent_end', () => {
+    const state = createInitialState('sk');
+    state.activeRunId = 'r1';
+    const onRunEnded = vi.fn();
+    const setActivityStatus = vi.fn();
+
+    dispatchAgentEvent(
+      'agent_end',
+      { runId: 'r1' },
+      state,
+      {} as never,
+      { requestRender: vi.fn() } as never,
+      setActivityStatus,
+      undefined,
+      onRunEnded,
+    );
+
+    expect(onRunEnded).toHaveBeenCalledTimes(1);
+    expect(state.activeRunId).toBeNull();
+    expect(state.runStatus.phase).toBe('idle');
+    expect(state.runStatus.runId).toBeNull();
+  });
+
+  it('renders structured errors as assistant messages and ends the run', () => {
+    const state = createInitialState('sk');
+    state.activeRunId = 'r1';
+    const onRunEnded = vi.fn();
+    const chatLog = {
+      finalizeAssistant: vi.fn(),
+    };
+
+    dispatchAgentEvent(
+      'error',
+      { runId: 'r1', content: 'fail' },
+      state,
+      chatLog as never,
+      { requestRender: vi.fn() } as never,
+      vi.fn(),
+      undefined,
+      onRunEnded,
+    );
+
+    expect(onRunEnded).toHaveBeenCalledTimes(1);
+    expect(state.activeRunId).toBeNull();
+    expect(chatLog.finalizeAssistant).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'assistant', stopReason: 'error', errorMessage: 'fail' }),
+      'r1',
+    );
+  });
+});
+
+describe('dispatchAgentEvent de-duplication', () => {
+  it('skips duplicate broadcast stream events for a run owned by the direct stream', () => {
     const state = createInitialState('sk');
     state.activeRunId = 'r1';
     state.runStatus = {
@@ -118,261 +127,134 @@ describe('dispatchAgentSSE run status', () => {
     const chatLog = {
       updateAssistant: vi.fn(),
     };
-    const assembler = {
-      ingestToken: vi.fn(() => 'duplicate'),
-    };
-    const tui = { requestRender: vi.fn() };
-    const setActivityStatus = vi.fn();
-    const touchStreamingActivity = vi.fn();
 
-    dispatchAgentSSE(
-      'token',
-      { content: 'duplicate' },
+    dispatchAgentEvent(
+      'message_update',
+      { runId: 'r1', message: assistantMessage('duplicate') },
       state,
       chatLog as never,
-      assembler as never,
-      tui as never,
-      setActivityStatus,
-      touchStreamingActivity,
+      { requestRender: vi.fn() } as never,
+      vi.fn(),
+      vi.fn(),
       undefined,
       undefined,
       'broadcast',
     );
 
-    expect(assembler.ingestToken).not.toHaveBeenCalled();
     expect(chatLog.updateAssistant).not.toHaveBeenCalled();
-    expect(setActivityStatus).not.toHaveBeenCalled();
-    expect(touchStreamingActivity).not.toHaveBeenCalled();
     expect(state.runStatus.source).toBe('agent-response');
   });
 
-  it('skips duplicate sequenced stream events across sources', () => {
+  it('skips duplicate sequenced events across sources', () => {
     const state = createInitialState('sk');
     state.activeRunId = 'r1';
     const chatLog = {
       updateAssistant: vi.fn(),
     };
-    const assembler = {
-      ingestToken: vi.fn((runId: string, token: string) => token),
-    };
-    const tui = { requestRender: vi.fn() };
-    const setActivityStatus = vi.fn();
 
-    dispatchAgentSSE(
-      'token',
-      { runId: 'r1', seq: 2, content: 'hello' },
+    dispatchAgentEvent(
+      'message_update',
+      { runId: 'r1', seq: 2, message: assistantMessage('hello') },
       state,
       chatLog as never,
-      assembler as never,
-      tui as never,
-      setActivityStatus,
+      { requestRender: vi.fn() } as never,
+      vi.fn(),
       undefined,
       undefined,
       undefined,
       'agent-response',
     );
-    dispatchAgentSSE(
-      'token',
-      { runId: 'r1', seq: 2, content: 'hello' },
+    dispatchAgentEvent(
+      'message_update',
+      { runId: 'r1', seq: 2, message: assistantMessage('hello') },
       state,
       chatLog as never,
-      assembler as never,
-      tui as never,
-      setActivityStatus,
+      { requestRender: vi.fn() } as never,
+      vi.fn(),
       undefined,
       undefined,
       undefined,
       'broadcast',
     );
 
-    expect(assembler.ingestToken).toHaveBeenCalledTimes(1);
     expect(chatLog.updateAssistant).toHaveBeenCalledTimes(1);
-  });
-
-  it('allows broadcast stream events when no direct response stream owns the run', () => {
-    const state = createInitialState('sk');
-    state.activeRunId = 'r1';
-    const chatLog = {
-      updateAssistant: vi.fn(),
-    };
-    const assembler = {
-      ingestToken: vi.fn(() => 'from broadcast'),
-    };
-    const tui = { requestRender: vi.fn() };
-    const setActivityStatus = vi.fn();
-
-    dispatchAgentSSE(
-      'token',
-      { content: 'from broadcast' },
-      state,
-      chatLog as never,
-      assembler as never,
-      tui as never,
-      setActivityStatus,
-      undefined,
-      undefined,
-      undefined,
-      'broadcast',
-    );
-
-    expect(assembler.ingestToken).toHaveBeenCalledWith('r1', 'from broadcast', false);
-    expect(chatLog.updateAssistant).toHaveBeenCalledWith('from broadcast', 'r1');
-    expect(state.runStatus.source).toBe('broadcast');
-  });
-
-  it('treats resumed agent streams as direct stream owners', () => {
-    const state = createInitialState('sk');
-    const chatLog = {
-      updateAssistant: vi.fn(),
-    };
-    const assembler = {
-      ingestToken: vi.fn(() => 'resumed'),
-    };
-    const tui = { requestRender: vi.fn() };
-    const setActivityStatus = vi.fn();
-
-    dispatchAgentSSE(
-      'status',
-      { runId: 'r1' },
-      state,
-      chatLog as never,
-      assembler as never,
-      tui as never,
-      setActivityStatus,
-      undefined,
-      undefined,
-      undefined,
-      'agent-resume',
-    );
-    dispatchAgentSSE(
-      'token',
-      { content: 'resumed' },
-      state,
-      chatLog as never,
-      assembler as never,
-      tui as never,
-      setActivityStatus,
-      undefined,
-      undefined,
-      undefined,
-      'agent-resume',
-    );
-
-    expect(state.runStatus.directStreamRunId).toBe('r1');
-    expect(state.runStatus.source).toBe('agent-resume');
-    expect(assembler.ingestToken).toHaveBeenCalledWith('r1', 'resumed', false);
   });
 });
 
-describe('dispatchAgentSSE tool updates', () => {
-  it('routes tool_update details to the pending tool when toolCallId is omitted', () => {
+describe('dispatchAgentEvent tool execution', () => {
+  it('starts tools from assistant tool-call blocks and marks args complete on message_end', () => {
     const state = createInitialState('sk');
     state.activeRunId = 'r1';
+    const message = assistantMessage('', {
+      content: [{ type: 'toolCall', id: 'tc1', name: 'read_file', arguments: { path: 'a.ts' } }],
+    });
     const chatLog = {
+      updateAssistant: vi.fn(),
       startTool: vi.fn(),
-      updateToolDetails: vi.fn(),
-      updateToolArgs: vi.fn(),
+      markToolArgsComplete: vi.fn(),
+      finalizeAssistant: vi.fn(),
     };
-    const tui = { requestRender: vi.fn() };
-    const setActivityStatus = vi.fn();
 
-    dispatchAgentSSE(
-      'tool_start',
-      { toolName: 'workflow', toolCallId: 'tc1', args: {} },
+    dispatchAgentEvent(
+      'message_update',
+      { runId: 'r1', message },
       state,
       chatLog as never,
-      {} as never,
-      tui as never,
-      setActivityStatus,
+      { requestRender: vi.fn() } as never,
+      vi.fn(),
     );
-    dispatchAgentSSE(
-      'tool_update',
-      { toolName: 'workflow', details: { phase: 'build' } },
+    dispatchAgentEvent(
+      'message_end',
+      { runId: 'r1', message },
       state,
       chatLog as never,
-      {} as never,
-      tui as never,
-      setActivityStatus,
+      { requestRender: vi.fn() } as never,
+      vi.fn(),
     );
 
-    expect(chatLog.updateToolDetails).toHaveBeenCalledWith('tc1', { phase: 'build' });
+    expect(chatLog.startTool).toHaveBeenCalledWith('tc1', 'read_file', { path: 'a.ts' }, 'r1');
+    expect(chatLog.markToolArgsComplete).toHaveBeenCalledWith('tc1');
   });
 
-  it('routes streamed tool args updates to the pending tool', () => {
+  it('updates tool lifecycle from tool_execution events', () => {
     const state = createInitialState('sk');
     state.activeRunId = 'r1';
     const chatLog = {
       startTool: vi.fn(),
-      updateToolDetails: vi.fn(),
-      updateToolArgs: vi.fn(),
-    };
-    const tui = { requestRender: vi.fn() };
-    const setActivityStatus = vi.fn();
-
-    dispatchAgentSSE(
-      'tool_start',
-      { toolName: 'edit', toolCallId: 'tc1', args: { file: 'old.ts' } },
-      state,
-      chatLog as never,
-      {} as never,
-      tui as never,
-      setActivityStatus,
-    );
-    dispatchAgentSSE(
-      'tool_update',
-      { toolName: 'edit', args: { file: 'new.ts' }, details: { phase: 'args' } },
-      state,
-      chatLog as never,
-      {} as never,
-      tui as never,
-      setActivityStatus,
-    );
-
-    expect(chatLog.updateToolArgs).toHaveBeenCalledWith('tc1', { file: 'new.ts' });
-    expect(chatLog.updateToolDetails).toHaveBeenCalledWith('tc1', { phase: 'args' });
-  });
-
-  it('does not route omitted-id updates to a completed explicit-id tool', () => {
-    const state = createInitialState('sk');
-    state.activeRunId = 'r1';
-    const chatLog = {
-      startTool: vi.fn(),
+      markToolExecutionStarted: vi.fn(),
       updateToolResult: vi.fn(),
-      updateToolDetails: vi.fn(),
-      updateToolArgs: vi.fn(),
     };
-    const tui = { requestRender: vi.fn() };
-    const setActivityStatus = vi.fn();
+    const partialResult = { content: [{ type: 'text', text: 'running' }], details: { phase: 'run' } };
+    const finalResult = { content: [{ type: 'text', text: 'done' }], details: { phase: 'done' } };
 
-    dispatchAgentSSE(
-      'tool_start',
-      { toolName: 'workflow', toolCallId: 'tc1', args: {} },
+    dispatchAgentEvent(
+      'tool_execution_start',
+      { runId: 'r1', toolName: 'workflow', toolCallId: 'tc1', args: { step: 'build' } },
       state,
       chatLog as never,
-      {} as never,
-      tui as never,
-      setActivityStatus,
+      { requestRender: vi.fn() } as never,
+      vi.fn(),
     );
-    dispatchAgentSSE(
-      'tool_end',
-      { toolName: 'workflow', toolCallId: 'tc1', result: 'done' },
+    dispatchAgentEvent(
+      'tool_execution_update',
+      { runId: 'r1', toolName: 'workflow', toolCallId: 'tc1', args: {}, partialResult },
       state,
       chatLog as never,
-      {} as never,
-      tui as never,
-      setActivityStatus,
+      { requestRender: vi.fn() } as never,
+      vi.fn(),
     );
-    dispatchAgentSSE(
-      'tool_update',
-      { toolName: 'workflow', details: { phase: 'late' } },
+    dispatchAgentEvent(
+      'tool_execution_end',
+      { runId: 'r1', toolName: 'workflow', toolCallId: 'tc1', result: finalResult, isError: false },
       state,
       chatLog as never,
-      {} as never,
-      tui as never,
-      setActivityStatus,
+      { requestRender: vi.fn() } as never,
+      vi.fn(),
     );
 
-    expect(chatLog.updateToolResult).toHaveBeenCalledWith('tc1', 'done', false);
-    expect(chatLog.updateToolDetails).not.toHaveBeenCalledWith('tc1', { phase: 'late' });
+    expect(chatLog.startTool).toHaveBeenCalledWith('tc1', 'workflow', { step: 'build' }, 'r1');
+    expect(chatLog.markToolExecutionStarted).toHaveBeenCalledWith('tc1');
+    expect(chatLog.updateToolResult).toHaveBeenCalledWith('tc1', partialResult, false, true);
+    expect(chatLog.updateToolResult).toHaveBeenCalledWith('tc1', finalResult, false, false);
   });
 });

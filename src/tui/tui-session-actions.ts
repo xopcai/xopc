@@ -7,9 +7,8 @@ import {
   historyMessageKey,
 } from './chat-history.js';
 import type { ChatLog } from './components/chat-log.js';
-import { clearPendingToolCallIds } from './tui-agent-events.js';
+import { clearSeenStreamEvents } from './tui-agent-events.js';
 import type { TuiBackend } from './tui-backend.js';
-import type { StreamAssembler } from './stream-assembler.js';
 import type { TuiState } from './tui-types.js';
 import type { TuiSessionSnapshot } from './tui-session-snapshot.js';
 import {
@@ -23,7 +22,6 @@ export type SessionActionsContext = {
   chatLog: ChatLog;
   tui: TUI;
   state: TuiState;
-  assembler: StreamAssembler;
   resolveSessionKey: (raw?: string) => string;
   updateHeader: () => void;
   updateFooter: () => void;
@@ -39,7 +37,6 @@ export function createSessionActions(context: SessionActionsContext) {
     chatLog,
     tui,
     state,
-    assembler,
     resolveSessionKey,
     updateHeader,
     updateFooter,
@@ -79,9 +76,8 @@ export function createSessionActions(context: SessionActionsContext) {
   };
 
   const clearChatForSessionSwitch = () => {
-    assembler.clear();
     chatLog.clearAll();
-    clearPendingToolCallIds();
+    clearSeenStreamEvents();
     sessionSnapshot?.clear();
     lastHistoryKeys = [];
     resetRunStatus(state);
@@ -142,7 +138,6 @@ export function createSessionActions(context: SessionActionsContext) {
     const runId = state.activeRunId;
     markRunAborting(state, runId);
     state.activeRunId = null;
-    assembler.drop(runId);
     if (opts?.clearUi !== false) {
       chatLog.dropAssistant(runId);
     }

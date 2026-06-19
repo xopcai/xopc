@@ -393,7 +393,7 @@ export function formatTuiSessionListInfo(
 
 function sessionTreeGroup(session: TuiSessionItem): { agentId: string; root: string; leaf: string } {
   const parsed = parseAgentSessionKey(session.key);
-  const agentId = parsed?.agentId ?? 'legacy';
+  const agentId = parsed?.agentId ?? 'unknown';
   const rest = parsed?.rest ?? session.key;
   const parts = rest.split(':').filter(Boolean);
   const root = parts[0] ?? rest;
@@ -733,6 +733,7 @@ export function formatTuiConfigInfo(state: TuiState): string {
     `Thinking: ${formatMaybe(state.sessionInfo.thinkingLevel)}`,
     `Reasoning: ${formatMaybe(state.sessionInfo.reasoningLevel)}`,
     `Verbose: ${formatMaybe(state.sessionInfo.verboseLevel)}`,
+    `Workspace: ${formatMaybe(state.sessionInfo.effectiveWorkspacePath)}`,
     `Tools: ${state.toolsExpanded ? 'expanded' : 'collapsed'}`,
     `Thinking Display: ${state.showThinking ? 'on' : 'off'}`,
     `Scoped Models: ${scopedModels}`,
@@ -797,7 +798,7 @@ export function formatTuiTrustInfo(
     '',
     'Project trust gates project-local xopc resources and extension UI context.',
     '',
-    `Project: ${options.cwd ?? process.cwd()}`,
+    `Project: ${options.cwd ?? 'unknown'}`,
     `Project Resources: ${options.hasProjectResources === undefined ? 'unknown' : options.hasProjectResources ? 'detected' : 'none detected'}`,
     `Project Trust: ${projectTrustStatus}`,
     `Trust Store: ${options.projectTrustStorePath ?? '(default)'}`,

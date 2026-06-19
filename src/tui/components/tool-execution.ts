@@ -8,6 +8,7 @@ import {
   Text,
 } from '@earendil-works/pi-tui';
 import { basename, dirname } from 'node:path';
+import type { AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import { theme } from '../theme.js';
 import { formatKeyIds } from '../format-tui-hotkeys.js';
@@ -177,11 +178,12 @@ export class ToolExecutionComponent extends Container {
   private expanded = false;
   private isError = false;
   private isPartial = true;
+  private executionStarted = false;
 
-  constructor(toolName: string, args: unknown, options: ToolExecutionOptions = {}) {
+  constructor(toolName: string, toolCallId: string, args: unknown, options: ToolExecutionOptions = {}) {
     super();
     this.toolName = toolName;
-    this.toolCallId = options.toolCallId ?? toolName;
+    this.toolCallId = toolCallId;
     this.args = args;
     this.showImages = options.showImages ?? true;
     this.imageWidthCells = Math.max(1, Math.floor(options.imageWidthCells ?? 60));
@@ -201,6 +203,15 @@ export class ToolExecutionComponent extends Container {
 
   setArgs(args: unknown): void {
     this.args = args;
+    this.refresh();
+  }
+
+  markExecutionStarted(): void {
+    this.executionStarted = true;
+    this.refresh();
+  }
+
+  setArgsComplete(): void {
     this.argsComplete = true;
     this.refresh();
   }
@@ -210,13 +221,13 @@ export class ToolExecutionComponent extends Container {
     this.refresh();
   }
 
-  setResult(result: unknown, isError: boolean): void {
+  updateResult(result: AgentToolResult<any> | unknown, isPartial = false, isError = false): void {
     const parsed = parseTuiToolResult(result);
     this.resultText = sanitize(parsed.text);
     this.resultContent = parsed.envelope?.content;
     this.resultDetails = parsed.envelope?.details;
     this.isError = isError;
-    this.isPartial = false;
+    this.isPartial = isPartial;
     this.refresh();
   }
 
@@ -371,7 +382,7 @@ export class ToolExecutionComponent extends Container {
       lastComponent,
       state: this.rendererState,
       cwd: this.cwd,
-      executionStarted: true,
+      executionStarted: this.executionStarted,
       argsComplete: this.argsComplete,
       isError: this.isError,
       isPartial: this.isPartial,

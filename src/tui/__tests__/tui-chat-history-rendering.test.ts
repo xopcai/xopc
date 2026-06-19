@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import { appendHistoryToChatLog, historyKeysHaveAppendOnlyPrefix } from '../chat-history.js';
 import { ChatLog } from '../components/chat-log.js';
@@ -7,6 +8,15 @@ function stripAnsi(text: string): string {
   return text
     .replace(/][^]*/g, '')
     .replace(/[[0-9;]*m/g, '');
+}
+
+function assistantMessage(content: unknown, extra: Partial<AgentMessage> = {}): AgentMessage {
+  return {
+    role: 'assistant',
+    content,
+    timestamp: 1,
+    ...extra,
+  } as AgentMessage;
 }
 
 describe('history replay rendering', () => {
@@ -18,10 +28,10 @@ describe('history replay rendering', () => {
 
   it('renders assistant error state even when no tokens streamed', () => {
     const chatLog = new ChatLog();
-    chatLog.finalizeAssistant('', 'run-error', {
+    chatLog.finalizeAssistant(assistantMessage([], {
       stopReason: 'error',
       errorMessage: 'provider unavailable',
-    });
+    }), 'run-error');
 
     const rendered = stripAnsi(chatLog.render(100).join('\n'));
     expect(rendered).toContain('Error: provider unavailable');
@@ -29,10 +39,10 @@ describe('history replay rendering', () => {
 
   it('does not add assistant OSC 133 markers for runs with tool calls', () => {
     const chatLog = new ChatLog();
-    chatLog.startAssistant('calling tool', 'run-1');
+    chatLog.startAssistant(assistantMessage([{ type: 'text', text: 'calling tool' }]), 'run-1');
     chatLog.startTool('tool-1', 'read_file', { path: 'a.ts' }, 'run-1');
     chatLog.updateToolResult('tool-1', 'done', false);
-    chatLog.finalizeAssistant('done', 'run-1');
+    chatLog.finalizeAssistant(assistantMessage([{ type: 'text', text: 'done' }]), 'run-1');
 
     const rendered = chatLog.render(100).join('\n');
     expect(rendered).not.toContain('\x1b]133;A\x07');
@@ -42,7 +52,13 @@ describe('history replay rendering', () => {
 
   it('updates existing assistant rows when thinking display changes', () => {
     const chatLog = new ChatLog();
-    chatLog.finalizeAssistant('<thinking>\nprivate plan\n</thinking>\n\nanswer', 'run-1');
+    chatLog.finalizeAssistant(
+      assistantMessage([
+        { type: 'thinking', thinking: 'private plan' },
+        { type: 'text', text: 'answer' },
+      ]),
+      'run-1',
+    );
 
     expect(stripAnsi(chatLog.render(100).join('\n'))).toContain('private plan');
 
@@ -60,7 +76,10 @@ describe('history replay rendering', () => {
       [
         {
           role: 'assistant',
-          content: '<thinking>\nprivate plan\n</thinking>\n\nanswer',
+          content: [
+            { type: 'thinking', thinking: 'private plan' },
+            { type: 'text', text: 'answer' },
+          ],
         },
       ],
       false,

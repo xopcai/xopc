@@ -42,7 +42,7 @@ describe('tui run state transitions', () => {
 
   it('records completed runs without clearing direct ownership immediately', () => {
     const state = createInitialState('agent:main:main');
-    markRunEvent(state, 'streaming', 'run-1', 'token', 'agent-response', 1_000);
+    markRunEvent(state, 'streaming', 'run-1', 'message_update', 'agent-response', 1_000);
 
     markRunIdleAfterCompletion(state, 'run-1', 'result', 'agent-response', 2_000);
 
