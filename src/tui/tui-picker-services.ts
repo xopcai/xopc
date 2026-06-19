@@ -25,8 +25,9 @@ export type PickerServices = {
   openEditorSelector: (component: Component, focus?: Component) => () => void;
   refreshSessionInfo: () => Promise<void>;
   updateHeader: () => void;
-  state: Pick<TuiState, 'currentSessionKey' | 'sessionInfo'>;
+  state: Pick<TuiState, 'currentSessionKey' | 'sessionInfo' | 'activeRunId'>;
   setSessionKey: (key: string) => void;
+  switchAgentSession?: (sessionKey: string, agentId: string) => void | Promise<void>;
   clearChatForSessionSwitch: () => void;
   loadSessionHistory: () => Promise<void>;
   setEditorText: (text: string) => void;

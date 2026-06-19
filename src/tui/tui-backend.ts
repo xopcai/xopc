@@ -40,6 +40,13 @@ export interface TuiSessionItem {
   cwd?: string;
 }
 
+export interface TuiAgentInfo {
+  id: string;
+  source: 'configured' | 'builtin';
+  enabled: boolean;
+  displayName?: string;
+}
+
 /** Model choice for the selector overlay. */
 export interface TuiModelChoice {
   id: string;
@@ -187,6 +194,9 @@ export interface TuiBackend {
 
   /** List sessions. */
   listSessions(): Promise<TuiSessionItem[]>;
+
+  /** List agents available for TUI agent switching. */
+  listAgents(): Promise<TuiAgentInfo[]>;
 
   /** Fetch session info (model, tokens, thinking). */
   getSessionInfo(sessionKey: string): Promise<SessionInfo>;

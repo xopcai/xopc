@@ -6,7 +6,7 @@ import { SearchableSelectList } from './components/searchable-select-list.js';
 import { SessionSelector } from './components/session-selector.js';
 import { ThinkingSelector } from './components/thinking-selector.js';
 import { formatKeyIds } from './format-tui-hotkeys.js';
-import type { TuiSessionItem } from './tui-backend.js';
+import type { TuiAgentInfo, TuiSessionItem } from './tui-backend.js';
 import type { PickerServices } from './tui-picker-services.js';
 import { formatSessionPickerDescription } from './tui-session-format.js';
 import { searchableSelectListTheme, theme } from './theme.js';
@@ -23,6 +23,7 @@ import {
   normalizeThinkLevel,
   type ThinkLevel,
 } from '../agent/transcript/thinking-types.js';
+import { parseAgentSessionKey } from '../routing/agent-session-key.js';
 import {
   getProjectTrustOptions,
   hasTrustRequiringProjectResources,
@@ -77,6 +78,33 @@ export function formatProjectTrustOpenedHint(keybindings: KeybindingsManager): s
   const confirm = formatKeyIds(keybindings, 'tui.select.confirm', { capitalize: true });
   const cancel = formatKeyIds(keybindings, 'tui.select.cancel', { capitalize: true });
   return `Project trust (${nav} · ${confirm} select · ${cancel} close)`;
+}
+
+export function formatAgentPickerOpenedHint(keybindings: KeybindingsManager): string {
+  const nav = formatSelectNavigationHint(keybindings);
+  const confirm = formatKeyIds(keybindings, 'tui.select.confirm', { capitalize: true });
+  const cancel = formatKeyIds(keybindings, 'tui.select.cancel', { capitalize: true });
+  return `Switch agent (${nav} · ${confirm} select · ${cancel} close)`;
+}
+
+function agentSelectItems(agents: TuiAgentInfo[], currentAgentId?: string): SelectItem[] {
+  const current = currentAgentId?.trim().toLowerCase();
+  return [...agents]
+    .filter((agent) => agent.enabled !== false)
+    .sort((a, b) => {
+      if (a.id === current && b.id !== current) return -1;
+      if (b.id === current && a.id !== current) return 1;
+      if (a.id === 'coder' && b.id !== 'coder') return -1;
+      if (b.id === 'coder' && a.id !== 'coder') return 1;
+      return a.id.localeCompare(b.id);
+    })
+    .map((agent) => ({
+      label: agent.id === current ? `${agent.id} (current)` : agent.id,
+      value: agent.id,
+      description: agent.displayName
+        ? `${agent.source} · ${agent.displayName}`
+        : agent.source,
+    }));
 }
 
 export function formatSessionTreeOpenedHint(keybindings: KeybindingsManager): string {
@@ -153,6 +181,59 @@ export function sessionTreeSelectItems(
 
 
 
+
+export async function openAgentPickerOverlay(svc: PickerServices): Promise<void> {
+  const parsed = parseAgentSessionKey(svc.state.currentSessionKey);
+  if (!parsed) {
+    svc.chatLog.addSystem('Cannot switch agent: current session is not an agent session.');
+    svc.tui.requestRender();
+    return;
+  }
+  if (svc.state.activeRunId) {
+    svc.chatLog.addSystem('Cannot switch agent while a run is active. Abort first.');
+    svc.tui.requestRender();
+    return;
+  }
+  if (!svc.switchAgentSession) {
+    svc.chatLog.addSystem('Agent switching is not available in this mode.');
+    svc.tui.requestRender();
+    return;
+  }
+  const agents = await svc.client.listAgents();
+  const items = agentSelectItems(agents, parsed.agentId);
+  if (items.length === 0) {
+    svc.chatLog.addSystem('No agents available.');
+    svc.tui.requestRender();
+    return;
+  }
+  svc.chatLog.addSystem(theme.dim(formatAgentPickerOpenedHint(svc.keybindings)));
+  const list = new SearchableSelectList(items, Math.min(10, items.length), searchableSelectListTheme, {
+    searchPromptText: 'agent> ',
+  });
+  const closeSelector = svc.openEditorSelector(list, list);
+  list.onSelect = (item) => {
+    closeSelector();
+    const targetAgentId = item.value;
+    if (targetAgentId === parsed.agentId) {
+      svc.chatLog.addSystem(`Already using agent: ${targetAgentId}`);
+      svc.tui.requestRender();
+      return;
+    }
+    const targetSessionKey = `agent:${targetAgentId}:${parsed.rest}`;
+    void Promise.resolve(svc.switchAgentSession?.(targetSessionKey, targetAgentId))
+      .then(() => {
+        svc.chatLog.addSystem(`Switched to agent: ${targetAgentId}\nSession: ${targetSessionKey}`);
+      })
+      .catch((err: unknown) => {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        svc.chatLog.addSystem(`Agent switch failed: ${errorMessage}`);
+      })
+      .finally(() => svc.tui.requestRender());
+    svc.tui.requestRender();
+  };
+  list.onCancel = () => closeSelector();
+  svc.tui.requestRender();
+}
 
 /** Ctrl+Shift+P — session picker with rename/delete. */
 export async function openSessionPickerOverlay(svc: PickerServices): Promise<void> {
