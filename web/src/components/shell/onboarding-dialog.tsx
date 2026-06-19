@@ -1,4 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import { useNavigate } from 'react-router-dom';
 
 import { OnboardingCard } from '@/features/onboarding/onboarding-card';
 import { useNeedsModelSetup } from '@/features/onboarding/use-needs-model-setup';
@@ -16,6 +17,7 @@ export function OnboardingDialog() {
   const token = useGatewayStore((s) => s.token);
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
+  const navigate = useNavigate();
   const modelSetup = useNeedsModelSetup(Boolean(token));
 
   const open =
@@ -40,7 +42,10 @@ export function OnboardingDialog() {
           <Dialog.Title className="sr-only">{m.onboarding.title}</Dialog.Title>
           <Dialog.Description className="sr-only">{m.onboarding.subtitle}</Dialog.Description>
           <OnboardingCard
-            onComplete={() => modelSetup.refresh()}
+            onComplete={async () => {
+              await modelSetup.refresh();
+              navigate('/chat');
+            }}
             onDismiss={modelSetup.dismissPermanently}
           />
         </Dialog.Content>

@@ -53,6 +53,10 @@ type PaletteRow = { id: string; title: string; subtitle?: string };
 
 type PaletteLayer = 'main' | 'models' | 'agents';
 
+function buildChatModelPatch(modelRef: string) {
+  return { agents: { defaults: { models: { chat: { primary: modelRef } } } } };
+}
+
 function iconFor(hit: GlobalHit) {
   switch (hit.kind) {
     case 'extension':
@@ -505,7 +509,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
           await fetchJson(apiUrl('/api/config'), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ agents: { defaults: { model: row.id } } }),
+            body: JSON.stringify(buildChatModelPatch(row.id)),
           });
           void revalidateGatewayConfig();
           dispatchConfigReload();
@@ -628,7 +632,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
                             await fetchJson(apiUrl('/api/config'), {
                               method: 'PATCH',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify({ agents: { defaults: { model: row.id } } }),
+                              body: JSON.stringify(buildChatModelPatch(row.id)),
                             });
                             void revalidateGatewayConfig();
                             dispatchConfigReload();
