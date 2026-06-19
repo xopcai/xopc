@@ -1,13 +1,18 @@
 # Getting Started
 
-Install **xopc**, add at least one LLM provider key, then use the **CLI**, **TUI**, **gateway** (browser console), or the **Electron** app. This page walks through a first install from scratch.
+Install **xopc**, add at least one LLM provider key, then use the **CLI**, **TUI**, **gateway** (browser console), or the **Electron** app. This page is aligned with the website flow: quick bootstrap, onboarding, first chat.
 
 ## Up and running in 30 seconds
 
 Install the CLI, run onboarding, and start chatting in the terminal — three steps:
 
 ```bash
+# Homepage default path (macOS, Linux, WSL)
+curl -fsSL https://xopc.ai/install.sh | bash
+
+# Optional: npm path
 npm install -g @xopcai/xopc
+
 xopc onboard          # faster path: xopc onboard --quick
 xopc tui --local
 ```
@@ -23,19 +28,33 @@ The sections below cover gateway, channels, desktop, and troubleshooting in more
 ## 1. Prerequisites
 
 - **Node.js** **22** or newer (`node -v`)
-- **pnpm**: required only when [building from source](#option-2-build-from-source) in this repo (`pnpm --version`)
+- **pnpm**: required only when [building from source](#option-3-build-from-source) in this repo (`pnpm --version`)
 
 End users can install the published CLI with **`npm install -g @xopcai/xopc`** (or `pnpm add -g`).
 
 ## 2. Installation
 
-### Option 1: Install from npm (Recommended)
+### Option 1: Install from script (Recommended)
+
+```bash
+curl -fsSL https://xopc.ai/install.sh | bash
+```
+
+Windows:
+
+```powershell
+iex (irm https://xopc.ai/install.ps1)
+```
+
+Installer includes optional `--cn` (shell) and `-Cn` (PowerShell) flags and also installs Node.js 22+ if needed.
+
+### Option 2: Install from npm
 
 ```bash
 npm install -g @xopcai/xopc
 ```
 
-### Option 2: Build from source
+### Option 3: Build from source
 
 ```bash
 git clone https://github.com/xopcai/xopc.git

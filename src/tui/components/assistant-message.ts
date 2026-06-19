@@ -1,3 +1,4 @@
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { Container, Markdown, Spacer, Text } from '@earendil-works/pi-tui';
 
 import { markdownTheme, theme } from '../theme.js';
@@ -6,120 +7,72 @@ const OSC133_ZONE_START = '\x1b]133;A\x07';
 const OSC133_ZONE_END = '\x1b]133;B\x07';
 const OSC133_ZONE_FINAL = '\x1b]133;C\x07';
 
-export type AssistantRenderState = {
-  stopReason?: 'stop' | 'length' | 'toolUse' | 'error' | 'aborted' | string;
-  errorMessage?: string;
-};
-
 export type AssistantMessageOptions = {
   hideThinkingBlock?: boolean;
   hiddenThinkingLabel?: string;
 };
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
+type ContentBlock = Record<string, unknown> & { type?: string };
 
-function contentHasToolCall(content: string | unknown[]): boolean {
+function contentBlocks(message: AgentMessage | undefined): ContentBlock[] {
+  const content = (message as { content?: unknown } | undefined)?.content;
   if (typeof content === 'string') {
-    return false;
+    return content.trim() ? [{ type: 'text', text: content }] : [];
   }
-  return content.some(
-    (block) =>
-      isRecord(block) &&
-      (block.type === 'toolCall' || block.type === 'tool_use'),
-  );
+  return Array.isArray(content)
+    ? content.filter((block): block is ContentBlock => !!block && typeof block === 'object')
+    : [];
 }
 
-export function normalizeAssistantContent(content: string | unknown[]): string {
-  if (typeof content === 'string') {
-    return content;
-  }
-  const parts: string[] = [];
-  for (const block of content) {
-    if (typeof block === 'string') {
-      parts.push(block);
-      continue;
-    }
-    if (!isRecord(block)) continue;
-    const type = typeof block.type === 'string' ? block.type : '';
-    if (type === 'text' && typeof block.text === 'string') {
-      parts.push(block.text);
-    } else if (type === 'thinking' && typeof block.thinking === 'string') {
-      parts.push(`<thinking>\n${block.thinking}\n</thinking>`);
-    } else if (type === 'image' || type === 'image_url') {
-      parts.push('[image]');
-    }
-  }
-  return parts.filter(Boolean).join('\n\n');
+function blockText(block: ContentBlock, key: 'text' | 'thinking'): string {
+  const value = block[key];
+  return typeof value === 'string' ? value : '';
 }
 
-function splitThinkingBlock(text: string): { thinking?: string; content: string } {
-  const match = text.match(/^<thinking>\n?([\s\S]*?)\n?<\/thinking>\n*/);
-  if (!match) return { content: text };
+function hasToolCalls(message: AgentMessage | undefined): boolean {
+  return contentBlocks(message).some((block) => block.type === 'toolCall' || block.type === 'tool_use');
+}
+
+function stopReason(message: AgentMessage | undefined): string | undefined {
+  return (message as { stopReason?: string } | undefined)?.stopReason;
+}
+
+function errorMessage(message: AgentMessage | undefined): string | undefined {
+  return (message as { errorMessage?: string } | undefined)?.errorMessage;
+}
+
+export function createAssistantMessageFromText(text: string): AgentMessage {
   return {
-    thinking: match[1]?.trim(),
-    content: text.slice(match[0].length),
-  };
-}
-
-type AssistantContentSegment = { type: 'text' | 'thinking'; text: string };
-
-function splitAssistantContentSegments(text: string): AssistantContentSegment[] {
-  const segments: AssistantContentSegment[] = [];
-  const thinkingRegex = /<thinking>\n?([\s\S]*?)\n?<\/thinking>/g;
-  let cursor = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = thinkingRegex.exec(text)) !== null) {
-    const before = text.slice(cursor, match.index).trim();
-    if (before) {
-      segments.push({ type: 'text', text: before });
-    }
-    const thinking = (match[1] ?? '').trim();
-    if (thinking) {
-      segments.push({ type: 'thinking', text: thinking });
-    }
-    cursor = match.index + match[0].length;
-  }
-
-  const after = text.slice(cursor).trim();
-  if (after) {
-    segments.push({ type: 'text', text: after });
-  }
-  return segments;
+    role: 'assistant',
+    content: [{ type: 'text', text }],
+    timestamp: Date.now(),
+  } as AgentMessage;
 }
 
 export class AssistantMessageComponent extends Container {
   private readonly contentContainer = new Container();
-  private text = '';
-  private contentIncludesToolCall = false;
+  private message: AgentMessage | undefined;
   private linkedToolCall = false;
-  private renderState: AssistantRenderState = {};
   private hideThinkingBlock = false;
   private hiddenThinkingLabel = 'Thinking...';
 
-  constructor(text: string | unknown[], options: AssistantMessageOptions = {}) {
+  constructor(message?: AgentMessage, options: AssistantMessageOptions = {}) {
     super();
     this.hideThinkingBlock = options.hideThinkingBlock ?? false;
     this.hiddenThinkingLabel = options.hiddenThinkingLabel ?? 'Thinking...';
     this.addChild(this.contentContainer);
-    this.setText(text);
+    if (message) {
+      this.updateContent(message);
+    }
   }
 
-  setText(text: string | unknown[]): void {
-    this.contentIncludesToolCall = contentHasToolCall(text);
-    this.text = normalizeAssistantContent(text);
+  updateContent(message: AgentMessage): void {
+    this.message = message;
     this.refresh();
   }
 
-  setHasToolCalls(hasToolCalls: boolean): void {
-    this.linkedToolCall = hasToolCalls;
-    this.refresh();
-  }
-
-  setRenderState(state: AssistantRenderState): void {
-    this.renderState = state;
+  setHasToolCalls(hasTools: boolean): void {
+    this.linkedToolCall = hasTools;
     this.refresh();
   }
 
@@ -142,7 +95,7 @@ export class AssistantMessageComponent extends Container {
 
   override render(width: number): string[] {
     const lines = super.render(width);
-    if (this.contentIncludesToolCall || this.linkedToolCall || lines.length === 0) return lines;
+    if (hasToolCalls(this.message) || this.linkedToolCall || lines.length === 0) return lines;
     lines[0] = OSC133_ZONE_START + lines[0];
     lines[lines.length - 1] = OSC133_ZONE_END + OSC133_ZONE_FINAL + lines[lines.length - 1];
     return lines;
@@ -150,62 +103,69 @@ export class AssistantMessageComponent extends Container {
 
   private refresh(): void {
     this.contentContainer.clear();
-    const segments = splitAssistantContentSegments(this.text);
-    const hasVisibleContent = segments.length > 0;
-    const hasToolCalls = this.contentIncludesToolCall || this.linkedToolCall;
+    const blocks = contentBlocks(this.message);
+    const visibleBlocks = blocks.filter((block) => {
+      if (block.type === 'text') return blockText(block, 'text').trim().length > 0;
+      if (block.type === 'thinking') return blockText(block, 'thinking').trim().length > 0;
+      if (block.type === 'image' || block.type === 'image_url') return true;
+      return false;
+    });
+    const reason = stopReason(this.message);
     const hasErrorState =
-      !hasToolCalls &&
-      (this.renderState.stopReason === 'aborted' || this.renderState.stopReason === 'error');
-    if (!hasVisibleContent && !hasErrorState) return;
+      !hasToolCalls(this.message) && !this.linkedToolCall && (reason === 'aborted' || reason === 'error');
+    if (visibleBlocks.length === 0 && !hasErrorState) return;
 
     this.contentContainer.addChild(new Spacer(1));
-    for (let i = 0; i < segments.length; i++) {
-      const segment = segments[i]!;
-      if (i > 0) {
-        this.contentContainer.addChild(new Spacer(1));
-      }
-      if (segment.type === 'thinking') {
-        const thinkingText = this.hideThinkingBlock ? this.hiddenThinkingLabel : segment.text;
+    let renderedVisible = 0;
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i]!;
+      if (block.type === 'text') {
+        const text = blockText(block, 'text').trim();
+        if (!text) continue;
+        if (renderedVisible > 0) this.contentContainer.addChild(new Spacer(1));
         this.contentContainer.addChild(
           new Markdown(
-            thinkingText,
+            text,
             1,
             0,
             markdownTheme,
-            {
-              color: (line) => theme.dim(theme.italic(line)),
-            },
+            { color: (line) => theme.assistantText(line) },
             { preserveOrderedListMarkers: true },
           ),
         );
-      } else {
+        renderedVisible++;
+      } else if (block.type === 'thinking') {
+        const thinking = blockText(block, 'thinking').trim();
+        if (!thinking) continue;
+        if (renderedVisible > 0) this.contentContainer.addChild(new Spacer(1));
+        const text = this.hideThinkingBlock ? this.hiddenThinkingLabel : thinking;
         this.contentContainer.addChild(
           new Markdown(
-            segment.text,
+            text,
             1,
             0,
             markdownTheme,
-            {
-              color: (line) => theme.assistantText(line),
-            },
+            { color: (line) => theme.dim(theme.italic(line)) },
             { preserveOrderedListMarkers: true },
           ),
         );
+        renderedVisible++;
+      } else if (block.type === 'image' || block.type === 'image_url') {
+        if (renderedVisible > 0) this.contentContainer.addChild(new Spacer(1));
+        this.contentContainer.addChild(new Text(theme.dim('[image]'), 1, 0));
+        renderedVisible++;
       }
     }
+
     if (hasErrorState) {
-      if (hasVisibleContent) {
-        this.contentContainer.addChild(new Spacer(1));
-      }
+      if (renderedVisible > 0) this.contentContainer.addChild(new Spacer(1));
       const text =
-        this.renderState.stopReason === 'aborted'
-          ? this.renderState.errorMessage && this.renderState.errorMessage !== 'Request was aborted'
-            ? this.renderState.errorMessage
+        reason === 'aborted'
+          ? errorMessage(this.message) && errorMessage(this.message) !== 'Request was aborted'
+            ? errorMessage(this.message)!
             : 'Operation aborted'
-          : `Error: ${this.renderState.errorMessage || 'Unknown error'}`;
+          : `Error: ${errorMessage(this.message) || 'Unknown error'}`;
       this.contentContainer.addChild(new Text(theme.error(text), 1, 0));
     }
   }
 }
-
-export const __testing = { splitThinkingBlock, splitAssistantContentSegments };

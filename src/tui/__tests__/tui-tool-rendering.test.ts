@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Text } from '@earendil-works/pi-tui';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import {
   clearTuiToolRenderers,
@@ -17,6 +18,19 @@ import { XopcKeybindingsManager } from '../tui-keybindings-file.js';
 
 function stripAnsi(text: string): string {
   return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+function tool(
+  toolName: string,
+  args: unknown,
+  options?: ConstructorParameters<typeof ToolExecutionComponent>[3],
+  toolCallId = 'test-tool-call',
+): ToolExecutionComponent {
+  return new ToolExecutionComponent(toolName, toolCallId, args, options);
+}
+
+function assistantMessage(content: unknown): AgentMessage {
+  return { role: 'assistant', content, timestamp: 1 } as AgentMessage;
 }
 
 function makeToolRenderContext(overrides: Partial<Parameters<typeof renderToolWithExtensions>[0]> = {}) {
@@ -44,11 +58,11 @@ describe('tui tool renderers', () => {
     const chatLog = new ChatLog();
     expect(chatLog.getLastAssistantText()).toBe('');
 
-    chatLog.finalizeAssistant('first', 'r1');
+    chatLog.finalizeAssistant(assistantMessage([{ type: 'text', text: 'first' }]), 'r1');
     expect(chatLog.getLastAssistantText()).toBe('first');
 
-    chatLog.startAssistant('draft', 'r2');
-    chatLog.updateAssistant('final draft', 'r2');
+    chatLog.startAssistant(assistantMessage([{ type: 'text', text: 'draft' }]), 'r2');
+    chatLog.updateAssistant(assistantMessage([{ type: 'text', text: 'final draft' }]), 'r2');
     expect(chatLog.getLastAssistantText()).toBe('final draft');
 
     chatLog.clearAll();
@@ -121,7 +135,13 @@ describe('tui tool renderers', () => {
   it('updates hidden thinking labels on existing assistant messages', () => {
     const chatLog = new ChatLog();
     chatLog.setShowThinking(false);
-    chatLog.finalizeAssistant('<thinking>\nprivate plan\n</thinking>\n\nanswer', 'run-1');
+    chatLog.finalizeAssistant(
+      assistantMessage([
+        { type: 'thinking', thinking: 'private plan' },
+        { type: 'text', text: 'answer' },
+      ]),
+      'run-1',
+    );
     chatLog.setHiddenThinkingLabel('Planning...');
 
     const rendered = chatLog.render(100).join('\n');
@@ -153,13 +173,13 @@ describe('tui tool renderers', () => {
       `content:${ctx.content?.[0]?.text ?? ''}`,
     ]);
 
-    const component = new ToolExecutionComponent('workflow', {});
+    const component = tool('workflow', {});
     component.setPartialDetails({ phase: 'build', status: 'running' });
     expect(component.render(80).join('\n')).toContain(
       'details:{"phase":"build","status":"running"}',
     );
 
-    component.setResult(
+    component.updateResult(
       JSON.stringify({
         content: [{ type: 'text', text: 'done' }],
         details: { phase: 'build', status: 'done' },
@@ -190,21 +210,23 @@ describe('tui tool renderers', () => {
       ];
     });
 
-    const component = new ToolExecutionComponent(
+    const component = tool(
       'workflow',
       { step: 'build' },
-      { toolCallId: 'tc-42', cwd: '/repo', showImages: false },
+      { cwd: '/repo', showImages: false },
+      'tc-42',
     );
     expect(stripAnsi(component.render(100).join('\n'))).toContain('state:1');
 
-    component.setResult('done', false);
+    component.markExecutionStarted();
+    component.updateResult('done', false);
     const rendered = stripAnsi(component.render(100).join('\n'));
     expect(rendered).toContain('id:tc-42');
     expect(rendered).toContain('cwd:/repo');
     expect(rendered).toContain('showImages:false');
     expect(rendered).toContain('started:true');
     expect(rendered).toContain('argsComplete:true');
-    expect(rendered).toContain('state:2');
+    expect(rendered).toContain('state:3');
     expect(rendered).toContain('last:id:tc-42');
     clearTuiToolRenderers();
   });
@@ -219,10 +241,10 @@ describe('tui tool renderers', () => {
       return new Text(`component:${ctx.toolCallId}:${count}`, 0, 0);
     });
 
-    const component = new ToolExecutionComponent('workflow', {}, { toolCallId: 'tc-component' });
+    const component = tool('workflow', {}, undefined, 'tc-component');
     expect(stripAnsi(component.render(100).join('\n'))).toContain('component:tc-component:1');
 
-    component.setResult('done', false);
+    component.updateResult('done', false);
     const rendered = stripAnsi(component.render(100).join('\n'));
     expect(rendered).toContain('component:tc-component:2');
     expect(rendered).not.toContain('component:tc-component:1');
@@ -251,10 +273,11 @@ describe('tui tool renderers', () => {
       },
     });
 
-    const component = new ToolExecutionComponent(
+    const component = tool(
       'workflow',
       { step: 'build' },
-      { toolCallId: 'tc-structured' },
+      undefined,
+      'tc-structured',
     );
     expect(stripAnsi(component.render(100).join('\n'))).toContain(
       'call:tc-structured:{"step":"build"}',
@@ -262,7 +285,7 @@ describe('tui tool renderers', () => {
     expect(stripAnsi(component.render(100).join('\n'))).not.toContain('result:');
 
     component.setExpanded(true);
-    component.setResult(
+    component.updateResult(
       JSON.stringify({
         content: [{ type: 'text', text: 'done' }],
         details: { phase: 'build' },
@@ -293,7 +316,7 @@ describe('tui tool renderers', () => {
       return ['ready'];
     });
 
-    const component = new ToolExecutionComponent('workflow', {}, { toolCallId: 'tc-1' });
+    const component = tool('workflow', {}, undefined, 'tc-1');
     expect(stripAnsi(component.render(80).join('\n'))).toContain('pending');
     await vi.waitFor(() => {
       expect(stripAnsi(component.render(80).join('\n'))).toContain('ready');
@@ -307,8 +330,8 @@ describe('tui tool renderers', () => {
       throw new Error('renderer failed');
     });
 
-    const component = new ToolExecutionComponent('workflow', { step: 'build' });
-    component.setResult('completed', false);
+    const component = tool('workflow', { step: 'build' });
+    component.updateResult('completed', false);
 
     const rendered = stripAnsi(component.render(100).join('\n'));
     expect(rendered).toContain('workflow');
@@ -319,7 +342,7 @@ describe('tui tool renderers', () => {
   });
 
   it('renders unusual tool argument values without throwing', () => {
-    const component = new ToolExecutionComponent('debug_tool', {
+    const component = tool('debug_tool', {
       id: 1n,
       skip: undefined,
       callback: () => 'ok',
@@ -334,15 +357,15 @@ describe('tui tool renderers', () => {
   });
 
   it('renders compact labels for resource read tool arguments', () => {
-    const skill = new ToolExecutionComponent('read_file', {
+    const skill = tool('read_file', {
       path: '/workspace/attio/SKILL.md',
       offset: 120,
       limit: 210,
     });
-    const agents = new ToolExecutionComponent('read_file', {
+    const agents = tool('read_file', {
       file_path: '/workspace/AGENTS.md',
     });
-    const unrelated = new ToolExecutionComponent('share_file', {
+    const unrelated = tool('share_file', {
       path: '/workspace/attio/SKILL.md',
     });
 
@@ -409,8 +432,8 @@ describe('tui tool renderers', () => {
   });
 
   it('trims trailing blank display lines from expanded fallback output', () => {
-    const component = new ToolExecutionComponent('read_file', { path: 'notes.txt' });
-    component.setResult('one\ntwo\n\n', false);
+    const component = tool('read_file', { path: 'notes.txt' });
+    component.updateResult('one\ntwo\n\n', false);
     component.setExpanded(true);
 
     const rendered = component.render(80).join('\n');
@@ -421,8 +444,8 @@ describe('tui tool renderers', () => {
 
   it('keeps read tool results compact until expanded', () => {
     clearTuiToolRenderers();
-    const component = new ToolExecutionComponent('read_file', { path: 'long.txt' });
-    component.setResult('hidden content', false);
+    const component = tool('read_file', { path: 'long.txt' });
+    component.updateResult('hidden content', false);
 
     const collapsed = component.render(80).join('\n');
     expect(collapsed).toContain('read_file');
@@ -436,8 +459,8 @@ describe('tui tool renderers', () => {
 
   it('counts collapsed read summaries by rendered rows', () => {
     const keybindings = new XopcKeybindingsManager({ 'app.tools.expand': 'x' });
-    const component = new ToolExecutionComponent('read_file', { path: 'wrapped.txt' }, { keybindings });
-    component.setResult('x'.repeat(200), false);
+    const component = tool('read_file', { path: 'wrapped.txt' }, { keybindings });
+    component.updateResult('x'.repeat(200), false);
 
     const rendered = component.render(30).join('\n');
     expect(rendered).toMatch(/\d+ rows; X to expand/);
@@ -446,8 +469,8 @@ describe('tui tool renderers', () => {
 
   it('limits collapsed non-read tool output by rendered rows', () => {
     clearTuiToolRenderers();
-    const component = new ToolExecutionComponent('search', { query: 'needle' });
-    component.setResult('x'.repeat(200), false);
+    const component = tool('search', { query: 'needle' });
+    component.updateResult('x'.repeat(200), false);
 
     const rendered = component.render(30).join('\n');
     expect(rendered).toContain('preview');
@@ -456,16 +479,16 @@ describe('tui tool renderers', () => {
 
   it('uses configured tool expand key in collapsed tool hints', () => {
     const keybindings = new XopcKeybindingsManager({ 'app.tools.expand': 'x' });
-    const component = new ToolExecutionComponent('read_file', { path: 'long.txt' }, { keybindings });
-    component.setResult('line\n'.repeat(20), false);
+    const component = tool('read_file', { path: 'long.txt' }, { keybindings });
+    component.updateResult('line\n'.repeat(20), false);
 
     expect(component.render(80).join('\n')).toContain('X to expand');
   });
 
   it('shows expand hint when collapsed output is visually truncated by wrapping', () => {
     const keybindings = new XopcKeybindingsManager({ 'app.tools.expand': 'x' });
-    const component = new ToolExecutionComponent('search', { query: 'needle' }, { keybindings });
-    component.setResult('x'.repeat(200), false);
+    const component = tool('search', { query: 'needle' }, { keybindings });
+    component.updateResult('x'.repeat(200), false);
 
     expect(component.render(30).join('\n')).toContain('X to expand');
   });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { createXopcTuiKeybindingsManager } from '../tui-keybindings-file.js';
+import { createInitialState } from '../tui-types.js';
 import {
   formatTuiCompactionResult,
   formatTuiConfigInfo,
@@ -347,33 +348,35 @@ it('exposes native usage and context commands', () => {
   it('formats startup help text', () => {
     const text = formatTuiStartText(
       {
-        currentSessionKey: 'agent:main:main',
-        activeRunId: null,
+        ...createInitialState('agent:main:main'),
         isConnected: true,
-        activityStatus: 'idle',
         connectionStatus: 'ready',
         sessionInfo: { modelProvider: 'openai', model: 'gpt-5' },
-        autoMessageSent: false,
         historyLoaded: true,
-        toolsExpanded: false,
         showThinking: false,
-        lastCtrlCAt: 0,
-        exitRequested: false,
-        messageFollowUpQueue: [],
-        steeringQueue: [],
-        scopedModelRefs: null,
-        lastEscapeAt: 0,
-        progressMessage: null,
-        isCompacting: false,
-        compactionQueue: [],
       },
       true,
       createXopcTuiKeybindingsManager(),
+      {
+        context: ['AGENTS.md'],
+        skills: ['find-skills', 'frontend-design'],
+        workflows: ['audit_repo'],
+        connectors: ['github'],
+      },
     );
 
     expect(text).toContain('xopc TUI');
     expect(text).toContain('Session: agent:main:main');
     expect(text).toContain('Model: openai/gpt-5');
+    expect(text).toContain('Press /start to show full startup help and loaded resources.');
+    expect(text).toContain('[Context]');
+    expect(text).toContain('AGENTS.md');
+    expect(text).toContain('[Skills]');
+    expect(text).toContain('find-skills');
+    expect(text).toContain('[Workflows]');
+    expect(text).toContain('audit_repo');
+    expect(text).toContain('[Connectors]');
+    expect(text).toContain('github');
     expect(text).toContain('/export');
   });
 
@@ -451,7 +454,7 @@ it('exposes native usage and context commands', () => {
           forkedFromSessionKey: 'agent:main:main',
         },
         {
-          key: 'legacy-session',
+          key: 'plain-session',
           updatedAt: now,
         },
       ],
@@ -463,7 +466,7 @@ it('exposes native usage and context commands', () => {
     expect(text).toContain('* Main');
     expect(text).toContain('main/telegram');
     expect(text).toContain('forked from Main');
-    expect(text).toContain('legacy/legacy-session');
+    expect(text).toContain('unknown/plain-session');
   });
 
   it('formats a transcript tree', () => {

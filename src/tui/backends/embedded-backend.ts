@@ -27,6 +27,7 @@ import type { SessionInfo } from '../tui-types.js';
 import { sessionMetadataToTuiItem } from '../tui-session-format.js';
 import { computeTuiSessionStats } from '../tui-session-stats.js';
 import { buildTuiTranscriptTree, transcriptTreeEntryIdToRowNumber } from '../tui-transcript-tree.js';
+import { collectTuiStartupResources } from '../tui-startup-resources.js';
 
 const log = createLogger('TUI:Embedded');
 
@@ -63,13 +64,15 @@ export class EmbeddedBackend implements TuiBackend {
     const modelId = config.agents?.defaults?.models?.chat?.primary;
 
     this.agent = new AgentService(this.bus, {
-      workspace: workspace ?? process.cwd(),
+      workspace,
       model: modelId,
       config,
       extensionRegistry: this.opts?.extensionRegistry,
     });
 
-    this.agent.start().catch((err) => {
+    this.agent.start().then(() => {
+      this.onConnected?.();
+    }).catch((err) => {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.error({ err, errorMessage }, `Embedded agent failed: ${errorMessage}`);
       this.onDisconnected?.(errorMessage);
@@ -77,9 +80,6 @@ export class EmbeddedBackend implements TuiBackend {
 
     // Process outbound messages in background
     this.processOutbound();
-
-    // Signal ready
-    queueMicrotask(() => this.onConnected?.());
   }
 
   stop(): void {
@@ -96,6 +96,10 @@ export class EmbeddedBackend implements TuiBackend {
     return signal && !signal.aborted ? signal : undefined;
   }
 
+  async getStartupResources(sessionKey: string) {
+    return collectTuiStartupResources(loadConfig(), sessionKey);
+  }
+
   async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {
     if (!this.agent) throw new Error('Agent not started');
 
@@ -104,7 +108,7 @@ export class EmbeddedBackend implements TuiBackend {
     this.chatAbort = new AbortController();
     const signal = this.chatAbort.signal;
 
-    this.onEvent?.({ event: 'status', data: { status: 'started', runId }, source: 'embedded' });
+    this.onEvent?.({ event: 'agent_start', data: { runId }, source: 'embedded' });
 
     // Run the stream in background so the TUI event loop stays responsive.
     void (async () => {
@@ -121,7 +125,7 @@ export class EmbeddedBackend implements TuiBackend {
           opts.sessionKey,
           opts.attachments,
           opts.thinking,
-          { signal },
+          { signal, runId },
         );
 
         for await (const event of stream) {
@@ -131,15 +135,15 @@ export class EmbeddedBackend implements TuiBackend {
 
         if (!signal.aborted) {
           this.onEvent?.({
-            event: 'result',
-            data: { ok: true },
+            event: 'agent_end',
+            data: { runId },
             source: 'embedded',
           });
         }
       } catch (error) {
         if (signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        this.onEvent?.({ event: 'error', data: { content: errorMessage }, source: 'embedded' });
+        this.onEvent?.({ event: 'error', data: { runId, content: errorMessage }, source: 'embedded' });
       }
     })();
 
@@ -263,6 +267,8 @@ export class EmbeddedBackend implements TuiBackend {
         totalTokens: usage.estimatedTokens,
         contextWindow: usage.contextWindow,
         contextUsagePercent: usage.usagePercent,
+        effectiveWorkspacePath: cfg.effectiveWorkspacePath,
+        workingDirectoryLocked: cfg.workingDirectoryLocked,
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -358,7 +364,7 @@ export class EmbeddedBackend implements TuiBackend {
     if (!isShareToolAvailable(config)) {
       throw new Error('Sharing is disabled in gateway config');
     }
-    const workspace = getWorkspacePath(config) ?? process.cwd();
+    const workspace = getWorkspacePath(config);
     const tool = createCreateShareTool({
       workspace,
       getConfig: () => config,

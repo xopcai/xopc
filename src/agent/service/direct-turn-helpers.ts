@@ -115,6 +115,7 @@ export interface RunDirectAgentTurnDeps {
 
 export interface RunDirectAgentTurnInput {
   sessionKey: string;
+  runId?: string;
   userMessage: AgentMessage;
   abortSignal?: AbortSignal;
   onEvent?: (event: EmbeddedStreamEvent) => void;
@@ -149,7 +150,7 @@ export async function runDirectAgentTurn(
 
   const result = await runEmbeddedTurnForSession({
     sessionKey: input.sessionKey,
-    runId: crypto.randomUUID(),
+    runId: input.runId ?? crypto.randomUUID(),
     userMessage: userMessageForModel,
     llmImages,
     sessionStore: deps.sessionStore,

@@ -4,15 +4,25 @@
 
 ## 30 秒，立即开始
 
-安装 CLI、运行 onboard、在终端开聊——三步，半分钟上手：
+网站主推的起步方式是：安装 CLI、运行 onboard、在终端开聊——三步即可上手：
 
 ```bash
+# 官网默认路径（macOS、Linux、WSL）
+curl -fsSL https://xopc.ai/install.sh | bash
+
+# 备选：npm 安装
 npm install -g @xopcai/xopc
 xopc onboard          # 想更快可先执行：xopc onboard --quick
 xopc tui --local
 ```
 
 **国内镜像：** `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
+
+Windows:
+
+```powershell
+iex (irm https://xopc.ai/install.ps1)
+```
 
 下文会展开网关、频道、桌面版与故障排除等细节。
 
@@ -23,19 +33,25 @@ xopc tui --local
 ## 1. 环境要求
 
 - **Node.js**：**22** 及以上（`node -v`）
-- **pnpm**：仅在 [从源码构建](#方式二从源码构建) 本仓库时需要（`pnpm --version`）
+- **pnpm**：仅在下方的从源码构建步骤需要（`pnpm --version`）
 
 日常使用可直接 **`npm install -g @xopcai/xopc`**（或 `pnpm add -g`），不必先装 pnpm。
 
 ## 2. 安装
 
-### 方式一：从 npm 安装（推荐）
+### 方式一：一键安装（推荐）
+
+```bash
+curl -fsSL https://xopc.ai/install.sh | bash
+```
+
+### 方式二：从 npm 安装
 
 ```bash
 npm install -g @xopcai/xopc
 ```
 
-### 方式二：从源码构建
+### 方式三：从源码构建
 
 ```bash
 git clone https://github.com/xopcai/xopc.git

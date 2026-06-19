@@ -107,7 +107,7 @@ export class TurnDispatcher {
     sessionKey = 'agent:main:main',
     attachments?: DirectAttachment[],
     thinking?: string,
-    options?: { signal?: AbortSignal },
+    options?: { signal?: AbortSignal; runId?: string },
   ): AsyncGenerator<ProcessDirectStreamingSseEvent, void, unknown> {
     yield* runProcessDirectStreaming(this.buildStreamingDeps(), {
       content,
@@ -115,6 +115,7 @@ export class TurnDispatcher {
       attachments,
       thinking,
       signal: options?.signal,
+      runId: options?.runId,
     });
   }
 
@@ -133,7 +134,14 @@ export class TurnDispatcher {
   notifyWebchatTranscriptAppend(sessionKey: string, assistantText: string): void {
     const trimmed = assistantText.trim();
     if (trimmed) {
-      this.enqueueWebchatSseEvent(sessionKey, { type: 'token', content: trimmed });
+      const message = {
+        role: 'assistant',
+        content: [{ type: 'text', text: trimmed }],
+        timestamp: Date.now(),
+      };
+      this.enqueueWebchatSseEvent(sessionKey, { type: 'message_start', message });
+      this.enqueueWebchatSseEvent(sessionKey, { type: 'message_update', message });
+      this.enqueueWebchatSseEvent(sessionKey, { type: 'message_end', message });
     }
     this.cfg.onSessionTranscriptUpdated?.(sessionKey);
   }

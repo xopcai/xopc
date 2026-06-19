@@ -19,6 +19,8 @@ function createTuiCommand(_ctx: CLIContext): Command {
     .option('--token <token>', 'Gateway bearer token')
     .option('-s, --session <key>', 'Session key to resume (omitted: start a fresh TUI session)')
     .option('-m, --message <text>', 'Send a message on launch')
+    .option('--workdir <dir>', 'Workspace directory for the new TUI session')
+    .option('--no-cwd', 'Do not use the launch directory as the new TUI session workspace')
     .option('--local', 'Run in embedded mode (no gateway required)')
     .option('--theme <name>', 'Theme: auto, dark, light, or custom name from ~/.xopc/themes/')
     .option('--thinking <level>', 'Thinking level override')
@@ -29,6 +31,8 @@ function createTuiCommand(_ctx: CLIContext): Command {
         token: typeof options.token === 'string' ? options.token : undefined,
         session: typeof options.session === 'string' ? options.session : undefined,
         message: typeof options.message === 'string' ? options.message : undefined,
+        workdir: typeof options.workdir === 'string' ? options.workdir : undefined,
+        useStartupCwd: options.cwd !== false,
         local: options.local === true,
         thinking: typeof options.thinking === 'string' ? options.thinking : undefined,
         theme: typeof options.theme === 'string' ? options.theme : undefined,

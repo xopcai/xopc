@@ -1,5 +1,8 @@
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
+
 import type { HistoryMessage } from './tui-backend.js';
 import { ChatLog } from './components/chat-log.js';
+import { createAssistantMessageFromText } from './components/assistant-message.js';
 
 export function historyMessageKey(message: HistoryMessage, index: number): string {
   if (message.id) return `id:${message.id}`;
@@ -9,8 +12,37 @@ export function historyMessageKey(message: HistoryMessage, index: number): strin
     message.kind ?? 'message',
     message.role,
     message.timestamp ?? '',
-    message.content,
+    JSON.stringify(message.content),
   ].join(':');
+}
+
+function historyContentText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((block) => {
+      if (!block || typeof block !== 'object') return '';
+      const rec = block as { type?: unknown; text?: unknown; thinking?: unknown };
+      if (rec.type === 'text' && typeof rec.text === 'string') return rec.text;
+      if (rec.type === 'thinking' && typeof rec.thinking === 'string') return rec.thinking;
+      return '';
+    })
+    .filter(Boolean)
+    .join('\n');
+}
+
+function assistantHistoryMessage(content: unknown): AgentMessage {
+  if (typeof content === 'string') {
+    return createAssistantMessageFromText(content.trim() ? content : ' ');
+  }
+  if (Array.isArray(content)) {
+    return {
+      role: 'assistant',
+      content,
+      timestamp: Date.now(),
+    } as AgentMessage;
+  }
+  return createAssistantMessageFromText(' ');
 }
 
 export function historyKeysHaveAppendOnlyPrefix(
@@ -43,7 +75,7 @@ export function appendHistoryToChatLog(
       if (hm.bash) {
         chatLog.addBashSummary(hm.bash);
       } else {
-        chatLog.addSystem(hm.content);
+        chatLog.addSystem(historyContentText(hm.content));
       }
       return;
     }
@@ -54,13 +86,13 @@ export function appendHistoryToChatLog(
         if (hm.custom.display === false) return;
         chatLog.addCustomMessage({
           customType: hm.custom.customType,
-          content: hm.content,
+          content: historyContentText(hm.content),
           rawContent: hm.rawContent,
           details: hm.custom.details,
           display: hm.custom.display,
         });
       } else {
-        chatLog.addSystem(hm.content);
+        chatLog.addSystem(historyContentText(hm.content));
       }
       return;
     }
@@ -69,7 +101,7 @@ export function appendHistoryToChatLog(
       if (hm.branch) {
         chatLog.addBranchMessageSummary(hm.branch);
       } else {
-        chatLog.addSystem(hm.content);
+        chatLog.addSystem(historyContentText(hm.content));
       }
       return;
     }
@@ -77,23 +109,25 @@ export function appendHistoryToChatLog(
     if (hm.kind === 'compaction') {
       chatLog.addCompactionSummary({
         compacted: true,
-        summary: hm.content,
+        summary: historyContentText(hm.content),
         tokensBefore: hm.tokensBefore,
         tokensAfter: hm.tokensAfter,
-        transcriptSummary: hm.content,
+        transcriptSummary: historyContentText(hm.content),
       });
       return;
     }
 
     if (hm.role === 'user') {
-      chatLog.addUser(hm.content);
+      chatLog.addUser(historyContentText(hm.content));
       return;
     }
 
     if (hm.role === 'system') {
-      chatLog.addSystem(hm.content);
+      chatLog.addSystem(historyContentText(hm.content));
       return;
     }
+
+    chatLog.finalizeAssistant(assistantHistoryMessage(hm.content), runId);
 
     const tools = hm.toolCalls ?? [];
     for (let t = 0; t < tools.length; t++) {
@@ -104,8 +138,5 @@ export function appendHistoryToChatLog(
         chatLog.updateToolResult(tid, tc.result, tc.isError ?? false);
       }
     }
-
-    const body = hm.content.trim() ? hm.content : ' ';
-    chatLog.finalizeAssistant(body, runId);
   });
 }

@@ -6,9 +6,8 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>The AI workstation that grows with you.</strong><br />
-  A self-hosted, local-first AI for one-person companies — terminal, browser, desktop, mobile, and messengers. One brain everywhere.<br />
-  Bring your own keys. Extend without forking.
+  <strong>Goal Loop OS. Long-term AI in one loop.</strong><br />
+  Local-first · Multi-surface · Workflows + Multi-agent + Extensible.
 </p>
 
 <p align="center">
@@ -56,6 +55,8 @@ iex (irm https://xopc.ai/install.ps1)
 ```
 
 The installer detects your OS, installs **Node.js ≥ 22** when needed, and installs **`@xopcai/xopc`**. China mirror: add `--cn` (bash) or `-Cn` (PowerShell), or pass `--registry https://registry.npmmirror.com`.
+
+> **30-second start:** this is the homepage-recommended path, including Node setup on macOS, Linux, and Windows.
 
 ### Onboard & chat
 
@@ -106,6 +107,8 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 
 ## Why xopc
 
+- 🔁 **Goal loops, not one-shot chats** — keep long-term direction, action, and feedback moving together.
+
 - 🏠 **Your machine** — Data and config under **`~/.xopc/`**. No mandatory cloud or surprise bills.
 - 🔑 **Bring your own keys** — OpenAI, Anthropic, Google, DeepSeek, Ollama, LM Studio, vLLM, and **20+** providers. Mix cloud and local; switch catalog models in one config line. See **[Models](https://xopcai.github.io/xopc/models)**.
 - 📱 **One brain, every screen** — Same assistant in terminal, browser, desktop, phone, and IM. No sync layer — one system.
@@ -122,7 +125,7 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | Scripts and minimal TTY |
 | **Web** | `xopc gateway` → open console URL | Chat, settings, logs in the browser |
 | **Desktop** | [GitHub Releases](#desktop-app) or `pnpm run electron:build` | Native app (macOS, Windows, Linux) |
-| **Mobile** | Pair with your gateway ([remote access](https://xopcai.github.io/xopc/remote-access)) | Assistant on the go |
+| **Mobile** | Pair with your gateway ([remote access](https://xopcai.github.io/xopc/remote-access)) | Continue your loop on the move |
 | **Messengers** | `channels.*` + gateway | Telegram, WeChat, Feishu/Lark |
 
 ---

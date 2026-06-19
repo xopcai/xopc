@@ -1,5 +1,6 @@
 import type { Component, KeybindingsManager } from '@earendil-works/pi-tui';
 import { Container, Spacer, Text } from '@earendil-works/pi-tui';
+import type { AgentMessage, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import { BashExecutionComponent } from './bash-execution.js';
 import { BashSummaryComponent, type BashSummary } from './bash-summary.js';
@@ -9,7 +10,7 @@ import { CompactionSummaryComponent } from './compaction-summary.js';
 import { CustomMessageComponent, type CustomMessageSummary } from './custom-message.js';
 import type { TuiMessageRenderer } from '../../extensions/types/tui.js';
 import { theme } from '../theme.js';
-import { AssistantMessageComponent, type AssistantRenderState } from './assistant-message.js';
+import { AssistantMessageComponent, createAssistantMessageFromText } from './assistant-message.js';
 import { ToolExecutionComponent, type ToolExecutionOptions } from './tool-execution.js';
 import { UserMessageComponent } from './user-message.js';
 import type { TuiBranchSummary, TuiCompactionResult } from '../tui-backend.js';
@@ -17,6 +18,19 @@ import type { TuiBranchSummary, TuiCompactionResult } from '../tui-backend.js';
 const MAX_COMPONENTS = 180;
 
 type ExpandableBlock = { setExpanded(expanded: boolean): void };
+
+function assistantPlainText(message: AgentMessage): string {
+  const content = (message as { content?: unknown }).content;
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((block) => {
+      if (!block || typeof block !== 'object') return '';
+      const rec = block as { type?: unknown; text?: unknown };
+      return rec.type === 'text' && typeof rec.text === 'string' ? rec.text : '';
+    })
+    .join('');
+}
 
 export class ChatLog extends Container {
   private toolById = new Map<string, ToolExecutionComponent>();
@@ -28,7 +42,7 @@ export class ChatLog extends Container {
   private customMessageRenderers = new Map<string, TuiMessageRenderer>();
   private assistantMessages: AssistantMessageComponent[] = [];
   private streamingRuns = new Map<string, AssistantMessageComponent>();
-  /** After finalizeAssistant, late tool_start can still arrive; keep the bubble to insert tools above. */
+  /** After finalizeAssistant, late tool execution events can still arrive; keep the bubble to link tools. */
   private assistantAnchorByRunId = new Map<string, AssistantMessageComponent>();
   private runsWithTools = new Set<string>();
   private toolsExpanded = false;
@@ -99,8 +113,8 @@ export class ChatLog extends Container {
     this.lastStatusText = null;
   }
 
-  private createAssistantMessage(text: string): AssistantMessageComponent {
-    const component = new AssistantMessageComponent(text, {
+  private createAssistantMessage(message?: AgentMessage): AssistantMessageComponent {
+    const component = new AssistantMessageComponent(message, {
       hideThinkingBlock: !this.showThinking,
       hiddenThinkingLabel: this.hiddenThinkingLabel,
     });
@@ -208,57 +222,48 @@ export class ChatLog extends Container {
     this.append(component);
   }
 
-  startAssistant(text: string, runId: string): void {
-    if (text.trim()) {
-      this.lastAssistantText = text;
-    }
+  startAssistant(message: AgentMessage, runId: string): void {
+    const text = assistantPlainText(message);
+    if (text.trim()) this.lastAssistantText = text;
     const existing = this.streamingRuns.get(runId);
     if (existing) {
-      existing.setText(text);
+      existing.updateContent(message);
       existing.setHasToolCalls(this.runsWithTools.has(runId));
       return;
     }
-    const component = this.createAssistantMessage(text);
+    const component = this.createAssistantMessage(message);
     component.setHasToolCalls(this.runsWithTools.has(runId));
     this.streamingRuns.set(runId, component);
     this.append(component);
   }
 
-  updateAssistant(text: string, runId: string): void {
-    if (text.trim()) {
-      this.lastAssistantText = text;
-    }
+  updateAssistant(message: AgentMessage, runId: string): void {
+    const text = assistantPlainText(message);
+    if (text.trim()) this.lastAssistantText = text;
     const existing = this.streamingRuns.get(runId);
     if (!existing) {
-      this.startAssistant(text, runId);
+      this.startAssistant(message, runId);
       return;
     }
-    existing.setText(text);
+    existing.updateContent(message);
     existing.setHasToolCalls(this.runsWithTools.has(runId));
   }
 
-  finalizeAssistant(text: string, runId: string, renderState?: AssistantRenderState): void {
-    if (text.trim()) {
-      this.lastAssistantText = text;
-    }
+  finalizeAssistant(message: AgentMessage, runId: string): void {
+    const text = assistantPlainText(message);
+    if (text.trim()) this.lastAssistantText = text;
     const existing = this.streamingRuns.get(runId);
     if (existing) {
-      existing.setText(text);
+      existing.updateContent(message);
       existing.setHasToolCalls(this.runsWithTools.has(runId));
-      if (renderState) {
-        existing.setRenderState(renderState);
-      }
       this.streamingRuns.delete(runId);
       this.assistantAnchorByRunId.set(runId, existing);
       return;
     }
-    const finalMessage = this.createAssistantMessage(text);
+    const finalMessage = this.createAssistantMessage(message);
     finalMessage.setHasToolCalls(this.runsWithTools.has(runId));
-    if (renderState) {
-      finalMessage.setRenderState(renderState);
-    }
     this.append(finalMessage);
-    if (text.trim() || renderState) {
+    if (text.trim()) {
       this.assistantAnchorByRunId.set(runId, finalMessage);
     }
   }
@@ -277,32 +282,34 @@ export class ChatLog extends Container {
       return;
     }
     this.runsWithTools.add(runId);
-    const component = new ToolExecutionComponent(toolName, args, {
+    const component = new ToolExecutionComponent(toolName, toolCallId, args, {
       ...this.toolImageOptions,
-      toolCallId,
     });
     component.setExpanded(this.toolsExpanded);
     this.toolById.set(toolCallId, component);
 
-    const assistant =
-      this.streamingRuns.get(runId) ?? this.assistantAnchorByRunId.get(runId);
-    if (assistant) {
-      assistant.setHasToolCalls(true);
-      // Streamed assistant text is updated in place from the start of the turn; tools
-      // arrive later from SSE but should appear above the conversational reply (like the web UI).
-      this.removeChild(assistant);
-      this.addChild(component);
-      this.addChild(assistant);
-    } else {
-      this.addChild(component);
-    }
+    const assistant = this.streamingRuns.get(runId) ?? this.assistantAnchorByRunId.get(runId);
+    assistant?.setHasToolCalls(true);
+    this.addChild(component);
     this.pruneOverflow();
   }
 
-  updateToolResult(toolCallId: string, result: unknown, isError: boolean): void {
+  markToolExecutionStarted(toolCallId: string): void {
     const existing = this.toolById.get(toolCallId);
     if (!existing) return;
-    existing.setResult(result, isError);
+    existing.markExecutionStarted();
+  }
+
+  markToolArgsComplete(toolCallId: string): void {
+    const existing = this.toolById.get(toolCallId);
+    if (!existing) return;
+    existing.setArgsComplete();
+  }
+
+  updateToolResult(toolCallId: string, result: AgentToolResult<any> | unknown, isError: boolean, isPartial = false): void {
+    const existing = this.toolById.get(toolCallId);
+    if (!existing) return;
+    existing.updateResult(result, isPartial, isError);
   }
 
   updateToolDetails(toolCallId: string, details: unknown): void {

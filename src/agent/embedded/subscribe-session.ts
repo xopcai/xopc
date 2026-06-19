@@ -2,7 +2,6 @@ import type { AgentSession, AgentSessionEvent } from '@earendil-works/pi-coding-
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
 
 import { extractTextContent } from '../context/workspace.js';
-import { mapEmbeddedToolEndResult } from './map-stream-events.js';
 import type { EmbeddedStreamEvent } from './types.js';
 
 export function subscribeEmbeddedSessionEvents(
@@ -12,89 +11,67 @@ export function subscribeEmbeddedSessionEvents(
   return session.subscribe((event: AgentSessionEvent) => {
     const base = event as AgentEvent;
     switch (base.type) {
-      case 'message_update': {
-        const u = base as Extract<AgentEvent, { type: 'message_update' }>;
-        const delta = u.assistantMessageEvent;
-        if (delta?.type === 'text_delta' && typeof delta.delta === 'string' && delta.delta) {
-          onEvent({ type: 'token', content: delta.delta });
-        }
-        if (delta?.type === 'thinking_delta' && typeof delta.delta === 'string' && delta.delta) {
-          onEvent({ type: 'thinking', content: delta.delta });
-        }
+      case 'agent_start':
+        onEvent({ type: 'agent_start' });
         break;
-      }
+      case 'agent_end':
+        onEvent({ type: 'agent_end' });
+        break;
       case 'message_start': {
         const m = (base as Extract<AgentEvent, { type: 'message_start' }>).message;
-        if (m?.role === 'assistant') {
-          onEvent({ type: 'thinking', status: 'started' });
-        }
+        onEvent({ type: 'message_start', message: m });
         break;
       }
-      case 'message_end':
-        onEvent({ type: 'message_end' });
+      case 'message_update': {
+        const u = base as Extract<AgentEvent, { type: 'message_update' }>;
+        onEvent({
+          type: 'message_update',
+          message: u.message,
+          assistantMessageEvent: u.assistantMessageEvent,
+        });
         break;
+      }
+      case 'message_end': {
+        const m = (base as Extract<AgentEvent, { type: 'message_end' }>).message;
+        onEvent({ type: 'message_end', message: m });
+        break;
+      }
       case 'tool_execution_start': {
         const t = base as Extract<AgentEvent, { type: 'tool_execution_start' }>;
         onEvent({
-          type: 'tool_start',
+          type: 'tool_execution_start',
           toolName: t.toolName,
           toolCallId: t.toolCallId,
-          args: (t.args as Record<string, unknown>) ?? {},
+          args: t.args,
         });
         break;
       }
       case 'tool_execution_end': {
         const t = base as Extract<AgentEvent, { type: 'tool_execution_end' }>;
         onEvent({
-          type: 'tool_end',
+          type: 'tool_execution_end',
           toolName: t.toolName,
           toolCallId: t.toolCallId,
           isError: t.isError,
-          result: mapEmbeddedToolEndResult(t.result),
+          result: t.result,
         });
         break;
       }
       case 'tool_execution_update': {
         const t = base as Extract<AgentEvent, { type: 'tool_execution_update' }>;
-        const details = extractStructuredDetails(t.partialResult);
-        // Only forward when the tool actually produced structured details.
-        // Tools that just stream text chunks via onUpdate (shell, web_*) would
-        // otherwise saturate the SSE channel with redundant payloads.
-        if (details !== undefined) {
-          onEvent({
-            type: 'tool_update',
-            toolName: t.toolName,
-            toolCallId: t.toolCallId,
-            details,
-          });
-        }
+        onEvent({
+          type: 'tool_execution_update',
+          toolName: t.toolName,
+          toolCallId: t.toolCallId,
+          args: t.args,
+          partialResult: t.partialResult,
+        });
         break;
       }
-      case 'agent_start':
-        onEvent({ type: 'progress', stage: 'thinking', message: 'Thinking...' });
-        break;
-      case 'agent_end':
-        onEvent({ type: 'progress', stage: 'idle', message: 'Done' });
-        break;
       default:
         break;
     }
   });
-}
-
-/**
- * Pull a structured `details` payload out of an AgentToolResult-shaped
- * `partialResult`. Returns undefined when the update is text-only (e.g. shell
- * stdout deltas), so callers can skip emitting empty SSE updates.
- */
-function extractStructuredDetails(partial: unknown): unknown {
-  if (!partial || typeof partial !== 'object') return undefined;
-  const rec = partial as Record<string, unknown>;
-  if (!('details' in rec)) return undefined;
-  const d = rec.details;
-  if (d === null || d === undefined) return undefined;
-  if (typeof d === 'object') return d;
-  return undefined;
 }
 
 export function lastAssistantPlainText(session: AgentSession): string | undefined {

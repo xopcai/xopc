@@ -19,7 +19,6 @@ import { applyReasoningVisibilityToSseEvent } from '../streaming/reasoning-visib
 import type { ReasoningLevel } from '../transcript/thinking-types.js';
 import { formatAgentRunErrorForClient } from '../client-error-format.js';
 import { abortEmbeddedRun } from '../embedded/runs.js';
-import { mapEmbeddedEventToGatewaySse } from '../embedded/map-stream-events.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { CommandHandler } from '../messaging/command-handler.js';
 import type { ModelManager } from '../models/index.js';
@@ -97,9 +96,29 @@ export interface ProcessDirectStreamingInput {
   attachments?: DirectStreamInboundAttachment[];
   thinking?: string;
   signal?: AbortSignal;
+  runId?: string;
 }
 
 export type ProcessDirectStreamingSseEvent = { type: string; [key: string]: unknown };
+
+function makeAssistantReceiptMessage(text: string): AgentMessage {
+  return {
+    role: 'assistant',
+    content: [{ type: 'text', text }],
+    timestamp: Date.now(),
+  } as AgentMessage;
+}
+
+function pushAssistantReceipt(
+  queue: AsyncQueue<ProcessDirectStreamingSseEvent>,
+  text: string,
+  runId?: string,
+): void {
+  const message = makeAssistantReceiptMessage(text);
+  queue.push({ type: 'message_start', runId, message });
+  queue.push({ type: 'message_update', runId, message });
+  queue.push({ type: 'message_end', runId, message });
+}
 
 export async function* runProcessDirectStreaming(
   deps: ProcessDirectStreamingDeps,
@@ -160,7 +179,7 @@ export async function* runProcessDirectStreaming(
         if (turn.bareReset && turn.ackMessage) {
           ranSlashCommand = true;
           webchatSlashReceipt = turn.ackMessage;
-          pushVisible({ type: 'token', content: turn.ackMessage });
+          pushAssistantReceipt(queue, turn.ackMessage, input.runId);
           return;
         }
         turnBody = turn.bodyStripped;
@@ -243,11 +262,11 @@ export async function* runProcessDirectStreaming(
         const text = slash.aggregatedText.trim();
         if (text) {
           webchatSlashReceipt = text;
-          pushVisible({ type: 'token', content: text });
+          pushAssistantReceipt(queue, text, input.runId);
         } else if (channel === 'webchat') {
           webchatSlashReceipt =
             'Command finished with no assistant text. If you used `/goal`, a follow-up turn may still be scheduled automatically.';
-          pushVisible({ type: 'token', content: webchatSlashReceipt });
+          pushAssistantReceipt(queue, webchatSlashReceipt, input.runId);
         }
         return;
       }
@@ -284,14 +303,13 @@ export async function* runProcessDirectStreaming(
             sessionKey,
             userMessage,
             abortSignal: signal,
+            runId: input.runId,
             onEvent: (embeddedEvent) => {
-              const mapped = mapEmbeddedEventToGatewaySse(embeddedEvent);
-              if (mapped) {
-                if (mapped.type === 'error' && typeof mapped.content === 'string') {
-                  mapped.content = formatStreamError(mapped.content);
-                }
-                pushVisible(mapped);
+              const event = { ...embeddedEvent };
+              if (event.type === 'error' && typeof event.content === 'string') {
+                event.content = formatStreamError(event.content);
               }
+              pushVisible(event);
             },
           },
         );

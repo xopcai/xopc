@@ -10,6 +10,10 @@ export interface TuiOptions {
   thinking?: string;
   /** Single message to send on start, then stay open. */
   message?: string;
+  /** Workspace directory for the new TUI session. */
+  workdir?: string;
+  /** Use the launch directory as the new TUI session workspace when no workdir is set. */
+  useStartupCwd?: boolean;
   /** Run in embedded (local) mode — no gateway required. */
   local?: boolean;
   /** Theme id: `auto`, `dark`, `light`, or custom name under `~/.xopc/themes/`. */
@@ -20,43 +24,6 @@ export type TuiExitReason = 'exit' | 'signal';
 
 export interface TuiResult {
   exitReason: TuiExitReason;
-}
-
-/** SSE events emitted by POST /api/agent. */
-export interface AgentSSEStatusEvent {
-  status: string;
-  runId: string;
-}
-
-export interface AgentSSETokenEvent {
-  content: string;
-}
-
-export interface AgentSSEThinkingEvent {
-  content: string;
-  isDelta?: boolean;
-}
-
-export interface AgentSSEToolStartEvent {
-  toolName: string;
-  toolCallId: string;
-  args?: unknown;
-}
-
-export interface AgentSSEToolEndEvent {
-  toolName: string;
-  toolCallId: string;
-  isError: boolean;
-  result?: string;
-}
-
-export interface AgentSSEErrorEvent {
-  content: string;
-}
-
-export interface AgentSSEResultEvent {
-  ok: boolean;
-  payload?: { status?: string; summary?: string };
 }
 
 /** Parsed SSE event from the stream. */
@@ -115,6 +82,8 @@ export interface SessionInfo {
   contextWindow?: number | null;
   contextUsagePercent?: number | null;
   displayName?: string;
+  effectiveWorkspacePath?: string;
+  workingDirectoryLocked?: boolean;
 }
 
 /** Mutable state bag for the TUI runtime. */
