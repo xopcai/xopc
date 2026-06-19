@@ -61,7 +61,7 @@ export type MessagingCallbacks = {
   onThinking: (content: string, isDelta: boolean) => void;
   onThinkingEnd: () => void;
   onToolStart: (toolName: string, args?: unknown, toolCallId?: string) => void;
-  onToolEnd: (toolName: string, isError: boolean, result?: string) => void;
+  onToolEnd: (toolName: string, isError: boolean, result?: unknown) => void;
   /**
    * Mid-execution structured update for a tool whose `partialResult` carried
    * `details`. Only emitted today by the `workflow` tool — feeds the
@@ -93,7 +93,7 @@ export type MessagingCallbacks = {
 export class MessageSender {
   private _abort?: AbortController;
   private _sseChatId = '';
-  /** `runId` from the `status` event for this POST/resume body; do not clear a newer pending run (scheduled continuation). */
+  /** `runId` from the `status` / `agent_start` event for this POST/resume body; do not clear a newer pending run (scheduled continuation). */
   private _trackedRunId?: string;
 
   get isSending() {
@@ -339,18 +339,23 @@ export class MessageSender {
       parsed = JSON.parse(data) as Record<string, unknown>;
     } catch {
       // Still complete the turn so the chat does not stay in a permanent "streaming" state.
-      if (event === 'result') {
+      if (event === 'result' || event === 'agent_end') {
         cb?.onResult();
       }
       return;
     }
 
+    const persistRunId = () => {
+      if (typeof parsed.runId === 'string' && this._sseChatId) {
+        this._trackedRunId = parsed.runId;
+        setPendingAgentRun(this._sseChatId, parsed.runId);
+      }
+    };
+
     switch (event) {
       case 'status':
-        if (typeof parsed.runId === 'string' && this._sseChatId) {
-          this._trackedRunId = parsed.runId;
-          setPendingAgentRun(this._sseChatId, parsed.runId);
-        }
+      case 'agent_start':
+        persistRunId();
         cb?.onStreamStart();
         break;
       case 'user_message':
@@ -381,6 +386,12 @@ export class MessageSender {
       case 'thinking_end':
         cb?.onThinkingEnd();
         break;
+      case 'message_start':
+        cb?.onStreamStart();
+        break;
+      case 'message_update':
+        this._dispatchStructuredMessageUpdate(parsed, cb);
+        break;
       case 'message_end':
         cb?.onThinkingEnd();
         break;
@@ -409,6 +420,28 @@ export class MessageSender {
         cb?.onToolUpdate?.(toolName, toolCallId, parsed.details);
         break;
       }
+      case 'tool_execution_start': {
+        const toolName = String(parsed.toolName || 'unknown');
+        const toolCallId = typeof parsed.toolCallId === 'string' ? parsed.toolCallId : undefined;
+        if (toolName === 'clarify') break;
+        cb?.onToolStart(toolName, parsed.args, toolCallId);
+        break;
+      }
+      case 'tool_execution_update': {
+        const toolName =
+          typeof parsed.toolName === 'string' && parsed.toolName ? parsed.toolName : 'unknown';
+        const toolCallId = typeof parsed.toolCallId === 'string' ? parsed.toolCallId : undefined;
+        const details = extractToolResultDetails(parsed.partialResult);
+        if (details !== undefined) cb?.onToolUpdate?.(toolName, toolCallId, details);
+        break;
+      }
+      case 'tool_execution_end':
+        cb?.onToolEnd(
+          typeof parsed.toolName === 'string' && parsed.toolName ? parsed.toolName : 'unknown',
+          !!parsed.isError,
+          serializeToolResult(parsed.result),
+        );
+        break;
       case 'progress':
         cb?.onProgress({
           stage: String(parsed.stage || 'thinking'),
@@ -452,6 +485,7 @@ export class MessageSender {
         break;
       }
       case 'result':
+      case 'agent_end':
         cb?.onResult();
         break;
       case 'error':
@@ -476,5 +510,49 @@ export class MessageSender {
         break;
       }
     }
+  }
+
+  private _dispatchStructuredMessageUpdate(parsed: Record<string, unknown>, cb?: MessagingCallbacks): void {
+    const assistantMessageEvent = parsed.assistantMessageEvent as Record<string, unknown> | undefined;
+    if (assistantMessageEvent?.type === 'text_delta' && typeof assistantMessageEvent.delta === 'string') {
+      cb?.onToken(assistantMessageEvent.delta);
+      return;
+    }
+    if (assistantMessageEvent?.type === 'thinking_delta' && typeof assistantMessageEvent.delta === 'string') {
+      cb?.onThinking(assistantMessageEvent.delta, true);
+      return;
+    }
+
+    const message = parsed.message as { role?: unknown; content?: unknown } | undefined;
+    if (message?.role !== 'assistant') return;
+    const text = extractTextFromStructuredContent(message.content);
+    if (text) cb?.onToken(text);
+  }
+}
+
+function extractTextFromStructuredContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((block) => {
+      if (!block || typeof block !== 'object') return '';
+      const rec = block as { type?: unknown; text?: unknown };
+      return rec.type === 'text' && typeof rec.text === 'string' ? rec.text : '';
+    })
+    .join('');
+}
+
+function extractToolResultDetails(result: unknown): unknown {
+  if (!result || typeof result !== 'object') return undefined;
+  const rec = result as Record<string, unknown>;
+  return rec.details ?? undefined;
+}
+
+function serializeToolResult(result: unknown): unknown {
+  if (typeof result === 'string' || result == null) return result;
+  try {
+    return JSON.stringify(result);
+  } catch {
+    return String(result);
   }
 }
