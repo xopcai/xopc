@@ -18,6 +18,7 @@ import { applyConfigOverrides } from '../config/runtime-overrides.js';
 import { resolveAgentProfileDir } from './agent-scope.js';
 import {
   type EffectiveAgentProfile,
+  resolveEffectiveAgentProfile,
   resolveEffectiveAgentProfileForSession,
 } from '../config/agent-profile.js';
 import { expandWorkspacePathString } from '../config/workspace-path.js';
@@ -46,7 +47,7 @@ import type { SessionStore } from '../session/store.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import type { SessionContext } from './session/session-context.js';
 import type { Skill, SkillMarkdownPreviewPayload } from './skills/types.js';
-import { createSkillConfigManager } from './skills/config.js';
+import { createSkillConfigManager, isSkillEnabled, resolveSkillConfig } from './skills/config.js';
 import { isUnderManagedSkillsDir } from './skills/managed-store.js';
 import { loadSkillsLock, type SkillHubLockEntry } from './skills/hub-lock.js';
 import { basename, resolve, sep } from 'node:path';
@@ -67,6 +68,7 @@ export interface SkillCatalogEntry {
   directoryId: string;
   name: string;
   description: string;
+  category?: string;
   source: Skill['source'];
   path: string;
   managed: boolean;
@@ -76,6 +78,21 @@ export interface SkillCatalogEntry {
   disableModelInvocation: boolean;
   /** Hub install provenance when under ~/.xopc/skills and listed in skills-lock.json. */
   hub?: SkillHubLockEntry;
+}
+
+export type AgentSkillUnavailableReason = 'agent-denied' | 'disabled' | 'requirements-unmet' | 'model-invocation-disabled';
+
+export interface AgentSkillAvailabilityEntry extends SkillCatalogEntry {
+  availableForCurrentAgent: boolean;
+  unavailableReason: AgentSkillUnavailableReason | null;
+}
+
+export interface AgentSkillAvailabilityPayload {
+  agentId: string;
+  defaultsAllowlist?: string[];
+  agentAllowlist?: string[];
+  effectiveAllowlist?: string[];
+  skills: AgentSkillAvailabilityEntry[];
 }
 
 export interface AgentManagerConfig {
@@ -408,30 +425,76 @@ export class AgentManager implements AgentInstanceGateway {
     return contextFiles;
   }
 
+  private skillCatalogEntryFromSkill(s: Skill, skillsConfig = createSkillConfigManager(resolveStateDir()).load(), lock = loadSkillsLock()): SkillCatalogEntry {
+    const base = resolve(s.baseDir);
+    const managed = isUnderManagedSkillsDir(s.baseDir);
+    const directoryId = base.split(sep).filter(Boolean).pop() || s.name;
+    const enabled = !(skillsConfig.entries?.[s.name]?.enabled === false);
+    const hubKey = managed ? basename(base) : '';
+    const hub = managed && hubKey ? lock.entries[hubKey] : undefined;
+
+    return {
+      directoryId,
+      name: s.name,
+      description: s.description,
+      category: s.category,
+      source: s.source,
+      path: s.baseDir,
+      managed,
+      enabled,
+      disableModelInvocation: s.disableModelInvocation,
+      ...(hub ? { hub } : {}),
+    };
+  }
+
   getSkillCatalog(): SkillCatalogEntry[] {
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
-    return this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).skillManager.getSkills().map((s) => {
-      const base = resolve(s.baseDir);
-      const managed = isUnderManagedSkillsDir(s.baseDir);
-      const directoryId = base.split(sep).filter(Boolean).pop() || s.name;
-      const enabled = !(skillsConfig.entries?.[s.name]?.enabled === false);
-      const hubKey = managed ? basename(base) : '';
-      const hub = managed && hubKey ? lock.entries[hubKey] : undefined;
+    return this.workspaceRuntimes
+      .getOrCreate(this.baseWorkspacePath)
+      .skillManager.getSkills()
+      .map((s) => this.skillCatalogEntryFromSkill(s, skillsConfig, lock));
+  }
+
+  getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
+    const cfg = this.config.config!;
+    const defaultsAllowlist = cfg.agents?.defaults?.skills;
+    const entry = Array.isArray(cfg.agents?.list)
+      ? cfg.agents.list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === agentId.toLowerCase())
+      : undefined;
+    const profile = resolveEffectiveAgentProfile(cfg, agentId);
+    const rt = this.workspaceRuntimes.getOrCreate(profile.resolvedWorkspacePath);
+    const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+    const lock = loadSkillsLock();
+    const allow = profile.skillsAllowlist === undefined ? undefined : new Set(profile.skillsAllowlist.map((s) => s.toLowerCase()));
+
+    const skills = rt.skillManager.getSkills().map((s) => {
+      let unavailableReason: AgentSkillUnavailableReason | null = null;
+      const skillConfig = resolveSkillConfig(s, skillsConfig);
+      if (skillConfig.enabled === false) {
+        unavailableReason = 'disabled';
+      } else if (s.disableModelInvocation) {
+        unavailableReason = 'model-invocation-disabled';
+      } else if (!isSkillEnabled(s, skillsConfig)) {
+        unavailableReason = 'requirements-unmet';
+      } else if (allow !== undefined && !allow.has(s.name.toLowerCase())) {
+        unavailableReason = 'agent-denied';
+      }
 
       return {
-        directoryId,
-        name: s.name,
-        description: s.description,
-        category: s.category,
-        source: s.source,
-        path: s.baseDir,
-        managed,
-        enabled,
-        disableModelInvocation: s.disableModelInvocation,
-        ...(hub ? { hub } : {}),
+        ...this.skillCatalogEntryFromSkill(s, skillsConfig, lock),
+        availableForCurrentAgent: unavailableReason === null,
+        unavailableReason,
       };
     });
+
+    return {
+      agentId: profile.agentId,
+      ...(defaultsAllowlist !== undefined ? { defaultsAllowlist: [...defaultsAllowlist] } : {}),
+      ...(entry?.skills !== undefined ? { agentAllowlist: [...entry.skills] } : {}),
+      ...(profile.skillsAllowlist !== undefined ? { effectiveAllowlist: [...profile.skillsAllowlist] } : {}),
+      skills,
+    };
   }
 
   /**

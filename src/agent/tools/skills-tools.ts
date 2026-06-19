@@ -120,10 +120,10 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool {
           content: [
             {
               type: 'text',
-              text: `Skill not found: "${p.name}". Use skills_list to see available names.`,
+              text: `Skill "${p.name}" was not found. It may not be installed. Open the Skills library to install it, or use skills_list to see available names.`,
             },
           ],
-          details: {},
+          details: { errorCode: 'skill_not_found', skillName: p.name },
         };
       }
 
@@ -134,16 +134,22 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool {
           content: [
             {
               type: 'text',
-              text: `Skill "${skill.name}" is installed but disabled by user settings. Enable it in Skills settings (or set entries.${skill.name}.enabled to true) before using skill_view.`,
+              text: `Skill "${skill.name}" is installed but disabled. Enable it in Skills settings before using it.`,
             },
           ],
-          details: {},
+          details: { errorCode: 'skill_disabled', skillName: skill.name },
         };
       }
-      if (skill.disableModelInvocation || !isSkillEnabled(skill, skillsConfig)) {
+      if (skill.disableModelInvocation) {
         return {
-          content: [{ type: 'text', text: `Skill "${skill.name}" is disabled or requirements are not met.` }],
-          details: {},
+          content: [{ type: 'text', text: `Skill "${skill.name}" is installed, but it is not available for model invocation.` }],
+          details: { errorCode: 'skill_model_invocation_disabled', skillName: skill.name },
+        };
+      }
+      if (!isSkillEnabled(skill, skillsConfig)) {
+        return {
+          content: [{ type: 'text', text: `Skill "${skill.name}" is installed, but its requirements are not met.` }],
+          details: { errorCode: 'skill_requirements_unmet', skillName: skill.name },
         };
       }
 
@@ -157,10 +163,10 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool {
           content: [
             {
               type: 'text',
-              text: `Skill "${skill.name}" is not available in this session (tool gating or allowlist).`,
+              text: `The current agent cannot use skill "${skill.name}". It is installed, but it is not in this agent's skill allowlist or is hidden by tool gating. Enable it in Agent settings → Skills before using it.`,
             },
           ],
-          details: {},
+          details: { errorCode: 'skill_agent_denied', skillName: skill.name },
         };
       }
 

@@ -445,6 +445,12 @@
       "queueBadge": "排队",
       "queueFullBadge": "队列已满",
       "queueFullTooltip": "跟进队列已满，请先处理",
+      "skillUnavailableBadge": "不可用",
+      "skillAgentDeniedBadge": "未加入白名单",
+      "skillUnavailableMessage": "技能“{{name}}”当前对智能体“{{agent}}”不可用。原因：{{reason}}。请在智能体设置 → 技能中启用后再使用。",
+      "skillAgentDeniedReason": "未加入当前智能体技能白名单",
+      "skillDisabledReason": "技能已禁用或依赖不满足",
+      "skillAddToAllowlistConfirm": "是否现在加入当前智能体白名单？",
       "showGroupedMore": "显示另外 {{count}} 条"
     },
     "goal": {

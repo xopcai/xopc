@@ -42,6 +42,12 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
 
   // ========== Skills (managed global skills under ~/.xopc/skills) ==========
 
+  authenticated.get('/api/chat/skills', (c) => {
+    const agentId = c.req.query('agentId')?.trim() || service.getConfig().agents?.default || 'main';
+    const payload = service.marketplace.getAgentSkillsApi(agentId);
+    return c.json({ ok: true, payload });
+  });
+
   authenticated.get('/api/skills', (c) => {
     const payload = service.marketplace.getSkillsApi();
     return c.json({ ok: true, payload });

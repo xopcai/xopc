@@ -59,7 +59,7 @@ import {
   type BrokerListenerHandle,
 } from './workflow/index.js';
 import { FeedbackCoordinator } from './feedback/index.js';
-import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
+import { AgentManager, type AgentSkillAvailabilityPayload, type SkillCatalogEntry } from './agent-manager.js';
 import type { SkillMarkdownPreviewPayload } from './skills/types.js';
 import type { AgentServiceConfig, StreamHandle } from './service.types.js';
 import { PersistentGoalService } from './goals/persistent-goal-service.js';
@@ -614,6 +614,10 @@ export class AgentService {
 
   getSkillCatalog(): SkillCatalogEntry[] {
     return this.agentManager.getSkillCatalog();
+  }
+
+  getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
+    return this.agentManager.getAgentSkillAvailability(agentId);
   }
 
   getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {

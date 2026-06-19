@@ -3,7 +3,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { listSkillNamesInWire } from '@/features/chat/composer/composer-editor-wire';
 import { ABORT_CLASS_NAMES } from '@/features/chat/composer/palette-item-handlers';
-import { fetchCommandsCached, getSkillsCached } from '@/features/chat/palette/command-palette-api';
+import { fetchCommandsCached, getChatSkillsCached } from '@/features/chat/palette/command-palette-api';
 import { useLocaleStore } from '@/stores/locale-store';
 import type { PaletteItem, SlashRange } from '@/features/chat/palette/command-palette.types';
 import { FILE_WIRE_TAIL_BODY } from '@/features/chat/palette/file-wire-pattern';
@@ -193,7 +193,7 @@ function clampPaletteIndex(index: number, length: number): number {
 export function useCommandPalette(
   value: string,
   cursor: number,
-  options?: { suppress?: boolean; isComposing?: boolean },
+  options?: { suppress?: boolean; isComposing?: boolean; currentAgentId?: string },
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   /** Grouped (empty) palette: each section can expand independently after "Show N more". */
@@ -221,7 +221,7 @@ export function useCommandPalette(
     async () => {
       const [commands, skillsPayload, agentsPayload] = await Promise.all([
         fetchCommandsCached(),
-        getSkillsCached(),
+        getChatSkillsCached(options?.currentAgentId),
         fetchChatAgents().catch(() => null),
       ]);
       const commandItems: PaletteItem[] = commands.map((c) => ({
@@ -233,19 +233,18 @@ export function useCommandPalette(
         aliases: c.aliases,
         acceptsArgs: c.acceptsArgs,
       }));
-      const skillItems: PaletteItem[] = skillsPayload.catalog.flatMap((s) => {
-        if (!s.enabled || s.disableModelInvocation) return [];
-        return [
-          {
-            kind: 'skill' as const,
-            id: `skill:${s.name}`,
-            name: s.name,
-            description: s.description,
-            category: 'skill',
-            source: s.source,
-          },
-        ];
-      });
+      const skillItems: PaletteItem[] = skillsPayload.skills.map((s) => ({
+        kind: 'skill' as const,
+        id: `skill:${s.name}`,
+        name: s.name,
+        description: s.description,
+        category: 'skill',
+        source: s.source,
+        availability: {
+          status: s.availableForCurrentAgent ? 'available' : (s.unavailableReason ?? 'agent-denied'),
+          reason: s.unavailableReason ?? undefined,
+        },
+      }));
       // Agents: only when there is more than one (matches header `showChatAgentSelector`).
       const agentItems: PaletteItem[] =
         agentsPayload && agentsPayload.items.length > 1
@@ -261,7 +260,7 @@ export function useCommandPalette(
           : [];
       return [...skillItems, ...commandItems, ...agentItems];
     },
-    [language],
+    [language, options?.currentAgentId],
     { enabled: paletteActive, initial: [] as PaletteItem[], errorData: [] },
   );
   const allItems = itemsResource.data;
@@ -319,6 +318,9 @@ export function useCommandPalette(
       if (item.kind === 'skill' && alreadyPicked.has(item.name)) {
         continue;
       }
+      if (item.kind === 'skill' && grouped && item.availability?.status !== 'available') {
+        continue;
+      }
       const rank = paletteItemMatchRank(item, query);
       if (rank === null) {
         continue;
@@ -369,6 +371,11 @@ export function useCommandPalette(
     }
 
     scored.sort((a, b) => {
+      const aUnavailableSkill = a.item.kind === 'skill' && a.item.availability?.status !== 'available';
+      const bUnavailableSkill = b.item.kind === 'skill' && b.item.availability?.status !== 'available';
+      if (aUnavailableSkill !== bUnavailableSkill) {
+        return aUnavailableSkill ? 1 : -1;
+      }
       if (a.rank !== b.rank) {
         return a.rank - b.rank;
       }

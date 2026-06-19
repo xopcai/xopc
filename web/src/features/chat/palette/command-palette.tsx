@@ -114,6 +114,8 @@ export const CommandPalette = memo(function CommandPalette({
   queueBadgeLabel,
   queueFullBadgeLabel,
   queueFullTooltip,
+  skillUnavailableLabel,
+  skillAgentDeniedLabel,
   onExpandSkills,
   onExpandCommands,
   onExpandAgents,
@@ -157,6 +159,8 @@ export const CommandPalette = memo(function CommandPalette({
   queueFullBadgeLabel: string;
   /** Tooltip shown when hovering a queue-full disabled row. */
   queueFullTooltip: string;
+  skillUnavailableLabel: string;
+  skillAgentDeniedLabel: string;
   onExpandSkills: () => void;
   onExpandCommands: () => void;
   onExpandAgents: () => void;
@@ -247,6 +251,7 @@ export const CommandPalette = memo(function CommandPalette({
     );
     const isCurrentAgent =
       isAgent && currentAgentId != null && currentAgentId.length > 0 && item.name === currentAgentId;
+    const isUnavailableSkill = isSkill && item.availability?.status !== 'available';
     const willQueue = commandRowWillQueue(item, streamCtx);
     const isDisabled = commandRowDisabled(item, streamCtx);
 
@@ -258,6 +263,15 @@ export const CommandPalette = memo(function CommandPalette({
           aria-label={currentBadgeLabel}
         >
           {currentBadgeLabel}
+        </span>
+      );
+    } else if (isUnavailableSkill) {
+      trailingBadge = (
+        <span
+          className="ml-1 shrink-0 rounded bg-surface-hover px-1 py-px text-[0.6rem] font-medium leading-none text-fg-muted"
+          aria-label={item.availability?.reason ?? 'unavailable'}
+        >
+          {item.availability?.status === 'agent-denied' ? skillAgentDeniedLabel : skillUnavailableLabel}
         </span>
       );
     } else if (isDisabled) {

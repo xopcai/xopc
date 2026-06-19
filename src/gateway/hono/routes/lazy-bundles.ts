@@ -143,7 +143,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'commands-skills',
-    match: (path) => startsWithAny(path, ['/api/commands', '/api/skills']),
+    match: (path) => startsWithAny(path, ['/api/commands', '/api/skills', '/api/chat/skills']),
     load: async () => {
       const { registerCommandsSkillsRoutes } = await import('./commands-skills.js');
       return { register: registerCommandsSkillsRoutes };

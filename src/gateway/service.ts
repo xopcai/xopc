@@ -102,6 +102,10 @@ export class GatewayService {
 
   private readonly sse = new GatewaySseHub();
 
+  getConfig(): Config {
+    return this.config;
+  }
+
   private stopGatewayUpdateCheck: (() => void) | null = null;
 
   /** When set (e.g. by `GatewayServer`), `triggerGatewayProcessRestart` can stop HTTP then exit. */

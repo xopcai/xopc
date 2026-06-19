@@ -5,7 +5,6 @@
 import { cp, mkdir, readdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve as pathResolve } from 'node:path';
 
-import { isBuiltinAgentId } from '../agent/builtin-agent-ids.js';
 import {
   DEFAULT_AGENT_ID,
   listAgentEntries,
@@ -274,9 +273,9 @@ export function prepareCreateAgent(
     workspace: wsAbs,
     ...(effectiveModels ? { models: effectiveModels } : {}),
     ...(body.agentDir?.trim() ? { agentDir: body.agentDir.trim() } : {}),
-    ...(!isBuiltinAgentId(agentId) && body.skills !== undefined
+    ...(body.skills !== undefined
       ? { skills: body.skills.map((s) => String(s).trim()).filter(Boolean) }
-      : !isBuiltinAgentId(agentId) && cloneSourceEntry?.skills !== undefined && body.cloneFrom
+      : cloneSourceEntry?.skills !== undefined && body.cloneFrom
         ? { skills: [...cloneSourceEntry.skills] }
         : {}),
   });
@@ -423,9 +422,6 @@ export function prepareUpdateAgent(
 
   type Entry = (typeof list)[number];
   const entry: Entry = { ...list[idx] };
-  if (isBuiltinAgentId(agentId)) {
-    delete entry.skills;
-  }
 
   if (body.workspace !== undefined) {
     const w = body.workspace.trim();
@@ -492,7 +488,7 @@ export function prepareUpdateAgent(
     }
   }
 
-  if (body.skills !== undefined && !isBuiltinAgentId(agentId)) {
+  if (body.skills !== undefined) {
     if (body.skills === null) {
       delete entry.skills;
     } else {

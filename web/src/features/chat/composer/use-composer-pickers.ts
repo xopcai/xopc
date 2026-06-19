@@ -37,6 +37,9 @@ export interface UseComposerPickersOptions {
   onUserTextCommitted?: (text: string) => void;
   /** Optional: when set, palette can offer agent rows that switch the active session agent. */
   onChatAgentChange?: (agentId: string) => void;
+  /** Active session agent id; used to resolve skill availability in `/` palette. */
+  currentAgentId?: string;
+  onUnavailableSkill?: (item: PaletteItem) => void;
   /** When runBusy and command is `acceptsArgs=false` non-abort: queue the command. */
   onAddPendingFollowUp?: (text: string, atts?: WireAttachment[]) => void | Promise<void>;
   /** When runBusy and command is abort-class: stop the current generation. */
@@ -82,6 +85,8 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     onSend,
     onUserTextCommitted,
     onChatAgentChange,
+    currentAgentId,
+    onUnavailableSkill,
     onAddPendingFollowUp,
     onAbort,
     pendingFollowUpsCount,
@@ -96,6 +101,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
   const palette = useCommandPalette(editorValue, editorCursor, {
     suppress: atRangeRaw != null,
     isComposing,
+    currentAgentId,
   });
   const atPicker = useAtMentionPicker(editorValue, editorCursor, {
     sessionKey,
@@ -123,6 +129,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
         onChatAgentChange,
         onAddPendingFollowUp,
         onAbort,
+        onUnavailableSkill,
       },
     }),
     [
@@ -139,6 +146,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
       onChatAgentChange,
       onAddPendingFollowUp,
       onAbort,
+      onUnavailableSkill,
     ],
   );
 
