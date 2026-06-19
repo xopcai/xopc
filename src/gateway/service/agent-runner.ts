@@ -120,13 +120,13 @@ export class GatewayAgentRunner {
 
     let step = await iter.next();
     while (!step.done) {
-      yield step.value as { type: string; [key: string]: unknown };
+      yield step.value as unknown as { type: string; [key: string]: unknown };
       step = await iter.next();
     }
     return step.value;
   }
 
-  /** Abort an in-flight webchat agent run (matches `runId` from SSE `status`). */
+  /** Abort an in-flight webchat agent run (matches `runId` from SSE `run_start`). */
   abortAgentRun(runId: string): boolean {
     this.clarifyBridge.cancelForRun(runId);
     const keysToMark: string[] = [];

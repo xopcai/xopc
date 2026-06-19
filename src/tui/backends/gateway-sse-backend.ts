@@ -106,9 +106,6 @@ export class GatewaySseBackend implements TuiBackend {
     const signal = this.chatAbort.signal;
     const runId = crypto.randomUUID();
 
-    // Match EmbeddedBackend: set activeRunId before any message/tool events so TUI state stays on one
-    // runId (avoids assistant under "default" and tools under the real uuid).
-    this.onEvent?.({ event: 'agent_start', data: { runId }, source: 'agent-response' });
 
     // Fire-and-forget: run the HTTP request + SSE consumption in background
     // so the TUI event loop stays responsive for keyboard input.
@@ -136,7 +133,13 @@ export class GatewaySseBackend implements TuiBackend {
           const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
           this.onEvent?.({
             event: 'error',
-            data: { content: body.error?.message ?? `Gateway error: ${res.status}` },
+            data: {
+              type: 'error',
+              runId,
+              sessionKey: opts.sessionKey,
+              timestamp: Date.now(),
+              payload: { code: 'GATEWAY_ERROR', message: body.error?.message ?? `Gateway error: ${res.status}` },
+            },
             source: 'agent-response',
           });
           return;
@@ -158,25 +161,23 @@ export class GatewaySseBackend implements TuiBackend {
         } else {
           const json = (await res.json()) as { ok?: boolean; payload?: { content?: string } };
           if (json.ok && json.payload?.content) {
-            this.onEvent?.({
-              event: 'message_end',
-              data: {
-                runId,
-                message: {
-                  role: 'assistant',
-                  content: [{ type: 'text', text: json.payload.content }],
-                  timestamp: Date.now(),
-                },
-              },
-              source: 'agent-response',
-            });
-            this.onEvent?.({ event: 'agent_end', data: { runId }, source: 'agent-response' });
+            const messageId = `msg_${runId}_1`;
+            const base = { runId, sessionKey: opts.sessionKey, timestamp: Date.now() };
+            this.onEvent?.({ event: 'run_start', data: { ...base, type: 'run_start', payload: { channel: 'webchat' } }, source: 'agent-response' });
+            this.onEvent?.({ event: 'assistant_message_start', data: { ...base, type: 'assistant_message_start', payload: { messageId } }, source: 'agent-response' });
+            this.onEvent?.({ event: 'assistant_delta', data: { ...base, type: 'assistant_delta', payload: { messageId, delta: json.payload.content } }, source: 'agent-response' });
+            this.onEvent?.({ event: 'assistant_message_end', data: { ...base, type: 'assistant_message_end', payload: { messageId } }, source: 'agent-response' });
+            this.onEvent?.({ event: 'run_end', data: { ...base, type: 'run_end', payload: { status: 'success' } }, source: 'agent-response' });
           }
         }
       } catch (error) {
         if (signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        this.onEvent?.({ event: 'error', data: { runId, content: errorMessage }, source: 'agent-response' });
+        this.onEvent?.({
+          event: 'error',
+          data: { type: 'error', runId, sessionKey: opts.sessionKey, timestamp: Date.now(), payload: { code: 'NETWORK_ERROR', message: errorMessage } },
+          source: 'agent-response',
+        });
       }
     })();
 
@@ -188,8 +189,8 @@ export class GatewaySseBackend implements TuiBackend {
     this.chatAbort = new AbortController();
     const signal = this.chatAbort.signal;
     this.onEvent?.({
-      event: 'agent_start',
-      data: { runId: opts.runId },
+      event: 'run_start',
+      data: { type: 'run_start', runId: opts.runId, sessionKey: opts.sessionKey, timestamp: Date.now(), payload: { channel: 'webchat' } },
       source: 'agent-resume',
     });
 
@@ -232,7 +233,11 @@ export class GatewaySseBackend implements TuiBackend {
       } catch (error) {
         if (signal.aborted) return;
         const errorMessage = error instanceof Error ? error.message : String(error);
-        this.onEvent?.({ event: 'error', data: { runId: opts.runId, content: errorMessage }, source: 'agent-resume' });
+        this.onEvent?.({
+          event: 'error',
+          data: { type: 'error', runId: opts.runId, sessionKey: opts.sessionKey, timestamp: Date.now(), payload: { code: 'NETWORK_ERROR', message: errorMessage } },
+          source: 'agent-resume',
+        });
       }
     })();
 

@@ -51,18 +51,6 @@ function maxBase64CharsForBinary(maxBinaryBytes: number): number {
   return 4 * Math.ceil(maxBinaryBytes / 3);
 }
 
-function extractTextFromStructuredContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  return content
-    .map((block) => {
-      if (!block || typeof block !== 'object') return '';
-      const rec = block as { type?: unknown; text?: unknown };
-      return rec.type === 'text' && typeof rec.text === 'string' ? rec.text : '';
-    })
-    .join('');
-}
-
 /**
  * POST /api/agent — Send a message to the agent, stream response via SSE.
  *
@@ -70,13 +58,11 @@ function extractTextFromStructuredContent(content: unknown): string {
  * Accept: text/event-stream → SSE stream
  * Accept: application/json → wait for full response, return JSON
  *
- * SSE events:
- *   event: agent_start — { runId }
- *   event: user_message — { timestamp, content?, attachments? } (user turn accepted, before agent tokens)
- *   event: user_transcript — { text, attachments? } (voice STT complete, before agent tokens)
- *   event: message_start / message_update / message_end — structured pi-agent messages
- *   event: tool_execution_start / tool_execution_update / tool_execution_end — structured tool lifecycle
- *   event: error    — { content }
+ * SSE events follow XOPC Chat Stream Protocol v1:
+ *   run_start, user_message, user_transcript, assistant_message_start,
+ *   assistant_delta, thinking_delta, thinking_end, tool_start, tool_update,
+ *   tool_end, assistant_message_end, compaction, tts_audio, clarify_request,
+ *   run_end, error.
  */
 export function createAgentSSEHandler(config: SSEHandlerConfig) {
   const { service } = config;
@@ -141,7 +127,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
     const clientAbort = new AbortController();
     const raw = c.req.raw;
     // Keep webchat runs alive across transient disconnects (page refresh / tab route switch)
-    // so the client can reattach via /api/agent/resume using runId from `agent_start`.
+    // so the client can reattach via /api/agent/resume using runId from `run_start`.
     // Explicit cancellation still goes through /api/agent/abort.
     if (channel !== 'webchat') {
       if (raw.signal.aborted) {
@@ -169,9 +155,9 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
             finalResult = value as { status: string; summary: string };
             break;
           }
-          const chunk = value as { type: string; message?: { role?: string; content?: unknown } };
-          if (chunk.type === 'message_end' && chunk.message?.role === 'assistant') {
-            tokens.push(extractTextFromStructuredContent(chunk.message.content));
+          const chunk = value as { type: string; payload?: { delta?: unknown } };
+          if (chunk.type === 'assistant_delta' && typeof chunk.payload?.delta === 'string') {
+            tokens.push(chunk.payload.delta);
           }
         }
 
@@ -213,30 +199,16 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
       });
 
       let eventId = 0;
-      let runId: string | undefined;
-      let sawAgentEnd = false;
 
       try {
         while (true) {
           const { done, value } = await generator.next();
 
-          if (done) {
-            if (!sawAgentEnd) {
-              await stream.writeSSE({
-                id: String(++eventId),
-                event: 'agent_end',
-                data: stringifySSEData({ type: 'agent_end', ...(runId ? { runId } : {}) }),
-              });
-            }
-            break;
-          }
+          if (done) break;
 
-          const chunk = value as { type: string; [key: string]: unknown };
-          if (typeof chunk.runId === 'string' && chunk.runId) runId = chunk.runId;
-          if (chunk.type === 'agent_end') sawAgentEnd = true;
-
+          const chunk = value as { type: string; seq?: unknown };
           await stream.writeSSE({
-            id: String(++eventId),
+            id: typeof chunk.seq === 'number' ? String(chunk.seq) : String(++eventId),
             event: chunk.type || 'message',
             data: stringifySSEData(chunk),
           });
@@ -246,9 +218,12 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
         await stream.writeSSE({
           id: String(++eventId),
           event: 'error',
-          data: JSON.stringify({
-            ok: false,
-            error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Unknown error' },
+          data: stringifySSEData({
+            type: 'error',
+            runId: 'unknown',
+            sessionKey: chatId,
+            timestamp: Date.now(),
+            payload: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Unknown error' },
           }),
         });
       }
@@ -292,7 +267,7 @@ export function createAgentResumeHandler(config: SSEHandlerConfig) {
       try {
         for await (const event of service.runRelay.subscribe(runId)) {
           await stream.writeSSE({
-            id: String(++eventId),
+            id: typeof event.seq === 'number' ? String(event.seq) : String(++eventId),
             event: event.type || 'message',
             data: stringifySSEData(event),
           });
@@ -302,9 +277,12 @@ export function createAgentResumeHandler(config: SSEHandlerConfig) {
         await stream.writeSSE({
           id: String(++eventId),
           event: 'error',
-          data: JSON.stringify({
-            ok: false,
-            error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Unknown error' },
+          data: stringifySSEData({
+            type: 'error',
+            runId,
+            sessionKey: typeof resumeChatId === 'string' ? resumeChatId : '',
+            timestamp: Date.now(),
+            payload: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Unknown error' },
           }),
         });
       }

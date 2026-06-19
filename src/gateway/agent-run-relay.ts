@@ -8,7 +8,7 @@ import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('Gateway:AgentRunRelay');
 
-export type RelayEvent = { type: string; [key: string]: unknown };
+export type RelayEvent = { type: string } & Record<string, unknown>;
 
 type RunState = {
   sessionKey: string;
