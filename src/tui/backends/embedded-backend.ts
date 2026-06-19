@@ -1,5 +1,7 @@
 import type { ExtensionRegistryImpl } from '../../extensions/loader.js';
+import { BUILTIN_AGENT_IDS } from '../../agent/builtin-agent-ids.js';
 import { AgentService } from '../../agent/index.js';
+import { listAgentEntries, normalizeAgentId } from '../../agent/agent-scope.js';
 import { parseModelRef } from '../../agent/models/selection.js';
 import { createCreateShareTool, isShareToolAvailable } from '../../agent/tools/create-share-tool.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
@@ -22,6 +24,7 @@ import type {
   TuiSessionStats,
   TuiSessionItem,
   TuiTranscriptTreeEntry,
+  TuiAgentInfo,
 } from '../tui-backend.js';
 import type { SessionInfo } from '../tui-types.js';
 import { sessionMetadataToTuiItem } from '../tui-session-format.js';
@@ -222,6 +225,24 @@ export class EmbeddedBackend implements TuiBackend {
       log.warn({ err: error, errorMessage }, `Embedded listSessions failed: ${errorMessage}`);
       return [];
     }
+  }
+
+  async listAgents(): Promise<TuiAgentInfo[]> {
+    const config = loadConfig();
+    const agents = new Map<string, TuiAgentInfo>();
+    for (const id of BUILTIN_AGENT_IDS) {
+      agents.set(id, { id, source: 'builtin', enabled: true });
+    }
+    for (const entry of listAgentEntries(config)) {
+      if (entry.enabled === false) continue;
+      const id = normalizeAgentId(entry.id);
+      agents.set(id, {
+        id,
+        source: 'configured',
+        enabled: true,
+      });
+    }
+    return [...agents.values()].sort((a, b) => a.id.localeCompare(b.id));
   }
 
   async renameSession(sessionKey: string, name: string): Promise<{ ok: boolean }> {
