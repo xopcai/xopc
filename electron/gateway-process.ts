@@ -89,14 +89,31 @@ function tryListenOnce(hostname: string, port: number): Promise<boolean> {
   });
 }
 
+function resolvePackagedAppPath(...segments: string[]): string {
+  const appPath = app.getAppPath();
+  const unpacked = join(dirname(appPath), 'app.asar.unpacked', ...segments);
+  if (existsSync(unpacked)) return unpacked;
+  return join(appPath, ...segments);
+}
+
+/** Static UI root for the packaged gateway subprocess. Prefer a real unpacked path on Windows. */
+function resolvePackagedStaticRoot(): string {
+  return resolvePackagedAppPath('dist', 'gateway', 'static', 'root');
+}
+
+/** Bundled extension modules import sibling dist/src files; keep them inside the same packaged tree. */
+function resolvePackagedBundledExtensionsRoot(): string {
+  return resolvePackagedAppPath('dist', 'extensions');
+}
+
 /**
  * CLI entry for the gateway subprocess.
- * Packaged: esbuild bundle at `out/server/index.js` (self-contained).
+ * Packaged: esbuild bundle at `out/server/index.js` (self-contained, asar-unpacked).
  * Dev: tsdown output at `dist/src/cli/bin.js` (resolves deps from node_modules).
  */
 export function resolveCliEntry(): string {
   if (app.isPackaged) {
-    return join(app.getAppPath(), 'out/server/index.js');
+    return resolvePackagedAppPath('out', 'server', 'index.js');
   }
   const mainDir = dirname(fileURLToPath(import.meta.url));
   return join(mainDir, '../../dist/src/cli/bin.js');
@@ -144,9 +161,10 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
         XOPC_WORKSPACE: opts.workspacePath,
         ...(isPackaged
           ? {
-              XOPC_UI_STATIC_ROOT: join(app.getAppPath(), 'dist/gateway/static/root'),
+              XOPC_UI_STATIC_ROOT: resolvePackagedStaticRoot(),
+              XOPC_BUNDLED_EXTENSIONS_ROOT: resolvePackagedBundledExtensionsRoot(),
               XOPC_BROWSER_EXT_BUNDLED_ROOT: join(process.resourcesPath, 'browser-ext'),
-              XOPC_TEMPLATE_PATH: join(app.getAppPath(), 'out/server/workspace-templates'),
+              XOPC_TEMPLATE_PATH: resolvePackagedAppPath('out', 'server', 'workspace-templates'),
               XOPC_PLAYWRIGHT_CORE_ROOT: join(process.resourcesPath, 'playwright-core'),
               XOPC_RIPGREP_BIN: join(
                 process.resourcesPath,

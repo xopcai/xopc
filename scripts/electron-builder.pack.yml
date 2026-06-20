@@ -30,6 +30,23 @@ files:
 # slows cold start. Unpacking it (and its sibling templates) puts it on plain disk.
 asarUnpack:
   - 'out/server/**'
+  # The gateway subprocess runs from app.asar.unpacked/out/server. Native ESM
+  # package resolution then walks app.asar.unpacked/node_modules, not
+  # app.asar/node_modules, so runtime externals must be unpacked beside it.
+  - 'node_modules/@vscode/ripgrep/**'
+  - 'node_modules/@vscode/ripgrep-*/**'
+  - 'node_modules/node-cron/**'
+  - 'node_modules/silk-wasm/**'
+  # Bundled channel extensions are loaded dynamically by the gateway subprocess. Keep the
+  # emitted extension tree and its sibling dist/src imports on the same real filesystem root;
+  # otherwise an unpacked dist/extensions would resolve ../../../src to a missing path.
+  - 'dist/extensions/**'
+  - 'dist/src/**'
+  - 'dist/_virtual/**'
+  # The packaged Electron main process starts a gateway subprocess with ELECTRON_RUN_AS_NODE.
+  # Keep the SPA assets on the real filesystem too; Windows is less tolerant of serving
+  # many files from app.asar in that subprocess and can otherwise boot to a blank shell.
+  - 'dist/gateway/static/root/**'
 
 extraMetadata:
   main: out/main/index.js
@@ -64,12 +81,13 @@ protocols:
       - xopc
 
 # Limit Chromium UI locales (file dialogs, context menus) to the ones xopc supports.
-# Drops 270+ unused locale .pak files from Electron Framework — biggest single win on dmg size.
-# Names must match Electron's *.lproj folders (underscore, not BCP-47 hyphen).
+# Names must match Electron's packaged locale `.pak` basenames. Using `en` / `zh_CN`
+# leaves Windows packaged installs with an empty `locales/` directory, which makes
+# Chromium fail locale resource lookup during renderer startup.
 electronLanguages:
-  - en
-  - zh_CN
-  - zh_TW
+  - en-US
+  - zh-CN
+  - zh-TW
 
 mac:
   category: public.app-category.productivity

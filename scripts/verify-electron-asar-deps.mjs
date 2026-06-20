@@ -3,11 +3,13 @@
  * Fail when app.asar contains an oversized node_modules tree (pnpm workspace leak).
  * Usage: node scripts/verify-electron-asar-deps.mjs [path-to-xopc.app-or-app.asar]
  */
-import { createRequire } from 'node:module';
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+import { ELECTRON_PACKAGED_DEPENDENCIES } from './electron-runtime-externals.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const requireRoot = createRequire(join(root, 'package.json'));
@@ -53,6 +55,49 @@ function dirSizeBytes(dir) {
   return total;
 }
 
+function packageDir(rootDir, name) {
+  return join(rootDir, 'node_modules', ...name.split('/'));
+}
+
+function verifyUnpackedRuntimeDeps(asarPath) {
+  const unpackedDir = join(dirname(asarPath), 'app.asar.unpacked');
+  const unpackedServer = join(unpackedDir, 'out', 'server', 'index.js');
+  if (!existsSync(unpackedServer)) {
+    return;
+  }
+
+  const missing = ELECTRON_PACKAGED_DEPENDENCIES.filter((name) => !existsSync(packageDir(unpackedDir, name)));
+  if (missing.length > 0) {
+    console.error(
+      `[verify-electron-asar-deps] app.asar.unpacked is missing runtime deps for unpacked gateway: ${missing.join(', ')}. ` +
+        'Add them to asarUnpack in scripts/electron-builder.pack.yml.',
+    );
+    process.exit(1);
+  }
+  console.log(
+    `[verify-electron-asar-deps] OK — unpacked gateway runtime deps present (${ELECTRON_PACKAGED_DEPENDENCIES.join(', ')})`,
+  );
+}
+
+function verifyUnpackedAppLayout(asarPath) {
+  const unpackedDir = join(dirname(asarPath), 'app.asar.unpacked');
+  const required = [
+    'out/server/index.js',
+    'dist/gateway/static/root/index.html',
+    'dist/extensions',
+    'dist/src',
+  ];
+  const missing = required.filter((rel) => !existsSync(join(unpackedDir, rel)));
+  if (missing.length > 0) {
+    console.error(
+      `[verify-electron-asar-deps] app.asar.unpacked is missing packaged runtime paths: ${missing.join(', ')}. ` +
+        'Check prepare-electron-pack-dir.mjs and asarUnpack in scripts/electron-builder.pack.yml.',
+    );
+    process.exit(1);
+  }
+  console.log('[verify-electron-asar-deps] OK — unpacked app runtime layout present');
+}
+
 export { findDefaultAsar };
 
 function main() {
@@ -73,19 +118,21 @@ function main() {
     const nm = join(tmp, 'node_modules');
     if (!existsSync(nm)) {
       console.log('[verify-electron-asar-deps] OK — no node_modules in asar');
-      process.exit(0);
+    } else {
+      const bytes = dirSizeBytes(nm);
+      const mb = (bytes / (1024 * 1024)).toFixed(2);
+      const maxMb = (maxNodeModulesBytes / (1024 * 1024)).toFixed(2);
+      if (bytes > maxNodeModulesBytes) {
+        console.error(
+          `[verify-electron-asar-deps] node_modules too large: ${mb} MB (max ${maxMb} MB). ` +
+            'pnpm workspace deps may have been bundled — check prepare-electron-pack-dir.mjs',
+        );
+        process.exit(1);
+      }
+      console.log(`[verify-electron-asar-deps] OK — node_modules ${mb} MB (max ${maxMb} MB)`);
     }
-    const bytes = dirSizeBytes(nm);
-    const mb = (bytes / (1024 * 1024)).toFixed(2);
-    const maxMb = (maxNodeModulesBytes / (1024 * 1024)).toFixed(2);
-    if (bytes > maxNodeModulesBytes) {
-      console.error(
-        `[verify-electron-asar-deps] node_modules too large: ${mb} MB (max ${maxMb} MB). ` +
-          'pnpm workspace deps may have been bundled — check prepare-electron-pack-dir.mjs',
-      );
-      process.exit(1);
-    }
-    console.log(`[verify-electron-asar-deps] OK — node_modules ${mb} MB (max ${maxMb} MB)`);
+    verifyUnpackedRuntimeDeps(asarPath);
+    verifyUnpackedAppLayout(asarPath);
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

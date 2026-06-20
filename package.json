@@ -80,7 +80,7 @@
     "electron:server:build": "node scripts/build-electron-server.mjs",
     "electron:frpc:download": "node --import tsx/esm scripts/download-frpc-binaries.mjs",
     "electron:frpc:download:all": "node --import tsx/esm scripts/download-frpc-binaries.mjs --all",
-    "electron:build": "pnpm run electron:vite:build:package && pnpm run electron:server:build && pnpm run electron:package",
+    "electron:build": "pnpm run build:web && pnpm run electron:vite:build:package && pnpm run electron:server:build && pnpm run electron:package",
     "electron:preview": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite preview"
   },
   "keywords": [
@@ -172,7 +172,7 @@
     "@vitejs/plugin-react-swc": "^4.3.1",
     "cross-env": "^10.1.0",
     "dependency-cruiser": "^17.4.3",
-    "electron": "^41.7.1",
+    "electron": "^42.4.1",
     "electron-builder": "^26.12.1",
     "electron-vite": "^6.0.0-beta.1",
     "esbuild": "^0.28.1",
