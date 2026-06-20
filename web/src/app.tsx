@@ -73,6 +73,12 @@ function RedirectLegacySettingsAgentsDetail() {
   return <Navigate to={raw ? `/agents/${encodeURIComponent(raw)}` : '/agents'} replace />;
 }
 
+function RedirectLegacyNoteDetail() {
+  const { noteId } = useParams();
+  const raw = typeof noteId === 'string' ? noteId.trim() : '';
+  return <Navigate to={raw ? `/notes/${encodeURIComponent(raw)}` : '/notes'} replace />;
+}
+
 function SettingsRouteFallback() {
   return (
     <div className="flex min-h-0 flex-1 flex-col" aria-busy>
@@ -126,6 +132,10 @@ const router = createHashRouter([
             <CronPage />
           </Suspense>
         ),
+      },
+      {
+        path: 'note/:noteId',
+        element: <RedirectLegacyNoteDetail />,
       },
       {
         path: 'notes',

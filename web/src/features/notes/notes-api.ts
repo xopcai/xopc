@@ -46,6 +46,29 @@ export interface NoteCatalysisReport {
   confidence: number;
 }
 
+export interface NoteAgentContextAttachmentStatus {
+  attachmentId: string;
+  type: NoteAttachment['type'];
+  fileName: string;
+  mimeType: string;
+  size: number;
+  status: 'ready' | 'unsupported' | 'failed';
+  summary?: string;
+  transcript?: string;
+  extractedText?: string;
+  error?: string;
+}
+
+export interface NoteAgentContextStatus {
+  noteUpdatedAt: number;
+  stale: boolean;
+  status: 'ready' | 'partial' | 'failed';
+  generatedAt?: number;
+  tokenEstimate?: number;
+  truncated: boolean;
+  attachments: NoteAgentContextAttachmentStatus[];
+}
+
 export interface NoteCatalysisMeta {
   status: 'none' | 'queued' | 'catalyzed' | 'snoozed' | 'dismissed';
   stage?: 'seed' | 'incubating' | 'developing' | 'validating' | 'shipped';
@@ -187,10 +210,23 @@ export interface NoteChatSessionSummary {
   customData?: Record<string, unknown>;
 }
 
-export async function openNoteChat(id: string): Promise<{ sessionKey: string; reused: boolean; session?: NoteChatSessionSummary }> {
-  return fetchJson<{ sessionKey: string; reused: boolean; session?: NoteChatSessionSummary }>(
+export interface NoteSourceBinding {
+  kind: 'note';
+  sourceId: string;
+  version: string;
+  attachedAt: number;
+}
+
+export async function openNoteChat(
+  id: string,
+  opts: { forceNew?: boolean } = {},
+): Promise<{ sessionKey: string; reused: boolean; session?: NoteChatSessionSummary; sourceBinding?: NoteSourceBinding }> {
+  return fetchJson<{ sessionKey: string; reused: boolean; session?: NoteChatSessionSummary; sourceBinding?: NoteSourceBinding }>(
     apiUrl(`/api/notes/${encodeURIComponent(id)}/chat`),
-    { method: 'POST' },
+    {
+      method: 'POST',
+      body: JSON.stringify(opts.forceNew ? { forceNew: true } : {}),
+    },
   );
 }
 
@@ -199,6 +235,16 @@ export async function listNoteThreads(id: string): Promise<NoteChatSessionSummar
     apiUrl(`/api/notes/${encodeURIComponent(id)}/threads`),
   );
   return result.items;
+}
+
+export async function getNoteAgentContextStatus(id: string): Promise<NoteAgentContextStatus> {
+  return fetchJson<NoteAgentContextStatus>(apiUrl(`/api/notes/${encodeURIComponent(id)}/context-status`));
+}
+
+export async function rebuildNoteAgentContext(id: string): Promise<NoteAgentContextStatus> {
+  return fetchJson<NoteAgentContextStatus>(apiUrl(`/api/notes/${encodeURIComponent(id)}/context-rebuild`), {
+    method: 'POST',
+  });
 }
 
 export async function appendNoteContent(id: string, content: string, heading?: string): Promise<Note> {
