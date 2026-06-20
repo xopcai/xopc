@@ -36,12 +36,6 @@ function buildNotePatch(body: Record<string, unknown>): Partial<Note> {
   return patch;
 }
 
-function buildNoteThreadContext(note: Note): string {
-  const title = note.title?.trim() || '未命名笔记';
-  const body = note.markdown.trim() || '这条笔记暂无正文。';
-  return [`来源 Note：${title}`, '', body].join('\n');
-}
-
 function noteThreadName(note: Note): string {
   const title = note.title?.trim() || note.markdown.trim().slice(0, 28) || '未命名笔记';
   return `讨论：${title}`;
@@ -225,11 +219,25 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       agentId = getDefaultAgentId(routingCfg);
     }
 
+    const sourceBinding = {
+      kind: 'note' as const,
+      sourceId: noteId,
+      version: String(note.updatedAt),
+      attachedAt: Date.now(),
+    };
+    const forceNew = body.forceNew === true;
     const existingKey = note.aiDeep?.catalysis?.sourceSessionKey;
-    if (existingKey) {
+    if (!forceNew && existingKey) {
       const existingSession = await service.sessions.getSession(existingKey);
       if (existingSession) {
-        return c.json({ session: existingSession, sessionKey: existingKey, reused: true });
+        const meta = await service.sessionIndexInstance.getSessionMetadata(existingKey);
+        await service.sessionIndexInstance.updateSessionMetadata(existingKey, {
+          customData: {
+            ...(meta?.customData ?? {}),
+            sourceBinding,
+          },
+        });
+        return c.json({ session: existingSession, sessionKey: existingKey, reused: true, sourceBinding });
       }
     }
 
@@ -242,15 +250,6 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     });
 
     await service.sessionIndexInstance.saveMessages(sessionKey, []);
-    await service.sessionIndexInstance.appendTranscriptContextEntry(sessionKey, {
-      id: `source-note:${noteId}`,
-      text: buildNoteThreadContext(note),
-      data: {
-        kind: 'source_note',
-        noteId,
-        title: note.title ?? '',
-      },
-    });
 
     const meta = await service.sessionIndexInstance.getSessionMetadata(sessionKey);
     await service.sessionIndexInstance.updateSessionMetadata(sessionKey, {
@@ -258,14 +257,44 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       tags: Array.from(new Set([...(meta?.tags ?? []), 'note'])),
       customData: {
         ...(meta?.customData ?? {}),
-        sourceNoteId: noteId,
-        sourceNoteTitle: note.title ?? '',
+        sourceBinding,
       },
     });
 
     await service.notesServiceInstance.linkNoteThread(noteId, sessionKey);
     const session = await service.sessions.getSession(sessionKey);
-    return c.json({ session, sessionKey, reused: false }, 201);
+    return c.json({ session, sessionKey, reused: false, sourceBinding }, 201);
+  });
+
+  function noteContextStatusPayload(result: NonNullable<Awaited<ReturnType<typeof service.notesServiceInstance.getAgentContextStatus>>>) {
+    const artifact = result.artifact;
+    return {
+      noteUpdatedAt: result.noteUpdatedAt,
+      stale: result.stale,
+      status: artifact?.status ?? 'failed',
+      generatedAt: artifact?.generatedAt,
+      tokenEstimate: artifact?.tokenEstimate,
+      truncated: artifact?.truncated ?? false,
+      attachments: artifact?.attachments ?? [],
+    };
+  }
+
+  // GET /api/notes/:id/context-status — build/read the Note grounding artifact status
+  authenticated.get('/api/notes/:id/context-status', async (c) => {
+    const result = await service.notesServiceInstance.getAgentContextStatus(c.req.param('id'), service.currentConfig);
+    if (!result) {
+      return c.json({ error: 'Note not found' }, 404);
+    }
+    return c.json(noteContextStatusPayload(result));
+  });
+
+  // POST /api/notes/:id/context-rebuild — force rebuild media/document understanding artifact
+  authenticated.post('/api/notes/:id/context-rebuild', async (c) => {
+    const result = await service.notesServiceInstance.getAgentContextStatus(c.req.param('id'), service.currentConfig, true);
+    if (!result) {
+      return c.json({ error: 'Note not found' }, 404);
+    }
+    return c.json(noteContextStatusPayload(result));
   });
 
   // GET /api/notes/:id/threads — list chat threads linked to a note

@@ -1,5 +1,5 @@
 import { ArrowLeft, Eye, Code2, FileText, History, MessageCircle, Sparkles } from 'lucide-react';
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
@@ -100,8 +100,11 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
   const [catalyzing, setCatalyzing] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
   const titleInitRef = useRef(false);
+  const titleComposingRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingMarkdownRef = useRef<string | null>(null);
+  const pendingTitleRef = useRef<string | null>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
@@ -116,10 +119,19 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     { revalidateOnFocus: false },
   );
 
-  if (note && !titleInitRef.current) {
+  useEffect(() => {
+    titleInitRef.current = false;
+    setTitle('');
+    setPreviewSnapshot(null);
+    setActiveSidePanel(null);
+    titleComposingRef.current = false;
+  }, [noteId]);
+
+  useEffect(() => {
+    if (!note || titleInitRef.current) return;
     setTitle(note.title ?? '');
     titleInitRef.current = true;
-  }
+  }, [note]);
 
   const time = note
     ? new Date(note.createdAt).toLocaleString(undefined, {
@@ -152,11 +164,15 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     (value: string) => {
       setTitle(value);
       if (!noteId) return;
+      pendingTitleRef.current = value;
       if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
       titleDebounceRef.current = setTimeout(async () => {
+        const nextTitle = pendingTitleRef.current;
+        pendingTitleRef.current = null;
+        if (nextTitle === null) return;
         setSaving(true);
         try {
-          await updateNote(noteId, { title: value });
+          await updateNote(noteId, { title: nextTitle });
           await mutate();
           onSaved?.();
         } catch {
@@ -186,10 +202,10 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     [n.saving, saving, time, title],
   );
 
-  const handleOpenNoteChat = useCallback(async () => {
+  const handleOpenNoteChat = useCallback(async (forceNew = false) => {
     setOpeningChat(true);
     try {
-      const result = await openNoteChat(noteId);
+      const result = await openNoteChat(noteId, { forceNew });
       await mutate();
       await mutateNoteThreads();
       navigate(`/chat/${encodeURIComponent(result.sessionKey)}`);
@@ -202,7 +218,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     } finally {
       setOpeningChat(false);
     }
-  }, [mutate, mutateNoteThreads, navigate, noteId]);
+  }, [mutate, mutateNoteThreads, navigate, noteId, n.chatOpenFailedMessage, n.chatOpenFailedTitle]);
 
   const handleCatalyze = useCallback(async () => {
     setCatalyzing(true);
@@ -221,26 +237,34 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     }
   }, [mutate, noteId]);
 
+  const handleBreakdownClick = useCallback(() => {
+    setActiveSidePanel(activeSidePanel === 'breakdown' ? null : 'breakdown');
+    if (!note?.aiDeep?.catalysis?.report && !catalyzing) {
+      void handleCatalyze();
+    }
+  }, [activeSidePanel, catalyzing, handleCatalyze, note?.aiDeep?.catalysis?.report]);
+
   const headerEnd = useMemo(
     () => (
       <div className={cn('flex items-center gap-2', APP_CHROME_NO_DRAG_CLASS)}>
         <button
           type="button"
-          onClick={() => setActiveSidePanel(activeSidePanel === 'breakdown' ? null : 'breakdown')}
+          onClick={handleBreakdownClick}
+          disabled={catalyzing}
           aria-label={n.catalysisSectionTitle}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
+            'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50',
             activeSidePanel === 'breakdown'
               ? 'bg-accent/10 text-accent'
               : 'bg-accent/10 text-fg hover:bg-accent/15',
           )}
         >
           <Sparkles className="h-3.5 w-3.5" aria-hidden />
-          {n.catalyzeButton}
+          {catalyzing ? n.catalyzing : n.catalyzeButton}
         </button>
         <button
           type="button"
-          onClick={handleOpenNoteChat}
+          onClick={() => handleOpenNoteChat(false)}
           disabled={openingChat}
           className={cn(
             'inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors',
@@ -272,7 +296,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     ),
     [
       catalyzing,
-      handleCatalyze,
+      handleBreakdownClick,
       handleOpenNoteChat,
       mode,
       n.history,
@@ -296,13 +320,17 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
   const handleSave = useCallback(
     (content: string) => {
       if (!noteId) return;
+      pendingMarkdownRef.current = content;
 
       // Debounce saves to avoid excessive API calls
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(async () => {
+        const markdown = pendingMarkdownRef.current;
+        pendingMarkdownRef.current = null;
+        if (markdown === null) return;
         setSaving(true);
         try {
-          await updateNote(noteId, { markdown: content });
+          await updateNote(noteId, { markdown });
           await mutate();
           onSaved?.();
         } catch (err) {
@@ -340,10 +368,41 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     onSaved?.();
   }, [mutate, onSaved]);
 
-  if (!note) {
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
+      const pendingMarkdown = pendingMarkdownRef.current;
+      const pendingTitle = pendingTitleRef.current;
+      pendingMarkdownRef.current = null;
+      pendingTitleRef.current = null;
+      const patch: Partial<import('./notes-api').Note> = {};
+      if (pendingMarkdown !== null) patch.markdown = pendingMarkdown;
+      if (pendingTitle !== null) patch.title = pendingTitle;
+      if (Object.keys(patch).length > 0) void updateNote(noteId, patch);
+    };
+  }, [noteId]);
+
+  if (note === undefined) {
     return (
       <div className="flex flex-1 items-center justify-center">
         <div className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (note === null) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 text-center">
+        <div className="text-sm font-medium text-fg">{n.notFoundTitle}</div>
+        <p className="text-sm text-fg-muted">{n.notFoundDescription}</p>
+        <button
+          type="button"
+          onClick={onBack}
+          className="rounded-lg border border-edge px-3 py-1.5 text-sm font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+        >
+          {n.back}
+        </button>
       </div>
     );
   }
@@ -384,8 +443,15 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
                       type="text"
                       value={title}
                       onChange={(e) => handleTitleChange(e.target.value)}
+                      onCompositionStart={() => {
+                        titleComposingRef.current = true;
+                      }}
+                      onCompositionEnd={() => {
+                        titleComposingRef.current = false;
+                      }}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+                        const nativeEvent = e.nativeEvent as KeyboardEvent & { isComposing?: boolean };
+                        if (e.key === 'Enter' && !titleComposingRef.current && !nativeEvent.isComposing) {
                           e.preventDefault();
                           const prosemirror = editorContainerRef.current?.querySelector<HTMLElement>('.ProseMirror');
                           prosemirror?.focus();
@@ -519,7 +585,8 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
                 onClose={() => setActiveSidePanel(null)}
                 noteThreads={noteThreads}
                 openingChat={openingChat}
-                onOpenChat={handleOpenNoteChat}
+                onOpenChat={() => handleOpenNoteChat(false)}
+                onOpenNewChat={() => handleOpenNoteChat(true)}
               />
             ) : null}
           </div>

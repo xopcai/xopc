@@ -90,6 +90,12 @@ export {
   upsertNoteRecord,
 } from './notes-repository.js';
 export {
+  deleteNoteAgentContextRecord,
+  getNoteAgentContextRecord,
+  upsertNoteAgentContextRecord,
+  type NoteAgentContextRecord,
+} from './note-agent-context-repository.js';
+export {
   resolveAgentIdFromMemoriesDir,
   searchMemoryIndex,
   syncMemoryIndex,

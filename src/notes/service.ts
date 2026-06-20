@@ -8,6 +8,7 @@ import { createLogger } from '../utils/logger.js';
 import { buildNoteAttachmentRef } from './attachment-ref.js';
 import { partitionAttachmentsByReference } from './note-attachment-sync.js';
 import { parseNoteMarkdown } from './note-markdown.js';
+import { buildNoteAgentContextArtifact, getCachedNoteAgentContextArtifact } from './agent-context.js';
 import { NotesStore } from './store.js';
 import type {
   CaptureSource,
@@ -314,6 +315,17 @@ export class NotesService {
     const note = await this.store.getNote(id);
     if (!note) return null;
     return Array.from(new Set([note.aiDeep?.catalysis?.sourceSessionKey, ...(note.aiDeep?.catalysis?.linkedSessionKeys ?? [])].filter((key): key is string => Boolean(key))));
+  }
+
+  async getAgentContextStatus(id: string, config?: Config, force = false): Promise<{ noteUpdatedAt: number; artifact: import('./agent-context.js').NoteAgentContextArtifact | null; stale: boolean } | null> {
+    const note = await this.store.getNote(id);
+    if (!note) return null;
+    const cached = getCachedNoteAgentContextArtifact(id);
+    if (!force && cached && cached.noteUpdatedAt === note.updatedAt) {
+      return { noteUpdatedAt: note.updatedAt, artifact: cached, stale: false };
+    }
+    const artifact = await buildNoteAgentContextArtifact({ note, notesService: this, config, force });
+    return { noteUpdatedAt: note.updatedAt, artifact, stale: false };
   }
 
   async appendTextToNote(id: string, content: string, heading = 'AI 讨论沉淀'): Promise<Note | null> {

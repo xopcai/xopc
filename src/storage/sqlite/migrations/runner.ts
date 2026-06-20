@@ -19,7 +19,7 @@ const log = createLogger('Sqlite:Migrations');
 export const XOPC_DB_BASELINE_SCHEMA_VERSION = 3;
 
 /** Latest schema version this release supports (increment when adding migrations). */
-export const XOPC_DB_SCHEMA_VERSION = 4;
+export const XOPC_DB_SCHEMA_VERSION = 5;
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 

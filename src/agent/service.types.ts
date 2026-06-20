@@ -6,6 +6,7 @@ import type { CronService } from '../cron/service.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import type { ProgressStage } from './lifecycle/progress.js';
+import type { AgentSourceContextResolver } from './source-context/types.js';
 
 export interface AgentServiceConfig {
   workspace: string;
@@ -40,6 +41,8 @@ export interface AgentServiceConfig {
   onSessionTranscriptUpdated?: (sessionKey: string) => void;
   /** Gateway: persisted workflow runs. */
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike;
+  /** Gateway: resolves bound source context (e.g. Note-grounded chat) before each turn. */
+  sourceContextResolver?: AgentSourceContextResolver;
 }
 
 export interface AgentContext {

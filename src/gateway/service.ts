@@ -10,7 +10,7 @@ import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { CronService } from '../cron/index.js';
-import { NotesService, NotesStore } from '../notes/index.js';
+import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
 import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
 import { WorkflowSessionBridge } from '../workflows/service/workflow-session-bridge.js';
@@ -290,6 +290,16 @@ export class GatewayService {
       extensionRegistry: this.extensionLoader?.getRegistry(),
       getCronService: () => cronRef.service,
       getWorkflowRunService: () => this.createWorkflowRunService(),
+      sourceContextResolver: async (binding) => {
+        if (binding.kind !== 'note') return null;
+        const note = await this.notesService.getNote(binding.sourceId);
+        if (!note) return null;
+        return buildNoteAgentContext({
+          note,
+          notesService: this.notesService,
+          config: this.config,
+        });
+      },
       gatewayClarify: {
         requestClarification: (sessionKey, request) =>
           this.agentRunner.requestClarification({

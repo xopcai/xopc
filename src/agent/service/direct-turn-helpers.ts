@@ -9,6 +9,7 @@
 import crypto from 'node:crypto';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { ImageContent } from '@earendil-works/pi-ai';
 
 import { commandRegistry } from '../../chat-commands/index.js';
 import { parseSlashCommand } from '../../chat-commands/command-parse.js';
@@ -22,6 +23,7 @@ import type { ModelManager } from '../models/index.js';
 import { extractAgentUserPlainText } from '../memory/user-message-text.js';
 import { runEmbeddedTurnForSession } from '../embedded/run-for-session.js';
 import type { EmbeddedStreamEvent } from '../embedded/types.js';
+import { resolveImageHandlingStrategy } from '../image/vision-detection.js';
 
 export interface HydratePerTurnStateDeps {
   hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
@@ -118,6 +120,7 @@ export interface RunDirectAgentTurnInput {
   runId?: string;
   userMessage: AgentMessage;
   abortSignal?: AbortSignal;
+  sourceImages?: ImageContent[];
   onEvent?: (event: EmbeddedStreamEvent) => void;
 }
 
@@ -146,7 +149,8 @@ export async function runDirectAgentTurn(
     message: input.userMessage as TranscriptUserMessage,
     modelRef,
   });
-  const llmImages = llmTurn.images;
+  const sourceImages = resolveImageHandlingStrategy(modelRef) === 'native' ? (input.sourceImages ?? []) : [];
+  const llmImages = [...llmTurn.images, ...sourceImages];
 
   const result = await runEmbeddedTurnForSession({
     sessionKey: input.sessionKey,

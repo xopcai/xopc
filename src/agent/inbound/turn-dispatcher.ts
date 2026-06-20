@@ -46,6 +46,7 @@ import {
   type RunProcessDirectDeps,
 } from '../service/process-direct-one-shot.js';
 import { maybeEmitWebchatTts } from '../service/webchat-tts.js';
+import type { AgentSourceContextResolver } from '../source-context/types.js';
 
 export interface TurnDispatcherConfig {
   log: ContextualLogger;
@@ -73,6 +74,7 @@ export interface TurnDispatcherConfig {
   /** Gateway hook fired after assistant text lands on disk (UI refetch). */
   onSessionTranscriptUpdated?: (sessionKey: string) => void;
   resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
+  sourceContextResolver?: AgentSourceContextResolver;
 }
 
 export type DirectAttachment = InboundAttachmentInput;
@@ -204,6 +206,7 @@ export class TurnDispatcher {
       reloadWebchatTranscript: (sk) => {
         c.onSessionTranscriptUpdated?.(sk);
       },
+      sourceContextResolver: c.sourceContextResolver,
       maybeEmitWebchatTts: (sk, hadVoice) =>
         maybeEmitWebchatTts(
           {

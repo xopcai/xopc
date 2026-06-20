@@ -26,16 +26,15 @@ export function useWorkflowSessionMetadata(sessionKey: string | null | undefined
         typeof detail.sessionType === 'string' && detail.sessionType.trim()
           ? detail.sessionType.trim()
           : null;
-      const rawSourceNoteId = detail.customData?.sourceNoteId;
+      const rawSourceBinding = detail.customData?.sourceBinding;
+      const sourceBinding = rawSourceBinding && typeof rawSourceBinding === 'object'
+        ? rawSourceBinding as Record<string, unknown>
+        : null;
       const sourceNoteId =
-        typeof rawSourceNoteId === 'string' && rawSourceNoteId.trim()
-          ? rawSourceNoteId.trim()
+        sourceBinding?.kind === 'note' && typeof sourceBinding.sourceId === 'string' && sourceBinding.sourceId.trim()
+          ? sourceBinding.sourceId.trim()
           : null;
-      const rawSourceNoteTitle = detail.customData?.sourceNoteTitle;
-      const sourceNoteTitle =
-        typeof rawSourceNoteTitle === 'string' && rawSourceNoteTitle.trim()
-          ? rawSourceNoteTitle.trim()
-          : null;
+      const sourceNoteTitle = null;
       return { workflowRunId, sessionType, sourceNoteId, sourceNoteTitle };
     },
     { revalidateOnFocus: false },

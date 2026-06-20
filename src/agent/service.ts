@@ -435,6 +435,7 @@ export class AgentService {
       endDirectRequestContext: () => this.endDirectRequestContext(),
       onSessionTranscriptUpdated: this.onSessionTranscriptUpdated,
       resetSession: (sk) => this.resetSession(sk),
+      sourceContextResolver: config.sourceContextResolver,
     });
 
     this.inboundLoop = new InboundLoop({
