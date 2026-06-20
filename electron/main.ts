@@ -6,6 +6,7 @@ import {
   Menu,
   app,
   clipboard,
+  crashReporter,
   dialog,
   globalShortcut,
   ipcMain,
@@ -20,6 +21,7 @@ import './thread-stream-bundle-shim.js';
 import { ensureGatewayConfigForElectron, getElectronUserPaths } from './ensure-gateway-config.js';
 import {
   isCliBundlePresent,
+  resolveCliEntry,
   spawnGatewayProcess,
   stopGatewayProcess,
   registerEmbeddedGatewayRuntime,
@@ -34,7 +36,7 @@ import { initElectronShellPreferences, isShellNotificationGranted, registerSyste
 import { isShellChromiumPermissionGranted } from './ipc/shell-permission-gates.js';
 import { registerCronDisplayWakeIpc, stopCronDisplayWakeBlocker } from './ipc/cron-display-wake-ipc.js';
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
-import { getLoadingPageDataUrl } from './loading-page.js';
+import { getLoadingPageDataUrl, getRendererCrashPageDataUrl } from './loading-page.js';
 import { isEmbeddedGatewayLoopbackUrl } from './loopback-url.js';
 import { hasPendingInstall, initAutoUpdater, stopAutoUpdater } from './auto-updater.js';
 import { buildAppMenu } from './menu.js';
@@ -56,6 +58,59 @@ import {
 
 /** Track the main window for gateway exit notifications. */
 let mainWindow: BrowserWindow | null = null;
+
+let crashReporterStarted = false;
+let rendererCrashReloadAttempted = false;
+let lastGatewayConsoleHref: string | null = null;
+let rendererCrashExternalOpened = false;
+
+function redactUrlForLog(href: string): string {
+  if (href.startsWith('data:')) {
+    return `data:<${href.length} chars>`;
+  }
+  try {
+    const url = new URL(href);
+    if (url.searchParams.has('token')) {
+      url.searchParams.set('token', '[redacted]');
+    }
+    return url.toString();
+  } catch {
+    return href.length > 300 ? `${href.slice(0, 300)}...` : href;
+  }
+}
+
+function windowStateForLog(win: BrowserWindow): string {
+  const wc = win.webContents;
+  const isCrashed =
+    typeof (wc as { isCrashed?: () => boolean }).isCrashed === 'function'
+      ? (wc as { isCrashed: () => boolean }).isCrashed()
+      : false;
+  return `url=${redactUrlForLog(wc.getURL() || 'about:blank')} loading=${wc.isLoading()} crashed=${isCrashed}`;
+}
+
+function appendWindowLifecycleLog(win: BrowserWindow, eventName: string, detail?: string): void {
+  appendElectronStartupLog(
+    `window ${eventName}${detail ? ` ${detail}` : ''} ${windowStateForLog(win)}`,
+  );
+}
+
+function startLocalCrashReporter(): void {
+  if (process.env['XOPC_ELECTRON_CRASH_REPORTER'] === '0') return;
+  try {
+    crashReporter.start({
+      uploadToServer: false,
+      globalExtra: {
+        product: 'xopc',
+        platform: process.platform,
+        packaged: String(app.isPackaged),
+      },
+    });
+    crashReporterStarted = true;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    appendElectronStartupLog(`crashReporter start failed: ${message}`);
+  }
+}
 
 function browserWindowChromeOptions(): Pick<BrowserWindowConstructorOptions, 'titleBarStyle' | 'titleBarOverlay'> {
   if (process.platform === 'darwin') {
@@ -81,9 +136,56 @@ function applyDarwinWindowButtonPosition(win: BrowserWindow): void {
   }
 }
 
+const win32StabilityMode = process.env['XOPC_ELECTRON_STABILITY_MODE'] === '1';
+const win32UseSoftwareRendering =
+  process.env['XOPC_ELECTRON_DISABLE_GPU'] === '1' || win32StabilityMode;
+const win32UseJitless =
+  process.env['XOPC_ELECTRON_DISABLE_JIT'] === '1' || win32StabilityMode;
+const win32DisableSandbox =
+  process.env['XOPC_ELECTRON_DISABLE_SANDBOX'] === '1' || win32StabilityMode;
+
 if (process.platform === 'win32') {
   app.setAppUserModelId('ai.xopc.xopc');
+  // Keep the default Windows renderer close to macOS/Linux. The broad software-rendering
+  // fallback below is useful on some locked-down hosts, but on others it triggers Chromium
+  // SwiftShader crashes while loading chat. Leave it opt-in instead of changing the normal UI.
+  app.commandLine.appendSwitch(
+    'disable-features',
+    [
+      // RendererCodeIntegrity is a common source of Windows Electron
+      // 0xC0000005 crashes when security/overlay DLLs inject into Chromium.
+      'RendererCodeIntegrity',
+      'CalculateNativeWinOcclusion',
+    ].join(','),
+  );
+  if (win32UseSoftwareRendering) {
+    app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch('disable-gpu');
+    app.commandLine.appendSwitch('disable-gpu-compositing');
+    app.commandLine.appendSwitch('disable-gpu-sandbox');
+    app.commandLine.appendSwitch('disable-gpu-rasterization');
+    app.commandLine.appendSwitch('disable-accelerated-2d-canvas');
+    app.commandLine.appendSwitch('disable-accelerated-video-decode');
+    app.commandLine.appendSwitch('disable-direct-composition');
+    app.commandLine.appendSwitch('disable-zero-copy');
+    app.commandLine.appendSwitch('disable-vulkan');
+    app.commandLine.appendSwitch('use-angle', 'swiftshader');
+  }
+  if (win32UseJitless) {
+    // Some Windows Server / security-software combinations crash Chromium's
+    // renderer in V8 JIT code with 0xC0000005. Keep this opt-in because chat's
+    // React editor and streaming path should match macOS by default.
+    app.commandLine.appendSwitch('js-flags', '--jitless');
+  }
+  if (win32DisableSandbox) {
+    // Last-resort stability path for locked-down Windows hosts. The desktop
+    // renderer already has nodeIntegration=false and contextIsolation=true.
+    app.commandLine.appendSwitch('no-sandbox');
+    app.commandLine.appendSwitch('disable-setuid-sandbox');
+  }
 }
+
+startLocalCrashReporter();
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -207,7 +309,7 @@ async function loadMainWindowUrl(win: BrowserWindow, href: string): Promise<void
 function shouldEmbedGateway(): boolean {
   if (process.env['ELECTRON_RENDERER_URL']) return false;
   const force = process.env['ELECTRON_EMBED_GATEWAY'] === '1';
-  return (app.isPackaged || force) && isCliBundlePresent();
+  return app.isPackaged || force;
 }
 
 function buildStartupFailureMessage(detail: string): string {
@@ -227,6 +329,9 @@ async function resolveWindowLoad(): Promise<
   }
 
   if (shouldEmbedGateway()) {
+    if (!isCliBundlePresent()) {
+      throw new Error(`Embedded gateway bundle is missing: ${resolveCliEntry()}`);
+    }
     const paths = getElectronUserPaths();
     const { port, token, bind } = await ensureGatewayConfigForElectron(paths);
     // Browser-extension artifact install runs inside the gateway subprocess (see
@@ -325,6 +430,10 @@ function createWindow(): void {
       preload: join(import.meta.dirname, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Keep preload in the classic isolated context. The preload intentionally uses
+      // Electron IPC and process.platform; explicitly pinning this avoids Electron
+      // default changes from moving it into a stricter sandbox on Windows builds.
+      sandbox: false,
     },
   });
 
@@ -382,9 +491,51 @@ function createWindow(): void {
 
   initAutoUpdater(win);
 
+  appendWindowLifecycleLog(win, 'created');
+
+  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    appendElectronStartupLog(`renderer console level=${level} source=${sourceId}:${line} ${message}`);
+  });
+
+  win.webContents.on('preload-error', (_event, preloadPath, error) => {
+    appendElectronStartupLog(
+      `preload-error path=${preloadPath} name=${error.name} message=${error.message} stack=${error.stack ?? ''}`,
+    );
+  });
+
+  win.webContents.on('did-start-loading', () => {
+    appendWindowLifecycleLog(win, 'did-start-loading');
+  });
+
+  win.webContents.on('dom-ready', () => {
+    appendWindowLifecycleLog(win, 'dom-ready');
+  });
+
+  win.webContents.on('did-stop-loading', () => {
+    appendWindowLifecycleLog(win, 'did-stop-loading');
+  });
+
+  win.webContents.on('did-start-navigation', (_event, navigationUrl, isSameDocument, isMainFrame) => {
+    if (!isMainFrame) return;
+    appendWindowLifecycleLog(
+      win,
+      'did-start-navigation',
+      `target=${redactUrlForLog(navigationUrl)} sameDocument=${isSameDocument}`,
+    );
+  });
+
+  win.webContents.on('did-navigate', (_event, navigationUrl) => {
+    appendWindowLifecycleLog(win, 'did-navigate', `target=${redactUrlForLog(navigationUrl)}`);
+  });
+
+  win.webContents.on('did-frame-finish-load', (_event, isMainFrame) => {
+    if (!isMainFrame) return;
+    appendWindowLifecycleLog(win, 'did-frame-finish-load');
+  });
+
   win.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (!isMainFrame) return;
-    const msg = `did-fail-load code=${errorCode} desc=${errorDescription} url=${validatedURL}`;
+    const msg = `did-fail-load code=${errorCode} desc=${errorDescription} url=${redactUrlForLog(validatedURL)} ${windowStateForLog(win)}`;
     console.error(`[main] Window failed to load (${errorCode} ${errorDescription}): ${validatedURL}`);
     appendElectronStartupLog(msg);
     if (shouldAutoOpenDevTools()) {
@@ -393,16 +544,57 @@ function createWindow(): void {
   });
 
   win.webContents.on('render-process-gone', (_event, details) => {
-    const msg = `render-process-gone reason=${details.reason} exitCode=${details.exitCode}`;
+    const msg =
+      `render-process-gone reason=${details.reason} exitCode=${details.exitCode} ` +
+      `${windowStateForLog(win)} crashReporter=${crashReporterStarted} crashDumps=${app.getPath('crashDumps')}`;
     console.error(`[main] Renderer process gone: ${details.reason} (exitCode=${details.exitCode})`);
     appendElectronStartupLog(msg);
+    if (!appIsQuitting && details.reason === 'crashed') {
+      if (!rendererCrashReloadAttempted) {
+        rendererCrashReloadAttempted = true;
+        appendElectronStartupLog('renderer crash recovery: reloading main window once');
+        setTimeout(() => {
+          if (!win.isDestroyed()) {
+            win.reload();
+          }
+        }, 500);
+      } else {
+        appendElectronStartupLog('renderer crash recovery: showing diagnostic page after repeated crash');
+        const externalHref = lastGatewayConsoleHref || win.webContents.getURL();
+        const canOpenExternal = isEmbeddedGatewayLoopbackUrl(externalHref);
+        if (canOpenExternal && !rendererCrashExternalOpened) {
+          rendererCrashExternalOpened = true;
+          appendElectronStartupLog(
+            `renderer crash fallback: opening default browser url=${redactUrlForLog(externalHref)}`,
+          );
+          void shell.openExternal(externalHref).catch((err) => {
+            const em = err instanceof Error ? err.message : String(err);
+            appendElectronStartupLog(`renderer crash fallback openExternal failed: ${em}`);
+          });
+        } else if (!canOpenExternal) {
+          appendElectronStartupLog(
+            `renderer crash fallback skipped: non-loopback url=${redactUrlForLog(externalHref)}`,
+          );
+        }
+        setTimeout(() => {
+          if (!win.isDestroyed()) {
+            void win
+              .loadURL(getRendererCrashPageDataUrl(app.getLocale(), msg, { openedExternal: canOpenExternal }))
+              .catch((err) => {
+                const em = err instanceof Error ? err.message : String(err);
+                appendElectronStartupLog(`renderer crash diagnostic page failed: ${em}`);
+              });
+          }
+        }, 500);
+      }
+    }
     if (shouldAutoOpenDevTools()) {
-      openMainWindowDevTools(win);
+      setImmediate(() => openMainWindowDevTools(win));
     }
   });
 
   win.webContents.on('did-finish-load', () => {
-    appendElectronStartupLog(`did-finish-load url=${win.webContents.getURL()}`);
+    appendWindowLifecycleLog(win, 'did-finish-load');
   });
 
   // Squirrel.Mac only finishes installing when the app process quits. Closing the last window does not call
@@ -429,7 +621,7 @@ function createWindow(): void {
   void (async () => {
     const embed = shouldEmbedGateway();
     try {
-      if (embed) {
+      if (embed || app.isPackaged) {
         await loadMainWindowUrl(win, getLoadingPageDataUrl(app.getLocale()));
       }
       const load = await resolveWindowLoad();
@@ -437,12 +629,16 @@ function createWindow(): void {
         return;
       }
       if (load.kind === 'url') {
-        appendElectronStartupLog(`loading gateway url=${load.href}`);
+        appendElectronStartupLog(`loading gateway url=${redactUrlForLog(load.href)}`);
+        if (isEmbeddedGatewayLoopbackUrl(load.href)) {
+          lastGatewayConsoleHref = load.href;
+        }
         await loadMainWindowUrl(win, load.href);
         if (load.openDevTools || shouldAutoOpenDevTools()) {
           openMainWindowDevTools(win);
         }
       } else {
+        lastGatewayConsoleHref = null;
         await win.loadFile(load.path);
         if (shouldAutoOpenDevTools()) {
           openMainWindowDevTools(win);
@@ -489,6 +685,22 @@ app.whenReady().then(async () => {
   registerSystemSettingsIpc(ipcMain);
   registerCronDisplayWakeIpc(ipcMain);
   registerUpdaterIpc(ipcMain);
+
+  ipcMain.on('preload:ready', (event, payload: unknown) => {
+    const href =
+      payload && typeof payload === 'object' && 'href' in payload && typeof payload.href === 'string'
+        ? payload.href
+        : event.sender.getURL();
+    appendElectronStartupLog(`preload ready url=${redactUrlForLog(href || 'about:blank')}`);
+  });
+
+  ipcMain.on('preload:dom-content-loaded', (event, payload: unknown) => {
+    const href =
+      payload && typeof payload === 'object' && 'href' in payload && typeof payload.href === 'string'
+        ? payload.href
+        : event.sender.getURL();
+    appendElectronStartupLog(`preload dom-content-loaded url=${redactUrlForLog(href || 'about:blank')}`);
+  });
 
   ipcMain.handle('clipboard:write-text', (_event, text: unknown) => {
     if (typeof text !== 'string' || !text) return false;
@@ -565,7 +777,26 @@ app.whenReady().then(async () => {
     console.warn(`[main] Failed to register global shortcut: ${devToolsHotkey}`);
   }
 
-  appendElectronStartupLog(`app ready platform=${process.platform} packaged=${app.isPackaged}`);
+  appendElectronStartupLog(
+    `app ready platform=${process.platform} packaged=${app.isPackaged} ` +
+      `electron=${process.versions.electron} chrome=${process.versions.chrome} ` +
+      `crashReporter=${crashReporterStarted} crashDumps=${app.getPath('crashDumps')}`,
+  );
+  if (process.platform === 'win32') {
+    appendElectronStartupLog(
+      `win32 stability flags gpu=${win32UseSoftwareRendering ? 'software' : 'default'} ` +
+        `jit=${win32UseJitless ? 'jitless' : 'default'} ` +
+        `sandbox=${win32DisableSandbox ? 'disabled' : 'default'}`,
+    );
+    appendElectronStartupLog(`gpu feature status=${JSON.stringify(app.getGPUFeatureStatus())}`);
+  }
+
+  app.on('child-process-gone', (_event, details) => {
+    appendElectronStartupLog(
+      `child-process-gone type=${details.type} reason=${details.reason} exitCode=${details.exitCode} ` +
+        `serviceName=${details.serviceName ?? ''} name=${details.name ?? ''}`,
+    );
+  });
 
   createWindow();
 

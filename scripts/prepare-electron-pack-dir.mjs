@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Stage an isolated Electron app directory in os.tmpdir().
  * electron-builder copies from this dir (--project) with beforeBuild=false so only the
@@ -12,9 +11,10 @@
  *
  * Layout:
  *   out/{main,preload,server}      app code (+ schema.sql, migrations/, workspace-templates/)
+ *   dist/{src,extensions,_virtual} bundled extension modules + sibling core/rolldown runtime imports
  *   dist/gateway/static/root       gateway-served UI
  *   skills/                        bundled SKILL.md files
- *   package.json                   minimal — only runtime externals as dependencies
+ *   package.json                   minimal package with runtime externals only
  *   pnpm-lock.yaml + node_modules  produced by `pnpm install --ignore-workspace --prod`
  *   _pack-resources/               build-time inputs that aren't part of the app source:
  *     entitlements.mac.plist       macOS entitlements
@@ -39,14 +39,16 @@ const APP_COPY_PATHS = [
   { from: 'out/main', to: 'out/main' },
   { from: 'out/preload', to: 'out/preload' },
   { from: 'out/server', to: 'out/server' },
+  { from: 'dist/src', to: 'dist/src' },
   { from: 'dist/extensions', to: 'dist/extensions' },
+  { from: 'dist/_virtual', to: 'dist/_virtual' },
   { from: 'dist/gateway/static/root', to: 'dist/gateway/static/root' },
   { from: 'skills', to: 'skills' },
 ];
 
 /** Build inputs referenced by electron-builder.pack.yml via `_pack-resources/...`. */
 const PACK_RESOURCE_COPIES = [
-  // Source path (relative to repo root) → destination (relative to pack dir).
+  // Source path (relative to repo root) to destination (relative to pack dir).
   // Required: missing source aborts the build.
   { from: 'electron/resources/entitlements.mac.plist', to: '_pack-resources/entitlements.mac.plist', required: true },
   { from: 'scripts/electron-before-build.cjs', to: '_pack-resources/electron-before-build.cjs', required: true },

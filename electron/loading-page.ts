@@ -119,3 +119,85 @@ export function getLoadingPageDataUrl(appLocale: string): string {
 </html>`;
   return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
 }
+
+export function getRendererCrashPageDataUrl(
+  appLocale: string,
+  detail: string,
+  options: { openedExternal?: boolean } = {},
+): string {
+  const lang = uiLangFromAppLocale(appLocale || 'en');
+  const isEn = lang === 'en';
+  const htmlLang = isEn ? 'en' : 'zh-CN';
+  const title = isEn ? 'Renderer crashed' : '渲染进程已崩溃';
+  const body = isEn
+    ? 'The local gateway is running, but the desktop renderer crashed while loading the console.'
+    : '本地网关已启动，但桌面渲染进程在加载控制台时崩溃。';
+  const hint = isEn
+    ? 'Restart the app. If it still happens, send the startup log and crash dump path below.'
+    : '请重启应用。若仍然发生，请提供下方启动日志信息和崩溃转储路径。';
+  const external = options.openedExternal
+    ? isEn
+      ? 'The console was also opened in your default browser as a fallback.'
+      : '控制台已作为降级方案在默认浏览器中打开。'
+    : '';
+  const escapedDetail = detail.replace(/[&<>"']/g, (ch) => {
+    switch (ch) {
+      case '&': return '&amp;';
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '"': return '&quot;';
+      case "'": return '&#39;';
+      default: return ch;
+    }
+  });
+  const html = `<!DOCTYPE html>
+<html lang="${htmlLang}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>xopc</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+    }
+    main {
+      width: min(42rem, 100%);
+      border: 1px solid #334155;
+      border-radius: 1rem;
+      background: #111827;
+      padding: 1.5rem;
+    }
+    h1 { margin: 0; font-size: 1.25rem; }
+    p { color: #94a3b8; line-height: 1.55; }
+    pre {
+      overflow: auto;
+      border-radius: 0.75rem;
+      background: #020617;
+      color: #cbd5e1;
+      padding: 1rem;
+      font-size: 0.8125rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>${title}</h1>
+    <p>${body}</p>
+    ${external ? `<p>${external}</p>` : ''}
+    <p>${hint}</p>
+    <pre>${escapedDetail}</pre>
+  </main>
+</body>
+</html>`;
+  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+}

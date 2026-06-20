@@ -4,6 +4,8 @@
  * Stale `HTTP_PROXY=http://127.0.0.1:7899` (Clash/V2Ray off) makes downloads fail with
  * "proxyconnect tcp: dial tcp 127.0.0.1:7899: connect: connection refused".
  * Set ELECTRON_BUILDER_KEEP_PROXY=1 to pass the parent environment through unchanged.
+ * Electron/electron-builder downloads default to npmmirror for reliability in China;
+ * set ELECTRON_MIRROR / ELECTRON_BUILDER_BINARIES_MIRROR to override.
  *
  * Packaging flow:
  * 1. prepare-electron-pack-dir.mjs — stage an isolated pack dir under os.tmpdir() with
@@ -42,6 +44,9 @@ if (process.env['ELECTRON_BUILDER_KEEP_PROXY'] !== '1') {
     if (shouldStripProxy(env[k])) delete env[k];
   }
 }
+
+env.ELECTRON_MIRROR ??= 'https://npmmirror.com/mirrors/electron/';
+env.ELECTRON_BUILDER_BINARIES_MIRROR ??= 'https://npmmirror.com/mirrors/electron-builder-binaries/';
 
 // Pack dir uses ${env.XOPC_ELECTRON_RELEASE_OUTPUT} for `directories.output` so artifacts
 // land under repo's dist/release even though the pack dir is in os.tmpdir().

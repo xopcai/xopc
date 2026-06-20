@@ -190,7 +190,6 @@ export function ChatPage() {
   /** Match `MessageList` empty welcome: tighter vertical padding so the first screen fits without scrolling. */
   const compactWelcomeLayout =
     !session.showSessionLoading && msgSlice.items.length === 0 && !stream.streaming;
-
   const chatHeadline = useMemo(() => {
     const titleKey =
       session.sessionRoutePending && session.decodedKey ? session.decodedKey : session.sessionKey;

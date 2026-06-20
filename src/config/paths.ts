@@ -24,6 +24,8 @@ export {
 // ============================================
 // File Names
 // ============================================
+const ENV_BUNDLED_EXTENSIONS_ROOT = 'XOPC_BUNDLED_EXTENSIONS_ROOT';
+
 export const FILENAMES = {
   CONFIG: 'xopc.json',
   MODELS_JSON: 'models.json',
@@ -333,11 +335,17 @@ export function resolveSkillsCachePath(config: Config, agentId: string): string 
  * Resolve the bundled extensions directory (shipped with xopc).
  *
  * Layout-dependent candidates (first existing wins):
+ * - `XOPC_BUNDLED_EXTENSIONS_ROOT` (Electron packaged gateway override)
  * - `dist/src/config` → `dist/extensions` (npm / gateway)
  * - `src/config` → `extensions/` (dev, tsx)
  * - `out/server` → `dist/extensions` (Electron esbuild bundle)
  */
 export function resolveBundledExtensionsDir(): string | null {
+  const envDir = process.env[ENV_BUNDLED_EXTENSIONS_ROOT];
+  if (envDir && existsSync(envDir)) {
+    return envDir;
+  }
+
   try {
     const currentFile = fileURLToPath(import.meta.url);
     const srcDir = dirname(currentFile);

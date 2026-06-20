@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+function notifyPreload(channel: 'preload:ready' | 'preload:dom-content-loaded'): void {
+  try {
+    ipcRenderer.send(channel, { href: window.location.href });
+  } catch {
+    /* main process may not have registered diagnostics yet */
+  }
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   clipboard: {
     writeText: (text: string) => ipcRenderer.invoke('clipboard:write-text', text) as Promise<boolean>,
@@ -180,4 +188,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     uninstallApp: (options?: { removeUserData?: boolean }) =>
       ipcRenderer.invoke('system-settings:uninstall-app', options),
   },
+});
+
+notifyPreload('preload:ready');
+
+window.addEventListener('DOMContentLoaded', () => {
+  notifyPreload('preload:dom-content-loaded');
 });
