@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -38,6 +41,37 @@ describe('electron-runtime-externals', () => {
     ]);
     expect(minimal).not.toHaveProperty('devDependencies');
     expect(minimal.name).toBe('@xopcai/xopc');
+  });
+
+  it('unpacks packaged runtime deps beside the unpacked gateway server', () => {
+    const packYml = readFileSync(join(process.cwd(), 'scripts/electron-builder.pack.yml'), 'utf8');
+
+    for (const name of ELECTRON_PACKAGED_DEPENDENCIES) {
+      expect(packYml).toContain(`node_modules/${name}/**`);
+    }
+  });
+
+  it('unpacks bundled extensions together with dist/src imports', () => {
+    const packYml = readFileSync(join(process.cwd(), 'scripts/electron-builder.pack.yml'), 'utf8');
+
+    expect(packYml).toContain("'dist/extensions/**'");
+    expect(packYml).toContain("'dist/src/**'");
+    expect(packYml).toContain("'dist/_virtual/**'");
+  });
+
+  it('keeps packaged Electron locale names aligned with .pak files', () => {
+    const packYml = readFileSync(join(process.cwd(), 'scripts/electron-builder.pack.yml'), 'utf8');
+    const match = packYml.match(/^electronLanguages:\r?\n((?:  - .+\r?\n)+)/m);
+    expect(match).not.toBeNull();
+    const locales = match![1]!
+      .split(/\r?\n/)
+      .map((line) => line.match(/^\s+-\s+(.+?)\s*$/)?.[1])
+      .filter((x): x is string => Boolean(x));
+
+    expect(locales).toEqual(['en-US', 'zh-CN', 'zh-TW']);
+    for (const locale of locales) {
+      expect(existsSync(join(process.cwd(), 'node_modules/electron/dist/locales', `${locale}.pak`))).toBe(true);
+    }
   });
 
   it('preserves electron devDependency for electron-builder version resolution', () => {

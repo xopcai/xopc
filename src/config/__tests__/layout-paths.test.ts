@@ -11,8 +11,9 @@
  *  7. Auth profiles at `agents/<id>/agent/auth-profiles.json` (no credentials subdir)
  *  8. Git init on brand-new workspace (tested in workspace-seed.test.ts)
  */
+import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { resolveStateDir } from '../paths-state.js';
@@ -32,6 +33,7 @@ import {
   resolveAgentProfileDir as resolveAgentProfileDirFromPaths,
   resolveAgentProfileMarkdownPath as resolveAgentProfileMarkdownPathFromPaths,
   resolveXopcDatabasePath,
+  resolveBundledExtensionsDir,
   FILENAMES,
 } from '../paths.js';
 
@@ -65,6 +67,7 @@ describe('Layout alignment: Phase 1 — State Root & Workspace Paths', () => {
     delete process.env.XOPC_PROFILE;
     delete process.env.XOPC_WORKSPACE;
     delete process.env.XOPC_HOME;
+    delete process.env.XOPC_BUNDLED_EXTENSIONS_ROOT;
   });
 
   afterEach(() => {
@@ -116,6 +119,19 @@ describe('Layout alignment: Phase 1 — State Root & Workspace Paths', () => {
     process.env.XOPC_WORKSPACE = '/custom/workspace';
     const result = resolveDefaultAgentWorkspaceDir(process.env);
     expect(result).toBe('/custom/workspace');
+  });
+
+  it('XOPC_BUNDLED_EXTENSIONS_ROOT overrides bundled extension discovery when it exists', () => {
+    const dir = join(tmpdir(), `xopc-bundled-extensions-${process.pid}`);
+    rmSync(dir, { recursive: true, force: true });
+    mkdirSync(dir, { recursive: true });
+    process.env.XOPC_BUNDLED_EXTENSIONS_ROOT = dir;
+    try {
+      expect(existsSync(dir)).toBe(true);
+      expect(resolveBundledExtensionsDir()).toBe(dir);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 
