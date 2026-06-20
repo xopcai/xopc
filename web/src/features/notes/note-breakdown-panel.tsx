@@ -1,12 +1,13 @@
 import { ArrowLeft, MessageCircle, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import useSWR from 'swr';
 
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import { recordNoteCatalysisFeedback, type Note, type NoteChatSessionSummary } from './notes-api';
+import { getNoteAgentContextStatus, rebuildNoteAgentContext, recordNoteCatalysisFeedback, type Note, type NoteChatSessionSummary } from './notes-api';
 
 type NoteBreakdownPanelProps = {
   noteId: string;
@@ -17,6 +18,7 @@ type NoteBreakdownPanelProps = {
   noteThreads: NoteChatSessionSummary[];
   openingChat: boolean;
   onOpenChat: () => void;
+  onOpenNewChat: () => void;
 };
 
 export function NoteBreakdownPanel({
@@ -28,12 +30,18 @@ export function NoteBreakdownPanel({
   noteThreads,
   openingChat,
   onOpenChat,
+  onOpenNewChat,
 }: NoteBreakdownPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const n = messages(language).notes;
   const navigate = useNavigate();
   const catalysis = note?.aiDeep?.catalysis;
   const catalysisReport = catalysis?.report ?? null;
+  const { data: contextStatus, mutate: mutateContextStatus, isLoading: contextStatusLoading } = useSWR(
+    noteId ? ['note-agent-context-status', noteId] : null,
+    () => getNoteAgentContextStatus(noteId),
+    { revalidateOnFocus: false },
+  );
 
   const handleCatalysisFeedback = useCallback(
     async (feedback: 'helpful' | 'not_helpful') => {
@@ -68,6 +76,45 @@ export function NoteBreakdownPanel({
           {n.catalysisSectionDescription}
         </p>
 
+        {contextStatus ? (
+          <section className="mb-4 rounded-xl border border-edge-subtle bg-surface-base p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-medium text-fg-muted">{n.contextStatusTitle}</div>
+              <button
+                type="button"
+                onClick={() => void mutateContextStatus(() => rebuildNoteAgentContext(noteId), { revalidate: false })}
+                disabled={contextStatusLoading}
+                className="rounded-md px-1.5 py-0.5 text-[11px] font-medium text-accent transition-colors hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {n.contextRebuild}
+              </button>
+              <span className={cn(
+                'rounded-full px-2 py-0.5 text-[11px] font-medium',
+                contextStatus.status === 'ready' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' :
+                  contextStatus.status === 'partial' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-300' :
+                    'bg-red-500/10 text-red-600 dark:text-red-300',
+              )}>
+                {contextStatus.status}
+              </span>
+            </div>
+            <div className="mt-2 text-xs leading-relaxed text-fg-muted">
+              {n.contextStatusDetail
+                .replace('{{attachments}}', String(contextStatus.attachments.length))
+                .replace('{{tokens}}', String(contextStatus.tokenEstimate ?? 0))}
+            </div>
+            {contextStatus.attachments.length > 0 ? (
+              <div className="mt-3 space-y-1.5">
+                {contextStatus.attachments.slice(0, 5).map((att) => (
+                  <div key={att.attachmentId} className="flex items-center justify-between gap-2 rounded-lg bg-surface-hover px-2 py-1.5 text-xs">
+                    <span className="min-w-0 truncate text-fg">{att.fileName}</span>
+                    <span className="shrink-0 text-fg-muted">{att.status}</span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
         <button
           type="button"
           onClick={onCatalyze}
@@ -82,6 +129,16 @@ export function NoteBreakdownPanel({
             <div>
               <div className="text-xs font-medium text-fg-muted">{n.valueHypothesis}</div>
               <p className="mt-1 text-sm leading-relaxed text-fg">{catalysisReport.valueHypothesis}</p>
+            </div>
+            <div>
+              <div className="text-xs font-medium text-fg-muted">{n.targetUsers}</div>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {catalysisReport.targetUsers.slice(0, 5).map((user) => (
+                  <span key={user} className="rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg">
+                    {user}
+                  </span>
+                ))}
+              </div>
             </div>
             <div>
               <div className="text-xs font-medium text-fg-muted">{n.keyQuestions}</div>
@@ -104,6 +161,30 @@ export function NoteBreakdownPanel({
                   </li>
                 ))}
               </ol>
+            </div>
+            <div>
+              <div className="text-xs font-medium text-fg-muted">{n.risks}</div>
+              <ul className="mt-1 space-y-1 text-sm leading-relaxed text-fg">
+                {catalysisReport.risks.slice(0, 3).map((risk) => (
+                  <li key={risk} className="flex gap-2">
+                    <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-fg-muted" />
+                    <span>{risk}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <div className="text-xs font-medium text-fg-muted">{n.nextActions}</div>
+              <ul className="mt-1 space-y-1 text-sm leading-relaxed text-fg">
+                {catalysisReport.nextActions.slice(0, 4).map((action) => (
+                  <li key={`${action.kind}:${action.text}`} className="flex gap-2">
+                    <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-accent">
+                      {action.kind}
+                    </span>
+                    <span>{action.text}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
             <div className="flex items-center justify-between border-t border-edge-subtle pt-3">
               <span className="text-xs text-fg-muted">
@@ -151,14 +232,24 @@ export function NoteBreakdownPanel({
               </div>
               <p className="mt-1 text-xs text-fg-muted">{n.relatedThreadsDescription}</p>
             </div>
-            <button
-              type="button"
-              onClick={onOpenChat}
-              disabled={openingChat}
-              className="shrink-0 rounded-lg border border-edge px-2.5 py-1.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {openingChat ? n.openingChat : n.openThread}
-            </button>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={onOpenChat}
+                disabled={openingChat}
+                className="rounded-lg border border-edge px-2.5 py-1.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {openingChat ? n.openingChat : n.openThread}
+              </button>
+              <button
+                type="button"
+                onClick={onOpenNewChat}
+                disabled={openingChat}
+                className="rounded-lg bg-accent px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {n.newThread}
+              </button>
+            </div>
           </div>
           {noteThreads.length > 0 ? (
             <div className="space-y-2">

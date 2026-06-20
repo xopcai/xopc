@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { writeTextAtomic } from '../infra/write-file-atomic.js';
 import { createLogger } from '../utils/logger.js';
 import {
+  deleteNoteAgentContextRecord,
   deleteNoteRecord,
   getNoteRecord,
   listNoteRecords,
@@ -68,6 +69,7 @@ export class NotesStore {
       return false;
     }
 
+    deleteNoteAgentContextRecord(id);
     const mediaDir = resolveNoteMediaDir(id);
     await rm(mediaDir, { recursive: true, force: true }).catch(() => undefined);
     return true;

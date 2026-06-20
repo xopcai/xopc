@@ -1,4 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
+import type { ImageContent } from '@earendil-works/pi-ai';
 
 import type { Config } from '../../config/schema.js';
 import type { InboundAttachmentInput, MediaRef } from '../../channels/attachments/inbound-persist.js';
@@ -22,6 +23,8 @@ import { abortEmbeddedRun } from '../embedded/runs.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { CommandHandler } from '../messaging/command-handler.js';
 import type { ModelManager } from '../models/index.js';
+import { injectSourceContextIntoUserMessage } from '../source-context/injector.js';
+import { isSessionSourceBinding, type AgentSourceContextResolver } from '../source-context/types.js';
 
 import { AsyncQueue } from './async-queue.js';
 import {
@@ -88,6 +91,7 @@ export interface ProcessDirectStreamingDeps {
   ) => Promise<{ type: 'tts_audio'; uri: string; mimeType: string; name: string } | null>;
   endDirectRequestContext: () => void;
   resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
+  sourceContextResolver?: AgentSourceContextResolver;
 }
 
 export interface ProcessDirectStreamingInput {
@@ -275,6 +279,19 @@ export async function* runProcessDirectStreaming(
         ? deps.agentManager.expandSkillUserText(mergedUserText)
         : mergedUserText;
       const userMessage = await deps.buildTranscriptUserMessage(textForAgent, prepared, sessionKey);
+      let sourceEnrichedUserMessage: AgentMessage = userMessage;
+      let sourceImages: ImageContent[] | undefined;
+      if (deps.sourceContextResolver) {
+        const metadata = await deps.sessionStore.getMetadata(sessionKey).catch(() => null);
+        const sourceBinding = metadata?.customData && typeof metadata.customData === 'object'
+          ? (metadata.customData as Record<string, unknown>).sourceBinding
+          : undefined;
+        if (isSessionSourceBinding(sourceBinding)) {
+          const sourceContext = await deps.sourceContextResolver(sourceBinding, sessionKey);
+          sourceEnrichedUserMessage = injectSourceContextIntoUserMessage(userMessage, sourceContext);
+          sourceImages = sourceContext?.images;
+        }
+      }
 
       if (channel === 'webchat') {
         pushVisible({
@@ -301,8 +318,9 @@ export async function* runProcessDirectStreaming(
           },
           {
             sessionKey,
-            userMessage,
+            userMessage: sourceEnrichedUserMessage,
             abortSignal: signal,
+            sourceImages,
             runId: input.runId,
             onEvent: (embeddedEvent) => {
               const event = { ...embeddedEvent };
