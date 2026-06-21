@@ -1,6 +1,6 @@
 {
   "name": "@xopcai/xopc",
-  "version": "0.0.106",
+  "version": "0.0.107",
   "description": "Goal Loop OS for long-term AI work: a local-first multi-surface agent system with workflow automation, multi-agent routing, and extensibility via extensions/skills.",
   "packageManager": "pnpm@11.6.0",
   "type": "module",
