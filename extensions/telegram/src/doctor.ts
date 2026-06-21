@@ -9,10 +9,11 @@ const TELEGRAM_DOCTOR_GETME_TIMEOUT_MS = 10_000;
 
 type TelegramCfg = {
   enabled?: boolean;
-  dmPolicy?: string;
-  allowFrom?: Array<string | number>;
-  apiRoot?: string;
-  proxy?: string;
+  defaults?: {
+    dmPolicy?: string;
+    apiRoot?: string;
+    proxy?: string;
+  };
   accounts?: Record<
     string,
     {
@@ -97,7 +98,7 @@ async function checkGetMe(params: {
       message: `getMe failed: ${description}`,
       hints: isTelegramUnauthorizedTokenError(description)
         ? ['Verify the bot token from @BotFather.']
-        : ['Check channels.telegram.apiRoot / account apiRoot and network access.'],
+        : ['Check channels.telegram.defaults.apiRoot / account apiRoot and network access.'],
     };
   } catch (err) {
     const message = formatGetMeError(err);
@@ -108,7 +109,7 @@ async function checkGetMe(params: {
       message: `getMe network check failed: ${message}`,
       hints: [
         'Verify this host can reach the Telegram Bot API.',
-        'If your shell uses HTTP(S)_PROXY, also set channels.telegram.proxy because Node fetch does not use env proxy automatically.',
+        'If your shell uses HTTP(S)_PROXY, also set channels.telegram.defaults.proxy because Node fetch does not use env proxy automatically.',
         `Effective apiRoot: ${apiRoot}`,
       ],
     };
@@ -127,27 +128,13 @@ export async function runTelegramDoctorChecks(params: {
     return results;
   }
 
-  if (tg.enabled && tg.dmPolicy === 'open') {
-    const allow = tg.allowFrom ?? [];
-    const hasWildcard = allow.some((e) => String(e).trim() === '*');
-    results.push({
-      id: 'telegram-dm-open-wildcard',
-      label: 'Telegram DM open policy',
-      status: hasWildcard ? 'pass' : 'warn',
-      message: hasWildcard
-        ? 'DM policy is open with allowFrom wildcard.'
-        : 'dmPolicy "open" should include allowFrom: ["*"] for explicit opt-in.',
-      hints: hasWildcard ? [] : ['Add `"allowFrom": ["*"]` or switch to pairing/allowlist.'],
-    });
-  }
-
-  if (hasTelegramBotEndpointApiRoot(tg.apiRoot)) {
+  if (hasTelegramBotEndpointApiRoot(tg.defaults?.apiRoot)) {
     results.push({
       id: 'telegram-api-root-bot-endpoint',
       label: 'Telegram apiRoot',
       status: 'warn',
       message: 'apiRoot includes a bot token path segment; it will be normalized to the API root.',
-      hints: [`Use "${normalizeTelegramApiRoot(tg.apiRoot)}" instead.`],
+      hints: [`Use "${normalizeTelegramApiRoot(tg.defaults?.apiRoot)}" instead.`],
     });
   }
 
@@ -166,6 +153,20 @@ export async function runTelegramDoctorChecks(params: {
   }
 
   for (const [id, acc] of Object.entries(tg.accounts ?? {})) {
+    const effectiveDmPolicy = acc.dmPolicy ?? tg.defaults?.dmPolicy ?? 'pairing';
+    if (tg.enabled && effectiveDmPolicy === 'open') {
+      const allow = acc.allowFrom ?? [];
+      const hasWildcard = allow.some((e) => String(e).trim() === '*');
+      results.push({
+        id: `telegram-dm-open-wildcard-${id}`,
+        label: `Telegram DM open policy (${id})`,
+        status: hasWildcard ? 'pass' : 'warn',
+        message: hasWildcard
+          ? `Account "${id}" DM policy is open with allowFrom wildcard.`
+          : `Account "${id}" dmPolicy "open" should include allowFrom: ["*"] for explicit opt-in.`,
+        hints: hasWildcard ? [] : [`Add "allowFrom": ["*"] to channels.telegram.accounts.${id} or switch to pairing/allowlist.`],
+      });
+    }
     if (hasTelegramBotEndpointApiRoot(acc.apiRoot)) {
       results.push({
         id: `telegram-account-api-root-${id}`,
@@ -203,8 +204,8 @@ export async function runTelegramDoctorChecks(params: {
         await checkGetMe({
           accountId: id,
           token,
-          apiRoot: acc.apiRoot || tg.apiRoot,
-          proxy: acc.proxy || tg.proxy,
+          apiRoot: acc.apiRoot || tg.defaults?.apiRoot,
+          proxy: acc.proxy || tg.defaults?.proxy,
           fetchImpl: params.fetchImpl,
         }),
       );

@@ -16,12 +16,16 @@ function baseTelegramConfig(): NonNullable<Config['channels']>['telegram'] {
         accountId: 'default',
         enabled: true,
         botToken: '123456:TEST_TOKEN',
-        dmPolicy: 'open',
-        groupPolicy: 'open',
       },
     },
-    dmPolicy: 'open',
-    groupPolicy: 'open',
+    defaults: {
+      dmPolicy: 'pairing',
+      groupPolicy: 'open',
+      replyToMode: 'off',
+      historyLimit: 50,
+      textChunkLimit: 4000,
+      streaming: { mode: 'partial' },
+    },
   } as NonNullable<Config['channels']>['telegram'];
 }
 
@@ -50,6 +54,32 @@ describe('TelegramChannelPlugin loadAccounts', () => {
     const acc = plugin.config.resolveAccount(cfg, 'default');
     expect(acc.botToken).toBe('123456:TEST_TOKEN');
     expect(acc.enabled).toBe(true);
+  });
+
+  it('inherits account policies from channels.telegram.defaults', async () => {
+    const cfg = {
+      channels: {
+        telegram: {
+          ...baseTelegramConfig(),
+          defaults: {
+            ...baseTelegramConfig().defaults,
+            dmPolicy: 'allowlist',
+            streaming: { mode: 'block' },
+          },
+        },
+      },
+    } as Config;
+
+    const plugin = new TelegramChannelPlugin();
+    await plugin.init({
+      bus,
+      config: cfg,
+      channelConfig: cfg.channels?.telegram as Record<string, unknown>,
+    });
+
+    const acc = plugin.config.resolveAccount(cfg, 'default');
+    expect(acc.dmPolicy).toBe('allowlist');
+    expect(acc.streaming?.mode).toBe('block');
   });
 
   it('uses named accounts when accounts is non-empty', async () => {
@@ -84,12 +114,9 @@ describe('TelegramChannelPlugin loadAccounts', () => {
               accountId: 'default',
               enabled: true,
               botToken: '123456:TEST_TOKEN',
-              dmPolicy: 'open',
-              groupPolicy: 'open',
             },
           },
-          dmPolicy: 'open',
-          groupPolicy: 'open',
+          defaults: baseTelegramConfig().defaults,
         },
       },
     } as Config;
@@ -104,12 +131,15 @@ describe('TelegramChannelPlugin loadAccounts', () => {
     expect(plugin.config.listAccountIds(cfg)).toEqual([]);
   });
 
-  it('inherits channels.telegram.apiRoot into each account when account omits apiRoot', async () => {
+  it('inherits channels.telegram.defaults.apiRoot into each account when account omits apiRoot', async () => {
     const cfg = {
       channels: {
         telegram: {
           ...baseTelegramConfig(),
-          apiRoot: 'https://tg.xopc.ai/',
+          defaults: {
+            ...baseTelegramConfig().defaults,
+            apiRoot: 'https://tg.xopc.ai/',
+          },
         },
       },
     } as Config;
@@ -125,12 +155,15 @@ describe('TelegramChannelPlugin loadAccounts', () => {
     expect(acc.apiRoot).toBe('https://tg.xopc.ai');
   });
 
-  it('keeps per-account apiRoot over channel-level apiRoot', async () => {
+  it('keeps per-account apiRoot over defaults apiRoot', async () => {
     const cfg = {
       channels: {
         telegram: {
           ...baseTelegramConfig(),
-          apiRoot: 'https://tg.xopc.ai',
+          defaults: {
+            ...baseTelegramConfig().defaults,
+            apiRoot: 'https://tg.xopc.ai',
+          },
           accounts: {
             default: {
               ...baseTelegramConfig().accounts!.default,

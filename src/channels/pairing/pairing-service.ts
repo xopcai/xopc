@@ -120,7 +120,7 @@ function resolveChannelAllowFromConfig(
   const ch = config?.channels?.[channel as keyof NonNullable<Config['channels']>];
   if (!ch || typeof ch !== 'object' || Array.isArray(ch)) return [];
   const block = ch as Record<string, unknown>;
-  const top = Array.isArray(block.allowFrom)
+  const top = channel !== 'telegram' && Array.isArray(block.allowFrom)
     ? block.allowFrom.map(String).filter(Boolean)
     : [];
   const accounts = block.accounts;
@@ -179,7 +179,12 @@ function resolveChannelDmPolicy(
       if (accPolicy) return resolveDmPolicy(accPolicy, 'pairing');
     }
   }
-  const topPolicy = block.dmPolicy as DmPolicy | undefined;
+  const defaults = block.defaults;
+  if (channel === 'telegram' && defaults && typeof defaults === 'object' && !Array.isArray(defaults)) {
+    const defaultPolicy = (defaults as { dmPolicy?: DmPolicy }).dmPolicy;
+    if (defaultPolicy) return resolveDmPolicy(defaultPolicy, 'pairing');
+  }
+  const topPolicy = channel === 'telegram' ? undefined : block.dmPolicy as DmPolicy | undefined;
   return resolveDmPolicy(topPolicy, channel === 'weixin' ? 'open' : 'pairing');
 }
 

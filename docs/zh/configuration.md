@@ -56,6 +56,11 @@ xopc onboard
   "channels": {
     "telegram": {
       "enabled": true,
+      "defaults": {
+        "dmPolicy": "pairing",
+        "groupPolicy": "open",
+        "streaming": { "mode": "partial" }
+      },
       "accounts": {
         "personal": {
           "name": "Personal Bot",
@@ -63,7 +68,7 @@ xopc onboard
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
-          "streamMode": "partial"
+          "streaming": { "mode": "partial" }
         }
       }
     }
@@ -329,6 +334,11 @@ xopc onboard
   "channels": {
     "telegram": {
       "enabled": true,
+      "defaults": {
+        "dmPolicy": "pairing",
+        "groupPolicy": "open",
+        "streaming": { "mode": "partial" }
+      },
       "accounts": {
         "personal": {
           "name": "Personal Bot",
@@ -336,7 +346,7 @@ xopc onboard
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
-          "streamMode": "partial"
+          "streaming": { "mode": "partial" }
         }
       }
     }
@@ -350,14 +360,17 @@ xopc onboard
 | `accounts` | object | - | 多账户配置 |
 | `accounts.<id>.name` | string | - | 显示名称 |
 | `accounts.<id>.botToken` | string | - | Bot token |
-| `accounts.<id>.dmPolicy` | string | `open` | DM 策略 |
-| `accounts.<id>.groupPolicy` | string | `open` | 群组策略 |
+| `defaults.dmPolicy` | string | `pairing` | 账号默认私聊策略 |
+| `defaults.groupPolicy` | string | `open` | 账号默认群组策略 |
+| `defaults.streaming.mode` | string | `partial` | 账号默认流式模式 |
+| `accounts.<id>.dmPolicy` | string | inherits `defaults.dmPolicy` | DM 策略 |
+| `accounts.<id>.groupPolicy` | string | inherits `defaults.groupPolicy` | 群组策略 |
 | `accounts.<id>.allowFrom` | array | `[]` | 允许的用户 ID |
-| `accounts.<id>.streamMode` | string | `partial` | 流式模式 |
+| `accounts.<id>.streaming.mode` | string | inherits `defaults.streaming.mode` | 流式模式 |
 
 **DM 策略**（`pairing` \| `allowlist` \| `open` \| `disabled`）：
 
-- **`pairing`**（推荐）：未在允许列表中的用户 **不会** 进入智能体管线。允许来源包括配置里的 **`allowFrom`**，以及执行 **`xopc channels pairing approve`** 后写入的 **各通道凭证目录下的 allowFrom 文件**（与配置在运行时合并）。用户首次私聊会收到 **配对码**。详见 [消息通道 — DM 私聊配对](./channels/index.md#dm-pairing) 与 [CLI — channels](./cli.md#channels)。
+- **`pairing`**（推荐）：未在允许列表中的用户 **不会** 进入智能体管线。Telegram 的允许来源是 **`channels.telegram.accounts.<账号>.allowFrom`**，并会合并执行 **`xopc channels pairing approve`** 后写入的 **Telegram allowFrom 凭证文件**（与配置在运行时合并）。用户首次私聊会收到 **配对码**。详见 [消息通道 — DM 私聊配对](./channels/index.md#dm-pairing) 与 [CLI — channels](./cli.md#channels)。
 - **`allowlist`**：同样合并配置与凭证文件中的 id，但 **不会** 发送配对码；未命中则静默丢弃。
 - **`open`**：任意用户可私聊（公开机器人上慎用）。
 - **`disabled`**：不接受私聊。

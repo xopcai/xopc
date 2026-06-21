@@ -104,7 +104,7 @@ Configure stream behavior in `config.json`:
     "telegram": {
       "accounts": {
         "default": {
-          "streamMode": "partial"
+          "streaming": { "mode": "partial" }
         }
       }
     }
@@ -223,7 +223,7 @@ type ProgressStage =
 
 ### No Progress Updates
 
-1. **Check stream mode**: Ensure `streamMode` is `partial` or `block`
+1. **Check stream mode**: Ensure `streaming.mode` is `partial` or `block`
 2. **Check logs**: Look for `ProgressFeedback` or `DraftStream` logs
 3. **Check channel support**: Progress updates only work with Telegram (currently)
 

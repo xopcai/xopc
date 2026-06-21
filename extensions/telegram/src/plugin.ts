@@ -361,16 +361,18 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     const accounts = telegramCfg.accounts as Record<string, Record<string, unknown>> | undefined;
     if (!accounts || Object.keys(accounts).length === 0) return;
 
-    const channelApiRoot =
-      typeof telegramCfg.apiRoot === 'string'
-        ? normalizeTelegramApiRoot(telegramCfg.apiRoot)
+    const defaults =
+      telegramCfg.defaults && typeof telegramCfg.defaults === 'object' && !Array.isArray(telegramCfg.defaults)
+        ? telegramCfg.defaults as Record<string, unknown>
+        : {};
+    const defaultApiRoot =
+      typeof defaults.apiRoot === 'string'
+        ? normalizeTelegramApiRoot(defaults.apiRoot)
         : undefined;
-    const channelProxy =
-      typeof telegramCfg.proxy === 'string' && telegramCfg.proxy.trim()
-        ? telegramCfg.proxy.trim()
+    const defaultProxy =
+      typeof defaults.proxy === 'string' && defaults.proxy.trim()
+        ? defaults.proxy.trim()
         : undefined;
-    const channelReplyToMode = telegramCfg.replyToMode as TelegramResolvedAccount['replyToMode'];
-    const channelStreaming = telegramCfg.streaming as TelegramResolvedAccount['streaming'];
 
     const tokenOwners = new Map<string, string[]>();
 
@@ -393,17 +395,14 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         typeof account.proxy === 'string' && account.proxy.trim() ? account.proxy.trim() : undefined;
 
       this.accountManager.registerAccount({
+        ...defaults,
         ...account,
         accountId: id,
         botToken: token,
         tokenFile: typeof account.tokenFile === 'string' ? account.tokenFile : undefined,
         tokenSource: source,
-        ...(accApiRoot || channelApiRoot ? { apiRoot: accApiRoot || channelApiRoot } : {}),
-        ...(accProxy || channelProxy ? { proxy: accProxy || channelProxy } : {}),
-        replyToMode:
-          (account.replyToMode as TelegramResolvedAccount['replyToMode']) ?? channelReplyToMode,
-        streaming:
-          (account.streaming as TelegramResolvedAccount['streaming']) ?? channelStreaming,
+        ...(accApiRoot || defaultApiRoot ? { apiRoot: accApiRoot || defaultApiRoot } : {}),
+        ...(accProxy || defaultProxy ? { proxy: accProxy || defaultProxy } : {}),
       } as import('@xopcai/xopc/channels/channel-domain.js').TelegramAccountConfig);
     }
 

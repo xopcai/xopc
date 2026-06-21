@@ -15,6 +15,11 @@
   "channels": {
     "telegram": {
       "enabled": true,
+      "defaults": {
+        "dmPolicy": "pairing",
+        "groupPolicy": "open",
+        "streaming": { "mode": "partial" }
+      },
       "accounts": {
         "personal": {
           "name": "Personal Bot",
@@ -22,7 +27,7 @@
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
-          "streamMode": "partial"
+          "streaming": { "mode": "partial" }
         },
         "work": {
           "name": "Work Bot",
@@ -46,10 +51,12 @@
 
 **DM 策略**（`dmPolicy`）：
 
-- **`pairing`** — 未在允许列表中的用户 **不会** 进入智能体。允许来源：`xopc.json` 中的 **`allowFrom`**，以及 **`~/.xopc/credentials/xopc-telegram-<账号>-allowFrom.json`** 里已批准的 id（可用 **`XOPC_CREDENTIALS_DIR`** 覆盖目录）。首次私聊会收到 **配对码**；管理员在网关所在机执行 **`xopc channels pairing approve --channel telegram --account <账号> <配对码>`**。详见 [DM 私聊配对](./index.md#dm-pairing) 与 [CLI — channels](../cli.md#channels)。
+- **`pairing`** — 未在允许列表中的用户 **不会** 进入智能体。允许来源：`channels.telegram.accounts.<账号>.allowFrom`，以及 **`~/.xopc/credentials/xopc-telegram-<账号>-allowFrom.json`** 里已批准的 id（可用 **`XOPC_CREDENTIALS_DIR`** 覆盖目录）。首次私聊会收到 **配对码**；管理员在网关所在机执行 **`xopc channels pairing approve --channel telegram --account <账号> <配对码>`**。详见 [DM 私聊配对](./index.md#dm-pairing) 与 [CLI — channels](../cli.md#channels)。
 - **`allowlist`** — 同样合并配置与凭证文件中的 id，但 **不** 发配对码；未命中则丢弃。
 - **`open`** — 任意用户可私聊。
 - **`disabled`** — 关闭私聊。
+
+`channels.telegram.defaults` 为账号提供策略、流式输出、代理、API 根地址和限制等默认值。访问列表只属于账号：私聊 id 写入 `accounts.<账号>.allowFrom`，群聊 id 写入 `accounts.<账号>.groupAllowFrom`。
 
 **群组策略** (`groupPolicy`)：
 - `open` - 允许所有群
@@ -58,7 +65,7 @@
 
 ## 流式输出
 
-**Stream 模式** (`streamMode`)：
+**Stream 模式** (`streaming.mode`)：
 
 | 模式 | 说明 |
 |------|------|
@@ -88,10 +95,12 @@
   "channels": {
     "telegram": {
       "enabled": true,
+      "defaults": {
+        "apiRoot": "https://your-proxy-domain.com"
+      },
       "accounts": {
         "default": {
-          "botToken": "YOUR_BOT_TOKEN",
-          "apiRoot": "https://your-proxy-domain.com"
+          "botToken": "YOUR_BOT_TOKEN"
         }
       }
     }
@@ -107,4 +116,3 @@
 - **轮询模式**：使用 long polling，约 1-2 秒延迟
 - **语音消息**：STT 60 秒限制（Telegram）
 - **TTS 文本**：受 `tts.maxTextLength` 限制（schema 默认 512；可配置）
-
