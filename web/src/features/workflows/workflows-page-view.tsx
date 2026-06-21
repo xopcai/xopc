@@ -9,8 +9,8 @@ import { interaction } from '@/lib/interaction';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { WorkflowBoard } from './workflow-board';
+import { WorkflowCreateDialog } from './workflow-create-dialog';
 import { WorkflowDefinitionDetailDialog } from './workflow-definition-detail-dialog';
-import { WorkflowManageDialog } from './workflow-manage-dialog';
 import { WorkflowPickStartDialog } from './workflow-pick-start-dialog';
 import { WorkflowRunPanel } from './workflow-run-panel';
 import { WorkflowStartDialog } from './workflow-start-dialog';
@@ -63,6 +63,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     retryRun,
     replayRun,
     saveCustomWorkflow,
+    saveDraftAndStart,
   } = vm;
 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -262,12 +263,14 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
         }}
       />
 
-      <WorkflowManageDialog
+      <WorkflowCreateDialog
         open={manageOpen}
         language={language}
+        ownerAgentId={ownerAgentId}
         saving={savingWorkflow}
         onClose={() => setManageOpen(false)}
-        onSave={(payload) => void saveCustomWorkflow(payload)}
+        onSave={(payload) => saveCustomWorkflow(payload)}
+        onSaveAndStart={saveDraftAndStart}
       />
     </main>
   );
