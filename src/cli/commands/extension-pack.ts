@@ -1,12 +1,15 @@
+import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, renameSync, mkdirSync, statSync } from 'node:fs';
-import { isAbsolute, join, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { basename, join, relative, resolve } from 'node:path';
 
+import AdmZip from 'adm-zip';
 import { Command } from 'commander';
 
 import { checkEngineCompatibility } from '../../extensions/engine-check.js';
 import type { ExtensionManifest } from '../../extensions/types/index.js';
 import { normalizeExtensionManifest } from '../../extensions/normalize-manifest.js';
+import { collectExtensionPackageDependencyIssues } from '../../extensions/package-contract.js';
 import { PACKAGE_VERSION } from '../../package-version.js';
 import { createLogger } from '../../utils/logger.js';
 import { colors } from '../utils/colors.js';
@@ -21,9 +24,17 @@ interface PackContext {
   diagnostics: PackDiagnostic[];
 }
 
-interface PackDiagnostic {
+export interface PackDiagnostic {
   level: 'error' | 'warning' | 'info';
   message: string;
+}
+
+export interface ExtensionPackageValidationResult {
+  extensionDir: string;
+  manifest: ExtensionManifest | null;
+  packageJson: Record<string, unknown> | null;
+  diagnostics: PackDiagnostic[];
+  ok: boolean;
 }
 
 function isRecord(x: unknown): x is Record<string, unknown> {
@@ -84,15 +95,9 @@ function collectContributionPaths(manifest: ExtensionManifest, extRoot: string):
   return out;
 }
 
-function resolveMainFile(root: string, main?: string): string | null {
-  const cands = [main, 'index.ts', 'index.js', 'extension.ts', 'extension.js'].filter(
-    (x): x is string => typeof x === 'string' && x.length > 0,
-  );
-  for (const c of cands) {
-    const p = join(root, c);
-    if (existsSync(p)) return p;
-  }
-  return null;
+function resolveMainFile(root: string, main: string): string | null {
+  const p = join(root, main);
+  return existsSync(p) ? p : null;
 }
 
 function validateManifest(ctx: PackContext): void {
@@ -100,11 +105,14 @@ function validateManifest(ctx: PackContext): void {
   if (!manifest.id || !String(manifest.id).trim()) {
     diagnostics.push({ level: 'error', message: 'Manifest "id" is required' });
   }
-  const mainFile = resolveMainFile(extensionDir, manifest.main);
+  if (!manifest.main) {
+    diagnostics.push({ level: 'error', message: 'Manifest "main" is required and must point at built JavaScript' });
+  }
+  const mainFile = manifest.main ? resolveMainFile(extensionDir, manifest.main) : null;
   if (!mainFile) {
     diagnostics.push({
       level: 'error',
-      message: `Main entry not found (expected main, index.ts, index.js, etc. in ${extensionDir})`,
+      message: `Main entry not found: ${manifest.main ?? '(missing)'}`,
     });
   }
 
@@ -121,16 +129,28 @@ function validateManifest(ctx: PackContext): void {
     }
   }
 
-  if (manifest.engines?.xopc) {
+  if (manifest.main && !/\.(mjs|cjs|js)$/i.test(manifest.main)) {
+    diagnostics.push({
+      level: 'error',
+      message: `Strict package contract requires manifest.main to point at built JavaScript, got "${manifest.main}"`,
+    });
+  }
+
+  if (!manifest.engines?.xopc) {
+    diagnostics.push({
+      level: 'error',
+      message: 'manifest engines.xopc is required for independent extension packages',
+    });
+  } else {
     const r = checkEngineCompatibility(PACKAGE_VERSION, manifest.engines.xopc);
     if (r.parseWarning) {
       diagnostics.push({
-        level: 'warning',
-        message: `engines.xopc parse issue — ${r.reason ?? 'unknown'} (continuing)`,
+        level: 'error',
+        message: `engines.xopc parse issue — ${r.reason ?? 'unknown'}`,
       });
     } else if (!r.compatible) {
       diagnostics.push({
-        level: 'warning',
+        level: 'error',
         message: `engines.xopc not satisfied by current xopc ${PACKAGE_VERSION}: ${r.reason ?? manifest.engines.xopc}`,
       });
     }
@@ -139,24 +159,21 @@ function validateManifest(ctx: PackContext): void {
 
 function validatePackageJson(ctx: PackContext): void {
   const { packageJson, diagnostics, extensionDir } = ctx;
-  const deps = packageJson.dependencies;
-  if (isRecord(deps)) {
-    for (const [name, v] of Object.entries(deps)) {
-      if (typeof v === 'string' && v.startsWith('workspace:')) {
-        diagnostics.push({
-          level: 'warning',
-          message: `dependency "${name}": ${v} — will be replaced when packing from a pnpm workspace`,
-        });
-      }
-    }
+  for (const issue of collectExtensionPackageDependencyIssues(packageJson, {
+    strictRuntimeSdkDeps: true,
+  })) {
+    diagnostics.push({
+      level: 'error',
+      message: issue.message,
+    });
   }
 
   const files = packageJson.files;
   if (Array.isArray(files)) {
     if (!files.some((f) => f === MANIFEST || f === '**/xopc.extension.json')) {
       diagnostics.push({
-        level: 'warning',
-        message: `package.json "files" should include "${MANIFEST}" so the archive ships the manifest`,
+        level: 'error',
+        message: `package.json "files" must include "${MANIFEST}" so the archive ships the manifest`,
       });
     }
   }
@@ -176,13 +193,127 @@ function validatePackageJson(ctx: PackContext): void {
   }
 }
 
-function pnpmAvailable(): boolean {
-  try {
-    execSync('pnpm --version', { stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
+const SECRET_FILE_RE = /(^|\/)(\.env(?:\..*)?|\.npmrc|\.yarnrc|id_rsa|id_ed25519|.*\.(?:pem|key|p12|pfx))$/i;
+const SECRET_TEXT_RE = /(sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN (?:RSA |OPENSSH |EC |DSA )?PRIVATE KEY-----)/;
+
+function scanUnsafeFiles(root: string, diagnostics: PackDiagnostic[]): void {
+  const walk = (dir: string) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      const rel = relative(root, full).replace(/\\/g, '/');
+      if (shouldExcludeFromArtifact(rel)) continue;
+      if (SECRET_FILE_RE.test(rel)) {
+        diagnostics.push({ level: 'error', message: `Unsafe secret-like file would be packaged: ${rel}` });
+        continue;
+      }
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.isFile()) {
+        const size = statSync(full).size;
+        if (size <= 1024 * 1024 && /\.(?:js|mjs|cjs|json|html|css|md|txt|map)$/i.test(entry.name)) {
+          const text = readFileSync(full, 'utf-8');
+          if (SECRET_TEXT_RE.test(text)) {
+            diagnostics.push({ level: 'error', message: `Potential secret token found in packaged file: ${rel}` });
+          }
+        }
+      }
+    }
+  };
+  walk(root);
+}
+
+export function validateExtensionPackageDirectory(dir: string): ExtensionPackageValidationResult {
+  const extensionDir = resolve(dir || '.');
+  const diagnostics: PackDiagnostic[] = [];
+  if (!existsSync(extensionDir) || !existsSync(join(extensionDir, 'package.json'))) {
+    diagnostics.push({ level: 'error', message: `Not an extension project (no package.json): ${extensionDir}` });
+    return { extensionDir, manifest: null, packageJson: null, diagnostics, ok: false };
   }
+  const manifest = loadManifestAtRoot(extensionDir, diagnostics);
+  let packageJson: Record<string, unknown> | null = null;
+  try {
+    packageJson = loadJson(join(extensionDir, 'package.json')) as Record<string, unknown>;
+    if (!isRecord(packageJson)) throw new Error('package.json must be an object');
+  } catch (e) {
+    diagnostics.push({ level: 'error', message: e instanceof Error ? e.message : String(e) });
+  }
+  if (manifest && packageJson) {
+    const ctx: PackContext = { extensionDir, manifest, packageJson, diagnostics };
+    validateManifest(ctx);
+    validatePackageJson(ctx);
+    scanUnsafeFiles(extensionDir, diagnostics);
+  }
+  return {
+    extensionDir,
+    manifest,
+    packageJson,
+    diagnostics,
+    ok: !diagnostics.some((d) => d.level === 'error'),
+  };
+}
+
+function shouldExcludeFromArtifact(rel: string): boolean {
+  const parts = rel.split(/[\\/]+/);
+  if (parts.some((p) => p === 'node_modules' || p === '.git' || p === '.turbo' || p === '.cache')) return true;
+  const name = parts.at(-1) ?? rel;
+  if (name === '.DS_Store') return true;
+  if (name.endsWith('.tgz') || name.endsWith('.zip') || name.endsWith('.sha256') || name.endsWith('.manifest.json')) return true;
+  if (name.endsWith('.tsbuildinfo')) return true;
+  return false;
+}
+
+function addDirectoryToZip(zip: AdmZip, root: string, dir: string): void {
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    const rel = relative(root, full).replace(/\\/g, '/');
+    if (shouldExcludeFromArtifact(rel)) continue;
+    if (entry.isDirectory()) {
+      addDirectoryToZip(zip, root, full);
+    } else if (entry.isFile()) {
+      zip.addFile(rel, readFileSync(full));
+    }
+  }
+}
+
+function writeStoreReadyArtifact(params: {
+  extensionDir: string;
+  outDir: string;
+  manifest: ExtensionManifest;
+  packageJson: Record<string, unknown>;
+}): string {
+  mkdirSync(params.outDir, { recursive: true });
+  const name = String(params.packageJson.name ?? params.manifest.id)
+    .replace(/^@/, '')
+    .replace(/[\\/]+/g, '-')
+    .replace(/[^A-Za-z0-9._-]+/g, '-');
+  const version = String(params.manifest.version ?? params.packageJson.version ?? '0.0.0');
+  const base = `${name}-${version}`;
+  const zipPath = join(params.outDir, `${base}.zip`);
+  const zip = new AdmZip();
+  addDirectoryToZip(zip, params.extensionDir, params.extensionDir);
+  zip.writeZip(zipPath);
+
+  const buffer = readFileSync(zipPath);
+  const sha256Hex = createHash('sha256').update(buffer).digest('hex');
+  const integrity = `sha256-${createHash('sha256').update(buffer).digest('base64')}`;
+  writeFileSync(join(params.outDir, `${base}.sha256`), `${sha256Hex}  ${basename(zipPath)}\n`);
+  writeFileSync(
+    join(params.outDir, `${base}.manifest.json`),
+    JSON.stringify(
+      {
+        id: params.manifest.id,
+        name: params.manifest.name,
+        version,
+        artifact: basename(zipPath),
+        integrity,
+        manifest: params.manifest,
+        packageJson: params.packageJson,
+      },
+      null,
+      2,
+    ),
+  );
+  return zipPath;
 }
 
 function printDiagnostics(d: PackDiagnostic[]): void {
@@ -205,45 +336,12 @@ export function createExtensionPackCommand(): Command {
     .option('--no-build-ui', 'Skip automatic "npm run build:ui" when defined')
     .option('--dry-run', 'Validate only; do not create an archive', false)
     .action((dir: string, opts: { out?: string; buildUi: boolean; dryRun: boolean }) => {
-      const extensionDir = resolve(dir || '.');
+      const validation = validateExtensionPackageDirectory(dir || '.');
+      const { extensionDir, manifest, packageJson, diagnostics } = validation;
       const outDir = opts.out && opts.out.length > 0 ? resolve(opts.out) : extensionDir;
-      const diagnostics: PackDiagnostic[] = [];
-      if (!existsSync(extensionDir) || !existsSync(join(extensionDir, 'package.json'))) {
-        console.error(
-          colors.red('error:'),
-          `Not an extension project (no package.json): ${extensionDir}`,
-        );
-        process.exit(1);
-      }
-      const manifest = loadManifestAtRoot(extensionDir, diagnostics);
-      if (!manifest) {
-        printDiagnostics(diagnostics);
-        process.exit(1);
-      }
-
-      let packageJson: Record<string, unknown>;
-      try {
-        packageJson = loadJson(join(extensionDir, 'package.json')) as Record<string, unknown>;
-        if (!isRecord(packageJson)) {
-          throw new Error('package.json must be an object');
-        }
-      } catch (e) {
-        log.error({ err: e }, 'Failed to read package.json');
-        console.error(
-          colors.red('error:'),
-          e instanceof Error ? e.message : String(e),
-        );
-        process.exit(1);
-      }
-
-      const ctx: PackContext = { extensionDir, manifest, packageJson, diagnostics };
-      validateManifest(ctx);
-      validatePackageJson(ctx);
-
       printDiagnostics(diagnostics);
 
-      const hasError = diagnostics.some((d) => d.level === 'error');
-      if (hasError) {
+      if (!validation.ok || !manifest || !packageJson) {
         console.error(colors.red('Pack validation failed (fix errors above).'));
         process.exit(1);
       }
@@ -267,65 +365,18 @@ export function createExtensionPackCommand(): Command {
         }
       }
 
-      let tarball: string;
+      let artifactPath: string;
       try {
-        const cmd = pnpmAvailable() ? 'pnpm pack' : 'npm pack';
-        const out = execSync(cmd, { cwd: extensionDir, encoding: 'utf-8' });
-        const lines = out
-          .split(/\r?\n/)
-          .map((l) => l.trim())
-          .filter(Boolean);
-        const line = lines
-          .slice()
-          .reverse()
-          .find((l) => l.endsWith('.tgz') && !l.startsWith('WARN')) ?? lines.at(-1) ?? '';
-        if (line.endsWith('.tgz')) {
-          tarball = isAbsolute(line) || line.startsWith('file:') ? resolve(line.replace(/^file:/, '')) : join(extensionDir, line);
-        } else {
-          tarball = '';
-        }
-        if (!tarball) {
-          const tgzs = readdirSync(extensionDir).filter((f) => f.endsWith('.tgz'));
-          tgzs.sort(
-            (a, b) => statSync(join(extensionDir, b)).mtimeMs - statSync(join(extensionDir, a)).mtimeMs,
-          );
-          const last = tgzs[0];
-          tarball = last ? join(extensionDir, last) : '';
-        }
-        if (!tarball || !existsSync(tarball)) {
-          throw new Error('Could not locate .tgz after pack; check pnpm/npm output');
-        }
+        artifactPath = writeStoreReadyArtifact({ extensionDir, outDir, manifest, packageJson });
       } catch (e) {
         log.error({ err: e }, 'pack failed');
-        console.error(
-          colors.red('error:'),
-          e instanceof Error ? e.message : String(e),
-        );
+        console.error(colors.red('error:'), e instanceof Error ? e.message : String(e));
         process.exit(1);
       }
 
-      if (outDir !== extensionDir) {
-        try {
-          mkdirSync(outDir, { recursive: true });
-          const base = tarball.includes('/') ? tarball.slice(tarball.lastIndexOf('/') + 1) : tarball;
-          const dest = join(outDir, base);
-          renameSync(tarball, dest);
-          tarball = dest;
-        } catch (e) {
-          console.error(
-            colors.red('error:'),
-            `Failed to move archive to --out: ${e instanceof Error ? e.message : String(e)}`,
-          );
-          process.exit(1);
-        }
-      }
-
-      const displayPath = tarball;
       console.log('');
-      console.log(colors.green('Pack complete:'), displayPath);
-      console.log(
-        colors.cyan('Next:'),
-        'install the .tgz with your extension workflow, or extract into the global / workspace extensions directory.',
-      );
+      console.log(colors.green('Pack complete:'), artifactPath);
+      console.log(colors.cyan('Generated:'), '.zip artifact, .sha256 checksum, .manifest.json metadata');
+      console.log(colors.cyan('Next:'), 'upload the generated artifact set to store.xopc.ai or install the zip via the store pipeline.');
     });
 }

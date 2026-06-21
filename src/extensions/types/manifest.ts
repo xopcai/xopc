@@ -8,6 +8,10 @@ import type { ExtensionKind } from './core.js';
 export interface EnginesDeclaration {
   /** Semver range string for the running xopc CLI / gateway, e.g. `">=0.0.20"`. */
   xopc?: string;
+  /** Stable backend extension SDK API range, independent from the host package version. */
+  extensionApi?: string;
+  /** Stable iframe UI SDK API range, independent from the host package version. */
+  extensionUiApi?: string;
 }
 
 export interface ExtensionManifest {
@@ -266,6 +270,17 @@ export interface ActivationDeclaration {
 }
 
 export interface ContractDeclaration {
+  tools?: string[];
+  hooks?: string[];
+  commands?: string[];
+  cliCommands?: string[];
+  channels?: string[];
+  httpRoutes?: string[];
+  gatewayMethods?: string[];
+  services?: string[];
+  tui?: string[];
+  providers?: string[];
+  marketplaceAdapters?: string[];
   mediaUnderstandingProviders?: string[];
   speechProviders?: string[];
   imageGenerationProviders?: string[];

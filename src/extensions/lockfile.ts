@@ -21,8 +21,16 @@ export interface ExtensionLockEntry {
   version: string;
   /** Resolved URL or path */
   resolved: string;
-  /** Integrity hash (for verification) */
+  /** Download artifact integrity, formatted as sha256-<base64>. */
   integrity?: string;
+  /** Deterministic hash of installed files, formatted as dir-sha256-<base64>. */
+  installedIntegrity?: string;
+  /** Immutable artifact URL used during install, when available. */
+  artifactUrl?: string;
+  /** Manifest snapshot captured at install time. */
+  manifest?: Record<string, unknown>;
+  /** package.json snapshot captured at install time. */
+  packageJson?: Record<string, unknown>;
   /** Installation timestamp */
   installedAt: string;
   /** Source type */

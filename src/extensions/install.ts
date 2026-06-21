@@ -22,7 +22,10 @@ import {
   resolveExtensionsDir as resolveGlobalExtensionsDir,
   resolveBundledExtensionsDir,
 } from '../config/paths.js';
+import { PACKAGE_VERSION } from '../package-version.js';
 import { createLogger } from '../utils/logger.js';
+import { checkEngineCompatibility } from './engine-check.js';
+import { collectExtensionPackageDependencyIssues } from './package-contract.js';
 import { MAX_EXTENSION_STORE_ZIP_BYTES } from './store-zip-limits.js';
 
 const log = createLogger('ExtensionInstall');
@@ -136,6 +139,11 @@ interface ExtensionManifest {
   name?: string;
   version?: string;
   main?: string;
+  engines?: {
+    xopc?: string;
+    extensionApi?: string;
+    extensionUiApi?: string;
+  };
 }
 
 function isSafeZipPath(name: string): boolean {
@@ -169,8 +177,7 @@ function inferExtensionStripPrefix(primaryManifestPath: string): string {
   return norm.slice(0, norm.length - suff.length);
 }
 
-/** Read `id` from the shallowest xopc.extension.json in a store zip (for --force / preflight). */
-export function peekExtensionIdFromStoreZip(buffer: Buffer): string | undefined {
+function readShallowestExtensionManifestFromZip(buffer: Buffer): Record<string, unknown> | undefined {
   if (buffer.length > MAX_EXTENSION_STORE_ZIP_BYTES) return undefined;
   let zip: AdmZip;
   try {
@@ -192,13 +199,25 @@ export function peekExtensionIdFromStoreZip(buffer: Buffer): string | undefined 
   if (!entry) return undefined;
   try {
     const raw = entry.getData().toString('utf8');
-    const m = JSON.parse(raw) as { id?: string };
-    const id = typeof m.id === 'string' ? m.id.trim() : '';
-    if (!id || id.includes('/') || id.includes('\\')) return undefined;
-    return id;
+    const parsed = JSON.parse(raw) as unknown;
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
   } catch {
     return undefined;
   }
+}
+
+export function peekExtensionManifestFromStoreZip(buffer: Buffer): Record<string, unknown> | undefined {
+  return readShallowestExtensionManifestFromZip(buffer);
+}
+
+/** Read `id` from the shallowest xopc.extension.json in a store zip (for --force / preflight). */
+export function peekExtensionIdFromStoreZip(buffer: Buffer): string | undefined {
+  const m = readShallowestExtensionManifestFromZip(buffer) as { id?: string } | undefined;
+  const id = typeof m?.id === 'string' ? m.id.trim() : '';
+  if (!id || id.includes('/') || id.includes('\\')) return undefined;
+  return id;
 }
 
 /**
@@ -422,6 +441,21 @@ async function installFromDirectory(
     }
   }
 
+  if (packageJson) {
+    const packageIssues = collectExtensionPackageDependencyIssues(
+      packageJson as Record<string, unknown>,
+      { strictRuntimeSdkDeps: true },
+    );
+    if (packageIssues.length > 0) {
+      return {
+        ok: false,
+        error: `Extension package is not installable as an independent package:\n${packageIssues
+          .map((issue) => `- ${issue.message}`)
+          .join('\n')}`,
+      };
+    }
+  }
+
   // Determine extension ID
   const extensionId = manifest?.id || packageJson?.name;
   if (!extensionId) {
@@ -442,8 +476,40 @@ async function installFromDirectory(
     return { ok: false, error: `Extension already exists at ${targetDir}. Use update instead.` };
   }
 
+  if (!manifest) {
+    return { ok: false, error: 'Extension must include xopc.extension.json' };
+  }
+
+  if (!manifest.engines?.xopc) {
+    return { ok: false, error: 'Extension manifest must declare engines.xopc' };
+  }
+  const engineCheck = checkEngineCompatibility(PACKAGE_VERSION, manifest.engines.xopc);
+  if (engineCheck.parseWarning) {
+    return {
+      ok: false,
+      error: engineCheck.reason ?? `Could not parse engines.xopc ${manifest.engines.xopc}`,
+    };
+  }
+  if (!engineCheck.compatible) {
+    return {
+      ok: false,
+      error: engineCheck.reason ?? `xopc ${PACKAGE_VERSION} does not satisfy engines.xopc ${manifest.engines.xopc}`,
+    };
+  }
+
+  if (!manifest.main) {
+    return { ok: false, error: 'Extension manifest must declare main' };
+  }
+
+  if (!/\.(mjs|cjs|js)$/i.test(manifest.main)) {
+    return {
+      ok: false,
+      error: `Extension main must point at built JavaScript (.js/.mjs/.cjs), got: ${manifest.main}`,
+    };
+  }
+
   // Validate main entry exists
-  const mainFile = manifest?.main || 'index.js';
+  const mainFile = manifest.main;
   const mainPath = join(sourceDir, mainFile);
   if (!existsSync(mainPath)) {
     return { ok: false, error: `Main entry not found: ${mainFile}` };

@@ -32,6 +32,7 @@ describe('ExtensionApiImpl registerCommand', () => {
       createExtensionLogger('test'),
       (p) => p,
       registry,
+      { commands: ['ping', 'cleanup-cmd'] },
     );
 
     api.registerCommand({
@@ -58,6 +59,7 @@ describe('ExtensionApiImpl registerCommand', () => {
       createExtensionLogger('test'),
       (p) => p,
       registry,
+      { commands: ['ping', 'cleanup-cmd'] },
     );
 
     api.registerCommand({

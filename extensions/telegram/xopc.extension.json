@@ -4,7 +4,7 @@
   "description": "Bundled Telegram Bot channel (private workspace sources; ships inside @xopcai/xopc dist/)",
   "version": "0.0.106",
   "kind": "channel",
-  "main": "src/index.ts",
+  "main": "src/index.js",
   "channels": [
     "telegram"
   ],
@@ -423,5 +423,13 @@
   "setup": {
     "providers": [],
     "requiresRuntime": true
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "channels": [
+      "telegram"
+    ]
   }
 }

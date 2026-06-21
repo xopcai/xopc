@@ -4,6 +4,11 @@
   "description": "Image generation via Fal.ai queue API. Configure API keys and queue base URL under Settings → Images, or here — both edit the same providers.fal entry.",
   "version": "1.0.0",
   "kind": "image-generation",
-  "main": "src/index.ts",
-  "autoEnableWhenConfiguredProviders": ["fal"]
+  "main": "src/index.js",
+  "autoEnableWhenConfiguredProviders": [
+    "fal"
+  ],
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  }
 }

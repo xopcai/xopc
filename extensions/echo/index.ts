@@ -7,7 +7,7 @@
  *   xopc extension install ./examples/extensions/echo
  */
 
-import type { ExtensionApi } from 'xopc/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 
 const extension = {
   id: 'echo',

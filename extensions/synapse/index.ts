@@ -5,7 +5,7 @@
  * Phase 2: Tool 注册 → Agent 可操作看板 (current)
  */
 
-import type { ExtensionApi } from 'xopc/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 import {
   createCard, moveCard, updateProgress,
   addDecision, resolveDecision, getBoard,

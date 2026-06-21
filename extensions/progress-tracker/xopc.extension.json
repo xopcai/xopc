@@ -4,7 +4,7 @@
   "description": "Example extension demonstrating enhanced tools with streaming updates and state persistence",
   "version": "1.0.0",
   "kind": "tool",
-  "main": "index.ts",
+  "main": "index.js",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -19,5 +19,17 @@
         "description": "Track tool execution history"
       }
     }
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "tools": [
+      "long_task"
+    ],
+    "hooks": [
+      "tool_execution_start",
+      "tool_execution_end"
+    ]
   }
 }

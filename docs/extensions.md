@@ -21,7 +21,7 @@ xopc provides a lightweight but powerful extension system for customizing and ex
 
 ```bash
 # Install from npm (~/.xopc/extensions)
-xopc extensions install xopc-extension-hello
+xopc extensions install npm:xopc-extension-hello
 
 # Install from local directory
 xopc extensions install ./my-local-extension
@@ -120,7 +120,7 @@ All are optional. Common fields:
 | `modelSupport` | `modelPrefixes`, `modelPatterns` for model-based activation |
 | `autoEnableWhenConfiguredProviders` | Auto-enable when listed providers appear in config |
 | `activation` | `onProviders`, `onChannels`, `onCommands`, `onCapabilities` |
-| `contracts`, `setup` | Capability and setup hints |
+| `contracts`, `setup` | Runtime capability declarations and setup hints. Runtime registration must match `contracts`. |
 
 ---
 
@@ -132,6 +132,8 @@ The npm package name is **`@xopcai/xopc`**. Import the SDK through the published
 // Recommended: published package subpath
 import type { ExtensionApi, ExtensionDefinition } from '@xopcai/xopc/extension-sdk';
 ```
+
+Distributed extensions must treat this SDK as **host-provided**: keep `@xopcai/xopc` in `devDependencies` for types/build tooling (and optionally as an optional peer dependency for compatibility metadata), but do not put it in runtime `dependencies`. Extension runtime code must import SDK APIs from `@xopcai/xopc/extension-sdk` and its documented subpaths.
 
 ### Exported Types
 
@@ -269,6 +271,8 @@ Each extension must include `xopc.extension.json`. Minimal example:
 Channel / provider extensions can add the **optional** declaration fields described in [When extensions load](#when-extensions-load); use the manifests of built-in extensions as examples when authoring your own.
 
 ### Extension Entry File
+
+Runtime registrations must be declared in `xopc.extension.json` `contracts`. For example, an extension that registers `my_tool` must include `"contracts": { "tools": ["my_tool"] }`; undeclared runtime capabilities are rejected by the host.
 
 ```typescript
 import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
@@ -655,11 +659,18 @@ export default extension;
 
 ## Publishing Extensions
 
-1. Create `xopc.extension.json` manifest
-2. Create `index.ts` entry file
-3. Push to GitHub or publish to npm
+1. Create `xopc.extension.json` manifest with `engines.xopc`
+2. Build a JavaScript runtime entry such as `dist/index.js`
+3. Bundle any Gateway UI iframe code into static assets (do not ship bare browser imports)
+4. Validate the independent package contract
+5. Push to GitHub or publish to npm / xopc-store
 
 ```bash
+xopc extensions create my-extension --template tool
+xopc extensions pack ./my-extension --dry-run
+xopc extensions pack ./my-extension --out ./release
+xopc extensions publish ./my-extension --dry-run
+
 # Publish to npm (public)
 npm publish --access public
 
@@ -667,6 +678,10 @@ npm publish --access public
 # package.json: { "name": "@yourname/xopc-extension-name" }
 npm publish --access public
 ```
+
+Published packages must not contain `workspace:*` in `dependencies`, `devDependencies`, `peerDependencies`, or `optionalDependencies`. `@xopcai/extension-ui-sdk` is a build-time dependency: bundle it into `ui/*.bundle.js` and keep it out of runtime `dependencies`.
+
+`xopc extensions pack` produces a store-ready artifact set: `.zip`, `.sha256`, and `.manifest.json`. It also rejects unsafe package contents such as `.env`, private key files, and common token patterns before creating the artifact. The `ui` template includes `@xopcai/extension-ui-sdk`, esbuild, `scripts/build-ui.mjs`, and a `build:ui` script that bundles `ui/panel-entry.ts` to `ui/panel.bundle.js`.
 
 ---
 
@@ -688,16 +703,16 @@ npm publish --access public
 
 ```bash
 # Install from npm
-xopc extensions install <package-name>
+xopc extensions install npm:<package-name>
 
 # Install a specific version
-xopc extensions install my-extension@1.0.0
+xopc extensions install npm:my-extension@1.0.0
 
 # Install from a local directory
 xopc extensions install ./local-extension-dir
 
-# Install from xopc-store only
-xopc extensions install --store weather
+# Install from xopc-store
+xopc extensions install store:weather
 ```
 
 ### extensions list
@@ -707,19 +722,29 @@ xopc extensions list
 xopc extensions list --json
 ```
 
-### extensions health / audit / verify
+### extensions inspect / health / audit / verify
 
 ```bash
+xopc extensions inspect <extension-id>
+xopc extensions inspect <extension-id> --runtime
+xopc extensions inspect <extension-id> --json
+xopc extensions doctor
+xopc extensions doctor --fix
+xopc extensions doctor --json
 xopc extensions health
 xopc extensions audit
 xopc extensions verify [extension-id]
 ```
 
-### extensions dev / pack / publish
+### extensions create / dev / pack / publish
 
 ```bash
+xopc extensions create my-extension --template tool
+xopc extensions create my-ui-extension --template ui
+xopc extensions create my-provider --template provider
+xopc extensions create my-channel --template channel
 xopc extensions dev ./local-extension-dir
-xopc extensions pack ./local-extension-dir
+xopc extensions pack ./local-extension-dir --out ./release
 xopc extensions publish ./local-extension-dir --dry-run
 ```
 

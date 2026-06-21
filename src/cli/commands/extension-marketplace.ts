@@ -1,7 +1,9 @@
+import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync, rmSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { confirm } from '@inquirer/prompts';
 import { Command } from 'commander';
 import semver from 'semver';
 
@@ -18,27 +20,92 @@ import {
   installFromLocal,
   installFromNpm,
   peekExtensionIdFromStoreZip,
+  peekExtensionManifestFromStoreZip,
 } from '../../extensions/install.js';
 import { getExtensionLockfileManager } from '../../extensions/lockfile.js';
 import * as marketplace from '../../extensions/marketplace.js';
-import { normalizeExtensionManifest } from '../../extensions/normalize-manifest.js';
 import { colors } from '../utils/colors.js';
 import { getContextWithOpts } from '../context.js';
+import { validateExtensionPackageDirectory } from './extension-pack.js';
 
 const MANIFEST = 'xopc.extension.json';
 
-function isRecord(x: unknown): x is Record<string, unknown> {
-  return typeof x === 'object' && x !== null && !Array.isArray(x);
+function readJsonObject(path: string): Record<string, unknown> | undefined {
+  try {
+    const raw = JSON.parse(readFileSync(path, 'utf-8')) as unknown;
+    return typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
-function hasWorkspaceDeps(pkg: Record<string, unknown>): boolean {
-  const deps = pkg.dependencies;
-  const dev = pkg.devDependencies;
-  const check = (d: unknown) => {
-    if (!isRecord(d)) return false;
-    return Object.values(d).some((v) => typeof v === 'string' && v.startsWith('workspace:'));
+function readInstalledSnapshots(targetDir: string, extensionId: string): {
+  manifest?: Record<string, unknown>;
+  packageJson?: Record<string, unknown>;
+} {
+  const root = join(targetDir, extensionId);
+  return {
+    manifest: readJsonObject(join(root, MANIFEST)),
+    packageJson: readJsonObject(join(root, 'package.json')),
   };
-  return check(deps) || check(dev);
+}
+
+function sha256Integrity(buffer: Buffer): string {
+  return `sha256-${createHash('sha256').update(buffer).digest('base64')}`;
+}
+
+function normalizeIntegrity(raw: string | undefined): string | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  if (value.startsWith('sha256-')) return value;
+  if (/^[a-f0-9]{64}$/i.test(value)) {
+    return `sha256-${Buffer.from(value, 'hex').toString('base64')}`;
+  }
+  return value;
+}
+
+function printManifestSummary(params: {
+  source: 'store' | 'npm' | 'local';
+  packageName: string;
+  version?: string;
+  integrity?: string;
+  manifest?: Record<string, unknown>;
+}): void {
+  const manifest = params.manifest;
+  console.log('');
+  console.log(colors.cyan('Extension install review'));
+  console.log(`  Source: ${params.source}`);
+  console.log(`  Package: ${params.packageName}${params.version ? `@${params.version}` : ''}`);
+  if (params.integrity) console.log(`  Integrity: ${params.integrity}`);
+  if (manifest) {
+    console.log(`  ID: ${String(manifest.id ?? '(unknown)')}`);
+    console.log(`  Name: ${String(manifest.name ?? manifest.id ?? '(unknown)')}`);
+    const engines = manifest.engines as Record<string, unknown> | undefined;
+    if (engines?.xopc) console.log(`  engines.xopc: ${String(engines.xopc)}`);
+    const permissions = manifest.permissions as Record<string, unknown> | undefined;
+    if (permissions) {
+      console.log('  Permissions:');
+      for (const [key, value] of Object.entries(permissions)) {
+        console.log(`    ${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`);
+      }
+    }
+    const contracts = manifest.contracts as Record<string, unknown> | undefined;
+    if (contracts) {
+      console.log('  Contracts:');
+      for (const [key, value] of Object.entries(contracts)) {
+        if (Array.isArray(value) && value.length > 0) console.log(`    ${key}: ${value.join(', ')}`);
+      }
+    }
+  }
+  console.log('');
+}
+
+async function confirmInstall(params: Parameters<typeof printManifestSummary>[0] & { yes?: boolean }): Promise<boolean> {
+  printManifestSummary(params);
+  if (params.yes || !process.stdin.isTTY) return true;
+  return await confirm({ message: 'Install this extension?', default: false });
 }
 
 function parseNameAtVersion(raw: string): { name: string; version?: string } {
@@ -66,11 +133,6 @@ function looksLikeLocalPath(raw: string): boolean {
 /** xopc-store package names: lowercase letters, digits, hyphen (see xopc-store scan). */
 const STORE_NAME_RE = /^[a-z0-9-]{1,64}$/;
 
-function looksLikeStorePackageRef(raw: string): boolean {
-  const { name } = parseNameAtVersion(raw);
-  return STORE_NAME_RE.test(name);
-}
-
 async function upsertNpmExtensionLock(
   lock: ReturnType<typeof getExtensionLockfileManager>,
   targetDir: string,
@@ -94,6 +156,7 @@ async function upsertNpmExtensionLock(
     version: ver,
     resolved,
     source: 'npm',
+    ...readInstalledSnapshots(targetDir, result.extensionId),
   });
 }
 
@@ -104,9 +167,10 @@ async function installExtensionFromStoreWithLock(params: {
   targetDir: string;
   lock: ReturnType<typeof getExtensionLockfileManager>;
   force?: boolean;
+  yes?: boolean;
 }): Promise<{ ok: true; extensionId: string; version: string } | { ok: false; error: string }> {
   try {
-    const { downloadUrl, version } = await resolveExtensionZipDownloadUrl(
+    const { downloadUrl, version, integrity: expectedIntegrityRaw } = await resolveExtensionZipDownloadUrl(
       params.storeBase,
       params.packageName,
       params.version,
@@ -116,6 +180,26 @@ async function installExtensionFromStoreWithLock(params: {
       `Downloading ${params.packageName}@${version} from xopc-store (${params.storeBase})…`,
     );
     const buf = await downloadExtensionStoreZipBuffer(params.storeBase, downloadUrl);
+    const actualIntegrity = sha256Integrity(buf);
+    const expectedIntegrity = normalizeIntegrity(expectedIntegrityRaw);
+    if (expectedIntegrity && expectedIntegrity !== actualIntegrity) {
+      return {
+        ok: false,
+        error: `Extension artifact checksum mismatch: expected ${expectedIntegrity}, got ${actualIntegrity}`,
+      };
+    }
+    const manifest = peekExtensionManifestFromStoreZip(buf);
+    const accepted = await confirmInstall({
+      source: 'store',
+      packageName: params.packageName,
+      version,
+      integrity: actualIntegrity,
+      manifest,
+      yes: params.yes,
+    });
+    if (!accepted) {
+      return { ok: false, error: 'Install cancelled' };
+    }
     if (params.force) {
       const id = peekExtensionIdFromStoreZip(buf);
       if (id && existsSync(join(params.targetDir, id))) {
@@ -131,6 +215,9 @@ async function installExtensionFromStoreWithLock(params: {
       version,
       resolved: params.packageName,
       source: 'store',
+      artifactUrl: downloadUrl,
+      integrity: actualIntegrity,
+      ...readInstalledSnapshots(params.targetDir, result.extensionId),
     });
     return { ok: true, extensionId: result.extensionId, version };
   } catch (e) {
@@ -146,19 +233,18 @@ export function createExtensionInstallCommand(): Command {
     )
     .argument(
       '<target>',
-      'npm spec, path, store:id, or store-shaped id (npm is tried first; use --store / store: for store-only)',
+      'Explicit source spec: store:<id>, npm:<package>, or a local extension directory',
     )
-    .option('--store', 'Install from xopc-store only (fail if not an extension package)', false)
-    .option('--npm', 'Install from npm only', false)
     .option(
       '-f, --force',
       'Remove existing extension folder (manifest id) before store or local install',
       false,
     )
+    .option('-y, --yes', 'Skip interactive install confirmation', false)
     .action(
       async (
         target: string,
-        opts: { store: boolean; npm: boolean; force: boolean },
+        opts: { force: boolean; yes: boolean },
       ) => {
         const ctx = getContextWithOpts();
         const cfg = loadConfig(ctx.configPath);
@@ -167,28 +253,20 @@ export function createExtensionInstallCommand(): Command {
 
         let installTarget = target.trim();
         const storeExplicit = /^store:/i.test(installTarget);
+        const npmExplicit = /^npm:/i.test(installTarget);
         if (storeExplicit) {
           installTarget = installTarget.replace(/^store:/i, '').trim();
+        } else if (npmExplicit) {
+          installTarget = installTarget.replace(/^npm:/i, '').trim();
         }
         if (!installTarget) {
           console.error(colors.red('error:'), 'Missing target');
           process.exit(1);
         }
 
-        if (opts.store && opts.npm) {
-          console.error(colors.red('error:'), 'Use only one of --store and --npm');
-          process.exit(1);
-        }
-
-        const storeOnly = opts.store || storeExplicit;
-        if (storeExplicit && opts.npm) {
-          console.error(colors.red('error:'), 'Cannot combine store: prefix with --npm');
-          process.exit(1);
-        }
-
         const storeBase = resolveExtensionsStoreBaseUrl(cfg);
 
-        if (storeOnly) {
+        if (storeExplicit) {
           const { name: pkgName, version: ver } = parseNameAtVersion(installTarget);
           if (!STORE_NAME_RE.test(pkgName)) {
             console.error(
@@ -204,6 +282,7 @@ export function createExtensionInstallCommand(): Command {
             targetDir,
             lock,
             force: opts.force,
+            yes: opts.yes,
           });
           if (r.ok === false) {
             console.error(colors.red('error:'), r.error);
@@ -213,7 +292,7 @@ export function createExtensionInstallCommand(): Command {
           return;
         }
 
-        if (opts.npm) {
+        if (npmExplicit) {
           const spec = installTarget;
           console.log(colors.cyan('📦'), `Installing from npm: ${spec}…`);
           const result = await installFromNpm(spec, targetDir);
@@ -259,42 +338,11 @@ export function createExtensionInstallCommand(): Command {
           return;
         }
 
-        if (looksLikeStorePackageRef(installTarget)) {
-          const spec = installTarget;
-          console.log(colors.cyan('📦'), `Trying npm: ${spec}…`);
-          const npmTry = await installFromNpm(spec, targetDir);
-          if (npmTry.ok) {
-            await upsertNpmExtensionLock(lock, targetDir, npmTry, spec);
-            console.log(colors.green('✓'), npmTry.extensionId ?? 'ok', '(npm)');
-            return;
-          }
-          console.log(colors.yellow('npm:'), npmTry.error ?? 'failed', '— trying xopc-store…');
-          const { name: pkgName, version: ver } = parseNameAtVersion(installTarget);
-          const r = await installExtensionFromStoreWithLock({
-            storeBase,
-            packageName: pkgName,
-            version: ver,
-            targetDir,
-            lock,
-            force: opts.force,
-          });
-          if (r.ok === false) {
-            console.error(colors.red('error:'), r.error);
-            process.exit(1);
-          }
-          console.log(colors.green('✓'), `${r.extensionId}@${r.version} (store)`);
-          return;
-        }
-
-        const spec = installTarget;
-        console.log(colors.cyan('📦'), `Installing from npm: ${spec}…`);
-        const result = await installFromNpm(spec, targetDir);
-        if (!result.ok) {
-          console.error(colors.red('error:'), result.error ?? 'install failed');
-          process.exit(1);
-        }
-        await upsertNpmExtensionLock(lock, targetDir, result, spec);
-        console.log(colors.green('✓'), result.extensionId ?? 'ok', '(npm)');
+        console.error(
+          colors.red('error:'),
+          'Extension installs require an explicit source: store:<id>, npm:<package>, or a local directory path.',
+        );
+        process.exit(1);
       },
     );
 }
@@ -367,23 +415,13 @@ export function createExtensionPublishCommand(): Command {
         console.error(colors.red('error:'), `Need ${MANIFEST} and package.json in ${root}`);
         process.exit(1);
       }
-      try {
-        const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as Record<string, unknown>;
-        if (hasWorkspaceDeps(pkg)) {
-          console.error(
-            colors.red('error:'),
-            'Remove workspace:* dependencies before publishing.',
-          );
-          process.exit(1);
-        }
-        const raw = JSON.parse(readFileSync(manifestPath, 'utf-8')) as Record<string, unknown>;
-        const manifest = normalizeExtensionManifest(raw);
-        if (!manifest.id) {
-          console.error(colors.red('error:'), 'Invalid manifest id');
-          process.exit(1);
-        }
-      } catch (e) {
-        console.error(colors.red('error:'), e instanceof Error ? e.message : String(e));
+      const validation = validateExtensionPackageDirectory(root);
+      for (const d of validation.diagnostics) {
+        const label = d.level === 'error' ? colors.red('error') : d.level === 'warning' ? colors.yellow('warning') : colors.cyan('info');
+        console.log(`${label}:`, d.message);
+      }
+      if (!validation.ok || !validation.manifest?.id) {
+        console.error(colors.red('error:'), 'Package is not publishable as an independent extension.');
         process.exit(1);
       }
 
@@ -436,6 +474,7 @@ export function createExtensionUpdateCommand(): Command {
             packageName: pkgName,
             targetDir,
             lock,
+            yes: true,
           });
           if (r.ok === false) {
             console.error(colors.red('error:'), r.error ?? id);
@@ -467,6 +506,7 @@ export function createExtensionUpdateCommand(): Command {
           version: entry.version,
           resolved: spec,
           source: 'npm',
+          ...readInstalledSnapshots(targetDir, id),
         });
         console.log(colors.green('✓'), id);
       }
