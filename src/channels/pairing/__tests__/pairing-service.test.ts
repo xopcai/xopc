@@ -6,6 +6,7 @@ import path from 'node:path';
 import { ENV_VARS } from '../../../config/paths-state.js';
 import { approveChannelPairing, approveChannelPairingBySender, dismissChannelPairingPending, listChannelPairingState, listChannelPairingSummary, revokeChannelPairingPaired, collectPairingPendingIssues } from '../pairing-service.js';
 import { upsertPairingRequestSync } from '../pairing-store.js';
+import '../../../../extensions/telegram/src/pairing-config-resolver.js';
 
 describe('pairing-service', () => {
   let dir: string;
