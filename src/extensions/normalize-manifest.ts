@@ -44,8 +44,16 @@ function normalizeReload(raw: unknown): ExtensionManifest['reload'] {
 function normalizeEngines(raw: unknown): EnginesDeclaration | undefined {
   if (!isRecord(raw)) return undefined;
   const xopc = typeof raw.xopc === 'string' && raw.xopc.length > 0 ? raw.xopc : undefined;
-  if (!xopc) return undefined;
-  return { xopc };
+  const extensionApi =
+    typeof raw.extensionApi === 'string' && raw.extensionApi.length > 0
+      ? raw.extensionApi
+      : undefined;
+  const extensionUiApi =
+    typeof raw.extensionUiApi === 'string' && raw.extensionUiApi.length > 0
+      ? raw.extensionUiApi
+      : undefined;
+  if (!xopc && !extensionApi && !extensionUiApi) return undefined;
+  return { xopc, extensionApi, extensionUiApi };
 }
 
 function normalizeManifestCommands(raw: unknown): ExtensionManifestCommand[] | undefined {
@@ -512,22 +520,26 @@ function normalizeContracts(raw: unknown): ContractDeclaration | undefined {
   const pick = (k: string) =>
     Array.isArray(raw[k]) ? raw[k].filter((x: unknown): x is string => typeof x === 'string') : undefined;
   const c: ContractDeclaration = {
+    tools: pick('tools'),
+    hooks: pick('hooks'),
+    commands: pick('commands'),
+    cliCommands: pick('cliCommands'),
+    channels: pick('channels'),
+    httpRoutes: pick('httpRoutes'),
+    gatewayMethods: pick('gatewayMethods'),
+    services: pick('services'),
+    tui: pick('tui'),
+    providers: pick('providers'),
+    marketplaceAdapters: pick('marketplaceAdapters'),
     mediaUnderstandingProviders: pick('mediaUnderstandingProviders'),
     speechProviders: pick('speechProviders'),
     imageGenerationProviders: pick('imageGenerationProviders'),
     webSearchProviders: pick('webSearchProviders'),
     memoryProviders: pick('memoryProviders'),
   };
-  if (
-    !c.mediaUnderstandingProviders?.length &&
-    !c.speechProviders?.length &&
-    !c.imageGenerationProviders?.length &&
-    !c.webSearchProviders?.length &&
-    !c.memoryProviders?.length
-  ) {
-    return undefined;
-  }
-  return c;
+  return Object.values(c).some((value) => Array.isArray(value) && value.length > 0)
+    ? c
+    : undefined;
 }
 
 function normalizeSetup(raw: unknown): SetupDeclaration | undefined {

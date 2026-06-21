@@ -4,7 +4,7 @@
   "description": "Sample extension: bundled iframe UI demonstrates every @xopcai/extension-ui-sdk API (run pnpm run build:extensions-ui from repo root after SDK changes).",
   "version": "1.0.0",
   "kind": "utility",
-  "main": "index.ts",
+  "main": "index.js",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -76,5 +76,29 @@
         }
       ]
     }
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "tools": [
+      "hello"
+    ],
+    "commands": [
+      "hello"
+    ],
+    "hooks": [
+      "before_tool_call",
+      "after_tool_call"
+    ],
+    "httpRoutes": [
+      "/hello"
+    ],
+    "gatewayMethods": [
+      "hello"
+    ],
+    "tui": [
+      "hello"
+    ]
   }
 }

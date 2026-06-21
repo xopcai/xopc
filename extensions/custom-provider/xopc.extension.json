@@ -4,15 +4,23 @@
   "description": "Demonstrates provider registration with custom models",
   "version": "1.0.0",
   "kind": "provider",
-  "main": "index.ts",
-  "providers": ["custom"],
+  "main": "index.js",
+  "providers": [
+    "custom"
+  ],
   "providerAuthEnvVars": {
-    "custom": ["CUSTOM_API_KEY"]
+    "custom": [
+      "CUSTOM_API_KEY"
+    ]
   },
   "modelSupport": {
-    "modelPrefixes": ["custom/"]
+    "modelPrefixes": [
+      "custom/"
+    ]
   },
-  "autoEnableWhenConfiguredProviders": ["custom"],
+  "autoEnableWhenConfiguredProviders": [
+    "custom"
+  ],
   "configSchema": {
     "type": "object",
     "properties": {
@@ -26,5 +34,13 @@
         "description": "API key for the proxy"
       }
     }
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "providers": [
+      "my-proxy"
+    ]
   }
 }

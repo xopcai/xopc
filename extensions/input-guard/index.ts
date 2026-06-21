@@ -6,7 +6,7 @@
  * Usage: xopc extension install ./examples/extensions/input-guard
  */
 
-import type { ExtensionApi } from 'xopc/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 
 export default function(api: ExtensionApi) {
   const config = api.extensionConfig;

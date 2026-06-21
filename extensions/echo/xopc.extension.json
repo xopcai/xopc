@@ -4,7 +4,7 @@
   "description": "Echoes messages back with modifications",
   "version": "1.0.0",
   "kind": "utility",
-  "main": "index.ts",
+  "main": "index.js",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -24,5 +24,17 @@
         "description": "Reverse the message"
       }
     }
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "tools": [
+      "echo"
+    ],
+    "hooks": [
+      "message_sending",
+      "message_received"
+    ]
   }
 }

@@ -3,13 +3,13 @@
  * @see .docs/extension-provider-demo.md
  */
 
-import type { ExtensionApi } from 'xopc/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 import type {
   ProviderPlugin,
   ProviderModelDefinition,
   ProviderStreamChunk,
   ProviderStreamParams,
-} from 'xopc/extension-sdk';
+} from '@xopcai/xopc/extension-sdk';
 
 const MODELS: ProviderModelDefinition[] = [
   {

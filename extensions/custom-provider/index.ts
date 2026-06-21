@@ -6,7 +6,7 @@
  * Usage: xopc extension install ./examples/extensions/custom-provider
  */
 
-import type { ExtensionApi } from 'xopc/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 
 export default function(api: ExtensionApi) {
   api.logger.info('Custom Provider extension registered!');

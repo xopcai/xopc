@@ -2,7 +2,7 @@
  * Minimal TUI demo for the hello extension (Phase 4).
  * Registers a footer widget and `/hello-tui` slash command when `xopc tui --local` starts.
  */
-import type { ExtensionApi } from 'xopc/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 
 export function registerHelloTui(api: ExtensionApi): void {
   api.registerTui((host) => {

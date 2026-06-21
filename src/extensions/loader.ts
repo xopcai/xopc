@@ -9,8 +9,7 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { join, dirname, isAbsolute } from 'path';
-import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createJiti } from 'jiti';
 import { resolveDefaultAgentId } from '../agent/agent-scope.js';
 import { loadConfig } from '../config/loader.js';
@@ -188,21 +187,29 @@ export class ExtensionLoader {
     this.cache = getExtensionCache();
     this.diagnostics = getExtensionDiagnostics();
 
-    // Build jiti alias for extension-sdk (+ subpath entry points)
+    // Build jiti aliases for the public, host-provided extension SDK contract.
+    // Extensions must import from @xopcai/xopc/extension-sdk; private aliases
+    // are intentionally not registered.
     const alias: Record<string, string> = {};
     const sdkPath = resolveExtensionSdkPath();
     if (sdkPath) {
-      alias['xopc/extension-sdk'] = sdkPath;
       const sdkDir = dirname(sdkPath);
-      alias['xopc/extension-sdk/core'] = join(sdkDir, 'core.ts');
-      alias['xopc/extension-sdk/lazy'] = join(sdkDir, 'lazy.ts');
-      alias['xopc/extension-sdk/provider'] = join(sdkDir, 'provider.ts');
-      alias['xopc/extension-sdk/channel'] = join(sdkDir, 'channel.ts');
-      alias['xopc/extension-sdk/hooks'] = join(sdkDir, 'hooks.ts');
-      alias['xopc/extension-sdk/tools'] = join(sdkDir, 'tools.ts');
-      alias['xopc/extension-sdk/testing'] = join(sdkDir, 'testing.ts');
-      alias['xopc/extension-sdk/speech'] = join(sdkDir, 'speech.ts');
-      alias['xopc/extension-sdk/media'] = join(sdkDir, 'media.ts');
+      const sdkSubpaths = [
+        'core',
+        'lazy',
+        'provider',
+        'channel',
+        'hooks',
+        'tools',
+        'testing',
+        'speech',
+        'media',
+      ];
+      const prefix = '@xopcai/xopc/extension-sdk';
+      alias[prefix] = sdkPath;
+      for (const subpath of sdkSubpaths) {
+        alias[`${prefix}/${subpath}`] = join(sdkDir, `${subpath}.ts`);
+      }
     }
 
     // Initialize jiti with TypeScript support and SDK alias
@@ -509,25 +516,37 @@ export class ExtensionLoader {
         return null;
       }
 
-      if (manifest.engines?.xopc) {
-        const range = manifest.engines.xopc;
-        const engineResult = checkEngineCompatibility(PACKAGE_VERSION, range);
-        if (engineResult.parseWarning) {
-          log.warn(
-            { extensionId: config.id, range, reason: engineResult.reason },
-            'Engine range parse warning — loading anyway',
-          );
-        } else if (!engineResult.compatible) {
-          log.warn(
-            { extensionId: config.id, range, currentVersion: PACKAGE_VERSION },
-            'Extension engine requirement not met (engines.xopc) — skipping load',
-          );
-          this.diagnostics.error(
-            config.id,
-            engineResult.reason ?? 'Incompatible xopc version (engines.xopc)',
-          );
-          return null;
-        }
+      if (!manifest.main || !/\.(js|mjs|cjs)$/i.test(manifest.main)) {
+        const reason = `Extension manifest main must point at built JavaScript (.js/.mjs/.cjs): ${manifest.main ?? '(missing)'}`;
+        log.warn({ extensionId: config.id, main: manifest.main }, reason);
+        this.diagnostics.error(config.id, reason);
+        return null;
+      }
+
+      if (!manifest.engines?.xopc) {
+        const reason = 'Extension manifest must declare engines.xopc';
+        log.warn({ extensionId: config.id }, reason);
+        this.diagnostics.error(config.id, reason);
+        return null;
+      }
+      const range = manifest.engines.xopc;
+      const engineResult = checkEngineCompatibility(PACKAGE_VERSION, range);
+      if (engineResult.parseWarning) {
+        const reason = engineResult.reason ?? `Could not parse engines.xopc: ${range}`;
+        log.warn({ extensionId: config.id, range, reason }, 'Extension engine range parse failure — skipping load');
+        this.diagnostics.error(config.id, reason);
+        return null;
+      }
+      if (!engineResult.compatible) {
+        log.warn(
+          { extensionId: config.id, range, currentVersion: PACKAGE_VERSION },
+          'Extension engine requirement not met (engines.xopc) — skipping load',
+        );
+        this.diagnostics.error(
+          config.id,
+          engineResult.reason ?? 'Incompatible xopc version (engines.xopc)',
+        );
+        return null;
       }
 
       // Validate extension config against schema (basic validation)
@@ -703,73 +722,12 @@ export class ExtensionLoader {
       }
     }
 
-    // Fallback to package.json
-    const packagePath = join(extensionPath, 'package.json');
-    if (existsSync(packagePath)) {
-      try {
-        const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8'));
-        
-        // Check for xopc.extension marker
-        if (packageJson.xopc?.extension) {
-          const xopcConfig = packageJson.xopc;
-          return normalizeExtensionManifest({
-            id: xopcConfig.id || packageJson.name,
-            name: xopcConfig.name || packageJson.name,
-            description: xopcConfig.description || packageJson.description,
-            version: xopcConfig.version || packageJson.version || '1.0.0',
-            kind: xopcConfig.kind || 'utility',
-            main: xopcConfig.main || packageJson.main || 'index.js',
-            configSchema: xopcConfig.configSchema,
-          });
-        }
-
-        // Also support xopc-extension-* naming convention
-        if (packageJson.name?.startsWith('xopc-extension-')) {
-          const id = packageJson.name.replace('xopc-extension-', '');
-          return normalizeExtensionManifest({
-            id,
-            name: packageJson.name,
-            description: packageJson.description,
-            version: packageJson.version || '1.0.0',
-            kind: 'utility',
-            main: packageJson.main || 'index.js',
-          });
-        }
-      } catch (error) {
-        log.error({ err: error, packagePath }, `Failed to parse package.json`);
-      }
-    }
-
     return null;
   }
 
-  /**
-   * Build candidate extension entry paths. After `tsdown`, manifests may still
-   * point at `*.ts` while the shipped tree only contains the emitted `*.js`.
-   */
   private moduleEntryCandidates(manifest: ExtensionManifest): string[] {
-    const raw = [
-      manifest.main,
-      'index.ts',
-      'index.js',
-      'extension.ts',
-      'extension.js',
-    ].filter(Boolean) as string[];
-
-    const out: string[] = [];
-    for (const entry of raw) {
-      out.push(entry);
-      if (entry.endsWith('.tsx')) {
-        out.push(`${entry.slice(0, -4)}.js`);
-      } else if (entry.endsWith('.ts')) {
-        out.push(`${entry.slice(0, -3)}.js`);
-      } else if (entry.endsWith('.mts')) {
-        out.push(`${entry.slice(0, -4)}.mjs`);
-      } else if (entry.endsWith('.cts')) {
-        out.push(`${entry.slice(0, -4)}.cjs`);
-      }
-    }
-    return [...new Set(out)];
+    if (!manifest.main) return [];
+    return [manifest.main];
   }
 
   private async loadModule(
@@ -783,12 +741,10 @@ export class ExtensionLoader {
 
       if (existsSync(fullPath)) {
         try {
-          if (/\.(js|mjs|cjs)$/.test(fullPath)) {
-            const require = createRequire(import.meta.url);
-            const mod = require(fullPath);
-            return mod.default || mod;
+          if (!/\.(js|mjs|cjs)$/.test(fullPath)) {
+            throw new Error(`Extension runtime entry must be built JavaScript: ${entry}`);
           }
-          const mod = this.jiti(fullPath);
+          const mod = await import(pathToFileURL(fullPath).href);
           return mod.default || mod;
         } catch (error) {
           log.warn({ err: error, path: fullPath }, `Failed to load module`);
@@ -840,6 +796,7 @@ export class ExtensionLoader {
       logger,
       resolvePath,
       this.registry,
+      manifest.contracts ?? {},
       runtime,
     );
     if (manifest.reload?.configPrefixes?.length) {
@@ -931,14 +888,7 @@ export function resolveExtensionPath(id: string, _options: ExtensionLoaderOption
     if (existsSync(bundledPath)) return bundledPath;
   }
 
-  // Check if it's an npm package
-  try {
-    const require = createRequire(import.meta.url);
-    const resolved = require.resolve(id);
-    return dirname(resolved);
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export function normalizeExtensionConfig(

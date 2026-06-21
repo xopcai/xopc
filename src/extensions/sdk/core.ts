@@ -1,5 +1,5 @@
 /**
- * Core extension types — prefer `xopc/extension-sdk/core` over the full SDK barrel when tree-shaking.
+ * Core extension types — prefer `@xopcai/xopc/extension-sdk/core` over the full SDK barrel when tree-shaking.
  */
 
 export type {

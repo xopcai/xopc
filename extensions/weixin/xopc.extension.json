@@ -4,8 +4,10 @@
   "description": "WeChat ilink channel (private workspace sources; ships inside @xopcai/xopc dist/)",
   "version": "0.1.0",
   "kind": "channel",
-  "main": "src/index.ts",
-  "channels": ["weixin"],
+  "main": "src/index.js",
+  "channels": [
+    "weixin"
+  ],
   "channelContributions": {
     "weixin": {
       "label": "Weixin",
@@ -25,19 +27,38 @@
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "enabled": { "type": "boolean", "default": false, "title": "Enabled" },
-          "accounts": { "type": "object", "additionalProperties": true, "title": "Accounts" },
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "title": "Enabled"
+          },
+          "accounts": {
+            "type": "object",
+            "additionalProperties": true,
+            "title": "Accounts"
+          },
           "dmPolicy": {
             "type": "string",
-            "enum": ["pairing", "allowlist", "open", "disabled"],
+            "enum": [
+              "pairing",
+              "allowlist",
+              "open",
+              "disabled"
+            ],
             "default": "open",
             "title": "DM policy"
           }
         }
       },
       "actions": {
-        "login.start": { "label": "Log in", "result": "qr" },
-        "login.status": { "label": "Login status", "result": "poll" }
+        "login.start": {
+          "label": "Log in",
+          "result": "qr"
+        },
+        "login.status": {
+          "label": "Login status",
+          "result": "poll"
+        }
       },
       "i18n": {
         "zh": {
@@ -45,25 +66,47 @@
           "description": "通过扫码登录的个人微信消息通道",
           "configSchema": {
             "properties": {
-              "enabled": { "title": "启用" },
-              "accounts": { "title": "账号" },
-              "dmPolicy": { "title": "私聊策略" }
+              "enabled": {
+                "title": "启用"
+              },
+              "accounts": {
+                "title": "账号"
+              },
+              "dmPolicy": {
+                "title": "私聊策略"
+              }
             }
           },
           "actions": {
-            "login.start": { "label": "微信扫码登录" },
-            "login.status": { "label": "登录状态" }
+            "login.start": {
+              "label": "微信扫码登录"
+            },
+            "login.status": {
+              "label": "登录状态"
+            }
           }
         }
       }
     }
   },
   "activation": {
-    "onChannels": ["weixin"],
-    "onCapabilities": ["channel"]
+    "onChannels": [
+      "weixin"
+    ],
+    "onCapabilities": [
+      "channel"
+    ]
   },
   "setup": {
     "providers": [],
     "requiresRuntime": true
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "channels": [
+      "weixin"
+    ]
   }
 }

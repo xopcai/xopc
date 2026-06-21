@@ -4,15 +4,26 @@
   "description": "Groq Whisper speech-to-text via OpenAI-compatible /audio/transcriptions.",
   "version": "1.0.0",
   "kind": "media-provider",
-  "main": "index.ts",
-  "mediaUnderstandingProviders": ["groq"],
+  "main": "index.js",
+  "mediaUnderstandingProviders": [
+    "groq"
+  ],
   "providerAuthEnvVars": {
-    "groq": ["GROQ_API_KEY"]
+    "groq": [
+      "GROQ_API_KEY"
+    ]
   },
   "activation": {
-    "onProviders": ["groq"]
+    "onProviders": [
+      "groq"
+    ]
   },
   "contracts": {
-    "mediaUnderstandingProviders": ["groq"]
+    "mediaUnderstandingProviders": [
+      "groq"
+    ]
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
   }
 }

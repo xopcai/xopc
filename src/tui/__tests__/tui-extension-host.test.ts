@@ -232,6 +232,7 @@ describe('ExtensionApi.registerTui', () => {
       createExtensionLogger('demo'),
       createPathResolver('/tmp/demo', process.cwd()),
       registry,
+      { tui: ['demo'] },
     );
 
     api.registerTui(() => {});
@@ -252,6 +253,7 @@ describe('ExtensionApi.registerTui', () => {
       createExtensionLogger('demo'),
       createPathResolver('/tmp/demo', process.cwd()),
       registry,
+      { tui: ['demo'] },
       { config: {}, log: createExtensionLogger('demo'), setLabel },
     );
 
@@ -275,6 +277,7 @@ describe('ExtensionApi.registerTui', () => {
       createExtensionLogger('demo'),
       createPathResolver('/tmp/demo', process.cwd()),
       registry,
+      { tui: ['demo'] },
       { config: {}, log: createExtensionLogger('demo'), sendUserMessage },
     );
 
@@ -298,6 +301,7 @@ describe('ExtensionApi.registerTui', () => {
       createExtensionLogger('demo'),
       createPathResolver('/tmp/demo', process.cwd()),
       registry,
+      { tui: ['demo'] },
       { config: {}, log: createExtensionLogger('demo'), appendEntry },
     );
 
@@ -319,6 +323,7 @@ describe('ExtensionApi.registerTui', () => {
       createExtensionLogger('demo'),
       createPathResolver('/tmp/demo', process.cwd()),
       registry,
+      { tui: ['demo'] },
       { config: {}, log: createExtensionLogger('demo'), sendMessage },
     );
 

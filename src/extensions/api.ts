@@ -23,6 +23,7 @@ import type {
   ShortcutConfig,
   HookHandlerMap,
   ExtensionHookEvent,
+  ExtensionHookHandler,
   HookExecutionMode,
   TuiExtensionRegistrar,
   ExtensionSendUserMessageOptions,
@@ -30,7 +31,7 @@ import type {
   ExtensionCustomMessage,
   ExtensionSendMessageOptions,
 } from './types/index.js';
-import type { CommandContribution } from './types/manifest.js';
+import type { CommandContribution, ContractDeclaration } from './types/manifest.js';
 import type { CommandDefinition } from '../chat-commands/types.js';
 import { commandRegistry } from '../chat-commands/registry.js';
 import type { ChannelPlugin } from '../channels/plugin-types.js';
@@ -80,6 +81,7 @@ export class ExtensionApiImpl implements ExtensionApi {
     private readonly _logger: ExtensionLogger,
     private readonly _resolvePath: (input: string) => string,
     private readonly _coreRegistry?: ExtensionRegistryImpl,
+    private readonly _contracts: ContractDeclaration = {},
     runtime?: ExtensionRuntime,
   ) {
     // Initialize typed event bus
@@ -104,7 +106,27 @@ export class ExtensionApiImpl implements ExtensionApi {
     return this._runtime;
   }
 
+  private _assertContract(kind: keyof ContractDeclaration, value: string): void {
+    const declared = this._contracts[kind];
+    if (!declared?.length) {
+      throw new Error(
+        `Extension ${this.id} attempted to register ${kind}:${value}, but manifest contracts.${kind} is missing`,
+      );
+    }
+    const allowed = declared.some((entry) => {
+      if (entry === value) return true;
+      if (entry.endsWith('*')) return value.startsWith(entry.slice(0, -1));
+      return false;
+    });
+    if (!allowed) {
+      throw new Error(
+        `Extension ${this.id} attempted to register ${kind}:${value}, but it is not declared in manifest contracts.${kind}`,
+      );
+    }
+  }
+
   registerTool(tool: AgentTool): void {
+    this._assertContract('tools', tool.name);
     if (this._tools.has(tool.name)) {
       this._logger.warn(`Tool ${tool.name} already registered, overwriting`);
     }
@@ -113,6 +135,7 @@ export class ExtensionApiImpl implements ExtensionApi {
   }
 
   registerHook(event: string, handler: Function, opts?: { priority?: number; once?: boolean }): void {
+    this._assertContract('hooks', event);
     if (!this._hooks.has(event)) {
       this._hooks.set(event, new Set());
     }
@@ -126,6 +149,7 @@ export class ExtensionApiImpl implements ExtensionApi {
       this._hooks.get(event)!.add(wrapper);
     }
 
+    this._registry.addHook(event as ExtensionHookEvent, handler as ExtensionHookHandler, this.id, opts?.priority ?? 0);
     this._logger.info(`Registered hook: ${event}`);
   }
 
@@ -144,6 +168,7 @@ export class ExtensionApiImpl implements ExtensionApi {
     handler: HookHandlerMap[K],
     _opts?: { priority?: number },
   ): void {
+    this._assertContract('hooks', hookName);
     // Get execution mode for this hook
     const mode = (HOOK_EXECUTION_MODES as Record<string, HookExecutionMode>)[hookName];
     
@@ -167,17 +192,21 @@ export class ExtensionApiImpl implements ExtensionApi {
   /** Adds a ChannelPlugin to the extension registry; emits `channel:register` for observability. */
   registerChannel(registration: { plugin: ChannelPlugin }): void {
     const plugin = registration.plugin;
+    this._assertContract('channels', plugin.id);
     this._registry.addChannelPlugin(plugin);
     this._eventBus.emit('channel:register', plugin);
     this._logger.info(`Registered channel plugin: ${plugin.id}`);
   }
 
   registerHttpRoute(path: string, handler: HttpRequestHandler): void {
+    this._assertContract('httpRoutes', path);
+    this._registry.addHttpRoute(path, handler);
     this._eventBus.emit('http:route', { path, handler });
     this._logger.info(`Registered HTTP route: ${path}`);
   }
 
   registerCommand(command: ExtensionCommand): void {
+    this._assertContract('commands', command.name);
     const commandId = `ext.${this.id}.${command.name}`;
 
     const definition: CommandDefinition = {
@@ -229,18 +258,9 @@ export class ExtensionApiImpl implements ExtensionApi {
   onCommand(commandId: string, handler: ExtensionCommandHandler): void {
     const meta = this._manifestCommands.get(commandId);
     if (!meta) {
-      this._logger.warn(
-        `onCommand: unknown command id "${commandId}" — registering runtime-only chat command`,
+      throw new Error(
+        `Extension ${this.id} attempted to bind command ${commandId}, but it is not declared in manifest ui.contributions.commands`,
       );
-      const name = commandId.includes('.')
-        ? (commandId.split('.').pop() ?? commandId).trim()
-        : commandId;
-      this.registerCommand({
-        name: name || commandId,
-        description: commandId,
-        handler,
-      });
-      return;
     }
     let name: string;
     if (meta.chatAlias?.trim()) {
@@ -279,11 +299,15 @@ export class ExtensionApiImpl implements ExtensionApi {
   }
 
   registerService(service: ExtensionService): void {
+    this._assertContract('services', service.id);
+    this._registry.addService(service);
     this._eventBus.emit('service:register', service);
     this._logger.info(`Registered service: ${service.id}`);
   }
 
   registerGatewayMethod(method: string, handler: GatewayMethodHandler): void {
+    this._assertContract('gatewayMethods', method);
+    this._registry.addGatewayMethod(method, handler);
     this._eventBus.emit('gateway:method', { method, handler });
     this._logger.info(`Registered gateway method: ${method}`);
   }
@@ -292,6 +316,9 @@ export class ExtensionApiImpl implements ExtensionApi {
     factory: (ctx: { program: Command }) => void,
     opts?: { commands: string[] },
   ): void {
+    for (const command of opts?.commands ?? []) {
+      this._assertContract('cliCommands', command);
+    }
     const reg: ExtensionCliRegistration = {
       extensionId: this.id,
       commands: opts?.commands ?? [],
@@ -331,6 +358,7 @@ export class ExtensionApiImpl implements ExtensionApi {
    * Register a full ProviderPlugin
    */
   registerProvider(plugin: import('./types/providers.js').ProviderPlugin): void {
+    this._assertContract('providers', plugin.id);
     import('../providers/plugin-registry.js').then(({ getProviderRegistry }) => {
       const registry = getProviderRegistry();
       registry.register(plugin);
@@ -348,6 +376,7 @@ export class ExtensionApiImpl implements ExtensionApi {
   }
 
   registerSpeechProvider(plugin: SpeechProviderPlugin): void {
+    this._assertContract('speechProviders', plugin.id);
     registerSpeechProviderInRegistry(plugin);
     if (!this._registeredSpeechProviderIds.includes(plugin.id)) {
       this._registeredSpeechProviderIds.push(plugin.id);
@@ -361,6 +390,7 @@ export class ExtensionApiImpl implements ExtensionApi {
   }
 
   registerMediaUnderstandingProvider(plugin: MediaUnderstandingProvider): void {
+    this._assertContract('mediaUnderstandingProviders', plugin.id);
     registerMediaUnderstandingProviderInRegistry(plugin);
     if (!this._registeredMediaUnderstandingProviderIds.includes(plugin.id)) {
       this._registeredMediaUnderstandingProviderIds.push(plugin.id);
@@ -380,8 +410,9 @@ export class ExtensionApiImpl implements ExtensionApi {
     adapter: import('../agent/skills/marketplace/adapter.types.js').SkillsMarketplaceAdapter;
     displayName?: string;
   }): void {
-    _registerMarketplaceAdapter(registration);
     const adapterId = registration.adapter.id;
+    this._assertContract('marketplaceAdapters', adapterId);
+    _registerMarketplaceAdapter(registration);
     if (!this._registeredMarketplaceAdapterIds.includes(adapterId)) {
       this._registeredMarketplaceAdapterIds.push(adapterId);
     }
@@ -401,6 +432,7 @@ export class ExtensionApiImpl implements ExtensionApi {
   }
 
   registerTui(register: TuiExtensionRegistrar): void {
+    this._assertContract('tui', this.id);
     this._registry.addTuiRegistration(this.id, register);
     this._logger.info('Registered TUI contributions (deferred until xopc tui starts)');
   }

@@ -6,7 +6,7 @@
  * Usage: xopc extension install ./examples/extensions/progress-tracker
  */
 
-import type { ExtensionApi, EnhancedTool } from 'xopc/extension-sdk';
+import type { ExtensionApi, EnhancedTool } from '@xopcai/xopc/extension-sdk';
 
 export default function(api: ExtensionApi) {
   api.logger.info('Progress Tracker extension registered!');

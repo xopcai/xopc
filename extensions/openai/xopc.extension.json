@@ -4,6 +4,11 @@
   "description": "DALL·E / GPT image APIs. Configure API keys and optional base URL under Settings → Images, or here — both edit the same providers.openai entry.",
   "version": "1.0.0",
   "kind": "image-generation",
-  "main": "src/index.ts",
-  "autoEnableWhenConfiguredProviders": ["openai"]
+  "main": "src/index.js",
+  "autoEnableWhenConfiguredProviders": [
+    "openai"
+  ],
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  }
 }

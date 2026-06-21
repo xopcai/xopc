@@ -4,7 +4,7 @@
   "description": "Provides weather data to other extensions via typed event bus",
   "version": "1.0.0",
   "kind": "utility",
-  "main": "index.ts",
+  "main": "index.js",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -18,5 +18,13 @@
         "description": "Weather API key (optional)"
       }
     }
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "hooks": [
+      "session_end"
+    ]
   }
 }

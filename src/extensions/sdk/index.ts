@@ -5,7 +5,7 @@
  * Import types and utilities from this module:
  * 
  * @example
- * import type { ExtensionApi, ExtensionDefinition } from 'xopc/extension-sdk';
+ * import type { ExtensionApi, ExtensionDefinition } from '@xopcai/xopc/extension-sdk';
  */
 
 // ============================================================================
@@ -298,7 +298,7 @@ export {
 
 export type { Config } from '../../config/config-surface.js';
 
-// Subpath barrels (also available as `xopc/extension-sdk/<name>`)
+// Public subpath barrels under `@xopcai/xopc/extension-sdk/<name>`.
 export { lazyModule, lazyFunction } from './lazy.js';
 
 export { createMockExtensionApi, createTestGateway } from './testing.js';

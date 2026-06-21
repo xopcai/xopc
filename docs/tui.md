@@ -160,7 +160,7 @@ Lines starting with **`/`** are treated as **slash commands** (not sent to the m
 Extensions can contribute terminal UI when **`xopc tui --local`** starts. Register deferred callbacks from `register()`:
 
 ```typescript
-import type { ExtensionApi } from 'xopc/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 
 export function register(api: ExtensionApi) {
   api.registerTui((host) => {
@@ -194,7 +194,7 @@ export function register(api: ExtensionApi) {
 - **`--local` only** for full extension load (tools + hooks + TUI host share one registry with `AgentService`).
 - Project trust follows the pi-style trust store at `~/.xopc/trust.json`. Project-local `.xopc/` resources and `.agents/skills` trigger a `/trust` prompt; extension TUI contexts can read the current decision through `isProjectTrusted()`.
 - **Gateway mode** still gets built-in **`@skill`** autocomplete; extension `registerTui` callbacks run only when extensions are loaded in-process.
-- Types: `TuiExtensionHostContract` and related types are exported from `xopc/extension-sdk`.
+- Types: `TuiExtensionHostContract` and related types are exported from `@xopcai/xopc/extension-sdk`.
 
 Type **`@`** in the editor to autocomplete skill names from workspace / `~/.xopc/skills` / bundled skills.
 
