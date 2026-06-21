@@ -86,7 +86,7 @@ xopc onboard --quick
 xopc tui --local
 ```
 
-需要网页控制台或 IM 频道时，再运行完整向导：
+需要网页控制台或即时通讯频道时，再运行完整向导：
 
 ```bash
 xopc onboard

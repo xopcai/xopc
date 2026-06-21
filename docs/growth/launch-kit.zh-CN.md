@@ -7,8 +7,8 @@
 - 官网主入口：`https://xopc.ai`
 - GitHub star 入口：`https://github.com/xopcai/xopc`
 - 文档入口：`https://xopcai.github.io/xopc/`
-- 3 分钟试用页：`https://xopcai.github.io/xopc/first-5-minutes`
-- 移动端说明页：`https://xopcai.github.io/xopc/mobile-app`
+- 5分钟快速入门页：`https://xopcai.github.io/xopc/first-5-minutes`
+- 手机端说明页：`https://xopcai.github.io/xopc/mobile-app`
 - 移动端仓库：`https://github.com/xopcai/xopc-app`
 
 外部发帖默认放官网第一链接、GitHub 第二链接。面向开发者社区或开源社区时，GitHub 可以放第一链接，但正文第一段仍要解释 `https://xopc.ai` 是安装入口。
@@ -17,10 +17,10 @@
 
 ## 今日发布前检查
 
-- README 首屏能在 10 秒内说明：本地优先、长期目标、跨终端/网页/桌面/移动端/IM。
-- 官网 `https://xopc.ai` 首屏能看到安装命令、GitHub star CTA、xopc-app 入口。
-- `First 5 Minutes` 页面可直接作为外部帖子落地页：`https://xopcai.github.io/xopc/first-5-minutes`。
-- 移动端帖子可直接落地到：`https://xopcai.github.io/xopc/mobile-app`，并链接 `https://github.com/xopcai/xopc-app`。
+- README 首屏能在 10 秒内说明：本地优先、长期目标、跨终端/网页/桌面/手机端/即时通讯。
+- 官网 `https://xopc.ai` 首屏能看到安装命令、GitHub Star 引导、xopc-app 入口。
+- `5分钟快速入门` 页面可直接作为外部帖子落地页：`https://xopcai.github.io/xopc/first-5-minutes`。
+- 手机端帖子可直接落地到：`https://xopcai.github.io/xopc/mobile-app`，并链接 `https://github.com/xopcai/xopc-app`。
 - `xopc onboard --quick` 存在，并且 help 能看到。
 - `curl -fsSL https://xopc.ai/install.sh | bash` 在至少一台 macOS 或 Linux 上跑通。
 - `xopc onboard --quick` 能完成模型最小配置。
@@ -44,7 +44,7 @@ xopc is a local-first Goal Loop OS: one AI assistant that keeps long-term goals 
 中文一句话：
 
 ```text
-xopc 是一个本地优先的目标循环操作系统：让同一个 AI 助手在终端、网页、桌面、移动端和 IM 里持续推进长期目标。
+xopc 是一个本地优先的目标循环操作系统：让同一个 AI 助手在终端、网页、桌面、手机端和即时通讯里持续推进长期目标。
 ```
 
 短卖点：
@@ -60,7 +60,7 @@ xopc 是一个本地优先的目标循环操作系统：让同一个 AI 助手�
 - 不是一次性聊天，而是长期目标循环。
 - 数据和配置默认在 `~/.xopc/`。
 - 同一个助手覆盖 TUI、CLI、网页、桌面、Telegram、微信、飞书。
-- 自带 API Key，支持云端和本地模型混用。
+- 使用你自己的 API Key，支持云端模型和本地模型混用。
 - 支持工作流、定时任务、skills/extensions、多 Agent 路由。
 
 ## 30 秒 Demo 脚本
@@ -78,7 +78,7 @@ xopc 是一个本地优先的目标循环操作系统：让同一个 AI 助手�
 5. 输入：
 
 ```text
-Help me keep my side project moving this week. Track goals, next actions, and blockers.
+帮我持续推进这个个人项目本周的进展。请记录目标、下一步行动和阻塞点。
 ```
 
 结尾字幕：

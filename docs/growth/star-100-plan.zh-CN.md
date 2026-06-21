@@ -19,7 +19,7 @@
 | --- | --- |
 | GitHub stars | 15 -> 100 |
 | 新增 stars | +85 |
-| 官网访问到试用/Star 转化 | 首屏安装命令、GitHub star CTA、xopc-app 入口 |
+| 官网访问到试用/Star 转化 | 首屏安装命令、GitHub Star 引导、xopc-app 入口 |
 | GitHub 访问到 star 转化 | 优先提升 README、安装后提示、社区承接 |
 | 安装/试用转化 | npm last-week downloads 1,988 中转化 3%-5% 即可贡献 60-100 stars |
 | 外部曝光 | 至少 8 个渠道、20 条有效触达、3 个演示素材 |
@@ -34,13 +34,13 @@ README 和官网首屏保留 “Goal Loop OS”，但要立刻补一句更具体
 
 中文：
 
-> 一个本地优先的长期目标 AI 助手：在终端、网页、桌面、移动端和 IM 里持续推进目标、行动与反馈。
+> 一个本地优先的长期目标 AI 助手：在终端、网页、桌面、手机端和即时通讯里持续推进目标、行动与反馈。
 
 首屏应该出现 3 个“我能用它做什么”的场景：
 
-- 个人开发者：每天自动总结项目状态，拆下一步，继续推进长期 side project。
-- 独立开发者 / One Person Company：同一个 AI 助手跨 CLI、网页、Telegram/微信、桌面工作。
-- AI 工具玩家：本地优先，BYOK，20+ 模型提供商，支持工作流、多 Agent、skills/extensions。
+- 个人开发者：每天自动总结项目状态，拆解下一步，持续推进长期个人项目。
+- 独立开发者 / 一人公司：同一个 AI 助手跨 CLI、网页、Telegram/微信和桌面使用。
+- AI 工具玩家：本地优先，使用自己的 API Key，支持 20+ 模型服务商、工作流、多 Agent、skills/extensions。
 
 ### P0：补强 Star CTA
 
@@ -82,7 +82,7 @@ https://github.com/xopcai/xopc
 
 ### P1：降低试用风险
 
-补一个 “Try in 3 minutes” 路径，明确不需要网关、不需要配置 IM：
+补一个“5分钟快速入门”路径，明确不需要网关、不需要配置即时通讯：
 
 ```bash
 curl -fsSL https://xopc.ai/install.sh | bash
@@ -94,7 +94,7 @@ xopc tui --local
 
 - 数据目录：`~/.xopc/`
 - 无强制云端
-- 自带 API key
+- 使用自己的 API Key
 - 可用本地模型
 
 ### P1：补充对比叙事
@@ -102,7 +102,7 @@ xopc tui --local
 README/官网可以加一段 “When to use xopc”：
 
 - 不只是聊天：适合长期目标和定期反馈。
-- 不只是 CLI：同一助手在 CLI、TUI、Web、Desktop、IM。
+- 不只是 CLI：同一助手覆盖 CLI、TUI、网页、桌面端和即时通讯。
 - 不绑定模型：OpenAI/Anthropic/Google/DeepSeek/Ollama/LM Studio/vLLM 等。
 - 不强制云：本地优先，配置和数据在用户机器。
 
@@ -150,9 +150,9 @@ GitHub repository social preview 图片要可识别：
 
 新增一个最小 demo 文档或脚本：
 
-- `docs/getting-started.md` 当前已有，补一个 “First 5 minutes”。
-- 示例目标：`Help me ship my side project this week. Track decisions, next actions, and blockers.`
-- 示例展示：TUI -> Gateway -> IM/channel。
+- `docs/getting-started.md` 当前已有，补一个“5分钟快速入门”。
+- 示例目标：`帮我持续推进这个个人项目本周的进展。请记录目标、下一步行动和阻塞点。`
+- 示例展示：TUI -> 网关控制台 -> 即时通讯频道。
 
 ### T2：打开讨论入口
 
@@ -172,7 +172,7 @@ GitHub 当前 public issues 为 0，短期看起来干净，但也可能显得�
 
 中文：
 
-> xopc 是一个本地优先的目标循环操作系统：让同一个 AI 助手在终端、网页、桌面和 IM 里持续推进长期目标。
+> xopc 是一个本地优先的目标循环操作系统：让同一个 AI 助手在终端、网页、桌面端和即时通讯里持续推进长期目标。
 
 ### 主传播角度
 

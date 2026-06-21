@@ -14,8 +14,8 @@ pnpm run growth:snapshot
 
 必须先完成：
 
-- 官网 `https://xopc.ai` 已部署，首屏有安装命令、GitHub star CTA、xopc-app 入口。
-- 文档站已部署，`First 5 Minutes` 和 `Mobile app` 页面可访问。
+- 官网 `https://xopc.ai` 已部署，首屏有安装命令、GitHub Star 引导、xopc-app 入口。
+- 文档站已部署，`5分钟快速入门` 和 `手机端 App` 页面可访问。
 - GitHub README 首屏已经包含本地优先、Goal Loop OS、多端入口和 star CTA。
 - GitHub About 设置为 `https://xopc.ai`，topics/social preview 已更新。
 

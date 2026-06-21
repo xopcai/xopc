@@ -4,7 +4,7 @@
 
 **设置界面：** 网关控制台 → **设置 → 远程访问**（`#/settings/remote-access`）。
 
-iOS/Android 使用 **[xopc-app](https://github.com/xopcai/xopc-app)** 连接已运行的 gateway。移动端专门路径见 [移动端 app](./mobile-app.md)。
+iOS/Android 使用 **[xopc-app](https://github.com/xopcai/xopc-app)** 连接已运行的网关。手机端专门路径见 [手机端 App](./mobile-app.md)。
 
 同一时间只应启用 **一种** 对外暴露模式（Tailscale Serve **或** 公网 FRP 隧道）。若两者同时开启，**概览** Tab 会提示配置冲突。
 
@@ -92,7 +92,7 @@ xopc tailscale status
 1. 打开 **远程访问 → 公网访问**。
 2. 阅读安全说明并点击 **开启远程访问**（首次需确认风险）。
 3. 等待公网 URL 分配（首次开启可能需 1–3 分钟以完成 HTTPS）。
-4. 在控制卡片下方的 **移动 App 配对** 区域用 [xopc-app](./mobile-app.md) 扫码（或复制配对链接）。
+4. 在控制卡片下方的 **手机端 App 配对** 区域用 [xopc-app](./mobile-app.md) 扫码（或复制配对链接）。
 5. 不需要远程访问时请及时 **断开** 隧道。
 
 ### Broker 注册密钥
