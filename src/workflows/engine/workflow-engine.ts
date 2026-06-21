@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { WorkflowDefinition } from '../domain/definition.js';
 import type { WorkflowEventEnvelope, WorkflowEventPayload, WorkflowEventType } from '../domain/event.js';
-import type { WorkflowRun, WorkflowRunError, WorkflowRunMetadata, WorkflowRunSource, WorkflowRunView } from '../domain/run.js';
+import type { WorkflowAgentStatus, WorkflowRun, WorkflowRunError, WorkflowRunMetadata, WorkflowRunSource, WorkflowRunView } from '../domain/run.js';
 import type { WorkflowResultEnvelope } from '../domain/result.js';
 import { validateWorkflowJsonSchema } from '../domain/schema-validation.js';
 import { WorkflowEventStore } from '../store/event-store.js';
@@ -100,6 +100,7 @@ export class WorkflowEngine {
     let currentPhaseId: string | undefined;
     let eventQueue = Promise.resolve();
     const progressRecorders = new Map<number, AgentProgressRecorder>();
+    const runtimeAgentStatuses = new Map<number, WorkflowAgentStatus | 'queued'>();
     const subagentSessionKeys = new Map<number, string>();
 
     const run: WorkflowRun = {
@@ -177,6 +178,7 @@ export class WorkflowEngine {
               const agentId = formatRuntimeAgentId(event.id);
               const subagentSessionKey = this.options.subagentSessionKeyFactory?.({ runId, agentId }) ?? defaultSubagentSessionKey(runId, agentId);
               subagentSessionKeys.set(event.id, subagentSessionKey);
+              runtimeAgentStatuses.set(event.id, 'queued');
               const phaseId = event.phase ? (phaseTitleToId.get(event.phase) ?? normalizePhaseId(event.phase)) : currentPhaseId;
               void this.callHooks((hook) => hook.beforeAgent?.({
                 runId,
@@ -195,11 +197,21 @@ export class WorkflowEngine {
               });
             },
             onAgentStart: (event) => {
+              const currentStatus = runtimeAgentStatuses.get(event.id);
+              if (currentStatus && currentStatus !== 'queued' && currentStatus !== 'running') {
+                return;
+              }
+              runtimeAgentStatuses.set(event.id, 'running');
               void appendEvent('agent_started', { agentId: formatRuntimeAgentId(event.id) });
             },
             onAgentEnd: (event) => {
+              const currentStatus = runtimeAgentStatuses.get(event.id);
+              if (currentStatus && currentStatus !== 'queued' && currentStatus !== 'running') {
+                return;
+              }
               const agentId = formatRuntimeAgentId(event.id);
               const completedStatus = normalizeCompletedAgentStatus(event.status);
+              runtimeAgentStatuses.set(event.id, completedStatus);
               const resultPreview = previewWorkflowValue(event.result);
               progressRecorders.get(event.id)?.completeOpenSteps(completedStatus === 'done' ? 'done' : 'error');
               progressRecorders.delete(event.id);
@@ -253,6 +265,15 @@ export class WorkflowEngine {
     } catch (err) {
       await eventQueue;
       const error = toWorkflowRunError(err, options.signal?.aborted === true, options.signal?.reason);
+      const terminalAgentStatus: WorkflowAgentStatus = error.code === 'cancelled' || error.code === 'timeout' ? 'skipped' : 'error';
+      await this.completeOutstandingRuntimeAgents({
+        runId,
+        statuses: runtimeAgentStatuses,
+        progressRecorders,
+        appendEvent,
+        status: terminalAgentStatus,
+        error: terminalAgentStatus === 'error' ? error.message : undefined,
+      });
       if (error.code === 'cancelled') {
         await appendEvent('run_cancelled', { reason: error.message });
         await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'cancelled' }));
@@ -488,6 +509,36 @@ export class WorkflowEngine {
       return { agentId: target.agentId, label: invocation.label, phaseId: target.phaseId, status: 'error', error: message };
     } finally {
       params.progressRecorders.delete(target.agentId);
+    }
+  }
+
+  private async completeOutstandingRuntimeAgents(params: {
+    runId: string;
+    statuses: Map<number, WorkflowAgentStatus | 'queued'>;
+    progressRecorders: Map<number, AgentProgressRecorder>;
+    appendEvent: AppendWorkflowEvent;
+    status: Extract<WorkflowAgentStatus, 'done' | 'error' | 'skipped'>;
+    error?: string;
+  }): Promise<void> {
+    for (const [id, currentStatus] of params.statuses) {
+      if (currentStatus !== 'queued' && currentStatus !== 'running') {
+        continue;
+      }
+      params.statuses.set(id, params.status);
+      const recorder = params.progressRecorders.get(id);
+      recorder?.completeOpenSteps(params.status === 'done' ? 'done' : 'error');
+      params.progressRecorders.delete(id);
+      const agentId = formatRuntimeAgentId(id);
+      await params.appendEvent('agent_completed', {
+        agentId,
+        status: params.status,
+        error: params.error,
+      });
+      await this.callHooks((hook) => hook.afterAgent?.({
+        runId: params.runId,
+        agentId,
+        status: params.status,
+      }));
     }
   }
 

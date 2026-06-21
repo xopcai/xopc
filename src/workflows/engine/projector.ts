@@ -38,6 +38,39 @@ function buildTimelineItem(event: WorkflowEventEnvelope): WorkflowTimelineItem {
   };
 }
 
+function isAgentMutationEvent(type: WorkflowEventEnvelope['type']): boolean {
+  return type === 'agent_queued'
+    || type === 'agent_started'
+    || type === 'agent_step_started'
+    || type === 'agent_step_completed'
+    || type === 'agent_completed';
+}
+
+function markOpenAgentsTerminal(
+  agentIdToAgent: Map<string, WorkflowAgentView>,
+  status: Extract<WorkflowAgentStatus, 'error' | 'skipped'>,
+  completedAtMs: number,
+  error?: string,
+): void {
+  for (const [agentId, agent] of agentIdToAgent) {
+    if (agent.status !== 'queued' && agent.status !== 'running') {
+      continue;
+    }
+    agentIdToAgent.set(agentId, {
+      ...agent,
+      status,
+      currentStep: undefined,
+      error: status === 'error' ? error : agent.error,
+      completedAtMs,
+      steps: agent.steps.map((step) =>
+        step.status === 'running'
+          ? { ...step, status: 'error', completedAtMs }
+          : step,
+      ),
+    });
+  }
+}
+
 export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): WorkflowRunView | null {
   if (events.length === 0) {
     return null;
@@ -66,6 +99,10 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
 
   for (const event of orderedEvents) {
     timeline.push(buildTimelineItem(event));
+
+    if (terminalRunStatus(run.status) && isAgentMutationEvent(event.type)) {
+      continue;
+    }
 
     switch (event.type) {
       case 'run_started': {
@@ -242,27 +279,18 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
         run.status = payload.error?.code === 'timeout' ? 'timeout' : 'failed';
         run.error = payload.error;
         run.completedAtMs = event.createdAtMs;
+        markOpenAgentsTerminal(
+          agentIdToAgent,
+          payload.error?.code === 'timeout' ? 'skipped' : 'error',
+          event.createdAtMs,
+          payload.error?.message,
+        );
         break;
       }
       case 'run_cancelled': {
         run.status = 'cancelled';
         run.completedAtMs = event.createdAtMs;
-        for (const [agentId, agent] of agentIdToAgent) {
-          if (agent.status !== 'queued' && agent.status !== 'running') {
-            continue;
-          }
-          agentIdToAgent.set(agentId, {
-            ...agent,
-            status: 'skipped',
-            currentStep: undefined,
-            completedAtMs: event.createdAtMs,
-            steps: agent.steps.map((step) =>
-              step.status === 'running'
-                ? { ...step, status: 'error', completedAtMs: event.createdAtMs }
-                : step,
-            ),
-          });
-        }
+        markOpenAgentsTerminal(agentIdToAgent, 'skipped', event.createdAtMs);
         break;
       }
       case 'run_queued':

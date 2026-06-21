@@ -278,6 +278,8 @@ return 'ok'
 
     expect(view.run.status).toBe('timeout');
     expect(view.run.error?.code).toBe('timeout');
+    expect(view.agents[0]?.status).toBe('skipped');
+    expect(view.agents[0]?.currentStep).toBeUndefined();
   });
 
   it('runs a scoped replay as a new workflow run', async () => {
