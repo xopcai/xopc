@@ -4,7 +4,10 @@ import { Button } from '@/components/ui/button';
 import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import { MarketplaceSkillCardSkeleton } from '@/features/skills/skills-page-primitives';
 import { SKILL_LIST_SKELETON_KEYS } from '@/features/skills/skills-page.constants';
-import { interpolate } from '@/features/skills/skills-page.utils';
+import {
+  interpolate,
+  marketplacePackageRequestName,
+} from '@/features/skills/skills-page.utils';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -208,7 +211,9 @@ export function SkillsPageMarketplaceContent(p: Props) {
               )}
             >
               {mpPayload.items.map((row) => {
-                const installed = isSkillInstalledByName(row.id);
+                const provider = row.providerId ?? marketBrowseProvider;
+                const packageName = marketplacePackageRequestName(row, provider);
+                const installed = isSkillInstalledByName(packageName);
                 return (
                   <article
                     key={row.id}
@@ -229,14 +234,14 @@ export function SkillsPageMarketplaceContent(p: Props) {
                       onClick={(e) => {
                         const el = e.target as HTMLElement;
                         if (el.closest('button')) return;
-                        void openMarketplaceDetail(row.id, row.name, row.providerId ?? undefined);
+                        void openMarketplaceDetail(packageName, row.name, row.providerId ?? undefined);
                       }}
                       onKeyDown={(e) => {
                         const el = e.target as HTMLElement;
                         if (el.closest('button')) return;
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
-                          void openMarketplaceDetail(row.id, row.name, row.providerId ?? undefined);
+                          void openMarketplaceDetail(packageName, row.name, row.providerId ?? undefined);
                         }
                       }}
                     >
@@ -267,16 +272,16 @@ export function SkillsPageMarketplaceContent(p: Props) {
                                 type="button"
                                 variant="secondary"
                                 className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                                disabled={mpLoading || usingSkillInChatName === row.id}
+                                disabled={mpLoading || usingSkillInChatName === packageName}
                                 onClick={() =>
                                   void onUseSkillInChat({
-                                    name: row.id,
+                                    name: packageName,
                                     source: 'store',
                                     providerOverride: row.providerId ?? null,
                                   })
                                 }
                               >
-                                {usingSkillInChatName === row.id
+                                {usingSkillInChatName === packageName
                                   ? sk.previewUseInChatBusy
                                   : sk.previewUseInChat}
                               </Button>
