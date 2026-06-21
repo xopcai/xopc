@@ -10,6 +10,7 @@ vi.mock('../../storage/sqlite/index.js', async (importOriginal) => {
     ...actual,
     isXopcDatabaseOpen: vi.fn(() => true),
     openXopcDatabase: vi.fn(),
+    requireXopcDatabase: vi.fn(() => ({ db: {}, path: ':memory:' })),
     getSessionMetadata: vi.fn(),
   };
 });
