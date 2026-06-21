@@ -17,16 +17,16 @@
 # Private repos: arm64 Linux/Windows runners require available quota on your plan
 # (see GitHub docs: “Standard GitHub-hosted runners for private repositories”).
 #
-# Optional secrets (macOS signing / notarization):
-#   - CSC_LINK: base64 of exported "Developer ID Application" .p12 (or file:// URL — see electron-builder docs)
-#   - CSC_KEY_PASSWORD: password for that .p12
+# Optional secrets (generic signing / macOS notarization):
+#   - CSC_LINK: base64/file URL certificate for electron-builder (used as Windows fallback)
+#   - CSC_KEY_PASSWORD: password for that certificate
 #   - APPLE_ID: Apple ID email for notarytool
 #   - APPLE_APP_SPECIFIC_PASSWORD: app-specific password (appleid.apple.com), not your Apple ID password
 #   - APPLE_TEAM_ID: 10-character Team ID (Membership details in developer.apple.com)
 # Alternative notarization auth: APPLE_API_KEY (base64 .p8), APPLE_API_KEY_ID, APPLE_API_ISSUER
 # Enable notarization in scripts/electron-builder.pack.yml: mac.notarize: true
 #
-# Optional secrets (Windows signing; required for tag releases):
+# Optional secrets (Windows signing; preferred for tag releases):
 #   - WIN_CSC_LINK: base64/file URL for Windows Authenticode certificate
 #   - WIN_CSC_KEY_PASSWORD: password for that certificate
 #
@@ -117,7 +117,7 @@ jobs:
         env:
           # Avoid hard-link issues on some Windows runners when packaging.
           USE_HARD_LINKS: false
-          # macOS signing: only export CSC_* when BOTH secrets are set. Partial config (e.g. CSC_LINK
+          # Signing: only export CSC_* when BOTH secrets are set. Partial config (e.g. CSC_LINK
           # without CSC_KEY_PASSWORD) makes electron-builder attempt import and fail with
           # "empty password" and ".../xopc not a file" on the workspace path.
           _EB_CSC_LINK: ${{ secrets.CSC_LINK }}
@@ -130,13 +130,15 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [[ "${{ matrix.os }}" == windows* ]]; then
-            if [[ "${{ github.ref }}" == refs/tags/v* && ( -z "${_EB_WIN_CSC_LINK:-}" || -z "${_EB_WIN_CSC_KEY_PASSWORD:-}" ) ]]; then
-              echo "❌ Windows tag releases require WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD for updater signature verification"
-              exit 1
-            fi
             if [[ -n "${_EB_WIN_CSC_LINK:-}" && -n "${_EB_WIN_CSC_KEY_PASSWORD:-}" ]]; then
               export CSC_LINK="$_EB_WIN_CSC_LINK"
               export CSC_KEY_PASSWORD="$_EB_WIN_CSC_KEY_PASSWORD"
+            elif [[ -n "${_EB_CSC_LINK:-}" && -n "${_EB_CSC_KEY_PASSWORD:-}" ]]; then
+              export CSC_LINK="$_EB_CSC_LINK"
+              export CSC_KEY_PASSWORD="$_EB_CSC_KEY_PASSWORD"
+            elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+              echo "❌ Windows tag releases require WIN_CSC_LINK/WIN_CSC_KEY_PASSWORD or CSC_LINK/CSC_KEY_PASSWORD for updater signature verification"
+              exit 1
             fi
           elif [[ -n "${_EB_CSC_LINK:-}" && -n "${_EB_CSC_KEY_PASSWORD:-}" ]]; then
             export CSC_LINK="$_EB_CSC_LINK"

@@ -174,10 +174,17 @@ async function configureTelegram(config: Config): Promise<Config> {
   const telegramConfig: Record<string, unknown> = {
     ...(prev ?? {}),
     enabled: true,
-    dmPolicy,
-    groupPolicy,
-    allowFrom: allowFrom ?? (prev?.allowFrom as Array<string | number> | undefined) ?? [],
-    groupAllowFrom: groupAllowFrom ?? (prev?.groupAllowFrom as Array<string | number> | undefined) ?? [],
+    defaults:
+      prev?.defaults && typeof prev.defaults === 'object' && !Array.isArray(prev.defaults)
+        ? prev.defaults
+        : {
+            dmPolicy: 'pairing',
+            groupPolicy: 'open',
+            replyToMode: 'off',
+            historyLimit: 50,
+            textChunkLimit: 4000,
+            streaming: { mode: 'partial' },
+          },
     accounts: {
       ...prevAccounts,
       default: {

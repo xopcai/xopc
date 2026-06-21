@@ -60,6 +60,17 @@ export const TelegramThreadBindingsConfigSchema = z.object({
   maxAgeMs: z.number().optional(),
 }).strict();
 
+export const TelegramAccountDefaultsConfigSchema = z.object({
+  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
+  groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('open'),
+  replyToMode: z.enum(['off', 'first', 'all']).default('off'),
+  historyLimit: z.number().default(50),
+  textChunkLimit: z.number().default(4000),
+  streaming: TelegramStreamingConfigSchema.default({ mode: 'partial' }),
+  proxy: z.string().optional(),
+  apiRoot: z.string().optional(),
+}).strict();
+
 export const TelegramAccountConfigSchema = z.object({
   accountId: z.string().optional(),
   name: z.string().optional(),
@@ -67,13 +78,13 @@ export const TelegramAccountConfigSchema = z.object({
   botToken: z.string().default(''),
   tokenFile: z.string().optional(),
   allowFrom: z.array(z.union([z.string(), z.number()])).default([]),
-  groupAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
-  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('open'),
-  groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('open'),
-  replyToMode: z.enum(['off', 'first', 'all']).default('off'),
+  groupAllowFrom: z.array(z.union([z.string(), z.number()])).default([]),
+  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).optional(),
+  groupPolicy: z.enum(['open', 'disabled', 'allowlist']).optional(),
+  replyToMode: z.enum(['off', 'first', 'all']).optional(),
   groups: z.record(z.string(), TelegramGroupConfigSchema).optional(),
-  historyLimit: z.number().default(50),
-  textChunkLimit: z.number().default(4000),
+  historyLimit: z.number().optional(),
+  textChunkLimit: z.number().optional(),
   streaming: TelegramStreamingConfigSchema.optional(),
   proxy: z.string().optional(),
   apiRoot: z.string().optional(),
@@ -88,18 +99,16 @@ export const TelegramAccountConfigSchema = z.object({
 
 export const TelegramConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  allowFrom: z.array(z.union([z.string(), z.number()])).default([]),
-  groupAllowFrom: z.array(z.union([z.string(), z.number()])).default([]),
-  apiRoot: z.string().optional(),
   debug: z.boolean().default(false),
+  defaults: TelegramAccountDefaultsConfigSchema.default({
+    dmPolicy: 'pairing',
+    groupPolicy: 'open',
+    replyToMode: 'off',
+    historyLimit: 50,
+    textChunkLimit: 4000,
+    streaming: { mode: 'partial' },
+  }),
   accounts: z.record(z.string(), TelegramAccountConfigSchema).optional(),
-  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('open'),
-  groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('open'),
-  replyToMode: z.enum(['off', 'first', 'all']).default('off'),
-  streaming: TelegramStreamingConfigSchema.optional(),
-  historyLimit: z.number().default(50),
-  textChunkLimit: z.number().default(4000),
-  proxy: z.string().optional(),
 }).strict();
 
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;

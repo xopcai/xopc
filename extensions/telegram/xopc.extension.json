@@ -48,11 +48,42 @@
         "accounts": {
           "advanced": true
         },
-        "groupPolicy": {
+        "defaults": {
           "advanced": true
         },
-        "groupAllowFrom": {
-          "advanced": true
+        "accounts.default.botToken": {
+          "tags": [
+            "basic"
+          ],
+          "sensitive": true,
+          "help": "Telegram bot token"
+        },
+        "accounts.default.dmPolicy": {
+          "tags": [
+            "basic"
+          ]
+        },
+        "accounts.default.allowFrom": {
+          "tags": [
+            "basic"
+          ],
+          "help": "Telegram user ids allowed for private chat when DM policy is pairing or allowlist."
+        },
+        "accounts.default.groupPolicy": {
+          "tags": [
+            "basic"
+          ]
+        },
+        "accounts.default.groupAllowFrom": {
+          "tags": [
+            "basic"
+          ],
+          "help": "Telegram user ids allowed in groups when group policy is allowlist."
+        },
+        "accounts.default.streaming.mode": {
+          "tags": [
+            "basic"
+          ]
         }
       },
       "configSchema": {
@@ -64,96 +95,10 @@
             "default": false,
             "title": "Enabled"
           },
-          "allowFrom": {
-            "type": "array",
-            "items": {
-              "type": [
-                "string",
-                "number"
-              ]
-            },
-            "title": "DM allow list"
-          },
-          "groupAllowFrom": {
-            "type": "array",
-            "items": {
-              "type": [
-                "string",
-                "number"
-              ]
-            },
-            "title": "Group allow list"
-          },
           "debug": {
             "type": "boolean",
             "default": false,
             "title": "Debug"
-          },
-          "apiRoot": {
-            "type": "string",
-            "title": "API root"
-          },
-          "proxy": {
-            "type": "string",
-            "title": "Proxy"
-          },
-          "dmPolicy": {
-            "type": "string",
-            "enum": [
-              "pairing",
-              "allowlist",
-              "open",
-              "disabled"
-            ],
-            "default": "open",
-            "title": "DM policy"
-          },
-          "groupPolicy": {
-            "type": "string",
-            "enum": [
-              "open",
-              "disabled",
-              "allowlist"
-            ],
-            "default": "open",
-            "title": "Group policy"
-          },
-          "replyToMode": {
-            "type": "string",
-            "enum": [
-              "off",
-              "first",
-              "all"
-            ],
-            "default": "off",
-            "title": "Reply-to mode"
-          },
-          "streaming": {
-            "type": "object",
-            "title": "Streaming",
-            "additionalProperties": true,
-            "properties": {
-              "mode": {
-                "type": "string",
-                "enum": [
-                  "off",
-                  "partial",
-                  "block"
-                ],
-                "default": "partial",
-                "title": "Mode"
-              }
-            }
-          },
-          "historyLimit": {
-            "type": "number",
-            "default": 50,
-            "title": "History limit"
-          },
-          "textChunkLimit": {
-            "type": "number",
-            "default": 4000,
-            "title": "Text chunk limit"
           },
           "accounts": {
             "type": "object",
@@ -215,7 +160,7 @@
                       "open",
                       "disabled"
                     ],
-                    "default": "open",
+                    "default": "pairing",
                     "title": "DM policy"
                   },
                   "groupPolicy": {
@@ -276,6 +221,79 @@
                 }
               }
             }
+          },
+          "defaults": {
+            "type": "object",
+            "title": "Account defaults",
+            "additionalProperties": false,
+            "properties": {
+              "dmPolicy": {
+                "type": "string",
+                "enum": [
+                  "pairing",
+                  "allowlist",
+                  "open",
+                  "disabled"
+                ],
+                "default": "pairing",
+                "title": "DM policy"
+              },
+              "groupPolicy": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "disabled",
+                  "allowlist"
+                ],
+                "default": "open",
+                "title": "Group policy"
+              },
+              "replyToMode": {
+                "type": "string",
+                "enum": [
+                  "off",
+                  "first",
+                  "all"
+                ],
+                "default": "off",
+                "title": "Reply-to mode"
+              },
+              "streaming": {
+                "type": "object",
+                "title": "Streaming",
+                "additionalProperties": true,
+                "properties": {
+                  "mode": {
+                    "type": "string",
+                    "enum": [
+                      "off",
+                      "partial",
+                      "block"
+                    ],
+                    "default": "partial",
+                    "title": "Mode"
+                  }
+                }
+              },
+              "historyLimit": {
+                "type": "number",
+                "default": 50,
+                "title": "History limit"
+              },
+              "textChunkLimit": {
+                "type": "number",
+                "default": 4000,
+                "title": "Text chunk limit"
+              },
+              "proxy": {
+                "type": "string",
+                "title": "Proxy"
+              },
+              "apiRoot": {
+                "type": "string",
+                "title": "API root"
+              }
+            }
           }
         }
       },
@@ -288,20 +306,8 @@
               "enabled": {
                 "title": "启用"
               },
-              "allowFrom": {
-                "title": "私聊允许列表"
-              },
-              "groupAllowFrom": {
-                "title": "群聊允许列表"
-              },
               "debug": {
                 "title": "调试"
-              },
-              "apiRoot": {
-                "title": "API 根地址"
-              },
-              "proxy": {
-                "title": "代理"
               },
               "accounts": {
                 "title": "账号",
@@ -363,34 +369,54 @@
                   }
                 }
               },
-              "dmPolicy": {
-                "title": "私聊策略"
-              },
-              "groupPolicy": {
-                "title": "群聊策略"
-              },
-              "replyToMode": {
-                "title": "回复模式"
-              },
-              "streaming": {
-                "title": "流式输出",
+              "defaults": {
+                "title": "账号默认值",
                 "properties": {
-                  "mode": {
-                    "title": "模式"
+                  "dmPolicy": {
+                    "title": "私聊策略"
+                  },
+                  "groupPolicy": {
+                    "title": "群聊策略"
+                  },
+                  "replyToMode": {
+                    "title": "回复模式"
+                  },
+                  "streaming": {
+                    "title": "流式输出",
+                    "properties": {
+                      "mode": {
+                        "title": "模式"
+                      }
+                    }
+                  },
+                  "historyLimit": {
+                    "title": "历史条数"
+                  },
+                  "textChunkLimit": {
+                    "title": "文本分块上限"
+                  },
+                  "proxy": {
+                    "title": "代理"
+                  },
+                  "apiRoot": {
+                    "title": "API 根地址"
                   }
                 }
-              },
-              "historyLimit": {
-                "title": "历史条数"
-              },
-              "textChunkLimit": {
-                "title": "文本分块上限"
               }
             }
           },
           "uiHints": {
             "accounts.*.botToken": {
               "help": "Telegram Bot Token"
+            },
+            "accounts.default.botToken": {
+              "help": "Telegram Bot Token"
+            },
+            "accounts.default.allowFrom": {
+              "help": "私聊策略为 pairing 或 allowlist 时允许的 Telegram 用户 ID。"
+            },
+            "accounts.default.groupAllowFrom": {
+              "help": "群聊策略为 allowlist 时允许的 Telegram 用户 ID。"
             }
           },
           "actions": {
@@ -403,6 +429,14 @@
               "result": "form"
             }
           }
+        }
+      },
+      "ui": {
+        "card": {
+          "summaryFields": [
+            "accounts.default.dmPolicy",
+            "accounts.default.streaming.mode"
+          ]
         }
       }
     }

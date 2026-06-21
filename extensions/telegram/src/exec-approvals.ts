@@ -14,7 +14,6 @@ export function resolveTelegramExecApprovers(
 ): string[] {
   const tg = cfg.channels?.telegram as
     | {
-        allowFrom?: Array<string | number>;
         accounts?: Record<
           string,
           {
@@ -26,7 +25,7 @@ export function resolveTelegramExecApprovers(
     | undefined;
   const acc = tg?.accounts?.[accountId];
   const explicit = acc?.execApprovals?.approvers ?? [];
-  const fallback = acc?.allowFrom ?? tg?.allowFrom ?? [];
+  const fallback = acc?.allowFrom ?? [];
   const merged = explicit.length > 0 ? explicit : fallback;
   return merged
     .map((v) => String(v).trim())

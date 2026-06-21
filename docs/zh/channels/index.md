@@ -32,7 +32,7 @@ xopc 可将助手接到 **Telegram**、**微信**、**飞书（Feishu / Lark）*
 
 **Telegram、飞书、微信** 在 **`dmPolicy` 为 `pairing`** 时，私聊是否放行由 **合并后的允许列表** 决定：
 
-1. 配置文件 **`xopc.json`** 里对应账号 / 通道块的 **`allowFrom`**；
+1. 配置文件 **`xopc.json`** 里的 **`allowFrom`**（Telegram：`channels.telegram.accounts.<账号>.allowFrom`；飞书/微信按各自文档使用通道或账号 allowlist）；
 2. 磁盘上 **已配对用户** 的 JSON 凭证（与配置在运行时合并）。
 
 若发送方不在允许列表中，机器人会回复 **一次性配对码**，并提示管理员在本机执行：

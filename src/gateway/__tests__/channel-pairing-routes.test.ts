@@ -18,7 +18,7 @@ function pairingConfig(): Partial<Config> {
     channels: {
       telegram: {
         enabled: true,
-        dmPolicy: 'pairing',
+        defaults: { dmPolicy: 'pairing' },
         accounts: { default: {} },
       },
     },

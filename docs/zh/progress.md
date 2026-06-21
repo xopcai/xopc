@@ -96,7 +96,7 @@ const config = {
     "telegram": {
       "accounts": {
         "default": {
-          "streamMode": "partial"
+          "streaming": { "mode": "partial" }
         }
       }
     }
@@ -194,7 +194,7 @@ type ProgressStage = 'thinking' | 'searching' | 'reading' | 'writing' | 'executi
 
 ### 没有进度更新
 
-1. **检查流模式**: 确保在配置中 `streamMode` 设置为 `partial` 或 `block`
+1. **检查流模式**: 确保在配置中 `streaming.mode` 设置为 `partial` 或 `block`
 2. **检查日志**: 查找 `ProgressFeedback` 或 `DraftStream` 日志
 3. **检查通道支持**：进度更新目前仅适用于 Telegram
 

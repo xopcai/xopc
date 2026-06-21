@@ -38,8 +38,8 @@ describe('pairing-service', () => {
         channels: {
           telegram: {
             enabled: true,
-            dmPolicy: 'pairing',
-            allowFrom: ['111'],
+            defaults: { dmPolicy: 'pairing' },
+            accounts: { default: { allowFrom: ['111'] } },
           },
         },
       } as any,
@@ -51,6 +51,25 @@ describe('pairing-service', () => {
     expect(state.paired.fromConfig).toEqual(['111']);
     expect(state.paired.fromCredentials).toEqual([]);
     expect(state.dmPolicy).toBe('pairing');
+  });
+
+  it('ignores legacy top-level telegram allowFrom', () => {
+    const state = listChannelPairingState({
+      channel: 'telegram',
+      accountId: 'default',
+      config: {
+        channels: {
+          telegram: {
+            enabled: true,
+            defaults: { dmPolicy: 'pairing' },
+            allowFrom: ['legacy'],
+            accounts: { default: { allowFrom: ['account'] } },
+          },
+        },
+      } as any,
+    });
+
+    expect(state.paired.fromConfig).toEqual(['account']);
   });
 
   it('approves pairing code via service', () => {
@@ -126,7 +145,7 @@ describe('pairing-service', () => {
 
     const summary = listChannelPairingSummary({
       channels: {
-        telegram: { enabled: true, dmPolicy: 'pairing', accounts: { default: {} } },
+        telegram: { enabled: true, defaults: { dmPolicy: 'pairing' }, accounts: { default: {} } },
       },
     } as any);
     expect(summary.telegram.pending).toBe(2);
@@ -161,7 +180,7 @@ describe('pairing-service', () => {
     });
     const issues = collectPairingPendingIssues({
       channels: {
-        telegram: { enabled: true, dmPolicy: 'pairing', accounts: { default: {} } },
+        telegram: { enabled: true, defaults: { dmPolicy: 'pairing' }, accounts: { default: {} } },
       },
     } as any);
     expect(issues.some((i) => i.channel === 'telegram' && i.pending === 1)).toBe(true);
@@ -177,14 +196,14 @@ describe('pairing-service', () => {
 
     const summary = listChannelPairingSummary({
       channels: {
-        telegram: { enabled: false, dmPolicy: 'pairing', accounts: { default: {} } },
+        telegram: { enabled: false, defaults: { dmPolicy: 'pairing' }, accounts: { default: {} } },
       },
     } as any);
     expect(summary.telegram).toBeUndefined();
 
     const issues = collectPairingPendingIssues({
       channels: {
-        telegram: { enabled: false, dmPolicy: 'pairing', accounts: { default: {} } },
+        telegram: { enabled: false, defaults: { dmPolicy: 'pairing' }, accounts: { default: {} } },
       },
     } as any);
     expect(issues).toHaveLength(0);
@@ -202,7 +221,7 @@ describe('pairing-service', () => {
       channels: {
         telegram: {
           enabled: true,
-          dmPolicy: 'allowlist',
+          defaults: { dmPolicy: 'allowlist' },
           accounts: { default: { dmPolicy: 'pairing' } },
         },
       },
@@ -222,7 +241,7 @@ describe('pairing-service', () => {
       channels: {
         telegram: {
           enabled: true,
-          dmPolicy: 'pairing',
+          defaults: { dmPolicy: 'pairing' },
           accounts: { default: { enabled: false } },
         },
       },

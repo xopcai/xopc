@@ -67,21 +67,20 @@ export interface TelegramAccountConfig {
 export interface TelegramChannelConfig {
   enabled?: boolean;
   accounts?: Record<string, TelegramAccountConfig>;
-  botToken?: string;
-  allowFrom?: Array<string | number>;
-  groupAllowFrom?: Array<string | number>;
-  dmPolicy?: DmPolicy;
-  groupPolicy?: GroupPolicy;
-  replyToMode?: ReplyToMode;
-  streaming?: {
-    mode?: 'off' | 'partial' | 'block';
-    preview?: { toolProgress?: boolean };
-    block?: { coalesce?: { minChars?: number; idleMs?: number } };
+  defaults?: {
+    dmPolicy?: DmPolicy;
+    groupPolicy?: GroupPolicy;
+    replyToMode?: ReplyToMode;
+    streaming?: {
+      mode?: 'off' | 'partial' | 'block';
+      preview?: { toolProgress?: boolean };
+      block?: { coalesce?: { minChars?: number; idleMs?: number } };
+    };
+    historyLimit?: number;
+    textChunkLimit?: number;
+    proxy?: string;
+    apiRoot?: string;
   };
-  historyLimit?: number;
-  textChunkLimit?: number;
-  proxy?: string;
-  apiRoot?: string;
   debug?: boolean;
 }
 

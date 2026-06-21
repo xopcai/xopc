@@ -151,9 +151,16 @@ See [Terminal UI (TUI)](./tui.md) for gateway-connected mode (`xopc tui`) and se
   "channels": {
     "telegram": {
       "enabled": true,
-      "botToken": "YOUR_BOT_TOKEN",
-      "dmPolicy": "allowlist",
-      "allowFrom": [123456789]
+      "defaults": {
+        "dmPolicy": "pairing"
+      },
+      "accounts": {
+        "default": {
+          "botToken": "YOUR_BOT_TOKEN",
+          "dmPolicy": "allowlist",
+          "allowFrom": [123456789]
+        }
+      }
     }
   }
 }

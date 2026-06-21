@@ -145,9 +145,16 @@ xopc tui --local
   "channels": {
     "telegram": {
       "enabled": true,
-      "botToken": "YOUR_BOT_TOKEN",
-      "dmPolicy": "allowlist",
-      "allowFrom": [123456789]
+      "defaults": {
+        "dmPolicy": "pairing"
+      },
+      "accounts": {
+        "default": {
+          "botToken": "YOUR_BOT_TOKEN",
+          "dmPolicy": "allowlist",
+          "allowFrom": [123456789]
+        }
+      }
     }
   }
 }
