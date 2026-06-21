@@ -17,7 +17,12 @@ describe('prepare-electron-pack-dir', () => {
 
   it('stages minimal runtime node_modules when app artifacts exist', () => {
     const repoRoot = process.cwd();
-    if (!existsSync(join(repoRoot, 'out/main/index.js'))) {
+    if (
+      !existsSync(join(repoRoot, 'out/main/index.js')) ||
+      !existsSync(join(repoRoot, 'out/server/index.js')) ||
+      !existsSync(join(repoRoot, 'dist/electron/extensions')) ||
+      !existsSync(join(repoRoot, 'dist/gateway/static/root/index.html'))
+    ) {
       return;
     }
 
@@ -31,6 +36,7 @@ describe('prepare-electron-pack-dir', () => {
     expect(existsSync(join(packDir, 'dist/src'))).toBe(false);
     expect(existsSync(join(packDir, 'dist/extensions'))).toBe(false);
     expect(existsSync(join(packDir, 'dist/gateway/static/root/index.html'))).toBe(true);
+    expect(existsSync(join(packDir, 'skills/tools/find-skills/SKILL.md'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/node-cron'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/silk-wasm'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@vscode/ripgrep'))).toBe(false);
