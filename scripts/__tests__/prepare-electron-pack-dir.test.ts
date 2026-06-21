@@ -27,13 +27,14 @@ describe('prepare-electron-pack-dir', () => {
     const pkg = JSON.parse(readFileSync(join(packDir, 'package.json'), 'utf8'));
     expect(Object.keys(pkg.dependencies).sort()).toEqual([...ELECTRON_PACKAGED_DEPENDENCIES].sort());
     expect(existsSync(join(packDir, 'out/main/index.js'))).toBe(true);
-    expect(existsSync(join(packDir, 'dist/src'))).toBe(true);
-    expect(existsSync(join(packDir, 'dist/extensions'))).toBe(true);
-    expect(existsSync(join(packDir, 'dist/_virtual'))).toBe(true);
+    expect(existsSync(join(packDir, 'dist/electron/extensions'))).toBe(true);
+    expect(existsSync(join(packDir, 'dist/src'))).toBe(false);
+    expect(existsSync(join(packDir, 'dist/extensions'))).toBe(false);
     expect(existsSync(join(packDir, 'dist/gateway/static/root/index.html'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/node-cron'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/silk-wasm'))).toBe(true);
-    expect(existsSync(join(packDir, 'node_modules/@vscode/ripgrep'))).toBe(true);
+    expect(existsSync(join(packDir, 'node_modules/@vscode/ripgrep'))).toBe(false);
+    expect(existsSync(join(packDir, '_pack-resources/rg'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@earendil-works/pi-ai'))).toBe(false);
     // Pack dir lives outside the repo so `pnpm --workspace-root` (run by electron-builder)
     // returns nothing and the dep collector stays scoped to pack dir.

@@ -36,6 +36,7 @@ import { initElectronShellPreferences, isShellNotificationGranted, registerSyste
 import { isShellChromiumPermissionGranted } from './ipc/shell-permission-gates.js';
 import { registerCronDisplayWakeIpc, stopCronDisplayWakeBlocker } from './ipc/cron-display-wake-ipc.js';
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
+import { assertTrustedRenderer } from './ipc/trusted-renderer.js';
 import { getLoadingPageDataUrl, getRendererCrashPageDataUrl } from './loading-page.js';
 import { isEmbeddedGatewayLoopbackUrl } from './loopback-url.js';
 import { hasPendingInstall, initAutoUpdater, stopAutoUpdater } from './auto-updater.js';
@@ -325,7 +326,7 @@ function buildStartupFailureMessage(detail: string): string {
   return (
     `Failed to start the local gateway.\n\n${detail}\n\n` +
     'The app picks a free port starting at 28790 when possible (CLI default is 18790). If startup still fails, quit other xopc or gateway processes, then restart.\n\n' +
-    '(Developers: pnpm run build && pnpm run electron:vite:build && pnpm run electron:server:build)'
+    '(Developers: pnpm run build && pnpm run electron:vite:build && pnpm run electron:server:build && pnpm run electron:extensions:build)'
   );
 }
 
@@ -691,8 +692,10 @@ app.whenReady().then(async () => {
   });
 
   await initElectronShellPreferences();
-  registerFileIpc(ipcMain);
-  registerSearchIpc(ipcMain);
+  const electronUserPaths = getElectronUserPaths();
+  const electronManagedRoots = [electronUserPaths.userData, electronUserPaths.workspacePath];
+  registerFileIpc(ipcMain, { allowedRoots: electronManagedRoots });
+  registerSearchIpc(ipcMain, { allowedRoots: electronManagedRoots });
   registerAgentIpc(ipcMain);
   registerSystemSettingsIpc(ipcMain);
   registerCronDisplayWakeIpc(ipcMain);
@@ -744,7 +747,8 @@ app.whenReady().then(async () => {
     return win ? win.isFullScreen() : false;
   });
 
-  ipcMain.handle('gateway:restart', async () => {
+  ipcMain.handle('gateway:restart', async (event) => {
+    assertTrustedRenderer(event);
     if (!shouldEmbedGateway()) {
       return { ok: false, message: 'Embedded gateway is not active in this session.' };
     }

@@ -129,6 +129,8 @@ export interface ChannelRuntimeActionResult {
   ok: boolean;
   payload?: ChannelRuntimeActionPayload;
   message?: string;
+  /** Internal gateway-side config replacement; never returned to the browser. */
+  nextConfig?: Config;
 }
 
 /** Gateway/CLI control-plane actions declared by extension manifests. */

@@ -1,10 +1,10 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import type { Config } from '../../config/schema.js';
 import { ConfigSchema } from '../../config/schema.js';
-import { loadConfig, saveConfig } from '../../config/loader.js';
+import { saveConfig } from '../../config/loader.js';
 import { ensureStarterAgentsInitialized } from '../../agent/starter-agents.js';
 
 export interface InitWorkspaceCoreOptions {
@@ -77,7 +77,7 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
 
   let config: Config;
   if (configExisted) {
-    config = loadConfig(configPath);
+    config = (await tryReadDiskConfig(configPath, assertChannelPlugins)) ?? ConfigSchema.parse(undefined);
   } else {
     config = ConfigSchema.parse(undefined);
     await assertChannelPluginsIfNeeded(config, assertChannelPlugins);
@@ -140,7 +140,11 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
   }
 
   if (needsWrite) {
-    await saveConfig(nextFinal, configPath);
+    if (assertChannelPlugins) {
+      await saveConfig(nextFinal, configPath);
+    } else {
+      writeFileSync(configPath, `${JSON.stringify(nextFinal, null, 2)}\n`, 'utf8');
+    }
   }
 
   return {

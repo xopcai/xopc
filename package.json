@@ -78,9 +78,11 @@
     "electron:vite:build:package": "cross-env ELECTRON_ENTRY=out/main/index.js ELECTRON_VITE_SKIP_RENDERER=1 electron-vite build",
     "electron:package": "node scripts/electron-builder.mjs",
     "electron:server:build": "node scripts/build-electron-server.mjs",
+    "electron:extensions:build": "node scripts/build-electron-extensions.mjs",
+    "electron:build:artifacts": "pnpm run electron:vite:build:package && pnpm run electron:server:build && pnpm run electron:extensions:build",
     "electron:frpc:download": "node --import tsx/esm scripts/download-frpc-binaries.mjs",
     "electron:frpc:download:all": "node --import tsx/esm scripts/download-frpc-binaries.mjs --all",
-    "electron:build": "pnpm run build:web && pnpm run electron:vite:build:package && pnpm run electron:server:build && pnpm run electron:package",
+    "electron:build": "pnpm run generate:bundled && pnpm run build:node && pnpm run build:web && pnpm run electron:build:artifacts && pnpm run electron:package",
     "electron:preview": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite preview"
   },
   "keywords": [

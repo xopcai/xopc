@@ -1,14 +1,8 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 
-/**
- * Runtime modules kept external in the Electron gateway bundle (`out/server/index.js`)
- * and copied into the packaged app via electron-builder production `dependencies`.
- *
- * Keep in sync with `scripts/build-electron-server.mjs` `external` list. Modules served
- * from `extraResources` (playwright-core, rg binary) or bundled in main/preload are omitted.
- */
+/** Runtime modules kept external in the Electron gateway bundle. */
 export const ELECTRON_GATEWAY_EXTERNALS = [
   'electron',
   '@vscode/ripgrep',
@@ -18,33 +12,24 @@ export const ELECTRON_GATEWAY_EXTERNALS = [
   'fsevents',
 ];
 
-/**
- * Production deps electron-builder should copy into the packaged app.
- *
- * This includes gateway bundle externals plus deps used by dynamically loaded bundled
- * channel extensions under `dist/extensions/**`. Those extension modules live in
- * `app.asar.unpacked`, and native ESM resolution does not honor NODE_PATH or jump into
- * `app.asar/node_modules`, so matching packages must also be asar-unpacked beside them.
- */
-export const ELECTRON_PACKAGED_DEPENDENCIES = [
-  '@vscode/ripgrep',
-  'node-cron',
-  'silk-wasm',
-  'zod',
-  'pino',
-  'js-yaml',
-  'markdown-it',
-  'grammy',
-  '@grammyjs/runner',
-  '@inquirer/prompts',
-  'abort-controller',
-  'undici',
-];
+/** Real node_modules packages required by the packaged gateway/extensions. */
+export const ELECTRON_PACKAGED_DEPENDENCIES = ['node-cron', 'silk-wasm'];
 
 /** @param {string} repoRoot */
 export function resolveInstalledElectronVersion(repoRoot) {
   const requireFromRoot = createRequire(join(repoRoot, 'package.json'));
   const pkgPath = requireFromRoot.resolve('electron/package.json');
+  return JSON.parse(readFileSync(pkgPath, 'utf8')).version;
+}
+
+/** @param {string} repoRoot @param {string} name */
+export function resolveInstalledPackageVersion(repoRoot, name) {
+  const directPath = join(repoRoot, 'node_modules', ...name.split('/'), 'package.json');
+  if (existsSync(directPath)) {
+    return JSON.parse(readFileSync(directPath, 'utf8')).version;
+  }
+  const requireFromRoot = createRequire(join(repoRoot, 'package.json'));
+  const pkgPath = requireFromRoot.resolve(`${name}/package.json`);
   return JSON.parse(readFileSync(pkgPath, 'utf8')).version;
 }
 
@@ -58,7 +43,7 @@ export function buildMinimalElectronPackageJson(rootPkg, repoRoot) {
   for (const name of ELECTRON_PACKAGED_DEPENDENCIES) {
     const version = rootPkg.dependencies?.[name];
     if (typeof version === 'string') {
-      dependencies[name] = version;
+      dependencies[name] = repoRoot != null ? resolveInstalledPackageVersion(repoRoot, name) : version;
     }
   }
 
