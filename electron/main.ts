@@ -64,6 +64,9 @@ let rendererCrashReloadAttempted = false;
 let lastGatewayConsoleHref: string | null = null;
 let rendererCrashExternalOpened = false;
 
+const debugWindowLifecycle = process.env['XOPC_ELECTRON_DEBUG_LIFECYCLE'] === '1';
+const openBrowserOnRendererCrash = process.env['XOPC_ELECTRON_OPEN_BROWSER_ON_CRASH'] === '1';
+
 function redactUrlForLog(href: string): string {
   if (href.startsWith('data:')) {
     return `data:<${href.length} chars>`;
@@ -89,6 +92,7 @@ function windowStateForLog(win: BrowserWindow): string {
 }
 
 function appendWindowLifecycleLog(win: BrowserWindow, eventName: string, detail?: string): void {
+  if (!debugWindowLifecycle) return;
   appendElectronStartupLog(
     `window ${eventName}${detail ? ` ${detail}` : ''} ${windowStateForLog(win)}`,
   );
@@ -143,21 +147,26 @@ const win32UseJitless =
   process.env['XOPC_ELECTRON_DISABLE_JIT'] === '1' || win32StabilityMode;
 const win32DisableSandbox =
   process.env['XOPC_ELECTRON_DISABLE_SANDBOX'] === '1' || win32StabilityMode;
+const win32DisableRendererCodeIntegrity =
+  process.env['XOPC_ELECTRON_DISABLE_RENDERER_CODE_INTEGRITY'] === '1' || win32StabilityMode;
+const win32DisableNativeWinOcclusion =
+  process.env['XOPC_ELECTRON_DISABLE_NATIVE_WIN_OCCLUSION'] === '1' || win32StabilityMode;
 
 if (process.platform === 'win32') {
   app.setAppUserModelId('ai.xopc.xopc');
   // Keep the default Windows renderer close to macOS/Linux. The broad software-rendering
-  // fallback below is useful on some locked-down hosts, but on others it triggers Chromium
-  // SwiftShader crashes while loading chat. Leave it opt-in instead of changing the normal UI.
-  app.commandLine.appendSwitch(
-    'disable-features',
-    [
-      // RendererCodeIntegrity is a common source of Windows Electron
-      // 0xC0000005 crashes when security/overlay DLLs inject into Chromium.
-      'RendererCodeIntegrity',
-      'CalculateNativeWinOcclusion',
-    ].join(','),
-  );
+  // fallback below is useful on some locked-down hosts. Leave it opt-in instead
+  // of changing the normal UI/security model.
+  const disabledFeatures: string[] = [];
+  if (win32DisableRendererCodeIntegrity) {
+    disabledFeatures.push('RendererCodeIntegrity');
+  }
+  if (win32DisableNativeWinOcclusion) {
+    disabledFeatures.push('CalculateNativeWinOcclusion');
+  }
+  if (disabledFeatures.length > 0) {
+    app.commandLine.appendSwitch('disable-features', disabledFeatures.join(','));
+  }
   if (win32UseSoftwareRendering) {
     app.disableHardwareAcceleration();
     app.commandLine.appendSwitch('disable-gpu');
@@ -430,10 +439,7 @@ function createWindow(): void {
       preload: join(import.meta.dirname, '../preload/index.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      // Keep preload in the classic isolated context. The preload intentionally uses
-      // Electron IPC and process.platform; explicitly pinning this avoids Electron
-      // default changes from moving it into a stricter sandbox on Windows builds.
-      sandbox: false,
+      ...(win32DisableSandbox ? { sandbox: false } : {}),
     },
   });
 
@@ -493,9 +499,11 @@ function createWindow(): void {
 
   appendWindowLifecycleLog(win, 'created');
 
-  win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
-    appendElectronStartupLog(`renderer console level=${level} source=${sourceId}:${line} ${message}`);
-  });
+  if (debugWindowLifecycle) {
+    win.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+      appendElectronStartupLog(`renderer console level=${level} source=${sourceId}:${line} ${message}`);
+    });
+  }
 
   win.webContents.on('preload-error', (_event, preloadPath, error) => {
     appendElectronStartupLog(
@@ -562,7 +570,7 @@ function createWindow(): void {
         appendElectronStartupLog('renderer crash recovery: showing diagnostic page after repeated crash');
         const externalHref = lastGatewayConsoleHref || win.webContents.getURL();
         const canOpenExternal = isEmbeddedGatewayLoopbackUrl(externalHref);
-        if (canOpenExternal && !rendererCrashExternalOpened) {
+        if (openBrowserOnRendererCrash && canOpenExternal && !rendererCrashExternalOpened) {
           rendererCrashExternalOpened = true;
           appendElectronStartupLog(
             `renderer crash fallback: opening default browser url=${redactUrlForLog(externalHref)}`,
@@ -571,7 +579,7 @@ function createWindow(): void {
             const em = err instanceof Error ? err.message : String(err);
             appendElectronStartupLog(`renderer crash fallback openExternal failed: ${em}`);
           });
-        } else if (!canOpenExternal) {
+        } else if (openBrowserOnRendererCrash && !canOpenExternal) {
           appendElectronStartupLog(
             `renderer crash fallback skipped: non-loopback url=${redactUrlForLog(externalHref)}`,
           );
@@ -579,7 +587,11 @@ function createWindow(): void {
         setTimeout(() => {
           if (!win.isDestroyed()) {
             void win
-              .loadURL(getRendererCrashPageDataUrl(app.getLocale(), msg, { openedExternal: canOpenExternal }))
+              .loadURL(
+                getRendererCrashPageDataUrl(app.getLocale(), msg, {
+                  openedExternal: openBrowserOnRendererCrash && canOpenExternal,
+                }),
+              )
               .catch((err) => {
                 const em = err instanceof Error ? err.message : String(err);
                 appendElectronStartupLog(`renderer crash diagnostic page failed: ${em}`);
@@ -687,6 +699,7 @@ app.whenReady().then(async () => {
   registerUpdaterIpc(ipcMain);
 
   ipcMain.on('preload:ready', (event, payload: unknown) => {
+    if (!debugWindowLifecycle) return;
     const href =
       payload && typeof payload === 'object' && 'href' in payload && typeof payload.href === 'string'
         ? payload.href
@@ -695,6 +708,7 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.on('preload:dom-content-loaded', (event, payload: unknown) => {
+    if (!debugWindowLifecycle) return;
     const href =
       payload && typeof payload === 'object' && 'href' in payload && typeof payload.href === 'string'
         ? payload.href
@@ -786,7 +800,9 @@ app.whenReady().then(async () => {
     appendElectronStartupLog(
       `win32 stability flags gpu=${win32UseSoftwareRendering ? 'software' : 'default'} ` +
         `jit=${win32UseJitless ? 'jitless' : 'default'} ` +
-        `sandbox=${win32DisableSandbox ? 'disabled' : 'default'}`,
+        `sandbox=${win32DisableSandbox ? 'disabled' : 'default'} ` +
+        `rendererCodeIntegrity=${win32DisableRendererCodeIntegrity ? 'disabled' : 'default'} ` +
+        `nativeWinOcclusion=${win32DisableNativeWinOcclusion ? 'disabled' : 'default'}`,
     );
     appendElectronStartupLog(`gpu feature status=${JSON.stringify(app.getGPUFeatureStatus())}`);
   }
