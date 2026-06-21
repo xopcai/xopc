@@ -5,6 +5,6 @@ export { GoalQueueStore } from './goal-queue-store.js';
 export { GoalNotificationService } from './goal-notifications.js';
 export { GoalWorkflowJudge } from './goal-workflow-judge.js';
 export type * from './types.js';
-export type * from './goal-runner.js';
+export type * from './goal-queue-types.js';
 export type * from './goal-notifications.js';
 export type * from './goal-workflow-judge.js';

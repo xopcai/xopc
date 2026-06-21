@@ -16,7 +16,6 @@ import type {
   GoalRunVerdict,
   GoalSource,
   GoalStatus,
-  GoalUiLocale,
 } from './types.js';
 
 type GoalRow = {
