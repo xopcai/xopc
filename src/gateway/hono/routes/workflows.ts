@@ -15,6 +15,7 @@ import type {
   WorkflowRunView,
 } from '../../../workflows/domain/index.js';
 import { buildWorkflowDefinition, validateWorkflowDefinitionInput } from '../../../workflows/domain/index.js';
+import { WorkflowDraftService, type CreateWorkflowDraftRequest } from '../../../workflows/draft/index.js';
 import { resolveWorkflowRunArtifactsDir } from '../../../workflows/store/paths.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -64,6 +65,10 @@ interface SaveWorkflowDefinitionRequestBody {
   script?: string;
 }
 
+interface CreateWorkflowDraftRequestBody extends Omit<CreateWorkflowDraftRequest, 'agentId'> {
+  agentId?: string;
+}
+
 export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
   const workflowRunService = service.createWorkflowRunService();
@@ -99,6 +104,29 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       script: body.script,
     });
     return c.json(result);
+  });
+
+  authenticated.post('/api/workflows/definitions/draft', async (c) => {
+    const body = await readJsonBody<CreateWorkflowDraftRequestBody>(c.req.raw);
+    const prompt = body.prompt?.trim();
+    if (!prompt) {
+      return c.json({ error: 'prompt is required' }, 400);
+    }
+    const agentId = getAgentId(body.agentId ?? c.req.query('agentId'), service.currentConfig);
+    const draftService = new WorkflowDraftService({ config: service.currentConfig });
+    try {
+      const draft = await draftService.createDraft({
+        prompt,
+        agentId,
+        language: body.language,
+        mode: body.mode,
+        existingScript: body.existingScript,
+        constraints: body.constraints,
+      }, c.req.raw.signal);
+      return c.json({ draft }, 201);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to create workflow draft' }, 400);
+    }
   });
 
   authenticated.post('/api/workflows/definitions', async (c) => {
