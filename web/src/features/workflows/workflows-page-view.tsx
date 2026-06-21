@@ -36,10 +36,12 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     setTriggerFilter,
     selectedRunId,
     selectedRunView,
+    selectedRunComparison,
     selectedRunLoading,
     selectedRunError,
     openRunDetails,
     closeRunDetails,
+    openRunDetailsById,
     openRunInChat,
     pickStartOpen,
     setPickStartOpen,
@@ -59,6 +61,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     submitStart,
     cancelRun,
     retryRun,
+    replayRun,
     saveCustomWorkflow,
   } = vm;
 
@@ -208,6 +211,8 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
 
       <WorkflowRunPanel
         view={selectedRunView}
+        comparison={selectedRunComparison}
+        currentDefinition={definitions.find((definition) => definition.id === selectedRunView?.run.definitionId)}
         loading={Boolean(selectedRunId) && selectedRunLoading}
         language={language}
         localeTag={localeTag}
@@ -217,6 +222,10 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
         onRetry={() => {
           if (selectedRunId) void retryRun(selectedRunId);
         }}
+        onReplay={(scope) => {
+          if (selectedRunId) void replayRun(selectedRunId, scope);
+        }}
+        onOpenRunId={openRunDetailsById}
         ownerAgentId={ownerAgentId}
         onClose={closeRunDetails}
       />

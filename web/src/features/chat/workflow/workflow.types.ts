@@ -28,6 +28,7 @@ export interface WorkflowAgentSnapshot {
   label: string;
   phase?: string;
   prompt: string;
+  invocation?: WorkflowAgentInvocationSnapshot;
   sessionKey?: string;
   transcriptMessageCount?: number;
   status: WorkflowAgentStatus;
@@ -40,6 +41,17 @@ export interface WorkflowAgentSnapshot {
   iteration?: number;
   maxIterations?: number;
   streamText?: string;
+}
+
+export interface WorkflowAgentInvocationSnapshot {
+  prompt: string;
+  label: string;
+  phase?: string;
+  modelRef?: string;
+  resolvedModelRef?: string;
+  schema?: unknown;
+  toolset?: string[];
+  maxIterations?: number;
 }
 
 export interface WorkflowSnapshot {

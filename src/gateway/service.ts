@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { listAgentEntries, normalizeAgentId, resolveDefaultAgentId } from '../agent/agent-scope.js';
 import { AgentService } from '../agent/service.js';
 import { ensureStarterAgentsInitialized } from '../agent/starter-agents.js';
 import { ChannelManager } from '../channels/manager.js';
@@ -669,6 +670,8 @@ export class GatewayService {
       workflowRunService: this.createWorkflowRunService(),
     });
 
+    await trace.measure('workflows.reconcile', () => this.reconcileInterruptedWorkflowRuns());
+
     this.sessionIndex.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {
       this.emit('session.updated', { key: data.key, name: data.name, tags: data.tags });
     });
@@ -1313,6 +1316,36 @@ export class GatewayService {
       });
     }
     return this.workflowRunServiceInstance;
+  }
+
+  private async reconcileInterruptedWorkflowRuns(): Promise<void> {
+    const workflowService = this.createWorkflowRunService();
+    const agentIds = this.collectWorkflowAgentIds();
+    let total = 0;
+    for (const agentId of agentIds) {
+      try {
+        total += await workflowService.reconcileInterruptedRuns(agentId);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        log.warn(
+          { err, agentId, errorMessage: msg },
+          `Workflow run reconcile failed for agent ${agentId}: ${msg}`,
+        );
+      }
+    }
+    if (total > 0) {
+      log.info({ count: total, agentIds }, 'Reconciled interrupted workflow runs');
+    }
+  }
+
+  private collectWorkflowAgentIds(): string[] {
+    const ids = new Set<string>();
+    ids.add(resolveDefaultAgentId(this.config));
+    for (const entry of listAgentEntries(this.config)) {
+      if (entry.enabled === false) continue;
+      ids.add(normalizeAgentId(entry.id));
+    }
+    return [...ids];
   }
 
   /** Process a message directly through the agent (for CLI mode). */

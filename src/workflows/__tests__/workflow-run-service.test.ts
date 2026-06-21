@@ -1,11 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkflowDefinition } from '../domain/index.js';
+import { WorkflowEventStore } from '../store/event-store.js';
+import { WorkflowRunStore } from '../store/run-store.js';
 import {
   buildWorkflowRunDefinitionSnapshot,
   buildWorkflowRunInputEnvelope,
   buildWorkflowRunMetadata,
+  resolveWorkflowReplayTargets,
+  WorkflowRunService,
 } from '../service/workflow-run-service.js';
+
+const originalStateDir = process.env.XOPC_STATE_DIR;
+let stateDir: string;
 
 function createDefinition(): WorkflowDefinition {
   return {
@@ -36,6 +47,20 @@ function createDefinition(): WorkflowDefinition {
 }
 
 describe('WorkflowRunService helpers', () => {
+  beforeEach(async () => {
+    stateDir = await mkdtemp(join(tmpdir(), 'xopc-workflow-service-'));
+    process.env.XOPC_STATE_DIR = stateDir;
+  });
+
+  afterEach(async () => {
+    if (originalStateDir === undefined) {
+      delete process.env.XOPC_STATE_DIR;
+    } else {
+      process.env.XOPC_STATE_DIR = originalStateDir;
+    }
+    await rm(stateDir, { recursive: true, force: true });
+  });
+
   it('wraps legacy input into a stable input envelope', () => {
     const envelope = buildWorkflowRunInputEnvelope({ branch: 'main' }, 'Check release');
 
@@ -58,7 +83,7 @@ describe('WorkflowRunService helpers', () => {
   it('builds a stable definition snapshot for run metadata', () => {
     const snapshot = buildWorkflowRunDefinitionSnapshot(createDefinition());
 
-    expect(snapshot).toEqual({
+    expect(snapshot).toMatchObject({
       id: 'release-check',
       name: 'release-check',
       title: 'Release Check',
@@ -66,6 +91,7 @@ describe('WorkflowRunService helpers', () => {
       source: 'builtin',
       tags: ['release'],
       phaseCount: 2,
+      defaults: { concurrency: 2, timeoutSec: 60, maxSubagents: 8 },
       estimatedAgents: { min: 1, max: 2 },
     });
   });
@@ -93,4 +119,227 @@ describe('WorkflowRunService helpers', () => {
       schedule: { scheduleId: 'nightly', fireId: 'fire-1' },
     });
   });
+
+  it('rejects invalid input before preparing a run session', async () => {
+    const definition: WorkflowDefinition = {
+      ...createDefinition(),
+      inputSchema: {
+        type: 'object',
+        properties: { branch: { type: 'string' } },
+        required: ['branch'],
+      },
+    };
+    const prepareRunSession = vi.fn();
+    const service = new WorkflowRunService({
+      service: createGatewayHostStub(),
+      sessionBridge: { prepareRunSession } as never,
+      buildChildTools: () => [],
+      definitionRegistry: {
+        async list() {
+          return [];
+        },
+        async get() {
+          return definition;
+        },
+      },
+    });
+
+    const result = await service.startWorkflowRun({
+      agentId: 'main',
+      definitionId: definition.id,
+      input: {},
+      source: { kind: 'webui' },
+    });
+
+    expect(result).toMatchObject({ ok: false, code: 'invalid_input', httpStatus: 400 });
+    expect(prepareRunSession).not.toHaveBeenCalled();
+  });
+
+  it('returns an existing run for a matching idempotency key', async () => {
+    const definition = createDefinition();
+    const config = {} as import('../../config/schema.js').Config;
+    const eventStore = new WorkflowEventStore(config, 'main');
+    const runStore = new WorkflowRunStore(config, 'main', eventStore);
+    await eventStore.append({
+      runId: 'existing-run',
+      type: 'run_queued',
+      payload: {
+        run: {
+          id: 'existing-run',
+          definitionId: definition.id,
+          definitionVersion: definition.version,
+          title: definition.title,
+          goal: 'Check release',
+          input: {},
+          status: 'queued',
+          source: { kind: 'api', idempotencyKey: 'idem-1' },
+          metadata: buildWorkflowRunMetadata({
+            definition,
+            agentId: 'main',
+            sessionKey: 'agent:main:webchat:default:direct:wf_run-existing',
+            source: { kind: 'api', idempotencyKey: 'idem-1' },
+            input: buildWorkflowRunInputEnvelope({}, 'Check release'),
+            idempotencyKey: 'idem-1',
+          }),
+          metrics: {
+            agentCount: 0,
+            doneAgentCount: 0,
+            errorAgentCount: 0,
+            skippedAgentCount: 0,
+            artifactCount: 0,
+          },
+          createdAtMs: 1_000,
+        },
+      },
+      createdAtMs: 1_000,
+    });
+    await runStore.rebuildRunView('existing-run');
+
+    const prepareRunSession = vi.fn();
+    const service = new WorkflowRunService({
+      service: createGatewayHostStub(config),
+      sessionBridge: { prepareRunSession } as never,
+      buildChildTools: () => [],
+      definitionRegistry: {
+        async list() {
+          return [];
+        },
+        async get() {
+          return definition;
+        },
+      },
+    });
+
+    const result = await service.startWorkflowRun({
+      agentId: 'main',
+      definitionId: definition.id,
+      input: {},
+      source: { kind: 'api', idempotencyKey: 'idem-1' },
+      idempotencyKey: 'idem-1',
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      runId: 'existing-run',
+      sessionKey: 'agent:main:webchat:default:direct:wf_run-existing',
+    });
+    expect(prepareRunSession).not.toHaveBeenCalled();
+  });
+
+  it('resolves failed-agent replay targets from a run view', () => {
+    const view = createReplayView();
+
+    const replay = resolveWorkflowReplayTargets(view, 'failed_agents');
+
+    expect(replay.targets).toEqual([
+      expect.objectContaining({
+        agentId: 'agent-2',
+        label: 'Failing review',
+        phaseId: 'inspect',
+        phaseTitle: 'Inspect',
+        prompt: 'Review risky files',
+        invocation: expect.objectContaining({
+          resolvedModelRef: 'openai/gpt-4o-mini',
+          toolset: ['file_read'],
+          maxIterations: 3,
+        }),
+      }),
+    ]);
+  });
+
+  it('resolves failed-phase replay targets with successful peers included', () => {
+    const view = createReplayView();
+
+    const replay = resolveWorkflowReplayTargets(view, 'failed_phases');
+
+    expect(replay.phaseIds).toEqual(['inspect']);
+    expect(replay.targets.map((target) => target.agentId)).toEqual(['agent-1', 'agent-2']);
+  });
 });
+
+function createGatewayHostStub(config = {} as import('../../config/schema.js').Config) {
+  return {
+    currentConfig: config,
+    currentWorkspacePath: stateDir,
+    messageBusInstance: {},
+    agentService: { getModelForSession: () => 'openai/gpt-4o-mini' },
+    sessionIndexInstance: { getStore: () => ({}) },
+    emit: vi.fn(),
+  } as never;
+}
+
+function createReplayView(): import('../domain/index.js').WorkflowRunView {
+  const definition = createDefinition();
+  return {
+    run: {
+      id: 'run-source',
+      definitionId: definition.id,
+      definitionVersion: definition.version,
+      title: definition.title,
+      goal: 'Check release',
+      input: {},
+      status: 'failed',
+      source: { kind: 'webui', sessionKey: 'agent:main:webchat:default:direct:wf_run-source' },
+      metadata: buildWorkflowRunMetadata({
+        definition,
+        agentId: 'main',
+        sessionKey: 'agent:main:webchat:default:direct:wf_run-source',
+        source: { kind: 'webui', sessionKey: 'agent:main:webchat:default:direct:wf_run-source' },
+        input: buildWorkflowRunInputEnvelope({}, 'Check release'),
+      }),
+      metrics: {
+        agentCount: 2,
+        doneAgentCount: 1,
+        errorAgentCount: 1,
+        skippedAgentCount: 0,
+        artifactCount: 0,
+      },
+      createdAtMs: 1_000,
+    },
+    phases: [
+      {
+        id: 'inspect',
+        title: 'Inspect',
+        status: 'failed',
+        agentIds: ['agent-1', 'agent-2'],
+      },
+    ],
+    agents: [
+      {
+        id: 'agent-1',
+        label: 'Successful review',
+        phaseId: 'inspect',
+        status: 'done',
+        prompt: 'Review stable files',
+        sessionKey: 'agent:main:workflow:run-source:subagent:agent-1',
+        transcriptMessageCount: 2,
+        resultPreview: 'ok',
+        steps: [],
+      },
+      {
+        id: 'agent-2',
+        label: 'Failing review',
+        phaseId: 'inspect',
+        status: 'error',
+        prompt: 'Review risky files',
+        invocation: {
+          prompt: 'Review risky files',
+          label: 'Failing review',
+          phase: 'Inspect',
+          resolvedModelRef: 'openai/gpt-4o-mini',
+          schema: { type: 'object', properties: { ok: { type: 'boolean' } } },
+          toolset: ['file_read'],
+          maxIterations: 3,
+        },
+        sessionKey: 'agent:main:workflow:run-source:subagent:agent-2',
+        transcriptMessageCount: 2,
+        error: 'failed',
+        steps: [],
+      },
+    ],
+    logs: [],
+    artifacts: [],
+    timeline: [],
+    controls: { canCancel: false, canRetry: true, canArchive: true },
+  };
+}

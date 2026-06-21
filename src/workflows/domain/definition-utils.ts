@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import type { WorkflowMeta } from '../../agent/workflow/types.js';
 
 import type { WorkflowDefinition, WorkflowDefinitionManifest } from './definition.js';
@@ -25,7 +27,8 @@ export function buildWorkflowDefinition(input: WorkflowDefinitionBuildInput): Wo
   const manifest = input.manifest;
   const manifestDefaults = manifest?.defaults ?? {};
 
-  return {
+  const runtimeHash = hashWorkflowStableValue(input.script);
+  const base = {
     id: input.name,
     name: input.name,
     title: manifest?.title ?? toWorkflowDefinitionTitle(input.name),
@@ -35,7 +38,7 @@ export function buildWorkflowDefinition(input: WorkflowDefinitionBuildInput): Wo
     outputSchema: manifest?.outputSchema,
     phases,
     runtime: {
-      kind: 'script',
+      kind: 'script' as const,
       source: input.script,
     },
     defaults: {
@@ -60,6 +63,41 @@ export function buildWorkflowDefinition(input: WorkflowDefinitionBuildInput): Wo
       updatedAtMs: nowMs,
     },
   };
+
+  return {
+    ...base,
+    runtimeHash,
+    contentHash: hashWorkflowStableValue({
+      id: base.id,
+      name: base.name,
+      title: base.title,
+      description: base.description,
+      version: base.version,
+      inputSchema: base.inputSchema,
+      outputSchema: base.outputSchema,
+      phases: base.phases,
+      runtimeHash,
+      defaults: base.defaults,
+      permissions: base.permissions,
+      resources: base.resources,
+      tags: base.metadata.tags,
+    }),
+  };
+}
+
+export function hashWorkflowStableValue(value: unknown): string {
+  return createHash('sha256').update(stableStringify(value)).digest('hex');
+}
+
+function stableStringify(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map((item) => stableStringify(item)).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .filter((key) => record[key] !== undefined)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`)
+    .join(',')}}`;
 }
 
 function normalizePositiveInt(value: number | undefined, fallback: number): number {
