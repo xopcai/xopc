@@ -349,14 +349,15 @@ export function useWorkflowsPage() {
   );
 
   const saveCustomWorkflow = useCallback(
-    async (payload: { name: string; script: string }) => {
+    async (payload: { name: string; script: string }): Promise<WorkflowDefinition | void> => {
       setSavingWorkflow(true);
       setActionError(null);
       try {
-        await saveWorkflowDefinition(payload.name, payload.script);
+        const definition = await saveWorkflowDefinition(payload.name, payload.script);
         setManageOpen(false);
         await definitionsSwr.mutate();
         setActionFeedback(labels.saveWorkflowSuccess);
+        return definition;
       } catch (err) {
         setActionError(err instanceof Error ? err.message : labels.saveWorkflowFailed);
       } finally {
@@ -364,6 +365,36 @@ export function useWorkflowsPage() {
       }
     },
     [definitionsSwr, labels.saveWorkflowFailed, labels.saveWorkflowSuccess],
+  );
+
+  const saveDraftAndStart = useCallback(
+    async (payload: { name: string; script: string; goal: string }) => {
+      setSavingWorkflow(true);
+      setActionError(null);
+      try {
+        const definition = await saveWorkflowDefinition(payload.name, payload.script);
+        await definitionsSwr.mutate();
+        const result = await startWorkflowRun({
+          definitionId: definition.id,
+          goal: payload.goal,
+          input: { goal: payload.goal },
+          agentId: ownerAgentId,
+        });
+        setManageOpen(false);
+        await runsSwr.mutate();
+        await statsSwr.mutate();
+        setActionFeedback(labels.startSuccess);
+        patchSearchParams((next) => {
+          if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
+          next.set(WORKFLOW_RUN_PARAM, result.runId);
+        });
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : labels.startFailed);
+      } finally {
+        setSavingWorkflow(false);
+      }
+    },
+    [definitionsSwr, labels.startFailed, labels.startSuccess, ownerAgentId, patchSearchParams, runsSwr, statsSwr],
   );
 
   const removeCustomWorkflow = useCallback(
@@ -432,6 +463,7 @@ export function useWorkflowsPage() {
     retryRun,
     replayRun,
     saveCustomWorkflow,
+    saveDraftAndStart,
     removeCustomWorkflow,
   };
 }

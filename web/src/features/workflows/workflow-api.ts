@@ -388,6 +388,58 @@ export interface ValidateWorkflowDefinitionResponse {
   definition?: WorkflowDefinition;
 }
 
+export interface WorkflowDraftConstraints {
+  allowedTools?: string[];
+  allowNetwork?: boolean;
+  fileSystem?: 'none' | 'read' | 'write';
+  maxPhases?: number;
+  maxSubagents?: number;
+  outputFormat?: 'report' | 'json' | 'actions';
+}
+
+export interface WorkflowDraftLintIssue {
+  severity: 'error' | 'warning';
+  code: string;
+  message: string;
+}
+
+export interface WorkflowDraftResponse {
+  draftId: string;
+  repairAttempts: number;
+  name: string;
+  script: string;
+  manifest: WorkflowDefinitionManifest;
+  explanation: string;
+  assumptions: string[];
+  risks: string[];
+  permissionsSummary: string[];
+  validation: ValidateWorkflowDefinitionResponse;
+  lint: WorkflowDraftLintIssue[];
+  suggestedInputs?: Array<{ key: string; label: string; example: string }>;
+}
+
+export interface WorkflowDefinitionManifest {
+  title?: string;
+  description?: string;
+  version?: string;
+  inputSchema?: JsonSchema;
+  outputSchema?: JsonSchema;
+  defaults?: Partial<WorkflowDefinitionDefaults>;
+  tags?: string[];
+  whenToUse?: string;
+  permissions?: WorkflowPermissionPolicy;
+  resources?: WorkflowResourceRefs;
+}
+
+export interface CreateWorkflowDraftOptions {
+  prompt: string;
+  agentId?: string;
+  language?: 'en' | 'zh';
+  mode?: 'create' | 'improve';
+  existingScript?: string;
+  constraints?: WorkflowDraftConstraints;
+}
+
 export async function listWorkflowDefinitions(): Promise<WorkflowDefinition[]> {
   const data = await fetchJson<{ definitions: WorkflowDefinition[] }>(apiUrl('/api/workflows/definitions'));
   return data.definitions ?? [];
@@ -408,6 +460,14 @@ export async function validateWorkflowDefinition(
     method: 'POST',
     body: JSON.stringify({ name, script }),
   });
+}
+
+export async function createWorkflowDraft(options: CreateWorkflowDraftOptions): Promise<WorkflowDraftResponse> {
+  const data = await fetchJson<{ draft: WorkflowDraftResponse }>(apiUrl('/api/workflows/definitions/draft'), {
+    method: 'POST',
+    body: JSON.stringify(options),
+  });
+  return data.draft;
 }
 
 export async function saveWorkflowDefinition(name: string, script: string): Promise<WorkflowDefinition> {
