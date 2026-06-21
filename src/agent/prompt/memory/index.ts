@@ -1,6 +1,6 @@
 // Memory Search - FTS-backed recall with markdown file reads for snippets
 import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, relative } from 'path';
 
 import { createLogger } from '../../../utils/logger.js';
 import {
@@ -37,6 +37,42 @@ function ensureMemoryDatabase(): void {
   requireXopcDatabase();
 }
 
+function fallbackMemorySearch(
+  baseDir: string,
+  query: string,
+  options: Required<Pick<MemorySearchOptions, 'maxResults' | 'minScore'>> &
+    Pick<MemorySearchOptions, 'memoriesDir'>,
+): MemoryMatch[] {
+  const normalizedQuery = query.trim().toLowerCase();
+  if (!normalizedQuery) return [];
+
+  const memoriesDir = options.memoriesDir;
+  const curatedPaths = memoriesDir
+    ? [...CURATED_MEMORY_FILENAMES]
+        .map((filename) => join(memoriesDir, filename))
+        .filter((path) => existsSync(path))
+    : [];
+  const candidatePaths = [...curatedPaths, join(baseDir, 'MEMORY.md')].filter((path) => existsSync(path));
+
+  const matches: MemoryMatch[] = [];
+  for (const path of candidatePaths) {
+    const content = readFileSync(path, 'utf-8');
+    const lines = content.split('\n');
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.toLowerCase().includes(normalizedQuery)) continue;
+      const score = 1;
+      if (score < options.minScore) continue;
+      const file = memoriesDir && path.startsWith(memoriesDir)
+        ? path.slice(memoriesDir.length).replace(/^[/\\]/, '')
+        : relative(baseDir, path).replace(/\\/g, '/');
+      matches.push({ file, lines: line, score, lineNumbers: [i + 1] });
+    }
+  }
+
+  return matches.slice(0, options.maxResults);
+}
+
 // =============================================================================
 // Main Search Function (Exported)
 // =============================================================================
@@ -67,7 +103,7 @@ export async function memorySearch(
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
     log.warn({ err, errorMessage: em, agentId: resolvedAgentId }, `Memory FTS search failed: ${em}`);
-    return [];
+    return fallbackMemorySearch(baseDir, query, { maxResults, minScore, memoriesDir });
   }
 }
 
