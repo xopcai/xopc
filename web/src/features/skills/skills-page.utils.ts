@@ -1,4 +1,8 @@
-import type { SkillCatalogEntry, SkillInstallSpecApi } from '@/features/skills/skill.types';
+import type {
+  MarketplacePackageItem,
+  SkillCatalogEntry,
+  SkillInstallSpecApi,
+} from '@/features/skills/skill.types';
 
 const SKILLHUB_PUBLIC_ORIGIN = 'https://skillhub.cn';
 const CLAWHUB_PUBLIC_ORIGIN = 'https://clawhub.ai';
@@ -32,6 +36,16 @@ export function marketplacePublicSkillUrl(
   if (provider === 'skillhub') return skillHubPublicSkillPageUrl(slug);
   if (provider === 'clawhub') return clawHubPublicSkillPageUrl(slug);
   return null;
+}
+
+export function marketplacePackageRequestName(
+  row: MarketplacePackageItem,
+  provider: string | null | undefined,
+): string {
+  if (provider === 'store') {
+    return row.name.trim() || row.id;
+  }
+  return row.id.trim() || row.name;
 }
 
 export function interpolate(template: string, params: Record<string, string | number>): string {
