@@ -55,6 +55,11 @@ Or create manually:
   "channels": {
     "telegram": {
       "enabled": true,
+      "defaults": {
+        "dmPolicy": "pairing",
+        "groupPolicy": "open",
+        "streaming": { "mode": "partial" }
+      },
       "accounts": {
         "personal": {
           "name": "Personal Bot",
@@ -62,7 +67,7 @@ Or create manually:
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
-          "streamMode": "partial"
+          "streaming": { "mode": "partial" }
         }
       }
     }
@@ -325,6 +330,11 @@ Multi-account Telegram configuration:
   "channels": {
     "telegram": {
       "enabled": true,
+      "defaults": {
+        "dmPolicy": "pairing",
+        "groupPolicy": "open",
+        "streaming": { "mode": "partial" }
+      },
       "accounts": {
         "personal": {
           "name": "Personal Bot",
@@ -332,7 +342,7 @@ Multi-account Telegram configuration:
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
-          "streamMode": "partial"
+          "streaming": { "mode": "partial" }
         }
       }
     }
@@ -346,14 +356,17 @@ Multi-account Telegram configuration:
 | `accounts` | object | - | Multi-account config |
 | `accounts.<id>.name` | string | - | Display name |
 | `accounts.<id>.botToken` | string | - | Bot token |
-| `accounts.<id>.dmPolicy` | string | `open` | DM policy |
-| `accounts.<id>.groupPolicy` | string | `open` | Group policy |
+| `defaults.dmPolicy` | string | `pairing` | Default DM policy for accounts |
+| `defaults.groupPolicy` | string | `open` | Default group policy for accounts |
+| `defaults.streaming.mode` | string | `partial` | Default stream mode for accounts |
+| `accounts.<id>.dmPolicy` | string | inherits `defaults.dmPolicy` | DM policy |
+| `accounts.<id>.groupPolicy` | string | inherits `defaults.groupPolicy` | Group policy |
 | `accounts.<id>.allowFrom` | array | `[]` | Allowed user IDs |
-| `accounts.<id>.streamMode` | string | `partial` | Stream mode |
+| `accounts.<id>.streaming.mode` | string | inherits `defaults.streaming.mode` | Stream mode |
 
 **DM policies** (`pairing` \| `allowlist` \| `open` \| `disabled`):
 
-- **`pairing`** (recommended): unknown users are **not** passed to the agent until their Telegram / Feishu / Weixin **sender id** is allowed. Allow sources are **`allowFrom` in config** plus entries in the **per-channel credential file** created after you run **`xopc channels pairing approve`**. First contact receives a **pairing code** in DM. See [Channels — DM pairing](./channels/index.md#dm-pairing) and [CLI — `channels`](./cli.md#channels).
+- **`pairing`** (recommended): unknown users are **not** passed to the agent until their Telegram / Feishu / Weixin **sender id** is allowed. For Telegram, allow sources are **`channels.telegram.accounts.<id>.allowFrom`** plus entries in the **Telegram credential file** created after you run **`xopc channels pairing approve`**. First contact receives a **pairing code** in DM. See [Channels — DM pairing](./channels/index.md#dm-pairing) and [CLI — `channels`](./cli.md#channels).
 - **`allowlist`**: same merge rules as pairing for the allow list, but **no** pairing code message; unknown senders are dropped.
 - **`open`**: any user can DM (avoid on public bots).
 - **`disabled`**: DMs are rejected.

@@ -15,6 +15,11 @@ When the gateway is running, the React console includes a dedicated **IM channel
   "channels": {
     "telegram": {
       "enabled": true,
+      "defaults": {
+        "dmPolicy": "pairing",
+        "groupPolicy": "open",
+        "streaming": { "mode": "partial" }
+      },
       "accounts": {
         "personal": {
           "name": "Personal Bot",
@@ -46,10 +51,12 @@ When the gateway is running, the React console includes a dedicated **IM channel
 
 **DM policies** (`dmPolicy`):
 
-- **`pairing`** — Unknown senders are blocked from the agent until their **numeric Telegram user id** is allowed. Allow sources: `allowFrom` in config **and** paired ids in **`~/.xopc/credentials/xopc-telegram-<account>-allowFrom.json`** (override base dir with **`XOPC_CREDENTIALS_DIR`**). First DM receives a **pairing code**; the owner runs **`xopc channels pairing approve --channel telegram --account <id> <CODE>`** on the gateway host. See [DM pairing](./index.md#dm-pairing) and [CLI — channels](../cli.md#channels).
+- **`pairing`** — Unknown senders are blocked from the agent until their **numeric Telegram user id** is allowed. Allow sources: `channels.telegram.accounts.<id>.allowFrom` **and** paired ids in **`~/.xopc/credentials/xopc-telegram-<account>-allowFrom.json`** (override base dir with **`XOPC_CREDENTIALS_DIR`**). First DM receives a **pairing code**; the owner runs **`xopc channels pairing approve --channel telegram --account <id> <CODE>`** on the gateway host. See [DM pairing](./index.md#dm-pairing) and [CLI — channels](../cli.md#channels).
 - **`allowlist`** — Same allow merge, but **no** pairing message; unknown users are dropped.
 - **`open`** — All users can DM.
 - **`disabled`** — DMs off.
+
+`channels.telegram.defaults` supplies defaults for accounts that omit policy, streaming, proxy, API root, and limits. Access lists are account-owned only: put DM ids in `accounts.<id>.allowFrom` and group ids in `accounts.<id>.groupAllowFrom`.
 
 **Group Policies** (`groupPolicy`):
 - `open` - Allow all groups
@@ -88,10 +95,12 @@ For restricted network environments:
   "channels": {
     "telegram": {
       "enabled": true,
+      "defaults": {
+        "apiRoot": "https://your-proxy-domain.com"
+      },
       "accounts": {
         "default": {
-          "botToken": "YOUR_BOT_TOKEN",
-          "apiRoot": "https://your-proxy-domain.com"
+          "botToken": "YOUR_BOT_TOKEN"
         }
       }
     }

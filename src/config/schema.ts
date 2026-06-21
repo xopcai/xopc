@@ -1416,29 +1416,24 @@ export const ConfigSchema = z.object({
   channels: {
     telegram: {
       enabled: false,
-      allowFrom: [],
-      groupAllowFrom: [],
       debug: false,
+      defaults: {
+        dmPolicy: 'pairing' as const,
+        groupPolicy: 'open' as const,
+        replyToMode: 'off' as const,
+        historyLimit: 50,
+        textChunkLimit: 4000,
+        streaming: { mode: 'partial' as const },
+      },
       accounts: {
         default: {
           accountId: 'default',
           enabled: true,
           botToken: '',
           allowFrom: [],
-          dmPolicy: 'pairing' as const,
-          groupPolicy: 'open' as const,
-          replyToMode: 'off' as const,
-          historyLimit: 50,
-          textChunkLimit: 4000,
-          streaming: { mode: 'partial' as const },
+          groupAllowFrom: [],
         },
       },
-      dmPolicy: 'pairing' as const,
-      groupPolicy: 'open' as const,
-      replyToMode: 'off' as const,
-      streaming: { mode: 'partial' as const },
-      historyLimit: 50,
-      textChunkLimit: 4000,
     },
   },
   gateway: {

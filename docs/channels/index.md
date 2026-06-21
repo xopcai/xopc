@@ -32,7 +32,7 @@ For how extension loading interacts with other CLI commands, see [Extensions —
 
 For **Telegram**, **Feishu**, and **Weixin**, when **`dmPolicy`** is **`pairing`**, private chats are allowed only if the sender appears in the **merged allow list**:
 
-1. **`allowFrom`** in `xopc.json` (per-account / channel block), plus
+1. **`allowFrom`** in `xopc.json` (Telegram: `channels.telegram.accounts.<id>.allowFrom`; Feishu/Weixin: their documented channel/account allow list), plus
 2. **Paired users** persisted on disk (JSON files under the credentials directory).
 
 If the sender is not allowed, the bot sends a **one-time pairing code** and instructions to run:

@@ -51,7 +51,7 @@ describe('runTelegramDoctorChecks', () => {
       expect.objectContaining({
         status: 'fail',
         message: expect.stringContaining('fetch failed'),
-        hints: expect.arrayContaining([expect.stringContaining('channels.telegram.proxy')]),
+        hints: expect.arrayContaining([expect.stringContaining('channels.telegram.defaults.proxy')]),
       }),
     );
   });

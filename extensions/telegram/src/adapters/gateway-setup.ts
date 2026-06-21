@@ -16,7 +16,9 @@ function pickString(input: unknown): string {
 }
 
 function pickDmPolicy(input: unknown): 'open' | 'pairing' | 'allowlist' | 'disabled' {
-  return input === 'pairing' || input === 'allowlist' || input === 'disabled' ? input : 'open';
+  return input === 'open' || input === 'pairing' || input === 'allowlist' || input === 'disabled'
+    ? input
+    : 'pairing';
 }
 
 function existingDefaultAccount(config: Config): Record<string, unknown> {
@@ -28,15 +30,36 @@ function existingDefaultAccount(config: Config): Record<string, unknown> {
     : {};
 }
 
+function existingDefaults(config: Config): Record<string, unknown> {
+  const telegram = config.channels?.telegram as Record<string, unknown> | undefined;
+  const defaults = telegram?.defaults;
+  return defaults && typeof defaults === 'object' && !Array.isArray(defaults)
+    ? (defaults as Record<string, unknown>)
+    : {};
+}
+
 function buildTelegramConfig(config: Config, input: Record<string, unknown>): Config {
   const existing = (config.channels?.telegram as Record<string, unknown> | undefined) ?? {};
   const existingAccounts = (existing.accounts as Record<string, unknown> | undefined) ?? {};
   const previousDefault = existingDefaultAccount(config);
+  const previousDefaults = existingDefaults(config);
 
   const botToken = pickString(input.botToken) || pickString(previousDefault.botToken);
   const apiRoot = pickString(input.apiRoot);
   const proxy = pickString(input.proxy);
-  const dmPolicy = pickDmPolicy(input.dmPolicy ?? previousDefault.dmPolicy ?? existing.dmPolicy);
+  const dmPolicy = pickDmPolicy(input.dmPolicy ?? previousDefault.dmPolicy ?? previousDefaults.dmPolicy);
+
+  const defaults: Record<string, unknown> = {
+    ...previousDefaults,
+    dmPolicy: previousDefaults.dmPolicy ?? 'pairing',
+    groupPolicy: previousDefaults.groupPolicy ?? 'open',
+    replyToMode: previousDefaults.replyToMode ?? 'off',
+    historyLimit: previousDefaults.historyLimit ?? 50,
+    textChunkLimit: previousDefaults.textChunkLimit ?? 4000,
+    streaming: previousDefaults.streaming ?? { mode: 'partial' },
+  };
+  if (apiRoot) defaults.apiRoot = apiRoot;
+  if (proxy) defaults.proxy = proxy;
 
   const defaultAccount: Record<string, unknown> = {
     ...previousDefault,
@@ -45,17 +68,7 @@ function buildTelegramConfig(config: Config, input: Record<string, unknown>): Co
     botToken,
     dmPolicy,
     allowFrom: dmPolicy === 'open' ? ['*'] : (previousDefault.allowFrom ?? []),
-    groupPolicy: previousDefault.groupPolicy ?? existing.groupPolicy ?? 'open',
-    replyToMode: previousDefault.replyToMode ?? existing.replyToMode ?? 'off',
-    historyLimit: previousDefault.historyLimit ?? existing.historyLimit ?? 50,
-    textChunkLimit: previousDefault.textChunkLimit ?? existing.textChunkLimit ?? 4000,
-    streaming: previousDefault.streaming ?? existing.streaming ?? { mode: 'partial' },
   };
-
-  if (apiRoot) defaultAccount.apiRoot = apiRoot;
-  if (proxy) defaultAccount.proxy = proxy;
-
-  const topAllowFrom = dmPolicy === 'open' ? ['*'] : (existing.allowFrom ?? []);
 
   return {
     ...config,
@@ -64,15 +77,7 @@ function buildTelegramConfig(config: Config, input: Record<string, unknown>): Co
       telegram: {
         ...existing,
         enabled: true,
-        dmPolicy,
-        allowFrom: topAllowFrom,
-        groupPolicy: existing.groupPolicy ?? 'open',
-        replyToMode: existing.replyToMode ?? 'off',
-        streaming: existing.streaming ?? { mode: 'partial' },
-        historyLimit: existing.historyLimit ?? 50,
-        textChunkLimit: existing.textChunkLimit ?? 4000,
-        ...(apiRoot ? { apiRoot } : {}),
-        ...(proxy ? { proxy } : {}),
+        defaults,
         accounts: {
           ...existingAccounts,
           default: defaultAccount,
@@ -84,14 +89,14 @@ function buildTelegramConfig(config: Config, input: Record<string, unknown>): Co
 
 function formPayload(config: Config, locale?: string) {
   const zh = isZh(locale);
-  const telegram = (config.channels?.telegram as Record<string, unknown> | undefined) ?? {};
   const account = existingDefaultAccount(config);
+  const defaults = existingDefaults(config);
   return {
     type: 'form' as const,
     submitAction: 'setup.save',
     message: zh
-      ? '填写 Bot Token 后保存即可启用 Telegram 私聊。群聊、多个账号、allowlist 等放在高级配置。'
-      : 'Enter a Bot Token and save. Private chat works by default; groups, multi-account, and allowlists live in Advanced configuration.',
+      ? '填写 Bot Token 后保存即可启用 Telegram。默认私聊策略为 pairing；允许列表在账号配置里维护。'
+      : 'Enter a Bot Token and save. The default DM policy is pairing; manage allow lists on the account configuration.',
     schema: {
       type: 'object',
       properties: {
@@ -117,9 +122,9 @@ function formPayload(config: Config, locale?: string) {
     },
     values: {
       botToken: pickString(account.botToken),
-      dmPolicy: pickDmPolicy(account.dmPolicy ?? telegram.dmPolicy ?? 'open'),
-      apiRoot: pickString(account.apiRoot ?? telegram.apiRoot),
-      proxy: pickString(account.proxy ?? telegram.proxy),
+      dmPolicy: pickDmPolicy(account.dmPolicy ?? defaults.dmPolicy ?? 'pairing'),
+      apiRoot: pickString(account.apiRoot ?? defaults.apiRoot),
+      proxy: pickString(account.proxy ?? defaults.proxy),
     },
   };
 }
@@ -144,7 +149,7 @@ export const telegramGatewaySetupActions: ChannelRuntimeActionAdapter = {
         ok: true,
         payload: {
           type: 'ok',
-          message: zh ? 'Telegram 配置已保存。私聊现在默认可用。' : 'Telegram configuration saved. Private chat is enabled by default.',
+          message: zh ? 'Telegram 配置已保存。私聊将按 pairing/允许列表策略放行。' : 'Telegram configuration saved. Private chat now follows the pairing/allow-list policy.',
           configChanged: true,
         },
       };

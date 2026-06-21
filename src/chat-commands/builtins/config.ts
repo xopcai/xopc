@@ -69,17 +69,10 @@ function senderMayWritePersistentConfig(ctx: CommandContext): boolean {
   if (!tg?.enabled) return false;
   const parsed = parseSessionKey(sessionKey);
   const accountId = parsed?.accountId ?? 'default';
-  let allowFrom: Array<string | number> = [];
-  let groupAllowFrom: Array<string | number> = [];
-  if (tg.accounts && Object.keys(tg.accounts).length > 0) {
-    const acc = tg.accounts[accountId] ?? tg.accounts['default'];
-    if (!acc || acc.enabled === false) return false;
-    allowFrom = [...(acc.allowFrom ?? [])];
-    groupAllowFrom = [...(acc.groupAllowFrom ?? [])];
-  } else {
-    allowFrom = [...(tg.allowFrom ?? [])];
-    groupAllowFrom = [...(tg.groupAllowFrom ?? [])];
-  }
+  const acc = tg.accounts?.[accountId] ?? tg.accounts?.['default'];
+  if (!acc || acc.enabled === false) return false;
+  const allowFrom = [...(acc.allowFrom ?? [])];
+  const groupAllowFrom = [...(acc.groupAllowFrom ?? [])];
   const list = isGroup && groupAllowFrom.length > 0 ? groupAllowFrom : allowFrom;
   if (list.length === 0) return false;
   return resolveAllowlistMatchSimple({ allowFrom: list, senderId }).allowed;
