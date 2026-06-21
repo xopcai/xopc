@@ -211,7 +211,7 @@ jobs:
               echo "❌ Windows installer not found for signature verification"
               exit 1
             fi
-            XOPC_SIGN_VERIFY_EXE="$exe_path" powershell -NoProfile -Command "\$s = Get-AuthenticodeSignature -LiteralPath \$env:XOPC_SIGN_VERIFY_EXE; if (\$s.Status -ne 'Valid') { Write-Error \"Invalid signature: \$($s.Status)\"; exit 1 }"
+            XOPC_SIGN_VERIFY_EXE="$exe_path" powershell -NoProfile -Command '$s = Get-AuthenticodeSignature -LiteralPath $env:XOPC_SIGN_VERIFY_EXE; if ($s.Status -ne "Valid") { Write-Error "Invalid signature: $($s.Status)"; exit 1 }'
           fi
 
       - name: Upload release artifacts
