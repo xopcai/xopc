@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   COMPOSER_INPUT_HISTORY_MAX,
+  COMPOSER_INPUT_HISTORY_MAX_SESSIONS,
+  COMPOSER_INPUT_HISTORY_STORAGE_KEY,
   getComposerInputHistory,
   recordComposerInputHistory,
 } from '@/features/chat/composer/composer-input-history';
@@ -60,5 +62,40 @@ describe('composer-input-history', () => {
   it('returns empty array for corrupt JSON', () => {
     localStorage.setItem('xopc.composer.inputHistory:test-corrupt', '{not-json');
     expect(getComposerInputHistory('test-corrupt')).toEqual([]);
+  });
+
+  it('stores all sessions under one aggregate key', () => {
+    recordComposerInputHistory('session-a', 'a');
+    recordComposerInputHistory('session-b', 'b');
+
+    expect(getComposerInputHistory('session-a')).toEqual(['a']);
+    expect(getComposerInputHistory('session-b')).toEqual(['b']);
+    expect(localStorage.getItem(COMPOSER_INPUT_HISTORY_STORAGE_KEY)).toBeTruthy();
+    expect([...Array.from({ length: localStorage.length }, (_, i) => localStorage.key(i))]).toEqual([
+      COMPOSER_INPUT_HISTORY_STORAGE_KEY,
+    ]);
+  });
+
+  it('migrates legacy per-session keys into the aggregate key', () => {
+    localStorage.setItem('xopc.composer.inputHistory:legacy-session', JSON.stringify(['old', 'older']));
+
+    expect(getComposerInputHistory('legacy-session')).toEqual(['old', 'older']);
+    expect(localStorage.getItem('xopc.composer.inputHistory:legacy-session')).toBeNull();
+    expect(localStorage.getItem(COMPOSER_INPUT_HISTORY_STORAGE_KEY)).toBeTruthy();
+  });
+
+  it(`caps aggregate storage at ${COMPOSER_INPUT_HISTORY_MAX_SESSIONS} sessions`, () => {
+    for (let i = 0; i < COMPOSER_INPUT_HISTORY_MAX_SESSIONS + 5; i++) {
+      recordComposerInputHistory(`session-${i}`, `m${i}`);
+    }
+
+    const raw = localStorage.getItem(COMPOSER_INPUT_HISTORY_STORAGE_KEY);
+    expect(raw).toBeTruthy();
+    const parsed = JSON.parse(raw ?? '{}') as { sessions?: Record<string, unknown> };
+    expect(Object.keys(parsed.sessions ?? {})).toHaveLength(COMPOSER_INPUT_HISTORY_MAX_SESSIONS);
+    expect(getComposerInputHistory('session-0')).toEqual([]);
+    expect(getComposerInputHistory(`session-${COMPOSER_INPUT_HISTORY_MAX_SESSIONS + 4}`)).toEqual([
+      `m${COMPOSER_INPUT_HISTORY_MAX_SESSIONS + 4}`,
+    ]);
   });
 });

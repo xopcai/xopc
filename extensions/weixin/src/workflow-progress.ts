@@ -23,7 +23,7 @@
 import type {
   ChannelProgressCapability,
   WorkflowProgressPostInput,
-} from '@xopcai/xopc/agent/workflow/index.js';
+} from '@xopcai/xopc/agent/workflow/channel-capability.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import { parseSessionKey } from '@xopcai/xopc/routing/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';

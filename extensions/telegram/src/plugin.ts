@@ -32,13 +32,12 @@ import { createStandardPairingAdapter } from '@xopcai/xopc/channels/pairing/pair
 import { createTimeoutAbortSignal } from './timeout-abort.js';
 import { createInboundDebouncer } from '@xopcai/xopc/infra/debounce.js';
 import { getMimeType } from '@xopcai/xopc/channels/media.js';
-import { transcribe as sttTranscribe, isSTTAvailable } from '@xopcai/xopc/voice/stt/index.js';
+import { isSTTAvailable } from '@xopcai/xopc/voice/stt/availability.js';
 import type { STTConfig } from '@xopcai/xopc/voice/stt/types.js';
 
 import { TelegramAccountManager } from './account-manager.js';
 import { createOutboundSender } from './outbound-sender.js';
-import { getWorkflowProgressBroker } from '@xopcai/xopc/agent/workflow/index.js';
-import { createTelegramWorkflowProgressCapability } from './workflow-progress.js';
+
 import { createTelegramCommandHandler } from './command-handler.js';
 import { createInboundProcessor } from './inbound-processor.js';
 import { TELEGRAM_CHANNEL_DEFAULTS } from './plugin-defaults.js';
@@ -208,13 +207,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       }),
     );
 
-    // Workflow progress is fed from the agent-side broker (subscribes to
-    // tool_execution_update for the `workflow` tool); the capability turns
-    // each snapshot into an edit-in-place Telegram message. Registration is
-    // idempotent — the broker replaces a prior cap with the same channelId.
-    this.workflowProgressUnregister = getWorkflowProgressBroker().registerChannel(
-      createTelegramWorkflowProgressCapability(this.accountManager),
-    );
+    await this.registerWorkflowProgressCapability();
 
     const debounceMs =
       this.defaults.queue?.debounceMs ?? TELEGRAM_CHANNEL_DEFAULTS.queue.debounceMs;
@@ -231,6 +224,18 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     });
 
     log.debug('Telegram plugin initialized');
+  }
+
+  private async registerWorkflowProgressCapability(): Promise<void> {
+    // Lazy-load workflow progress so channel runtime startup does not pull the
+    // whole workflow/agent/provider graph into Electron's dynamic extension path.
+    const [{ getWorkflowProgressBroker }, { createTelegramWorkflowProgressCapability }] = await Promise.all([
+      import('@xopcai/xopc/agent/workflow/progress-broker.js'),
+      import('./workflow-progress.js'),
+    ]);
+    this.workflowProgressUnregister = getWorkflowProgressBroker().registerChannel(
+      createTelegramWorkflowProgressCapability(this.accountManager),
+    );
   }
 
   private bindOutboundComponents(): void {
@@ -276,7 +281,9 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       },
       sttService: {
         transcribe: async (buffer, config, options) => {
-          const result = await sttTranscribe(buffer, config as STTConfig, options);
+          // Lazy-load STT providers only when voice transcription is actually used.
+          const { transcribe } = await import('@xopcai/xopc/voice/stt/transcribe-core.js');
+          const result = await transcribe(buffer, config as STTConfig, options);
           return { text: result.text };
         },
         isSTTAvailable: (config) => isSTTAvailable(config as STTConfig | undefined),

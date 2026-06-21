@@ -39,8 +39,6 @@ import { normalizeWeixinCronDeliveryToResolved } from './delivery-to.js';
 import { weixinConfigSurface } from './config-surface.js';
 import { WeixinConfigSchema } from './config-schema.js';
 import { weixinOnboardAdapter } from './adapters/onboard-cli.js';
-import { getWorkflowProgressBroker } from '@xopcai/xopc/agent/workflow/index.js';
-import { createWeixinWorkflowProgressCapability } from './workflow-progress.js';
 
 const log = createLogger('WeixinPlugin');
 
@@ -114,10 +112,10 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
         const start = await startWeixinGatewayQrLogin({
           account: accountId,
           timeoutMs,
+          initialConfig: this.cfg,
           onPersisted: async (result) => {
             if (!result.ok) return;
-            const { loadConfig } = await import('@xopcai/xopc/config/loader.js');
-            await this.reloadMonitorsWithConfig(loadConfig(), this.bus);
+            await this.reloadMonitorsWithConfig(result.config ?? this.cfg, this.bus);
           },
         });
         if (start.ok === false) {
@@ -267,14 +265,21 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
     this.bus = options.bus;
     this.cfg = options.config;
 
-    // Workflow progress broker capability — WeChat has no editMessage, so the
-    // capability runs in `final-only` mode: the broker silently drops every
-    // mid-run snapshot and only invokes us once when `tool_end` lands.
+    await this.registerWorkflowProgressCapability();
+
+    log.debug('Weixin plugin initialized');
+  }
+
+  private async registerWorkflowProgressCapability(): Promise<void> {
+    // Lazy-load workflow progress so Weixin runtime startup does not pull the
+    // agent/workflow/provider graph into Electron's dynamic extension path.
+    const [{ getWorkflowProgressBroker }, { createWeixinWorkflowProgressCapability }] = await Promise.all([
+      import('@xopcai/xopc/agent/workflow/progress-broker.js'),
+      import('./workflow-progress.js'),
+    ]);
     this.workflowProgressUnregister = getWorkflowProgressBroker().registerChannel(
       createWeixinWorkflowProgressCapability({ getConfig: () => this.cfg }),
     );
-
-    log.debug('Weixin plugin initialized');
   }
 
   async start(options?: ChannelPluginStartOptions): Promise<void> {

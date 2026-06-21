@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 const mainIndex = join(process.cwd(), 'out/main/index.js');
 const mainChunksDir = join(process.cwd(), 'out/main/chunks');
 
-/** Runtime npm imports that must not appear in the main bundle (packaged asar has minimal node_modules). */
+/** Heavy/runtime npm imports that must not appear in the Electron main bundle. */
 const FORBIDDEN_MAIN_EXTERNALS = ['zod', 'pino', 'dotenv', 'electron-updater'] as const;
 
 function readMainBundleSources(): string[] {
@@ -36,7 +36,7 @@ describe('electron main bundle (when out/main exists)', () => {
     expect(channelChunk).toEqual([]);
   });
 
-  it('bundles runtime npm deps instead of bare imports (packaged asar omits them)', () => {
+  it('does not leave forbidden bare imports in the main bundle', () => {
     let sources: string[];
     try {
       sources = readMainBundleSources();

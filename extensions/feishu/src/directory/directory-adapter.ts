@@ -2,7 +2,6 @@ import type { ChannelDirectoryAdapter } from '@xopcai/xopc/channels/plugins/type
 import type { Config } from '@xopcai/xopc/config/schema.js';
 
 import { resolveFeishuAccount } from '../state/accounts.js';
-import { createFeishuClient } from '../transport/client/client.js';
 
 export function createFeishuDirectoryAdapter(): ChannelDirectoryAdapter {
   return {
@@ -19,6 +18,7 @@ export function createFeishuDirectoryAdapter(): ChannelDirectoryAdapter {
       const account = resolveFeishuAccount(params.cfg, 'default');
       if (!account.configured) return undefined;
 
+      const { createFeishuClient } = await import('../transport/client/client.js');
       const { api } = createFeishuClient(account);
       try {
         const res = await (api as any).contact.user.get({
