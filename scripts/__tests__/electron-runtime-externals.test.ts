@@ -61,6 +61,7 @@ describe('electron-runtime-externals', () => {
     const packYml = readFileSync(join(process.cwd(), 'scripts/electron-builder.pack.yml'), 'utf8');
     expect(packYml).toContain("'node_modules/**'");
     expect(packYml).toContain("'dist/electron/extensions/**'");
+    expect(packYml).toContain("'skills/**'");
     expect(packYml).not.toContain("'dist/extensions/**'");
     expect(packYml).not.toContain("'dist/src/**'");
   });

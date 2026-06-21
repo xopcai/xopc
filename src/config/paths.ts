@@ -25,6 +25,7 @@ export {
 // File Names
 // ============================================
 const ENV_BUNDLED_EXTENSIONS_ROOT = 'XOPC_BUNDLED_EXTENSIONS_ROOT';
+const ENV_BUNDLED_SKILLS_ROOT = 'XOPC_BUNDLED_SKILLS_ROOT';
 
 export const FILENAMES = {
   CONFIG: 'xopc.json',
@@ -375,6 +376,11 @@ export function resolveBundledExtensionsDir(): string | null {
  * Resolve the bundled skills directory (shipped with xopc)
  */
 export function resolveBundledSkillsDir(): string | null {
+  const envDir = process.env[ENV_BUNDLED_SKILLS_ROOT];
+  if (envDir && existsSync(envDir)) {
+    return envDir;
+  }
+
   try {
     const currentFile = fileURLToPath(import.meta.url);
     const srcDir = dirname(currentFile);
