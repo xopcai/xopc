@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
-import type { GoalQueueItemSnapshot, GoalQueueStatus } from './goal-runner.js';
+import type { GoalQueueItemSnapshot, GoalQueueStatus } from './goal-queue-types.js';
 
 type GoalQueueRow = {
   queue_id: string;

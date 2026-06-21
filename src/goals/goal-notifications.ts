@@ -4,7 +4,7 @@ import { createLogger } from '../utils/logger.js';
 
 import { GoalService } from './goal-service.js';
 import type { GoalWithDetails } from './types.js';
-import type { GoalQueueItemSnapshot } from './goal-runner.js';
+import type { GoalQueueItemSnapshot } from './goal-queue-types.js';
 
 const log = createLogger('GoalNotifications');
 
