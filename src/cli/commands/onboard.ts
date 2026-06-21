@@ -7,7 +7,6 @@ import type { Config } from '../../config/schema.js';
 import { setupModel as runModelSetup } from './onboard/model.js';
 import { colors } from '../utils/colors.js';
 import { setupChannels as runChannelOnboard, getChannelConfigurators } from './onboard/channels/index.js';
-import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
 import { resolveGatewayLocalClientHost } from '../../config/gateway-bind.js';
 import { initWorkspace } from '../utils/init-workspace.js';
 import { ConfigSchema } from '../../config/schema.js';
@@ -116,8 +115,6 @@ async function runOnboard(
 
   // Save config once at the end
   await saveConfig(config as Config, configPath);
-
-  seedMainAgentProfileMarkdown(config as Config);
 
   console.log('\n' + '═'.repeat(50));
   console.log('\n🎉 Setup Complete!\n');

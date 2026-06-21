@@ -11,8 +11,7 @@ import { extractDocumentText } from '../document-understanding/extract.js';
 import { describeImagesWithFallback } from '../agent/image/understanding/runtime.js';
 import { resolveImageModelConfigForTool } from '../agent/image/tool-model-config.js';
 import { isSTTAvailable, transcribe } from '../voice/stt/index.js';
-import type { Note, NoteAttachment } from './types.js';
-import type { NotesService } from './service.js';
+import type { Note, NoteAttachment, SnapshotTrigger } from './types.js';
 
 const MAX_NOTE_MARKDOWN_CHARS = 40_000;
 const MAX_TEXT_ATTACHMENT_CHARS = 20_000;
@@ -43,6 +42,11 @@ export interface NoteAgentContextArtifact {
   tokenEstimate: number;
   truncated: boolean;
   status: 'ready' | 'partial' | 'failed';
+}
+
+interface NoteAgentContextNotesService {
+  getAttachmentPath(noteId: string, attachmentId: string): Promise<{ filePath: string; mimeType: string; fileName: string } | null>;
+  updateNote(id: string, patch: Partial<Note>, trigger?: SnapshotTrigger): Promise<Note | null>;
 }
 
 const TEXT_MIME_PREFIXES = ['text/'];
@@ -78,13 +82,13 @@ function formatTime(ms: number | undefined): string {
   return typeof ms === 'number' && Number.isFinite(ms) ? new Date(ms).toISOString() : 'unknown';
 }
 
-async function readAttachmentBuffer(notesService: NotesService, noteId: string, att: NoteAttachment): Promise<Buffer | null> {
+async function readAttachmentBuffer(notesService: NoteAgentContextNotesService, noteId: string, att: NoteAttachment): Promise<Buffer | null> {
   const located = await notesService.getAttachmentPath(noteId, att.id);
   if (!located) return null;
   return readFile(located.filePath).catch(() => null);
 }
 
-async function attachmentTextExcerpt(notesService: NotesService, noteId: string, att: NoteAttachment): Promise<string | null> {
+async function attachmentTextExcerpt(notesService: NoteAgentContextNotesService, noteId: string, att: NoteAttachment): Promise<string | null> {
   if (!isTextLikeAttachment(att)) return null;
   const located = await notesService.getAttachmentPath(noteId, att.id);
   if (!located) return null;
@@ -96,7 +100,7 @@ async function attachmentTextExcerpt(notesService: NotesService, noteId: string,
 async function ensureMediaTranscript(params: {
   note: Note;
   att: NoteAttachment;
-  notesService: NotesService;
+  notesService: NoteAgentContextNotesService;
   config?: Config;
 }): Promise<string | undefined> {
   const existing = params.att.transcript?.trim();
@@ -121,7 +125,7 @@ async function ensureMediaTranscript(params: {
 async function describeImageAttachment(params: {
   note: Note;
   att: NoteAttachment;
-  notesService: NotesService;
+  notesService: NoteAgentContextNotesService;
   config?: Config;
 }): Promise<string | undefined> {
   const toolCfg = resolveImageModelConfigForTool({ cfg: params.config });
@@ -143,7 +147,7 @@ async function describeImageAttachment(params: {
 async function extractDocumentAttachment(params: {
   note: Note;
   att: NoteAttachment;
-  notesService: NotesService;
+  notesService: NoteAgentContextNotesService;
 }): Promise<string | undefined> {
   const buffer = await readAttachmentBuffer(params.notesService, params.note.id, params.att);
   if (!buffer) return undefined;
@@ -167,7 +171,7 @@ function unsupportedDocumentSummary(att: NoteAttachment): string {
 async function buildAttachmentContext(params: {
   note: Note;
   att: NoteAttachment;
-  notesService: NotesService;
+  notesService: NoteAgentContextNotesService;
   config?: Config;
 }): Promise<NoteAgentAttachmentContext> {
   const { note, att, notesService, config } = params;
@@ -220,7 +224,7 @@ function renderAttachmentContext(att: NoteAgentAttachmentContext): string {
   return lines.join('\n');
 }
 
-async function loadNativeVisionImages(notesService: NotesService, note: Note): Promise<ImageContent[]> {
+async function loadNativeVisionImages(notesService: NoteAgentContextNotesService, note: Note): Promise<ImageContent[]> {
   const images: ImageContent[] = [];
   for (const att of note.attachments ?? []) {
     if (att.type !== 'image') continue;
@@ -236,7 +240,7 @@ async function loadNativeVisionImages(notesService: NotesService, note: Note): P
 
 export async function buildNoteAgentContextArtifact(params: {
   note: Note;
-  notesService: NotesService;
+  notesService: NoteAgentContextNotesService;
   config?: Config;
   force?: boolean;
 }): Promise<NoteAgentContextArtifact> {
@@ -300,7 +304,7 @@ export async function buildNoteAgentContextArtifact(params: {
 
 export async function buildNoteAgentContext(params: {
   note: Note;
-  notesService: NotesService;
+  notesService: NoteAgentContextNotesService;
   config?: Config;
   force?: boolean;
 }): Promise<AgentSourceContext> {

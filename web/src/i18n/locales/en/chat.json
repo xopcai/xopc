@@ -205,6 +205,9 @@
         "host": "On this computer"
       },
       "openInSettings": "Open in settings",
+      "resolvingDescription": "Resolving file reference…",
+      "resolveFailedDescription": "Could not resolve this file path.",
+      "closeActions": "Close file actions",
       "browserExternalDescription": "This file is outside the current workspace. In the browser, copy the path and open it from your system.",
       "missingDescription": "This file is currently unavailable. It may have been moved, deleted, or created in another runtime environment.",
       "invalidDescription": "This file path could not be resolved.",

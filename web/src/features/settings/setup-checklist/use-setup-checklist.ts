@@ -3,7 +3,6 @@ import useSWR from 'swr';
 
 import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
-import { PRESET_AGENTS_SKIPPED_KEY } from '@/features/settings/agents/preset-agents';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { fetchProviderMetaList } from '@/features/settings/providers-api';
 import { getSkills } from '@/features/skills/skill-api';
@@ -14,22 +13,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 import { buildSetupStatusSnapshot, type SetupStatusSnapshot } from './setup-checklist-state';
 
-function readPresetsSkipped(): boolean {
-  try {
-    return localStorage.getItem(PRESET_AGENTS_SKIPPED_KEY) === 'true';
-  } catch {
-    return false;
-  }
-}
-
-function computePresetsDone(
-  agents: { id: string }[] | undefined,
-  defaultId: string | undefined,
-): boolean {
-  if (readPresetsSkipped()) return true;
-  if (!agents || agents.length === 0) return false;
-  const onlyMain = agents.length <= 1 && agents.every((ag) => ag.id === defaultId);
-  return !onlyMain;
+function computePresetsDone(agents: { id: string }[] | undefined): boolean {
+  return Boolean(agents && agents.length > 1);
 }
 
 export function useSetupChecklist(): {
@@ -92,7 +77,7 @@ export function useSetupChecklist(): {
     const metaConfigured = providerMeta?.filter((p) => p.configured).length ?? 0;
     const metaTotal = providerMeta?.length ?? 0;
     const agentCount = agentsData?.agents.length ?? 0;
-    const presetsDone = computePresetsDone(agentsData?.agents, agentsData?.defaultId);
+    const presetsDone = computePresetsDone(agentsData?.agents);
 
     return buildSetupStatusSnapshot({
       hasToken: Boolean(token),

@@ -1,5 +1,4 @@
 import type { ExtensionRegistryImpl } from '../../extensions/loader.js';
-import { BUILTIN_AGENT_IDS } from '../../agent/builtin-agent-ids.js';
 import { AgentService } from '../../agent/index.js';
 import { listAgentEntries, normalizeAgentId } from '../../agent/agent-scope.js';
 import { parseModelRef } from '../../agent/models/selection.js';
@@ -239,15 +238,11 @@ export class EmbeddedBackend implements TuiBackend {
   async listAgents(): Promise<TuiAgentInfo[]> {
     const config = loadConfig();
     const agents = new Map<string, TuiAgentInfo>();
-    for (const id of BUILTIN_AGENT_IDS) {
-      agents.set(id, { id, source: 'builtin', enabled: true });
-    }
     for (const entry of listAgentEntries(config)) {
       if (entry.enabled === false) continue;
       const id = normalizeAgentId(entry.id);
       agents.set(id, {
         id,
-        source: 'configured',
         enabled: true,
       });
     }

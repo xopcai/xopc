@@ -190,7 +190,7 @@
       "skillsConfigured": "{{count}} skill(s) available",
       "skillsMissing": "No skills installed yet",
       "presetsConfigured": "{{count}} agent(s) configured",
-      "presetsMissing": "Only the default agent — add preset personas"
+      "presetsMissing": "Starter agents are not initialized"
     },
     "items": {
       "gateway": {
@@ -226,7 +226,7 @@
         "stepProviders": "Configure LLM provider keys",
         "stepDefaultModel": "Choose default chat model",
         "stepChannel": "Connect a messaging channel",
-        "stepPresets": "Add specialized agents",
+        "stepPresets": "Review specialized agents",
         "stepCron": "Set up scheduled tasks",
         "stepSkills": "Install skills from the catalog"
       },

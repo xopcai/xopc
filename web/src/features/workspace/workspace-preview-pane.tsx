@@ -20,6 +20,7 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane() {
       ? decodeURIComponent(sessionKeyParam)
       : undefined;
   const path = useWorkspacePreviewStore((s) => s.path);
+  const line = useWorkspacePreviewStore((s) => s.line);
   const setPath = useWorkspacePreviewStore((s) => s.setPath);
   const editorAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
 
@@ -54,6 +55,7 @@ export const WorkspacePreviewPane = memo(function WorkspacePreviewPane() {
     >
       <WorkspaceFilePreviewPanel
         filePath={path}
+        targetLine={line}
         sessionKey={chatSessionKey}
         agentId={editorAgentId.trim() || undefined}
         onClose={() => setPath(null)}

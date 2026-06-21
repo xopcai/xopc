@@ -37,13 +37,6 @@ import {
 import { parseBrowserSetupRequired } from '@/features/chat/tool-results/browser-setup-required-parser';
 import { ToolResultFileLinks } from '@/features/chat/tool-results/tool-result-file-links';
 import { extractFilePathsFromToolResult } from '@/features/chat/tool-results/tool-result-file-paths';
-import {
-  WebSearchToolResultLinks,
-} from '@/features/chat/tool-results/web-search-tool-result-links';
-import {
-  extractWebSearchLinksFromToolResult,
-  isWebSearchToolName,
-} from '@/features/chat/tool-results/web-search-tool-result-parser';
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
@@ -424,16 +417,6 @@ function StepRow({
     return extractFilePathsFromToolResult(toolResultText);
   }, [block, toolResultText]);
 
-  const webSearchLinks = useMemo(() => {
-    if (block.type !== 'tool_use' || block.status === 'running' || block.status === 'error') {
-      return [];
-    }
-    if (!isWebSearchToolName(block.name) || !toolResultText) {
-      return [];
-    }
-    return extractWebSearchLinksFromToolResult(toolResultText);
-  }, [block, toolResultText]);
-
   // browser_use preflight produces a structured "setup required" sentinel.
   // The agent-side text is JSON, so the generic outputPreview would render
   // raw JSON — hide it and render the dedicated card instead.
@@ -574,9 +557,6 @@ function StepRow({
         ) : null}
         {!isStreaming && !isError ? (
           <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} />
-        ) : null}
-        {!isStreaming && !isError && webSearchLinks.length > 0 ? (
-          <WebSearchToolResultLinks links={webSearchLinks} />
         ) : null}
         {!isStreaming && !isError && extractedFilePaths.length > 0 ? (
           <ToolResultFileLinks paths={extractedFilePaths} sessionKey={sessionKey} />
