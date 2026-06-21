@@ -33,16 +33,18 @@ asarUnpack:
   # The gateway subprocess runs from app.asar.unpacked/out/server. Native ESM
   # package resolution then walks app.asar.unpacked/node_modules, not
   # app.asar/node_modules, so runtime externals must be unpacked beside it.
-  - 'node_modules/@vscode/ripgrep/**'
-  - 'node_modules/@vscode/ripgrep-*/**'
-  - 'node_modules/node-cron/**'
-  - 'node_modules/silk-wasm/**'
+  # Gateway runtime externals and bundled channel extension deps. Dynamic ESM modules are
+  # loaded from app.asar.unpacked, so bare package imports must resolve under
+  # app.asar.unpacked/node_modules. Unpack the minimal production node_modules tree staged
+  # by prepare-electron-pack-dir, including transitive deps.
+  - 'node_modules/**'
   # Bundled channel extensions are loaded dynamically by the gateway subprocess. Keep the
   # emitted extension tree and its sibling dist/src imports on the same real filesystem root;
   # otherwise an unpacked dist/extensions would resolve ../../../src to a missing path.
   - 'dist/extensions/**'
   - 'dist/src/**'
   - 'dist/_virtual/**'
+  - 'dist/package.js'
   # The packaged Electron main process starts a gateway subprocess with ELECTRON_RUN_AS_NODE.
   # Keep the SPA assets on the real filesystem too; Windows is less tolerant of serving
   # many files from app.asar in that subprocess and can otherwise boot to a blank shell.

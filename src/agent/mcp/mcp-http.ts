@@ -61,7 +61,7 @@ export function resolveHttpMcpServerLaunchConfig(
   return {
     ok: true,
     config: {
-      transportType: options?.transportType ?? "sse",
+      transportType: options?.transportType ?? "streamable-http",
       url,
       headers,
     },

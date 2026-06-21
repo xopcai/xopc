@@ -36,7 +36,6 @@ import type {
   WorkflowMetaPhase,
   WorkflowRunOptions,
   WorkflowRunResult,
-  WorkflowSnapshot,
   WorkflowAgentStatus,
 } from './types.js';
 
@@ -302,29 +301,7 @@ export async function runWorkflow<T = unknown>(
   };
 }
 
-// ---------------------------------------------------------------------------
-// Initial snapshot helper — kept here so the runtime is the single source of
-// truth for "what a fresh snapshot looks like for this workflow".
-// ---------------------------------------------------------------------------
-
-export function emptySnapshotFor(
-  name: string,
-  description?: string,
-  phaseTitles?: string[],
-): WorkflowSnapshot {
-  return {
-    name,
-    description,
-    phases: phaseTitles ? [...phaseTitles] : [],
-    logs: [],
-    agents: [],
-    agentCount: 0,
-    runningCount: 0,
-    doneCount: 0,
-    errorCount: 0,
-    skippedCount: 0,
-  };
-}
+export { emptySnapshotFor } from './snapshot-empty.js';
 
 // ---------------------------------------------------------------------------
 // Internals

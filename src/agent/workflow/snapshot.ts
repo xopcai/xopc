@@ -13,7 +13,7 @@ import type {
   WorkflowMeta,
   WorkflowSnapshot,
 } from './types.js';
-import { emptySnapshotFor } from './runtime.js';
+import { emptySnapshotFor } from './snapshot-empty.js';
 
 export function createWorkflowSnapshot(meta: WorkflowMeta): WorkflowSnapshot {
   return emptySnapshotFor(

@@ -19,7 +19,7 @@ describe('bundle-mcp-policy', () => {
     expect(parseMcpToolName('shell')).toBeNull();
   });
 
-  it('respects bundle-mcp disable sentinel and connector-only runtime creation', () => {
+  it('respects bundle-mcp disable sentinel and configured runtime creation', () => {
     const connectorManagedConfig = {
       mcp: {
         servers: {
@@ -41,7 +41,7 @@ describe('bundle-mcp-policy', () => {
       shouldCreateBundleMcpRuntimeForAttempt({
         cfg: { mcp: { servers: { demo: { command: 'node' } } } },
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldCreateBundleMcpRuntimeForAttempt({
         cfg: connectorManagedConfig,

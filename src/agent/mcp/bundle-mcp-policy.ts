@@ -1,5 +1,5 @@
 import { TOOL_NAME_SEPARATOR } from './bundle-mcp-names.js';
-import { listConnectorInstances } from '../../connectors/instances.js';
+import { hasAnyMcpServers } from '../../extensions/bundle-mcp.js';
 import type { Config } from '../../config/schema.js';
 
 export function shouldCreateBundleMcpRuntimeForAttempt(params: {
@@ -13,7 +13,7 @@ export function shouldCreateBundleMcpRuntimeForAttempt(params: {
   if (params.disabledTools?.has('bundle-mcp')) {
     return false;
   }
-  return listConnectorInstances(params.cfg ?? ({} as Config)).length > 0;
+  return hasAnyMcpServers(params.cfg ?? ({} as Config));
 }
 
 export function isMcpToolName(toolName: string): boolean {

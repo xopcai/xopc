@@ -18,8 +18,28 @@ export const ELECTRON_GATEWAY_EXTERNALS = [
   'fsevents',
 ];
 
-/** Production deps electron-builder should copy into app.asar (gateway bundle runtime). */
-export const ELECTRON_PACKAGED_DEPENDENCIES = ['@vscode/ripgrep', 'node-cron', 'silk-wasm'];
+/**
+ * Production deps electron-builder should copy into the packaged app.
+ *
+ * This includes gateway bundle externals plus deps used by dynamically loaded bundled
+ * channel extensions under `dist/extensions/**`. Those extension modules live in
+ * `app.asar.unpacked`, and native ESM resolution does not honor NODE_PATH or jump into
+ * `app.asar/node_modules`, so matching packages must also be asar-unpacked beside them.
+ */
+export const ELECTRON_PACKAGED_DEPENDENCIES = [
+  '@vscode/ripgrep',
+  'node-cron',
+  'silk-wasm',
+  'zod',
+  'pino',
+  'js-yaml',
+  'markdown-it',
+  'grammy',
+  '@grammyjs/runner',
+  '@inquirer/prompts',
+  'abort-controller',
+  'undici',
+];
 
 /** @param {string} repoRoot */
 export function resolveInstalledElectronVersion(repoRoot) {

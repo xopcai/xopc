@@ -24,14 +24,12 @@
 import type {
   ChannelProgressCapability,
   WorkflowProgressPostInput,
-} from '@xopcai/xopc/agent/workflow/index.js';
+} from '@xopcai/xopc/agent/workflow/channel-capability.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import { parseSessionKey } from '@xopcai/xopc/routing/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
-import { editMessageFeishu } from './outbound/actions.js';
 import { resolveFeishuAccount } from './state/accounts.js';
-import { createFeishuClient } from './transport/client/client.js';
 
 const log = createLogger('FeishuWorkflowProgress');
 
@@ -71,6 +69,7 @@ export function createFeishuWorkflowProgressCapability(opts: {
       // past the running bubble can still see the conclusion.
       if (input.previousMessageId && !input.isFinal) {
         try {
+          const { editMessageFeishu } = await import('./outbound/actions.js');
           await editMessageFeishu({
             cfg,
             accountId: target.accountId,
@@ -94,6 +93,7 @@ export function createFeishuWorkflowProgressCapability(opts: {
         }
       }
 
+      const { createFeishuClient } = await import('./transport/client/client.js');
       const { api } = createFeishuClient(account);
       const receiveIdType = isOpenId(target.peerId) ? 'open_id' : 'chat_id';
       const res: unknown = await (api as { im: { message: { create(arg: unknown): Promise<unknown> } } }).im.message.create({

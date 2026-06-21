@@ -6,8 +6,6 @@ import type {
 import type { Config } from '@xopcai/xopc/config/schema.js';
 
 import { resolveFeishuAccount } from '../state/accounts.js';
-import { createFeishuClient } from '../transport/client/client.js';
-import { formatFeishuOutboundText } from '../format.js';
 import { loadMediaForFeishu } from './media-load.js';
 import { getFeishuBindingByMessageId, recordFeishuMessageBinding } from '../state/message-bindings.js';
 
@@ -24,12 +22,14 @@ export function createFeishuOutboundAdapter(): ChannelOutboundAdapter {
         return { success: false, messageId: '', chatId: ctx.to, error: 'Feishu account is not configured' };
       }
 
+      const { createFeishuClient } = await import('../transport/client/client.js');
       const { api } = createFeishuClient(account);
       const to = ctx.to;
       const raw = ctx.text ?? '';
       const renderMode = account.renderMode ?? 'auto';
       const preferCard = renderMode === 'card' || renderMode === 'auto';
 
+      const { formatFeishuOutboundText } = await import('../format.js');
       const cardBody = formatFeishuOutboundText({
         text: raw,
         renderMode,
@@ -114,6 +114,7 @@ export function createFeishuOutboundAdapter(): ChannelOutboundAdapter {
         localRoots: ctx.mediaLocalRoots,
       });
 
+      const { createFeishuClient } = await import('../transport/client/client.js');
       const { api } = createFeishuClient(account);
 
       const isImage = loaded.mimeType.startsWith('image/');

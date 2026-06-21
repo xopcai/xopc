@@ -1,7 +1,7 @@
 import { normalizeConfiguredMcpServers } from '../../config/mcp-config-normalize.js';
-import { isManagedConnectorServer } from '../../connectors/materialize.js';
 import type { Config } from '../../config/schema.js';
 import {
+  loadEnabledBundleMcpConfig,
   type BundleMcpConfig,
   type BundleMcpDiagnostic,
   type BundleMcpServerConfig,
@@ -17,14 +17,13 @@ export type BundleMcpServerMapper = (
   name: string,
 ) => BundleMcpServerConfig;
 
-function listConnectorManagedMcpServers(params: {
+function listConfiguredMcpServers(params: {
   cfg?: Config;
   mapConfiguredServer: BundleMcpServerMapper;
 }): BundleMcpConfig["mcpServers"] {
   const configuredMcp = normalizeConfiguredMcpServers(params.cfg?.mcp?.servers);
   return Object.fromEntries(
     Object.entries(configuredMcp)
-      .filter(([, server]) => isManagedConnectorServer(server))
       .map(([name, server]) => [
         name,
         params.mapConfiguredServer(server as BundleMcpServerConfig, name),
@@ -38,14 +37,22 @@ export function loadMergedBundleMcpConfig(params: {
   mapConfiguredServer?: BundleMcpServerMapper;
 }): MergedBundleMcpConfig {
   const mapConfiguredServer = params.mapConfiguredServer ?? ((server) => server);
+  const bundled = loadEnabledBundleMcpConfig({
+    workspaceDir: params.workspaceDir,
+    cfg: params.cfg,
+  });
+  const configured = listConfiguredMcpServers({
+    cfg: params.cfg,
+    mapConfiguredServer,
+  });
 
   return {
     config: {
-      mcpServers: listConnectorManagedMcpServers({
-        cfg: params.cfg,
-        mapConfiguredServer,
-      }),
+      mcpServers: {
+        ...bundled.config.mcpServers,
+        ...configured,
+      },
     },
-    diagnostics: [],
+    diagnostics: bundled.diagnostics,
   };
 }

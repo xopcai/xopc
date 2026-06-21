@@ -3,8 +3,8 @@
  * Fail when app.asar contains an oversized node_modules tree (pnpm workspace leak).
  * Usage: node scripts/verify-electron-asar-deps.mjs [path-to-xopc.app-or-app.asar]
  */
-import { existsSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { createRequire } from 'node:module';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { builtinModules, createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -16,7 +16,10 @@ const requireRoot = createRequire(join(root, 'package.json'));
 const requireFromBuilder = createRequire(requireRoot.resolve('electron-builder/package.json'));
 const asar = requireFromBuilder('@electron/asar');
 
-const maxNodeModulesBytes = Number(process.env['XOPC_ELECTRON_ASAR_NODE_MODULES_MAX_BYTES'] ?? 15 * 1024 * 1024);
+// The packaged app intentionally carries a small production node_modules tree for
+// gateway externals and dynamically loaded bundled channel extensions. Keep the
+// guard high enough for those deps, but low enough to catch a workspace-wide leak.
+const maxNodeModulesBytes = Number(process.env['XOPC_ELECTRON_ASAR_NODE_MODULES_MAX_BYTES'] ?? 25 * 1024 * 1024);
 
 function findAppAsarFiles(dir, acc = []) {
   if (!existsSync(dir)) return acc;
@@ -59,6 +62,62 @@ function packageDir(rootDir, name) {
   return join(rootDir, 'node_modules', ...name.split('/'));
 }
 
+const builtinModuleNames = new Set(builtinModules.flatMap((name) => [name, name.replace(/^node:/, '')]));
+// Static ESM imports and CommonJS require() calls are resolved while the dynamic
+// extension module is linked. Dynamic import() is intentionally excluded: those
+// dependencies are optional/lazy and should not force Electron package bloat.
+const importSpecPattern = /(?:import|export)\s+(?:[^'";]+?\s+from\s+)?["']([^"']+)["']|require\(["']([^"']+)["']\)/g;
+
+function packageNameFromSpecifier(specifier) {
+  return specifier.startsWith('@') ? specifier.split('/').slice(0, 2).join('/') : specifier.split('/')[0];
+}
+
+function resolveLocalJs(fromFile, specifier) {
+  let base = join(dirname(fromFile), specifier);
+  const candidates = [base, `${base}.js`, `${base}.mjs`, join(base, 'index.js')];
+  return candidates.find((candidate) => existsSync(candidate));
+}
+
+function collectExtensionRuntimePackages(unpackedDir) {
+  const rootsDir = join(unpackedDir, 'dist', 'extensions');
+  if (!existsSync(rootsDir)) return new Set();
+  const roots = readdirSync(rootsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(rootsDir, entry.name, 'src', 'index.js'))
+    .filter((entry) => existsSync(entry));
+  const seen = new Set();
+  const packages = new Set();
+
+  function visit(file) {
+    if (seen.has(file)) return;
+    seen.add(file);
+    const source = readFileSync(file, 'utf8');
+    // Use a per-file RegExp. The walker is recursive; sharing a global RegExp would
+    // mutate lastIndex in child visits and corrupt the parent scan, producing false
+    // package requirements from unrelated offsets.
+    const pattern = new RegExp(importSpecPattern.source, 'g');
+    const specifiers = [];
+    let match;
+    while ((match = pattern.exec(source)) !== null) {
+      const specifier = match[1] || match[2];
+      if (specifier) specifiers.push(specifier);
+    }
+
+    for (const specifier of specifiers) {
+      if (specifier.startsWith('.') || specifier.startsWith('/')) {
+        const next = resolveLocalJs(file, specifier);
+        if (next && next.startsWith(join(unpackedDir, 'dist'))) visit(next);
+        continue;
+      }
+      if (specifier.startsWith('node:') || builtinModuleNames.has(specifier)) continue;
+      packages.add(packageNameFromSpecifier(specifier));
+    }
+  }
+
+  for (const root of roots) visit(root);
+  return packages;
+}
+
 function verifyUnpackedRuntimeDeps(asarPath) {
   const unpackedDir = join(dirname(asarPath), 'app.asar.unpacked');
   const unpackedServer = join(unpackedDir, 'out', 'server', 'index.js');
@@ -66,16 +125,21 @@ function verifyUnpackedRuntimeDeps(asarPath) {
     return;
   }
 
-  const missing = ELECTRON_PACKAGED_DEPENDENCIES.filter((name) => !existsSync(packageDir(unpackedDir, name)));
+  const traced = collectExtensionRuntimePackages(unpackedDir);
+  if (process.env.XOPC_ELECTRON_VERIFY_DEBUG === '1') {
+    console.log(`[verify-electron-asar-deps] traced extension packages: ${[...traced].sort().join(', ')}`);
+  }
+  const required = [...new Set([...ELECTRON_PACKAGED_DEPENDENCIES, ...traced])].sort();
+  const missing = required.filter((name) => !existsSync(packageDir(unpackedDir, name)));
   if (missing.length > 0) {
     console.error(
-      `[verify-electron-asar-deps] app.asar.unpacked is missing runtime deps for unpacked gateway: ${missing.join(', ')}. ` +
-        'Add them to asarUnpack in scripts/electron-builder.pack.yml.',
+      `[verify-electron-asar-deps] app.asar.unpacked is missing runtime deps for unpacked gateway/extensions: ${missing.join(', ')}. ` +
+        'Add direct deps to ELECTRON_PACKAGED_DEPENDENCIES and ensure node_modules/** is in asarUnpack.',
     );
     process.exit(1);
   }
   console.log(
-    `[verify-electron-asar-deps] OK — unpacked gateway runtime deps present (${ELECTRON_PACKAGED_DEPENDENCIES.join(', ')})`,
+    `[verify-electron-asar-deps] OK — unpacked gateway/extension runtime deps present (${required.join(', ')})`,
   );
 }
 
@@ -86,6 +150,7 @@ function verifyUnpackedAppLayout(asarPath) {
     'dist/gateway/static/root/index.html',
     'dist/extensions',
     'dist/src',
+    'dist/package.js',
   ];
   const missing = required.filter((rel) => !existsSync(join(unpackedDir, rel)));
   if (missing.length > 0) {

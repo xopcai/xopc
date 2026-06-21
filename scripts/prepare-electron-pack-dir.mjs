@@ -12,6 +12,7 @@
  * Layout:
  *   out/{main,preload,server}      app code (+ schema.sql, migrations/, workspace-templates/)
  *   dist/{src,extensions,_virtual} bundled extension modules + sibling core/rolldown runtime imports
+ *   dist/package.js                 emitted package-version helper imported by dist/src/package-version.js
  *   dist/gateway/static/root       gateway-served UI
  *   skills/                        bundled SKILL.md files
  *   package.json                   minimal package with runtime externals only
@@ -42,6 +43,7 @@ const APP_COPY_PATHS = [
   { from: 'dist/src', to: 'dist/src' },
   { from: 'dist/extensions', to: 'dist/extensions' },
   { from: 'dist/_virtual', to: 'dist/_virtual' },
+  { from: 'dist/package.js', to: 'dist/package.js' },
   { from: 'dist/gateway/static/root', to: 'dist/gateway/static/root' },
   { from: 'skills', to: 'skills' },
 ];

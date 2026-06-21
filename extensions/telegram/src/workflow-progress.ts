@@ -20,7 +20,7 @@
  * `<` in agent labels or shell-style payloads.
  */
 
-import type { ChannelProgressCapability, WorkflowProgressPostInput } from '@xopcai/xopc/agent/workflow/index.js';
+import type { ChannelProgressCapability, WorkflowProgressPostInput } from '@xopcai/xopc/agent/workflow/channel-capability.js';
 import { parseSessionKey } from '@xopcai/xopc/routing/session-key.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 

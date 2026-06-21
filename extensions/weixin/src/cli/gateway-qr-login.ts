@@ -2,8 +2,9 @@
  * Gateway / web UI: start Weixin QR login, poll status, persist credentials (same as CLI).
  */
 
+import { readFileSync, writeFileSync } from "node:fs";
+
 import type { Config } from "@xopcai/xopc/config/schema.js";
-import { loadConfig, saveConfig } from "@xopcai/xopc/config/loader.js";
 
 import {
   clearStaleAccountsForUserId,
@@ -39,6 +40,21 @@ type TerminalRecord =
 
 const completedSessions = new Map<string, TerminalRecord>();
 
+function loadConfigSnapshot(configPath: string | undefined, fallback: Config | undefined): Config {
+  if (fallback) return fallback;
+  if (!configPath) return {} as Config;
+  try {
+    return JSON.parse(readFileSync(configPath, 'utf8')) as Config;
+  } catch {
+    return {} as Config;
+  }
+}
+
+function saveConfigSnapshot(configPath: string | undefined, config: Config): void {
+  if (!configPath) return;
+  writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+}
+
 function rememberCompleted(sessionKey: string, state: TerminalRecord): void {
   completedSessions.set(sessionKey, state);
   setTimeout(() => completedSessions.delete(sessionKey), 10 * 60_000);
@@ -73,8 +89,10 @@ export type WeixinGatewayQrLoginStartOptions = {
   account?: string;
   timeoutMs?: number;
   verbose?: boolean;
+  /** Config snapshot from the already-running gateway; avoids loading the heavy config loader from Electron dynamic extension code. */
+  initialConfig?: Config;
   /** After credentials + config file are written (or login failed after wait). */
-  onPersisted?: (r: { ok: boolean; accountId?: string; message: string }) => void | Promise<void>;
+  onPersisted?: (r: { ok: boolean; accountId?: string; message: string; config?: Config }) => void | Promise<void>;
 };
 
 /**
@@ -84,7 +102,7 @@ export async function startWeixinGatewayQrLogin(
   opts: WeixinGatewayQrLoginStartOptions,
 ): Promise<{ ok: true; sessionKey: string; qrcodeUrl: string } | { ok: false; message: string }> {
   const configPath = opts.configPath ?? process.env.XOPC_CONFIG_PATH;
-  const cfg = loadConfig(configPath);
+  const cfg = loadConfigSnapshot(configPath, opts.initialConfig);
   const { baseUrl, routeTag } = getWeixinLoginApiContext(cfg, opts.account);
   const timeoutMs = opts.timeoutMs ?? 480_000;
   const verbose = Boolean(opts.verbose);
@@ -141,12 +159,15 @@ export async function startWeixinGatewayQrLogin(
 
     try {
       const nextCfg = mergeWeixinConfigAfterLogin(cfg as Config, normalizedId);
-      await saveConfig(nextCfg, configPath);
+      saveConfigSnapshot(configPath, nextCfg);
+      await opts.onPersisted?.({ ok: true, accountId: normalizedId, message: "OK", config: nextCfg });
+      rememberCompleted(sessionKey, { phase: "done", ok: true, accountId: normalizedId });
+      return;
     } catch (err) {
       logger.warn(`Config merge failed (credentials saved on disk): ${String(err)}`);
     }
 
-    await opts.onPersisted?.({ ok: true, accountId: normalizedId, message: "OK" });
+    await opts.onPersisted?.({ ok: true, accountId: normalizedId, message: "OK", config: cfg as Config });
     rememberCompleted(sessionKey, { phase: "done", ok: true, accountId: normalizedId });
   })();
 

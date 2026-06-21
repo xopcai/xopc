@@ -23,7 +23,7 @@ import { resolveRoute } from '@xopcai/xopc/routing/index.js';
 import { resolveTelegramGroupContext } from './group-config-resolver.js';
 import { resolveTelegramFocusedSessionKey } from './focus-handler.js';
 import { buildTelegramConversationId } from './conversation-id.js';
-import { checkMentionInTranscription } from '@xopcai/xopc/voice/stt/index.js';
+import { checkMentionInTranscription } from '@xopcai/xopc/voice/stt/mention.js';
 
 const log = createLogger('TelegramInboundProcessor');
 
