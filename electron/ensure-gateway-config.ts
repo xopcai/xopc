@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { app } from 'electron';
@@ -8,7 +8,6 @@ import {
   resolveGatewayBindMode,
   resolveGatewayEffectiveHost,
 } from '../src/config/gateway-bind.js';
-import { saveConfig } from '../src/config/loader.js';
 import type { GatewayBindMode } from '../src/config/schema.js';
 import { ConfigSchema } from '../src/config/schema.js';
 import { ensureGatewayCorsOriginsForNetworkBind } from '../src/gateway/ensure-network-cors.js';
@@ -61,7 +60,7 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
   finalConfig = ensureGatewayCorsOriginsForNetworkBind(finalConfig, resolvedPort);
 
   if (JSON.stringify(finalConfig) !== JSON.stringify(initResult.config)) {
-    await saveConfig(finalConfig, paths.configPath);
+    writeFileSync(paths.configPath, `${JSON.stringify(finalConfig, null, 2)}\n`, 'utf8');
   }
 
   const bind = resolveGatewayBindMode(finalConfig);

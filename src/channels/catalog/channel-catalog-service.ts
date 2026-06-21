@@ -68,6 +68,20 @@ function hasConfiguredWeixinAccount(raw: unknown): boolean {
   return Object.values(accounts).some((account) => isRecord(account) && account.enabled !== false);
 }
 
+function hasConfiguredFeishuCredential(raw: unknown): boolean {
+  if (!isRecord(raw)) return false;
+  const hasRootCredentials = hasNonEmptyString(raw.appId) && hasNonEmptyString(raw.appSecret);
+  if (hasRootCredentials) return true;
+  const accounts = raw.accounts;
+  if (!isRecord(accounts)) return false;
+  return Object.values(accounts).some((account) => {
+    if (!isRecord(account) || account.enabled === false) return false;
+    const appId = hasNonEmptyString(account.appId) ? account.appId : raw.appId;
+    const appSecret = hasNonEmptyString(account.appSecret) ? account.appSecret : raw.appSecret;
+    return hasNonEmptyString(appId) && hasNonEmptyString(appSecret);
+  });
+}
+
 function withoutUndefined(value: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined));
 }
@@ -192,6 +206,7 @@ export function isChannelConfigured(config: Config, channelId: string): boolean 
   if (!raw) return false;
   if (id === 'telegram') return hasConfiguredTelegramCredential(raw);
   if (id === 'weixin') return hasConfiguredWeixinAccount(raw);
+  if (id === 'feishu' || id === 'lark') return hasConfiguredFeishuCredential(raw);
   return isRecord(raw) ? raw.enabled === true || Object.keys(raw).length > 0 : true;
 }
 

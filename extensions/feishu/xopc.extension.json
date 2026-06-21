@@ -55,20 +55,316 @@
             ],
             "default": "feishu",
             "title": "Domain"
+          },
+          "connectionMode": {
+            "type": "string",
+            "enum": [
+              "websocket",
+              "webhook"
+            ],
+            "default": "websocket",
+            "title": "Connection mode"
+          },
+          "dmPolicy": {
+            "type": "string",
+            "enum": [
+              "pairing",
+              "allowlist",
+              "open",
+              "disabled"
+            ],
+            "default": "open",
+            "title": "DM policy"
+          },
+          "groupPolicy": {
+            "type": "string",
+            "enum": [
+              "open",
+              "disabled",
+              "allowlist"
+            ],
+            "default": "allowlist",
+            "title": "Group policy"
+          },
+          "allowFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed DM senders"
+          },
+          "groupAllowFrom": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "title": "Allowed group senders"
+          },
+          "requireMention": {
+            "type": "boolean",
+            "default": true,
+            "title": "Require mention in groups"
+          },
+          "renderMode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "raw",
+              "card"
+            ],
+            "default": "auto",
+            "title": "Render mode"
+          },
+          "streaming": {
+            "type": "boolean",
+            "default": false,
+            "title": "Streaming replies"
+          },
+          "reactionNotifications": {
+            "type": "string",
+            "enum": [
+              "off",
+              "own",
+              "all"
+            ],
+            "default": "own",
+            "title": "Reaction notifications"
+          },
+          "inboundDebounceMs": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10000,
+            "title": "Inbound debounce (ms)"
+          },
+          "historyLimit": {
+            "type": "number",
+            "minimum": 0,
+            "default": 50,
+            "title": "History limit"
+          },
+          "textChunkLimit": {
+            "type": "number",
+            "minimum": 1,
+            "default": 4000,
+            "title": "Text chunk limit"
+          },
+          "webhookHost": {
+            "type": "string",
+            "title": "Webhook host"
+          },
+          "webhookPort": {
+            "type": "number",
+            "minimum": 1,
+            "title": "Webhook port"
+          },
+          "webhookPath": {
+            "type": "string",
+            "title": "Webhook path"
+          },
+          "verificationToken": {
+            "type": "string",
+            "format": "password",
+            "title": "Verification token"
+          },
+          "encryptKey": {
+            "type": "string",
+            "format": "password",
+            "title": "Encrypt key"
+          },
+          "tools": {
+            "type": "object",
+            "title": "Tools",
+            "additionalProperties": false,
+            "properties": {
+              "doc": {
+                "type": "boolean",
+                "title": "Doc"
+              },
+              "chat": {
+                "type": "boolean",
+                "title": "Chat"
+              },
+              "wiki": {
+                "type": "boolean",
+                "title": "Wiki"
+              },
+              "drive": {
+                "type": "boolean",
+                "title": "Drive"
+              },
+              "perm": {
+                "type": "boolean",
+                "title": "Permissions"
+              },
+              "bitable": {
+                "type": "boolean",
+                "title": "Bitable"
+              },
+              "scopes": {
+                "type": "boolean",
+                "title": "Scopes"
+              }
+            }
+          },
+          "actions": {
+            "type": "object",
+            "title": "Actions",
+            "additionalProperties": false,
+            "properties": {
+              "reactions": {
+                "type": "boolean",
+                "title": "Reactions"
+              }
+            }
+          },
+          "blockStreamingCoalesce": {
+            "type": "object",
+            "title": "Block streaming coalesce",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "title": "Enabled"
+              },
+              "minChars": {
+                "type": "number",
+                "minimum": 1,
+                "title": "Minimum characters"
+              },
+              "idleMs": {
+                "type": "number",
+                "minimum": 1,
+                "title": "Idle milliseconds"
+              }
+            }
+          },
+          "dynamicAgentCreation": {
+            "type": "object",
+            "title": "Dynamic agent creation",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "type": "boolean",
+                "title": "Enabled"
+              },
+              "workspaceTemplate": {
+                "type": "string",
+                "title": "Workspace template"
+              },
+              "agentDirTemplate": {
+                "type": "string",
+                "title": "Agent directory template"
+              },
+              "maxAgents": {
+                "type": "number",
+                "minimum": 1,
+                "title": "Max agents"
+              }
+            }
           }
         }
       },
       "uiHints": {
+        "enabled": {
+          "advanced": false,
+          "tags": [
+            "basic"
+          ]
+        },
+        "appId": {
+          "advanced": false,
+          "tags": [
+            "basic"
+          ]
+        },
         "appSecret": {
+          "advanced": false,
+          "tags": [
+            "basic"
+          ],
           "sensitive": true
+        },
+        "domain": {
+          "advanced": false,
+          "tags": [
+            "basic"
+          ]
+        },
+        "accounts": {
+          "advanced": true
+        },
+        "connectionMode": {
+          "advanced": true
+        },
+        "dmPolicy": {
+          "advanced": true
+        },
+        "groupPolicy": {
+          "advanced": true
+        },
+        "allowFrom": {
+          "advanced": true
+        },
+        "groupAllowFrom": {
+          "advanced": true
+        },
+        "requireMention": {
+          "advanced": true
+        },
+        "renderMode": {
+          "advanced": true
+        },
+        "streaming": {
+          "advanced": true
+        },
+        "reactionNotifications": {
+          "advanced": true
+        },
+        "inboundDebounceMs": {
+          "advanced": true
+        },
+        "historyLimit": {
+          "advanced": true
+        },
+        "textChunkLimit": {
+          "advanced": true
+        },
+        "webhookHost": {
+          "advanced": true
+        },
+        "webhookPort": {
+          "advanced": true
+        },
+        "webhookPath": {
+          "advanced": true
+        },
+        "verificationToken": {
+          "advanced": true,
+          "sensitive": true
+        },
+        "encryptKey": {
+          "advanced": true,
+          "sensitive": true
+        },
+        "tools": {
+          "advanced": true
+        },
+        "actions": {
+          "advanced": true
+        },
+        "blockStreamingCoalesce": {
+          "advanced": true
+        },
+        "dynamicAgentCreation": {
+          "advanced": true
         },
         "accounts.*.appSecret": {
           "sensitive": true
         },
-        "verificationToken": {
+        "accounts.*.verificationToken": {
           "sensitive": true
         },
-        "encryptKey": {
+        "accounts.*.encryptKey": {
           "sensitive": true
         }
       },
@@ -110,6 +406,69 @@
               },
               "domain": {
                 "title": "域名"
+              },
+              "connectionMode": {
+                "title": "连接模式"
+              },
+              "dmPolicy": {
+                "title": "私聊策略"
+              },
+              "groupPolicy": {
+                "title": "群聊策略"
+              },
+              "allowFrom": {
+                "title": "允许的私聊发送者"
+              },
+              "groupAllowFrom": {
+                "title": "允许的群聊发送者"
+              },
+              "requireMention": {
+                "title": "群聊需要 @"
+              },
+              "renderMode": {
+                "title": "渲染模式"
+              },
+              "streaming": {
+                "title": "流式回复"
+              },
+              "reactionNotifications": {
+                "title": "表情回应通知"
+              },
+              "inboundDebounceMs": {
+                "title": "入站合并延迟（毫秒）"
+              },
+              "historyLimit": {
+                "title": "历史消息数量"
+              },
+              "textChunkLimit": {
+                "title": "文本分块上限"
+              },
+              "webhookHost": {
+                "title": "Webhook 主机"
+              },
+              "webhookPort": {
+                "title": "Webhook 端口"
+              },
+              "webhookPath": {
+                "title": "Webhook 路径"
+              },
+              "verificationToken": {
+                "title": "Verification Token"
+              },
+              "encryptKey": {
+                "title": "Encrypt Key"
+              },
+              "tools": {
+                "title": "工具"
+              },
+              "actions": {
+                "title": "操作"
+              },
+              "blockStreamingCoalesce": {
+                "title": "块流式合并"
+              },
+              "dynamicAgentCreation": {
+                "title": "动态 Agent 创建"
               }
             }
           },

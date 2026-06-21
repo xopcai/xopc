@@ -4,7 +4,7 @@ import { ManifestRegistry } from '../../../extensions/manifest-registry.js';
 import type { ExtensionMetadataSnapshot } from '../../../extensions/extension-metadata-snapshot.js';
 import { normalizeExtensionManifest } from '../../../extensions/normalize-manifest.js';
 
-import { buildChannelCatalogFromSnapshot } from '../channel-catalog-service.js';
+import { buildChannelCatalogFromSnapshot, isChannelConfigured } from '../channel-catalog-service.js';
 
 describe('channel catalog service', () => {
   function snapshotWithManifest(manifest: ReturnType<typeof normalizeExtensionManifest>): ExtensionMetadataSnapshot {
@@ -60,6 +60,12 @@ describe('channel catalog service', () => {
       configPath: 'channels.demo',
       capabilities: { pairing: true },
     });
+  });
+
+  it('requires Feishu app credentials to mark the channel configured', () => {
+    expect(isChannelConfigured({ channels: { feishu: { enabled: true } } } as any, 'feishu')).toBe(false);
+    expect(isChannelConfigured({ channels: { feishu: { enabled: true, appId: 'app', appSecret: 'secret' } } } as any, 'feishu')).toBe(true);
+    expect(isChannelConfigured({ channels: { feishu: { enabled: true, accounts: { default: { appId: 'app', appSecret: 'secret' } } } } } as any, 'feishu')).toBe(true);
   });
 
   it('localizes channel contribution metadata from manifest i18n', () => {

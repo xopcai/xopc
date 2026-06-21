@@ -184,6 +184,12 @@ export function discoverExtensionsFromDisk(
     discoverInDirectory(paths.bundledDir, 'bundled', discovered);
   }
 
+  // Electron ships self-contained extension bundles. Do not let stale user/global source
+  // extensions override those packaged manifests.
+  if (process.env.XOPC_BUNDLED_EXTENSIONS_ROOT || paths.bundledDir?.includes(`${join('dist', 'electron', 'extensions')}`)) {
+    return Array.from(discovered.values());
+  }
+
   discoverInDirectory(paths.globalDir, 'global', discovered);
   if (paths.workspaceExtensionsDir) {
     discoverInDirectory(paths.workspaceExtensionsDir, 'workspace', discovered);

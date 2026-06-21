@@ -1,4 +1,4 @@
-import { join } from 'path';
+import { join, sep } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { existsSync } from 'fs';
@@ -337,8 +337,8 @@ export function resolveSkillsCachePath(config: Config, agentId: string): string 
  * Layout-dependent candidates (first existing wins):
  * - `XOPC_BUNDLED_EXTENSIONS_ROOT` (Electron packaged gateway override)
  * - `dist/src/config` → `dist/extensions` (npm / gateway)
- * - `src/config` → `extensions/` (dev, tsx)
- * - `out/server` → `dist/extensions` (Electron esbuild bundle)
+ * - `src/config` → `dist/extensions` when built, else `extensions/` (dev, tsx)
+ * - `out/server` → `dist/electron/extensions` (Electron extension bundles)
  */
 export function resolveBundledExtensionsDir(): string | null {
   const envDir = process.env[ENV_BUNDLED_EXTENSIONS_ROOT];
@@ -349,11 +349,17 @@ export function resolveBundledExtensionsDir(): string | null {
   try {
     const currentFile = fileURLToPath(import.meta.url);
     const srcDir = dirname(currentFile);
-    const candidates = [
-      join(srcDir, '..', '..', 'extensions'),
-      join(srcDir, '..', '..', 'dist', 'extensions'),
-      join(srcDir, '..', '..', '..', 'extensions'),
-    ];
+    const isElectronServerBundle = srcDir.endsWith(`${sep}out${sep}server`);
+    const candidates = isElectronServerBundle
+      ? [join(srcDir, '..', '..', 'dist', 'electron', 'extensions')]
+      : [
+          // In source-tree dev, prefer compiled bundled extensions when present: manifests point
+          // at built JavaScript entries (for example src/index.js), while source folders contain TS.
+          join(srcDir, '..', '..', 'dist', 'extensions'),
+          join(srcDir, '..', '..', 'extensions'),
+          join(srcDir, '..', '..', '..', 'dist', 'extensions'),
+          join(srcDir, '..', '..', '..', 'extensions'),
+        ];
     for (const dir of candidates) {
       if (existsSync(dir)) {
         return dir;

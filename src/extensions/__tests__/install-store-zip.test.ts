@@ -44,7 +44,11 @@ describe('installExtensionFromStoreZip', () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-ext-test-'));
     try {
       const buf = zipBuffer({
-        'xopc.extension.json': JSON.stringify({ id: 't-test-ext', main: 'index.js' }),
+        'xopc.extension.json': JSON.stringify({
+          id: 't-test-ext',
+          main: 'index.js',
+          engines: { xopc: '>=0.0.0' },
+        }),
         'index.js': 'export default {};\n',
       });
       const res = await installExtensionFromStoreZip(buf, dir);
@@ -59,7 +63,11 @@ describe('installExtensionFromStoreZip', () => {
     const dir = mkdtempSync(join(tmpdir(), 'xopc-ext-test-'));
     try {
       const buf = zipBuffer({
-        'myext/xopc.extension.json': JSON.stringify({ id: 'e', main: 'index.js' }),
+        'myext/xopc.extension.json': JSON.stringify({
+          id: 'e',
+          main: 'index.js',
+          engines: { xopc: '>=0.0.0' },
+        }),
         'other/readme.txt': 'x',
         'myext/index.js': 'export default {};\n',
       });
