@@ -4,7 +4,7 @@
   "description": "人 × AI Agent 协作看板。创建意图，Agent 自动推进，你在关键节点决策。",
   "version": "0.1.0",
   "kind": "utility",
-  "main": "index.ts",
+  "main": "index.js",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -51,5 +51,26 @@
         }
       ]
     }
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "tools": [
+      "synapse_get_board",
+      "synapse_create_card",
+      "synapse_move_card",
+      "synapse_update_progress",
+      "synapse_add_decision",
+      "synapse_resolve_decision"
+    ],
+    "commands": [
+      "synapse:open-panel",
+      "synapse:board-status"
+    ],
+    "hooks": [
+      "tool_execution_start",
+      "tool_execution_end"
+    ]
   }
 }

@@ -4,16 +4,24 @@
   "description": "Bundled example: mock streaming LLM provider for extension developer docs.",
   "version": "1.0.0",
   "kind": "provider",
-  "main": "index.ts",
+  "main": "index.js",
   "enabledByDefault": true,
-  "providers": ["demo"],
+  "providers": [
+    "demo"
+  ],
   "providerAuthEnvVars": {
-    "demo": ["DEMO_API_KEY"]
+    "demo": [
+      "DEMO_API_KEY"
+    ]
   },
   "modelSupport": {
-    "modelPrefixes": ["demo/"]
+    "modelPrefixes": [
+      "demo/"
+    ]
   },
-  "autoEnableWhenConfiguredProviders": ["demo"],
+  "autoEnableWhenConfiguredProviders": [
+    "demo"
+  ],
   "configSchema": {
     "type": "object",
     "properties": {
@@ -32,5 +40,13 @@
         "description": "Default model id"
       }
     }
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "providers": [
+      "demo"
+    ]
   }
 }

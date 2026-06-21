@@ -4,14 +4,19 @@
   "description": "Example extension demonstrating input hook - content moderation and command interception",
   "version": "1.0.0",
   "kind": "utility",
-  "main": "index.ts",
+  "main": "index.js",
   "configSchema": {
     "type": "object",
     "properties": {
       "blockedWords": {
         "type": "array",
-        "items": { "type": "string" },
-        "default": ["spam", "scam"],
+        "items": {
+          "type": "string"
+        },
+        "default": [
+          "spam",
+          "scam"
+        ],
         "description": "Words to block in messages"
       },
       "enableQuickCommands": {
@@ -25,5 +30,13 @@
         "description": "Log all input for debugging"
       }
     }
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "hooks": [
+      "input"
+    ]
   }
 }

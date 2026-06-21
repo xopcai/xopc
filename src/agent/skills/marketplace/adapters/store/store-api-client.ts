@@ -266,6 +266,9 @@ export interface StorePublishedPackageHead {
   latestVersion: {
     version: string;
     downloadUrl: string;
+    checksum?: string;
+    integrity?: string;
+    sha256?: string;
   };
 }
 
@@ -273,7 +276,7 @@ export async function resolveExtensionZipDownloadUrl(
   storeBaseUrl: string,
   packageName: string,
   version?: string,
-): Promise<{ downloadUrl: string; version: string }> {
+): Promise<{ downloadUrl: string; version: string; integrity?: string }> {
   const base = normalizeBaseUrl(storeBaseUrl);
   const enc = encodeURIComponent(packageName.trim());
   const meta = await fetchJson<StorePublishedPackageHead>(`${base}/api/v1/packages/${enc}`);
@@ -285,21 +288,33 @@ export async function resolveExtensionZipDownloadUrl(
   }
   if (version?.trim()) {
     const v = encodeURIComponent(version.trim());
-    const detail = await fetchJson<{ downloadUrl: string; version: string }>(
-      `${base}/api/v1/packages/${enc}/versions/${v}`,
-    );
+    const detail = await fetchJson<{
+      downloadUrl: string;
+      version: string;
+      checksum?: string;
+      integrity?: string;
+      sha256?: string;
+    }>(`${base}/api/v1/packages/${enc}/versions/${v}`);
     if (!detail.downloadUrl) {
       throw new Error('Store version has no download URL');
     }
     assertDownloadUrlAllowed(detail.downloadUrl, base);
-    return { downloadUrl: detail.downloadUrl, version: detail.version };
+    return {
+      downloadUrl: detail.downloadUrl,
+      version: detail.version,
+      integrity: detail.integrity ?? detail.checksum ?? detail.sha256,
+    };
   }
   const lv = meta.latestVersion;
   if (!lv?.downloadUrl) {
     throw new Error('Package has no published version');
   }
   assertDownloadUrlAllowed(lv.downloadUrl, base);
-  return { downloadUrl: lv.downloadUrl, version: lv.version };
+  return {
+    downloadUrl: lv.downloadUrl,
+    version: lv.version,
+    integrity: lv.integrity ?? lv.checksum ?? lv.sha256,
+  };
 }
 
 export async function downloadExtensionStoreZipBuffer(

@@ -4,7 +4,7 @@
   "description": "Example extension demonstrating context hook - injects system messages before LLM calls",
   "version": "1.0.0",
   "kind": "utility",
-  "main": "index.ts",
+  "main": "index.js",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -19,5 +19,15 @@
         "description": "Inject current timestamp"
       }
     }
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "hooks": [
+      "context",
+      "turn_start",
+      "turn_end"
+    ]
   }
 }

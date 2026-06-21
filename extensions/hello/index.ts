@@ -14,7 +14,7 @@
  *   cp -r examples/extensions/hello workspace/.extensions/
  */
 
-import type { ExtensionApi } from 'xopc/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 import { registerHelloTui } from './tui.js';
 
 // Extension definition

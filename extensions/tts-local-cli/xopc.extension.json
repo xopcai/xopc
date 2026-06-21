@@ -4,13 +4,18 @@
   "description": "Pipe text to any local TTS binary (mlx-audio, sherpa-onnx-tts, piper, ...).",
   "version": "1.0.0",
   "kind": "speech-provider",
-  "main": "index.ts",
+  "main": "index.js",
   "contracts": {
-    "speechProviders": ["tts-local-cli", "cli"]
+    "speechProviders": [
+      "tts-local-cli",
+      "cli"
+    ]
   },
   "configSchema": {
     "type": "object",
-    "required": ["command"],
+    "required": [
+      "command"
+    ],
     "properties": {
       "command": {
         "type": "string",
@@ -18,12 +23,18 @@
       },
       "args": {
         "type": "array",
-        "items": { "type": "string" },
+        "items": {
+          "type": "string"
+        },
         "description": "Extra args appended after the parsed command."
       },
       "outputFormat": {
         "type": "string",
-        "enum": ["mp3", "opus", "wav"],
+        "enum": [
+          "mp3",
+          "opus",
+          "wav"
+        ],
         "default": "wav",
         "description": "Expected output format. Defines {{OutputPath}} extension."
       },
@@ -38,9 +49,14 @@
       },
       "env": {
         "type": "object",
-        "additionalProperties": { "type": "string" },
+        "additionalProperties": {
+          "type": "string"
+        },
         "description": "Extra env vars merged into the process env."
       }
     }
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
   }
 }

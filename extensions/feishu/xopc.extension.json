@@ -4,8 +4,11 @@
   "description": "Feishu/Lark tools (doc/wiki/drive/perm/bitable) for xopc agents. Activates when the Feishu channel is configured.",
   "version": "0.0.14",
   "kind": "tool",
-  "main": "src/index.ts",
-  "channels": ["feishu", "lark"],
+  "main": "src/index.js",
+  "channels": [
+    "feishu",
+    "lark"
+  ],
   "channelContributions": {
     "feishu": {
       "label": "Feishu",
@@ -25,29 +28,67 @@
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "enabled": { "type": "boolean", "default": false, "title": "Enabled" },
-          "accounts": { "type": "object", "additionalProperties": true, "title": "Accounts" },
-          "appId": { "type": "string", "title": "App ID" },
-          "appSecret": { "type": "string", "format": "password", "title": "App secret" },
+          "enabled": {
+            "type": "boolean",
+            "default": false,
+            "title": "Enabled"
+          },
+          "accounts": {
+            "type": "object",
+            "additionalProperties": true,
+            "title": "Accounts"
+          },
+          "appId": {
+            "type": "string",
+            "title": "App ID"
+          },
+          "appSecret": {
+            "type": "string",
+            "format": "password",
+            "title": "App secret"
+          },
           "domain": {
             "type": "string",
-            "enum": ["feishu", "lark"],
+            "enum": [
+              "feishu",
+              "lark"
+            ],
             "default": "feishu",
             "title": "Domain"
           }
         }
       },
       "uiHints": {
-        "appSecret": { "sensitive": true },
-        "accounts.*.appSecret": { "sensitive": true },
-        "verificationToken": { "sensitive": true },
-        "encryptKey": { "sensitive": true }
+        "appSecret": {
+          "sensitive": true
+        },
+        "accounts.*.appSecret": {
+          "sensitive": true
+        },
+        "verificationToken": {
+          "sensitive": true
+        },
+        "encryptKey": {
+          "sensitive": true
+        }
       },
       "actions": {
-        "setup.start": { "label": "Set up by QR", "result": "qr" },
-        "setup.status": { "label": "Setup status", "result": "poll" },
-        "setup.manual": { "label": "Manual setup", "result": "form" },
-        "doctor.run": { "label": "Run doctor", "result": "diagnostics" }
+        "setup.start": {
+          "label": "Set up by QR",
+          "result": "qr"
+        },
+        "setup.status": {
+          "label": "Setup status",
+          "result": "poll"
+        },
+        "setup.manual": {
+          "label": "Manual setup",
+          "result": "form"
+        },
+        "doctor.run": {
+          "label": "Run doctor",
+          "result": "diagnostics"
+        }
       },
       "i18n": {
         "zh": {
@@ -55,29 +96,61 @@
           "description": "飞书 / Lark 消息通道与工作区工具",
           "configSchema": {
             "properties": {
-              "enabled": { "title": "启用" },
-              "accounts": { "title": "账号" },
-              "appId": { "title": "App ID" },
-              "appSecret": { "title": "App Secret" },
-              "domain": { "title": "域名" }
+              "enabled": {
+                "title": "启用"
+              },
+              "accounts": {
+                "title": "账号"
+              },
+              "appId": {
+                "title": "App ID"
+              },
+              "appSecret": {
+                "title": "App Secret"
+              },
+              "domain": {
+                "title": "域名"
+              }
             }
           },
           "actions": {
-            "setup.start": { "label": "扫码配置" },
-            "setup.status": { "label": "配置状态" },
-            "setup.manual": { "label": "手动配置" },
-            "doctor.run": { "label": "诊断" }
+            "setup.start": {
+              "label": "扫码配置"
+            },
+            "setup.status": {
+              "label": "配置状态"
+            },
+            "setup.manual": {
+              "label": "手动配置"
+            },
+            "doctor.run": {
+              "label": "诊断"
+            }
           }
         }
       }
     }
   },
   "activation": {
-    "onChannels": ["feishu", "lark"],
-    "onCapabilities": ["tool"]
+    "onChannels": [
+      "feishu",
+      "lark"
+    ],
+    "onCapabilities": [
+      "tool"
+    ]
   },
   "setup": {
     "providers": [],
     "requiresRuntime": true
+  },
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  },
+  "contracts": {
+    "channels": [
+      "feishu",
+      "lark"
+    ]
   }
 }

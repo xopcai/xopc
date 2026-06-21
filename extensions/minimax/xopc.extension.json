@@ -4,6 +4,12 @@
   "description": "MiniMax image generation. Configure API keys and cluster (CN vs international) under Settings → Images, or here — both edit the same providers.minimax entry.",
   "version": "1.0.0",
   "kind": "image-generation",
-  "main": "src/index.ts",
-  "autoEnableWhenConfiguredProviders": ["minimax", "minimax-cn"]
+  "main": "src/index.js",
+  "autoEnableWhenConfiguredProviders": [
+    "minimax",
+    "minimax-cn"
+  ],
+  "engines": {
+    "xopc": ">=0.0.106 <1.0.0"
+  }
 }

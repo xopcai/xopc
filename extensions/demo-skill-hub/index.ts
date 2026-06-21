@@ -13,7 +13,7 @@
  * catalog that talks to clawhub.ai so you can see a second marketplace tab in Skills.
  */
 
-import type { ExtensionApi } from 'xopc/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 
 const ADAPTER_ID = 'demo-skill-hub';
 const DEFAULT_REGISTRY_BASE = 'https://clawhub.ai';
