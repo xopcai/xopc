@@ -127,7 +127,7 @@ export default defineConfig({
             text: '快速开始',
             items: [
               { text: '简介', link: '/zh/' },
-              { text: '前 5 分钟', link: '/zh/first-5-minutes' },
+              { text: '5分钟快速入门', link: '/zh/first-5-minutes' },
               { text: '快速上手', link: '/zh/getting-started' }
             ]
           },
@@ -165,7 +165,7 @@ export default defineConfig({
               { text: '进度反馈', link: '/zh/progress' },
               { text: '终端界面 (tui)', link: '/zh/tui' },
               { text: '网关服务', link: '/zh/gateway' },
-              { text: '移动端 app', link: '/zh/mobile-app' },
+              { text: '手机端 App', link: '/zh/mobile-app' },
               { text: '远程访问', link: '/zh/remote-access' },
               { text: '会话管理', link: '/zh/session' },
               { text: '技能系统', link: '/zh/skills' },
