@@ -4,6 +4,7 @@ import type { WorkflowDefinition } from '../domain/definition.js';
 import type { WorkflowEventEnvelope, WorkflowEventPayload, WorkflowEventType } from '../domain/event.js';
 import type { WorkflowRun, WorkflowRunError, WorkflowRunMetadata, WorkflowRunSource, WorkflowRunView } from '../domain/run.js';
 import type { WorkflowResultEnvelope } from '../domain/result.js';
+import { validateWorkflowJsonSchema } from '../domain/schema-validation.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
 import { createScriptWorkflowRuntime } from '../runtime/script-workflow-runtime.js';
@@ -13,6 +14,7 @@ import type { Api, Model } from '@earendil-works/pi-ai';
 import { workflowStepLabel } from '../../agent/workflow/step-labels.js';
 import type { SubagentProgressEvent } from '../../agent/workflow/types.js';
 import type { WorkflowScriptSubagentRunner } from '../runtime/script-runtime.js';
+import type { WorkflowAgentInvocationSnapshot } from '../domain/index.js';
 
 export interface WorkflowEngineOptions {
   cwd: string;
@@ -70,6 +72,22 @@ export interface StartWorkflowRunOptions {
   concurrency?: number;
   maxSubagents?: number;
   tokenBudget?: number | null;
+  timeoutSec?: number;
+}
+
+export interface WorkflowReplayAgentTarget {
+  agentId: string;
+  label: string;
+  phaseId?: string;
+  phaseTitle?: string;
+  prompt: string;
+  invocation?: WorkflowAgentInvocationSnapshot;
+}
+
+export interface StartWorkflowReplayRunOptions extends StartWorkflowRunOptions {
+  sourceRunId: string;
+  replayScope: 'failed_agents' | 'failed_phases';
+  targets: WorkflowReplayAgentTarget[];
 }
 
 export class WorkflowEngine {
@@ -130,106 +148,111 @@ export class WorkflowEngine {
 
     try {
       const runtime = this.options.runtime ?? createScriptWorkflowRuntime();
-      const runtimeResult = await runtime.run<unknown>(
-        definition.runtime.source,
-        {
-          runner: this.options.runner,
-          resolveModelId: this.options.resolveModelId,
-        },
-        {
-          cwd: this.options.cwd,
-          args: options.input,
-          signal: options.signal,
-          concurrency: options.concurrency ?? definition.defaults.concurrency,
-          maxSubagents: options.maxSubagents ?? definition.defaults.maxSubagents,
-          tokenBudget: options.tokenBudget,
-          onPhase: (title) => {
-            const nextPhaseId = phaseTitleToId.get(title) ?? normalizePhaseId(title);
-            if (currentPhaseId && currentPhaseId !== nextPhaseId) {
-              void appendEvent('phase_completed', { phaseId: currentPhaseId });
-            }
-            currentPhaseId = nextPhaseId;
-            void appendEvent('phase_started', { phaseId: nextPhaseId, title });
+      const runtimeResult = await withWorkflowTimeout(
+        runtime.run<unknown>(
+          definition.runtime.source,
+          {
+            runner: this.options.runner,
+            resolveModelId: this.options.resolveModelId,
           },
-          onLog: (message) => {
-            void appendEvent('log_appended', { message });
+          {
+            cwd: this.options.cwd,
+            args: options.input,
+            signal: options.signal,
+            concurrency: options.concurrency ?? definition.defaults.concurrency,
+            maxSubagents: options.maxSubagents ?? definition.defaults.maxSubagents,
+            tokenBudget: options.tokenBudget,
+            onPhase: (title) => {
+              const nextPhaseId = phaseTitleToId.get(title) ?? normalizePhaseId(title);
+              if (currentPhaseId && currentPhaseId !== nextPhaseId) {
+                void appendEvent('phase_completed', { phaseId: currentPhaseId });
+              }
+              currentPhaseId = nextPhaseId;
+              void appendEvent('phase_started', { phaseId: nextPhaseId, title });
+            },
+            onLog: (message) => {
+              void appendEvent('log_appended', { message });
+            },
+            onAgentQueued: (event) => {
+              const agentId = formatRuntimeAgentId(event.id);
+              const subagentSessionKey = this.options.subagentSessionKeyFactory?.({ runId, agentId }) ?? defaultSubagentSessionKey(runId, agentId);
+              subagentSessionKeys.set(event.id, subagentSessionKey);
+              const phaseId = event.phase ? (phaseTitleToId.get(event.phase) ?? normalizePhaseId(event.phase)) : currentPhaseId;
+              void this.callHooks((hook) => hook.beforeAgent?.({
+                runId,
+                agentId,
+                label: event.label,
+                phaseId,
+                prompt: event.prompt,
+              }));
+              void appendEvent('agent_queued', {
+                agentId,
+                label: event.label,
+                phaseId,
+                prompt: event.prompt,
+                sessionKey: subagentSessionKey,
+                invocation: event.invocation,
+              });
+            },
+            onAgentStart: (event) => {
+              void appendEvent('agent_started', { agentId: formatRuntimeAgentId(event.id) });
+            },
+            onAgentEnd: (event) => {
+              const agentId = formatRuntimeAgentId(event.id);
+              const completedStatus = normalizeCompletedAgentStatus(event.status);
+              const resultPreview = previewWorkflowValue(event.result);
+              progressRecorders.get(event.id)?.completeOpenSteps(completedStatus === 'done' ? 'done' : 'error');
+              progressRecorders.delete(event.id);
+              void appendEvent('agent_completed', {
+                agentId,
+                status: completedStatus,
+                resultPreview,
+                error: completedStatus === 'error' ? 'Subagent failed' : undefined,
+              }).then(() => this.callHooks((hook) => hook.afterAgent?.({
+                runId,
+                agentId,
+                status: completedStatus,
+                resultPreview,
+              })).catch(() => undefined));
+            },
+            enhanceSubagentRun: (ctx) => {
+              const recorder = new AgentProgressRecorder({
+                agentId: formatRuntimeAgentId(ctx.id),
+                appendEvent,
+              });
+              progressRecorders.set(ctx.id, recorder);
+              const agentId = formatRuntimeAgentId(ctx.id);
+              const sessionKey = subagentSessionKeys.get(ctx.id)
+                ?? this.options.subagentSessionKeyFactory?.({ runId, agentId })
+                ?? defaultSubagentSessionKey(runId, agentId);
+              subagentSessionKeys.set(ctx.id, sessionKey);
+              return {
+                sessionKey,
+                sessionMetadata: {
+                  parentSessionKey: this.options.parentSessionKey,
+                  workflowRunId: runId,
+                  workflowDefinitionId: definition.id,
+                  workflowAgentId: agentId,
+                  workflowAgentLabel: ctx.label,
+                },
+                onProgress: (event) => recorder.onProgress(event),
+              };
+            },
           },
-          onAgentQueued: (event) => {
-            const agentId = formatRuntimeAgentId(event.id);
-            const subagentSessionKey = this.options.subagentSessionKeyFactory?.({ runId, agentId }) ?? defaultSubagentSessionKey(runId, agentId);
-            subagentSessionKeys.set(event.id, subagentSessionKey);
-            const phaseId = event.phase ? (phaseTitleToId.get(event.phase) ?? normalizePhaseId(event.phase)) : currentPhaseId;
-            void this.callHooks((hook) => hook.beforeAgent?.({
-              runId,
-              agentId,
-              label: event.label,
-              phaseId,
-              prompt: event.prompt,
-            }));
-            void appendEvent('agent_queued', {
-              agentId,
-              label: event.label,
-              phaseId,
-              prompt: event.prompt,
-              sessionKey: subagentSessionKey,
-            });
-          },
-          onAgentStart: (event) => {
-            void appendEvent('agent_started', { agentId: formatRuntimeAgentId(event.id) });
-          },
-          onAgentEnd: (event) => {
-            const agentId = formatRuntimeAgentId(event.id);
-            const completedStatus = normalizeCompletedAgentStatus(event.status);
-            const resultPreview = previewWorkflowValue(event.result);
-            progressRecorders.get(event.id)?.completeOpenSteps(completedStatus === 'done' ? 'done' : 'error');
-            progressRecorders.delete(event.id);
-            void appendEvent('agent_completed', {
-              agentId,
-              status: completedStatus,
-              resultPreview,
-              error: completedStatus === 'error' ? 'Subagent failed' : undefined,
-            }).then(() => this.callHooks((hook) => hook.afterAgent?.({
-              runId,
-              agentId,
-              status: completedStatus,
-              resultPreview,
-            })).catch(() => undefined));
-          },
-          enhanceSubagentRun: (ctx) => {
-            const recorder = new AgentProgressRecorder({
-              agentId: formatRuntimeAgentId(ctx.id),
-              appendEvent,
-            });
-            progressRecorders.set(ctx.id, recorder);
-            const agentId = formatRuntimeAgentId(ctx.id);
-            const sessionKey = subagentSessionKeys.get(ctx.id)
-              ?? this.options.subagentSessionKeyFactory?.({ runId, agentId })
-              ?? defaultSubagentSessionKey(runId, agentId);
-            subagentSessionKeys.set(ctx.id, sessionKey);
-            return {
-              sessionKey,
-              sessionMetadata: {
-                parentSessionKey: this.options.parentSessionKey,
-                workflowRunId: runId,
-                workflowDefinitionId: definition.id,
-                workflowAgentId: agentId,
-                workflowAgentLabel: ctx.label,
-              },
-              onProgress: (event) => recorder.onProgress(event),
-            };
-          },
-        },
+        ),
+        options.timeoutSec ?? definition.defaults.timeoutSec,
       );
 
       await eventQueue;
       if (currentPhaseId) {
         await appendEvent('phase_completed', { phaseId: currentPhaseId });
       }
+      assertWorkflowOutput(definition, runtimeResult.result);
       await appendEvent('run_completed', { result: toWorkflowResultEnvelope(runtimeResult.result) });
       await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'succeeded' }));
     } catch (err) {
       await eventQueue;
-      const error = toWorkflowRunError(err, options.signal?.aborted === true);
+      const error = toWorkflowRunError(err, options.signal?.aborted === true, options.signal?.reason);
       if (error.code === 'cancelled') {
         await appendEvent('run_cancelled', { reason: error.message });
         await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'cancelled' }));
@@ -246,6 +269,228 @@ export class WorkflowEngine {
     return view;
   }
 
+  async startReplayRun(definition: WorkflowDefinition, options: StartWorkflowReplayRunOptions): Promise<WorkflowRunView> {
+    const runId = options.runId ?? randomUUID();
+    const createdAtMs = Date.now();
+    let eventQueue = Promise.resolve();
+    const progressRecorders = new Map<string, AgentProgressRecorder>();
+
+    const run: WorkflowRun = {
+      id: runId,
+      definitionId: definition.id,
+      definitionVersion: definition.version,
+      title: `${definition.title} replay`,
+      goal: options.goal ?? definition.description,
+      input: options.input ?? {},
+      status: 'queued',
+      source: options.source,
+      metadata: options.metadata,
+      metrics: {
+        agentCount: 0,
+        doneAgentCount: 0,
+        errorAgentCount: 0,
+        skippedAgentCount: 0,
+        artifactCount: 0,
+      },
+      createdAtMs,
+    };
+
+    const appendEvent = (type: WorkflowEventType, payload: WorkflowEventPayload, createdAtMsOverride?: number) => {
+      eventQueue = eventQueue
+        .then(() =>
+          this.options.eventStore.append({
+            runId,
+            type,
+            payload,
+            createdAtMs: createdAtMsOverride,
+          }),
+        )
+        .then(async (event) => {
+          this.options.onEventAppended?.(event);
+          const view = await this.options.runStore.rebuildRunView(runId);
+          if (view) {
+            this.options.onRunViewUpdated?.(view);
+          }
+        });
+      return eventQueue;
+    };
+
+    await appendEvent('run_queued', { run }, createdAtMs);
+    await this.callHooks((hook) => hook.beforeRun?.({ definition, run }));
+    await appendEvent('run_started', { startedAtMs: Date.now() });
+
+    try {
+      const result = await withWorkflowTimeout(
+        this.runReplayTargets({
+          definition,
+          runId,
+          targets: options.targets,
+          signal: options.signal,
+          appendEvent,
+          progressRecorders,
+        }),
+        options.timeoutSec ?? definition.defaults.timeoutSec,
+      );
+
+      await eventQueue;
+      if (result.errors.length > 0) {
+        await appendEvent('run_failed', {
+          error: {
+            code: 'runtime_error',
+            message: `Replay completed with ${result.errors.length} failed target${result.errors.length === 1 ? '' : 's'}.`,
+            detail: result.errors.join('\n'),
+            recoverable: true,
+          },
+        });
+        await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'failed' }));
+      } else {
+        await appendEvent('run_completed', { result: buildReplayResultEnvelope(options, result.results) });
+        await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'succeeded' }));
+      }
+    } catch (err) {
+      await eventQueue;
+      const error = toWorkflowRunError(err, options.signal?.aborted === true, options.signal?.reason);
+      if (error.code === 'cancelled') {
+        await appendEvent('run_cancelled', { reason: error.message });
+        await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'cancelled' }));
+      } else {
+        await appendEvent('run_failed', { error });
+        await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'failed' }));
+      }
+    }
+
+    const view = await this.options.runStore.readRunView(runId);
+    if (!view) {
+      throw new Error(`workflow replay run view was not created for ${runId}`);
+    }
+    return view;
+  }
+
+  private async runReplayTargets(params: {
+    definition: WorkflowDefinition;
+    runId: string;
+    targets: WorkflowReplayAgentTarget[];
+    signal?: AbortSignal;
+    appendEvent: AppendWorkflowEvent;
+    progressRecorders: Map<string, AgentProgressRecorder>;
+  }): Promise<{ results: WorkflowReplayTargetResult[]; errors: string[] }> {
+    const results: WorkflowReplayTargetResult[] = [];
+    const errors: string[] = [];
+    const targetsByPhase = groupReplayTargetsByPhase(params.targets);
+
+    for (const group of targetsByPhase) {
+      throwIfSignalAborted(params.signal);
+      if (group.phaseId && group.phaseTitle) {
+        await params.appendEvent('phase_started', { phaseId: group.phaseId, title: group.phaseTitle });
+      }
+
+      const phaseResults = await Promise.all(
+        group.targets.map((target) => this.runReplayTarget({ ...params, target })),
+      );
+      results.push(...phaseResults);
+      errors.push(...phaseResults.filter((item) => item.status === 'error').map((item) => `${item.label}: ${item.error ?? 'failed'}`));
+
+      if (group.phaseId && phaseResults.every((item) => item.status === 'done')) {
+        await params.appendEvent('phase_completed', { phaseId: group.phaseId });
+      }
+    }
+
+    return { results, errors };
+  }
+
+  private async runReplayTarget(params: {
+    definition: WorkflowDefinition;
+    runId: string;
+    target: WorkflowReplayAgentTarget;
+    signal?: AbortSignal;
+    appendEvent: AppendWorkflowEvent;
+    progressRecorders: Map<string, AgentProgressRecorder>;
+  }): Promise<WorkflowReplayTargetResult> {
+    const { target } = params;
+    const invocation = normalizeReplayInvocation(target);
+    const sessionKey = this.options.subagentSessionKeyFactory?.({ runId: params.runId, agentId: target.agentId })
+      ?? defaultSubagentSessionKey(params.runId, target.agentId);
+    await this.callHooks((hook) => hook.beforeAgent?.({
+      runId: params.runId,
+      agentId: target.agentId,
+      label: invocation.label,
+      phaseId: target.phaseId,
+      prompt: invocation.prompt,
+    }));
+    await params.appendEvent('agent_queued', {
+      agentId: target.agentId,
+      label: invocation.label,
+      phaseId: target.phaseId,
+      prompt: invocation.prompt,
+      sessionKey,
+      invocation,
+    });
+    await params.appendEvent('agent_started', { agentId: target.agentId });
+
+    const recorder = new AgentProgressRecorder({
+      agentId: target.agentId,
+      appendEvent: params.appendEvent,
+    });
+    params.progressRecorders.set(target.agentId, recorder);
+
+    try {
+      throwIfSignalAborted(params.signal);
+      const model = resolveReplayModel(invocation, this.options.resolveModelId);
+      const result = await this.options.runner.run<unknown>(invocation.prompt, {
+        label: invocation.label,
+        schema: invocation.schema as never,
+        allowedToolNames: invocation.toolset,
+        maxIterations: invocation.maxIterations,
+        phase: invocation.phase ?? target.phaseTitle,
+        signal: params.signal,
+        model,
+        sessionKey,
+        sessionMetadata: {
+          parentSessionKey: this.options.parentSessionKey,
+          workflowRunId: params.runId,
+          workflowDefinitionId: params.definition.id,
+          workflowAgentId: target.agentId,
+          workflowAgentLabel: invocation.label,
+        },
+        onProgress: (event) => recorder.onProgress(event),
+      });
+      throwIfSignalAborted(params.signal);
+      const status = result === null ? 'error' : 'done';
+      const resultPreview = previewWorkflowValue(result);
+      recorder.completeOpenSteps(status === 'done' ? 'done' : 'error');
+      await params.appendEvent('agent_completed', {
+        agentId: target.agentId,
+        status,
+        resultPreview,
+        error: status === 'error' ? 'Replay target failed' : undefined,
+      });
+      await this.callHooks((hook) => hook.afterAgent?.({
+        runId: params.runId,
+        agentId: target.agentId,
+        status,
+        resultPreview,
+      }));
+      return { agentId: target.agentId, label: invocation.label, phaseId: target.phaseId, status, resultPreview };
+    } catch (err) {
+      if (params.signal?.aborted) throw err;
+      const message = err instanceof Error ? err.message : String(err);
+      recorder.completeOpenSteps('error');
+      await params.appendEvent('agent_completed', {
+        agentId: target.agentId,
+        status: 'error',
+        error: message,
+      });
+      await this.callHooks((hook) => hook.afterAgent?.({
+        runId: params.runId,
+        agentId: target.agentId,
+        status: 'error',
+      }));
+      return { agentId: target.agentId, label: invocation.label, phaseId: target.phaseId, status: 'error', error: message };
+    } finally {
+      params.progressRecorders.delete(target.agentId);
+    }
+  }
+
   private async callHooks(call: (hook: WorkflowEngineHook) => Promise<void> | void | undefined): Promise<void> {
     for (const hook of this.options.hooks ?? []) {
       try {
@@ -254,6 +499,27 @@ export class WorkflowEngine {
         // Hooks are extension points; workflow execution remains authoritative.
       }
     }
+  }
+}
+
+interface WorkflowReplayTargetResult {
+  agentId: string;
+  label: string;
+  phaseId?: string;
+  status: 'done' | 'error';
+  resultPreview?: string;
+  error?: string;
+}
+
+class WorkflowEngineRunError extends Error {
+  constructor(
+    readonly code: WorkflowRunError['code'],
+    message: string,
+    readonly recoverable: boolean,
+    readonly detail?: string,
+  ) {
+    super(message);
+    this.name = 'WorkflowEngineRunError';
   }
 }
 
@@ -422,6 +688,114 @@ function normalizePhaseId(title: string): string {
   return normalized || 'phase';
 }
 
+function withWorkflowTimeout<T>(promise: Promise<T>, timeoutSec: number | undefined): Promise<T> {
+  if (typeof timeoutSec !== 'number' || !Number.isFinite(timeoutSec) || timeoutSec <= 0) {
+    return promise;
+  }
+
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      reject(new Error(`workflow timed out after ${timeoutSec}s`));
+    }, timeoutSec * 1000);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}
+
+function throwIfSignalAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return;
+  const reason = signal.reason;
+  if (reason instanceof Error) throw reason;
+  if (reason) throw new Error(String(reason));
+  throw new Error('workflow aborted');
+}
+
+function groupReplayTargetsByPhase(targets: WorkflowReplayAgentTarget[]): Array<{
+  phaseId?: string;
+  phaseTitle?: string;
+  targets: WorkflowReplayAgentTarget[];
+}> {
+  const groups: Array<{
+    key: string;
+    phaseId?: string;
+    phaseTitle?: string;
+    targets: WorkflowReplayAgentTarget[];
+  }> = [];
+
+  for (const target of targets) {
+    const key = target.phaseId ?? '';
+    let group = groups.find((item) => item.key === key);
+    if (!group) {
+      group = {
+        key,
+        phaseId: target.phaseId,
+        phaseTitle: target.phaseTitle,
+        targets: [],
+      };
+      groups.push(group);
+    }
+    group.targets.push(target);
+  }
+
+  return groups.map(({ key: _key, ...group }) => group);
+}
+
+function buildReplayResultEnvelope(
+  options: StartWorkflowReplayRunOptions,
+  results: WorkflowReplayTargetResult[],
+): WorkflowResultEnvelope {
+  const done = results.filter((item) => item.status === 'done').length;
+  return {
+    summary: `Replay completed for ${done}/${results.length} target${results.length === 1 ? '' : 's'}.`,
+    sections: [
+      {
+        kind: 'json',
+        title: 'Replay targets',
+        value: {
+          sourceRunId: options.sourceRunId,
+          scope: options.replayScope,
+          targets: results,
+        },
+      },
+    ],
+    structuredOutput: {
+      replay: {
+        sourceRunId: options.sourceRunId,
+        scope: options.replayScope,
+        targets: results,
+      },
+    },
+  };
+}
+
+function normalizeReplayInvocation(target: WorkflowReplayAgentTarget): WorkflowAgentInvocationSnapshot {
+  return {
+    prompt: target.invocation?.prompt ?? target.prompt,
+    label: target.invocation?.label ?? target.label,
+    phase: target.invocation?.phase ?? target.phaseTitle,
+    modelRef: target.invocation?.modelRef,
+    resolvedModelRef: target.invocation?.resolvedModelRef,
+    schema: target.invocation?.schema,
+    toolset: target.invocation?.toolset ? [...target.invocation.toolset] : undefined,
+    maxIterations: target.invocation?.maxIterations,
+  };
+}
+
+function resolveReplayModel(
+  invocation: WorkflowAgentInvocationSnapshot,
+  resolveModelId: ((modelId: string) => Model<Api>) | undefined,
+): Model<Api> | undefined {
+  const modelRef = invocation.resolvedModelRef ?? invocation.modelRef;
+  if (!modelRef) return undefined;
+  if (!resolveModelId) {
+    throw new Error(`workflow replay missing resolveModelId; cannot resolve model '${modelRef}'`);
+  }
+  return resolveModelId(modelRef);
+}
+
 function formatRuntimeAgentId(id: number): string {
   return `agent-${id}`;
 }
@@ -477,6 +851,17 @@ function toWorkflowResultEnvelope(value: unknown): WorkflowResultEnvelope {
   };
 }
 
+function assertWorkflowOutput(definition: WorkflowDefinition, value: unknown): void {
+  const validation = validateWorkflowJsonSchema(definition.outputSchema, value);
+  if (validation.ok) return;
+  throw new WorkflowEngineRunError(
+    'result_validation_failed',
+    validation.message ?? 'Workflow result did not match output schema',
+    false,
+    JSON.stringify(validation.errors ?? []),
+  );
+}
+
 function isWorkflowResultEnvelope(value: unknown): value is WorkflowResultEnvelope {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
@@ -485,19 +870,28 @@ function isWorkflowResultEnvelope(value: unknown): value is WorkflowResultEnvelo
   return typeof record.summary === 'string' && Array.isArray(record.sections);
 }
 
-function toWorkflowRunError(err: unknown, wasAborted: boolean): WorkflowRunError {
-  const message = err instanceof Error ? err.message : String(err);
+function toWorkflowRunError(err: unknown, wasAborted: boolean, abortReason?: unknown): WorkflowRunError {
+  if (err instanceof WorkflowEngineRunError) {
+    return {
+      code: err.code,
+      message: err.message,
+      detail: err.detail,
+      recoverable: err.recoverable,
+    };
+  }
+  const abortMessage = abortReason instanceof Error ? abortReason.message : abortReason ? String(abortReason) : '';
+  const message = abortMessage || (err instanceof Error ? err.message : String(err));
+  if (/timeout|timed out/i.test(message)) {
+    return {
+      code: 'timeout',
+      message,
+      recoverable: true,
+    };
+  }
   if (wasAborted || /aborted|cancelled/i.test(message)) {
     return {
       code: 'cancelled',
       message: message || 'Workflow run cancelled',
-      recoverable: true,
-    };
-  }
-  if (/timeout/i.test(message)) {
-    return {
-      code: 'timeout',
-      message,
       recoverable: true,
     };
   }

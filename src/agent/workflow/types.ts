@@ -99,6 +99,17 @@ export interface WorkflowAgentSnapshot {
   streamText?: string;
 }
 
+export interface WorkflowAgentInvocationSnapshot {
+  prompt: string;
+  label: string;
+  phase?: string;
+  modelRef?: string;
+  resolvedModelRef?: string;
+  schema?: JsonSchema;
+  toolset?: string[];
+  maxIterations?: number;
+}
+
 export interface WorkflowSnapshot {
   runId?: string;
   name: string;
@@ -201,7 +212,13 @@ export interface WorkflowRunOptions {
   maxSubagents?: number;
   onLog?: (message: string) => void;
   onPhase?: (title: string) => void;
-  onAgentQueued?: (event: { id: number; label: string; phase?: string; prompt: string }) => void;
+  onAgentQueued?: (event: {
+    id: number;
+    label: string;
+    phase?: string;
+    prompt: string;
+    invocation: WorkflowAgentInvocationSnapshot;
+  }) => void;
   onAgentStart?: (event: { id: number; label: string; phase?: string; prompt: string }) => void;
   onAgentEnd?: (event: { id: number; label: string; phase?: string; result: unknown; status: WorkflowAgentStatus }) => void;
   /** Merge extra subagent run options (e.g. progress callbacks) per agent id. */

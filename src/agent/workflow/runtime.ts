@@ -37,6 +37,7 @@ import type {
   WorkflowRunOptions,
   WorkflowRunResult,
   WorkflowAgentStatus,
+  WorkflowAgentInvocationSnapshot,
 } from './types.js';
 
 const DEFAULT_CONCURRENCY_FLOOR = 1;
@@ -95,28 +96,26 @@ export async function runWorkflow<T = unknown>(
   });
 
   const throwIfAborted = () => {
-    if (options.signal?.aborted) throw new Error('workflow aborted');
+    if (!options.signal?.aborted) return;
+    const reason = options.signal.reason;
+    if (reason instanceof Error) throw reason;
+    if (reason) throw new Error(String(reason));
+    throw new Error('workflow aborted');
   };
 
-  const resolveAgentModel = (
+  const resolveAgentModelSelection = (
     normalized: AgentScriptOptions,
     assignedPhase: string | undefined,
-  ): Model<Api> | undefined => {
-    const realId = normalized.model?.trim();
-    if (realId) {
+  ): { modelRef?: string; resolvedModelRef?: string; model?: Model<Api> } => {
+    const modelRef = normalized.model?.trim() || (assignedPhase ? phaseDefaultModels.get(assignedPhase) : undefined);
+    if (modelRef) {
       if (!deps.resolveModelId) {
         throw new Error('workflow runtime missing resolveModelId; cannot resolve real model id');
       }
-      return deps.resolveModelId(realId);
+      const model = deps.resolveModelId(modelRef);
+      return { modelRef, resolvedModelRef: modelToRef(model), model };
     }
-    if (assignedPhase) {
-      const phaseRef = phaseDefaultModels.get(assignedPhase);
-      if (phaseRef) {
-        if (!deps.resolveModelId) return undefined;
-        return deps.resolveModelId(phaseRef);
-      }
-    }
-    return undefined;
+    return {};
   };
 
   const agent = async (prompt: unknown, agentOptions: unknown = {}) => {
@@ -132,18 +131,25 @@ export async function runWorkflow<T = unknown>(
     const normalized = normalizeAgentOptions(agentOptions);
     const assignedPhase = normalized.phase ?? state.currentPhase;
     const requestedLabel = normalized.label?.trim();
+    const modelSelection = resolveAgentModelSelection(normalized, assignedPhase);
 
     state.agentCount += 1;
     const id = state.agentCount;
     const label = requestedLabel || defaultAgentLabel(assignedPhase, id);
-    options.onAgentQueued?.({ id, label, phase: assignedPhase, prompt: taskPrompt });
+    const invocation = buildInvocationSnapshot({
+      prompt: taskPrompt,
+      label,
+      phase: assignedPhase,
+      normalized,
+      modelSelection,
+    });
+    options.onAgentQueued?.({ id, label, phase: assignedPhase, prompt: taskPrompt, invocation });
 
     const runPromise = limiter(async () => {
       options.onAgentStart?.({ id, label, phase: assignedPhase, prompt: taskPrompt });
 
       try {
         throwIfAborted();
-        const resolvedModel = resolveAgentModel(normalized, assignedPhase);
         const enhanced = options.enhanceSubagentRun?.({
           id,
           label,
@@ -157,7 +163,7 @@ export async function runWorkflow<T = unknown>(
           maxIterations: normalized.maxIterations,
           phase: assignedPhase,
           signal: options.signal,
-          model: resolvedModel,
+          model: modelSelection.model,
           ...enhanced,
         });
         throwIfAborted();
@@ -387,6 +393,41 @@ function normalizeAgentOptions(value: unknown): AgentScriptOptions {
     toolset,
     maxIterations,
   };
+}
+
+function buildInvocationSnapshot(params: {
+  prompt: string;
+  label: string;
+  phase: string | undefined;
+  normalized: AgentScriptOptions;
+  modelSelection: { modelRef?: string; resolvedModelRef?: string };
+}): WorkflowAgentInvocationSnapshot {
+  return compactObject({
+    prompt: params.prompt,
+    label: params.label,
+    phase: params.phase,
+    modelRef: params.modelSelection.modelRef,
+    resolvedModelRef: params.modelSelection.resolvedModelRef,
+    schema: cloneJsonValue(params.normalized.schema),
+    toolset: params.normalized.toolset ? [...params.normalized.toolset] : undefined,
+    maxIterations: params.normalized.maxIterations,
+  });
+}
+
+function modelToRef(model: Model<Api>): string {
+  return `${model.provider}/${model.id}`;
+}
+
+function cloneJsonValue<T>(value: T | undefined): T | undefined {
+  if (value === undefined) return undefined;
+  return structuredClone(value);
+}
+
+function compactObject<T extends Record<string, unknown>>(value: T): T {
+  for (const key of Object.keys(value)) {
+    if (value[key] === undefined) delete value[key];
+  }
+  return value;
 }
 
 function assertStructuredCloneable(value: unknown, name: string): void {

@@ -1,3 +1,6 @@
+import { readFile, stat } from 'node:fs/promises';
+import { basename, join } from 'node:path';
+
 import type { Hono } from 'hono';
 
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
@@ -5,11 +8,14 @@ import { createWorkflowCatalog } from '../../../agent/workflow/catalog.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
 import type {
   WorkflowDefinition,
+  WorkflowArtifactRef,
   WorkflowRunInputEnvelope,
   WorkflowRunSource,
   WorkflowRunSummary,
+  WorkflowRunView,
 } from '../../../workflows/domain/index.js';
 import { buildWorkflowDefinition, validateWorkflowDefinitionInput } from '../../../workflows/domain/index.js';
+import { resolveWorkflowRunArtifactsDir } from '../../../workflows/store/paths.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 interface StartWorkflowRunRequestBody {
@@ -24,6 +30,33 @@ interface StartWorkflowRunRequestBody {
   maxSubagents?: number;
   tokenBudget?: number | null;
   idempotencyKey?: string;
+}
+
+interface ReplayWorkflowRunRequestBody {
+  scope?: 'failed_agents' | 'failed_phases';
+}
+
+interface WorkflowRunComparison {
+  sourceRunId: string;
+  replayRunId: string;
+  sourceStatus: WorkflowRunView['run']['status'];
+  replayStatus: WorkflowRunView['run']['status'];
+  statusChanged: boolean;
+  durationDeltaMs: number | null;
+  failedAgentsBefore: number;
+  failedAgentsAfter: number;
+  fixedAgentIds: string[];
+  stillFailingAgentIds: string[];
+  targetAgents: Array<{
+    agentId: string;
+    label: string;
+    beforeStatus?: string;
+    afterStatus?: string;
+    beforeError?: string;
+    afterError?: string;
+    beforePreview?: string;
+    afterPreview?: string;
+  }>;
 }
 
 interface SaveWorkflowDefinitionRequestBody {
@@ -207,6 +240,25 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     });
   });
 
+  authenticated.get('/api/workflows/runs/:runId/comparison', async (c) => {
+    const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
+    const runId = c.req.param('runId');
+    const runStore = workflowRunService.createRunStore(agentId);
+    const replayView = await runStore.readRunView(runId);
+    if (!replayView) {
+      return c.json({ error: 'Workflow run not found' }, 404);
+    }
+    const sourceRunId = c.req.query('sourceRunId')?.trim() || replayView.run.metadata?.replay?.sourceRunId;
+    if (!sourceRunId) {
+      return c.json({ error: 'Workflow run is not a replay run' }, 409);
+    }
+    const sourceView = await runStore.readRunView(sourceRunId);
+    if (!sourceView) {
+      return c.json({ error: 'Source workflow run not found' }, 404);
+    }
+    return c.json({ comparison: buildWorkflowRunComparison(sourceView, replayView) });
+  });
+
   authenticated.get('/api/workflows/runs/:runId', async (c) => {
     const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
     const runId = c.req.param('runId');
@@ -216,6 +268,42 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ error: 'Workflow run not found' }, 404);
     }
     return c.json({ view });
+  });
+
+  authenticated.get('/api/workflows/runs/:runId/artifacts/:artifactId', async (c) => {
+    const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
+    const runId = c.req.param('runId');
+    const artifactId = c.req.param('artifactId');
+    const runStore = workflowRunService.createRunStore(agentId);
+    const view = await runStore.readRunView(runId);
+    if (!view) {
+      return c.json({ error: 'Workflow run not found' }, 404);
+    }
+
+    const artifact = findWorkflowArtifact(view, artifactId);
+    if (!artifact) {
+      return c.json({ error: 'Workflow artifact not found' }, 404);
+    }
+
+    const artifactPath = join(resolveWorkflowRunArtifactsDir(service.currentConfig, agentId, runId), basename(artifact.name));
+    let file: Buffer;
+    try {
+      const info = await stat(artifactPath);
+      if (!info.isFile()) {
+        return c.json({ error: 'Workflow artifact not found' }, 404);
+      }
+      file = await readFile(artifactPath);
+    } catch {
+      return c.json({ error: 'Workflow artifact not found' }, 404);
+    }
+
+    return new Response(new Uint8Array(file), {
+      headers: {
+        'Content-Type': artifact.mimeType || 'application/octet-stream',
+        'Content-Length': String(file.byteLength),
+        'Content-Disposition': `attachment; filename="${encodeHeaderFilename(artifact.name)}"`,
+      },
+    });
   });
 
   authenticated.post('/api/workflows/runs/:runId/rebuild', async (c) => {
@@ -240,6 +328,63 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
 
     return c.json({ runId: result.runId, sessionKey: result.sessionKey }, 202);
   });
+
+  authenticated.post('/api/workflows/runs/:runId/replay', async (c) => {
+    const body = await readJsonBody<ReplayWorkflowRunRequestBody>(c.req.raw);
+    const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
+    const runId = c.req.param('runId');
+    const scope = body.scope === 'failed_phases' ? 'failed_phases' : 'failed_agents';
+    const result = await workflowRunService.replayWorkflowRun({ agentId, runId, scope });
+    if (result.ok === false) {
+      return c.json({ error: result.message, code: result.code }, result.httpStatus);
+    }
+
+    return c.json({ runId: result.runId, sessionKey: result.sessionKey }, 202);
+  });
+}
+
+function buildWorkflowRunComparison(sourceView: WorkflowRunView, replayView: WorkflowRunView): WorkflowRunComparison {
+  const targetAgentIds = replayView.run.metadata?.replay?.agentIds ?? replayView.agents.map((agent) => agent.id);
+  const sourceAgents = new Map(sourceView.agents.map((agent) => [agent.id, agent]));
+  const replayAgents = new Map(replayView.agents.map((agent) => [agent.id, agent]));
+  const targetAgents = targetAgentIds.map((agentId) => {
+    const before = sourceAgents.get(agentId);
+    const after = replayAgents.get(agentId);
+    return {
+      agentId,
+      label: after?.label ?? before?.label ?? agentId,
+      beforeStatus: before?.status,
+      afterStatus: after?.status,
+      beforeError: before?.error,
+      afterError: after?.error,
+      beforePreview: before?.resultPreview,
+      afterPreview: after?.resultPreview,
+    };
+  });
+  const fixedAgentIds = targetAgents
+    .filter((agent) => (agent.beforeStatus === 'error' || agent.beforeStatus === 'skipped') && agent.afterStatus === 'done')
+    .map((agent) => agent.agentId);
+  const stillFailingAgentIds = targetAgents
+    .filter((agent) => agent.afterStatus === 'error' || agent.afterStatus === 'skipped')
+    .map((agent) => agent.agentId);
+  const durationDeltaMs =
+    typeof sourceView.run.metrics.durationMs === 'number' && typeof replayView.run.metrics.durationMs === 'number'
+      ? replayView.run.metrics.durationMs - sourceView.run.metrics.durationMs
+      : null;
+
+  return {
+    sourceRunId: sourceView.run.id,
+    replayRunId: replayView.run.id,
+    sourceStatus: sourceView.run.status,
+    replayStatus: replayView.run.status,
+    statusChanged: sourceView.run.status !== replayView.run.status,
+    durationDeltaMs,
+    failedAgentsBefore: targetAgents.filter((agent) => agent.beforeStatus === 'error' || agent.beforeStatus === 'skipped').length,
+    failedAgentsAfter: stillFailingAgentIds.length,
+    fixedAgentIds,
+    stillFailingAgentIds,
+    targetAgents,
+  };
 }
 
 function getAgentId(rawAgentId: string | undefined, config: AuthenticatedRouteDeps['service']['currentConfig']): string {
@@ -321,3 +466,37 @@ function normalizePositiveInteger(value: number | undefined): number | undefined
   return Math.floor(value);
 }
 
+function findWorkflowArtifact(
+  view: { artifacts?: WorkflowArtifactRef[]; run?: { result?: unknown } },
+  artifactId: string,
+): WorkflowArtifactRef | null {
+  const all = [...(view.artifacts ?? []), ...extractResultArtifacts(view.run?.result)];
+  return all.find((artifact) => artifact.id === artifactId) ?? null;
+}
+
+function extractResultArtifacts(result: unknown): WorkflowArtifactRef[] {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    return [];
+  }
+  const maybeArtifacts = (result as { artifacts?: unknown }).artifacts;
+  if (!Array.isArray(maybeArtifacts)) {
+    return [];
+  }
+  return maybeArtifacts.filter(isWorkflowArtifactRef);
+}
+
+function isWorkflowArtifactRef(value: unknown): value is WorkflowArtifactRef {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Partial<WorkflowArtifactRef>;
+  return (
+    typeof record.id === 'string' &&
+    typeof record.name === 'string' &&
+    typeof record.mimeType === 'string'
+  );
+}
+
+function encodeHeaderFilename(value: string): string {
+  return basename(value).replace(/["\\\r\n]/g, '_');
+}

@@ -47,6 +47,7 @@ export function ChatPage() {
 
   const skillQuery = searchParams.get('skill')?.trim() ?? '';
   const slashQuery = searchParams.get('slash')?.trim() ?? '';
+  const draftQuery = searchParams.get('draft') ?? '';
   const chatSessionKey = session.decodedKey ?? session.sessionKey;
   const { data: workflowMeta } = useWorkflowSessionMetadata(chatSessionKey);
   const workflowRunId = workflowMeta?.workflowRunId ?? null;
@@ -77,7 +78,7 @@ export function ChatPage() {
 
   useEffect(() => {
     if (!auth.hasToken) return;
-    if (!skillQuery && !slashQuery) return;
+    if (!skillQuery && !slashQuery && !draftQuery) return;
     if (session.showSessionLoading || session.sessionRoutePending) return;
     if (!session.sessionKey) return;
 
@@ -85,6 +86,7 @@ export function ChatPage() {
       const next = new URLSearchParams(searchParams);
       next.delete('skill');
       next.delete('slash');
+      next.delete('draft');
       const qs = next.toString();
       navigate({ pathname, search: qs ? `?${qs}` : '' }, { replace: true });
     };
@@ -107,6 +109,13 @@ export function ChatPage() {
       }
       const marker = `${session.sessionKey}:skill:${skillQuery}`;
       applyWireSeed(`/skill:${skillQuery} `, marker);
+      return;
+    }
+
+    const trimmedDraftQuery = draftQuery.trim();
+    if (trimmedDraftQuery) {
+      const marker = `${session.sessionKey}:draft:${trimmedDraftQuery}`;
+      applyWireSeed(trimmedDraftQuery, marker);
       return;
     }
 
@@ -142,6 +151,7 @@ export function ChatPage() {
     auth.hasToken,
     skillQuery,
     slashQuery,
+    draftQuery,
     searchParams,
     session.showSessionLoading,
     session.sessionRoutePending,
