@@ -1,11 +1,9 @@
 import { ArrowLeft, Eye, Code2, FileText, History, MessageCircle, Sparkles } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
-import { BlockEditor } from '@/components/block-editor';
-import { MarkdownEditor } from '@/components/markdown/markdown-editor';
 import { messages } from '@/i18n/messages';
 import { showToast } from '@/lib/toast';
 import { cn } from '@/lib/cn';
@@ -30,6 +28,23 @@ import { NoteBreakdownPanel } from './note-breakdown-panel';
 
 type EditorMode = 'wysiwyg' | 'source' | 'preview';
 
+const loadBlockEditor = () => import('@/components/block-editor');
+const loadMarkdownEditor = () => import('@/components/markdown/markdown-editor');
+
+const BlockEditor = lazy(() => loadBlockEditor().then((m) => ({ default: m.BlockEditor })));
+const MarkdownEditor = lazy(() => loadMarkdownEditor().then((m) => ({ default: m.MarkdownEditor })));
+
+function EditorFallback() {
+  return (
+    <div className="flex h-full min-h-0 flex-col px-6 py-4" aria-busy>
+      <div className="h-8 w-56 max-w-full animate-pulse rounded-md bg-surface-hover" />
+      <div className="mt-6 h-4 w-11/12 animate-pulse rounded bg-surface-hover" />
+      <div className="mt-3 h-4 w-9/12 animate-pulse rounded bg-surface-hover" />
+      <div className="mt-3 h-4 w-10/12 animate-pulse rounded bg-surface-hover" />
+    </div>
+  );
+}
+
 function NoteDetailModeSwitcher({
   mode,
   onModeChange,
@@ -52,6 +67,14 @@ function NoteDetailModeSwitcher({
           key={id}
           type="button"
           onClick={() => onModeChange(id)}
+          onMouseEnter={() => {
+            if (id === 'wysiwyg') void loadBlockEditor();
+            if (id === 'source') void loadMarkdownEditor();
+          }}
+          onFocus={() => {
+            if (id === 'wysiwyg') void loadBlockEditor();
+            if (id === 'source') void loadMarkdownEditor();
+          }}
           className={cn(
             'inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition-colors',
             mode === id
@@ -462,12 +485,14 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
                     />
                   </div>
                   <div className="min-h-0 flex-1">
-                    <BlockEditor
-                      key={`wysiwyg-${noteId}`}
-                      initialContent={note.markdown ?? ''}
-                      onChange={handleSave}
-                      noteId={noteId}
-                    />
+                    <Suspense fallback={<EditorFallback />}>
+                      <BlockEditor
+                        key={`wysiwyg-${noteId}`}
+                        initialContent={note.markdown ?? ''}
+                        onChange={handleSave}
+                        noteId={noteId}
+                      />
+                    </Suspense>
                   </div>
                 </div>
               )}
@@ -483,12 +508,14 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
                     />
                   </div>
                   <div className="min-h-0 flex-1">
-                    <MarkdownEditor
-                      key={`source-${noteId}`}
-                      initialContent={note.markdown ?? ''}
-                      onChange={handleSave}
-                      isDark={isDark}
-                    />
+                    <Suspense fallback={<EditorFallback />}>
+                      <MarkdownEditor
+                        key={`source-${noteId}`}
+                        initialContent={note.markdown ?? ''}
+                        onChange={handleSave}
+                        isDark={isDark}
+                      />
+                    </Suspense>
                   </div>
                 </div>
               )}

@@ -34,6 +34,7 @@ function yieldToBrowser(): Promise<void> {
 export type RenderPdfInContainerOptions = {
   loadingText?: string;
   loadMoreHint?: string;
+  onPageCount?: (count: number) => void;
 };
 
 export async function renderPdfInContainer(
@@ -75,6 +76,7 @@ export async function renderPdfInContainer(
 
     const pageContainer = document.createElement('div');
     pageContainer.className = 'mb-4 last:mb-0';
+    pageContainer.dataset.pdfPage = String(pageNum);
 
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
@@ -121,6 +123,7 @@ export async function renderPdfInContainer(
   };
 
   const numPages = pdf.numPages;
+  options?.onPageCount?.(numPages);
   const initialEnd = Math.min(PDF_INITIAL_PAGE_COUNT, numPages);
 
   if (initialEnd > 0) {

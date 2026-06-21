@@ -31,6 +31,7 @@ import { effectiveWorkspacePathForSession } from '../session/session-workspace.j
 import { wrapMarkdownExportAsHtml } from '../session/chat-export.js';
 import type { CompactionResult } from '../agent/memory/compaction.js';
 import type { PersistentGoalApis } from '../agent/goals/persistent-goal-apis.js';
+import type { WorkflowRunServiceLike } from '../workflows/service/workflow-run-service.types.js';
 
 const log = createLogger('CommandContext');
 
@@ -77,6 +78,7 @@ export interface CommandContextDeps {
   ) => Promise<string>;
 
   persistentGoalApis?: PersistentGoalApis;
+  workflowRunService?: WorkflowRunServiceLike;
 }
 
 export class CommandContextImpl implements CommandContext {
@@ -89,6 +91,7 @@ export class CommandContextImpl implements CommandContext {
   readonly config: Config;
   readonly abortCurrentTurn?: () => Promise<void>;
   readonly persistentGoalApis?: PersistentGoalApis;
+  readonly workflowRunApis?: CommandContext['workflowRunApis'];
 
   private deps: CommandContextDeps;
 
@@ -110,6 +113,12 @@ export class CommandContextImpl implements CommandContext {
     }
 
     this.persistentGoalApis = deps.persistentGoalApis;
+    if (deps.workflowRunService) {
+      this.workflowRunApis = {
+        service: deps.workflowRunService,
+        startWorkflowRun: (params) => deps.workflowRunService!.startWorkflowRun(params),
+      };
+    }
   }
 
   // === Reply API ===

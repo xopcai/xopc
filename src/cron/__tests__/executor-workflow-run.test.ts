@@ -90,6 +90,40 @@ function succeededView() {
 }
 
 describe('DefaultJobExecutor workflowRun payload', () => {
+  it('queues goal continuations', async () => {
+    const enqueue = vi.fn(() => ({
+      id: 'queue-1',
+      goalId: 'goal-1',
+      status: 'queued',
+      sessionKey: 'agent:main:webchat:default:direct:goal-goal-1',
+    }));
+    const executor = new DefaultJobExecutor();
+
+    await executor.execute(
+      createWorkflowRunJob({
+        payload: {
+          kind: 'goalContinue',
+          goalId: 'goal-1',
+          message: 'Continue the goal',
+          maxRetries: 1,
+        },
+      }),
+      new AbortController().signal,
+      { goalRunner: { enqueue } },
+    );
+
+    expect(enqueue).toHaveBeenCalledWith('goal-1', {
+      message: 'Continue the goal',
+      maxRetries: 1,
+      source: 'cron',
+    });
+    expect(executor.getHistory('nightly', 1)[0]).toMatchObject({
+      status: 'success',
+      sessionKey: 'agent:main:webchat:default:direct:goal-goal-1',
+      sessionType: 'goal',
+    });
+  });
+
   it('waits for terminal status and records workflow outcome', async () => {
     const startWorkflowRun = vi.fn(async () => ({
       ok: true as const,

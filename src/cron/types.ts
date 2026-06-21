@@ -39,7 +39,15 @@ export interface CronDelivery {
 export type CronPayload =
   | { kind: 'systemEvent'; text: string }
   | { kind: 'agentTurn'; message: string; model?: string; timeoutSeconds?: number }
+  | CronGoalContinuePayload
   | CronWorkflowRunPayload;
+
+export interface CronGoalContinuePayload {
+  kind: 'goalContinue';
+  goalId: string;
+  message?: string;
+  maxRetries?: number;
+}
 
 export interface CronWorkflowRunPayload {
   kind: 'workflowRun';
@@ -133,6 +141,13 @@ export interface JobExecutorDeps {
    */
   getDefaultCronAgentId?: () => string;
   workflowRunService?: CronWorkflowRunStarter;
+  goalRunner?: {
+    enqueue(goalId: string, options?: {
+      message?: string;
+      maxRetries?: number;
+      source?: 'api' | 'cron' | 'workflow' | 'system';
+    }): { id: string; goalId: string; status: string; sessionKey?: string };
+  };
 }
 
 export interface JobExecutor {

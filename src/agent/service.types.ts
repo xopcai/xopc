@@ -39,6 +39,14 @@ export interface AgentServiceConfig {
   onSessionMetadataUpdated?: (sessionKey: string, patch?: { name?: string }) => void;
   /** Gateway: transcript JSONL append (goal verdict, slash receipt, background turns). */
   onSessionTranscriptUpdated?: (sessionKey: string) => void;
+  /** Gateway: durable goal status changed after post-turn judge. */
+  onGoalStatusUpdated?: (payload: {
+    goalId: string;
+    sessionKey: string;
+    previousStatus: string;
+    status: string;
+    goal: import('../goals/types.js').GoalWithDetails;
+  }) => void;
   /** Gateway: persisted workflow runs. */
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike;
   /** Gateway: resolves bound source context (e.g. Note-grounded chat) before each turn. */

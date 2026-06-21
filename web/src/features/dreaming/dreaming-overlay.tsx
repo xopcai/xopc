@@ -10,8 +10,9 @@ import { useCallback, useEffect, useRef } from 'react';
 
 import { cn } from '@/lib/cn';
 
-import { DreamingScene } from './dreaming-scene';
 import { useDreamingEvents } from './use-dreaming-events';
+
+type DreamingSceneInstance = import('./dreaming-scene').DreamingScene;
 
 const PHASE_LABELS: Record<string, string> = {
   light: '💤 Light Sleep — scanning memories…',
@@ -26,20 +27,40 @@ function prefersReducedMotion(): boolean {
 
 export function DreamingOverlay() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<DreamingScene | null>(null);
+  const sceneRef = useRef<DreamingSceneInstance | null>(null);
+  const sceneLoadingRef = useRef<Promise<DreamingSceneInstance | null> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { state, dismiss } = useDreamingEvents();
 
-  // Initialize / dispose Three.js scene
-  useEffect(() => {
+  const ensureScene = useCallback(async (): Promise<DreamingSceneInstance | null> => {
+    if (sceneRef.current) return sceneRef.current;
+    if (sceneLoadingRef.current) return sceneLoadingRef.current;
+
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
 
-    const dreamScene = new DreamingScene(canvas);
-    sceneRef.current = dreamScene;
+    sceneLoadingRef.current = import('./dreaming-scene')
+      .then(({ DreamingScene }) => {
+        if (!canvas.isConnected) return null;
+        const dreamScene = new DreamingScene(canvas);
+        sceneRef.current = dreamScene;
+        const container = containerRef.current;
+        if (container) {
+          dreamScene.resize(container.clientWidth, container.clientHeight);
+        }
+        return dreamScene;
+      })
+      .finally(() => {
+        sceneLoadingRef.current = null;
+      });
 
+    return sceneLoadingRef.current;
+  }, []);
+
+  // Dispose Three.js only if it was needed.
+  useEffect(() => {
     return () => {
-      dreamScene.dispose();
+      sceneRef.current?.dispose();
       sceneRef.current = null;
     };
   }, []);
@@ -58,16 +79,20 @@ export function DreamingOverlay() {
 
   // Drive animation based on state
   useEffect(() => {
-    const scene = sceneRef.current;
-    if (!scene) return;
-
     if (state.status === 'running') {
       if (prefersReducedMotion()) return; // skip animation entirely
-      scene.startPhase(state.phase);
+      let cancelled = false;
+      void ensureScene().then((scene) => {
+        if (cancelled || !scene) return;
+        scene.startPhase(state.phase);
+      });
+      return () => {
+        cancelled = true;
+      };
     } else if (state.status === 'fading-out') {
-      scene.fadeOut();
+      sceneRef.current?.fadeOut();
     }
-  }, [state]);
+  }, [ensureScene, state]);
 
   // Initial size after mount
   useEffect(() => {

@@ -39,10 +39,13 @@ const EVALUATE_CHECKLIST_SYSTEM = (
   'For each pending item, decide if evidence in the agent snippet and/or history excerpt shows it is satisfied.\n' +
   'Flip pending→completed only with clear evidence; pending→impossible only if truly unachievable here.\n' +
   'Do not regress completed/impossible items — omit them from updates.\n\n' +
-  'Reply ONLY with one JSON object on one line. Field "updates" is an array of ' +
-  '{"index": <1-based number>, "status": "completed" or "impossible", "evidence": "short citation"}. ' +
-  'Field "new_items" is an array of {"text": "..."} for missing criteria. ' +
-  'Field "reason" is one sentence. updates and new_items may be empty arrays.'
+  'Reply ONLY with one JSON object on one line:\n' +
+  '{"verdict":"continue|done|blocked|needs_input","confidence":0.0,"reason":"...",' +
+  '"nextAction":"...","missingEvidence":["..."],"userQuestion":"...",' +
+  '"updates":[{"index":1,"status":"completed|impossible","evidence":"short citation"}],' +
+  '"new_items":[{"text":"..."}]}\n' +
+  'Use verdict=done only when all checklist criteria are complete/impossible. ' +
+  'Use needs_input when the next step requires user input. Use blocked when external progress is impossible.'
 );
 
 function extractJsonObject(raw: string): Record<string, unknown> | null {
@@ -170,9 +173,14 @@ export type ChecklistJudgeUpdate = {
 };
 
 export type ChecklistEvaluateParsed = {
+  verdict: 'continue' | 'done' | 'blocked' | 'needs_input';
+  confidence: number;
   updates: ChecklistJudgeUpdate[];
   newItems: { text: string }[];
   reason: string;
+  nextAction?: string;
+  missingEvidence?: string[];
+  userQuestion?: string;
 };
 
 export type EvaluateChecklistResult = {
@@ -197,6 +205,8 @@ export async function evaluateGoalChecklistJudge(opts: {
   } catch {
     return {
       parsed: {
+        verdict: 'continue',
+        confidence: 0,
         updates: [],
         newItems: [],
         reason: judgeReasonText('judge_model_not_configured', locale),
@@ -236,6 +246,8 @@ export async function evaluateGoalChecklistJudge(opts: {
     if (errorReason) {
       return {
         parsed: {
+          verdict: 'continue',
+          confidence: 0,
           updates: [],
           newItems: [],
           reason: judgeReasonText('judge_call_failed', locale),
@@ -249,6 +261,8 @@ export async function evaluateGoalChecklistJudge(opts: {
     if (!data) {
       return {
         parsed: {
+          verdict: 'continue',
+          confidence: 0,
           updates: [],
           newItems: [],
           reason: judgeReasonText('judge_reply_not_json', locale),
@@ -258,6 +272,16 @@ export async function evaluateGoalChecklistJudge(opts: {
     }
     const updatesRaw = data.updates;
     const newRaw = data.new_items ?? data.newItems;
+    const verdictRaw = String(data.verdict ?? '').trim().toLowerCase();
+    const verdict =
+      verdictRaw === 'done' || verdictRaw === 'blocked' || verdictRaw === 'needs_input'
+        ? verdictRaw
+        : 'continue';
+    const confidenceRaw = Number(data.confidence);
+    const confidence = Number.isFinite(confidenceRaw) ? Math.max(0, Math.min(1, confidenceRaw)) : 0;
+    const nextAction = typeof data.nextAction === 'string' ? data.nextAction.trim() : undefined;
+    const userQuestion = typeof data.userQuestion === 'string' ? data.userQuestion.trim() : undefined;
+    const missingEvidenceRaw = data.missingEvidence ?? data.missing_evidence;
     const trimmed = typeof data.reason === 'string' ? data.reason.trim() : '';
     const inner = trimmed || JUDGE_REASON_EN.no_reason_provided;
     const reason = localizeJudgeReasonText(inner, locale);
@@ -287,17 +311,30 @@ export async function evaluateGoalChecklistJudge(opts: {
         }
       }
     }
+    const missingEvidence: string[] = [];
+    if (Array.isArray(missingEvidenceRaw)) {
+      for (const item of missingEvidenceRaw) {
+        if (typeof item === 'string' && item.trim()) missingEvidence.push(item.trim());
+      }
+    }
     return {
       parsed: {
+        verdict,
+        confidence,
         updates,
         newItems,
         reason: reason || judgeReasonText('no_reason_provided', locale),
+        ...(nextAction ? { nextAction } : {}),
+        ...(missingEvidence.length ? { missingEvidence } : {}),
+        ...(userQuestion ? { userQuestion } : {}),
       },
       parseFailed: false,
     };
   } catch {
     return {
       parsed: {
+        verdict: 'continue',
+        confidence: 0,
         updates: [],
         newItems: [],
         reason: judgeReasonText('judge_call_failed', locale),

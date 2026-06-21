@@ -4,11 +4,11 @@ import type { StoredLanguage } from '@/lib/storage';
 export type GoalWallClockSlice = {
   createdAt: number;
   lastTurnAt: number;
-  status: 'active' | 'paused' | 'done' | 'cleared';
+  status: 'active' | 'paused' | 'blocked' | 'needs_input' | 'done' | 'archived';
 };
 
 /**
- * Milliseconds from goal `createdAt` to `nowMs` while active/paused, or to `lastTurnAt` when status is `done`
+ * Milliseconds from goal `createdAt` to `nowMs` while active/paused/blocked, or to `lastTurnAt` when status is `done`
  * (if `lastTurnAt` is before `createdAt`, falls back to `nowMs`).
  */
 export function computeGoalWallElapsedMs(g: GoalWallClockSlice, nowMs: number): number {

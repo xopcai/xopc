@@ -5,7 +5,7 @@ const base = '/xopc/'
 
 export default defineConfig({
   title: 'xopc',
-  description: 'Ultra-Lightweight Personal AI Assistant',
+  description: 'Local-first Goal Loop OS for long-term AI work across terminal, web, desktop, messengers, and mobile app.',
   base,
   // esbuild 0.28+ errors when downleveling destructuring for legacy targets; our
   // browserslist is above Safari 14.1 (see evanw/esbuild#4436, vitejs/vite#22346).
@@ -21,6 +21,14 @@ export default defineConfig({
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
     ['link', { rel: 'apple-touch-icon', href: `${base}logo.svg` }],
+    ['meta', { property: 'og:title', content: 'xopc - Local-first Goal Loop OS' }],
+    ['meta', { property: 'og:description', content: 'One AI assistant that keeps long-term goals moving across terminal, web, desktop, messengers, and mobile app.' }],
+    ['meta', { property: 'og:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
+    ['meta', { property: 'og:type', content: 'website' }],
+    ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
+    ['meta', { name: 'twitter:title', content: 'xopc - Local-first Goal Loop OS' }],
+    ['meta', { name: 'twitter:description', content: 'One AI assistant that keeps long-term goals moving across terminal, web, desktop, messengers, and mobile app.' }],
+    ['meta', { name: 'twitter:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
   ],
   locales: {
     root: {
@@ -31,7 +39,7 @@ export default defineConfig({
         logo: '/logo.svg',
         nav: [
           { text: 'Home', link: '/' },
-          { text: 'Guide', link: '/getting-started' },
+          { text: 'Guide', link: '/first-5-minutes' },
           { text: 'Reference', link: '/reference/templates' }
         ],
         sidebar: [
@@ -39,6 +47,7 @@ export default defineConfig({
             text: 'Getting Started',
             items: [
               { text: 'Introduction', link: '/' },
+              { text: 'First 5 Minutes', link: '/first-5-minutes' },
               { text: 'Quick Start', link: '/getting-started' }
             ]
           },
@@ -76,6 +85,7 @@ export default defineConfig({
               { text: 'Progress Feedback', link: '/progress' },
               { text: 'Terminal UI (tui)', link: '/tui' },
               { text: 'Gateway', link: '/gateway' },
+              { text: 'Mobile app', link: '/mobile-app' },
               { text: 'Remote access', link: '/remote-access' },
               { text: 'Session', link: '/session' },
               { text: 'Skills', link: '/skills' },
@@ -109,7 +119,7 @@ export default defineConfig({
         logo: '/logo.svg',
         nav: [
           { text: '首页', link: '/zh/' },
-          { text: '指南', link: '/zh/getting-started' },
+          { text: '指南', link: '/zh/first-5-minutes' },
           { text: '参考', link: '/zh/reference/templates' }
         ],
         sidebar: [
@@ -117,6 +127,7 @@ export default defineConfig({
             text: '快速开始',
             items: [
               { text: '简介', link: '/zh/' },
+              { text: '前 5 分钟', link: '/zh/first-5-minutes' },
               { text: '快速上手', link: '/zh/getting-started' }
             ]
           },
@@ -154,6 +165,7 @@ export default defineConfig({
               { text: '进度反馈', link: '/zh/progress' },
               { text: '终端界面 (tui)', link: '/zh/tui' },
               { text: '网关服务', link: '/zh/gateway' },
+              { text: '移动端 app', link: '/zh/mobile-app' },
               { text: '远程访问', link: '/zh/remote-access' },
               { text: '会话管理', link: '/zh/session' },
               { text: '技能系统', link: '/zh/skills' },

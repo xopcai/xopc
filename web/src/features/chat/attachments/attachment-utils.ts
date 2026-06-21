@@ -1,3 +1,2 @@
-/** Lightweight helpers + re-export of async `loadAttachment` (heavy parsers in separate chunks). */
+/** Lightweight attachment helpers. Keep heavy loaders out of this barrel. */
 export * from '@/features/chat/attachments/attachment-utils-core';
-export { loadAttachment } from '@/features/chat/attachments/attachment-load';

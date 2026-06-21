@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
+import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import type { WorkflowRun } from '../domain/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { resolveWorkflowRunEventsPath } from '../store/paths.js';
@@ -20,6 +21,20 @@ function createRun(runId: string, createdAtMs: number): WorkflowRun {
     input: {},
     status: 'queued',
     source: { kind: 'webui' },
+    metadata: {
+      sessionKey: `agent:main:webchat:default:direct:wf_${runId}`,
+      triggerSource: 'webui',
+      agentId: 'main',
+      definition: {
+        id: 'research',
+        name: 'research',
+        title: 'Research task',
+        version: '1.0.0',
+        source: 'builtin',
+        tags: [],
+        phaseCount: 0,
+      },
+    },
     metrics: {
       agentCount: 0,
       doneAgentCount: 0,
@@ -40,9 +55,11 @@ describe('WorkflowEventStore and WorkflowRunStore', () => {
   beforeEach(async () => {
     stateDir = await mkdtemp(join(tmpdir(), 'xopc-workflows-'));
     process.env.XOPC_STATE_DIR = stateDir;
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
   });
 
   afterEach(async () => {
+    closeXopcDatabase();
     if (originalStateDir === undefined) {
       delete process.env.XOPC_STATE_DIR;
     } else {
@@ -98,6 +115,7 @@ describe('WorkflowEventStore and WorkflowRunStore', () => {
       createdAtMs: 2_010,
     });
 
+    await runStore.rebuildRunView('run-older');
     const view = await runStore.rebuildRunView('run-newer');
     const summaries = await runStore.listRunSummaries(10);
 

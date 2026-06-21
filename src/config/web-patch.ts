@@ -25,6 +25,44 @@ const GoalsConfigPatchSchema = z.object({
   maxConsecutiveParseFailures: z.number().int().min(1).max(20).optional(),
   judgeTimeoutMs: z.number().int().min(5_000).max(120_000).optional(),
   checklistHistoryChars: z.number().int().min(0).max(100_000).optional(),
+  notifications: z
+    .object({
+      enabled: z.boolean().optional(),
+      includeLinkedSessions: z.boolean().optional(),
+      channels: z.array(z.string().min(1)).optional(),
+      events: z
+        .array(z.enum([
+          'done',
+          'blocked',
+          'needs_input',
+          'queue_failed',
+          'queue_retry',
+          'queue_succeeded',
+          'queue_skipped',
+        ]))
+        .optional(),
+      targets: z
+        .array(z.object({
+          channel: z.string().min(1),
+          chatId: z.string().min(1),
+          accountId: z.string().optional(),
+          threadId: z.union([z.string(), z.number()]).optional(),
+          silent: z.boolean().optional(),
+          events: z
+            .array(z.enum([
+              'done',
+              'blocked',
+              'needs_input',
+              'queue_failed',
+              'queue_retry',
+              'queue_succeeded',
+              'queue_skipped',
+            ]))
+            .optional(),
+        }))
+        .optional(),
+    })
+    .optional(),
 });
 
 const SessionStoragePatchSchema = z.object({
@@ -78,16 +116,25 @@ export function mergeGoalsConfigPatch(
   if (!parsed.success) {
     return { ok: false, message: parsed.error.issues.map((i) => i.message).join('; ') };
   }
-  config.goals = {
-    ...(config.goals ?? GoalsConfigSchema.parse({})),
-    ...parsed.data,
-  };
+  const currentGoals = GoalsConfigSchema.parse(config.goals ?? {});
+  const goalPatch = { ...parsed.data };
   if ('judgeModelRef' in patch) {
     const ref = patch.judgeModelRef;
     if (ref === null || (typeof ref === 'string' && !ref.trim())) {
-      delete config.goals?.judgeModelRef;
+      delete goalPatch.judgeModelRef;
+      delete currentGoals.judgeModelRef;
     }
   }
+  config.goals = GoalsConfigSchema.parse({
+    ...currentGoals,
+    ...goalPatch,
+    notifications: goalPatch.notifications
+      ? {
+          ...currentGoals.notifications,
+          ...goalPatch.notifications,
+        }
+      : currentGoals.notifications,
+  });
   return { ok: true };
 }
 

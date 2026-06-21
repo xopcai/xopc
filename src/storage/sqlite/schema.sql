@@ -131,6 +131,36 @@ CREATE INDEX IF NOT EXISTS idx_cron_runs_job_started
 CREATE INDEX IF NOT EXISTS idx_cron_runs_started
   ON cron_runs(started_at DESC);
 
+CREATE TABLE IF NOT EXISTS workflow_runs (
+  run_id              TEXT PRIMARY KEY,
+  agent_id            TEXT NOT NULL,
+  definition_id       TEXT NOT NULL,
+  definition_version  TEXT NOT NULL,
+  goal_id             TEXT,
+  session_key         TEXT NOT NULL,
+  parent_session_key  TEXT,
+  status              TEXT NOT NULL,
+  source_kind         TEXT NOT NULL,
+  source_json         TEXT NOT NULL,
+  metadata_json       TEXT,
+  title               TEXT NOT NULL,
+  created_at_ms       INTEGER NOT NULL,
+  started_at_ms       INTEGER,
+  completed_at_ms     INTEGER,
+  metrics_json        TEXT NOT NULL,
+  result_preview      TEXT,
+  error_message       TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_workflow_runs_goal_created
+  ON workflow_runs(goal_id, created_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_workflow_runs_status_created
+  ON workflow_runs(agent_id, status, created_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_workflow_runs_definition_created
+  ON workflow_runs(definition_id, created_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_workflow_runs_created
+  ON workflow_runs(agent_id, created_at_ms DESC);
+
 CREATE TABLE IF NOT EXISTS notes (
   note_id               TEXT PRIMARY KEY,
   title                 TEXT,
@@ -199,3 +229,136 @@ CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
   end_line UNINDEXED,
   tokenize='unicode61'
 );
+
+CREATE TABLE IF NOT EXISTS goals (
+  goal_id              TEXT PRIMARY KEY,
+  title                TEXT NOT NULL,
+  description          TEXT,
+  status               TEXT NOT NULL,
+  agent_id             TEXT NOT NULL,
+  priority             TEXT NOT NULL DEFAULT 'normal',
+  deadline_at          INTEGER,
+  created_at           INTEGER NOT NULL,
+  updated_at           INTEGER NOT NULL,
+  completed_at         INTEGER,
+  archived_at          INTEGER,
+  active_session_key   TEXT,
+  current_run_id       TEXT,
+  next_action          TEXT,
+  blocked_reason       TEXT,
+  judge_model_ref      TEXT,
+  max_turns            INTEGER NOT NULL,
+  turns_used           INTEGER NOT NULL DEFAULT 0,
+  ui_locale            TEXT,
+  source               TEXT NOT NULL DEFAULT 'chat'
+);
+
+CREATE INDEX IF NOT EXISTS idx_goals_status_updated
+  ON goals(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_goals_agent_updated
+  ON goals(agent_id, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_goals_active_session
+  ON goals(active_session_key);
+
+CREATE TABLE IF NOT EXISTS goal_queue (
+  queue_id       TEXT PRIMARY KEY,
+  goal_id        TEXT NOT NULL,
+  status         TEXT NOT NULL,
+  payload_json   TEXT NOT NULL,
+  attempts       INTEGER NOT NULL,
+  max_retries    INTEGER NOT NULL,
+  enqueued_at    INTEGER NOT NULL,
+  started_at     INTEGER,
+  finished_at    INTEGER,
+  next_run_at    INTEGER,
+  session_key    TEXT,
+  last_error     TEXT,
+  source         TEXT NOT NULL,
+  FOREIGN KEY (goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_goal_queue_status_next
+  ON goal_queue(status, next_run_at, enqueued_at);
+CREATE INDEX IF NOT EXISTS idx_goal_queue_goal_status
+  ON goal_queue(goal_id, status);
+CREATE INDEX IF NOT EXISTS idx_goal_queue_enqueued
+  ON goal_queue(enqueued_at DESC);
+
+CREATE TABLE IF NOT EXISTS goal_checklist_items (
+  item_id            TEXT PRIMARY KEY,
+  goal_id            TEXT NOT NULL,
+  text               TEXT NOT NULL,
+  status             TEXT NOT NULL,
+  added_by           TEXT NOT NULL,
+  added_at           INTEGER NOT NULL,
+  completed_at       INTEGER,
+  evidence_summary   TEXT,
+  sort_order         INTEGER NOT NULL,
+  FOREIGN KEY (goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_goal_checklist_goal_order
+  ON goal_checklist_items(goal_id, sort_order);
+
+CREATE TABLE IF NOT EXISTS goal_runs (
+  run_id              TEXT PRIMARY KEY,
+  goal_id             TEXT NOT NULL,
+  session_key         TEXT NOT NULL,
+  source              TEXT NOT NULL,
+  status              TEXT NOT NULL,
+  started_at          INTEGER NOT NULL,
+  finished_at         INTEGER,
+  verdict             TEXT,
+  reason              TEXT,
+  next_action         TEXT,
+  assistant_preview   TEXT,
+  checklist_done      INTEGER,
+  checklist_total     INTEGER,
+  FOREIGN KEY (goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_goal_runs_goal_started
+  ON goal_runs(goal_id, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_goal_runs_session_started
+  ON goal_runs(session_key, started_at DESC);
+
+CREATE TABLE IF NOT EXISTS goal_events (
+  event_id       TEXT PRIMARY KEY,
+  goal_id        TEXT NOT NULL,
+  run_id         TEXT,
+  kind           TEXT NOT NULL,
+  message        TEXT NOT NULL,
+  data_json      TEXT,
+  created_at     INTEGER NOT NULL,
+  FOREIGN KEY (goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_goal_events_goal_created
+  ON goal_events(goal_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS goal_evidence (
+  evidence_id   TEXT PRIMARY KEY,
+  goal_id       TEXT NOT NULL,
+  run_id        TEXT,
+  kind          TEXT NOT NULL,
+  title         TEXT NOT NULL,
+  summary       TEXT,
+  uri           TEXT,
+  data_json     TEXT,
+  created_at    INTEGER NOT NULL,
+  FOREIGN KEY (goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_goal_evidence_goal_created
+  ON goal_evidence(goal_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS goal_session_links (
+  goal_id       TEXT NOT NULL,
+  session_key   TEXT NOT NULL,
+  linked_at     INTEGER NOT NULL,
+  PRIMARY KEY (goal_id, session_key),
+  FOREIGN KEY (goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_goal_session_links_session
+  ON goal_session_links(session_key, linked_at DESC);

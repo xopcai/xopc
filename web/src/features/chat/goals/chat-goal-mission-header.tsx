@@ -49,8 +49,8 @@ export function GoalMissionHeader({
             {t.elapsedLabel}: <span className="text-fg">{elapsedStr}</span>
           </span>
         </div>
-        <p className="mt-1 line-clamp-2 text-sm leading-snug text-fg" title={goal.goal}>
-          {goal.goal}
+        <p className="mt-1 line-clamp-2 text-sm leading-snug text-fg" title={goal.title}>
+          {goal.title}
         </p>
       </div>
       <div className="flex shrink-0 items-center gap-1">

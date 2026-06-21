@@ -11,6 +11,7 @@
     "settings": "设置",
     "sessions": "会话管理",
     "cron": "定时任务",
+    "goals": "目标",
     "notes": "笔记",
     "workflows": "工作流",
     "skills": "技能",
@@ -150,8 +151,7 @@
     "checkUpdatesDownloaded": "已下载，可安装：v{version}",
     "checkUpdatesError": "检查失败",
     "gatewayUnavailable": "—",
-    "openSourceLead": "本软件离不开 ",
-    "openSourceLink": "开源软件",
+    "repositoryLink": "View on GitHub",
     "copyright": "版权所有 © {year} xopcai"
   },
   "updatePanel": {

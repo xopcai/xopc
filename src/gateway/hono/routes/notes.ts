@@ -14,6 +14,10 @@ const VALID_KINDS = new Set<NoteKind>(['thought', 'todo', 'voice', 'media', 'boo
 const VALID_STATUSES = new Set<NoteStatus>(['inbox', 'processed', 'archived', 'trashed']);
 const VALID_CHANNELS = new Set<CaptureChannel>(['app', 'web', 'electron', 'tui', 'telegram', 'wechat', 'feishu']);
 
+function noteNotFound() {
+  return { error: 'Note not found', code: 'note_not_found' };
+}
+
 function parseCaptureSource(body: Record<string, unknown>): CaptureSource {
   const channel = typeof body.channel === 'string' && VALID_CHANNELS.has(body.channel as CaptureChannel)
     ? (body.channel as CaptureChannel)
@@ -65,7 +69,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     const pinnedRaw = c.req.query('pinned');
     const limitRaw = c.req.query('limit');
     const offsetRaw = c.req.query('offset');
-    const sortBy = c.req.query('sortBy') as 'createdAt' | 'updatedAt' | undefined;
+    const sortBy = c.req.query('sortBy') as 'createdAt' | 'updatedAt' | 'lastOpenedAt' | undefined;
     const sortOrder = c.req.query('sortOrder') as 'asc' | 'desc' | undefined;
 
     const result = await service.notesServiceInstance.listNotes({
@@ -76,7 +80,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       pinned: pinnedRaw === 'true' ? true : pinnedRaw === 'false' ? false : undefined,
       limit: limitRaw ? parseInt(limitRaw, 10) : undefined,
       offset: offsetRaw ? parseInt(offsetRaw, 10) : undefined,
-      sortBy: sortBy === 'createdAt' || sortBy === 'updatedAt' ? sortBy : undefined,
+      sortBy: sortBy === 'createdAt' || sortBy === 'updatedAt' || sortBy === 'lastOpenedAt' ? sortBy : undefined,
       sortOrder: sortOrder === 'asc' || sortOrder === 'desc' ? sortOrder : undefined,
     });
     return c.json(result);
@@ -170,7 +174,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     const patch = buildNotePatch(body);
     const result = await service.notesServiceInstance.syncNote(noteId, patch, baseRemoteVersion);
     if (!result.note) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     if (result.conflict) {
       return c.json({ conflict: true, note: result.note }, 409);
@@ -182,7 +186,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
   authenticated.post('/api/notes/:id/catalyze', async (c) => {
     const result = await service.notesServiceInstance.catalyzeNote(c.req.param('id'), service.currentConfig);
     if (!result) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     return c.json(result);
   });
@@ -196,7 +200,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
     const note = await service.notesServiceInstance.recordCatalysisFeedback(c.req.param('id'), feedback);
     if (!note) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     return c.json({ note });
   });
@@ -206,7 +210,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     const noteId = c.req.param('id');
     const note = await service.notesServiceInstance.getNote(noteId);
     if (!note) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
 
     const body = await c.req.json().catch(() => ({}));
@@ -283,7 +287,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
   authenticated.get('/api/notes/:id/context-status', async (c) => {
     const result = await service.notesServiceInstance.getAgentContextStatus(c.req.param('id'), service.currentConfig);
     if (!result) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     return c.json(noteContextStatusPayload(result));
   });
@@ -292,7 +296,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
   authenticated.post('/api/notes/:id/context-rebuild', async (c) => {
     const result = await service.notesServiceInstance.getAgentContextStatus(c.req.param('id'), service.currentConfig, true);
     if (!result) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     return c.json(noteContextStatusPayload(result));
   });
@@ -302,7 +306,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     const noteId = c.req.param('id');
     const keys = await service.notesServiceInstance.listNoteThreads(noteId);
     if (!keys) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     const sessions = [];
     for (const key of keys) {
@@ -322,7 +326,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
     const note = await service.notesServiceInstance.appendTextToNote(c.req.param('id'), content, heading);
     if (!note) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     return c.json({ note });
   });
@@ -332,7 +336,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     const id = c.req.param('id');
     const note = await service.notesServiceInstance.getNote(id);
     if (!note) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     return c.json({ note });
   });
@@ -350,7 +354,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
 
     const updated = await service.notesServiceInstance.updateNote(id, patch, trigger);
     if (!updated) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     return c.json({ note: updated });
   });
@@ -360,7 +364,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     const id = c.req.param('id');
     const removed = await service.notesServiceInstance.deleteNote(id);
     if (!removed) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     return c.json({ deleted: true });
   });
@@ -413,7 +417,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     const markdown = typeof body.markdown === 'string' ? body.markdown : undefined;
     const result = await service.notesServiceInstance.createAiEditPatch(id, instruction, markdown);
     if (!result) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     return c.json(result);
   });
@@ -458,7 +462,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
     });
 
     if (!attachment) {
-      return c.json({ error: 'Note not found' }, 404);
+      return c.json(noteNotFound(), 404);
     }
     return c.json({ attachment }, 201);
   });

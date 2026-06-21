@@ -14,6 +14,11 @@ import type {
   VerboseLevel,
 } from '../agent/transcript/thinking-types.js';
 import type { SessionConfigStore } from '../session/index.js';
+import type {
+  StartWorkflowRunServiceParams,
+  WorkflowRunServiceLike,
+  WorkflowRunServiceResult,
+} from '../workflows/service/workflow-run-service.types.js';
 
 // ============================================================================
 // Unified Message Format (Platform Agnostic)
@@ -234,6 +239,11 @@ export interface CommandContext {
 
   /** Session store + continuation scheduling for built-in persistent `/goal` (when wired). */
   persistentGoalApis?: PersistentGoalApis;
+
+  workflowRunApis?: {
+    startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult>;
+    service: WorkflowRunServiceLike;
+  };
 }
 
 export type PlatformFeature = 

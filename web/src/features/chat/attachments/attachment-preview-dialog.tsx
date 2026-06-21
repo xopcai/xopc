@@ -1,19 +1,23 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Download, Maximize2, Minimize2, X } from 'lucide-react';
+import { Maximize2, Minimize2, X } from 'lucide-react';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
+import { getAttachmentBinaryPayload } from '@/features/chat/attachments/attachment-utils-core';
 import {
-  getAttachmentBinaryPayload,
-  type AttachmentPreviewFileType,
-} from '@/features/chat/attachments/attachment-utils-core';
-import { FilePreviewBody, useAttachmentPreviewResolved, useFilePreviewFullscreen } from '@/features/file-preview';
+  PreviewRuntimeToolbar,
+  PreviewRuntimeView,
+  useAttachmentPreviewResolved,
+  usePreviewRuntimeController,
+  type PreviewFileType,
+} from '@/features/preview-runtime';
+import { useFilePreviewFullscreen } from '@/features/file-preview/use-file-preview-fullscreen';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-function fileTypeLabel(ft: AttachmentPreviewFileType, labels: ReturnType<typeof messages>['chat']): string {
+function fileTypeLabel(ft: PreviewFileType, labels: ReturnType<typeof messages>['chat']): string {
   switch (ft) {
     case 'pdf':
       return labels.attachmentPreviewPdf;
@@ -21,7 +25,7 @@ function fileTypeLabel(ft: AttachmentPreviewFileType, labels: ReturnType<typeof 
       return labels.attachmentPreviewDocument;
     case 'pptx':
       return labels.attachmentPreviewPresentation;
-    case 'excel':
+    case 'spreadsheet':
       return labels.attachmentPreviewSpreadsheet;
     default:
       return '';
@@ -44,6 +48,7 @@ export function AttachmentPreviewDialog({
   const language = useLocaleStore((s) => s.language);
   const labels = messages(language).chat;
   const resolved = useAttachmentPreviewResolved({ open, attachment, authToken, sessionKey, language });
+  const previewController = usePreviewRuntimeController(resolved.descriptor);
   const { rootRef, active, enter, exit } = useFilePreviewFullscreen();
 
   const { preview, fileType, hasExtractedText, showExtractedText } = resolved;
@@ -88,6 +93,10 @@ export function AttachmentPreviewDialog({
   };
 
   const canDownload = Boolean(resolved.binaryBuffer || getAttachmentBinaryPayload(preview ?? {}));
+  const previewActions = {
+    onDownload: handleDownload,
+    canDownload,
+  };
 
   const sideStripClass = cn(
     'min-h-0 min-w-0 flex-1 cursor-pointer border-0 p-0',
@@ -122,11 +131,10 @@ export function AttachmentPreviewDialog({
           >
             <div
               className={cn(
-                'shrink-0 border-b border-edge bg-surface-panel dark:border-edge',
+                'flex shrink-0 items-start gap-2 border-b border-edge px-4 py-2 dark:border-edge',
                 APP_CHROME_NO_DRAG_CLASS,
               )}
             >
-              <div className="flex w-full items-center justify-between gap-2 px-4 py-3 sm:px-8">
                 <Dialog.Title className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
                   {preview?.name ?? ''}
                 </Dialog.Title>
@@ -163,6 +171,7 @@ export function AttachmentPreviewDialog({
                       </button>
                     </div>
                   ) : null}
+                  {preview ? <PreviewRuntimeToolbar controller={previewController} actions={previewActions} /> : null}
                   {canPreviewFullscreen ? (
                     <button
                       type="button"
@@ -174,15 +183,6 @@ export function AttachmentPreviewDialog({
                       {active ? <Minimize2 className="size-4" /> : <Maximize2 className="size-4" />}
                     </button>
                   ) : null}
-                  <button
-                    type="button"
-                    className="rounded-md p-2 text-fg-muted hover:bg-surface-hover hover:text-fg"
-                    title={labels.attachmentPreviewDownload}
-                    aria-label={labels.attachmentPreviewDownload}
-                    onClick={handleDownload}
-                  >
-                    <Download className="size-4" />
-                  </button>
                   <Dialog.Close asChild>
                     <button
                       type="button"
@@ -194,19 +194,15 @@ export function AttachmentPreviewDialog({
                     </button>
                   </Dialog.Close>
                 </div>
-              </div>
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-2 sm:px-8">
               {preview ? (
-                <FilePreviewBody
-                  context="attachment"
+                <PreviewRuntimeView
                   language={language}
-                  fileKey={resolved.fileKey}
-                  fileName={resolved.fileName}
+                  descriptor={resolved.descriptor}
                   loading={resolved.loading}
                   loadError={resolved.loadError}
-                  previewKind={resolved.previewKind}
                   textContent={resolved.textContent}
                   binaryBuffer={resolved.binaryBuffer}
                   showExtractedText={resolved.showExtractedText}
@@ -216,6 +212,8 @@ export function AttachmentPreviewDialog({
                     onDownload: handleDownload,
                     canDownload,
                   }}
+                  controller={previewController}
+                  renderToolbar={() => null}
                 />
               ) : null}
             </div>

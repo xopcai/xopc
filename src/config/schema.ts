@@ -1236,6 +1236,48 @@ export const UpdateAutoConfigSchema = z
   .optional();
 
 /** Persistent `/goal` (Ralph loop) — Hermes-aligned defaults. */
+export const GoalNotificationEventSchema = z.enum([
+  'done',
+  'blocked',
+  'needs_input',
+  'queue_failed',
+  'queue_retry',
+  'queue_succeeded',
+  'queue_skipped',
+]);
+
+export const GoalNotificationTargetSchema = z
+  .object({
+    channel: z.string().min(1),
+    chatId: z.string().min(1),
+    accountId: z.string().optional(),
+    threadId: z.union([z.string(), z.number()]).optional(),
+    silent: z.boolean().optional(),
+    events: z.array(GoalNotificationEventSchema).optional(),
+  })
+  .strict();
+
+export const GoalNotificationsConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    /** Notify Telegram/Weixin chats bound to the goal activeSessionKey. */
+    includeLinkedSessions: z.boolean().default(true),
+    /** Channels eligible for linked-session notifications. */
+    channels: z.array(z.string().min(1)).default(['telegram', 'weixin']),
+    events: z
+      .array(GoalNotificationEventSchema)
+      .default(['done', 'blocked', 'needs_input', 'queue_failed', 'queue_retry']),
+    targets: z.array(GoalNotificationTargetSchema).default([]),
+  })
+  .strict()
+  .default({
+    enabled: false,
+    includeLinkedSessions: true,
+    channels: ['telegram', 'weixin'],
+    events: ['done', 'blocked', 'needs_input', 'queue_failed', 'queue_retry'],
+    targets: [],
+  });
+
 export const GoalsConfigSchema = z
   .object({
     /** Max continuation turns before auto-pause (Hermes default 20). */
@@ -1253,6 +1295,8 @@ export const GoalsConfigSchema = z
     judgeTimeoutMs: z.number().int().min(5_000).max(120_000).default(60_000),
     /** Max characters of recent transcript JSON passed to the checklist judge as extra context. */
     checklistHistoryChars: z.number().int().min(0).max(100_000).default(24_000),
+    /** External channel notification policy for durable goal lifecycle events. */
+    notifications: GoalNotificationsConfigSchema,
   })
   .strict();
 
@@ -1473,6 +1517,13 @@ export const ConfigSchema = z.object({
     maxConsecutiveParseFailures: 3,
     judgeTimeoutMs: 60_000,
     checklistHistoryChars: 24_000,
+    notifications: {
+      enabled: false,
+      includeLinkedSessions: true,
+      channels: ['telegram', 'weixin'],
+      events: ['done', 'blocked', 'needs_input', 'queue_failed', 'queue_retry'],
+      targets: [],
+    },
   },
   extensions: {
     allow: [],

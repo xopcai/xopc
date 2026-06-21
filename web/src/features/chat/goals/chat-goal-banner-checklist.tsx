@@ -77,9 +77,9 @@ export function GoalChecklist({ goal, canEdit, mutationBusy, t, onMutate }: Prop
                     <span className="rounded-full bg-surface-panel px-1.5 py-0.5">
                       {it.addedBy === 'user' ? (copy.userAdded ?? 'User') : (copy.judgeGenerated ?? 'Judge')}
                     </span>
-                    {it.evidence ? (
+                    {it.evidenceSummary ? (
                       <span className="min-w-0 break-words">
-                        {(copy.evidenceLabel ?? 'Evidence')}: {it.evidence}
+                        {(copy.evidenceLabel ?? 'Evidence')}: {it.evidenceSummary}
                       </span>
                     ) : null}
                   </div>

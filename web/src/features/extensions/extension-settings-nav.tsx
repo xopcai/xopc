@@ -4,7 +4,6 @@
 
 import { Bug, LayoutGrid, Puzzle } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
 
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -19,7 +18,6 @@ interface ExtensionSettingsNavProps {
 }
 
 export function ExtensionSettingsNav({ navLinkClassName, showAdvanced = true }: ExtensionSettingsNavProps) {
-  const { t } = useTranslation();
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const uiExtensions = useUiExtensions();
@@ -42,7 +40,7 @@ export function ExtensionSettingsNav({ navLinkClassName, showAdvanced = true }: 
         </NavLink>
         <NavLink to="/settings/extensions/debug" className={navLinkClassName}>
           <Bug className="size-5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-          <span className="min-w-0 flex-1 truncate">{t('extensionDebug.nav')}</span>
+          <span className="min-w-0 flex-1 truncate">{m.extensionDebug.nav}</span>
         </NavLink>
         {settingsPanels.map(({ extension, panel }) => {
           const path = `/settings/ext/${extension.id}/${panel.id}`;

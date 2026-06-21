@@ -1,34 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
 import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
-import { inferAttachmentFileType, inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
+import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
+import { detectPreviewFileType } from '@/features/preview-runtime';
 
-describe('inferAttachmentFileType', () => {
+describe('detectPreviewFileType', () => {
   it('detects PDF from extension when mime is application/octet-stream', () => {
-    expect(
-      inferAttachmentFileType({
-        name: 'report.pdf',
-        mimeType: 'application/octet-stream',
-      }),
-    ).toBe('pdf');
+    expect(detectPreviewFileType('report.pdf', 'application/octet-stream')).toBe('pdf');
   });
 
   it('detects DOCX from extension when mime is generic', () => {
-    expect(
-      inferAttachmentFileType({
-        name: 'Notes.DOCX',
-        mimeType: 'application/octet-stream',
-      }),
-    ).toBe('docx');
+    expect(detectPreviewFileType('Notes.DOCX', 'application/octet-stream')).toBe('docx');
   });
 
   it('prefers office types over image extension false positives', () => {
-    expect(
-      inferAttachmentFileType({
-        name: 'file.xlsx',
-        mimeType: 'application/octet-stream',
-      }),
-    ).toBe('excel');
+    expect(detectPreviewFileType('file.xlsx', 'application/octet-stream')).toBe('spreadsheet');
   });
 });
 

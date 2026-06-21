@@ -8,17 +8,18 @@ import {
   FileTree,
 } from '@/features/file-tree/file-tree';
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
-import { base64ToArrayBuffer, inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
+import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import {
   downloadBinaryFile,
   downloadTextFile,
+  fetchWorkspaceFileBlob,
   readWorkspaceFile,
-  readWorkspaceFileBase64,
 } from '@/features/workspace/workspace-api';
 import {
-  getFileName,
-  shouldReadWorkspaceFileAsBase64Path,
-} from '@/features/file-preview';
+  detectPreviewFileType,
+  getPreviewFileName,
+  readModeForPreviewType,
+} from '@/features/preview-runtime';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
@@ -155,10 +156,10 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
         case 'download':
           if (entry.isDirectory) return;
           try {
-            const fileName = getFileName(entry.path);
-            if (shouldReadWorkspaceFileAsBase64Path(entry.path)) {
-              const { contentBase64 } = await readWorkspaceFileBase64(entry.path, workspaceReadOpts);
-              const buf = base64ToArrayBuffer(contentBase64);
+            const fileName = getPreviewFileName(entry.path);
+            if (readModeForPreviewType(detectPreviewFileType(fileName)) !== 'text') {
+              const blob = await fetchWorkspaceFileBlob(entry.path, workspaceReadOpts);
+              const buf = await blob.arrayBuffer();
               const mime = inferMimeTypeFromFileName(fileName) ?? 'application/octet-stream';
               downloadBinaryFile(fileName, buf, mime);
             } else {

@@ -12,7 +12,26 @@ type UseBinaryPreviewInContainerArgs = {
   kind: BinaryRenderKind | null;
   fileKey: string | null;
   containerEl: HTMLDivElement | null;
+  onPdfPageCount?: (count: number) => void;
 };
+
+function previewLoadingText(language: StoredLanguage, kind: BinaryRenderKind): string {
+  if (kind === 'pdf') return messages(language).chat.attachmentPreviewPdfRendering;
+  if (language === 'zh') {
+    if (kind === 'excel') return '正在加载电子表格…';
+    return '正在加载文档…';
+  }
+  if (kind === 'excel') return 'Loading spreadsheet...';
+  return 'Loading document...';
+}
+
+function renderLoadingPlaceholder(container: HTMLDivElement, text: string): void {
+  container.innerHTML = '';
+  const loadingEl = document.createElement('p');
+  loadingEl.className = 'p-4 text-sm text-fg-muted';
+  loadingEl.textContent = text;
+  container.appendChild(loadingEl);
+}
 
 export function useBinaryPreviewInContainer({
   language,
@@ -20,6 +39,7 @@ export function useBinaryPreviewInContainer({
   kind,
   fileKey,
   containerEl,
+  onPdfPageCount,
 }: UseBinaryPreviewInContainerArgs): { error: string | null; excelTruncated: boolean } {
   const cleanupRef = useRef<(() => void) | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +54,7 @@ export function useBinaryPreviewInContainer({
     if (!buffer || !kind || !containerEl || !fileKey) return;
 
     let cancelled = false;
+    renderLoadingPlaceholder(containerEl, previewLoadingText(language, kind));
 
     void (async () => {
       try {
@@ -44,6 +65,7 @@ export function useBinaryPreviewInContainer({
           const { cleanup } = await mod.renderPdfInContainer(containerEl, buffer, {
             loadingText: L.attachmentPreviewPdfRendering,
             loadMoreHint: L.attachmentPreviewPdfLoadMore,
+            onPageCount: onPdfPageCount,
           });
           cleanupRef.current = cleanup;
         } else if (kind === 'excel') {
@@ -70,8 +92,7 @@ export function useBinaryPreviewInContainer({
       cleanupRef.current?.();
       cleanupRef.current = null;
     };
-  }, [buffer, kind, containerEl, fileKey, language]);
+  }, [buffer, kind, containerEl, fileKey, language, onPdfPageCount]);
 
   return { error, excelTruncated };
 }
-

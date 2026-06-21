@@ -1,5 +1,7 @@
+import * as Tooltip from '@radix-ui/react-tooltip';
 import { MessageSquarePlus } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import {
@@ -8,6 +10,7 @@ import {
 } from '@/features/settings/agents/agent-display-names';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 
 function filterAgents(agents: GatewayAgentRow[], query: string, a: AgentsSettingsMessages): GatewayAgentRow[] {
@@ -28,6 +31,95 @@ function filterAgents(agents: GatewayAgentRow[], query: string, a: AgentsSetting
     );
   });
 }
+
+function formatCount(template: string, count: number): string {
+  return template.replace('{{count}}', String(count));
+}
+
+function agentPrimaryFacts(ag: GatewayAgentRow, a: AgentsSettingsMessages): Array<{
+  label: string;
+  value: string;
+  title?: string;
+}> {
+  const model = ag.model?.primary?.trim();
+  const workspace = ag.workspace.trim();
+
+  return [
+    {
+      label: a.listModelLabel,
+      value: model || a.listInheritedValue,
+      title: model || undefined,
+    },
+    {
+      label: a.listWorkspaceLabel,
+      value: workspace || a.listUnsetValue,
+      title: workspace || undefined,
+    },
+  ];
+}
+
+function agentCapabilityMeta(ag: GatewayAgentRow, a: AgentsSettingsMessages): string {
+  const disabledTools = ag.tools.effectiveDisable.length;
+  const skillCount = ag.skills.effectiveAllowlist?.length ?? 0;
+  const toolsText = disabledTools > 0
+    ? formatCount(a.listToolsDisabledCount, disabledTools)
+    : a.listToolsAllEnabled;
+  const skillsText = skillCount > 0
+    ? formatCount(a.listSkillsCount, skillCount)
+    : a.listInheritedValue;
+
+  return `${a.listToolsLabel} ${toolsText} · ${a.listSkillsLabel} ${skillsText}`;
+}
+
+function agentCapabilityLabels(ag: GatewayAgentRow, a: AgentsSettingsMessages): string[] {
+  const disabledTools = ag.tools.effectiveDisable.length;
+  const skillCount = ag.skills.effectiveAllowlist?.length ?? 0;
+  const toolsText = disabledTools > 0
+    ? formatCount(a.listToolsDisabledCount, disabledTools)
+    : a.listToolsAllEnabled;
+  const skillsText = skillCount > 0
+    ? formatCount(a.listSkillsCount, skillCount)
+    : a.listInheritedValue;
+  return [`${a.listToolsLabel} ${toolsText}`, `${a.listSkillsLabel} ${skillsText}`];
+}
+
+function TextTooltip({
+  text,
+  children,
+  className,
+}: {
+  text: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <Tooltip.Provider delayDuration={300} skipDelayDuration={100}>
+      <Tooltip.Root>
+        <Tooltip.Trigger asChild>
+          <span className={className} title={text}>
+            {children}
+          </span>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content
+            side="top"
+            align="start"
+            sideOffset={6}
+            className={cn(
+              'max-w-[min(28rem,calc(100vw-2rem))] rounded-lg border border-edge bg-surface-panel px-2.5 py-2',
+              'text-left text-xs leading-snug text-fg shadow-popover',
+              SETTINGS_SHELL_POPOVER_Z,
+            )}
+          >
+            {text}
+            <Tooltip.Arrow className="fill-surface-panel" />
+          </Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+    </Tooltip.Provider>
+  );
+}
+
 export function AgentsListGrid(props: {
   a: AgentsSettingsMessages;
   agents: GatewayAgentRow[];
@@ -53,75 +145,105 @@ export function AgentsListGrid(props: {
           const title = agentListDisplayName(ag, a);
           const monoId = ag.id;
           const descTrim = agentListDisplayDescription(ag, a);
+          const facts = agentPrimaryFacts(ag, a);
+          const capabilityMeta = agentCapabilityMeta(ag, a);
+          const capabilityLabels = agentCapabilityLabels(ag, a);
           return (
             <li key={ag.id} className="h-full min-h-0">
-              <div
-                className={cn(
-                  'flex h-full min-h-0 flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-panel p-4 shadow-sm transition-colors',
-                  'hover:border-edge',
-                )}
-              >
+              <article className="flex min-h-[15.5rem] flex-col rounded-xl border border-edge-subtle bg-surface-panel p-4 shadow-surface transition-colors hover:border-edge">
+                <div className="flex items-start justify-between gap-4">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => onOpenAgent(ag.id)}
+                    className={cn(
+                      'flex min-w-0 items-start gap-3 text-left',
+                      'rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                      'disabled:pointer-events-none disabled:opacity-50',
+                      interaction.pressCard,
+                    )}
+                  >
+                    <div
+                      className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-surface-base text-fg ring-1 ring-edge-subtle/40"
+                      aria-hidden
+                    >
+                      <AgentAvatarDisplay agentId={ag.id} avatar={ag.avatar} size={48} className="size-full" />
+                    </div>
+                    <div className="min-w-0">
+                      <h2 className="truncate text-base font-semibold text-fg">{title}</h2>
+                      <p className="mt-1 truncate font-mono text-xs text-fg-muted" title={monoId}>
+                        {monoId}
+                      </p>
+                    </div>
+                  </button>
+                  {ag.isDefault ? (
+                    <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">
+                      {a.defaultBadge}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg-muted">
+                      {a.listCustomBadge}
+                    </span>
+                  )}
+                </div>
+
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => onOpenAgent(ag.id)}
                   className={cn(
-                    'flex shrink-0 w-full flex-col gap-2 text-left transition-colors',
+                    'mt-5 min-h-[6.25rem] text-left',
                     'rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                     'disabled:pointer-events-none disabled:opacity-50',
-                    interaction.pressCard,
                   )}
                 >
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-accent-soft ring-1 ring-edge-subtle/40"
-                      aria-hidden
+                  <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+                    <p
+                      className={cn(
+                        'line-clamp-2 text-sm leading-5',
+                        descTrim ? 'text-fg' : 'text-fg-muted',
+                      )}
+                      title={descTrim || undefined}
                     >
-                      <AgentAvatarDisplay agentId={ag.id} avatar={ag.avatar} size={44} className="size-full" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <span className="truncate font-semibold text-fg">{title}</span>
-                        {ag.isDefault ? (
-                          <span className="shrink-0 rounded-md bg-surface-base px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-muted">
-                            {a.defaultBadge}
-                          </span>
-                        ) : null}
-                      </div>
-                      <p className="mt-0.5 truncate font-mono text-xs text-fg-muted" title={monoId}>
-                        {monoId}
-                      </p>
+                      {descTrim || a.listNoDescription}
+                    </p>
+                    <div className="mt-3 space-y-1 text-sm leading-5 text-fg-muted">
+                      {facts.map((item) => (
+                        <p key={item.label} className="flex min-w-0 items-baseline gap-2">
+                          <span className="shrink-0 text-xs font-medium text-fg-subtle">{item.label}</span>
+                          <TextTooltip text={item.title ?? item.value} className="min-w-0 truncate">
+                            {item.value}
+                          </TextTooltip>
+                        </p>
+                      ))}
                     </div>
                   </div>
-                  <p
-                    className={cn(
-                      'line-clamp-1 min-h-5.25 text-xs leading-relaxed',
-                      descTrim ? 'text-fg' : 'text-fg-muted/25',
-                    )}
-                    title={descTrim || undefined}
-                  >
-                    {descTrim || '\u00A0'}
-                  </p>
+                  <div className="mt-3 flex flex-wrap gap-1.5" title={capabilityMeta}>
+                    {capabilityLabels.map((label) => (
+                      <TextTooltip
+                        key={label}
+                        text={label}
+                        className="rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted"
+                      >
+                        {label}
+                      </TextTooltip>
+                    ))}
+                  </div>
                 </button>
-                <div className="flex shrink-0 items-center gap-2">
-                  <button
+
+                <div className="mt-auto pt-4">
+                  <Button
                     type="button"
+                    variant="primary"
                     disabled={busy}
                     onClick={() => onChatWithAgent(ag.id)}
-                    className={cn(
-                      'flex flex-1 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold',
-                      'bg-accent-soft text-accent-fg transition-colors',
-                      'hover:bg-accent/15',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-                      'disabled:pointer-events-none disabled:opacity-50',
-                      interaction.press,
-                    )}
+                    className="w-full rounded-2xl py-2.5"
                   >
                     <MessageSquarePlus className="size-4 shrink-0" strokeWidth={2} aria-hidden />
                     {a.listChatWithAgent}
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </article>
             </li>
           );
         })}

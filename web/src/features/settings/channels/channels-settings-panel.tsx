@@ -186,7 +186,7 @@ function channelSummary(
     const accounts = countAccounts(config);
     if (accounts > 0) out.push(ch.cardAccounts.replace('{{count}}', String(accounts)));
   }
-  if (out.length > 0) return out.slice(0, 3);
+  if (out.length > 0) return out.slice(0, 2);
   if (entry.configured) return [ch.hubStatusConfigured];
   return [];
 }
@@ -195,6 +195,28 @@ function channelActionLabel(entry: ChannelCatalogEntry, ch: ReturnType<typeof me
   const primary = choosePrimaryChannelAction(entry);
   if (primary?.[1].label) return primary[1].label;
   return entry.configured ? ch.manageChannel : ch.startConfiguration;
+}
+
+function channelSetupHint(entry: ChannelCatalogEntry, ch: ReturnType<typeof messages>['channelsSettings']): string {
+  const primary = choosePrimaryChannelAction(entry);
+  if (primary?.[1].result === 'qr') return ch.cardSetupQrHint;
+  if (primary?.[1].result === 'form') return ch.cardSetupConfigHint;
+  return ch.cardSetupGenericHint;
+}
+
+function channelCapabilityLabels(
+  entry: ChannelCatalogEntry,
+  ch: ReturnType<typeof messages>['channelsSettings'],
+): string[] {
+  const c = entry.capabilities ?? {};
+  const labels: string[] = [];
+  if (c.login === true) labels.push(ch.cardCapabilityLogin);
+  if (c.pairing === true) labels.push(ch.cardCapabilityPairing);
+  if (c.multiAccount === true) labels.push(ch.cardCapabilityMultiAccount);
+  if (c.streaming === true) labels.push(ch.cardCapabilityStreaming);
+  if (c.media === true) labels.push(ch.cardCapabilityMedia);
+  if (c.doctor === true) labels.push(ch.cardCapabilityDoctor);
+  return labels.slice(0, 3);
 }
 
 function ChannelIcon({ entry }: { entry: ChannelCatalogEntry }) {
@@ -281,6 +303,7 @@ function ChannelHubCard({
   onToggle: () => void;
 }) {
   const summary = channelSummary(entry, config, ch);
+  const capabilityLabels = channelCapabilityLabels(entry, ch);
   return (
     <article
       className="flex min-h-[15.5rem] flex-col rounded-xl border border-edge-subtle bg-surface-panel p-4 shadow-surface transition-colors hover:border-edge"
@@ -303,12 +326,39 @@ function ChannelHubCard({
         />
       </div>
 
-      <button type="button" onClick={onOpen} className="mt-5 min-h-[4.5rem] text-left">
-        <p className="line-clamp-3 text-sm leading-6 text-fg-muted">{entry.description ?? entry.id}</p>
-        {summary.length > 0 ? (
-          <div className="mt-3 space-y-0.5 text-sm leading-5 text-fg-muted">
-            {summary.map((item) => <p key={item}>{item}</p>)}
+      <button type="button" onClick={onOpen} className="mt-5 min-h-[6.25rem] text-left">
+        {entry.configured ? (
+          <>
+            <p className="line-clamp-2 text-sm leading-6 text-fg-muted">{entry.description ?? entry.id}</p>
+            {summary.length > 0 ? (
+              <div className="mt-3 space-y-0.5 text-sm leading-5 text-fg-muted">
+                {summary.map((item) => (
+                  <p key={item} className="truncate" title={item}>
+                    {item}
+                  </p>
+                ))}
+              </div>
+            ) : null}
+          </>
+        ) : (
+          <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+            <p className="text-sm font-medium text-fg">{ch.cardSetupTitle}</p>
+            <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{channelSetupHint(entry, ch)}</p>
+            {capabilityLabels.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {capabilityLabels.map((label) => (
+                  <span key={label} className="rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">
+                    {label}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
+        )}
+        {!entry.configured && entry.description ? (
+          <p className="mt-3 truncate text-xs text-fg-subtle" title={entry.description}>
+            {ch.cardAdapterLabel}: {entry.description}
+          </p>
         ) : null}
       </button>
 

@@ -2,44 +2,18 @@ import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 
+import { getSkills } from '@/features/skills/skill-list-api';
+import { reloadSkills } from '@/features/skills/skill-reload-api';
+import { readSkillApiErrorMessage } from '@/features/skills/skill-api-utils';
+
 import type {
   MarketplaceCategoryItem,
   MarketplacePackageDetailPayload,
   SkillMarkdownPreviewPayload,
   SkillsMarketplacePayload,
-  SkillsPayload,
 } from '@/features/skills/skill.types';
 
-async function readErrorMessage(res: Response): Promise<string> {
-  const j = (await res.json().catch(() => ({}))) as { error?: unknown };
-  if (typeof j.error === 'string') return j.error;
-  if (j.error && typeof j.error === 'object' && 'message' in j.error) {
-    const m = (j.error as { message?: string }).message;
-    if (typeof m === 'string') return m;
-  }
-  return `HTTP ${res.status}`;
-}
-
-export async function getSkills(): Promise<SkillsPayload> {
-  const res = await apiFetch(apiUrl('/api/skills'), { cache: 'no-store' });
-  if (!res.ok) {
-    throw new Error(await readErrorMessage(res));
-  }
-  const data = (await res.json()) as { ok?: boolean; payload?: SkillsPayload };
-  if (!data.payload) {
-    throw new Error('Invalid response');
-  }
-  return data.payload;
-}
-
-export async function reloadSkills(): Promise<void> {
-  const res = await apiFetch(apiUrl('/api/skills/reload'), {
-    method: 'POST',
-  });
-  if (!res.ok) {
-    throw new Error(await readErrorMessage(res));
-  }
-}
+export { getSkills, reloadSkills };
 
 export async function uploadSkillZip(
   file: File,
@@ -89,7 +63,7 @@ export async function deleteSkill(skillId: string): Promise<void> {
     method: 'DELETE',
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res));
+    throw new Error(await readSkillApiErrorMessage(res));
   }
 }
 
@@ -100,7 +74,7 @@ export async function patchSkillEnabled(skillName: string, enabled: boolean): Pr
     body: JSON.stringify({ skillName, enabled }),
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res));
+    throw new Error(await readSkillApiErrorMessage(res));
   }
 }
 
@@ -120,7 +94,7 @@ export async function getMarketplaceCategories(opts?: {
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res));
+    throw new Error(await readSkillApiErrorMessage(res));
   }
   const data = (await res.json()) as { ok?: boolean; payload?: { items?: MarketplaceCategoryItem[] } };
   if (!data.payload || !Array.isArray(data.payload.items)) {
@@ -153,7 +127,7 @@ export async function getMarketplaceSkills(params: {
     signal: params.signal,
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res));
+    throw new Error(await readSkillApiErrorMessage(res));
   }
   const data = (await res.json()) as { ok?: boolean; payload?: SkillsMarketplacePayload & { provider?: string } };
   if (!data.payload?.items || !data.payload.meta) {
@@ -174,7 +148,7 @@ export async function getMarketplacePackageDetail(
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res));
+    throw new Error(await readSkillApiErrorMessage(res));
   }
   const data = (await res.json()) as { ok?: boolean; payload?: MarketplacePackageDetailPayload };
   const p = data.payload;
@@ -207,7 +181,7 @@ export async function installMarketplaceSkill(opts: {
     body: JSON.stringify(opts),
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res));
+    throw new Error(await readSkillApiErrorMessage(res));
   }
   const data = (await res.json()) as {
     ok?: boolean;
@@ -225,7 +199,7 @@ export async function getSkillMarkdown(skillName: string): Promise<SkillMarkdown
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res));
+    throw new Error(await readSkillApiErrorMessage(res));
   }
   const data = (await res.json()) as { ok?: boolean; payload?: SkillMarkdownPreviewPayload };
   const p = data.payload;
@@ -255,7 +229,7 @@ export async function getMarketplaceProvider(): Promise<MarketplaceProviderInfo>
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res));
+    throw new Error(await readSkillApiErrorMessage(res));
   }
   const data = (await res.json()) as { ok?: boolean; payload?: MarketplaceProviderInfo };
   if (!data.payload?.provider) {
@@ -273,7 +247,7 @@ export async function getMarketplaceProviders(): Promise<{
     cache: 'no-store',
   });
   if (!res.ok) {
-    throw new Error(await readErrorMessage(res));
+    throw new Error(await readSkillApiErrorMessage(res));
   }
   const data = (await res.json()) as {
     ok?: boolean;

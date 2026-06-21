@@ -47,4 +47,17 @@ describe('cron validation agentId', () => {
     });
     expect(r.success).toBe(true);
   });
+
+  it('AddJobRequestSchema accepts goalContinue payload', () => {
+    const r = AddJobRequestSchema.safeParse({
+      schedule: '*/15 * * * *',
+      payload: {
+        kind: 'goalContinue',
+        goalId: 'goal-1',
+        message: 'Continue from the latest blocker',
+        maxRetries: 2,
+      },
+    });
+    expect(r.success).toBe(true);
+  });
 });

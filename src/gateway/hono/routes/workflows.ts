@@ -24,6 +24,7 @@ interface StartWorkflowRunRequestBody {
   input?: unknown;
   inputEnvelope?: WorkflowRunInputEnvelope;
   goal?: string;
+  goalId?: string;
   agentId?: string;
   parentSessionKey?: string;
   source?: WorkflowRunSource;
@@ -187,10 +188,12 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
 
     const agentId = getAgentId(body.agentId ?? c.req.query('agentId'), service.currentConfig);
     const parentSessionKey = body.parentSessionKey?.trim() || undefined;
+    const goalId = body.goalId?.trim();
     const result = await workflowRunService.startWorkflowRun({
       agentId,
       definitionId,
-      input: body.input,
+      goalId,
+      input: body.inputEnvelope ? undefined : body.input,
       inputEnvelope: body.inputEnvelope,
       goal: body.goal,
       parentSessionKey,
@@ -212,8 +215,11 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
     const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
     const rawLimit = c.req.query('limit');
     const limit = rawLimit ? Number.parseInt(rawLimit, 10) : 50;
+    const goalId = c.req.query('goalId')?.trim();
     const runStore = workflowRunService.createRunStore(agentId);
-    const runs = await runStore.listRunSummaries(Number.isFinite(limit) ? limit : 50);
+    const runs = goalId
+      ? await runStore.listRunSummariesForGoal(goalId, Number.isFinite(limit) ? limit : 50)
+      : await runStore.listRunSummaries(Number.isFinite(limit) ? limit : 50);
     return c.json({ runs });
   });
 

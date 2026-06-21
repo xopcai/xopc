@@ -41,6 +41,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   sessions: FolderOpen,
   cron: Clock,
   skills: Layers,
+  goals: Target,
   channels: Plug,
   agents: Users,
   logs: FileText,

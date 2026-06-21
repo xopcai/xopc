@@ -7,7 +7,7 @@
 
 <p align="center">
   <strong>Goal Loop OS，目标持续循环。</strong><br />
-  本地优先 · 多端联动 · 工作流 + 多 Agent + 可扩展。
+  一个本地优先的长期目标 AI 助手：在终端、网页、桌面、移动端和 IM 里持续推进目标、行动与反馈。
 </p>
 
 <p align="center">
@@ -20,6 +20,7 @@
 
 <p align="center">
   <a href="https://xopc.ai"><strong>xopc.ai</strong></a> ·
+  <a href="https://github.com/xopcai/xopc"><strong>GitHub</strong></a> ·
   <a href="https://xopcai.github.io/xopc/zh/">中文文档</a> ·
   <a href="#get-started">快速开始</a> ·
   <a href="https://github.com/xopcai/xopc/releases">Releases</a>
@@ -31,10 +32,28 @@
 
 ---
 
+## 适合谁
+
+- **长期项目** —— 把方向、下一步行动、反馈和重新校准放进同一个循环，不让目标断在一次次聊天里。
+- **独立开发者 / One Person Company** —— 同一个助手覆盖 CLI、TUI、网页、桌面、Telegram、微信和飞书/Lark。
+- **本地优先 AI 工作流** —— 自带 API Key，云端/本地模型混用，支持 skills/extensions，数据默认在 **`~/.xopc/`**。
+
+---
+
 <a id="get-started"></a>
 <a id="quick-start"></a>
 
 ## 快速开始
+
+### 3 分钟试用
+
+```bash
+curl -fsSL https://xopc.ai/install.sh | bash
+xopc onboard --quick
+xopc tui --local
+```
+
+这条路径会启动本地嵌入式 TUI，不需要先配置网关、桌面端或 IM。
 
 ### 一键安装（推荐）
 
@@ -66,6 +85,8 @@ xopc tui --local
 ```
 
 > **第一次用？** 先跑 **`xopc tui --local`**（本地嵌入式对话，不用网关）。需要 **网页控制台** 或 **Telegram / 微信 / 飞书** 时再执行 **`xopc gateway`**。
+
+如果首次运行顺利，欢迎 **[给仓库点个 Star](https://github.com/xopcai/xopc)**，帮助更多人发现这个项目。
 
 ### npm（已具备 Node.js 22+）
 
@@ -111,7 +132,7 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 
 - 🏠 **你的机器** — 配置与数据在 **`~/.xopc/`**，无强制云端、无意外账单。
 - 🔑 **自带钥匙** — OpenAI、Anthropic、Google、DeepSeek、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端本地可混用，一行配置切换目录模型。详见 **[模型](https://xopcai.github.io/xopc/zh/models)**。
-- 📱 **一个大脑，处处可用** — 终端、浏览器、桌面、手机、IM 同一套助手，无需另做同步。
+- 📱 **一个大脑，处处可用** — 终端、浏览器、桌面、[移动端 app](https://github.com/xopcai/xopc-app)、IM 同一套助手，无需另做同步。
 - 🧩 **随你长大** — **`xopc skills install`** · **`xopc extensions install`** 扩展工具、频道与 UI；多 Agent 按场景隔离。
 - ⏰ **能主动干活** — **Cron** 定时摘要与提醒；**工作流**扇出多子 Agent 任务；**多 Agent** 各自工作区、工具与系统提示词。
 
@@ -125,7 +146,7 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | 脚本、最小终端环境 |
 | **网页** | `xopc gateway` → 打开控制台地址 | 聊天、设置、日志 |
 | **桌面** | [GitHub Releases](#desktop-app) 或 `pnpm run electron:build` | 原生应用（macOS / Windows / Linux） |
-| **手机** | 与网关配对（[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在路上也能继续推进循环 |
+| **手机** | [xopc-app](https://github.com/xopcai/xopc-app) + 网关配对（[移动端 app](https://xopcai.github.io/xopc/zh/mobile-app)、[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在 iOS/Android 上继续推进循环 |
 | **即时通讯** | 配置 `channels.*` 并启动网关 | Telegram、微信、飞书/Lark |
 
 ---
@@ -192,7 +213,28 @@ xopc extensions dev ./my-extension
 | [架构](https://xopcai.github.io/xopc/zh/architecture) | 整体结构 |
 | [工作流](https://xopcai.github.io/xopc/zh/workflows) | 扇出子 Agent、看板、脚本 |
 
-更多：[工具](https://xopcai.github.io/xopc/zh/tools) · [语音](https://xopcai.github.io/xopc/zh/voice) · [远程访问](https://xopcai.github.io/xopc/zh/remote-access)
+更多：[工具](https://xopcai.github.io/xopc/zh/tools) · [移动端 app](https://xopcai.github.io/xopc/zh/mobile-app) · [语音](https://xopcai.github.io/xopc/zh/voice) · [远程访问](https://xopcai.github.io/xopc/zh/remote-access)
+
+---
+
+## 常见问题
+
+**xopc 是云服务吗？**  
+不是。xopc 跑在你的机器上，配置、工作区文件、凭据和本地状态默认都在 **`~/.xopc/`**。
+
+**必须使用付费云端模型吗？**  
+不必须。你可以自带云厂商 API Key，也可以使用 Ollama、LM Studio、vLLM 等本地/自部署模型服务。
+
+**最快怎么试用？**  
+执行 **`xopc onboard --quick`** 和 **`xopc tui --local`**。这条路径不会先要求你配置网关、桌面端或 IM。
+
+**它和普通聊天 UI 有什么区别？**  
+xopc 围绕目标循环组织：方向、下一步、反馈、重新校准，并且同一个助手可以跨多个入口继续工作。
+
+**能在手机或 IM 里用吗？**  
+可以。建议先用本地 TUI 试用；确认方向后，再启动 gateway，用 [xopc-app](https://github.com/xopcai/xopc-app) 连接 iOS/Android，或配置 Telegram、微信、飞书/Lark。
+
+如果这些回答解决了你的顾虑，欢迎 **[给 xopc 点个 Star](https://github.com/xopcai/xopc)**，帮助更多开发者看到它。
 
 ---
 

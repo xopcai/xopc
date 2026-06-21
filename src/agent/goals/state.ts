@@ -1,7 +1,6 @@
 import {
   CHECKLIST_ITEM_PENDING,
   TERMINAL_CHECKLIST_STATUSES,
-  type ChecklistItemAddedBy,
   type ChecklistItemStatus,
   type GoalChecklistItem,
 } from './checklist-types.js';
@@ -10,9 +9,6 @@ import {
 // `GoalUiLocale` AND imports values from `state.ts`, so going through `./goal-locale.js`
 // would create a circular module cycle.
 import type { ServerLocale as GoalUiLocale } from '../../i18n/locale.js';
-
-/** Persisted under `SessionMetadata.customData.persistentGoal`. */
-export const PERSISTENT_GOAL_CUSTOM_KEY = 'persistentGoal';
 
 export type PersistentGoalStatus = 'active' | 'paused' | 'done' | 'cleared';
 
@@ -42,125 +38,6 @@ export function defaultMaxTurns(cfg: { maxTurns?: number } | undefined): number 
     return Math.max(1, Math.min(500, Math.floor(n)));
   }
   return 20;
-}
-
-function coerceStatus(s: unknown): PersistentGoalStatus | undefined {
-  if (s === 'active' || s === 'paused' || s === 'done' || s === 'cleared') return s;
-  return undefined;
-}
-
-function coerceChecklistItem(raw: unknown): GoalChecklistItem | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const r = raw as Record<string, unknown>;
-  const text = typeof r.text === 'string' ? r.text.trim() : '';
-  if (!text) return null;
-  const st = typeof r.status === 'string' ? r.status.trim().toLowerCase() : '';
-  const status: ChecklistItemStatus =
-    st === 'completed' || st === 'impossible' || st === 'pending' ? st : CHECKLIST_ITEM_PENDING;
-  const ab = typeof r.addedBy === 'string' ? r.addedBy.trim().toLowerCase() : '';
-  const addedBy: ChecklistItemAddedBy = ab === 'user' ? 'user' : 'judge';
-  const addedAt =
-    typeof r.addedAt === 'number' && Number.isFinite(r.addedAt) ? Math.floor(r.addedAt) : Date.now();
-  const completedAt =
-    typeof r.completedAt === 'number' && Number.isFinite(r.completedAt) ? Math.floor(r.completedAt) : undefined;
-  const evidence = typeof r.evidence === 'string' ? r.evidence : undefined;
-  return { text, status, addedBy, addedAt, completedAt, evidence };
-}
-
-export function readPersistentGoal(customData: Record<string, unknown> | undefined): PersistentGoalState | null {
-  if (!customData || typeof customData !== 'object') return null;
-
-  const raw = customData[PERSISTENT_GOAL_CUSTOM_KEY];
-  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
-    const o = raw as Record<string, unknown>;
-    const goal = typeof o.goal === 'string' ? o.goal.trim() : '';
-    if (!goal) return null;
-    const status = coerceStatus(o.status) ?? 'active';
-    const maxTurns =
-      typeof o.maxTurns === 'number' && Number.isFinite(o.maxTurns)
-        ? Math.max(1, Math.min(500, Math.floor(o.maxTurns)))
-        : 20;
-    const turnsUsed =
-      typeof o.turnsUsed === 'number' && Number.isFinite(o.turnsUsed)
-        ? Math.max(0, Math.floor(o.turnsUsed))
-        : 0;
-    const createdAt =
-      typeof o.createdAt === 'number' && Number.isFinite(o.createdAt) ? o.createdAt : Date.now();
-    const lastTurnAt =
-      typeof o.lastTurnAt === 'number' && Number.isFinite(o.lastTurnAt) ? o.lastTurnAt : 0;
-    const lastVerdict =
-      o.lastVerdict === 'done' ||
-      o.lastVerdict === 'continue' ||
-      o.lastVerdict === 'skipped' ||
-      o.lastVerdict === 'decompose'
-        ? o.lastVerdict
-        : undefined;
-    const lastReason = typeof o.lastReason === 'string' ? o.lastReason : undefined;
-    const pausedReason = typeof o.pausedReason === 'string' ? o.pausedReason : undefined;
-    const judgeModelRef = typeof o.judgeModelRef === 'string' ? o.judgeModelRef.trim() : undefined;
-    const consecutiveParseFailures =
-      typeof o.consecutiveParseFailures === 'number' && Number.isFinite(o.consecutiveParseFailures)
-        ? Math.max(0, Math.floor(o.consecutiveParseFailures))
-        : 0;
-    const decomposed = Boolean(o.decomposed);
-    const uiLocale = o.uiLocale === 'zh' || o.uiLocale === 'en' ? o.uiLocale : undefined;
-    const checklistRaw = o.checklist;
-    const checklist: GoalChecklistItem[] = [];
-    if (Array.isArray(checklistRaw)) {
-      for (const row of checklistRaw) {
-        const it = coerceChecklistItem(row);
-        if (it) checklist.push(it);
-      }
-    }
-    return {
-      goal,
-      status,
-      turnsUsed,
-      maxTurns,
-      createdAt,
-      lastTurnAt,
-      lastVerdict,
-      lastReason,
-      pausedReason,
-      judgeModelRef: judgeModelRef || undefined,
-      consecutiveParseFailures,
-      decomposed: decomposed || undefined,
-      checklist: checklist.length ? checklist : undefined,
-      uiLocale,
-    };
-  }
-
-  return null;
-}
-
-export function serializePersistentGoal(s: PersistentGoalState): Record<string, unknown> {
-  return {
-    goal: s.goal,
-    status: s.status,
-    turnsUsed: s.turnsUsed,
-    maxTurns: s.maxTurns,
-    createdAt: s.createdAt,
-    lastTurnAt: s.lastTurnAt,
-    ...(s.lastVerdict ? { lastVerdict: s.lastVerdict } : {}),
-    ...(s.lastReason ? { lastReason: s.lastReason } : {}),
-    ...(s.pausedReason ? { pausedReason: s.pausedReason } : {}),
-    ...(s.judgeModelRef ? { judgeModelRef: s.judgeModelRef } : {}),
-    ...(s.consecutiveParseFailures ? { consecutiveParseFailures: s.consecutiveParseFailures } : {}),
-    ...(s.decomposed ? { decomposed: true } : {}),
-    ...(s.uiLocale ? { uiLocale: s.uiLocale } : {}),
-    ...(s.checklist?.length
-      ? {
-          checklist: s.checklist.map((it) => ({
-            text: it.text,
-            status: it.status,
-            addedBy: it.addedBy,
-            addedAt: it.addedAt,
-            ...(it.completedAt !== undefined ? { completedAt: it.completedAt } : {}),
-            ...(it.evidence ? { evidence: it.evidence } : {}),
-          })),
-        }
-      : {}),
-  };
 }
 
 /** Render checklist for continuation prompt (Hermes-style, no numbers in body). */
@@ -250,12 +127,4 @@ export function applyJudgeChecklistUpdates(
     });
   }
   return next;
-}
-
-
-export function mergeCustomDataPatch(
-  existingCustom: Record<string, unknown> | undefined,
-  patch: Record<string, unknown>,
-): Record<string, unknown> {
-  return { ...(existingCustom ?? {}), ...patch };
 }

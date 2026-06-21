@@ -85,6 +85,9 @@ export function createAgentStreamMessagingCallbacks(opts: {
       if (!shouldApplyStreamUpdate(chatId)) return;
       store().appendUserMessageIfMissing(chatId, message);
     },
+    onWorkflowRunStarted: () => {
+      window.dispatchEvent(new CustomEvent('workflow-run-started-from-chat', { detail: { sessionKey: chatId } }));
+    },
     onStreamStart: () => {
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, () => {});

@@ -21,6 +21,7 @@ import { bulletList, code, joinBlocks, section } from '../format-output.js';
 import { createWorkflowCatalog } from '../../agent/workflow/catalog.js';
 import { getLastWorkflowMemory } from '../../agent/workflow/last-run-memory.js';
 import type { CatalogEntry } from '../../agent/workflow/catalog.js';
+import { extractProfileAgentId } from '../../config/agent-profile.js';
 
 const VIEW_MAX_LINES = 200;
 
@@ -134,14 +135,7 @@ export const workflowCommand: CommandDefinition = {
     }
 
     if (subLower === 'run' || subLower === 'start') {
-      const name = target || '<name>';
-      return {
-        content: joinBlocks(
-          `To run a workflow, ask in plain language: "run the ${name} workflow".`,
-          `The assistant will call the workflow tool with ${code(`name="${name}"`)} and stream progress inline.`,
-        ),
-        success: true,
-      };
+      return runWorkflowFromCommand(ctx, target);
     }
 
     if (subLower === 'save') {
@@ -182,12 +176,157 @@ export const workflowCommand: CommandDefinition = {
     return {
       content: joinBlocks(
         `Unknown subcommand "${sub}". Available: list, view ${code('<name>')}, save ${code('<name>')}.`,
-        'To run a workflow, ask in plain language ("run the audit_repo workflow") — the assistant uses the workflow tool with `name="..."`.',
+        `Run directly with ${code('/workflow run <name> [--goal "..."] [--json \'{...}\']')}.`,
       ),
       success: false,
     };
   },
 };
+
+async function runWorkflowFromCommand(ctx: CommandContext, args: string) {
+  if (!ctx.workflowRunApis) {
+    return {
+      content: 'Workflow runs are not available in this context.',
+      success: false,
+    };
+  }
+
+  let parsed: { name: string; goal?: string; input?: unknown };
+  try {
+    parsed = parseWorkflowRunArgs(args);
+  } catch (err) {
+    return {
+      content: `error: ${err instanceof Error ? err.message : String(err)}`,
+      success: false,
+    };
+  }
+  if (!parsed.name) {
+    return {
+      content: `usage: ${code('/workflow run <name> [--goal "..."] [--json \'{...}\']')}`,
+      success: false,
+    };
+  }
+
+  const catalog = createWorkflowCatalog();
+  try {
+    catalog.load(parsed.name);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    return { content: `error: ${message}`, success: false };
+  }
+
+  const agentId = extractProfileAgentId(ctx.sessionKey, ctx.config);
+  const source =
+    ctx.source === 'webui' || ctx.channelId === 'webchat'
+      ? ({ kind: 'webui' as const, sessionKey: ctx.sessionKey })
+      : ({ kind: 'chat' as const, sessionKey: ctx.sessionKey });
+  const result = await ctx.workflowRunApis.startWorkflowRun({
+    agentId,
+    definitionId: parsed.name,
+    goal: parsed.goal,
+    input: parsed.input,
+    parentSessionKey: ctx.sessionKey,
+    source,
+  });
+
+  if (result.ok === false) {
+    return {
+      content: `error: ${result.message}`,
+      success: false,
+      metadata: {
+        workflowRun: {
+          ok: false,
+          definitionId: parsed.name,
+          code: result.code,
+          message: result.message,
+        },
+      },
+    };
+  }
+
+  const content = joinBlocks(
+    `Started workflow **${parsed.name}**.`,
+    bulletList([
+      { label: 'runId', detail: code(result.runId) },
+      { label: 'sessionKey', detail: code(result.sessionKey) },
+    ]),
+  );
+
+  return {
+    content,
+    success: true,
+    metadata: {
+      workflowRun: {
+        ok: true,
+        definitionId: parsed.name,
+        runId: result.runId,
+        sessionKey: result.sessionKey,
+        parentSessionKey: ctx.sessionKey,
+      },
+    },
+  };
+}
+
+function parseWorkflowRunArgs(raw: string): { name: string; goal?: string; input?: unknown } {
+  const tokens = tokenizeArgs(raw);
+  const name = tokens.shift()?.trim() ?? '';
+  let goal: string | undefined;
+  let input: unknown;
+
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i];
+    if (token === '--goal' || token === '-g') {
+      goal = tokens[++i]?.trim() || undefined;
+      continue;
+    }
+    if (token.startsWith('--goal=')) {
+      goal = token.slice('--goal='.length).trim() || undefined;
+      continue;
+    }
+    if (token === '--json' || token === '--input') {
+      const value = tokens[++i];
+      input = parseJsonArg(value, token);
+      continue;
+    }
+    if (token.startsWith('--json=')) {
+      input = parseJsonArg(token.slice('--json='.length), '--json');
+      continue;
+    }
+    if (token.startsWith('--input=')) {
+      input = parseJsonArg(token.slice('--input='.length), '--input');
+      continue;
+    }
+    if (!goal) {
+      goal = [token, ...tokens.slice(i + 1)].join(' ').trim() || undefined;
+      break;
+    }
+  }
+
+  return { name, goal, input };
+}
+
+function parseJsonArg(value: string | undefined, flag: string): unknown {
+  if (!value?.trim()) {
+    throw new Error(`${flag} requires a JSON value`);
+  }
+  try {
+    return JSON.parse(value);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Error(`${flag} is not valid JSON: ${message}`);
+  }
+}
+
+function tokenizeArgs(raw: string): string[] {
+  const tokens: string[] = [];
+  const re = /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^'\\]*(?:\\.[^'\\]*)*)'|(\S+)/g;
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(raw)) !== null) {
+    const value = match[1] ?? match[2] ?? match[3] ?? '';
+    tokens.push(value.replace(/\\(["'\\])/g, '$1'));
+  }
+  return tokens;
+}
 
 /**
  * Replace the `name` field inside the FIRST `export const meta = { ... }` literal.

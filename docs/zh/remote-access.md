@@ -4,6 +4,8 @@
 
 **设置界面：** 网关控制台 → **设置 → 远程访问**（`#/settings/remote-access`）。
 
+iOS/Android 使用 **[xopc-app](https://github.com/xopcai/xopc-app)** 连接已运行的 gateway。移动端专门路径见 [移动端 app](./mobile-app.md)。
+
 同一时间只应启用 **一种** 对外暴露模式（Tailscale Serve **或** 公网 FRP 隧道）。若两者同时开启，**概览** Tab 会提示配置冲突。
 
 ---
@@ -81,7 +83,7 @@ xopc tailscale status
 
 ## 公网访问（FRP 隧道）{#public-tunnel}
 
-需要 **公网 HTTPS 地址** 时使用 — 例如移动 App 配对或从 tailnet 外访问 Gateway。
+需要 **公网 HTTPS 地址** 时使用 — 例如 [xopc-app](https://github.com/xopcai/xopc-app) 配对或从 tailnet 外访问 Gateway。
 
 流量经 **frp.xopc.ai** 代理。**风险较高**：持有公网 URL 或配对 QR 的人若获得 Bearer token，可能访问你的 Gateway。
 
@@ -90,7 +92,7 @@ xopc tailscale status
 1. 打开 **远程访问 → 公网访问**。
 2. 阅读安全说明并点击 **开启远程访问**（首次需确认风险）。
 3. 等待公网 URL 分配（首次开启可能需 1–3 分钟以完成 HTTPS）。
-4. 在控制卡片下方的 **移动 App 配对** 区域扫码（或复制配对链接）。
+4. 在控制卡片下方的 **移动 App 配对** 区域用 [xopc-app](./mobile-app.md) 扫码（或复制配对链接）。
 5. 不需要远程访问时请及时 **断开** 隧道。
 
 ### Broker 注册密钥
@@ -163,7 +165,7 @@ ssh -N -L 18790:127.0.0.1:18790 user@your-host
 
 ## 反向代理（自部署 HTTPS）{#reverse-proxy}
 
-用 **你自己部署的 HTTPS 反向代理**（Caddy、nginx、Cloudflare Tunnel 等）将 Gateway 暴露在自定义域名下，例如 `https://gateway.example.com`。反向代理负责 TLS 终止并转发到 loopback 上的 Gateway；移动 App 通过这个公网 URL 完成配对。
+用 **你自己部署的 HTTPS 反向代理**（Caddy、nginx、Cloudflare Tunnel 等）将 Gateway 暴露在自定义域名下，例如 `https://gateway.example.com`。反向代理负责 TLS 终止并转发到 loopback 上的 Gateway；[xopc-app](./mobile-app.md) 通过这个公网 URL 完成配对。
 
 这与「可信代理认证」（见下文「[高级](#advanced)」）**不同**：这里反代只承担 TLS / 域名职责，**Gateway 仍用自己的 Bearer token 鉴权**，不需要 SSO。
 
@@ -180,7 +182,7 @@ ssh -N -L 18790:127.0.0.1:18790 user@your-host
 2. 如果你已经通过反代访问当前控制台（地址栏显示 `https://gateway.example.com`），该 Tab 会 **自动识别** URL 并立即展示配对 QR，**无需先保存**。
 3. 点击 **测试** 调用 `/api/tunnel/pair/ping` 验证 TLS + DNS + 连通性。
 4. 点击 **保存为默认** 持久化为 `gateway.publicUrl`，其他客户端/重启后共用同一地址。
-5. 在 xopc 移动 App 中扫码。
+5. 在 [xopc-app](https://github.com/xopcai/xopc-app) 中扫码。
 
 移动 App 会把该 URL 存为主 `baseUrl`，若可达会回退到 LAN / FRP。
 

@@ -35,6 +35,7 @@ import {
   createDreamingTool,
   createClarifyTool,
   createToolManualTool,
+  createGoalTool,
 } from './index.js';
 import { createCuratedMemoryTool } from './curated-memory-tool.js';
 import { createSessionSearchTool } from './session-search-tool.js';
@@ -68,6 +69,7 @@ import { createSkillsListTool, createSkillViewTool } from './skills-tools.js';
 import { createSkillManageTool } from './skill-manage-tool.js';
 import { createTextToSpeechTool } from './tts-tool.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
+import { createGoalEvidenceRecorder } from './goal-evidence-recorder.js';
 
 const log = createLogger('AgentToolsFactory');
 
@@ -260,6 +262,9 @@ export class AgentToolsFactory {
     const primary = getPrimary?.();
     const modelHasVision = primary?.input?.includes('image') ?? false;
     const cfg = this.deps.getConfig?.();
+    const recordGoalEvidence = createGoalEvidenceRecorder({
+      getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+    });
     const imageTool = createImageTool({
       config: cfg,
       workspace,
@@ -277,9 +282,11 @@ export class AgentToolsFactory {
     });
     const writeTool = createWriteFileTool(workspace, {
       profileMarkdownRoot: options?.profileMarkdownRoot,
+      recordGoalEvidence,
     });
     const editTool = createEditFileTool(workspace, {
       profileMarkdownRoot: options?.profileMarkdownRoot,
+      recordGoalEvidence,
     });
     const listDir = createListDirTool(workspace);
     const grep = createGrepTool(workspace);
@@ -332,6 +339,7 @@ export class AgentToolsFactory {
       find,
       createShellTool(workspace, {
         getSkillPassthroughEnvVarNames: this.deps.getSkillPassthroughEnvVarNames,
+        recordGoalEvidence,
       }),
       createWebSearchTool(() => this.deps.getConfig?.()),
       createWebFetchTool(() => this.deps.getConfig?.()),
@@ -386,6 +394,7 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
+      createGoalTool(),
       ...(cfg?.agents?.defaults?.browser?.enabled !== false
         ? [
             createBrowserUseTool({

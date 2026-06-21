@@ -32,8 +32,11 @@ interface AgentRequestBody {
     type: string;
     mimeType?: string;
     data?: string;
+    uri?: string;
     name?: string;
     size?: number;
+    workspaceRelativePath?: string;
+    durationSeconds?: number;
   }>;
 }
 

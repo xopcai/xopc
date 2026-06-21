@@ -8,11 +8,13 @@ import type { WorkflowRunSummary, WorkflowRunView } from '../domain/run.js';
 
 import { WorkflowEventStore } from './event-store.js';
 import { resolveWorkflowRunViewPath } from './paths.js';
+import { WorkflowRunIndexStore } from './run-index-store.js';
 
 const log = createLogger('WorkflowRunStore');
 
 export class WorkflowRunStore {
   private readonly eventStore: WorkflowEventStore;
+  private readonly indexStore = new WorkflowRunIndexStore();
 
   constructor(
     private readonly config: Config,
@@ -31,6 +33,7 @@ export class WorkflowRunStore {
 
     const viewPath = resolveWorkflowRunViewPath(this.config, this.agentId, runId);
     await writeTextAtomic(viewPath, `${JSON.stringify(view, null, 2)}\n`);
+    this.indexStore.upsert(this.agentId, view);
     return view;
   }
 
@@ -38,7 +41,9 @@ export class WorkflowRunStore {
     const viewPath = resolveWorkflowRunViewPath(this.config, this.agentId, runId);
     try {
       const content = await readFile(viewPath, 'utf8');
-      return JSON.parse(content) as WorkflowRunView;
+      const view = JSON.parse(content) as WorkflowRunView;
+      this.indexStore.upsert(this.agentId, view);
+      return view;
     } catch (err) {
       const code = err && typeof err === 'object' && 'code' in err ? String((err as NodeJS.ErrnoException).code) : '';
       if (code !== 'ENOENT') {
@@ -50,29 +55,12 @@ export class WorkflowRunStore {
 
   async listRunSummaries(limit = 50): Promise<WorkflowRunSummary[]> {
     const safeLimit = Math.min(500, Math.max(1, Math.floor(limit)));
-    const runIds = await this.eventStore.listRunIds();
-    const summaries: WorkflowRunSummary[] = [];
-    for (const runId of runIds) {
-      const view = await this.readRunView(runId);
-      if (!view) {
-        continue;
-      }
-      summaries.push({
-        id: view.run.id,
-        definitionId: view.run.definitionId,
-        title: view.run.title,
-        status: view.run.status,
-        source: view.run.source,
-        metadata: view.run.metadata,
-        createdAtMs: view.run.createdAtMs,
-        startedAtMs: view.run.startedAtMs,
-        completedAtMs: view.run.completedAtMs,
-        metrics: view.run.metrics,
-      });
-    }
+    return this.indexStore.list(this.agentId, { limit: safeLimit });
+  }
 
-    summaries.sort((left, right) => right.createdAtMs - left.createdAtMs);
-    return summaries.slice(0, safeLimit);
+  async listRunSummariesForGoal(goalId: string, limit = 50): Promise<WorkflowRunSummary[]> {
+    const safeLimit = Math.min(500, Math.max(1, Math.floor(limit)));
+    return this.indexStore.list(this.agentId, { goalId, limit: safeLimit });
   }
 }
 

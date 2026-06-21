@@ -19,6 +19,7 @@ import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode } from '@/navig
 import { isAgentDefaultsNavActive, isAgentDefaultsNavTab } from '@/navigation/agent-defaults-nav';
 import { isElectron } from '@/lib/electron-env';
 import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-window-chrome';
+import { preloadRouteForPath } from '@/lib/route-preload';
 import { SETTINGS_SHEET_PORTAL_BODY_MQ } from '@/lib/settings-shell-dialog-layer';
 import { useMediaQuery } from '@/lib/use-media-query';
 import type { StoredLanguage } from '@/lib/storage';
@@ -96,6 +97,8 @@ function SettingsNavGroupBlock({
             key={tab}
             to={pathForTab(tab)}
             state={location.state}
+            onMouseEnter={() => preloadRouteForPath(pathForTab(tab))}
+            onFocus={() => preloadRouteForPath(pathForTab(tab))}
             className={({ isActive: routerActive }) =>
               settingsNavLinkClass({
                 isActive: isAgentDefaultsNavTab(tab)

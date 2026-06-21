@@ -18,6 +18,7 @@ import {
 } from '../../chat-commands/index.js';
 import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
 import type { PersistentGoalApis } from '../goals/persistent-goal-apis.js';
+import type { WorkflowRunServiceLike } from '../../workflows/service/workflow-run-service.types.js';
 
 const log = createLogger('CommandHandler');
 
@@ -70,6 +71,7 @@ export interface CommandHandlerConfig {
     chatId: string;
     inboundMetadata?: Record<string, unknown>;
   }) => PersistentGoalApis;
+  getWorkflowRunService?: () => WorkflowRunServiceLike | undefined;
 }
 
 export class CommandHandler {
@@ -87,6 +89,7 @@ export class CommandHandler {
   private getSessionContextReport?: CommandHandlerConfig['getSessionContextReport'];
   private getPersistentGoalApisForCommand: CommandHandlerConfig['getPersistentGoalApisForCommand'];
   private resetSession?: CommandHandlerConfig['resetSession'];
+  private getWorkflowRunService?: CommandHandlerConfig['getWorkflowRunService'];
 
   constructor(handlerConfig: CommandHandlerConfig) {
     this.config = handlerConfig.config;
@@ -103,6 +106,7 @@ export class CommandHandler {
     this.getSessionContextReport = handlerConfig.getSessionContextReport;
     this.getPersistentGoalApisForCommand = handlerConfig.getPersistentGoalApisForCommand;
     this.resetSession = handlerConfig.resetSession;
+    this.getWorkflowRunService = handlerConfig.getWorkflowRunService;
   }
 
   /** Replace config reference after hot reload or gateway PATCH so commands see current defaults. */
@@ -225,6 +229,7 @@ export class CommandHandler {
         chatId: context.chatId,
         inboundMetadata: context.inboundMetadata,
       }),
+      workflowRunService: this.getWorkflowRunService?.(),
     });
   }
 
@@ -265,7 +270,7 @@ export class CommandHandler {
     commandName: string,
     args: string,
     context: CommandContext,
-  ): Promise<{ handled: boolean; aggregatedText: string }> {
+  ): Promise<{ handled: boolean; aggregatedText: string; metadata?: Record<string, unknown> }> {
     if (!commandRegistry.has(commandName)) {
       return { handled: false, aggregatedText: '' };
     }
@@ -289,6 +294,6 @@ export class CommandHandler {
     }
 
     const aggregatedText = segments.filter((s) => s && s.trim()).join('\n\n');
-    return { handled: true, aggregatedText };
+    return { handled: true, aggregatedText, metadata: result.metadata };
   }
 }

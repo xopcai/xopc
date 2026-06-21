@@ -1,7 +1,7 @@
 {
   "name": "@xopcai/xopc",
   "version": "0.0.110",
-  "description": "Goal Loop OS for long-term AI work: a local-first multi-surface agent system with workflow automation, multi-agent routing, and extensibility via extensions/skills.",
+  "description": "Local-first Goal Loop OS for long-term AI work across terminal, web, desktop, mobile app, and messengers.",
   "packageManager": "pnpm@11.6.0",
   "type": "module",
   "main": "dist/src/index.js",
@@ -65,6 +65,8 @@
     "test:startup:imports": "node scripts/check-cli-bootstrap-imports.mjs",
     "tunnel:phase6:verify": "node scripts/tunnel-phase6-broker-tls-verify.mjs",
     "release:patch": "bash scripts/release-patch.sh",
+    "growth:snapshot": "node scripts/growth-snapshot.mjs",
+    "growth:github-community": "node scripts/growth-github-community.mjs",
     "prepublishOnly": "npm test && npm run test:skills:all && npm run build",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
@@ -87,6 +89,8 @@
   },
   "keywords": [
     "agent-os",
+    "ai-agent",
+    "byok",
     "cli",
     "cron",
     "desktop",
@@ -97,8 +101,10 @@
     "local-first",
     "mcp",
     "multi-agent",
+    "ollama",
     "self-hosted",
     "telegram",
+    "tui",
     "voice-ai",
     "weixin",
     "workflow"
@@ -112,7 +118,7 @@
   "bugs": {
     "url": "https://github.com/xopcai/xopc/issues"
   },
-  "homepage": "https://github.com/xopcai/xopc#readme",
+  "homepage": "https://xopc.ai",
   "engines": {
     "node": ">=22.0.0"
   },

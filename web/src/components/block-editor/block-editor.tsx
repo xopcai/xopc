@@ -66,6 +66,10 @@ export function BlockEditor({
   onChangeRef.current = onChange;
   const imageInputRef = useRef<HTMLInputElement>(null);
   const slashRuntimeRef = useRef<SlashCommandRuntime>({});
+  const uploadImageFileRef = useRef<(file: File) => void>(() => undefined);
+  const latestMarkdownRef = useRef(initialContent);
+  const lastSentMarkdownRef = useRef(initialContent);
+  const contentSeededRef = useRef(false);
 
   const editor = useEditor({
     extensions: [
@@ -110,14 +114,43 @@ export function BlockEditor({
         getRuntime: () => slashRuntimeRef.current,
       }),
     ],
-    content: initialContent,
+    content: '',
     onUpdate: ({ editor: editorInstance }) => {
       const markdownContent = (editorInstance.storage as unknown as { markdown: { getMarkdown: () => string } }).markdown.getMarkdown();
+      latestMarkdownRef.current = markdownContent;
+      lastSentMarkdownRef.current = markdownContent;
       onChangeRef.current(markdownContent);
     },
     editorProps: {
       attributes: {
         class: 'block-editor-content',
+      },
+      handlePaste: (_view, event) => {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+
+        for (const item of items) {
+          if (item.type.startsWith('image/')) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            if (file) uploadImageFileRef.current(file);
+            return true;
+          }
+        }
+        return false;
+      },
+      handleDrop: (_view, event) => {
+        const files = event.dataTransfer?.files;
+        if (!files?.length) return false;
+
+        for (const file of files) {
+          if (file.type.startsWith('image/')) {
+            event.preventDefault();
+            uploadImageFileRef.current(file);
+            return true;
+          }
+        }
+        return false;
       },
     },
   });
@@ -148,6 +181,10 @@ export function BlockEditor({
     [editor, noteId, notesLabels.imageUploadFailed, notesLabels.imageUploadFailedHint],
   );
 
+  uploadImageFileRef.current = (file: File) => {
+    void handleImageUpload(file);
+  };
+
   const requestImagePicker = useCallback(() => {
     imageInputRef.current?.click();
   }, []);
@@ -157,46 +194,39 @@ export function BlockEditor({
     requestImagePicker: noteId ? requestImagePicker : undefined,
   };
 
-  // Handle paste/drop images
   useEffect(() => {
-    if (!editor || !noteId) return;
+    if (!editor) return;
+    const externalChanged = initialContent !== latestMarkdownRef.current;
+    const localClean = latestMarkdownRef.current === lastSentMarkdownRef.current;
+    if (contentSeededRef.current && (!externalChanged || !localClean)) return;
 
-    const handlePaste = (event: ClipboardEvent) => {
-      const items = event.clipboardData?.items;
-      if (!items) return;
+    let cancelled = false;
+    let frame: number | null = null;
+    const markdown = initialContent;
 
-      for (const item of items) {
-        if (item.type.startsWith('image/')) {
-          event.preventDefault();
-          const file = item.getAsFile();
-          if (file) void handleImageUpload(file);
-          return;
-        }
+    const seedContent = () => {
+      if (cancelled || editor.isDestroyed) return;
+      const initialized = (editor as unknown as { isEditorContentInitialized?: boolean }).isEditorContentInitialized;
+      if (!initialized) {
+        frame = window.requestAnimationFrame(seedContent);
+        return;
       }
+
+      editor.commands.setContent(markdown, { emitUpdate: false });
+      latestMarkdownRef.current = markdown;
+      lastSentMarkdownRef.current = markdown;
+      contentSeededRef.current = true;
     };
 
-    const handleDrop = (event: DragEvent) => {
-      const files = event.dataTransfer?.files;
-      if (!files?.length) return;
-
-      for (const file of files) {
-        if (file.type.startsWith('image/')) {
-          event.preventDefault();
-          void handleImageUpload(file);
-          return;
-        }
-      }
-    };
-
-    const editorElement = editor.view.dom;
-    editorElement.addEventListener('paste', handlePaste);
-    editorElement.addEventListener('drop', handleDrop);
+    seedContent();
 
     return () => {
-      editorElement.removeEventListener('paste', handlePaste);
-      editorElement.removeEventListener('drop', handleDrop);
+      cancelled = true;
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
     };
-  }, [editor, noteId, handleImageUpload]);
+  }, [editor, initialContent]);
 
   if (!editor) return null;
 

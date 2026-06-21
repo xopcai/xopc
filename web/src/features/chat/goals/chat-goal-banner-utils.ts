@@ -19,7 +19,7 @@ type GoalMessagesWithMissionCopy = GoalMessages & {
 };
 
 export function shouldShowGoal(g: WebchatPersistentGoalWire | null): g is WebchatPersistentGoalWire {
-  return g !== null && g.status !== 'cleared';
+  return g !== null && g.status !== 'archived';
 }
 
 export function checklistStats(g: WebchatPersistentGoalWire): { total: number; done: number } {
@@ -42,7 +42,7 @@ export function goalChecklistProgress(g: WebchatPersistentGoalWire): { done: num
 
 export function goalUiPhase(g: WebchatPersistentGoalWire, agentBusy: boolean): GoalUiPhase {
   if (agentBusy) return 'agent_running';
-  if (g.status === 'paused') return 'paused';
+  if (g.status === 'paused' || g.status === 'blocked' || g.status === 'needs_input') return 'paused';
   if (g.status === 'done') return 'done';
   if (g.lastVerdict) return 'judge_recently_completed';
   return 'idle';
@@ -59,7 +59,7 @@ export function phaseLabel(phase: GoalUiPhase, t: GoalMessages): string {
 
 export function statusLabel(g: WebchatPersistentGoalWire, t: GoalMessages): string {
   if (g.status === 'active') return t.statusActive;
-  if (g.status === 'paused') return t.statusPaused;
+  if (g.status === 'paused' || g.status === 'blocked' || g.status === 'needs_input') return t.statusPaused;
   if (g.status === 'done') return t.statusDone;
   return g.status;
 }
@@ -67,13 +67,13 @@ export function statusLabel(g: WebchatPersistentGoalWire, t: GoalMessages): stri
 export function verdictLabel(v: WebchatPersistentGoalWire['lastVerdict'], t: GoalMessages): string {
   if (v === 'done') return t.verdictDone;
   if (v === 'continue') return t.verdictContinue;
-  if (v === 'skipped') return t.verdictSkipped;
   if (v === 'decompose') return t.verdictDecompose;
+  if (v === 'blocked' || v === 'needs_input') return t.statusPaused;
   return v ?? '';
 }
 
-export function runVerdictLabel(v: WebchatGoalRunVerdict, t: GoalMessages): string {
-  if (v === 'inactive') return t.verdictInactive;
+export function runVerdictLabel(v: WebchatGoalRunVerdict | undefined, t: GoalMessages): string {
+  if (!v) return '';
   return verdictLabel(v, t);
 }
 

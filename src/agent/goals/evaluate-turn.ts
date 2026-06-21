@@ -34,9 +34,13 @@ export type GoalPostTurnDecision = {
   newState: PersistentGoalState | null;
   shouldContinue: boolean;
   continuationPrompt: string | null;
-  verdict: 'done' | 'continue' | 'skipped' | 'inactive' | 'decompose';
+  verdict: 'done' | 'continue' | 'blocked' | 'needs_input' | 'skipped' | 'inactive' | 'decompose';
   reason: string;
   message: string;
+  confidence?: number;
+  missingEvidence?: string[];
+  userQuestion?: string;
+  completedChecklistItemIndexes?: number[];
 };
 
 function cloneState(s: PersistentGoalState): PersistentGoalState {
@@ -175,6 +179,12 @@ export async function evaluateAfterTurnHermesLike(
     next.lastVerdict = 'continue';
     next.lastReason = evalResult.parsed.reason;
 
+    const completedChecklistItemIndexes = evalResult.parsed.updates
+      .filter((update) => update.status === 'completed' || update.status === 'impossible')
+      .map((update) => update.index);
+    const structuredNextAction = evalResult.parsed.nextAction?.trim();
+    const continuationPrompt = structuredNextAction || buildContinuationPromptFromState(next, locale);
+
     if (!evalResult.parseFailed && allChecklistTerminal(next.checklist ?? [])) {
       next.status = 'done';
       next.lastVerdict = 'done';
@@ -185,6 +195,29 @@ export async function evaluateAfterTurnHermesLike(
         verdict: 'done',
         reason: evalResult.parsed.reason,
         message: copy.goalAchieved(evalResult.parsed.reason),
+        confidence: evalResult.parsed.confidence,
+        missingEvidence: evalResult.parsed.missingEvidence,
+        userQuestion: evalResult.parsed.userQuestion,
+        completedChecklistItemIndexes,
+      };
+    }
+
+    if (!evalResult.parseFailed && (evalResult.parsed.verdict === 'blocked' || evalResult.parsed.verdict === 'needs_input')) {
+      next.status = 'paused';
+      next.pausedReason = evalResult.parsed.reason;
+      return {
+        newState: next,
+        shouldContinue: false,
+        continuationPrompt: null,
+        verdict: evalResult.parsed.verdict,
+        reason: evalResult.parsed.reason,
+        message: evalResult.parsed.verdict === 'needs_input'
+          ? `Goal needs input: ${evalResult.parsed.userQuestion || evalResult.parsed.reason}`
+          : `Goal blocked: ${evalResult.parsed.reason}`,
+        confidence: evalResult.parsed.confidence,
+        missingEvidence: evalResult.parsed.missingEvidence,
+        userQuestion: evalResult.parsed.userQuestion,
+        completedChecklistItemIndexes,
       };
     }
 
@@ -201,7 +234,7 @@ export async function evaluateAfterTurnHermesLike(
     return {
       newState: next,
       shouldContinue: true,
-      continuationPrompt: buildContinuationPromptFromState(next, locale),
+      continuationPrompt,
       verdict: 'continue',
       reason: evalResult.parsed.reason,
       message: copy.continuingWithProgress(
@@ -210,6 +243,10 @@ export async function evaluateAfterTurnHermesLike(
         progressSuffix,
         evalResult.parsed.reason,
       ),
+      confidence: evalResult.parsed.confidence,
+      missingEvidence: evalResult.parsed.missingEvidence,
+      userQuestion: evalResult.parsed.userQuestion,
+      completedChecklistItemIndexes,
     };
   }
 

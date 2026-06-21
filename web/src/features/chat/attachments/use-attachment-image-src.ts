@@ -5,7 +5,7 @@ import {
   getAttachmentBinaryPayload,
   resolveDataUrlForDisplay,
 } from '@/features/chat/attachments/attachment-utils-core';
-import { fetchMediaUriBlob } from '@/features/file-preview/fetch-workspace-relative-file';
+import { fetchMediaUriBlob } from '@/features/preview-runtime/media-fetch';
 
 function blobWithAttachmentMime(blob: Blob, mimeType: string | undefined): Blob {
   const normalized = mimeType?.split(';')[0]?.trim();

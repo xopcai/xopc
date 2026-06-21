@@ -1,7 +1,6 @@
 import {
   Check,
   Copy,
-  Download,
   ExternalLink,
   Eye,
   FolderOpen,
@@ -18,12 +17,14 @@ import { useCallback, useState } from 'react';
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import {
-  FilePreviewBody,
-  getFileExtension,
-  getFileName,
-  useFilePreviewFullscreen,
-  useWorkspaceFilePreviewState,
-} from '@/features/file-preview';
+  getPreviewFileExtension,
+  getPreviewFileName,
+  PreviewRuntimeToolbar,
+  PreviewRuntimeView,
+  usePreviewRuntimeController,
+  useWorkspacePreviewState,
+} from '@/features/preview-runtime';
+import { useFilePreviewFullscreen } from '@/features/file-preview/use-file-preview-fullscreen';
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
 import { cn } from '@/lib/cn';
@@ -69,14 +70,15 @@ export function WorkspaceFilePreviewPanel({
   const m = messages(language);
   const resolvedTheme = useThemeStore((s) => s.resolved);
 
-  const state = useWorkspaceFilePreviewState({ filePath, sessionKey, agentId });
+  const state = useWorkspacePreviewState({ filePath, sessionKey, agentId });
+  const previewController = usePreviewRuntimeController(state.descriptor);
   const { rootRef, active, enter, exit } = useFilePreviewFullscreen();
   const { dialogOpen, loading, result, error, createShareLink, handleOpenChange } = useShareLink();
   const [pathCopied, setPathCopied] = useState(false);
   const [openWithMenuOpen, setOpenWithMenuOpen] = useState(false);
 
-  const ext = filePath ? getFileExtension(filePath) : '';
-  const name = filePath ? getFileName(filePath) : '';
+  const ext = filePath ? getPreviewFileExtension(filePath) : '';
+  const name = filePath ? getPreviewFileName(filePath) : '';
   const isMd = ext === '.md';
   const isHtml = ext === '.html' || ext === '.htm';
 
@@ -104,6 +106,14 @@ export function WorkspaceFilePreviewPanel({
   }, [agentId, createShareLink, filePath, sessionKey]);
 
   const canPreviewFullscreen = Boolean(filePath && !state.loading && !state.loadError);
+  const previewActions = {
+    onDownload: () => void state.onDownload(),
+    canDownload: state.canDownload,
+    onOpenWithSystemApp: () => void state.onOpenWithSystemApp(),
+    canOpenWithSystemApp: state.canOpenWithSystemApp,
+    onChooseOpenWithApp: () => void state.onChooseOpenWithApp(),
+    canChooseOpenWithApp: state.canChooseOpenWithApp,
+  };
 
   const handleClose = useCallback(() => {
     void exit();
@@ -150,6 +160,7 @@ export function WorkspaceFilePreviewPanel({
               {state.saveStatus === 'saving' ? m.workspace.saving : m.workspace.saved}
             </span>
           ) : null}
+          <PreviewRuntimeToolbar controller={previewController} actions={previewActions} />
           {isMd ? (
             <button
               type="button"
@@ -333,16 +344,6 @@ export function WorkspaceFilePreviewPanel({
           </button>
           <button
             type="button"
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
-            title={m.workspace.download}
-            aria-label={m.workspace.download}
-            onClick={() => void state.onDownload()}
-            disabled={!state.canDownload}
-          >
-            <Download className="size-4" />
-          </button>
-          <button
-            type="button"
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
             title={m.workspace.close}
             aria-label={m.workspace.close}
@@ -352,21 +353,19 @@ export function WorkspaceFilePreviewPanel({
           </button>
         </div>
       </div>
-      <FilePreviewBody
-        context="workspace"
+      <PreviewRuntimeView
         language={language}
         resolvedTheme={resolvedTheme}
-        fileKey={filePath}
-        fileName={name}
+        descriptor={state.descriptor}
         loading={state.loading}
         loadError={state.loadError}
-        previewKind={state.previewKind}
         textContent={state.textContent}
         binaryBuffer={state.binaryBuffer}
+        hostAbsolutePath={state.hostAbsolutePath}
+        mtimeMs={state.mtimeMs}
         targetLine={targetLine}
-        pptxText={state.pptxText}
-        pptxTruncated={state.pptxTruncated}
-        pptxError={state.pptxError}
+        extractedText={state.extractedText}
+        extractedTextTruncated={state.extractedTextTruncated}
         workspaceEditing={{
           markdownEditMode: state.markdownEditMode,
           onSaveMarkdown: state.onSaveMarkdown,
@@ -374,14 +373,9 @@ export function WorkspaceFilePreviewPanel({
           onHtmlChange: state.onHtmlChange,
           isDark: resolvedTheme === 'dark',
         }}
-        actions={{
-          onDownload: () => void state.onDownload(),
-          canDownload: state.canDownload,
-          onOpenWithSystemApp: () => void state.onOpenWithSystemApp(),
-          canOpenWithSystemApp: state.canOpenWithSystemApp,
-          onChooseOpenWithApp: () => void state.onChooseOpenWithApp(),
-          canChooseOpenWithApp: state.canChooseOpenWithApp,
-        }}
+        actions={previewActions}
+        controller={previewController}
+        renderToolbar={() => null}
       />
     </div>
     <ShareLinkDialog

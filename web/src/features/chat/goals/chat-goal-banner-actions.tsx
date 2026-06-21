@@ -76,6 +76,14 @@ export function GoalActions({ goal, canEditChecklist, mutationBusy, t, onAction,
           >
             {t.clear}
           </button>
+          <button
+            type="button"
+            className="block w-full px-3 py-1.5 text-left text-xs text-fg hover:bg-surface-hover"
+            disabled={mutationBusy}
+            onClick={() => void onAction('detach')}
+          >
+            Detach
+          </button>
         </div>
       </details>
     </div>

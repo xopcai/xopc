@@ -82,6 +82,13 @@ export type MessagingCallbacks = {
   }) => void;
   /** User turn from another device or early in the POST stream (before assistant tokens). */
   onUserMessage?: (message: Message) => void;
+  /** Slash command or tool path started a persisted workflow run. */
+  onWorkflowRunStarted?: (payload: {
+    runId: string;
+    sessionKey: string;
+    definitionId: string;
+    parentSessionKey?: string;
+  }) => void;
   onResult: () => void;
   onError: (msg: string) => void;
 };
@@ -435,6 +442,19 @@ export class MessageSender {
             : undefined;
           const def = typeof payload.default === 'string' && payload.default.trim() ? payload.default.trim() : undefined;
           cb.onClarifyRequest({ requestId, question, choices: choices && choices.length >= 2 ? choices : undefined, default: def });
+        }
+        break;
+      }
+      case 'workflow_run_started': {
+        const workflowRun = payload.workflowRun as Record<string, unknown> | undefined;
+        if (workflowRun?.ok === true) {
+          const runId = typeof workflowRun.runId === 'string' ? workflowRun.runId : '';
+          const sessionKey = typeof workflowRun.sessionKey === 'string' ? workflowRun.sessionKey : '';
+          const definitionId = typeof workflowRun.definitionId === 'string' ? workflowRun.definitionId : '';
+          const parentSessionKey = typeof workflowRun.parentSessionKey === 'string' ? workflowRun.parentSessionKey : undefined;
+          if (runId && sessionKey && definitionId) {
+            cb?.onWorkflowRunStarted?.({ runId, sessionKey, definitionId, parentSessionKey });
+          }
         }
         break;
       }

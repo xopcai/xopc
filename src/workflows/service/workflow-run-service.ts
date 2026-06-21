@@ -135,6 +135,7 @@ export class WorkflowRunService {
       metadata: buildWorkflowRunMetadata({
         definition,
         agentId: params.agentId,
+        goalId: params.goalId,
         sessionKey,
         source,
         input: inputEnvelope,
@@ -261,6 +262,7 @@ export class WorkflowRunService {
       metadata: buildWorkflowRunMetadata({
         definition,
         agentId: params.agentId,
+        goalId: existing.run.metadata?.goalId,
         sessionKey,
         source,
         input: inputEnvelope,
@@ -464,6 +466,7 @@ export function buildWorkflowRunInputEnvelope(input: unknown, goal?: string): Wo
 export function buildWorkflowRunMetadata(params: {
   definition: WorkflowDefinition;
   agentId: string;
+  goalId?: string;
   sessionKey: string;
   source: WorkflowRunSource;
   input: WorkflowRunInputEnvelope;
@@ -471,6 +474,7 @@ export function buildWorkflowRunMetadata(params: {
   idempotencyKey?: string;
   replay?: WorkflowRunReplayMetadata;
 }): WorkflowRunMetadata {
+  const goalId = params.goalId?.trim() || undefined;
   return {
     sessionKey: params.sessionKey,
     triggerSource: params.source.kind,
@@ -486,6 +490,7 @@ export function buildWorkflowRunMetadata(params: {
     schedule: params.source.kind === 'cron'
       ? { scheduleId: params.source.scheduleId, fireId: params.source.fireId }
       : undefined,
+    goalId,
   };
 }
 
