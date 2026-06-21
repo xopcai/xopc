@@ -27,6 +27,7 @@ export function runViewToSnapshot(view: WorkflowRunView): WorkflowSnapshot {
     label: agent.label,
     phase: agent.phaseId ? phaseTitleById.get(agent.phaseId) : undefined,
     prompt: agent.prompt ?? '',
+    invocation: agent.invocation,
     sessionKey: agent.sessionKey,
     transcriptMessageCount: agent.transcriptMessageCount,
     status: agent.status,

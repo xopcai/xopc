@@ -16,6 +16,8 @@ export interface WorkflowDefinition {
   title: string;
   description: string;
   version: string;
+  contentHash?: string;
+  runtimeHash?: string;
   inputSchema?: JsonSchema;
   outputSchema?: JsonSchema;
   phases: WorkflowPhaseDefinition[];

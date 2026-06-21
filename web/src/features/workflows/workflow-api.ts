@@ -1,6 +1,7 @@
 import type { Message } from '@/features/chat/messages/messages.types';
 import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages';
-import { fetchJson } from '@/lib/fetch';
+import { apiFetch, fetchJson } from '@/lib/fetch';
+import { formatApiHttpError } from '@/lib/http-error-message';
 import { apiUrl } from '@/lib/url';
 
 export type WorkflowRunStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timeout';
@@ -32,6 +33,8 @@ export interface WorkflowDefinition {
   title: string;
   description: string;
   version: string;
+  contentHash?: string;
+  runtimeHash?: string;
   inputSchema?: JsonSchema;
   outputSchema?: JsonSchema;
   phases: WorkflowPhaseDefinition[];
@@ -117,11 +120,23 @@ export interface WorkflowRunMetadata {
   triggerSource: string;
   agentId?: string;
   retryOfRunId?: string;
+  replay?: WorkflowRunReplayMetadata;
   definition: WorkflowRunDefinitionSnapshot;
   input?: WorkflowRunInputEnvelope;
   correlation?: WorkflowRunCorrelation;
   origin?: WorkflowRunOrigin;
   schedule?: WorkflowRunScheduleMetadata;
+}
+
+export type WorkflowRunReplayScope = 'failed_agents' | 'failed_phases';
+
+export interface WorkflowRunReplayMetadata {
+  sourceRunId: string;
+  scope: WorkflowRunReplayScope;
+  phaseIds?: string[];
+  agentIds: string[];
+  targetCount: number;
+  createdAtMs: number;
 }
 
 export interface WorkflowRunInputEnvelope {
@@ -159,9 +174,14 @@ export interface WorkflowRunDefinitionSnapshot {
   name: string;
   title: string;
   version: string;
+  contentHash?: string;
+  runtimeHash?: string;
   source: 'builtin' | 'user';
   tags: string[];
   phaseCount: number;
+  defaults?: WorkflowDefinitionDefaults;
+  permissions?: WorkflowPermissionPolicy;
+  resources?: WorkflowResourceRefs;
   estimatedAgents?: WorkflowDefinitionEstimatedAgents;
 }
 
@@ -239,6 +259,7 @@ export interface WorkflowAgentView {
   phaseId?: string;
   status: WorkflowAgentStatus;
   prompt?: string;
+  invocation?: WorkflowAgentInvocationSnapshot;
   sessionKey: string;
   transcriptMessageCount: number;
   currentStep?: string;
@@ -260,6 +281,17 @@ export interface WorkflowAgentView {
   }>;
 }
 
+export interface WorkflowAgentInvocationSnapshot {
+  prompt: string;
+  label: string;
+  phase?: string;
+  modelRef?: string;
+  resolvedModelRef?: string;
+  schema?: unknown;
+  toolset?: string[];
+  maxIterations?: number;
+}
+
 export interface WorkflowLogEntry {
   sequence: number;
   message: string;
@@ -274,6 +306,29 @@ export interface WorkflowRunView {
   artifacts: unknown[];
   timeline: Array<{ sequence: number; type: string; title: string; createdAtMs: number }>;
   controls: { canCancel: boolean; canRetry: boolean; canArchive: boolean };
+}
+
+export interface WorkflowRunComparison {
+  sourceRunId: string;
+  replayRunId: string;
+  sourceStatus: WorkflowRunStatus;
+  replayStatus: WorkflowRunStatus;
+  statusChanged: boolean;
+  durationDeltaMs: number | null;
+  failedAgentsBefore: number;
+  failedAgentsAfter: number;
+  fixedAgentIds: string[];
+  stillFailingAgentIds: string[];
+  targetAgents: Array<{
+    agentId: string;
+    label: string;
+    beforeStatus?: WorkflowAgentStatus;
+    afterStatus?: WorkflowAgentStatus;
+    beforeError?: string;
+    afterError?: string;
+    beforePreview?: string;
+    afterPreview?: string;
+  }>;
 }
 
 export interface WorkflowStats {
@@ -401,6 +456,41 @@ export async function getWorkflowRun(runId: string, options?: WorkflowOwnerAgent
   return data.view;
 }
 
+export async function getWorkflowRunComparison(
+  runId: string,
+  options?: WorkflowOwnerAgentOptions,
+): Promise<WorkflowRunComparison> {
+  const searchParams = new URLSearchParams();
+  appendOwnerAgentParam(searchParams, options);
+  const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
+  const data = await fetchJson<{ comparison: WorkflowRunComparison }>(
+    apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/comparison${suffix}`),
+  );
+  return data.comparison;
+}
+
+export async function downloadWorkflowArtifact(
+  runId: string,
+  artifactId: string,
+  options?: WorkflowOwnerAgentOptions,
+): Promise<Blob> {
+  const searchParams = new URLSearchParams();
+  appendOwnerAgentParam(searchParams, options);
+  const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
+  const res = await apiFetch(
+    apiUrl(
+      `/api/workflows/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(artifactId)}${suffix}`,
+    ),
+    { headers: { Accept: '*/*' } },
+  );
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({})) as { error?: string | { message?: string } };
+    const serverMessage = typeof body.error === 'string' ? body.error : body.error?.message;
+    throw new Error(formatApiHttpError(res.status, res.statusText, serverMessage));
+  }
+  return res.blob();
+}
+
 export async function getWorkflowAgentSession(
   runId: string,
   workflowAgentId: string | number,
@@ -453,5 +543,22 @@ export async function retryWorkflowRun(runId: string, options?: WorkflowOwnerAge
   return fetchJson<StartWorkflowRunResult>(
     apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/retry${suffix}`),
     { method: 'POST' },
+  );
+}
+
+export async function replayWorkflowRun(
+  runId: string,
+  scope: WorkflowRunReplayScope,
+  options?: WorkflowOwnerAgentOptions,
+): Promise<StartWorkflowRunResult> {
+  const searchParams = new URLSearchParams();
+  appendOwnerAgentParam(searchParams, options);
+  const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
+  return fetchJson<StartWorkflowRunResult>(
+    apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/replay${suffix}`),
+    {
+      method: 'POST',
+      body: JSON.stringify({ scope }),
+    },
   );
 }

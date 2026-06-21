@@ -5,3 +5,4 @@ export * from './result.js';
 export * from './run.js';
 export * from './command.js';
 export * from './validation.js';
+export * from './schema-validation.js';

@@ -10,6 +10,7 @@ import { resolveModel as resolveModelById } from '../../providers/index.js';
 import { DelegateSubagentRunner } from '../../agent/workflow/subagent-runner.js';
 import { CatalogWorkflowDefinitionRegistry } from '../registry/catalog-workflow-definition-registry.js';
 import type { WorkflowDefinitionRegistry } from '../registry/workflow-definition-registry.js';
+import { validateWorkflowJsonSchema } from '../domain/schema-validation.js';
 import type {
   WorkflowDefinition,
   WorkflowRunDefinitionSnapshot,
@@ -26,6 +27,7 @@ export type {
   CancelWorkflowRunResult,
   CancelWorkflowRunServiceParams,
   CancelWorkflowRunServiceResult,
+  ReplayWorkflowRunServiceParams,
   RetryWorkflowRunServiceParams,
   StartWorkflowRunServiceParams,
   StartWorkflowRunServiceResult,
@@ -37,10 +39,13 @@ export type {
 import type {
   CancelWorkflowRunResult,
   CancelWorkflowRunServiceParams,
+  ReplayWorkflowRunServiceParams,
   RetryWorkflowRunServiceParams,
   StartWorkflowRunServiceParams,
   WorkflowRunServiceResult,
 } from './workflow-run-service.types.js';
+import type { WorkflowRunReplayMetadata, WorkflowRunReplayScope, WorkflowRunView } from '../domain/run.js';
+import type { WorkflowReplayAgentTarget } from '../engine/index.js';
 
 export interface WorkflowRunServiceOptions {
   service: GatewayWorkflowHost;
@@ -51,6 +56,7 @@ export interface WorkflowRunServiceOptions {
 
 export class WorkflowRunService {
   private readonly activeRuns = new Map<string, AbortController>();
+  private readonly timeoutHandles = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly definitionRegistry: WorkflowDefinitionRegistry;
 
   constructor(private readonly options: WorkflowRunServiceOptions) {
@@ -65,6 +71,28 @@ export class WorkflowRunService {
         code: 'definition_not_found',
         message: 'Workflow definition not found',
         httpStatus: 404,
+      };
+    }
+
+    const inputEnvelope = params.inputEnvelope ?? buildWorkflowRunInputEnvelope(params.input, params.goal);
+    const inputValidation = validateWorkflowJsonSchema(definition.inputSchema, inputEnvelope.payload);
+    if (!inputValidation.ok) {
+      return {
+        ok: false,
+        code: 'invalid_input',
+        message: inputValidation.message ?? 'Workflow input did not match input schema',
+        httpStatus: 400,
+      };
+    }
+
+    const existingRun = params.idempotencyKey
+      ? await this.findRunByIdempotencyKey(params.agentId, params.idempotencyKey)
+      : null;
+    if (existingRun) {
+      return {
+        ok: true,
+        runId: existingRun.run.id,
+        sessionKey: existingRun.run.metadata?.sessionKey ?? '',
       };
     }
 
@@ -87,9 +115,18 @@ export class WorkflowRunService {
       runStore,
       sessionKey,
     });
-    const inputEnvelope = params.inputEnvelope ?? buildWorkflowRunInputEnvelope(params.input, params.goal);
+    const limits = resolveWorkflowRunLimits({
+      config: this.options.service.currentConfig,
+      definition,
+      concurrency: params.concurrency,
+      maxSubagents: params.maxSubagents,
+    });
 
     this.activeRuns.set(runId, abortController);
+    const timeoutHandle = setTimeout(() => {
+      abortController.abort(new Error(`workflow timed out after ${limits.timeoutSec}s`));
+    }, limits.timeoutSec * 1000);
+    this.timeoutHandles.set(runId, timeoutHandle);
     void engine.startRun(definition, {
       runId,
       input: inputEnvelope.payload,
@@ -105,9 +142,10 @@ export class WorkflowRunService {
         idempotencyKey: params.idempotencyKey,
       }),
       signal: abortController.signal,
-      concurrency: params.concurrency,
-      maxSubagents: params.maxSubagents,
+      concurrency: limits.concurrency,
+      maxSubagents: limits.maxSubagents,
       tokenBudget: params.tokenBudget,
+      timeoutSec: limits.timeoutSec,
     }).catch((err) => {
       this.options.service.emit('workflow.run.error', {
         runId,
@@ -115,6 +153,9 @@ export class WorkflowRunService {
       });
     }).finally(() => {
       this.activeRuns.delete(runId);
+      const handle = this.timeoutHandles.get(runId);
+      if (handle) clearTimeout(handle);
+      this.timeoutHandles.delete(runId);
     });
 
     return { ok: true, runId, sessionKey };
@@ -146,11 +187,123 @@ export class WorkflowRunService {
     });
   }
 
+  async replayWorkflowRun(params: ReplayWorkflowRunServiceParams): Promise<WorkflowRunServiceResult> {
+    const runStore = this.createRunStore(params.agentId);
+    const existing = await runStore.readRunView(params.runId);
+    if (!existing) {
+      return {
+        ok: false,
+        code: 'run_not_found',
+        message: 'Workflow run not found',
+        httpStatus: 404,
+      };
+    }
+
+    const definition = await this.loadDefinition(existing.run.definitionId);
+    if (!definition) {
+      return {
+        ok: false,
+        code: 'definition_not_found',
+        message: 'Workflow definition not found',
+        httpStatus: 404,
+      };
+    }
+
+    const targets = resolveWorkflowReplayTargets(existing, params.scope);
+    if (targets.targets.length === 0) {
+      return {
+        ok: false,
+        code: 'invalid_state',
+        message: params.scope === 'failed_phases'
+          ? 'No failed workflow phase is available to replay'
+          : 'No failed workflow agent is available to replay',
+        httpStatus: 409,
+      };
+    }
+
+    const replayRunId = randomUUID();
+    const goal = buildReplayGoal(existing, params.scope, targets.targets.length);
+    const parentSessionKey =
+      existing.run.source.kind === 'chat' ? existing.run.source.sessionKey : undefined;
+    const { sessionKey } = await this.options.sessionBridge.prepareRunSession({
+      runId: replayRunId,
+      agentId: params.agentId,
+      definitionId: existing.run.definitionId,
+      definitionTitle: `${definition.title} replay`,
+      goal,
+      parentSessionKey,
+    });
+    const source = normalizeWorkflowRunSourceForSession(existing.run.source, sessionKey, parentSessionKey);
+    const abortController = new AbortController();
+    const eventStore = new WorkflowEventStore(this.options.service.currentConfig, params.agentId);
+    const replayRunStore = new WorkflowRunStore(this.options.service.currentConfig, params.agentId, eventStore);
+    const engine = this.createWorkflowEngine({
+      eventStore,
+      runStore: replayRunStore,
+      sessionKey,
+    });
+    const limits = resolveWorkflowRunLimits({
+      config: this.options.service.currentConfig,
+      definition,
+    });
+    const inputEnvelope = existing.run.metadata?.input ?? buildWorkflowRunInputEnvelope(existing.run.input, existing.run.goal);
+
+    this.activeRuns.set(replayRunId, abortController);
+    const timeoutHandle = setTimeout(() => {
+      abortController.abort(new Error(`workflow timed out after ${limits.timeoutSec}s`));
+    }, limits.timeoutSec * 1000);
+    this.timeoutHandles.set(replayRunId, timeoutHandle);
+    void engine.startReplayRun(definition, {
+      runId: replayRunId,
+      input: inputEnvelope.payload,
+      goal,
+      source,
+      metadata: buildWorkflowRunMetadata({
+        definition,
+        agentId: params.agentId,
+        sessionKey,
+        source,
+        input: inputEnvelope,
+        retryOfRunId: existing.run.id,
+        replay: {
+          sourceRunId: existing.run.id,
+          scope: params.scope,
+          phaseIds: targets.phaseIds,
+          agentIds: targets.targets.map((target) => target.agentId),
+          targetCount: targets.targets.length,
+          createdAtMs: Date.now(),
+        },
+      }),
+      signal: abortController.signal,
+      concurrency: limits.concurrency,
+      maxSubagents: limits.maxSubagents,
+      timeoutSec: limits.timeoutSec,
+      sourceRunId: existing.run.id,
+      replayScope: params.scope,
+      targets: targets.targets,
+    }).catch((err) => {
+      this.options.service.emit('workflow.run.error', {
+        runId: replayRunId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }).finally(() => {
+      this.activeRuns.delete(replayRunId);
+      const handle = this.timeoutHandles.get(replayRunId);
+      if (handle) clearTimeout(handle);
+      this.timeoutHandles.delete(replayRunId);
+    });
+
+    return { ok: true, runId: replayRunId, sessionKey };
+  }
+
   async cancelWorkflowRun(params: CancelWorkflowRunServiceParams): Promise<CancelWorkflowRunResult> {
     const controller = this.activeRuns.get(params.runId);
     if (controller) {
       controller.abort();
       this.activeRuns.delete(params.runId);
+      const handle = this.timeoutHandles.get(params.runId);
+      if (handle) clearTimeout(handle);
+      this.timeoutHandles.delete(params.runId);
       return { ok: true, cancelled: true };
     }
 
@@ -192,8 +345,53 @@ export class WorkflowRunService {
     return this.createRunStore(agentId).readRunView(runId);
   }
 
+  async reconcileInterruptedRuns(agentId: string): Promise<number> {
+    const runStore = this.createRunStore(agentId);
+    const summaries = await runStore.listRunSummaries(500);
+    let reconciled = 0;
+
+    for (const summary of summaries) {
+      if (isTerminalWorkflowRunStatus(summary.status) || this.activeRuns.has(summary.id)) {
+        continue;
+      }
+
+      const eventStore = new WorkflowEventStore(this.options.service.currentConfig, agentId);
+      await eventStore.append({
+        runId: summary.id,
+        type: 'run_failed',
+        payload: {
+          error: {
+            code: 'runtime_error',
+            message: 'Workflow run interrupted by gateway restart',
+            recoverable: true,
+          },
+        },
+      });
+      const updated = await runStore.rebuildRunView(summary.id);
+      if (updated) {
+        this.options.service.emit('workflow.run.updated', { runId: summary.id, view: updated });
+        void this.options.sessionBridge.handleRunViewUpdated(updated);
+      }
+      reconciled += 1;
+    }
+
+    return reconciled;
+  }
+
   private loadDefinition(definitionId: string): Promise<WorkflowDefinition | null> {
     return this.definitionRegistry.get(definitionId);
+  }
+
+  private async findRunByIdempotencyKey(agentId: string, idempotencyKey: string) {
+    const runStore = this.createRunStore(agentId);
+    const summaries = await runStore.listRunSummaries(500);
+    for (const summary of summaries) {
+      if (summary.metadata?.correlation?.idempotencyKey !== idempotencyKey) {
+        continue;
+      }
+      return runStore.readRunView(summary.id);
+    }
+    return null;
   }
 
   private createWorkflowEngine(params: {
@@ -271,12 +469,14 @@ export function buildWorkflowRunMetadata(params: {
   input: WorkflowRunInputEnvelope;
   retryOfRunId?: string;
   idempotencyKey?: string;
+  replay?: WorkflowRunReplayMetadata;
 }): WorkflowRunMetadata {
   return {
     sessionKey: params.sessionKey,
     triggerSource: params.source.kind,
     agentId: params.agentId,
     retryOfRunId: params.retryOfRunId,
+    replay: params.replay,
     definition: buildWorkflowRunDefinitionSnapshot(params.definition),
     input: params.input,
     correlation: {
@@ -289,8 +489,60 @@ export function buildWorkflowRunMetadata(params: {
   };
 }
 
-export function buildWorkflowRunDefinitionSnapshot(definition: WorkflowDefinition): WorkflowRunDefinitionSnapshot {
+export function resolveWorkflowReplayTargets(
+  view: WorkflowRunView,
+  scope: WorkflowRunReplayScope,
+): { targets: WorkflowReplayAgentTarget[]; phaseIds?: string[] } {
+  const phaseTitleById = new Map(view.phases.map((phase) => [phase.id, phase.title]));
+  const failedStatuses = new Set(['error', 'skipped']);
+
+  if (scope === 'failed_agents') {
+    return {
+      targets: view.agents
+        .filter((agent) => failedStatuses.has(agent.status) && workflowAgentReplayPrompt(agent))
+        .map((agent) => ({
+          agentId: agent.id,
+          label: agent.label,
+          phaseId: agent.phaseId,
+          phaseTitle: agent.phaseId ? phaseTitleById.get(agent.phaseId) : undefined,
+          prompt: workflowAgentReplayPrompt(agent) ?? '',
+          invocation: agent.invocation,
+        })),
+    };
+  }
+
+  const failedPhaseIds = view.phases
+    .filter((phase) => phase.status === 'failed')
+    .map((phase) => phase.id);
+  const phaseIds = failedPhaseIds.length > 0
+    ? failedPhaseIds
+    : [...new Set(view.agents.filter((agent) => failedStatuses.has(agent.status) && agent.phaseId).map((agent) => agent.phaseId as string))];
+  const phaseIdSet = new Set(phaseIds);
+
   return {
+    phaseIds,
+    targets: view.agents
+      .filter((agent) => agent.phaseId && phaseIdSet.has(agent.phaseId) && workflowAgentReplayPrompt(agent))
+      .map((agent) => ({
+        agentId: agent.id,
+        label: agent.label,
+        phaseId: agent.phaseId,
+        phaseTitle: agent.phaseId ? phaseTitleById.get(agent.phaseId) : undefined,
+        prompt: workflowAgentReplayPrompt(agent) ?? '',
+        invocation: agent.invocation,
+      })),
+  };
+}
+
+function workflowAgentReplayPrompt(agent: WorkflowRunView['agents'][number]): string | undefined {
+  const invocationPrompt = agent.invocation?.prompt?.trim();
+  if (invocationPrompt) return invocationPrompt;
+  const prompt = agent.prompt?.trim();
+  return prompt || undefined;
+}
+
+export function buildWorkflowRunDefinitionSnapshot(definition: WorkflowDefinition): WorkflowRunDefinitionSnapshot {
+  const snapshot: WorkflowRunDefinitionSnapshot = {
     id: definition.id,
     name: definition.name,
     title: definition.title,
@@ -298,8 +550,65 @@ export function buildWorkflowRunDefinitionSnapshot(definition: WorkflowDefinitio
     source: definition.metadata.source,
     tags: [...definition.metadata.tags],
     phaseCount: definition.phases.length,
+    defaults: { ...definition.defaults },
     estimatedAgents: definition.metadata.estimatedAgents,
   };
+  if (definition.contentHash) snapshot.contentHash = definition.contentHash;
+  if (definition.runtimeHash) snapshot.runtimeHash = definition.runtimeHash;
+  if (definition.permissions) snapshot.permissions = structuredClone(definition.permissions);
+  if (definition.resources) snapshot.resources = structuredClone(definition.resources);
+  return snapshot;
+}
+
+function resolveWorkflowRunLimits(params: {
+  config: import('../../config/schema.js').Config;
+  definition: WorkflowDefinition;
+  concurrency?: number;
+  maxSubagents?: number;
+}): { concurrency: number; maxSubagents: number; timeoutSec: number } {
+  const cfg = params.config.agents?.defaults?.workflow;
+  const configuredMaxConcurrency = normalizePositiveInt(
+    cfg?.maxConcurrency,
+    params.definition.defaults.concurrency,
+  );
+  const configuredMaxSubagents = normalizePositiveInt(
+    cfg?.maxSubagents,
+    params.definition.defaults.maxSubagents,
+  );
+  const configuredTimeoutSec = normalizePositiveInt(
+    cfg?.defaultTimeoutSec,
+    params.definition.defaults.timeoutSec,
+  );
+
+  return {
+    concurrency: Math.max(
+      1,
+      Math.min(
+        normalizePositiveInt(params.concurrency, params.definition.defaults.concurrency),
+        configuredMaxConcurrency,
+      ),
+    ),
+    maxSubagents: Math.max(
+      1,
+      Math.min(
+        normalizePositiveInt(params.maxSubagents, params.definition.defaults.maxSubagents),
+        configuredMaxSubagents,
+      ),
+    ),
+    timeoutSec: Math.max(1, Math.min(params.definition.defaults.timeoutSec, configuredTimeoutSec)),
+  };
+}
+
+function normalizePositiveInt(value: number | undefined, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 1) {
+    return fallback;
+  }
+  return Math.floor(value);
+}
+
+function buildReplayGoal(view: WorkflowRunView, scope: WorkflowRunReplayScope, targetCount: number): string {
+  const scopeLabel = scope === 'failed_phases' ? 'failed phase' : 'failed agent';
+  return `Replay ${targetCount} ${scopeLabel}${targetCount === 1 ? '' : 's'} from workflow run ${view.run.id}: ${view.run.goal}`;
 }
 
 export function extractWorkflowRunSessionKey(source: WorkflowRunSource): string | null {

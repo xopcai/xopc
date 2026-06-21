@@ -29,9 +29,20 @@ import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 
 import { runViewToSnapshot } from './run-view-to-snapshot';
-import type { WorkflowArtifactRef, WorkflowFollowUp, WorkflowResultEnvelope, WorkflowRunView } from './workflow-api';
+import {
+  downloadWorkflowArtifact,
+  type WorkflowArtifactRef,
+  type WorkflowDefinition,
+  type WorkflowFollowUp,
+  type WorkflowResultEnvelope,
+  type WorkflowRunComparison,
+  type WorkflowRunDefinitionSnapshot,
+  type WorkflowRunReplayScope,
+  type WorkflowRunView,
+} from './workflow-api';
 import { ACTIVE_RUN_STATUSES } from './workflow-page.constants';
 import {
+  collectWorkflowRunDiagnostics,
   formatDuration,
   formatTime,
   interpolate,
@@ -39,6 +50,7 @@ import {
   resolveWorkflowSessionKey,
   statusTone,
   stringifyWorkflowResult,
+  type WorkflowRunDiagnosticItem,
   workflowChatHref,
 } from './workflow-page.utils';
 
@@ -95,20 +107,28 @@ function formatSourceSummary(source: WorkflowRunView['run']['source']): string {
 
 export function WorkflowRunPanel({
   view,
+  comparison,
+  currentDefinition,
   loading,
   language,
   localeTag,
   onCancel,
   onRetry,
+  onReplay,
+  onOpenRunId,
   ownerAgentId,
   onClose,
 }: {
   view: WorkflowRunView | undefined;
+  comparison?: WorkflowRunComparison;
+  currentDefinition?: WorkflowDefinition;
   loading: boolean;
   language: StoredLanguage;
   localeTag: string;
   onCancel: () => void;
   onRetry: () => void;
+  onReplay: (scope: WorkflowRunReplayScope) => void;
+  onOpenRunId?: (runId: string) => void;
   ownerAgentId?: string;
   onClose: () => void;
 }) {
@@ -120,6 +140,8 @@ export function WorkflowRunPanel({
   const [logsExpanded, setLogsExpanded] = useState(false);
   const [drawerAgentId, setDrawerAgentId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+  const [downloadingArtifactId, setDownloadingArtifactId] = useState<string | null>(null);
   const [, setTick] = useState(0);
 
   const runStatus = view?.run.status;
@@ -135,6 +157,7 @@ export function WorkflowRunPanel({
 
     setProcessExpanded(shouldExpandProcess);
     setDrawerAgentId(null);
+    setDownloadError(null);
   }, [view?.run.id, isActive, runStatus, view?.run.metrics.errorAgentCount]);
 
   useEffect(() => {
@@ -155,6 +178,7 @@ export function WorkflowRunPanel({
   }, []);
 
   const outcome = view ? resolveWorkflowOutcome(view.run.result) : null;
+  const diagnostics = useMemo(() => (view ? collectWorkflowRunDiagnostics(view) : []), [view]);
   const resultForDisplay = view ? resolveWorkflowResultForDisplay(view.run.result) : undefined;
   const resultText = stringifyWorkflowResult(resultForDisplay);
   const hasResult = resultText.trim().length > 0;
@@ -184,6 +208,39 @@ export function WorkflowRunPanel({
     if (!sessionKey) return;
     navigate(workflowChatHref(sessionKey));
   }, [navigate, view]);
+
+  const handleDownloadArtifact = useCallback(async (artifact: WorkflowArtifactRef) => {
+    if (!view) return;
+    setDownloadError(null);
+    setDownloadingArtifactId(artifact.id);
+    try {
+      const blob = await downloadWorkflowArtifact(view.run.id, artifact.id, { ownerAgentId });
+      triggerBlobDownload(blob, artifact.name || artifact.id);
+    } catch (error) {
+      setDownloadError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDownloadingArtifactId(null);
+    }
+  }, [ownerAgentId, view]);
+
+  const handleStartFollowUp = useCallback((followUp: WorkflowFollowUp) => {
+    if (!view || !followUp.prompt) return;
+    const sessionKey = resolveWorkflowSessionKeyFromView(view);
+    if (!sessionKey) {
+      void copyTextToClipboard(followUp.prompt);
+      return;
+    }
+    navigate(workflowChatHref(sessionKey, followUp.prompt));
+  }, [navigate, view]);
+
+  const openDiagnosticAgent = useCallback((agentId: string | number | undefined) => {
+    if (!view || agentId == null) return;
+    const rawAgentId = String(agentId);
+    const index = view.agents.findIndex((agent) => String(agent.id) === rawAgentId);
+    if (index < 0) return;
+    const parsed = Number.parseInt(rawAgentId, 10);
+    setDrawerAgentId(Number.isFinite(parsed) ? parsed : index + 1);
+  }, [view]);
   const workflowSessionKey = view ? resolveWorkflowSessionKeyFromView(view) : null;
 
   if (loading) {
@@ -216,6 +273,11 @@ export function WorkflowRunPanel({
   const diagnosticHint = buildDiagnosticHint(view, labels);
   const metadata = run.metadata;
   const sourceSummary = formatSourceSummary(run.source);
+  const canReplayFailedAgents = view.controls.canRetry && view.agents.some((agent) => (agent.status === 'error' || agent.status === 'skipped') && agent.prompt?.trim());
+  const canReplayFailedPhases = view.controls.canRetry && (
+    view.phases.some((phase) => phase.status === 'failed' && view.agents.some((agent) => agent.phaseId === phase.id && agent.prompt?.trim()))
+    || view.agents.some((agent) => (agent.status === 'error' || agent.status === 'skipped') && agent.phaseId && agent.prompt?.trim())
+  );
 
   return (
     <>
@@ -264,6 +326,19 @@ export function WorkflowRunPanel({
           </div>
         </div>
 
+        <WorkflowDiagnosticsPanel
+          diagnostics={diagnostics}
+          labels={labels}
+          onOpenAgent={openDiagnosticAgent}
+        />
+
+        <WorkflowReplayLineagePanel
+          view={view}
+          comparison={comparison}
+          labels={labels}
+          onOpenRunId={onOpenRunId}
+        />
+
         <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Metric label={labels.metrics.startedAt} value={formatTime(run.startedAtMs ?? run.createdAtMs, localeTag)} />
           <Metric label={labels.metrics.duration} value={durationText} />
@@ -296,6 +371,18 @@ export function WorkflowRunPanel({
               {labels.rerun}
             </Button>
           ) : null}
+          {canReplayFailedAgents ? (
+            <Button variant="secondary" onClick={() => onReplay('failed_agents')}>
+              <RotateCcw className="size-4" aria-hidden />
+              {labels.replayFailedAgents}
+            </Button>
+          ) : null}
+          {canReplayFailedPhases ? (
+            <Button variant="secondary" onClick={() => onReplay('failed_phases')}>
+              <RotateCcw className="size-4" aria-hidden />
+              {labels.replayFailedPhases}
+            </Button>
+          ) : null}
           {hasResult ? (
             <>
               <Button variant="secondary" onClick={handleCopy}>
@@ -321,7 +408,15 @@ export function WorkflowRunPanel({
               {labels.noResult}
             </div>
           )}
-          <WorkflowOutcomePanel outcome={outcome} labels={labels} onCopyText={(text) => void copyTextToClipboard(text)} />
+          <WorkflowOutcomePanel
+            outcome={outcome}
+            labels={labels}
+            downloadingArtifactId={downloadingArtifactId}
+            downloadError={downloadError}
+            onCopyText={(text) => void copyTextToClipboard(text)}
+            onDownloadArtifact={(artifact) => void handleDownloadArtifact(artifact)}
+            onStartFollowUp={handleStartFollowUp}
+          />
         </div>
 
         <div className="mt-6 rounded-2xl border border-edge bg-surface-base/35">
@@ -403,6 +498,14 @@ export function WorkflowRunPanel({
             label={labels.metadataDefinition}
             value={`${metadata?.definition.version ?? run.definitionVersion} · ${metadata?.definition.source ?? 'unknown'}`}
           />
+          <MetadataItem
+            label={labels.metadataDefinitionHash}
+            value={definitionSnapshotStatus(metadata?.definition, currentDefinition, labels)}
+          />
+          <MetadataItem
+            label={labels.metadataPermissions}
+            value={formatPermissionSnapshot(metadata?.definition)}
+          />
           <MetadataItem label={labels.metadataRetryOf} value={metadata?.retryOfRunId ?? '—'} />
         </div>
             </section>
@@ -425,14 +528,168 @@ export function WorkflowRunPanel({
   );
 }
 
+function WorkflowDiagnosticsPanel({
+  diagnostics,
+  labels,
+  onOpenAgent,
+}: {
+  diagnostics: WorkflowRunDiagnosticItem[];
+  labels: WorkflowsMessages;
+  onOpenAgent: (agentId: string | number | undefined) => void;
+}) {
+  if (diagnostics.length === 0) return null;
+
+  return (
+    <section className="mt-5 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4">
+      <div className="flex items-start gap-3">
+        <div className="rounded-xl bg-rose-500/10 p-2 text-rose-700 dark:text-rose-300">
+          <AlertTriangle className="size-4" aria-hidden />
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-sm font-semibold text-fg">{labels.diagnosticsTitle}</h3>
+          <p className="mt-1 text-xs leading-5 text-fg-subtle">{labels.diagnosticsHint}</p>
+          <ul className="mt-3 space-y-2">
+            {diagnostics.slice(0, 5).map((item) => (
+              <li key={item.key} className="rounded-xl border border-edge-subtle bg-surface-panel px-3 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-fg">{diagnosticItemTitle(item, labels)}</div>
+                    {item.message ? (
+                      <div className="mt-0.5 text-xs leading-5 text-fg-muted">{item.message}</div>
+                    ) : null}
+                    {item.detail ? (
+                      <div className="mt-0.5 line-clamp-2 text-xs leading-5 text-fg-subtle">{item.detail}</div>
+                    ) : null}
+                  </div>
+                  {item.agentId != null ? (
+                    <Button type="button" variant="ghost" className="h-8 shrink-0 px-2 text-xs" onClick={() => onOpenAgent(item.agentId)}>
+                      {labels.openAgentDetails}
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function diagnosticItemTitle(item: WorkflowRunDiagnosticItem, labels: WorkflowsMessages): string {
+  if (item.kind === 'run_error') {
+    return item.code ? interpolate(labels.diagnosticsRunErrorWithCode, { code: item.code }) : labels.diagnosticsRunError;
+  }
+  if (item.kind === 'agent_error') {
+    return interpolate(labels.diagnosticsAgentError, { agent: item.agentLabel ?? String(item.agentId ?? '—') });
+  }
+  if (item.kind === 'step_error') {
+    return interpolate(labels.diagnosticsStepError, {
+      agent: item.agentLabel ?? String(item.agentId ?? '—'),
+      step: item.stepLabel ?? item.stepId ?? '—',
+    });
+  }
+  return interpolate(labels.diagnosticsAgentSkipped, { agent: item.agentLabel ?? String(item.agentId ?? '—') });
+}
+
+function WorkflowReplayLineagePanel({
+  view,
+  comparison,
+  labels,
+  onOpenRunId,
+}: {
+  view: WorkflowRunView;
+  comparison?: WorkflowRunComparison;
+  labels: WorkflowsMessages;
+  onOpenRunId?: (runId: string) => void;
+}) {
+  const replay = view.run.metadata?.replay;
+  if (!replay) return null;
+
+  return (
+    <section className="mt-5 rounded-2xl border border-edge-subtle bg-surface-base/35 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-fg">{labels.replayLineageTitle}</h3>
+          <p className="mt-1 text-xs leading-5 text-fg-subtle">
+            {interpolate(labels.replayLineageSummary, {
+              scope: replayScopeLabel(replay.scope, labels),
+              count: replay.targetCount,
+            })}
+          </p>
+          <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+            <MetadataItem label={labels.replaySourceRun} value={replay.sourceRunId} />
+            <MetadataItem label={labels.replayTargetAgents} value={replay.agentIds.join(', ')} />
+          </dl>
+          {comparison ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <Metric label={labels.replayFixedAgents} value={String(comparison.fixedAgentIds.length)} />
+              <Metric label={labels.replayStillFailingAgents} value={String(comparison.stillFailingAgentIds.length)} />
+              <Metric label={labels.replayDurationDelta} value={formatDurationDelta(comparison.durationDeltaMs)} />
+            </div>
+          ) : null}
+        </div>
+        {onOpenRunId ? (
+          <Button type="button" variant="secondary" className="shrink-0" onClick={() => onOpenRunId(replay.sourceRunId)}>
+            {labels.replayOpenSource}
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function definitionSnapshotStatus(
+  snapshot: WorkflowRunDefinitionSnapshot | undefined,
+  currentDefinition: WorkflowDefinition | undefined,
+  labels: WorkflowsMessages,
+): string {
+  if (!snapshot?.contentHash) return labels.definitionHashUnavailable;
+  const short = snapshot.contentHash.slice(0, 8);
+  if (!currentDefinition?.contentHash) return `${short} · ${labels.definitionHashCurrentUnknown}`;
+  return currentDefinition.contentHash === snapshot.contentHash
+    ? `${short} · ${labels.definitionHashMatches}`
+    : `${short} · ${labels.definitionHashDrifted}`;
+}
+
+function formatPermissionSnapshot(snapshot: WorkflowRunDefinitionSnapshot | undefined): string {
+  const permissions = snapshot?.permissions;
+  if (!permissions) return '—';
+  const parts = [
+    permissions.tools?.length ? `tools:${permissions.tools.join(',')}` : null,
+    permissions.network != null ? `network:${permissions.network ? 'on' : 'off'}` : null,
+    permissions.fileSystem ? `fs:${permissions.fileSystem}` : null,
+    permissions.approvalRequired ? 'approval' : null,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : '—';
+}
+
+function formatDurationDelta(deltaMs: number | null): string {
+  if (deltaMs == null) return '—';
+  const sign = deltaMs > 0 ? '+' : deltaMs < 0 ? '-' : '';
+  return `${sign}${formatDuration(Math.abs(deltaMs))}`;
+}
+
+function replayScopeLabel(scope: WorkflowRunReplayScope, labels: WorkflowsMessages): string {
+  return scope === 'failed_phases' ? labels.replayScopeFailedPhases : labels.replayScopeFailedAgents;
+}
+
 function WorkflowOutcomePanel({
   outcome,
   labels,
+  downloadingArtifactId,
+  downloadError,
   onCopyText,
+  onDownloadArtifact,
+  onStartFollowUp,
 }: {
   outcome: WorkflowOutcomeView | null;
   labels: WorkflowsMessages;
+  downloadingArtifactId: string | null;
+  downloadError: string | null;
   onCopyText: (text: string) => void;
+  onDownloadArtifact: (artifact: WorkflowArtifactRef) => void;
+  onStartFollowUp: (followUp: WorkflowFollowUp) => void;
 }) {
   if (!outcome || (!outcome.artifacts.length && !outcome.followUps.length && outcome.structuredOutput === undefined)) {
     return null;
@@ -449,9 +706,19 @@ function WorkflowOutcomePanel({
                   {artifact.title ?? artifact.name}
                 </div>
                 <div className="mt-0.5 text-xs text-fg-subtle">{artifact.mimeType}</div>
+                <button
+                  type="button"
+                  className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline disabled:cursor-wait disabled:opacity-60"
+                  disabled={downloadingArtifactId === artifact.id}
+                  onClick={() => onDownloadArtifact(artifact)}
+                >
+                  <Download className="size-3" aria-hidden />
+                  {downloadingArtifactId === artifact.id ? labels.downloadingArtifact : labels.downloadArtifact}
+                </button>
               </li>
             ))}
           </ul>
+          {downloadError ? <p className="mt-2 text-xs leading-5 text-rose-600 dark:text-rose-400">{downloadError}</p> : null}
         </OutcomeCard>
       ) : null}
 
@@ -462,13 +729,22 @@ function WorkflowOutcomePanel({
               <li key={followUp.id} className="rounded-lg bg-surface-base px-2.5 py-2">
                 <div className="text-sm font-medium text-fg">{followUp.title}</div>
                 {followUp.prompt ? (
-                  <button
-                    type="button"
-                    className="mt-1 text-xs font-medium text-accent-fg hover:underline"
-                    onClick={() => onCopyText(followUp.prompt ?? '')}
-                  >
-                    {labels.copyPrompt}
-                  </button>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-accent-fg hover:underline"
+                      onClick={() => onStartFollowUp(followUp)}
+                    >
+                      {labels.startFollowUp}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-fg-subtle hover:text-fg"
+                      onClick={() => onCopyText(followUp.prompt ?? '')}
+                    >
+                      {labels.copyPrompt}
+                    </button>
+                  </div>
                 ) : null}
               </li>
             ))}
@@ -485,6 +761,15 @@ function WorkflowOutcomePanel({
       ) : null}
     </div>
   );
+}
+
+function triggerBlobDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 function OutcomeCard({ title, children }: { title: string; children: ReactNode }) {
@@ -580,12 +865,44 @@ function AgentInputOutputOverview({
                   </div>
                 </div>
               </div>
+              <AgentInvocationSnapshotView agent={agent} labels={labels} />
             </article>
           );
           })}
         </div>
       ) : null}
     </section>
+  );
+}
+
+function AgentInvocationSnapshotView({
+  agent,
+  labels,
+}: {
+  agent: WorkflowAgentSnapshot;
+  labels: WorkflowsMessages;
+}) {
+  const invocation = agent.invocation;
+  if (!invocation) return null;
+
+  const fields = [
+    { label: labels.agentInvocationModel, value: invocation.resolvedModelRef ?? invocation.modelRef },
+    { label: labels.agentInvocationTools, value: invocation.toolset?.join(', ') },
+    { label: labels.agentInvocationIterations, value: invocation.maxIterations != null ? String(invocation.maxIterations) : undefined },
+    { label: labels.agentInvocationSchema, value: invocation.schema ? labels.agentInvocationSchemaPresent : undefined },
+  ].filter((item): item is { label: string; value: string } => Boolean(item.value));
+
+  if (fields.length === 0) return null;
+
+  return (
+    <dl className="mt-3 grid gap-2 border-t border-edge-subtle pt-3 text-xs sm:grid-cols-2 lg:grid-cols-4">
+      {fields.map((item) => (
+        <div key={item.label} className="min-w-0">
+          <dt className="text-fg-subtle">{item.label}</dt>
+          <dd className="mt-0.5 truncate font-medium text-fg-muted" title={item.value}>{item.value}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 

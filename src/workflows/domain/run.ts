@@ -1,4 +1,4 @@
-import type { WorkflowDefinitionEstimatedAgents } from './definition.js';
+import type { WorkflowDefinitionDefaults, WorkflowDefinitionEstimatedAgents, WorkflowPermissionPolicy, WorkflowResourceRefs } from './definition.js';
 import type { WorkflowArtifactRef, WorkflowResultEnvelope } from './result.js';
 
 export type WorkflowRunStatus =
@@ -43,11 +43,23 @@ export interface WorkflowRunMetadata {
   triggerSource: WorkflowRunSource['kind'];
   agentId?: string;
   retryOfRunId?: string;
+  replay?: WorkflowRunReplayMetadata;
   definition: WorkflowRunDefinitionSnapshot;
   input?: WorkflowRunInputEnvelope;
   correlation?: WorkflowRunCorrelation;
   origin?: WorkflowRunOrigin;
   schedule?: WorkflowRunScheduleMetadata;
+}
+
+export type WorkflowRunReplayScope = 'failed_agents' | 'failed_phases';
+
+export interface WorkflowRunReplayMetadata {
+  sourceRunId: string;
+  scope: WorkflowRunReplayScope;
+  phaseIds?: string[];
+  agentIds: string[];
+  targetCount: number;
+  createdAtMs: number;
 }
 
 export interface WorkflowRunInputEnvelope {
@@ -85,9 +97,14 @@ export interface WorkflowRunDefinitionSnapshot {
   name: string;
   title: string;
   version: string;
+  contentHash?: string;
+  runtimeHash?: string;
   source: 'builtin' | 'user';
   tags: string[];
   phaseCount: number;
+  defaults?: WorkflowDefinitionDefaults;
+  permissions?: WorkflowPermissionPolicy;
+  resources?: WorkflowResourceRefs;
   estimatedAgents?: WorkflowDefinitionEstimatedAgents;
 }
 
@@ -171,6 +188,7 @@ export interface WorkflowAgentView {
   phaseId?: string;
   status: WorkflowAgentStatus;
   prompt?: string;
+  invocation?: WorkflowAgentInvocationSnapshot;
   sessionKey: string;
   transcriptMessageCount: number;
   currentStep?: string;
@@ -179,6 +197,17 @@ export interface WorkflowAgentView {
   startedAtMs?: number;
   completedAtMs?: number;
   steps: WorkflowAgentStepView[];
+}
+
+export interface WorkflowAgentInvocationSnapshot {
+  prompt: string;
+  label: string;
+  phase?: string;
+  modelRef?: string;
+  resolvedModelRef?: string;
+  schema?: unknown;
+  toolset?: string[];
+  maxIterations?: number;
 }
 
 export type WorkflowAgentStepStatus = 'running' | 'done' | 'error';

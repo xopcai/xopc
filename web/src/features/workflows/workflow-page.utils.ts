@@ -142,8 +142,12 @@ export function resolveWorkflowSessionKey(view: WorkflowRunView): string | null 
 }
 
 /** Navigate target for opening a workflow run in Chat. */
-export function workflowChatHref(sessionKey: string): string {
-  return `/chat/${encodeURIComponent(sessionKey)}`;
+export function workflowChatHref(sessionKey: string, draft?: string): string {
+  const href = `/chat/${encodeURIComponent(sessionKey)}`;
+  const trimmedDraft = draft?.trim();
+  if (!trimmedDraft) return href;
+  const params = new URLSearchParams({ draft: trimmedDraft });
+  return `${href}?${params.toString()}`;
 }
 
 /** Deep link to the workflows board with a run detail drawer open. */
@@ -173,4 +177,75 @@ export function buildWorkflowInput(args: Record<string, string>): unknown {
     if (trimmed) input[key] = trimmed;
   }
   return Object.keys(input).length > 0 ? input : undefined;
+}
+
+export type WorkflowRunDiagnosticKind = 'run_error' | 'agent_error' | 'step_error' | 'agent_skipped';
+export type WorkflowRunDiagnosticSeverity = 'error' | 'warning';
+
+export interface WorkflowRunDiagnosticItem {
+  key: string;
+  kind: WorkflowRunDiagnosticKind;
+  severity: WorkflowRunDiagnosticSeverity;
+  code?: string;
+  message?: string;
+  detail?: string;
+  agentId?: string | number;
+  agentLabel?: string;
+  stepId?: string;
+  stepLabel?: string;
+}
+
+export function collectWorkflowRunDiagnostics(view: WorkflowRunView): WorkflowRunDiagnosticItem[] {
+  const items: WorkflowRunDiagnosticItem[] = [];
+
+  if (view.run.error) {
+    items.push({
+      key: 'run-error',
+      kind: 'run_error',
+      severity: view.run.error.recoverable ? 'warning' : 'error',
+      code: view.run.error.code,
+      message: view.run.error.message,
+      detail: view.run.error.detail,
+    });
+  }
+
+  for (const agent of view.agents) {
+    if (agent.status === 'error') {
+      items.push({
+        key: `agent-error:${agent.id}`,
+        kind: 'agent_error',
+        severity: 'error',
+        agentId: agent.id,
+        agentLabel: agent.label,
+        message: agent.error,
+        detail: agent.resultPreview,
+      });
+    } else if (agent.status === 'skipped') {
+      items.push({
+        key: `agent-skipped:${agent.id}`,
+        kind: 'agent_skipped',
+        severity: 'warning',
+        agentId: agent.id,
+        agentLabel: agent.label,
+        message: agent.error,
+      });
+    }
+
+    for (const step of agent.steps ?? []) {
+      if (step.status !== 'error') continue;
+      items.push({
+        key: `step-error:${agent.id}:${step.id}`,
+        kind: 'step_error',
+        severity: 'error',
+        agentId: agent.id,
+        agentLabel: agent.label,
+        stepId: step.id,
+        stepLabel: step.label,
+        message: step.error,
+        detail: step.resultPreview ?? step.detail,
+      });
+    }
+  }
+
+  return items;
 }

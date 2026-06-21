@@ -98,13 +98,21 @@ export function projectWorkflowRunView(events: WorkflowEventEnvelope[]): Workflo
         break;
       }
       case 'agent_queued': {
-        const payload = event.payload as { agentId: string; label: string; phaseId?: string; prompt?: string; sessionKey: string };
+        const payload = event.payload as {
+          agentId: string;
+          label: string;
+          phaseId?: string;
+          prompt?: string;
+          sessionKey: string;
+          invocation?: WorkflowAgentView['invocation'];
+        };
         agentIdToAgent.set(payload.agentId, {
           id: payload.agentId,
           label: payload.label,
           phaseId: payload.phaseId,
           status: 'queued',
           prompt: payload.prompt,
+          invocation: payload.invocation,
           sessionKey: payload.sessionKey,
           transcriptMessageCount: 0,
           steps: [],

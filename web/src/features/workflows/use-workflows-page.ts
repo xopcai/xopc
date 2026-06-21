@@ -10,15 +10,18 @@ import { useLocaleStore } from '@/stores/locale-store';
 import {
   cancelWorkflowRun,
   deleteWorkflowDefinition,
+  getWorkflowRunComparison,
   getWorkflowRun,
   getWorkflowStats,
   listWorkflowDefinitions,
   listWorkflowRuns,
+  replayWorkflowRun,
   retryWorkflowRun,
   saveWorkflowDefinition,
   startWorkflowRun,
   type WorkflowDefinition,
   type WorkflowRunSummary,
+  type WorkflowRunReplayScope,
 } from './workflow-api';
 import {
   RUN_FETCH_LIMIT,
@@ -97,6 +100,13 @@ export function useWorkflowsPage() {
   const runs = runsSwr.data ?? [];
   const selectedRunId = runParam || null;
   const selectedRunLive = useWorkflowRunLive(selectedRunId, { ownerAgentId });
+  const selectedRunComparisonSwr = useSWR(
+    hasToken && ownerAgentId && selectedRunId && selectedRunLive.view?.run.metadata?.replay
+      ? ['workflow-run-comparison', token, ownerAgentId, selectedRunId]
+      : null,
+    () => getWorkflowRunComparison(selectedRunId as string, { ownerAgentId }),
+    { revalidateOnFocus: false },
+  );
 
   const filteredDefinitions = useMemo(
     () => filterDefinitions(definitions, searchQuery, 'all', 'all'),
@@ -187,6 +197,16 @@ export function useWorkflowsPage() {
       next.delete(WORKFLOW_RUN_PARAM);
     });
   }, [patchSearchParams]);
+
+  const openRunDetailsById = useCallback(
+    (runId: string) => {
+      patchSearchParams((next) => {
+        if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
+        next.set(WORKFLOW_RUN_PARAM, runId);
+      });
+    },
+    [ownerAgentId, patchSearchParams],
+  );
 
   const openRunInChat = useCallback(
     (run: WorkflowRunSummary) => {
@@ -311,6 +331,23 @@ export function useWorkflowsPage() {
     [labels.retryFailed, ownerAgentId, patchSearchParams, runsSwr, statsSwr],
   );
 
+  const replayRun = useCallback(
+    async (runId: string, scope: WorkflowRunReplayScope) => {
+      try {
+        const result = await replayWorkflowRun(runId, scope, { ownerAgentId });
+        await runsSwr.mutate();
+        await statsSwr.mutate();
+        patchSearchParams((next) => {
+          if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
+          next.set(WORKFLOW_RUN_PARAM, result.runId);
+        });
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : labels.retryFailed);
+      }
+    },
+    [labels.retryFailed, ownerAgentId, patchSearchParams, runsSwr, statsSwr],
+  );
+
   const saveCustomWorkflow = useCallback(
     async (payload: { name: string; script: string }) => {
       setSavingWorkflow(true);
@@ -367,10 +404,12 @@ export function useWorkflowsPage() {
     runs,
     selectedRunId,
     selectedRunView: selectedRunLive.view,
+    selectedRunComparison: selectedRunComparisonSwr.data,
     selectedRunLoading: selectedRunLive.loading,
-    selectedRunError: selectedRunLive.error?.message ?? null,
+    selectedRunError: selectedRunLive.error?.message ?? selectedRunComparisonSwr.error?.message ?? null,
     openRunDetails,
     closeRunDetails,
+    openRunDetailsById,
     openRunInChat,
     pickStartOpen,
     setPickStartOpen,
@@ -391,6 +430,7 @@ export function useWorkflowsPage() {
     submitStart,
     cancelRun,
     retryRun,
+    replayRun,
     saveCustomWorkflow,
     removeCustomWorkflow,
   };

@@ -1,5 +1,6 @@
 import type {
   WorkflowRunInputEnvelope,
+  WorkflowRunReplayScope,
   WorkflowRunSource,
 } from '../domain/index.js';
 
@@ -27,6 +28,7 @@ export interface StartWorkflowRunServiceResult {
 export type WorkflowRunServiceErrorCode =
   | 'definition_not_found'
   | 'run_not_found'
+  | 'invalid_input'
   | 'invalid_state';
 
 export interface WorkflowRunServiceErrorResult {
@@ -41,6 +43,12 @@ export type WorkflowRunServiceResult = StartWorkflowRunServiceResult | WorkflowR
 export interface RetryWorkflowRunServiceParams {
   agentId: string;
   runId: string;
+}
+
+export interface ReplayWorkflowRunServiceParams {
+  agentId: string;
+  runId: string;
+  scope: WorkflowRunReplayScope;
 }
 
 export interface CancelWorkflowRunServiceParams {

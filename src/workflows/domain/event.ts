@@ -1,5 +1,5 @@
 import type { WorkflowArtifactRef, WorkflowResultEnvelope } from './result.js';
-import type { WorkflowRun, WorkflowRunError } from './run.js';
+import type { WorkflowAgentInvocationSnapshot, WorkflowRun, WorkflowRunError } from './run.js';
 
 export type WorkflowEventType =
   | 'run_queued'
@@ -65,7 +65,9 @@ export interface AgentQueuedPayload {
   phaseId?: string;
   prompt?: string;
   sessionKey: string;
+  invocation?: WorkflowAgentInvocationSnapshot;
 }
+
 
 export interface AgentStartedPayload {
   agentId: string;
