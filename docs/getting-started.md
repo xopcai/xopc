@@ -13,7 +13,7 @@ curl -fsSL https://xopc.ai/install.sh | bash
 # Optional: npm path
 npm install -g @xopcai/xopc
 
-xopc onboard          # faster path: xopc onboard --quick
+xopc onboard --quick  # model only, then launch locally
 xopc tui --local
 ```
 
@@ -81,7 +81,22 @@ The wizard will guide you through:
 4. Optional messaging channels (**Telegram**, **WeChat (Weixin)**, **Feishu/Lark**)
 5. Gateway Web console (and optional **`xopc tui`** vs gateway choice at the end)
 
-### Quick Setup
+### Quick onboarding
+
+For the shortest guided path, configure only the model and skip gateway/channel setup:
+
+```bash
+xopc onboard --quick
+xopc tui --local
+```
+
+Use the full wizard later when you want the Web console or messaging channels:
+
+```bash
+xopc onboard
+```
+
+### Minimal file setup
 
 For minimal setup without interactive prompts:
 
@@ -89,7 +104,7 @@ For minimal setup without interactive prompts:
 xopc setup
 ```
 
-This creates basic config and workspace files only.
+This creates basic config and workspace files only; it does not guide you through model credentials.
 
 ### Manual Configuration
 

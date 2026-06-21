@@ -49,6 +49,8 @@ export interface SlashCommandOutcome {
   aggregatedText: string;
   /** The parsed command name when matched. */
   command?: string;
+  /** Structured command result metadata for webchat and other rich clients. */
+  metadata?: Record<string, unknown>;
 }
 
 export interface TryRunSlashCommandDeps {
@@ -85,7 +87,7 @@ export async function tryRunSlashCommand(
     return { matched: false, aggregatedText: '' };
   }
   try {
-    const { aggregatedText } = await deps.commandHandler.executeCommandAndAggregateReply(
+    const { aggregatedText, metadata } = await deps.commandHandler.executeCommandAndAggregateReply(
       parsed.command,
       parsed.args,
       {
@@ -97,7 +99,7 @@ export async function tryRunSlashCommand(
         inboundMetadata: ctx.inboundMetadata ?? {},
       },
     );
-    return { matched: true, aggregatedText: aggregatedText ?? '', command: parsed.command };
+    return { matched: true, aggregatedText: aggregatedText ?? '', command: parsed.command, metadata };
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
     deps.log.warn(

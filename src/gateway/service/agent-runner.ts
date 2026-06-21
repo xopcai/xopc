@@ -217,15 +217,20 @@ export class GatewayAgentRunner {
     });
   }
 
+  /** Same execution path as scheduled continuation, but lets callers observe failures. */
+  async runScheduledWebchatContinuation(sessionKey: string, message: string): Promise<void> {
+    const gen = this.runAgent(message, 'webchat', sessionKey, undefined, undefined, {
+      clientCreatedAtMs: Date.now(),
+    });
+    for await (const _ of gen) {
+      // Relay + `agent.stream` broadcast; UI attaches via pending runId + resume.
+    }
+  }
+
   /** Background drain for extension-initiated webchat turns (`scheduleWebchatContinuation`). */
   async drainScheduledWebchatContinuation(sessionKey: string, message: string): Promise<void> {
     try {
-      const gen = this.runAgent(message, 'webchat', sessionKey, undefined, undefined, {
-        clientCreatedAtMs: Date.now(),
-      });
-      for await (const _ of gen) {
-        // Relay + `agent.stream` broadcast; UI attaches via pending runId + resume.
-      }
+      await this.runScheduledWebchatContinuation(sessionKey, message);
     } catch (err) {
       log.warn({ err, sessionKey }, 'Scheduled webchat continuation failed');
     }

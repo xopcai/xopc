@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">xopc social preview</title>
+  <desc id="desc">xopc is a local-first Goal Loop OS for long-term AI work across terminal, web, desktop, messengers, and the xopc mobile app.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0f172a"/>
+      <stop offset="0.52" stop-color="#172554"/>
+      <stop offset="1" stop-color="#082f49"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fafc" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#38bdf8" stop-opacity="0.10"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="20" stdDeviation="24" flood-color="#020617" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect x="56" y="56" width="1168" height="528" rx="28" fill="url(#panel)" stroke="#60a5fa" stroke-opacity="0.28"/>
+
+  <g transform="translate(104 112)">
+    <text x="0" y="0" fill="#e0f2fe" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="30" font-weight="700" letter-spacing="0">xopc</text>
+    <text x="0" y="104" fill="#f8fafc" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="76" font-weight="800" letter-spacing="0">Goal Loop OS</text>
+    <text x="0" y="174" fill="#bae6fd" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="40" font-weight="650" letter-spacing="0">Long-term AI work in one loop</text>
+    <text x="0" y="244" fill="#dbeafe" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="29" font-weight="500" letter-spacing="0">Local-first assistant across terminal, web, desktop,</text>
+    <text x="0" y="282" fill="#dbeafe" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="29" font-weight="500" letter-spacing="0">messengers, and the xopc mobile app.</text>
+
+    <g transform="translate(0 334)" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="23" font-weight="700" letter-spacing="0">
+      <rect x="0" y="0" width="96" height="46" rx="23" fill="#0ea5e9"/>
+      <text x="25" y="31" fill="#f8fafc">TUI</text>
+      <rect x="118" y="0" width="96" height="46" rx="23" fill="#22c55e"/>
+      <text x="143" y="31" fill="#052e16">Web</text>
+      <rect x="236" y="0" width="116" height="46" rx="23" fill="#facc15"/>
+      <text x="260" y="31" fill="#422006">App</text>
+      <rect x="374" y="0" width="132" height="46" rx="23" fill="#f8fafc"/>
+      <text x="399" y="31" fill="#0f172a">IM bots</text>
+    </g>
+
+    <text x="0" y="432" fill="#93c5fd" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="25" font-weight="650" letter-spacing="0">github.com/xopcai/xopc  ·  github.com/xopcai/xopc-app</text>
+  </g>
+
+  <g transform="translate(856 132)" filter="url(#shadow)">
+    <rect x="0" y="0" width="318" height="376" rx="18" fill="#020617" stroke="#38bdf8" stroke-opacity="0.42"/>
+    <rect x="0" y="0" width="318" height="42" rx="18" fill="#0f172a"/>
+    <circle cx="24" cy="21" r="6" fill="#f87171"/>
+    <circle cx="46" cy="21" r="6" fill="#facc15"/>
+    <circle cx="68" cy="21" r="6" fill="#4ade80"/>
+    <text x="24" y="82" fill="#38bdf8" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="18">$ xopc tui --local</text>
+    <text x="24" y="126" fill="#e2e8f0" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="16">Goal: ship the project</text>
+    <text x="24" y="163" fill="#94a3b8" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="16">1. keep direction</text>
+    <text x="24" y="196" fill="#94a3b8" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="16">2. move next action</text>
+    <text x="24" y="229" fill="#94a3b8" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="16">3. capture feedback</text>
+    <text x="24" y="262" fill="#94a3b8" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="16">4. recalibrate loop</text>
+    <rect x="24" y="300" width="166" height="36" rx="10" fill="#0ea5e9" fill-opacity="0.18" stroke="#38bdf8" stroke-opacity="0.5"/>
+    <text x="40" y="323" fill="#e0f2fe" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15">local-first</text>
+    <rect x="202" y="300" width="84" height="36" rx="10" fill="#22c55e" fill-opacity="0.16" stroke="#4ade80" stroke-opacity="0.42"/>
+    <text x="223" y="323" fill="#dcfce7" font-family="SFMono-Regular, Menlo, Consolas, monospace" font-size="15">BYOK</text>
+  </g>
+</svg>

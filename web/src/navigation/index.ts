@@ -28,6 +28,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsDreams'
   | 'settingsGoals'
   | 'skills'
+  | 'goals'
   | 'channels',
   SettingsSectionId
 > = {
@@ -54,6 +55,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsDreams: 'dreams',
   settingsGoals: 'goals',
   skills: 'skills',
+  goals: 'goals',
   channels: 'channels',
 };
 
@@ -163,6 +165,7 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
   if (tab === 'agents' || tab === 'settingsAgents') return '/agents';
   if (tab === 'cron') return '/cron';
+  if (tab === 'goals') return '/goals';
   if (tab === 'settingsGoals') return '/settings/goals';
   if (tab === 'settingsKeyboardShortcuts') return '/settings/keyboard-shortcuts';
   if (tab === 'skills') return '/skills';

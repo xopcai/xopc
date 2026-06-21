@@ -119,6 +119,7 @@ export interface WorkflowRunMetadata {
   sessionKey: string;
   triggerSource: string;
   agentId?: string;
+  goalId?: string;
   retryOfRunId?: string;
   replay?: WorkflowRunReplayMetadata;
   definition: WorkflowRunDefinitionSnapshot;
@@ -342,6 +343,7 @@ export interface WorkflowStats {
 
 export interface StartWorkflowRunOptions {
   definitionId: string;
+  goalId?: string;
   goal?: string;
   input?: unknown;
   agentId?: string;
@@ -484,6 +486,7 @@ export async function deleteWorkflowDefinition(id: string): Promise<void> {
 
 export interface WorkflowOwnerAgentOptions {
   ownerAgentId?: string;
+  goalId?: string;
 }
 
 function appendOwnerAgentParam(params: URLSearchParams, options?: WorkflowOwnerAgentOptions): void {
@@ -504,6 +507,8 @@ export async function getWorkflowStats(definitionId?: string, options?: Workflow
 export async function listWorkflowRuns(limit = 50, options?: WorkflowOwnerAgentOptions): Promise<WorkflowRunSummary[]> {
   const searchParams = new URLSearchParams({ limit: String(limit) });
   appendOwnerAgentParam(searchParams, options);
+  const goalId = options?.goalId?.trim();
+  if (goalId) searchParams.set('goalId', goalId);
   const data = await fetchJson<{ runs: WorkflowRunSummary[] }>(apiUrl(`/api/workflows/runs?${searchParams.toString()}`));
   return data.runs ?? [];
 }
@@ -576,6 +581,38 @@ export async function startWorkflowRun(options: StartWorkflowRunOptions): Promis
     method: 'POST',
     body: JSON.stringify(options),
   });
+}
+
+export async function listGoalWorkflowRuns(goalId: string, limit = 50): Promise<WorkflowRunSummary[]> {
+  const searchParams = new URLSearchParams({ limit: String(limit) });
+  const data = await fetchJson<{ ok: true; runs: WorkflowRunSummary[] }>(
+    apiUrl(`/api/goals/${encodeURIComponent(goalId)}/workflow-runs?${searchParams.toString()}`),
+  );
+  return data.runs ?? [];
+}
+
+export async function startGoalWorkflowRun(options: {
+  goalId: string;
+  definitionId: string;
+  goal?: string;
+  input?: unknown;
+  concurrency?: number;
+  maxSubagents?: number;
+}): Promise<StartWorkflowRunResult> {
+  const data = await fetchJson<{ ok: true; runId: string; sessionKey: string }>(
+    apiUrl(`/api/goals/${encodeURIComponent(options.goalId)}/workflows/run`),
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        definitionId: options.definitionId,
+        goal: options.goal,
+        input: options.input,
+        concurrency: options.concurrency,
+        maxSubagents: options.maxSubagents,
+      }),
+    },
+  );
+  return { runId: data.runId, sessionKey: data.sessionKey };
 }
 
 export async function cancelWorkflowRun(runId: string, options?: WorkflowOwnerAgentOptions): Promise<void> {

@@ -88,6 +88,13 @@ const CronAgentTurnPayloadSchema = z.object({
   timeoutSeconds: z.number().int().min(10).max(3600).optional(),
 });
 
+const CronGoalContinuePayloadSchema = z.object({
+  kind: z.literal('goalContinue'),
+  goalId: z.string().min(1).max(100),
+  message: optionalTrimmedString(50000, 1),
+  maxRetries: z.number().int().min(0).max(10).optional(),
+});
+
 const WorkflowRunInputEnvelopeSchema = z.object({
   payload: z.unknown(),
   goal: optionalTrimmedString(5000, 1),
@@ -115,6 +122,7 @@ const CronWorkflowRunPayloadSchema = z.object({
 const CronPayloadSchema = z.union([
   CronSystemEventPayloadSchema,
   CronAgentTurnPayloadSchema,
+  CronGoalContinuePayloadSchema,
   CronWorkflowRunPayloadSchema,
 ]);
 

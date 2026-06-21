@@ -4,7 +4,7 @@ layout: home
 hero:
   name: xopc
   text: Goal Loop OS
-  tagline: "Goal Loop OS for long-term AI work: a local-first, multi-surface agent system with workflow automation, multi-agent routing, and extensible extensions/skills."
+  tagline: "A local-first AI assistant that keeps long-term goals moving across terminal, web, desktop, mobile app, and messengers."
   image:
     src: /logo.svg
     alt: xopc
@@ -17,14 +17,14 @@ hero:
       link: https://github.com/xopcai/xopc
 
 features:
-  - title: 🏠 Your machine. Your rules.
-    details: "xopc runs on your hardware. Conversations stay local. API keys stay in your config. No mandatory cloud — everything under ~/.xopc/."
+  - title: 🏠 Local-first by default
+    details: "xopc runs on your hardware. Config, workspace files, credentials, and local state live under ~/.xopc/. No mandatory cloud."
     link: /configuration
   - title: 🔑 Bring your own keys. Any model.
     details: "DeepSeek, OpenAI, Anthropic, Google, Ollama, LM Studio, vLLM, Bedrock, Azure — 20+ providers. Run offline or mix cloud and local. Switch models in one config line."
     link: /models
   - title: 📡 One brain, every screen
-    details: "The same assistant — terminal, browser, desktop app, phone, and messengers. No sync needed. It's all one system."
+    details: "The same assistant across TUI, CLI, browser, desktop app, xopc-app on iOS/Android, and messengers. No sync needed. It's all one system."
     link: /channels
   - title: 🧩 Grows with you. Never outgrow it.
     details: "xopc skills install · xopc extensions install — extend capabilities with reusable modules, tools, channels, and UI panels without forking core."
@@ -33,7 +33,7 @@ features:
     details: Summaries, reminders, and reports on a timetable. Your agent runs while you focus elsewhere.
     link: /cron
   - title: 🔀 Dynamic workflows
-    details: Fan-out subagents from deterministic scripts — repo audits, multi-perspective reviews, and parallel research with live progress.
+    details: Fan out subagents from deterministic scripts — repo audits, multi-perspective reviews, and parallel research with live progress.
     link: /workflows
   - title: 🤖 Multi-agent routing
     details: Route different contexts to different agents — each with its own model, workspace, tools, and system prompt.

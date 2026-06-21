@@ -6,6 +6,7 @@ import type { Message } from '@/features/chat/messages/messages.types';
 import { ModelContextRing } from '@/features/chat/model/model-context-ring';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import { SessionWorkingDirectoryControl } from '@/features/chat/session/session-working-directory-control';
+import { ChatGoalComposerMenu } from '@/features/chat/composer/chat-goal-composer-menu';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import type { ThinkingLevel } from '@/features/chat/composer/composer.types';
 import { interpolate } from '@/features/chat/composer/composer.types';
@@ -134,6 +135,12 @@ export const ComposerToolbar = memo(function ComposerToolbar({
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
             <div className="flex flex-col gap-0.5">
+              <ChatGoalComposerMenu
+                sessionKey={sessionKey}
+                disabled={disabled || runBusy}
+                onDone={() => setMoreOpen(false)}
+              />
+              <div className="my-1 h-px bg-edge-subtle" />
               <button
                 type="button"
                 className={cn(

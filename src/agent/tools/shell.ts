@@ -4,6 +4,7 @@ import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { spawn } from 'child_process';
 import { evaluateExecPolicy } from '../sandbox/exec-policy.js';
 import { createWriteStream } from 'fs';
+import type { GoalEvidenceRecordInput } from './goal-evidence-recorder.js';
 
 const MAX_SHELL_TIMEOUT = 300;
 const DEFAULT_MAX_BYTES = 50 * 1024;
@@ -25,6 +26,10 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+}
+
+function isLikelyTestCommand(command: string): boolean {
+  return /\b(test|vitest|jest|pytest|go test|cargo test|npm test|pnpm test|yarn test)\b/i.test(command);
 }
 
 function truncateTail(content: string, maxLines = DEFAULT_MAX_LINES, maxBytes = DEFAULT_MAX_BYTES) {
@@ -59,6 +64,7 @@ function truncateTail(content: string, maxLines = DEFAULT_MAX_LINES, maxBytes = 
 export interface CreateShellToolOptions {
   /** Env var names allowed through {@link prepareSafeToolEnv} even if they match secret heuristics (skill passthrough). */
   getSkillPassthroughEnvVarNames?: () => string[];
+  recordGoalEvidence?: (input: GoalEvidenceRecordInput) => Promise<void> | void;
 }
 
 export function createShellTool(
@@ -144,7 +150,7 @@ export function createShellTool(
             resultText += `\n\n[Output truncated: ${formatSize(truncation.outputBytes)} of ${formatSize(truncation.totalBytes)}]`;
           }
 
-          resolve({
+          const result: AgentToolResult<ShellDetails> = {
             content: [{ type: 'text', text: resultText }],
             details: {
               exitCode: code,
@@ -153,7 +159,19 @@ export function createShellTool(
               truncatedBy: truncation.truncatedBy,
               outputBytes: truncation.outputBytes,
             },
-          });
+          };
+          void Promise.resolve(options?.recordGoalEvidence?.({
+            kind: timedOut || code !== 0 ? 'command' : isLikelyTestCommand(p.command) ? 'test' : 'command',
+            title: `Command: ${p.command.slice(0, 120)}`,
+            summary: resultText.slice(0, 2000),
+            data: {
+              command: p.command,
+              exitCode: code,
+              timedOut,
+              truncated: truncation.truncated,
+              outputBytes: truncation.outputBytes,
+            },
+          })).finally(() => resolve(result));
         });
 
         proc.on('error', (err) => {

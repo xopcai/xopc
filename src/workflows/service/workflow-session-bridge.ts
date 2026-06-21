@@ -6,6 +6,7 @@ import type { SessionStore } from '../../session/store.js';
 import { SessionStatus } from '../../session/types.js';
 import type { WorkflowRunView } from '../domain/index.js';
 import { isTerminalWorkflowRunStatus } from '../domain/index.js';
+import { GoalWorkflowJudge } from '../../goals/index.js';
 
 import { runViewToSnapshot } from './run-view-to-snapshot.js';
 import { buildWorkflowRunSessionKey } from './workflow-session-key.js';
@@ -98,6 +99,11 @@ export class WorkflowSessionBridge {
         status: view.run.status,
       });
     }
+    await new GoalWorkflowJudge().handleTerminalWorkflowRun({
+      config: this.gateway.currentConfig,
+      view,
+      sessionKey,
+    });
   }
 
   private async persistTerminalTranscript(sessionKey: string, view: WorkflowRunView): Promise<void> {

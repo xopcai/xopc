@@ -12,7 +12,7 @@ curl -fsSL https://xopc.ai/install.sh | bash
 
 # 备选：npm 安装
 npm install -g @xopcai/xopc
-xopc onboard          # 想更快可先执行：xopc onboard --quick
+xopc onboard --quick  # 只配置模型，然后本地启动
 xopc tui --local
 ```
 
@@ -77,13 +77,28 @@ xopc onboard
 4. 按需配置 **Telegram、微信、飞书/Lark** 等机器人（可跳过）
 5. 网关网页控制台，以及结束时可选 **TUI** 或 **网关** 用法提示
 
+### 快速 onboard
+
+最短的引导路径：只配置模型，跳过网关和频道设置。
+
+```bash
+xopc onboard --quick
+xopc tui --local
+```
+
+需要网页控制台或 IM 频道时，再运行完整向导：
+
+```bash
+xopc onboard
+```
+
 ### 快速生成文件（无交互）
 
 ```bash
 xopc setup
 ```
 
-只生成基础配置与工作区骨架，不逐步提问。
+只生成基础配置与工作区骨架，不逐步提问，也不会引导配置模型密钥。
 
 ### 手写配置
 

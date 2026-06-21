@@ -11,6 +11,7 @@
     "settings": "Settings",
     "sessions": "Session management",
     "cron": "Scheduled Tasks",
+    "goals": "Goals",
     "notes": "Notes",
     "workflows": "Workflows",
     "skills": "Skills",
@@ -150,8 +151,7 @@
     "checkUpdatesDownloaded": "Ready to install: v{version}",
     "checkUpdatesError": "Check failed",
     "gatewayUnavailable": "—",
-    "openSourceLead": "This software is made possible by ",
-    "openSourceLink": "open source software",
+    "repositoryLink": "View on GitHub",
     "copyright": "Copyright © {year} xopcai"
   },
   "updatePanel": {

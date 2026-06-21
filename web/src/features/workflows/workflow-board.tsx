@@ -65,7 +65,7 @@ export const WorkflowBoard = memo(function WorkflowBoard({
 
   if (!loading && totalCards === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-edge bg-surface-panel/40 px-6 py-12 text-center">
+      <div className="flex h-full min-h-0 flex-col items-center justify-center rounded-2xl border border-dashed border-edge bg-surface-panel/40 px-6 py-12 text-center">
         <p className="text-sm font-medium text-fg">{labels.boardEmptyTitle}</p>
         <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-fg-muted">{labels.boardEmptyHint}</p>
         <div className="mt-4 flex justify-center">
@@ -78,7 +78,7 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   }
 
   return (
-    <div className="-mx-1 flex min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-2">
+    <div className="-mx-1 flex h-full min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-3">
       {columns.map((column) => (
         <WorkflowBoardColumn
           key={column.id}

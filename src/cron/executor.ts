@@ -70,6 +70,7 @@ export class DefaultJobExecutor implements JobExecutor {
   private runLogStore: CronRunLogStore | null = null;
   private getDefaultCronAgentId: (() => string) | null = null;
   private workflowRunService: CronWorkflowRunStarter | null = null;
+  private goalRunner: JobExecutorDeps['goalRunner'] | null = null;
 
   setRunLogStore(store: CronRunLogStore | null): void {
     this.runLogStore = store;
@@ -84,6 +85,7 @@ export class DefaultJobExecutor implements JobExecutor {
     }
     this.getDefaultCronAgentId = deps.getDefaultCronAgentId ?? null;
     this.workflowRunService = deps.workflowRunService ?? null;
+    this.goalRunner = deps.goalRunner ?? null;
   }
 
   private async buildCronOutboundMessage(
@@ -230,6 +232,10 @@ export class DefaultJobExecutor implements JobExecutor {
     }
 
     try {
+      if (job.payload.kind === 'goalContinue') {
+        return await this.executeGoalContinue(job);
+      }
+
       if (job.payload.kind === 'workflowRun') {
         return await this.executeWorkflowRun(job, signal);
       }
@@ -251,6 +257,27 @@ export class DefaultJobExecutor implements JobExecutor {
         error: error instanceof Error ? error.message : String(error),
       };
     }
+  }
+
+  private async executeGoalContinue(job: JobData): Promise<CronRunOutcome> {
+    if (job.payload.kind !== 'goalContinue') {
+      return { status: 'error', error: 'Cron job payload is not goalContinue' };
+    }
+    if (!this.goalRunner) {
+      return { status: 'error', error: 'Goal runner is not configured for cron' };
+    }
+    const item = this.goalRunner.enqueue(job.payload.goalId, {
+      message: job.payload.message,
+      maxRetries: job.payload.maxRetries ?? job.maxRetries,
+      source: 'cron',
+    });
+    return {
+      status: 'ok',
+      summary: `Queued goal ${job.payload.goalId} (${item.status})`,
+      sessionId: item.sessionKey,
+      sessionKey: item.sessionKey,
+      sessionType: 'goal',
+    };
   }
 
   private async executeWorkflowRun(job: JobData, signal: AbortSignal): Promise<CronRunOutcome> {

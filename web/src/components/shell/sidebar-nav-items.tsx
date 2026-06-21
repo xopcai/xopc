@@ -8,6 +8,7 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useNavOrderStore } from '@/stores/nav-order-store';
 import { cn } from '@/lib/cn';
+import { preloadRouteForPath } from '@/lib/route-preload';
 
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { extensionPagePath } from '@/features/extensions/extension-paths';
@@ -136,7 +137,7 @@ export function SidebarNavItems({
 
   const available = useMemo<NavItem[]>(() => {
     const builtins: NavItem[] = BUILTIN_NAV_DEFS.map((def) => {
-      const labelKey = def.id.slice('builtin:'.length) as 'agents' | 'skills' | 'cron' | 'notes' | 'workflows' | 'channels';
+      const labelKey = def.id.slice('builtin:'.length) as 'agents' | 'goals' | 'skills' | 'cron' | 'notes' | 'workflows' | 'channels';
       return {
         id: def.id,
         kind: 'builtin',
@@ -201,6 +202,10 @@ export function SidebarNavItems({
     onDragEnd();
   }, [moveToEnd, onDragEnd]);
 
+  const onNavIntent = useCallback((to: string) => {
+    preloadRouteForPath(to);
+  }, []);
+
   function renderRailRow(item: NavItem): ReactNode {
     const dragging = draggingId === item.id;
     const dropHint = hoverTarget?.id === item.id ? hoverTarget.position : null;
@@ -215,6 +220,8 @@ export function SidebarNavItems({
         onDrop={onRowDrop(item.id)}
         className={(props) => navRowClass(props, collapsed, dragging, dropHint)}
         title={item.title ?? item.label}
+        onMouseEnter={() => onNavIntent(item.to)}
+        onFocus={() => onNavIntent(item.to)}
         onClick={() => onNavigate?.()}
       >
         <NavIcon item={item} collapsed={collapsed} />
@@ -274,6 +281,8 @@ export function SidebarNavItems({
                       onDrop={onRowDrop(item.id)}
                       className={(props) => popoverRowClass(props, dragging, dropHint)}
                       title={item.title ?? item.label}
+                      onMouseEnter={() => onNavIntent(item.to)}
+                      onFocus={() => onNavIntent(item.to)}
                       onClick={() => {
                         setPopoverOpen(false);
                         onNavigate?.();

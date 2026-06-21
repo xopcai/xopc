@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
 import type { WorkflowDefinition } from '../domain/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
@@ -50,9 +51,11 @@ describe('WorkflowRunService helpers', () => {
   beforeEach(async () => {
     stateDir = await mkdtemp(join(tmpdir(), 'xopc-workflow-service-'));
     process.env.XOPC_STATE_DIR = stateDir;
+    openXopcDatabase({ path: join(stateDir, 'xopc.db') });
   });
 
   afterEach(async () => {
+    closeXopcDatabase();
     if (originalStateDir === undefined) {
       delete process.env.XOPC_STATE_DIR;
     } else {
@@ -61,7 +64,7 @@ describe('WorkflowRunService helpers', () => {
     await rm(stateDir, { recursive: true, force: true });
   });
 
-  it('wraps legacy input into a stable input envelope', () => {
+  it('wraps raw input into a stable input envelope', () => {
     const envelope = buildWorkflowRunInputEnvelope({ branch: 'main' }, 'Check release');
 
     expect(envelope).toEqual({

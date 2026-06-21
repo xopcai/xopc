@@ -13,6 +13,7 @@ import {
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useAsyncResource } from '@/lib/use-async-resource';
+import { showToast } from '@/lib/toast';
 
 import { GoalActions } from './chat-goal-banner-actions';
 import { GoalChecklist } from './chat-goal-banner-checklist';
@@ -76,6 +77,7 @@ function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerPr
   const [mutation, dispatchMutation] = useReducer(mutationReducer, { busy: false, error: null });
   const [goalClockMs, setGoalClockMs] = useState(() => Date.now());
   const prevAgentBusyRef = useRef(streaming || sending);
+  const observedStatusRef = useRef<{ goalId: string; status: string } | null>(null);
   const idleRefetchPendingRef = useRef(false);
   const isAgentBusy = streaming || sending;
   if (prevAgentBusyRef.current && !isAgentBusy) {
@@ -107,7 +109,7 @@ function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerPr
   } = useAsyncResource(
     async () => {
       const res = await fetchWebchatGoal(sessionKey, { uiLocale: language });
-      return res.persistentGoal;
+      return res.goal;
     },
     [sessionKey, language],
     { initial: null as WebchatPersistentGoalWire | null, errorData: null },
@@ -116,7 +118,7 @@ function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerPr
   const refetchGoal = useCallback(async () => {
     try {
       const res = await fetchWebchatGoal(sessionKey, { uiLocale: language });
-      setGoal(res.persistentGoal);
+      setGoal(res.goal);
     } catch (e) {
       dispatchMutation({
         type: 'error',
@@ -128,6 +130,27 @@ function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerPr
   const refetchFromEffect = useEffectEvent(() => {
     void refetchGoal();
   });
+
+  useEffect(() => {
+    if (!goal) {
+      observedStatusRef.current = null;
+      return;
+    }
+    const previous = observedStatusRef.current;
+    observedStatusRef.current = { goalId: goal.id, status: goal.status };
+    if (!previous || previous.goalId !== goal.id || previous.status === goal.status) return;
+    if (goal.status === 'done') {
+      showToast({ type: 'success', title: 'Goal completed', message: goal.title, duration: 0 });
+      return;
+    }
+    if (goal.status === 'blocked') {
+      showToast({ type: 'warning', title: 'Goal blocked', message: goal.blockedReason || goal.title, duration: 0 });
+      return;
+    }
+    if (goal.status === 'needs_input') {
+      showToast({ type: 'warning', title: 'Goal needs input', message: goal.blockedReason || goal.title, duration: 0 });
+    }
+  }, [goal?.id, goal?.status, goal?.updatedAt, goal?.title, goal?.blockedReason]);
 
   useEffect(() => {
     const onSessionUpdated = (e: Event) => {
@@ -185,7 +208,10 @@ function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerPr
         ? fetchError.message
         : t.loadFailed);
 
-  if (!loaded || !shouldShowGoal(goal)) {
+  if (!loaded) {
+    return null;
+  }
+  if (!shouldShowGoal(goal)) {
     return null;
   }
 
@@ -201,7 +227,7 @@ function ChatGoalBannerBody({ sessionKey, streaming, sending }: ChatGoalBannerPr
   const phase = goalUiPhase(g, agentBusy);
   const pillTitle = t.pillTitle.replace('{{status}}', statusShort).replace('{{turns}}', turnsShort);
   const showGoalClock =
-    !collapsed && g.status !== 'done' && g.status !== 'cleared';
+    !collapsed && g.status !== 'done' && g.status !== 'archived';
 
   if (collapsed) {
     return (

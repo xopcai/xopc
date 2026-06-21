@@ -22,10 +22,10 @@ export function WorkflowStatsBar({
     : null;
 
   return (
-    <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      <StatCard label={labels.statsTotalRuns} value={String(stats.totalRuns)} />
-      <StatCard label={labels.statsActiveRuns} value={String(stats.activeRuns)} />
-      <StatCard
+    <section className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-edge bg-surface-panel/70 px-3 py-2">
+      <StatPill label={labels.statsTotalRuns} value={String(stats.totalRuns)} />
+      <StatPill label={labels.statsActiveRuns} value={String(stats.activeRuns)} />
+      <StatPill
         label={labels.statsSuccessRate}
         value={
           stats.totalRuns > 0
@@ -33,21 +33,20 @@ export function WorkflowStatsBar({
             : '—'
         }
       />
-      <StatCard
+      <StatPill
         label={labels.statsAvgDuration}
         value={stats.averageDurationMs != null ? formatDuration(stats.averageDurationMs) : '—'}
-        hint={topLine ?? undefined}
       />
+      {topLine ? <span className="min-w-0 truncate text-xs text-fg-muted">{topLine}</span> : null}
     </section>
   );
 }
 
-function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function StatPill({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-edge bg-surface-panel px-4 py-3">
-      <div className="text-xs text-fg-subtle">{label}</div>
-      <div className="mt-1 text-lg font-semibold tabular-nums text-fg">{value}</div>
-      {hint ? <div className="mt-1 truncate text-[11px] text-fg-muted">{hint}</div> : null}
-    </div>
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-muted px-2.5 py-1 text-xs text-fg-muted">
+      <span>{label}</span>
+      <span className="font-semibold tabular-nums text-fg">{value}</span>
+    </span>
   );
 }

@@ -1,23 +1,24 @@
+import { lazy, Suspense, type ComponentType } from 'react';
 import { Navigate, useParams } from 'react-router-dom';
 
-import {
-  AgentBrowserSettingsPage,
-  AgentDefaultsTabbedPage,
-} from '@/features/settings/agents';
-import { SetupStatusPanel } from '@/features/settings/setup-checklist/setup-status-panel';
-import { ModelsHubPanel } from '@/features/settings/models-hub/models-hub-panel';
-import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
-import { KeyboardShortcutsSettingsPanel } from '@/features/settings/keyboard-shortcuts-settings';
-import { DreamingSettingsPanel } from '@/features/settings/dreaming-settings';
-import { GoalsSettingsPanel } from '@/features/settings/goals-settings';
-import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
-import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
-import { RemoteAccessHub } from '@/features/remote-access/remote-access-hub';
-import { SharesSettingsPanel } from '@/features/shares/shares-settings';
-import { AppManagementSettingsPanel } from '@/features/settings/app-management-settings-panel';
-import { SystemSettingsPanel } from '@/features/settings/system-settings-panel';
-import { ConnectorsSettingsPanel } from '@/features/settings/connectors/connectors-settings';
 import { messages } from '@/i18n/messages';
+import {
+  loadAgentBrowserSettingsPage,
+  loadAgentDefaultsSettingsPage,
+  loadAppManagementSettingsPanel,
+  loadAppearanceSettingsPanel,
+  loadConnectorsSettingsPanel,
+  loadDreamingSettingsPanel,
+  loadGatewaySettingsPanel,
+  loadGoalsSettingsPanel,
+  loadHeartbeatSettingsPanel,
+  loadKeyboardShortcutsSettingsPanel,
+  loadModelsHubPanel,
+  loadRemoteAccessHub,
+  loadSetupStatusPanel,
+  loadSharesSettingsPanel,
+  loadSystemSettingsPanel,
+} from '@/lib/route-preload';
 import type { SettingsSectionId } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -40,6 +41,58 @@ const SECTIONS: SettingsSectionId[] = [
   'dreams',
 ];
 
+const SetupStatusPanel = lazy(() => loadSetupStatusPanel().then((m) => ({ default: m.SetupStatusPanel })));
+const AgentDefaultsTabbedPage = lazy(() =>
+  loadAgentDefaultsSettingsPage().then((m) => ({ default: m.AgentDefaultsTabbedPage })),
+);
+const AgentBrowserSettingsPage = lazy(() =>
+  loadAgentBrowserSettingsPage().then((m) => ({ default: m.AgentBrowserSettingsPage })),
+);
+const ConnectorsSettingsPanel = lazy(() =>
+  loadConnectorsSettingsPanel().then((m) => ({ default: m.ConnectorsSettingsPanel })),
+);
+const AppearanceSettingsPanel = lazy(() =>
+  loadAppearanceSettingsPanel().then((m) => ({ default: m.AppearanceSettingsPanel })),
+);
+const KeyboardShortcutsSettingsPanel = lazy(() =>
+  loadKeyboardShortcutsSettingsPanel().then((m) => ({ default: m.KeyboardShortcutsSettingsPanel })),
+);
+const SystemSettingsPanel = lazy(() => loadSystemSettingsPanel().then((m) => ({ default: m.SystemSettingsPanel })));
+const AppManagementSettingsPanel = lazy(() =>
+  loadAppManagementSettingsPanel().then((m) => ({ default: m.AppManagementSettingsPanel })),
+);
+const ModelsHubPanel = lazy(() => loadModelsHubPanel().then((m) => ({ default: m.ModelsHubPanel })));
+const GatewaySettingsPanel = lazy(() =>
+  loadGatewaySettingsPanel().then((m) => ({ default: m.GatewaySettingsPanel })),
+);
+const HeartbeatSettingsPanel = lazy(() =>
+  loadHeartbeatSettingsPanel().then((m) => ({ default: m.HeartbeatSettingsPanel })),
+);
+const RemoteAccessHub = lazy(() => loadRemoteAccessHub().then((m) => ({ default: m.RemoteAccessHub })));
+const SharesSettingsPanel = lazy(() => loadSharesSettingsPanel().then((m) => ({ default: m.SharesSettingsPanel })));
+const DreamingSettingsPanel = lazy(() =>
+  loadDreamingSettingsPanel().then((m) => ({ default: m.DreamingSettingsPanel })),
+);
+const GoalsSettingsPanel = lazy(() => loadGoalsSettingsPanel().then((m) => ({ default: m.GoalsSettingsPanel })));
+
+function SettingsSectionFallback() {
+  return (
+    <div className="mx-auto w-full max-w-app-main flex-1 px-4 py-8" aria-busy>
+      <div className="h-8 w-48 max-w-full animate-pulse rounded-md bg-surface-hover" />
+      <div className="mt-6 h-36 animate-pulse rounded-xl bg-surface-hover" />
+      <div className="mt-4 h-24 animate-pulse rounded-xl bg-surface-hover" />
+    </div>
+  );
+}
+
+function renderLazySection(Panel: ComponentType) {
+  return (
+    <Suspense fallback={<SettingsSectionFallback />}>
+      <Panel />
+    </Suspense>
+  );
+}
+
 export function SettingsPage() {
   const { section } = useParams();
   const language = useLocaleStore((s) => s.language);
@@ -60,65 +113,65 @@ export function SettingsPage() {
   const id = section as SettingsSectionId;
 
   if (id === 'overview') {
-    return <SetupStatusPanel />;
+    return renderLazySection(SetupStatusPanel);
   }
 
   const title = m.settingsSections[id];
 
   if (id === 'agent-defaults') {
-    return <AgentDefaultsTabbedPage />;
+    return renderLazySection(AgentDefaultsTabbedPage);
   }
 
   if (id === 'agent-browser') {
-    return <AgentBrowserSettingsPage />;
+    return renderLazySection(AgentBrowserSettingsPage);
   }
 
   if (id === 'connectors') {
-    return <ConnectorsSettingsPanel />;
+    return renderLazySection(ConnectorsSettingsPanel);
   }
 
   if (id === 'appearance') {
-    return <AppearanceSettingsPanel />;
+    return renderLazySection(AppearanceSettingsPanel);
   }
 
   if (id === 'keyboard-shortcuts') {
-    return <KeyboardShortcutsSettingsPanel />;
+    return renderLazySection(KeyboardShortcutsSettingsPanel);
   }
 
   if (id === 'system') {
-    return <SystemSettingsPanel />;
+    return renderLazySection(SystemSettingsPanel);
   }
 
   if (id === 'app-management') {
-    return <AppManagementSettingsPanel />;
+    return renderLazySection(AppManagementSettingsPanel);
   }
 
   if (id === 'credentials') {
-    return <ModelsHubPanel />;
+    return renderLazySection(ModelsHubPanel);
   }
 
   if (id === 'gateway') {
-    return <GatewaySettingsPanel />;
+    return renderLazySection(GatewaySettingsPanel);
   }
 
   if (id === 'heartbeat') {
-    return <HeartbeatSettingsPanel />;
+    return renderLazySection(HeartbeatSettingsPanel);
   }
 
   if (id === 'tunnel' || id === 'remote-access') {
-    return <RemoteAccessHub />;
+    return renderLazySection(RemoteAccessHub);
   }
 
   if (id === 'shares') {
-    return <SharesSettingsPanel />;
+    return renderLazySection(SharesSettingsPanel);
   }
 
   if (id === 'dreams') {
-    return <DreamingSettingsPanel />;
+    return renderLazySection(DreamingSettingsPanel);
   }
 
   if (id === 'goals') {
-    return <GoalsSettingsPanel />;
+    return renderLazySection(GoalsSettingsPanel);
   }
 
   return (

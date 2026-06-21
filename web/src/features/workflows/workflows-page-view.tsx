@@ -1,11 +1,10 @@
 import { useLayoutEffect } from 'react';
-import { GitBranch, Play } from 'lucide-react';
+import { GitBranch, Search } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { cn } from '@/lib/cn';
-import { messages } from '@/i18n/messages';
 import { interaction } from '@/lib/interaction';
+import { messages } from '@/i18n/messages';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { WorkflowBoard } from './workflow-board';
@@ -27,6 +26,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     definitions,
     runs,
     searchQuery,
+    setSearchQuery,
     ownerAgentId,
     agentOptions,
     setOwnerAgentId,
@@ -79,6 +79,9 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
       main: (
         <div className="min-w-0">
           <h1 className="truncate text-base font-semibold tracking-tight text-fg">{labels.title}</h1>
+          <p className="truncate text-xs text-fg-muted">
+            {stats ? `${labels.statsTotalRuns}: ${stats.totalRuns} · ${labels.statsActiveRuns}: ${stats.activeRuns}` : labels.subtitleBoard}
+          </p>
         </div>
       ),
       end: <WorkflowsPageHeaderActions vm={vm} />,
@@ -88,7 +91,11 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     clearPageHeader,
     hasToken,
     labels.title,
+    labels.statsActiveRuns,
+    labels.statsTotalRuns,
+    labels.subtitleBoard,
     loading,
+    stats,
     vm,
     vm.refreshAll,
     vm.setManageOpen,
@@ -108,62 +115,71 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
   }
 
   return (
-    <main className="min-h-0 flex-1 overflow-auto bg-surface-base">
-      <div className="mx-auto flex w-full max-w-400 flex-col gap-5 px-4 py-6 lg:px-6">
-        <div className="flex flex-wrap items-center justify-end gap-2">
-            {agentOptions.length > 1 ? (
-              <select
-                value={ownerAgentId ?? ''}
-                aria-label="Agent"
-                onChange={(event) => setOwnerAgentId(event.target.value)}
-                className={cn(
-                  'h-9 min-w-36 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
-                  interaction.focusRingPanel,
-                )}
-              >
-                {agentOptions.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agentListDisplayName(agent, messages(language).agentsSettings)}
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            <select
-              value={triggerFilter}
-              aria-label={labels.boardTriggerFilterAria}
-              onChange={(event) => setTriggerFilter(event.target.value)}
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-base">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-4 py-5 sm:px-6 2xl:px-8">
+        <section className="flex flex-wrap items-center gap-2 rounded-lg border border-edge bg-surface-panel/70 px-3 py-2">
+          <div className="relative min-w-48 flex-1 sm:max-w-xs">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
+            <input
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder={labels.searchPlaceholder}
               className={cn(
-                'h-9 min-w-[7.5rem] rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
+                'h-9 w-full rounded-lg border border-edge bg-surface-panel py-2 pl-9 pr-3 text-sm text-fg shadow-surface',
+                'placeholder:text-fg-subtle',
+                interaction.focusRingPanel,
+              )}
+            />
+          </div>
+          {agentOptions.length > 1 ? (
+            <select
+              value={ownerAgentId ?? ''}
+              aria-label="Agent"
+              onChange={(event) => setOwnerAgentId(event.target.value)}
+              className={cn(
+                'h-9 min-w-32 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
                 interaction.focusRingPanel,
               )}
             >
-              <option value="all">{labels.boardTriggerFilterAll}</option>
-              <option value="cron">{labels.boardTriggerFilterCron}</option>
-              <option value="webui">{labels.boardTriggerFilterWebui}</option>
-              <option value="chat">{labels.boardTriggerFilterChat}</option>
-              <option value="api">{labels.boardTriggerFilterApi}</option>
-            </select>
-            <select
-              value={workflowFilterId}
-              aria-label={labels.boardWorkflowFilterAria}
-              onChange={(event) => setWorkflowFilterId(event.target.value)}
-              className={cn(
-                'h-9 min-w-40 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
-                interaction.focusRingPanel,
-              )}
-            >
-              <option value="">{labels.boardWorkflowFilterAll}</option>
-              {definitions.map((definition) => (
-                <option key={definition.id} value={definition.id}>
-                  {definition.title}
+              {agentOptions.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {agentListDisplayName(agent, messages(language).agentsSettings)}
                 </option>
               ))}
             </select>
-            <Button variant="primary" onClick={() => setPickStartOpen(true)}>
-              <Play className="size-4" aria-hidden />
-              {labels.boardStart}
-            </Button>
-        </div>
+          ) : null}
+          <select
+            value={triggerFilter}
+            aria-label={labels.boardTriggerFilterAria}
+            onChange={(event) => setTriggerFilter(event.target.value)}
+            className={cn(
+              'h-9 min-w-[7.5rem] rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
+              interaction.focusRingPanel,
+            )}
+          >
+            <option value="all">{labels.boardTriggerFilterAll}</option>
+            <option value="cron">{labels.boardTriggerFilterCron}</option>
+            <option value="webui">{labels.boardTriggerFilterWebui}</option>
+            <option value="chat">{labels.boardTriggerFilterChat}</option>
+            <option value="api">{labels.boardTriggerFilterApi}</option>
+          </select>
+          <select
+            value={workflowFilterId}
+            aria-label={labels.boardWorkflowFilterAria}
+            onChange={(event) => setWorkflowFilterId(event.target.value)}
+            className={cn(
+              'h-9 min-w-40 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
+              interaction.focusRingPanel,
+            )}
+          >
+            <option value="">{labels.boardWorkflowFilterAll}</option>
+            {definitions.map((definition) => (
+              <option key={definition.id} value={definition.id}>
+                {definition.title}
+              </option>
+            ))}
+          </select>
+        </section>
 
         {actionFeedback ? (
           <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-200">
@@ -185,7 +201,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
           </div>
         ) : null}
 
-        <div className="min-w-0">
+        <div className="min-h-0 flex-1">
           <WorkflowBoard
             runs={runs}
             language={language}

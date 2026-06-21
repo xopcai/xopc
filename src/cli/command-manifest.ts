@@ -34,6 +34,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'update [options]', description: 'Check for and install xopc updates' },
   { name: 'logs', description: 'Manage and query logs' },
   { name: 'cron', description: 'Manage scheduled tasks' },
+  { name: 'goal', description: 'Manage durable goals' },
   { name: 'config [options]', description: 'View and edit configuration' },
   { name: 'image', description: 'Configure image generation and understanding models' },
   { name: 'models [options]', description: 'List and manage models and model auth' },

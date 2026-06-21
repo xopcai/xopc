@@ -3,20 +3,16 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import { getAgentDefaultModelRef } from '../../config/schema.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
+import { GoalService } from '../../goals/index.js';
 import { createLogger } from '../../utils/logger.js';
 
 import { evaluateAfterTurnHermesLike } from './evaluate-turn.js';
-import { appendGoalRun } from './goal-run-store.js';
 import { resolveGoalUiLocale } from './goal-locale.js';
 import type { PersistentGoalApis } from './persistent-goal-apis.js';
-import {
-  PERSISTENT_GOAL_CUSTOM_KEY,
-  mergeCustomDataPatch,
-  readPersistentGoal,
-  serializePersistentGoal,
-} from './state.js';
+import type { PersistentGoalState } from './state.js';
 
 const log = createLogger('PersistentGoal');
+const goalService = new GoalService();
 
 function buildHistoryExcerpt(messages: AgentMessage[], maxChars: number): string {
   if (maxChars <= 0) return '';
@@ -64,6 +60,13 @@ export async function handlePersistentGoalPostTurn(opts: {
   signal?: AbortSignal;
   /** Hermes-style: verdict line also sent as a normal outbound message (non-webchat). */
   publishVerdictToChannel?: (text: string) => Promise<void>;
+  onGoalStatusUpdated?: (payload: {
+    goalId: string;
+    sessionKey: string;
+    previousStatus: string;
+    status: string;
+    goal: import('../../goals/types.js').GoalWithDetails;
+  }) => void;
 }): Promise<void> {
   const {
     apis,
@@ -76,6 +79,7 @@ export async function handlePersistentGoalPostTurn(opts: {
     runtimeSessionModelRef,
     signal,
     publishVerdictToChannel,
+    onGoalStatusUpdated,
   } = opts;
 
   if (skipPersistentGoalPostTurn) return;
@@ -84,8 +88,29 @@ export async function handlePersistentGoalPostTurn(opts: {
   const meta = await apis.getSessionMetadata(sessionKey);
   if (!meta) return;
 
-  const state = readPersistentGoal(meta.customData as Record<string, unknown> | undefined);
-  if (!state || state.status !== 'active') return;
+  const goal = goalService.getActiveForSession(sessionKey);
+  if (!goal || goal.status !== 'active') return;
+
+  const state: PersistentGoalState = {
+    goal: goal.title,
+    status: 'active',
+    turnsUsed: goal.turnsUsed,
+    maxTurns: goal.maxTurns,
+    createdAt: goal.createdAt,
+    lastTurnAt: goal.updatedAt,
+    lastReason: goal.blockedReason,
+    judgeModelRef: goal.judgeModelRef,
+    decomposed: goal.checklist.length > 0 ? true : undefined,
+    uiLocale: goal.uiLocale,
+    checklist: goal.checklist.map((it) => ({
+      text: it.text,
+      status: it.status,
+      addedBy: it.addedBy,
+      addedAt: it.addedAt,
+      completedAt: it.completedAt,
+      evidence: it.evidenceSummary,
+    })),
+  };
 
   const judgeRef = resolveJudgeModelRef(config, sessionKey, state.judgeModelRef, runtimeSessionModelRef);
   if (!judgeRef) {
@@ -112,27 +137,65 @@ export async function handlePersistentGoalPostTurn(opts: {
     uiLocale: resolveGoalUiLocale(state),
   });
 
-  const baseCustom = { ...(meta.customData as Record<string, unknown> | undefined) };
-
   if (decision.newState) {
-    const merged = mergeCustomDataPatch(baseCustom, {
-      [PERSISTENT_GOAL_CUSTOM_KEY]: serializePersistentGoal(decision.newState),
-    });
-    await apis.updateSessionMetadata(sessionKey, { customData: merged });
-  }
-
-  if (config) {
+    const ns = decision.newState;
+    const completedChecklistItemIds = decision.completedChecklistItemIndexes
+      ?.map((index) => goal.checklist[index]?.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0);
     try {
-      await appendGoalRun({
-        config,
+      const updatedGoal = goalService.syncPostTurnState({
+        goalId: goal.id,
         sessionKey,
-        decision,
-        assistantPlainText,
+        source: 'chat',
+        status: ns.status === 'done'
+          ? 'done'
+          : decision.verdict === 'blocked'
+            ? 'blocked'
+            : decision.verdict === 'needs_input'
+              ? 'needs_input'
+              : ns.status === 'paused'
+                ? 'paused'
+                : 'active',
+        turnsUsed: ns.turnsUsed,
+        maxTurns: ns.maxTurns,
+        reason: ns.pausedReason ?? decision.reason,
+        nextAction: decision.continuationPrompt ?? undefined,
+        assistantPreview: assistantPlainText,
+        verdict: decision.verdict === 'done'
+          ? 'done'
+          : decision.verdict === 'decompose'
+            ? 'decompose'
+            : decision.verdict === 'blocked'
+              ? 'blocked'
+              : decision.verdict === 'needs_input'
+                ? 'needs_input'
+                : 'continue',
+        confidence: decision.confidence,
+        missingEvidence: decision.missingEvidence,
+        userQuestion: decision.userQuestion,
+        completedChecklistItemIds,
+        checklist: ns.checklist?.map((it) => ({
+          text: it.text,
+          status: it.status,
+          addedBy: it.addedBy,
+          addedAt: it.addedAt,
+          completedAt: it.completedAt,
+          evidenceSummary: it.evidence,
+        })),
       });
+      if (updatedGoal && updatedGoal.status !== goal.status) {
+        onGoalStatusUpdated?.({
+          goalId: goal.id,
+          sessionKey,
+          previousStatus: goal.status,
+          status: updatedGoal.status,
+          goal: updatedGoal,
+        });
+      }
     } catch (err) {
       log.warn(
-        { err, sessionKey },
-        `Persistent goal: goal run append failed: ${err instanceof Error ? err.message : String(err)}`,
+        { err, sessionKey, goalId: goal.id },
+        `Persistent goal: SQLite goal update failed: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   }

@@ -23,6 +23,7 @@ import type { MessageBus } from '../../infra/bus/index.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionStore } from '../../session/store.js';
 import type { SessionStateBag } from '../session/index.js';
+import type { GoalWithDetails } from '../../goals/types.js';
 import { parseSessionKey as parseRoutingSessionKey } from '../../routing/session-key.js';
 import { createLogger } from '../../utils/logger.js';
 import type { PersistentGoalApis } from './persistent-goal-apis.js';
@@ -61,6 +62,14 @@ export interface PersistentGoalServiceOptions {
   onSessionMetadataUpdated?: (sessionKey: string) => void;
   /** Push an assistant token + transcript refresh into a live webchat stream. */
   notifyWebchatTranscriptAppend: (sessionKey: string, assistantText: string) => void;
+  /** Gateway: durable goal status changed after post-turn judge. */
+  onGoalStatusUpdated?: (payload: {
+    goalId: string;
+    sessionKey: string;
+    previousStatus: string;
+    status: string;
+    goal: GoalWithDetails;
+  }) => void;
 }
 
 export class PersistentGoalService {
@@ -194,6 +203,7 @@ export class PersistentGoalService {
       config: this.opts.getConfig(),
       runtimeSessionModelRef,
       publishVerdictToChannel: publishVerdict,
+      onGoalStatusUpdated: this.opts.onGoalStatusUpdated,
     });
   }
 }

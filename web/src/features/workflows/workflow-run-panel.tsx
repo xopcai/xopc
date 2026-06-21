@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useNavigate } from 'react-router-dom';
 
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
-import { WorkflowAgentDetailDrawer } from '@/features/chat/workflow/workflow-agent-detail-drawer';
+import { WorkflowAgentDetailModal } from '@/features/chat/workflow/workflow-agent-detail-modal';
 import { ProgressTree, RunningProgressPanel } from '@/features/chat/workflow/workflow-progress-display';
 import { WorkflowResultSummary } from '@/features/chat/workflow/workflow-result-summary';
 import type { WorkflowAgentSnapshot } from '@/features/chat/workflow/workflow.types';
@@ -248,7 +248,7 @@ export function WorkflowRunPanel({
       <Dialog.Root open onOpenChange={(next) => !next && onClose()}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex max-h-[min(85vh,44rem)] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(85vh,44rem)] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-5 py-4">
               <Dialog.Title className="text-base font-semibold tracking-tight text-fg">{labels.runSummaryTitle}</Dialog.Title>
               <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={labels.pickStartClose} onClick={onClose}>
@@ -284,7 +284,7 @@ export function WorkflowRunPanel({
       <Dialog.Root open onOpenChange={(next) => !next && onClose()}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex max-h-[min(90vh,52rem)] w-[min(100%-2rem,64rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(90vh,52rem)] w-[min(100%-2rem,64rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-5 py-4">
               <Dialog.Title className="truncate text-base font-semibold tracking-tight text-fg">{run.title}</Dialog.Title>
               <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={labels.pickStartClose} onClick={onClose}>
@@ -513,14 +513,12 @@ export function WorkflowRunPanel({
         </Dialog.Portal>
       </Dialog.Root>
 
-      <WorkflowAgentDetailDrawer
+      <WorkflowAgentDetailModal
         open={drawerAgentId != null && drawerAgent != null}
         agent={drawerAgent}
         snapshot={snapshot}
         sessionKey={null}
         ownerAgentId={ownerAgentId}
-        pinnedAgentId={null}
-        onPinAgent={() => {}}
         onClose={() => setDrawerAgentId(null)}
         labels={cardLabels.drawer}
       />

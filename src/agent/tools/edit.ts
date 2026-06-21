@@ -10,6 +10,7 @@ import {
 } from './tool-paths.js';
 import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
 import { normalizeToLF, restoreLineEndings, normalizeForFuzzyMatch, fuzzyFindText, stripBom, generateDiffString } from './edit-diff.js';
+import type { GoalEvidenceRecordInput } from './goal-evidence-recorder.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
@@ -30,6 +31,7 @@ type EditFileParams = { path: string; oldText: string; newText: string };
 export interface CreateEditFileToolOptions {
   /** When set and the path is a bare profile filename (e.g. SOUL.md), edit under this root. */
   profileMarkdownRoot?: string;
+  recordGoalEvidence?: (input: GoalEvidenceRecordInput) => Promise<void> | void;
 }
 
 export function createEditFileTool(
@@ -104,6 +106,16 @@ export function createEditFileTool(
 
         const diffResult = generateDiffString(originalWithReplacement, finalContent, normalized);
         await writeFile(normalized, finalContent, 'utf-8');
+        await options?.recordGoalEvidence?.({
+          kind: 'diff',
+          title: `File edited: ${normalized}`,
+          summary: diffResult.slice(0, 4000),
+          uri: normalized,
+          data: {
+            path: normalized,
+            fuzzyMatchUsed: matchResult.usedFuzzyMatch,
+          },
+        });
 
         return {
           content: [{ type: 'text', text: `File edited: ${normalized}` }],

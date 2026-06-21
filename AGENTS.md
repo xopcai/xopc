@@ -336,6 +336,8 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 **Design system:** Follow **[docs/design/ui-design-system.md](./docs/design/ui-design-system.md)** — calm slate neutrals, **blue** only for primary actions / links / AI hints; prefer borders over heavy shadows in dark mode; short copy. Implement with **`web/src/styles/globals.css`** semantic tokens (`bg-surface-*`, `text-fg*`, `border-edge`, `accent`, etc.) and Tailwind utilities—do not add a second token system under `web/` unless extending `@theme` there.
 
+**Modal sizing:** Complex modals and detail dialogs must use a fixed responsive outer size (`h-[min(...)]` + fixed width) with `overflow-hidden`; keep header/footer fixed and put variable content in an internal `min-h-0 flex-1 overflow-y-auto` region. Do not let modal height shrink/grow based on content, because different records should not cause visual jumps.
+
 **Lint / typecheck:** `cd web && pnpm run lint` · `pnpm run type-check`. Tests: when added, colocate `web/src/**/__tests__/*.test.ts` and run with root **vitest** if wired; until then, rely on `pnpm run build` for the `web` project.
 
 ---

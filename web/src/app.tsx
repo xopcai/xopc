@@ -1,59 +1,58 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { I18nextProvider } from 'react-i18next';
 import { createHashRouter, Navigate, RouterProvider, useParams } from 'react-router-dom';
 
-import { i18n } from '@/i18n/i18n';
 import { AppShell } from '@/components/shell/app-shell';
 import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
 import { SettingsSheet } from '@/components/shell/settings-sheet';
 import { ChatPage } from '@/features/chat/chat-page';
 import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
 import { ExtensionProvider } from '@/features/extensions/extension-provider';
+import {
+  loadAgentsSettingsPage,
+  loadAppsPage,
+  loadChannelsPage,
+  loadCronPage,
+  loadGoalDetailPage,
+  loadGoalsPage,
+  loadExtensionDebugPage,
+  loadExtensionPage,
+  loadExtensionSettingsPage,
+  loadLogsPage,
+  loadNoteDetailPage,
+  loadNotesPage,
+  loadSettingsPage,
+  loadSharePreviewPage,
+  loadSessionsPage,
+  loadSkillsPage,
+  loadWorkflowsPage,
+} from '@/lib/route-preload';
 import { SwrProvider } from '@/providers/swr-provider';
 import { syncFontScaleAfterHydration, useFontScaleStore } from '@/stores/font-scale-store';
 import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/stores/theme-store';
 
-const SessionsPage = lazy(() =>
-  import('@/pages/sessions-page').then((m) => ({ default: m.SessionsPage })),
-);
-const CronPage = lazy(() => import('@/pages/cron-page').then((m) => ({ default: m.CronPage })));
-const NotesPage = lazy(() => import('@/pages/notes-page').then((m) => ({ default: m.NotesPage })));
-const NoteDetailPage = lazy(() => import('@/features/notes/note-detail-page').then((m) => ({ default: m.NoteDetailPage })));
-const WorkflowsPage = lazy(() =>
-  import('@/pages/workflows-page').then((m) => ({ default: m.WorkflowsPage })),
-);
-const SkillsPage = lazy(() => import('@/pages/skills-page').then((m) => ({ default: m.SkillsPage })));
-const LogsPage = lazy(() => import('@/pages/logs-page').then((m) => ({ default: m.LogsPage })));
-const SettingsPage = lazy(() =>
-  import('@/pages/settings-page').then((m) => ({ default: m.SettingsPage })),
-);
+const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.SessionsPage })));
+const CronPage = lazy(() => loadCronPage().then((m) => ({ default: m.CronPage })));
+const GoalsPage = lazy(() => loadGoalsPage().then((m) => ({ default: m.GoalsPage })));
+const GoalDetailPage = lazy(() => loadGoalDetailPage().then((m) => ({ default: m.GoalDetailPage })));
+const NotesPage = lazy(() => loadNotesPage().then((m) => ({ default: m.NotesPage })));
+const NoteDetailPage = lazy(() => loadNoteDetailPage().then((m) => ({ default: m.NoteDetailPage })));
+const WorkflowsPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowsPage })));
+const SkillsPage = lazy(() => loadSkillsPage().then((m) => ({ default: m.SkillsPage })));
+const LogsPage = lazy(() => loadLogsPage().then((m) => ({ default: m.LogsPage })));
+const SettingsPage = lazy(() => loadSettingsPage().then((m) => ({ default: m.SettingsPage })));
 const AgentsSettingsDetailPage = lazy(() =>
-  import('@/features/settings/agents').then((m) => ({ default: m.AgentsSettingsPanel })),
+  loadAgentsSettingsPage().then((m) => ({ default: m.AgentsSettingsPanel })),
 );
-const ChannelsPage = lazy(() =>
-  import('@/features/settings/channels-settings').then((m) => ({
-    default: m.ChannelsSettingsPanel,
-  })),
-);
-const AppsPage = lazy(() =>
-  import('@/pages/apps-page').then((m) => ({ default: m.AppsPage })),
-);
-const ExtensionPage = lazy(() =>
-  import('@/features/extensions/extension-page').then((m) => ({ default: m.ExtensionPage })),
-);
+const ChannelsPage = lazy(() => loadChannelsPage().then((m) => ({ default: m.ChannelsSettingsPanel })));
+const AppsPage = lazy(() => loadAppsPage().then((m) => ({ default: m.AppsPage })));
+const ExtensionPage = lazy(() => loadExtensionPage().then((m) => ({ default: m.ExtensionPage })));
 const ExtensionSettingsPage = lazy(() =>
-  import('@/features/extensions/extension-settings-page').then((m) => ({
-    default: m.ExtensionSettingsPage,
-  })),
+  loadExtensionSettingsPage().then((m) => ({ default: m.ExtensionSettingsPage })),
 );
 const ExtensionDebugPage = lazy(() =>
-  import('@/features/extensions/extension-debug-page').then((m) => ({
-    default: m.ExtensionDebugPage,
-  })),
+  loadExtensionDebugPage().then((m) => ({ default: m.ExtensionDebugPage })),
 );
-const SharePreviewPage = lazy(() =>
-  import('@/pages/share-preview-page').then((m) => ({ default: m.SharePreviewPage })),
-);
+const SharePreviewPage = lazy(() => loadSharePreviewPage().then((m) => ({ default: m.SharePreviewPage })));
 
 function SecondaryRouteFallback() {
   return (
@@ -132,6 +131,27 @@ const router = createHashRouter([
             <CronPage />
           </Suspense>
         ),
+      },
+      {
+        path: 'goals',
+        children: [
+          {
+            index: true,
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <GoalsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: ':goalId',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <GoalDetailPage />
+              </Suspense>
+            ),
+          },
+        ],
       },
       {
         path: 'note/:noteId',
@@ -355,17 +375,15 @@ function ThemeEffects() {
 
 export function App() {
   return (
-    <I18nextProvider i18n={i18n}>
-      <SwrProvider>
-        <ExtensionProvider>
-          <div className="flex min-h-0 flex-1 flex-col">
-            <ThemeEffects />
-            <div className="flex min-h-0 flex-1 flex-col *:min-h-0 *:flex-1">
-              <RouterProvider router={router} />
-            </div>
+    <SwrProvider>
+      <ExtensionProvider>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <ThemeEffects />
+          <div className="flex min-h-0 flex-1 flex-col *:min-h-0 *:flex-1">
+            <RouterProvider router={router} />
           </div>
-        </ExtensionProvider>
-      </SwrProvider>
-    </I18nextProvider>
+        </div>
+      </ExtensionProvider>
+    </SwrProvider>
   );
 }

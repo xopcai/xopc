@@ -46,8 +46,11 @@ export async function *runGatewayAgent(
     type: string;
     mimeType?: string;
     data?: string;
+    uri?: string;
     name?: string;
     size?: number;
+    workspaceRelativePath?: string;
+    durationSeconds?: number;
   }>,
   thinking?: string,
   runOptions?: { signal?: AbortSignal; clientCreatedAtMs?: number },

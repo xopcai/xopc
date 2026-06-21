@@ -21,12 +21,12 @@ type Props = {
 
 export function GoalJudgementSummary({ goal, t }: Props) {
   const [open, setOpen] = useState(false);
-  const hasJudgement = Boolean(goal.lastVerdict || goal.lastReason || goal.pausedReason);
+  const hasJudgement = Boolean(goal.lastVerdict || goal.lastReason || goal.blockedReason);
   if (!hasJudgement) return null;
 
   const copy = t as GoalMessagesWithJudgementCopy;
   const verdict = goal.lastVerdict ? verdictLabel(goal.lastVerdict, t) : '';
-  const primaryReason = goal.pausedReason || goal.lastReason;
+  const primaryReason = goal.blockedReason || goal.lastReason;
 
   return (
     <section className="rounded-xl border border-edge/70 bg-surface-muted/45 px-2.5 py-2 text-xs dark:bg-surface-muted/25">
@@ -62,19 +62,14 @@ export function GoalJudgementSummary({ goal, t }: Props) {
               <span className="font-medium text-fg">{t.lastReason}:</span> {goal.lastReason}
             </p>
           ) : null}
-          {goal.pausedReason ? (
+          {goal.blockedReason ? (
             <p className="whitespace-pre-wrap break-words">
-              <span className="font-medium text-fg">{copy.pausedReason ?? t.statusPaused}:</span> {goal.pausedReason}
+              <span className="font-medium text-fg">{copy.pausedReason ?? t.statusPaused}:</span> {goal.blockedReason}
             </p>
           ) : null}
           {goal.judgeModelRef ? (
             <p className="break-words">
               <span className="font-medium text-fg">{copy.judgeModel ?? 'Judge model'}:</span> {goal.judgeModelRef}
-            </p>
-          ) : null}
-          {goal.consecutiveParseFailures ? (
-            <p>
-              <span className="font-medium text-fg">{copy.parseFailures ?? 'Parse failures'}:</span> {goal.consecutiveParseFailures}
             </p>
           ) : null}
         </div>

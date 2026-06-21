@@ -21,7 +21,7 @@ import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { interaction } from '@/lib/interaction';
 
-import { WorkflowAgentDetailDrawer, type WorkflowAgentDetailDrawerLabels } from './workflow-agent-detail-drawer';
+import { WorkflowAgentDetailModal, type WorkflowAgentDetailModalLabels } from './workflow-agent-detail-modal';
 import { WorkflowCardHeader, type WorkflowCardHeaderLabels } from './workflow-card-header';
 import { WorkflowErrorCard, type WorkflowErrorCardLabels } from './workflow-error-card';
 import type { WorkflowPhaseRowLabels } from './workflow-phase-row';
@@ -44,7 +44,7 @@ export type WorkflowCardLabels = {
   phase: WorkflowPhaseRowLabels;
   result: WorkflowResultSummaryLabels;
   error: WorkflowErrorCardLabels;
-  drawer: WorkflowAgentDetailDrawerLabels;
+  drawer: WorkflowAgentDetailModalLabels;
   /** Header action button tooltips / a11y. */
   cancel: string;
   saveAria: string;
@@ -112,7 +112,6 @@ export const WorkflowCard = memo(function WorkflowCard({
 
   const [showSubagentsAfterComplete, setShowSubagentsAfterComplete] = useState(false);
   const [drawerAgentId, setDrawerAgentId] = useState<number | null>(null);
-  const [pinnedAgentId, setPinnedAgentId] = useState<number | null>(null);
   const [logsExpanded, setLogsExpanded] = useState(false);
 
   const drawerAgent = useMemo(() => {
@@ -207,13 +206,11 @@ export const WorkflowCard = memo(function WorkflowCard({
           labels={labels.error}
           className={className}
         />
-        <WorkflowAgentDetailDrawer
+        <WorkflowAgentDetailModal
           open={drawerAgentId != null && failureDrawerAgent != null}
           agent={failureDrawerAgent}
           snapshot={failureSnapshot}
           sessionKey={sessionKey}
-          pinnedAgentId={pinnedAgentId}
-          onPinAgent={setPinnedAgentId}
           onClose={closeDrawer}
           labels={labels.drawer}
         />
@@ -445,13 +442,11 @@ export const WorkflowCard = memo(function WorkflowCard({
       ) : null}
     </div>
 
-    <WorkflowAgentDetailDrawer
+    <WorkflowAgentDetailModal
       open={drawerAgentId != null && drawerAgent != null}
       agent={drawerAgent}
       snapshot={snapshot}
       sessionKey={sessionKey}
-      pinnedAgentId={pinnedAgentId}
-      onPinAgent={setPinnedAgentId}
       onClose={closeDrawer}
       labels={labels.drawer}
     />

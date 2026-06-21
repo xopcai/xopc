@@ -5,7 +5,7 @@ import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/featur
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { fetchProviderMetaList } from '@/features/settings/providers-api';
-import { getSkills } from '@/features/skills/skill-api';
+import { getSkills } from '@/features/skills/skill-list-api';
 import { messages } from '@/i18n/messages';
 import { useGatewaySseStore } from '@/stores/gateway-sse-store';
 import { useGatewayStore } from '@/stores/gateway-store';
