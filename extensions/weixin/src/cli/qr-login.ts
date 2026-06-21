@@ -4,7 +4,6 @@
 
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import { ConfigSchema } from '@xopcai/xopc/config/schema.js';
-import { loadConfig, saveConfig } from '@xopcai/xopc/config/loader.js';
 
 import {
   clearStaleAccountsForUserId,
@@ -92,6 +91,7 @@ export async function runWeixinQrLoginCli(opts: WeixinQrLoginCliOptions): Promis
   message: string;
 }> {
   const configPath = opts.configPath ?? process.env.XOPC_CONFIG_PATH;
+  const { loadConfig } = await import('@xopcai/xopc/config/loader.js');
   const cfg = opts.existingConfig ?? loadConfig(configPath);
   const { baseUrl, routeTag } = getWeixinLoginApiContext(cfg, opts.account);
   const timeoutMs = opts.timeoutMs ?? 480_000;
@@ -161,6 +161,7 @@ export async function runWeixinQrLoginCli(opts: WeixinQrLoginCliOptions): Promis
   if (opts.writeConfig !== false) {
     try {
       const next = mergeWeixinConfigAfterLogin(cfg, normalizedId);
+      const { saveConfig } = await import('@xopcai/xopc/config/loader.js');
       await saveConfig(next, configPath);
     } catch (err) {
       logger.warn(`Config merge failed (credentials saved on disk): ${String(err)}`);

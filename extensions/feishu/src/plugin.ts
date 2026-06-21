@@ -27,6 +27,7 @@ import type {
 import type {
   ChannelCliLoginAdapter,
   ChannelRuntimeActionAdapter,
+  ChannelOnboardAdapter,
 } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { evaluateAccess, resolveDmPolicy, resolveGroupPolicy } from '@xopcai/xopc/channels/security.js';
@@ -34,33 +35,15 @@ import { createStandardPairingAdapter } from '@xopcai/xopc/channels/pairing/pair
 
 import { FeishuConfigSchema, type FeishuConfig } from './schema/config-schema.js';
 import { listFeishuAccountIds, resolveFeishuAccount, type ResolvedFeishuAccount } from './state/accounts.js';
-import { createFeishuSocketModeMonitor } from './transport/socket-mode/monitor.js';
-import { createFeishuWebhookMonitor } from './transport/webhook/monitor.js';
 import { createFeishuOutboundAdapter } from './outbound/outbound-adapter.js';
 import { createFeishuStatusAdapter } from './status/status-adapter.js';
 import { createFeishuDoctorAdapter } from './status/doctor.js';
 import { feishuConfigSurface } from './ui/config-surface.js';
 import { createFeishuStreamingAdapter } from './streaming/streaming-adapter.js';
 import { readFrameworkAllowFromList } from './auth/pairing.js';
-import {
-  addReactionFeishu,
-  editMessageFeishu,
-  getMessageFeishu,
-  listPinsFeishu,
-  listReactionsFeishu,
-  pinMessageFeishu,
-  removeReactionFeishu,
-  unpinMessageFeishu,
-} from './outbound/actions.js';
-import { createFeishuDirectoryAdapter } from './directory/directory-adapter.js';
-import { feishuWhoAmI } from './tools/tools.js';
-import { feishuCliLoginAdapter } from './adapters/cli-login.js';
-import { feishuOnboardAdapter } from './adapters/onboard-cli.js';
 import { feishuGatewaySetupActions } from './adapters/gateway-setup.js';
 import { handleFeishuChannelMessageAction } from './actions/message-action-handler.js';
 import { createFeishuInboundPipeline, type FeishuInboundWork } from './transport/reliability/inbound-pipeline.js';
-import { getWorkflowProgressBroker } from '@xopcai/xopc/agent/workflow/index.js';
-import { createFeishuWorkflowProgressCapability } from './workflow-progress.js';
 
 const log = createLogger('FeishuPlugin');
 
@@ -116,9 +99,25 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
 
   readonly pairing = createStandardPairingAdapter('feishu');
 
-  onboard = feishuOnboardAdapter;
+  onboard: ChannelOnboardAdapter = {
+    isConfigured: (config) => {
+      const feishu = config.channels?.feishu as Record<string, unknown> | undefined;
+      const appId = typeof feishu?.appId === 'string' ? feishu.appId.trim() : '';
+      const appSecret = typeof feishu?.appSecret === 'string' ? feishu.appSecret.trim() : '';
+      return feishu?.enabled === true && Boolean(appId && appSecret);
+    },
+    configure: async (config) => {
+      const { feishuOnboardAdapter } = await import('./adapters/onboard-cli.js');
+      return feishuOnboardAdapter.configure(config);
+    },
+  };
 
-  readonly cliLogin: ChannelCliLoginAdapter = feishuCliLoginAdapter;
+  readonly cliLogin: ChannelCliLoginAdapter = {
+    runLogin: async (params) => {
+      const { feishuCliLoginAdapter } = await import('./adapters/cli-login.js');
+      return feishuCliLoginAdapter.runLogin(params);
+    },
+  };
 
   readonly runtimeActions: ChannelRuntimeActionAdapter = feishuGatewaySetupActions;
 
@@ -191,7 +190,12 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
 
   doctor: ChannelDoctorAdapter = createFeishuDoctorAdapter();
 
-  directory = createFeishuDirectoryAdapter();
+  directory = {
+    resolveDisplayName: async (params) => {
+      const { createFeishuDirectoryAdapter } = await import('./directory/directory-adapter.js');
+      return createFeishuDirectoryAdapter().resolveDisplayName?.(params);
+    },
+  };
 
   actions: ChannelMessageActionAdapter = {
     handleAction: handleFeishuChannelMessageAction,
@@ -204,6 +208,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
       execute: async (toolCtx, args) => {
         const messageId = typeof (args as any)?.messageId === 'string' ? (args as any).messageId : toolCtx.messageId;
         if (!messageId) throw new Error('feishu_read requires messageId');
+        const { getMessageFeishu } = await import('./outbound/actions.js');
         return await getMessageFeishu({ cfg: this.cfg, accountId: toolCtx.accountId, messageId });
       },
     },
@@ -215,6 +220,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         const text = typeof (args as any)?.text === 'string' ? (args as any).text : '';
         if (!messageId) throw new Error('feishu_edit requires messageId');
         if (!text.trim()) throw new Error('feishu_edit requires text');
+        const { editMessageFeishu } = await import('./outbound/actions.js');
         return await editMessageFeishu({ cfg: this.cfg, accountId: toolCtx.accountId, messageId, text });
       },
     },
@@ -222,6 +228,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
       name: 'feishu_scopes_probe',
       description: 'Probe Feishu credentials/scopes (placeholder for full docs/wiki/drive tools).',
       execute: async (toolCtx) => {
+        const { feishuWhoAmI } = await import('./tools/tools.js');
         return await feishuWhoAmI({ cfg: this.cfg, accountId: toolCtx.accountId });
       },
     },
@@ -240,6 +247,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         }
 
         if (a?.list === true) {
+          const { listReactionsFeishu } = await import('./outbound/actions.js');
           return await listReactionsFeishu({
             cfg: this.cfg,
             accountId: toolCtx.accountId,
@@ -251,11 +259,13 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         if (a?.remove === true) {
           const reactionId = typeof a?.reactionId === 'string' ? a.reactionId : '';
           if (!reactionId) throw new Error('feishu_react remove requires reactionId');
+          const { removeReactionFeishu } = await import('./outbound/actions.js');
           return await removeReactionFeishu({ cfg: this.cfg, accountId: toolCtx.accountId, messageId, reactionId });
         }
 
         const emojiType = typeof a?.emojiType === 'string' ? a.emojiType : '';
         if (!emojiType) throw new Error('feishu_react requires emojiType');
+        const { addReactionFeishu } = await import('./outbound/actions.js');
         return await addReactionFeishu({ cfg: this.cfg, accountId: toolCtx.accountId, messageId, emojiType });
       },
     },
@@ -268,6 +278,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         if (action === 'list') {
           const chatId = typeof a?.chatId === 'string' ? a.chatId : toolCtx.chatId;
           if (!chatId) throw new Error('feishu_pins list requires chatId');
+          const { listPinsFeishu } = await import('./outbound/actions.js');
           return await listPinsFeishu({
             cfg: this.cfg,
             accountId: toolCtx.accountId,
@@ -281,9 +292,11 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         const messageId = typeof a?.messageId === 'string' ? a.messageId : toolCtx.messageId;
         if (!messageId) throw new Error('feishu_pins requires messageId');
         if (action === 'pin') {
+          const { pinMessageFeishu } = await import('./outbound/actions.js');
           return await pinMessageFeishu({ cfg: this.cfg, accountId: toolCtx.accountId, messageId });
         }
         if (action === 'unpin') {
+          const { unpinMessageFeishu } = await import('./outbound/actions.js');
           return await unpinMessageFeishu({ cfg: this.cfg, accountId: toolCtx.accountId, messageId });
         }
         throw new Error('feishu_pins requires action: pin | unpin | list');
@@ -303,15 +316,21 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
       },
     });
 
-    // Workflow progress broker capability — turns mid-run snapshots into
-    // edit-in-place Feishu messages. Broker is the agent-side subscriber for
-    // `tool_execution_update` on the `workflow` tool. Registration is
-    // idempotent (replaces a prior cap with the same channelId).
+    await this.registerWorkflowProgressCapability();
+
+    log.debug('Feishu plugin initialized');
+  }
+
+  private async registerWorkflowProgressCapability(): Promise<void> {
+    // Lazy-load workflow progress so Feishu runtime startup does not pull the
+    // agent/workflow/provider graph into Electron's dynamic extension path.
+    const [{ getWorkflowProgressBroker }, { createFeishuWorkflowProgressCapability }] = await Promise.all([
+      import('@xopcai/xopc/agent/workflow/progress-broker.js'),
+      import('./workflow-progress.js'),
+    ]);
     this.workflowProgressUnregister = getWorkflowProgressBroker().registerChannel(
       createFeishuWorkflowProgressCapability({ getConfig: () => this.cfg }),
     );
-
-    log.debug('Feishu plugin initialized');
   }
 
   async start(options?: ChannelPluginStartOptions): Promise<void> {
@@ -338,7 +357,7 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         return p.enqueue(work);
       };
 
-      const monitor = createFeishuSocketModeMonitor({
+      const monitorDeps = {
         account,
         config: this.cfg,
         enqueueInbound,
@@ -347,22 +366,11 @@ export class FeishuChannelPlugin implements ChannelPlugin<ResolvedFeishuAccount>
         security: {
           checkAccess: (ctx: ChannelSecurityContext) => this.security.checkAccess?.(ctx, account, this.cfg),
         },
-      });
-
+      };
       const runner =
         account.connectionMode === 'webhook'
-          ? createFeishuWebhookMonitor({
-              account,
-              config: this.cfg,
-              enqueueInbound,
-              inboundDebounceDefaultMs: defaultDebounce,
-              abortSignal: ac.signal,
-              security: {
-                checkAccess: (ctx: ChannelSecurityContext) =>
-                  this.security.checkAccess?.(ctx, account, this.cfg),
-              },
-            })
-          : monitor;
+          ? (await import('./transport/webhook/monitor.js')).createFeishuWebhookMonitor(monitorDeps)
+          : (await import('./transport/socket-mode/monitor.js')).createFeishuSocketModeMonitor(monitorDeps);
 
       void runner.run().catch((err) => {
         if ((err as { name?: string } | undefined)?.name === 'AbortError') {

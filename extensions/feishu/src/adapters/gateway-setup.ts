@@ -1,4 +1,3 @@
-import { loadConfig, saveConfig } from '@xopcai/xopc/config/loader.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type {
   ChannelRuntimeActionAdapter,
@@ -192,6 +191,7 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
         }
 
         try {
+          const { loadConfig, saveConfig } = await import('@xopcai/xopc/config/loader.js');
           const current = loadConfig();
           await saveConfig(buildFeishuConfig(current, outcome.result));
           rememberCompleted(sessionKey, {
@@ -239,6 +239,7 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
       if (!appId || !appSecret) {
         return { ok: false, message: zh ? 'App ID 和 App Secret 为必填项。' : 'App ID and App Secret are required.' };
       }
+      const { loadConfig, saveConfig } = await import('@xopcai/xopc/config/loader.js');
       const current = loadConfig();
       await saveConfig(buildFeishuConfig(current, { appId, appSecret, domain }));
       return {

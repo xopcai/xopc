@@ -1,4 +1,3 @@
-import { loadConfig, saveConfig } from '@xopcai/xopc/config/loader.js';
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { ChannelRuntimeActionAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 
@@ -129,6 +128,7 @@ export const telegramGatewaySetupActions: ChannelRuntimeActionAdapter = {
   async runAction({ actionId, input, locale }) {
     const zh = isZh(locale);
     if (actionId === 'setup.start') {
+      const { loadConfig } = await import('@xopcai/xopc/config/loader.js');
       return { ok: true, payload: formPayload(loadConfig(), locale) };
     }
 
@@ -138,6 +138,7 @@ export const telegramGatewaySetupActions: ChannelRuntimeActionAdapter = {
       if (!botToken) {
         return { ok: false, message: zh ? 'Bot Token 为必填项。' : 'Bot Token is required.' };
       }
+      const { loadConfig, saveConfig } = await import('@xopcai/xopc/config/loader.js');
       await saveConfig(buildTelegramConfig(loadConfig(), raw));
       return {
         ok: true,

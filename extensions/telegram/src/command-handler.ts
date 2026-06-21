@@ -10,9 +10,7 @@ import type { Context } from 'grammy';
 import type { TelegramAccountManager } from './account-manager.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import type { Config } from '@xopcai/xopc/config/index.js';
-import { isProviderConfiguredSync } from '@xopcai/xopc/providers/index.js';
 import { TelegramInlineKeyboards, type ProviderInfo } from './inline-keyboards.js';
-import { getProviderDisplayName, getModelsByProvider, getDefaultModelSync, getAllProviders } from '@xopcai/xopc/providers/index.js';
 import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
 
 const log = createLogger('TelegramCommandHandler');
@@ -34,7 +32,8 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
 
   // ========== Helper Functions ==========
 
-  const getAvailableProviders = (): ProviderInfo[] => {
+  const getAvailableProviders = async (): Promise<ProviderInfo[]> => {
+    const { getAllProviders, getProviderDisplayName, isProviderConfiguredSync } = await import('@xopcai/xopc/providers/index.js');
     const allProviders = getAllProviders();
     const available: ProviderInfo[] = [];
 
@@ -51,7 +50,8 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     return available;
   };
 
-  const getModelsForProvider = (providerId: string) => {
+  const getModelsForProvider = async (providerId: string) => {
+    const { getModelsByProvider } = await import('@xopcai/xopc/providers/index.js');
     const models = getModelsByProvider(providerId);
     
     if (models.length === 0) {
@@ -96,7 +96,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
    */
   const handleStart = async (ctx: Context): Promise<void> => {
     try {
-      const providers = getAvailableProviders();
+      const providers = await getAvailableProviders();
       const hasProviders = providers.length > 0;
 
       await ctx.reply(
@@ -132,7 +132,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
    */
   const handleModels = async (ctx: Context): Promise<void> => {
     try {
-      const providers = getAvailableProviders();
+      const providers = await getAvailableProviders();
 
       if (providers.length === 0) {
         await ctx.reply('❌ No providers available. Please check your configuration.');
@@ -171,10 +171,11 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     try {
       const sessionKey = getSessionKeyFromCtx(ctx);
       const modelConfig = config.agents?.defaults?.models?.chat;
+      const { getDefaultModelSync, getProviderDisplayName } = await import('@xopcai/xopc/providers/index.js');
       const defaultModel = modelConfig?.primary || getDefaultModelSync(config);
       const currentModel = getSessionModel(sessionKey) || defaultModel;
 
-      const models = getModelsForProvider(providerId);
+      const models = await getModelsForProvider(providerId);
       
       if (models.length === 0) {
         await ctx.editMessageText('❌ No models available for this provider.');
@@ -217,7 +218,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
 
   const handleShowProviders = async (ctx: Context): Promise<void> => {
     try {
-      const providers = getAvailableProviders();
+      const providers = await getAvailableProviders();
 
       await ctx.editMessageText('🤖 Select a provider:', {
         reply_markup: TelegramInlineKeyboards.providerSelector(providers),

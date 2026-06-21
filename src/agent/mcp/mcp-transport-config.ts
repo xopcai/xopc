@@ -150,16 +150,13 @@ export function resolveMcpTransportConfig(
     return null;
   }
 
-  if (effectiveTransport === "streamable-http") {
-    const httpTransport = resolveHttpTransportConfig(serverName, rawServer, "streamable-http");
-    if (httpTransport) {
-      return httpTransport;
-    }
-  }
-
-  const sseTransport = resolveHttpTransportConfig(serverName, rawServer, "sse");
-  if (sseTransport) {
-    return sseTransport;
+  const httpTransport = resolveHttpTransportConfig(
+    serverName,
+    rawServer,
+    effectiveTransport === "sse" ? "sse" : "streamable-http",
+  );
+  if (httpTransport) {
+    return httpTransport;
   }
 
   const stdioReason =

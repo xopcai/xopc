@@ -1,6 +1,7 @@
 import type { STTConfig, STTResult } from './types.js';
 import { transcribe } from './transcribe-core.js';
 import { isSTTAvailable } from './availability.js';
+export { checkMentionInTranscription } from './mention.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('STT:Preflight');
@@ -85,28 +86,3 @@ export async function audioPreflightTranscribe(
   }
 }
 
-/**
- * Spoken @bot variants ("at botname", "hey botname") for STT text.
- */
-export function checkMentionInTranscription(transcribedText: string, botNames: string[]): boolean {
-  const normalizedText = transcribedText.toLowerCase().trim();
-
-  for (const name of botNames) {
-    const normalizedName = name.toLowerCase().trim();
-    if (!normalizedName) continue;
-
-    if (normalizedText.includes(normalizedName)) {
-      return true;
-    }
-
-    const fuzzyPatterns = [`at ${normalizedName}`, `hey ${normalizedName}`, `hi ${normalizedName}`];
-
-    for (const pattern of fuzzyPatterns) {
-      if (normalizedText.includes(pattern)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
