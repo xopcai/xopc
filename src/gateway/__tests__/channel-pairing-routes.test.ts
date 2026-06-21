@@ -8,6 +8,7 @@ import { ENV_VARS } from '../../config/paths-state.js';
 import type { Config } from '../../config/schema.js';
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
+import '../../../extensions/telegram/src/pairing-config-resolver.js';
 
 const TOKEN = 'pairing-test-token';
 
