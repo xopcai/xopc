@@ -14,7 +14,7 @@ import {
 } from '../auth/app-registration.js';
 
 type FeishuGatewaySetupDone =
-  | { phase: 'done'; ok: true; accountId: string; appId: string; domain: FeishuDomain }
+  | { phase: 'done'; ok: true; accountId: string; appId: string; domain: FeishuDomain; result: AppRegistrationResult }
   | { phase: 'done'; ok: false; message: string };
 
 type FeishuGatewaySetupActive = {
@@ -65,7 +65,7 @@ function buildFeishuConfig(config: Config, result: AppRegistrationResult): Confi
         dmPolicy: existing?.dmPolicy ?? 'open',
         groupPolicy: existing?.groupPolicy ?? 'allowlist',
         allowFrom,
-        groupAllowFrom: Array.isArray(existing?.groupAllowFrom) ? existing.groupAllowFrom : [],
+        groupAllowFrom: Array.isArray(existing?.groupAllowFrom) ? existing.groupAllowFrom : allowFrom,
         requireMention: typeof existing?.requireMention === 'boolean' ? existing.requireMention : true,
         renderMode: existing?.renderMode ?? 'auto',
         streaming: typeof existing?.streaming === 'boolean' ? existing.streaming : false,
@@ -134,8 +134,13 @@ function statusPayload(
   };
 }
 
+function completedNextConfig(cfg: Config, state: FeishuGatewaySetupDone | undefined): Config | undefined {
+  if (!state || state.ok === false) return undefined;
+  return buildFeishuConfig(cfg, state.result);
+}
+
 export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
-  async runAction({ actionId, input, locale }) {
+  async runAction({ cfg, actionId, input, locale }) {
     const zh = isZh(locale);
     if (actionId === 'setup.start') {
       const raw = readInput(input);
@@ -190,24 +195,14 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
           return;
         }
 
-        try {
-          const { loadConfig, saveConfig } = await import('@xopcai/xopc/config/loader.js');
-          const current = loadConfig();
-          await saveConfig(buildFeishuConfig(current, outcome.result));
-          rememberCompleted(sessionKey, {
-            phase: 'done',
-            ok: true,
-            accountId: 'default',
-            appId: outcome.result.appId,
-            domain: outcome.result.domain,
-          });
-        } catch (err) {
-          rememberCompleted(sessionKey, {
-            phase: 'done',
-            ok: false,
-            message: `${zh ? '配置保存失败' : 'Config save failed'}: ${String(err)}`,
-          });
-        }
+        rememberCompleted(sessionKey, {
+          phase: 'done',
+          ok: true,
+          accountId: 'default',
+          appId: outcome.result.appId,
+          domain: outcome.result.domain,
+          result: outcome.result,
+        });
       })();
 
       return {
@@ -228,7 +223,12 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
       const raw = readInput(input);
       const sessionKey = typeof raw.sessionKey === 'string' ? raw.sessionKey : '';
       if (!sessionKey) return { ok: false, message: zh ? '缺少配置 sessionKey' : 'Missing setup sessionKey' };
-      return { ok: true, payload: statusPayload(completedSessions.get(sessionKey), activeSessions.get(sessionKey), locale) };
+      const completed = completedSessions.get(sessionKey);
+      return {
+        ok: true,
+        payload: statusPayload(completed, activeSessions.get(sessionKey), locale),
+        nextConfig: completedNextConfig(cfg, completed),
+      };
     }
 
     if (actionId === 'setup.manual') {
@@ -239,11 +239,9 @@ export const feishuGatewaySetupActions: ChannelRuntimeActionAdapter = {
       if (!appId || !appSecret) {
         return { ok: false, message: zh ? 'App ID 和 App Secret 为必填项。' : 'App ID and App Secret are required.' };
       }
-      const { loadConfig, saveConfig } = await import('@xopcai/xopc/config/loader.js');
-      const current = loadConfig();
-      await saveConfig(buildFeishuConfig(current, { appId, appSecret, domain }));
       return {
         ok: true,
+        nextConfig: buildFeishuConfig(cfg, { appId, appSecret, domain }),
         payload: {
           type: 'ok',
           message: zh ? '飞书配置已保存。' : 'Feishu configuration saved.',

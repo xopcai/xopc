@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
 
 import { type IpcMain, app } from 'electron';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
+
+import { assertTrustedRenderer } from './trusted-renderer.js';
 
 export interface SearchResult {
   filePath: string;
@@ -12,6 +14,26 @@ export interface SearchResult {
 }
 
 let cachedDevRipgrepBin: string | undefined;
+
+export type SearchIpcOptions = {
+  allowedRoots?: string[];
+};
+
+function isPathInsideRoot(candidate: string, root: string): boolean {
+  const resolvedCandidate = resolve(candidate);
+  const resolvedRoot = resolve(root);
+  const rel = relative(resolvedRoot, resolvedCandidate);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+function assertAllowedSearchRoot(dirPath: string, allowedRoots: string[]): void {
+  if (typeof dirPath !== 'string' || !isAbsolute(dirPath)) {
+    throw new Error('Search path must be absolute.');
+  }
+  if (allowedRoots.length > 0 && !allowedRoots.some((root) => isPathInsideRoot(dirPath, root))) {
+    throw new Error('Search path is outside the Electron-managed workspace.');
+  }
+}
 
 /** Packaged apps ship `rg` under extraResources; dev resolves from `@vscode/ripgrep` or PATH. */
 async function resolveRipgrepBinary(): Promise<string> {
@@ -28,10 +50,13 @@ async function resolveRipgrepBinary(): Promise<string> {
   return cachedDevRipgrepBin;
 }
 
-export function registerSearchIpc(ipcMain: IpcMain): void {
+export function registerSearchIpc(ipcMain: IpcMain, options: SearchIpcOptions = {}): void {
+  const allowedRoots = options.allowedRoots ?? [];
   ipcMain.handle(
     'search:ripgrep',
-    async (_, query: string, dirPath: string): Promise<SearchResult[]> => {
+    async (event, query: string, dirPath: string): Promise<SearchResult[]> => {
+      assertTrustedRenderer(event);
+      assertAllowedSearchRoot(dirPath, allowedRoots);
       const rgBin = await resolveRipgrepBinary();
       return new Promise((resolve, reject) => {
         const args = [

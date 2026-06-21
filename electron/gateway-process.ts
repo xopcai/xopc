@@ -101,9 +101,8 @@ function resolvePackagedStaticRoot(): string {
   return resolvePackagedAppPath('dist', 'gateway', 'static', 'root');
 }
 
-/** Bundled extension modules import sibling dist/src files; keep them inside the same packaged tree. */
 function resolvePackagedBundledExtensionsRoot(): string {
-  return resolvePackagedAppPath('dist', 'extensions');
+  return resolvePackagedAppPath('dist', 'electron', 'extensions');
 }
 
 /**

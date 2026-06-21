@@ -1,5 +1,7 @@
 import { type IpcMain } from 'electron';
 
+import { assertTrustedRenderer } from './trusted-renderer.js';
+
 /**
  * Minimal agent bridge for the Electron shell.
  * Full `AgentService` pulls the gateway/channel/extension graph and does not bundle cleanly
@@ -8,6 +10,7 @@ import { type IpcMain } from 'electron';
  */
 export function registerAgentIpc(ipcMain: IpcMain): void {
   ipcMain.handle('agent:send', async (event, message: string, _sessionKey: string) => {
+    assertTrustedRenderer(event);
     const preview = message.length > 400 ? `${message.slice(0, 400)}…` : message;
     event.sender.send(
       'agent:stream-chunk',

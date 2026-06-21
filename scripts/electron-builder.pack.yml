@@ -30,21 +30,8 @@ files:
 # slows cold start. Unpacking it (and its sibling templates) puts it on plain disk.
 asarUnpack:
   - 'out/server/**'
-  # The gateway subprocess runs from app.asar.unpacked/out/server. Native ESM
-  # package resolution then walks app.asar.unpacked/node_modules, not
-  # app.asar/node_modules, so runtime externals must be unpacked beside it.
-  # Gateway runtime externals and bundled channel extension deps. Dynamic ESM modules are
-  # loaded from app.asar.unpacked, so bare package imports must resolve under
-  # app.asar.unpacked/node_modules. Unpack the minimal production node_modules tree staged
-  # by prepare-electron-pack-dir, including transitive deps.
   - 'node_modules/**'
-  # Bundled channel extensions are loaded dynamically by the gateway subprocess. Keep the
-  # emitted extension tree and its sibling dist/src imports on the same real filesystem root;
-  # otherwise an unpacked dist/extensions would resolve ../../../src to a missing path.
-  - 'dist/extensions/**'
-  - 'dist/src/**'
-  - 'dist/_virtual/**'
-  - 'dist/package.js'
+  - 'dist/electron/extensions/**'
   # The packaged Electron main process starts a gateway subprocess with ELECTRON_RUN_AS_NODE.
   # Keep the SPA assets on the real filesystem too; Windows is less tolerant of serving
   # many files from app.asar in that subprocess and can otherwise boot to a blank shell.
@@ -81,6 +68,16 @@ protocols:
   - name: xopc
     schemes:
       - xopc
+
+electronFuses:
+  # Keep RunAsNode enabled: the packaged desktop starts the gateway subprocess with
+  # ELECTRON_RUN_AS_NODE until it moves to utilityProcess or a standalone Node runtime.
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
 
 # Limit Chromium UI locales (file dialogs, context menus) to the ones xopc supports.
 # Names must match Electron's packaged locale `.pak` basenames. Using `en` / `zh_CN`

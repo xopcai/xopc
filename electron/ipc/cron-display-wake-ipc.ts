@@ -1,9 +1,12 @@
 import { type IpcMain, powerSaveBlocker } from 'electron';
 
+import { assertTrustedRenderer } from './trusted-renderer.js';
+
 let cronDisplayWakeBlockerId: number | null = null;
 
 export function registerCronDisplayWakeIpc(ipcMain: IpcMain): void {
-  ipcMain.handle('cron:set-prevent-display-sleep', (_event, enabled: unknown) => {
+  ipcMain.handle('cron:set-prevent-display-sleep', (event, enabled: unknown) => {
+    assertTrustedRenderer(event);
     const on = enabled === true;
     if (on) {
       if (cronDisplayWakeBlockerId == null) {

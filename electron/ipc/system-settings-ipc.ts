@@ -14,6 +14,7 @@ import { type IpcMain, type IpcMainInvokeEvent, app, desktopCapturer, Notificati
 import type { PrivacyPaneKind, ShellPermissionSnapshot, SystemSettingsBehavior, TccTriState, PermissionRequestResult } from './system-settings-types.js';
 import { rawMediaAccessStatus, tccToTriState } from './shell-permission-gates.js';
 import { openMacosPrivacyPane, openWinPrivacyPane } from './privacy-deep-links.js';
+import { assertTrustedRenderer } from './trusted-renderer.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -503,7 +504,10 @@ function getBehaviorState(): SystemSettingsBehavior {
 }
 
 export function registerSystemSettingsIpc(ipcMain: IpcMain): void {
-  ipcMain.handle('system-settings:get-behavior', (): SystemSettingsBehavior => getBehaviorState());
+  ipcMain.handle('system-settings:get-behavior', (event): SystemSettingsBehavior => {
+    assertTrustedRenderer(event);
+    return getBehaviorState();
+  });
 
   ipcMain.handle(
     'system-settings:set-behavior',
@@ -517,6 +521,7 @@ export function registerSystemSettingsIpc(ipcMain: IpcMain): void {
         notifySoundEnabled: boolean;
       }>,
     ): Promise<{ ok: true; behavior: SystemSettingsBehavior }> => {
+      assertTrustedRenderer(_e);
       if (typeof patch.openAtLogin === 'boolean' || typeof patch.openAsHidden === 'boolean') {
         const cur = app.getLoginItemSettings();
         app.setLoginItemSettings({
@@ -542,9 +547,10 @@ export function registerSystemSettingsIpc(ipcMain: IpcMain): void {
   );
 
   const permissionsHandler = async (
-    _e: IpcMainInvokeEvent,
+    event: IpcMainInvokeEvent,
     options?: { probe?: boolean },
   ): Promise<ShellPermissionSnapshot> => {
+    assertTrustedRenderer(event);
     if (options?.probe) {
       await probeNotificationAccess();
     }
@@ -562,42 +568,50 @@ export function registerSystemSettingsIpc(ipcMain: IpcMain): void {
 
   ipcMain.handle('system-settings:get-permissions', permissionsHandler);
 
-  const openHandler = async (_e: IpcMainInvokeEvent, kind: PrivacyPaneKind) => {
+  const openHandler = async (event: IpcMainInvokeEvent, kind: PrivacyPaneKind) => {
+    assertTrustedRenderer(event);
     const ok = await openPrivacyForPlatform(kind);
     return ok ? ({ ok: true as const }) : ({ ok: false as const, error: 'OPEN_SETTINGS_FAILED' });
   };
 
   ipcMain.handle('system-settings:open-privacy', openHandler);
 
-  ipcMain.handle('system-settings:request-microphone', async (): Promise<PermissionRequestResult> => {
+  ipcMain.handle('system-settings:request-microphone', async (event): Promise<PermissionRequestResult> => {
+    assertTrustedRenderer(event);
     return requestMicrophoneAccess();
   });
 
-  ipcMain.handle('system-settings:request-accessibility', async (): Promise<PermissionRequestResult> => {
+  ipcMain.handle('system-settings:request-accessibility', async (event): Promise<PermissionRequestResult> => {
+    assertTrustedRenderer(event);
     return requestAccessibilityAccess();
   });
 
-  ipcMain.handle('system-settings:request-notifications', async (): Promise<PermissionRequestResult> => {
+  ipcMain.handle('system-settings:request-notifications', async (event): Promise<PermissionRequestResult> => {
+    assertTrustedRenderer(event);
     return requestNotificationAccess();
   });
 
-  ipcMain.handle('system-settings:request-screen', async (): Promise<PermissionRequestResult> => {
+  ipcMain.handle('system-settings:request-screen', async (event): Promise<PermissionRequestResult> => {
+    assertTrustedRenderer(event);
     return requestScreenAccess();
   });
 
-  ipcMain.handle('system-settings:get-uninstall-info', async () => {
+  ipcMain.handle('system-settings:get-uninstall-info', async (event) => {
+    assertTrustedRenderer(event);
     const { getUninstallInfo } = await import('../uninstall/get-uninstall-info.js');
     return getUninstallInfo();
   });
 
-  ipcMain.handle('system-settings:clear-user-data', async () => {
+  ipcMain.handle('system-settings:clear-user-data', async (event) => {
+    assertTrustedRenderer(event);
     const { clearUserData } = await import('../uninstall/clear-user-data.js');
     return clearUserData();
   });
 
   ipcMain.handle(
     'system-settings:uninstall-app',
-    async (_e: IpcMainInvokeEvent, options?: { removeUserData?: boolean }) => {
+    async (event: IpcMainInvokeEvent, options?: { removeUserData?: boolean }) => {
+      assertTrustedRenderer(event);
       const { uninstallApp } = await import('../uninstall/index.js');
       return uninstallApp({ removeUserData: options?.removeUserData === true });
     },

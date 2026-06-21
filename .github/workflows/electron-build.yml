@@ -26,6 +26,10 @@
 # Alternative notarization auth: APPLE_API_KEY (base64 .p8), APPLE_API_KEY_ID, APPLE_API_ISSUER
 # Enable notarization in scripts/electron-builder.pack.yml: mac.notarize: true
 #
+# Optional secrets (Windows signing; required for tag releases):
+#   - WIN_CSC_LINK: base64/file URL for Windows Authenticode certificate
+#   - WIN_CSC_KEY_PASSWORD: password for that certificate
+#
 # Inspect runs locally (after `gh auth login`):
 #   ./scripts/gh-electron-build-runs.sh
 #   gh run list --workflow=electron-build.yml --limit 15
@@ -118,18 +122,29 @@ jobs:
           # "empty password" and ".../xopc not a file" on the workspace path.
           _EB_CSC_LINK: ${{ secrets.CSC_LINK }}
           _EB_CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          _EB_WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          _EB_WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
           # Notarization (used when mac.notarize is true in scripts/electron-builder.pack.yml)
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [[ -n "${_EB_CSC_LINK:-}" && -n "${_EB_CSC_KEY_PASSWORD:-}" ]]; then
+          if [[ "${{ matrix.os }}" == windows* ]]; then
+            if [[ "${{ github.ref }}" == refs/tags/v* && ( -z "${_EB_WIN_CSC_LINK:-}" || -z "${_EB_WIN_CSC_KEY_PASSWORD:-}" ) ]]; then
+              echo "❌ Windows tag releases require WIN_CSC_LINK and WIN_CSC_KEY_PASSWORD for updater signature verification"
+              exit 1
+            fi
+            if [[ -n "${_EB_WIN_CSC_LINK:-}" && -n "${_EB_WIN_CSC_KEY_PASSWORD:-}" ]]; then
+              export CSC_LINK="$_EB_WIN_CSC_LINK"
+              export CSC_KEY_PASSWORD="$_EB_WIN_CSC_KEY_PASSWORD"
+            fi
+          elif [[ -n "${_EB_CSC_LINK:-}" && -n "${_EB_CSC_KEY_PASSWORD:-}" ]]; then
             export CSC_LINK="$_EB_CSC_LINK"
             export CSC_KEY_PASSWORD="$_EB_CSC_KEY_PASSWORD"
           fi
-          unset _EB_CSC_LINK _EB_CSC_KEY_PASSWORD
+          unset _EB_CSC_LINK _EB_CSC_KEY_PASSWORD _EB_WIN_CSC_LINK _EB_WIN_CSC_KEY_PASSWORD
 
-          pnpm run electron:vite:build:package
+          pnpm run electron:build:artifacts
           if find out/main/chunks -name '*validate-channel-configs*' 2>/dev/null | grep -q .; then
             echo "❌ Electron main bundle still includes validate-channel-configs chunk"
             exit 1
@@ -138,10 +153,12 @@ jobs:
             echo "❌ Electron main bundle externalizes runtime npm deps (set main.build.externalizeDeps=false)"
             exit 1
           fi
-          # Same as local `pnpm run electron:build`: bundle gateway CLI to out/server/index.js for packaged apps.
-          pnpm run electron:server:build
           if [ ! -f out/server/schema.sql ]; then
             echo "❌ out/server/schema.sql missing (build-electron-server must copy SQLite DDL beside index.js)"
+            exit 1
+          fi
+          if [ ! -d dist/electron/extensions ]; then
+            echo "❌ dist/electron/extensions missing (electron:extensions:build must run before packaging)"
             exit 1
           fi
           # electron-builder.mjs hides pnpm workspace markers + verifies asar node_modules size on success.
@@ -176,6 +193,24 @@ jobs:
           artifact_count="$(echo "$artifacts" | wc -l | tr -d ' ')"
           echo "✅ Found ${artifact_count} publishable artifact(s):"
           echo "$artifacts"
+
+          if [[ "${{ github.ref }}" == refs/tags/v* && "${{ matrix.os }}" == "macos-latest" ]]; then
+            app_path="$(find dist/release -name 'xopc.app' -type d | head -n 1)"
+            if [ -z "$app_path" ]; then
+              echo "❌ macOS .app bundle not found for signature verification"
+              exit 1
+            fi
+            codesign --verify --deep --strict "$app_path"
+          fi
+
+          if [[ "${{ github.ref }}" == refs/tags/v* && "${{ matrix.os }}" == windows* ]]; then
+            exe_path="$(find dist/release -maxdepth 1 -name 'xopc-*.exe' -type f | head -n 1)"
+            if [ -z "$exe_path" ]; then
+              echo "❌ Windows installer not found for signature verification"
+              exit 1
+            fi
+            XOPC_SIGN_VERIFY_EXE="$exe_path" powershell -NoProfile -Command "\$s = Get-AuthenticodeSignature -LiteralPath \$env:XOPC_SIGN_VERIFY_EXE; if (\$s.Status -ne 'Valid') { Write-Error \"Invalid signature: \$($s.Status)\"; exit 1 }"
+          fi
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7

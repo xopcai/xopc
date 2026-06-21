@@ -83,14 +83,10 @@ export function initAutoUpdater(mainWindow: BrowserWindow): void {
   // or never reaches `update-downloaded`; full installer download is more reliable.
   if (process.platform === 'win32') {
     autoUpdater.disableDifferentialDownload = true;
-    // app-update.yml often carries Apple "Developer ID Application: …" from CSC_* while the NSIS
-    // installer is signed with Windows Authenticode — the stock verifier rejects every update.
-    // Trust boundary remains HTTPS to the update feed; opt into strict check after aligning
-    // `win.publisherName` (or equivalent) with the Windows signing subject.
-    if (process.env['XOPC_WIN_UPDATER_STRICT_SIGNATURE'] !== '1') {
-      log.info(
-        'Windows auto-update: skipping exe vs publisherName signature check (set XOPC_WIN_UPDATER_STRICT_SIGNATURE=1 after fixing electron-builder signing metadata).',
-      );
+    // Release builds must keep signature verification enabled. This override is only for local
+    // updater-feed migration tests where the publisherName metadata is known to be wrong.
+    if (process.env['XOPC_WIN_UPDATER_SKIP_SIGNATURE_VERIFY'] === '1') {
+      log.warn('Windows auto-update: skipping exe signature verification by explicit override.');
       (autoUpdater as NsisUpdater).verifyUpdateCodeSignature = async () => null;
     }
   }

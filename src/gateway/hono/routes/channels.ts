@@ -113,7 +113,12 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
       if (!result.ok) {
         return c.json({ ok: false, error: { code: 'CHANNEL_ACTION_FAILED', message: result.message ?? 'Channel action failed' } }, 400);
       }
-      if (actionPayloadChangedConfig(result.payload)) {
+      if (result.nextConfig) {
+        const saved = await service.saveConfig(result.nextConfig);
+        if (!saved.saved) {
+          return c.json({ ok: false, error: { code: 'CHANNEL_ACTION_FAILED', message: saved.error ?? 'Failed to save channel config' } }, 500);
+        }
+      } else if (actionPayloadChangedConfig(result.payload)) {
         await service.reloadConfig();
       }
       return c.json({ ok: true, payload: result.payload ?? {} });

@@ -1,9 +1,11 @@
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { watch as fsWatch } from 'node:fs';
-import { basename, dirname, extname, isAbsolute, join } from 'node:path';
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 
 import { type IpcMain, app, dialog, shell } from 'electron';
+
+import { assertTrustedRenderer } from './trusted-renderer.js';
 
 const SUPPORTED_EXTENSIONS = new Set(['.md', '.txt', '.json', '.ts', '.js']);
 
@@ -43,6 +45,10 @@ export type RecommendedOpenWithApp = {
 
 const RECENT_OPEN_WITH_LIMIT = 8;
 const SHELL_PREFS_NAME = 'electron-shell-open-with.json';
+
+export type FileIpcOptions = {
+  allowedRoots?: string[];
+};
 
 type KnownAppCandidate = {
   name: string;
@@ -521,6 +527,23 @@ async function validateOpenPath(filePath: string): Promise<ShellOpenResult> {
   }
 }
 
+function isPathInsideRoot(candidate: string, root: string): boolean {
+  const resolvedCandidate = resolve(candidate);
+  const resolvedRoot = resolve(root);
+  const rel = relative(resolvedRoot, resolvedCandidate);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+function validateManagedPath(filePath: string, allowedRoots: string[]): ShellOpenResult {
+  if (typeof filePath !== 'string' || !isAbsolute(filePath)) {
+    return { ok: false, code: 'INVALID_PATH', error: 'Path must be absolute.' };
+  }
+  if (allowedRoots.length === 0 || allowedRoots.some((root) => isPathInsideRoot(filePath, root))) {
+    return { ok: true };
+  }
+  return { ok: false, code: 'INVALID_PATH', error: 'Path is outside the Electron-managed workspace.' };
+}
+
 async function validateAppPath(appPath: string): Promise<ShellOpenResult> {
   if (typeof appPath !== 'string' || !isAbsolute(appPath)) {
     return { ok: false, code: 'INVALID_APP', error: 'Application path must be absolute.' };
@@ -560,17 +583,28 @@ async function spawnOpenWithApp(filePath: string, appPath: string): Promise<Shel
   });
 }
 
-export function registerFileIpc(ipcMain: IpcMain): void {
-  ipcMain.handle('file:read', async (_, filePath: string) => {
+export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}): void {
+  const allowedRoots = options.allowedRoots ?? [];
+
+  ipcMain.handle('file:read', async (event, filePath: string) => {
+    assertTrustedRenderer(event);
+    const validation = validateManagedPath(filePath, allowedRoots);
+    if (!validation.ok) throw new Error(validation.error);
     return readFile(filePath, 'utf-8');
   });
 
-  ipcMain.handle('file:write', async (_, filePath: string, content: string) => {
+  ipcMain.handle('file:write', async (event, filePath: string, content: string) => {
+    assertTrustedRenderer(event);
+    const validation = validateManagedPath(filePath, allowedRoots);
+    if (!validation.ok) throw new Error(validation.error);
     await writeFile(filePath, content, 'utf-8');
     return { success: true as const };
   });
 
-  ipcMain.handle('file:list-dir', async (_, dirPath: string): Promise<FileEntry[]> => {
+  ipcMain.handle('file:list-dir', async (event, dirPath: string): Promise<FileEntry[]> => {
+    assertTrustedRenderer(event);
+    const validation = validateManagedPath(dirPath, allowedRoots);
+    if (!validation.ok) throw new Error(validation.error);
     const entries = await readdir(dirPath, { withFileTypes: true });
     const result: FileEntry[] = [];
 
@@ -590,7 +624,8 @@ export function registerFileIpc(ipcMain: IpcMain): void {
     });
   });
 
-  ipcMain.handle('file:open-dir-dialog', async (_, options?: { defaultPath?: string }) => {
+  ipcMain.handle('file:open-dir-dialog', async (event, options?: { defaultPath?: string }) => {
+    assertTrustedRenderer(event);
     const defaultPath =
       typeof options?.defaultPath === 'string' && options.defaultPath.trim()
         ? options.defaultPath.trim()
@@ -602,19 +637,24 @@ export function registerFileIpc(ipcMain: IpcMain): void {
     return res.canceled ? null : res.filePaths[0] ?? null;
   });
 
-  ipcMain.handle('shell:open-path', async (_, filePath: string) => {
+  ipcMain.handle('shell:open-path', async (event, filePath: string) => {
+    assertTrustedRenderer(event);
     const validation = await validateOpenPath(filePath);
     if (!validation.ok) return validation;
     const err = await shell.openPath(filePath);
     return err ? { ok: false as const, code: 'OPEN_FAILED' as const, error: err } : { ok: true as const };
   });
 
-  ipcMain.handle('shell:show-item-in-folder', async (_, filePath: string) => {
+  ipcMain.handle('shell:show-item-in-folder', async (event, filePath: string) => {
+    assertTrustedRenderer(event);
+    const validation = await validateOpenPath(filePath);
+    if (!validation.ok) return { success: false as const };
     shell.showItemInFolder(filePath);
     return { success: true as const };
   });
 
-  ipcMain.handle('shell:choose-app-and-open-path', async (_, filePath: string): Promise<ShellOpenResult> => {
+  ipcMain.handle('shell:choose-app-and-open-path', async (event, filePath: string): Promise<ShellOpenResult> => {
+    assertTrustedRenderer(event);
     const validation = await validateFilePath(filePath);
     if (!validation.ok) return validation;
     const defaultPath =
@@ -641,16 +681,19 @@ export function registerFileIpc(ipcMain: IpcMain): void {
 
   ipcMain.handle(
     'shell:open-path-with-app',
-    async (_, filePath: string, appPath: string): Promise<ShellOpenResult> => {
+    async (event, filePath: string, appPath: string): Promise<ShellOpenResult> => {
+      assertTrustedRenderer(event);
       return spawnOpenWithApp(filePath, appPath);
     },
   );
 
-  ipcMain.handle('shell:get-recent-open-with-apps', async () => {
+  ipcMain.handle('shell:get-recent-open-with-apps', async (event) => {
+    assertTrustedRenderer(event);
     return readRecentOpenWithApps();
   });
 
-  ipcMain.handle('shell:get-open-with-apps-for-path', async (_, filePath: string) => {
+  ipcMain.handle('shell:get-open-with-apps-for-path', async (event, filePath: string) => {
+    assertTrustedRenderer(event);
     const validation = await validateFilePath(filePath);
     if (!validation.ok) return { recommended: [], recent: [] };
     const [recommended, recent] = await Promise.all([
@@ -664,12 +707,16 @@ export function registerFileIpc(ipcMain: IpcMain): void {
     };
   });
 
-  ipcMain.handle('shell:clear-recent-open-with-apps', async () => {
+  ipcMain.handle('shell:clear-recent-open-with-apps', async (event) => {
+    assertTrustedRenderer(event);
     await writeRecentOpenWithApps([]);
     return { ok: true as const };
   });
 
   ipcMain.handle('file:watch', async (event, filePath: string) => {
+    assertTrustedRenderer(event);
+    const validation = validateManagedPath(filePath, allowedRoots);
+    if (!validation.ok) throw new Error(validation.error);
     if (watchers.has(filePath)) return;
     const w = fsWatch(filePath, async () => {
       try {
