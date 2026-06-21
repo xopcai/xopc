@@ -61,6 +61,7 @@ function verifyUnpackedAppLayout(asarPath) {
     'out/server/index.js',
     'dist/electron/extensions',
     'dist/gateway/static/root/index.html',
+    'skills/tools/find-skills/SKILL.md',
   ];
   const missing = required.filter((rel) => !existsSync(join(unpackedDir, rel)));
   if (missing.length > 0) {

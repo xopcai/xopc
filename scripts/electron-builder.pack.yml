@@ -32,6 +32,7 @@ asarUnpack:
   - 'out/server/**'
   - 'node_modules/**'
   - 'dist/electron/extensions/**'
+  - 'skills/**'
   # The packaged Electron main process starts a gateway subprocess with ELECTRON_RUN_AS_NODE.
   # Keep the SPA assets on the real filesystem too; Windows is less tolerant of serving
   # many files from app.asar in that subprocess and can otherwise boot to a blank shell.
