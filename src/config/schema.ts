@@ -413,6 +413,8 @@ export const AgentsConfigSchema = z.object({
   default: z.string().optional(),
   defaults: AgentDefaultsSchema.optional(),
   list: z.array(AgentConfigSchema).optional(),
+  /** One-time starter agent bootstrap marker. Agents remain ordinary list entries after initialization. */
+  starterAgentsInitializedVersion: z.number().int().min(0).optional(),
 }).default({
   defaults: {
     workspace: '~/.xopc/workspace',

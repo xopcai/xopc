@@ -6,8 +6,6 @@ import { AgentsEditorModal } from './agents-editor-modal';
 import { AgentsEditorPanelContent } from './agents-editor-panel-content';
 import { AgentsListGrid } from './agents-list-grid';
 import { CreateAgentDialog } from './create-agent-dialog';
-import { PRESET_AGENTS } from './preset-agents';
-import { PresetAgentsSetup } from './preset-agents-setup';
 import { useAgentsSettingsPanel } from './use-agents-settings-panel';
 
 export function AgentsSettingsPanel() {
@@ -22,23 +20,6 @@ export function AgentsSettingsPanel() {
     );
   }
 
-  if (vm.showPresetSetup && vm.data) {
-    const existingIds = new Set(vm.data.agents.map((ag) => ag.id));
-    // Only show the preset setup when there's at least one preset available;
-    // otherwise fall through to the main UI (showPresetSetup resets on next data refresh).
-    const hasAvailablePresets = PRESET_AGENTS.some((p) => !existingIds.has(p.id));
-    if (hasAvailablePresets) {
-      return (
-        <div className="mx-auto flex w-full max-w-app-main flex-col px-4 py-8">
-          <PresetAgentsSetup
-            existingAgentIds={existingIds}
-            onComplete={vm.onPresetSetupComplete}
-            onSkip={vm.onPresetSetupSkip}
-          />
-        </div>
-      );
-    }
-  }
 
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">

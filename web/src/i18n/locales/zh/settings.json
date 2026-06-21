@@ -190,7 +190,7 @@
       "skillsConfigured": "已有 {{count}} 个可用技能",
       "skillsMissing": "尚未安装技能",
       "presetsConfigured": "已配置 {{count}} 个智能体",
-      "presetsMissing": "仅有默认智能体 — 可添加预设角色"
+      "presetsMissing": "启动智能体尚未初始化"
     },
     "items": {
       "gateway": {
@@ -226,7 +226,7 @@
         "stepProviders": "配置 LLM 服务商密钥",
         "stepDefaultModel": "选择默认对话模型",
         "stepChannel": "连接消息通道",
-        "stepPresets": "添加专用智能体",
+        "stepPresets": "查看专用智能体",
         "stepCron": "设置定时任务",
         "stepSkills": "从目录安装技能"
       },

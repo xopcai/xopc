@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { AgentService } from '../agent/service.js';
+import { ensureStarterAgentsInitialized } from '../agent/starter-agents.js';
 import { ChannelManager } from '../channels/manager.js';
 import {
   buildChannelCatalogForConfig,
@@ -148,6 +149,14 @@ export class GatewayService {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
     this.config = loadConfig(this.configPath);
+    const starterResult = ensureStarterAgentsInitialized(this.config);
+    if (starterResult.changed) {
+      this.config = starterResult.config;
+      void writeConfigToDisk(this.config, this.configPath).catch((err) => {
+        const em = err instanceof Error ? err.message : String(err);
+        log.warn({ err, phase: 'starter_agents_init', errorMessage: em }, `Starter agents init persist failed: ${em}`);
+      });
+    }
     if (sanitizeTunnelConfig(this.config)) {
       void writeConfigToDisk(this.config, this.configPath).catch((err) => {
         const em = err instanceof Error ? err.message : String(err);

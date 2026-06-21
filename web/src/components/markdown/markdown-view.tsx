@@ -6,6 +6,12 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { parseMarkdown } from './parse-markdown';
+import {
+  linkWorkspaceFileMentions,
+  parseWorkspaceFileLinkTarget,
+  rewriteXopcSettingsLinksInMarkdown,
+  type WorkspaceFileLinkTarget,
+} from './internal-links';
 import './markdown.css';
 
 let externalLinkHookRegistered = false;
@@ -155,6 +161,8 @@ export interface MarkdownViewProps {
   className?: string;
   /** When true (default), fenced code blocks get a copy-to-clipboard control. */
   codeCopy?: boolean;
+  /** Called when a chat/workspace file link should open in the local preview pane. */
+  onWorkspaceFileOpen?: (target: WorkspaceFileLinkTarget) => void;
 }
 
 function MarkdownViewImpl({
@@ -163,6 +171,7 @@ function MarkdownViewImpl({
   breaks = false,
   className,
   codeCopy = true,
+  onWorkspaceFileOpen,
 }: MarkdownViewProps) {
   const language = useLocaleStore((s) => s.language);
   const labels = useMemo(() => {
@@ -172,7 +181,7 @@ function MarkdownViewImpl({
 
   const safeHtml = useMemo(() => {
     if (!content.trim()) return '';
-    const raw = parseMarkdown(content, breaks ? { breaks: true } : undefined);
+    const raw = parseMarkdown(rewriteXopcSettingsLinksInMarkdown(content), breaks ? { breaks: true } : undefined);
     return DOMPurify.sanitize(raw, {
       USE_PROFILES: { html: true, svg: true },
       ADD_ATTR: [
@@ -196,11 +205,53 @@ function MarkdownViewImpl({
     if (!el) return;
 
     unwrapMarkdownCodeBlocks(el);
+    if (onWorkspaceFileOpen) {
+      linkWorkspaceFileMentions(el);
+    }
 
     if (!codeCopy || !safeHtml) return;
 
     return mountMarkdownCodeBlocks(el, labels);
-  }, [codeCopy, safeHtml, labels]);
+  }, [codeCopy, safeHtml, labels, onWorkspaceFileOpen]);
+
+  useLayoutEffect(() => {
+    const el = hostRef.current;
+    if (!el) return;
+
+    const onClick = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const anchor = target?.closest<HTMLAnchorElement>('a[href]');
+      if (!anchor || !el.contains(anchor)) return;
+
+      const filePath = anchor.dataset.xopcFilePath;
+      if (filePath && onWorkspaceFileOpen) {
+        event.preventDefault();
+        const line = Number(anchor.dataset.xopcLine ?? '');
+        onWorkspaceFileOpen({
+          path: filePath,
+          line: Number.isFinite(line) && line > 0 ? Math.floor(line) : undefined,
+          kind: anchor.dataset.xopcFileKind === 'absolute' ? 'absolute' : 'workspace-relative',
+        });
+        return;
+      }
+
+      const href = anchor.getAttribute('href') ?? '';
+      const fileTarget = onWorkspaceFileOpen ? parseWorkspaceFileLinkTarget(href) : null;
+      if (fileTarget && onWorkspaceFileOpen) {
+        event.preventDefault();
+        onWorkspaceFileOpen(fileTarget);
+        return;
+      }
+
+      if (href.startsWith('/settings/')) {
+        event.preventDefault();
+        window.location.hash = `#${href}`;
+      }
+    };
+
+    el.addEventListener('click', onClick);
+    return () => el.removeEventListener('click', onClick);
+  }, [onWorkspaceFileOpen]);
 
   return (
     <div ref={hostRef}>

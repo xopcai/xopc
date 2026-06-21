@@ -5,6 +5,7 @@ import { dirname } from 'node:path';
 import type { Config } from '../../config/schema.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { loadConfig, saveConfig } from '../../config/loader.js';
+import { ensureStarterAgentsInitialized } from '../../agent/starter-agents.js';
 
 export interface InitWorkspaceCoreOptions {
   configPath: string;
@@ -122,10 +123,11 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
     },
   };
 
-  const nextFinal = ConfigSchema.parse(nextConfig);
+  const starterResult = ensureStarterAgentsInitialized(ConfigSchema.parse(nextConfig));
+  const nextFinal = ConfigSchema.parse(starterResult.config);
   await assertChannelPluginsIfNeeded(nextFinal, assertChannelPlugins);
 
-  let needsWrite = configCreated;
+  let needsWrite = configCreated || starterResult.changed;
   if (!needsWrite) {
     const disk = await tryReadDiskConfig(configPath, assertChannelPlugins);
     if (!disk) {

@@ -13,7 +13,6 @@ import {
   listAgentProfileFiles,
   listGatewayAgents,
   prepareCreateAgent,
-  prepareCreateAgentsBatch,
   prepareDeleteAgent,
   prepareUpdateAgent,
   readAgentAvatarFile,
@@ -187,55 +186,6 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ ok: true, payload });
   });
 
-  authenticated.post('/api/agents/batch', strictRateLimitMiddleware, async (c) => {
-    let body: Record<string, unknown> = {};
-    try {
-      body = (await c.req.json()) as Record<string, unknown>;
-    } catch {
-      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
-    }
-    const rawAgents = body.agents;
-    if (!Array.isArray(rawAgents)) {
-      return c.json({ ok: false, error: { message: 'agents must be an array' } }, 400);
-    }
-    const parsedAgents: CreateAgentBody[] = [];
-    for (const raw of rawAgents) {
-      const parsed = parseCreateAgentBody(raw);
-      if ('error' in parsed) {
-        return c.json({ ok: false, error: { message: parsed.error } }, 400);
-      }
-      parsedAgents.push(parsed);
-    }
-    const prep = prepareCreateAgentsBatch(service.currentConfig as Config, parsedAgents);
-    if (prep.ok === false) {
-      return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
-    }
-    const { nextConfig, created } = prep.data;
-    const save = await service.saveConfig(nextConfig);
-    if (!save.saved) {
-      return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
-    }
-    const cfg = service.currentConfig as Config;
-    const agentIds: string[] = [];
-    for (const item of created) {
-      const finalized = await finalizeCreateAgentDirs(cfg, item.agentId, {
-        ...(item.profileFiles !== undefined ? { profileFiles: item.profileFiles } : {}),
-      });
-      if (finalized.ok === false) {
-        return c.json({ ok: false, error: { message: finalized.error } }, finalized.status ?? 400);
-      }
-      agentIds.push(item.agentId);
-    }
-    const locale = c.req.query('locale') || c.req.header('Accept-Language')?.split(',')[0]?.trim();
-    const agentsPayload = await listGatewayAgents(cfg, { locale });
-    return c.json({
-      ok: true,
-      payload: {
-        agentIds,
-        agents: agentsPayload,
-      },
-    });
-  });
 
   authenticated.post('/api/agents', strictRateLimitMiddleware, async (c) => {
     let body: Record<string, unknown> = {};

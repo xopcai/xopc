@@ -40,7 +40,6 @@ import { useAgentsSkillsCatalog } from './hooks/use-agents-skills-catalog';
 import { useAgentsToolsSkillsLocalState } from './hooks/use-agents-tools-skills-local-state';
 import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-defaults';
 
-import { PRESET_AGENTS_SKIPPED_KEY } from './preset-agents';
 import type { AgentPanel } from './utils';
 import { cleanTypedModelsForPatch, validateTypedModelsForSave } from './typed-models-lib';
 
@@ -91,9 +90,6 @@ export function useAgentsSettingsPanel() {
   const displayError = error ?? loadError;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [presetSetupDismissed, setPresetSetupDismissed] = useState(
-    () => localStorage.getItem(PRESET_AGENTS_SKIPPED_KEY) === 'true',
-  );
   const [panel, setPanel] = useState<AgentPanel>('overview');
 
   const [createDisplayName, setCreateDisplayName] = useState('');
@@ -138,22 +134,6 @@ export function useAgentsSettingsPanel() {
       });
     }
   }
-
-  const onlyMainAgent =
-    data != null &&
-    data.agents.length <= 1 &&
-    data.agents.every((ag) => ag.id === data.defaultId);
-  const showPresetSetup = Boolean(data && !loading && onlyMainAgent && !presetSetupDismissed);
-
-  const onPresetSetupComplete = useCallback(() => {
-    setPresetSetupDismissed(true);
-    void mutateAgents();
-  }, [mutateAgents]);
-
-  const onPresetSetupSkip = useCallback(() => {
-    localStorage.setItem(PRESET_AGENTS_SKIPPED_KEY, 'true');
-    setPresetSetupDismissed(true);
-  }, []);
 
   useEffect(() => {
     if (!data || !routeAgentId) {
@@ -772,9 +752,6 @@ export function useAgentsSettingsPanel() {
     displayError,
     navigate,
     routeAgentId,
-    showPresetSetup,
-    onPresetSetupComplete,
-    onPresetSetupSkip,
     busy,
     listSearchQuery,
     openAddAgentModal,

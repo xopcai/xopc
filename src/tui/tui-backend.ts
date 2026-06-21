@@ -42,7 +42,6 @@ export interface TuiSessionItem {
 
 export interface TuiAgentInfo {
   id: string;
-  source: 'configured' | 'builtin';
   enabled: boolean;
   displayName?: string;
 }

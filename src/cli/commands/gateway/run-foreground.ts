@@ -16,10 +16,7 @@ async function ensureGatewayReady(
   workspacePath: string,
   port: number,
 ): Promise<void> {
-  const [{ initWorkspace }, { seedMainAgentProfileMarkdown }] = await Promise.all([
-    import('../../utils/init-workspace.js'),
-    import('../../../agent/context/workspace-seed.js'),
-  ]);
+  const { initWorkspace } = await import('../../utils/init-workspace.js');
   const result = await initWorkspace({
     configPath,
     workspacePath,
@@ -37,7 +34,6 @@ async function ensureGatewayReady(
     console.log('');
     console.log('💡 Tip: run `xopc onboard` anytime to configure models, channels, and more.');
     console.log('');
-    seedMainAgentProfileMarkdown(result.config);
   }
 }
 
