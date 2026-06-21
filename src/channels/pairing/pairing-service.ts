@@ -17,8 +17,6 @@ import {
 import {
   resolveStandardAllowFromPath,
   resolveStandardPairingPath,
-  resolveWeixinAllowFromPath,
-  resolveWeixinPairingPath,
 } from './paths.js';
 
 // `PairingPendingView` moved to `./pairing-types.js` (leaf) so
@@ -39,25 +37,129 @@ export type ChannelPairingState = {
   };
 };
 
+export type PairingPaths = {
+  pairingPath: string;
+  allowPath: string;
+};
+
+export type PairingChannelConfigResolver = {
+  resolvePaths?: (accountId: string) => PairingPaths;
+  resolveAllowFromConfig?: (config: Config | undefined, channel: PairingCliChannel, accountId: string) => string[];
+  resolveChannelEnabled?: (config: Config | undefined, channel: PairingCliChannel) => boolean;
+  resolveAccountEnabled?: (config: Config | undefined, channel: PairingCliChannel, accountId: string) => boolean;
+  resolveDmPolicy?: (config: Config | undefined, channel: PairingCliChannel, accountId: string) => DmPolicy;
+  resolveAccountIds?: (config: Config | undefined, channel: PairingCliChannel) => string[];
+};
+
+const pairingResolvers = new Map<string, PairingChannelConfigResolver>();
+
+export function registerPairingChannelResolver(
+  channel: PairingCliChannel,
+  resolver: PairingChannelConfigResolver,
+): void {
+  const id = channel.trim().toLowerCase();
+  if (!id) return;
+  pairingResolvers.set(id, resolver);
+}
+
 function normalizeAccountId(accountId: string | undefined): string {
   return (accountId ?? 'default').trim().toLowerCase() || 'default';
 }
 
-function resolvePairingPaths(channel: PairingCliChannel, accountId: string): {
-  pairingPath: string;
-  allowPath: string;
-} {
+function channelBlock(config: Config | undefined, channel: PairingCliChannel): Record<string, unknown> | null {
+  const ch = config?.channels?.[channel as keyof NonNullable<Config['channels']>];
+  return ch && typeof ch === 'object' && !Array.isArray(ch) ? (ch as Record<string, unknown>) : null;
+}
+
+function channelResolver(channel: PairingCliChannel): PairingChannelConfigResolver {
+  return pairingResolvers.get(channel.trim().toLowerCase()) ?? defaultPairingResolver;
+}
+
+function defaultPairingPaths(channel: PairingCliChannel, accountId: string): PairingPaths {
   const normalized = normalizeAccountId(accountId);
-  if (channel === 'weixin') {
-    return {
-      pairingPath: resolveWeixinPairingPath(normalized),
-      allowPath: resolveWeixinAllowFromPath(normalized),
-    };
-  }
   return {
     pairingPath: resolveStandardPairingPath(channel, normalized),
     allowPath: resolveStandardAllowFromPath(channel, normalized),
   };
+}
+
+function defaultAllowFromConfig(
+  config: Config | undefined,
+  channel: PairingCliChannel,
+  accountId: string,
+): string[] {
+  const block = channelBlock(config, channel);
+  if (!block) return [];
+  const top = Array.isArray(block.allowFrom)
+    ? block.allowFrom.map(String).filter(Boolean)
+    : [];
+  const accounts = block.accounts;
+  if (accounts && typeof accounts === 'object' && !Array.isArray(accounts)) {
+    const acc = (accounts as Record<string, unknown>)[accountId];
+    if (acc && typeof acc === 'object' && !Array.isArray(acc)) {
+      const fromAcc = (acc as { allowFrom?: unknown }).allowFrom;
+      if (Array.isArray(fromAcc)) {
+        return [...new Set([...top, ...fromAcc.map(String).filter(Boolean)])];
+      }
+    }
+  }
+  return [...new Set(top)];
+}
+
+function defaultChannelEnabled(config: Config | undefined, channel: PairingCliChannel): boolean {
+  return channelBlock(config, channel)?.enabled === true;
+}
+
+function defaultAccountEnabled(
+  config: Config | undefined,
+  channel: PairingCliChannel,
+  accountId: string,
+): boolean {
+  if (!defaultChannelEnabled(config, channel)) return false;
+  const accounts = channelBlock(config, channel)?.accounts;
+  if (accounts && typeof accounts === 'object' && !Array.isArray(accounts)) {
+    const acc = (accounts as Record<string, unknown>)[accountId];
+    if (acc && typeof acc === 'object' && !Array.isArray(acc)) {
+      return (acc as { enabled?: boolean }).enabled !== false;
+    }
+  }
+  return true;
+}
+
+function defaultDmPolicy(config: Config | undefined, channel: PairingCliChannel, accountId: string): DmPolicy {
+  const block = channelBlock(config, channel);
+  if (!block) return resolveDmPolicy(undefined, 'pairing');
+  const accounts = block.accounts;
+  if (accounts && typeof accounts === 'object' && !Array.isArray(accounts)) {
+    const acc = (accounts as Record<string, unknown>)[accountId];
+    if (acc && typeof acc === 'object' && !Array.isArray(acc)) {
+      const accPolicy = (acc as { dmPolicy?: DmPolicy }).dmPolicy;
+      if (accPolicy) return resolveDmPolicy(accPolicy, 'pairing');
+    }
+  }
+  return resolveDmPolicy(block.dmPolicy as DmPolicy | undefined, 'pairing');
+}
+
+function defaultAccountIds(config: Config | undefined, channel: PairingCliChannel): string[] {
+  const accounts = channelBlock(config, channel)?.accounts;
+  if (accounts && typeof accounts === 'object' && !Array.isArray(accounts)) {
+    const keys = Object.keys(accounts as Record<string, unknown>).sort();
+    if (keys.length > 0) return keys;
+  }
+  return ['default'];
+}
+
+const defaultPairingResolver: PairingChannelConfigResolver = {
+  resolveAllowFromConfig: defaultAllowFromConfig,
+  resolveChannelEnabled: defaultChannelEnabled,
+  resolveAccountEnabled: defaultAccountEnabled,
+  resolveDmPolicy: defaultDmPolicy,
+  resolveAccountIds: defaultAccountIds,
+};
+
+function resolvePairingPaths(channel: PairingCliChannel, accountId: string): PairingPaths {
+  return channelResolver(channel).resolvePaths?.(normalizeAccountId(accountId)) ??
+    defaultPairingPaths(channel, accountId);
 }
 
 function requestAccountId(entry: PairingRequest): string {
@@ -112,34 +214,9 @@ function pendingEntryStats(pending: PairingRequest[]): {
   };
 }
 
-function resolveChannelAllowFromConfig(
-  config: Config | undefined,
-  channel: PairingCliChannel,
-  accountId: string,
-): string[] {
-  const ch = config?.channels?.[channel as keyof NonNullable<Config['channels']>];
-  if (!ch || typeof ch !== 'object' || Array.isArray(ch)) return [];
-  const block = ch as Record<string, unknown>;
-  const top = channel !== 'telegram' && Array.isArray(block.allowFrom)
-    ? block.allowFrom.map(String).filter(Boolean)
-    : [];
-  const accounts = block.accounts;
-  if (accounts && typeof accounts === 'object' && !Array.isArray(accounts)) {
-    const acc = (accounts as Record<string, unknown>)[accountId];
-    if (acc && typeof acc === 'object' && !Array.isArray(acc)) {
-      const fromAcc = (acc as { allowFrom?: unknown }).allowFrom;
-      if (Array.isArray(fromAcc)) {
-        return [...new Set([...top, ...fromAcc.map(String).filter(Boolean)])];
-      }
-    }
-  }
-  return [...new Set(top)];
-}
-
 function resolveChannelEnabled(config: Config | undefined, channel: PairingCliChannel): boolean {
-  const ch = config?.channels?.[channel as keyof NonNullable<Config['channels']>];
-  if (!ch || typeof ch !== 'object' || Array.isArray(ch)) return false;
-  return (ch as { enabled?: boolean }).enabled === true;
+  return channelResolver(channel).resolveChannelEnabled?.(config, channel) ??
+    defaultChannelEnabled(config, channel);
 }
 
 function resolveAccountEnabled(
@@ -147,18 +224,8 @@ function resolveAccountEnabled(
   channel: PairingCliChannel,
   accountId: string,
 ): boolean {
-  if (!resolveChannelEnabled(config, channel)) return false;
-  const ch = config?.channels?.[channel as keyof NonNullable<Config['channels']>];
-  if (!ch || typeof ch !== 'object' || Array.isArray(ch)) return true;
-  const block = ch as Record<string, unknown>;
-  const accounts = block.accounts;
-  if (accounts && typeof accounts === 'object' && !Array.isArray(accounts)) {
-    const acc = (accounts as Record<string, unknown>)[accountId];
-    if (acc && typeof acc === 'object' && !Array.isArray(acc)) {
-      return (acc as { enabled?: boolean }).enabled !== false;
-    }
-  }
-  return true;
+  return channelResolver(channel).resolveAccountEnabled?.(config, channel, accountId) ??
+    defaultAccountEnabled(config, channel, accountId);
 }
 
 function resolveChannelDmPolicy(
@@ -166,26 +233,8 @@ function resolveChannelDmPolicy(
   channel: PairingCliChannel,
   accountId: string,
 ): DmPolicy {
-  const ch = config?.channels?.[channel as keyof NonNullable<Config['channels']>];
-  if (!ch || typeof ch !== 'object' || Array.isArray(ch)) {
-    return resolveDmPolicy(undefined, channel === 'weixin' ? 'open' : 'pairing');
-  }
-  const block = ch as Record<string, unknown>;
-  const accounts = block.accounts;
-  if (accounts && typeof accounts === 'object' && !Array.isArray(accounts)) {
-    const acc = (accounts as Record<string, unknown>)[accountId];
-    if (acc && typeof acc === 'object' && !Array.isArray(acc)) {
-      const accPolicy = (acc as { dmPolicy?: DmPolicy }).dmPolicy;
-      if (accPolicy) return resolveDmPolicy(accPolicy, 'pairing');
-    }
-  }
-  const defaults = block.defaults;
-  if (channel === 'telegram' && defaults && typeof defaults === 'object' && !Array.isArray(defaults)) {
-    const defaultPolicy = (defaults as { dmPolicy?: DmPolicy }).dmPolicy;
-    if (defaultPolicy) return resolveDmPolicy(defaultPolicy, 'pairing');
-  }
-  const topPolicy = channel === 'telegram' ? undefined : block.dmPolicy as DmPolicy | undefined;
-  return resolveDmPolicy(topPolicy, channel === 'weixin' ? 'open' : 'pairing');
+  return channelResolver(channel).resolveDmPolicy?.(config, channel, accountId) ??
+    defaultDmPolicy(config, channel, accountId);
 }
 
 export type ChannelPairingSummaryEntry = {
@@ -205,23 +254,8 @@ export type PairingPendingIssue = {
 };
 
 function resolvePairingAccountIds(config: Config | undefined, channel: PairingCliChannel): string[] {
-  const ch = config?.channels?.[channel as keyof NonNullable<Config['channels']>];
-  if (!ch || typeof ch !== 'object' || Array.isArray(ch)) {
-    return channel === 'telegram' ? ['default'] : [];
-  }
-  const block = ch as Record<string, unknown>;
-  const accounts = block.accounts;
-  if (accounts && typeof accounts === 'object' && !Array.isArray(accounts)) {
-    const keys = Object.keys(accounts as Record<string, unknown>).sort();
-    if (keys.length > 0) return keys;
-  }
-  if (channel === 'feishu') {
-    const appId = typeof block.appId === 'string' ? block.appId.trim() : '';
-    const appSecret = typeof block.appSecret === 'string' ? block.appSecret.trim() : '';
-    return appId && appSecret ? ['default'] : [];
-  }
-  if (channel === 'telegram') return ['default'];
-  return ['default'];
+  return channelResolver(channel).resolveAccountIds?.(config, channel) ??
+    defaultAccountIds(config, channel);
 }
 
 export function listChannelPairingSummary(config?: Config): ChannelPairingSummary {
@@ -284,7 +318,9 @@ export function listChannelPairingState(params: {
     dmPolicy: resolveChannelDmPolicy(params.config, params.channel, accountId),
     pending: pendingRaw.map(toPendingView),
     paired: {
-      fromConfig: resolveChannelAllowFromConfig(params.config, params.channel, accountId),
+      fromConfig:
+        channelResolver(params.channel).resolveAllowFromConfig?.(params.config, params.channel, accountId) ??
+        defaultAllowFromConfig(params.config, params.channel, accountId),
       fromCredentials: readAllowFromIdsSync(allowPath),
     },
   };

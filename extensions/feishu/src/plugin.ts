@@ -7,6 +7,8 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
+import './pairing-config-resolver.js';
+
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import type {

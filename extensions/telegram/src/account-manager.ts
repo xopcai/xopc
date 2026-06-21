@@ -10,8 +10,9 @@
  */
 
 import type { Bot, Context } from 'grammy';
-import type { TelegramAccountConfig, ChannelStatus } from '@xopcai/xopc/channels/channel-domain.js';
+import type { ChannelStatus } from '@xopcai/xopc/channels/channel-domain.js';
 import type { TelegramPollingSession } from './polling-session.js';
+import type { TelegramAccountConfig } from './config-types.js';
 
 export class TelegramAccountManager {
   private accounts = new Map<string, TelegramAccountConfig>();

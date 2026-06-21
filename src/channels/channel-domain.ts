@@ -1,5 +1,5 @@
 /**
- * Channel domain types (Telegram config, message context, send options).
+ * Channel domain types shared by channel plugins.
  */
 
 import type { MessageBus } from '../infra/bus/index.js';
@@ -8,81 +8,11 @@ import type { ProgressStage } from '../agent/lifecycle/progress.js';
 
 export type { ProgressStage } from '../agent/lifecycle/progress.js';
 
-export type ChannelType = 'telegram' | 'system';
-
 export type ChatType = 'direct' | 'group' | 'channel' | 'thread';
-
-export interface TelegramTopicConfig {
-  topicId: string;
-  requireMention?: boolean;
-  enabled?: boolean;
-  allowFrom?: Array<string | number>;
-  systemPrompt?: string;
-  agentId?: string;
-  groupPolicy?: GroupPolicy;
-}
 
 export type DmPolicy = 'pairing' | 'allowlist' | 'open' | 'disabled';
 export type GroupPolicy = 'open' | 'disabled' | 'allowlist';
 export type ReplyToMode = 'off' | 'first' | 'all';
-
-export interface TelegramGroupConfig {
-  groupId: string;
-  requireMention?: boolean;
-  groupPolicy?: GroupPolicy;
-  enabled?: boolean;
-  allowFrom?: Array<string | number>;
-  systemPrompt?: string;
-  agentId?: string;
-  topics?: Record<string, TelegramTopicConfig>;
-}
-
-export interface TelegramAccountConfig {
-  accountId: string;
-  name?: string;
-  enabled?: boolean;
-  botToken?: string;
-  tokenFile?: string;
-  dmPolicy?: DmPolicy;
-  groupPolicy?: GroupPolicy;
-  replyToMode?: ReplyToMode;
-  allowFrom?: Array<string | number>;
-  groupAllowFrom?: Array<string | number>;
-  groups?: Record<string, TelegramGroupConfig>;
-  historyLimit?: number;
-  textChunkLimit?: number;
-  streaming?: {
-    mode?: 'off' | 'partial' | 'block';
-    preview?: { toolProgress?: boolean };
-    block?: { coalesce?: { minChars?: number; idleMs?: number } };
-  };
-  proxy?: string;
-  apiRoot?: string;
-  pollingStallThresholdMs?: number;
-  reactionLevel?: 'off' | 'ack' | 'minimal' | 'extensive';
-  reactionNotifications?: 'off' | 'own' | 'all';
-  ackReaction?: string;
-}
-
-export interface TelegramChannelConfig {
-  enabled?: boolean;
-  accounts?: Record<string, TelegramAccountConfig>;
-  defaults?: {
-    dmPolicy?: DmPolicy;
-    groupPolicy?: GroupPolicy;
-    replyToMode?: ReplyToMode;
-    streaming?: {
-      mode?: 'off' | 'partial' | 'block';
-      preview?: { toolProgress?: boolean };
-      block?: { coalesce?: { minChars?: number; idleMs?: number } };
-    };
-    historyLimit?: number;
-    textChunkLimit?: number;
-    proxy?: string;
-    apiRoot?: string;
-  };
-  debug?: boolean;
-}
 
 export interface NormalizedAllowFrom {
   entries: string[];

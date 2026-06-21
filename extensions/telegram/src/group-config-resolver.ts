@@ -1,4 +1,4 @@
-import type { TelegramAccountConfig, TelegramGroupConfig, TelegramTopicConfig } from '@xopcai/xopc/channels/channel-domain.js';
+import type { TelegramAccountConfig, TelegramGroupConfig, TelegramTopicConfig } from './config-types.js';
 
 export interface ResolvedTelegramGroupContext {
   groupConfig?: TelegramGroupConfig;

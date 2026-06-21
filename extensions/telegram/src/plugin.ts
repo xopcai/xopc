@@ -9,6 +9,8 @@ import { isDeepStrictEqual } from 'node:util';
 
 import { Bot, type Context } from 'grammy';
 
+import './pairing-config-resolver.js';
+
 import type { Config } from '@xopcai/xopc/config/index.js';
 import type {
   ChannelPlugin,
@@ -403,7 +405,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         tokenSource: source,
         ...(accApiRoot || defaultApiRoot ? { apiRoot: accApiRoot || defaultApiRoot } : {}),
         ...(accProxy || defaultProxy ? { proxy: accProxy || defaultProxy } : {}),
-      } as import('@xopcai/xopc/channels/channel-domain.js').TelegramAccountConfig);
+      } as import('./config-types.js').TelegramAccountConfig);
     }
 
     for (const [token, owners] of tokenOwners) {

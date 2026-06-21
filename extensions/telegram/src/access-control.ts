@@ -9,10 +9,9 @@ import type {
   NormalizedAllowFrom,
   AllowFromMatch,
   GroupAccessResult,
-  TelegramGroupConfig,
-  TelegramTopicConfig,
   GroupPolicy,
 } from '@xopcai/xopc/channels/channel-domain.js';
+import type { TelegramGroupConfig, TelegramTopicConfig } from './config-types.js';
 
 // ============================================
 // AllowFrom Normalization

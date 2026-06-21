@@ -30,11 +30,14 @@ export {
   collectPairingPendingIssues,
   revokeChannelPairingPaired,
   dismissChannelPairingPending,
+  registerPairingChannelResolver,
 } from './pairing-service.js';
 export type {
   ChannelPairingState,
   ChannelPairingSummary,
   ChannelPairingSummaryEntry,
+  PairingChannelConfigResolver,
+  PairingPaths,
   PairingPendingIssue,
   PairingPendingView,
 } from './pairing-service.js';
