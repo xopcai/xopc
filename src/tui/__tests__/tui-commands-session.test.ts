@@ -83,8 +83,8 @@ describe('TUI session slash commands', () => {
       } as never,
       state: createInitialState('agent:coder:tui-123'),
       listAgents: vi.fn(async () => [
-        { id: 'coder', source: 'builtin' as const, enabled: true },
-        { id: 'main', source: 'configured' as const, enabled: true },
+        { id: 'coder', enabled: true },
+        { id: 'main', enabled: true },
       ]),
       switchAgentSession,
     });
@@ -105,7 +105,7 @@ describe('TUI session slash commands', () => {
         setToolsExpanded: () => {},
       } as never,
       state: createInitialState('global'),
-      listAgents: vi.fn(async () => [{ id: 'main', source: 'configured' as const, enabled: true }]),
+      listAgents: vi.fn(async () => [{ id: 'main', enabled: true }]),
       switchAgentSession,
     });
 
@@ -123,7 +123,7 @@ describe('TUI session slash commands', () => {
         addSystem: (text: string) => systems.push(text),
         setToolsExpanded: () => {},
       } as never,
-      listAgents: vi.fn(async () => [{ id: 'main', source: 'configured' as const, enabled: true }]),
+      listAgents: vi.fn(async () => [{ id: 'main', enabled: true }]),
       switchAgentSession,
     });
 
@@ -144,7 +144,7 @@ describe('TUI session slash commands', () => {
         setToolsExpanded: () => {},
       } as never,
       state,
-      listAgents: vi.fn(async () => [{ id: 'coder', source: 'builtin' as const, enabled: true }]),
+      listAgents: vi.fn(async () => [{ id: 'coder', enabled: true }]),
       switchAgentSession,
     });
 
@@ -162,16 +162,16 @@ describe('TUI session slash commands', () => {
         setToolsExpanded: () => {},
       } as never,
       listAgents: vi.fn(async () => [
-        { id: 'main', source: 'configured' as const, enabled: true },
-        { id: 'coder', source: 'builtin' as const, enabled: true },
+        { id: 'main', enabled: true },
+        { id: 'coder', enabled: true },
       ]),
     });
 
     handler('/agents');
 
     await vi.waitFor(() => expect(systems.at(-1)).toContain('Available agents:'));
-    expect(systems.at(-1)).toContain('coder (builtin)');
-    expect(systems.at(-1)).toContain('main (configured)');
+    expect(systems.at(-1)).toContain('coder');
+    expect(systems.at(-1)).toContain('main');
     expect(systems.at(-1)).toContain('Switch with: /agent <id>');
   });
 

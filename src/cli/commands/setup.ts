@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { existsSync } from 'fs';
 import { register, formatExamples, type CLIContext } from '../registry.js';
-import { seedMainAgentProfileMarkdown } from '../../agent/context/workspace-seed.js';
 import { initWorkspace } from '../utils/init-workspace.js';
 
 function createSetupCommand(ctx: CLIContext): Command {
@@ -44,8 +43,6 @@ function createSetupCommand(ctx: CLIContext): Command {
       } else {
         console.log('\n📁 Workspace already present (verified).');
       }
-
-      seedMainAgentProfileMarkdown(result.config);
 
       console.log('\n' + '═'.repeat(40));
       console.log('\n✅ Setup complete!\n');

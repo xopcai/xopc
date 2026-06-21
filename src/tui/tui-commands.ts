@@ -331,7 +331,7 @@ function formatAgentsList(agents: TuiAgentInfo[], currentAgentId?: string): stri
     ...sorted.map((agent) => {
       const marker = agent.id === current ? '*' : ' ';
       const label = agent.displayName ? ` — ${agent.displayName}` : '';
-      return `${marker} ${agent.id} (${agent.source})${label}`;
+      return `${marker} ${agent.id}${label}`;
     }),
     '',
     'Switch with: /agent <id>',

@@ -1,5 +1,4 @@
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
-import { BUILTIN_AGENT_IDS } from '../../agent/builtin-agent-ids.js';
 import { parseModelRef } from '../../agent/models/selection.js';
 import type { ExportFormat } from '../../session/types.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
@@ -407,9 +406,6 @@ export class GatewaySseBackend implements TuiBackend {
 
   async listAgents(): Promise<TuiAgentInfo[]> {
     const agents = new Map<string, TuiAgentInfo>();
-    for (const id of BUILTIN_AGENT_IDS) {
-      agents.set(id, { id, source: 'builtin', enabled: true });
-    }
     try {
       const res = await gatewayFetch(this.baseUrl, '/api/agents', this.token);
       if (res.ok) {
@@ -421,7 +417,6 @@ export class GatewaySseBackend implements TuiBackend {
           const id = row.id.trim().toLowerCase();
           agents.set(id, {
             id,
-            source: 'configured',
             enabled: true,
             ...(typeof row.name === 'string' && row.name.trim()
               ? { displayName: row.name.trim() }

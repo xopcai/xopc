@@ -1,4 +1,4 @@
-import { useMemo, useRef, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 
 import { HtmlWorkspaceEditor } from '@/components/html/html-workspace-editor';
 import { MarkdownSplit } from '@/components/markdown/markdown-split';
@@ -53,6 +53,8 @@ export type FilePreviewBodyProps = {
 
   /** Workspace-only: markdown/html editors; ignored for attachment. */
   workspaceEditing?: WorkspaceTextEditing;
+  /** Workspace-only: optional source line to highlight for path:line links. */
+  targetLine?: number | null;
 
   /** PPTX: already processed text & error. */
   pptxText?: string | null;
@@ -70,6 +72,37 @@ function wrapInCodeFence(content: string, extension: string): string {
   };
   const lang = langMap[extension] ?? 'plaintext';
   return `\`\`\`${lang}\n${content}\n\`\`\``;
+}
+
+function LineNumberedTextPreview({ text, targetLine }: { text: string; targetLine: number }) {
+  const targetRef = useRef<HTMLDivElement | null>(null);
+  const lines = useMemo(() => text.split(/\r\n|\n|\r/), [text]);
+
+  useEffect(() => {
+    targetRef.current?.scrollIntoView({ block: 'center' });
+  }, [targetLine, text]);
+
+  return (
+    <div className="min-h-0 flex-1 overflow-auto px-4 py-3">
+      <div className="min-w-max font-mono text-xs leading-relaxed text-fg">
+        {lines.map((line, index) => {
+          const n = index + 1;
+          const active = n === targetLine;
+          return (
+            <div
+              key={n}
+              ref={active ? targetRef : undefined}
+              className={active ? 'flex bg-accent-soft/60 text-fg' : 'flex'}
+              data-line={n}
+            >
+              <span className="w-12 shrink-0 select-none pr-3 text-right text-fg-subtle">{n}</span>
+              <span className="min-w-0 flex-1 whitespace-pre-wrap break-words">{line || ' '}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 type PptxSlidePaneLayout = 'attachment' | 'workspace';
@@ -161,6 +194,7 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
     extractedText,
     extractedTextTruncated,
     workspaceEditing,
+    targetLine,
     pptxText,
     pptxTruncated,
     pptxError,
@@ -388,7 +422,9 @@ export function FilePreviewBody(props: FilePreviewBodyProps) {
       </div>
     );
   } else if (textContent !== null && previewKind === 'text') {
-    if (context === 'workspace' && isMd && workspaceEditing?.markdownEditMode) {
+    if (context === 'workspace' && targetLine && targetLine > 0) {
+      body = <LineNumberedTextPreview text={textContent} targetLine={targetLine} />;
+    } else if (context === 'workspace' && isMd && workspaceEditing?.markdownEditMode) {
       body = (
         <div className="min-h-0 flex-1 overflow-hidden">
           <MarkdownSplit

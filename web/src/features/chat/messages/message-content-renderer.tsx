@@ -2,9 +2,11 @@
 // into either text/image nodes or a collapsible AssistantStepsBlock for runs
 // of consecutive thinking/tool_use blocks.
 
-import { type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
+import { AlertCircle, Copy, ExternalLink, File, FolderOpen, Loader2, X } from 'lucide-react';
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
+import type { WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
 import { AssistantStepsBlock } from '@/features/chat/messages/assistant-steps-block';
 import type {
   ImageContent,
@@ -27,11 +29,208 @@ import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
 import { ProviderSetupRequiredCard } from '@/features/chat/messages/provider-setup-required-banner';
 import { parseProviderSetupRequired } from '@/features/chat/messages/provider-setup-required.parser';
 import {
+  resolveFileReferenceAction,
+  resolveWorkspaceFileReference,
+  type WorkspaceFileReference,
+} from '@/features/workspace/workspace-api';
+import {
   mergeConsecutiveTextBlocks,
   prepareStreamingMarkdown,
 } from '@/features/chat/messages/streaming-markdown';
+import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { isElectron } from '@/lib/electron-env';
 import { interaction } from '@/lib/interaction';
+import { useLocaleStore } from '@/stores/locale-store';
+import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
+
+type MarkdownFileResolution =
+  | { status: 'loading'; target: WorkspaceFileLinkTarget }
+  | { status: 'ready'; target: WorkspaceFileLinkTarget; ref: WorkspaceFileReference }
+  | { status: 'error'; target: WorkspaceFileLinkTarget; message: string };
+
+function ChatMarkdownFileActionCard({
+  resolution,
+  sessionKey,
+  onClose,
+}: {
+  resolution: MarkdownFileResolution;
+  sessionKey?: string | null;
+  onClose: () => void;
+}) {
+  const language = useLocaleStore((s) => s.language);
+  const m = messages(language).chat.fileReference;
+  const [copied, setCopied] = useState(false);
+  const canUseShell = isElectron() && Boolean(window.electronAPI?.shell);
+
+  const targetPath = resolution.target.path;
+  const ref = resolution.status === 'ready' ? resolution.ref : null;
+  const displayName = ref?.displayName ?? targetPath.split(/[\\/]/).pop() ?? targetPath;
+  const displayPath = ref?.absolutePath ?? targetPath;
+
+  const copyPath = useCallback(() => {
+    void copyTextToClipboard(displayPath).then((ok) => {
+      if (!ok) return;
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    });
+  }, [displayPath]);
+
+  const runAction = useCallback(
+    async (action: 'openExternal' | 'revealInFolder') => {
+      if (!ref?.fileRefId || !canUseShell) return;
+      const resolved = await resolveFileReferenceAction(ref.fileRefId, action, {
+        sessionKey: sessionKey?.trim() || undefined,
+      });
+      if (!resolved) return;
+      if (action === 'openExternal') {
+        await window.electronAPI?.shell?.openPath(resolved.absolutePath);
+      } else {
+        await window.electronAPI?.shell?.showItemInFolder(resolved.absolutePath);
+      }
+    },
+    [canUseShell, ref?.fileRefId, sessionKey],
+  );
+
+  const tone =
+    resolution.status === 'ready' && resolution.ref.exists && resolution.ref.scope !== 'missing'
+      ? 'border-edge-subtle bg-surface-panel'
+      : 'border-warning/30 bg-warning/5';
+
+  return (
+    <div className={cn('mt-2 flex max-w-xl min-w-0 flex-col gap-1.5 rounded-lg border px-2.5 py-2 text-xs', tone)}>
+      <div className="flex min-w-0 items-center gap-1.5">
+        {resolution.status === 'loading' ? (
+          <Loader2 className="size-3.5 shrink-0 animate-spin text-fg-muted" strokeWidth={1.75} aria-hidden />
+        ) : resolution.status === 'error' || ref?.scope === 'missing' || ref?.scope === 'invalid' ? (
+          <AlertCircle className="size-3.5 shrink-0 text-warning" strokeWidth={1.75} aria-hidden />
+        ) : (
+          <File className="size-3.5 shrink-0 text-accent" strokeWidth={1.75} aria-hidden />
+        )}
+        <span className="min-w-0 truncate font-medium">{displayName}</span>
+        <button
+          type="button"
+          onClick={onClose}
+          className={cn('ml-auto inline-flex size-5 shrink-0 items-center justify-center rounded text-fg-muted hover:bg-surface-hover hover:text-fg', interaction.focusRingPanel)}
+          aria-label={m.closeActions}
+        >
+          <X className="size-3" strokeWidth={1.75} aria-hidden />
+        </button>
+      </div>
+      <p className="line-clamp-2 break-all text-[11px] leading-snug text-fg-muted">
+        {resolution.status === 'loading'
+          ? m.resolvingDescription
+          : resolution.status === 'error'
+            ? resolution.message
+            : ref?.scope === 'missing'
+              ? m.missingDescription
+              : ref?.scope === 'invalid'
+                ? m.invalidDescription
+                : canUseShell
+                  ? m.externalDescription
+                  : m.browserExternalDescription}
+      </p>
+      <div className="flex flex-wrap items-center gap-1 pt-0.5">
+        {canUseShell && ref?.capabilities.includes('openExternal') ? (
+          <button
+            type="button"
+            className={fileActionButtonClass}
+            onClick={() => void runAction('openExternal')}
+          >
+            <ExternalLink className="size-3" strokeWidth={1.75} aria-hidden />
+            <span>{m.openExternal}</span>
+          </button>
+        ) : null}
+        {canUseShell && ref?.capabilities.includes('revealInFolder') ? (
+          <button
+            type="button"
+            className={fileActionButtonClass}
+            onClick={() => void runAction('revealInFolder')}
+          >
+            <FolderOpen className="size-3" strokeWidth={1.75} aria-hidden />
+            <span>{m.revealInFolder}</span>
+          </button>
+        ) : null}
+        <button type="button" className={fileActionButtonClass} onClick={copyPath}>
+          <Copy className="size-3" strokeWidth={1.75} aria-hidden />
+          <span>{copied ? messages(language).chat.messageCopied : m.copyPath}</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const fileActionButtonClass = cn(
+  'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+  interaction.focusRingPanel,
+  interaction.press,
+);
+
+function ChatMarkdownView({
+  content,
+  compact,
+  sessionKey,
+}: {
+  content: string;
+  compact?: boolean;
+  sessionKey?: string | null;
+}) {
+  const setPreview = useWorkspacePreviewStore((s) => s.setPath);
+  const language = useLocaleStore((s) => s.language);
+  const fileReferenceMessages = messages(language).chat.fileReference;
+  const [resolution, setResolution] = useState<MarkdownFileResolution | null>(null);
+
+  const openFile = useCallback(
+    (target: WorkspaceFileLinkTarget) => {
+      if (target.kind === 'workspace-relative') {
+        setPreview(target.path, target.line);
+        setResolution(null);
+        return;
+      }
+
+      setResolution({ status: 'loading', target });
+      void resolveWorkspaceFileReference(target.path, { sessionKey: sessionKey?.trim() || undefined })
+        .then((ref) => {
+          if (!ref) {
+            setResolution({
+              status: 'error',
+              target,
+              message: fileReferenceMessages.resolveFailedDescription,
+            });
+            return;
+          }
+          if (ref.scope === 'workspace' && ref.workspaceRelativePath) {
+            setPreview(ref.workspaceRelativePath, target.line);
+            setResolution(null);
+            return;
+          }
+          setResolution({ status: 'ready', target, ref });
+        })
+        .catch((err) => {
+          setResolution({
+            status: 'error',
+            target,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        });
+    },
+    [fileReferenceMessages.resolveFailedDescription, sessionKey, setPreview],
+  );
+
+  return (
+    <>
+      <MarkdownView content={content} compact={compact} onWorkspaceFileOpen={openFile} />
+      {resolution ? (
+        <ChatMarkdownFileActionCard
+          resolution={resolution}
+          sessionKey={sessionKey}
+          onClose={() => setResolution(null)}
+        />
+      ) : null}
+    </>
+  );
+}
 
 function renderTextOrImageBlock(
   block: MessageContent,
@@ -41,6 +240,7 @@ function renderTextOrImageBlock(
   imagePreviewLabel: string,
   onImagePreview?: (block: ImageContent, index: number) => void,
   contentIndex?: number,
+  sessionKey?: string | null,
 ) {
   if (block.type === 'text') {
     if (isUser) {
@@ -66,9 +266,10 @@ function renderTextOrImageBlock(
 
     return (
       <div key={key} className="markdown-content min-w-0">
-        <MarkdownView
+        <ChatMarkdownView
           content={isAssistantMessageStreaming ? prepareStreamingMarkdown(block.text) : block.text}
           compact
+          sessionKey={sessionKey}
         />
       </div>
     );
@@ -222,6 +423,7 @@ export function renderChunkedContent(
         imagePreviewLabel,
         onImagePreview,
         b.type === 'image' ? imgIdx : i,
+        sessionKey,
       );
       if (el) nodes.push(el);
       i++;

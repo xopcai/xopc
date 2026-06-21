@@ -51,6 +51,7 @@ function formatWorkspaceFileMtime(mtimeMs: number, language: 'en' | 'zh'): strin
 export interface WorkspaceFilePreviewPanelProps {
   filePath: string | null;
   onClose: () => void;
+  targetLine?: number | null;
   /** Per-chat session workspace (takes priority over `agentId`). */
   sessionKey?: string;
   /** Chat agent workspace; omit to use gateway default agent root. */
@@ -60,6 +61,7 @@ export interface WorkspaceFilePreviewPanelProps {
 export function WorkspaceFilePreviewPanel({
   filePath,
   onClose,
+  targetLine,
   sessionKey,
   agentId,
 }: WorkspaceFilePreviewPanelProps) {
@@ -135,6 +137,7 @@ export function WorkspaceFilePreviewPanel({
               title={new Date(state.mtimeMs).toISOString()}
             >
               {m.workspace.lastModified}: {formatWorkspaceFileMtime(state.mtimeMs, language)}
+              {targetLine ? ` · Line ${targetLine}` : ''}
             </p>
           ) : null}
         </div>
@@ -360,6 +363,7 @@ export function WorkspaceFilePreviewPanel({
         previewKind={state.previewKind}
         textContent={state.textContent}
         binaryBuffer={state.binaryBuffer}
+        targetLine={targetLine}
         pptxText={state.pptxText}
         pptxTruncated={state.pptxTruncated}
         pptxError={state.pptxError}

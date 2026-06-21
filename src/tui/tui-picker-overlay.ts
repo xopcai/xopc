@@ -101,9 +101,7 @@ function agentSelectItems(agents: TuiAgentInfo[], currentAgentId?: string): Sele
     .map((agent) => ({
       label: agent.id === current ? `${agent.id} (current)` : agent.id,
       value: agent.id,
-      description: agent.displayName
-        ? `${agent.source} · ${agent.displayName}`
-        : agent.source,
+      description: agent.displayName,
     }));
 }
 
