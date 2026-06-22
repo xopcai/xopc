@@ -4,7 +4,7 @@ layout: home
 hero:
   name: xopc
   text: Goal Loop OS
-  tagline: "一个本地优先的长期目标 AI 助手：在终端、网页、桌面、移动端和 IM 里持续推进目标、行动与反馈。"
+  tagline: "一个本地优先的长期目标 AI 助手：在终端、网页、桌面、手机端和即时通讯里持续推进目标、行动与反馈。"
   image:
     src: /logo.svg
     alt: xopc
@@ -20,14 +20,14 @@ features:
   - title: 🏠 默认本地优先
     details: "xopc 运行在你自己的硬件上。配置、工作区文件、凭据和本地状态默认都在 ~/.xopc/。没有强制云端。"
     link: /zh/configuration
-  - title: 🔑 自带钥匙，任选模型。
-    details: "DeepSeek、OpenAI、Anthropic、Google、Ollama、LM Studio、vLLM、Bedrock、Azure——内置 20+ 供应商。纯离线或云端本地混搭，一行配置切换模型。"
+  - title: 🔑 使用自己的密钥，自由选择模型
+    details: "DeepSeek、OpenAI、Anthropic、Google、Ollama、LM Studio、vLLM、Bedrock、Azure——内置 20+ 模型服务商。云端模型、本地模型或自部署服务都能接入，一行配置即可切换。"
     link: /zh/models
   - title: 📡 一个大脑，每块屏幕都能用
-    details: "同一个助手覆盖 TUI、CLI、浏览器、桌面应用、iOS/Android 上的 xopc-app 和即时通讯。无需同步，因为本来就是同一个系统。"
+    details: "同一个助手覆盖 TUI、CLI、浏览器、桌面应用、iOS/Android 上的 xopc-app 和即时通讯。无需额外同步，因为它们连接的是同一个系统。"
     link: /zh/channels
-  - title: 🧩 跟你一起长大，永远不会过时。
-    details: "xopc skills install · xopc extensions install——通过可复用的扩展模块不断补充能力，添加工具、通道和 UI 面板，免去改核心。"
+  - title: 🧩 能力可扩展，长期可维护
+    details: "通过 xopc skills install 和 xopc extensions install 安装可复用模块，按需添加工具、通道和 UI 面板，通常不需要改核心代码。"
     link: /zh/extensions
   - title: ⏰ Cron 定时
     details: 摘要、提醒与报告按时间表推送。在你专注别处时，Agent 也能主动运行。
