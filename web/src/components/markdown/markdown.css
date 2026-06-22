@@ -291,6 +291,10 @@ html.dark .markdown-code-copy-btn:hover {
   margin: 0 0 0.5em;
 }
 
+.markdown-body.markdown-compact > :last-child {
+  margin-bottom: 0;
+}
+
 .markdown-body.markdown-compact pre {
   margin-bottom: 0.75em;
 }
