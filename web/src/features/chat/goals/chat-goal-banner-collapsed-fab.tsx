@@ -34,7 +34,7 @@ export function GoalCollapsedFab({ goal, agentBusy, pillTitle, phase, statusShor
             'pointer-events-auto flex h-11 min-w-11 max-w-[min(calc(100vw-1.5rem),16rem)] items-center gap-1.5 rounded-full border border-edge/60 bg-surface-panel/95 px-2.5 py-1 text-left shadow-elevated backdrop-blur-sm',
             'transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
           )}
-          title={`${pillTitle}${clLine ? ` · ${clLine}` : ''}${goal.lastVerdict ? `\n${t.lastVerdict}: ${goal.lastVerdict}` : ''}${goal.lastReason ? `\n${t.lastReason}: ${goal.lastReason}` : ''}\n${goal.goal}`}
+          title={`${pillTitle}${clLine ? ` · ${clLine}` : ''}${goal.lastVerdict ? `\n${t.lastVerdict}: ${goal.lastVerdict}` : ''}${goal.lastReason ? `\n${t.lastReason}: ${goal.lastReason}` : ''}\n${goal.title}`}
           aria-label={t.expandAria}
           onClick={onExpand}
         >

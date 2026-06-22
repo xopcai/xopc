@@ -1,7 +1,7 @@
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-import { getSkills } from '@/features/skills/skill-api';
+import { getSkills } from '@/features/skills/skill-list-api';
 
 import type { CommandEntry, SkillAvailabilityStatus } from '@/features/chat/palette/command-palette.types';
 import { refreshSlashCommandWireIndex } from '@/features/chat/palette/slash-command-wire';

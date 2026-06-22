@@ -45,9 +45,11 @@ import {
 import { AgentRunRelay, type RelayEvent } from './agent-run-relay.js';
 import { registerClarifyBridge } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
+import { GoalNotificationService, GoalRunner, type EnqueueGoalRunOptions } from '../goals/index.js';
 
 import { disposeAllSessionMcpRuntimes } from '../agent/mcp/bundle-mcp-tools.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
+import { buildSessionKey, sanitizeSegment } from '../routing/session-key.js';
 import { scheduleGatewayUpdateCheck } from '../infra/update-startup.js';
 import { resolveChannelConnectDeferSet } from './resolve-channel-connect-defer.js';
 import { restartGatewayProcessWithFreshPid } from './respawn.js';
@@ -122,6 +124,8 @@ export class GatewayService {
   private startupTrace: GatewayStartupTrace | null = null;
   private workflowSessionBridge: WorkflowSessionBridge | null = null;
   private workflowRunServiceInstance: WorkflowRunService | null = null;
+  private goalRunner: GoalRunner | null = null;
+  private goalNotifications: GoalNotificationService | null = null;
 
   /**
    * Webchat agent invocation surface (`runAgent`, `abortAgentRun`, `steer*`,
@@ -222,7 +226,7 @@ export class GatewayService {
     this.workspacePath = getWorkspacePath(this.config) || './workspace';
     this.initializeExtensionLoader();
 
-    // Session index + files shared with AgentService (webchat `/goal` metadata must match GET /api/goals/webchat).
+    // Session index + files shared with AgentService for chat transcript and goal execution context.
     this.sessionIndex = new SessionIndex({
       config: this.config,
     });
@@ -297,6 +301,9 @@ export class GatewayService {
       onSessionTranscriptUpdated: (sessionKey) => {
         this.emit('session.transcript_updated', { key: sessionKey });
       },
+      onGoalStatusUpdated: (payload) => {
+        this.emit('goal.status.updated', payload);
+      },
       extensionRegistry: this.extensionLoader?.getRegistry(),
       getCronService: () => cronRef.service,
       getWorkflowRunService: () => this.createWorkflowRunService(),
@@ -335,6 +342,7 @@ export class GatewayService {
       sessionStore: this.sessionIndex.getStore(),
       getDefaultCronAgentId: () => getDefaultAgentId(this.config),
       workflowRunService: this.createWorkflowRunService(),
+      goalRunner: this.createGoalRunner(),
     });
     cronRef.service = this.cronService;
 
@@ -372,6 +380,66 @@ export class GatewayService {
 
   // ── Webchat agent runner (delegated to GatewayAgentRunner) ────────────
 
+  private createGoalRunner(): GoalRunner {
+    if (!this.goalRunner) {
+      this.goalRunner = new GoalRunner({
+        maxConcurrent: 1,
+        defaultMaxRetries: 2,
+        ensureSession: async (goal) => {
+          const existing = goal.activeSessionKey?.trim();
+          if (existing) return existing;
+          const sessionKey = buildSessionKey({
+            agentId: goal.agentId || getDefaultAgentId(this.config),
+            source: 'webchat',
+            accountId: 'default',
+            peerKind: 'direct',
+            peerId: `goal-${sanitizeSegment(goal.id) || Date.now()}`,
+          });
+          await this.sessionIndex.saveMessages(sessionKey, []);
+          const { GoalService } = await import('../goals/index.js');
+          new GoalService().attachSession(goal.id, sessionKey);
+          return sessionKey;
+        },
+        hasActiveRun: (sessionKey) => this.agentRunner.hasActiveRun(sessionKey),
+        runContinuation: (sessionKey, message) =>
+          this.agentRunner.runScheduledWebchatContinuation(sessionKey, message),
+        emit: (type, payload) => this.emit(type, payload),
+      });
+    }
+    return this.goalRunner;
+  }
+
+  private createGoalNotificationService(): GoalNotificationService {
+    if (!this.goalNotifications) {
+      this.goalNotifications = new GoalNotificationService({
+        getConfig: () => this.config,
+        send: async (target) => {
+          await this.channelManager.send({
+            channel: target.channel,
+            chat_id: target.chatId,
+            content: target.text,
+            type: 'message',
+            silent: target.silent,
+            metadata: {
+              accountId: target.accountId,
+              threadId: target.threadId,
+              source: 'goal-notification',
+            },
+          });
+        },
+      });
+    }
+    return this.goalNotifications;
+  }
+
+  enqueueGoalRun(goalId: string, options?: EnqueueGoalRunOptions) {
+    return this.createGoalRunner().enqueue(goalId, options);
+  }
+
+  getGoalQueueSnapshot() {
+    return this.createGoalRunner().snapshot();
+  }
+
   enqueueWebchatPersistentGoalKickoff(sessionKey: string, goalText: string): void {
     this.agentRunner.enqueueWebchatPersistentGoalKickoff(sessionKey, goalText);
   }
@@ -384,6 +452,10 @@ export class GatewayService {
 
   abortAgentRun(runId: string): boolean {
     return this.agentRunner.abortAgentRun(runId);
+  }
+
+  getActiveWebchatRunId(sessionKey: string): string | undefined {
+    return this.agentRunner.getActiveRunId(sessionKey);
   }
 
   steerWebchatAgent(
@@ -668,6 +740,7 @@ export class GatewayService {
       sessionStore: this.sessionIndex.getStore(),
       getDefaultCronAgentId: () => getDefaultAgentId(this.config),
       workflowRunService: this.createWorkflowRunService(),
+      goalRunner: this.createGoalRunner(),
     });
 
     await trace.measure('workflows.reconcile', () => this.reconcileInterruptedWorkflowRuns());
@@ -1364,6 +1437,7 @@ export class GatewayService {
 
   emit(type: string, payload: unknown): void {
     this.sse.emit(type, payload);
+    this.createGoalNotificationService().handleGatewayEvent(type, payload);
   }
 
   /** Replay events since `lastEventId` for SSE reconnection. */

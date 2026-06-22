@@ -7,6 +7,7 @@ import type {
 export interface StartWorkflowRunServiceParams {
   agentId: string;
   definitionId: string;
+  goalId?: string;
   parentSessionKey?: string;
   input?: unknown;
   inputEnvelope?: WorkflowRunInputEnvelope;

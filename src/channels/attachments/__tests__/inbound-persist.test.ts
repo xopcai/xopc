@@ -74,6 +74,42 @@ describe('persistInboundAttachments', () => {
     await rm(work, { recursive: true, force: true });
   });
 
+  it('resolves canonical attachment URI through resolver', async () => {
+    prevStateDir = process.env.XOPC_STATE_DIR;
+    const work = join(tmpdir(), `xopc-inbound-${Date.now()}`);
+    process.env.XOPC_STATE_DIR = work;
+    await mkdir(work, { recursive: true });
+
+    const prepared = await persistInboundAttachments(
+      [
+        {
+          type: 'image',
+          mimeType: 'image/png',
+          name: 'note-image.png',
+          uri: 'xopc-attachment://notes/note-1/att-1',
+        },
+      ],
+      {
+        resolveUri: async (uri) => {
+          expect(uri).toBe('xopc-attachment://notes/note-1/att-1');
+          return {
+            buffer: Buffer.from('image-bytes'),
+            path: '/notes/note-1/att-1',
+            mimeType: 'image/png',
+            name: 'note-image.png',
+            size: Buffer.byteLength('image-bytes'),
+          };
+        },
+      },
+    );
+
+    expect(prepared![0]!.uri).toMatch(/^media:\/\/inbound\//);
+    expect(prepared![0]!.name).toBe('note-image.png');
+    const buf = await readInboundAttachmentBuffer(prepared![0]!.uri);
+    expect(buf.toString()).toBe('image-bytes');
+    await rm(work, { recursive: true, force: true });
+  });
+
   it('throws when attachment has neither data nor uri', async () => {
     prevStateDir = process.env.XOPC_STATE_DIR;
     process.env.XOPC_STATE_DIR = join(tmpdir(), `xopc-inbound-${Date.now()}`);

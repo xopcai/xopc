@@ -1,10 +1,6 @@
 import { checklistCounts } from './checklist-types.js';
 import {
-  mergeCustomDataPatch,
-  PERSISTENT_GOAL_CUSTOM_KEY,
-  readPersistentGoal,
   renderChecklistPlain,
-  serializePersistentGoal,
   type PersistentGoalState,
 } from './state.js';
 
@@ -103,20 +99,4 @@ export type GoalEvaluateUserCopyPack = ReturnType<typeof goalsEvaluateCopy>;
 
 export function goalEvaluateUserCopy(locale: GoalUiLocale): GoalEvaluateUserCopyPack {
   return goalsEvaluateCopy(goalUiLocaleOrFallback(locale));
-}
-
-/** Persist `uiLocale` on the standing goal when the gateway console language is known. */
-export function mergePersistentGoalUiLocale(
-  customData: Record<string, unknown> | undefined,
-  locale: GoalUiLocale | undefined,
-): Record<string, unknown> | undefined {
-  if (!locale) return customData;
-  const canonical = goalUiLocaleOrFallback(locale);
-  const g = readPersistentGoal(customData);
-  if (!g || g.status === 'cleared') return customData;
-  if (g.uiLocale === canonical) return customData;
-  const next: PersistentGoalState = { ...g, uiLocale: canonical };
-  return mergeCustomDataPatch(customData ?? {}, {
-    [PERSISTENT_GOAL_CUSTOM_KEY]: serializePersistentGoal(next),
-  });
 }

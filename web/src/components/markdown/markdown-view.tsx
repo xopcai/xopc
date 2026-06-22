@@ -152,6 +152,10 @@ function mountMarkdownCodeBlocks(root: HTMLElement, labels: { copy: string; copi
   };
 }
 
+function findMermaidCodeBlocks(root: HTMLElement): HTMLElement[] {
+  return Array.from(root.querySelectorAll<HTMLElement>('pre code.language-mermaid, pre code.hljs.language-mermaid'));
+}
+
 export interface MarkdownViewProps {
   content: string;
   /** Tighter heading/paragraph spacing for chat bubbles */
@@ -213,6 +217,36 @@ function MarkdownViewImpl({
 
     return mountMarkdownCodeBlocks(el, labels);
   }, [codeCopy, safeHtml, labels, onWorkspaceFileOpen]);
+
+  useLayoutEffect(() => {
+    const el = hostRef.current;
+    if (!el || !safeHtml) return;
+
+    const blocks = findMermaidCodeBlocks(el);
+    if (blocks.length === 0) return;
+
+    let cancelled = false;
+    void import('./mermaid-render').then(({ renderMermaidBlock }) => {
+      if (cancelled) return;
+      for (const code of blocks) {
+        if (!code.isConnected) continue;
+        const pre = code.closest('pre');
+        if (!pre) continue;
+        const replaceTarget = pre.closest('[data-md-code-block]') ?? pre;
+        const rendered = renderMermaidBlock(code.textContent ?? '');
+        const template = document.createElement('template');
+        template.innerHTML = rendered.html.trim();
+        const node = template.content.firstElementChild;
+        if (node) {
+          replaceTarget.replaceWith(node);
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [safeHtml]);
 
   useLayoutEffect(() => {
     const el = hostRef.current;

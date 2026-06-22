@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useTranslation } from 'react-i18next';
 
+import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { describePermission } from './extension-permission-grants';
@@ -22,8 +22,8 @@ export function ExtensionPermissionDialog({
   permissions,
   onConfirm,
 }: ExtensionPermissionDialogProps) {
-  const { t } = useTranslation();
   const language = useLocaleStore((s) => s.language);
+  const t = messages(language).extensionUi;
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -34,16 +34,16 @@ export function ExtensionPermissionDialog({
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <Dialog.Title className="text-base font-semibold text-fg">
-            {t('extensionUi.permissionTitle', { name: extensionName })}
+            {t.permissionTitle.replace('{{name}}', extensionName)}
           </Dialog.Title>
           <p className="mt-2 text-sm text-fg-muted">
-            {t('extensionUi.permissionSubtitle')}{' '}
+            {t.permissionSubtitle}{' '}
             <span className="font-mono text-xs text-fg-muted" title={extensionId}>
               ({extensionId})
             </span>
           </p>
           {permissions.length === 0 ? (
-            <p className="mt-4 text-sm text-fg-muted">{t('extensionUi.permissionsNone')}</p>
+            <p className="mt-4 text-sm text-fg-muted">{t.permissionsNone}</p>
           ) : (
             <ul className="mt-4 max-h-48 list-inside list-disc space-y-1 overflow-y-auto text-sm text-fg">
               {permissions.map((p) => (
@@ -57,7 +57,7 @@ export function ExtensionPermissionDialog({
                 type="button"
                 className="rounded-lg border border-edge px-3 py-2 text-sm text-fg hover:bg-surface-muted"
               >
-                {t('extensionUi.deny')}
+                {t.deny}
               </button>
             </Dialog.Close>
             <button
@@ -68,7 +68,7 @@ export function ExtensionPermissionDialog({
                 onOpenChange(false);
               }}
             >
-              {t('extensionUi.allow')}
+              {t.allow}
             </button>
           </div>
         </Dialog.Content>

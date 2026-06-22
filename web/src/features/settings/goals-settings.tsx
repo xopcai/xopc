@@ -1,4 +1,5 @@
 import { GoalsConfigSection } from '@/features/settings/goals-config-section';
+import { SaveBarControls } from '@/features/settings/save-bar/save-bar-controls';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -15,6 +16,7 @@ export function GoalsSettingsPanel() {
         <h1 className="text-xl font-semibold tracking-tight text-fg">{t.title}</h1>
         <p className="max-w-2xl text-sm text-fg-muted">{t.subtitle}</p>
       </header>
+      <SaveBarControls />
       <GoalsConfigSection hasToken={hasToken} />
     </div>
   );

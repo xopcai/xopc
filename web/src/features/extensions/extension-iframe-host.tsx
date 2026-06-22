@@ -1,8 +1,8 @@
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
-import { useTranslation } from 'react-i18next';
 
+import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useThemeStore } from '@/stores/theme-store';
@@ -61,7 +61,8 @@ export function ExtensionIframeHost({
   minHeight = DEFAULT_MIN,
   initialData,
 }: ExtensionIframeHostProps) {
-  const { t } = useTranslation();
+  const language = useLocaleStore((s) => s.language);
+  const t = messages(language).extensionUi;
   const router = useExtensionRouter();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const gatewayToken = useGatewayStore((s) => s.token);
@@ -164,13 +165,13 @@ export function ExtensionIframeHost({
                 : 'rounded-lg border border-edge border-dashed bg-surface-base p-4 text-sm text-fg-muted'
             }
           >
-            <p>{t('extensionUi.deniedHint')}</p>
+            <p>{t.deniedHint}</p>
             <button
               type="button"
               className="mt-2 text-sm font-medium text-accent underline-offset-2 hover:underline"
               onClick={() => dispatch({ type: 'patch', patch: { dialogOpen: true } })}
             >
-              {t('extensionUi.reviewPermissions')}
+              {t.reviewPermissions}
             </button>
           </div>
         ) : null}
@@ -182,8 +183,8 @@ export function ExtensionIframeHost({
     <div className="flex flex-1 min-h-0 min-w-0 flex-col">
       {loadError ? (
         <div className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-fg">
-          <p>{t('extensionUi.loadFailed')}</p>
-          <p className="mt-2 text-xs text-fg-muted">{t('extensionUi.loadFailedConnectionHint')}</p>
+          <p>{t.loadFailed}</p>
+          <p className="mt-2 text-xs text-fg-muted">{t.loadFailedConnectionHint}</p>
           <button
             type="button"
             className="mt-2 font-medium text-accent underline-offset-2 hover:underline"
@@ -191,7 +192,7 @@ export function ExtensionIframeHost({
               dispatch({ type: 'patch', patch: { loadError: false, reloadKey: reloadKey + 1 } });
             }}
           >
-            {t('extensionUi.retryLoad')}
+            {t.retryLoad}
           </button>
         </div>
       ) : null}
@@ -207,8 +208,7 @@ export function ExtensionIframeHost({
         onError={() => dispatch({ type: 'patch', patch: { loadError: true } })}
         onLoad={() => {
           dispatch({ type: 'patch', patch: { loadError: false } });
-          const locale = useLocaleStore.getState().language;
-          router.sendInit(extensionId, buildThemeInfo(useThemeStore.getState().resolved), locale);
+          router.sendInit(extensionId, buildThemeInfo(useThemeStore.getState().resolved), language);
           if (initialData !== undefined) {
             router.sendEvent(extensionId, 'widget.data', initialData);
           }

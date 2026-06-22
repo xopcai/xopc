@@ -166,6 +166,7 @@ export async function* runProcessDirectStreaming(
   let ranSlashCommand = false;
   let mergedUserText = input.content;
   let webchatSlashReceipt: string | undefined;
+  let slashCommandMetadata: Record<string, unknown> | undefined;
 
   const taskPromise = (async () => {
     try {
@@ -263,6 +264,7 @@ export async function* runProcessDirectStreaming(
       );
       if (slash.matched) {
         ranSlashCommand = true;
+        slashCommandMetadata = slash.metadata;
         const text = slash.aggregatedText.trim();
         if (text) {
           webchatSlashReceipt = text;
@@ -271,6 +273,14 @@ export async function* runProcessDirectStreaming(
           webchatSlashReceipt =
             'Command finished with no assistant text. If you used `/goal`, a follow-up turn may still be scheduled automatically.';
           pushAssistantReceipt(queue, webchatSlashReceipt, input.runId);
+        }
+        const workflowRun = slash.metadata?.workflowRun;
+        if (workflowRun && typeof workflowRun === 'object') {
+          queue.push({
+            type: 'workflow_run_started',
+            runId: input.runId,
+            payload: { workflowRun },
+          });
         }
         return;
       }
@@ -370,6 +380,9 @@ export async function* runProcessDirectStreaming(
             role: 'assistant' as const,
             content: [{ type: 'text' as const, text: webchatSlashReceipt.trim() }],
             timestamp: Date.now(),
+            ...(slashCommandMetadata && Object.keys(slashCommandMetadata).length > 0
+              ? { metadata: slashCommandMetadata }
+              : {}),
           } as AgentMessage;
           await deps.sessionStore.appendTranscriptMessage(sessionKey, assistantMsg);
         }

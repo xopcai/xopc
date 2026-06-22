@@ -7,6 +7,7 @@ export type Tab =
   | 'sessions'
   | 'cron'
   | 'skills'
+  | 'goals'
   | 'channels'
   | 'agents'
   | 'logs'

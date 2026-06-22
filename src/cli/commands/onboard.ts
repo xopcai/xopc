@@ -15,6 +15,11 @@ function isInteractive(): boolean {
   return process.stdin.isTTY && process.stdout.isTTY;
 }
 
+function printGitHubStarHint(): void {
+  console.log('\n⭐ If xopc helps you keep long-term AI work moving, please star the repo:');
+  console.log('   https://github.com/xopcai/xopc');
+}
+
 async function setupNonInteractive(_configPath: string, existingConfig: Config): Promise<Config> {
   console.log('\n🤖 AI Model Configuration (Non-Interactive Mode)\n');
   console.log('Current config:', JSON.stringify(existingConfig.agents?.defaults?.models?.chat, null, 2));
@@ -30,11 +35,13 @@ function createOnboardCommand(ctx: CLIContext): Command {
       'after',
       formatExamples([
         'xopc onboard              # Full interactive setup',
+        'xopc onboard --quick      # Configure model only, then launch locally',
         'xopc onboard --model      # Configure LLM model only',
         'xopc onboard --channels   # Configure messaging channels',
         'xopc onboard --gateway    # Apply default gateway settings (quiet)',
       ])
     )
+    .option('--quick', 'Configure model only, then launch locally')
     .option('--model', 'Configure LLM provider and model')
     .option('--channels', 'Configure messaging channels')
     .option('--gateway', 'Configure gateway WebUI')
@@ -56,6 +63,7 @@ function createOnboardCommand(ctx: CLIContext): Command {
 }
 
 type OnboardOptions = {
+  quick?: boolean;
   model?: boolean;
   channels?: boolean;
   gateway?: boolean;
@@ -76,10 +84,10 @@ async function runOnboard(
   let config = initResult.config;
 
   // Determine what to configure based on options
-  const doModel = options.model || options.all || (!options.channels && !options.gateway);
-  const doChannels = options.channels || options.all || (!options.model && !options.gateway);
-  const doGateway = options.gateway || options.all || (!options.model && !options.channels);
-  const runFullWizard = !options.model && !options.channels && !options.gateway;
+  const doModel = options.quick || options.model || options.all || (!options.channels && !options.gateway);
+  const doChannels = !options.quick && (options.channels || options.all || (!options.model && !options.gateway));
+  const doGateway = !options.quick && (options.gateway || options.all || (!options.model && !options.channels));
+  const runFullWizard = !options.quick && !options.model && !options.channels && !options.gateway;
   /** Any setup step besides the unified launch prompt ran in interactive flow. */
   const didConfigurableSteps = doModel || doChannels || doGateway;
 
@@ -167,6 +175,8 @@ async function runOnboard(
   console.log('\n📁 Files:');
   console.log('  Config:', configPath);
   console.log('  Workspace:', workspacePath);
+
+  printGitHubStarHint();
 
   if (isInteractive() && didConfigurableSteps) {
     await promptLaunchAfterOnboard(config as Config, ctx, { doChannels });

@@ -245,14 +245,13 @@ export function AboutDialog({
 
             <div className="mt-6 border-t border-edge-subtle pt-4 text-center text-[11px] leading-relaxed text-fg-muted">
               <p>
-                {d.openSourceLead}
                 <a
                   className="text-accent-fg underline decoration-accent-fg/40 underline-offset-2 hover:decoration-accent-fg"
                   href={REPO_URL}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  {d.openSourceLink}
+                  {d.repositoryLink}
                 </a>
               </p>
               <p className="mt-2">{copyright}</p>

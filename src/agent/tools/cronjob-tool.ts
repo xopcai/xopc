@@ -73,6 +73,17 @@ const CronjobSchema = Type.Object({
       description: 'JSON object for workflow input payload (workflowRun create/update).',
     }),
   ),
+  goalId: Type.Optional(
+    Type.String({
+      description:
+        'Durable goal id for a goalContinue job (mutually exclusive with message and workflowDefinitionId).',
+    }),
+  ),
+  goalMessage: Type.Optional(
+    Type.String({
+      description: 'Optional custom continuation message for a goalContinue job.',
+    }),
+  ),
   waitForCompletion: Type.Optional(
     Type.Boolean({
       description:
@@ -121,6 +132,8 @@ export type CronjobToolParams = {
   workflowDefinitionId?: string;
   workflowGoal?: string;
   workflowInputJson?: string;
+  goalId?: string;
+  goalMessage?: string;
   waitForCompletion?: boolean;
   deliveryChannel?: string;
   deliveryTo?: string;
@@ -179,10 +192,10 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
     label: '⏰ Cronjob',
     description:
       'Manage scheduled tasks (cron jobs) that run automatically.\n\n' +
-      'Jobs can run an agent message (agentTurn) or a workflow directly (workflowRun).\n\n' +
+      'Jobs can run an agent message (agentTurn), a workflow directly (workflowRun), or continue a durable goal (goalContinue).\n\n' +
       'ACTIONS:\n' +
       '- list: Show all scheduled jobs with status and next run time\n' +
-      '- create: Create a job (schedule + message OR workflowDefinitionId; optional goal, workflowInputJson, deliveryChannel/deliveryTo, waitForCompletion)\n' +
+      '- create: Create a job (schedule + exactly one of message, workflowDefinitionId, or goalId)\n' +
       '- update: Change schedule, message, workflow fields, name, timezone, sessionTarget, agentId, or workingDirectory (requires jobId)\n' +
       '- remove: Delete a job (requires jobId)\n' +
       '- enable / disable: Toggle a job (requires jobId)\n' +
@@ -208,10 +221,12 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
 
           case 'create': {
             const workflowId = params.workflowDefinitionId?.trim();
+            const goalId = params.goalId?.trim();
             const hasMessage = Boolean(params.message?.trim());
-            if (!params.schedule?.trim() || (!workflowId && !hasMessage) || (workflowId && hasMessage)) {
+            const targetCount = [workflowId, goalId, hasMessage ? 'message' : ''].filter(Boolean).length;
+            if (!params.schedule?.trim() || targetCount !== 1) {
               return textResult(
-                'Error: create requires schedule and exactly one of message or workflowDefinitionId.',
+                'Error: create requires schedule and exactly one of message, workflowDefinitionId, or goalId.',
               );
             }
 
@@ -227,7 +242,14 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
             let sessionTarget = params.sessionTarget ?? 'isolated';
             let delivery: JobData['delivery'];
 
-            if (workflowId) {
+            if (goalId) {
+              payload = {
+                kind: 'goalContinue',
+                goalId,
+                ...(params.goalMessage?.trim() ? { message: params.goalMessage.trim() } : {}),
+              };
+              sessionTarget = 'isolated';
+            } else if (workflowId) {
               let inputEnvelope: { payload: unknown } | undefined;
               if (params.workflowInputJson?.trim()) {
                 try {
@@ -274,7 +296,7 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
               payload,
             });
 
-            const kindLabel = workflowId ? `workflow job (${workflowId})` : 'job';
+            const kindLabel = goalId ? `goal job (${goalId})` : workflowId ? `workflow job (${workflowId})` : 'job';
             return textResult(
               `Created ${kindLabel}${params.name ? ` "${params.name.trim()}"` : ''} (${result.id})\n` +
                 `Schedule: ${result.schedule}`,
@@ -296,6 +318,14 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
                 return textResult(`Error: ${scanResult}`);
               }
               updates.payload = { kind: 'agentTurn', message: params.message.trim() };
+            }
+            if (params.goalId?.trim()) {
+              updates.payload = {
+                kind: 'goalContinue',
+                goalId: params.goalId.trim(),
+                ...(params.goalMessage?.trim() ? { message: params.goalMessage.trim() } : {}),
+              };
+              updates.sessionTarget = 'isolated';
             }
             if (params.workflowDefinitionId?.trim()) {
               let inputEnvelope: { payload: unknown } | undefined;

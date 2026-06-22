@@ -9,7 +9,7 @@
 import type { StoredLanguage } from '@/lib/storage';
 
 import type { WorkflowCardLabels } from './workflow-card';
-import type { WorkflowAgentDetailDrawerLabels } from './workflow-agent-detail-drawer';
+import type { WorkflowAgentDetailModalLabels } from './workflow-agent-detail-modal';
 
 /**
  * Resolve a {@link WorkflowCardLabels} bag for the given language. Falls back
@@ -29,7 +29,7 @@ export function defaultWorkflowCardLabels(): WorkflowCardLabels {
   return enLabels();
 }
 
-function drawerLabelsEn(): WorkflowAgentDetailDrawerLabels {
+function drawerLabelsEn(): WorkflowAgentDetailModalLabels {
   return {
     close: 'Close',
     statusQueued: 'Queued',
@@ -44,21 +44,12 @@ function drawerLabelsEn(): WorkflowAgentDetailDrawerLabels {
     currentStepHeading: 'Current step',
     executionHeading: 'Execution process',
     promptHeading: 'Prompt',
-    stepsHeading: 'Steps',
-    outputHeading: 'Output',
     logsHeading: 'Workflow logs',
-    pin: 'Pin',
-    pinned: 'Pinned',
     runningPlaceholder: 'Waiting for subagent steps…',
-    resizeLabel: 'Resize drawer',
-    stream: {
-      heading: 'Live output',
-      empty: 'No streamed output yet',
-    },
   };
 }
 
-function drawerLabelsZh(): WorkflowAgentDetailDrawerLabels {
+function drawerLabelsZh(): WorkflowAgentDetailModalLabels {
   return {
     close: '关闭',
     statusQueued: '排队中',
@@ -73,17 +64,8 @@ function drawerLabelsZh(): WorkflowAgentDetailDrawerLabels {
     currentStepHeading: '当前步骤',
     executionHeading: '执行过程',
     promptHeading: '输入',
-    stepsHeading: '步骤',
-    outputHeading: '输出',
     logsHeading: '工作流日志',
-    pin: '固定',
-    pinned: '已固定',
     runningPlaceholder: '等待子 agent 步骤…',
-    resizeLabel: '调整抽屉宽度',
-    stream: {
-      heading: '实时输出',
-      empty: '暂无流式输出',
-    },
   };
 }
 

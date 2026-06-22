@@ -1,0 +1,19 @@
+date,channel,target_or_url,owner,status,planned_action,star_target,notes
+2026-06-22,Metrics,GitHub+npm snapshot,owner,done,Baseline snapshot before launch distribution,0,"stars 15/100; 85 remaining; forks 3; npm downloads 1988 for 2026-06-14..2026-06-20; latest 0.0.110"
+2026-06-22,GitHub Community,Issues+Discussions,owner,ready,Run growth:github-community to create launch-week Discussions and good-first-issues,5,Create承接点 before external posts; use dry-run first then --apply with GITHUB_TOKEN
+2026-06-22,README/GitHub,https://github.com/xopcai/xopc,owner,ready,Merge README positioning and FAQ changes,10,Repository page must convert existing traffic before external launch
+2026-06-22,npm,https://www.npmjs.com/package/@xopcai/xopc,owner,ready,Publish growth-ready package metadata and v0.0.111 release,10,Use existing weekly npm traffic to convert installers into stars
+2026-06-22,Docs,https://xopcai.github.io/xopc/,owner,ready,Deploy updated docs homepage and OG card,5,Docs links need clear share preview and positioning
+2026-06-23,X/Twitter,launch thread,owner,planned,Post launch thread with TUI demo,15,Reply to every comment in first 6 hours
+2026-06-23,Direct outreach,10 developer contacts,owner,planned,Send short private feedback request,10,Ask for product-shape feedback and star if useful
+2026-06-24,Hacker News,Show HN,owner,planned,Submit Show HN after release and demo are live,20,Monitor and respond for the full day
+2026-06-24,Reddit,r/LocalLLaMA,owner,planned,Post local-first/BYOK angle,10,Lead with local model support and avoid generic launch copy
+2026-06-24,Reddit,r/selfhosted,owner,planned,Post self-hosted local gateway angle,8,Emphasize data under ~/.xopc and local gateway
+2026-06-24,Reddit,r/selfhosted mobile,owner,planned,Post xopc-app mobile gateway angle,8,Lead with iOS/Android client for a self-hosted gateway
+2026-06-25,V2EX,share post,owner,planned,Post Chinese product story and demo,20,Use practical tone, request feedback and star
+2026-06-25,V2EX/mobile,share post,owner,planned,Post xopc-app follow-up with gateway pairing flow,8,Link mobile app docs and xopc-app repo
+2026-06-25,WeChat,朋友圈/微信群,owner,planned,Share 30-second demo and GitHub link,15,Direct ask: this week trying to reach 100 stars
+2026-06-26,Juejin/OSChina,technical article,owner,planned,Publish Goal Loop OS design article,10,End with quick start and GitHub star CTA
+2026-06-26,Direct outreach,20 more developer contacts,owner,planned,Send private feedback request,20,Prioritize people who build AI/devtools/self-hosted workflows
+2026-06-27,Follow-up,X/Twitter + V2EX comments,owner,planned,Post what changed from feedback,8,Show responsiveness and link release
+2026-06-28,Review,GitHub traffic/stars/npm downloads,owner,planned,Measure conversion and update README FAQ,0,Use learnings to adjust next week plan

@@ -7,6 +7,7 @@ import {
 } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
 import { existsSync, readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import {
@@ -65,6 +66,7 @@ import type { AgentServiceConfig, StreamHandle } from './service.types.js';
 import { PersistentGoalService } from './goals/persistent-goal-service.js';
 import { reconcileManagedDreamingCronJobs } from './service/reconcile-dreaming-cron.js';
 import { parseOutboundSessionKey } from './service/parse-outbound-session-key.js';
+import { parseNoteAttachmentTarget } from '../notes/attachment-ref.js';
 
 import {
   resolveAgentHomeDir,
@@ -349,6 +351,7 @@ export class AgentService {
       sessionStore: this.sessionStore,
       sessionConfigStore: this.sessionConfigStore,
       getPersistentGoalApisForCommand: (routing) => this.persistentGoals.buildApisForRouting(routing),
+      getWorkflowRunService: config.getWorkflowRunService,
       applySessionThinkingLevel: (sessionKey: string, level: ThinkLevel) => {
         this.agentManager.setThinkingLevel(sessionKey, level as ThinkingLevel);
       },
@@ -382,6 +385,7 @@ export class AgentService {
       getConfig: () => this.effectiveAppConfig(),
       getResolvedWorkspaceForSession: (sk) => this.agentManager.getResolvedWorkspaceForSession(sk),
       onSessionMetadataUpdated: this.onSessionMetadataUpdated,
+      onGoalStatusUpdated: config.onGoalStatusUpdated,
       notifyWebchatTranscriptAppend: (sk, text) => this.turnDispatcher.notifyWebchatTranscriptAppend(sk, text),
     });
 
@@ -840,7 +844,32 @@ export class AgentService {
     _sessionKey: string,
     attachments?: InboundAttachmentInput[],
   ): Promise<MediaRef[] | undefined> {
-    return persistInboundAttachments(attachments);
+    return persistInboundAttachments(attachments, {
+      resolveUri: async (uri) => {
+        const target = parseNoteAttachmentTarget(uri);
+        if (!target) return null;
+        const notesService = (this as unknown as {
+          notesServiceInstance?: {
+            getAttachmentPath(noteId: string, attachmentId: string): Promise<{
+              filePath: string;
+              mimeType?: string;
+              fileName?: string;
+            } | null>;
+          };
+        }).notesServiceInstance;
+        if (!notesService) return null;
+        const located = await notesService.getAttachmentPath(target.noteId, target.attachmentId);
+        if (!located) return null;
+        const buffer = await readFile(located.filePath);
+        return {
+          buffer,
+          path: located.filePath,
+          mimeType: located.mimeType,
+          name: located.fileName,
+          size: buffer.byteLength,
+        };
+      },
+    });
   }
 
   private endDirectRequestContext(): void {

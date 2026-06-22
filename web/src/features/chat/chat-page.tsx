@@ -63,13 +63,18 @@ export function ChatPage() {
   useEffect(() => {
     if (!chatSessionKey) return;
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<{ key?: string }>).detail;
-      if (detail?.key === chatSessionKey) {
+      const detail = (event as CustomEvent<{ key?: string; sessionKey?: string }>).detail;
+      const updatedKey = detail?.key ?? detail?.sessionKey;
+      if (updatedKey === chatSessionKey) {
         void refreshWorkflowRunLinks();
       }
     };
     window.addEventListener('session-transcript-updated', handler);
-    return () => window.removeEventListener('session-transcript-updated', handler);
+    window.addEventListener('workflow-run-started-from-chat', handler);
+    return () => {
+      window.removeEventListener('session-transcript-updated', handler);
+      window.removeEventListener('workflow-run-started-from-chat', handler);
+    };
   }, [chatSessionKey, refreshWorkflowRunLinks]);
 
   useEffect(() => {

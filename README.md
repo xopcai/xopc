@@ -7,7 +7,7 @@
 
 <p align="center">
   <strong>Goal Loop OS. Long-term AI in one loop.</strong><br />
-  Local-first · Multi-surface · Workflows + Multi-agent + Extensible.
+  A local-first AI assistant that keeps long-term goals moving across terminal, web, desktop, mobile app, and messengers.
 </p>
 
 <p align="center">
@@ -20,6 +20,7 @@
 
 <p align="center">
   <a href="https://xopc.ai"><strong>xopc.ai</strong></a> ·
+  <a href="https://github.com/xopcai/xopc"><strong>GitHub</strong></a> ·
   <a href="https://xopcai.github.io/xopc/">Documentation</a> ·
   <a href="#get-started">Get started</a> ·
   <a href="https://github.com/xopcai/xopc/releases">Releases</a>
@@ -31,10 +32,28 @@
 
 ---
 
+## Built for
+
+- **Long-running projects** — keep direction, next actions, feedback, and recalibration in one loop instead of losing context between chats.
+- **One-person companies and solo builders** — use the same assistant from CLI, TUI, Web, Desktop, Telegram, WeChat, and Feishu/Lark.
+- **Local-first AI workflows** — bring your own keys, mix cloud/local models, add skills/extensions, and keep data under **`~/.xopc/`**.
+
+---
+
 <a id="get-started"></a>
 <a id="quick-start"></a>
 
 ## Get started
+
+### Try in 3 minutes
+
+```bash
+curl -fsSL https://xopc.ai/install.sh | bash
+xopc onboard --quick
+xopc tui --local
+```
+
+This path starts the embedded terminal UI: no gateway, desktop app, or messenger setup required.
 
 ### One-liner (recommended)
 
@@ -66,6 +85,8 @@ xopc tui --local
 ```
 
 > **New here?** Start with **`xopc tui --local`** (embedded agent, no gateway). Run **`xopc gateway`** when you want the **web console** or **messengers** (Telegram, WeChat, Feishu).
+
+If the first run works for you, please **[star the repo](https://github.com/xopcai/xopc)** so others can discover it.
 
 ### npm (already have Node.js 22+)
 
@@ -111,7 +132,7 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 
 - 🏠 **Your machine** — Data and config under **`~/.xopc/`**. No mandatory cloud or surprise bills.
 - 🔑 **Bring your own keys** — OpenAI, Anthropic, Google, DeepSeek, Ollama, LM Studio, vLLM, and **20+** providers. Mix cloud and local; switch catalog models in one config line. See **[Models](https://xopcai.github.io/xopc/models)**.
-- 📱 **One brain, every screen** — Same assistant in terminal, browser, desktop, phone, and IM. No sync layer — one system.
+- 📱 **One brain, every screen** — Same assistant in terminal, browser, desktop, [mobile app](https://github.com/xopcai/xopc-app), and IM. No sync layer — one system.
 - 🧩 **Grows with you** — **`xopc skills install`** · **`xopc extensions install`** for tools, channels, and UI panels; multi-agent routing per context.
 - ⏰ **Proactive** — **Cron** for scheduled summaries and reminders; **workflows** for fan-out subagent tasks; **multi-agent** routing with isolated workspaces, tools, and prompts.
 
@@ -125,7 +146,7 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | Scripts and minimal TTY |
 | **Web** | `xopc gateway` → open console URL | Chat, settings, logs in the browser |
 | **Desktop** | [GitHub Releases](#desktop-app) or `pnpm run electron:build` | Native app (macOS, Windows, Linux) |
-| **Mobile** | Pair with your gateway ([remote access](https://xopcai.github.io/xopc/remote-access)) | Continue your loop on the move |
+| **Mobile** | [xopc-app](https://github.com/xopcai/xopc-app) + gateway pairing ([mobile app](https://xopcai.github.io/xopc/mobile-app), [remote access](https://xopcai.github.io/xopc/remote-access)) | Continue your loop on iOS/Android |
 | **Messengers** | `channels.*` + gateway | Telegram, WeChat, Feishu/Lark |
 
 ---
@@ -192,7 +213,28 @@ Optional tools (e.g. browser) stay **off until enabled**; use Playwright Chromiu
 | [Architecture](https://xopcai.github.io/xopc/architecture) | How pieces fit together |
 | [Workflows](https://xopcai.github.io/xopc/workflows) | Fan-out subagents, board UI, scripts |
 
-Also: [Tools](https://xopcai.github.io/xopc/tools) · [Voice](https://xopcai.github.io/xopc/voice) · [Remote access](https://xopcai.github.io/xopc/remote-access)
+Also: [Tools](https://xopcai.github.io/xopc/tools) · [Mobile app](https://xopcai.github.io/xopc/mobile-app) · [Voice](https://xopcai.github.io/xopc/voice) · [Remote access](https://xopcai.github.io/xopc/remote-access)
+
+---
+
+## FAQ
+
+**Is xopc a hosted service?**  
+No. xopc runs on your machine. Config, workspace files, credentials, and local state live under **`~/.xopc/`** by default.
+
+**Do I need a paid cloud model?**  
+No. Bring your own keys for cloud providers, or use local/model-server options such as Ollama, LM Studio, and vLLM.
+
+**What is the fastest way to try it?**  
+Use **`xopc onboard --quick`** and **`xopc tui --local`**. That path avoids gateway, desktop, and messenger setup.
+
+**How is this different from another chat UI?**  
+xopc is organized around goal loops: direction, next action, feedback, and recalibration across multiple surfaces.
+
+**Can I use it from my phone or messengers?**  
+Yes. Start with local TUI first; when ready, run the gateway and use [xopc-app](https://github.com/xopcai/xopc-app) on iOS/Android, or configure Telegram, WeChat, or Feishu/Lark.
+
+If this answers your concerns, please **[star xopc](https://github.com/xopcai/xopc)** so more developers can find it.
 
 ---
 

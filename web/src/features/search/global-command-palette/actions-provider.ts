@@ -58,7 +58,7 @@ export function buildAutomationActionHits(
       keywords: ['skills', 'reload', 'refresh'],
       run: () => {
         closePalette();
-        void import('@/features/skills/skill-api').then(({ reloadSkills }) => reloadSkills());
+        void import('@/features/skills/skill-reload-api').then(({ reloadSkills }) => reloadSkills());
       },
     },
   ];

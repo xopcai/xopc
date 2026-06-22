@@ -31,7 +31,16 @@ export function decodeInboundAttachmentBase64(data: string): Buffer {
  */
 export async function persistInboundAttachments(
   attachments: InboundAttachmentInput[] | undefined,
-  opts?: { maxBytes?: number },
+  opts?: {
+    maxBytes?: number;
+    resolveUri?: (uri: string, attachment: InboundAttachmentInput) => Promise<{
+      buffer: Buffer;
+      path: string;
+      mimeType: string;
+      name: string;
+      size: number;
+    } | null>;
+  },
 ): Promise<MediaRef[] | undefined> {
   if (!attachments?.length) return undefined;
 
@@ -40,10 +49,25 @@ export async function persistInboundAttachments(
 
   for (const att of attachments) {
     if (att.uri?.trim()) {
-      const resolved = await resolveMediaReference(att.uri.trim());
-      out.push(
-        mediaRefFromUri(att, resolved.uri, resolved.path, resolved.bucket, resolved.id),
-      );
+      const uri = att.uri.trim();
+      if (uri.startsWith('media://')) {
+        const resolved = await resolveMediaReference(uri);
+        out.push(
+          mediaRefFromUri(att, resolved.uri, resolved.path, resolved.bucket, resolved.id),
+        );
+      } else {
+        const resolved = await opts?.resolveUri?.(uri, att);
+        if (!resolved) {
+          throw new Error(`Inbound attachment "${att.name ?? 'file'}" has unsupported uri`);
+        }
+        const saved = await saveMediaBuffer(resolved.buffer, {
+          contentType: resolved.mimeType,
+          bucket: 'inbound',
+          maxBytes,
+          originalFilename: resolved.name,
+        });
+        out.push(toMediaRef({ ...att, mimeType: resolved.mimeType, name: resolved.name, size: resolved.size }, saved));
+      }
       continue;
     }
 
