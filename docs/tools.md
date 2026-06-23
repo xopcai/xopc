@@ -370,7 +370,7 @@ Runs JavaScript in a VM with `tools.*` wrappers for an allowlisted set (`web_sea
 
 ### `cronjob`
 
-Lists and manages scheduled agent runs: `list`, `create`, `update`, `remove`, `enable`, `disable`, `history`. Create/update need schedule and message; optional `timezone`, `sessionTarget` (`main` | `isolated`), `name`, `jobId` as applicable.
+Lists and manages scheduled agent runs: `list`, `create`, `update`, `remove`, `enable`, `disable`, `history`. Create/update use `scheduleKind` with `cronExpr`, `at`, or `everyMs`, plus exactly one payload (`message`, `workflowDefinitionId`, or `goalId`). Optional fields include `tz` for cron schedules, `sessionTarget`, `agentId`, `workingDirectory`, `name`, and `jobId` as applicable.
 
 Only registered when the runtime provides `CronService` (normal for gateway deployments). Includes basic prompt checks on create/update.
 

@@ -3,9 +3,9 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
 import type { CronService } from '../../cron/index.js';
+import { describeSchedule } from '../../cron/schedule.js';
 import { getCronPayloadText } from '../../cron/job-content.js';
-import { DEFAULT_WORKFLOW_CRON_WAIT_MS } from '../../cron/workflow-run-completion.js';
-import type { CronPayload, JobData, JobExecution, JobWithNextRun } from '../../cron/types.js';
+import type { CronDelivery, CronPayload, CronSchedule, CronJobPatch, JobData, JobExecution } from '../../cron/types.js';
 
 const CRON_THREAT_PATTERNS: Array<[RegExp, string]> = [
   [/ignore\s+(previous|all|above)\s+instructions/i, 'prompt_injection'],
@@ -43,7 +43,12 @@ const CronjobSchema = Type.Object({
   ),
 
   name: Type.Optional(Type.String({ description: 'Human-readable job name' })),
-  schedule: Type.Optional(
+  scheduleKind: Type.Optional(
+    Type.Union([Type.Literal('cron'), Type.Literal('at'), Type.Literal('every')], {
+      description: 'Schedule kind. Use cronExpr for cron, at for one-time ISO time, everyMs for interval.',
+    }),
+  ),
+  cronExpr: Type.Optional(
     Type.String({
       description:
         'Cron schedule expression. Examples:\n' +
@@ -53,6 +58,9 @@ const CronjobSchema = Type.Object({
         '  "0 0 1 * *" = first day of each month',
     }),
   ),
+  at: Type.Optional(Type.String({ description: 'One-time run timestamp as ISO 8601 string.' })),
+  everyMs: Type.Optional(Type.Number({ description: 'Fixed interval in milliseconds.' })),
+  tz: Type.Optional(Type.String({ description: 'IANA timezone for cronExpr, e.g. Asia/Shanghai.' })),
   message: Type.Optional(
     Type.String({
       description:
@@ -62,7 +70,7 @@ const CronjobSchema = Type.Object({
   workflowDefinitionId: Type.Optional(
     Type.String({
       description:
-        'Workflow definition id for a direct workflowRun job (mutually exclusive with message on create).',
+        'Workflow definition id for a workflowRun job (mutually exclusive with message on create).',
     }),
   ),
   workflowGoal: Type.Optional(
@@ -96,12 +104,6 @@ const CronjobSchema = Type.Object({
   deliveryTo: Type.Optional(
     Type.String({ description: 'Delivery recipient chat id when workflow completes.' }),
   ),
-  timezone: Type.Optional(
-    Type.String({
-      description:
-        'IANA timezone (e.g. Asia/Shanghai, America/New_York). Must be one supported by the cron store.',
-    }),
-  ),
   sessionTarget: Type.Optional(
     Type.Union([Type.Literal('main'), Type.Literal('isolated')], {
       description:
@@ -127,7 +129,11 @@ const CronjobSchema = Type.Object({
 export type CronjobToolParams = {
   action: 'list' | 'create' | 'update' | 'remove' | 'enable' | 'disable' | 'history';
   name?: string;
-  schedule?: string;
+  scheduleKind?: 'cron' | 'at' | 'every';
+  cronExpr?: string;
+  at?: string;
+  everyMs?: number;
+  tz?: string;
   message?: string;
   workflowDefinitionId?: string;
   workflowGoal?: string;
@@ -137,8 +143,7 @@ export type CronjobToolParams = {
   waitForCompletion?: boolean;
   deliveryChannel?: string;
   deliveryTo?: string;
-  timezone?: string;
-  sessionTarget?: 'main' | 'isolated';
+  sessionTarget?: 'main' | 'isolated' | 'current';
   agentId?: string;
   workingDirectory?: string;
   jobId?: string;
@@ -152,8 +157,8 @@ function textResult(text: string): AgentToolResult<{}> {
   return { content: [{ type: 'text', text }], details: {} };
 }
 
-function formatJob(job: JobWithNextRun): string {
-  const status = job.enabled ? '▶️ active' : '⏸️ disabled';
+function formatJob(job: JobData): string {
+  const status = job.enabled ? 'active' : 'disabled';
   const payloadText = getCronPayloadText(job);
   const truncatedPayload =
     payloadText.length > 100 ? `${payloadText.slice(0, 100)}...` : payloadText;
@@ -164,14 +169,31 @@ function formatJob(job: JobWithNextRun): string {
 
   return [
     `${status} ${job.name ?? '(unnamed)'} (${job.id})`,
-    `  Schedule: ${job.schedule}${job.timezone ? ` (${job.timezone})` : ''}`,
+    `  Schedule: ${describeSchedule(job.schedule)}`,
     `  Type: ${job.payload.kind}`,
     payloadLine,
-    `  Next run: ${job.next_run ?? 'N/A'}`,
+    `  Next run: ${job.state.nextRunAtMs ? new Date(job.state.nextRunAtMs).toISOString() : 'N/A'}`,
     `  Session: ${job.sessionTarget ?? 'main'}`,
     `  Agent: ${job.agentId?.trim() || '(default)'}`,
     `  Workspace: ${job.workingDirectory?.trim() || '(agent default)'}`,
   ].join('\n');
+}
+
+function scheduleFromParams(params: Pick<CronjobToolParams, 'scheduleKind' | 'cronExpr' | 'at' | 'everyMs' | 'tz'>): CronSchedule | undefined {
+  const kind = params.scheduleKind;
+  if (!kind) return undefined;
+  if (kind === 'cron') {
+    const expr = params.cronExpr?.trim();
+    if (!expr) return undefined;
+    return { kind, expr, ...(params.tz?.trim() ? { tz: params.tz.trim() } : {}) };
+  }
+  if (kind === 'at') {
+    const at = params.at?.trim();
+    if (!at) return undefined;
+    return { kind, at };
+  }
+  if (!Number.isFinite(params.everyMs) || !params.everyMs || params.everyMs <= 0) return undefined;
+  return { kind, everyMs: Math.floor(params.everyMs) };
 }
 
 function formatExecution(exec: JobExecution): string {
@@ -195,8 +217,8 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
       'Jobs can run an agent message (agentTurn), a workflow directly (workflowRun), or continue a durable goal (goalContinue).\n\n' +
       'ACTIONS:\n' +
       '- list: Show all scheduled jobs with status and next run time\n' +
-      '- create: Create a job (schedule + exactly one of message, workflowDefinitionId, or goalId)\n' +
-      '- update: Change schedule, message, workflow fields, name, timezone, sessionTarget, agentId, or workingDirectory (requires jobId)\n' +
+      '- create: Create a job (scheduleKind plus exactly one of message, workflowDefinitionId, or goalId)\n' +
+      '- update: Change schedule, message, workflow fields, name, sessionTarget, agentId, or workingDirectory (requires jobId)\n' +
       '- remove: Delete a job (requires jobId)\n' +
       '- enable / disable: Toggle a job (requires jobId)\n' +
       '- history: Recent executions for a job (requires jobId)',
@@ -224,9 +246,10 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
             const goalId = params.goalId?.trim();
             const hasMessage = Boolean(params.message?.trim());
             const targetCount = [workflowId, goalId, hasMessage ? 'message' : ''].filter(Boolean).length;
-            if (!params.schedule?.trim() || targetCount !== 1) {
+            const schedule = scheduleFromParams(params);
+            if (!schedule || targetCount !== 1) {
               return textResult(
-                'Error: create requires schedule and exactly one of message, workflowDefinitionId, or goalId.',
+                'Error: create requires scheduleKind with matching cronExpr/at/everyMs and exactly one of message, workflowDefinitionId, or goalId.',
               );
             }
 
@@ -238,9 +261,8 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
             }
 
             let payload: CronPayload;
-            let timeout: number | undefined;
             let sessionTarget = params.sessionTarget ?? 'isolated';
-            let delivery: JobData['delivery'];
+            let delivery: CronDelivery | undefined;
 
             if (goalId) {
               payload = {
@@ -268,10 +290,9 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
                 ...(params.waitForCompletion === false ? { waitForCompletion: false } : {}),
               };
               sessionTarget = 'isolated';
-              timeout = DEFAULT_WORKFLOW_CRON_WAIT_MS;
               if (params.deliveryChannel?.trim() && params.deliveryTo?.trim()) {
                 delivery = {
-                  mode: 'direct',
+                  mode: 'announce',
                   channel: params.deliveryChannel.trim(),
                   to: params.deliveryTo.trim(),
                 };
@@ -283,11 +304,9 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
               };
             }
 
-            const result = await cron.addJob(params.schedule.trim(), {
+            const result = await cron.addJob(schedule, {
               name: params.name?.trim() || undefined,
-              timezone: params.timezone?.trim() || undefined,
               sessionTarget,
-              ...(timeout ? { timeout } : {}),
               ...(delivery ? { delivery } : {}),
               ...(params.agentId?.trim() ? { agentId: params.agentId.trim() } : {}),
               ...(params.workingDirectory?.trim()
@@ -299,7 +318,7 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
             const kindLabel = goalId ? `goal job (${goalId})` : workflowId ? `workflow job (${workflowId})` : 'job';
             return textResult(
               `Created ${kindLabel}${params.name ? ` "${params.name.trim()}"` : ''} (${result.id})\n` +
-                `Schedule: ${result.schedule}`,
+                `Schedule: ${describeSchedule(result.schedule)}`,
             );
           }
 
@@ -308,9 +327,10 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
               return textResult('Error: update requires jobId.');
             }
 
-            const updates: Partial<Omit<JobData, 'id' | 'created_at' | 'updated_at'>> = {};
-            if (params.schedule?.trim()) {
-              updates.schedule = params.schedule.trim();
+            const updates: CronJobPatch = {};
+            const nextSchedule = scheduleFromParams(params);
+            if (nextSchedule) {
+              updates.schedule = nextSchedule;
             }
             if (params.message != null && params.message.trim()) {
               const scanResult = scanCronPrompt(params.message);
@@ -346,17 +366,13 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
                 ...(params.waitForCompletion === false ? { waitForCompletion: false } : {}),
               };
               updates.sessionTarget = 'isolated';
-              updates.timeout = DEFAULT_WORKFLOW_CRON_WAIT_MS;
             }
             if (params.deliveryChannel?.trim() && params.deliveryTo?.trim()) {
               updates.delivery = {
-                mode: 'direct',
+                mode: 'announce',
                 channel: params.deliveryChannel.trim(),
                 to: params.deliveryTo.trim(),
               };
-            }
-            if (params.timezone?.trim()) {
-              updates.timezone = params.timezone.trim();
             }
             if (params.name !== undefined) {
               updates.name = params.name.trim() || undefined;
@@ -366,16 +382,16 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool {
             }
             if (params.agentId !== undefined) {
               const t = params.agentId.trim();
-              updates.agentId = t || null;
+              if (t) updates.agentId = t;
             }
             if (params.workingDirectory !== undefined) {
               const t = params.workingDirectory.trim();
-              updates.workingDirectory = t || null;
+              if (t) updates.workingDirectory = t;
             }
 
             if (Object.keys(updates).length === 0) {
               return textResult(
-                'Error: update requires at least one of schedule, message, workflowDefinitionId, name, timezone, sessionTarget, agentId, workingDirectory, deliveryChannel/deliveryTo.',
+                'Error: update requires at least one of scheduleKind, message, workflowDefinitionId, name, sessionTarget, agentId, workingDirectory, deliveryChannel/deliveryTo.',
               );
             }
 

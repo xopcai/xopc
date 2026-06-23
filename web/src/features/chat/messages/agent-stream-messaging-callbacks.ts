@@ -144,21 +144,16 @@ export function createAgentStreamMessagingCallbacks(opts: {
       store().setSessionProgress(chatId, p);
     },
     onTtsAudio: (p) => {
-      beforeAssistantDelta();
-      store().mutateSessionStreaming(chatId, (msg) => {
-        const uri = p.uri?.trim();
-        const existing = msg.attachments ?? [];
-        if (uri && existing.some((a) => a.uri?.trim() === uri)) {
-          return;
-        }
-        const nextAtt = {
-          name: p.name,
-          mimeType: p.mimeType,
-          type: 'voice' as const,
-          uri: p.uri,
-          size: 0,
-        };
-        msg.attachments = [...existing, nextAtt];
+      if (!shouldApplyStreamUpdate(chatId)) return;
+      store().appendAttachmentToCurrentAssistant(chatId, {
+        name: p.name,
+        mimeType: p.mimeType,
+        type: 'voice' as const,
+        uri: p.uri,
+        size: 0,
+      }, {
+        attachTo: p.attachTo,
+        messageId: p.messageId,
       });
     },
     onCompaction: (state: CompactionState) => {

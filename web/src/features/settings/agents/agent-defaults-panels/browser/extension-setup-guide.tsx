@@ -19,7 +19,9 @@ export function ExtensionSetupGuide({
   connected,
   busy,
   onOpenChrome,
+  onCopyPath,
   onRevealFolder,
+  pathBusy,
   folderBusy,
 }: {
   m: BrowserMessages;
@@ -28,7 +30,9 @@ export function ExtensionSetupGuide({
   connected: boolean;
   busy: boolean;
   onOpenChrome: () => void;
+  onCopyPath: () => void;
   onRevealFolder: () => void;
+  pathBusy: boolean;
   folderBusy: boolean;
 }) {
   const steps: ChecklistStep[] = [
@@ -55,6 +59,15 @@ export function ExtensionSetupGuide({
               onClick={onOpenChrome}
             >
               {m.browserExtensionOpenChrome}
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline disabled:opacity-60"
+              disabled={busy}
+              onClick={onCopyPath}
+              title={extensionDir}
+            >
+              {pathBusy ? m.browserExtensionInstalling : m.browserExtensionCopyPath}
             </button>
             <button
               type="button"

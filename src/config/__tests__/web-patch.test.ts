@@ -19,12 +19,10 @@ describe('web-patch merges', () => {
     const result = mergeCronConfigPatch(config, {
       enabled: false,
       maxConcurrentJobs: 10,
-      defaultTimezone: 'America/New_York',
     });
     expect(result).toEqual({ ok: true });
     expect(config.cron?.enabled).toBe(false);
     expect(config.cron?.maxConcurrentJobs).toBe(10);
-    expect(config.cron?.defaultTimezone).toBe('America/New_York');
   });
 
   it('merges goals config', () => {
@@ -105,7 +103,6 @@ describe('web-patch resolve helpers', () => {
     expect(resolveCronConfigForWeb({} as Config)).toEqual({
       enabled: true,
       maxConcurrentJobs: 5,
-      defaultTimezone: 'UTC',
       historyRetentionDays: 7,
       enableMetrics: true,
     });

@@ -14,18 +14,22 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, join, normalize, resolve, sep } from 'node:path';
+import { basename, join, normalize, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 import { fetch } from 'undici';
 
 import { parseFrontmatter } from '../../markdown/frontmatter.js';
-import { resolveSkillsDir } from '../../config/paths.js';
 import { computeSkillTreeHashSync } from './hub-hash.js';
 import { getSkillsLockEntry, recordSkillsHubInstall } from './hub-lock.js';
 import type { SkillHubKind } from './hub-lock.js';
-import { installSkillFromZip, isValidSkillId } from './managed-store.js';
+import {
+  installSkillFromZip,
+  isValidSkillId,
+  prepareManagedSkillTempDir,
+  promoteManagedSkillTempDir,
+} from './managed-store.js';
 import { formatScanSummary, scanSkillDirectory } from './scanner.js';
 
 export interface HubPullOptions {
@@ -143,49 +147,47 @@ async function copySkillTreeToManaged(
     throw new Error(`Invalid skill id "${targetId}" (letters, digits, ._-; max 63 chars after first)`);
   }
 
-  const rootDir = resolveSkillsDir();
-  mkdirSync(rootDir, { recursive: true });
-  const dest = join(rootDir, targetId);
-  const destResolved = resolve(dest);
-  const rootResolved = resolve(rootDir);
-  if (!destResolved.startsWith(rootResolved + sep) && destResolved !== rootResolved) {
-    throw new Error('Invalid destination path');
-  }
-
-  if (existsSync(dest)) {
-    if (!ctx.force) {
+  const { destDir, tempDir } = prepareManagedSkillTempDir(targetId);
+  try {
+    if (existsSync(destDir) && !ctx.force) {
       throw new Error(`Skill "${targetId}" already exists. Use --force to replace.`);
     }
-    rmSync(dest, { recursive: true, force: true });
-  }
 
-  cpSync(skillRoot, dest, { recursive: true });
+    cpSync(skillRoot, tempDir, { recursive: true });
 
-  if (!existsSync(join(dest, 'SKILL.md'))) {
-    rmSync(dest, { recursive: true, force: true });
-    throw new Error('Installed tree is missing SKILL.md');
-  }
+    if (!existsSync(join(tempDir, 'SKILL.md'))) {
+      throw new Error('Installed tree is missing SKILL.md');
+    }
 
-  const hash = computeSkillTreeHashSync(dest);
-  recordSkillsHubInstall(
-    targetId,
-    {
+    await runScan(tempDir, ctx.strictScan);
+    const promoted = promoteManagedSkillTempDir({
+      skillId: targetId,
+      tempDir,
+      overwrite: ctx.force,
+    });
+    const hash = computeSkillTreeHashSync(promoted.path);
+    recordSkillsHubInstall(
+      targetId,
+      {
+        kind: ctx.kind,
+        source: ctx.source,
+        ref: ctx.kind === 'git' ? ctx.ref : undefined,
+        subpath: ctx.kind === 'git' ? ctx.subpath : undefined,
+      },
+      hash,
+    );
+
+    return {
+      skillId: targetId,
+      path: promoted.path,
+      contentHash: hash,
       kind: ctx.kind,
       source: ctx.source,
-      ref: ctx.kind === 'git' ? ctx.ref : undefined,
-      subpath: ctx.kind === 'git' ? ctx.subpath : undefined,
-    },
-    hash,
-  );
-  await runScan(dest, ctx.strictScan);
-
-  return {
-    skillId: targetId,
-    path: dest,
-    contentHash: hash,
-    kind: ctx.kind,
-    source: ctx.source,
-  };
+    };
+  } catch (err) {
+    rmSync(tempDir, { recursive: true, force: true });
+    throw err;
+  }
 }
 
 async function pullSkillFromZipBuffer(

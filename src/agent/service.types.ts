@@ -47,6 +47,8 @@ export interface AgentServiceConfig {
     status: string;
     goal: import('../goals/types.js').GoalWithDetails;
   }) => void;
+  /** Gateway/TUI: local skill catalog changed or skill config toggles changed. */
+  onSkillsUpdated?: (payload: { reason: 'disk' | 'config' }) => void;
   /** Gateway: persisted workflow runs. */
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike;
   /** Gateway: resolves bound source context (e.g. Note-grounded chat) before each turn. */

@@ -1,3 +1,4 @@
+import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 import { cn } from '@/lib/cn';
@@ -8,6 +9,11 @@ import { WORKFLOW_ARG_FIELDS } from './workflow-page.constants';
 import { resolveWorkflowArgLabel } from './workflow-input.utils';
 
 type WorkflowsMessages = ReturnType<typeof messages>['workflows'];
+
+type WorkflowArgAiAssistConfig = {
+  disabled?: boolean;
+  context?: Record<string, unknown>;
+};
 
 function ExamplePromptList({
   examples,
@@ -48,6 +54,7 @@ export function WorkflowArgFieldsForm({
   examplePrompts = [],
   showGoal = true,
   inputClassName,
+  aiAssist,
 }: {
   workflowName: string;
   language: StoredLanguage;
@@ -58,6 +65,7 @@ export function WorkflowArgFieldsForm({
   examplePrompts?: WorkflowDefinitionExamplePrompt[];
   showGoal?: boolean;
   inputClassName?: string;
+  aiAssist?: WorkflowArgAiAssistConfig;
 }) {
   const labels = messages(language).workflows;
   const argFields = WORKFLOW_ARG_FIELDS[workflowName] ?? [];
@@ -75,54 +83,95 @@ export function WorkflowArgFieldsForm({
 
   return (
     <div className="flex flex-col gap-3">
-      {argFields.map((field) => (
-        <label key={field.key} className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">
-            {resolveWorkflowArgLabel(labels.args as Record<string, string>, field.labelKey)}
-            {field.required ? ' *' : ''}
-          </span>
-          {field.multiline ? (
-            <textarea
-              value={argValues[field.key] ?? ''}
-              onChange={(event) =>
-                onArgValuesChange({ ...argValues, [field.key]: event.target.value })
-              }
-              placeholder={resolveWorkflowArgLabel(
-                labels.args as Record<string, string>,
-                field.placeholderKey,
-              )}
-              className={cn(fieldClass, 'min-h-20 resize-y')}
-            />
-          ) : (
-            <input
-              value={argValues[field.key] ?? ''}
-              onChange={(event) =>
-                onArgValuesChange({ ...argValues, [field.key]: event.target.value })
-              }
-              placeholder={resolveWorkflowArgLabel(
-                labels.args as Record<string, string>,
-                field.placeholderKey,
-              )}
-              className={fieldClass}
-            />
-          )}
-        </label>
-      ))}
+      {argFields.map((field) => {
+        const label = resolveWorkflowArgLabel(labels.args, field.labelKey);
+        const placeholder = resolveWorkflowArgLabel(
+          labels.args,
+          field.placeholderKey,
+        );
+        const value = argValues[field.key] ?? '';
+        return (
+          <div key={field.key} className="flex flex-col gap-1">
+            <span className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium text-fg-muted">
+                {label}
+                {field.required ? ' *' : ''}
+              </span>
+              {field.multiline && aiAssist ? (
+                <AiTextAssistButton
+                  value={value}
+                  onApply={(next) => onArgValuesChange({ ...argValues, [field.key]: next })}
+                  fieldId={`workflow.arg.${field.key}`}
+                  fieldLabel={label}
+                  scenario="workflow.arg"
+                  locale={language}
+                  context={{
+                    ...aiAssist.context,
+                    workflowName,
+                    workflowArgs: argValues,
+                    fieldKey: field.key,
+                  }}
+                  disabled={aiAssist.disabled}
+                  showLabel={false}
+                />
+              ) : null}
+            </span>
+            {field.multiline ? (
+              <textarea
+                value={value}
+                onChange={(event) =>
+                  onArgValuesChange({ ...argValues, [field.key]: event.target.value })
+                }
+                placeholder={placeholder}
+                className={cn(fieldClass, 'min-h-20 resize-y')}
+              />
+            ) : (
+              <input
+                value={value}
+                onChange={(event) =>
+                  onArgValuesChange({ ...argValues, [field.key]: event.target.value })
+                }
+                placeholder={placeholder}
+                className={fieldClass}
+              />
+            )}
+          </div>
+        );
+      })}
 
       {hasArgFields && examplePrompts.length > 0 ? (
         <ExamplePromptList examples={examplePrompts} labels={labels} onSelect={applyExample} />
       ) : null}
 
       {showGoal ? (
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-medium text-fg-muted">{labels.goalLabel}</span>
+        <div className="flex flex-col gap-1">
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-xs font-medium text-fg-muted">{labels.goalLabel}</span>
+            {aiAssist ? (
+              <AiTextAssistButton
+                value={goal}
+                onApply={onGoalChange}
+                fieldId="workflow.goal"
+                fieldLabel={labels.goalLabel}
+                scenario="cron.workflowGoal"
+                locale={language}
+                context={{
+                  ...aiAssist.context,
+                  workflowName,
+                  workflowArgs: argValues,
+                }}
+                disabled={aiAssist.disabled}
+                showLabel={false}
+              />
+            ) : null}
+          </span>
           <textarea
             value={goal}
             onChange={(event) => onGoalChange(event.target.value)}
             placeholder={labels.goalPlaceholder}
             className={cn(fieldClass, 'min-h-20 resize-y')}
           />
-        </label>
+        </div>
       ) : null}
 
       {!hasArgFields && examplePrompts.length > 0 ? (

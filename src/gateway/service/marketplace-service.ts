@@ -22,7 +22,12 @@ import type { Config } from '../../config/schema.js';
 import type { AgentService } from '../../agent/service.js';
 import type { ChannelManager } from '../../channels/manager.js';
 import type { ExtensionLoader } from '../../extensions/loader.js';
-import type { AgentSkillAvailabilityPayload, SkillCatalogEntry } from '../../agent/agent-manager.js';
+import type {
+  AgentSkillAvailabilityEntry,
+  AgentSkillAvailabilityPayload,
+  SkillCatalogEntry,
+  SkillCatalogRuntimeMeta,
+} from '../../agent/agent-manager.js';
 import type {
   ManagedSkillListItem,
 } from '../../agent/skills/managed-store.js';
@@ -72,6 +77,23 @@ export interface GatewayMarketplaceServiceOptions {
   emit: (type: string, payload: unknown) => void;
 }
 
+export interface SkillInstallAvailability {
+  skillId: string;
+  skillName?: string;
+  loaded: boolean;
+  enabled?: boolean;
+  defaultAgentId: string;
+  availableForDefaultAgent?: boolean;
+  unavailableReason?: AgentSkillAvailabilityEntry['unavailableReason'];
+  diagnostics: SkillCatalogRuntimeMeta['diagnostics'];
+}
+
+export interface SkillInstallResultPayload {
+  skillId: string;
+  path: string;
+  availability: SkillInstallAvailability;
+}
+
 export class GatewayMarketplaceService {
   private readonly opts: GatewayMarketplaceServiceOptions;
 
@@ -84,10 +106,25 @@ export class GatewayMarketplaceService {
   getSkillsApi(): {
     catalog: SkillCatalogEntry[];
     managed: ManagedSkillListItem[];
-  } {
+  } & SkillCatalogRuntimeMeta {
+    const snapshot = this.opts.getAgentService().getSkillCatalogSnapshot();
     return {
-      catalog: this.opts.getAgentService().getSkillCatalog(),
+      catalog: snapshot.catalog,
       managed: listManagedSkillDirs(),
+      version: snapshot.version,
+      loadedAt: snapshot.loadedAt,
+      diagnostics: snapshot.diagnostics,
+      status: snapshot.status,
+    };
+  }
+
+  getSkillsStatusApi(): SkillCatalogRuntimeMeta {
+    const snapshot = this.opts.getAgentService().getSkillCatalogSnapshot();
+    return {
+      version: snapshot.version,
+      loadedAt: snapshot.loadedAt,
+      diagnostics: snapshot.diagnostics,
+      status: snapshot.status,
     };
   }
 
@@ -108,11 +145,14 @@ export class GatewayMarketplaceService {
   installSkillZip(
     buffer: Buffer,
     opts: { skillId?: string; overwrite?: boolean },
-  ): { skillId: string; path: string } {
+  ): SkillInstallResultPayload {
     const result = installSkillFromZip(buffer, opts);
     removeSkillsLockEntry(result.skillId);
     this.opts.getAgentService().refreshSkillsAfterDiskChange();
-    return result;
+    return {
+      ...result,
+      availability: this.getInstallAvailability(result.skillId),
+    };
   }
 
   reloadSkills(): void {
@@ -151,7 +191,7 @@ export class GatewayMarketplaceService {
     version?: string;
     overwrite?: boolean;
     provider?: string;
-  }): Promise<{ skillId: string; path: string }> {
+  }): Promise<SkillInstallResultPayload> {
     const { buffer, skillId } = await downloadFromMarketplace(
       this.opts.getConfig(),
       opts.name,
@@ -172,6 +212,36 @@ export class GatewayMarketplaceService {
   /** All registered marketplace providers (built-in + extension-contributed). */
   getSkillsProviders(): Array<{ id: string; displayName: string }> {
     return listRegisteredProviders();
+  }
+
+  private getDefaultAgentId(): string {
+    return this.opts.getConfig().agents?.default || 'main';
+  }
+
+  private getInstallAvailability(skillId: string): SkillInstallAvailability {
+    const snapshot = this.opts.getAgentService().getSkillCatalogSnapshot();
+    const catalogEntry =
+      snapshot.catalog.find((s) => s.directoryId === skillId) ??
+      snapshot.catalog.find((s) => s.name === skillId);
+    const defaultAgentId = this.getDefaultAgentId();
+    const agentSkills = this.getAgentSkillsApi(defaultAgentId);
+    const agentEntry = catalogEntry
+      ? agentSkills.skills.find((s) => s.name === catalogEntry.name)
+      : undefined;
+    const relevantDiagnostics = snapshot.diagnostics.filter((diag) => {
+      if (!catalogEntry) return diag.path?.includes(skillId) || diag.skillName === skillId;
+      return diag.skillName === catalogEntry.name || diag.path?.startsWith(catalogEntry.path);
+    });
+    return {
+      skillId,
+      ...(catalogEntry ? { skillName: catalogEntry.name } : {}),
+      loaded: Boolean(catalogEntry),
+      ...(catalogEntry ? { enabled: catalogEntry.enabled } : {}),
+      defaultAgentId,
+      ...(agentEntry ? { availableForDefaultAgent: agentEntry.availableForCurrentAgent } : {}),
+      ...(agentEntry?.unavailableReason ? { unavailableReason: agentEntry.unavailableReason } : {}),
+      diagnostics: relevantDiagnostics,
+    };
   }
 
   // ── Extension marketplace ─────────────────────────────────────────────

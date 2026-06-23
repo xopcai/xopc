@@ -64,6 +64,8 @@ export interface CommandContextDeps {
   getUsage?: () => Promise<UsageStats>;
   /** Stop current LLM turn and clear channel preview stream (Telegram draft, etc.) */
   abortCurrentTurn?: () => Promise<void>;
+  /** Reload skills from disk and refresh active agent prompts. */
+  reloadSkills?: () => Promise<void>;
 
   compactSession?: (
     sessionKey: string,
@@ -90,6 +92,7 @@ export class CommandContextImpl implements CommandContext {
   readonly isGroup: boolean;
   readonly config: Config;
   readonly abortCurrentTurn?: () => Promise<void>;
+  readonly reloadSkills?: () => Promise<void>;
   readonly persistentGoalApis?: PersistentGoalApis;
   readonly workflowRunApis?: CommandContext['workflowRunApis'];
 
@@ -108,6 +111,13 @@ export class CommandContextImpl implements CommandContext {
     if (deps.abortCurrentTurn) {
       const run = deps.abortCurrentTurn;
       this.abortCurrentTurn = async () => {
+        await run();
+      };
+    }
+
+    if (deps.reloadSkills) {
+      const run = deps.reloadSkills;
+      this.reloadSkills = async () => {
         await run();
       };
     }

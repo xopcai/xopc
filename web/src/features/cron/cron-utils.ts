@@ -1,4 +1,4 @@
-import type { CronJob, CronJobExecution, SessionChatId } from '@/features/cron/cron-api';
+import type { CronJob, CronJobExecution, CronSchedule, SessionChatId } from '@/features/cron/cron-api';
 import {
   formatCronExpressionLabel,
   type ScheduleBadgeLabels,
@@ -125,16 +125,38 @@ export function execStatusLabel(
 
 export type { ScheduleBadgeLabels } from '@/features/scheduling/cron/format-cron-label';
 
+function formatEveryMs(ms: number, locale: string): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
+  const rtf = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' });
+  if (ms % 86400000 === 0) return rtf.format(ms / 86400000, 'day').replace(/^in\s+/i, 'Every ');
+  if (ms % 3600000 === 0) return rtf.format(ms / 3600000, 'hour').replace(/^in\s+/i, 'Every ');
+  if (ms % 60000 === 0) return rtf.format(ms / 60000, 'minute').replace(/^in\s+/i, 'Every ');
+  if (ms % 1000 === 0) return rtf.format(ms / 1000, 'second').replace(/^in\s+/i, 'Every ');
+  return `${ms}ms`;
+}
+
+export function scheduleTechnicalText(schedule: CronSchedule): string {
+  if (schedule.kind === 'cron') return schedule.tz ? `${schedule.expr} (${schedule.tz})` : schedule.expr;
+  if (schedule.kind === 'at') return `at ${schedule.at}`;
+  return `every ${schedule.everyMs}ms${schedule.anchorMs ? ` from ${new Date(schedule.anchorMs).toISOString()}` : ''}`;
+}
+
 /**
  * Short human-readable schedule for task cards (cron expression + optional next run).
  */
 export function formatScheduleBadge(
-  job: Pick<CronJob, 'schedule' | 'timezone' | 'next_run'>,
+  job: Pick<CronJob, 'schedule' | 'nextRunAtMs'>,
   locale: string,
   labels: ScheduleBadgeLabels,
 ): string {
-  return formatCronExpressionLabel(job.schedule || '', locale, labels, {
-    timezone: job.timezone,
-    nextRun: job.next_run,
+  if (job.schedule.kind === 'at') {
+    return new Date(job.schedule.at).toLocaleString(locale);
+  }
+  if (job.schedule.kind === 'every') {
+    return formatEveryMs(job.schedule.everyMs, locale);
+  }
+  return formatCronExpressionLabel(job.schedule.expr, locale, labels, {
+    timezone: job.schedule.tz,
+    nextRun: job.nextRunAtMs ? new Date(job.nextRunAtMs).toISOString() : undefined,
   });
 }

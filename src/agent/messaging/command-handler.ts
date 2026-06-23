@@ -52,6 +52,8 @@ export interface CommandHandlerConfig {
   resetSession?: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
   /** Cancel streaming preview + in-flight LLM work for this session (e.g. /abort) */
   abortSessionTurn?: (sessionKey: string) => Promise<void>;
+  /** Reload skills from disk and refresh active agent prompts. */
+  reloadSkills?: () => void | Promise<void>;
 
   compactSession?: (
     sessionKey: string,
@@ -84,6 +86,7 @@ export class CommandHandler {
   private switchModelForSession: (sessionKey: string, modelId: string) => Promise<boolean>;
   private invalidateAgentSession?: (sessionKey: string) => void;
   private abortSessionTurn?: (sessionKey: string) => Promise<void>;
+  private reloadSkills?: CommandHandlerConfig['reloadSkills'];
   private compactSession?: CommandHandlerConfig['compactSession'];
   private btwQuery?: CommandHandlerConfig['btwQuery'];
   private getSessionContextReport?: CommandHandlerConfig['getSessionContextReport'];
@@ -101,6 +104,7 @@ export class CommandHandler {
     this.switchModelForSession = handlerConfig.switchModelForSession;
     this.invalidateAgentSession = handlerConfig.invalidateAgentSession;
     this.abortSessionTurn = handlerConfig.abortSessionTurn;
+    this.reloadSkills = handlerConfig.reloadSkills;
     this.compactSession = handlerConfig.compactSession;
     this.btwQuery = handlerConfig.btwQuery;
     this.getSessionContextReport = handlerConfig.getSessionContextReport;
@@ -217,6 +221,11 @@ export class CommandHandler {
       abortCurrentTurn: this.abortSessionTurn
         ? async () => {
             await this.abortSessionTurn!(context.sessionKey);
+          }
+        : undefined,
+      reloadSkills: this.reloadSkills
+        ? async () => {
+            await this.reloadSkills!();
           }
         : undefined,
 

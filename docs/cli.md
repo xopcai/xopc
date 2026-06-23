@@ -362,28 +362,34 @@ Manage scheduled tasks.
 ### Add Task
 
 ```bash
-xopc cron add --schedule "0 9 * * *" --message "Good morning!"
+xopc cron add --cron "0 9 * * *" --message "Good morning!"
+xopc cron add --at 2026-06-24T09:00:00+08:00 --message "One-time reminder"
+xopc cron add --every 30m --message "Interval check"
 ```
 
 **Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
-| `--schedule` | Cron expression |
+| `--cron` | Cron expression |
+| `--tz` | Optional IANA timezone for `--cron` |
+| `--at` | One-time ISO timestamp or relative duration |
+| `--every` | Fixed interval duration |
 | `--message` | Message to send |
+| `--workflow` | Workflow definition id |
 | `--name` | Task name (optional) |
 
 **Examples:**
 
 ```bash
 # Daily at 9am
-xopc cron add --schedule "0 9 * * *" --message "Daily update"
+xopc cron add --cron "0 9 * * *" --message "Daily update"
 
 # Weekdays at 6pm
-xopc cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!"
+xopc cron add --cron "0 18 * * 1-5" --message "Time to wrap up!"
 
 # Hourly reminder
-xopc cron add --schedule "0 * * * *" --message "Hourly reminder" --name hourly
+xopc cron add --every 1h --message "Hourly reminder" --name hourly
 ```
 
 ### Remove Task

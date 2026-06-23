@@ -246,6 +246,18 @@ export interface SkillDiagnostic {
   path?: string;
 }
 
+export interface SkillRuntimeStatus {
+  version: string;
+  loadedAt: number;
+  reloadInProgress: boolean;
+  reloadPending: boolean;
+  lastReloadStartedAt?: number;
+  lastReloadFinishedAt?: number;
+  lastReloadReason?: 'initial' | 'disk' | 'config';
+  lastReloadOk?: boolean;
+  lastReloadError?: string;
+}
+
 export interface SkillSnapshot {
   version: string;
   skills: SkillEntry[];

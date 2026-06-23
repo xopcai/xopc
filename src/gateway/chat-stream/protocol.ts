@@ -44,7 +44,10 @@ export type CompactionEvent = ChatStreamEnvelope<
   'compaction',
   { status: 'started' | 'completed' | 'skipped'; tokensBefore?: number; tokensAfter?: number; summary?: string }
 >;
-export type TtsAudioEvent = ChatStreamEnvelope<'tts_audio', { uri: string; mimeType: string; name: string }>;
+export type TtsAudioEvent = ChatStreamEnvelope<
+  'tts_audio',
+  { uri: string; mimeType: string; name: string; attachTo?: 'last_assistant'; messageId?: string }
+>;
 export type ClarifyRequestEvent = ChatStreamEnvelope<
   'clarify_request',
   { requestId: string; question: string; choices?: string[]; default?: string }

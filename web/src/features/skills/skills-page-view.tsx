@@ -20,6 +20,7 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     hasToken,
     error,
     actionFeedback,
+    skillDiagnostics,
     mainTab,
     setMainTab,
     setSourceFilter,
@@ -77,6 +78,21 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
             role="alert"
           >
             {error}
+          </div>
+        ) : null}
+        {skillDiagnostics.length > 0 ? (
+          <div
+            className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200"
+            role="status"
+          >
+            <div className="font-medium">Skill diagnostics: {skillDiagnostics.length}</div>
+            <ul className="mt-1 space-y-1">
+              {skillDiagnostics.slice(0, 3).map((diag, index) => (
+                <li key={`${diag.path ?? diag.skillName ?? 'diagnostic'}-${index}`} className="truncate">
+                  {diag.type}: {diag.message}
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
         {inSettingsShell ? (

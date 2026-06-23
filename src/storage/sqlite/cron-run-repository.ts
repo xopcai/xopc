@@ -87,9 +87,6 @@ function trimJobRuns(db: ReturnType<typeof getSqliteDatabase>, jobId: string): v
 }
 
 export function appendCronRun(execution: JobExecution): void {
-  if (execution.status === 'running') {
-    return;
-  }
   const row = executionToInsert(execution);
   runSqliteWriteTransaction((db) => {
     db.prepare(

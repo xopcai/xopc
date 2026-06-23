@@ -18,6 +18,7 @@ import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusCl
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { showToast } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -128,7 +129,7 @@ function ExtensionSttProviderSettingsBody({
   const [localDraft, setLocalDraft] = useState<SttCredSlice | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [savedFlash, setSavedFlash] = useState(false);
+  const [_savedFlash, setSavedFlash] = useState(false);
 
   const credDraft = localDraft ?? savedSlice;
   const credBaseline = savedSlice;
@@ -166,7 +167,7 @@ function ExtensionSttProviderSettingsBody({
       dirtyRef.current = false;
       setLocalDraft(null);
       setSavedFlash(true);
-      window.setTimeout(() => setSavedFlash(false), 2500);
+      showToast({ type: 'success', title: v.saved });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -260,9 +261,6 @@ function ExtensionSttProviderSettingsBody({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {savedFlash ? (
-          <span className="text-xs text-emerald-600 dark:text-emerald-400">{v.saved}</span>
-        ) : null}
         {error ? <span className="text-xs text-red-600 dark:text-red-400">{error}</span> : null}
         <Button
           type="button"

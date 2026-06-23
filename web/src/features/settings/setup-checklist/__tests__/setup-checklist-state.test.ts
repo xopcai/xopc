@@ -16,6 +16,7 @@ const labels = {
   skillsMissing: 'no skills',
   presetsConfigured: 'presets ok',
   presetsMissing: 'presets missing',
+  readyToChat: 'ready',
 };
 
 describe('buildSetupStatusSnapshot', () => {
@@ -119,5 +120,42 @@ describe('buildSetupStatusSnapshot', () => {
     });
 
     expect(snapshot.channelConfigured).toBe(true);
+  });
+
+  it('promotes doctor failures into blocking issues', () => {
+    const snapshot = buildSetupStatusSnapshot({
+      hasToken: true,
+      sseConnected: true,
+      config: {
+        agents: { defaults: { model: 'openai/gpt-4o' } },
+        providers: { openai: '***' },
+      },
+      skillCount: 0,
+      doctorChecks: [
+        {
+          id: 'cron-health',
+          label: 'Cron',
+          status: 'warn',
+          message: 'Cron has a warning.',
+          hints: ['Open cron settings'],
+          fixed: false,
+        },
+        {
+          id: 'provider-auth',
+          label: 'Provider auth',
+          status: 'fail',
+          message: 'No provider auth.',
+          hints: ['Configure a provider'],
+          fixed: false,
+        },
+      ],
+      presetsDone: false,
+      agentCount: 1,
+      labels,
+    });
+
+    expect(snapshot.healthTier).toBe('blocked');
+    expect(snapshot.issues.map((issue) => issue.id)).toEqual(['provider-auth', 'cron-health']);
+    expect(snapshot.issues[0]?.path).toBe('/settings/credentials');
   });
 });

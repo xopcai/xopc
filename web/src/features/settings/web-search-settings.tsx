@@ -20,6 +20,7 @@ import { cn } from '@/lib/cn';
 import { messages, type WebSearchSettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-form-draft';
+import { showToast } from '@/lib/toast';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -81,7 +82,6 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
   const baseline = formDraft.baseline;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState(false);
   const dirtyRef = useRef(false);
   const trackedParsedRef = useRef<WebSearchSettingsState | null>(null);
 
@@ -124,13 +124,11 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
     if (!form || saving) return;
     setSaving(true);
     setError(null);
-    setSaveOk(false);
     try {
       await patchWebSearchSettings(form);
       dirtyRef.current = false;
       dispatchForm({ type: 'saved', value: form });
-      setSaveOk(true);
-      window.setTimeout(() => setSaveOk(false), 2500);
+      showToast({ type: 'success', title: w.saved });
     } catch (e) {
       setError(e instanceof Error ? e.message : w.saveError);
     } finally {
@@ -143,7 +141,6 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
     dirtyRef.current = false;
     dispatchForm({ type: 'discard' });
     setError(null);
-    setSaveOk(false);
   }, [baseline]);
 
   // Coordinate with the hub-level Save bar (no-op when this panel is opened
@@ -214,7 +211,6 @@ export function WebSearchSettingsPanel({ embedded = false }: { embedded?: boolea
          */}
         {embedded ? null : (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            {saveOk ? <span className="text-sm text-fg-muted">{w.saved}</span> : null}
             <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
               {w.discard}
             </Button>

@@ -2,7 +2,8 @@ import type { Hono } from 'hono';
 
 import { listGatewayAgents } from '../../agents-admin.js';
 import { getTunnelService } from '../../../tunnel/index.js';
-import type { JobWithNextRun, CronRunHistoryRow } from '../../../cron/types.js';
+import { describeSchedule } from '../../../cron/index.js';
+import type { CronRunHistoryRow, JobData } from '../../../cron/types.js';
 import type { WorkflowRunSummary } from '../../../workflows/domain/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -53,18 +54,18 @@ function toHomeWorkflowRun(run: WorkflowRunSummary): HomeWorkflowRun {
   };
 }
 
-function payloadKind(job: JobWithNextRun): string {
+function payloadKind(job: JobData): string {
   const payload = job.payload as { kind?: unknown } | undefined;
   return typeof payload?.kind === 'string' ? payload.kind : 'unknown';
 }
 
-function toHomeCronJob(job: JobWithNextRun): HomeCronJob | null {
-  if (!job.enabled || !job.next_run) return null;
+function toHomeCronJob(job: JobData): HomeCronJob | null {
+  if (!job.enabled || !job.state.nextRunAtMs) return null;
   return {
     id: job.id,
     name: job.name,
-    schedule: job.schedule,
-    nextRunAt: job.next_run,
+    schedule: describeSchedule(job.schedule),
+    nextRunAt: new Date(job.state.nextRunAtMs).toISOString(),
     payloadKind: payloadKind(job),
   };
 }

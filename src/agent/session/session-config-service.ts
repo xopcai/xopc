@@ -5,6 +5,7 @@
  * Previously these lived as four sibling methods on `AgentService`:
  *   - `patchSessionAgentConfig` (96 lines of validation + persistence)
  *   - `applyCronJobWorkingDirectory` (cron-specific working dir update)
+ *   - `applyCronJobModelOverride` (cron-specific model update before session creation)
  *   - `clearCronSessionWorkingDirectoryOverride` (private helper)
  *   - `clearSessionModelOverride` (private helper)
  *
@@ -145,6 +146,30 @@ export class SessionConfigService {
       return;
     }
     await this.clearCronWorkingDirectoryOverride(sessionKey);
+  }
+
+  /**
+   * Persist a cron job model override before the direct turn creates/hydrates
+   * the AgentSession. Unlike the user-facing patch path, this must not call
+   * `agentManager.setModelForSession`, because the cron session usually does
+   * not exist yet.
+   */
+  async applyCronJobModelOverride(
+    sessionKey: string,
+    model: string | undefined,
+  ): Promise<boolean> {
+    const raw = model?.trim();
+    if (!raw) {
+      await this.clearModelOverride(sessionKey);
+      return true;
+    }
+    const ok = await this.opts.modelManager.switchModelForSession(sessionKey, raw);
+    if (!ok) {
+      await this.clearModelOverride(sessionKey);
+      return false;
+    }
+    await this.opts.sessionConfigStore.update(sessionKey, { modelOverride: raw });
+    return true;
   }
 
   /**

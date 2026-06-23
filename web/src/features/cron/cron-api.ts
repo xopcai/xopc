@@ -3,12 +3,33 @@ import { apiUrl } from '@/lib/url';
 import { fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import type { WorkflowRunInputEnvelope, WorkflowRunSource } from '@/features/workflows/workflow-api';
 
+export class CronApiError extends Error {
+  readonly status: number;
+  readonly code?: string;
+  readonly runningSessionKey?: string;
+
+  constructor(message: string, details: { status: number; code?: string; runningSessionKey?: string }) {
+    super(message);
+    this.name = 'CronApiError';
+    this.status = details.status;
+    this.code = details.code;
+    this.runningSessionKey = details.runningSessionKey;
+  }
+}
+
 export interface CronDelivery {
-  mode: 'none' | 'announce' | 'direct';
+  mode: 'none' | 'announce' | 'webhook';
   channel?: string;
   to?: string;
+  accountId?: string;
+  threadId?: string | number;
   bestEffort?: boolean;
 }
+
+export type CronSchedule =
+  | { kind: 'at'; at: string }
+  | { kind: 'every'; everyMs: number; anchorMs?: number }
+  | { kind: 'cron'; expr: string; tz?: string; staggerMs?: number };
 
 export type CronPayload =
   | { kind: 'systemEvent'; text: string }
@@ -30,34 +51,55 @@ export interface CronWorkflowRunPayload {
 
 export interface CronJob {
   id: string;
-  name?: string;
-  schedule: string;
+  name: string;
+  description?: string;
+  schedule: CronSchedule;
   enabled: boolean;
-  timezone?: string;
-  maxRetries: number;
-  timeout: number;
-  next_run?: string;
-  created_at: string;
-  updated_at: string;
-  sessionTarget?: 'main' | 'isolated';
+  deleteAfterRun?: boolean;
+  createdAtMs: number;
+  updatedAtMs: number;
+  nextRunAtMs?: number;
+  sessionTarget?: 'main' | 'isolated' | 'current' | `session:${string}`;
+  wakeMode?: 'now' | 'next-heartbeat';
   /** Isolated jobs: agent profile for session key; omit uses the default agent. */
   agentId?: string;
+  sessionKey?: string;
   /** Isolated jobs: absolute workspace on gateway host; omit uses the agent default workspace. */
   workingDirectory?: string;
   payload: CronPayload;
   delivery?: CronDelivery;
+  failureAlert?: unknown;
   model?: string;
+  state?: CronJobState;
+}
+
+export interface CronJobState {
+  nextRunAtMs?: number;
+  runningAtMs?: number;
+  runningSessionKey?: string;
+  lastRunAtMs?: number;
+  lastRunStatus?: 'ok' | 'error' | 'skipped';
+  lastError?: string;
+  lastDurationMs?: number;
+}
+
+export interface CronRunNowResult {
+  triggered: boolean;
+  job?: CronJob;
+  history?: CronJobExecution[];
 }
 
 export interface AddJobOptions {
   name?: string;
-  timezone?: string;
-  sessionTarget?: 'main' | 'isolated';
+  description?: string;
+  sessionTarget?: 'main' | 'isolated' | 'current' | `session:${string}`;
+  wakeMode?: 'now' | 'next-heartbeat';
   agentId?: string;
+  sessionKey?: string;
   workingDirectory?: string;
-  model?: string;
-  timeout?: number;
+  deleteAfterRun?: boolean;
   delivery?: CronDelivery;
+  failureAlert?: unknown;
   payload: CronPayload;
 }
 
@@ -129,45 +171,73 @@ export interface CronRunHistoryRow extends CronJobExecution {
 
 export interface CronJobUpdate {
   name?: string;
-  schedule?: string;
+  description?: string;
+  schedule?: CronSchedule;
   enabled?: boolean;
-  timezone?: string;
-  maxRetries?: number;
-  timeout?: number;
-  sessionTarget?: 'main' | 'isolated';
-  agentId?: string | null;
-  workingDirectory?: string | null;
-  model?: string;
+  sessionTarget?: 'main' | 'isolated' | 'current' | `session:${string}`;
+  wakeMode?: 'now' | 'next-heartbeat';
+  agentId?: string;
+  sessionKey?: string;
+  workingDirectory?: string;
+  deleteAfterRun?: boolean;
   delivery?: CronDelivery;
+  failureAlert?: unknown;
   payload?: CronPayload;
+}
+
+type ServerCronJob = Omit<CronJob, 'nextRunAtMs' | 'model'> & {
+  state?: CronJobState;
+  model?: string;
+};
+
+export function cronExpressionToSchedule(expr: string): CronSchedule {
+  return { kind: 'cron', expr: expr.trim() };
+}
+
+function normalizeCronJob(job: ServerCronJob): CronJob {
+  return {
+    ...job,
+    nextRunAtMs: job.state?.nextRunAtMs,
+    model:
+      job.model ??
+      (job.payload?.kind === 'agentTurn' && job.payload.model ? job.payload.model : undefined),
+  };
 }
 
 async function fetchJsonCron<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
   const res = await apiFetch(input, init);
-  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    code?: string;
+    runningSessionKey?: string;
+  };
   if (!res.ok) {
     const msg = typeof data.error === 'string' ? data.error : `HTTP ${res.status}`;
-    throw new Error(msg);
+    throw new CronApiError(msg, {
+      status: res.status,
+      code: data.code,
+      runningSessionKey: data.runningSessionKey,
+    });
   }
   return data as T;
 }
 
 export async function listJobs(): Promise<CronJob[]> {
-  const result = await fetchJsonCron<{ jobs: CronJob[] }>(apiUrl('/api/cron'));
-  return result.jobs || [];
+  const result = await fetchJsonCron<{ jobs: ServerCronJob[] }>(apiUrl('/api/cron'));
+  return (result.jobs || []).map(normalizeCronJob);
 }
 
 export async function getJob(id: string): Promise<CronJob | null> {
   const res = await apiFetch(apiUrl(`/api/cron/${encodeURIComponent(id)}`));
   if (res.status === 404) return null;
-  const data = (await res.json().catch(() => ({}))) as { error?: string; job?: CronJob };
+  const data = (await res.json().catch(() => ({}))) as { error?: string; job?: ServerCronJob };
   if (!res.ok) {
     throw new Error(typeof data.error === 'string' ? data.error : `HTTP ${res.status}`);
   }
-  return data.job ?? null;
+  return data.job ? normalizeCronJob(data.job) : null;
 }
 
-export async function addJob(schedule: string, options: AddJobOptions): Promise<{ id: string; schedule: string }> {
+export async function addJob(schedule: CronSchedule, options: AddJobOptions): Promise<{ id: string; schedule: CronSchedule }> {
   return fetchJsonCron(apiUrl('/api/cron'), {
     method: 'POST',
     body: JSON.stringify({ schedule, ...options }),
@@ -197,8 +267,8 @@ export async function toggleJob(id: string, enabled: boolean): Promise<boolean> 
   return result.toggled;
 }
 
-export async function runJob(id: string): Promise<void> {
-  await fetchJsonCron(apiUrl(`/api/cron/${encodeURIComponent(id)}/run`), { method: 'POST' });
+export async function runJob(id: string): Promise<CronRunNowResult> {
+  return await fetchJsonCron<CronRunNowResult>(apiUrl(`/api/cron/${encodeURIComponent(id)}/run`), { method: 'POST' });
 }
 
 export async function getHistory(id: string, limit = 10): Promise<CronJobExecution[]> {

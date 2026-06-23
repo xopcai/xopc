@@ -5,7 +5,6 @@ import { apiUrl } from '@/lib/url';
 export type CronGlobalsState = {
   enabled: boolean;
   maxConcurrentJobs: number;
-  defaultTimezone: string;
   historyRetentionDays: number;
   enableMetrics: boolean;
 };
@@ -13,7 +12,6 @@ export type CronGlobalsState = {
 const DEFAULT_CRON_GLOBALS: CronGlobalsState = {
   enabled: true,
   maxConcurrentJobs: 5,
-  defaultTimezone: 'UTC',
   historyRetentionDays: 7,
   enableMetrics: true,
 };
@@ -31,10 +29,6 @@ export function normalizeCronGlobalsFromConfig(config: unknown): CronGlobalsStat
       typeof cron.maxConcurrentJobs === 'number' && Number.isFinite(cron.maxConcurrentJobs)
         ? Math.max(1, Math.min(100, Math.floor(cron.maxConcurrentJobs)))
         : DEFAULT_CRON_GLOBALS.maxConcurrentJobs,
-    defaultTimezone:
-      typeof cron.defaultTimezone === 'string' && cron.defaultTimezone.trim()
-        ? cron.defaultTimezone.trim()
-        : DEFAULT_CRON_GLOBALS.defaultTimezone,
     historyRetentionDays:
       typeof cron.historyRetentionDays === 'number' && Number.isFinite(cron.historyRetentionDays)
         ? Math.max(1, Math.min(365, Math.floor(cron.historyRetentionDays)))

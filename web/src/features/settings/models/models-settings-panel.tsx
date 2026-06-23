@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { showToast } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -111,7 +112,6 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
     validating,
     reloading,
     error,
-    saveOk,
     validation,
     expanded,
     editorMode,
@@ -280,6 +280,7 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
         }
       }
       dispatchUi({ type: 'patch', patch: { saveOk: true } });
+      showToast({ type: 'success', title: ms.saved });
     } catch (e) {
       dispatchUi({ type: 'patch', patch: { error: e instanceof Error ? e.message : ms.saveError } });
     }
@@ -559,11 +560,6 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
       </div>
 
       {combinedDirty && !embedded ? <p className="text-xs text-amber-800 dark:text-amber-200">{ms.unsavedHint}</p> : null}
-      {saveOk || agentVm.saveOk ? (
-        <p className="text-xs text-emerald-700 dark:text-emerald-400" role="status">
-          {ms.saved}
-        </p>
-      ) : null}
       {error ? (
         <p className="flex items-center gap-1 text-sm text-red-600 dark:text-red-400" role="alert">
           <AlertCircle className="size-4 shrink-0" />
