@@ -1,5 +1,5 @@
 import { parseSessionKey } from '@xopcai/xopc/routing/session-key.js';
-import type { SessionStore } from '@xopcai/xopc/session/store.js';
+import type { SessionListReader } from '@xopcai/xopc/session/store-reader.js';
 
 export type NormalizedWeixinCronDelivery = {
   chatId: string;
@@ -34,7 +34,7 @@ export function normalizeWeixinCronDeliveryTo(to: string): NormalizedWeixinCronD
  * If exactly one indexed weixin DM session matches `ilinkPeerId`, return that session's accountId.
  */
 export async function resolveWeixinAccountIdFromSessions(
-  store: SessionStore,
+  store: SessionListReader,
   ilinkPeerId: string,
 ): Promise<string | undefined> {
   const normalized = ilinkPeerId.trim().toLowerCase();
@@ -63,7 +63,7 @@ export async function resolveWeixinAccountIdFromSessions(
 /** Like {@link normalizeWeixinCronDeliveryTo}, plus session-index lookup for bare ilink user ids. */
 export async function normalizeWeixinCronDeliveryToResolved(
   to: string,
-  sessionStore?: SessionStore,
+  sessionStore?: SessionListReader,
 ): Promise<NormalizedWeixinCronDelivery> {
   const base = normalizeWeixinCronDeliveryTo(to);
   if (base.accountId || !sessionStore) return base;

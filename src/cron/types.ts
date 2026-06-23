@@ -1,4 +1,4 @@
-import type { SessionStore } from '../session/store.js';
+import type { SessionListReader } from '../session/store-reader.js';
 import type {
   WorkflowRunInputEnvelope,
   WorkflowRunSource,
@@ -153,7 +153,7 @@ export interface JobExecutorDeps {
   agentService?: any;
   messageBus?: any;
   heartbeatService?: HeartbeatWakeSink;
-  sessionStore?: SessionStore;
+  sessionStore?: SessionListReader;
   getDefaultCronAgentId?: () => string;
   workflowRunService?: CronWorkflowRunStarter;
   goalRunner?: {

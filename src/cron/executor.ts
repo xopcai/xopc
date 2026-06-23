@@ -15,7 +15,6 @@ import {
   getChannelPlugin,
 } from '../channels/plugins/registry.js';
 import { getCronPayloadText } from './job-content.js';
-import type { SessionStore } from '../session/store.js';
 import type { CronRunLogStore } from './run-log-store.js';
 import {
   DEFAULT_ACK_MAX_CHARS,
@@ -75,7 +74,7 @@ export class DefaultJobExecutor implements JobExecutor {
   private agentService: any = null;
   private messageBus: any = null;
   private heartbeatService: HeartbeatWakeSink | null = null;
-  private sessionStore: SessionStore | undefined;
+  private sessionStore: JobExecutorDeps['sessionStore'] | undefined;
   private runLogStore: CronRunLogStore | null = null;
   private getDefaultCronAgentId: (() => string) | null = null;
   private workflowRunService: CronWorkflowRunStarter | null = null;
