@@ -4,7 +4,7 @@
 
 import type { Config } from '../../config/schema.js';
 import type { BindingRule } from '../../routing/bindings.js';
-import type { SessionStore } from '../../session/store.js';
+import type { SessionListReader } from '../../session/store-reader.js';
 import type { PairingPendingView } from '../pairing/pairing-types.js';
 
 export interface ChannelPairingAdapter {
@@ -150,7 +150,7 @@ export interface ChannelRuntimeActionAdapter {
 export interface ChannelCronDeliveryAdapter {
   normalizeDeliveryTarget(
     to: string,
-    sessionStore?: SessionStore,
+    sessionStore?: SessionListReader,
   ): Promise<{ chatId: string; accountId?: string; metadata?: Record<string, unknown> }>;
 }
 
