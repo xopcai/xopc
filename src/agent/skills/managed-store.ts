@@ -7,6 +7,7 @@ import AdmZip from 'adm-zip';
 import {
   existsSync,
   mkdirSync,
+  renameSync,
   readdirSync,
   readFileSync,
   rmSync,
@@ -20,9 +21,15 @@ import { loadSkillsLock, type SkillHubLockEntry } from './hub-lock.js';
 export const MAX_SKILL_ZIP_BYTES = 15 * 1024 * 1024;
 
 const SKILL_ID_RE = /^[a-zA-Z0-9]([a-zA-Z0-9._-]{0,62})$/;
+const TEMP_PREFIX = '.tmp-';
+const TRASH_PREFIX = '.trash-';
 
 export function isValidSkillId(id: string): boolean {
   return SKILL_ID_RE.test(id);
+}
+
+export function isManagedSkillTransientDirName(name: string): boolean {
+  return name.startsWith(TEMP_PREFIX) || name.startsWith(TRASH_PREFIX);
 }
 
 /** True when `baseDir` is the global managed skills root or a direct child folder. */
@@ -121,7 +128,82 @@ export function deleteManagedSkill(skillId: string): void {
   if (!existsSync(join(dir, 'SKILL.md'))) {
     throw new Error('Skill not found');
   }
-  rmSync(dir, { recursive: true, force: true });
+  const trashDir = createTransientManagedDir(root, TRASH_PREFIX, skillId);
+  renameSync(dir, trashDir);
+  rmSync(trashDir, { recursive: true, force: true });
+}
+
+function createTransientManagedDir(root: string, prefix: string, skillId: string): string {
+  for (let i = 0; i < 100; i += 1) {
+    const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}-${i}`;
+    const dir = join(root, `${prefix}${skillId}-${suffix}`);
+    if (!existsSync(dir)) return dir;
+  }
+  throw new Error('Could not allocate temporary skill directory');
+}
+
+export function getManagedSkillDir(skillId: string): string {
+  if (!isValidSkillId(skillId)) {
+    throw new Error('Invalid skill id');
+  }
+  return join(resolveSkillsDir(), skillId);
+}
+
+export function assertManagedSkillDestination(skillId: string): { root: string; destDir: string } {
+  if (!isValidSkillId(skillId)) {
+    throw new Error(`Invalid skill id "${skillId}" (letters, digits, ._-; max 63 chars after first)`);
+  }
+  const root = resolveSkillsDir();
+  mkdirSync(root, { recursive: true });
+  const destDir = join(root, skillId);
+  const destResolved = resolve(destDir);
+  const rootResolved = resolve(root);
+  if (!destResolved.startsWith(rootResolved + sep) && destResolved !== rootResolved) {
+    throw new Error('Invalid destination path');
+  }
+  return { root, destDir };
+}
+
+export function prepareManagedSkillTempDir(skillId: string): { root: string; destDir: string; tempDir: string } {
+  const { root, destDir } = assertManagedSkillDestination(skillId);
+  const tempDir = createTransientManagedDir(root, TEMP_PREFIX, skillId);
+  mkdirSync(tempDir, { recursive: true });
+  return { root, destDir, tempDir };
+}
+
+export function promoteManagedSkillTempDir(params: {
+  skillId: string;
+  tempDir: string;
+  overwrite?: boolean;
+}): { skillId: string; path: string } {
+  const { root, destDir } = assertManagedSkillDestination(params.skillId);
+  const tempResolved = resolve(params.tempDir);
+  const rootResolved = resolve(root);
+  if (!tempResolved.startsWith(rootResolved + sep)) {
+    throw new Error('Invalid temporary skill directory');
+  }
+  if (!existsSync(join(params.tempDir, 'SKILL.md'))) {
+    throw new Error('Installed tree is missing SKILL.md');
+  }
+
+  if (existsSync(destDir)) {
+    if (!params.overwrite) {
+      throw new Error(`Skill "${params.skillId}" already exists. Pass overwrite to replace.`);
+    }
+    const trashDir = createTransientManagedDir(root, TRASH_PREFIX, params.skillId);
+    renameSync(destDir, trashDir);
+    try {
+      renameSync(params.tempDir, destDir);
+    } catch (err) {
+      renameSync(trashDir, destDir);
+      throw err;
+    }
+    rmSync(trashDir, { recursive: true, force: true });
+  } else {
+    renameSync(params.tempDir, destDir);
+  }
+
+  return { skillId: params.skillId, path: destDir };
 }
 
 function inferStripPrefix(primary: string): string {
@@ -181,9 +263,6 @@ export function installSkillFromZip(
     }
   }
 
-  const root = resolveSkillsDir();
-  mkdirSync(root, { recursive: true });
-
   let targetId = options.skillId?.trim();
   if (!targetId) {
     if (stripPrefix) {
@@ -206,46 +285,45 @@ export function installSkillFromZip(
     );
   }
 
-  const destDir = join(root, targetId);
-  const destResolved = resolve(destDir);
-  const rootResolved = resolve(root);
-  if (!destResolved.startsWith(rootResolved + sep) && destResolved !== rootResolved) {
-    throw new Error('Invalid destination');
-  }
-
-  if (existsSync(destDir)) {
-    if (!options.overwrite) {
+  const { destDir, tempDir } = prepareManagedSkillTempDir(targetId);
+  const tempResolved = resolve(tempDir);
+  try {
+    if (existsSync(destDir) && !options.overwrite) {
       throw new Error(`Skill "${targetId}" already exists. Pass overwrite to replace.`);
     }
-    rmSync(destDir, { recursive: true, force: true });
-  }
-  mkdirSync(destDir, { recursive: true });
 
-  for (const e of safeEntries) {
-    const norm = e.entryName.replace(/\\/g, '/');
-    let rel: string;
-    if (stripPrefix) {
-      const prefixNorm = stripPrefix.replace(/\\/g, '/');
-      if (!norm.startsWith(prefixNorm)) continue;
-      rel = norm.slice(prefixNorm.length).replace(/^\//, '');
-    } else {
-      rel = norm;
+    for (const e of safeEntries) {
+      const norm = e.entryName.replace(/\\/g, '/');
+      let rel: string;
+      if (stripPrefix) {
+        const prefixNorm = stripPrefix.replace(/\\/g, '/');
+        if (!norm.startsWith(prefixNorm)) continue;
+        rel = norm.slice(prefixNorm.length).replace(/^\//, '');
+      } else {
+        rel = norm;
+      }
+      if (!rel || rel.includes('..')) continue;
+
+      const targetPath = join(tempDir, rel);
+      const resolvedTarget = resolve(targetPath);
+      if (!resolvedTarget.startsWith(tempResolved + sep) && resolvedTarget !== tempResolved) {
+        continue;
+      }
+      mkdirSync(dirname(targetPath), { recursive: true });
+      writeFileSync(targetPath, e.getData());
     }
-    if (!rel || rel.includes('..')) continue;
 
-    const targetPath = join(destDir, rel);
-    const resolvedTarget = resolve(targetPath);
-    if (!resolvedTarget.startsWith(destResolved + sep) && resolvedTarget !== destResolved) {
-      continue;
+    if (!existsSync(join(tempDir, 'SKILL.md'))) {
+      throw new Error('Extracted content is missing SKILL.md');
     }
-    mkdirSync(dirname(targetPath), { recursive: true });
-    writeFileSync(targetPath, e.getData());
-  }
 
-  if (!existsSync(join(destDir, 'SKILL.md'))) {
-    rmSync(destDir, { recursive: true, force: true });
-    throw new Error('Extracted content is missing SKILL.md');
+    return promoteManagedSkillTempDir({
+      skillId: targetId,
+      tempDir,
+      overwrite: options.overwrite,
+    });
+  } catch (err) {
+    rmSync(tempDir, { recursive: true, force: true });
+    throw err;
   }
-
-  return { skillId: targetId, path: destDir };
 }

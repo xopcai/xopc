@@ -11,6 +11,7 @@ import {
 import { useCallback, useState } from 'react';
 
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { showToast } from '@/lib/toast';
 
 import { AgentDefaultsField } from '../../agent-defaults-field';
 import { inputClassName } from '../../defaults-field-styles';
@@ -57,7 +58,7 @@ export function ExtensionCard({
   revealExtensionFolder: () => Promise<void>;
   embedded?: boolean;
 }) {
-  const [busy, setBusy] = useState<'start' | 'stop' | 'disconnect' | 'install' | 'open' | 'folder' | null>(null);
+  const [busy, setBusy] = useState<'start' | 'stop' | 'disconnect' | 'install' | 'open' | 'path' | 'folder' | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [installMessage, setInstallMessage] = useState<string | null>(null);
 
@@ -159,21 +160,39 @@ export function ExtensionCard({
     }
   }, [busy, openExtensionChrome]);
 
+  const onCopyPath = useCallback(async () => {
+    if (!extensionDir || busy) return;
+    setBusy('path');
+    setError(null);
+    setInstallMessage(null);
+    try {
+      const copied = await copyTextToClipboard(extensionDir);
+      if (copied) {
+        showToast({ type: 'success', title: m.browserExtensionPathCopied });
+      } else {
+        setInstallMessage(m.browserExtensionPathCopyFailed);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(null);
+    }
+  }, [busy, extensionDir, m.browserExtensionPathCopied, m.browserExtensionPathCopyFailed]);
+
   const onRevealFolder = useCallback(async () => {
     if (!extensionDir || busy) return;
     setBusy('folder');
     setError(null);
     setInstallMessage(null);
     try {
-      const copied = await copyTextToClipboard(extensionDir);
       await revealExtensionFolder();
-      setInstallMessage(copied ? m.browserExtensionPathCopied : m.browserExtensionFolderOpened);
+      showToast({ type: 'success', title: m.browserExtensionFolderOpened });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
     }
-  }, [busy, extensionDir, m.browserExtensionFolderOpened, m.browserExtensionPathCopied, revealExtensionFolder]);
+  }, [busy, extensionDir, m.browserExtensionFolderOpened, revealExtensionFolder]);
 
   const primaryAction = (
     <div className="flex flex-wrap items-center gap-2">
@@ -306,8 +325,10 @@ export function ExtensionCard({
           extensionDir={extensionDir}
           connected={connected}
           busy={busy !== null}
+          pathBusy={busy === 'path'}
           folderBusy={busy === 'folder'}
           onOpenChrome={() => void openChromeExtensions()}
+          onCopyPath={() => void onCopyPath()}
           onRevealFolder={() => void onRevealFolder()}
         />
 

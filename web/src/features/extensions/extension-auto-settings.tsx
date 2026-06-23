@@ -6,6 +6,7 @@ import { extractObjectDefaults } from '@/components/ui/schema-form-utils';
 import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { showToast } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -95,7 +96,7 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
     saveError: null,
     saveSuccess: false,
   });
-  const [saveSuccessFlash, setSaveSuccessFlash] = useState(false);
+  const [_saveSuccessFlash, setSaveSuccessFlash] = useState(false);
 
   const dirtyRef = useRef(false);
   const trackedSavedRef = useRef(savedValues);
@@ -136,7 +137,7 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
       dirtyRef.current = false;
       dispatch({ type: 'save-success', value: draft.localValues });
       setSaveSuccessFlash(true);
-      window.setTimeout(() => setSaveSuccessFlash(false), 3000);
+      showToast({ type: 'success', title: a.saved });
     } catch (e) {
       dispatch({ type: 'save-error', message: e instanceof Error ? e.message : String(e) });
     }
@@ -164,9 +165,6 @@ export function ExtensionAutoSettings({ extensionId }: { extensionId: string }) 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-fg">Configuration</h2>
         <div className="flex flex-wrap items-center gap-2">
-          {saveSuccessFlash ? (
-            <span className="text-xs text-emerald-600 dark:text-emerald-400">{a.saved}</span>
-          ) : null}
           {draft.saveError ? <span className="text-xs text-red-600 dark:text-red-400">{draft.saveError}</span> : null}
           <Button
             type="button"

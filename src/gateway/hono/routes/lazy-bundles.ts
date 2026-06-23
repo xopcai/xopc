@@ -142,6 +142,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'ai-assist',
+    match: (path) => startsWithAny(path, ['/api/ai']),
+    load: async () => {
+      const { registerAiAssistRoutes } = await import('./ai-assist.js');
+      return { register: registerAiAssistRoutes };
+    },
+  },
+  {
     id: 'commands-skills',
     match: (path) => startsWithAny(path, ['/api/commands', '/api/skills', '/api/chat/skills']),
     load: async () => {

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { listSkillNamesInWire } from '@/features/chat/composer/composer-editor-wire';
@@ -196,6 +196,7 @@ export function useCommandPalette(
   options?: { suppress?: boolean; isComposing?: boolean; currentAgentId?: string },
 ) {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [skillsVersion, setSkillsVersion] = useState(0);
   /** Grouped (empty) palette: each section can expand independently after "Show N more". */
   const [groupedSkillsExpanded, setGroupedSkillsExpanded] = useState(false);
   const [groupedCommandsExpanded, setGroupedCommandsExpanded] = useState(false);
@@ -207,6 +208,23 @@ export function useCommandPalette(
     [value, cursor, options?.isComposing],
   );
   const paletteActive = Boolean(slashRange && !options?.suppress);
+
+  useEffect(() => {
+    const onConfigReload = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (
+        detail &&
+        typeof detail === 'object' &&
+        'section' in detail &&
+        ((detail as { section?: unknown }).section === 'skills' ||
+          (detail as { section?: unknown }).section === 'agents')
+      ) {
+        setSkillsVersion((v) => v + 1);
+      }
+    };
+    window.addEventListener('config-reload', onConfigReload);
+    return () => window.removeEventListener('config-reload', onConfigReload);
+  }, []);
 
   if (
     !paletteActive &&
@@ -260,7 +278,7 @@ export function useCommandPalette(
           : [];
       return [...skillItems, ...commandItems, ...agentItems];
     },
-    [language, options?.currentAgentId],
+    [language, options?.currentAgentId, skillsVersion],
     { enabled: paletteActive, initial: [] as PaletteItem[], errorData: [] },
   );
   const allItems = itemsResource.data;

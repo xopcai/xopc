@@ -60,7 +60,12 @@ import {
   type BrokerListenerHandle,
 } from './workflow/index.js';
 import { FeedbackCoordinator } from './feedback/index.js';
-import { AgentManager, type AgentSkillAvailabilityPayload, type SkillCatalogEntry } from './agent-manager.js';
+import {
+  AgentManager,
+  type AgentSkillAvailabilityPayload,
+  type SkillCatalogEntry,
+  type SkillCatalogSnapshot,
+} from './agent-manager.js';
 import type { SkillMarkdownPreviewPayload } from './skills/types.js';
 import type { AgentServiceConfig, StreamHandle } from './service.types.js';
 import { PersistentGoalService } from './goals/persistent-goal-service.js';
@@ -276,6 +281,7 @@ export class AgentService {
       gatewayClarify: config.gatewayClarify,
       getCronService: config.getCronService,
       getWorkflowRunService: config.getWorkflowRunService,
+      onSkillsUpdated: config.onSkillsUpdated,
     });
 
     this.agentEventHandler = new AgentEventHandler({
@@ -366,6 +372,7 @@ export class AgentService {
         await this.streamManager.abort();
         this.agentOrchestrator.abort(sessionKey);
       },
+      reloadSkills: () => this.refreshSkillsAfterDiskChange(),
       compactSession: (sessionKey, options) => this.sessionInspector.compact(sessionKey, options),
       btwQuery: (sessionKey, question) => this.sessionInspector.btwQuery(sessionKey, question),
       getSessionContextReport: (sessionKey, mode) => this.sessionInspector.report(sessionKey, mode),
@@ -623,6 +630,10 @@ export class AgentService {
 
   getSkillCatalog(): SkillCatalogEntry[] {
     return this.agentManager.getSkillCatalog();
+  }
+
+  getSkillCatalogSnapshot(): SkillCatalogSnapshot {
+    return this.agentManager.getSkillCatalogSnapshot();
   }
 
   getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {

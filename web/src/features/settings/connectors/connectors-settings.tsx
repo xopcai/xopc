@@ -7,6 +7,7 @@ import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { cn } from '@/lib/cn';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
+import { showToast } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -527,7 +528,7 @@ export function ConnectorsSettingsPanel() {
   const [customDialog, setCustomDialog] = useState<CustomDialogState>(null);
   const [sessionIdleTtlMinutes, setSessionIdleTtlMinutes] = useState<number | undefined>(undefined);
   const [ttlSaving, setTtlSaving] = useState(false);
-  const [ttlSaved, setTtlSaved] = useState(false);
+  const [_ttlSaved, setTtlSaved] = useState(false);
 
   const { data: configData, mutate: mutateConfig } = useGatewayConfigSwr(hasToken);
   const config = configData?.payload?.config;
@@ -592,6 +593,7 @@ export function ConnectorsSettingsPanel() {
       );
       await mutateConfig();
       setTtlSaved(true);
+      showToast({ type: 'success', title: mcp.saved });
     } finally {
       setTtlSaving(false);
     }
@@ -654,7 +656,6 @@ export function ConnectorsSettingsPanel() {
                 {mcp.save}
               </Button>
             </div>
-            {ttlSaved ? <p className="text-sm text-fg-muted">{mcp.saved}</p> : null}
           </SettingsFormSection>
 
           <div className="flex flex-wrap items-center justify-between gap-3">

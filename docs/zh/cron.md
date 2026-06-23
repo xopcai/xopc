@@ -1,261 +1,113 @@
 # 定时任务
 
-xopc 内置 Cron 服务，支持定时发送消息，支持两种执行模式：**直接发送** 与 **AI 智能体**。
+xopc 定时任务是持久化任务，存储在 SQLite（`~/.xopc/xopc.db`）。调度器支持单次、固定间隔和 cron 表达式三种计划，记录每次运行，并可执行 agent turn、workflow run、goal continuation 或 system event。
 
-## 使用方法
+## CLI
 
-### 查看任务列表
+创建任务时必须选择一种计划和一种执行内容。
+
+```bash
+xopc cron add --at 2026-06-24T09:00:00+08:00 --message "准备明天简报"
+xopc cron add --every 30m --message "检查紧急收件箱"
+xopc cron add --cron "0 9 * * 1-5" --tz Asia/Shanghai --message "工作日晨间复盘"
+xopc cron add --cron "0 17 * * 5" --workflow weekly_review --goal "周复盘"
+```
+
+计划参数：
+
+| 参数 | 含义 |
+| --- | --- |
+| `--at <time>` | 单次 ISO 时间，或 `20m`、`2h`、`1d` 这类相对时间 |
+| `--every <duration>` | 固定间隔，例如 `10m`、`1h`、`1d` |
+| `--cron <expr>` | Cron 表达式 |
+| `--tz <iana>` | `--cron` 的可选 IANA 时区 |
+
+执行内容参数：
+
+| 参数 | 含义 |
+| --- | --- |
+| `--message <text>` | 创建消息/Agent 任务 |
+| `--workflow <id>` | 启动 workflow 定义 |
+| `--goal <text>` | 覆盖 workflow 目标 |
+| `--input-json <json>` | Workflow 输入 |
+| `--agent-id <id>` | 隔离任务使用的 Agent Profile |
+| `--channel <name>` + `--to <id>` | 将结果 announce 到频道 |
+
+管理任务：
 
 ```bash
 xopc cron list
+xopc cron enable <job-id>
+xopc cron disable <job-id>
+xopc cron remove <job-id>
 ```
 
-输出示例：
+## 数据模型
 
-```
-ID       | Schedule      | Mode     | Enabled | Next Run
----------|---------------|----------|---------|-------------------
-abc12345 | 0 9 * * *    | main     | true    | 2026-02-21T09:00
-def67890 | 0 10 * * *   | isolated | true    | 2026-02-21T10:00
-```
+任务使用结构化计划：
 
-### 添加任务
-
-```bash
-xopc cron add --schedule "0 9 * * *" --message "Good morning!"
+```ts
+type CronSchedule =
+  | { kind: 'at'; at: string }
+  | { kind: 'every'; everyMs: number; anchorMs?: number }
+  | { kind: 'cron'; expr: string; tz?: string; staggerMs?: number };
 ```
 
-参数：
+运行状态保存在任务行上：
 
-| 参数 | 描述 |
-|------|------|
-| `--schedule` | Cron 表达式 |
-| `--message` | 定时发送的消息 |
-| `--name` | (可选) 任务名称 |
-| `--target` | 执行模式：`main`（直接发送）或 `isolated`（AI 智能体） |
-| `--model` | (可选) AI 智能体模式使用的模型 |
-| `--channel` | (可选) 目标渠道：`telegram`、`cli` |
-| `--to` | (可选) 接收方会话 ID（如 Telegram 的 chat id） |
-
-### 删除任务
-
-```bash
-xopc cron remove <task-id>
+```ts
+type JobState = {
+  nextRunAtMs?: number;
+  runningAtMs?: number;
+  lastRunAtMs?: number;
+  lastRunStatus?: 'ok' | 'error' | 'skipped';
+  consecutiveErrors?: number;
+  lastDeliveryStatus?: 'delivered' | 'not-delivered' | 'unknown' | 'not-requested';
+};
 ```
 
-### 启用/禁用任务
+SQLite 表：
 
-```bash
-xopc cron enable <task-id>
-xopc cron disable <task-id>
-```
+| 表 | 用途 |
+| --- | --- |
+| `cron_jobs` | 任务定义、计划、payload、投递、失败提醒、状态 |
+| `cron_runs` | 运行历史与执行结果 |
 
-### 立即运行
+没有 JSON 任务文件，也没有旧的 `schedule: string` 契约。
 
-```bash
-xopc cron run <task-id>
-```
+## 调度行为
 
-## 执行模式
+- 启动时会重新计算错过的任务，并分散触发，避免集中执行。
+- 整点类 cron 会获得确定性的默认 stagger，除非显式设置 `staggerMs`。
+- 正在执行的任务会写入 state；进程中断后重启会暴露为错误状态。
+- `deleteAfterRun` 的单次任务在计划执行成功后删除。
+- 运行历史写入 SQLite，并通过网关 UI/API 展示。
 
-CLI 的 `cron add` 通过标志创建 **system event** 任务（类似 heartbeat 消息）：
+## Gateway API
 
-```bash
-xopc cron add --schedule "0 9 * * *" --message "早安！" --name "早安提醒"
-```
+创建任务：
 
-带 **渠道投递**、**isolated 智能体轮次** 或更复杂 payload 的任务，请在 **网关控制台**（`#/settings/cron`）或编辑磁盘上的 cron jobs 存储中配置。
+```http
+POST /api/cron
+Content-Type: application/json
 
-### 示例（CLI system event）
-
-```bash
-xopc cron add --schedule "0 9 * * *" --message "早安！" --name "Morning"
-xopc cron add --schedule "0 18 * * 1-5" --message "收工提醒" --name "EOD"
-```
-
-### 高级任务（网关 / JSON）
-
-直接发渠道、isolated 智能体运行等（文档中曾用 positional `cron add` 示例）**尚未**在 CLI 暴露，请使用 Web UI 或 jobs 文件。
-
-**工作流运行：** 可直接定时执行工作流（无需助手轮次）：
-
-```bash
-xopc cron add --schedule "0 17 * * 5" --workflow weekly_review --goal "周复盘"
-xopc cron add --schedule "30 8 * * 1-5" --workflow inbox_triage \
-  --input-json '{"inbox":"在此粘贴待分拣内容"}' \
-  --channel telegram --to <chat-id>
-```
-
-在 `#/settings/cron` 中选择任务类型 **工作流运行** 可获得相同能力（结构化参数 + 可选投递）。默认等待工作流完成（超时约 35 分钟）。详见 [动态工作流](workflows.md)。
-
-## Cron 表达式格式
-
-```
-┌───────────── 分钟 (0 - 59)
-│ ┌─────────── 小时 (0 - 23)
-│ │ ┌───────── 日 (1 - 31)
-│ │ │ ┌─────── 月 (1 - 12)
-│ │ │ │ ┌───── 周几 (0 - 6, 周日=0)
-│ │ │ │ │
-* * * * *
-```
-
-## 常用示例
-
-| 表达式 | 描述 |
-|--------|------|
-| `0 9 * * *` | 每天 9:00 |
-| `0 18 * * 1-5` | 工作日 18:00 |
-| `30 8 * * 1` | 每周一 8:30 |
-| `0 0 1 * *` | 每月 1 号 |
-| `*/15 * * * *` | 每 15 分钟 |
-| `*/1 * * * *` | 每分钟（测试用） |
-
-## 任务存储
-
-任务保存在 `~/.xopc/cron-jobs.json`：
-
-```json
 {
-  "jobs": [
-    {
-      "id": "abc12345",
-      "name": "早安提醒",
-      "schedule": "0 9 * * *",
-      "message": "早安！",
-      "enabled": true,
-      "sessionTarget": "main",
-      "delivery": {
-        "mode": "direct",
-        "channel": "telegram",
-        "to": "123456789"
-      },
-      "created_at": "2026-02-20T12:00:00.000Z",
-      "updated_at": "2026-02-20T12:00:00.000Z"
-    },
-    {
-      "id": "def67890",
-      "name": "天气查询",
-      "schedule": "0 10 * * *",
-      "message": "今天天气怎么样？",
-      "enabled": true,
-      "sessionTarget": "isolated",
-      "model": "minimax/minimax-m2.5",
-      "delivery": {
-        "mode": "direct",
-        "channel": "telegram",
-        "to": "123456789"
-      },
-      "created_at": "2026-02-20T12:00:00.000Z",
-      "updated_at": "2026-02-20T12:00:00.000Z"
-    }
-  ],
-  "version": 1
+  "name": "Daily review",
+  "schedule": { "kind": "cron", "expr": "0 9 * * 1-5", "tz": "Asia/Shanghai" },
+  "sessionTarget": "isolated",
+  "delivery": { "mode": "announce", "channel": "telegram", "to": "123456" },
+  "payload": { "kind": "agentTurn", "message": "总结昨天并规划今天。" }
 }
 ```
 
-## 程序化使用
+列表：
 
-```typescript
-import { CronService } from '../cron/index.js';
-
-const cronService = new CronService({
-  filePath: '~/.xopc/cron-jobs.json',
-  agentService: agentServiceInstance,
-  messageBus: messageBusInstance,
-});
-
-// 初始化
-await cronService.initialize();
-
-// 添加任务 - 直接发送模式
-await cronService.addJob('0 9 * * *', '早安！', {
-  name: '早安提醒',
-  sessionTarget: 'main',
-  delivery: {
-    mode: 'direct',
-    channel: 'telegram',
-    to: '123456789',
-  },
-});
-
-// 添加任务 - AI 智能体模式
-await cronService.addJob('0 10 * * *', '查询天气', {
-  name: '天气查询',
-  sessionTarget: 'isolated',
-  model: 'minimax/minimax-m2.5',
-  delivery: {
-    mode: 'direct',
-    channel: 'telegram',
-    to: '123456789',
-  },
-});
-
-// 列出任务
-const jobs = await cronService.listJobs();
-console.log(jobs);
-
-// 获取任务历史
-const history = cronService.getHistory(jobId, 10);
-
-// 立即运行任务
-await cronService.runJobNow(jobId);
-
-// 停止服务
-await cronService.stop();
+```http
+GET /api/cron
 ```
 
-## 配置
+返回任务包含 `createdAtMs`、`updatedAtMs`、结构化 `schedule` 和 `state.nextRunAtMs`。
 
-定时任务在配置文件中启用：
+## 产品说明
 
-```json
-{
-  "cron": {
-    "enabled": true,
-    "maxConcurrentJobs": 5,
-    "defaultTimezone": "UTC",
-    "historyRetentionDays": 7
-  }
-}
-```
-
-确保网关服务运行以接收定时消息。
-
-## 错误退避
-
-当任务连续失败时，系统会应用指数退避：
-
-| 连续错误次数 | 延迟 |
-|-------------|------|
-| 1 | 30 秒 |
-| 2 | 1 分钟 |
-| 3 | 5 分钟 |
-| 4 | 15 分钟 |
-| 5+ | 60 分钟 |
-
-## 最佳实践
-
-1. **测试表达式**：使用 `cron-parser` 验证表达式
-2. **合理频率**：避免过于频繁的任务
-3. **错误处理**：查看日志确认任务执行成功
-4. **时区注意**：Cron 使用服务器时区
-
-## 故障排除
-
-**任务不执行？**
-- 确认网关服务正在运行
-- 检查 Cron 表达式格式正确
-- 查看日志中的错误信息
-
-**时区问题？**
-- Cron 使用系统时区
-- 确认服务器时区设置正确
-
-**消息未发送？**
-- 检查通道配置是否启用
-- 确认 API Key 有效
-
-**AI 模式不工作？**
-- 确保模型已在 models 配置中
-- 检查 agent service 已正确初始化
+精确单次提醒用 `at`，固定频率监控用 `every`，按日历运行用 `cron`。依赖用户本地时间的 cron 计划应在 schedule 上显式设置 `tz`；不再存在全局默认调度时区。

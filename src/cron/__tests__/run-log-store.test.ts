@@ -47,17 +47,35 @@ describe('CronRunLogStore', () => {
     expect(hist[0].summary).toBe('ok');
   });
 
-  it('does not persist running status', async () => {
+  it('persists running status and updates the same run on completion', async () => {
     const ex: JobExecution = {
       id: 'r1',
       jobId: 'j',
       status: 'running',
       startedAt: new Date().toISOString(),
       retryCount: 0,
+      sessionKey: 'agent:main:cron:default:direct:j-1',
+      sessionType: 'cron',
     };
     await store.appendCompleted(ex);
-    const hist = await store.readJobHistory('j', 10);
-    expect(hist).toHaveLength(0);
+    const running = await store.readJobHistory('j', 10);
+    expect(running).toHaveLength(1);
+    expect(running[0]).toMatchObject({
+      id: 'r1',
+      status: 'running',
+      sessionKey: 'agent:main:cron:default:direct:j-1',
+    });
+
+    await store.appendCompleted({
+      ...ex,
+      status: 'success',
+      endedAt: new Date().toISOString(),
+      duration: 100,
+      summary: 'done',
+    });
+    const completed = await store.readJobHistory('j', 10);
+    expect(completed).toHaveLength(1);
+    expect(completed[0]).toMatchObject({ id: 'r1', status: 'success', summary: 'done' });
   });
 
   it('readAllRuns merges jobs and attaches names', async () => {

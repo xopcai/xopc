@@ -6,6 +6,7 @@ import useSWR from 'swr';
 
 import {
   addJob,
+  CronApiError,
   getHistory,
   getJob,
   removeJob,
@@ -28,7 +29,7 @@ import { CronSystemTasksPanel } from '@/features/cron/cron-system-tasks-panel';
 import { CronTasksPanel } from '@/features/cron/cron-tasks-panel';
 import type { CronTemplateFilter } from '@/features/cron/cron-template-library';
 import { CronTemplatePickerDialog } from '@/features/cron/cron-template-picker-dialog';
-import { WORKFLOW_CRON_TIMEOUT_MS, cronMainTabSearchParam, parseCronMainTab, type CronMainTab } from '@/features/cron/cron-page-lib';
+import { cronMainTabSearchParam, parseCronMainTab, type CronMainTab } from '@/features/cron/cron-page-lib';
 import { useCronJobForm } from '@/features/cron/use-cron-job-form';
 import { useCronKeepAwake } from '@/features/cron/use-cron-keep-awake';
 import {
@@ -57,6 +58,7 @@ type CronPageUi = {
   detailJob: CronJob | null;
   detailHistory: CronJobExecution[];
   detailLoading: boolean;
+  detailActionNotice: { kind: 'error' | 'info'; message: string; sessionKey?: string } | null;
   confirmOpen: boolean;
   templatePickerOpen: boolean;
   templateCategoryFilter: CronTemplateFilter;
@@ -72,6 +74,7 @@ const initialCronPageUi: CronPageUi = {
   detailJob: null,
   detailHistory: [],
   detailLoading: false,
+  detailActionNotice: null,
   confirmOpen: false,
   templatePickerOpen: false,
   templateCategoryFilter: 'all',
@@ -107,6 +110,7 @@ export function CronPage() {
     detailJob,
     detailHistory,
     detailLoading,
+    detailActionNotice,
     confirmOpen,
     templatePickerOpen,
     templateCategoryFilter,
@@ -203,7 +207,11 @@ export function CronPage() {
       setError(c.nameRequired);
       return;
     }
-    if (!form.formSchedule.trim()) {
+    if (
+      (form.formSchedule.kind === 'cron' && !form.formSchedule.expr.trim()) ||
+      (form.formSchedule.kind === 'at' && !form.formSchedule.at.trim()) ||
+      (form.formSchedule.kind === 'every' && (!Number.isFinite(form.formSchedule.everyMs) || form.formSchedule.everyMs <= 0))
+    ) {
       setError(c.scheduleRequired);
       return;
     }
@@ -243,16 +251,16 @@ export function CronPage() {
         if (form.formAgentLocalOnly) {
           delivery = { mode: 'none' };
         } else if (form.formChannel === 'local') {
-          delivery = { mode: 'direct', channel: 'local' };
+          delivery = { mode: 'announce', channel: 'local' };
         } else {
-          delivery = { mode: 'direct', channel: form.formChannel, to: form.formChatId.trim() };
+          delivery = { mode: 'announce', channel: form.formChannel, to: form.formChatId.trim() };
         }
       } else if (form.formSessionTarget === 'isolated' && form.formAgentLocalOnly) {
         delivery = { mode: 'none' };
       } else if (form.formChannel === 'local') {
-        delivery = { mode: 'direct', channel: 'local' };
+        delivery = { mode: 'announce', channel: 'local' };
       } else {
-        delivery = { mode: 'direct', channel: form.formChannel, to: form.formChatId.trim() };
+        delivery = { mode: 'announce', channel: form.formChannel, to: form.formChatId.trim() };
       }
 
       let payload: CronPayload;
@@ -281,16 +289,14 @@ export function CronPage() {
       const agentIdForEdit = effectiveSessionTarget === 'main' ? null : agentIdTrim || null;
       const jobData = {
         name: form.formName.trim(),
-        schedule: form.formSchedule.trim(),
+        schedule: form.formSchedule,
         sessionTarget: effectiveSessionTarget,
-        model: isIsolatedMessage && modelTrimmed ? modelTrimmed : undefined,
-        ...(isWorkflowRun ? { timeout: WORKFLOW_CRON_TIMEOUT_MS } : {}),
         delivery,
         payload,
         ...(form.formMode === 'edit'
           ? {
-              agentId: agentIdForEdit,
-              workingDirectory: isIsolatedMessage ? workingDirectoryTrimmed || null : null,
+              ...(agentIdForEdit ? { agentId: agentIdForEdit } : {}),
+              ...(isIsolatedMessage && workingDirectoryTrimmed ? { workingDirectory: workingDirectoryTrimmed } : {}),
             }
           : {
               ...(effectiveSessionTarget === 'isolated' && agentIdTrim ? { agentId: agentIdTrim } : {}),
@@ -322,7 +328,7 @@ export function CronPage() {
   const openDetail = async (job: CronJob) => {
     dispatch({
       type: 'patch',
-      patch: { detailOpen: true, detailJob: job, detailLoading: true, detailHistory: [] },
+      patch: { detailOpen: true, detailJob: job, detailLoading: true, detailHistory: [], detailActionNotice: null },
     });
     try {
       const full = await getJob(job.id);
@@ -340,7 +346,7 @@ export function CronPage() {
   };
 
   const closeDetail = useCallback(() => {
-    dispatch({ type: 'patch', patch: { detailOpen: false, detailJob: null } });
+    dispatch({ type: 'patch', patch: { detailOpen: false, detailJob: null, detailActionNotice: null } });
   }, []);
 
   const openTemplatePicker = useCallback(() => {
@@ -366,7 +372,19 @@ export function CronPage() {
     dismissConfirm();
     try {
       if (action === 'run') {
-        await runJob(id);
+        const result = await runJob(id);
+        if (detailJob?.id === id) {
+          const full = result.job ?? await getJob(id);
+          const history = result.history ?? await getHistory(id, 20);
+          dispatch({
+            type: 'patch',
+            patch: {
+              detailJob: full,
+              detailHistory: history,
+              detailActionNotice: { kind: 'info', message: c.runStarted },
+            },
+          });
+        }
       } else {
         await removeJob(id);
         if (detailJob?.id === id) {
@@ -375,7 +393,29 @@ export function CronPage() {
       }
       await Promise.all([data.loadJobs(), data.loadAux(), data.loadRunHistoryOnly()]);
     } catch (e) {
-      setError(e instanceof Error ? e.message : c.actionFailed);
+      const message = e instanceof Error ? e.message : c.actionFailed;
+      if (action === 'run' && detailJob?.id === id) {
+        const full = await getJob(id).catch(() => null);
+        const history = await getHistory(id, 20).catch(() => detailHistory);
+        const runningSessionKey =
+          e instanceof CronApiError && e.code === 'job_already_running'
+            ? e.runningSessionKey || full?.state?.runningSessionKey || history.find((row) => row.status === 'running')?.sessionKey
+            : full?.state?.runningSessionKey || history.find((row) => row.status === 'running')?.sessionKey;
+        dispatch({
+          type: 'patch',
+          patch: {
+            ...(full ? { detailJob: full } : {}),
+            detailHistory: history,
+            detailActionNotice: {
+              kind: 'error',
+              message: message.includes('already running') ? c.jobAlreadyRunning : message,
+              ...(runningSessionKey ? { sessionKey: runningSessionKey } : {}),
+            },
+          },
+        });
+      } else {
+        setError(message);
+      }
     }
   };
 
@@ -608,11 +648,12 @@ export function CronPage() {
         onSelectTemplate={onSelectTemplate}
       />
 
-      <CronJobDetailDrawer
+          <CronJobDetailDrawer
         open={detailOpen}
         onDismiss={closeDetail}
         detailJob={detailJob}
         detailLoading={detailLoading}
+        actionNotice={detailActionNotice}
         detailHistory={detailHistory}
         c={c}
         localeTag={localeTag}
@@ -620,8 +661,8 @@ export function CronPage() {
         chatWorkingDirNotSet={chatM.workingDirectory.notSet}
         statusLabels={statusLabels}
         onEdit={(job) => {
-          closeDetail();
           form.openForm(job);
+          window.requestAnimationFrame(() => closeDetail());
         }}
         onRunNow={(job) => openConfirm('run', job.id)}
         onToggle={(job, enabled) => void onToggle(job, enabled)}

@@ -3,6 +3,7 @@ import useSWR, { mutate } from 'swr';
 
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { isSkillsOnlyConfigReload } from '@/features/gateway/config-reload-event';
 
 export type GatewayConfigApiResponse = {
   ok?: boolean;
@@ -41,7 +42,8 @@ export function useGatewayConfigSwr(shouldFetch: boolean) {
   useEffect(() => {
     if (!shouldFetch) return;
     const k = gatewayConfigSwrKey();
-    const onReload = () => {
+    const onReload = (event: Event) => {
+      if (isSkillsOnlyConfigReload((event as CustomEvent<unknown>).detail)) return;
       void mutate(k);
     };
     window.addEventListener('config-reload', onReload);

@@ -1,6 +1,6 @@
 import type { Config } from '../../config/schema.js';
 import type { CronService } from '../../cron/index.js';
-import type { JobWithNextRun } from '../../cron/types.js';
+import type { JobData } from '../../cron/types.js';
 import {
   DREAMING_SWEEP_TOKEN,
   DREAMING_LIGHT_CRON_NAME,
@@ -17,7 +17,7 @@ const DREAMING_SWEEP_TOKENS = new Set<string>([
   DREAMING_REM_SWEEP_TOKEN,
 ]);
 
-function dreamingSweepTokenFromJob(job: JobWithNextRun): string | undefined {
+function dreamingSweepTokenFromJob(job: JobData): string | undefined {
   if (job.payload?.kind !== 'agentTurn') {
     return undefined;
   }
@@ -81,11 +81,15 @@ export async function reconcileManagedDreamingCronJobs(
     }
 
     const desiredPayload = { kind: 'agentTurn' as const, message: spec.token };
+    const desiredSchedule = {
+      kind: 'cron' as const,
+      expr: spec.schedule,
+      ...(dreaming.timezone ? { tz: dreaming.timezone } : {}),
+    };
 
     if (phaseJobs.length === 0) {
-      await cron.addJob(spec.schedule, {
+      await cron.addJob(desiredSchedule, {
         name: spec.cronName,
-        timezone: dreaming.timezone,
         sessionTarget: 'isolated' as const,
         payload: desiredPayload,
         enabled: true,
@@ -103,8 +107,7 @@ export async function reconcileManagedDreamingCronJobs(
         ? primary.payload.message
         : (primary.payload as any)?.text;
     const needsUpdate =
-      primary.schedule !== spec.schedule ||
-      (dreaming.timezone ?? null) !== (primary.timezone ?? null) ||
+      JSON.stringify(primary.schedule) !== JSON.stringify(desiredSchedule) ||
       primary.sessionTarget !== 'isolated' ||
       payloadMessage !== spec.token ||
       primary.enabled !== true ||
@@ -112,8 +115,7 @@ export async function reconcileManagedDreamingCronJobs(
 
     if (needsUpdate) {
       await cron.updateJob(primary.id, {
-        schedule: spec.schedule,
-        timezone: dreaming.timezone ?? undefined,
+        schedule: desiredSchedule,
         sessionTarget: 'isolated',
         name: spec.cronName,
         payload: desiredPayload,

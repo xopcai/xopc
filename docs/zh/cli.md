@@ -379,28 +379,34 @@ xopc gateway service start
 ### 添加任务
 
 ```bash
-xopc cron add --schedule "0 9 * * *" --message "Good morning!"
+xopc cron add --cron "0 9 * * *" --message "Good morning!"
+xopc cron add --at 2026-06-24T09:00:00+08:00 --message "单次提醒"
+xopc cron add --every 30m --message "间隔检查"
 ```
 
 **参数**：
 
 | 参数 | 描述 |
 |------|------|
-| `--schedule` | Cron 表达式 |
+| `--cron` | Cron 表达式 |
+| `--tz` | `--cron` 的可选 IANA 时区 |
+| `--at` | 单次 ISO 时间或相对时长 |
+| `--every` | 固定间隔时长 |
 | `--message` | 定时发送的消息 |
+| `--workflow` | Workflow 定义 id |
 | `--name` | 任务名称 (可选) |
 
 **示例**：
 
 ```bash
 # 每天 9 点
-xopc cron add --schedule "0 9 * * *" --message "Daily update"
+xopc cron add --cron "0 9 * * *" --message "Daily update"
 
 # 工作日 18 点
-xopc cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!"
+xopc cron add --cron "0 18 * * 1-5" --message "Time to wrap up!"
 
 # 每小时提醒
-xopc cron add --schedule "0 * * * *" --message "Hourly reminder" --name hourly
+xopc cron add --every 1h --message "Hourly reminder" --name hourly
 ```
 
 ### 删除任务

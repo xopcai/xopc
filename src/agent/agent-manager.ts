@@ -46,7 +46,12 @@ import type { CronService } from '../cron/index.js';
 import type { SessionStore } from '../session/store.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import type { SessionContext } from './session/session-context.js';
-import type { Skill, SkillMarkdownPreviewPayload } from './skills/types.js';
+import type {
+  Skill,
+  SkillDiagnostic,
+  SkillMarkdownPreviewPayload,
+  SkillRuntimeStatus,
+} from './skills/types.js';
 import { createSkillConfigManager, isSkillEnabled, resolveSkillConfig } from './skills/config.js';
 import { isUnderManagedSkillsDir } from './skills/managed-store.js';
 import { loadSkillsLock, type SkillHubLockEntry } from './skills/hub-lock.js';
@@ -61,6 +66,7 @@ import { MemoryPrefetchCoordinator } from './memory/prefetch-coordinator.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
+import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
 
 const log = createLogger('AgentManager');
 
@@ -80,6 +86,17 @@ export interface SkillCatalogEntry {
   hub?: SkillHubLockEntry;
 }
 
+export interface SkillCatalogRuntimeMeta {
+  version: string;
+  loadedAt: number;
+  diagnostics: SkillDiagnostic[];
+  status: SkillRuntimeStatus;
+}
+
+export interface SkillCatalogSnapshot extends SkillCatalogRuntimeMeta {
+  catalog: SkillCatalogEntry[];
+}
+
 export type AgentSkillUnavailableReason = 'agent-denied' | 'disabled' | 'requirements-unmet' | 'model-invocation-disabled';
 
 export interface AgentSkillAvailabilityEntry extends SkillCatalogEntry {
@@ -89,6 +106,10 @@ export interface AgentSkillAvailabilityEntry extends SkillCatalogEntry {
 
 export interface AgentSkillAvailabilityPayload {
   agentId: string;
+  version: string;
+  loadedAt: number;
+  diagnostics: SkillDiagnostic[];
+  status: SkillRuntimeStatus;
   defaultsAllowlist?: string[];
   agentAllowlist?: string[];
   effectiveAllowlist?: string[];
@@ -116,6 +137,8 @@ export interface AgentManagerConfig {
   getCronService?: () => CronService | undefined;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike | undefined;
+  /** Runtime notification for UI/CLI shells that cache skill catalogs. */
+  onSkillsUpdated?: (payload: { reason: 'disk' | 'config' }) => void;
 }
 
 export interface AgentInstance {
@@ -151,13 +174,29 @@ export class AgentManager implements AgentInstanceGateway {
   private workspaceRuntimes: WorkspaceRuntimeRegistry;
   private memoryPrefetch: MemoryPrefetchCoordinator;
   private backgroundReview: BackgroundReviewCoordinator;
+  private skillFilesystemWatcher: SkillFilesystemWatcher;
+  private skillDiskRefreshInProgress = false;
+  private skillDiskRefreshPending = false;
+  private lastExplicitSkillDiskRefreshAt = 0;
+  private skillsUpdatedTimer: NodeJS.Timeout | undefined;
+  private pendingSkillsUpdatedReason: 'disk' | 'config' | undefined;
 
   constructor(config: AgentManagerConfig) {
     this.config = config;
     this.baseWorkspacePath = this.computeBaseWorkspacePath();
+    this.skillFilesystemWatcher = new SkillFilesystemWatcher({
+      onChange: (event) => {
+        log.info({ changedPath: event.changedPath }, 'Skill filesystem changed; refreshing skills');
+        this.refreshSkillsAfterDiskChange('watch');
+      },
+    });
+    this.skillFilesystemWatcher.refreshPrimaryWorkspace(this.baseWorkspacePath);
     this.workspaceRuntimes = new WorkspaceRuntimeRegistry({
       getConfig: () => this.config.config!,
       bundledSkillsDir: resolveBundledSkillsDir(),
+      onRuntimeCreated: (resolvedPath) => {
+        this.skillFilesystemWatcher.watchWorkspace(resolvedPath);
+      },
     });
     this.memoryPrefetch = new MemoryPrefetchCoordinator({
       getConfig: () => this.config.config,
@@ -166,7 +205,7 @@ export class AgentManager implements AgentInstanceGateway {
     });
     this.backgroundReview = new BackgroundReviewCoordinator({
       getConfig: () => this.mergedConfig(),
-      onSkillsFilesystemMutate: () => this.refreshSkillsAfterDiskChange(),
+      onSkillsFilesystemMutate: () => this.refreshSkillsAfterDiskChange('explicit'),
     });
     this.toolsFactory = new AgentToolsFactory(this.buildToolsFactoryDeps());
 
@@ -255,6 +294,7 @@ export class AgentManager implements AgentInstanceGateway {
     this.config.model = ref;
     this.defaultModel = ref || getDefaultModelSync(config);
     this.baseWorkspacePath = this.computeBaseWorkspacePath();
+    this.skillFilesystemWatcher.refreshPrimaryWorkspace(this.baseWorkspacePath);
     void this.toolsFactory.shutdownBrowser();
     void this.workspaceRuntimes.clearAll();
   }
@@ -291,7 +331,7 @@ export class AgentManager implements AgentInstanceGateway {
         };
       },
       onSkillsFilesystemMutate: () => {
-        this.refreshSkillsAfterDiskChange();
+        this.refreshSkillsAfterDiskChange('explicit');
       },
       getSkillPassthroughEnvVarNames: () => {
         const ctx = this.config.getCurrentContext?.();
@@ -448,12 +488,22 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   getSkillCatalog(): SkillCatalogEntry[] {
+    return this.getSkillCatalogSnapshot().catalog;
+  }
+
+  getSkillCatalogSnapshot(): SkillCatalogSnapshot {
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
-    return this.workspaceRuntimes
-      .getOrCreate(this.baseWorkspacePath)
-      .skillManager.getSkills()
-      .map((s) => this.skillCatalogEntryFromSkill(s, skillsConfig, lock));
+    const rt = this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath);
+    return {
+      catalog: rt.skillManager
+        .getSkills()
+        .map((s) => this.skillCatalogEntryFromSkill(s, skillsConfig, lock)),
+      version: rt.skillManager.getVersion(),
+      loadedAt: rt.skillManager.getLoadedAt(),
+      diagnostics: rt.skillManager.getDiagnostics(),
+      status: rt.skillManager.getStatus(),
+    };
   }
 
   getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
@@ -490,6 +540,10 @@ export class AgentManager implements AgentInstanceGateway {
 
     return {
       agentId: profile.agentId,
+      version: rt.skillManager.getVersion(),
+      loadedAt: rt.skillManager.getLoadedAt(),
+      diagnostics: rt.skillManager.getDiagnostics(),
+      status: rt.skillManager.getStatus(),
       ...(defaultsAllowlist !== undefined ? { defaultsAllowlist: [...defaultsAllowlist] } : {}),
       ...(entry?.skills !== undefined ? { agentAllowlist: [...entry.skills] } : {}),
       ...(profile.skillsAllowlist !== undefined ? { effectiveAllowlist: [...profile.skillsAllowlist] } : {}),
@@ -503,6 +557,10 @@ export class AgentManager implements AgentInstanceGateway {
   refreshSkillsAfterSkillConfigChange(): void {
     const cfg = this.config.config!;
     const touched = new Set<string>();
+    for (const [resolvedPath, rt] of this.workspaceRuntimes.entries()) {
+      rt.skillManager.refreshPromptFromConfig();
+      touched.add(resolvedPath);
+    }
     for (const instance of this.agents.values()) {
       const rt = this.workspaceRuntimes.getOrCreate(instance.resolvedWorkspacePath);
       if (!touched.has(instance.resolvedWorkspacePath)) {
@@ -531,12 +589,56 @@ export class AgentManager implements AgentInstanceGateway {
       instance.agent.state.systemPrompt = newPrompt;
     }
     log.info({ agents: this.agents.size }, 'Skill toggles applied; system prompt updated');
+    this.scheduleSkillsUpdated('config');
   }
 
   /**
    * Reload skills from disk and refresh system prompt on all active Agent instances.
    */
-  refreshSkillsAfterDiskChange(): void {
+  refreshSkillsAfterDiskChange(source: 'explicit' | 'watch' = 'explicit'): void {
+    const now = Date.now();
+    if (source === 'watch' && now - this.lastExplicitSkillDiskRefreshAt < 2500) {
+      log.debug({ changedWithinMs: now - this.lastExplicitSkillDiskRefreshAt }, 'Ignoring skill watcher echo after explicit refresh');
+      return;
+    }
+    if (source === 'explicit') {
+      this.lastExplicitSkillDiskRefreshAt = now;
+    }
+
+    if (this.skillDiskRefreshInProgress) {
+      this.skillDiskRefreshPending = true;
+      return;
+    }
+
+    this.skillDiskRefreshInProgress = true;
+    let refreshed = false;
+    try {
+      do {
+        this.skillDiskRefreshPending = false;
+        this.applySkillsAfterDiskChange();
+        refreshed = true;
+      } while (this.skillDiskRefreshPending);
+    } finally {
+      this.skillDiskRefreshInProgress = false;
+    }
+
+    if (refreshed) {
+      this.scheduleSkillsUpdated('disk');
+    }
+  }
+
+  private scheduleSkillsUpdated(reason: 'disk' | 'config'): void {
+    this.pendingSkillsUpdatedReason = reason === 'disk' ? 'disk' : this.pendingSkillsUpdatedReason ?? 'config';
+    if (this.skillsUpdatedTimer) clearTimeout(this.skillsUpdatedTimer);
+    this.skillsUpdatedTimer = setTimeout(() => {
+      const nextReason = this.pendingSkillsUpdatedReason ?? reason;
+      this.pendingSkillsUpdatedReason = undefined;
+      this.skillsUpdatedTimer = undefined;
+      this.config.onSkillsUpdated?.({ reason: nextReason });
+    }, 250);
+  }
+
+  private applySkillsAfterDiskChange(): void {
     const cfg = this.config.config!;
     // Reload every workspace SkillManager first. When there are no active agent sessions
     // (e.g. gateway UI only), the loop below runs zero times — without this, `getSkillCatalog()`
@@ -731,6 +833,8 @@ export class AgentManager implements AgentInstanceGateway {
    * Dispose all agents
    */
   dispose(): void {
+    if (this.skillsUpdatedTimer) clearTimeout(this.skillsUpdatedTimer);
+    this.skillFilesystemWatcher.dispose();
     void this.toolsFactory.shutdownBrowser();
     void disposeAllSessionMcpRuntimes().catch(() => {});
     evictAllEmbeddedSessionRunners('agent_manager_dispose');

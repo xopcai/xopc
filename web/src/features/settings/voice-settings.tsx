@@ -26,6 +26,7 @@ import { apiUrl } from '@/lib/url';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
+import { showToast } from '@/lib/toast';
 import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -291,7 +292,6 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
   const [models, setModels] = useState<VoiceModelsPayload | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState(false);
   const dirtyRef = useRef(false);
   const trackedVoiceSyncRef = useRef<{
     parsed: VoiceSettingsState | null;
@@ -363,7 +363,6 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
       trackedVoiceSyncRef.current = { parsed: voiceParsed, models: voiceModels };
       dispatchForm({ type: 'sync', value: voiceParsed });
       setModels(voiceModels);
-      setSaveOk(false);
     }
   }
 
@@ -533,13 +532,11 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
     if (!form || saving) return;
     setSaving(true);
     setError(null);
-    setSaveOk(false);
     try {
       await patchVoiceSettings(form);
       dispatchForm({ type: 'saved', value: form });
       dirtyRef.current = false;
-      setSaveOk(true);
-      window.setTimeout(() => setSaveOk(false), 2500);
+      showToast({ type: 'success', title: v.saved });
     } catch (e) {
       setError(e instanceof Error ? e.message : v.saveError);
     } finally {
@@ -552,7 +549,6 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
     dirtyRef.current = false;
     dispatchForm({ type: 'discard' });
     setError(null);
-    setSaveOk(false);
   }, [baseline]);
 
   useSaveBarRegistration({ id: 'voice', dirty, saving, save, discard });
@@ -629,7 +625,6 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
         {/* See WebSearchSettingsPanel — global Save bar replaces these in embedded mode. */}
         {embedded ? null : (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            {saveOk ? <span className="text-sm text-fg-muted">{v.saved}</span> : null}
             <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
               {v.discard}
             </Button>

@@ -1,5 +1,6 @@
 import type { Hono } from 'hono';
 
+import { CronJobAlreadyRunningError } from '../../../cron/service.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 
@@ -19,7 +20,7 @@ export function registerCronRoutes(authenticated: Hono, deps: AuthenticatedRoute
   // POST /api/cron - Add new job
   authenticated.post('/api/cron', async (c) => {
     const body = await c.req.json();
-    const { schedule, name, timezone, sessionTarget, agentId, workingDirectory, model, delivery, payload } = body;
+    const { schedule, name, description, sessionTarget, wakeMode, agentId, workingDirectory, delivery, payload, failureAlert, deleteAfterRun } = body;
 
     if (!schedule || !payload) {
       return c.json({ error: 'Missing required fields: schedule, payload' }, 400);
@@ -28,14 +29,16 @@ export function registerCronRoutes(authenticated: Hono, deps: AuthenticatedRoute
     try {
       const result = await service.cronServiceInstance.addJob(schedule, {
         name,
-        timezone,
+        description,
         sessionTarget,
+        wakeMode,
         ...(typeof agentId === 'string' && agentId.trim() ? { agentId: agentId.trim() } : {}),
         ...(typeof workingDirectory === 'string' && workingDirectory.trim()
           ? { workingDirectory: workingDirectory.trim() }
           : {}),
-        model,
+        ...(typeof deleteAfterRun === 'boolean' ? { deleteAfterRun } : {}),
         delivery,
+        failureAlert,
         payload,
       });
       return c.json(result, 201);
@@ -88,9 +91,24 @@ export function registerCronRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const id = c.req.param('id');
 
     try {
-      await service.cronServiceInstance.runJobNow(id);
-      return c.json({ triggered: true });
+      const result = await service.cronServiceInstance.runJobNow(id);
+      return c.json({ triggered: true, job: result.job, history: result.history });
     } catch (err) {
+      if (err instanceof CronJobAlreadyRunningError) {
+        log.info(
+          { jobId: err.jobId, runningSessionKey: err.runningSessionKey },
+          'Cron job run requested while already running',
+        );
+        return c.json(
+          {
+            error: err.message,
+            code: 'job_already_running',
+            jobId: err.jobId,
+            runningSessionKey: err.runningSessionKey,
+          },
+          409,
+        );
+      }
       logRouteError(log, c, err, 'gateway.route.cron', { operation: 'runJob' });
       return c.json({ error: err instanceof Error ? err.message : 'Failed to run job' }, 400);
     }

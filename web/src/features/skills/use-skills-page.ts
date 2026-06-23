@@ -30,6 +30,8 @@ import type {
   MarketplacePackageItem,
   MarketplaceProviderInfo,
   SkillCatalogEntry,
+  SkillDiagnostic,
+  SkillInstallResultPayload,
   SkillMarkdownPreviewPayload,
 } from '@/features/skills/skill.types';
 import { fileToZipUpload } from '@/features/skills/skill-upload-zip';
@@ -47,6 +49,7 @@ import {
   normalizeCatalogEntry,
 } from '@/features/skills/skills-page.utils';
 import { messages } from '@/i18n/messages';
+import { configReloadSection } from '@/features/gateway/config-reload-event';
 import { useAsyncResource } from '@/lib/use-async-resource';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -121,11 +124,14 @@ export function useSkillsPage() {
   const [marketCategoryId, setMarketCategoryId] = useState('');
   const [marketBrowseProvider, setMarketBrowseProvider] = useState<string | null>(() => urlMarketProvider);
   const [providersRefreshKey, setProvidersRefreshKey] = useState(0);
+  const [catalogRefreshKey, setCatalogRefreshKey] = useState(0);
+  const [skillDiagnostics, setSkillDiagnostics] = useState<SkillDiagnostic[]>([]);
   const marketplaceDetailProviderRef = useRef<string | null>(null);
   const trackedUrlProviderRef = useRef<string | null>(urlMarketProvider);
   const trackedProvidersCurrentRef = useRef<string | null>(null);
   const trackedMarketFilterKeyRef = useRef('');
   const trackedMarketProviderRef = useRef<string | null>(null);
+  const skipNextSkillsReloadRef = useRef(false);
 
   // ─── Aggregated search state ─────────────────────────────────────────────
   // When the user types a query we fan out across every registered marketplace provider
@@ -150,10 +156,11 @@ export function useSkillsPage() {
 
   const catalogResource = useAsyncResource(
     () =>
-      getSkills().then((data) =>
-        data.catalog.map(normalizeCatalogEntry),
-      ),
-    [hasToken],
+      getSkills().then((data) => {
+        setSkillDiagnostics(data.diagnostics ?? []);
+        return data.catalog.map(normalizeCatalogEntry);
+      }),
+    [hasToken, catalogRefreshKey],
     { enabled: hasToken, initial: [] as SkillCatalogEntry[], errorData: [] },
   );
   const { data: catalog, loading: catalogLoading, setData: setCatalogData } = catalogResource;
@@ -186,7 +193,18 @@ export function useSkillsPage() {
   const registeredProviders = providersResource.data.providers;
 
   useEffect(() => {
-    const onConfigReload = () => setProvidersRefreshKey((k) => k + 1);
+    const onConfigReload = (event: Event) => {
+      const section = configReloadSection((event as CustomEvent<unknown>).detail);
+      if (section === 'skills') {
+        if (skipNextSkillsReloadRef.current) {
+          skipNextSkillsReloadRef.current = false;
+          return;
+        }
+        setCatalogRefreshKey((k) => k + 1);
+      } else {
+        setProvidersRefreshKey((k) => k + 1);
+      }
+    };
     window.addEventListener('config-reload', onConfigReload);
     return () => window.removeEventListener('config-reload', onConfigReload);
   }, []);
@@ -529,6 +547,7 @@ export function useSkillsPage() {
       setError(null);
       try {
         const data = await getSkills();
+        setSkillDiagnostics(data.diagnostics ?? []);
         setCatalogData(data.catalog.map(normalizeCatalogEntry));
         return { ok: true };
       } catch (e) {
@@ -593,6 +612,29 @@ export function useSkillsPage() {
     window.setTimeout(() => setActionFeedback(null), durationMs);
   }, []);
 
+  const installFeedbackMessage = useCallback(
+    (result: SkillInstallResultPayload): string => {
+      const availability = result.availability;
+      if (!availability) return sk.installSuccess;
+      const label = availability.skillName || availability.skillId;
+      if (!availability.loaded) {
+        return `Skill "${label}" installed, but it was not loaded. Check skill diagnostics.`;
+      }
+      if (availability.diagnostics.length > 0) {
+        return `Skill "${label}" installed with ${availability.diagnostics.length} diagnostic(s).`;
+      }
+      if (availability.enabled === false) {
+        return `Skill "${label}" installed but disabled. Enable it before use.`;
+      }
+      if (availability.availableForDefaultAgent === false) {
+        const reason = availability.unavailableReason || 'unavailable';
+        return `Skill "${label}" installed but unavailable for agent "${availability.defaultAgentId}" (${reason}).`;
+      }
+      return `Skill "${label}" installed and ready.`;
+    },
+    [sk.installSuccess],
+  );
+
   const openSkillDetail = useCallback(
     async (row: SkillCatalogEntry) => {
       setDetailSource('catalog');
@@ -604,6 +646,31 @@ export function useSkillsPage() {
       setDetailLoading(true);
       try {
         const preview = await getSkillMarkdown(row.name);
+        setDetailCatalogPreview(preview);
+        setDetailTitle(preview.name);
+      } catch (e) {
+        setDetailCatalogPreview(null);
+        setDetailError(e instanceof Error ? e.message : sk.detailLoadFailed);
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [sk.detailLoadFailed],
+  );
+
+  const openSkillDetailByName = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) return;
+      setDetailSource('catalog');
+      setDetailOpen(true);
+      setDetailTitle(trimmed);
+      setDetailCatalogPreview(null);
+      setDetailMarketplacePreview(null);
+      setDetailError(null);
+      setDetailLoading(true);
+      try {
+        const preview = await getSkillMarkdown(trimmed);
         setDetailCatalogPreview(preview);
         setDetailTitle(preview.name);
       } catch (e) {
@@ -824,12 +891,14 @@ export function useSkillsPage() {
         showFeedback('error', sk.invalidFile);
         return;
       }
-      await uploadSkillZip(upload, { overwrite: true });
+      const result = await uploadSkillZip(upload, { overwrite: true });
+      skipNextSkillsReloadRef.current = true;
       await load();
-      showFeedback('success', sk.installSuccess);
+      showFeedback('success', installFeedbackMessage(result));
       setInstallOpen(false);
       setPendingFile(null);
       setMainTab('user');
+      await openSkillDetailByName(result.availability?.skillName || result.skillId);
     } catch (err) {
       setError(err instanceof Error ? err.message : sk.uploadFailed);
       showFeedback('error', err instanceof Error ? err.message : sk.uploadFailed);
@@ -895,6 +964,7 @@ export function useSkillsPage() {
     setActionFeedback(null);
     try {
       await deleteSkill(id);
+      skipNextSkillsReloadRef.current = true;
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : sk.deleteFailed);
@@ -933,6 +1003,7 @@ export function useSkillsPage() {
             overwrite: false,
             ...(mp ? { provider: mp } : {}),
           });
+          skipNextSkillsReloadRef.current = true;
           await load({ silent: true });
         }
         setDetailOpen(false);
@@ -975,15 +1046,16 @@ export function useSkillsPage() {
           (opts?.useDetailProvider
             ? marketplaceDetailProviderRef.current ?? marketBrowseProvider
             : marketBrowseProvider);
-        await installMarketplaceSkill({
+        const result = await installMarketplaceSkill({
           name,
           overwrite: installed,
           ...(p ? { provider: p } : {}),
         });
+        skipNextSkillsReloadRef.current = true;
         await load({ silent: true });
-        showFeedback('success', sk.installSuccess);
-        setDetailOpen(false);
+        showFeedback('success', installFeedbackMessage(result));
         setMainTab('user');
+        await openSkillDetailByName(result.availability?.skillName || result.skillId || name);
       } catch (e) {
         showFeedback('error', e instanceof Error ? e.message : sk.uploadFailed);
       } finally {
@@ -992,10 +1064,11 @@ export function useSkillsPage() {
     },
     [
       isSkillInstalledByName,
+      installFeedbackMessage,
       load,
       marketBrowseProvider,
+      openSkillDetailByName,
       showFeedback,
-      sk.installSuccess,
       sk.marketplaceReinstallConfirm,
       sk.uploadFailed,
     ],
@@ -1023,6 +1096,7 @@ export function useSkillsPage() {
     searchQuery,
     setSearchQuery,
     actionFeedback,
+    skillDiagnostics,
     mainTab,
     setMainTab,
     sourceFilter,

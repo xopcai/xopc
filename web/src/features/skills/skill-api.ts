@@ -9,7 +9,10 @@ import { readSkillApiErrorMessage } from '@/features/skills/skill-api-utils';
 import type {
   MarketplaceCategoryItem,
   MarketplacePackageDetailPayload,
+  SkillDiagnostic,
+  SkillInstallResultPayload,
   SkillMarkdownPreviewPayload,
+  SkillRuntimeStatus,
   SkillsMarketplacePayload,
 } from '@/features/skills/skill.types';
 
@@ -18,7 +21,7 @@ export { getSkills, reloadSkills };
 export async function uploadSkillZip(
   file: File,
   opts: { skillId?: string; overwrite?: boolean },
-): Promise<{ skillId: string; path: string }> {
+): Promise<SkillInstallResultPayload> {
   const form = new FormData();
   form.append('file', file);
   if (opts.skillId) {
@@ -47,7 +50,7 @@ export async function uploadSkillZip(
   const data = (await res.json().catch(() => ({}))) as {
     ok?: boolean;
     error?: string;
-    payload?: { skillId: string; path: string };
+    payload?: SkillInstallResultPayload;
   };
   if (!res.ok) {
     throw new Error(data.error || `HTTP ${res.status}`);
@@ -174,7 +177,7 @@ export async function installMarketplaceSkill(opts: {
   version?: string;
   overwrite?: boolean;
   provider?: string;
-}): Promise<{ skillId: string; path: string }> {
+}): Promise<SkillInstallResultPayload> {
   const res = await apiFetch(apiUrl('/api/skills/marketplace/install'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -186,7 +189,7 @@ export async function installMarketplaceSkill(opts: {
   const data = (await res.json()) as {
     ok?: boolean;
     error?: string;
-    payload?: { skillId: string; path: string };
+    payload?: SkillInstallResultPayload;
   };
   if (!data.payload?.skillId) {
     throw new Error(data.error || 'Invalid response');
@@ -254,6 +257,33 @@ export async function getMarketplaceProviders(): Promise<{
     payload?: { providers: Array<{ id: string; displayName: string }>; current: string };
   };
   if (!data.payload?.providers) {
+    throw new Error('Invalid response');
+  }
+  return data.payload;
+}
+
+export async function getSkillsStatus(): Promise<{
+  version: string;
+  loadedAt: number;
+  diagnostics: SkillDiagnostic[];
+  status: SkillRuntimeStatus;
+}> {
+  const res = await apiFetch(apiUrl('/api/skills/status'), {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(await readSkillApiErrorMessage(res));
+  }
+  const data = (await res.json()) as {
+    ok?: boolean;
+    payload?: {
+      version: string;
+      loadedAt: number;
+      diagnostics: SkillDiagnostic[];
+      status: SkillRuntimeStatus;
+    };
+  };
+  if (!data.payload?.status) {
     throw new Error('Invalid response');
   }
   return data.payload;

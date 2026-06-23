@@ -73,7 +73,6 @@ export function AgentDefaultsRouteLayout(props: {
           )}
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {vm.saveOk ? <span className="text-sm text-fg-muted">{a.saved}</span> : null}
           <Button type="button" variant="secondary" disabled={!vm.dirty || vm.saving} onClick={vm.discard}>
             {a.discard}
           </Button>

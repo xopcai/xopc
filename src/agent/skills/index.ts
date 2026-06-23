@@ -83,9 +83,13 @@ function shouldIgnore(path: string, ignoredPaths: Set<string>): boolean {
   return false;
 }
 
-function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global'): Skill[] {
+function discoverSkills(
+  dir: string,
+  source: 'builtin' | 'workspace' | 'global',
+): { skills: Skill[]; diagnostics: SkillDiagnostic[] } {
   const skills: Skill[] = [];
-  if (!existsSync(dir)) return skills;
+  const diagnostics: SkillDiagnostic[] = [];
+  if (!existsSync(dir)) return { skills, diagnostics };
 
   function scan(currentDir: string, currentIgnoredPaths: Set<string>) {
     try {
@@ -113,18 +117,26 @@ function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global')
           }
 
           if (existsSync(skillMdPath) && !shouldIgnore(skillRelPath, currentIgnoredPaths)) {
-            const skill = loadSkillFromFile(skillMdPath, source, dir);
+            const { skill, diagnostic } = loadSkillFromFile(skillMdPath, source, dir);
+            if (diagnostic) diagnostics.push(diagnostic);
             if (skill) skills.push(skill);
           }
 
           scan(fullPath, subIgnoredPaths);
         }
       }
-    } catch {}
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      diagnostics.push({
+        type: 'error',
+        message: `Failed to scan skills directory: ${message}`,
+        path: currentDir,
+      });
+    }
   }
 
   scan(dir, loadIgnoreRules(dir, dir));
-  return skills;
+  return { skills, diagnostics };
 }
 
 function deriveDescriptionFromMarkdown(content: string): string | undefined {
@@ -149,7 +161,11 @@ function deriveDescriptionFromMarkdown(content: string): string | undefined {
   return fallbackHeading || undefined;
 }
 
-function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | 'global', rootDir?: string): Skill | null {
+function loadSkillFromFile(
+  filePath: string,
+  source: 'builtin' | 'workspace' | 'global',
+  rootDir?: string,
+): { skill: Skill | null; diagnostic?: SkillDiagnostic } {
   try {
     const rawContent = readFileSync(filePath, 'utf-8');
     const { frontmatter, content } = parseFrontmatter(rawContent);
@@ -159,7 +175,17 @@ function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | '
     const name = (frontmatter.name as string | undefined) || parentDirName;
     const description =
       (frontmatter.description as string | undefined)?.trim() || deriveDescriptionFromMarkdown(content);
-    if (!description?.trim()) return null;
+    if (!description?.trim()) {
+      return {
+        skill: null,
+        diagnostic: {
+          type: 'error',
+          skillName: name,
+          message: `Skill "${name}" is missing a description`,
+          path: filePath,
+        },
+      };
+    }
 
     // Derive category from directory path: skills/creative/algorithmic-art → 'creative'
     // Only assign a category when the skill is nested at least two levels below rootDir.
@@ -179,20 +205,30 @@ function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | '
     const requiredEnvVarNames = parseRequiredEnvVarNames(frontmatter);
 
     return {
-      name,
-      description: description.trim(),
-      category,
-      filePath,
-      baseDir: skillDir,
-      source,
-      disableModelInvocation: frontmatter['disable-model-invocation'] === true,
-      metadata,
-      toolConditions,
-      requiredEnvVarNames: requiredEnvVarNames.length > 0 ? requiredEnvVarNames : undefined,
-      content,
+      skill: {
+        name,
+        description: description.trim(),
+        category,
+        filePath,
+        baseDir: skillDir,
+        source,
+        disableModelInvocation: frontmatter['disable-model-invocation'] === true,
+        metadata,
+        toolConditions,
+        requiredEnvVarNames: requiredEnvVarNames.length > 0 ? requiredEnvVarNames : undefined,
+        content,
+      },
     };
-  } catch {
-    return null;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return {
+      skill: null,
+      diagnostic: {
+        type: 'error',
+        message: `Failed to load skill file: ${message}`,
+        path: filePath,
+      },
+    };
   }
 }
 
@@ -208,7 +244,9 @@ export function loadSkills(options: {
   const diagnostics: SkillDiagnostic[] = [];
 
   if (builtinDir) {
-    for (const skill of discoverSkills(builtinDir, 'builtin')) {
+    const discovered = discoverSkills(builtinDir, 'builtin');
+    diagnostics.push(...discovered.diagnostics);
+    for (const skill of discovered.skills) {
       const existing = skillMap.get(skill.name);
       if (existing) {
         diagnostics.push({
@@ -229,7 +267,9 @@ export function loadSkills(options: {
   ].filter((d): d is string => !!d && existsSync(d));
 
   for (const dir of globalDirs) {
-    for (const skill of discoverSkills(dir, 'global')) {
+    const discovered = discoverSkills(dir, 'global');
+    diagnostics.push(...discovered.diagnostics);
+    for (const skill of discovered.skills) {
       const existing = skillMap.get(skill.name);
       if (existing) {
         diagnostics.push({
@@ -245,7 +285,9 @@ export function loadSkills(options: {
   }
 
   if (workspaceDir) {
-    const workspaceSkills = discoverSkills(join(workspaceDir, 'skills'), 'workspace');
+    const discovered = discoverSkills(join(workspaceDir, 'skills'), 'workspace');
+    diagnostics.push(...discovered.diagnostics);
+    const workspaceSkills = discovered.skills;
     for (const skill of workspaceSkills) {
       const existing = skillMap.get(skill.name);
       if (existing) {
@@ -263,7 +305,9 @@ export function loadSkills(options: {
   // Scan extra directories
   for (const extraDir of extraDirs) {
     if (existsSync(extraDir)) {
-      for (const skill of discoverSkills(extraDir, 'global')) {
+      const discovered = discoverSkills(extraDir, 'global');
+      diagnostics.push(...discovered.diagnostics);
+      for (const skill of discovered.skills) {
         const existing = skillMap.get(skill.name);
         if (existing) {
           diagnostics.push({

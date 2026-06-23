@@ -15,6 +15,7 @@ import {
   WEBCHAT_AGENT_STORAGE_KEY,
 } from '@/features/chat/session/chat-session-defaults';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
+import { isSkillsOnlyConfigReload } from '@/features/gateway/config-reload-event';
 import { getAgentIdFromWebSessionKey } from '@/lib/web-session-agent';
 import { useGatewayStore } from '@/stores/gateway-store';
 
@@ -35,7 +36,10 @@ export function useChatSessionAgents(opts: {
   );
 
   useEffect(() => {
-    const onConfigReload = () => void mutateChatAgents();
+    const onConfigReload = (event: Event) => {
+      if (isSkillsOnlyConfigReload((event as CustomEvent<unknown>).detail)) return;
+      void mutateChatAgents();
+    };
     window.addEventListener('config-reload', onConfigReload);
     return () => window.removeEventListener('config-reload', onConfigReload);
   }, [mutateChatAgents]);

@@ -34,6 +34,7 @@ let _commandsInflight: Promise<CommandEntry[]> | null = null;
 let _skillsCache: Awaited<ReturnType<typeof getSkills>> | null = null;
 let _skillsExpiry = 0;
 let _skillsInflight: ReturnType<typeof getSkills> | null = null;
+let _skillsGeneration = 0;
 
 export interface ChatSkillEntry {
   name: string;
@@ -47,6 +48,14 @@ export interface ChatSkillEntry {
 
 export interface ChatSkillsPayload {
   agentId: string;
+  version: string;
+  loadedAt: number;
+  diagnostics?: Array<{
+    type: 'warning' | 'collision' | 'error';
+    skillName?: string;
+    message: string;
+    path?: string;
+  }>;
   defaultsAllowlist?: string[];
   agentAllowlist?: string[];
   effectiveAllowlist?: string[];
@@ -55,6 +64,7 @@ export interface ChatSkillsPayload {
 
 const _chatSkillsCache = new Map<string, { payload: ChatSkillsPayload; expiry: number }>();
 const _chatSkillsInflight = new Map<string, Promise<ChatSkillsPayload>>();
+let _chatSkillsGeneration = 0;
 
 export async function fetchCommandsCached(forceRefresh = false): Promise<CommandEntry[]> {
   const now = Date.now();
@@ -92,6 +102,7 @@ export async function getChatSkillsCached(agentId: string | undefined, forceRefr
   const inflight = _chatSkillsInflight.get(key);
   if (inflight) return inflight;
 
+  const generation = _chatSkillsGeneration;
   const request = apiFetch(apiUrl(`/api/chat/skills?agentId=${encodeURIComponent(key)}`))
     .then(async (res) => {
       if (!res.ok) throw new Error(await readErrorMessage(res));
@@ -99,7 +110,9 @@ export async function getChatSkillsCached(agentId: string | undefined, forceRefr
       if (!data.payload || !Array.isArray(data.payload.skills)) {
         throw new Error('Invalid /api/chat/skills response');
       }
-      _chatSkillsCache.set(key, { payload: data.payload, expiry: Date.now() + CACHE_TTL_MS });
+      if (generation === _chatSkillsGeneration) {
+        _chatSkillsCache.set(key, { payload: data.payload, expiry: Date.now() + CACHE_TTL_MS });
+      }
       return data.payload;
     })
     .finally(() => {
@@ -124,11 +137,24 @@ export async function addSkillToAgentAllowlist(agentId: string | undefined, skil
 }
 
 export function clearChatSkillsCache(agentId?: string): void {
+  _chatSkillsGeneration += 1;
   if (agentId) {
     _chatSkillsCache.delete(agentId);
+    _chatSkillsInflight.delete(agentId);
     return;
   }
   _chatSkillsCache.clear();
+  _chatSkillsInflight.clear();
+}
+
+export function clearSkillPaletteCaches(agentId?: string): void {
+  clearChatSkillsCache(agentId);
+  if (!agentId) {
+    _skillsGeneration += 1;
+    _skillsCache = null;
+    _skillsExpiry = 0;
+    _skillsInflight = null;
+  }
 }
 
 export async function getSkillsCached(
@@ -140,10 +166,13 @@ export async function getSkillsCached(
   }
   if (_skillsInflight) return _skillsInflight;
 
+  const generation = _skillsGeneration;
   _skillsInflight = getSkills()
     .then((payload) => {
-      _skillsCache = payload;
-      _skillsExpiry = Date.now() + CACHE_TTL_MS;
+      if (generation === _skillsGeneration) {
+        _skillsCache = payload;
+        _skillsExpiry = Date.now() + CACHE_TTL_MS;
+      }
       return payload;
     })
     .finally(() => {

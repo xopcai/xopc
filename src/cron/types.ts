@@ -1,5 +1,3 @@
-// Cron types and interfaces
-
 import type { SessionStore } from '../session/store.js';
 import type {
   WorkflowRunInputEnvelope,
@@ -19,26 +17,42 @@ export type {
   JobExecution,
 } from './execution-types.js';
 
-// ============================================================================
-// Delivery Types
-// ============================================================================
+export type CronSchedule =
+  | { kind: 'at'; at: string }
+  | { kind: 'every'; everyMs: number; anchorMs?: number }
+  | { kind: 'cron'; expr: string; tz?: string; staggerMs?: number };
 
-export type CronDeliveryMode = 'none' | 'announce' | 'direct';
+export type CronSessionTarget = 'main' | 'isolated' | 'current' | `session:${string}`;
+export type CronWakeMode = 'now' | 'next-heartbeat';
+
+export type CronDeliveryMode = 'none' | 'announce' | 'webhook';
 
 export interface CronDelivery {
   mode: CronDeliveryMode;
-  channel?: string;  // 'telegram' | 'cli' | 'local'
-  to?: string;       // recipient chat id (omit for `local`)
+  channel?: string;
+  to?: string;
+  accountId?: string;
+  threadId?: string | number;
   bestEffort?: boolean;
+  completionDestination?: { mode: 'webhook'; to: string };
+  failureDestination?: {
+    mode?: 'announce' | 'webhook';
+    channel?: string;
+    to?: string;
+    accountId?: string;
+  };
 }
-
-// ============================================================================
-// Payload Types
-// ============================================================================
 
 export type CronPayload =
   | { kind: 'systemEvent'; text: string }
-  | { kind: 'agentTurn'; message: string; model?: string; timeoutSeconds?: number }
+  | {
+      kind: 'agentTurn';
+      message: string;
+      model?: string;
+      thinking?: string;
+      toolsAllow?: string[];
+      timeoutSeconds?: number;
+    }
   | CronGoalContinuePayload
   | CronWorkflowRunPayload;
 
@@ -57,66 +71,73 @@ export interface CronWorkflowRunPayload {
   goal?: string;
   agentId?: string;
   sessionKey?: string;
-  /** When true (default), cron waits for terminal workflow status before marking the job result. */
+  maxRetries?: number;
   waitForCompletion?: boolean;
   source?: Partial<Extract<WorkflowRunSource, { kind: 'cron' }>>;
 }
 
-// ============================================================================
-// Session Target
-// ============================================================================
+export type CronRunStatusValue = 'ok' | 'error' | 'skipped';
+export type CronDeliveryStatus = 'delivered' | 'not-delivered' | 'unknown' | 'not-requested';
 
-export type CronSessionTarget = 'main' | 'isolated';
-
-// ============================================================================
-// Job Data
-// ============================================================================
-
-export interface JobData {
-  id: string;
-  name?: string;
-  schedule: string;
-  enabled: boolean;
-  timezone?: string;
-  maxRetries: number;
-  timeout: number;
-  created_at: string;
-  updated_at: string;
-  sessionTarget?: CronSessionTarget;
-  /** When set, isolated agent runs use this agent id in the session key (multi-agent). */
-  agentId?: string;
-  /**
-   * Optional absolute workspace root for isolated agent runs (same semantics as chat working directory).
-   * Omit to use the effective agent profile default workspace.
-   */
-  workingDirectory?: string;
-  payload: CronPayload;
-  delivery?: CronDelivery;
-  model?: string;
-  // Internal state
-  state?: JobState;
+export interface CronFailureAlert {
+  after?: number;
+  cooldownMs?: number;
+  includeSkipped?: boolean;
+  mode?: 'announce' | 'webhook';
+  channel?: string;
+  to?: string;
+  accountId?: string;
 }
 
 export interface JobState {
   nextRunAtMs?: number;
   runningAtMs?: number;
+  runningSessionKey?: string;
   lastRunAtMs?: number;
-  lastStatus?: 'ok' | 'error' | 'skipped';
+  lastRunStatus?: CronRunStatusValue;
   lastError?: string;
   lastDurationMs?: number;
   consecutiveErrors?: number;
-  scheduleErrorCount?: number;
+  consecutiveSkipped?: number;
+  lastDeliveryStatus?: CronDeliveryStatus;
+  lastDeliveryError?: string;
+  lastFailureAlertAtMs?: number;
 }
 
-// ============================================================================
-// Job Execution
-// ============================================================================
+export interface JobData {
+  id: string;
+  name: string;
+  description?: string;
+  enabled: boolean;
+  deleteAfterRun?: boolean;
+  createdAtMs: number;
+  updatedAtMs: number;
+  schedule: CronSchedule;
+  sessionTarget: CronSessionTarget;
+  wakeMode: CronWakeMode;
+  agentId?: string;
+  sessionKey?: string;
+  workingDirectory?: string;
+  payload: CronPayload;
+  delivery?: CronDelivery;
+  failureAlert?: CronFailureAlert | false;
+  state: JobState;
+}
 
-// See ./execution-types.js for JobExecution, CronRunHistoryRow, CronRunOutcome, etc.
+export type CronJobCreate = Omit<JobData, 'id' | 'createdAtMs' | 'updatedAtMs' | 'state' | 'enabled' | 'sessionTarget' | 'wakeMode' | 'name'> & {
+  id?: string;
+  name?: string;
+  enabled?: boolean;
+  sessionTarget?: CronSessionTarget;
+  wakeMode?: CronWakeMode;
+  state?: Partial<JobState>;
+};
 
-// ============================================================================
-// Executor Interface
-// ============================================================================
+export type CronJobPatch = Partial<
+  Omit<JobData, 'id' | 'createdAtMs' | 'updatedAtMs' | 'state'>
+> & {
+  state?: Partial<JobState>;
+};
 
 export interface CronWorkflowRunStarter {
   startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult>;
@@ -124,7 +145,6 @@ export interface CronWorkflowRunStarter {
   retryWorkflowRun?(params: { agentId: string; runId: string }): Promise<WorkflowRunServiceResult>;
 }
 
-/** Optional hook after a successful cron run (e.g. wake gateway heartbeat). */
 export interface HeartbeatWakeSink {
   requestNow(opts?: { reason?: string }): void;
 }
@@ -133,12 +153,7 @@ export interface JobExecutorDeps {
   agentService?: any;
   messageBus?: any;
   heartbeatService?: HeartbeatWakeSink;
-  /** When set, weixin cron `delivery.to` may be a bare ilink user id; accountId is inferred from sessions. */
   sessionStore?: SessionStore;
-  /**
-   * When a job has no `agentId`, isolated cron runs use this id for the session key
-   * (same as {@link JobData.agentId} set to the default agent). Typically `getDefaultAgentId(config)`.
-   */
   getDefaultCronAgentId?: () => string;
   workflowRunService?: CronWorkflowRunStarter;
   goalRunner?: {
@@ -153,10 +168,6 @@ export interface JobExecutorDeps {
 export interface JobExecutor {
   execute(job: JobData, signal: AbortSignal, deps?: JobExecutorDeps): Promise<void>;
 }
-
-// ============================================================================
-// Metrics & Health
-// ============================================================================
 
 export interface CronMetrics {
   totalJobs: number;
@@ -177,26 +188,7 @@ export interface CronHealth {
   lastError?: string;
 }
 
-// ============================================================================
-// API Options
-// ============================================================================
-
-export interface AddJobOptions {
-  name?: string;
-  timezone?: string;
-  maxRetries?: number;
-  timeout?: number;
-  sessionTarget?: CronSessionTarget;
-  agentId?: string;
-  workingDirectory?: string;
-  payload: CronPayload;
-  delivery?: CronDelivery;
-  model?: string;
-}
-
-export interface JobWithNextRun extends Omit<JobData, 'created_at' | 'updated_at' | 'state'> {
-  next_run?: string;
-}
+export type AddJobOptions = CronJobCreate;
 
 export interface JobHistoryQuery {
   jobId: string;

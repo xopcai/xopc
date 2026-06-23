@@ -9,11 +9,13 @@ import { settingsFormSectionClassName } from '@/features/settings/settings-form-
 export function SettingsFormSection({
   children,
   className,
+  id,
 }: {
   children: ReactNode;
   className?: string;
+  id?: string;
 }) {
-  return <section className={cn(settingsFormSectionClassName(), className)}>{children}</section>;
+  return <section id={id} className={cn(settingsFormSectionClassName(), className)}>{children}</section>;
 }
 
 const settingsSectionHeaderIconShellClass =

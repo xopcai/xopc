@@ -1,264 +1,113 @@
-# Cron Jobs
+# Scheduled Tasks
 
-xopc has a built-in Cron service that supports scheduled message sending with two execution modes: **Direct** and **AI Agent**.
+xopc scheduled tasks are durable jobs stored in SQLite (`~/.xopc/xopc.db`). The scheduler supports one-time, interval, and cron-expression schedules, records every run, and can execute agent turns, workflow runs, goal continuations, or system events.
 
-## Usage
+## CLI
 
-### List Tasks
+Create exactly one schedule and exactly one payload.
+
+```bash
+xopc cron add --at 2026-06-24T09:00:00+08:00 --message "Prepare tomorrow's briefing"
+xopc cron add --every 30m --message "Check urgent inbox items"
+xopc cron add --cron "0 9 * * 1-5" --tz Asia/Shanghai --message "Daily workday review"
+xopc cron add --cron "0 17 * * 5" --workflow weekly_review --goal "Weekly review"
+```
+
+Schedule options:
+
+| Option | Meaning |
+| --- | --- |
+| `--at <time>` | One-time ISO timestamp, or relative duration such as `20m`, `2h`, `1d` |
+| `--every <duration>` | Fixed interval such as `10m`, `1h`, `1d` |
+| `--cron <expr>` | Cron expression |
+| `--tz <iana>` | Optional timezone for `--cron` |
+
+Payload options:
+
+| Option | Meaning |
+| --- | --- |
+| `--message <text>` | Create an agent/system message task |
+| `--workflow <id>` | Start a workflow definition |
+| `--goal <text>` | Workflow goal override |
+| `--input-json <json>` | Workflow input payload |
+| `--agent-id <id>` | Agent profile for isolated jobs |
+| `--channel <name>` + `--to <id>` | Announce result to a channel |
+
+Manage jobs:
 
 ```bash
 xopc cron list
+xopc cron enable <job-id>
+xopc cron disable <job-id>
+xopc cron remove <job-id>
 ```
 
-Output example:
+## Data Model
 
-```
-ID       | Schedule      | Mode     | Enabled | Next Run
----------|---------------|----------|---------|-------------------
-abc12345 | 0 9 * * *    | main     | true    | 2026-02-21T09:00
-def67890 | 0 10 * * *   | isolated | true    | 2026-02-21T10:00
-```
+Jobs use structured schedules:
 
-### Add Task
-
-```bash
-xopc cron add --schedule "0 9 * * *" --message "Good morning!"
+```ts
+type CronSchedule =
+  | { kind: 'at'; at: string }
+  | { kind: 'every'; everyMs: number; anchorMs?: number }
+  | { kind: 'cron'; expr: string; tz?: string; staggerMs?: number };
 ```
 
-**Parameters:**
+Runtime state is stored on the job row:
 
-| Parameter | Description |
-|-----------|-------------|
-| `--schedule` | Cron expression |
-| `--message` | Message to send |
-| `--name` | (Optional) Task name |
-| `--target` | Execution mode: `main` (direct) or `isolated` (AI agent) |
-| `--model` | (Optional) Model for AI agent mode |
-| `--channel` | (Optional) Target channel: `telegram`, `cli` |
-| `--to` | (Optional) Recipient chat ID |
-
-### Remove Task
-
-```bash
-xopc cron remove <task-id>
+```ts
+type JobState = {
+  nextRunAtMs?: number;
+  runningAtMs?: number;
+  lastRunAtMs?: number;
+  lastRunStatus?: 'ok' | 'error' | 'skipped';
+  consecutiveErrors?: number;
+  lastDeliveryStatus?: 'delivered' | 'not-delivered' | 'unknown' | 'not-requested';
+};
 ```
 
-### Enable/Disable Task
+SQLite tables:
 
-```bash
-xopc cron enable <task-id>
-xopc cron disable <task-id>
-```
+| Table | Purpose |
+| --- | --- |
+| `cron_jobs` | Job definitions, schedule, payload, delivery, failure alert, state |
+| `cron_runs` | Run history and execution outcome |
 
-### Run Now
+There is no JSON job file and no legacy `schedule: string` contract.
 
-```bash
-xopc cron run <task-id>
-```
+## Scheduler Behavior
 
-## Execution Modes
+- On startup, missed jobs are recomputed and staggered to avoid a thundering herd.
+- Top-of-hour cron jobs receive a deterministic default stagger unless `staggerMs` is set.
+- Running jobs are marked in state; interrupted runs are surfaced as errors on restart.
+- `deleteAfterRun` one-time jobs are removed after a successful scheduled run.
+- Run history is written to SQLite and exposed through the gateway UI and API.
 
-The CLI `cron add` command creates a **system event** job (heartbeat-style message) using flags:
+## Gateway API
 
-```bash
-xopc cron add --schedule "0 9 * * *" --message "Good morning!" --name "Morning"
-```
+Create:
 
-Jobs with **channel delivery**, **isolated agent turns**, or richer payloads are managed via the **gateway console** (`#/settings/cron`) or by editing the cron jobs store on disk. See gateway API / agent tools for advanced scheduling.
+```http
+POST /api/cron
+Content-Type: application/json
 
-### Examples (CLI system events)
-
-```bash
-# Daily reminder
-xopc cron add --schedule "0 9 * * *" --message "Good morning!" --name "Morning"
-
-# Weekday wrap-up
-xopc cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!" --name "EOD"
-```
-
-### Advanced jobs (gateway / JSON)
-
-Direct channel sends and isolated agent runs (previously shown with positional `cron add` arguments) are **not** exposed on the CLI yet. Configure them in the web UI or jobs file.
-
-**Workflow runs:** Schedule a workflow directly (no assistant turn):
-
-```bash
-xopc cron add --schedule "0 17 * * 5" --workflow weekly_review --goal "Weekly review"
-xopc cron add --schedule "30 8 * * 1-5" --workflow inbox_triage \
-  --input-json '{"inbox":"paste items here"}' \
-  --channel telegram --to <chat-id>
-```
-
-In `#/settings/cron`, choose task kind **Workflow run** for the same payload with structured args and optional delivery. Cron waits for completion by default (~35 min timeout). See [Dynamic Workflows](workflows.md).
-
-## Cron Expression Format
-
-```
-┌───────────── minute (0 - 59)
-│ ┌─────────── hour (0 - 23)
-│ │ ┌───────── day of month (1 - 31)
-│ │ │ ┌─────── month (1 - 12)
-│ │ │ │ ┌───── day of week (0 - 6, Sunday=0)
-│ │ │ │ │
-* * * * *
-```
-
-## Common Examples
-
-| Expression | Description |
-|-----------|-------------|
-| `0 9 * * *` | Daily at 9:00 AM |
-| `0 18 * * 1-5` | Weekdays at 6:00 PM |
-| `30 8 * * 1` | Every Monday at 8:30 AM |
-| `0 0 1 * *` | First day of every month |
-| `*/15 * * * *` | Every 15 minutes |
-| `*/1 * * * *` | Every minute (for testing) |
-
-## Task Storage
-
-Tasks are saved in `~/.xopc/cron-jobs.json`:
-
-```json
 {
-  "jobs": [
-    {
-      "id": "abc12345",
-      "name": "Morning",
-      "schedule": "0 9 * * *",
-      "message": "Good morning!",
-      "enabled": true,
-      "sessionTarget": "main",
-      "delivery": {
-        "mode": "direct",
-        "channel": "telegram",
-        "to": "123456789"
-      },
-      "created_at": "2026-02-20T12:00:00.000Z",
-      "updated_at": "2026-02-20T12:00:00.000Z"
-    },
-    {
-      "id": "def67890",
-      "name": "Weather",
-      "schedule": "0 10 * * *",
-      "message": "What's the weather today?",
-      "enabled": true,
-      "sessionTarget": "isolated",
-      "model": "minimax/minimax-m2.5",
-      "delivery": {
-        "mode": "direct",
-        "channel": "telegram",
-        "to": "123456789"
-      },
-      "created_at": "2026-02-20T12:00:00.000Z",
-      "updated_at": "2026-02-20T12:00:00.000Z"
-    }
-  ],
-  "version": 1
+  "name": "Daily review",
+  "schedule": { "kind": "cron", "expr": "0 9 * * 1-5", "tz": "Asia/Shanghai" },
+  "sessionTarget": "isolated",
+  "delivery": { "mode": "announce", "channel": "telegram", "to": "123456" },
+  "payload": { "kind": "agentTurn", "message": "Summarize yesterday and plan today." }
 }
 ```
 
-## Programmatic Usage
+List:
 
-```typescript
-import { CronService } from '../cron/index.js';
-
-const cronService = new CronService({
-  filePath: '~/.xopc/cron-jobs.json',
-  agentService: agentServiceInstance,
-  messageBus: messageBusInstance,
-});
-
-// Initialize
-await cronService.initialize();
-
-// Add task - Direct mode
-await cronService.addJob('0 9 * * *', 'Good morning!', {
-  name: 'Morning',
-  sessionTarget: 'main',
-  delivery: {
-    mode: 'direct',
-    channel: 'telegram',
-    to: '123456789',
-  },
-});
-
-// Add task - AI Agent mode
-await cronService.addJob('0 10 * * *', 'Query weather', {
-  name: 'Weather',
-  sessionTarget: 'isolated',
-  model: 'minimax/minimax-m2.5',
-  delivery: {
-    mode: 'direct',
-    channel: 'telegram',
-    to: '123456789',
-  },
-});
-
-// List tasks
-const jobs = await cronService.listJobs();
-console.log(jobs);
-
-// Get task history
-const history = cronService.getHistory(jobId, 10);
-
-// Run task immediately
-await cronService.runJobNow(jobId);
-
-// Stop service
-await cronService.stop();
+```http
+GET /api/cron
 ```
 
-## Configuration
+Each job returns `createdAtMs`, `updatedAtMs`, structured `schedule`, and `state.nextRunAtMs`.
 
-Cron jobs are enabled in the config:
+## Product Notes
 
-```json
-{
-  "cron": {
-    "enabled": true,
-    "maxConcurrentJobs": 5,
-    "defaultTimezone": "UTC",
-    "historyRetentionDays": 7
-  }
-}
-```
-
-Make sure the gateway service is running to receive scheduled messages.
-
-## Error Backoff
-
-When a job fails consecutively, the system applies exponential backoff:
-
-| Consecutive Errors | Delay |
-|-------------------|-------|
-| 1 | 30 seconds |
-| 2 | 1 minute |
-| 3 | 5 minutes |
-| 4 | 15 minutes |
-| 5+ | 60 minutes |
-
-## Best Practices
-
-1. **Test expressions**: Use `cron-parser` to validate expressions
-2. **Reasonable frequency**: Avoid overly frequent tasks
-3. **Error handling**: Check logs to confirm task execution success
-4. **Timezone**: Cron uses server timezone
-
-## Troubleshooting
-
-**Task not executing?**
-- Ensure gateway service is running
-- Check Cron expression format is correct
-- Check error logs
-
-**Timezone issues?**
-- Cron uses system timezone
-- Ensure server timezone is set correctly
-
-**Message not sent?**
-- Check channel configuration is enabled
-- Verify API Key is valid
-
-**AI mode not working?**
-- Ensure model is configured in providers
-- Check agent service is initialized
+Use `at` for exact one-time reminders, `every` for fixed interval monitoring, and `cron` for calendar schedules. Put timezone on each cron schedule that depends on a human local time; there is no global scheduler timezone.

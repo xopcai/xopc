@@ -11,7 +11,19 @@ import { useGatewaySseStore } from '@/stores/gateway-sse-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-import { buildSetupStatusSnapshot, type SetupStatusSnapshot } from './setup-checklist-state';
+import {
+  buildSetupStatusSnapshot,
+  readOverviewBrowserDiagnosticsInput,
+  type SetupStatusSnapshot,
+} from './setup-checklist-state';
+import {
+  browserDiagnosticsSwrKey,
+  fetchBrowserDiagnostics,
+  fetchLogsHealth,
+  fetchSetupDoctorChecks,
+  logsHealthSwrKey,
+  setupDoctorSwrKey,
+} from './setup-diagnostics-api';
 
 function computePresetsDone(agents: { id: string }[] | undefined): boolean {
   return Boolean(agents && agents.length > 1);
@@ -63,13 +75,59 @@ export function useSetupChecklist(): {
     revalidateOnFocus: false,
   });
 
+  const {
+    data: doctorChecks,
+    error: doctorError,
+    isLoading: doctorLoading,
+    mutate: mutateDoctor,
+  } = useSWR(Boolean(token) ? setupDoctorSwrKey() : null, fetchSetupDoctorChecks, {
+    revalidateOnFocus: false,
+  });
+
+  const {
+    data: logsHealth,
+    isLoading: logsLoading,
+    mutate: mutateLogs,
+  } = useSWR(Boolean(token) ? logsHealthSwrKey() : null, fetchLogsHealth, {
+    revalidateOnFocus: false,
+  });
+
+  const browserDiagnosticsInput = useMemo(
+    () => readOverviewBrowserDiagnosticsInput(configData?.payload?.config),
+    [configData?.payload?.config],
+  );
+
+  const {
+    data: browserDiagnostics,
+    isLoading: browserDiagnosticsLoading,
+    mutate: mutateBrowserDiagnostics,
+  } = useSWR(browserDiagnosticsSwrKey(Boolean(token) ? browserDiagnosticsInput : null), ([, input]) =>
+    fetchBrowserDiagnostics(input),
+  {
+    revalidateOnFocus: false,
+  });
+
   // Warm models cache for other panels; not required for checklist itself.
   useSWR(Boolean(token) ? CONFIGURED_MODELS_SWR_KEY : null, fetchConfiguredModelsCached, {
     revalidateOnFocus: false,
   });
 
-  const ready = !token || (!configLoading && !skillsLoading && !providerMetaLoading && !agentsLoading);
-  const error = Boolean(configError || skillsError || providerMetaError || agentsError);
+  const ready = !token || (
+    !configLoading &&
+    !skillsLoading &&
+    !providerMetaLoading &&
+    !agentsLoading &&
+    !doctorLoading &&
+    !logsLoading &&
+    !browserDiagnosticsLoading
+  );
+  const error = Boolean(
+    configError ||
+    skillsError ||
+    providerMetaError ||
+    agentsError ||
+    doctorError,
+  );
 
   const snapshot = useMemo(() => {
     if (!token || !ready) return null;
@@ -85,6 +143,9 @@ export function useSetupChecklist(): {
       config: configData?.payload?.config,
       skillCount,
       providerMeta: metaTotal > 0 ? { configured: metaConfigured, total: metaTotal } : null,
+      doctorChecks,
+      logsHealth,
+      browserDiagnostics,
       presetsDone,
       agentCount,
       labels: {
@@ -104,12 +165,21 @@ export function useSetupChecklist(): {
         skillsMissing: l.skillsMissing,
         presetsConfigured: l.presetsConfigured.replace('{{count}}', String(agentCount)),
         presetsMissing: l.presetsMissing,
+        readyToChat: m.setupStatus.requiredCompleteMessage,
       },
     });
-  }, [token, ready, sseConnected, configData, skillsData, providerMeta, agentsData, l]);
+  }, [token, ready, sseConnected, configData, skillsData, providerMeta, agentsData, doctorChecks, logsHealth, browserDiagnostics, l, m.setupStatus.requiredCompleteMessage]);
 
   const refresh = async () => {
-    await Promise.all([mutateConfig(), mutateSkills(), mutateProviderMeta(), mutateAgents()]);
+    await Promise.all([
+      mutateConfig(),
+      mutateSkills(),
+      mutateProviderMeta(),
+      mutateAgents(),
+      mutateDoctor(),
+      mutateLogs(),
+      mutateBrowserDiagnostics(),
+    ]);
   };
 
   return { ready, error, snapshot, refresh };

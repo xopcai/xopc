@@ -148,8 +148,8 @@ export function useCronPageData(opts: {
 export function sortJobsByCreated(arr: CronJob[], sort: JobSort): CronJob[] {
   const next = [...arr];
   next.sort((a, b) => {
-    const ta = new Date(a.created_at).getTime();
-    const tb = new Date(b.created_at).getTime();
+    const ta = a.createdAtMs;
+    const tb = b.createdAtMs;
     return sort === 'created_desc' ? tb - ta : ta - tb;
   });
   return next;

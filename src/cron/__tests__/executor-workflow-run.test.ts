@@ -7,12 +7,13 @@ function createWorkflowRunJob(overrides: Partial<JobData> = {}): JobData {
   return {
     id: 'nightly',
     name: 'Nightly workflow',
-    schedule: '0 * * * *',
+    schedule: { kind: 'cron', expr: '0 * * * *' },
     enabled: true,
-    maxRetries: 0,
-    timeout: 60_000,
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z',
+    createdAtMs: Date.parse('2026-01-01T00:00:00.000Z'),
+    updatedAtMs: Date.parse('2026-01-01T00:00:00.000Z'),
+    sessionTarget: 'isolated',
+    wakeMode: 'now',
+    state: {},
     payload: {
       kind: 'workflowRun',
       definitionId: 'release-check',
@@ -169,7 +170,14 @@ describe('DefaultJobExecutor workflowRun payload', () => {
     const executor = new DefaultJobExecutor();
 
     await executor.execute(
-      createWorkflowRunJob({ maxRetries: 1 }),
+      createWorkflowRunJob({
+        payload: {
+          kind: 'workflowRun',
+          definitionId: 'release-check',
+          goal: 'Check release',
+          maxRetries: 1,
+        },
+      }),
       new AbortController().signal,
       {
         getDefaultCronAgentId: () => 'main',

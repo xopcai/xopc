@@ -13,6 +13,7 @@ import {
   type CronJobTemplateDef,
   type CronTemplateCategory,
 } from '@/features/cron/cron-templates';
+import { cronExpressionToSchedule } from '@/features/cron/cron-api';
 import { formatScheduleBadge, type ScheduleBadgeLabels } from '@/features/cron/cron-utils';
 
 export type CronTemplateFilter = 'all' | CronTemplateCategory;
@@ -78,7 +79,7 @@ function CronTemplateCard({
   if (!copy) return null;
 
   const badge = formatScheduleBadge(
-    { schedule: template.defaultSchedule, timezone: undefined, next_run: undefined },
+    { schedule: cronExpressionToSchedule(template.defaultSchedule), nextRunAtMs: undefined },
     localeTag,
     scheduleBadgeLabels,
   );

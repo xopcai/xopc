@@ -45,7 +45,6 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
     cron: {
       enabled: true,
       maxConcurrentJobs: 5,
-      defaultTimezone: 'UTC',
       historyRetentionDays: 7,
       enableMetrics: true,
     },

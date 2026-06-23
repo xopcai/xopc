@@ -8,6 +8,7 @@
 
 import { useEffect, type MutableRefObject } from 'react';
 
+import { isSkillsOnlyConfigReload } from '@/features/gateway/config-reload-event';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
@@ -56,7 +57,8 @@ export function useChatSessionWindowEvents(opts: {
   }, [sessionKey, loadSessionById]);
 
   useEffect(() => {
-    const onConfigReload = () => {
+    const onConfigReload = (event: Event) => {
+      if (isSkillsOnlyConfigReload((event as CustomEvent<unknown>).detail)) return;
       const key = sessionKeyRef.current;
       if (!key) return;
       void sessionMgrRef.current

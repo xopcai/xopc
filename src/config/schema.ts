@@ -951,13 +951,11 @@ export const GatewayConfigSchema = z.object({
 export const CronConfigSchema = z.object({
   enabled: z.boolean().optional(),
   maxConcurrentJobs: z.number().optional(),
-  defaultTimezone: z.string().optional(),
   historyRetentionDays: z.number().optional(),
   enableMetrics: z.boolean().optional(),
 }).default({
   enabled: true,
   maxConcurrentJobs: 5,
-  defaultTimezone: 'UTC',
   historyRetentionDays: 7,
   enableMetrics: true,
 });
@@ -1507,7 +1505,6 @@ export const ConfigSchema = z.object({
   cron: {
     enabled: true,
     maxConcurrentJobs: 5,
-    defaultTimezone: 'UTC',
     historyRetentionDays: 7,
     enableMetrics: true,
   },

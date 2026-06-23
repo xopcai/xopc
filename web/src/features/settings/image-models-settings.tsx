@@ -29,6 +29,7 @@ import { useImageProviderCredentials } from '@/features/settings/use-image-provi
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
+import { showToast } from '@/lib/toast';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -133,7 +134,7 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
   const state = formDraft.form;
   const baseline = formDraft.baseline;
   const [ui, dispatchUi] = useReducer(uiPatchReducer<ImageModelsUi>, initialImageModelsUi);
-  const { loading, saving, savedFlash, error } = ui;
+  const { loading, saving, error } = ui;
 
   const extensions = useExtensions();
   const extensionIds = useMemo(() => new Set(extensions.map((e) => e.id)), [extensions]);
@@ -232,7 +233,7 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
       }
       await Promise.all(savePromises);
       dispatchUi({ type: 'patch', patch: { savedFlash: true } });
-      window.setTimeout(() => dispatchUi({ type: 'patch', patch: { savedFlash: false } }), 1500);
+      showToast({ type: 'success', title: t.saved });
     } catch (err) {
       dispatchUi({
         type: 'patch',
@@ -303,7 +304,6 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
             <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
           </div>
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            {savedFlash ? <span className="text-sm text-fg-muted">{t.saved}</span> : null}
             <Button type="button" variant="secondary" onClick={onDiscard} disabled={!anyDirty || saving}>
               {t.discard}
             </Button>

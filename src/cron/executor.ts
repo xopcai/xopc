@@ -13,7 +13,6 @@ import type { OutboundMessage } from '../channels/transport-types.js';
 import { createLogger } from '../utils/logger.js';
 import {
   getChannelPlugin,
-  listChannelPlugins,
 } from '../channels/plugins/registry.js';
 import { getCronPayloadText } from './job-content.js';
 import type { SessionStore } from '../session/store.js';
@@ -51,13 +50,23 @@ function errorBackoffMs(consecutiveErrors: number): number {
 }
 
 function resolveIsolatedCronJobModel(job: JobData): string | undefined {
-  const fromJob = job.model?.trim();
-  if (fromJob) return fromJob;
   if (job.payload?.kind === 'agentTurn') {
     const m = job.payload.model?.trim();
     if (m) return m;
   }
   return undefined;
+}
+
+async function postCronWebhook(url: string, payload: unknown): Promise<void> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Webhook delivery failed: HTTP ${res.status}${text ? ` ${text.slice(0, 200)}` : ''}`);
+  }
 }
 
 export class DefaultJobExecutor implements JobExecutor {
@@ -132,10 +141,16 @@ export class DefaultJobExecutor implements JobExecutor {
       status: 'running',
       startedAt: new Date().toISOString(),
       retryCount: 0,
+      sessionId: job.sessionKey,
+      sessionKey: job.sessionKey,
+      sessionType: job.sessionKey ? 'cron' : undefined,
     };
 
     // Record execution start
     this.addToHistory(job.id, execution);
+    if (this.runLogStore) {
+      await this.runLogStore.upsert(execution);
+    }
     this.runningJobs.set(job.id, new AbortController());
 
     log.info(
@@ -180,7 +195,7 @@ export class DefaultJobExecutor implements JobExecutor {
         );
       }
 
-      if (result.status === 'ok' && this.heartbeatService) {
+      if (result.status === 'ok' && job.wakeMode === 'next-heartbeat' && this.heartbeatService) {
         try {
           this.heartbeatService.requestNow({ reason: `cron:${job.id}` });
         } catch (e) {
@@ -213,7 +228,7 @@ export class DefaultJobExecutor implements JobExecutor {
     }
 
     if (this.runLogStore) {
-      await this.runLogStore.appendCompleted(execution);
+      await this.runLogStore.upsert(execution);
     }
 
     return;
@@ -223,8 +238,11 @@ export class DefaultJobExecutor implements JobExecutor {
    * Perform the actual job work - integrate with AgentService
    */
   protected async performJob(job: JobData, signal: AbortSignal): Promise<CronRunOutcome> {
-    const timeout = job.timeout || 60000;
-    const sessionTarget = job.sessionTarget || 'main';
+    const timeout =
+      job.payload.kind === 'agentTurn' && job.payload.timeoutSeconds
+        ? job.payload.timeoutSeconds * 1000
+        : 180_000;
+    const sessionTarget = job.sessionTarget;
 
     // Check for abort before starting
     if (signal.aborted) {
@@ -268,7 +286,7 @@ export class DefaultJobExecutor implements JobExecutor {
     }
     const item = this.goalRunner.enqueue(job.payload.goalId, {
       message: job.payload.message,
-      maxRetries: job.payload.maxRetries ?? job.maxRetries,
+      maxRetries: job.payload.maxRetries ?? 0,
       source: 'cron',
     });
     return {
@@ -357,8 +375,11 @@ export class DefaultJobExecutor implements JobExecutor {
     initialRunId: string;
     signal: AbortSignal;
   }): Promise<CronRunOutcome> {
-    const waitMs = resolveWorkflowCronWaitMs(params.job.timeout);
-    const maxWorkflowRetries = Math.max(0, params.job.maxRetries ?? 0);
+    const waitMs = resolveWorkflowCronWaitMs(180_000);
+    const maxWorkflowRetries =
+      params.job.payload.kind === 'workflowRun'
+        ? Math.max(0, Math.floor(params.job.payload.maxRetries ?? 0))
+        : 0;
     let runId = params.initialRunId;
     let attempt = 0;
 
@@ -459,7 +480,6 @@ export class DefaultJobExecutor implements JobExecutor {
     view: WorkflowRunView,
     outcome: CronRunOutcome,
   ): Promise<void> {
-    if (!this.messageBus) return;
     const delivery = job.delivery;
     if (!delivery || delivery.mode === 'none' || delivery.channel === 'local' || !delivery.to?.trim()) {
       return;
@@ -467,6 +487,20 @@ export class DefaultJobExecutor implements JobExecutor {
 
     try {
       const text = buildWorkflowRunDeliveryText(view);
+      if (delivery.mode === 'webhook') {
+        await postCronWebhook(delivery.to, {
+          jobId: job.id,
+          jobName: job.name,
+          payloadKind: job.payload.kind,
+          workflowRunId: view.run.id,
+          status: view.run.status,
+          text,
+          run: view.run,
+        });
+        log.info({ jobId: job.id, workflowRunId: view.run.id }, 'Delivered workflow run webhook from cron');
+        return;
+      }
+      if (!this.messageBus || !delivery.channel) return;
       const outbound = await this.buildCronOutboundMessage(delivery.channel!, delivery.to!, text);
       await this.messageBus.publishOutbound(outbound);
       log.info(
@@ -496,49 +530,10 @@ export class DefaultJobExecutor implements JobExecutor {
       return { status: 'skipped', error: 'Main session job requires non-empty message' };
     }
 
-    // Parse delivery from job config, or parse routing from payload text: "channel:chat_id:content"
-    let channel: string;
-    let to: string;
-    let actualMessage: string;
-
-    if (job.delivery?.channel === 'local') {
-      channel = 'local';
-      to = '';
-      actualMessage = text;
-    } else if (job.delivery?.channel && job.delivery?.to) {
-      // Use explicit delivery config
-      channel = job.delivery.channel;
-      to = job.delivery.to;
-      actualMessage = text;
-    } else {
-      // Parse from payload text: "channel:chat_id:content"
-      const parts = text.split(':');
-      const hasAtLeastThreeParts = parts.length >= 3;
-      
-      // Check if first part looks like a known channel
-      const registeredChannelIds = listChannelPlugins().map((p) => p.id);
-      const knownChannels = [...new Set([...registeredChannelIds, 'cli', 'gateway', 'local'])];
-      const firstPartIsChannel = knownChannels.includes(parts[0]);
-      
-      if (hasAtLeastThreeParts && firstPartIsChannel) {
-        channel = parts[0];
-        to = parts[1];
-        actualMessage = parts.slice(2).join(':');
-        log.info(
-          { jobId: job.id, channel, to, parsedFrom: 'message', originalLength: text.length },
-          'Parsed delivery from payload text'
-        );
-      } else {
-        // Fallback to defaults
-        channel = 'cli';
-        to = 'cron';
-        actualMessage = text;
-        log.debug(
-          { jobId: job.id, partsCount: parts.length, firstPart: parts[0], hasDelivery: !!job.delivery },
-          'Using default delivery - message format not recognized'
-        );
-      }
-    }
+    const delivery = job.delivery;
+    const channel = delivery?.channel ?? 'local';
+    const to = delivery?.to ?? '';
+    const actualMessage = text;
 
     // Create timeout promise
     const timeoutPromise = new Promise<never>((_, reject) => {
@@ -552,15 +547,35 @@ export class DefaultJobExecutor implements JobExecutor {
         throw new Error('Job was aborted');
       }
 
-      if (channel === 'local') {
+      if (!delivery || delivery.mode === 'none' || channel === 'local') {
         log.info(
           { jobId: job.id, messageLength: actualMessage.length },
-          'Cron main session: local channel — no outbound publish'
+          'Cron main session: no outbound publish'
         );
         return {
           status: 'ok' as const,
           summary: actualMessage.slice(0, 200),
         };
+      }
+
+      if (delivery.mode === 'webhook') {
+        if (!to.trim()) {
+          throw new Error('Webhook delivery requires delivery.to');
+        }
+        await postCronWebhook(to, {
+          jobId: job.id,
+          jobName: job.name,
+          payloadKind: job.payload.kind,
+          text: actualMessage,
+        });
+        return {
+          status: 'ok' as const,
+          summary: actualMessage.slice(0, 200),
+        };
+      }
+
+      if (!this.messageBus) {
+        return { status: 'error' as const, error: 'MessageBus not available' };
       }
 
       const outbound = await this.buildCronOutboundMessage(channel, to, actualMessage);
@@ -596,14 +611,22 @@ export class DefaultJobExecutor implements JobExecutor {
       return { status: 'skipped', error: 'Isolated job requires non-empty message' };
     }
 
+    const explicitSessionKey =
+      job.sessionTarget.startsWith('session:')
+        ? job.sessionTarget.slice('session:'.length).trim()
+        : job.sessionTarget === 'current'
+          ? job.sessionKey?.trim()
+          : job.sessionTarget === 'isolated'
+            ? job.sessionKey?.trim()
+          : undefined;
     const aid = job.agentId?.trim();
     const fallbackAgentId = this.getDefaultCronAgentId?.() ?? DEFAULT_AGENT_ID;
-    const sessionKey = buildSessionKey({
+    const sessionKey = explicitSessionKey || buildSessionKey({
       agentId: normalizeAgentId(aid || fallbackAgentId),
       source: 'cron',
       accountId: 'default',
       peerKind: 'dm',
-      peerId: job.id,
+      peerId: `${job.id}-${crypto.randomUUID().slice(0, 8)}`,
     });
 
     // Create timeout promise
@@ -622,13 +645,12 @@ export class DefaultJobExecutor implements JobExecutor {
 
       const jobModel = resolveIsolatedCronJobModel(job);
       if (jobModel) {
-        const ok = await this.agentService.switchModelForSession(sessionKey, jobModel);
+        const ok = await this.agentService.sessionConfig.applyCronJobModelOverride(sessionKey, jobModel);
         if (!ok) {
           log.warn({ jobId: job.id, sessionKey, model: jobModel }, 'Cron job model invalid; using agent default');
-          await this.agentService.resetSessionModelToAgentDefault(sessionKey);
         }
       } else {
-        await this.agentService.resetSessionModelToAgentDefault(sessionKey);
+        await this.agentService.sessionConfig.applyCronJobModelOverride(sessionKey, undefined);
       }
 
       const response = await this.agentService.turnDispatcher.processDirect(message, sessionKey);
@@ -646,7 +668,6 @@ export class DefaultJobExecutor implements JobExecutor {
       const shouldPublish =
         delivery &&
         delivery.mode !== 'none' &&
-        outboundChannel !== 'local' &&
         delivery.to;
 
       if (shouldPublish) {
@@ -663,6 +684,35 @@ export class DefaultJobExecutor implements JobExecutor {
         const { stripped } = stripHeartbeatToken(response);
         const outboundText = stripped || response.trim();
 
+        if (delivery.mode === 'webhook') {
+          await postCronWebhook(delivery.to, {
+            jobId: job.id,
+            jobName: job.name,
+            payloadKind: job.payload.kind,
+            sessionKey,
+            model,
+            text: outboundText,
+          });
+          log.info({ jobId: job.id }, 'Delivered agent response webhook');
+          return {
+            status: 'ok' as const,
+            summary: response.slice(0, 200),
+            sessionId: sessionKey,
+            sessionKey,
+            sessionType: 'cron',
+            model,
+          };
+        }
+        if (outboundChannel === 'local') {
+          return {
+            status: 'ok' as const,
+            summary: response.slice(0, 200),
+            sessionId: sessionKey,
+            sessionKey,
+            sessionType: 'cron',
+            model,
+          };
+        }
         const targetChannel = outboundChannel || 'cli';
         const outbound = await this.buildCronOutboundMessage(targetChannel, delivery.to, outboundText);
 

@@ -38,16 +38,20 @@ export interface WorkspaceRuntimeRegistryOptions {
   getConfig: () => Config;
   /** Absolute path to the bundled skills directory shared by every workspace. */
   bundledSkillsDir: string;
+  /** Called after a runtime is first created for a workspace. */
+  onRuntimeCreated?: (resolvedPath: string) => void;
 }
 
 export class WorkspaceRuntimeRegistry {
   private readonly runtimes = new Map<string, WorkspaceRuntime>();
   private readonly getConfig: () => Config;
   private readonly bundledSkillsDir: string;
+  private readonly onRuntimeCreated?: (resolvedPath: string) => void;
 
   constructor(opts: WorkspaceRuntimeRegistryOptions) {
     this.getConfig = opts.getConfig;
     this.bundledSkillsDir = opts.bundledSkillsDir;
+    this.onRuntimeCreated = opts.onRuntimeCreated;
   }
 
   /** Lazily construct (and cache) the runtime for a resolved workspace path. */
@@ -76,12 +80,18 @@ export class WorkspaceRuntimeRegistry {
       memoryManager,
     };
     this.runtimes.set(resolvedPath, rt);
+    this.onRuntimeCreated?.(resolvedPath);
     return rt;
   }
 
   /** Iterate every live workspace runtime (used by skill / config hot-reload). */
   values(): IterableIterator<WorkspaceRuntime> {
     return this.runtimes.values();
+  }
+
+  /** Iterate live workspace runtime entries keyed by resolved workspace path. */
+  entries(): IterableIterator<[string, WorkspaceRuntime]> {
+    return this.runtimes.entries();
   }
 
   /**

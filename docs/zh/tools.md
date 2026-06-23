@@ -368,7 +368,7 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 ### `cronjob`
 
-`list` / `create` / `update` / `remove` / `enable` / `disable` / `history`。创建/更新需计划表达式与消息；可选 `timezone`、`sessionTarget`（`main` | `isolated`）、`name`、`jobId` 等。
+`list` / `create` / `update` / `remove` / `enable` / `disable` / `history`。创建/更新使用 `scheduleKind` 搭配 `cronExpr`、`at` 或 `everyMs`，并且只能选择一种 payload（`message`、`workflowDefinitionId` 或 `goalId`）。可选字段包括 cron 计划的 `tz`、`sessionTarget`、`agentId`、`workingDirectory`、`name`、`jobId` 等。
 
 仅当运行时提供 `CronService` 时注册（网关部署常见）。创建/更新带简单提示安全检查。
 

@@ -29,6 +29,7 @@ import { apiUrl } from '@/lib/url';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { showToast } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -106,7 +107,6 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
   const {
     saving,
     error,
-    saveNotice,
     expandedCats,
     searchQuery,
     unconfiguredOnly,
@@ -230,7 +230,7 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
       dispatchDraft({ type: 'commitDraft' });
       dirtyRef.current = false;
       dispatchUi({ type: 'patch', patch: { saveNotice: 'noChanges' } });
-      window.setTimeout(() => dispatchUi({ type: 'patch', patch: { saveNotice: null } }), 2500);
+      showToast({ type: 'info', title: p.noChangesSaved });
       return;
     }
     dispatchUi({ type: 'patch', patch: { saving: true, error: null, saveNotice: null } });
@@ -248,7 +248,7 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
         dirtyRef.current = false;
       }
       dispatchUi({ type: 'patch', patch: { saveNotice: 'saved' } });
-      window.setTimeout(() => dispatchUi({ type: 'patch', patch: { saveNotice: null } }), 2500);
+      showToast({ type: 'success', title: p.saved });
     } catch (e) {
       dispatchUi({ type: 'patch', patch: { error: e instanceof Error ? e.message : p.saveError } });
     } finally {
@@ -350,8 +350,6 @@ export function ProvidersSettingsPanel({ embedded = false }: { embedded?: boolea
         {/* See WebSearchSettingsPanel — global Save bar replaces these in embedded mode. */}
         {embedded ? null : (
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {saveNotice === 'saved' ? <span className="text-sm text-fg-muted">{p.saved}</span> : null}
-          {saveNotice === 'noChanges' ? <span className="text-sm text-fg-muted">{p.noChangesSaved}</span> : null}
           <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
             {p.discard}
           </Button>

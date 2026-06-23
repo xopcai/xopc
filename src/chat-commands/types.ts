@@ -207,6 +207,9 @@ export interface CommandContext {
   /** Update configuration value */
   updateConfig?(path: string, value: unknown): Promise<boolean>;
 
+  /** Reload skills from disk and refresh active agent prompts. */
+  reloadSkills?(): Promise<void>;
+
   /** Persist session thinking level and sync in-memory agent (when wired) */
   setThinkingLevel?(level: ThinkLevel): Promise<void>;
 

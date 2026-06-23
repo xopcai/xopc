@@ -46,7 +46,6 @@ describe('Phase D config API normalizers', () => {
       cron: {
         enabled: false,
         maxConcurrentJobs: 8,
-        defaultTimezone: 'Asia/Shanghai',
         historyRetentionDays: 14,
         enableMetrics: false,
       },
@@ -54,7 +53,6 @@ describe('Phase D config API normalizers', () => {
     expect(state).toEqual({
       enabled: false,
       maxConcurrentJobs: 8,
-      defaultTimezone: 'Asia/Shanghai',
       historyRetentionDays: 14,
       enableMetrics: false,
     });

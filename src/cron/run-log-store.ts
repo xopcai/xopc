@@ -23,16 +23,17 @@ export class CronRunLogStore {
     requireXopcDatabase(this.dbPath ? { path: this.dbPath } : undefined);
   }
 
-  async appendCompleted(execution: JobExecution): Promise<void> {
-    if (execution.status === 'running') {
-      return;
-    }
+  async upsert(execution: JobExecution): Promise<void> {
     try {
       this.requireDatabase();
       appendCronRun(execution);
     } catch (err) {
       log.error({ jobId: execution.jobId, err: err as Error }, 'Failed to persist cron run');
     }
+  }
+
+  async appendCompleted(execution: JobExecution): Promise<void> {
+    await this.upsert(execution);
   }
 
   async readJobHistory(jobId: string, limit: number): Promise<JobExecution[]> {

@@ -8,7 +8,7 @@ export interface CronJobTemplateDef {
   category: CronTemplateCategory;
   defaultSchedule: string;
   defaultSessionTarget: 'isolated';
-  /** When set, the template opens as a direct workflow run instead of an agent message. */
+  /** When set, the template opens as a workflow run instead of an agent message. */
   taskKind?: 'workflowRun';
   workflowDefinitionId?: string;
 }
