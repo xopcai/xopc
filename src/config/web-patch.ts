@@ -13,7 +13,6 @@ import {
 const CronConfigPatchSchema = z.object({
   enabled: z.boolean().optional(),
   maxConcurrentJobs: z.number().int().min(1).max(100).optional(),
-  defaultTimezone: z.string().min(1).optional(),
   historyRetentionDays: z.number().int().min(1).max(365).optional(),
   enableMetrics: z.boolean().optional(),
 });
@@ -251,7 +250,6 @@ export function resolveCronConfigForWeb(config: Config) {
   return {
     enabled: cron.enabled !== false,
     maxConcurrentJobs: cron.maxConcurrentJobs ?? 5,
-    defaultTimezone: cron.defaultTimezone ?? 'UTC',
     historyRetentionDays: cron.historyRetentionDays ?? 7,
     enableMetrics: cron.enableMetrics !== false,
   };

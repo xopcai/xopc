@@ -2,7 +2,7 @@ import { AlarmClock } from 'lucide-react';
 
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { cronJobBodyText, type CronJob } from '@/features/cron/cron-api';
-import { ScheduleSummary } from '@/features/scheduling/schedule-summary';
+import { formatScheduleBadge, scheduleTechnicalText } from '@/features/cron/cron-utils';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
@@ -57,17 +57,11 @@ export function AgentCronTab(props: {
                   <tr key={job.id} className="border-b border-edge-subtle">
                     <td className="py-2 pr-3">
                       <div className="flex flex-col gap-0.5">
-                        <ScheduleSummary
-                          kind="cron"
-                          expression={job.schedule}
-                          locale={localeTag}
-                          labels={scheduleBadgeLabels}
-                          timezone={job.timezone}
-                          nextRun={job.next_run}
-                          className="text-sm font-medium text-fg"
-                        />
-                        <span className="truncate font-mono text-[0.65rem] text-fg-subtle" title={job.schedule}>
-                          {job.schedule}
+                        <span className="text-sm font-medium text-fg">
+                          {formatScheduleBadge(job, localeTag, scheduleBadgeLabels)}
+                        </span>
+                        <span className="truncate font-mono text-[0.65rem] text-fg-subtle" title={scheduleTechnicalText(job.schedule)}>
+                          {scheduleTechnicalText(job.schedule)}
                         </span>
                       </div>
                     </td>

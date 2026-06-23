@@ -4,19 +4,19 @@
  * Handles skill initialization, reloading, and command expansion.
  */
 
-import { createSkillLoader, type Skill } from './index.js';
+import { createSkillLoader } from './index.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager, isSkillEnabled } from './config.js';
 import { formatSkillsForPrompt, selectSkillsVisibleInPrompt } from './format-skills-prompt.js';
+import type {
+  LoadSkillsResult,
+  Skill,
+  SkillDiagnostic,
+  SkillRuntimeStatus,
+} from './types.js';
 
 const log = createLogger('SkillManager');
-
-export interface SkillDiagnostic {
-  type: 'collision' | 'warning' | 'error' | 'info';
-  skillName: string;
-  message: string;
-}
 
 export interface SkillLoadResult {
   skills: Skill[];
@@ -30,6 +30,15 @@ export class SkillManager {
   private skillLoader = createSkillLoader();
   private workspace: string;
   private bundledSkillsDir: string;
+  private version = 0;
+  private loadedAt = 0;
+  private reloadInProgress = false;
+  private reloadPending = false;
+  private lastReloadStartedAt: number | undefined;
+  private lastReloadFinishedAt: number | undefined;
+  private lastReloadReason: SkillRuntimeStatus['lastReloadReason'];
+  private lastReloadOk: boolean | undefined;
+  private lastReloadError: string | undefined;
 
   constructor(workspace: string, bundledSkillsDir?: string) {
     this.workspace = workspace;
@@ -41,24 +50,7 @@ export class SkillManager {
    * Initialize skills from workspace and bundled directories
    */
   private initialize(): void {
-    const result = this.skillLoader.init(this.workspace, this.bundledSkillsDir);
-    this.skillPrompt = result.prompt;
-    this.skills = result.skills;
-
-    // Log diagnostics
-    for (const diag of result.diagnostics) {
-      if (diag.type === 'collision') {
-        log.warn({ skill: diag.skillName, message: diag.message }, 'Skill collision');
-      } else if (diag.type === 'warning') {
-        log.warn({ skill: diag.skillName, message: diag.message }, 'Skill warning');
-      } else if (diag.type === 'error') {
-        log.error({ skill: diag.skillName, message: diag.message }, 'Skill error');
-      } else {
-        log.info({ skill: diag.skillName, message: diag.message }, 'Skill info');
-      }
-    }
-
-    log.debug({ count: result.skills.length }, 'Skills loaded');
+    this.runReload('initial', () => this.skillLoader.init(this.workspace, this.bundledSkillsDir));
   }
 
   /**
@@ -67,28 +59,64 @@ export class SkillManager {
   refreshPromptFromConfig(): void {
     this.skillLoader.refreshPromptFromConfig();
     this.skillPrompt = this.skillLoader.getPrompt();
+    this.version += 1;
+    this.loadedAt = Date.now();
+    this.lastReloadReason = 'config';
+    this.lastReloadOk = true;
+    this.lastReloadError = undefined;
   }
 
   /**
    * Reload skills from disk
    */
   reload(): void {
-    log.info('Reloading skills...');
-    const result = this.skillLoader.reload();
+    this.runReload('disk', () => this.skillLoader.reload());
+  }
+
+  private runReload(reason: NonNullable<SkillRuntimeStatus['lastReloadReason']>, load: () => LoadSkillsResult): void {
+    if (this.reloadInProgress) {
+      this.reloadPending = true;
+      return;
+    }
+
+    do {
+      this.reloadPending = false;
+      this.reloadInProgress = true;
+      this.lastReloadStartedAt = Date.now();
+      this.lastReloadReason = reason;
+      try {
+        const result = load();
+        this.applyLoadResult(result);
+        this.lastReloadOk = true;
+        this.lastReloadError = undefined;
+        log.info({ count: result.skills.length, version: this.version }, 'Skills reloaded');
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        this.lastReloadOk = false;
+        this.lastReloadError = errorMessage;
+        log.error({ err, errorMessage }, `Skills reload failed: ${errorMessage}`);
+      } finally {
+        this.lastReloadFinishedAt = Date.now();
+        this.reloadInProgress = false;
+      }
+    } while (this.reloadPending);
+  }
+
+  private applyLoadResult(result: LoadSkillsResult): void {
     this.skillPrompt = result.prompt;
     this.skills = result.skills;
+    this.version += 1;
+    this.loadedAt = Date.now();
 
     for (const diag of result.diagnostics) {
       if (diag.type === 'collision') {
-        log.warn({ skill: diag.skillName, message: diag.message }, 'Skill collision');
+        log.warn({ skill: diag.skillName, path: diag.path, message: diag.message }, 'Skill collision');
       } else if (diag.type === 'warning') {
-        log.warn({ skill: diag.skillName, message: diag.message }, 'Skill warning');
+        log.warn({ skill: diag.skillName, path: diag.path, message: diag.message }, 'Skill warning');
       } else if (diag.type === 'error') {
-        log.error({ skill: diag.skillName, message: diag.message }, 'Skill error');
+        log.error({ skill: diag.skillName, path: diag.path, message: diag.message }, 'Skill error');
       }
     }
-
-    log.info({ count: result.skills.length }, 'Skills reloaded');
   }
 
   /**
@@ -130,6 +158,32 @@ export class SkillManager {
    */
   getSkills(): Skill[] {
     return [...this.skills];
+  }
+
+  getDiagnostics(): SkillDiagnostic[] {
+    return this.skillLoader.getDiagnostics();
+  }
+
+  getVersion(): string {
+    return String(this.version);
+  }
+
+  getLoadedAt(): number {
+    return this.loadedAt;
+  }
+
+  getStatus(): SkillRuntimeStatus {
+    return {
+      version: this.getVersion(),
+      loadedAt: this.loadedAt,
+      reloadInProgress: this.reloadInProgress,
+      reloadPending: this.reloadPending,
+      ...(this.lastReloadStartedAt !== undefined ? { lastReloadStartedAt: this.lastReloadStartedAt } : {}),
+      ...(this.lastReloadFinishedAt !== undefined ? { lastReloadFinishedAt: this.lastReloadFinishedAt } : {}),
+      ...(this.lastReloadReason !== undefined ? { lastReloadReason: this.lastReloadReason } : {}),
+      ...(this.lastReloadOk !== undefined ? { lastReloadOk: this.lastReloadOk } : {}),
+      ...(this.lastReloadError !== undefined ? { lastReloadError: this.lastReloadError } : {}),
+    };
   }
 
   /**

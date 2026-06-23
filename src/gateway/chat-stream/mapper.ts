@@ -16,6 +16,7 @@ type ToolResultEnvelope = { content?: unknown[]; details?: unknown; text?: strin
 export class ChatStreamMapper {
   private assistantIndex = 0;
   private currentAssistantMessageId: string | undefined;
+  private lastAssistantMessageId: string | undefined;
   private currentAssistantText = '';
   private toolCallToMessageId = new Map<string, string>();
   private started = false;
@@ -29,7 +30,7 @@ export class ChatStreamMapper {
       case 'agent_start':
         return this.start();
       case 'agent_end':
-        return this.end('success');
+        return [];
       case 'message_start':
         return this.mapMessageStart(event.message);
       case 'message_update':
@@ -63,6 +64,8 @@ export class ChatStreamMapper {
             uri: String(event.uri ?? ''),
             mimeType: String(event.mimeType ?? 'audio/mpeg'),
             name: String(event.name ?? 'voice.mp3'),
+            attachTo: 'last_assistant',
+            ...(this.lastAssistantMessageId ? { messageId: this.lastAssistantMessageId } : {}),
           }),
         ];
       case 'clarify_request':
@@ -136,6 +139,7 @@ export class ChatStreamMapper {
     this.currentAssistantText = text || this.currentAssistantText;
     events.push(this.make('thinking_end', { messageId }));
     events.push(this.make('assistant_message_end', { messageId, usage: extractUsage(message) }));
+    this.lastAssistantMessageId = messageId;
     this.currentAssistantMessageId = undefined;
     this.currentAssistantText = '';
     return events;

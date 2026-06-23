@@ -69,6 +69,9 @@ importers:
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
+      chokidar:
+        specifier: ^5.0.0
+        version: 5.0.0
       cli-table3:
         specifier: ^0.6.5
         version: 0.6.5
@@ -105,9 +108,6 @@ importers:
       markdown-it:
         specifier: ^14.2.0
         version: 14.2.0
-      node-cron:
-        specifier: ^4.2.1
-        version: 4.2.1
       node-edge-tts:
         specifier: ^1.2.10
         version: 1.2.10
@@ -166,9 +166,6 @@ importers:
       '@types/node':
         specifier: ^25.9.1
         version: 25.9.1
-      '@types/node-cron':
-        specifier: ^3.0.11
-        version: 3.0.11
       '@types/qrcode-terminal':
         specifier: ^0.12.2
         version: 0.12.2
@@ -3350,9 +3347,6 @@ packages:
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
 
-  '@types/node-cron@3.0.11':
-    resolution: {integrity: sha512-0ikrnug3/IyneSHqCBeslAhlK2aBfYek1fGo4bP4QnZPmiqSGRK+Oy7ZMisLWkesffJvQ1cqAcBnJC+8+nxIAg==}
-
   '@types/node@24.12.4':
     resolution: {integrity: sha512-GUUEShf+PBCGW2KaXwcIt3Yk+e3pkKwWKb9GSyM9WQVE+ep2jzmHdGsHzu4wgcZy5fN9FBdVzjpBQsYlpfpgLA==}
 
@@ -3974,6 +3968,10 @@ packages:
 
   chardet@2.1.1:
     resolution: {integrity: sha512-PsezH1rqdV9VvyNhxxOW32/d75r01NY7TQCmOqomRo15ZSOKbpTFVsfjghxo6JloQUCGnH4k1LGu0R4yCLlWQQ==}
+
+  chokidar@5.0.0:
+    resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
+    engines: {node: '>= 20.19.0'}
 
   chownr@3.0.0:
     resolution: {integrity: sha512-+IxzY9BZOQd/XuYPRmrvEVjF/nqj5kgT4kEq7VofrDoM1MxoRjEWkrCC3EtLi59TVawxTAn+orJwFQcrqEN1+g==}
@@ -5392,10 +5390,6 @@ packages:
   node-api-version@0.2.1:
     resolution: {integrity: sha512-2xP/IGGMmmSQpI1+O/k72jF/ykvZ89JeuKX3TLJAYPDVLUalrshrLHkeVcCCZqG/eEa635cr8IBYzgnDvM2O8Q==}
 
-  node-cron@4.2.1:
-    resolution: {integrity: sha512-lgimEHPE/QDgFlywTd8yTR61ptugX3Qer29efeyWw2rv259HtGBNn1vZVmp8lB9uo9wC0t/AT4iGqXxia+CJFg==}
-    engines: {node: '>=6.0.0'}
-
   node-domexception@1.0.0:
     resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
     engines: {node: '>=10.5.0'}
@@ -5859,6 +5853,10 @@ packages:
   readable-stream@3.6.2:
     resolution: {integrity: sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA==}
     engines: {node: '>= 6'}
+
+  readdirp@5.0.0:
+    resolution: {integrity: sha512-9u/XQ1pvrQtYyMpZe7DXKv2p5CNvyVwzUB6uhLAnQwHMSgKMBR62lc7AHljaeteeHXn11XTAaLLUVZYVZyuRBQ==}
+    engines: {node: '>= 20.19.0'}
 
   real-require@0.2.0:
     resolution: {integrity: sha512-57frrGM/OCTLqLOAh0mhVA9VBMHd+9U7Zb2THMGdBUoZVOtGbJzjxsYGDJ3A9AYYCP4hn6y1TVbaOfzWtm5GFg==}
@@ -9633,8 +9631,6 @@ snapshots:
 
   '@types/ms@2.1.0': {}
 
-  '@types/node-cron@3.0.11': {}
-
   '@types/node@24.12.4':
     dependencies:
       undici-types: 7.16.0
@@ -10366,6 +10362,10 @@ snapshots:
   character-entities-legacy@3.0.0: {}
 
   chardet@2.1.1: {}
+
+  chokidar@5.0.0:
+    dependencies:
+      readdirp: 5.0.0
 
   chownr@3.0.0: {}
 
@@ -11859,8 +11859,6 @@ snapshots:
     dependencies:
       semver: 7.8.1
 
-  node-cron@4.2.1: {}
-
   node-domexception@1.0.0: {}
 
   node-edge-tts@1.2.10:
@@ -12359,6 +12357,8 @@ snapshots:
       inherits: 2.0.4
       string_decoder: 1.1.1
       util-deprecate: 1.0.2
+
+  readdirp@5.0.0: {}
 
   real-require@0.2.0: {}
 

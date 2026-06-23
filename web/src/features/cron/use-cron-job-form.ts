@@ -3,9 +3,11 @@ import { useCallback, useMemo, useReducer, useRef } from 'react';
 import { type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import {
   cronJobBodyText,
+  cronExpressionToSchedule,
   getSessionChatIds,
   type ChannelStatus,
   type CronJob,
+  type CronSchedule,
   type SessionChatId,
 } from '@/features/cron/cron-api';
 import { DEFAULT_SCHEDULE } from '@/features/cron/cron-page-lib';
@@ -25,7 +27,7 @@ type FormState = {
   formMode: FormMode;
   formJobId: string | null;
   formName: string;
-  formSchedule: string;
+  formSchedule: CronSchedule;
   formChannel: string;
   formChatId: string;
   formMessage: string;
@@ -54,7 +56,7 @@ function initialFormState(): FormState {
     formMode: 'add',
     formJobId: null,
     formName: '',
-    formSchedule: DEFAULT_SCHEDULE,
+    formSchedule: cronExpressionToSchedule(DEFAULT_SCHEDULE),
     formChannel: 'local',
     formChatId: '',
     formMessage: '',
@@ -100,7 +102,7 @@ function buildOpenFormState(job: CronJob | undefined, defaultModelForForm: () =>
   }
 
   base.formName = job.name || '';
-  base.formSchedule = (job.schedule && String(job.schedule).trim()) || DEFAULT_SCHEDULE;
+  base.formSchedule = job.schedule;
   const bodyText = cronJobBodyText(job);
   base.formMessage = bodyText ?? '';
   if (job.payload.kind === 'workflowRun') {
@@ -116,7 +118,7 @@ function buildOpenFormState(job: CronJob | undefined, defaultModelForForm: () =>
       base.formAgentId = payloadAgentId;
     }
   }
-  base.formSessionTarget = job.sessionTarget || 'main';
+  base.formSessionTarget = job.sessionTarget === 'isolated' ? 'isolated' : 'main';
   base.formAgentId =
     (job.sessionTarget || 'main') === 'isolated' && job.agentId?.trim()
       ? job.agentId.trim().toLowerCase()
@@ -143,16 +145,8 @@ function buildOpenFormState(job: CronJob | undefined, defaultModelForForm: () =>
     base.formChannel = job.delivery.channel || 'telegram';
     base.formChatId = job.delivery.to || '';
   } else if (!agentLocalOnly) {
-    const parts = bodyText.split(':');
-    const knownChannels = ['telegram', 'cli', 'gateway', 'local'];
-    if (parts.length >= 3 && knownChannels.includes(parts[0])) {
-      base.formChannel = parts[0];
-      base.formChatId = parts[1];
-      base.formMessage = parts.slice(2).join(':');
-    } else {
-      base.formChannel = 'telegram';
-      base.formChatId = '';
-    }
+    base.formChannel = 'telegram';
+    base.formChatId = '';
   } else {
     base.formChannel = 'telegram';
     base.formChatId = '';
@@ -228,9 +222,16 @@ export function useCronJobForm(opts: {
       validateWorkflowArgValues(form.formWorkflowDefinitionId.trim(), form.formWorkflowArgValues)
     : Boolean(form.formMessage.trim());
 
+  const hasSchedule =
+    form.formSchedule.kind === 'cron'
+      ? Boolean(form.formSchedule.expr.trim())
+      : form.formSchedule.kind === 'at'
+        ? Boolean(form.formSchedule.at.trim())
+        : Number.isFinite(form.formSchedule.everyMs) && form.formSchedule.everyMs > 0;
+
   const canSubmit =
     Boolean(form.formName.trim()) &&
-    Boolean(form.formSchedule.trim()) &&
+    hasSchedule &&
     hasRunnablePayload &&
     (!needsDeliveryChat || Boolean(form.formChatId.trim()));
 
@@ -260,7 +261,7 @@ export function useCronJobForm(opts: {
           formOpen: true,
           formMode: 'add',
           formName: copy.title,
-          formSchedule: def.defaultSchedule,
+          formSchedule: cronExpressionToSchedule(def.defaultSchedule),
           formMessage: isWorkflowTemplate ? '' : copy.prompt,
           formTaskKind: isWorkflowTemplate ? 'workflowRun' : 'message',
           formWorkflowDefinitionId: isWorkflowTemplate ? def.workflowDefinitionId! : '',
@@ -345,7 +346,7 @@ export function useCronJobForm(opts: {
     sessionChatIds,
     // setters
     setFormName: (formName: string) => patchForm({ formName }),
-    setFormSchedule: (formSchedule: string) => patchForm({ formSchedule }),
+    setFormSchedule: (formSchedule: CronSchedule) => patchForm({ formSchedule }),
     setFormChatId: (formChatId: string) => patchForm({ formChatId }),
     setFormMessage: (formMessage: string) => patchForm({ formMessage }),
     setFormTaskKind: (formTaskKind: FormTaskKind) =>

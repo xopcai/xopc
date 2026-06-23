@@ -5,11 +5,15 @@ import { AddJobRequestSchema, JobDataSchema, UpdateJobRequestSchema } from '../v
 describe('cron validation agentId', () => {
   const baseJob = {
     id: 'abc12345',
-    schedule: '0 * * * *',
+    name: 'Test job',
+    schedule: { kind: 'cron' as const, expr: '0 * * * *' },
     enabled: true,
-    created_at: '2026-01-01T00:00:00.000Z',
-    updated_at: '2026-01-01T00:00:00.000Z',
+    createdAtMs: Date.parse('2026-01-01T00:00:00.000Z'),
+    updatedAtMs: Date.parse('2026-01-01T00:00:00.000Z'),
+    sessionTarget: 'isolated' as const,
+    wakeMode: 'now' as const,
     payload: { kind: 'agentTurn' as const, message: 'hi' },
+    state: {},
   };
 
   it('JobDataSchema accepts optional agentId', () => {
@@ -19,21 +23,21 @@ describe('cron validation agentId', () => {
 
   it('AddJobRequestSchema accepts agentId', () => {
     const r = AddJobRequestSchema.safeParse({
-      schedule: '0 * * * *',
+      schedule: { kind: 'cron', expr: '0 * * * *' },
       agentId: 'main',
       payload: { kind: 'agentTurn', message: 'x' },
     });
     expect(r.success).toBe(true);
   });
 
-  it('UpdateJobRequestSchema accepts agentId null to clear', () => {
+  it('UpdateJobRequestSchema rejects agentId null', () => {
     const r = UpdateJobRequestSchema.safeParse({ agentId: null });
-    expect(r.success).toBe(true);
+    expect(r.success).toBe(false);
   });
 
   it('AddJobRequestSchema accepts workflowRun payload', () => {
     const r = AddJobRequestSchema.safeParse({
-      schedule: '0 * * * *',
+      schedule: { kind: 'cron', expr: '0 * * * *' },
       payload: {
         kind: 'workflowRun',
         definitionId: 'release-check',
@@ -50,7 +54,7 @@ describe('cron validation agentId', () => {
 
   it('AddJobRequestSchema accepts goalContinue payload', () => {
     const r = AddJobRequestSchema.safeParse({
-      schedule: '*/15 * * * *',
+      schedule: { kind: 'cron', expr: '*/15 * * * *' },
       payload: {
         kind: 'goalContinue',
         goalId: 'goal-1',

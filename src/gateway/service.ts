@@ -38,7 +38,6 @@ import { prewarmModelRegistry } from '../providers/index.js';
 import { createLogger, getLogDir, getRuntimeLogStats } from '../utils/logger.js';
 import {
   resolveConfigPath,
-  resolveCronJobsPath,
   resolveAgentDir,
   resolveExtensionsDir,
 } from '../config/paths.js';
@@ -232,7 +231,7 @@ export class GatewayService {
     });
 
     this.cronService = new CronService({
-      filePath: resolveCronJobsPath(),
+      maxConcurrentJobs: this.config.cron?.maxConcurrentJobs,
     });
 
     this.notesService = new NotesService(new NotesStore());
@@ -303,6 +302,12 @@ export class GatewayService {
       },
       onGoalStatusUpdated: (payload) => {
         this.emit('goal.status.updated', payload);
+      },
+      onSkillsUpdated: (payload) => {
+        this.emit('config.reload', {
+          section: 'skills',
+          source: payload.reason === 'disk' ? 'skills-filesystem' : 'skills-config',
+        });
       },
       extensionRegistry: this.extensionLoader?.getRegistry(),
       getCronService: () => cronRef.service,

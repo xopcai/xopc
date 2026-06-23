@@ -193,7 +193,6 @@ export function GatewaySettingsPanel() {
   const {
     saving,
     error,
-    saveOk,
     auditRefreshToken,
     restarting,
     restartConfirmOpen,
@@ -356,7 +355,7 @@ export function GatewaySettingsPanel() {
         type: 'patch',
         patch: { saveOk: true, auditRefreshToken: auditRefreshToken + 1 },
       });
-      window.setTimeout(() => dispatchUi({ type: 'patch', patch: { saveOk: false } }), 2500);
+      showToast({ type: 'success', title: g.saved });
     } catch (e) {
       dispatchUi({ type: 'patch', patch: { error: e instanceof Error ? e.message : g.saveError } });
     } finally {
@@ -446,7 +445,6 @@ export function GatewaySettingsPanel() {
           </a>
         </div>
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-          {saveOk ? <span className="text-sm text-fg-muted">{g.saved}</span> : null}
           <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
             {g.discard}
           </Button>

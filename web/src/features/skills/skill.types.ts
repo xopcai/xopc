@@ -81,6 +81,25 @@ export interface SkillCatalogEntry {
   hub?: SkillHubProvenance;
 }
 
+export interface SkillDiagnostic {
+  type: 'warning' | 'collision' | 'error';
+  skillName?: string;
+  message: string;
+  path?: string;
+}
+
+export interface SkillRuntimeStatus {
+  version: string;
+  loadedAt: number;
+  reloadInProgress: boolean;
+  reloadPending: boolean;
+  lastReloadStartedAt?: number;
+  lastReloadFinishedAt?: number;
+  lastReloadReason?: 'initial' | 'disk' | 'config';
+  lastReloadOk?: boolean;
+  lastReloadError?: string;
+}
+
 export interface ManagedSkillDir {
   id: string;
   name: string;
@@ -92,6 +111,27 @@ export interface ManagedSkillDir {
 export interface SkillsPayload {
   catalog: SkillCatalogEntry[];
   managed: ManagedSkillDir[];
+  version: string;
+  loadedAt: number;
+  diagnostics: SkillDiagnostic[];
+  status: SkillRuntimeStatus;
+}
+
+export interface SkillInstallAvailability {
+  skillId: string;
+  skillName?: string;
+  loaded: boolean;
+  enabled?: boolean;
+  defaultAgentId: string;
+  availableForDefaultAgent?: boolean;
+  unavailableReason?: 'agent-denied' | 'disabled' | 'requirements-unmet' | 'model-invocation-disabled' | null;
+  diagnostics: SkillDiagnostic[];
+}
+
+export interface SkillInstallResultPayload {
+  skillId: string;
+  path: string;
+  availability?: SkillInstallAvailability;
 }
 
 /**

@@ -2,6 +2,32 @@ import { Command } from 'commander';
 import { register, formatExamples } from '../registry.js';
 import type { CLIContext } from '../registry.js';
 import { withCronService } from './cron-cli.js';
+import { describeSchedule, type CronSchedule } from '../../cron/index.js';
+
+function parseDurationMs(value: string): number | null {
+  const match = /^(\d+)\s*(ms|s|m|h|d)?$/i.exec(value.trim());
+  if (!match) return null;
+  const amount = Number.parseInt(match[1], 10);
+  const unit = (match[2] ?? 'ms').toLowerCase();
+  const factor = unit === 'd' ? 86_400_000 : unit === 'h' ? 3_600_000 : unit === 'm' ? 60_000 : unit === 's' ? 1000 : 1;
+  return amount > 0 ? amount * factor : null;
+}
+
+function resolveSchedule(options: { at?: string; every?: string; cron?: string; tz?: string; schedule?: string }): CronSchedule | null {
+  const chosen = [options.at, options.every, options.cron, options.schedule].filter((v) => typeof v === 'string' && v.trim()).length;
+  if (chosen !== 1) return null;
+  if (options.at?.trim()) {
+    const raw = options.at.trim();
+    const rel = parseDurationMs(raw);
+    return { kind: 'at', at: new Date(rel ? Date.now() + rel : Date.parse(raw)).toISOString() };
+  }
+  if (options.every?.trim()) {
+    const everyMs = parseDurationMs(options.every);
+    return everyMs ? { kind: 'every', everyMs, anchorMs: Date.now() } : null;
+  }
+  const expr = options.cron?.trim() || options.schedule?.trim();
+  return expr ? { kind: 'cron', expr, ...(options.tz?.trim() ? { tz: options.tz.trim() } : {}) } : null;
+}
 
 function createCronCommand(_ctx: CLIContext): Command {
   const cmd = new Command('cron')
@@ -10,8 +36,9 @@ function createCronCommand(_ctx: CLIContext): Command {
       'after',
       formatExamples([
         'xopc cron list                              # List all tasks',
-        'xopc cron add --schedule "0 9 * * *" --message "Good morning"',
-        'xopc cron add --schedule "0 17 * * 5" --workflow weekly_review --goal "Weekly review"',
+        'xopc cron add --cron "0 9 * * *" --message "Good morning"',
+        'xopc cron add --every 1h --message "Check for updates"',
+        'xopc cron add --at 20m --message "Remind me"',
         'xopc cron enable <job-id>                   # Enable a task',
         'xopc cron disable <job-id>                  # Disable a task',
         'xopc cron run <job-id>                      # Run a task now',
@@ -35,9 +62,9 @@ function createCronCommand(_ctx: CLIContext): Command {
           const { getCronPayloadText } = await import('../../cron/job-content.js');
           for (const job of jobs) {
             const state = job.enabled ? 'enabled ' : 'disabled';
-            console.log(`  ${job.id} [${state}] - ${job.schedule}`);
+            console.log(`  ${job.id} [${state}] - ${describeSchedule(job.schedule)}`);
             console.log(`     ${getCronPayloadText({ payload: job.payload })}`);
-            console.log(`     Next: ${job.next_run || 'N/A'}`);
+            console.log(`     Next: ${job.state.nextRunAtMs ? new Date(job.state.nextRunAtMs).toISOString() : 'N/A'}`);
             console.log();
           }
         });
@@ -48,9 +75,12 @@ function createCronCommand(_ctx: CLIContext): Command {
     new Command('add')
       .description('Add a scheduled task')
       .option('--name <text>', 'Task name')
-      .option('--schedule <cron>', 'Cron expression (e.g., "0 9 * * *")')
+      .option('--at <time>', 'One-shot time: ISO timestamp or duration like 20m')
+      .option('--every <duration>', 'Interval like 10m, 1h, 1d')
+      .option('--cron <expr>', 'Cron expression (e.g., "0 9 * * *")')
+      .option('--tz <iana>', 'IANA timezone for --cron')
       .option('--message <text>', 'Message to send (system event)')
-      .option('--workflow <id>', 'Workflow definition id (direct workflow run)')
+      .option('--workflow <id>', 'Workflow definition id')
       .option('--goal <text>', 'Optional workflow goal')
       .option('--input-json <json>', 'Workflow input payload as JSON object')
       .option('--agent-id <id>', 'Agent profile for workflow or isolated jobs')
@@ -60,18 +90,16 @@ function createCronCommand(_ctx: CLIContext): Command {
       .action(async (options) => {
         const hasWorkflow = Boolean(options.workflow?.trim());
         const hasMessage = Boolean(options.message?.trim());
-        if (!options.schedule || (!hasWorkflow && !hasMessage) || (hasWorkflow && hasMessage)) {
+        const schedule = resolveSchedule(options);
+        if (!schedule || (!hasWorkflow && !hasMessage) || (hasWorkflow && hasMessage)) {
           console.error(
-            'Error: --schedule is required; provide exactly one of --message or --workflow',
+            'Error: provide exactly one schedule (--at, --every, --cron) and exactly one of --message or --workflow',
           );
           process.exit(1);
         }
 
         await withCronService(async (cronService) => {
           if (hasWorkflow) {
-            const { DEFAULT_WORKFLOW_CRON_WAIT_MS } = await import(
-              '../../cron/workflow-run-completion.js'
-            );
             let inputEnvelope: { payload: unknown } | undefined;
             if (options.inputJson) {
               try {
@@ -85,15 +113,14 @@ function createCronCommand(_ctx: CLIContext): Command {
             const delivery =
               options.channel?.trim() && options.to?.trim()
                 ? {
-                    mode: 'direct' as const,
+                    mode: 'announce' as const,
                     channel: options.channel.trim(),
                     to: options.to.trim(),
                   }
                 : undefined;
-            const result = await cronService.addJob(options.schedule, {
+            const result = await cronService.addJob(schedule, {
               name: options.name,
               sessionTarget: 'isolated',
-              timeout: DEFAULT_WORKFLOW_CRON_WAIT_MS,
               ...(agentId ? { agentId } : {}),
               delivery,
               payload: {
@@ -106,18 +133,18 @@ function createCronCommand(_ctx: CLIContext): Command {
               },
             });
             console.log(`✅ Added workflow job ${result.id}`);
-            console.log(`   Schedule: ${result.schedule}`);
+            console.log(`   Schedule: ${describeSchedule(result.schedule)}`);
             console.log(`   Workflow: ${options.workflow.trim()}`);
             return;
           }
 
-          const result = await cronService.addJob(options.schedule, {
+          const result = await cronService.addJob(schedule, {
             name: options.name,
             payload: { kind: 'systemEvent', text: options.message },
           });
 
           console.log(`✅ Added job ${result.id}`);
-          console.log(`   Schedule: ${result.schedule}`);
+          console.log(`   Schedule: ${describeSchedule(result.schedule)}`);
         });
       }),
   );
@@ -212,8 +239,8 @@ register({
     category: 'utility',
     examples: [
       'xopc cron list',
-      'xopc cron add --schedule "0 9 * * *" --message "Hello"',
-      'xopc cron add --schedule "0 17 * * 5" --workflow weekly_review',
+      'xopc cron add --cron "0 9 * * *" --message "Hello"',
+      'xopc cron add --every 1h --workflow weekly_review',
       'xopc cron enable abc12345',
       'xopc cron run abc12345',
     ],

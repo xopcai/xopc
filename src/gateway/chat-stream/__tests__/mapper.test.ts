@@ -7,7 +7,7 @@ function mapper() {
 }
 
 describe('ChatStreamMapper', () => {
-  it('maps run lifecycle', () => {
+  it('maps run lifecycle with gateway-owned terminal event', () => {
     const m = mapper();
     expect(m.map({ type: 'agent_start', runId: 'run-1' })[0]).toMatchObject({
       type: 'run_start',
@@ -15,7 +15,8 @@ describe('ChatStreamMapper', () => {
       sessionKey: 'sk',
       payload: { channel: 'webchat' },
     });
-    expect(m.map({ type: 'agent_end', runId: 'run-1' })[0]).toMatchObject({
+    expect(m.map({ type: 'agent_end', runId: 'run-1' })).toEqual([]);
+    expect(m.end('success')[0]).toMatchObject({
       type: 'run_end',
       payload: { status: 'success' },
     });
@@ -35,6 +36,35 @@ describe('ChatStreamMapper', () => {
     expect(delta).toMatchObject({ type: 'assistant_delta', payload: { messageId: 'msg_run-1_1', delta: 'h' } });
     expect(end.map((e) => e.type)).toEqual(['assistant_delta', 'thinking_end', 'assistant_message_end']);
     expect(end[0]).toMatchObject({ payload: { delta: 'i' } });
+  });
+
+  it('maps TTS audio before the gateway run_end and targets the last assistant', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+    m.map({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'hello' }] },
+    });
+    m.map({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'hello' }] } });
+
+    expect(m.map({ type: 'agent_end', runId: 'run-1' })).toEqual([]);
+    const [tts] = m.map({
+      type: 'tts_audio',
+      uri: 'media://tts/reply.mp3',
+      mimeType: 'audio/mpeg',
+      name: 'reply.mp3',
+    });
+    const [done] = m.end('success');
+
+    expect(tts).toMatchObject({
+      type: 'tts_audio',
+      payload: {
+        uri: 'media://tts/reply.mp3',
+        attachTo: 'last_assistant',
+        messageId: 'msg_run-1_1',
+      },
+    });
+    expect(done).toMatchObject({ type: 'run_end' });
   });
 
   it('maps tool lifecycle', () => {

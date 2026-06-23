@@ -77,6 +77,61 @@ describe('useChatSessionStore', () => {
     expect(snap?.streamingMsg?.content.some((c) => c.type === 'text' && c.text === 'hello')).toBe(true);
   });
 
+  it('appendAttachmentToCurrentAssistant updates the streaming assistant without creating a new bubble', () => {
+    useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
+      ...idleSlice,
+      sending: true,
+      streaming: true,
+      streamingMsg: {
+        role: 'assistant',
+        content: [{ type: 'text', text: 'done' }],
+        timestamp: 2,
+      },
+    });
+
+    useChatSessionStore.getState().appendAttachmentToCurrentAssistant(sessionKey, {
+      name: 'reply.mp3',
+      mimeType: 'audio/mpeg',
+      type: 'voice',
+      uri: 'media://tts/reply.mp3',
+    });
+
+    const snap = getChatSessionSnapshot(sessionKey);
+    expect(snap?.messages).toHaveLength(1);
+    expect(snap?.streamingMsg?.attachments).toEqual([
+      expect.objectContaining({ uri: 'media://tts/reply.mp3', type: 'voice' }),
+    ]);
+  });
+
+  it('appendAttachmentToCurrentAssistant merges late TTS audio into the last committed assistant', () => {
+    useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
+      ...idleSlice,
+      messages: [
+        userMsg,
+        { role: 'assistant', content: [{ type: 'text', text: 'done' }], timestamp: 2 },
+      ],
+    });
+
+    useChatSessionStore.getState().appendAttachmentToCurrentAssistant(sessionKey, {
+      name: 'reply.mp3',
+      mimeType: 'audio/mpeg',
+      type: 'voice',
+      uri: 'media://tts/reply.mp3',
+    });
+    useChatSessionStore.getState().appendAttachmentToCurrentAssistant(sessionKey, {
+      name: 'reply.mp3',
+      mimeType: 'audio/mpeg',
+      type: 'voice',
+      uri: 'media://tts/reply.mp3',
+    });
+
+    const snap = getChatSessionSnapshot(sessionKey);
+    expect(snap?.messages).toHaveLength(2);
+    expect(snap?.messages[1]?.attachments).toEqual([
+      expect.objectContaining({ uri: 'media://tts/reply.mp3', type: 'voice' }),
+    ]);
+  });
+
   it('setCommittedSnapshot preserves live slice messages', () => {
     useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
       ...idleSlice,

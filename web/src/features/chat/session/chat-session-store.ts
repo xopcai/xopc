@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 
-import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages/messages.types';
+import type {
+  Message,
+  MessageAttachment,
+  ProgressState,
+  ReasoningLevel,
+} from '@/features/chat/messages/messages.types';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
 import { mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
 import { mergeMissingUserMessagesFromServer } from '@/features/chat/messages/merge-missing-user-messages';
@@ -80,6 +85,11 @@ type ChatSessionStoreActions = {
     mutator: (msg: Message) => void,
     timestamp?: number,
   ) => void;
+  appendAttachmentToCurrentAssistant: (
+    sessionKey: string,
+    attachment: MessageAttachment,
+    target?: { messageId?: string; attachTo?: 'last_assistant' },
+  ) => void;
   applyHydratedTail: (
     sessionKey: string,
     messagesWithoutTail: Message[],
@@ -103,6 +113,25 @@ const IDLE_STREAM: Pick<ChatSessionSlice, 'streamingMsg' | 'progress' | 'sending
 
 function cloneMessages(messages: Message[]): Message[] {
   return messages.map((m) => cloneMessageForRender(m));
+}
+
+function attachmentKey(att: MessageAttachment): string {
+  const uri = att.uri?.trim();
+  if (uri) return `uri:${uri}`;
+  if (att.id) return `id:${att.id}`;
+  return `name:${att.name ?? 'file'}|${att.mimeType ?? ''}`;
+}
+
+function appendAttachmentDeduped(
+  attachments: MessageAttachment[] | undefined,
+  attachment: MessageAttachment,
+): MessageAttachment[] {
+  const next = [...(attachments ?? [])];
+  const key = attachmentKey(attachment);
+  if (!next.some((att) => attachmentKey(att) === key)) {
+    next.push({ ...attachment });
+  }
+  return next;
 }
 
 function cloneSlice(slice: ChatSessionSlice): ChatSessionSlice {
@@ -345,6 +374,44 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             },
           },
         };
+      });
+    },
+
+    appendAttachmentToCurrentAssistant: (sessionKey, attachment, _target) => {
+      const key = normalizeKey(sessionKey);
+      if (!key) return;
+      set((state) => {
+        const current = state.sessions[key];
+        if (!current) return state;
+
+        if (current.streamingMsg?.role === 'assistant') {
+          const streamingMsg = cloneMessageForRender(current.streamingMsg);
+          streamingMsg.attachments = appendAttachmentDeduped(streamingMsg.attachments, attachment);
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: { ...current, streamingMsg },
+            },
+          };
+        }
+
+        const messages = cloneMessages(current.messages);
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const msg = messages[i];
+          if (msg?.role !== 'assistant') continue;
+          messages[i] = {
+            ...msg,
+            attachments: appendAttachmentDeduped(msg.attachments, attachment),
+          };
+          return {
+            sessions: {
+              ...state.sessions,
+              [key]: { ...current, messages },
+            },
+          };
+        }
+
+        return state;
       });
     },
 

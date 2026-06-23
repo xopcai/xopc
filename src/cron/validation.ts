@@ -1,200 +1,199 @@
-// Cron input validation using Zod
+import { CronExpressionParser } from 'cron-parser';
 import { z } from 'zod';
-import nodeCron from 'node-cron';
 
-// Custom cron validation
-const cronExpression = z.string().superRefine((val, ctx) => {
-  if (!nodeCron.validate(val)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: `Invalid cron expression: ${val}`,
-    });
-  }
-});
+const nonEmptyString = z.string().trim().min(1);
 
-// Valid timezones (subset of IANA timezones)
-const validTimezones = [
-  'UTC',
-  'America/New_York',
-  'America/Chicago',
-  'America/Denver',
-  'America/Los_Angeles',
-  'America/Toronto',
-  'Europe/London',
-  'Europe/Paris',
-  'Europe/Berlin',
-  'Europe/Moscow',
-  'Asia/Tokyo',
-  'Asia/Shanghai',
-  'Asia/Hong_Kong',
-  'Asia/Singapore',
-  'Asia/Seoul',
-  'Asia/Dubai',
-  'Asia/Mumbai',
-  'Australia/Sydney',
-  'Pacific/Auckland',
-];
-
-const CronDeliveryMode = z.enum(['none', 'announce', 'direct']);
-
-/** Treat `''` / `null` / whitespace-only as absent so optional fields do not fail `.min(1)` */
-function optionalTrimmedString(max: number, min = 1) {
-  return z.preprocess((v) => {
-    if (v === null || v === undefined) return undefined;
+const optionalTrimmedString = (max: number) =>
+  z.preprocess((v) => {
+    if (v === undefined) return undefined;
+    if (v === null) return v;
     if (typeof v !== 'string') return v;
     const t = v.trim();
     return t.length === 0 ? undefined : t;
-  }, z.string().min(min).max(max).optional());
-}
+  }, z.string().min(1).max(max).optional());
 
-/** Optional agent id on create; empty string → undefined. */
-const optionalJobAgentId = optionalTrimmedString(64, 1);
+export const CronScheduleSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('at'),
+    at: nonEmptyString,
+  }).strict(),
+  z.object({
+    kind: z.literal('every'),
+    everyMs: z.number().int().min(1),
+    anchorMs: z.number().int().nonnegative().optional(),
+  }).strict(),
+  z.object({
+    kind: z.literal('cron'),
+    expr: nonEmptyString.superRefine((val, ctx) => {
+      try {
+        CronExpressionParser.parse(val);
+      } catch {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Invalid cron expression: ${val}`,
+        });
+      }
+    }),
+    tz: optionalTrimmedString(100),
+    staggerMs: z.number().int().nonnegative().optional(),
+  }).strict(),
+]);
 
-/** Optional absolute workspace path on create; empty string → undefined. */
-const optionalJobWorkingDirectory = optionalTrimmedString(4096, 1);
+export const CronDeliverySchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('none') }).strict(),
+  z.object({
+    mode: z.literal('announce'),
+    channel: optionalTrimmedString(32),
+    to: optionalTrimmedString(200),
+    accountId: optionalTrimmedString(100),
+    threadId: z.union([z.string(), z.number()]).optional(),
+    bestEffort: z.boolean().optional(),
+    completionDestination: z.object({
+      mode: z.literal('webhook'),
+      to: nonEmptyString,
+    }).strict().optional(),
+    failureDestination: z.object({
+      mode: z.enum(['announce', 'webhook']).optional(),
+      channel: optionalTrimmedString(32),
+      to: optionalTrimmedString(500),
+      accountId: optionalTrimmedString(100),
+    }).strict().optional(),
+  }).strict(),
+  z.object({
+    mode: z.literal('webhook'),
+    to: nonEmptyString,
+    bestEffort: z.boolean().optional(),
+  }).strict(),
+]);
 
-/**
- * PATCH: set string, or `null` / empty to clear `workingDirectory` on the job.
- */
-const patchJobWorkingDirectory = z.preprocess((v) => {
-  if (v === null) return null;
-  if (v === undefined) return undefined;
-  if (typeof v !== 'string') return v;
-  const t = v.trim();
-  return t.length === 0 ? null : t;
-}, z.union([z.string().min(1).max(4096), z.null()]).optional());
-
-/**
- * PATCH: set string, or `null` / empty to clear `agentId` on the job.
- */
-const patchJobAgentId = z.preprocess((v) => {
-  if (v === null) return null;
-  if (v === undefined) return undefined;
-  if (typeof v !== 'string') return v;
-  const t = v.trim();
-  return t.length === 0 ? null : t;
-}, z.union([z.string().min(1).max(64), z.null()]).optional());
-
-// CronPayload validation
 const CronSystemEventPayloadSchema = z.object({
   kind: z.literal('systemEvent'),
   text: z.string().min(1).max(50000),
-});
+}).strict();
 
 const CronAgentTurnPayloadSchema = z.object({
   kind: z.literal('agentTurn'),
   message: z.string().min(1).max(50000),
-  model: optionalTrimmedString(100, 1),
-  timeoutSeconds: z.number().int().min(10).max(3600).optional(),
-});
+  model: optionalTrimmedString(100),
+  thinking: optionalTrimmedString(50),
+  toolsAllow: z.array(z.string().trim().min(1)).optional(),
+  timeoutSeconds: z.number().int().min(1).max(86400).optional(),
+}).strict();
 
 const CronGoalContinuePayloadSchema = z.object({
   kind: z.literal('goalContinue'),
-  goalId: z.string().min(1).max(100),
-  message: optionalTrimmedString(50000, 1),
+  goalId: nonEmptyString.max(100),
+  message: optionalTrimmedString(50000),
   maxRetries: z.number().int().min(0).max(10).optional(),
-});
+}).strict();
 
 const WorkflowRunInputEnvelopeSchema = z.object({
   payload: z.unknown(),
-  goal: optionalTrimmedString(5000, 1),
+  goal: optionalTrimmedString(5000),
   variables: z.record(z.string(), z.unknown()).optional(),
   context: z.record(z.string(), z.unknown()).optional(),
-});
+}).strict();
 
 const CronWorkflowRunPayloadSchema = z.object({
   kind: z.literal('workflowRun'),
-  definitionId: z.string().min(1).max(200),
+  definitionId: nonEmptyString.max(200),
   input: z.unknown().optional(),
   inputEnvelope: WorkflowRunInputEnvelopeSchema.optional(),
-  goal: optionalTrimmedString(5000, 1),
-  agentId: optionalTrimmedString(64, 1),
-  sessionKey: optionalTrimmedString(300, 1),
+  goal: optionalTrimmedString(5000),
+  agentId: optionalTrimmedString(64),
+  sessionKey: optionalTrimmedString(300),
+  maxRetries: z.number().int().min(0).max(10).optional(),
   waitForCompletion: z.boolean().optional(),
   source: z.object({
     kind: z.literal('cron').optional(),
-    scheduleId: optionalTrimmedString(200, 1),
-    fireId: optionalTrimmedString(200, 1),
+    scheduleId: optionalTrimmedString(200),
+    fireId: optionalTrimmedString(200),
     scheduledAtMs: z.number().int().nonnegative().optional(),
-  }).optional(),
-});
+  }).strict().optional(),
+}).strict();
 
-const CronPayloadSchema = z.union([
+export const CronPayloadSchema = z.discriminatedUnion('kind', [
   CronSystemEventPayloadSchema,
   CronAgentTurnPayloadSchema,
   CronGoalContinuePayloadSchema,
   CronWorkflowRunPayloadSchema,
 ]);
 
-// CronDelivery validation — channel must match gateway UI / message bus ids (telegram, weixin, cli, local, …)
-const CronDeliverySchema = z.object({
-  mode: CronDeliveryMode.default('none'),
-  channel: optionalTrimmedString(32, 1),
-  to: z.preprocess(
-    (v) => (v === '' || v === null || v === undefined ? undefined : v),
-    z.string().max(100).optional(),
-  ),
-  bestEffort: z.boolean().optional(),
-});
+export const CronFailureAlertSchema = z.object({
+  after: z.number().int().min(1).optional(),
+  cooldownMs: z.number().int().nonnegative().optional(),
+  includeSkipped: z.boolean().optional(),
+  mode: z.enum(['announce', 'webhook']).optional(),
+  channel: optionalTrimmedString(32),
+  to: optionalTrimmedString(500),
+  accountId: optionalTrimmedString(100),
+}).strict();
 
-export const JobDataSchema = z
-  .object({
-    id: z.string().min(1).max(32),
-    name: z.string().max(100).optional(),
-    schedule: cronExpression,
-    enabled: z.boolean(),
-    timezone: z.string().superRefine((val, ctx) => {
-      if (val && !validTimezones.includes(val)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: `Invalid timezone: ${val}. Use IANA timezone names.`,
-        });
-      }
-    }).optional(),
-    maxRetries: z.number().int().min(0).max(10).default(3),
-    timeout: z.number().int().min(1000).max(7_200_000).default(180000),
-    created_at: z.string().datetime(),
-    updated_at: z.string().datetime(),
-    sessionTarget: z.enum(['main', 'isolated']).optional(),
-    agentId: optionalTrimmedString(64, 1),
-    workingDirectory: optionalJobWorkingDirectory,
-    payload: CronPayloadSchema,
-    delivery: CronDeliverySchema.optional(),
-    model: optionalTrimmedString(100, 1),
-    state: z.any().optional(),
-  })
-  .strict();
+export const JobStateSchema = z.object({
+  nextRunAtMs: z.number().int().nonnegative().optional(),
+  runningAtMs: z.number().int().nonnegative().optional(),
+  runningSessionKey: optionalTrimmedString(300),
+  lastRunAtMs: z.number().int().nonnegative().optional(),
+  lastRunStatus: z.enum(['ok', 'error', 'skipped']).optional(),
+  lastError: z.string().optional(),
+  lastDurationMs: z.number().int().nonnegative().optional(),
+  consecutiveErrors: z.number().int().nonnegative().optional(),
+  consecutiveSkipped: z.number().int().nonnegative().optional(),
+  lastDeliveryStatus: z.enum(['delivered', 'not-delivered', 'unknown', 'not-requested']).optional(),
+  lastDeliveryError: z.string().optional(),
+  lastFailureAlertAtMs: z.number().int().nonnegative().optional(),
+}).strict();
 
-export const AddJobRequestSchema = z.object({
-  schedule: cronExpression,
-  name: z.string().max(100).optional(),
-  timezone: z.string().optional(),
-  maxRetries: z.number().int().min(0).max(10).optional(),
-  timeout: z.number().int().min(1000).max(7_200_000).optional(),
-  sessionTarget: z.enum(['main', 'isolated']).optional(),
-  agentId: optionalJobAgentId,
-  workingDirectory: optionalJobWorkingDirectory,
+export const JobDataSchema = z.object({
+  id: nonEmptyString.max(64),
+  name: nonEmptyString.max(200),
+  description: z.string().max(2000).optional(),
+  enabled: z.boolean(),
+  deleteAfterRun: z.boolean().optional(),
+  createdAtMs: z.number().int().nonnegative(),
+  updatedAtMs: z.number().int().nonnegative(),
+  schedule: CronScheduleSchema,
+  sessionTarget: z.union([
+    z.literal('main'),
+    z.literal('isolated'),
+    z.literal('current'),
+    z.string().regex(/^session:.+$/),
+  ]),
+  wakeMode: z.enum(['now', 'next-heartbeat']),
+  agentId: optionalTrimmedString(64),
+  sessionKey: optionalTrimmedString(300),
+  workingDirectory: optionalTrimmedString(4096),
   payload: CronPayloadSchema,
   delivery: CronDeliverySchema.optional(),
-  model: optionalTrimmedString(100, 1),
+  failureAlert: z.union([z.literal(false), CronFailureAlertSchema]).optional(),
+  state: JobStateSchema.default({}),
+}).strict();
+
+export const AddJobRequestSchema = JobDataSchema.omit({
+  id: true,
+  name: true,
+  enabled: true,
+  createdAtMs: true,
+  updatedAtMs: true,
+  sessionTarget: true,
+  wakeMode: true,
+  state: true,
+}).extend({
+  id: optionalTrimmedString(64),
+  name: optionalTrimmedString(200),
+  enabled: z.boolean().optional(),
+  sessionTarget: JobDataSchema.shape.sessionTarget.optional(),
+  wakeMode: JobDataSchema.shape.wakeMode.optional(),
+  state: JobStateSchema.partial().optional(),
 });
 
-export const UpdateJobRequestSchema = z.object({
-  name: z.string().max(100).optional(),
-  schedule: cronExpression.optional(),
-  timezone: z.string().optional(),
-  maxRetries: z.number().int().min(0).max(10).optional(),
-  timeout: z.number().int().min(1000).max(7_200_000).optional(),
-  enabled: z.boolean().optional(),
-  sessionTarget: z.enum(['main', 'isolated']).optional(),
-  agentId: patchJobAgentId,
-  workingDirectory: patchJobWorkingDirectory,
-  payload: CronPayloadSchema.optional(),
-  delivery: CronDeliverySchema.optional(),
-  model: optionalTrimmedString(100, 1),
-}).refine(
+export const UpdateJobRequestSchema = JobDataSchema.omit({
+  id: true,
+  createdAtMs: true,
+  updatedAtMs: true,
+}).partial().refine(
   (data) => Object.keys(data).length > 0,
-  { message: 'At least one field must be provided for update' }
+  { message: 'At least one field must be provided for update' },
 );
 
 export type ValidatedJobData = z.infer<typeof JobDataSchema>;
@@ -202,6 +201,3 @@ export type ValidatedAddJobRequest = z.infer<typeof AddJobRequestSchema>;
 export type ValidatedUpdateJobRequest = z.infer<typeof UpdateJobRequestSchema>;
 export type ValidatedCronPayload = z.infer<typeof CronPayloadSchema>;
 export type ValidatedCronDelivery = z.infer<typeof CronDeliverySchema>;
-
-// Re-export common validation helpers
-export { cronExpression };

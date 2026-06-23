@@ -42,7 +42,7 @@ export function useAgentsCronJobs(options: {
     setBusy(true);
     setError(null);
     try {
-      await updateJob(job.id, { agentId: agentKey === '' ? null : agentKey });
+      await updateJob(job.id, { agentId: agentKey });
       setCronJobsOverride(await listJobs());
     } catch (err) {
       setError(err instanceof Error ? err.message : saveErrorMessage);

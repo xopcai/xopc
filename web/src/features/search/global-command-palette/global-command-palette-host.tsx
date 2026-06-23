@@ -227,10 +227,27 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
   const setPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
 
   const [ui, dispatchUi] = useReducer(paletteUiReducer, initialPaletteUi);
+  const [skillsVersion, setSkillsVersion] = useState(0);
   const { query, selectedIndex, paletteLayer } = ui;
 
   const routeSeeds = useMemo(() => buildRouteSeeds(language), [language]);
   const [debouncedQuery] = useDebounce(query, 120);
+
+  useEffect(() => {
+    const onConfigReload = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (
+        detail &&
+        typeof detail === 'object' &&
+        'section' in detail &&
+        (detail as { section?: unknown }).section === 'skills'
+      ) {
+        setSkillsVersion((v) => v + 1);
+      }
+    };
+    window.addEventListener('config-reload', onConfigReload);
+    return () => window.removeEventListener('config-reload', onConfigReload);
+  }, []);
 
   const openModelPalette = useCallback(() => {
     dispatchUi({ type: 'setLayer', layer: 'models' });
@@ -428,6 +445,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
       openModelPalette,
       openAgentPalette,
       onClose,
+      skillsVersion,
     ],
     {
       enabled: paletteLayer === 'main',

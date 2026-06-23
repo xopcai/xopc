@@ -111,10 +111,15 @@ const skillsCommand: CommandDefinition = {
   examples: ['/skills reload'],
   handler: async (ctx: CommandContext, args: string) => {
     if (args === 'reload') {
-      // Publish system event to reload skills
-      // This will be handled by AgentService skill reload logic
+      if (!ctx.reloadSkills) {
+        return {
+          content: 'Skills reload is not available in this context.',
+          success: false,
+        };
+      }
+      await ctx.reloadSkills();
       return {
-        content: '✅ Skills reloaded successfully',
+        content: 'Skills reloaded successfully',
         success: true,
       };
     }

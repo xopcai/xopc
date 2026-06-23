@@ -53,6 +53,11 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     return c.json({ ok: true, payload });
   });
 
+  authenticated.get('/api/skills/status', (c) => {
+    const payload = service.marketplace.getSkillsStatusApi();
+    return c.json({ ok: true, payload });
+  });
+
   authenticated.get('/api/skills/:skillName/content', (c) => {
     const raw = c.req.param('skillName');
     if (!raw) {

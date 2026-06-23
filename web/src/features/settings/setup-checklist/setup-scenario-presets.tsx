@@ -17,6 +17,7 @@ import {
   SCENARIO_PRESETS,
   type ScenarioPresetStep,
 } from './scenario-presets';
+import { scenarioStepState, type SetupStatusSnapshot } from './setup-checklist-state';
 
 function stepLabel(
   step: ScenarioPresetStep,
@@ -25,7 +26,7 @@ function stepLabel(
   return steps[step.labelKey] ?? step.labelKey;
 }
 
-export function SetupScenarioPresets() {
+export function SetupScenarioPresets({ snapshot }: { snapshot?: SetupStatusSnapshot }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const s = m.setupStatus.scenarios;
@@ -64,20 +65,43 @@ export function SetupScenarioPresets() {
               <h3 className="text-sm font-semibold text-fg">{copy.title}</h3>
               <p className="mt-1 text-xs leading-relaxed text-fg-muted">{copy.description}</p>
               <ol className="mt-3 flex flex-col gap-1">
-                {preset.steps.map((step, index) => (
-                  <li key={`${preset.id}-${step.labelKey}`}>
-                    <Link
-                      to={step.path}
-                      className={cn(
-                        'text-xs font-medium text-accent-fg hover:underline',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded',
-                      )}
-                    >
-                      {index + 1}. {stepLabel(step, s.steps)}
-                    </Link>
-                  </li>
-                ))}
+                {preset.steps.map((step, index) => {
+                  const state = snapshot ? scenarioStepState(step.labelKey, snapshot) : null;
+                  return (
+                    <li key={`${preset.id}-${step.labelKey}`} className="flex min-w-0 items-center gap-2">
+                      {state ? (
+                        <span
+                          className={cn(
+                            'size-1.5 shrink-0 rounded-full',
+                            state.done
+                              ? 'bg-success'
+                              : state.status === 'fail'
+                                ? 'bg-red-500'
+                                : state.status === 'warn'
+                                  ? 'bg-amber-500'
+                                  : 'bg-fg-subtle',
+                          )}
+                          aria-hidden
+                        />
+                      ) : null}
+                      <Link
+                        to={step.path}
+                        className={cn(
+                          'min-w-0 truncate rounded text-xs font-medium text-accent-fg hover:underline',
+                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                        )}
+                      >
+                        {index + 1}. {stepLabel(step, s.steps)}
+                      </Link>
+                    </li>
+                  );
+                })}
               </ol>
+              {snapshot ? (
+                <p className="mt-3 text-[11px] font-medium text-fg-subtle">
+                  {preset.steps.filter((step) => scenarioStepState(step.labelKey, snapshot).done).length} / {preset.steps.length}
+                </p>
+              ) : null}
             </article>
           );
         })}
