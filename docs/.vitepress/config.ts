@@ -7,20 +7,28 @@ export default defineConfig({
   title: 'xopc',
   description: 'Local-first Goal Loop OS for long-term AI work across terminal, web, desktop, messengers, and mobile app.',
   base,
-  // esbuild 0.28+ errors when downleveling destructuring for legacy targets; our
-  // browserslist is above Safari 14.1 (see evanw/esbuild#4436, vitejs/vite#22346).
+  // esbuild 0.28+ errors when downleveling destructuring for Vite's legacy
+  // default dev target. Apply the feature override to both Vite transforms and
+  // dependency pre-bundling, because docs:dev fails during optimizeDeps.
   vite: {
     esbuild: {
       supported: {
         destructuring: true,
       },
     },
+    optimizeDeps: {
+      esbuildOptions: {
+        supported: {
+          destructuring: true,
+        },
+      },
+    },
   },
   cleanUrls: true,
   ignoreDeadLinks: true,
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
-    ['link', { rel: 'apple-touch-icon', href: `${base}logo.svg` }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
+    ['link', { rel: 'apple-touch-icon', href: `${base}favicon.svg` }],
     ['meta', { property: 'og:title', content: 'xopc - Local-first Goal Loop OS' }],
     ['meta', { property: 'og:description', content: 'One AI assistant that keeps long-term goals moving across terminal, web, desktop, messengers, and mobile app.' }],
     ['meta', { property: 'og:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
@@ -36,7 +44,11 @@ export default defineConfig({
       lang: 'en',
       themeConfig: {
         siteTitle: 'xopc',
-        logo: '/logo.svg',
+        logo: {
+          light: '/logo.svg',
+          dark: '/logo-dark.svg',
+          alt: 'xopc'
+        },
         nav: [
           { text: 'Home', link: '/' },
           { text: 'Guide', link: '/first-5-minutes' },
@@ -116,7 +128,11 @@ export default defineConfig({
       link: '/zh/',
       themeConfig: {
         siteTitle: 'xopc',
-        logo: '/logo.svg',
+        logo: {
+          light: '/logo.svg',
+          dark: '/logo-dark.svg',
+          alt: 'xopc'
+        },
         nav: [
           { text: '首页', link: '/zh/' },
           { text: '指南', link: '/zh/first-5-minutes' },
