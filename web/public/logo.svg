@@ -1,18 +1,20 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="10 10 80 80" fill="none" aria-hidden="true">
   <title>xopc</title>
   <g transform="translate(50 50) scale(0.92) translate(-50 -50)">
-    <!-- Black rings (drawn under the hub) -->
-    <g stroke="#000000" stroke-width="4.4" stroke-linecap="round" fill="none">
-    <path d="M 29.375 23.602 A 33.5 33.5 0 0 1 70.625 23.602" />
-    <path d="M 76.398 29.375 A 33.5 33.5 0 0 1 76.398 70.625" />
-    <path d="M 70.625 76.398 A 33.5 33.5 0 0 1 29.375 76.398" />
-    <path d="M 23.602 70.625 A 33.5 33.5 0 0 1 23.602 29.375" />
-    <g transform="rotate(45 50 50)">
-      <path d="M 35.011 29.370 A 25.5 25.5 0 0 1 64.989 29.370" />
-      <path d="M 70.630 35.011 A 25.5 25.5 0 0 1 70.630 64.989" />
-      <path d="M 64.989 70.630 A 25.5 25.5 0 0 1 35.011 70.630" />
-      <path d="M 29.370 64.989 A 25.5 25.5 0 0 1 29.370 35.011" />
-    </g>
+    <!-- Goal loop: outer system boundary + inner feedback loop -->
+    <g stroke-linecap="round" fill="none">
+      <g stroke="#000000" stroke-width="4">
+        <path d="M 29.375 23.602 A 33.5 33.5 0 0 1 70.625 23.602" />
+        <path d="M 76.398 29.375 A 33.5 33.5 0 0 1 76.398 70.625" />
+        <path d="M 70.625 76.398 A 33.5 33.5 0 0 1 29.375 76.398" />
+        <path d="M 23.602 70.625 A 33.5 33.5 0 0 1 23.602 29.375" />
+      </g>
+      <g stroke="#000000" stroke-width="3.2" transform="rotate(45 50 50)">
+        <path d="M 35.011 29.370 A 25.5 25.5 0 0 1 64.989 29.370" />
+        <path d="M 70.630 35.011 A 25.5 25.5 0 0 1 70.630 64.989" />
+        <path d="M 64.989 70.630 A 25.5 25.5 0 0 1 35.011 70.630" />
+        <path d="M 29.370 64.989 A 25.5 25.5 0 0 1 29.370 35.011" />
+      </g>
     </g>
     <!-- Central hub -->
     <path
