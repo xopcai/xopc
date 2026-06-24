@@ -98,6 +98,7 @@ export const MessageList = memo(function MessageList({
             onSendUserMessage={onSendUserMessage}
             onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
             onExtractAssistantTask={onExtractAssistantTask}
+            suppressAssistantActions={streaming}
           />
         );
       })}

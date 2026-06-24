@@ -76,6 +76,7 @@ export const MessageBubble = memo(function MessageBubble({
   onExtractAssistantTask,
   readonly = false,
   density = 'normal',
+  suppressAssistantActions = false,
 }: {
   message: Message;
   authToken?: string;
@@ -103,6 +104,8 @@ export const MessageBubble = memo(function MessageBubble({
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
   readonly?: boolean;
   density?: 'normal' | 'compact';
+  /** Hide assistant footer actions while the session is receiving live SSE updates. */
+  suppressAssistantActions?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -230,13 +233,14 @@ export const MessageBubble = memo(function MessageBubble({
     Boolean(progressForMeta?.message) ||
     (isStreaming && !streamingThinking);
 
+  const assistantActionsVisible = isAssistant && !readonly && !isStreaming && !suppressAssistantActions;
   const copyMarkdown = useMemo(
-    () => (isAssistant ? getAssistantCopyMarkdown(message.content ?? []) : ''),
-    [isAssistant, message.content],
+    () => (assistantActionsVisible ? getAssistantCopyMarkdown(message.content ?? []) : ''),
+    [assistantActionsVisible, message.content],
   );
   const copyPlainText = useMemo(
-    () => (isAssistant && copyMarkdown ? getAssistantCopyPlainText(message.content ?? []) : ''),
-    [isAssistant, copyMarkdown, message.content],
+    () => (assistantActionsVisible && copyMarkdown ? getAssistantCopyPlainText(message.content ?? []) : ''),
+    [assistantActionsVisible, copyMarkdown, message.content],
   );
   const userCopyText = useMemo(() => {
     if (!isUser) return '';
@@ -597,7 +601,7 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         ) : null}
 
-        {isAssistant && copyMarkdown && !readonly ? (
+        {assistantActionsVisible && copyMarkdown ? (
           <div className="mt-2 flex shrink-0 flex-wrap items-center gap-2 overflow-visible">
             <button
               type="button"
