@@ -30,6 +30,53 @@ describe('prepareStreamingMarkdown', () => {
     expect(repaired).toBe('| Name | Age |\n| --- | --- |');
   });
 
+  it('keeps a streaming table renderable when the separator row has only started', () => {
+    const raw = 'Here is the table:\n\n| Name | Age |\n|';
+    const repaired = prepareStreamingMarkdown(raw);
+
+    expect(parsesTable(raw)).toBe(false);
+    expect(parsesTable(repaired)).toBe(true);
+    expect(repaired).toBe('Here is the table:\n\n| Name | Age |\n| --- | --- |');
+  });
+
+  it('does not insert a blank line while waiting for an indented separator row', () => {
+    const raw = 'Here is the table:\n\n| Name | Age |\n ';
+    const repaired = prepareStreamingMarkdown(raw);
+
+    expect(parsesTable(raw)).toBe(false);
+    expect(parsesTable(repaired)).toBe(true);
+    expect(repaired).toBe('Here is the table:\n\n| Name | Age |\n| --- | --- |');
+  });
+
+  it('keeps common table prefixes renderable after the table first appears', () => {
+    const raw = 'Here is the table:\n\n| Name | Age |\n | --- | --- |\n | Ada | 36 |';
+    let seenTable = false;
+
+    for (let i = 1; i <= raw.length; i++) {
+      const prefix = raw.slice(0, i);
+      const isTable = parsesTable(prepareStreamingMarkdown(prefix));
+      if (isTable) seenTable = true;
+      if (seenTable) expect(isTable, `prefix ${i}: ${JSON.stringify(prefix)}`).toBe(true);
+    }
+  });
+
+  it('preserves container prefixes for streaming tables inside lists and blockquotes', () => {
+    const samples = [
+      '- item\n  | Name | Age |\n  | --- | --- |\n  | Ada | 36 |',
+      '> | Name | Age |\n> | --- | --- |\n> | Ada | 36 |',
+    ];
+
+    for (const raw of samples) {
+      let seenTable = false;
+      for (let i = 1; i <= raw.length; i++) {
+        const prefix = raw.slice(0, i);
+        const isTable = parsesTable(prepareStreamingMarkdown(prefix));
+        if (isTable) seenTable = true;
+        if (seenTable) expect(isTable, `prefix ${i}: ${JSON.stringify(prefix)}`).toBe(true);
+      }
+    }
+  });
+
   it('completes a partial final row without mutating non-table text', () => {
     const raw = '| Name | Age |\n| --- | --- |\n| Ada | 36';
     const repaired = prepareStreamingMarkdown(raw);

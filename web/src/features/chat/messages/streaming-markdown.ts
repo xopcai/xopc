@@ -1,7 +1,36 @@
 import type { MessageContent } from '@/features/chat/messages/messages.types';
 
+function tableLinePrefix(line: string): string {
+  const withoutCr = line.replace(/\r$/, '');
+  let prefix = '';
+  let rest = withoutCr;
+
+  const leading = rest.match(/^\s{0,3}/)?.[0] ?? '';
+  prefix += leading;
+  rest = rest.slice(leading.length);
+
+  while (rest.startsWith('>')) {
+    prefix += '>';
+    rest = rest.slice(1);
+    if (rest.startsWith(' ')) {
+      prefix += ' ';
+      rest = rest.slice(1);
+    }
+    const nestedLeading = rest.match(/^\s{0,3}/)?.[0] ?? '';
+    prefix += nestedLeading;
+    rest = rest.slice(nestedLeading.length);
+  }
+
+  return prefix;
+}
+
+function tableLineBody(line: string): string {
+  const withoutCr = line.replace(/\r$/, '');
+  return withoutCr.slice(tableLinePrefix(withoutCr).length);
+}
+
 function splitPipeCells(line: string): string[] {
-  return line
+  return tableLineBody(line)
     .trim()
     .replace(/^\|/, '')
     .replace(/\|$/, '')
@@ -10,32 +39,37 @@ function splitPipeCells(line: string): string[] {
 }
 
 function pipeCount(line: string): number {
-  return (line.match(/\|/g) ?? []).length;
+  return (tableLineBody(line).match(/\|/g) ?? []).length;
 }
 
 function isLikelyPipeTableRow(line: string): boolean {
-  const trimmed = line.trim();
-  if (!trimmed) return false;
-  return trimmed.startsWith('|') ? splitPipeCells(trimmed).length >= 2 : pipeCount(trimmed) >= 2;
+  const body = tableLineBody(line).trim();
+  if (!body) return false;
+  return body.startsWith('|') ? splitPipeCells(line).length >= 2 : pipeCount(line) >= 2;
 }
 
 function isSeparatorLike(line: string): boolean {
-  const trimmed = line.trim();
-  return trimmed.includes('-') && /^[\s|:-]+$/.test(trimmed);
+  const body = tableLineBody(line).trim();
+  return body.includes('-') && /^[\s|:-]+$/.test(body);
+}
+
+function isStreamingSeparatorPrefix(line: string): boolean {
+  const body = tableLineBody(line).trim();
+  return body.length > 0 && /^[\s|:]+$/.test(body);
 }
 
 function separatorColumnCount(line: string): number {
   return splitPipeCells(line).filter((cell) => cell.includes('-')).length;
 }
 
-function buildSeparator(columns: number): string {
-  return `| ${Array.from({ length: columns }, () => '---').join(' | ')} |`;
+function buildSeparator(columns: number, prefix = ''): string {
+  return `${prefix}| ${Array.from({ length: columns }, () => '---').join(' | ')} |`;
 }
 
 function completePipeRow(line: string, columns: number): string {
   const cells = splitPipeCells(line);
   while (cells.length < columns) cells.push('');
-  return `| ${cells.slice(0, columns).join(' | ')} |`;
+  return `${tableLinePrefix(line)}| ${cells.slice(0, columns).join(' | ')} |`;
 }
 
 function isInsideUnclosedFence(content: string): boolean {
@@ -65,16 +99,26 @@ export function prepareStreamingMarkdown(content: string): string {
   const header = lines[headerIndex] ?? '';
   const columns = splitPipeCells(header).length;
   if (columns < 2) return content;
+  const tablePrefix = tableLinePrefix(header);
 
   const separatorIndex = headerIndex + 1;
   const separator = lines[separatorIndex];
-  if (separator === undefined || !separator.trim()) {
-    return `${content}${content.endsWith('\n') ? '' : '\n'}${buildSeparator(columns)}`;
+  if (separator === undefined) {
+    return `${content}${content.endsWith('\n') ? '' : '\n'}${buildSeparator(columns, tablePrefix)}`;
   }
 
-  if (isSeparatorLike(separator) && separatorColumnCount(separator) < columns) {
+  if (!tableLineBody(separator).trim()) {
     const next = [...lines];
-    next[separatorIndex] = buildSeparator(columns);
+    next[separatorIndex] = buildSeparator(columns, tablePrefix);
+    return next.join('\n');
+  }
+
+  if (
+    (isSeparatorLike(separator) && separatorColumnCount(separator) < columns) ||
+    isStreamingSeparatorPrefix(separator)
+  ) {
+    const next = [...lines];
+    next[separatorIndex] = buildSeparator(columns, tablePrefix);
     return next.join('\n');
   }
 
