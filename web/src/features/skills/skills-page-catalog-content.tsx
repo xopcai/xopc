@@ -177,7 +177,10 @@ export function SkillsPageCatalogContent(p: Props) {
                       </h3>
                       <div
                         role="group"
-                        className="flex shrink-0 items-center gap-1"
+                        className={cn(
+                          'hidden shrink-0 items-center gap-1 transition-opacity sm:flex',
+                          'sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100',
+                        )}
                         onClick={(e) => e.stopPropagation()}
                         onKeyDown={(e) => e.stopPropagation()}
                       >
@@ -189,9 +192,7 @@ export function SkillsPageCatalogContent(p: Props) {
                             disabled={togglingSkillName === row.name}
                             onClick={() => void onSkillToggle(row.name, true)}
                           >
-                            {togglingSkillName === row.name
-                              ? sk.uploading
-                              : sk.detailModalEnable}
+                            {togglingSkillName === row.name ? sk.uploading : sk.detailModalEnable}
                           </Button>
                         ) : null}
                         <Button
@@ -204,9 +205,7 @@ export function SkillsPageCatalogContent(p: Props) {
                             togglingSkillName === row.name
                           }
                           title={!enabled ? sk.useRequiresEnabled : undefined}
-                          onClick={() =>
-                            void onUseSkillInChat({ name: row.name, source: 'catalog' })
-                          }
+                          onClick={() => void onUseSkillInChat({ name: row.name, source: 'catalog' })}
                         >
                           {usingSkillInChatName === row.name
                             ? sk.previewUseInChatBusy
@@ -250,6 +249,36 @@ export function SkillsPageCatalogContent(p: Props) {
                     </div>
                   </div>
                 </div>
+              </div>
+              <div
+                role="group"
+                className="mt-3 flex items-center justify-end gap-1 border-t border-edge-subtle pt-3 sm:hidden"
+              >
+                {!enabled ? (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                    disabled={togglingSkillName === row.name}
+                    onClick={() => void onSkillToggle(row.name, true)}
+                  >
+                    {togglingSkillName === row.name ? sk.uploading : sk.detailModalEnable}
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                  disabled={
+                    !enabled ||
+                    usingSkillInChatName === row.name ||
+                    togglingSkillName === row.name
+                  }
+                  title={!enabled ? sk.useRequiresEnabled : undefined}
+                  onClick={() => void onUseSkillInChat({ name: row.name, source: 'catalog' })}
+                >
+                  {usingSkillInChatName === row.name ? sk.previewUseInChatBusy : sk.previewUseInChat}
+                </Button>
               </div>
             </article>
             );

@@ -36,28 +36,6 @@ function formatCount(template: string, count: number): string {
   return template.replace('{{count}}', String(count));
 }
 
-function agentPrimaryFacts(ag: GatewayAgentRow, a: AgentsSettingsMessages): Array<{
-  label: string;
-  value: string;
-  title?: string;
-}> {
-  const model = ag.model?.primary?.trim();
-  const workspace = ag.workspace.trim();
-
-  return [
-    {
-      label: a.listModelLabel,
-      value: model || a.listInheritedValue,
-      title: model || undefined,
-    },
-    {
-      label: a.listWorkspaceLabel,
-      value: workspace || a.listUnsetValue,
-      title: workspace || undefined,
-    },
-  ];
-}
-
 function agentCapabilityMeta(ag: GatewayAgentRow, a: AgentsSettingsMessages): string {
   const disabledTools = ag.tools.effectiveDisable.length;
   const skillCount = ag.skills.effectiveAllowlist?.length ?? 0;
@@ -145,7 +123,6 @@ export function AgentsListGrid(props: {
           const title = agentListDisplayName(ag, a);
           const monoId = ag.id;
           const descTrim = agentListDisplayDescription(ag, a);
-          const facts = agentPrimaryFacts(ag, a);
           const capabilityMeta = agentCapabilityMeta(ag, a);
           const capabilityLabels = agentCapabilityLabels(ag, a);
           return (
@@ -207,16 +184,6 @@ export function AgentsListGrid(props: {
                     >
                       {descTrim || a.listNoDescription}
                     </p>
-                    <div className="mt-3 space-y-1 text-sm leading-5 text-fg-muted">
-                      {facts.map((item) => (
-                        <p key={item.label} className="flex min-w-0 items-baseline gap-2">
-                          <span className="shrink-0 text-xs font-medium text-fg-subtle">{item.label}</span>
-                          <TextTooltip text={item.title ?? item.value} className="min-w-0 truncate">
-                            {item.value}
-                          </TextTooltip>
-                        </p>
-                      ))}
-                    </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1.5" title={capabilityMeta}>
                     {capabilityLabels.map((label) => (
@@ -234,7 +201,7 @@ export function AgentsListGrid(props: {
                 <div className="mt-auto pt-4">
                   <Button
                     type="button"
-                    variant="primary"
+                    variant="secondary"
                     disabled={busy}
                     onClick={() => onChatWithAgent(ag.id)}
                     className="w-full rounded-2xl py-2.5"

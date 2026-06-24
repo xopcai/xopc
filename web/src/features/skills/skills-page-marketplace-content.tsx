@@ -27,6 +27,8 @@ type Props = Pick<
   | 'setMarketPage'
   | 'isSkillInstalledByName'
   | 'openMarketplaceDetail'
+  | 'onMarketInstall'
+  | 'installingMarketName'
   | 'onUseSkillInChat'
   | 'usingSkillInChatName'
   | 'searchInputActive'
@@ -52,6 +54,8 @@ export function SkillsPageMarketplaceContent(p: Props) {
     setMarketPage,
     isSkillInstalledByName,
     openMarketplaceDetail,
+    onMarketInstall,
+    installingMarketName,
     onUseSkillInChat,
     usingSkillInChatName,
     searchInputActive,
@@ -251,28 +255,45 @@ export function SkillsPageMarketplaceContent(p: Props) {
                           <div className="flex items-start justify-between gap-2">
                             <h3
                               id={`mp-skill-title-${row.id}`}
-                              className="min-w-0 flex-1 text-[15px] font-semibold leading-snug tracking-tight text-fg"
+                              className="min-w-0 flex-1 truncate text-[15px] font-semibold leading-snug tracking-tight text-fg"
                             >
-                              <span className="flex min-w-0 items-center gap-1.5">
-                                <span className="truncate">{row.name}</span>
-                                {!installed ? (
-                                  <span className="shrink-0 text-[10px] font-normal leading-none text-fg-subtle">
-                                    {sk.marketplaceNotInstalled}
-                                  </span>
-                                ) : null}
-                              </span>
+                              {row.name}
                             </h3>
                             <div
                               role="group"
-                              className="flex shrink-0 items-center gap-1"
+                              className={cn(
+                                'hidden shrink-0 items-center gap-1 transition-opacity sm:flex',
+                                'sm:pointer-events-none sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100',
+                              )}
                               onClick={(e) => e.stopPropagation()}
                               onKeyDown={(e) => e.stopPropagation()}
                             >
+                              {!installed ? (
+                                <Button
+                                  type="button"
+                                  variant="primary"
+                                  className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                                  disabled={mpLoading || installingMarketName === packageName}
+                                  onClick={() =>
+                                    void onMarketInstall(packageName, {
+                                      providerOverride: row.providerId ?? null,
+                                    })
+                                  }
+                                >
+                                  {installingMarketName === packageName
+                                    ? sk.uploading
+                                    : sk.marketplaceInstall}
+                                </Button>
+                              ) : null}
                               <Button
                                 type="button"
                                 variant="secondary"
                                 className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
-                                disabled={mpLoading || usingSkillInChatName === packageName}
+                                disabled={
+                                  mpLoading ||
+                                  usingSkillInChatName === packageName ||
+                                  installingMarketName === packageName
+                                }
                                 onClick={() =>
                                   void onUseSkillInChat({
                                     name: packageName,
@@ -371,6 +392,47 @@ export function SkillsPageMarketplaceContent(p: Props) {
                           </div>
                         </div>
                       </div>
+                    </div>
+                    <div
+                      role="group"
+                      className="mt-3 flex items-center justify-end gap-1 border-t border-edge-subtle pt-3 sm:hidden"
+                    >
+                      {!installed ? (
+                        <Button
+                          type="button"
+                          variant="primary"
+                          className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                          disabled={mpLoading || installingMarketName === packageName}
+                          onClick={() =>
+                            void onMarketInstall(packageName, {
+                              providerOverride: row.providerId ?? null,
+                            })
+                          }
+                        >
+                          {installingMarketName === packageName ? sk.uploading : sk.marketplaceInstall}
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="h-8 shrink-0 whitespace-nowrap px-2.5 text-xs font-medium"
+                        disabled={
+                          mpLoading ||
+                          usingSkillInChatName === packageName ||
+                          installingMarketName === packageName
+                        }
+                        onClick={() =>
+                          void onUseSkillInChat({
+                            name: packageName,
+                            source: 'store',
+                            providerOverride: row.providerId ?? null,
+                          })
+                        }
+                      >
+                        {usingSkillInChatName === packageName
+                          ? sk.previewUseInChatBusy
+                          : sk.previewUseInChat}
+                      </Button>
                     </div>
                   </article>
                 );
