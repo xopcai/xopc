@@ -368,19 +368,20 @@ async function resolveWindowLoad(): Promise<
         },
       };
       const child = spawnGatewayProcess(spawnOpts);
-      await waitForGatewayReady(port, token, child);
-      registerEmbeddedGatewayRuntime({ ...spawnOpts, authToken: token });
-      setEmbeddedGatewayCredentials(port, token);
+      const readyPort = await waitForGatewayReady(port, token, child);
+      const readySpawnOpts = { ...spawnOpts, port: readyPort };
+      registerEmbeddedGatewayRuntime({ ...readySpawnOpts, authToken: token });
+      setEmbeddedGatewayCredentials(readyPort, token);
       void maybeAutoStartTunnel();
       startTunnelStatusPolling();
+      const u = new URL(`http://127.0.0.1:${readyPort}/`);
+      u.searchParams.set('token', token);
+      u.hash = '#/chat';
+      return { kind: 'url', href: u.toString(), openDevTools: false };
     } catch (e) {
       stopGatewayProcess();
       throw e;
     }
-    const u = new URL(`http://127.0.0.1:${port}/`);
-    u.searchParams.set('token', token);
-    u.hash = '#/chat';
-    return { kind: 'url', href: u.toString(), openDevTools: false };
   }
 
   return { kind: 'file', path: join(import.meta.dirname, '../renderer/index.html') };

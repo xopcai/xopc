@@ -1,6 +1,6 @@
 /**
- * Renders extension toolbar / store icons from the gateway app logo (single source of truth).
- * Source: web/public/logo.svg
+ * Renders extension toolbar / store icons from the gateway app icon (single source of truth).
+ * Source: web/public/favicon.svg
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -10,7 +10,7 @@ import { Resvg } from '@resvg/resvg-js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, '../../..');
-const svgPath = join(repoRoot, 'web/public/logo.svg');
+const svgPath = join(repoRoot, 'web/public/favicon.svg');
 const outDir = resolve(__dirname, '../icons');
 
 const svg = readFileSync(svgPath);

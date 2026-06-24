@@ -45,7 +45,12 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
     persistWorkspacePath: true,
   });
 
-  const preferredPort = initResult.config.gateway?.port ?? getDefaultGatewayPort();
+  const configuredPort = initResult.config.gateway?.port;
+  // Early Electron builds reused the CLI default port. Move those desktop-owned configs
+  // onto the desktop range so the app and `xopc gateway` can run side by side.
+  const preferredPort = configuredPort === 18790
+    ? getDefaultGatewayPort()
+    : (configuredPort ?? getDefaultGatewayPort());
   const listenHost = resolveGatewayEffectiveHost(initResult.config);
   const bindHost = listenHost === '::' ? '::' : listenHost;
   const resolvedPort = await pickAvailablePort(bindHost, preferredPort, 40);
