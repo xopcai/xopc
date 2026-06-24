@@ -153,7 +153,7 @@ Telegram、微信、网页聊天及扩展提供的通道，共用进入智能体
 | CLI | Commander.js |
 | 验证 | Zod (配置) + TypeBox (工具) |
 | 日志 | Pino |
-| Cron | node-cron |
+| Cron | cron-parser + 内置调度器 |
 | HTTP 服务器 | Hono |
 | Web UI | React + Vite + Tailwind v4（网关控制台） |
 | 测试 | Vitest |

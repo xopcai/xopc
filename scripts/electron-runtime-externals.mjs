@@ -8,12 +8,11 @@ export const ELECTRON_GATEWAY_EXTERNALS = [
   '@vscode/ripgrep',
   'silk-wasm',
   'playwright-core',
-  'node-cron',
   'fsevents',
 ];
 
 /** Real node_modules packages required by the packaged gateway/extensions. */
-export const ELECTRON_PACKAGED_DEPENDENCIES = ['node-cron', 'silk-wasm'];
+export const ELECTRON_PACKAGED_DEPENDENCIES = ['silk-wasm'];
 
 /** @param {string} repoRoot */
 export function resolveInstalledElectronVersion(repoRoot) {

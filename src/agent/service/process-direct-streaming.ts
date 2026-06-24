@@ -357,6 +357,16 @@ export async function* runProcessDirectStreaming(
         pushVisible({ type: 'error', content: formatStreamError(em) });
       }
     } finally {
+      if (!userAborted && channel === 'webchat') {
+        try {
+          const ttsAudioEvent = await deps.maybeEmitWebchatTts(sessionKey, inboundVoice);
+          if (ttsAudioEvent) {
+            queue.push(ttsAudioEvent);
+          }
+        } catch (ttsErr) {
+          deps.log.warn({ err: ttsErr, sessionKey }, 'Failed to emit TTS audio before stream close');
+        }
+      }
       queue.close();
     }
   })();
@@ -389,13 +399,6 @@ export async function* runProcessDirectStreaming(
         deps.reloadWebchatTranscript?.(sessionKey);
       } catch (err) {
         deps.log.warn({ err, sessionKey }, 'Failed to persist webchat slash command receipt');
-      }
-    }
-
-    if (!userAborted) {
-      const ttsAudioEvent = await deps.maybeEmitWebchatTts(sessionKey, inboundVoice);
-      if (ttsAudioEvent) {
-        yield ttsAudioEvent;
       }
     }
 

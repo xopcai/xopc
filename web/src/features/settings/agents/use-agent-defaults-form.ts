@@ -10,7 +10,6 @@ import {
 import { validateTypedModelsForSave } from '@/features/settings/agents/typed-models-lib';
 import type { MessageBundle } from '@/i18n/messages';
 import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-form-draft';
-import { showToast } from '@/lib/toast';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export type UseAgentDefaultsFormResult = {
@@ -74,6 +73,7 @@ export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgen
 
   const update = useCallback((patch: Partial<AgentDefaultsState>) => {
     dirtyRef.current = true;
+    setSaveOk(false);
     dispatchForm({ type: 'patch', patch });
   }, []);
 
@@ -108,7 +108,6 @@ export function useAgentDefaultsForm(a: MessageBundle['agentSettings']): UseAgen
       dirtyRef.current = false;
       dispatchForm({ type: 'saved', value: form });
       setSaveOk(true);
-      showToast({ type: 'success', title: a.saved });
       void mutate();
       return true;
     } catch (e) {

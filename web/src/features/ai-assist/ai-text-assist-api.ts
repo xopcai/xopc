@@ -24,6 +24,7 @@ export interface TextAssistRequest {
 
 export interface TextAssistResponse {
   text: string;
+  thinking?: string;
 }
 
 interface TextAssistStreamPayload {
@@ -52,7 +53,10 @@ function getSseErrorMessage(payload: TextAssistStreamPayload): string {
   return 'AI suggestion failed';
 }
 
-function handleSseBlock(block: string, onDelta?: (text: string) => void): string | null {
+function handleSseBlock(
+  block: string,
+  options: { onDelta?: (text: string) => void; onThinkingDelta?: (text: string) => void } = {},
+): string | null {
   const data = block
     .split('\n')
     .filter((line) => line.startsWith('data:'))
@@ -62,7 +66,11 @@ function handleSseBlock(block: string, onDelta?: (text: string) => void): string
   if (!payload) return null;
 
   if (payload.type === 'text_delta' && typeof payload.delta === 'string') {
-    onDelta?.(payload.delta);
+    options.onDelta?.(payload.delta);
+    return null;
+  }
+  if (payload.type === 'thinking_delta' && typeof payload.delta === 'string') {
+    options.onThinkingDelta?.(payload.delta);
     return null;
   }
   if (payload.type === 'done' && typeof payload.text === 'string') {
@@ -76,7 +84,7 @@ function handleSseBlock(block: string, onDelta?: (text: string) => void): string
 
 export async function requestTextAssist(
   request: TextAssistRequest,
-  options: { onDelta?: (text: string) => void } = {},
+  options: { onDelta?: (text: string) => void; onThinkingDelta?: (text: string) => void } = {},
 ): Promise<TextAssistResponse> {
   const res = await apiFetch(apiUrl('/api/ai/text-assist'), {
     method: 'POST',
@@ -103,6 +111,7 @@ export async function requestTextAssist(
   const decoder = new TextDecoder();
   let buffer = '';
   let text = '';
+  let thinking = '';
 
   while (true) {
     const { done, value } = await reader.read();
@@ -111,9 +120,15 @@ export async function requestTextAssist(
       const blocks = buffer.split(/\r?\n\r?\n/);
       buffer = blocks.pop() ?? '';
       for (const block of blocks) {
-        const finalText = handleSseBlock(block, (delta) => {
-          text += delta;
-          options.onDelta?.(delta);
+        const finalText = handleSseBlock(block, {
+          onDelta: (delta) => {
+            text += delta;
+            options.onDelta?.(delta);
+          },
+          onThinkingDelta: (delta) => {
+            thinking += delta;
+            options.onThinkingDelta?.(delta);
+          },
         });
         if (finalText !== null) {
           text = finalText;
@@ -124,9 +139,15 @@ export async function requestTextAssist(
   }
 
   if (buffer.trim()) {
-    const finalText = handleSseBlock(buffer, (delta) => {
-      text += delta;
-      options.onDelta?.(delta);
+    const finalText = handleSseBlock(buffer, {
+      onDelta: (delta) => {
+        text += delta;
+        options.onDelta?.(delta);
+      },
+      onThinkingDelta: (delta) => {
+        thinking += delta;
+        options.onThinkingDelta?.(delta);
+      },
     });
     if (finalText !== null) {
       text = finalText;
@@ -137,5 +158,5 @@ export async function requestTextAssist(
   if (!trimmed) {
     throw new Error('AI returned an empty suggestion');
   }
-  return { text: trimmed };
+  return { text: trimmed, thinking: thinking.trim() || undefined };
 }
