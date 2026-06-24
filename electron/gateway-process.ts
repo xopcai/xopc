@@ -8,6 +8,8 @@ import { app } from 'electron';
 
 import type { GatewayBindMode } from '../src/config/schema.js';
 
+import { parseGatewayListenPortFromOutput } from './gateway-output.js';
+
 /** Default listen port for the gateway subprocess when started by Electron (not CLI). Kept separate from CLI default (18790) so desktop + `xopc gateway` can run side by side. */
 const DEFAULT_PORT = 28790;
 
@@ -251,16 +253,26 @@ export async function waitForGatewayReady(
   token: string,
   child: ChildProcess,
   timeoutMs = 120_000,
-): Promise<void> {
+): Promise<number> {
   const deadline = Date.now() + timeoutMs;
-  const url = `http://127.0.0.1:${port}/api/config`;
+  let readyPort = port;
+  let url = `http://127.0.0.1:${readyPort}/api/config`;
   while (Date.now() < deadline) {
+    const observedPort = parseGatewayListenPortFromOutput(gatewayLogBuffer);
+    if (observedPort !== null && observedPort !== readyPort) {
+      console.warn(
+        `[gateway] detected listen port ${observedPort} from child output; probing that port instead of ${readyPort}`,
+      );
+      readyPort = observedPort;
+      url = `http://127.0.0.1:${readyPort}/api/config`;
+    }
+
     if (child.exitCode !== null || child.signalCode !== null) {
       const logHint = gatewayLogSnippetForError();
       throw new Error(
         `Gateway process exited before becoming ready (code=${child.exitCode}, signal=${child.signalCode}). ` +
           (logHint ? `Output:\n${logHint}\n\n` : '') +
-          `Port ${port} may be in use by another program, or the gateway failed to start.`,
+          `Port ${readyPort} may be in use by another program, or the gateway failed to start.`,
       );
     }
     try {
@@ -268,7 +280,7 @@ export async function waitForGatewayReady(
         headers: { Authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(2000),
       });
-      if (res.ok) return;
+      if (res.ok) return readyPort;
     } catch {
       /* retry */
     }
@@ -299,9 +311,9 @@ export async function restartEmbeddedGatewayFromSavedConfig(params: {
     onUnexpectedExit: embeddedGatewayRuntime.onUnexpectedExit,
   };
   const child = spawnGatewayProcess(opts);
-  await waitForGatewayReady(port, token, child);
-  embeddedGatewayRuntime = { ...opts, authToken: token };
-  return { port, token };
+  const readyPort = await waitForGatewayReady(port, token, child);
+  embeddedGatewayRuntime = { ...opts, port: readyPort, authToken: token };
+  return { port: readyPort, token };
 }
 
 export function stopGatewayProcess(): void {
