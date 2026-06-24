@@ -6,7 +6,8 @@ hero:
   text: Goal Loop OS
   tagline: "A local-first AI assistant that keeps long-term goals moving across terminal, web, desktop, mobile app, and messengers."
   image:
-    src: /logo.svg
+    light: /logo.svg
+    dark: /logo-dark.svg
     alt: xopc
   actions:
     - theme: brand
