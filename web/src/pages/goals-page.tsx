@@ -22,6 +22,8 @@ import { type DragEvent, useCallback, useEffect, useLayoutEffect, useMemo, useSt
 import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/api/registry-api';
+import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { messages } from '@/i18n/messages';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -75,10 +77,17 @@ type CreateGoalDraft = {
   description: string;
   checklist: string[];
   priority: GoalItem['priority'];
+  deadlineMode: 'none' | 'today' | 'tomorrow' | 'friday' | 'custom';
   deadline: string;
   maxTurns: string;
   agentId: string;
   judgeModelRef: string;
+};
+
+type GoalCreateOptions = {
+  defaultAgentId: string;
+  agents: GatewayAgentRow[];
+  models: ConfiguredModel[];
 };
 
 const BOARD_STATUSES: GoalStatus[] = ['active', 'paused', 'blocked', 'needs_input', 'done', 'archived'];
@@ -391,13 +400,58 @@ function emptyCreateDraft(): CreateGoalDraft {
   return {
     title: '',
     description: '',
-    checklist: ['', '', ''],
+    checklist: [''],
     priority: 'normal',
+    deadlineMode: 'none',
     deadline: '',
     maxTurns: '10',
     agentId: '',
     judgeModelRef: '',
   };
+}
+
+function formatDatetimeLocal(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return [
+    date.getFullYear(),
+    '-',
+    pad(date.getMonth() + 1),
+    '-',
+    pad(date.getDate()),
+    'T',
+    pad(date.getHours()),
+    ':',
+    pad(date.getMinutes()),
+  ].join('');
+}
+
+function endOfLocalDay(offsetDays: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + offsetDays);
+  date.setHours(23, 59, 0, 0);
+  return formatDatetimeLocal(date);
+}
+
+function endOfThisFriday(): string {
+  const date = new Date();
+  const day = date.getDay();
+  const friday = 5;
+  const daysUntilFriday = day <= friday ? friday - day : 7 - day + friday;
+  date.setDate(date.getDate() + daysUntilFriday);
+  date.setHours(23, 59, 0, 0);
+  return formatDatetimeLocal(date);
+}
+
+function nextDeadlineForMode(mode: CreateGoalDraft['deadlineMode']): string {
+  if (mode === 'today') return endOfLocalDay(0);
+  if (mode === 'tomorrow') return endOfLocalDay(1);
+  if (mode === 'friday') return endOfThisFriday();
+  if (mode === 'custom') {
+    const date = new Date();
+    date.setHours(date.getHours() + 1, 0, 0, 0);
+    return formatDatetimeLocal(date);
+  }
+  return '';
 }
 
 function aiChecklistDraft(draft: CreateGoalDraft, t: GoalsPageMessages): string[] {
@@ -421,12 +475,14 @@ function GoalCreateDialog({
   open,
   t,
   busy,
+  options,
   onClose,
   onCreate,
 }: {
   open: boolean;
   t: GoalsPageMessages;
   busy: boolean;
+  options: GoalCreateOptions;
   onClose: () => void;
   onCreate: (draft: CreateGoalDraft) => Promise<void>;
 }) {
@@ -442,7 +498,32 @@ function GoalCreateDialog({
     }
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !options.defaultAgentId) return;
+    setDraft((prev) => (prev.agentId ? prev : { ...prev, agentId: options.defaultAgentId }));
+  }, [open, options.defaultAgentId]);
+
   const patch = (next: Partial<CreateGoalDraft>) => setDraft((prev) => ({ ...prev, ...next }));
+  const agents = options.agents.length ? options.agents : [{
+    id: options.defaultAgentId || 'main',
+    workspace: '',
+    profileDir: '',
+    typedModels: { defaults: [], effective: [] },
+    isDefault: true,
+    skills: { defaults: [] },
+    tools: { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
+  } satisfies GatewayAgentRow];
+  const selectedAgent = agents.find((agent) => agent.id === draft.agentId) ?? agents.find((agent) => agent.id === options.defaultAgentId) ?? agents[0];
+  const selectedAgentId = draft.agentId || selectedAgent?.id || 'main';
+  const agentModelRoles = [...(selectedAgent?.typedModels.effective ?? [])].sort((a, b) => {
+    if (a.id === 'judge') return -1;
+    if (b.id === 'judge') return 1;
+    return a.id.localeCompare(b.id);
+  });
+  const modelOptions = options.models.filter((model, index, all) => all.findIndex((item) => item.id === model.id) === index);
+  const patchDeadlineMode = (mode: CreateGoalDraft['deadlineMode']) => {
+    patch({ deadlineMode: mode, deadline: nextDeadlineForMode(mode) });
+  };
   const patchChecklist = (index: number, text: string) => {
     setDraft((prev) => ({
       ...prev,
@@ -517,6 +598,7 @@ function GoalCreateDialog({
                     variant="secondary"
                     className="h-8 rounded-lg text-xs"
                     onClick={() => patch({ checklist: aiChecklistDraft(draft, t) })}
+                    disabled={!draft.title.trim() && !draft.description.trim()}
                   >
                     <Sparkles className="size-3.5" aria-hidden />
                     {t.createDialog.aiDraft}
@@ -569,6 +651,25 @@ function GoalCreateDialog({
                 </button>
                 {advancedOpen ? (
                   <div className="grid gap-3 border-t border-edge-subtle p-4 sm:grid-cols-2">
+                    <label className="grid gap-1.5 sm:col-span-2">
+                      <span className="text-sm font-medium text-fg">{t.createDialog.agentId}</span>
+                      <select
+                        value={selectedAgentId}
+                        onChange={(e) => patch({ agentId: e.target.value })}
+                        className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                      >
+                        {agents.map((agent) => (
+                          <option key={agent.id} value={agent.id}>
+                            {(agent.name?.trim() || agent.id) + (agent.isDefault ? ` · ${t.createDialog.defaultAgent}` : ` · ${agent.id}`)}
+                          </option>
+                        ))}
+                      </select>
+                      {selectedAgent?.description ? (
+                        <span className="line-clamp-2 text-xs text-fg-muted">{selectedAgent.description}</span>
+                      ) : selectedAgent?.model?.primary ? (
+                        <span className="truncate text-xs text-fg-muted">{formatMessage(t.createDialog.agentPrimaryModel, { model: selectedAgent.model.primary })}</span>
+                      ) : null}
+                    </label>
                     <label className="grid gap-1.5">
                       <span className="text-sm font-medium text-fg">{t.createDialog.priority}</span>
                       <select
@@ -583,13 +684,29 @@ function GoalCreateDialog({
                     </label>
                     <label className="grid gap-1.5">
                       <span className="text-sm font-medium text-fg">{t.createDialog.deadline}</span>
-                      <input
-                        type="date"
-                        value={draft.deadline}
-                        onChange={(e) => patch({ deadline: e.target.value })}
+                      <select
+                        value={draft.deadlineMode}
+                        onChange={(e) => patchDeadlineMode(e.target.value as CreateGoalDraft['deadlineMode'])}
                         className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-                      />
+                      >
+                        <option value="none">{t.createDialog.deadlineNone}</option>
+                        <option value="today">{t.createDialog.deadlineToday}</option>
+                        <option value="tomorrow">{t.createDialog.deadlineTomorrow}</option>
+                        <option value="friday">{t.createDialog.deadlineFriday}</option>
+                        <option value="custom">{t.createDialog.deadlineCustom}</option>
+                      </select>
                     </label>
+                    {draft.deadlineMode !== 'none' ? (
+                      <label className="grid gap-1.5">
+                        <span className="text-sm font-medium text-fg">{t.createDialog.deadlineAt}</span>
+                        <input
+                          type="datetime-local"
+                          value={draft.deadline}
+                          onChange={(e) => patch({ deadline: e.target.value, deadlineMode: 'custom' })}
+                          className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                        />
+                      </label>
+                    ) : null}
                     <label className="grid gap-1.5">
                       <span className="text-sm font-medium text-fg">{t.createDialog.maxTurns}</span>
                       <input
@@ -601,23 +718,31 @@ function GoalCreateDialog({
                         className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
                       />
                     </label>
-                    <label className="grid gap-1.5">
-                      <span className="text-sm font-medium text-fg">{t.createDialog.agentId}</span>
-                      <input
-                        value={draft.agentId}
-                        onChange={(e) => patch({ agentId: e.target.value })}
-                        placeholder="main"
-                        className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-                      />
-                    </label>
                     <label className="grid gap-1.5 sm:col-span-2">
                       <span className="text-sm font-medium text-fg">{t.createDialog.judgeModel}</span>
-                      <input
+                      <select
                         value={draft.judgeModelRef}
                         onChange={(e) => patch({ judgeModelRef: e.target.value })}
-                        placeholder={t.createDialog.judgeModelPlaceholder}
-                        className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-                      />
+                        className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                      >
+                        <option value="">{t.createDialog.judgeModelPlaceholder}</option>
+                        {agentModelRoles.length ? (
+                          <optgroup label={t.createDialog.agentModelRoles}>
+                            {agentModelRoles.map((role) => (
+                              <option key={`${role.id}:${role.model}`} value={role.model}>
+                                {role.id === 'judge' ? t.createDialog.judgeRole : role.id} · {role.model}
+                              </option>
+                            ))}
+                          </optgroup>
+                        ) : null}
+                        <optgroup label={t.createDialog.configuredModels}>
+                          {modelOptions.map((model) => (
+                            <option key={model.id} value={model.id}>
+                              {model.name} · {model.id}
+                            </option>
+                          ))}
+                        </optgroup>
+                      </select>
                     </label>
                   </div>
                 ) : null}
@@ -791,6 +916,11 @@ export function GoalsPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createOptions, setCreateOptions] = useState<GoalCreateOptions>({
+    defaultAgentId: '',
+    agents: [],
+    models: [],
+  });
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [draggingGoalId, setDraggingGoalId] = useState<string | null>(null);
   const [dropLane, setDropLane] = useState<GoalBoardLaneId | null>(null);
@@ -812,6 +942,39 @@ export function GoalsPage() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadCreateOptions() {
+      const [agentsResult, modelsResult] = await Promise.allSettled([
+        fetchGatewayAgents(),
+        fetchConfiguredModelsCached(),
+      ]);
+      if (cancelled) return;
+      setCreateOptions((prev) => {
+        const defaultAgentId = agentsResult.status === 'fulfilled' ? agentsResult.value.defaultId : prev.defaultAgentId;
+        const agents = agentsResult.status === 'fulfilled' ? agentsResult.value.agents : prev.agents;
+        const models = modelsResult.status === 'fulfilled' ? modelsResult.value : prev.models;
+        return {
+          defaultAgentId,
+          agents: agents.length ? agents : [{
+            id: defaultAgentId || 'main',
+            workspace: '',
+            profileDir: '',
+            typedModels: { defaults: [], effective: [] },
+            isDefault: true,
+            skills: { defaults: [] },
+            tools: { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
+          }],
+          models,
+        };
+      });
+    }
+    void loadCreateOptions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const handler = () => {
@@ -885,7 +1048,7 @@ export function GoalsPage() {
 
   const createFromDraft = useCallback(async (draft: CreateGoalDraft) => {
     const maxTurns = Number.parseInt(draft.maxTurns, 10);
-    const deadlineAt = draft.deadline ? new Date(`${draft.deadline}T23:59:59`).getTime() : undefined;
+    const deadlineAt = draft.deadline ? new Date(draft.deadline).getTime() : undefined;
     setBusy('create');
     setError(null);
     try {
@@ -1052,6 +1215,7 @@ export function GoalsPage() {
         open={createDialogOpen}
         t={t}
         busy={busy === 'create'}
+        options={createOptions}
         onClose={() => setCreateDialogOpen(false)}
         onCreate={createFromDraft}
       />

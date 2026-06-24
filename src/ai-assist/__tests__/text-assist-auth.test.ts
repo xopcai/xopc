@@ -113,6 +113,7 @@ describe('text assist model auth', () => {
     } as const;
     const stream = {
       async *[Symbol.asyncIterator]() {
+        yield { type: 'thinking_delta', delta: 'checking tone' };
         yield { type: 'text_delta', delta: '```markdown\nhello ' };
         yield { type: 'text_delta', delta: 'world\n```' };
       },
@@ -133,9 +134,57 @@ describe('text assist model auth', () => {
 
     expect(events).toEqual([
       { type: 'start', provider: 'local-qwen', modelId: 'model', scenario: 'generic.text' },
+      { type: 'thinking_delta', delta: 'checking tone' },
       { type: 'text_delta', delta: '```markdown\nhello ' },
       { type: 'text_delta', delta: 'world\n```' },
       { type: 'done', text: 'hello world' },
+    ]);
+  });
+
+  it('does not use thinking content as the final suggestion', async () => {
+    const resolvedModel = model({ provider: 'local-qwen', baseUrl: 'http://localhost:11434/v1' });
+    mockedGetDefaultModelSync.mockReturnValue('local-qwen/qwen');
+    mockedResolveModel.mockReturnValue(resolvedModel);
+    mockedGetApiKey.mockResolvedValue(undefined);
+
+    const finalMessage = {
+      role: 'assistant',
+      content: [{ type: 'thinking', thinking: 'private reasoning that should not be shown' }],
+      api: resolvedModel.api,
+      provider: resolvedModel.provider,
+      model: resolvedModel.id,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: 'stop',
+      timestamp: Date.now(),
+    } as const;
+    const stream = {
+      async *[Symbol.asyncIterator]() {
+        yield { type: 'thinking_delta', delta: 'private reasoning that should not be shown' };
+      },
+      result: vi.fn().mockResolvedValue(finalMessage),
+    };
+    mockedCreateExtensionAwareStreamFn.mockReturnValue(() => stream as never);
+
+    const events = [];
+    const generator = streamTextAssist({ input: 'hello', locale: 'en' });
+    await expect(async () => {
+      while (true) {
+        const next = await generator.next();
+        if (next.done) break;
+        events.push(next.value);
+      }
+    }).rejects.toThrow('AI returned an empty suggestion');
+
+    expect(events).toEqual([
+      { type: 'start', provider: 'local-qwen', modelId: 'model', scenario: 'generic.text' },
+      { type: 'thinking_delta', delta: 'private reasoning that should not be shown' },
     ]);
   });
 });

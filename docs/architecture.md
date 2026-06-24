@@ -153,7 +153,7 @@ User Reply / Channel Response
 | CLI | Commander.js |
 | Validation | Zod (config) + TypeBox (tools) |
 | Logging | Pino |
-| Cron | node-cron |
+| Cron | cron-parser + internal scheduler |
 | HTTP Server | Hono |
 | Web UI | React + Vite + Tailwind v4 (gateway console) |
 | Testing | Vitest |

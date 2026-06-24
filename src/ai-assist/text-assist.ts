@@ -1,10 +1,6 @@
 import type { AssistantMessage, UserMessage } from '@earendil-works/pi-ai';
 
-import {
-  extractAssistantText,
-  getAssistantMessageErrorReason,
-  stripCodeFences,
-} from '../agent/goals/judge.js';
+import { getAssistantMessageErrorReason, stripCodeFences } from '../agent/goals/judge.js';
 import type { Config } from '../config/schema.js';
 import { getApiKey, getDefaultModelSync, resolveModel } from '../providers/index.js';
 import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
@@ -44,6 +40,7 @@ export interface TextAssistResult {
 
 export type TextAssistStreamEvent =
   | { type: 'start'; provider: string; modelId: string; scenario: TextAssistScenario }
+  | { type: 'thinking_delta'; delta: string }
   | { type: 'text_delta'; delta: string }
   | { type: 'done'; text: string }
   | { type: 'error'; message: string };
@@ -134,6 +131,20 @@ const SCENARIOS: Record<TextAssistScenario, TextAssistScenarioDefinition> = {
 
 function sanitizeOutput(text: string, max: number): string {
   return stripCodeFences(text).slice(0, max);
+}
+
+function extractAssistantVisibleText(content: unknown): string {
+  if (!Array.isArray(content)) return '';
+
+  let textParts = '';
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue;
+    const typed = block as Record<string, unknown>;
+    if (typed.type === 'text' && typeof typed.text === 'string') {
+      textParts += typed.text;
+    }
+  }
+  return textParts;
 }
 
 function stringifyContext(
@@ -311,15 +322,22 @@ export async function* streamTextAssist(
   let streamedText = '';
 
   for await (const event of stream) {
-    if (event.type === 'text_delta' && typeof event.delta === 'string') {
-      streamedText += event.delta;
-      yield { type: 'text_delta', delta: event.delta };
+    const streamEvent = event as { type?: unknown; delta?: unknown; error?: unknown };
+    if (streamEvent.type === 'text_delta' && typeof streamEvent.delta === 'string') {
+      streamedText += streamEvent.delta;
+      yield { type: 'text_delta', delta: streamEvent.delta };
       continue;
     }
-    if (event.type === 'error') {
+    if (streamEvent.type === 'thinking_delta') {
+      if (typeof streamEvent.delta === 'string' && streamEvent.delta) {
+        yield { type: 'thinking_delta', delta: streamEvent.delta };
+      }
+      continue;
+    }
+    if (streamEvent.type === 'error') {
       const errorMessage =
-        event.error?.errorMessage ||
-        getAssistantMessageErrorReason(event.error) ||
+        ((streamEvent.error as { errorMessage?: string } | undefined)?.errorMessage) ||
+        getAssistantMessageErrorReason(streamEvent.error) ||
         'AI text assist failed';
       throw new Error(errorMessage);
     }
@@ -332,7 +350,7 @@ export async function* streamTextAssist(
   }
 
   const text = sanitizeOutput(
-    streamedText || extractAssistantText(response.content),
+    streamedText || extractAssistantVisibleText(response.content),
     scenario.maxOutputChars ?? MAX_OUTPUT_CHARS,
   );
   if (!text) {

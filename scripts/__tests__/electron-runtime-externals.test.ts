@@ -12,9 +12,10 @@ import {
 
 describe('electron-runtime-externals', () => {
   it('keeps only unavoidable node_modules deps in packaged runtime', () => {
-    expect(ELECTRON_PACKAGED_DEPENDENCIES).toEqual(['node-cron', 'silk-wasm']);
+    expect(ELECTRON_PACKAGED_DEPENDENCIES).toEqual(['silk-wasm']);
     expect(ELECTRON_GATEWAY_EXTERNALS).toContain('playwright-core');
     expect(ELECTRON_PACKAGED_DEPENDENCIES).not.toContain('playwright-core');
+    expect(ELECTRON_PACKAGED_DEPENDENCIES).not.toContain('node-cron');
     expect(ELECTRON_PACKAGED_DEPENDENCIES).not.toContain('@larksuiteoapi/node-sdk');
     expect(ELECTRON_PACKAGED_DEPENDENCIES).not.toContain('ajv');
   });
@@ -25,14 +26,13 @@ describe('electron-runtime-externals', () => {
       version: '0.0.0',
       dependencies: {
         hono: '^4.0.0',
-        'node-cron': '^4.2.1',
         'silk-wasm': '^3.7.1',
       },
       devDependencies: {
         vitest: '^4.0.0',
       },
     });
-    expect(Object.keys(minimal.dependencies)).toEqual(['node-cron', 'silk-wasm']);
+    expect(Object.keys(minimal.dependencies)).toEqual(['silk-wasm']);
     expect(minimal).not.toHaveProperty('devDependencies');
     expect(minimal.name).toBe('@xopcai/xopc');
   });
@@ -44,14 +44,12 @@ describe('electron-runtime-externals', () => {
         name: '@xopcai/xopc',
         version: '0.0.0',
         dependencies: {
-          'node-cron': '^4.2.1',
           'silk-wasm': '^3.7.1',
         },
       },
       repoRoot,
     );
     expect(minimal.dependencies).toEqual({
-      'node-cron': resolveInstalledPackageVersion(repoRoot, 'node-cron'),
       'silk-wasm': resolveInstalledPackageVersion(repoRoot, 'silk-wasm'),
     });
     expect(Object.values(minimal.dependencies as Record<string, string>).every((v) => !v.startsWith('^'))).toBe(true);
@@ -83,7 +81,6 @@ describe('electron-runtime-externals', () => {
       name: 'x',
       version: '0.0.0',
       dependencies: {
-        'node-cron': '^4.2.1',
         'silk-wasm': '^3.7.1',
       },
       devDependencies: {
@@ -99,7 +96,7 @@ describe('electron-runtime-externals', () => {
       buildMinimalElectronPackageJson({
         name: 'x',
         version: '0.0.0',
-        dependencies: { 'node-cron': '^4.2.1' },
+        dependencies: {},
       }),
     ).toThrow(/Missing root dependencies/);
   });

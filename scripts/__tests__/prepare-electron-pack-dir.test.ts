@@ -37,7 +37,6 @@ describe('prepare-electron-pack-dir', () => {
     expect(existsSync(join(packDir, 'dist/extensions'))).toBe(false);
     expect(existsSync(join(packDir, 'dist/gateway/static/root/index.html'))).toBe(true);
     expect(existsSync(join(packDir, 'skills/tools/find-skills/SKILL.md'))).toBe(true);
-    expect(existsSync(join(packDir, 'node_modules/node-cron'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/silk-wasm'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@vscode/ripgrep'))).toBe(false);
     expect(existsSync(join(packDir, '_pack-resources/rg'))).toBe(true);
