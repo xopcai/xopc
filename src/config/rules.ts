@@ -78,6 +78,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'gateway.channelConnectDeferIds', kind: 'restart', description: 'Explicit channel connect defer list' },
   { prefix: 'gateway.channelConnectDeferSkipIds', kind: 'restart', description: 'Channel connect defer skip list' },
   { prefix: 'gateway.share', kind: 'restart', description: 'File share policy' },
+  { prefix: 'gateway.siteShare', kind: 'restart', description: 'Site share policy' },
   {
     prefix: 'gateway.skillsStoreBaseUrl',
     kind: 'restart',

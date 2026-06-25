@@ -3,7 +3,7 @@
  *
  * Covers heartbeat, bind/customBindHost/port, tailscale, auth (mode + token +
  * password + rateLimit + trustedProxy), trustedProxies, allowRealIpFallback,
- * dangerouslyAllowHostHeaderOriginFallback, security, share, publicUrl,
+ * dangerouslyAllowHostHeaderOriginFallback, security, share, siteShare, publicUrl,
  * corsOrigins, maxSseConnections, and channelConnectDefer{Mode,Ids,SkipIds}.
  *
  * Validation policy: each subsection that can reject rejects with a 400 and a
@@ -17,6 +17,7 @@ import type { Config, GatewayBindMode } from '../../../../config/schema.js';
 import { isValidIPv4 } from '../../../../config/gateway-bind.js';
 import { validatePublicUrl } from '../../../../config/public-url.js';
 import { mergeShareConfigPatch } from '../../../../share/share-config.js';
+import { mergeSiteShareConfigPatch } from '../../../../share/site-share-config.js';
 import { isMaskedSecretPatchValue } from '../../lib/mask-secret-length.js';
 import { type PatchResult, PATCH_OK, patchError } from './result.js';
 
@@ -337,6 +338,20 @@ export function applyGatewayPatch(config: Config, body: any): PatchResult {
     const shareResult = mergeShareConfigPatch(config, body.gateway.share as Record<string, unknown>);
     if (shareResult.ok === false) {
       return patchError(shareResult.message);
+    }
+  }
+
+  if (body.gateway?.siteShare !== undefined) {
+    if (
+      typeof body.gateway.siteShare !== 'object' ||
+      body.gateway.siteShare === null ||
+      Array.isArray(body.gateway.siteShare)
+    ) {
+      return patchError('gateway.siteShare must be an object');
+    }
+    const siteShareResult = mergeSiteShareConfigPatch(config, body.gateway.siteShare as Record<string, unknown>);
+    if (siteShareResult.ok === false) {
+      return patchError(siteShareResult.message);
     }
   }
 

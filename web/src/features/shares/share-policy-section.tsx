@@ -181,6 +181,15 @@ function SharePolicyFields({
           onChange={(maxActiveShares) => onChange({ maxActiveShares })}
         />
         <NumberField
+          id="site-share-max-active"
+          label={t.policyMaxActiveSites}
+          hint={t.policyMaxActiveSitesHint}
+          value={form.maxActiveSites}
+          min={1}
+          max={1_000}
+          onChange={(maxActiveSites) => onChange({ maxActiveSites })}
+        />
+        <NumberField
           id="share-max-file-mb"
           label={t.policyMaxFileSizeMb}
           hint={t.policyMaxFileSizeHint}

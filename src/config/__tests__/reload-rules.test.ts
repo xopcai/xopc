@@ -32,6 +32,8 @@ describe('matchReloadRule', () => {
   it('requires restart for share policy', () => {
     expect(matchReloadRule('gateway.share')?.kind).toBe('restart');
     expect(matchReloadRule('gateway.share.maxTtlMs')?.kind).toBe('restart');
+    expect(matchReloadRule('gateway.siteShare')?.kind).toBe('restart');
+    expect(matchReloadRule('gateway.siteShare.maxActiveSites')?.kind).toBe('restart');
     expect(matchReloadRule('tunnel.autoStart')?.kind).toBe('hot');
   });
 });
