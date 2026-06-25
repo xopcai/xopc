@@ -31,6 +31,8 @@
     "badgeUser": "自定义",
     "runWorkflow": "运行",
     "viewDetails": "详情",
+    "editWorkflow": "编辑",
+    "copyAndEditWorkflow": "复制后编辑",
     "deleteWorkflow": "删除",
     "deleteConfirm": "确定删除自定义工作流「{{name}}」？此操作不可撤销。",
     "deleteWorkflowSuccess": "工作流已删除。",
@@ -43,6 +45,12 @@
     "manageDialogHint": "将 JavaScript 工作流脚本保存到 ~/.xopc/workflows/，文件名须与 meta.name 一致。",
     "createWorkflowTitle": "添加工作流",
     "createWorkflowHint": "选择 AI 创建或手动编写。两种方式都会在保存前校验 workflow 定义。",
+    "createWorkflowHintFromCopy": "已基于内置模板预填内容。可以直接保存，也可以让 AI 帮你改写后再保存。",
+    "editWorkflowTitle": "编辑工作流",
+    "editWorkflowHint": "修改自定义工作流。可以手动编辑，也可以让 AI 基于当前脚本改写。",
+    "copyWorkflowNotice": "已从内置工作流「{{title}}」复制。保存后会成为你的自定义工作流，后续修改不会影响原模板。",
+    "editWorkflowNotice": "正在编辑自定义工作流「{{title}}」。保存后会覆盖当前自定义版本。",
+    "editWorkflowSourceMissing": "这个工作流没有可编辑的脚本来源。",
     "createWorkflowAiTab": "AI 创建",
     "createWorkflowManualTab": "手动编写",
     "nlBuilderTitle": "用 AI 创建工作流",
@@ -50,6 +58,8 @@
     "nlBuilderOpen": "用 AI 创建",
     "nlBuilderPromptLabel": "工作流目标",
     "nlBuilderPromptPlaceholder": "例如：创建一个每周代码质量巡检，检查最近变更、发现风险，并返回行动清单。",
+    "nlBuilderEditPromptLabel": "改写要求",
+    "nlBuilderEditPromptPlaceholder": "例如：保留现有阶段结构，增加失败诊断步骤，并把输出改成行动清单。",
     "nlBuilderMaxPhases": "阶段上限",
     "nlBuilderMaxAgents": "Agent 上限",
     "nlBuilderAllowNetwork": "允许联网",
@@ -57,6 +67,7 @@
     "nlBuilderGenerate": "生成草案",
     "nlBuilderGenerating": "生成中…",
     "nlBuilderImprove": "改写草案",
+    "nlBuilderRewriteExisting": "AI 改写当前脚本",
     "nlBuilderGenerateFailed": "生成 workflow 草案失败。",
     "nlBuilderSaveAndStart": "保存并启动",
     "nlBuilderPermissions": "权限",
@@ -72,9 +83,34 @@
     "validationFailed": "请先修复这些问题再保存。",
     "validationPreview": "已生成预览：识别到 {{phaseCount}} 个阶段。",
     "validateWorkflowFailed": "校验工作流失败。",
-    "library": "工作流库",
     "noDefinitions": "没有匹配的工作流。",
     "noDefinitionsHint": "试试其他筛选条件，或在 ~/.xopc/workflows/ 添加自定义脚本。",
+    "viewModes": {
+      "operations": "列表",
+      "board": "看板"
+    },
+    "operationSections": {
+      "attention": {
+        "title": "需关注",
+        "description": "失败、超时或取消后可能需要恢复的运行。",
+        "empty": "暂无需要关注的运行。"
+      },
+      "running": {
+        "title": "运行中",
+        "description": "当前正在执行的工作流运行。",
+        "empty": "暂无运行中的工作流。"
+      },
+      "queued": {
+        "title": "排队中",
+        "description": "正在等待执行的运行。",
+        "empty": "暂无排队中的工作流运行。"
+      },
+      "recent": {
+        "title": "最近完成",
+        "description": "可用于复核的已成功运行。",
+        "empty": "当前视图暂无完成运行。"
+      }
+    },
     "boardStart": "启动运行",
     "boardEmptyTitle": "还没有工作流运行",
     "boardEmptyHint": "启动一次运行即可创建任务卡片。进度与结果在关联的 Chat 会话中查看。",
@@ -154,6 +190,12 @@
     "diagnosticTimeoutHint": "本次运行达到时间上限。建议收窄目标、降低并发或提高上限后再运行。",
     "diagnosticCancelledHint": "后续 agent 不会继续启动。准备好后可以重新运行。",
     "diagnosticPartialHint": "运行已完成，但部分 agent 报错。建议先检查执行过程再使用结果。",
+    "reliabilityTitle": "可信度与异常",
+    "reliabilityHint": "这些信号会影响你是否可以直接信任或复用本次结果。",
+    "nextActionsTitle": "下一步操作",
+    "primaryActionsTitle": "继续使用",
+    "recoveryActionsTitle": "恢复运行",
+    "resultActionsTitle": "使用结果",
     "diagnosticsTitle": "诊断",
     "diagnosticsHint": "聚合本次运行、失败 agent 与失败步骤中的关键信号。",
     "diagnosticsRunError": "运行错误",
@@ -192,6 +234,8 @@
     "metadataDefinitionHash": "定义 hash",
     "metadataPermissions": "权限快照",
     "metadataRetryOf": "重试来源",
+    "debugDetailsTitle": "调试详情",
+    "debugDetailsHint": "用于排障的子 agent prompt、输出、元数据和审计字段。",
     "definitionHashMatches": "与当前一致",
     "definitionHashDrifted": "当前已变化",
     "definitionHashCurrentUnknown": "当前未知",

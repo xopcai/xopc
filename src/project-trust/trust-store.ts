@@ -38,6 +38,10 @@ const TRUST_REQUIRING_XOPC_PROJECT_RESOURCES = [
   'workspace.json',
 ] as const;
 
+const TRUST_REQUIRING_PROJECT_ROOT_RESOURCES = [
+  'AGENTS.md',
+] as const;
+
 function canonicalizePath(path: string): string {
   const resolved = resolvePath(path);
   try {
@@ -187,6 +191,10 @@ export function hasTrustRequiringProjectResources(cwd: string): boolean {
   const homeDir = canonicalizePath(process.env.HOME || homedir());
   const userAgentsSkillsDir = join(homeDir, '.agents', 'skills');
   let currentDir = canonicalizePath(cwd);
+
+  if (TRUST_REQUIRING_PROJECT_ROOT_RESOURCES.some((entry) => existsSync(join(currentDir, entry)))) {
+    return true;
+  }
 
   const xopcProjectDir = join(currentDir, '.xopc');
   if (TRUST_REQUIRING_XOPC_PROJECT_RESOURCES.some((entry) => existsSync(join(xopcProjectDir, entry)))) {

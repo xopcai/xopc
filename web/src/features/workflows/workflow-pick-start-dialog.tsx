@@ -16,12 +16,16 @@ export function WorkflowPickStartDialog({
   language,
   onClose,
   onPick,
+  onDetail,
+  onEdit,
 }: {
   open: boolean;
   definitions: WorkflowDefinition[];
   language: StoredLanguage;
   onClose: () => void;
   onPick: (definition: WorkflowDefinition) => void;
+  onDetail: (definition: WorkflowDefinition) => void;
+  onEdit: (definition: WorkflowDefinition) => void;
 }) {
   const labels = messages(language).workflows;
 
@@ -53,7 +57,13 @@ export function WorkflowPickStartDialog({
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col px-6 py-5">
-              <WorkflowPickLibrary definitions={definitions} language={language} onPick={onPick} />
+              <WorkflowPickLibrary
+                definitions={definitions}
+                language={language}
+                onPick={onPick}
+                onDetail={onDetail}
+                onEdit={onEdit}
+              />
             </div>
           </Dialog.Content>
         </div>

@@ -282,6 +282,7 @@ export class AgentService {
       getCronService: config.getCronService,
       getWorkflowRunService: config.getWorkflowRunService,
       onSkillsUpdated: config.onSkillsUpdated,
+      isWorkspaceTrusted: config.isWorkspaceTrusted,
     });
 
     this.agentEventHandler = new AgentEventHandler({

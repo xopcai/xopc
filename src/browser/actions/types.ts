@@ -35,7 +35,31 @@ export type BrowserActionName =
   | 'output'
   | 'network_start'
   | 'network_events'
-  | 'network_stop';
+  | 'network_stop'
+  | 'wait_for_navigation'
+  | 'wait_for_timeout'
+  | 'wait_for_function'
+  | 'wait_for_network_idle'
+  | 'element_text'
+  | 'element_attribute'
+  | 'bounding_box'
+  | 'set_input_files'
+  | 'cookies'
+  | 'get_cookies'
+  | 'add_cookies'
+  | 'clear_cookies'
+  | 'tabs'
+  | 'list_tabs'
+  | 'new_tab'
+  | 'switch_tab'
+  | 'select'
+  | 'map'
+  | 'filter'
+  | 'sort'
+  | 'limit'
+  | 'fetch'
+  | 'collect'
+  | 'tap';
 
 // ─── Artifact ───────────────────────────────────────────────────────────────
 
@@ -87,8 +111,13 @@ export interface BrowserActionContext {
   taskId: string;
   supervisor?: CdpSupervisor;
   signal?: AbortSignal;
-  /** Current pipeline data accumulator (set during pipeline execution). */
-  pipelineData?: unknown;
+  pipeline?: {
+    args: Record<string, unknown>;
+    last: unknown;
+    outputs: unknown[];
+    vars: Record<string, unknown>;
+    error?: { code?: string; message?: string };
+  };
 }
 
 // ─── Action Handler ─────────────────────────────────────────────────────────

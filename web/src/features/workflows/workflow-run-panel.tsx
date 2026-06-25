@@ -8,9 +8,7 @@ import {
   Copy,
   Download,
   MessageSquare,
-  PackageCheck,
   RotateCcw,
-  Sparkles,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
@@ -150,10 +148,7 @@ export function WorkflowRunPanel({
   useEffect(() => {
     if (!view?.run.id) return;
 
-    const shouldExpandProcess = isActive
-      || runStatus === 'failed'
-      || runStatus === 'timeout'
-      || (runStatus === 'succeeded' && view.run.metrics.errorAgentCount > 0);
+    const shouldExpandProcess = isActive || runStatus === 'failed' || runStatus === 'timeout';
 
     setProcessExpanded(shouldExpandProcess);
     setDrawerAgentId(null);
@@ -278,6 +273,12 @@ export function WorkflowRunPanel({
     view.phases.some((phase) => phase.status === 'failed' && view.agents.some((agent) => agent.phaseId === phase.id && agent.prompt?.trim()))
     || view.agents.some((agent) => (agent.status === 'error' || agent.status === 'skipped') && agent.phaseId && agent.prompt?.trim())
   );
+  const displayTitle = run.goal?.trim() || run.title;
+  const hasDiagnostics = diagnostics.length > 0 || Boolean(diagnosticHint);
+  const hasPrimaryActions = Boolean(workflowSessionKey) || canCancel;
+  const hasRecoveryActions = view.controls.canRetry || canReplayFailedAgents || canReplayFailedPhases;
+  const hasResultActions = hasResult;
+  const hasAnyActions = hasPrimaryActions || hasRecoveryActions || hasResultActions;
 
   return (
     <>
@@ -286,138 +287,146 @@ export function WorkflowRunPanel({
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
           <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(90vh,52rem)] w-[min(100%-2rem,64rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-5 py-4">
-              <Dialog.Title className="truncate text-base font-semibold tracking-tight text-fg">{run.title}</Dialog.Title>
+              <Dialog.Title className="truncate text-base font-semibold tracking-tight text-fg">{displayTitle}</Dialog.Title>
               <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={labels.pickStartClose} onClick={onClose}>
                 <X className="size-5" aria-hidden />
               </Button>
             </div>
             <section className="min-h-0 flex-1 overflow-y-auto p-5">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-lg font-semibold text-fg">{run.title}</h2>
-              <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusTone(run.status))}>
-                {statusLabel(run.status, labels)}
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-fg-subtle">{run.definitionId}</p>
-            {run.goal ? <p className="mt-3 text-sm leading-6 text-fg-muted">{run.goal}</p> : null}
-          </div>
-        </div>
+              <header className="rounded-2xl border border-edge-subtle bg-surface-base/60 p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-lg font-semibold leading-7 text-fg">{displayTitle}</h2>
+                      <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusTone(run.status))}>
+                        {statusLabel(run.status, labels)}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-fg-subtle">
+                      {run.title} · {run.definitionId}
+                    </p>
+                    <p className="mt-3 text-sm leading-6 text-fg-muted">{runSummary}</p>
+                    {diagnosticHint ? <p className="mt-2 text-xs leading-5 text-fg-subtle">{diagnosticHint}</p> : null}
+                  </div>
+                </div>
+                <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <Metric label={labels.metrics.startedAt} value={formatTime(run.startedAtMs ?? run.createdAtMs, localeTag)} />
+                  <Metric label={labels.metrics.duration} value={durationText} />
+                  <Metric
+                    label={labels.metrics.agents}
+                    value={interpolate(labels.agentProgress, {
+                      done: run.metrics.doneAgentCount,
+                      total: run.metrics.agentCount,
+                    })}
+                  />
+                  <Metric label={labels.metrics.artifacts} value={String(run.metrics.artifactCount)} />
+                </dl>
+              </header>
 
-        <div className="mt-5 rounded-2xl border border-edge-subtle bg-surface-base/60 p-4">
-          <div className="flex items-start gap-3">
-            <div className="rounded-xl bg-accent-soft p-2 text-accent-fg">
-              {run.status === 'succeeded' ? (
-                <PackageCheck className="size-4" aria-hidden />
-              ) : run.status === 'failed' || run.status === 'timeout' ? (
-                <AlertTriangle className="size-4" aria-hidden />
-              ) : (
-                <Sparkles className="size-4" aria-hidden />
-              )}
-            </div>
-            <div className="min-w-0">
-              <h3 className="text-sm font-semibold text-fg">{labels.runSummaryTitle}</h3>
-              <p className="mt-1 text-sm leading-6 text-fg-muted">{runSummary}</p>
-              {diagnosticHint ? (
-                <p className="mt-2 text-xs leading-5 text-fg-subtle">{diagnosticHint}</p>
+              <section className="mt-5">
+                <h3 className="text-sm font-semibold text-fg">{labels.resultTitle}</h3>
+                {hasResult ? (
+                  <div className="mt-3 rounded-xl border border-edge bg-surface-base/50 p-3">
+                    <WorkflowResultSummary result={resultForDisplay} labels={cardLabels.result} />
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-xl border border-dashed border-edge p-4 text-sm text-fg-muted">
+                    {labels.noResult}
+                  </div>
+                )}
+                <WorkflowOutcomePanel
+                  outcome={outcome}
+                  labels={labels}
+                  downloadingArtifactId={downloadingArtifactId}
+                  downloadError={downloadError}
+                  onCopyText={(text) => void copyTextToClipboard(text)}
+                  onDownloadArtifact={(artifact) => void handleDownloadArtifact(artifact)}
+                  onStartFollowUp={handleStartFollowUp}
+                />
+              </section>
+
+              {hasDiagnostics ? (
+                <WorkflowDiagnosticsPanel
+                  diagnostics={diagnostics}
+                  labels={labels}
+                  hint={diagnosticHint}
+                  onOpenAgent={openDiagnosticAgent}
+                />
               ) : null}
-            </div>
-          </div>
-        </div>
 
-        <WorkflowDiagnosticsPanel
-          diagnostics={diagnostics}
-          labels={labels}
-          onOpenAgent={openDiagnosticAgent}
-        />
+              <WorkflowReplayLineagePanel
+                view={view}
+                comparison={comparison}
+                labels={labels}
+                onOpenRunId={onOpenRunId}
+              />
 
-        <WorkflowReplayLineagePanel
-          view={view}
-          comparison={comparison}
-          labels={labels}
-          onOpenRunId={onOpenRunId}
-        />
-
-        <dl className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <Metric label={labels.metrics.startedAt} value={formatTime(run.startedAtMs ?? run.createdAtMs, localeTag)} />
-          <Metric label={labels.metrics.duration} value={durationText} />
-          <Metric
-            label={labels.metrics.agents}
-            value={interpolate(labels.agentProgress, {
-              done: run.metrics.doneAgentCount,
-              total: run.metrics.agentCount,
-            })}
-          />
-          <Metric label={labels.metrics.artifacts} value={String(run.metrics.artifactCount)} />
-        </dl>
-
-        <div className="mt-5 flex flex-wrap gap-2">
-          {workflowSessionKey ? (
-            <Button variant="primary" onClick={continueInChat}>
-              <MessageSquare className="size-4" aria-hidden />
-              {labels.continueInChat}
-            </Button>
-          ) : null}
-          {canCancel ? (
-            <Button variant="secondary" onClick={onCancel} className="text-red-600 dark:text-red-300">
-              <CircleStop className="size-4" aria-hidden />
-              {labels.cancel}
-            </Button>
-          ) : null}
-          {view.controls.canRetry ? (
-            <Button variant="secondary" onClick={onRetry}>
-              <RotateCcw className="size-4" aria-hidden />
-              {labels.rerun}
-            </Button>
-          ) : null}
-          {canReplayFailedAgents ? (
-            <Button variant="secondary" onClick={() => onReplay('failed_agents')}>
-              <RotateCcw className="size-4" aria-hidden />
-              {labels.replayFailedAgents}
-            </Button>
-          ) : null}
-          {canReplayFailedPhases ? (
-            <Button variant="secondary" onClick={() => onReplay('failed_phases')}>
-              <RotateCcw className="size-4" aria-hidden />
-              {labels.replayFailedPhases}
-            </Button>
-          ) : null}
-          {hasResult ? (
-            <>
-              <Button variant="secondary" onClick={handleCopy}>
-                {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
-                {copied ? labels.copied : labels.copyResult}
-              </Button>
-              <Button variant="secondary" onClick={handleExport}>
-                <Download className="size-4" aria-hidden />
-                {labels.exportResult}
-              </Button>
-            </>
-          ) : null}
-        </div>
-
-        <div className="mt-6">
-          <h3 className="text-sm font-semibold text-fg">{labels.resultTitle}</h3>
-          {hasResult ? (
-            <div className="mt-3 rounded-xl border border-edge bg-surface-base/50 p-3">
-              <WorkflowResultSummary result={resultForDisplay} labels={cardLabels.result} />
-            </div>
-          ) : (
-            <div className="mt-3 rounded-xl border border-dashed border-edge p-4 text-sm text-fg-muted">
-              {labels.noResult}
-            </div>
-          )}
-          <WorkflowOutcomePanel
-            outcome={outcome}
-            labels={labels}
-            downloadingArtifactId={downloadingArtifactId}
-            downloadError={downloadError}
-            onCopyText={(text) => void copyTextToClipboard(text)}
-            onDownloadArtifact={(artifact) => void handleDownloadArtifact(artifact)}
-            onStartFollowUp={handleStartFollowUp}
-          />
-        </div>
+              {hasAnyActions ? (
+                <section className="mt-5 rounded-2xl border border-edge-subtle bg-surface-base/35 p-4">
+                  <h3 className="text-sm font-semibold text-fg">{labels.nextActionsTitle}</h3>
+                  <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                    {hasPrimaryActions ? (
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-medium text-fg-subtle">{labels.primaryActionsTitle}</h4>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {workflowSessionKey ? (
+                            <Button variant="primary" onClick={continueInChat}>
+                              <MessageSquare className="size-4" aria-hidden />
+                              {labels.continueInChat}
+                            </Button>
+                          ) : null}
+                          {canCancel ? (
+                            <Button variant="secondary" onClick={onCancel} className="text-red-600 dark:text-red-300">
+                              <CircleStop className="size-4" aria-hidden />
+                              {labels.cancel}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                    {hasRecoveryActions ? (
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-medium text-fg-subtle">{labels.recoveryActionsTitle}</h4>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {canReplayFailedAgents ? (
+                            <Button variant="secondary" onClick={() => onReplay('failed_agents')}>
+                              <RotateCcw className="size-4" aria-hidden />
+                              {labels.replayFailedAgents}
+                            </Button>
+                          ) : null}
+                          {canReplayFailedPhases ? (
+                            <Button variant="secondary" onClick={() => onReplay('failed_phases')}>
+                              <RotateCcw className="size-4" aria-hidden />
+                              {labels.replayFailedPhases}
+                            </Button>
+                          ) : null}
+                          {view.controls.canRetry ? (
+                            <Button variant="secondary" onClick={onRetry}>
+                              <RotateCcw className="size-4" aria-hidden />
+                              {labels.rerun}
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    ) : null}
+                    {hasResultActions ? (
+                      <div className="min-w-0">
+                        <h4 className="text-xs font-medium text-fg-subtle">{labels.resultActionsTitle}</h4>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button variant="secondary" onClick={handleCopy}>
+                            {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
+                            {copied ? labels.copied : labels.copyResult}
+                          </Button>
+                          <Button variant="secondary" onClick={handleExport}>
+                            <Download className="size-4" aria-hidden />
+                            {labels.exportResult}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </section>
+              ) : null}
 
         <div className="mt-6 rounded-2xl border border-edge bg-surface-base/35">
           <button
@@ -485,29 +494,19 @@ export function WorkflowRunPanel({
           ) : null}
         </div>
 
-        <AgentInputOutputOverview
-          agents={snapshot.agents}
-          labels={labels}
-          defaultExpanded={run.status === 'failed' || run.status === 'timeout' || run.metrics.errorAgentCount > 0}
-        />
-
-        <div className="mt-6 grid gap-3 rounded-2xl border border-edge-subtle bg-surface-base/35 p-4 sm:grid-cols-2 lg:grid-cols-4">
-          <MetadataItem label={labels.metadataSession} value={metadata?.sessionKey ?? resolveWorkflowSessionKey(view) ?? '—'} />
-          <MetadataItem label={labels.metadataSource} value={sourceSummary} />
-          <MetadataItem
-            label={labels.metadataDefinition}
-            value={`${metadata?.definition.version ?? run.definitionVersion} · ${metadata?.definition.source ?? 'unknown'}`}
-          />
-          <MetadataItem
-            label={labels.metadataDefinitionHash}
-            value={definitionSnapshotStatus(metadata?.definition, currentDefinition, labels)}
-          />
-          <MetadataItem
-            label={labels.metadataPermissions}
-            value={formatPermissionSnapshot(metadata?.definition)}
-          />
-          <MetadataItem label={labels.metadataRetryOf} value={metadata?.retryOfRunId ?? '—'} />
-        </div>
+              <WorkflowDebugDetails
+                agents={snapshot.agents}
+                labels={labels}
+                metadataItems={[
+                  { label: labels.metadataSession, value: metadata?.sessionKey ?? resolveWorkflowSessionKey(view) ?? '—' },
+                  { label: labels.metadataSource, value: sourceSummary },
+                  { label: labels.metadataDefinition, value: `${metadata?.definition.version ?? run.definitionVersion} · ${metadata?.definition.source ?? 'unknown'}` },
+                  { label: labels.metadataDefinitionHash, value: definitionSnapshotStatus(metadata?.definition, currentDefinition, labels) },
+                  { label: labels.metadataPermissions, value: formatPermissionSnapshot(metadata?.definition) },
+                  { label: labels.metadataRetryOf, value: metadata?.retryOfRunId ?? '—' },
+                ]}
+                defaultExpanded={run.status === 'failed' || run.status === 'timeout'}
+              />
             </section>
           </Dialog.Content>
         </Dialog.Portal>
@@ -529,13 +528,15 @@ export function WorkflowRunPanel({
 function WorkflowDiagnosticsPanel({
   diagnostics,
   labels,
+  hint,
   onOpenAgent,
 }: {
   diagnostics: WorkflowRunDiagnosticItem[];
   labels: WorkflowsMessages;
+  hint?: string | null;
   onOpenAgent: (agentId: string | number | undefined) => void;
 }) {
-  if (diagnostics.length === 0) return null;
+  if (diagnostics.length === 0 && !hint) return null;
 
   return (
     <section className="mt-5 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-4">
@@ -544,30 +545,32 @@ function WorkflowDiagnosticsPanel({
           <AlertTriangle className="size-4" aria-hidden />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="text-sm font-semibold text-fg">{labels.diagnosticsTitle}</h3>
-          <p className="mt-1 text-xs leading-5 text-fg-subtle">{labels.diagnosticsHint}</p>
-          <ul className="mt-3 space-y-2">
-            {diagnostics.slice(0, 5).map((item) => (
-              <li key={item.key} className="rounded-xl border border-edge-subtle bg-surface-panel px-3 py-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-fg">{diagnosticItemTitle(item, labels)}</div>
-                    {item.message ? (
-                      <div className="mt-0.5 text-xs leading-5 text-fg-muted">{item.message}</div>
-                    ) : null}
-                    {item.detail ? (
-                      <div className="mt-0.5 line-clamp-2 text-xs leading-5 text-fg-subtle">{item.detail}</div>
+          <h3 className="text-sm font-semibold text-fg">{labels.reliabilityTitle}</h3>
+          <p className="mt-1 text-xs leading-5 text-fg-subtle">{hint ?? labels.reliabilityHint}</p>
+          {diagnostics.length > 0 ? (
+            <ul className="mt-3 space-y-2">
+              {diagnostics.slice(0, 5).map((item) => (
+                <li key={item.key} className="rounded-xl border border-edge-subtle bg-surface-panel px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-fg">{diagnosticItemTitle(item, labels)}</div>
+                      {item.message ? (
+                        <div className="mt-0.5 text-xs leading-5 text-fg-muted">{item.message}</div>
+                      ) : null}
+                      {item.detail ? (
+                        <div className="mt-0.5 line-clamp-2 text-xs leading-5 text-fg-subtle">{item.detail}</div>
+                      ) : null}
+                    </div>
+                    {item.agentId != null ? (
+                      <Button type="button" variant="ghost" className="h-8 shrink-0 px-2 text-xs" onClick={() => onOpenAgent(item.agentId)}>
+                        {labels.openAgentDetails}
+                      </Button>
                     ) : null}
                   </div>
-                  {item.agentId != null ? (
-                    <Button type="button" variant="ghost" className="h-8 shrink-0 px-2 text-xs" onClick={() => onOpenAgent(item.agentId)}>
-                      {labels.openAgentDetails}
-                    </Button>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       </div>
     </section>
@@ -794,13 +797,15 @@ function resolveWorkflowOutcome(result: unknown): WorkflowOutcomeView | null {
   return { artifacts, followUps, structuredOutput: envelope.structuredOutput };
 }
 
-function AgentInputOutputOverview({
+function WorkflowDebugDetails({
   agents,
   labels,
+  metadataItems,
   defaultExpanded,
 }: {
   agents: WorkflowAgentSnapshot[];
   labels: WorkflowsMessages;
+  metadataItems: Array<{ label: string; value: string }>;
   defaultExpanded: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
@@ -808,8 +813,6 @@ function AgentInputOutputOverview({
   useEffect(() => {
     setExpanded(defaultExpanded);
   }, [defaultExpanded]);
-
-  if (agents.length === 0) return null;
 
   return (
     <section className="mt-6 rounded-2xl border border-edge bg-surface-base/35">
@@ -819,9 +822,9 @@ function AgentInputOutputOverview({
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
       >
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-semibold text-fg">{labels.agentIoTitle}</h3>
-          <p className="text-xs leading-5 text-fg-subtle">{labels.agentIoHint}</p>
+        <div className="flex min-w-0 flex-col gap-1">
+          <h3 className="text-sm font-semibold text-fg">{labels.debugDetailsTitle}</h3>
+          <p className="text-xs leading-5 text-fg-subtle">{labels.debugDetailsHint}</p>
         </div>
         <ChevronDown
           className={cn('mt-0.5 size-4 shrink-0 text-fg-subtle transition-transform', expanded ? 'rotate-180' : null)}
@@ -829,7 +832,33 @@ function AgentInputOutputOverview({
         />
       </button>
       {expanded ? (
-        <div className="grid gap-3 border-t border-edge px-4 py-4">
+        <div className="border-t border-edge px-4 py-4">
+          <AgentInputOutputOverview agents={agents} labels={labels} />
+          <div className="mt-4 grid gap-3 rounded-xl border border-edge-subtle bg-surface-panel/60 p-3 sm:grid-cols-2 lg:grid-cols-3">
+            {metadataItems.map((item) => (
+              <MetadataItem key={item.label} label={item.label} value={item.value} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function AgentInputOutputOverview({
+  agents,
+  labels,
+}: {
+  agents: WorkflowAgentSnapshot[];
+  labels: WorkflowsMessages;
+}) {
+  if (agents.length === 0) return null;
+
+  return (
+    <section>
+      <h4 className="text-sm font-semibold text-fg">{labels.agentIoTitle}</h4>
+      <p className="mt-1 text-xs leading-5 text-fg-subtle">{labels.agentIoHint}</p>
+      <div className="mt-3 grid gap-3">
           {agents.map((agent) => {
           const output = agent.error || agent.resultPreview || labels.agentNoOutput;
           return (
@@ -867,8 +896,7 @@ function AgentInputOutputOverview({
             </article>
           );
           })}
-        </div>
-      ) : null}
+      </div>
     </section>
   );
 }

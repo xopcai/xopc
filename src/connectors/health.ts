@@ -1,7 +1,6 @@
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import {
-  createBundleMcpToolRuntime,
-  mapBundleMcpToolsForGateway,
+  listBundleMcpServerCapabilitiesForGateway,
 } from '../agent/mcp/bundle-mcp-materialize.js';
 import type { Config } from '../config/schema.js';
 import { getConnectorInstance } from './instances.js';
@@ -48,25 +47,32 @@ export async function testConnectorInstance(config: Config, serverId: string): P
       ok: false,
       status: 'server_not_found',
       toolCount: 0,
+      resourceCount: 0,
+      promptCount: 0,
       tools: [],
+      resources: [],
+      prompts: [],
       error: `Connector instance not found: ${serverId}`,
     };
   }
 
   const workspaceDir = getWorkspacePath(config) || './workspace';
-  let runtime: Awaited<ReturnType<typeof createBundleMcpToolRuntime>> | undefined;
   try {
-    runtime = await createBundleMcpToolRuntime({
+    const capabilities = await listBundleMcpServerCapabilitiesForGateway({
       workspaceDir,
       cfg: config,
+      serverId,
     });
-    const tools = mapBundleMcpToolsForGateway(runtime.tools, serverId);
     return {
       serverId,
       ok: true,
       status: 'ok',
-      toolCount: tools.length,
-      tools,
+      toolCount: capabilities.toolCount,
+      resourceCount: capabilities.resourceCount,
+      promptCount: capabilities.promptCount,
+      tools: capabilities.tools,
+      resources: capabilities.resources,
+      prompts: capabilities.prompts,
     };
   } catch (error) {
     const status = classifyConnectorHealthError(error);
@@ -75,11 +81,13 @@ export async function testConnectorInstance(config: Config, serverId: string): P
       ok: false,
       status,
       toolCount: 0,
+      resourceCount: 0,
+      promptCount: 0,
       tools: [],
+      resources: [],
+      prompts: [],
       error: error instanceof Error ? error.message : String(error),
       action: healthActionForStatus(status),
     };
-  } finally {
-    await runtime?.dispose();
   }
 }

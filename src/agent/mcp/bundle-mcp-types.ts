@@ -12,6 +12,8 @@ export type McpServerCatalog = {
   serverName: string;
   launchSummary: string;
   toolCount: number;
+  resourceCount: number;
+  promptCount: number;
 };
 
 export type McpCatalogTool = {
@@ -24,11 +26,30 @@ export type McpCatalogTool = {
   fallbackDescription: string;
 };
 
+export type McpCatalogResource = {
+  serverName: string;
+  uri: string;
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+};
+
+export type McpCatalogPrompt = {
+  serverName: string;
+  name: string;
+  title?: string;
+  description?: string;
+  argumentCount: number;
+};
+
 export type McpToolCatalog = {
   version: number;
   generatedAt: number;
   servers: Record<string, McpServerCatalog>;
   tools: McpCatalogTool[];
+  resources: McpCatalogResource[];
+  prompts: McpCatalogPrompt[];
 };
 
 export type SessionMcpRuntime = {

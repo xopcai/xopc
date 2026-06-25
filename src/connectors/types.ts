@@ -79,6 +79,8 @@ export type ConnectorUsageRecord = {
   lastHealthCheckAt?: string;
   lastHealthStatus?: ConnectorHealthStatus;
   lastToolCount?: number;
+  lastResourceCount?: number;
+  lastPromptCount?: number;
 };
 
 export type ConnectorAuditRecord = {
@@ -87,6 +89,8 @@ export type ConnectorAuditRecord = {
   status?: ConnectorHealthStatus;
   ok?: boolean;
   toolCount?: number;
+  resourceCount?: number;
+  promptCount?: number;
 };
 
 export type ConnectorInstance = {
@@ -119,7 +123,11 @@ export type ConnectorHealthResult = {
   ok: boolean;
   status: ConnectorHealthStatus;
   toolCount: number;
+  resourceCount: number;
+  promptCount: number;
   tools: Array<{ name: string; shortName?: string; description?: string }>;
+  resources: Array<{ uri: string; name: string; title?: string; description?: string; mimeType?: string }>;
+  prompts: Array<{ name: string; title?: string; description?: string; argumentCount: number }>;
   error?: string;
   action?: string;
 };

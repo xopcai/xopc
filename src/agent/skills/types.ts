@@ -132,7 +132,7 @@ export interface SkillsConfig {
    */
   toolGating?: boolean;
   /**
-   * Where `skill_manage` may create or edit skills: global `~/.xopc/skills`, workspace `skills/`, or both.
+   * Where `skill_manage` may create or edit skills: global `~/.xopc/skills`, workspace `.xopc/skills/`, or both.
    * Default `global`.
    */
   agentWritePolicy?: 'global' | 'workspace' | 'both';

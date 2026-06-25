@@ -35,7 +35,12 @@ export interface CreateBrowserUseToolDeps {
    */
   getReadiness?: () => Promise<BrowserNotReadyError | null>;
   /** Pipeline runner (injected to avoid circular deps; lazy-loaded if not provided). */
-  runPipeline?: (yaml: string, args: Record<string, unknown>, ctx: BrowserActionContext, dryRun: boolean) => Promise<BrowserActionResult>;
+  runPipeline?: (
+    yaml: string,
+    args: Record<string, unknown>,
+    ctx: BrowserActionContext,
+    options: { dryRun?: boolean; sourceLocation?: string },
+  ) => Promise<BrowserActionResult>;
 }
 
 export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<any, any> {
@@ -116,7 +121,7 @@ export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<
         mode: string;
         command?: string;
         args?: Record<string, unknown>;
-        pipeline?: { yaml?: string; script?: string; path?: string; args?: Record<string, unknown>; dryRun?: boolean };
+        pipeline?: { yaml?: string; path?: string; args?: Record<string, unknown>; dryRun?: boolean };
         options?: { timeout?: number; headless?: boolean };
       };
 
@@ -214,12 +219,14 @@ export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<
           };
         }
 
-        // Resolve YAML source
-        let yamlSource = pipelineParams.yaml ?? pipelineParams.script ?? '';
+        let yamlSource = pipelineParams.yaml ?? '';
+        let sourceLocation: string | undefined;
 
         if (!yamlSource && pipelineParams.path) {
           try {
-            yamlSource = (await loadBrowserPipelineSource(pipelineParams.path)).source;
+            const loaded = await loadBrowserPipelineSource(pipelineParams.path);
+            yamlSource = loaded.source;
+            sourceLocation = loaded.location;
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             return {
@@ -243,14 +250,14 @@ export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<
 
         // Use injected runner or lazy-load
         if (deps.runPipeline) {
-          const result = await deps.runPipeline(yamlSource, pipelineArgs, ctx, dryRun);
+          const result = await deps.runPipeline(yamlSource, pipelineArgs, ctx, { dryRun, sourceLocation });
           return formatResult(result);
         }
 
         // Lazy import pipeline runner
         try {
           const { runBrowserPipeline } = await import('../../../../browser/pipeline/runner.js');
-          const result = await runBrowserPipeline(yamlSource, pipelineArgs, ctx, registry, dryRun);
+          const result = await runBrowserPipeline(yamlSource, pipelineArgs, ctx, registry, { dryRun, sourceLocation });
           return formatResult(result);
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);

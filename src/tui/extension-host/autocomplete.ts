@@ -70,7 +70,7 @@ export class ChainedAutocompleteProvider implements AutocompleteProvider {
       }
     }
 
-    const atMatch = beforeCursor.match(/@([\w.-]*)$/);
+    const atMatch = beforeCursor.match(/@([^\s]*)$/);
     if (!atMatch) {
       return primary;
     }
@@ -83,9 +83,10 @@ export class ChainedAutocompleteProvider implements AutocompleteProvider {
     for (const provider of this.extraProviders) {
       const suggestions = await provider(query, { cwd: this.cwd, sessionKey });
       for (const s of suggestions) {
+        const value = s.value ?? `@${s.name}`;
         items.push({
-          value: `@${s.name}`,
-          label: s.name,
+          value,
+          label: s.label ?? s.name,
           description: s.description,
         });
       }
@@ -95,12 +96,8 @@ export class ChainedAutocompleteProvider implements AutocompleteProvider {
       return primary;
     }
 
-    const filtered = query
-      ? items.filter((item) => item.label.toLowerCase().includes(query.toLowerCase()))
-      : items;
-
     const primaryItems = primary?.prefix.startsWith('@') ? primary.items : [];
-    const merged = dedupeAutocompleteItems([...primaryItems, ...filtered]);
+    const merged = dedupeAutocompleteItems([...primaryItems, ...items]);
 
     return {
       prefix: primary?.prefix.startsWith('@') ? primary.prefix : prefix,
@@ -119,13 +116,14 @@ export class ChainedAutocompleteProvider implements AutocompleteProvider {
       const line = lines[cursorLine] ?? '';
       const before = line.slice(0, cursorCol);
       const start = before.length - prefix.length;
-      const nextLine = line.slice(0, start) + item.value + line.slice(cursorCol);
+      const suffix = item.value.startsWith('@file:') && !item.value.endsWith('/') ? ' ' : '';
+      const nextLine = line.slice(0, start) + item.value + suffix + line.slice(cursorCol);
       const nextLines = [...lines];
       nextLines[cursorLine] = nextLine;
       return {
         lines: nextLines,
         cursorLine,
-        cursorCol: start + item.value.length,
+        cursorCol: start + item.value.length + suffix.length,
       };
     }
     return this.primary.applyCompletion(lines, cursorLine, cursorCol, item, prefix);

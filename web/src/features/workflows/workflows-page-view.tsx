@@ -1,5 +1,5 @@
-import { useLayoutEffect } from 'react';
-import { GitBranch, Search } from 'lucide-react';
+import { useLayoutEffect, useState } from 'react';
+import { GitBranch, LayoutGrid, ListFilter, Search } from 'lucide-react';
 
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { cn } from '@/lib/cn';
@@ -14,8 +14,46 @@ import { WorkflowPickStartDialog } from './workflow-pick-start-dialog';
 import { WorkflowRunPanel } from './workflow-run-panel';
 import { WorkflowStartDialog } from './workflow-start-dialog';
 import { WorkflowStatsBar } from './workflow-stats-bar';
+import { WorkflowTaskCard } from './workflow-task-card';
 import type { WorkflowsPageVm } from './use-workflows-page';
+import type { WorkflowRunSummary } from './workflow-api';
+import { filterRunsForBoard } from './workflow-board.utils';
 import { WorkflowsPageHeaderActions } from './workflows-page-header-actions';
+
+type WorkflowsViewMode = 'operations' | 'board';
+type RunSectionId = 'attention' | 'running' | 'queued' | 'recent';
+
+const RUN_SECTIONS: RunSectionId[] = ['attention', 'running', 'queued', 'recent'];
+
+function runSectionForStatus(run: WorkflowRunSummary): RunSectionId | null {
+  if (run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled') return 'attention';
+  if (run.status === 'running') return 'running';
+  if (run.status === 'queued') return 'queued';
+  if (run.status === 'succeeded') return 'recent';
+  return null;
+}
+
+function runTimeMs(run: WorkflowRunSummary): number {
+  return run.completedAtMs ?? run.startedAtMs ?? run.createdAtMs;
+}
+
+function sortRunsForOperations(section: RunSectionId, runs: WorkflowRunSummary[]): WorkflowRunSummary[] {
+  const copy = [...runs];
+  if (section === 'queued') return copy.sort((a, b) => a.createdAtMs - b.createdAtMs);
+  return copy.sort((a, b) => runTimeMs(b) - runTimeMs(a));
+}
+
+function groupRunsForOperations(runs: WorkflowRunSummary[]): Map<RunSectionId, WorkflowRunSummary[]> {
+  const grouped = new Map<RunSectionId, WorkflowRunSummary[]>(RUN_SECTIONS.map((section) => [section, []]));
+  for (const run of runs) {
+    const section = runSectionForStatus(run);
+    if (section) grouped.get(section)?.push(run);
+  }
+  for (const section of RUN_SECTIONS) {
+    grouped.set(section, sortRunsForOperations(section, grouped.get(section) ?? []));
+  }
+  return grouped;
+}
 
 export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
   const {
@@ -51,6 +89,8 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     setDetailDefinition,
     manageOpen,
     setManageOpen,
+    workflowEditorDraft,
+    openWorkflowEditor,
     actionError,
     actionFeedback,
     starting,
@@ -68,6 +108,10 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+  const [viewMode, setViewMode] = useState<WorkflowsViewMode>('operations');
+  const nowMs = Date.now();
+  const filteredRuns = filterRunsForBoard(runs, { searchQuery, workflowFilterId, triggerFilter });
+  const operationGroups = groupRunsForOperations(filteredRuns);
 
   useLayoutEffect(() => {
     if (!hasToken) {
@@ -117,7 +161,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-base">
       <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-4 py-5 sm:px-6 2xl:px-8">
-        <section className="flex flex-wrap items-center gap-2 rounded-lg border border-edge bg-surface-panel/70 px-3 py-2">
+        <section className="mx-auto flex w-full max-w-app-main flex-wrap items-center gap-2 rounded-lg border border-edge bg-surface-panel/70 px-3 py-2">
           <div className="relative min-w-48 flex-1 sm:max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
             <input
@@ -179,51 +223,122 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               </option>
             ))}
           </select>
+          <div className="flex rounded-lg border border-edge bg-surface-muted p-0.5">
+            <button
+              type="button"
+              className={cn(
+                'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
+                viewMode === 'operations' ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg',
+              )}
+              onClick={() => setViewMode('operations')}
+            >
+              <ListFilter className="size-3.5" aria-hidden />
+              {labels.viewModes.operations}
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
+                viewMode === 'board' ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg',
+              )}
+              onClick={() => setViewMode('board')}
+            >
+              <LayoutGrid className="size-3.5" aria-hidden />
+              {labels.viewModes.board}
+            </button>
+          </div>
         </section>
 
         {actionFeedback ? (
-          <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-200">
+          <div className="mx-auto w-full max-w-app-main rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-200">
             {actionFeedback}
           </div>
         ) : null}
 
         {(actionError ?? error) ? (
-          <div className="rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+          <div className="mx-auto w-full max-w-app-main rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
             {actionError ?? error}
           </div>
         ) : null}
 
-        <WorkflowStatsBar stats={stats} language={language} />
+        <div className="mx-auto w-full max-w-app-main">
+          <WorkflowStatsBar stats={stats} language={language} />
+        </div>
 
         {selectedRunError ? (
-          <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+          <div className="mx-auto w-full max-w-app-main rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
             {selectedRunError}
           </div>
         ) : null}
 
-        <div className="min-h-0 flex-1">
-          <WorkflowBoard
-            runs={runs}
-            language={language}
-            localeTag={localeTag}
-            labels={{
-              boardEmptyTitle: labels.boardEmptyTitle,
-              boardEmptyHint: labels.boardEmptyHint,
-              boardStart: labels.boardStart,
-              loading: labels.loading,
-            }}
-            searchQuery={searchQuery}
-            workflowFilterId={workflowFilterId}
-            triggerFilter={triggerFilter}
-            selectedRunId={selectedRunId}
-            loading={loading}
-            onOpenRun={openRunDetails}
-            onOpenRunChat={openRunInChat}
-            onCancelRun={(runId) => void cancelRun(runId)}
-            onRetryRun={(runId) => void retryRun(runId)}
-            onStart={() => setPickStartOpen(true)}
-          />
-        </div>
+        {viewMode === 'operations' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+            <div className="mx-auto grid w-full max-w-app-main gap-4">
+              {RUN_SECTIONS.map((section) => {
+                const sectionRuns = operationGroups.get(section) ?? [];
+                return (
+                  <section key={section} className="rounded-lg border border-edge bg-surface-panel/60">
+                    <header className="flex flex-wrap items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3">
+                      <div className="min-w-0">
+                        <h2 className="text-sm font-semibold text-fg">{labels.operationSections[section].title}</h2>
+                        <p className="mt-1 text-xs text-fg-muted">{labels.operationSections[section].description}</p>
+                      </div>
+                      <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold tabular-nums text-fg-muted">
+                        {sectionRuns.length}
+                      </span>
+                    </header>
+                    <div className="grid gap-2 p-2.5 md:grid-cols-2 xl:grid-cols-3">
+                      {sectionRuns.map((run) => (
+                        <WorkflowTaskCard
+                          key={run.id}
+                          run={run}
+                          language={language}
+                          localeTag={localeTag}
+                          nowMs={nowMs}
+                          selected={run.id === selectedRunId}
+                          onOpen={openRunDetails}
+                          onOpenChat={openRunInChat}
+                          onCancel={(runId) => void cancelRun(runId)}
+                          onRetry={(runId) => void retryRun(runId)}
+                        />
+                      ))}
+                      {!loading && sectionRuns.length === 0 ? (
+                        <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed border-edge bg-surface-panel/40 px-4 py-5 text-center text-xs text-fg-subtle md:col-span-2 xl:col-span-3">
+                          {labels.operationSections[section].empty}
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
+                );
+              })}
+
+            </div>
+          </div>
+        ) : (
+          <div className="mx-auto min-h-0 w-full max-w-app-main flex-1">
+            <WorkflowBoard
+              runs={runs}
+              language={language}
+              localeTag={localeTag}
+              labels={{
+                boardEmptyTitle: labels.boardEmptyTitle,
+                boardEmptyHint: labels.boardEmptyHint,
+                boardStart: labels.boardStart,
+                loading: labels.loading,
+              }}
+              searchQuery={searchQuery}
+              workflowFilterId={workflowFilterId}
+              triggerFilter={triggerFilter}
+              selectedRunId={selectedRunId}
+              loading={loading}
+              onOpenRun={openRunDetails}
+              onOpenRunChat={openRunInChat}
+              onCancelRun={(runId) => void cancelRun(runId)}
+              onRetryRun={(runId) => void retryRun(runId)}
+              onStart={() => setPickStartOpen(true)}
+            />
+          </div>
+        )}
       </div>
 
       <WorkflowRunPanel
@@ -256,6 +371,11 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
           setPickStartOpen(false);
           setStartDefinition(definition);
         }}
+        onDetail={(definition) => {
+          setPickStartOpen(false);
+          setDetailDefinition(definition);
+        }}
+        onEdit={openWorkflowEditor}
       />
 
       <WorkflowStartDialog
@@ -284,6 +404,16 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
         language={language}
         ownerAgentId={ownerAgentId}
         saving={savingWorkflow}
+        initialDraft={
+          workflowEditorDraft
+            ? {
+                mode: workflowEditorDraft.mode,
+                name: workflowEditorDraft.initialName,
+                script: workflowEditorDraft.initialScript,
+                sourceTitle: workflowEditorDraft.definition.title,
+              }
+            : null
+        }
         onClose={() => setManageOpen(false)}
         onSave={(payload) => saveCustomWorkflow(payload)}
         onSaveAndStart={saveDraftAndStart}

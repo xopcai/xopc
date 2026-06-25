@@ -122,7 +122,7 @@ Skills can be loaded from these locations:
    - Bundled skills ship with the XOPC install.
    
 2. **Workspace** - Workspace-specific skills
-   - Location: `<workspace>/skills/`
+   - Location: `<workspace>/.xopc/skills/`
    - Highest priority
 
 3. **Global** - Global skills

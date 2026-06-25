@@ -18,7 +18,7 @@ describe('SkillManager runtime status', () => {
   function makeWorkspace(): string {
     const root = mkdtempSync(join(tmpdir(), 'xopc-skill-manager-'));
     roots.push(root);
-    const skillDir = join(root, 'skills', 'demo');
+    const skillDir = join(root, '.xopc', 'skills', 'demo');
     mkdirSync(skillDir, { recursive: true });
     writeFileSync(
       join(skillDir, 'SKILL.md'),

@@ -11,7 +11,7 @@
 | **状态目录** | 全局配置、凭据、日志、cron、全局 skills/extensions、托管工具链等。 |
 | **智能体主目录** `<stateDir>/agents/<agentId>/` | 按 `agentId` 隔离的运行时数据：托管记忆、**`profile/`** 下的 profile Markdown（`SOUL.md` 等）、入站/TTS 落盘。会话 transcript 存储在 **`xopc.db`**，而非 `sessions/`。 |
 | **智能体状态目录** `…/agents/<agentId>/agent/` | 进程状态：`agent.json`、各智能体凭据、IPC 收件箱、pid/socket、小型机器状态、扩展安装、出站崩溃恢复队列。 |
-| **Markdown 工作空间** | 用户项目树：工具 **cwd**、每日 `memory/*.md`、`media/generated`、用户 `skills/`、任意用户文件。 |
+| **Markdown 工作空间** | 用户项目树：工具 **cwd**、每日 `memory/*.md`、`media/generated`、项目 `.xopc/skills/`、任意用户文件。 |
 
 下文默认状态根为 `~/.xopc/`；可用 `XOPC_STATE_DIR`、`XOPC_PROFILE`、`XOPC_HOME` 覆盖（见 [workspace.md 环境变量](workspace.md#环境变量速查)）。
 
@@ -70,7 +70,7 @@
 |------|------|
 | `memory/` | 按日或主题笔记（`YYYY-MM-DD.md`）；`memory_search` 等与工具 cwd。 |
 | `media/generated/` | 生图等输出。 |
-| `skills/` | 用户自建技能。 |
+| `.xopc/skills/` | 项目本地用户自建技能。 |
 | *任意文件* | `read` / `write` / `edit` 等工具操作对象。 |
 
 新安装不会把内部状态写回 Markdown 工作区。本版本只支持文首表格中的 **单一目录树**：人设 Markdown 与机器状态按上表分布；**不会**从「全部堆在 Markdown 工作区里」的旧布局自动迁移；完整状态树用 `xopc init`，或 `xopc setup` / `xopc onboard` 做配置与 profile Markdown 种子，从其它 fork 升级时需自行搬迁数据。

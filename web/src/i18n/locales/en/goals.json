@@ -9,6 +9,7 @@
     "executionQueue": "Execution queue",
     "attempt": "attempt {{attempts}}/{{max}}",
     "boardLabel": "Goal status board",
+    "focusLabel": "Goal operations focus",
     "loading": "Loading goals…",
     "turns": "turns {{used}}/{{max}}",
     "checklistProgress": "checklist {{done}}/{{total}}",
@@ -20,6 +21,19 @@
     "nextAction": "Next action",
     "noNextAction": "No next action recorded yet.",
     "noChecklist": "No checklist yet.",
+    "prioritySummary": "{{priority}} priority",
+    "deadlineSummary": "due {{deadline}}",
+    "sourceSummary": "from {{source}}",
+    "viewModes": {
+      "focus": "Focus",
+      "board": "Board"
+    },
+    "overview": {
+      "attention": "Needs attention",
+      "running": "Running",
+      "queued": "Queued",
+      "active": "Active"
+    },
     "queueSummary": {
       "running": "{{count}} running",
       "queued": "{{count}} queued",
@@ -96,6 +110,33 @@
         "title": "Archived",
         "description": "Removed from active operation.",
         "empty": "No archived goals."
+      }
+    },
+    "focusSections": {
+      "attention": {
+        "title": "Needs attention",
+        "description": "Blocked goals, waiting input, and failed queue items.",
+        "empty": "Nothing needs attention."
+      },
+      "running": {
+        "title": "Running or queued",
+        "description": "Goals currently executing or waiting for the next run.",
+        "empty": "No goals are running or queued."
+      },
+      "active": {
+        "title": "Ready to continue",
+        "description": "Open goals that can be advanced now.",
+        "empty": "No ready goals."
+      },
+      "paused": {
+        "title": "Paused",
+        "description": "Goals intentionally stopped or waiting for later.",
+        "empty": "No paused goals."
+      },
+      "recentDone": {
+        "title": "Recently done",
+        "description": "Completed goals kept nearby for review.",
+        "empty": "No completed goals."
       }
     },
     "actions": {

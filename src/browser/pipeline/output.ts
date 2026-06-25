@@ -1,21 +1,28 @@
 /**
- * Pipeline output formatting — standardize pipeline results for tool consumption.
+ * Pipeline output formatting.
  */
 
 import type { BrowserActionResult, BrowserArtifact, BrowserDiagnostics } from '../actions/types.js';
 
+export interface PipelineStepTrace {
+  index: number;
+  scope: string;
+  action: string;
+  ok: boolean;
+  elapsedMs: number;
+  text?: string;
+  data?: unknown;
+  error?: { code: string; message: string };
+}
+
 export interface PipelineOutput {
   ok: boolean;
   name: string;
-  /** Final output data (from `output` action or last step data). */
-  data: unknown;
-  /** All artifacts collected during the pipeline. */
+  last: unknown;
+  outputs: unknown[];
   artifacts: BrowserArtifact[];
-  /** Diagnostics from failed steps or on_error. */
   diagnostics: BrowserDiagnostics;
-  /** Per-step results summary. */
-  steps: { action: string; ok: boolean; text?: string }[];
-  /** Error from the failed step (if any). */
+  trace: PipelineStepTrace[];
   error?: { step: number; action: string; code: string; message: string };
 }
 
@@ -23,15 +30,16 @@ export function createPipelineOutput(name: string): PipelineOutput {
   return {
     ok: true,
     name,
-    data: undefined,
+    last: undefined,
+    outputs: [],
     artifacts: [],
     diagnostics: { warnings: [] },
-    steps: [],
+    trace: [],
   };
 }
 
-export function addStepResult(output: PipelineOutput, stepIndex: number, result: BrowserActionResult): void {
-  output.steps.push({ action: result.action, ok: result.ok, text: result.text?.slice(0, 200) });
+export function addStepTrace(output: PipelineOutput, trace: PipelineStepTrace, result: BrowserActionResult): void {
+  output.trace.push(trace);
 
   if (result.artifacts) {
     output.artifacts.push(...result.artifacts);
@@ -40,14 +48,13 @@ export function addStepResult(output: PipelineOutput, stepIndex: number, result:
   if (!result.ok) {
     output.ok = false;
     output.error = {
-      step: stepIndex,
+      step: trace.index,
       action: result.action,
       code: result.error?.code ?? 'UNKNOWN',
       message: result.error?.message ?? 'Step failed',
     };
   }
 
-  // Merge diagnostics
   if (result.diagnostics) {
     if (result.diagnostics.url) output.diagnostics.url = result.diagnostics.url;
     if (result.diagnostics.title) output.diagnostics.title = result.diagnostics.title;
@@ -55,24 +62,35 @@ export function addStepResult(output: PipelineOutput, stepIndex: number, result:
     if (result.diagnostics.screenshot) output.diagnostics.screenshot = result.diagnostics.screenshot;
     if (result.diagnostics.console) output.diagnostics.console = result.diagnostics.console;
     if (result.diagnostics.network) output.diagnostics.network = result.diagnostics.network;
-    if (result.diagnostics.warnings) output.diagnostics.warnings!.push(...result.diagnostics.warnings);
+    if (result.diagnostics.warnings) {
+      output.diagnostics.warnings ??= [];
+      output.diagnostics.warnings.push(...result.diagnostics.warnings);
+    }
   }
 }
 
-/**
- * Format a PipelineOutput into a BrowserActionResult for tool consumption.
- */
 export function formatPipelineResult(output: PipelineOutput): BrowserActionResult {
+  const data = {
+    output: output.outputs.length === 0 ? output.last : output.outputs.length === 1 ? output.outputs[0] : output.outputs,
+    last: output.last,
+    outputs: output.outputs,
+    trace: output.trace,
+  };
+
   if (output.ok) {
-    const text = output.data
-      ? (typeof output.data === 'string' ? output.data : JSON.stringify(output.data, null, 2))
-      : `Pipeline "${output.name}" completed (${output.steps.length} steps).`;
+    const textValue = data.output;
+    const text = textValue === undefined
+      ? `Pipeline "${output.name}" completed (${output.trace.length} steps).`
+      : typeof textValue === 'string'
+        ? textValue
+        : JSON.stringify(textValue, null, 2);
     return {
       ok: true,
       action: 'pipeline',
       text,
-      data: output.data,
+      data,
       artifacts: output.artifacts.length > 0 ? output.artifacts : undefined,
+      diagnostics: output.diagnostics,
     };
   }
 
@@ -83,6 +101,7 @@ export function formatPipelineResult(output: PipelineOutput): BrowserActionResul
     ok: false,
     action: 'pipeline',
     text: errText,
+    data,
     error: output.error ? { code: output.error.code, message: output.error.message } : { code: 'PIPELINE_FAILED', message: errText },
     artifacts: output.artifacts.length > 0 ? output.artifacts : undefined,
     diagnostics: output.diagnostics,

@@ -120,6 +120,12 @@ export interface TuiStartupResources {
   connectors: string[];
 }
 
+export interface TuiWorkspaceFileSearchEntry {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+}
+
 /** Read-only transcript tree row for current-session navigation/inspection. */
 export interface TuiTranscriptTreeEntry {
   id: string;
@@ -178,6 +184,13 @@ export interface TuiBackend {
 
   /** Load startup resources shown in `/start` and initial help. */
   getStartupResources?(sessionKey: string): Promise<TuiStartupResources>;
+
+  /** Fuzzy search files in this session's effective workspace. */
+  searchWorkspaceFiles?(
+    sessionKey: string,
+    query: string,
+    options?: { limit?: number },
+  ): Promise<TuiWorkspaceFileSearchEntry[]>;
 
   /** Load chat history for a session. */
   loadHistory(opts: {

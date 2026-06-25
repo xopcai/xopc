@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { AlertTriangle, Braces, CheckCircle2, Code2, RotateCcw, Sparkles } from 'lucide-react';
+import { AlertTriangle, Braces, CheckCircle2, Code2, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -18,6 +18,13 @@ import {
 
 type WorkflowsMessages = ReturnType<typeof messages>['workflows'];
 type CreateMode = 'ai' | 'manual';
+
+export interface WorkflowEditorInitialDraft {
+  mode: 'edit' | 'copy';
+  name: string;
+  script: string;
+  sourceTitle: string;
+}
 
 const DEFAULT_SCRIPT = `export const meta = {
   name: 'my_workflow',
@@ -43,6 +50,7 @@ export function WorkflowCreateDialog({
   language,
   ownerAgentId,
   saving,
+  initialDraft,
   onClose,
   onSave,
   onSaveAndStart,
@@ -51,17 +59,29 @@ export function WorkflowCreateDialog({
   language: StoredLanguage;
   ownerAgentId?: string;
   saving: boolean;
+  initialDraft?: WorkflowEditorInitialDraft | null;
   onClose: () => void;
   onSave: (payload: { name: string; script: string }) => Promise<WorkflowDefinition | void> | WorkflowDefinition | void;
   onSaveAndStart: (payload: { name: string; script: string; goal: string }) => Promise<void> | void;
 }) {
   const labels = messages(language).workflows;
   const [mode, setMode] = useState<CreateMode>('ai');
+  const [workflowName, setWorkflowName] = useState('');
+  const [workflowScript, setWorkflowScript] = useState('');
+  const editingExisting = initialDraft?.mode === 'edit';
+  const title = editingExisting ? labels.editWorkflowTitle : labels.createWorkflowTitle;
+  const hint = editingExisting
+    ? labels.editWorkflowHint
+    : initialDraft?.mode === 'copy'
+      ? labels.createWorkflowHintFromCopy
+      : labels.createWorkflowHint;
 
   useEffect(() => {
     if (!open) return;
-    setMode('ai');
-  }, [open]);
+    setMode(initialDraft ? 'manual' : 'ai');
+    setWorkflowName(initialDraft?.name ?? '');
+    setWorkflowScript(initialDraft?.script ?? '');
+  }, [initialDraft, open]);
 
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
@@ -69,8 +89,8 @@ export function WorkflowCreateDialog({
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
         <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(92vh,52rem)] w-[min(100%-2rem,72rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
           <div className="border-b border-edge px-5 py-4">
-            <Dialog.Title className="text-base font-semibold text-fg">{labels.createWorkflowTitle}</Dialog.Title>
-            <Dialog.Description className="mt-1 text-sm text-fg-muted">{labels.createWorkflowHint}</Dialog.Description>
+            <Dialog.Title className="text-base font-semibold text-fg">{title}</Dialog.Title>
+            <Dialog.Description className="mt-1 text-sm text-fg-muted">{hint}</Dialog.Description>
             <div className="mt-4 inline-flex rounded-xl border border-edge bg-surface-base p-1">
               <ModeButton active={mode === 'ai'} onClick={() => setMode('ai')} icon={<Sparkles className="size-4" aria-hidden />}>
                 {labels.createWorkflowAiTab}
@@ -86,12 +106,27 @@ export function WorkflowCreateDialog({
               language={language}
               ownerAgentId={ownerAgentId}
               saving={saving}
+              initialDraft={initialDraft}
+              name={workflowName}
+              setName={setWorkflowName}
+              script={workflowScript}
+              setScript={setWorkflowScript}
               onClose={onClose}
               onSave={onSave}
               onSaveAndStart={onSaveAndStart}
             />
           ) : (
-            <ManualCreatePane language={language} saving={saving} onClose={onClose} onSave={onSave} />
+            <ManualCreatePane
+              language={language}
+              saving={saving}
+              initialDraft={initialDraft}
+              name={workflowName}
+              setName={setWorkflowName}
+              script={workflowScript}
+              setScript={setWorkflowScript}
+              onClose={onClose}
+              onSave={onSave}
+            />
           )}
         </Dialog.Content>
       </Dialog.Portal>
@@ -130,6 +165,11 @@ function AiCreatePane({
   language,
   ownerAgentId,
   saving,
+  initialDraft,
+  name,
+  setName,
+  script,
+  setScript,
   onClose,
   onSave,
   onSaveAndStart,
@@ -137,6 +177,11 @@ function AiCreatePane({
   language: StoredLanguage;
   ownerAgentId?: string;
   saving: boolean;
+  initialDraft?: WorkflowEditorInitialDraft | null;
+  name: string;
+  setName: (value: string) => void;
+  script: string;
+  setScript: (value: string) => void;
   onClose: () => void;
   onSave: (payload: { name: string; script: string }) => Promise<WorkflowDefinition | void> | WorkflowDefinition | void;
   onSaveAndStart: (payload: { name: string; script: string; goal: string }) => Promise<void> | void;
@@ -144,8 +189,6 @@ function AiCreatePane({
   const labels = messages(language).workflows;
   const [prompt, setPrompt] = useState('');
   const [draft, setDraft] = useState<WorkflowDraftResponse | null>(null);
-  const [name, setName] = useState('');
-  const [script, setScript] = useState('');
   const [constraints, setConstraints] = useState<WorkflowDraftConstraints>({
     allowNetwork: false,
     fileSystem: 'read',
@@ -160,6 +203,10 @@ function AiCreatePane({
   const blockingLint = useMemo(() => draft?.lint.filter((issue) => issue.severity === 'error') ?? [], [draft]);
   const canGenerate = prompt.trim().length > 0 && !generating;
   const canSave = Boolean(draft && name.trim() && script.trim() && draft.validation.valid && blockingLint.length === 0 && !saving);
+  const hasExistingScript = script.trim().length > 0;
+  const promptLabel = hasExistingScript ? labels.nlBuilderEditPromptLabel : labels.nlBuilderPromptLabel;
+  const promptPlaceholder = hasExistingScript ? labels.nlBuilderEditPromptPlaceholder : labels.nlBuilderPromptPlaceholder;
+  const primaryGenerateMode: 'create' | 'improve' = hasExistingScript ? 'improve' : 'create';
 
   const generate = async (mode: 'create' | 'improve') => {
     if (!prompt.trim()) return;
@@ -200,11 +247,11 @@ function AiCreatePane({
       <div className="grid min-h-0 flex-1 gap-4 overflow-auto px-5 py-4 lg:grid-cols-[minmax(18rem,0.9fr)_minmax(24rem,1.4fr)]">
         <section className="space-y-3">
           <label className="block">
-            <span className="text-xs font-medium text-fg">{labels.nlBuilderPromptLabel}</span>
+            <span className="text-xs font-medium text-fg">{promptLabel}</span>
             <textarea
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder={labels.nlBuilderPromptPlaceholder}
+              placeholder={promptPlaceholder}
               className="mt-1.5 min-h-36 w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm leading-6 text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
             />
           </label>
@@ -238,16 +285,10 @@ function AiCreatePane({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button variant="primary" disabled={!canGenerate} onClick={() => void generate('create')}>
+            <Button variant="primary" disabled={!canGenerate} onClick={() => void generate(primaryGenerateMode)}>
               <Sparkles className="size-4" aria-hidden />
-              {generating ? labels.nlBuilderGenerating : labels.nlBuilderGenerate}
+              {generating ? labels.nlBuilderGenerating : hasExistingScript ? labels.nlBuilderRewriteExisting : labels.nlBuilderGenerate}
             </Button>
-            {draft ? (
-              <Button variant="secondary" disabled={!canGenerate} onClick={() => void generate('improve')}>
-                <RotateCcw className="size-4" aria-hidden />
-                {labels.nlBuilderImprove}
-              </Button>
-            ) : null}
           </div>
 
           {error ? <Notice text={error} /> : null}
@@ -255,6 +296,7 @@ function AiCreatePane({
         </section>
 
         <section className="min-w-0 space-y-3">
+          <WorkflowEditorContextNotice initialDraft={initialDraft} labels={labels} />
           <WorkflowNameField labels={labels} name={name} setName={setName} />
           <WorkflowScriptField labels={labels} script={script} setScript={setScript} minHeightClass="min-h-96" />
           {draft ? <AiValidationPanel draft={draft} labels={labels} validationIssues={validationIssues} /> : null}
@@ -279,17 +321,25 @@ function AiCreatePane({
 function ManualCreatePane({
   language,
   saving,
+  initialDraft,
+  name,
+  setName,
+  script,
+  setScript,
   onClose,
   onSave,
 }: {
   language: StoredLanguage;
   saving: boolean;
+  initialDraft?: WorkflowEditorInitialDraft | null;
+  name: string;
+  setName: (value: string) => void;
+  script: string;
+  setScript: (value: string) => void;
   onClose: () => void;
   onSave: (payload: { name: string; script: string }) => Promise<WorkflowDefinition | void> | WorkflowDefinition | void;
 }) {
   const labels = messages(language).workflows;
-  const [name, setName] = useState('');
-  const [script, setScript] = useState(DEFAULT_SCRIPT);
   const [submitted, setSubmitted] = useState(false);
   const [validating, setValidating] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -339,6 +389,16 @@ function ManualCreatePane({
   const showValidationPanel = submitted || validating || validationResult != null || validationError != null;
   const canSave = hasRequiredFields && !saving && !validating && validationResult?.valid === true;
 
+  useEffect(() => {
+    if (!initialDraft && !script.trim()) {
+      setScript(DEFAULT_SCRIPT);
+    }
+    setSubmitted(false);
+    setValidating(false);
+    setValidationError(null);
+    setValidationResult(null);
+  }, [initialDraft, script, setScript]);
+
   const submit = async () => {
     setSubmitted(true);
     if (!hasRequiredFields || saving) return;
@@ -362,6 +422,7 @@ function ManualCreatePane({
   return (
     <>
       <div className="min-h-0 flex-1 space-y-3 overflow-auto px-5 py-4">
+        <WorkflowEditorContextNotice initialDraft={initialDraft} labels={labels} />
         <WorkflowNameField
           labels={labels}
           name={name}
@@ -450,6 +511,25 @@ function WorkflowNameField({
         className="mt-1.5 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 font-mono text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
       />
     </label>
+  );
+}
+
+function WorkflowEditorContextNotice({
+  initialDraft,
+  labels,
+}: {
+  initialDraft?: WorkflowEditorInitialDraft | null;
+  labels: WorkflowsMessages;
+}) {
+  if (!initialDraft) return null;
+  const text =
+    initialDraft.mode === 'copy'
+      ? labels.copyWorkflowNotice.replace('{{title}}', initialDraft.sourceTitle)
+      : labels.editWorkflowNotice.replace('{{title}}', initialDraft.sourceTitle);
+  return (
+    <div className="rounded-xl border border-accent/20 bg-accent-soft/60 px-3 py-2 text-sm leading-6 text-accent-fg">
+      {text}
+    </div>
   );
 }
 

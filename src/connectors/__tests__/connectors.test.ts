@@ -17,7 +17,20 @@ describe('connectors catalog', () => {
   it('exposes connector-only built-ins without secret values', () => {
     const ids = listConnectorCatalog().map((connector) => connector.id);
 
-    expect(ids).toEqual(['fetch', 'filesystem', 'github', 'playwright', 'time']);
+    expect(ids).toEqual(expect.arrayContaining([
+      'brave-search',
+      'fetch',
+      'filesystem',
+      'github',
+      'google-drive',
+      'linear',
+      'memory',
+      'notion',
+      'playwright',
+      'sequential-thinking',
+      'slack',
+      'time',
+    ]));
     expect(JSON.stringify(listConnectorCatalog())).not.toContain('ghp_');
   });
 });

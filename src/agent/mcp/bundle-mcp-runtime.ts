@@ -39,6 +39,8 @@ type BundleMcpSession = {
 
 type LoadedMcpConfig = ReturnType<typeof loadEmbeddedMcpConfig>;
 type ListedTool = Awaited<ReturnType<Client["listTools"]>>["tools"][number];
+type ListedResource = Awaited<ReturnType<Client["listResources"]>>["resources"][number];
+type ListedPrompt = Awaited<ReturnType<Client["listPrompts"]>>["prompts"][number];
 type CreateSessionMcpRuntime = (
   params: Parameters<typeof createSessionMcpRuntime>[0] & { configFingerprint?: string },
 ) => SessionMcpRuntime;
@@ -122,6 +124,49 @@ async function listAllTools(client: Client) {
     cursor = page.nextCursor;
   } while (cursor);
   return tools;
+}
+
+async function listAllResources(client: Client) {
+  const resources: ListedResource[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await client.listResources(cursor ? { cursor } : undefined);
+    resources.push(...page.resources);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return resources;
+}
+
+async function listAllPrompts(client: Client) {
+  const prompts: ListedPrompt[] = [];
+  let cursor: string | undefined;
+  do {
+    const page = await client.listPrompts(cursor ? { cursor } : undefined);
+    prompts.push(...page.prompts);
+    cursor = page.nextCursor;
+  } while (cursor);
+  return prompts;
+}
+
+async function listOptionalMcpCapability<T>(params: {
+  serverName: string;
+  capability: "resources" | "prompts";
+  list: () => Promise<T[]>;
+}): Promise<T[]> {
+  try {
+    return await params.list();
+  } catch (error) {
+    log.debug(
+      {
+        phase: "agent.mcp_connect",
+        serverName: params.serverName,
+        capability: params.capability,
+        errorMessage: redactErrorUrls(error),
+      },
+      `bundle-mcp: server "${params.serverName}" did not list ${params.capability}`,
+    );
+    return [];
+  }
 }
 
 async function disposeSession(session: BundleMcpSession) {
@@ -218,11 +263,15 @@ export function createSessionMcpRuntime(params: {
           generatedAt: Date.now(),
           servers: {},
           tools: [],
+          resources: [],
+          prompts: [],
         };
       }
 
       const servers: Record<string, McpServerCatalog> = {};
       const tools: McpCatalogTool[] = [];
+      const resources: McpToolCatalog["resources"] = [];
+      const prompts: McpToolCatalog["prompts"] = [];
       const usedServerNames = new Set<string>();
 
       try {
@@ -268,11 +317,23 @@ export function createSessionMcpRuntime(params: {
             await connectWithTimeout(client, resolved.transport, resolved.connectionTimeoutMs);
             failIfDisposed();
             const listedTools = await listAllTools(client);
+            const listedResources = await listOptionalMcpCapability({
+              serverName,
+              capability: "resources",
+              list: () => listAllResources(client),
+            });
+            const listedPrompts = await listOptionalMcpCapability({
+              serverName,
+              capability: "prompts",
+              list: () => listAllPrompts(client),
+            });
             failIfDisposed();
             servers[serverName] = {
               serverName,
               launchSummary: resolved.description,
               toolCount: listedTools.length,
+              resourceCount: listedResources.length,
+              promptCount: listedPrompts.length,
             };
             for (const tool of listedTools) {
               const toolName = tool.name.trim();
@@ -288,6 +349,34 @@ export function createSessionMcpRuntime(params: {
                   normalizeOptionalString(tool.description) ?? normalizeOptionalString(tool.title),
                 inputSchema: tool.inputSchema,
                 fallbackDescription: `Provided by bundle MCP server "${serverName}" (${resolved.description}).`,
+              });
+            }
+            for (const resource of listedResources) {
+              const uri = resource.uri.trim();
+              const name = resource.name.trim();
+              if (!uri || !name) {
+                continue;
+              }
+              resources.push({
+                serverName,
+                uri,
+                name,
+                title: resource.title,
+                description: normalizeOptionalString(resource.description),
+                mimeType: normalizeOptionalString(resource.mimeType),
+              });
+            }
+            for (const prompt of listedPrompts) {
+              const name = prompt.name.trim();
+              if (!name) {
+                continue;
+              }
+              prompts.push({
+                serverName,
+                name,
+                title: prompt.title,
+                description: normalizeOptionalString(prompt.description),
+                argumentCount: Array.isArray(prompt.arguments) ? prompt.arguments.length : 0,
               });
             }
           } catch (error) {
@@ -308,6 +397,8 @@ export function createSessionMcpRuntime(params: {
           generatedAt: Date.now(),
           servers,
           tools,
+          resources,
+          prompts,
         };
       } catch (error) {
         await Promise.allSettled(

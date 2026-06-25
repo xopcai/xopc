@@ -6,6 +6,7 @@ import { resolveSkillsDir, resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager } from './config.js';
 import { isManagedSkillTransientDirName } from './managed-store.js';
+import { resolveWorkspaceSkillsDir } from './workspace-skills-dir.js';
 
 const log = createLogger('SkillFilesystemWatcher');
 
@@ -59,12 +60,16 @@ function isSameOrInside(parent: string, child: string): boolean {
 }
 
 function isWorkspaceSkillPath(workspaceRoot: string, candidate: string): boolean {
-  const skillsRoot = path.join(workspaceRoot, 'skills');
-  return candidate === workspaceRoot || isSameOrInside(skillsRoot, candidate);
+  const skillsRoot = resolveWorkspaceSkillsDir(workspaceRoot);
+  return (
+    candidate === workspaceRoot ||
+    isSameOrInside(skillsRoot, candidate) ||
+    isSameOrInside(candidate, skillsRoot)
+  );
 }
 
 function isWorkspaceSkillsRoot(workspaceRoot: string, candidate: string): boolean {
-  return candidate === path.join(workspaceRoot, 'skills');
+  return candidate === resolveWorkspaceSkillsDir(workspaceRoot);
 }
 
 function isSkillMdPath(candidate: string): boolean {

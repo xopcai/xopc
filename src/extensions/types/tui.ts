@@ -7,6 +7,8 @@ export type TuiNotifyLevel = 'info' | 'warn' | 'warning' | 'error';
 
 export interface TuiAutocompleteSuggestion {
   name: string;
+  value?: string;
+  label?: string;
   description?: string;
 }
 

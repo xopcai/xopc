@@ -5,8 +5,7 @@
 import { Type } from '@sinclair/typebox';
 
 export const BrowserUsePipelineSchema = Type.Object({
-  yaml: Type.Optional(Type.String({ description: 'Inline YAML pipeline (brocli-style DSL).' })),
-  script: Type.Optional(Type.String({ description: 'Alias for `yaml` — inline brocli YAML script.' })),
+  yaml: Type.Optional(Type.String({ description: 'Inline YAML browser pipeline.' })),
   path: Type.Optional(Type.String({ description: 'Path or http(s) URL to a .yaml pipeline file.' })),
   args: Type.Optional(
     Type.Record(Type.String(), Type.Unknown(), { description: 'Override pipeline arg defaults.' }),

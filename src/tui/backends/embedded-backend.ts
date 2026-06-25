@@ -1,4 +1,5 @@
 import type { ExtensionRegistryImpl } from '../../extensions/loader.js';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { AgentService } from '../../agent/index.js';
 import { listAgentEntries, normalizeAgentId } from '../../agent/agent-scope.js';
 import { parseModelRef } from '../../agent/models/selection.js';
@@ -24,6 +25,7 @@ import type {
   TuiSessionItem,
   TuiTranscriptTreeEntry,
   TuiAgentInfo,
+  TuiWorkspaceFileSearchEntry,
 } from '../tui-backend.js';
 import type { SessionInfo } from '../tui-types.js';
 import { sessionMetadataToTuiItem } from '../tui-session-format.js';
@@ -31,8 +33,20 @@ import { computeTuiSessionStats } from '../tui-session-stats.js';
 import { buildTuiTranscriptTree, transcriptTreeEntryIdToRowNumber } from '../tui-transcript-tree.js';
 import { ChatStreamMapper } from '../../gateway/chat-stream/mapper.js';
 import { collectTuiStartupResources } from '../tui-startup-resources.js';
+import { fuzzySearchWorkspaceFiles } from '../../gateway/workspace-file-search.js';
 
 const log = createLogger('TUI:Embedded');
+
+interface EmbeddedBackendOptions {
+  extensionRegistry?: ExtensionRegistryImpl;
+  implicitTrustedWorkspace?: string;
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean | null | undefined;
+}
+
+function isPathSameOrInside(parentDir: string, childDir: string): boolean {
+  const rel = relative(resolve(parentDir), resolve(childDir));
+  return rel === '' || (!!rel && !rel.startsWith('..') && !isAbsolute(rel));
+}
 
 /**
  * TUI backend that runs the agent in-process (no gateway required).
@@ -50,7 +64,7 @@ export class EmbeddedBackend implements TuiBackend {
   onConnected?: () => void;
   onDisconnected?: (reason: string) => void;
 
-  constructor(private readonly opts?: { extensionRegistry?: ExtensionRegistryImpl }) {
+  constructor(private readonly opts?: EmbeddedBackendOptions) {
     this.bus = new MessageBus();
   }
 
@@ -71,6 +85,17 @@ export class EmbeddedBackend implements TuiBackend {
       model: modelId,
       config,
       extensionRegistry: this.opts?.extensionRegistry,
+      isWorkspaceTrusted: (workspaceDir) => {
+        const explicit = this.opts?.isWorkspaceTrusted?.(workspaceDir);
+        if (explicit !== undefined && explicit !== null) {
+          return explicit;
+        }
+        const implicit = this.opts?.implicitTrustedWorkspace;
+        if (implicit && isPathSameOrInside(implicit, workspaceDir)) {
+          return true;
+        }
+        return undefined;
+      },
     });
 
     this.agent.start().then(() => {
@@ -101,6 +126,22 @@ export class EmbeddedBackend implements TuiBackend {
 
   async getStartupResources(sessionKey: string) {
     return collectTuiStartupResources(loadConfig(), sessionKey);
+  }
+
+  async searchWorkspaceFiles(
+    sessionKey: string,
+    query: string,
+    options?: { limit?: number },
+  ): Promise<TuiWorkspaceFileSearchEntry[]> {
+    if (!this.agent) return [];
+    try {
+      const workspaceRoot = await this.agent.getEffectiveWorkspacePathForSession(sessionKey);
+      return await fuzzySearchWorkspaceFiles(workspaceRoot, query, options?.limit ?? 15);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn({ err: error, sessionKey, errorMessage }, `Embedded workspace file search failed: ${errorMessage}`);
+      return [];
+    }
   }
 
   async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {

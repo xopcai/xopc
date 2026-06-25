@@ -8,7 +8,9 @@ import {
   CirclePlay,
   Clock3,
   ExternalLink,
+  LayoutGrid,
   ListChecks,
+  ListFilter,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -36,6 +38,8 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 type GoalStatus = 'active' | 'paused' | 'blocked' | 'needs_input' | 'done' | 'archived';
 type GoalBoardLaneId = 'active' | 'paused' | 'attention' | 'done' | 'archived';
 type GoalAction = 'continue' | 'pause' | 'resume' | 'reopen' | 'complete' | 'archive' | 'unarchive';
+type GoalsViewMode = 'focus' | 'board';
+type FocusSectionId = 'attention' | 'running' | 'active' | 'paused' | 'recentDone';
 
 type GoalItem = {
   id: string;
@@ -44,6 +48,7 @@ type GoalItem = {
   status: GoalStatus;
   agentId: string;
   priority: 'low' | 'normal' | 'high';
+  deadlineAt?: number;
   createdAt: number;
   updatedAt: number;
   turnsUsed: number;
@@ -92,6 +97,7 @@ type GoalCreateOptions = {
 
 const BOARD_STATUSES: GoalStatus[] = ['active', 'paused', 'blocked', 'needs_input', 'done', 'archived'];
 const BOARD_LANES: GoalBoardLaneId[] = ['active', 'paused', 'attention', 'done', 'archived'];
+const FOCUS_SECTIONS: FocusSectionId[] = ['attention', 'running', 'active', 'paused', 'recentDone'];
 const DRAG_TYPE = 'application/x-xopc-goal-id';
 
 function progress(goal: GoalItem): { done: number; total: number } {
@@ -163,6 +169,39 @@ function queueTone(status: GoalQueueItem['status']): string {
   if (status === 'retry_waiting' || status === 'failed') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
   if (status === 'succeeded') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
   return 'bg-surface-hover text-fg-muted';
+}
+
+function isActiveQueueStatus(status: GoalQueueItem['status']): boolean {
+  return status === 'running' || status === 'queued' || status === 'retry_waiting';
+}
+
+function focusSectionForGoal(goal: GoalItem, queueItem?: GoalQueueItem): FocusSectionId | null {
+  if (goal.status === 'archived') return null;
+  if (goal.status === 'blocked' || goal.status === 'needs_input' || queueItem?.status === 'failed') return 'attention';
+  if (queueItem && isActiveQueueStatus(queueItem.status)) return 'running';
+  if (goal.status === 'active') return 'active';
+  if (goal.status === 'paused') return 'paused';
+  if (goal.status === 'done') return 'recentDone';
+  return null;
+}
+
+function priorityRank(priority: GoalItem['priority']): number {
+  if (priority === 'high') return 3;
+  if (priority === 'normal') return 2;
+  return 1;
+}
+
+function compareGoalsForFocus(a: GoalItem, b: GoalItem, queueByGoal: Map<string, GoalQueueItem>): number {
+  const qa = queueByGoal.get(a.id);
+  const qb = queueByGoal.get(b.id);
+  const queueDiff = (qa ? queueRank(qa) : 0) - (qb ? queueRank(qb) : 0);
+  if (queueDiff !== 0) return -queueDiff;
+  const priorityDiff = priorityRank(a.priority) - priorityRank(b.priority);
+  if (priorityDiff !== 0) return -priorityDiff;
+  const aDeadline = a.deadlineAt ?? Number.POSITIVE_INFINITY;
+  const bDeadline = b.deadlineAt ?? Number.POSITIVE_INFINITY;
+  if (aDeadline !== bDeadline) return aDeadline - bDeadline;
+  return b.updatedAt - a.updatedAt;
 }
 
 function matchesSearch(goal: GoalItem, query: string): boolean {
@@ -362,6 +401,92 @@ function GoalCard({
           {selected ? <span className="font-medium text-accent-fg">{t.openDetails}</span> : null}
         </div>
       </button>
+    </article>
+  );
+}
+
+function FocusGoalRow({
+  goal,
+  queueItem,
+  t,
+  language,
+  busy,
+  selected,
+  onOpen,
+  onAction,
+}: {
+  goal: GoalItem;
+  queueItem?: GoalQueueItem;
+  t: GoalsPageMessages;
+  language: StoredLanguage;
+  busy: string | null;
+  selected: boolean;
+  onOpen: (goal: GoalItem) => void;
+  onAction: (goalId: string, action: GoalAction) => void;
+}) {
+  const p = progress(goal);
+  const primary = primaryAction(goal);
+  const attentionText = goal.blockedReason || goal.nextAction || goal.latestRun?.reason || t.noNextAction;
+  const updatedAt = goal.latestRun?.finishedAt ?? goal.updatedAt;
+
+  return (
+    <article
+      className={cn(
+        'rounded-lg border bg-surface-panel transition-colors hover:border-edge-strong hover:bg-surface-hover/40',
+        selected ? 'border-accent/70 ring-1 ring-accent/30' : 'border-edge',
+      )}
+    >
+      <div className="flex flex-col gap-3 p-3.5 lg:flex-row lg:items-center">
+        <button
+          type="button"
+          className={cn('min-w-0 flex-1 text-left', interaction.focusRingPanel)}
+          aria-label={`${t.openDetails}: ${goal.title}`}
+          onClick={() => onOpen(goal)}
+        >
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', statusClass(goal.status))}>
+              {statusLabel(goal.status, t)}
+            </span>
+            {queueItem ? (
+              <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-semibold', queueTone(queueItem.status))}>
+                {statusLabel(queueItem.status, t)}
+              </span>
+            ) : null}
+            <span className="text-[11px] font-medium text-fg-muted">{formatMessage(t.prioritySummary, { priority: t.priorities[goal.priority] })}</span>
+            <span className="text-[11px] text-fg-subtle">{goal.agentId}</span>
+          </div>
+          <h3 className="mt-2 line-clamp-2 text-sm font-semibold leading-5 text-fg">{goal.title}</h3>
+          <p className={cn('mt-1 line-clamp-2 text-sm leading-5', goal.blockedReason ? 'text-amber-700 dark:text-amber-300' : 'text-fg-muted')}>
+            {attentionText}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-fg-subtle">
+            <span>{formatDateTime(updatedAt, language)}</span>
+            <span>{formatMessage(t.turns, { used: goal.turnsUsed, max: goal.maxTurns })}</span>
+            {p.total ? <span>{formatMessage(t.checklistProgress, { done: p.done, total: p.total })}</span> : null}
+            {goal.deadlineAt ? <span>{formatMessage(t.deadlineSummary, { deadline: formatDateTime(goal.deadlineAt, language) })}</span> : null}
+            {queueItem ? <span>{formatMessage(t.sourceSummary, { source: t.sources[queueItem.source] })}</span> : null}
+          </div>
+        </button>
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2 lg:justify-end">
+          {primary ? (
+            <GoalActionButton
+              goalId={goal.id}
+              action={primary}
+              t={t}
+              busy={busy}
+              variant={primary === 'continue' ? 'primary' : 'secondary'}
+              onAction={onAction}
+            />
+          ) : null}
+          <Button asChild type="button" variant="ghost" className="h-9 rounded-lg px-3">
+            <Link to={`/goals/${encodeURIComponent(goal.id)}`}>
+              <ExternalLink className="size-4" aria-hidden />
+              {t.fullDetails}
+            </Link>
+          </Button>
+        </div>
+      </div>
     </article>
   );
 }
@@ -921,6 +1046,7 @@ export function GoalsPage() {
     agents: [],
     models: [],
   });
+  const [viewMode, setViewMode] = useState<GoalsViewMode>('focus');
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [draggingGoalId, setDraggingGoalId] = useState<string | null>(null);
   const [dropLane, setDropLane] = useState<GoalBoardLaneId | null>(null);
@@ -990,6 +1116,17 @@ export function GoalsPage() {
 
   const queueByGoal = useMemo(() => queueForGoals(queue), [queue]);
   const visibleGoals = useMemo(() => goals.filter((goal) => matchesSearch(goal, query)), [goals, query]);
+  const focusGroups = useMemo(() => {
+    const grouped = new Map<FocusSectionId, GoalItem[]>(FOCUS_SECTIONS.map((section) => [section, []]));
+    for (const goal of visibleGoals) {
+      const section = focusSectionForGoal(goal, queueByGoal.get(goal.id));
+      if (section) grouped.get(section)?.push(goal);
+    }
+    for (const section of FOCUS_SECTIONS) {
+      grouped.get(section)?.sort((a, b) => compareGoalsForFocus(a, b, queueByGoal));
+    }
+    return grouped;
+  }, [queueByGoal, visibleGoals]);
   const lanes = useMemo(() => {
     const grouped = new Map<GoalBoardLaneId, GoalItem[]>(BOARD_LANES.map((lane) => [lane, []]));
     for (const goal of visibleGoals) {
@@ -1004,16 +1141,18 @@ export function GoalsPage() {
     const attention = goals.filter((g) => g.status === 'blocked' || g.status === 'needs_input').length;
     const running = queue.filter((item) => item.status === 'running').length;
     const queued = queue.filter((item) => item.status === 'queued' || item.status === 'retry_waiting').length;
-    return { open, attention, running, queued };
+    const failed = queue.filter((item) => item.status === 'failed').length;
+    const active = goals.filter((g) => g.status === 'active').length;
+    return { open, attention, running, queued, failed, active };
   }, [goals, queue]);
 
   const queueSummary = useMemo(
     () => [
       { key: 'running', count: counts.running },
       { key: 'queued', count: counts.queued },
-      { key: 'failed', count: queue.filter((item) => item.status === 'failed').length },
+      { key: 'failed', count: counts.failed },
     ],
-    [counts.queued, counts.running, queue],
+    [counts.failed, counts.queued, counts.running],
   );
 
   const runAction = async (goalId: string, action: GoalAction) => {
@@ -1127,89 +1266,179 @@ export function GoalsPage() {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-base">
       <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-4 py-5 sm:px-6 2xl:px-8">
-        <section className="flex flex-wrap items-center gap-2 rounded-lg border border-edge bg-surface-panel px-3 py-2">
-          <div className="mr-1 flex items-center gap-2 text-sm font-medium text-fg">
-            <Clock3 className="size-4 text-accent" aria-hidden />
-            {t.executionQueue}
+        <section className="mx-auto w-full max-w-app-main rounded-lg border border-edge bg-surface-panel p-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-md border border-edge-subtle bg-surface-muted/50 px-3 py-2">
+                <p className="text-[11px] font-medium text-fg-muted">{t.overview.attention}</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.attention + counts.failed}</p>
+              </div>
+              <div className="rounded-md border border-edge-subtle bg-surface-muted/50 px-3 py-2">
+                <p className="text-[11px] font-medium text-fg-muted">{t.overview.running}</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.running}</p>
+              </div>
+              <div className="rounded-md border border-edge-subtle bg-surface-muted/50 px-3 py-2">
+                <p className="text-[11px] font-medium text-fg-muted">{t.overview.queued}</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.queued}</p>
+              </div>
+              <div className="rounded-md border border-edge-subtle bg-surface-muted/50 px-3 py-2">
+                <p className="text-[11px] font-medium text-fg-muted">{t.overview.active}</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.active}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="mr-1 flex items-center gap-2 text-sm font-medium text-fg">
+                <Clock3 className="size-4 text-accent" aria-hidden />
+                {t.executionQueue}
+              </div>
+              {queueSummary.map((item) => (
+                <span key={item.key} className="rounded-full border border-edge bg-surface-muted px-2 py-0.5 text-xs text-fg-muted">
+                  {formatMessage(t.queueSummary[item.key as keyof typeof t.queueSummary], { count: item.count })}
+                </span>
+              ))}
+              <div className="ml-0 flex rounded-lg border border-edge bg-surface-muted p-0.5 lg:ml-2">
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
+                    viewMode === 'focus' ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg',
+                  )}
+                  onClick={() => setViewMode('focus')}
+                >
+                  <ListFilter className="size-3.5" aria-hidden />
+                  {t.viewModes.focus}
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors',
+                    viewMode === 'board' ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted hover:text-fg',
+                  )}
+                  onClick={() => setViewMode('board')}
+                >
+                  <LayoutGrid className="size-3.5" aria-hidden />
+                  {t.viewModes.board}
+                </button>
+              </div>
+            </div>
           </div>
-          {queueSummary.map((item) => (
-            <span key={item.key} className="rounded-full border border-edge bg-surface-muted px-2 py-0.5 text-xs text-fg-muted">
-              {formatMessage(t.queueSummary[item.key as keyof typeof t.queueSummary], { count: item.count })}
-            </span>
-          ))}
         </section>
 
         {error ? <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
         {loading ? <p className="text-sm text-fg-muted">{t.loading}</p> : null}
 
-        <section className="-mx-1 min-h-0 flex-1 overflow-x-auto px-1 pb-3" aria-label={t.boardLabel}>
-          <div className="flex h-full min-w-max snap-x snap-mandatory gap-3">
-            {BOARD_LANES.map((lane) => {
-              const laneGoals = lanes.get(lane) ?? [];
-              return (
-                <section
-                  key={lane}
-                  className={cn(
-                    'flex h-full w-80 shrink-0 snap-center flex-col overflow-hidden rounded-2xl border bg-surface-panel/40',
-                    dropLane === lane ? 'border-accent ring-1 ring-accent/30' : 'border-edge',
-                  )}
-                  aria-label={t.lanes[lane].title}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    event.dataTransfer.dropEffect = 'move';
-                    setDropLane(lane);
-                  }}
-                  onDragLeave={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropLane(null);
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    const goalId = event.dataTransfer.getData(DRAG_TYPE) || draggingGoalId;
-                    if (goalId) void applyDrop(goalId, lane);
-                  }}
-                >
-                  <header className="flex shrink-0 items-center justify-between gap-2 rounded-t-2xl border-b border-edge-subtle bg-surface-panel/90 px-3.5 py-3 backdrop-blur">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span className="size-2 rounded-full bg-accent" aria-hidden />
-                      <h2 className="truncate text-sm font-semibold text-fg">{t.lanes[lane].title}</h2>
-                    </div>
-                    <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold tabular-nums text-fg-muted">
-                      {laneGoals.length}
-                    </span>
-                  </header>
-                  <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-2.5">
-                    {laneGoals.map((goal) => (
-                      <GoalCard
-                        key={goal.id}
-                        goal={goal}
-                        queueItem={queueByGoal.get(goal.id)}
-                        t={t}
-                        language={language}
-                        selected={goal.id === selectedGoalId}
-                        dragging={goal.id === draggingGoalId}
-                        onOpen={(next) => setSelectedGoalId(next.id)}
-                        onDragStart={(goalId, event) => {
-                          event.dataTransfer.effectAllowed = 'move';
-                          event.dataTransfer.setData(DRAG_TYPE, goalId);
-                          setDraggingGoalId(goalId);
-                        }}
-                        onDragEnd={() => {
-                          setDraggingGoalId(null);
-                          setDropLane(null);
-                        }}
-                      />
-                    ))}
-                    {!loading && laneGoals.length === 0 ? (
-                      <div className="flex min-h-32 items-center justify-center rounded-xl border border-dashed border-edge bg-surface-panel/40 px-4 py-6 text-center text-xs text-fg-subtle">
-                        {t.lanes[lane].empty}
+        {viewMode === 'focus' ? (
+          <section className="min-h-0 flex-1 overflow-y-auto pb-3" aria-label={t.focusLabel}>
+            <div className="mx-auto grid w-full max-w-app-main gap-4">
+              {FOCUS_SECTIONS.map((section) => {
+                const sectionGoals = focusGroups.get(section) ?? [];
+                return (
+                  <section key={section} className="rounded-lg border border-edge bg-surface-panel/60">
+                    <header className="flex flex-wrap items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3">
+                      <div className="min-w-0">
+                        <h2 className="text-sm font-semibold text-fg">{t.focusSections[section].title}</h2>
+                        <p className="mt-1 text-xs text-fg-muted">{t.focusSections[section].description}</p>
                       </div>
-                    ) : null}
-                  </div>
-                </section>
-              );
-            })}
-          </div>
-        </section>
+                      <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold tabular-nums text-fg-muted">
+                        {sectionGoals.length}
+                      </span>
+                    </header>
+                    <div className="grid gap-2 p-2.5">
+                      {sectionGoals.map((goal) => (
+                        <FocusGoalRow
+                          key={goal.id}
+                          goal={goal}
+                          queueItem={queueByGoal.get(goal.id)}
+                          t={t}
+                          language={language}
+                          busy={busy}
+                          selected={goal.id === selectedGoalId}
+                          onOpen={(next) => setSelectedGoalId(next.id)}
+                          onAction={(id, action) => void runAction(id, action)}
+                        />
+                      ))}
+                      {!loading && sectionGoals.length === 0 ? (
+                        <div className="flex min-h-20 items-center justify-center rounded-md border border-dashed border-edge bg-surface-panel/40 px-4 py-5 text-center text-xs text-fg-subtle">
+                          {t.focusSections[section].empty}
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </section>
+        ) : (
+          <section className="mx-auto min-h-0 w-full max-w-app-main flex-1 overflow-x-auto pb-3" aria-label={t.boardLabel}>
+            <div className="flex h-full min-w-max snap-x snap-mandatory gap-3">
+              {BOARD_LANES.map((lane) => {
+                const laneGoals = lanes.get(lane) ?? [];
+                return (
+                  <section
+                    key={lane}
+                    className={cn(
+                      'flex h-full w-80 shrink-0 snap-center flex-col overflow-hidden rounded-2xl border bg-surface-panel/40',
+                      dropLane === lane ? 'border-accent ring-1 ring-accent/30' : 'border-edge',
+                    )}
+                    aria-label={t.lanes[lane].title}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                      setDropLane(lane);
+                    }}
+                    onDragLeave={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropLane(null);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const goalId = event.dataTransfer.getData(DRAG_TYPE) || draggingGoalId;
+                      if (goalId) void applyDrop(goalId, lane);
+                    }}
+                  >
+                    <header className="flex shrink-0 items-center justify-between gap-2 rounded-t-2xl border-b border-edge-subtle bg-surface-panel/90 px-3.5 py-3 backdrop-blur">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className="size-2 rounded-full bg-accent" aria-hidden />
+                        <h2 className="truncate text-sm font-semibold text-fg">{t.lanes[lane].title}</h2>
+                      </div>
+                      <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold tabular-nums text-fg-muted">
+                        {laneGoals.length}
+                      </span>
+                    </header>
+                    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-2.5">
+                      {laneGoals.map((goal) => (
+                        <GoalCard
+                          key={goal.id}
+                          goal={goal}
+                          queueItem={queueByGoal.get(goal.id)}
+                          t={t}
+                          language={language}
+                          selected={goal.id === selectedGoalId}
+                          dragging={goal.id === draggingGoalId}
+                          onOpen={(next) => setSelectedGoalId(next.id)}
+                          onDragStart={(goalId, event) => {
+                            event.dataTransfer.effectAllowed = 'move';
+                            event.dataTransfer.setData(DRAG_TYPE, goalId);
+                            setDraggingGoalId(goalId);
+                          }}
+                          onDragEnd={() => {
+                            setDraggingGoalId(null);
+                            setDropLane(null);
+                          }}
+                        />
+                      ))}
+                      {!loading && laneGoals.length === 0 ? (
+                        <div className="flex min-h-32 items-center justify-center rounded-xl border border-dashed border-edge bg-surface-panel/40 px-4 py-6 text-center text-xs text-fg-subtle">
+                          {t.lanes[lane].empty}
+                        </div>
+                      ) : null}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          </section>
+        )}
       </div>
       <GoalCreateDialog
         open={createDialogOpen}

@@ -56,7 +56,13 @@ export function useWorkflowsPage() {
   const [startDefinition, setStartDefinition] = useState<WorkflowDefinition | null>(null);
   const [pickStartOpen, setPickStartOpen] = useState(false);
   const [detailDefinition, setDetailDefinition] = useState<WorkflowDefinition | null>(null);
-  const [manageOpen, setManageOpen] = useState(false);
+  const [manageOpen, setManageOpenState] = useState(false);
+  const [workflowEditorDraft, setWorkflowEditorDraft] = useState<{
+    mode: 'edit' | 'copy';
+    definition: WorkflowDefinition;
+    initialName: string;
+    initialScript: string;
+  } | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
@@ -111,6 +117,47 @@ export function useWorkflowsPage() {
   const filteredDefinitions = useMemo(
     () => filterDefinitions(definitions, searchQuery, 'all', 'all'),
     [definitions, searchQuery],
+  );
+
+  const setManageOpen = useCallback((next: boolean) => {
+    if (next) setWorkflowEditorDraft(null);
+    setManageOpenState(next);
+  }, []);
+
+  const buildWorkflowCopyName = useCallback(
+    (definition: WorkflowDefinition) => {
+      const usedNames = new Set(definitions.map((item) => item.name));
+      const base = `${definition.name}_copy`;
+      if (!usedNames.has(base)) return base;
+      for (let index = 2; index < 100; index += 1) {
+        const candidate = `${base}_${index}`;
+        if (!usedNames.has(candidate)) return candidate;
+      }
+      return `${base}_${Date.now()}`;
+    },
+    [definitions],
+  );
+
+  const openWorkflowEditor = useCallback(
+    (definition: WorkflowDefinition) => {
+      const script = definition.runtime?.source ?? '';
+      if (!script.trim()) {
+        setActionError(labels.editWorkflowSourceMissing);
+        return;
+      }
+      const mode = definition.metadata.source === 'user' ? 'edit' : 'copy';
+      const initialName = mode === 'edit' ? definition.name : buildWorkflowCopyName(definition);
+      setActionError(null);
+      setPickStartOpen(false);
+      setWorkflowEditorDraft({
+        mode,
+        definition,
+        initialName,
+        initialScript: mode === 'copy' ? renameWorkflowScript(script, initialName) : script,
+      });
+      setManageOpenState(true);
+    },
+    [buildWorkflowCopyName, labels.editWorkflowSourceMissing],
   );
 
   const patchSearchParams = useCallback(
@@ -354,7 +401,8 @@ export function useWorkflowsPage() {
       setActionError(null);
       try {
         const definition = await saveWorkflowDefinition(payload.name, payload.script);
-        setManageOpen(false);
+        setManageOpenState(false);
+        setWorkflowEditorDraft(null);
         await definitionsSwr.mutate();
         setActionFeedback(labels.saveWorkflowSuccess);
         return definition;
@@ -380,7 +428,8 @@ export function useWorkflowsPage() {
           input: { goal: payload.goal },
           agentId: ownerAgentId,
         });
-        setManageOpen(false);
+        setManageOpenState(false);
+        setWorkflowEditorDraft(null);
         await runsSwr.mutate();
         await statsSwr.mutate();
         setActionFeedback(labels.startSuccess);
@@ -450,6 +499,8 @@ export function useWorkflowsPage() {
     setDetailDefinition,
     manageOpen,
     setManageOpen,
+    workflowEditorDraft,
+    openWorkflowEditor,
     actionError,
     actionFeedback,
     starting,
@@ -466,6 +517,12 @@ export function useWorkflowsPage() {
     saveDraftAndStart,
     removeCustomWorkflow,
   };
+}
+
+function renameWorkflowScript(script: string, nextName: string): string {
+  return script.replace(/(name\s*:\s*['"`])([^'"`]+)(['"`])/, (_match, prefix: string, _current: string, suffix: string) => {
+    return `${prefix}${nextName}${suffix}`;
+  });
 }
 
 export type WorkflowsPageVm = ReturnType<typeof useWorkflowsPage>;

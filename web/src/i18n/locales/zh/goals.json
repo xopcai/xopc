@@ -9,6 +9,7 @@
     "executionQueue": "执行队列",
     "attempt": "尝试 {{attempts}}/{{max}}",
     "boardLabel": "目标状态看板",
+    "focusLabel": "目标运营焦点",
     "loading": "正在加载目标…",
     "turns": "轮次 {{used}}/{{max}}",
     "checklistProgress": "清单 {{done}}/{{total}}",
@@ -20,6 +21,19 @@
     "nextAction": "下一步",
     "noNextAction": "尚未记录下一步。",
     "noChecklist": "暂无验收清单。",
+    "prioritySummary": "{{priority}}优先级",
+    "deadlineSummary": "截止 {{deadline}}",
+    "sourceSummary": "来源 {{source}}",
+    "viewModes": {
+      "focus": "列表",
+      "board": "看板"
+    },
+    "overview": {
+      "attention": "需关注",
+      "running": "运行中",
+      "queued": "排队中",
+      "active": "可推进"
+    },
     "queueSummary": {
       "running": "{{count}} 个运行中",
       "queued": "{{count}} 个排队中",
@@ -96,6 +110,33 @@
         "title": "已归档",
         "description": "已移出当前运营流。",
         "empty": "暂无归档目标。"
+      }
+    },
+    "focusSections": {
+      "attention": {
+        "title": "需关注",
+        "description": "受阻、等待输入或队列失败的目标。",
+        "empty": "暂无需要关注的目标。"
+      },
+      "running": {
+        "title": "运行或排队中",
+        "description": "正在执行或等待下一次运行的目标。",
+        "empty": "暂无运行或排队中的目标。"
+      },
+      "active": {
+        "title": "可继续推进",
+        "description": "当前可以直接继续的打开目标。",
+        "empty": "暂无可推进目标。"
+      },
+      "paused": {
+        "title": "已暂停",
+        "description": "被有意停止或等待稍后处理的目标。",
+        "empty": "暂无暂停目标。"
+      },
+      "recentDone": {
+        "title": "最近完成",
+        "description": "保留在近处便于复核的完成目标。",
+        "empty": "暂无完成目标。"
       }
     },
     "actions": {

@@ -59,10 +59,22 @@ describe('TUI session slash commands', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
-  it('/clear aliases /reset', async () => {
-    const { handler, resetSession } = makeHandler();
+  it('/clear only clears the TUI view without resetting the session', () => {
+    const systems: string[] = [];
+    const clearAll = vi.fn();
+    const { handler, resetSession } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+        clearAll,
+      } as never,
+    });
+
     handler('/clear');
-    await vi.waitFor(() => expect(resetSession).toHaveBeenCalledOnce());
+
+    expect(resetSession).not.toHaveBeenCalled();
+    expect(clearAll).toHaveBeenCalledOnce();
+    expect(systems.at(-1)).toBe('TUI view cleared. Session transcript was not reset.');
   });
 
   it('/fork calls forkSession and does not forward slash to agent', async () => {
@@ -228,6 +240,7 @@ describe('TUI session slash commands', () => {
 
     expect(systems.at(-1)).toContain('Extension commands:');
     expect(systems.at(-1)).toContain('/demo — Demo extension command');
+    expect(systems.at(-1)).toContain('/aside — Alias for /btw');
   });
 
   it('keeps built-in slash commands ahead of conflicting extension commands', () => {
@@ -497,6 +510,82 @@ describe('TUI session slash commands', () => {
 
     handler('/settings');
     expect(overlayFns.openSettings).toHaveBeenCalledOnce();
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('reports unavailable overlay commands instead of silently doing nothing', () => {
+    const systems: string[] = [];
+    const { handler, sendMessage } = makeHandler({
+      uiOverlays: undefined,
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+    });
+
+    handler('/resume');
+    expect(systems.at(-1)).toContain('Session picker is not available');
+
+    handler('/scoped-models');
+    expect(systems.at(-1)).toContain('Scoped model picker is not available');
+
+    handler('/settings');
+    expect(systems.at(-1)).toContain('Settings are not available');
+
+    handler('/reload');
+    expect(systems.at(-1)).toContain('Reload is not available');
+
+    handler('/think');
+    expect(systems.at(-1)).toContain('Usage: /think');
+
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('reports unavailable optional command actions instead of silently doing nothing', () => {
+    const systems: string[] = [];
+    const { handler, sendMessage } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+      recoverStream: undefined,
+      retryLastMessage: undefined,
+      copyLastAssistant: undefined,
+      renameCurrentSession: undefined,
+      switchModel: undefined,
+      runCompaction: undefined,
+      setThinkingLevel: undefined,
+      setReasoningLevel: undefined,
+      setVerboseLevel: undefined,
+    });
+
+    handler('/recover');
+    expect(systems.at(-1)).toContain('Stream recovery is not available');
+
+    handler('/retry');
+    expect(systems.at(-1)).toContain('Retry is not available');
+
+    handler('/copy');
+    expect(systems.at(-1)).toContain('Copy is not available');
+
+    handler('/name next');
+    expect(systems.at(-1)).toContain('Session rename is not available');
+
+    handler('/switch openai/gpt-5');
+    expect(systems.at(-1)).toContain('Model switching is not available');
+
+    handler('/compact');
+    expect(systems.at(-1)).toContain('Compaction is not available');
+
+    handler('/think high');
+    expect(systems.at(-1)).toContain('Thinking level changes are not available');
+
+    handler('/reasoning stream');
+    expect(systems.at(-1)).toContain('Reasoning visibility changes are not available');
+
+    handler('/verbose on');
+    expect(systems.at(-1)).toContain('Verbose mode changes are not available');
 
     expect(sendMessage).not.toHaveBeenCalled();
   });

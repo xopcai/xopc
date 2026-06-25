@@ -1,7 +1,8 @@
 /**
  * Pipeline template expression engine.
  *
- * Supports: ${{ args.xxx }}, ${{ data }}, ${{ data | json }}, ${{ error.message }}
+ * Supports: ${{ args.xxx }}, ${{ last }}, ${{ outputs.0 }}, ${{ vars.name }},
+ * ${{ error.message }} and simple pipe filters.
  * Does NOT execute arbitrary JavaScript — only whitelisted expressions.
  */
 
@@ -9,16 +10,30 @@ const TEMPLATE_RE = /\$\{\{\s*(.+?)\s*\}\}/g;
 
 export interface TemplateContext {
   args: Record<string, unknown>;
-  data: unknown;
+  last: unknown;
+  outputs: unknown[];
+  vars: Record<string, unknown>;
   error?: { code?: string; message?: string };
 }
 
-function resolvePath(obj: unknown, path: string): unknown {
-  const parts = path.split('.');
+function parsePath(path: string): string[] {
+  return path
+    .replace(/\[(\d+)\]/g, '.$1')
+    .split('.')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+export function resolvePath(obj: unknown, path: string): unknown {
+  const parts = parsePath(path);
   let current: unknown = obj;
   for (const part of parts) {
     if (current === null || current === undefined) return undefined;
-    if (typeof current === 'object') {
+    if (Array.isArray(current)) {
+      const index = Number(part);
+      if (!Number.isInteger(index)) return undefined;
+      current = current[index];
+    } else if (typeof current === 'object') {
       current = (current as Record<string, unknown>)[part];
     } else {
       return undefined;
@@ -37,13 +52,30 @@ function applyFilter(value: unknown, filter: string): string {
       return String(Number(value));
     case 'boolean':
       return String(Boolean(value));
+    case 'urlencode':
+      return encodeURIComponent(String(value ?? ''));
     default:
       return String(value ?? '');
   }
 }
 
-function evaluateExpression(expr: string, ctx: TemplateContext): string {
-  // Check for pipe filter: `data | json`
+export function isTruthyValue(value: unknown): boolean {
+  if (value === null || value === undefined || value === false) return false;
+  if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
+  if (typeof value === 'string') return value.length > 0 && value !== 'false' && value !== '0';
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+export function valueContains(actual: unknown, expected: unknown): boolean {
+  if (typeof actual === 'string') return actual.includes(String(expected));
+  if (Array.isArray(actual)) return actual.some((item) => JSON.stringify(item) === JSON.stringify(expected));
+  if (actual && typeof actual === 'object') return JSON.stringify(actual).includes(String(expected));
+  return String(actual ?? '').includes(String(expected));
+}
+
+export function evaluateRawExpression(expr: string, ctx: TemplateContext): unknown {
+  // Check for pipe filter: `last | json`
   const pipeIdx = expr.indexOf('|');
   let path = expr;
   let filter: string | undefined;
@@ -54,27 +86,45 @@ function evaluateExpression(expr: string, ctx: TemplateContext): string {
 
   let value: unknown;
 
-  if (path === 'data') {
-    value = ctx.data;
+  if (path === 'last') {
+    value = ctx.last;
+  } else if (path.startsWith('last.')) {
+    value = resolvePath(ctx.last, path.slice(5));
   } else if (path.startsWith('args.')) {
     value = resolvePath(ctx.args, path.slice(5));
+  } else if (path === 'outputs') {
+    value = ctx.outputs;
+  } else if (path.startsWith('outputs.')) {
+    value = resolvePath(ctx.outputs, path.slice(8));
+  } else if (path === 'vars') {
+    value = ctx.vars;
+  } else if (path.startsWith('vars.')) {
+    value = resolvePath(ctx.vars, path.slice(5));
   } else if (path.startsWith('error.')) {
     value = resolvePath(ctx.error, path.slice(6));
   } else if (path === 'error') {
     value = ctx.error?.message ?? '';
   } else {
-    // Try resolving from args as fallback
-    value = resolvePath(ctx.args, path) ?? `\${{ ${expr} }}`;
+    value = resolvePath(ctx.args, path);
+    if (value === undefined) return `\${{ ${expr} }}`;
   }
 
   if (filter) {
     return applyFilter(value, filter);
   }
 
+  return value;
+}
+
+function stringifyTemplateValue(value: unknown): string {
   if (value === undefined || value === null) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   return JSON.stringify(value);
+}
+
+function evaluateExpression(expr: string, ctx: TemplateContext): string {
+  return stringifyTemplateValue(evaluateRawExpression(expr, ctx));
 }
 
 /**
@@ -86,12 +136,19 @@ export function resolveTemplate(template: string, ctx: TemplateContext): string 
   });
 }
 
+export function resolveTemplateValue(value: string, ctx: TemplateContext): unknown {
+  const trimmed = value.trim();
+  const match = /^\$\{\{\s*(.+?)\s*\}\}$/.exec(trimmed);
+  if (!match) return resolveTemplate(value, ctx);
+  return evaluateRawExpression(match[1].trim(), ctx);
+}
+
 /**
  * Deep-resolve templates in an object/array/string value.
  */
 export function resolveTemplateDeep(value: unknown, ctx: TemplateContext): unknown {
   if (typeof value === 'string') {
-    return resolveTemplate(value, ctx);
+    return resolveTemplateValue(value, ctx);
   }
   if (Array.isArray(value)) {
     return value.map((item) => resolveTemplateDeep(item, ctx));

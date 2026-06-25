@@ -6,9 +6,9 @@
  */
 
 import { watch } from 'fs';
-import { join } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import type { SkillLoader } from './index.js';
+import { resolveWorkspaceSkillsDir } from './workspace-skills-dir.js';
 
 const log = createLogger('SkillWatcher');
 
@@ -149,10 +149,9 @@ export function createWatcherFromLoader(
 ): SkillWatcher | null {
   const watchDirs: string[] = [];
 
-  // Add workspace skills directory
+  // Add project-local workspace skills directory
   if (options.workspaceDir) {
-    const workspaceSkillsDir = join(options.workspaceDir, 'skills');
-    watchDirs.push(workspaceSkillsDir);
+    watchDirs.push(resolveWorkspaceSkillsDir(options.workspaceDir));
   }
 
   // Add builtin directory

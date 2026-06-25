@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 
 const DEFAULT_PIPELINE_SOURCE_TIMEOUT_MS = 30_000;
 const MAX_PIPELINE_SOURCE_BYTES = 1024 * 1024;
@@ -61,7 +62,7 @@ async function readLimitedResponseText(response: Response, url: string): Promise
   return new TextDecoder().decode(payload);
 }
 
-async function fetchPipelineSource(url: string): Promise<string> {
+export async function fetchPipelineSource(url: string): Promise<string> {
   const response = await fetch(url, {
     headers: {
       accept: 'application/yaml, text/yaml, text/plain, */*',
@@ -96,4 +97,21 @@ export async function loadBrowserPipelineSource(location: string): Promise<Brows
     origin: 'file',
     location: normalizedLocation,
   };
+}
+
+export function resolvePipelineIncludeLocation(includePath: string, parentLocation: string | undefined): string {
+  const normalized = includePath.trim();
+  if (!normalized) {
+    throw new Error('Pipeline include path is empty');
+  }
+  if (isRemotePipelineSource(normalized)) {
+    return normalized;
+  }
+  if (!parentLocation) {
+    return resolve(normalized);
+  }
+  if (isRemotePipelineSource(parentLocation)) {
+    return new URL(normalized, parentLocation).toString();
+  }
+  return resolve(dirname(parentLocation), normalized);
 }
