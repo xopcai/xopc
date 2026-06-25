@@ -68,7 +68,6 @@ export async function *runGatewayAgent(
 
   const runId = crypto.randomUUID();
   const {
-    config,
     agentService,
     bus,
     runRelay,
@@ -80,14 +79,19 @@ export async function *runGatewayAgent(
   const sessionIndex = sessionIndexFromDeps;
 
   let webchatSessionKey: string | undefined;
+  let webchatSessionId: string | undefined;
   let webchatStaleSkip = false;
   if (channel === 'webchat') {
-    const resolved = resolveWebchatSessionKey({ cfg: config, chatId, newSession: false });
+    const resolved = resolveWebchatSessionKey({ sessionKey: chatId });
     if (resolved.ok === false) {
       throw new Error(resolved.error);
     }
     webchatSessionKey = resolved.sessionKey;
     const meta = await sessionIndex.getSessionMetadata(webchatSessionKey);
+    if (!meta) {
+      throw new Error('Session not found; create sessions via POST /api/sessions');
+    }
+    webchatSessionId = meta?.sessionId;
     webchatStaleSkip = shouldSkipWebchatInboundByAbortCutoff(meta, runOptions?.clientCreatedAtMs);
     if (!webchatStaleSkip && meta?.abortCutoffTimestamp !== undefined) {
       await sessionIndex
@@ -127,7 +131,10 @@ export async function *runGatewayAgent(
       }
 
       const sessionKey = webchatSessionKey;
-      updateAsyncLogContext({ sessionId: sessionKey });
+      updateAsyncLogContext({
+        sessionKey,
+        ...(webchatSessionId ? { sessionId: webchatSessionId } : {}),
+      });
 
       const timezone = agentService.resolveUserTimezoneForSession(sessionKey);
       const stampedMessage = message.trimStart().startsWith('/')

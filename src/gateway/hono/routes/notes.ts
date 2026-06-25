@@ -245,15 +245,29 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       }
     }
 
+    const peerId = `note_${noteId}_${Date.now()}`;
     const sessionKey = buildSessionKey({
       agentId,
       source: 'webchat',
       accountId: 'default',
       peerKind: 'direct',
-      peerId: `note_${noteId}_${Date.now()}`,
+      peerId,
     });
 
-    await service.sessionIndexInstance.saveMessages(sessionKey, []);
+    await service.sessionIndexInstance.saveMessages(sessionKey, [], {
+      metadata: {
+        sourceChannel: 'webchat',
+        sourceChatId: `default:direct:${peerId}`,
+        sessionType: 'chat',
+        routing: {
+          agentId,
+          source: 'webchat',
+          accountId: 'default',
+          peerKind: 'direct',
+          peerId,
+        },
+      },
+    });
 
     const meta = await service.sessionIndexInstance.getSessionMetadata(sessionKey);
     await service.sessionIndexInstance.updateSessionMetadata(sessionKey, {

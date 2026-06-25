@@ -17,6 +17,7 @@ export interface LogEntry {
   service?: string;
   extension?: string;
   requestId?: string;
+  sessionKey?: string;
   sessionId?: string;
   userId?: string;
   [key: string]: unknown;
@@ -57,6 +58,8 @@ export interface LogContext {
   /** Request/operation ID for tracing */
   requestId?: string;
   /** Session ID for user tracking */
+  sessionKey?: string;
+  /** Active transcript/session instance id */
   sessionId?: string;
   /** Cross-service trace id when distinct from requestId */
   correlationId?: string;
@@ -138,6 +141,8 @@ export interface LogQuery {
   /** Filter by request ID */
   requestId?: string;
   /** Filter by session ID */
+  sessionKey?: string;
+  /** Filter by active transcript/session instance id */
   sessionId?: string;
   /** Pagination offset */
   offset?: number;

@@ -414,14 +414,25 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
       sessionKey?: string;
       newSession?: boolean;
     };
+    let targetSessionKey = sessionKey?.trim() || '';
+    if (newSession || !targetSessionKey) {
+      const createResponse = await apiFetch(apiUrl('/api/sessions'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: 'webchat' }),
+      });
+      if (!createResponse.ok) throw new Error(`Session create failed: ${createResponse.status}`);
+      const created = (await createResponse.json()) as { session?: { key?: string } };
+      targetSessionKey = created.session?.key ?? '';
+      if (!targetSessionKey) throw new Error('Session create did not return a session key');
+    }
     const response = await apiFetch(apiUrl('/api/agent'), {
       method: 'POST',
       headers: { Accept: 'application/json' },
       body: JSON.stringify({
         message,
         channel: 'webchat',
-        sessionKey: newSession ? undefined : sessionKey,
-        newSession: Boolean(newSession),
+        sessionKey: targetSessionKey,
       }),
     });
     if (!response.ok) throw new Error(`Agent request failed: ${response.status}`);
@@ -430,7 +441,7 @@ export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
       sessionKey?: string;
     };
     const fromPayload = data.payload?.sessionKey ?? data.payload?.key;
-    return { sessionKey: fromPayload ?? data.sessionKey ?? sessionKey ?? '' };
+    return { sessionKey: fromPayload ?? data.sessionKey ?? targetSessionKey };
   });
 
   router.registerMethod('config.get', async (extensionId) => {

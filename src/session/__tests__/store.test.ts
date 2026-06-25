@@ -12,6 +12,20 @@ import {
 } from '../../storage/sqlite/index.js';
 import { SessionStore } from '../store.js';
 
+function directMetadata(agentId: string, source: string, peerId: string) {
+  return {
+    sourceChannel: source,
+    sourceChatId: `default:direct:${peerId}`,
+    routing: {
+      agentId,
+      source,
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId,
+    },
+  };
+}
+
 describe('SessionStore', () => {
   let tempDir: string;
   let store: SessionStore;
@@ -40,14 +54,16 @@ describe('SessionStore', () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  describe('routing metadata extraction', () => {
-    it('should extract routing from basic session key', async () => {
+  describe('routing metadata', () => {
+    it('persists explicit routing metadata', async () => {
       const messages: any[] = [
         { role: 'user', content: 'Hello' },
         { role: 'assistant', content: 'Hi there' },
       ];
 
-      await store.saveMessages('agent:main:telegram:default:direct:123456', messages);
+      await store.saveMessages('agent:main:telegram:default:direct:123456', messages, {
+        metadata: directMetadata('main', 'telegram', '123456'),
+      });
       const metadata = await store.getMetadata('agent:main:telegram:default:direct:123456');
 
       expect(metadata?.routing).toEqual({
@@ -59,30 +75,26 @@ describe('SessionStore', () => {
       });
     });
 
-    it('should extract routing with thread', async () => {
+    it('does not infer routing from session key', async () => {
       const messages: any[] = [{ role: 'user', content: 'Thread message' }];
 
       await store.saveMessages('agent:main:discord:channel:987654:thread:789', messages);
       const metadata = await store.getMetadata('agent:main:discord:channel:987654:thread:789');
 
-      expect(metadata?.routing).toEqual({
-        agentId: 'main',
-        source: 'discord',
-        accountId: 'default',
-        peerKind: 'channel',
-        peerId: '987654',
-        threadId: '789',
-      });
+      expect(metadata?.routing).toBeUndefined();
+      expect(metadata?.sourceChannel).toBe('');
+      expect(metadata?.sourceChatId).toBe('');
     });
 
-    it('should handle invalid session key', async () => {
+    it('keeps empty metadata for arbitrary keys without fallback parsing', async () => {
       const messages: any[] = [{ role: 'user', content: 'Test' }];
 
       await store.saveMessages('invalid-key', messages);
       const metadata = await store.getMetadata('invalid-key');
 
       expect(metadata?.routing).toBeUndefined();
-      expect(metadata?.sourceChannel).toBe('unknown');
+      expect(metadata?.sourceChannel).toBe('');
+      expect(metadata?.sourceChatId).toBe('');
     });
   });
 
@@ -101,11 +113,11 @@ describe('SessionStore', () => {
       await store.saveMessages(key, [{ role: 'user', content: 'hello', timestamp: Date.now() }]);
       const before = await store.getMetadata(key);
       const outcome = await store.reset(key);
-      expect(outcome?.previousSessionId).toBe(before?.transcriptId);
-      expect(outcome?.sessionId).not.toBe(before?.transcriptId);
+      expect(outcome?.previousSessionId).toBe(before?.sessionId);
+      expect(outcome?.sessionId).not.toBe(before?.sessionId);
       const after = await store.getMetadata(key);
       expect(after?.key).toBe(key);
-      expect(after?.transcriptId).toBe(outcome?.sessionId);
+      expect(after?.sessionId).toBe(outcome?.sessionId);
       expect(await store.loadMessages(key)).toHaveLength(0);
     });
 
@@ -244,26 +256,31 @@ describe('SessionStore', () => {
     });
 
     it('should list sessions with channel filter', async () => {
-      await store.saveMessages('agent:main:telegram:default:direct:1', [{ role: 'user', content: '1' }]);
-      await store.saveMessages('agent:main:discord:default:direct:2', [{ role: 'user', content: '2' }]);
+      await store.saveMessages('agent:main:telegram:default:direct:1', [{ role: 'user', content: '1' }], {
+        metadata: directMetadata('main', 'telegram', '1'),
+      });
+      await store.saveMessages('agent:main:discord:default:direct:2', [{ role: 'user', content: '2' }], {
+        metadata: directMetadata('main', 'discord', '2'),
+      });
 
       const telegramSessions = await store.list({ channel: 'telegram' });
       expect(telegramSessions.items).toHaveLength(1);
       expect(telegramSessions.items[0].sourceChannel).toBe('telegram');
     });
 
-    it('lists webchat when metadata omits sourceChannel (rehydrate from session key)', async () => {
+    it('does not list by channel when explicit sourceChannel is absent', async () => {
       const key = 'agent:main:webchat:default:direct:meta-gap';
       await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
-      patchSessionMetadata(key, { sourceChannel: '' });
 
       const listed = await store.list({ channel: 'webchat,gateway' });
-      expect(listed.items.some((s) => s.key === key)).toBe(true);
+      expect(listed.items.some((s) => s.key === key)).toBe(false);
     });
 
     it('lists webchat sessions from other agents in the shared database', async () => {
       const key = 'agent:coder:webchat:default:direct:standalone';
-      await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
+      await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }], {
+        metadata: directMetadata('coder', 'webchat', 'standalone'),
+      });
 
       const listed = await store.list({ channel: 'webchat,gateway' });
       expect(listed.items.some((session) => session.key === key)).toBe(true);
@@ -274,7 +291,9 @@ describe('SessionStore', () => {
       expect(before.items).toHaveLength(0);
 
       const key = 'agent:main:webchat:default:direct:cache-write';
-      await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }]);
+      await store.saveMessages(key, [{ role: 'user', content: 'x', timestamp: Date.now() }], {
+        metadata: directMetadata('main', 'webchat', 'cache-write'),
+      });
 
       const after = await store.list({ channel: 'webchat' });
       expect(after.items.some((session) => session.key === key)).toBe(true);
@@ -514,7 +533,7 @@ describe('SessionStore', () => {
       expect(targetMeta?.tags).toContain('demo');
       expect(targetMeta?.tags).toContain('fork');
       expect(targetMeta?.customData?.forkedFromSessionKey).toBe(source);
-      expect(targetMeta?.customData?.forkedFromTranscriptId).toBeTruthy();
+      expect(targetMeta?.customData?.forkedFromSessionId).toBeTruthy();
       expect(targetMeta?.customData?.forkedAt).toEqual(expect.any(String));
     });
 

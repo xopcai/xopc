@@ -14,7 +14,7 @@ export function upsertWebchatEmptyShellCache(sessions: SessionInfo[]): void {
   snapshot = { sessions: [...sessions], fetchedAt: Date.now() };
 }
 
-/** Track an optimistic or freshly registered empty shell before the next list fetch. */
+/** Track a freshly created empty shell before the next list fetch. */
 export function addWebchatEmptyShellToCache(session: SessionInfo): void {
   const key = session.key.trim();
   if (!key) return;

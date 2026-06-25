@@ -160,6 +160,10 @@ export interface CommandContext {
   senderId: string;
   /** Whether this is a group context */
   isGroup: boolean;
+  /** Account ID for multi-account channels, when supplied by routing metadata. */
+  accountId?: string;
+  /** Thread/topic ID for threaded channels, when supplied by routing metadata. */
+  threadId?: string;
   
   // === Configuration ===
   /** Bot configuration */

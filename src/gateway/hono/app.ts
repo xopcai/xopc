@@ -179,19 +179,37 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return next();
   }));
 
+  const DEFAULT_API_BODY_MAX = 1 * 1024 * 1024;
+  const SKILL_UPLOAD_BODY_MAX = 10 * 1024 * 1024;
+  const NOTE_MEDIA_BODY_MAX = 25 * 1024 * 1024;
+  const VOICE_TRANSCRIBE_BODY_MAX = 35 * 1024 * 1024;
+  const WEBCHAT_AGENT_BODY_MAX = maxWebchatAgentRequestBodyBytes();
+
+  const isNoteMediaUploadRequest = (path: string, method: string, contentType: string | undefined): boolean => {
+    if (method !== 'POST') return false;
+    if (/^\/api\/notes\/[^/]+\/media$/.test(path)) return true;
+    return path === '/api/notes' && contentType?.includes('multipart/form-data') === true;
+  };
+
   app.use('/api/skills/upload', bodyLimit({
-    maxSize: 10 * 1024 * 1024,
+    maxSize: SKILL_UPLOAD_BODY_MAX,
     onError: (c) => {
       log.warn({ path: c.req.path, maxSizeMb: 10 }, 'Request body too large: skills upload exceeds 10MB limit');
       return c.json({ error: 'Skill package too large', maxSize: '10MB' }, 413);
     },
   }));
 
-  const DEFAULT_API_BODY_MAX = 1 * 1024 * 1024;
-  const WEBCHAT_AGENT_BODY_MAX = maxWebchatAgentRequestBodyBytes();
-
   app.use('/api/*', async (c, next) => {
-    const maxSize = c.req.path === '/api/agent' ? WEBCHAT_AGENT_BODY_MAX : DEFAULT_API_BODY_MAX;
+    const contentType = c.req.header('content-type');
+    const maxSize = c.req.path === '/api/agent'
+      ? WEBCHAT_AGENT_BODY_MAX
+      : c.req.path === '/api/skills/upload'
+        ? SKILL_UPLOAD_BODY_MAX
+        : c.req.path === '/api/voice/transcribe'
+          ? VOICE_TRANSCRIBE_BODY_MAX
+          : isNoteMediaUploadRequest(c.req.path, c.req.method, contentType)
+            ? NOTE_MEDIA_BODY_MAX
+            : DEFAULT_API_BODY_MAX;
     const maxSizeMb = Math.ceil(maxSize / (1024 * 1024));
     return bodyLimit({
       maxSize,

@@ -33,6 +33,17 @@ import {
 
 const SESSION_KEY = 'agent:main:webchat:default:dm:test-user';
 const CWD = '/tmp/workspace';
+const METADATA = {
+  sourceChannel: 'webchat',
+  sourceChatId: 'default:dm:test-user',
+  routing: {
+    agentId: 'main',
+    source: 'webchat',
+    accountId: 'default',
+    peerKind: 'dm',
+    peerId: 'test-user',
+  },
+};
 
 function userMessage(text: string): AgentMessage {
   return { role: 'user', content: text };
@@ -58,14 +69,23 @@ describe('sqlite repositories', () => {
   });
 
   it('creates and reads session metadata', () => {
-    const created = ensureSessionRecord(SESSION_KEY, CWD);
+    const created = ensureSessionRecord(SESSION_KEY, CWD, METADATA);
     expect(created.key).toBe(SESSION_KEY);
-    expect(created.transcriptId).toBeTruthy();
+    expect(created.sessionId).toBeTruthy();
     expect(created.messageCount).toBe(0);
 
     const loaded = getSessionMetadata(SESSION_KEY);
-    expect(loaded?.transcriptId).toBe(created.transcriptId);
+    expect(loaded?.sessionId).toBe(created.sessionId);
     expect(loaded?.routing?.agentId).toBe('main');
+    expect(loaded?.sourceChannel).toBe('webchat');
+  });
+
+  it('does not infer metadata from session key', () => {
+    ensureSessionRecord(SESSION_KEY, CWD);
+    const loaded = getSessionMetadata(SESSION_KEY);
+    expect(loaded?.routing).toBeUndefined();
+    expect(loaded?.sourceChannel).toBe('');
+    expect(loaded?.sourceChatId).toBe('');
   });
 
   it('lists and patches session metadata', () => {
@@ -120,16 +140,16 @@ describe('sqlite repositories', () => {
     expect((rows[1] as { type?: string }).type).toBe('compaction');
   });
 
-  it('resets session with new transcript id while keeping session key', () => {
+  it('resets session with new session id while keeping session key', () => {
     const created = ensureSessionRecord(SESSION_KEY, CWD);
     appendTranscriptEntry(SESSION_KEY, userMessage('before reset'));
 
     const reset = resetSessionRecord(SESSION_KEY, CWD);
-    expect(reset?.previousSessionId).toBe(created.transcriptId);
-    expect(reset?.sessionId).not.toBe(created.transcriptId);
+    expect(reset?.previousSessionId).toBe(created.sessionId);
+    expect(reset?.sessionId).not.toBe(created.sessionId);
 
     const meta = getSessionMetadata(SESSION_KEY);
-    expect(meta?.transcriptId).toBe(reset?.sessionId);
+    expect(meta?.sessionId).toBe(reset?.sessionId);
     expect(meta?.messageCount).toBe(0);
     expect(loadTranscriptRowsForSession(SESSION_KEY)).toHaveLength(0);
   });

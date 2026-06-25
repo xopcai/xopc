@@ -7,16 +7,12 @@ import {
   type XopcTranscriptContextEntry,
 } from '../../session/session-context-for-llm.js';
 import { SessionStatus, type GlobalSessionStats, type SessionMetadata } from '../../session/types.js';
-import {
-  buildDefaultSessionMetadata,
-  parseSessionKeySource,
-  resolveAgentIdFromSessionKey,
-} from './session-metadata.js';
+import { buildDefaultSessionMetadata } from './session-metadata.js';
 
 export type SessionRow = {
   session_key: string;
   agent_id: string;
-  current_transcript_id: string;
+  session_id: string;
   status: string;
   name: string | null;
   tags_json: string;
@@ -49,7 +45,7 @@ export type SessionRow = {
 
 export type TranscriptEntryRow = {
   entry_id: string;
-  transcript_id: string;
+  session_id: string;
   seq: number;
   entry_kind: string;
   role: string | null;
@@ -89,15 +85,12 @@ function isoFromMs(ms: number | null | undefined): string | undefined {
 
 export function sessionRowToMetadata(sessionKey: string, row: SessionRow): SessionMetadata {
   const defaults = buildDefaultSessionMetadata(sessionKey);
-  const { channel: keySource, chatId: keyChatId } = parseSessionKeySource(sessionKey);
-  const routing = parseJson<SessionMetadata['routing']>(row.routing_json) ?? defaults.routing;
-  const customData = parseJson<Record<string, unknown>>(row.custom_data_json) ?? defaults.customData;
+  const routing = parseJson<SessionMetadata['routing']>(row.routing_json);
+  const customData = parseJson<Record<string, unknown>>(row.custom_data_json);
   const tags = parseJson<string[]>(row.tags_json) ?? [];
   const createdAt = isoFromMs(row.created_at) ?? defaults.createdAt;
   const updatedAt = isoFromMs(row.updated_at) ?? defaults.updatedAt;
   const lastAccessedAt = isoFromMs(row.last_accessed_at) ?? defaults.lastAccessedAt;
-  const diskSc = row.source_channel?.trim() ?? '';
-  const diskChat = row.source_chat_id?.trim() ?? '';
 
   return {
     ...defaults,
@@ -110,8 +103,8 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
     lastAccessedAt,
     sessionStartedAt: isoFromMs(row.session_started_at),
     lastInteractionAt: isoFromMs(row.last_interaction_at),
-    sourceChannel: diskSc || keySource,
-    sourceChatId: diskChat || keyChatId,
+    sourceChannel: row.source_channel,
+    sourceChatId: row.source_chat_id,
     sessionType: (row.session_type ?? defaults.sessionType) as SessionMetadata['sessionType'],
     hiddenFromSessionList: Boolean(row.hidden_from_session_list),
     parentSessionKey: row.parent_session_key ?? undefined,
@@ -119,15 +112,15 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
     workflowDefinitionId: row.workflow_definition_id ?? undefined,
     workflowAgentId: row.workflow_agent_id ?? undefined,
     workflowAgentLabel: row.workflow_agent_label ?? undefined,
-    routing,
-    customData,
+    ...(routing ? { routing } : {}),
+    ...(customData ? { customData } : {}),
     abortCutoffTimestamp: row.abort_cutoff_timestamp ?? undefined,
     messageCount: row.message_count,
     estimatedTokens: row.estimated_tokens,
     compactedCount: row.compacted_count,
     lastFlushedAt: row.last_flushed_at ?? undefined,
     flushCount: row.flush_count,
-    transcriptId: row.current_transcript_id,
+    sessionId: row.session_id,
     cwd: row.cwd ?? undefined,
     stats: {
       messageCount: row.message_count,
@@ -139,14 +132,14 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
 
 export function metadataToSessionInsert(
   sessionKey: string,
-  transcriptId: string,
+  sessionId: string,
   metadata: SessionMetadata,
   thinkingLevel?: string | null,
   verboseLevel?: string | null,
 ): {
   sessionKey: string;
   agentId: string;
-  transcriptId: string;
+  sessionId: string;
   status: string;
   name: string | null;
   tagsJson: string;
@@ -176,10 +169,11 @@ export function metadataToSessionInsert(
   verboseLevel: string | null;
 } {
   const now = Date.now();
+  const agentId = metadata.routing?.agentId?.trim().toLowerCase() || 'main';
   return {
     sessionKey,
-    agentId: resolveAgentIdFromSessionKey(sessionKey),
-    transcriptId,
+    agentId,
+    sessionId,
     status: metadata.status,
     name: metadata.name ?? null,
     tagsJson: JSON.stringify(metadata.tags ?? []),

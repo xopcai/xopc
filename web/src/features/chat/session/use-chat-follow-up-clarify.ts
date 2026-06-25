@@ -458,7 +458,7 @@ export function useChatFollowUpClarify(options: {
       const res = await apiFetch(apiUrl('/api/agent/steer'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId: key, message: row.text.trim() }),
+        body: JSON.stringify({ sessionKey: key, message: row.text.trim() }),
       });
       if (res.ok) {
         setPendingFollowUps((prev) => {

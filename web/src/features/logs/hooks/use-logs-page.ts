@@ -11,6 +11,7 @@ import {
 } from '@/features/logs/log-api';
 import { LogStreamConnection, prependLiveLog } from '@/features/logs/log-stream-connection';
 import type { LogEntry, LogFile, LogLevel, LogErrorSummaryItem } from '@/features/logs/log.types';
+import { resolveSession } from '@/features/sessions/session-api';
 import type { LevelSegmentValue } from '@/features/logs/logs-page-lib';
 import {
   isSameLogLevelSet,
@@ -539,10 +540,21 @@ export function useLogsPage(language: StoredLanguage) {
     dispatchFilters({ type: 'setLevels', value: levelsForPreset('errors') });
   }, []);
 
-  const openChatForSession = useCallback((sessionId: string) => {
-    window.dispatchEvent(
-      new CustomEvent('navigate-to-chat', { detail: { sessionKey: sessionId } }),
-    );
+  const openChatForSession = useCallback((target: { sessionKey?: string; sessionId?: string }) => {
+    const directKey = target.sessionKey?.trim();
+    if (directKey) {
+      window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { sessionKey: directKey } }));
+      return;
+    }
+    const sessionId = target.sessionId?.trim();
+    if (!sessionId) return;
+    void resolveSession({ sessionId })
+      .then((resolved) => {
+        window.dispatchEvent(
+          new CustomEvent('navigate-to-chat', { detail: { sessionKey: resolved.sessionKey } }),
+        );
+      })
+      .catch(() => {});
   }, []);
 
   return {

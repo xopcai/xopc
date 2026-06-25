@@ -181,7 +181,21 @@ export class HeartbeatService {
     // self-contained (HEARTBEAT.md + this turn's text), so we start from an empty history.
     if (sessionKey === 'heartbeat:main') {
       try {
-        await this.deps.sessionStore.saveMessages(sessionKey, []);
+        await this.deps.sessionStore.saveMessages(sessionKey, [], {
+          metadata: {
+            sourceChannel: 'heartbeat',
+            sourceChatId: 'main',
+            sessionType: 'heartbeat',
+            customData: { heartbeatTarget: 'main' },
+            routing: {
+              agentId: 'main',
+              source: 'heartbeat',
+              accountId: 'default',
+              peerKind: 'direct',
+              peerId: 'main',
+            },
+          },
+        });
       } catch (err) {
         log.warn({ err, sessionKey }, 'Heartbeat: failed to reset main session transcript');
       }

@@ -42,28 +42,28 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
         400,
       );
     }
-    const chatId =
-      typeof (body as { chatId?: unknown }).chatId === 'string'
-        ? (body as { chatId: string }).chatId.trim()
+    const sessionKey =
+      typeof (body as { sessionKey?: unknown }).sessionKey === 'string'
+        ? (body as { sessionKey: string }).sessionKey.trim()
         : '';
     const message =
       typeof (body as { message?: unknown }).message === 'string'
         ? (body as { message: string }).message
         : '';
-    if (!chatId) {
+    if (!sessionKey) {
       return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: 'Missing chatId' } },
+        { ok: false, error: { code: 'BAD_REQUEST', message: 'Missing sessionKey' } },
         400,
       );
     }
-    const result = await service.steerWebchatAgent(chatId, message);
+    const result = await service.steerWebchatAgent(sessionKey, message);
     if (result.ok === false) {
-      logRouteWarn(log, c, `Agent steer failed: ${result.code}`, 'gateway.route.agent', { chatId, code: result.code });
+      logRouteWarn(log, c, `Agent steer failed: ${result.code}`, 'gateway.route.agent', { sessionKey, code: result.code });
       const code = result.code;
       const status = code === 'BAD_REQUEST' ? 400 : code === 'NO_ACTIVE_RUN' ? 409 : 500;
       const msg =
         code === 'NO_ACTIVE_RUN'
-          ? 'No active agent run for this chat'
+              ? 'No active agent run for this session'
           : code === 'STEER_FAILED'
             ? 'Steer failed'
             : 'Message required';

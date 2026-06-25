@@ -1,5 +1,3 @@
-import { isWebUiSessionKey } from '@/features/chat/session/session-manager';
-
 import type { WorkflowDefinition, WorkflowRunStatus, WorkflowRunSummary, WorkflowRunView } from './workflow-api';
 import { collectWorkflowSearchText } from './workflow-meta-locale';
 import {
@@ -137,7 +135,7 @@ export function resolveWorkflowResultForDisplay(result: unknown): unknown {
 /** Dedicated web chat session for a workflow run (from run metadata). */
 export function resolveWorkflowSessionKey(view: WorkflowRunView): string | null {
   const metadataKey = view.run.metadata?.sessionKey?.trim();
-  if (metadataKey && isWebUiSessionKey(metadataKey)) return metadataKey;
+  if (metadataKey && /^agent:[^:]+:webchat:/i.test(metadataKey)) return metadataKey;
   return null;
 }
 

@@ -43,7 +43,6 @@ import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { shouldRegisterCuratedMemoryTool } from '../memory/memory-config.js';
 import type { SessionStore } from '../../session/store.js';
-import { parseSessionKey as parseRoutingSessionKey } from '../../routing/session-key.js';
 import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
@@ -75,15 +74,6 @@ const log = createLogger('AgentToolsFactory');
 
 /** Channels where `clarify` can block for a user answer (web UI, Telegram, CLI readline). */
 const CLARIFY_SUPPORTED_CHANNELS = new Set(['webchat', 'telegram', 'cli']);
-
-function clarifyTransportSource(sessionKey: string): string | undefined {
-  const parsed = parseRoutingSessionKey(sessionKey);
-  if (parsed) return parsed.source;
-  // Fallback for simple `<channel>:<chatId>` keys used by webchat and CLI.
-  const first = sessionKey.split(':').filter(Boolean)[0] ?? '';
-  if (first === 'cli' || first === 'webchat') return first;
-  return undefined;
-}
 
 export interface ToolFactoryDeps {
   workspace: string;
@@ -305,8 +295,7 @@ export class AgentToolsFactory {
           if (!req) return null;
           const ctx = this.deps.getCurrentContext();
           if (!ctx?.sessionKey) return null;
-          const source = clarifyTransportSource(ctx.sessionKey);
-          if (!source || !CLARIFY_SUPPORTED_CHANNELS.has(source)) return null;
+          if (!CLARIFY_SUPPORTED_CHANNELS.has(ctx.channel)) return null;
           return (r) => req(ctx.sessionKey, r);
         },
       }),

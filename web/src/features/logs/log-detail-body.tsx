@@ -12,6 +12,7 @@ export type LogDetailLabels = Pick<
   | 'message'
   | 'metadata'
   | 'requestId'
+  | 'sessionKey'
   | 'sessionId'
   | 'phase'
   | 'stackTrace'
@@ -25,7 +26,7 @@ type Props = {
   labels: LogDetailLabels;
   onFilterByRequestId?: (requestId: string) => void;
   onFilterBySessionId?: (sessionId: string) => void;
-  onOpenChat?: (sessionId: string) => void;
+  onOpenChat?: (target: { sessionKey?: string; sessionId?: string }) => void;
 };
 
 export function LogDetailBody({
@@ -37,6 +38,7 @@ export function LogDetailBody({
 }: Props) {
   const lv = log.level ?? 'info';
   const rid = typeof log.requestId === 'string' ? log.requestId : '';
+  const sk = typeof log.sessionKey === 'string' ? log.sessionKey : '';
   const sid = typeof log.sessionId === 'string' ? log.sessionId : '';
   const phase = phaseLabel(log);
   const errDetail = extractErrorDetail(log);
@@ -101,6 +103,24 @@ export function LogDetailBody({
             </div>
           </>
         ) : null}
+        {sk ? (
+          <>
+            <span className="font-sans text-fg-muted">{labels.sessionKey}</span>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <code className="break-all text-fg">{sk}</code>
+              {onOpenChat ? (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="h-7 px-2 text-[11px]"
+                  onClick={() => onOpenChat({ sessionKey: sk })}
+                >
+                  {labels.openChat}
+                </Button>
+              ) : null}
+            </div>
+          </>
+        ) : null}
         {sid ? (
           <>
             <span className="font-sans text-fg-muted">{labels.sessionId}</span>
@@ -121,7 +141,7 @@ export function LogDetailBody({
                   type="button"
                   variant="secondary"
                   className="h-7 px-2 text-[11px]"
-                  onClick={() => onOpenChat(sid)}
+                  onClick={() => onOpenChat({ sessionId: sid })}
                 >
                   {labels.openChat}
                 </Button>

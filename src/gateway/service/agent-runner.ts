@@ -28,8 +28,6 @@ import type { ChannelManager } from '../../channels/manager.js';
 import type { SessionIndex } from '../../session/index.js';
 import { AgentRunRelay, type RelayEvent } from '../agent-run-relay.js';
 import { ClarifyBridge, type ClarifyBridgeRequest } from '../clarify-bridge.js';
-import { buildSessionKey, parseSessionKey } from '../../routing/session-key.js';
-import { getDefaultAgentId } from '../../routing/resolve-route.js';
 import { runGatewayAgent } from './run-gateway-agent.js';
 import { createLogger } from '../../utils/logger.js';
 
@@ -169,11 +167,10 @@ export class GatewayAgentRunner {
 
   /**
    * Queue steering text for an active webchat run (`Agent.steer` /
-   * tool-boundary injection). `chatId` is the same as `POST /api/agent` body
-   * (`sessionKey` or legacy peer id).
+   * tool-boundary injection). The caller must pass the session key.
    */
   async steerWebchatAgent(
-    chatId: string,
+    sessionKey: string,
     message: string,
   ): Promise<
     { ok: true } | { ok: false; code: 'BAD_REQUEST' | 'NO_ACTIVE_RUN' | 'STEER_FAILED' }
@@ -182,17 +179,6 @@ export class GatewayAgentRunner {
     if (!trimmed) {
       return { ok: false, code: 'BAD_REQUEST' };
     }
-    const cfg = this.opts.getConfig();
-    const parsedKey = parseSessionKey(chatId);
-    const sessionKey = parsedKey
-      ? chatId
-      : buildSessionKey({
-          agentId: getDefaultAgentId(cfg),
-          source: 'webchat',
-          accountId: 'default',
-          peerKind: 'direct',
-          peerId: chatId,
-        });
     if (!this.activeWebchatRunBySession.has(sessionKey)) {
       return { ok: false, code: 'NO_ACTIVE_RUN' };
     }
@@ -247,7 +233,7 @@ export class GatewayAgentRunner {
    * `turnDispatcher.enqueueWebchatSseEvent`. We take it as a callback so the
    * runner does not import AgentService statically.
    */
-  requestClarification(opts: {
+  async requestClarification(opts: {
     sessionKey: string;
     request: ClarifyBridgeRequest;
     publishSseFor: (runId: string) => (e: RelayEvent) => void;
@@ -255,9 +241,10 @@ export class GatewayAgentRunner {
     const { sessionKey, request, publishSseFor } = opts;
     const runId = this.activeWebchatRunBySession.get(sessionKey);
     const publishSse = runId ? publishSseFor(runId) : undefined;
-    const parsed = parseSessionKey(sessionKey);
+    const metadata = await this.opts.sessionIndex.getSessionMetadata(sessionKey).catch(() => null);
+    const routing = metadata?.routing;
     const deliver =
-      parsed?.source === 'telegram'
+      routing?.source === 'telegram'
         ? async (ctx: {
             sessionKey: string;
             requestId: string;
@@ -286,8 +273,9 @@ export class GatewayAgentRunner {
     requestId: string;
     request: ClarifyBridgeRequest;
   }): Promise<void> {
-    const parsed = parseSessionKey(ctx.sessionKey);
-    if (!parsed || parsed.source !== 'telegram') {
+    const metadata = await this.opts.sessionIndex.getSessionMetadata(ctx.sessionKey).catch(() => null);
+    const routing = metadata?.routing;
+    if (!routing || routing.source !== 'telegram') {
       return;
     }
 
@@ -313,11 +301,11 @@ export class GatewayAgentRunner {
 
     await this.opts.getChannelManager().send({
       channel: 'telegram',
-      chat_id: parsed.peerId,
+      chat_id: routing.peerId,
       content: body,
       metadata: {
-        accountId: parsed.accountId,
-        ...(parsed.threadId ? { threadId: parsed.threadId } : {}),
+        accountId: routing.accountId,
+        ...(routing.threadId ? { threadId: routing.threadId } : {}),
       },
       buttons: buttonRows,
     });

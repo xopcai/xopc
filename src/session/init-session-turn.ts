@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
 import { SessionConfigSchema, type Config } from '../config/schema.js';
-import { parseSessionKey } from '../routing/session-key.js';
 import { createLogger } from '../utils/logger.js';
 import { requireXopcDatabase } from '../storage/sqlite/index.js';
 import { resolveSessionLifecycleTimestamps } from './lifecycle-timestamps.js';
@@ -59,16 +58,15 @@ export async function initSessionTurn(
   });
   const key = sessionKey?.trim() ?? opts.sessionKey.trim();
 
-  const parsed = key ? parseSessionKey(key) : null;
-  const peerKind = parsed?.peerKind;
+  const routing = sessionMetadata?.routing;
+  const peerKind = routing?.peerKind;
   const resetType = resolveSessionResetType({
-    sessionKey: key,
     isGroup: peerKind === 'group' || peerKind === 'channel',
-    isThread: Boolean(parsed?.threadId),
+    isThread: Boolean(routing?.threadId),
   });
   const channelReset = resolveChannelResetConfig({
     sessionCfg,
-    channel: parsed?.source ?? sessionMetadata?.sourceChannel,
+    channel: routing?.source ?? sessionMetadata?.sourceChannel,
   });
   const resetPolicy = resolveSessionResetPolicy({
     sessionCfg,
@@ -102,11 +100,11 @@ export async function initSessionTurn(
   const staleRollover = Boolean(sessionMetadata && !skipImplicit && !freshness.fresh);
   const needsRollover = triggerMatch.resetTriggered || staleRollover;
 
-  let sessionId = sessionMetadata?.transcriptId;
+  let sessionId = sessionMetadata?.sessionId;
   let previousSessionId: string | undefined;
   let isNewSession = false;
 
-  if (needsRollover && sessionMetadata?.transcriptId) {
+  if (needsRollover && sessionMetadata?.sessionId) {
     const outcome = await opts.resetSession(key);
     if (outcome) {
       previousSessionId = outcome.previousSessionId;

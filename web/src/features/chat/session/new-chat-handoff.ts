@@ -1,4 +1,3 @@
-import type { SessionInfo } from '@/features/chat/chat.types';
 import { dispatchSidebarSessionFocus } from '@/lib/provisional-session-title';
 import { markSkipInitialSessionLoad } from '@/features/chat/session/chat-session-init-skip-load';
 import { resolveNewChatTarget } from '@/features/chat/session/resolve-new-chat-target';
@@ -20,19 +19,13 @@ export type NewChatHandoffOpts = {
   forceNew?: boolean;
   navigateToSession: NewChatHandoffNavigate;
   onOpened: (sessionKey: string) => void;
-  followRegistration?: (ctx: {
-    sessionKey: string;
-    register: Promise<SessionInfo>;
-    replaceNavigate?: boolean;
-    search?: string;
-  }) => void;
   replaceNavigate?: boolean;
   search?: string;
 };
 
 let resolveInflight: Promise<string> | null = null;
 
-/** Resolve reuse / noop / optimistic create; navigate when the target key changes. */
+/** Resolve reuse / noop / create; navigate when the target key changes. */
 export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
   if (resolveInflight) {
     return resolveInflight;
@@ -64,22 +57,21 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
       return resolution.sessionKey;
     }
 
-    const { sessionKey, register } = resolution;
+    const { sessionKey, session } = resolution;
     addWebchatEmptyShellToCache({
       key: sessionKey,
+      sessionId: session.sessionId,
+      name: session.name,
       messageCount: 0,
-      updatedAt: new Date().toISOString(),
+      updatedAt: session.updatedAt || new Date().toISOString(),
+      sourceChannel: session.sourceChannel,
+      sourceChatId: session.sourceChatId,
+      routing: session.routing,
     });
     markSkipInitialSessionLoad(sessionKey);
     opts.onOpened(sessionKey);
     opts.navigateToSession(sessionKey, opts.replaceNavigate ?? false, opts.search);
     dispatchSidebarSessionFocus(sessionKey);
-    opts.followRegistration?.({
-      sessionKey,
-      register,
-      replaceNavigate: opts.replaceNavigate,
-      search: opts.search,
-    });
     return sessionKey;
   })().finally(() => {
     resolveInflight = null;

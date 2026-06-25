@@ -38,6 +38,21 @@ describe('GoalNotificationService', () => {
     } as Config;
     notifications = new GoalNotificationService({
       getConfig: () => config,
+      getSessionMetadata: async (sessionKey) =>
+        sessionKey === 'agent:main:telegram:default:direct:123456'
+          ? ({
+              key: sessionKey,
+              routing: {
+                agentId: 'main',
+                source: 'telegram',
+                accountId: 'default',
+                peerKind: 'direct',
+                peerId: '123456',
+              },
+              sourceChannel: 'telegram',
+              sourceChatId: 'default:direct:123456',
+            } as never)
+          : null,
       send: async (input) => {
         sent.push(input);
       },
@@ -63,7 +78,7 @@ describe('GoalNotificationService', () => {
       previousStatus: 'active',
       status: 'done',
     });
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({

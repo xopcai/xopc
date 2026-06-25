@@ -3,10 +3,7 @@ import type { DatabaseSync } from 'node:sqlite';
 
 import { validateSessionId } from '../../session/session-id.js';
 import type { SessionListQuery, SessionMetadata, PaginatedResult } from '../../session/types.js';
-import {
-  buildDefaultSessionMetadata,
-  resolveAgentIdFromSessionKey,
-} from './session-metadata.js';
+import { buildDefaultSessionMetadata, type SessionMetadataSeed } from './session-metadata.js';
 import {
   buildGlobalSessionStats,
   metadataToSessionInsert,
@@ -16,7 +13,7 @@ import {
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 const SESSION_COLUMNS = `
-  s.session_key, s.agent_id, s.current_transcript_id, s.status, s.name, s.tags_json,
+  s.session_key, s.agent_id, s.session_id, s.status, s.name, s.tags_json,
   s.created_at, s.updated_at, s.last_accessed_at, s.session_started_at, s.last_interaction_at,
   s.source_channel, s.source_chat_id, s.session_type, s.hidden_from_session_list,
   s.parent_session_key, s.workflow_run_id, s.workflow_definition_id, s.workflow_agent_id, s.workflow_agent_label,
@@ -31,7 +28,7 @@ import { escapeFts5Query } from './fts.js';
 
 const SESSION_FROM_JOIN = `
   FROM sessions s
-  LEFT JOIN transcripts t ON t.transcript_id = s.current_transcript_id
+  LEFT JOIN transcripts t ON t.session_id = s.session_id
 `;
 
 const SELECT_SESSION = `SELECT ${SESSION_COLUMNS} ${SESSION_FROM_JOIN} WHERE s.session_key = ?`;
@@ -43,14 +40,14 @@ function readSessionRow(db: DatabaseSync, sessionKey: string): SessionRow | unde
 function insertSessionAndTranscript(
   db: DatabaseSync,
   sessionKey: string,
-  transcriptId: string,
+  sessionId: string,
   cwd: string,
   metadata: SessionMetadata,
 ): void {
-  const row = metadataToSessionInsert(sessionKey, transcriptId, metadata);
+  const row = metadataToSessionInsert(sessionKey, sessionId, metadata);
   db.prepare(
     `INSERT INTO sessions (
-      session_key, agent_id, current_transcript_id, status, name, tags_json,
+      session_key, agent_id, session_id, status, name, tags_json,
       created_at, updated_at, last_accessed_at, session_started_at, last_interaction_at,
       source_channel, source_chat_id, session_type, hidden_from_session_list,
       parent_session_key, workflow_run_id, workflow_definition_id, workflow_agent_id, workflow_agent_label,
@@ -70,7 +67,7 @@ function insertSessionAndTranscript(
   ).run(
     row.sessionKey,
     row.agentId,
-    row.transcriptId,
+    row.sessionId,
     row.status,
     row.name,
     row.tagsJson,
@@ -102,25 +99,26 @@ function insertSessionAndTranscript(
 
   const now = Date.now();
   db.prepare(
-    `INSERT INTO transcripts (transcript_id, session_key, status, created_at, cwd)
+    `INSERT INTO transcripts (session_id, session_key, status, created_at, cwd)
      VALUES (?, ?, 'active', ?, ?)`,
-  ).run(transcriptId, sessionKey, now, cwd);
+  ).run(sessionId, sessionKey, now, cwd);
 }
 
 export function ensureSessionInTransaction(
   db: DatabaseSync,
   sessionKey: string,
   cwd: string,
+  seed?: SessionMetadataSeed,
 ): SessionMetadata {
   const existing = readSessionRow(db, sessionKey);
   if (existing) {
     return sessionRowToMetadata(sessionKey, existing);
   }
 
-  const transcriptId = validateSessionId(randomUUID());
-  const metadata = buildDefaultSessionMetadata(sessionKey);
-  metadata.transcriptId = transcriptId;
-  insertSessionAndTranscript(db, sessionKey, transcriptId, cwd, metadata);
+  const sessionId = validateSessionId(randomUUID());
+  const metadata = buildDefaultSessionMetadata(sessionKey, seed);
+  metadata.sessionId = sessionId;
+  insertSessionAndTranscript(db, sessionKey, sessionId, cwd, metadata);
   const row = readSessionRow(db, sessionKey);
   if (!row) {
     throw new Error(`Failed to create session: ${sessionKey}`);
@@ -128,15 +126,19 @@ export function ensureSessionInTransaction(
   return sessionRowToMetadata(sessionKey, row);
 }
 
-export function ensureSessionRecord(sessionKey: string, cwd: string): SessionMetadata {
-  return runSqliteWriteTransaction((db) => ensureSessionInTransaction(db, sessionKey, cwd));
+export function ensureSessionRecord(
+  sessionKey: string,
+  cwd: string,
+  seed?: SessionMetadataSeed,
+): SessionMetadata {
+  return runSqliteWriteTransaction((db) => ensureSessionInTransaction(db, sessionKey, cwd, seed));
 }
 
-export function readCurrentTranscriptId(db: DatabaseSync, sessionKey: string): string | null {
+export function readCurrentSessionId(db: DatabaseSync, sessionKey: string): string | null {
   const row = db
-    .prepare(`SELECT current_transcript_id FROM sessions WHERE session_key = ?`)
-    .get(sessionKey) as { current_transcript_id?: string } | undefined;
-  return row?.current_transcript_id ?? null;
+    .prepare(`SELECT session_id FROM sessions WHERE session_key = ?`)
+    .get(sessionKey) as { session_id?: string } | undefined;
+  return row?.session_id ?? null;
 }
 
 export function getSessionMetadata(sessionKey: string): SessionMetadata | null {
@@ -148,8 +150,8 @@ export function getSessionMetadata(sessionKey: string): SessionMetadata | null {
   return sessionRowToMetadata(sessionKey, row);
 }
 
-export function getCurrentTranscriptId(sessionKey: string): string | null {
-  return readCurrentTranscriptId(getSqliteDatabase(), sessionKey);
+export function getCurrentSessionId(sessionKey: string): string | null {
+  return readCurrentSessionId(getSqliteDatabase(), sessionKey);
 }
 
 export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResult<SessionMetadata> {
@@ -192,22 +194,7 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
     if (channels.length === 0) {
       return { items: [], total: 0, limit: query.limit ?? 50, offset: query.offset ?? 0, hasMore: false };
     }
-    const directMatch = `LOWER(s.source_channel) IN (${channels.map(() => '?').join(', ')})`;
-    const keyPatterns = new Set<string>();
-    for (const c of channels) {
-      if (c === 'webchat' || c === 'ui') {
-        keyPatterns.add(`s.session_key LIKE 'agent:%:webchat:%'`);
-      } else if (c === 'gateway' || c === 'webui') {
-        keyPatterns.add(`s.session_key LIKE 'agent:%:gateway:%'`);
-      } else {
-        keyPatterns.add(`s.session_key LIKE 'agent:%:${c.replace(/'/g, "''")}:%'`);
-      }
-    }
-    const keyFallback =
-      keyPatterns.size > 0
-        ? `(TRIM(COALESCE(s.source_channel, '')) = '' AND (${[...keyPatterns].join(' OR ')}))`
-        : '';
-    conditions.push(keyFallback ? `(${directMatch} OR ${keyFallback})` : directMatch);
+    conditions.push(`LOWER(s.source_channel) IN (${channels.map(() => '?').join(', ')})`);
     params.push(...channels);
   }
 
@@ -408,31 +395,31 @@ export function resetSessionRecord(
       return null;
     }
 
-    const previousSessionId = existing.current_transcript_id;
+    const previousSessionId = existing.session_id;
     const now = Date.now();
     db.prepare(
       `UPDATE transcripts SET status = 'archived', archive_reason = 'reset', archived_at = ?
-       WHERE transcript_id = ?`,
+       WHERE session_id = ?`,
     ).run(now, previousSessionId);
 
-    const newTranscriptId = validateSessionId(randomUUID());
+    const newSessionId = validateSessionId(randomUUID());
     db.prepare(
-      `INSERT INTO transcripts (transcript_id, session_key, status, created_at, cwd)
+      `INSERT INTO transcripts (session_id, session_key, status, created_at, cwd)
        VALUES (?, ?, 'active', ?, ?)`,
-    ).run(newTranscriptId, sessionKey, now, cwd);
+    ).run(newSessionId, sessionKey, now, cwd);
 
     db.prepare(
       `UPDATE sessions SET
-        current_transcript_id = ?,
+        session_id = ?,
         updated_at = ?,
         session_started_at = ?,
         last_interaction_at = NULL,
         message_count = 0,
         estimated_tokens = 0
       WHERE session_key = ?`,
-    ).run(newTranscriptId, now, now, sessionKey);
+    ).run(newSessionId, now, now, sessionKey);
 
-    return { sessionId: newTranscriptId, previousSessionId };
+    return { sessionId: newSessionId, previousSessionId };
   });
 }
 
@@ -446,8 +433,8 @@ export function deleteSessionRecord(sessionKey: string): boolean {
     const now = Date.now();
     db.prepare(
       `UPDATE transcripts SET status = 'archived', archive_reason = 'delete', archived_at = ?
-       WHERE transcript_id = ?`,
-    ).run(now, existing.current_transcript_id);
+       WHERE session_id = ?`,
+    ).run(now, existing.session_id);
 
     db.prepare(`DELETE FROM sessions WHERE session_key = ?`).run(sessionKey);
     return true;
@@ -480,11 +467,11 @@ export function getSessionPersistedLevels(sessionKey: string): {
   return { thinkingLevel: row.thinking_level, verboseLevel: row.verbose_level };
 }
 
-export function findSessionKeyByTranscriptId(transcriptId: string): string | null {
+export function findSessionKeyBySessionId(sessionId: string): string | null {
   const db = getSqliteDatabase();
   const row = db
-    .prepare(`SELECT session_key FROM sessions WHERE current_transcript_id = ?`)
-    .get(transcriptId) as { session_key?: string } | undefined;
+    .prepare(`SELECT session_key FROM sessions WHERE session_id = ?`)
+    .get(sessionId) as { session_key?: string } | undefined;
   return row?.session_key ?? null;
 }
 
@@ -494,5 +481,5 @@ export function getGlobalSessionStats(): ReturnType<typeof buildGlobalSessionSta
 }
 
 export function resolveSessionAgentId(sessionKey: string): string {
-  return resolveAgentIdFromSessionKey(sessionKey);
+  return getSessionMetadata(sessionKey)?.routing?.agentId ?? 'main';
 }

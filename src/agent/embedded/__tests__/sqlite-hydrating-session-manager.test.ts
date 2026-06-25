@@ -55,11 +55,11 @@ describe('openSqliteHydratingSessionManager', () => {
 
     const sm = openSqliteHydratingSessionManager({
       sessionKey: SESSION_KEY,
-      sessionId: created.transcriptId!,
+      sessionId: created.sessionId!,
       cwd: CWD,
     });
 
-    expect(sm.getSessionId()).toBe(created.transcriptId);
+    expect(sm.getSessionId()).toBe(created.sessionId);
     expect(sm.getSessionFile()).toBeUndefined();
     expect(sm.isPersisted()).toBe(false);
 

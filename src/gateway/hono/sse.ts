@@ -20,13 +20,9 @@ export interface SSEHandlerConfig {
 interface AgentRequestBody {
   message: string;
   channel?: string;
-  chatId?: string;
-  /** Alias for `chatId` (gateway console + extension clients). */
   sessionKey?: string;
   /** Epoch ms when the client started this send (abort cutoff / stale POST drop). */
   clientCreatedAtMs?: number;
-  /** When true and `channel` is `webchat`, start a new peer id (new session). */
-  newSession?: boolean;
   thinking?: string;
   attachments?: Array<{
     type: string;
@@ -57,7 +53,7 @@ function maxBase64CharsForBinary(maxBinaryBytes: number): number {
 /**
  * POST /api/agent — Send a message to the agent, stream response via SSE.
  *
- * Request body: { message, channel?, chatId?, attachments? }
+ * Request body: { message, channel?, sessionKey, attachments? }
  * Accept: text/event-stream → SSE stream
  * Accept: application/json → wait for full response, return JSON
  *
@@ -86,13 +82,8 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
       typeof body.clientCreatedAtMs === 'number' && Number.isFinite(body.clientCreatedAtMs)
         ? body.clientCreatedAtMs
         : undefined;
-    const newSession = Boolean(body.newSession);
-    const cfg = service.currentConfig;
     const resolved = resolveWebchatSessionKey({
-      cfg,
       sessionKey: typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
-      chatId: typeof body.chatId === 'string' ? body.chatId : undefined,
-      newSession,
     });
     if (resolved.ok === false) {
       return c.json({
@@ -102,7 +93,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
     }
     const chatId = resolved.sessionKey;
 
-    updateAsyncLogContext({ sessionId: String(chatId) });
+    updateAsyncLogContext({ sessionKey: String(chatId) });
 
     if (Array.isArray(attachments)) {
       const maxDataChars = maxBase64CharsForBinary(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES);
@@ -237,7 +228,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
 /**
  * POST /api/agent/resume — Re-attach to an in-progress agent run via SSE.
  *
- * Request body: { runId, chatId }
+ * Request body: { runId, sessionKey }
  * The relay replays all buffered events from the beginning and then live-tails
  * until the run completes.
  *
@@ -252,9 +243,9 @@ export function createAgentResumeHandler(config: SSEHandlerConfig) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid JSON body' } }, 400);
     }
 
-    const { runId, chatId: resumeChatId } = body as { runId?: string; chatId?: string };
-    if (typeof resumeChatId === 'string' && resumeChatId.trim()) {
-      updateAsyncLogContext({ sessionId: resumeChatId.trim() });
+    const { runId, sessionKey } = body as { runId?: string; sessionKey?: string };
+    if (typeof sessionKey === 'string' && sessionKey.trim()) {
+      updateAsyncLogContext({ sessionKey: sessionKey.trim() });
     }
     if (!runId || typeof runId !== 'string') {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing required field: runId' } }, 400);
@@ -283,7 +274,7 @@ export function createAgentResumeHandler(config: SSEHandlerConfig) {
           data: stringifySSEData({
             type: 'error',
             runId,
-            sessionKey: typeof resumeChatId === 'string' ? resumeChatId : '',
+            sessionKey: typeof sessionKey === 'string' ? sessionKey : '',
             timestamp: Date.now(),
             payload: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Unknown error' },
           }),
@@ -311,8 +302,6 @@ export function createSendHandler(config: SSEHandlerConfig) {
         400,
       );
     }
-
-    updateAsyncLogContext({ sessionId: String(chatId) });
 
     try {
       const result = await service.sendMessage(channel, chatId, content);

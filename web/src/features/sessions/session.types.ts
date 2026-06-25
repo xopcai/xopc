@@ -19,8 +19,8 @@ export interface SessionMetadata {
   };
   sessionType?: string;
   customData?: Record<string, unknown>;
-  /** Stable wrapped-transcript id (same as on-disk envelope id). */
-  transcriptId?: string;
+  /** Active OpenClaw-style session instance id. Rotates on reset while `key` stays stable. */
+  sessionId?: string;
   sessionStartedAt?: string;
   lastInteractionAt?: string;
 }

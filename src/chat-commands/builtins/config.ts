@@ -15,7 +15,6 @@ import { ConfigSchema, type TelegramConfig, type WeixinConfig } from '../../conf
 import { loadConfig, saveConfig } from '../../config/loader.js';
 import { resolveConfigPath } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
-import { parseSessionKey } from '../../routing/session-key.js';
 import { resolveAllowlistMatchSimple } from '../../channels/security.js';
 
 const log = createLogger('ConfigCommand');
@@ -41,7 +40,7 @@ function redactConfigForDisplay(plain: Record<string, unknown>): void {
 }
 
 function senderMayWritePersistentConfig(ctx: CommandContext): boolean {
-  const { source, senderId, isGroup, sessionKey } = ctx;
+  const { source, senderId, isGroup } = ctx;
   if (source !== 'telegram' && source !== 'weixin') {
     return true;
   }
@@ -51,8 +50,7 @@ function senderMayWritePersistentConfig(ctx: CommandContext): boolean {
   if (source === 'weixin') {
     const wx = cfg.channels?.weixin as WeixinConfig | undefined;
     if (!wx?.enabled) return false;
-    const parsed = parseSessionKey(sessionKey);
-    const accountId = parsed?.accountId ?? 'default';
+    const accountId = ctx.accountId ?? 'default';
     let allowFrom: Array<string | number> = [];
     if (wx.accounts && Object.keys(wx.accounts).length > 0) {
       const acc = wx.accounts[accountId] ?? wx.accounts['default'];
@@ -67,8 +65,7 @@ function senderMayWritePersistentConfig(ctx: CommandContext): boolean {
 
   const tg = cfg.channels?.telegram as TelegramConfig | undefined;
   if (!tg?.enabled) return false;
-  const parsed = parseSessionKey(sessionKey);
-  const accountId = parsed?.accountId ?? 'default';
+  const accountId = ctx.accountId ?? 'default';
   const acc = tg.accounts?.[accountId] ?? tg.accounts?.['default'];
   if (!acc || acc.enabled === false) return false;
   const allowFrom = [...(acc.allowFrom ?? [])];

@@ -164,7 +164,11 @@ export function logMatchesClientFilters(
   if (filters.selectedLevels.size > 0 && !filters.selectedLevels.has(log.level)) return false;
   if (filters.moduleFilter && moduleLabel(log) !== filters.moduleFilter) return false;
   if (filters.requestIdFilter && log.requestId !== filters.requestIdFilter) return false;
-  if (filters.sessionIdFilter && log.sessionId !== filters.sessionIdFilter) return false;
+  if (
+    filters.sessionIdFilter &&
+    log.sessionId !== filters.sessionIdFilter &&
+    log.sessionKey !== filters.sessionIdFilter
+  ) return false;
 
   if (filters.dateFrom) {
     const from = new Date(filters.dateFrom).getTime();
@@ -184,6 +188,7 @@ export function logMatchesClientFilters(
       moduleLabel(log),
       phaseLabel(log),
       log.requestId,
+      log.sessionKey,
       log.sessionId,
       extractErrorDetail(log)?.message,
       extractErrorDetail(log)?.stack,

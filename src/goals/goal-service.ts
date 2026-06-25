@@ -1,6 +1,5 @@
 import type { Config } from '../config/schema.js';
 import { defaultMaxTurns } from '../agent/goals/state.js';
-import { parseSessionKey } from '../routing/session-key.js';
 import { GoalStore } from './goal-store.js';
 import type {
   CreateGoalInput,
@@ -14,10 +13,6 @@ import type {
   GoalUiLocale,
   GoalWithDetails,
 } from './types.js';
-
-function resolveAgentId(sessionKey: string, fallback = 'main'): string {
-  return parseSessionKey(sessionKey)?.agentId ?? fallback;
-}
 
 function normalizeTitle(title: string): string {
   const t = title.trim();
@@ -49,7 +44,7 @@ export class GoalService {
     return this.store.create({
       title: normalizeTitle(input.title),
       description: input.description,
-      agentId: input.agentId ?? (sessionKey ? resolveAgentId(sessionKey) : 'main'),
+      agentId: input.agentId ?? 'main',
       sessionKey,
       priority: input.priority,
       deadlineAt: input.deadlineAt,

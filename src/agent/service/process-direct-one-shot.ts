@@ -28,7 +28,7 @@ import {
 export type RunProcessDirectDeps = {
   log: ProcessDirectStreamLog;
   config: Config;
-  parseSessionKey: (sessionKey: string) => { channel: string; chatId: string };
+  resolveSessionEndpoint: (sessionKey: string) => Promise<{ channel: string; chatId: string }>;
   initSessionContext: (sessionKey: string, channel: string, chatId: string) => void;
   hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
   hydrateSessionModelFromStore: (sessionKey: string) => Promise<void>;
@@ -55,7 +55,7 @@ export async function runProcessDirect(
     thinking?: string;
   },
 ): Promise<string> {
-  const { channel, chatId } = deps.parseSessionKey(input.sessionKey);
+  const { channel, chatId } = await deps.resolveSessionEndpoint(input.sessionKey);
   deps.initSessionContext(input.sessionKey, channel, chatId);
 
   try {

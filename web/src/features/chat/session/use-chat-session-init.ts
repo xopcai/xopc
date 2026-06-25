@@ -1,5 +1,5 @@
 // Initial chat-session bootstrap. Product contract: docs/web/chat-session-semantics.md
-//   1. `/chat/new` — resolve reusable empty shell, else optimistic key + background POST (chat_id).
+//   1. `/chat/new` — resolve reusable empty shell, else create a server-owned session.
 //   2. `/chat/:key` route — load that session and try to resume any in-flight agent run for it.
 //   3. No key in URL — pick the most-recent populated session (or fall back to creating one).
 //
@@ -7,16 +7,13 @@
 
 import { useEffect, useRef, type MutableRefObject } from 'react';
 
-import type { SessionInfo } from '@/features/chat/chat.types';
 import type { Message } from '@/features/chat/messages/messages.types';
 import {
   getChatSessionSnapshot,
   getSessionMessages,
-  useChatSessionStore,
 } from '@/features/chat/session/chat-session-store';
 import { searchParamsForComposerHandoff } from '@/features/chat/session/composer-handoff-params';
 import { takeSkipInitialSessionLoad } from '@/features/chat/session/chat-session-init-skip-load';
-import { followOptimisticSessionRegistration } from '@/features/chat/session/optimistic-new-session-handoff';
 import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { lastNonNewSessionKeyRef } from '@/features/chat/session/use-chat-session-route';
@@ -84,30 +81,6 @@ export function useChatSessionInit(opts: {
         });
     };
 
-    const followRegistration = (ctx: {
-      sessionKey: string;
-      register: Promise<SessionInfo>;
-      replaceNavigate?: boolean;
-      search?: string;
-    }) => {
-      followOptimisticSessionRegistration({
-        ...ctx,
-        navigateToSession,
-        isActive: isLive,
-        onError: (msg) => patchInitUi({ error: msg }),
-        onReconciled: (key, session) => {
-          adoptEmptySession(key, session.name ?? null);
-          applyResolvedSessionConfig(key);
-        },
-        onRegistered: (key, session) => {
-          if (session.name) {
-            useChatSessionStore.getState().patchSessionMeta(key, { name: session.name });
-          }
-          applyResolvedSessionConfig(key);
-        },
-      });
-    };
-
     const createNewRouteSession = (): Promise<void> => {
       if (!isLive()) return Promise.resolve();
       const aid = resolveAgentIdForPost();
@@ -120,7 +93,6 @@ export function useChatSessionInit(opts: {
         replaceNavigate: true,
         search: searchParamsForComposerHandoff(locationSearch),
         onOpened: (key) => adoptEmptySession(key, null),
-        followRegistration,
       }).then(() => undefined);
     };
 
@@ -170,7 +142,6 @@ export function useChatSessionInit(opts: {
           routeSessionKey: null,
           navigateToSession,
           onOpened: (key) => adoptEmptySession(key, null),
-          followRegistration,
         }).then(() => undefined);
       });
     };

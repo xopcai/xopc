@@ -1,6 +1,6 @@
 import type { Config } from '../config/schema.js';
-import { parseSessionKey } from '../routing/session-key.js';
 import { createLogger } from '../utils/logger.js';
+import type { SessionMetadata } from '../session/index.js';
 
 import { GoalService } from './goal-service.js';
 import type { GoalWithDetails } from './types.js';
@@ -31,6 +31,7 @@ export interface GoalNotificationSendInput extends GoalNotificationTarget {
 
 export interface GoalNotificationServiceOptions {
   getConfig: () => Config;
+  getSessionMetadata?: (sessionKey: string) => Promise<SessionMetadata | null>;
   send: (input: GoalNotificationSendInput) => Promise<void>;
 }
 
@@ -139,7 +140,7 @@ export class GoalNotificationService {
     if (!policy?.enabled) return;
     if (!policy.events.includes(event)) return;
 
-    const targets = this.resolveTargets(event, goal);
+    const targets = await this.resolveTargets(event, goal);
     if (targets.length === 0) return;
 
     const text = formatGoalNotification(event, goal, { queueItem: opts?.queueItem });
@@ -154,20 +155,24 @@ export class GoalNotificationService {
     }
   }
 
-  private resolveTargets(event: GoalNotificationEvent, goal: GoalWithDetails): GoalNotificationTarget[] {
+  private async resolveTargets(event: GoalNotificationEvent, goal: GoalWithDetails): Promise<GoalNotificationTarget[]> {
     const policy = this.opts.getConfig().goals?.notifications;
     if (!policy?.enabled) return [];
     const byKey = new Map<string, GoalNotificationTarget>();
 
-    if (policy.includeLinkedSessions !== false && goal.activeSessionKey) {
-      const parsed = parseSessionKey(goal.activeSessionKey);
-      const eligible = parsed && policy.channels.includes(parsed.source);
+    if (policy.includeLinkedSessions !== false && goal.activeSessionKey && this.opts.getSessionMetadata) {
+      const metadata = await this.opts.getSessionMetadata(goal.activeSessionKey).catch((err) => {
+        log.warn({ err, sessionKey: goal.activeSessionKey, goalId: goal.id }, 'Failed to load linked session metadata for goal notification');
+        return null;
+      });
+      const routing = metadata?.routing;
+      const eligible = routing && policy.channels.includes(routing.source);
       if (eligible) {
         const target: GoalNotificationTarget = {
-          channel: parsed.source,
-          chatId: parsed.peerId,
-          accountId: parsed.accountId,
-          ...(parsed.threadId ? { threadId: parsed.threadId } : {}),
+          channel: routing.source,
+          chatId: routing.peerId,
+          accountId: routing.accountId,
+          ...(routing.threadId ? { threadId: routing.threadId } : {}),
         };
         byKey.set(targetKey(target), target);
       }

@@ -35,8 +35,8 @@ const WINDOWS_RESERVED_AGENT_IDS = new Set<string>([
   'lpt9',
 ]);
 
-export function normalizeAgentId(value: string): string {
-  const trimmed = value.trim();
+export function normalizeAgentId(value: string | undefined | null): string {
+  const trimmed = (value ?? '').trim();
   if (!trimmed) {
     return DEFAULT_AGENT_ID;
   }
@@ -64,7 +64,7 @@ export function validateAgentIdForNewAgent(
       return {
         ok: false,
         error:
-          'Invalid agent id: use 1–64 characters; letters, digits, underscores, and hyphens only; start with a letter or digit.',
+          'Invalid agent id: use 1-64 characters; letters, digits, underscores, and hyphens only; start with a letter or digit.',
       };
     }
     if (id === DEFAULT_AGENT_ID) {

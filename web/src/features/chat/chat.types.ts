@@ -4,7 +4,13 @@ export type GatewayClientConfig = {
 
 export interface SessionInfo {
   key: string;
+  sessionId?: string;
   name?: string;
   updatedAt: string;
   messageCount?: number;
+  sourceChannel?: string;
+  sourceChatId?: string;
+  routing?: {
+    agentId?: string;
+  };
 }

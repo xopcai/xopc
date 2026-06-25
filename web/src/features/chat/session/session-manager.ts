@@ -6,24 +6,10 @@ import { listSessions } from '@/features/sessions/session-api';
 import { apiFetch } from '@/lib/fetch';
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { apiUrl } from '@/lib/url';
-import { buildWebchatSessionKey, generateNewChatId, normalizeAgentId } from '@/lib/webchat-session-key';
 import { upsertWebchatEmptyShellCache } from '@/features/chat/session/webchat-empty-shell-cache';
 
-/** Web UI chat sessions use segment `webchat` (same as `ui`). */
-export function isWebUiSessionKey(key: string): boolean {
-  return (
-    key.startsWith('gateway:') ||
-    key.includes(':gateway:') ||
-    key.includes(':webchat:') ||
-    key.includes(':ui:')
-  );
-}
-
-/**
- * `GET /api/sessions?channel=…` filters on {@link SessionMetadata.sourceChannel}. Web console uses
- * `webchat`; older installs may still have `gateway` in the session key.
- */
-export const WEB_UI_SESSION_SOURCE_CHANNELS = 'webchat,gateway';
+/** `GET /api/sessions?channel=…` filters on {@link SessionMetadata.sourceChannel}. */
+export const WEB_UI_SESSION_SOURCE_CHANNELS = 'webchat';
 
 type SessionAgentConfig = {
   thinkingLevel: string;
@@ -61,12 +47,15 @@ export class SessionManager {
         offset,
       });
       for (const s of data.items) {
-        if (!isWebUiSessionKey(s.key)) continue;
         out.push({
           key: s.key,
+          sessionId: s.sessionId,
           name: s.name,
           updatedAt: s.updatedAt,
           messageCount: s.messageCount,
+          sourceChannel: s.sourceChannel,
+          sourceChatId: s.sourceChatId,
+          routing: s.routing,
         });
       }
       if (!data.hasMore) break;
@@ -180,11 +169,10 @@ export class SessionManager {
     return pending;
   }
 
-  async createSession(options?: { agentId?: string; chatId?: string }): Promise<SessionInfo> {
+  async createSession(options?: { agentId?: string }): Promise<SessionInfo> {
     const body: Record<string, unknown> = { channel: 'webchat' };
     const raw = options?.agentId?.trim();
     if (raw) body.agentId = raw.toLowerCase();
-    if (options?.chatId?.trim()) body.chat_id = options.chatId.trim();
     const res = await apiFetch(apiUrl('/api/sessions'), {
       method: 'POST',
       body: JSON.stringify(body),
@@ -192,22 +180,6 @@ export class SessionManager {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as { session: SessionInfo };
     return data.session;
-  }
-
-  /** Background registration for client-generated optimistic session keys. */
-  registerSessionWithChatId(agentId: string, chatId: string): Promise<SessionInfo> {
-    return this.createSession({ agentId, chatId });
-  }
-
-  /** Instant new-chat key + async POST — matches mobile optimistic session flow. */
-  openOptimisticNewSession(agentId?: string): { sessionKey: string; register: Promise<SessionInfo> } {
-    const id = normalizeAgentId(agentId);
-    const chatId = generateNewChatId();
-    const sessionKey = buildWebchatSessionKey(id, chatId);
-    return {
-      sessionKey,
-      register: this.registerSessionWithChatId(id, chatId),
-    };
   }
 
   /** Lightweight name read after auto-title (matches `ui` SessionManager). */

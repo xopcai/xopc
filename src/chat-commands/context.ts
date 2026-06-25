@@ -22,7 +22,6 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { MessageBus } from '../infra/bus/index.js';
 import type { SessionStore, SessionConfigStore } from '../session/index.js';
 import { createLogger } from '../utils/logger.js';
-import { getRoutingInfo } from './session-key.js';
 import { saveConfig } from '../config/loader.js';
 import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/transcript/thinking-types.js';
 import { mkdir, writeFile } from 'fs/promises';
@@ -42,6 +41,8 @@ export interface CommandContextDeps {
   chatId: string;
   senderId: string;
   isGroup: boolean;
+  accountId?: string;
+  threadId?: string;
   config: Config;
   bus: MessageBus;
   sessionStore: SessionStore;
@@ -90,6 +91,8 @@ export class CommandContextImpl implements CommandContext {
   readonly chatId: string;
   readonly senderId: string;
   readonly isGroup: boolean;
+  readonly accountId?: string;
+  readonly threadId?: string;
   readonly config: Config;
   readonly abortCurrentTurn?: () => Promise<void>;
   readonly reloadSkills?: () => Promise<void>;
@@ -105,6 +108,8 @@ export class CommandContextImpl implements CommandContext {
     this.chatId = deps.chatId;
     this.senderId = deps.senderId;
     this.isGroup = deps.isGroup;
+    this.accountId = deps.accountId;
+    this.threadId = deps.threadId;
     this.config = deps.config;
     this.deps = deps;
 
@@ -129,6 +134,14 @@ export class CommandContextImpl implements CommandContext {
         startWorkflowRun: (params) => deps.workflowRunService!.startWorkflowRun(params),
       };
     }
+  }
+
+  private outboundMetadata(extra?: Record<string, unknown>): Record<string, unknown> {
+    return {
+      accountId: this.deps.accountId,
+      threadId: this.deps.threadId,
+      ...extra,
+    };
   }
 
   // === Reply API ===
@@ -172,15 +185,12 @@ export class CommandContextImpl implements CommandContext {
       return;
     }
 
-    const routing = getRoutingInfo(this.sessionKey);
     await this.deps.bus.publishOutbound({
-      channel: routing.channel,
-      chat_id: routing.chatId,
+      channel: this.source,
+      chat_id: this.chatId,
       content: '✅ New session started. Previous transcript archived; model and session overrides kept.',
       type: 'message',
-      metadata: {
-        threadId: routing.threadId,
-      },
+      metadata: this.outboundMetadata(),
     });
 
     log.info({ sessionKey: this.sessionKey }, 'Session reset');
@@ -199,15 +209,12 @@ export class CommandContextImpl implements CommandContext {
     this.deps.invalidateAgentSession?.(this.sessionKey);
 
     // Publish outbound message to confirm
-    const routing = getRoutingInfo(this.sessionKey);
     await this.deps.bus.publishOutbound({
-      channel: routing.channel,
-      chat_id: routing.chatId,
+      channel: this.source,
+      chat_id: this.chatId,
       content: '✅ Session cleared.',
       type: 'message',
-      metadata: {
-        threadId: routing.threadId,
-      },
+      metadata: this.outboundMetadata(),
     });
 
     log.info({ sessionKey: this.sessionKey }, 'Session cleared');
