@@ -31,9 +31,7 @@ export {
 export { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 export {
   buildDefaultSessionMetadata,
-  extractRoutingFromSessionKey,
-  parseSessionKeySource,
-  resolveAgentIdFromSessionKey,
+  type SessionMetadataSeed,
 } from './session-metadata.js';
 export {
   buildGlobalSessionStats,
@@ -51,9 +49,9 @@ export {
 export {
   deleteSessionRecord,
   ensureSessionRecord,
-  getCurrentTranscriptId,
+  getCurrentSessionId,
   getGlobalSessionStats,
-  findSessionKeyByTranscriptId,
+  findSessionKeyBySessionId,
   getSessionPersistedLevels,
   getSessionMetadata,
   incrementSessionStatsOnAppend,

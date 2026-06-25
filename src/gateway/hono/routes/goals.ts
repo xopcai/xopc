@@ -481,14 +481,29 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
         : goal.activeSessionKey;
 
     if (!sessionKey) {
+      const agentId = goal.agentId || getDefaultAgentId(cfg());
+      const peerId = `goal-${sanitizeSegment(goal.id) || Date.now()}`;
       sessionKey = buildSessionKey({
-        agentId: goal.agentId || getDefaultAgentId(cfg()),
+        agentId,
         source: 'webchat',
         accountId: 'default',
         peerKind: 'direct',
-        peerId: `goal-${sanitizeSegment(goal.id) || Date.now()}`,
+        peerId,
       });
-      await deps.service.sessionIndexInstance.saveMessages(sessionKey, []);
+      await deps.service.sessionIndexInstance.saveMessages(sessionKey, [], {
+        metadata: {
+          sourceChannel: 'webchat',
+          sourceChatId: `default:direct:${peerId}`,
+          sessionType: 'chat',
+          routing: {
+            agentId,
+            source: 'webchat',
+            accountId: 'default',
+            peerKind: 'direct',
+            peerId,
+          },
+        },
+      });
       goals.attachSession(goalId, sessionKey);
     }
 

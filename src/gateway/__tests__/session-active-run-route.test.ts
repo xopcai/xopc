@@ -42,3 +42,29 @@ describe('GET /api/sessions/:key/run', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('/api/sessions/resolve', () => {
+  it('resolves sessionId to canonical session key', async () => {
+    const sessionKey = 'agent:main:webchat:default:direct:abc';
+    const sessionId = 'session-123';
+    const service = {
+      sessions: {
+        resolveSession: async (input: { sessionId?: string }) =>
+          input.sessionId === sessionId
+            ? { sessionKey, sessionId, session: { key: sessionKey, sessionId } }
+            : null,
+      },
+    } as unknown as GatewayService;
+
+    const app = new Hono();
+    registerSessionsRoutes(app, { service });
+
+    const res = await app.request(`/api/sessions/resolve?sessionId=${encodeURIComponent(sessionId)}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      payload: { sessionKey: string; sessionId: string };
+    };
+    expect(body).toEqual({ ok: true, payload: { sessionKey, sessionId, session: { key: sessionKey, sessionId } } });
+  });
+});

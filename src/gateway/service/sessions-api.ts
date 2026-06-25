@@ -54,6 +54,34 @@ export class GatewaySessionsApi {
     return this.opts.sessionIndex.getSession(key, options);
   }
 
+  async resolveSession(input: {
+    key?: string;
+    sessionKey?: string;
+    sessionId?: string;
+  }): Promise<
+    | {
+        sessionKey: string;
+        sessionId: string;
+        session: Awaited<ReturnType<GatewaySessionsApi['getSession']>>;
+      }
+    | null
+  > {
+    const explicitKey = input.sessionKey?.trim() || input.key?.trim();
+    const resolvedKey =
+      explicitKey ||
+      (input.sessionId?.trim()
+        ? await this.opts.sessionIndex.resolveSessionKeyBySessionId(input.sessionId.trim())
+        : null);
+    if (!resolvedKey) {
+      return null;
+    }
+    const session = await this.getSession(resolvedKey);
+    if (!session?.sessionId) {
+      return null;
+    }
+    return { sessionKey: resolvedKey, sessionId: session.sessionId, session };
+  }
+
   /** Read-only: in-flight webchat agent run for this session key, if any. */
   getActiveRun(sessionKey: string): { active: boolean; runId?: string } {
     const key = sessionKey.trim();

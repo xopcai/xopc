@@ -24,7 +24,6 @@ import type { ModelManager } from '../models/index.js';
 import type { SessionStore } from '../../session/store.js';
 import type { SessionStateBag } from '../session/index.js';
 import type { GoalWithDetails } from '../../goals/types.js';
-import { parseSessionKey as parseRoutingSessionKey } from '../../routing/session-key.js';
 import { createLogger } from '../../utils/logger.js';
 import type { PersistentGoalApis } from './persistent-goal-apis.js';
 import { handlePersistentGoalPostTurn } from './post-turn.js';
@@ -98,8 +97,7 @@ export class PersistentGoalService {
     message: string,
     routing: { channel: string; chatId: string; inboundMetadata?: Record<string, unknown> },
   ): void {
-    const parsed = parseRoutingSessionKey(sessionKey);
-    if (parsed?.source === 'webchat' && this.webchatContinuationScheduler) {
+    if (routing.channel === 'webchat' && this.webchatContinuationScheduler) {
       this.webchatContinuationScheduler(sessionKey, message);
       return;
     }
@@ -168,8 +166,7 @@ export class PersistentGoalService {
       inboundMetadata: payload.outboundMetadata,
     });
 
-    const src = parseRoutingSessionKey(payload.sessionKey)?.source;
-    const isWebchat = src === 'webchat';
+    const isWebchat = payload.channel === 'webchat';
     const publishVerdict =
       !isWebchat && payload.channel !== 'cli'
         ? async (text: string) => {

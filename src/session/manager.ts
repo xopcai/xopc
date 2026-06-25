@@ -12,6 +12,7 @@ import type {
   ExportFormat,
   SessionStatus,
 } from './types.js';
+import type { SessionMetadataSeed } from '../storage/sqlite/index.js';
 import type { Message } from './types.js';
 import type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
 import type { XopcSessionTranscriptV1 } from './transcript-format.js';
@@ -126,6 +127,10 @@ export class SessionIndex extends EventEmitter {
 
   async getSessionMetadata(key: string): Promise<SessionMetadata | null> {
     return this.store.getMetadata(key);
+  }
+
+  async resolveSessionKeyBySessionId(sessionId: string): Promise<string | null> {
+    return this.store.resolveKeyBySessionId(sessionId);
   }
 
   async deleteSession(key: string): Promise<boolean> {
@@ -338,8 +343,12 @@ export class SessionIndex extends EventEmitter {
    * Runtime turns must use PiTranscriptManager.appendMessage; this entry point
    * is reserved for compaction, tests, and admin tools.
    */
-  async saveMessages(key: string, messages: any[]) {
-    return this.store.saveMessages(key, messages);
+  async saveMessages(
+    key: string,
+    messages: any[],
+    options?: { metadata?: SessionMetadataSeed },
+  ) {
+    return this.store.saveMessages(key, messages, options);
   }
 
   /**

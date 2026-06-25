@@ -17,6 +17,7 @@ import {
   getCompactionCheckpointDetail,
   getGlobalSessionStats,
   getSessionMetadata,
+  findSessionKeyBySessionId,
   listCompactionCheckpoints,
   listSessionMetadata,
   listSessionsByAgent,
@@ -27,6 +28,7 @@ import {
   replaceTranscriptRows,
   resetSessionRecord,
   restoreCompactionCheckpoint,
+  type SessionMetadataSeed,
 } from '../storage/sqlite/index.js';
 import type { TranscriptCompactionRecord, XopcSessionTranscriptV1 } from './transcript-format.js';
 import {
@@ -96,18 +98,23 @@ export class SessionStore {
 
   async resolveTranscriptPath(
     sessionKey: string,
+    options?: { metadata?: SessionMetadataSeed },
   ): Promise<{ sessionId: string; sessionKey: string }> {
     requireXopcDatabase();
     const cwd = this.resolveWorkspaceCwd(sessionKey);
-    const meta = ensureSessionRecord(sessionKey, cwd);
-    return { sessionId: meta.transcriptId!, sessionKey };
+    const meta = ensureSessionRecord(sessionKey, cwd, options?.metadata);
+    return { sessionId: meta.sessionId!, sessionKey };
   }
 
-  async appendTranscriptMessage(sessionKey: string, message: AgentMessage): Promise<void> {
+  async appendTranscriptMessage(
+    sessionKey: string,
+    message: AgentMessage,
+    options?: { metadata?: SessionMetadataSeed },
+  ): Promise<void> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
       const cwd = this.resolveWorkspaceCwd(sessionKey);
-      ensureSessionRecord(sessionKey, cwd);
+      ensureSessionRecord(sessionKey, cwd, options?.metadata);
       appendTranscriptEntry(sessionKey, message);
     });
   }
@@ -255,6 +262,11 @@ export class SessionStore {
     return getSessionMetadata(key);
   }
 
+  async resolveKeyBySessionId(sessionId: string): Promise<string | null> {
+    requireXopcDatabase();
+    return findSessionKeyBySessionId(sessionId);
+  }
+
   async updateMetadata(key: string, updates: Partial<SessionMetadata>): Promise<void> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
@@ -330,7 +342,7 @@ export class SessionStore {
 
   async loadTranscriptDocument(key: string): Promise<XopcSessionTranscriptV1 | null> {
     const metadata = await this.getMetadata(key);
-    if (!metadata?.transcriptId) {
+    if (!metadata?.sessionId) {
       return null;
     }
     const rows = await this.loadTranscriptRows(key);
@@ -350,7 +362,7 @@ export class SessionStore {
     return {
       type: 'xopc_session_transcript',
       version: 1,
-      id: metadata.transcriptId,
+      id: metadata.sessionId,
       createdAt: metadata.createdAt,
       updatedAt: metadata.updatedAt,
       messages: rows,
@@ -483,11 +495,15 @@ export class SessionStore {
     });
   }
 
-  async saveMessages(key: string, messages: AgentMessage[]): Promise<void> {
+  async saveMessages(
+    key: string,
+    messages: AgentMessage[],
+    options?: { metadata?: SessionMetadataSeed },
+  ): Promise<void> {
     return this.runStoreMutation(async () => {
       requireXopcDatabase();
       const cwd = this.resolveWorkspaceCwd(key);
-      ensureSessionRecord(key, cwd);
+      ensureSessionRecord(key, cwd, options?.metadata);
       const prev = await this.loadTranscriptRows(key);
       const merged = mergeLlmMessagesPreservingContextRows(prev, messages);
       replaceTranscriptRows(key, merged);
@@ -665,13 +681,19 @@ export class SessionStore {
         throw new Error('Session export contains no importable transcript rows');
       }
 
-      const cwd = this.resolveWorkspaceCwd(targetKey);
-      ensureSessionRecord(targetKey, cwd);
-      replaceTranscriptRows(targetKey, rows);
-
       const metadata = record.metadata && typeof record.metadata === 'object'
         ? record.metadata as Partial<SessionMetadata>
         : {};
+      const cwd = this.resolveWorkspaceCwd(targetKey);
+      ensureSessionRecord(targetKey, cwd, {
+        sourceChannel: metadata.sourceChannel,
+        sourceChatId: metadata.sourceChatId,
+        sessionType: metadata.sessionType,
+        routing: metadata.routing,
+        customData: metadata.customData,
+      });
+      replaceTranscriptRows(targetKey, rows);
+
       const sourceKey = typeof metadata.key === 'string' ? metadata.key : undefined;
       const sourceName = typeof metadata.name === 'string' ? metadata.name.trim() : '';
       patchSessionMetadata(targetKey, {
@@ -721,7 +743,13 @@ export class SessionStore {
       const selectedRows =
         options.throughRow === undefined ? rows : rows.slice(0, Math.max(0, Math.trunc(options.throughRow)));
       const cwd = this.resolveWorkspaceCwd(targetKey);
-      ensureSessionRecord(targetKey, cwd);
+      ensureSessionRecord(targetKey, cwd, {
+        sourceChannel: sourceMetadata.sourceChannel,
+        sourceChatId: sourceMetadata.sourceChatId,
+        sessionType: sourceMetadata.sessionType,
+        routing: sourceMetadata.routing,
+        customData: sourceMetadata.customData,
+      });
       replaceTranscriptRows(targetKey, selectedRows);
       const label = sourceMetadata.name?.trim() || sourceKey;
       patchSessionMetadata(targetKey, {
@@ -730,7 +758,7 @@ export class SessionStore {
         customData: {
           ...(sourceMetadata.customData ?? {}),
           forkedFromSessionKey: sourceKey,
-          forkedFromTranscriptId: sourceMetadata.transcriptId,
+          forkedFromSessionId: sourceMetadata.sessionId,
           ...(options.throughRow !== undefined ? { forkedFromRow: selectedRows.length } : {}),
           forkedAt: new Date().toISOString(),
         },

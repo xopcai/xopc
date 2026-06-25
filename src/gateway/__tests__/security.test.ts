@@ -386,6 +386,92 @@ describe('Gateway Security Fixes', () => {
       // Should not be 413 (Payload Too Large)
       expect(res.status).not.toBe(413);
     });
+
+    it('should allow larger note media uploads through the API body limit', async () => {
+      const service = createMockService();
+      const app = createHonoApp({ service, token: 'test' });
+      const boundary = '----xopc-test-boundary';
+      const body = [
+        `--${boundary}`,
+        'Content-Disposition: form-data; name="file"; filename="photo.jpg"',
+        'Content-Type: image/jpeg',
+        '',
+        'x'.repeat(2 * 1024 * 1024),
+        `--${boundary}--`,
+        '',
+      ].join('\r\n');
+
+      const res = await app.request('/api/notes/note-1/media', {
+        method: 'POST',
+        headers: {
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          Authorization: 'Bearer test',
+          'Content-Length': String(Buffer.byteLength(body)),
+        },
+        body,
+      });
+
+      expect(res.status).not.toBe(413);
+    });
+
+    it('should keep rejecting oversized note media uploads', async () => {
+      const service = createMockService();
+      const app = createHonoApp({ service, token: 'test' });
+
+      const res = await app.request('/api/notes/note-1/media', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'multipart/form-data; boundary=xopc',
+          Authorization: 'Bearer test',
+          'Content-Length': String(26 * 1024 * 1024),
+        },
+        body: 'x',
+      });
+
+      expect(res.status).toBe(413);
+      const json = await res.json();
+      expect(json.maxSize).toBe('25MB');
+    });
+
+    it('should allow larger voice transcription payloads through the API body limit', async () => {
+      const service = createMockService();
+      const app = createHonoApp({ service, token: 'test' });
+      const body = JSON.stringify({
+        audio: Buffer.alloc(2 * 1024 * 1024).toString('base64'),
+        mimeType: 'audio/mp4',
+      });
+
+      const res = await app.request('/api/voice/transcribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test',
+          'Content-Length': String(Buffer.byteLength(body)),
+        },
+        body,
+      });
+
+      expect(res.status).not.toBe(413);
+    });
+
+    it('should keep rejecting oversized voice transcription payloads', async () => {
+      const service = createMockService();
+      const app = createHonoApp({ service, token: 'test' });
+
+      const res = await app.request('/api/voice/transcribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test',
+          'Content-Length': String(36 * 1024 * 1024),
+        },
+        body: '{}',
+      });
+
+      expect(res.status).toBe(413);
+      const json = await res.json();
+      expect(json.maxSize).toBe('35MB');
+    });
   });
 
   describe('Auth failure rate limiting', () => {

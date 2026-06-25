@@ -1,12 +1,13 @@
 /**
- * Session Key Generator — OpenClaw `agent:{agentId}:{rest}` format.
+ * Chat-command session display helpers.
+ *
+ * Session routing is resolved from SessionMetadata, not by parsing session keys.
  */
 
 import type { MessageSource } from './types.js';
 import {
   buildAgentMainSessionKey,
   buildAgentPeerSessionKey,
-  parseSessionKey as parseRoutingSessionKey,
 } from '../routing/session-key.js';
 
 export interface SessionKeyContext {
@@ -75,79 +76,7 @@ export function generateSessionKey(ctx: SessionKeyContext): string {
   return key;
 }
 
-export function parseSessionKey(sessionKey: string): {
-  source: MessageSource;
-  type: 'dm' | 'group' | 'thread' | 'direct' | 'other';
-  chatId: string;
-  threadId?: string;
-  agentId?: string;
-  accountId?: string;
-} {
-  const parsed = parseRoutingSessionKey(sessionKey);
-
-  if (!parsed) {
-    return {
-      source: 'system',
-      type: 'other',
-      chatId: 'unknown',
-    };
-  }
-
-  let type: 'dm' | 'group' | 'thread' | 'direct' | 'other';
-  switch (parsed.peerKind) {
-    case 'dm':
-    case 'direct':
-      type = parsed.peerKind === 'direct' && parsed.peerId === 'main' ? 'direct' : 'dm';
-      break;
-    case 'group':
-    case 'channel':
-      type = parsed.threadId ? 'thread' : 'group';
-      break;
-    default:
-      type = 'other';
-  }
-
-  return {
-    source: parsed.source as MessageSource,
-    type,
-    chatId: parsed.peerId,
-    threadId: parsed.threadId,
-    agentId: parsed.agentId,
-    accountId: parsed.accountId,
-  };
-}
-
-export function isValidSessionKey(sessionKey: string): boolean {
-  return parseRoutingSessionKey(sessionKey) !== null;
-}
-
 export function getSessionDisplayName(sessionKey: string): string {
-  const parsed = parseSessionKey(sessionKey);
-
-  switch (parsed.type) {
-    case 'dm':
-      return `Private Chat (${parsed.source})`;
-    case 'group':
-      return `Group (${parsed.source})`;
-    case 'thread':
-      return `Thread (${parsed.source})`;
-    case 'direct':
-      return parsed.chatId === 'main' ? 'Main session' : `Direct (${parsed.source})`;
-    default:
-      return `${parsed.source}:${parsed.chatId}`;
-  }
-}
-
-export function getRoutingInfo(sessionKey: string): {
-  channel: string;
-  chatId: string;
-  threadId?: string;
-} {
-  const parsed = parseSessionKey(sessionKey);
-
-  return {
-    channel: parsed.source,
-    chatId: parsed.chatId,
-    threadId: parsed.threadId,
-  };
+  const trimmed = sessionKey.trim();
+  return trimmed || 'Session';
 }

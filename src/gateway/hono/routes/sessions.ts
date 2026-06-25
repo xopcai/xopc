@@ -1,7 +1,8 @@
 import type { Hono } from 'hono';
 
-import { buildSessionKey, parseSessionKey } from '../../../routing/session-key.js';
+import { buildSessionKey } from '../../../routing/session-key.js';
 import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
+import type { SessionMetadataSeed } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
 import { messagesToClientHistory } from '../../../session/client-history.js';
@@ -33,6 +34,26 @@ function ensureGatewayReadyForSessions(
   return respondStartupUnavailable(c, method);
 }
 
+function buildDirectSessionMetadata(params: {
+  agentId: string;
+  source: string;
+  accountId: string;
+  peerId: string;
+}): SessionMetadataSeed {
+  return {
+    sourceChannel: params.source,
+    sourceChatId: [params.accountId, 'direct', params.peerId].join(':'),
+    sessionType: 'chat',
+    routing: {
+      agentId: params.agentId,
+      source: params.source,
+      accountId: params.accountId,
+      peerKind: 'direct',
+      peerId: params.peerId,
+    },
+  };
+}
+
 export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
 
@@ -62,7 +83,14 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
         peerId: body.chat_id,
       });
 
-      await service.sessionIndexInstance.saveMessages(sessionKey, []);
+      await service.sessionIndexInstance.saveMessages(sessionKey, [], {
+        metadata: buildDirectSessionMetadata({
+          agentId,
+          source: channel,
+          accountId: 'default',
+          peerId: body.chat_id,
+        }),
+      });
       const session = await service.sessions.getSession(sessionKey);
       return c.json({ session }, 201);
     }
@@ -78,8 +106,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     // Reuse an empty session only when it matches the requested agent (session key embeds agent id).
     const emptySession = existingSessions.items.find((s) => {
       if (s.messageCount !== 0) return false;
-      const parsed = parseSessionKey(s.key);
-      return parsed?.agentId === agentId;
+      return s.routing?.agentId === agentId;
     });
     
     if (emptySession) {
@@ -98,7 +125,14 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       peerId: chatId,
     });
 
-    await service.sessionIndexInstance.saveMessages(sessionKey, []);
+    await service.sessionIndexInstance.saveMessages(sessionKey, [], {
+      metadata: buildDirectSessionMetadata({
+        agentId,
+        source: channel,
+        accountId: 'default',
+        peerId: chatId,
+      }),
+    });
 
     const session = await service.sessions.getSession(sessionKey);
     return c.json({ session }, 201);
@@ -138,6 +172,32 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     const channel = c.req.query('channel');
     const chatIds = await service.sessions.chatIds(channel || undefined);
     return c.json({ ok: true, payload: { chatIds } });
+  });
+
+  // GET /api/sessions/resolve?sessionId=... - Resolve OpenClaw-style session id to canonical key.
+  authenticated.get('/api/sessions/resolve', async (c) => {
+    const result = await service.sessions.resolveSession({
+      sessionId: c.req.query('sessionId'),
+      sessionKey: c.req.query('sessionKey') ?? c.req.query('key'),
+    });
+    if (!result) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    return c.json({ ok: true, payload: result });
+  });
+
+  // POST /api/sessions/resolve - Resolve by JSON body (`sessionId`, `sessionKey`, or `key`).
+  authenticated.post('/api/sessions/resolve', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const result = await service.sessions.resolveSession({
+      sessionId: typeof body.sessionId === 'string' ? body.sessionId : undefined,
+      sessionKey: typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
+      key: typeof body.key === 'string' ? body.key : undefined,
+    });
+    if (!result) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    return c.json({ ok: true, payload: result });
   });
 
   // GET /api/sessions/:key/run — read-only active webchat agent run (for UI resume)

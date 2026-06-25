@@ -3,7 +3,7 @@
 CREATE TABLE IF NOT EXISTS sessions (
   session_key              TEXT PRIMARY KEY,
   agent_id                 TEXT NOT NULL,
-  current_transcript_id    TEXT NOT NULL UNIQUE,
+  session_id                TEXT NOT NULL UNIQUE,
   status                   TEXT NOT NULL DEFAULT 'active',
   name                     TEXT,
   tags_json                TEXT NOT NULL DEFAULT '[]',
@@ -15,6 +15,12 @@ CREATE TABLE IF NOT EXISTS sessions (
   source_channel           TEXT NOT NULL DEFAULT '',
   source_chat_id           TEXT NOT NULL DEFAULT '',
   session_type             TEXT,
+  hidden_from_session_list INTEGER NOT NULL DEFAULT 0,
+  parent_session_key       TEXT,
+  workflow_run_id          TEXT,
+  workflow_definition_id   TEXT,
+  workflow_agent_id        TEXT,
+  workflow_agent_label     TEXT,
   routing_json             TEXT,
   custom_data_json         TEXT,
   abort_cutoff_timestamp   INTEGER,
@@ -35,6 +41,12 @@ CREATE INDEX IF NOT EXISTS idx_sessions_source_channel
   ON sessions(source_channel);
 CREATE INDEX IF NOT EXISTS idx_sessions_last_interaction
   ON sessions(last_interaction_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sessions_type
+  ON sessions(session_type);
+CREATE INDEX IF NOT EXISTS idx_sessions_workflow_run
+  ON sessions(workflow_run_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_parent
+  ON sessions(parent_session_key);
 
 CREATE TABLE IF NOT EXISTS session_config (
   session_key                  TEXT PRIMARY KEY,
@@ -50,7 +62,7 @@ CREATE TABLE IF NOT EXISTS session_config (
 );
 
 CREATE TABLE IF NOT EXISTS transcripts (
-  transcript_id    TEXT PRIMARY KEY,
+  session_id        TEXT PRIMARY KEY,
   session_key        TEXT NOT NULL,
   status             TEXT NOT NULL DEFAULT 'active',
   archive_reason     TEXT,
@@ -64,24 +76,24 @@ CREATE INDEX IF NOT EXISTS idx_transcripts_session
 
 CREATE TABLE IF NOT EXISTS transcript_entries (
   entry_id        TEXT PRIMARY KEY,
-  transcript_id   TEXT NOT NULL,
+  session_id       TEXT NOT NULL,
   seq             INTEGER NOT NULL,
   entry_kind      TEXT NOT NULL,
   role            TEXT,
   payload_json    TEXT NOT NULL,
   created_at      INTEGER NOT NULL,
-  UNIQUE(transcript_id, seq),
-  FOREIGN KEY (transcript_id) REFERENCES transcripts(transcript_id)
+  UNIQUE(session_id, seq),
+  FOREIGN KEY (session_id) REFERENCES transcripts(session_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_entries_transcript_seq
-  ON transcript_entries(transcript_id, seq);
+CREATE INDEX IF NOT EXISTS idx_entries_session_seq
+  ON transcript_entries(session_id, seq);
 CREATE INDEX IF NOT EXISTS idx_entries_kind
-  ON transcript_entries(transcript_id, entry_kind);
+  ON transcript_entries(session_id, entry_kind);
 
 CREATE TABLE IF NOT EXISTS compaction_checkpoints (
   checkpoint_id    TEXT PRIMARY KEY,
-  transcript_id    TEXT NOT NULL,
+  session_id       TEXT NOT NULL,
   session_key      TEXT NOT NULL,
   created_at       INTEGER NOT NULL,
   message_count    INTEGER NOT NULL,
@@ -101,7 +113,7 @@ CREATE TABLE IF NOT EXISTS checkpoint_entries (
 CREATE VIRTUAL TABLE IF NOT EXISTS transcript_fts USING fts5(
   content,
   session_key UNINDEXED,
-  transcript_id UNINDEXED,
+  session_id UNINDEXED,
   entry_id UNINDEXED,
   tokenize='unicode61'
 );
@@ -217,6 +229,17 @@ CREATE INDEX IF NOT EXISTS idx_notes_kind
   ON notes(kind);
 CREATE INDEX IF NOT EXISTS idx_notes_group
   ON notes(group_id);
+
+CREATE TABLE IF NOT EXISTS note_agent_contexts (
+  note_id TEXT PRIMARY KEY,
+  note_updated_at INTEGER NOT NULL,
+  context_version TEXT NOT NULL,
+  generated_at INTEGER NOT NULL,
+  payload_json TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_note_agent_contexts_generated
+  ON note_agent_contexts(generated_at DESC);
 
 CREATE TABLE IF NOT EXISTS memory_files (
   file_id       TEXT PRIMARY KEY,
@@ -339,6 +362,10 @@ CREATE TABLE IF NOT EXISTS goal_runs (
   assistant_preview   TEXT,
   checklist_done      INTEGER,
   checklist_total     INTEGER,
+  confidence          REAL,
+  missing_evidence_json TEXT,
+  user_question       TEXT,
+  completed_checklist_item_ids_json TEXT,
   FOREIGN KEY (goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE
 );
 

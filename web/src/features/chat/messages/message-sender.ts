@@ -143,13 +143,13 @@ export class MessageSender {
     const res = await apiFetch(apiUrl('/api/agent'), {
       method: 'POST',
       headers: { Accept: 'text/event-stream' },
-      body: JSON.stringify({
-        message: content,
-        channel: 'webchat',
-        chatId,
-        attachments: capped,
-        thinking: thinkingLevel,
-        clientCreatedAtMs,
+        body: JSON.stringify({
+          message: content,
+          channel: 'webchat',
+          sessionKey: chatId,
+          attachments: capped,
+          thinking: thinkingLevel,
+          clientCreatedAtMs,
       }),
       signal: this._abort.signal,
     });
@@ -220,7 +220,7 @@ export class MessageSender {
     const res = await apiFetch(apiUrl('/api/agent/resume'), {
       method: 'POST',
       headers: { Accept: 'text/event-stream' },
-      body: JSON.stringify({ runId, chatId }),
+      body: JSON.stringify({ runId, sessionKey: chatId }),
       signal: this._abort.signal,
     });
 

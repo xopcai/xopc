@@ -117,10 +117,8 @@ export interface SessionMetadata {
   workflowDefinitionId?: string;
   workflowAgentId?: string;
   workflowAgentLabel?: string;
-  /**
-   * Stable transcript document id (wrapped on-disk format), aligned with OpenClaw `sessionId`.
-   */
-  transcriptId?: string;
+  /** Active OpenClaw-style session instance id. Rotates on reset while `key` stays stable. */
+  sessionId?: string;
   /** Workspace/cwd recorded for the active transcript. */
   cwd?: string;
   /** First activity time for this session row (ISO), from transcript header when available. */

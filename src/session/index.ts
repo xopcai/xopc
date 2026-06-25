@@ -48,7 +48,6 @@ export {
   type SessionResetType,
 } from './reset-policy.js';
 export {
-  isThreadSessionKey,
   resolveChannelResetConfig,
   resolveSessionResetType,
 } from './reset-type.js';

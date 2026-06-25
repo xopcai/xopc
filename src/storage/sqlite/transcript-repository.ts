@@ -16,22 +16,22 @@ import {
   transcriptEntryRowToStoredRow,
   type TranscriptEntryRow,
 } from './row-mappers.js';
-import { getCurrentTranscriptId, readCurrentTranscriptId } from './session-repository.js';
+import { getCurrentSessionId, readCurrentSessionId } from './session-repository.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 const MAX_CHECKPOINTS_PER_TRANSCRIPT = 15;
 
-function nextSeq(db: DatabaseSync, transcriptId: string): number {
+function nextSeq(db: DatabaseSync, sessionId: string): number {
   const row = db
-    .prepare(`SELECT COALESCE(MAX(seq), 0) AS max_seq FROM transcript_entries WHERE transcript_id = ?`)
-    .get(transcriptId) as { max_seq: number };
+    .prepare(`SELECT COALESCE(MAX(seq), 0) AS max_seq FROM transcript_entries WHERE session_id = ?`)
+    .get(sessionId) as { max_seq: number };
   return (row.max_seq ?? 0) + 1;
 }
 
 function insertEntry(
   db: DatabaseSync,
   params: {
-    transcriptId: string;
+    sessionId: string;
     sessionKey: string;
     row: TranscriptStoredRow;
     entryId?: string;
@@ -40,26 +40,26 @@ function insertEntry(
 ): TranscriptEntryRow {
   const { entryKind, role } = classifyStoredRow(params.row);
   const entryId = params.entryId ?? randomUUID();
-  const seq = nextSeq(db, params.transcriptId);
+  const seq = nextSeq(db, params.sessionId);
   const createdAt = params.createdAt ?? Date.now();
   const payloadJson = JSON.stringify(params.row);
 
   db.prepare(
-    `INSERT INTO transcript_entries (entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at)
+    `INSERT INTO transcript_entries (entry_id, session_id, seq, entry_kind, role, payload_json, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
-  ).run(entryId, params.transcriptId, seq, entryKind, role, payloadJson, createdAt);
+  ).run(entryId, params.sessionId, seq, entryKind, role, payloadJson, createdAt);
 
   const content = extractFtsContent(params.row);
   if (content.trim()) {
     db.prepare(
-      `INSERT INTO transcript_fts (content, session_key, transcript_id, entry_id)
+      `INSERT INTO transcript_fts (content, session_key, session_id, entry_id)
        VALUES (?, ?, ?, ?)`,
-    ).run(content, params.sessionKey, params.transcriptId, entryId);
+    ).run(content, params.sessionKey, params.sessionId, entryId);
   }
 
   return {
     entry_id: entryId,
-    transcript_id: params.transcriptId,
+    session_id: params.sessionId,
     seq,
     entry_kind: entryKind,
     role,
@@ -71,14 +71,14 @@ function insertEntry(
 export function appendTranscriptEntry(
   sessionKey: string,
   row: TranscriptStoredRow,
-  opts?: { transcriptId?: string; tokenDelta?: number },
+  opts?: { sessionId?: string; tokenDelta?: number },
 ): TranscriptEntryRow {
   return runSqliteWriteTransaction((db) => {
-    const transcriptId = opts?.transcriptId ?? readCurrentTranscriptId(db, sessionKey);
-    if (!transcriptId) {
+    const sessionId = opts?.sessionId ?? readCurrentSessionId(db, sessionKey);
+    if (!sessionId) {
       throw new Error(`Session not found: ${sessionKey}`);
     }
-    const inserted = insertEntry(db, { transcriptId, sessionKey, row });
+    const inserted = insertEntry(db, { sessionId, sessionKey, row });
     if (classifyStoredRow(row).entryKind === 'message') {
       const tokenDelta = opts?.tokenDelta ?? 0;
       const now = Date.now();
@@ -97,23 +97,23 @@ export function appendTranscriptEntry(
 }
 
 export function loadTranscriptRowsForSession(sessionKey: string): TranscriptStoredRow[] {
-  const transcriptId = getCurrentTranscriptId(sessionKey);
-  if (!transcriptId) {
+  const sessionId = getCurrentSessionId(sessionKey);
+  if (!sessionId) {
     return [];
   }
-  return loadTranscriptRows(transcriptId);
+  return loadTranscriptRows(sessionId);
 }
 
-export function loadTranscriptRows(transcriptId: string): TranscriptStoredRow[] {
+export function loadTranscriptRows(sessionId: string): TranscriptStoredRow[] {
   const db = getSqliteDatabase();
   const rows = db
     .prepare(
-      `SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at
+      `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
        FROM transcript_entries
-       WHERE transcript_id = ?
+       WHERE session_id = ?
        ORDER BY seq ASC`,
     )
-    .all(transcriptId) as TranscriptEntryRow[];
+    .all(sessionId) as TranscriptEntryRow[];
   return rows.map(transcriptEntryRowToStoredRow);
 }
 
@@ -128,13 +128,13 @@ export function replaceTranscriptRows(
   opts?: { appendCompaction?: TranscriptCompactionRecord },
 ): void {
   runSqliteWriteTransaction((db) => {
-    const transcriptId = readCurrentTranscriptId(db, sessionKey);
-    if (!transcriptId) {
+    const sessionId = readCurrentSessionId(db, sessionKey);
+    if (!sessionId) {
       throw new Error(`Session not found: ${sessionKey}`);
     }
 
-    db.prepare(`DELETE FROM transcript_fts WHERE transcript_id = ?`).run(transcriptId);
-    db.prepare(`DELETE FROM transcript_entries WHERE transcript_id = ?`).run(transcriptId);
+    db.prepare(`DELETE FROM transcript_fts WHERE session_id = ?`).run(sessionId);
+    db.prepare(`DELETE FROM transcript_entries WHERE session_id = ?`).run(sessionId);
 
     const toWrite = [...rows];
     if (opts?.appendCompaction) {
@@ -145,7 +145,7 @@ export function replaceTranscriptRows(
     }
 
     for (const row of toWrite) {
-      insertEntry(db, { transcriptId, sessionKey, row });
+      insertEntry(db, { sessionId, sessionKey, row });
     }
 
     const llm = buildSessionContextForLlm(toWrite);
@@ -200,8 +200,8 @@ export function paginateTranscriptMessages(
   startSeq: number;
   endSeq: number;
 } {
-  const transcriptId = getCurrentTranscriptId(sessionKey);
-  if (!transcriptId) {
+  const sessionId = getCurrentSessionId(sessionKey);
+  if (!sessionId) {
     return { rows: [], messages: [], total: 0, startSeq: 0, endSeq: 0 };
   }
 
@@ -212,9 +212,9 @@ export function paginateTranscriptMessages(
   const countRow = db
     .prepare(
       `SELECT COUNT(*) AS total FROM transcript_entries
-       WHERE transcript_id = ? AND entry_kind IN (${kindPlaceholders})`,
+       WHERE session_id = ? AND entry_kind IN (${kindPlaceholders})`,
     )
-    .get(transcriptId, ...kinds) as { total: number };
+    .get(sessionId, ...kinds) as { total: number };
   const total = countRow.total;
 
   const limit = Math.min(200, Math.max(1, Math.trunc(options.limit ?? 50)));
@@ -226,38 +226,38 @@ export function paginateTranscriptMessages(
     const startInclusive = Math.max(0, endExclusive - limit);
     rows = db
       .prepare(
-        `SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at
+        `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
          FROM (
-           SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at,
+           SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at,
                   ROW_NUMBER() OVER (ORDER BY seq ASC) - 1 AS idx
            FROM transcript_entries
-           WHERE transcript_id = ? AND entry_kind IN (${kindPlaceholders})
+           WHERE session_id = ? AND entry_kind IN (${kindPlaceholders})
          )
          WHERE idx >= ? AND idx < ?
          ORDER BY seq ASC`,
       )
-      .all(transcriptId, ...kinds, startInclusive, endExclusive) as TranscriptEntryRow[];
+      .all(sessionId, ...kinds, startInclusive, endExclusive) as TranscriptEntryRow[];
   } else if (options.beforeSeq !== undefined && Number.isFinite(options.beforeSeq)) {
     rows = db
       .prepare(
-        `SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at
+        `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
          FROM transcript_entries
-         WHERE transcript_id = ? AND entry_kind IN (${kindPlaceholders}) AND seq < ?
+         WHERE session_id = ? AND entry_kind IN (${kindPlaceholders}) AND seq < ?
          ORDER BY seq DESC
          LIMIT ?`,
       )
-      .all(transcriptId, ...kinds, options.beforeSeq, limit) as TranscriptEntryRow[];
+      .all(sessionId, ...kinds, options.beforeSeq, limit) as TranscriptEntryRow[];
     rows.reverse();
   } else {
     rows = db
       .prepare(
-        `SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at
+        `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
          FROM transcript_entries
-         WHERE transcript_id = ? AND entry_kind IN (${kindPlaceholders})
+         WHERE session_id = ? AND entry_kind IN (${kindPlaceholders})
          ORDER BY seq DESC
          LIMIT ? OFFSET ?`,
       )
-      .all(transcriptId, ...kinds, limit, offset) as TranscriptEntryRow[];
+      .all(sessionId, ...kinds, limit, offset) as TranscriptEntryRow[];
     rows.reverse();
   }
 
@@ -270,17 +270,17 @@ export function paginateTranscriptMessages(
 
 export function captureCompactionCheckpoint(sessionKey: string): string | null {
   return runSqliteWriteTransaction((db) => {
-    const transcriptId = readCurrentTranscriptId(db, sessionKey);
-    if (!transcriptId) {
+    const sessionId = readCurrentSessionId(db, sessionKey);
+    if (!sessionId) {
       return null;
     }
 
     const entries = db
       .prepare(
-        `SELECT entry_id, transcript_id, seq, entry_kind, role, payload_json, created_at
-         FROM transcript_entries WHERE transcript_id = ? ORDER BY seq ASC`,
+        `SELECT entry_id, session_id, seq, entry_kind, role, payload_json, created_at
+         FROM transcript_entries WHERE session_id = ? ORDER BY seq ASC`,
       )
-      .all(transcriptId) as TranscriptEntryRow[];
+      .all(sessionId) as TranscriptEntryRow[];
     if (entries.length === 0) {
       return null;
     }
@@ -292,9 +292,9 @@ export function captureCompactionCheckpoint(sessionKey: string): string | null {
 
     db.prepare(
       `INSERT INTO compaction_checkpoints
-        (checkpoint_id, transcript_id, session_key, created_at, message_count, size_bytes)
+        (checkpoint_id, session_id, session_key, created_at, message_count, size_bytes)
        VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(checkpointId, transcriptId, sessionKey, now, messageCount, sizeBytes);
+    ).run(checkpointId, sessionId, sessionKey, now, messageCount, sizeBytes);
 
     const insertCheckpointEntry = db.prepare(
       `INSERT INTO checkpoint_entries (checkpoint_id, seq, entry_kind, role, payload_json)
@@ -310,19 +310,19 @@ export function captureCompactionCheckpoint(sessionKey: string): string | null {
       );
     }
 
-    pruneCompactionCheckpoints(db, transcriptId);
+    pruneCompactionCheckpoints(db, sessionId);
     return checkpointId;
   });
 }
 
-function pruneCompactionCheckpoints(db: DatabaseSync, transcriptId: string): void {
+function pruneCompactionCheckpoints(db: DatabaseSync, sessionId: string): void {
   const rows = db
     .prepare(
       `SELECT checkpoint_id FROM compaction_checkpoints
-       WHERE transcript_id = ?
+       WHERE session_id = ?
        ORDER BY created_at ASC`,
     )
-    .all(transcriptId) as Array<{ checkpoint_id: string }>;
+    .all(sessionId) as Array<{ checkpoint_id: string }>;
   if (rows.length <= MAX_CHECKPOINTS_PER_TRANSCRIPT) {
     return;
   }
@@ -388,8 +388,8 @@ export function getCompactionCheckpointDetail(
 
 export function restoreCompactionCheckpoint(sessionKey: string, checkpointId: string): void {
   runSqliteWriteTransaction((db) => {
-    const transcriptId = readCurrentTranscriptId(db, sessionKey);
-    if (!transcriptId) {
+    const sessionId = readCurrentSessionId(db, sessionKey);
+    if (!sessionId) {
       throw new Error(`Session not found: ${sessionKey}`);
     }
 
@@ -417,13 +417,13 @@ export function restoreCompactionCheckpoint(sessionKey: string, checkpointId: st
       payload_json: string;
     }>;
 
-    db.prepare(`DELETE FROM transcript_fts WHERE transcript_id = ?`).run(transcriptId);
-    db.prepare(`DELETE FROM transcript_entries WHERE transcript_id = ?`).run(transcriptId);
+    db.prepare(`DELETE FROM transcript_fts WHERE session_id = ?`).run(sessionId);
+    db.prepare(`DELETE FROM transcript_entries WHERE session_id = ?`).run(sessionId);
 
     for (const entry of entries) {
       const payload = JSON.parse(entry.payload_json) as TranscriptStoredRow;
       insertEntry(db, {
-        transcriptId,
+        sessionId,
         sessionKey,
         row: payload,
         createdAt: Date.now(),

@@ -82,6 +82,23 @@ export async function getSessionDetail(
   return data.session;
 }
 
+export async function resolveSession(
+  input: { sessionId?: string; sessionKey?: string; key?: string },
+): Promise<{ sessionKey: string; sessionId: string; session: SessionDetail }> {
+  const data = await fetchJson<{
+    ok: boolean;
+    payload?: { sessionKey: string; sessionId: string; session: SessionDetail };
+    error?: string;
+  }>(apiUrl('/api/sessions/resolve'), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  if (!data.ok || !data.payload) {
+    throw new Error(data.error ?? 'Session not found');
+  }
+  return data.payload;
+}
+
 export async function deleteSession(key: string): Promise<void> {
   await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(key)}`), { method: 'DELETE' });
 }

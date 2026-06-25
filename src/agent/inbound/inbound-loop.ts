@@ -194,7 +194,11 @@ export class InboundLoop {
         },
       };
 
-      updateAsyncLogContext({ sessionId: sessionContext.sessionKey });
+      const sessionMetadata = await this.cfg.sessionStore.getMetadata(sessionContext.sessionKey).catch(() => null);
+      updateAsyncLogContext({
+        sessionKey: sessionContext.sessionKey,
+        ...(sessionMetadata?.sessionId ? { sessionId: sessionMetadata.sessionId } : {}),
+      });
 
       await this.cfg.sessionContextManager.runWith(sessionContext, async () => {
         this.cfg.feedbackCoordinator.setContext(sessionContext);

@@ -47,15 +47,8 @@ export type {
   ReplyPayload,
 } from './types.js';
 
-// Session Key
-export {
-  generateSessionKey,
-  parseSessionKey,
-  isValidSessionKey,
-  getSessionDisplayName,
-  getRoutingInfo,
-  type SessionKeyContext,
-} from './session-key.js';
+// Session display helpers
+export { generateSessionKey, getSessionDisplayName, type SessionKeyContext } from './session-key.js';
 
 // Command parsing helpers
 export { normalizeTelegramCommandName, parseSlashCommand } from './command-parse.js';

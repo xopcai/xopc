@@ -8,7 +8,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { LogContext } from './types.js';
 
 /** Correlation fields merged into every log line while the store is active (via pino mixin). */
-const ASYNC_LOG_CORRELATION_KEYS = ['requestId', 'sessionId', 'userId', 'correlationId'] as const;
+const ASYNC_LOG_CORRELATION_KEYS = ['requestId', 'sessionKey', 'sessionId', 'userId', 'correlationId'] as const;
 
 type AsyncLogCorrelationKey = (typeof ASYNC_LOG_CORRELATION_KEYS)[number];
 
@@ -30,7 +30,7 @@ export function getAsyncLogContext(): LogContext | undefined {
 }
 
 /**
- * Shallow-merge fields into the current async log context (e.g. set sessionId after parsing a body).
+ * Shallow-merge fields into the current async log context (e.g. set session identifiers after parsing a body).
  * No-op when not inside {@link runWithLogContext}.
  */
 export function updateAsyncLogContext(partial: LogContext): void {
@@ -47,8 +47,8 @@ export function getAsyncLogCorrelationKeys(): readonly AsyncLogCorrelationKey[] 
 
 /**
  * Fields to copy from ALS onto {@link InboundMessage.metadata} when the gateway enqueues
- * a message for the agent bus. Omits `sessionId` so channel routing / sessionKey stays
- * authoritative; the agent sets log sessionId after `routeMessage`.
+ * a message for the agent bus. Omits session identifiers so channel routing / session metadata stays
+ * authoritative; the agent sets log sessionKey/sessionId after `routeMessage`.
  */
 const INBOUND_METADATA_FROM_ASYNC: readonly (keyof LogContext)[] = [
   'requestId',

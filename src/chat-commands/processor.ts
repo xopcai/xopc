@@ -12,9 +12,16 @@ import type { MessageBus } from '../infra/bus/index.js';
 import type { SessionStore } from '../session/index.js';
 import type { Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
-import { getRoutingInfo } from './session-key.js';
 
 const log = createLogger('CommandProcessor');
+
+function commandOutboundMetadata(message: UnifiedMessage, extra?: Record<string, unknown>): Record<string, unknown> {
+  return {
+    accountId: message.platformData.accountId,
+    threadId: message.platformData.threadId,
+    ...extra,
+  };
+}
 
 export interface CommandProcessorDeps {
   bus: MessageBus;
@@ -65,15 +72,12 @@ async function executeCommand(
 
   // Send response if there's content
   if (result.content) {
-    const routing = getRoutingInfo(message.sessionKey);
     await deps.bus.publishOutbound({
-      channel: routing.channel,
-      chat_id: routing.chatId,
+      channel: message.source,
+      chat_id: message.chatId,
       content: result.content,
       type: 'message',
-      metadata: {
-        threadId: routing.threadId,
-      },
+      metadata: commandOutboundMetadata(message),
     });
   }
 
@@ -87,8 +91,6 @@ async function createCommandContextFromMessage(
   message: UnifiedMessage,
   deps: CommandProcessorDeps
 ): Promise<CommandContext> {
-  const routing = getRoutingInfo(message.sessionKey);
-
   return createCommandContext({
     sessionKey: message.sessionKey,
     source: message.source,
@@ -96,6 +98,8 @@ async function createCommandContextFromMessage(
     chatId: message.chatId,
     senderId: message.senderId,
     isGroup: message.platformData.isGroup,
+    accountId: message.platformData.accountId,
+    threadId: message.platformData.threadId,
     config: deps.config,
     bus: deps.bus,
     sessionStore: deps.sessionStore,
@@ -103,26 +107,23 @@ async function createCommandContextFromMessage(
     // Reply handler
     replyHandler: async (text: string, options?) => {
       await deps.bus.publishOutbound({
-        channel: routing.channel,
-        chat_id: routing.chatId,
+        channel: message.source,
+        chat_id: message.chatId,
         content: text,
         type: 'message',
-        metadata: {
-          threadId: routing.threadId,
+        metadata: commandOutboundMetadata(message, {
           parseMode: options?.parseMode,
-        },
+        }),
       });
     },
 
     // Typing handler
     typingHandler: async (typing: boolean) => {
       await deps.bus.publishOutbound({
-        channel: routing.channel,
-        chat_id: routing.chatId,
+        channel: message.source,
+        chat_id: message.chatId,
         type: typing ? 'typing_on' : 'typing_off',
-        metadata: {
-          threadId: routing.threadId,
-        },
+        metadata: commandOutboundMetadata(message),
       });
     },
 

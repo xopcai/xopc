@@ -1,15 +1,22 @@
 import type { SessionInfo } from '@/features/chat/chat.types';
 import { isSessionAgentRunActive } from '@/features/chat/session/chat-session-store';
-import { isWebUiSessionKey } from '@/features/chat/session/session-manager';
-import { getAgentIdFromWebSessionKey } from '@/lib/web-session-agent';
-import { normalizeAgentId } from '@/lib/webchat-session-key';
+import { normalizeAgentId } from '@/lib/agent-id';
+
+function parseAgentWebchatKey(key: string): { agentId: string; sourceChannel: string } | null {
+  const parts = key.trim().split(':');
+  if (parts[0] !== 'agent' || !parts[1] || !parts[2]) return null;
+  return { agentId: parts[1], sourceChannel: parts[2] };
+}
 
 /** Empty webchat session eligible for New chat reuse (same agent, no active run). */
 export function isReusableEmptyShell(session: SessionInfo, agentId: string): boolean {
   const key = session.key?.trim();
-  if (!key || !isWebUiSessionKey(key)) return false;
+  if (!key) return false;
+  const parsed = parseAgentWebchatKey(key);
+  const sourceChannel = session.sourceChannel?.trim().toLowerCase() ?? parsed?.sourceChannel.toLowerCase();
+  if (sourceChannel !== 'webchat') return false;
   if ((session.messageCount ?? 0) !== 0) return false;
-  const sessionAgent = getAgentIdFromWebSessionKey(key);
+  const sessionAgent = (session.routing?.agentId ?? parsed?.agentId)?.trim().toLowerCase();
   if (!sessionAgent || sessionAgent !== normalizeAgentId(agentId)) return false;
   if (isSessionAgentRunActive(key)) return false;
   return true;

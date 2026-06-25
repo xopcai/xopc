@@ -227,7 +227,7 @@ export class GatewaySseBackend implements TuiBackend {
       res = await gatewayFetch(this.baseUrl, '/api/agent/resume', this.token, {
         method: 'POST',
         headers: { Accept: 'text/event-stream' },
-        body: JSON.stringify({ runId: opts.runId, chatId: opts.sessionKey }),
+        body: JSON.stringify({ runId: opts.runId, sessionKey: opts.sessionKey }),
         signal,
       });
     } catch (error) {
@@ -291,7 +291,7 @@ export class GatewaySseBackend implements TuiBackend {
     try {
       const res = await gatewayFetch(this.baseUrl, '/api/agent/steer', this.token, {
         method: 'POST',
-        body: JSON.stringify({ chatId: opts.sessionKey, message: opts.message }),
+        body: JSON.stringify({ sessionKey: opts.sessionKey, message: opts.message }),
       });
       if (!res.ok) return { ok: false };
       const json = (await res.json()) as { ok?: boolean };

@@ -1,6 +1,6 @@
 import type { Config } from '../../config/schema.js';
 import { INTERNAL_OUTBOUND_DROP_CHANNEL } from '../../channels/internal-outbound.js';
-import { parseSessionKey as parseRoutingSessionKey } from '../../routing/session-key.js';
+import { getSessionMetadata } from '../../storage/sqlite/index.js';
 
 /**
  * Map a session key to outbound channel routing (heartbeat/cron/virtual keys included).
@@ -22,17 +22,18 @@ export function parseOutboundSessionKey(
     return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'heartbeat' };
   }
 
-  const parsed = parseRoutingSessionKey(sessionKey);
-  if (parsed) {
-    return { channel: parsed.source, chatId: parsed.peerId };
+  const metadata = getSessionMetadata(sessionKey);
+  const routing = metadata?.routing;
+  if (routing?.source && routing.peerId) {
+    return { channel: routing.source, chatId: routing.peerId };
+  }
+  if (metadata?.sourceChannel && metadata.sourceChatId) {
+    return { channel: metadata.sourceChannel, chatId: metadata.sourceChatId };
   }
 
   if (first === 'cron') {
     return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'cron' };
   }
 
-  return {
-    channel: first,
-    chatId: parts.slice(1).join(':') || 'direct',
-  };
+  return { channel: 'cli', chatId: 'main' };
 }

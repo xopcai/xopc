@@ -15,7 +15,6 @@ import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-import { isWebUiSessionKey } from '@/features/chat/session/session-manager';
 import { isValidSkillWireId } from '@/features/chat/palette/skill-wire-pattern';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
 import { WorkflowRunLinkCard } from '@/features/chat/workflow/workflow-run-link-card';
@@ -291,10 +290,7 @@ export function ChatPage() {
             </div>
           </div>
         ) : null}
-        {session.sessionKey &&
-        isWebUiSessionKey(session.sessionKey) &&
-        !session.showSessionLoading &&
-        !session.sessionRoutePending ? (
+        {session.sessionKey && !session.showSessionLoading && !session.sessionRoutePending ? (
           <ChatGoalBanner
             sessionKey={session.sessionKey}
             streaming={stream.streaming}

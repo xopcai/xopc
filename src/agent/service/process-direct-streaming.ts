@@ -48,7 +48,7 @@ export type ProcessDirectStreamLog = {
 
 export interface ProcessDirectStreamingDeps {
   log: ProcessDirectStreamLog;
-  parseSessionKey: (sessionKey: string) => { channel: string; chatId: string };
+  resolveSessionEndpoint: (sessionKey: string) => Promise<{ channel: string; chatId: string }>;
   initDirectStreamingSession: (
     sessionKey: string,
     channel: string,
@@ -129,7 +129,7 @@ export async function* runProcessDirectStreaming(
   input: ProcessDirectStreamingInput,
 ): AsyncGenerator<ProcessDirectStreamingSseEvent, void, unknown> {
   const sessionKey = input.sessionKey ?? 'agent:main:main';
-  const { channel, chatId } = deps.parseSessionKey(sessionKey);
+  const { channel, chatId } = await deps.resolveSessionEndpoint(sessionKey);
   const context = deps.initDirectStreamingSession(sessionKey, channel, chatId);
 
   const queue = new AsyncQueue<ProcessDirectStreamingSseEvent>();

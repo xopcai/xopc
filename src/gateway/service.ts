@@ -393,14 +393,29 @@ export class GatewayService {
         ensureSession: async (goal) => {
           const existing = goal.activeSessionKey?.trim();
           if (existing) return existing;
+          const agentId = goal.agentId || getDefaultAgentId(this.config);
+          const peerId = `goal-${sanitizeSegment(goal.id) || Date.now()}`;
           const sessionKey = buildSessionKey({
-            agentId: goal.agentId || getDefaultAgentId(this.config),
+            agentId,
             source: 'webchat',
             accountId: 'default',
             peerKind: 'direct',
-            peerId: `goal-${sanitizeSegment(goal.id) || Date.now()}`,
+            peerId,
           });
-          await this.sessionIndex.saveMessages(sessionKey, []);
+          await this.sessionIndex.saveMessages(sessionKey, [], {
+            metadata: {
+              sourceChannel: 'webchat',
+              sourceChatId: `default:direct:${peerId}`,
+              sessionType: 'chat',
+              routing: {
+                agentId,
+                source: 'webchat',
+                accountId: 'default',
+                peerKind: 'direct',
+                peerId,
+              },
+            },
+          });
           const { GoalService } = await import('../goals/index.js');
           new GoalService().attachSession(goal.id, sessionKey);
           return sessionKey;
@@ -418,6 +433,7 @@ export class GatewayService {
     if (!this.goalNotifications) {
       this.goalNotifications = new GoalNotificationService({
         getConfig: () => this.config,
+        getSessionMetadata: (sessionKey) => this.sessionIndex.getSessionMetadata(sessionKey),
         send: async (target) => {
           await this.channelManager.send({
             channel: target.channel,
@@ -464,10 +480,10 @@ export class GatewayService {
   }
 
   steerWebchatAgent(
-    chatId: string,
+    sessionKey: string,
     message: string,
   ): ReturnType<GatewayAgentRunner['steerWebchatAgent']> {
-    return this.agentRunner.steerWebchatAgent(chatId, message);
+    return this.agentRunner.steerWebchatAgent(sessionKey, message);
   }
 
   submitClarifyResponse(requestId: string, answer: string): boolean {

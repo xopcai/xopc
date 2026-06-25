@@ -53,7 +53,7 @@ function mockExistingEntry(sessionStartedAt: number) {
       return null;
     }
     return baseMetadata({
-      transcriptId: 'old-id',
+      sessionId: 'old-id',
       sessionStartedAt: new Date(sessionStartedAt).toISOString(),
     });
   });

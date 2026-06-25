@@ -175,7 +175,26 @@ export class DelegateSubagentRunner implements SubagentRunner {
   ): Promise<void> {
     const store = this.deps.sessionStore;
     if (!store) return;
-    await store.resolveTranscriptPath(sessionKey);
+    await store.resolveTranscriptPath(sessionKey, {
+      metadata: {
+        sessionType: 'workflow-subagent',
+        hiddenFromSessionList: true,
+        parentSessionKey: metadata.parentSessionKey,
+        workflowRunId: metadata.workflowRunId,
+        workflowDefinitionId: metadata.workflowDefinitionId,
+        workflowAgentId: metadata.workflowAgentId,
+        workflowAgentLabel: metadata.workflowAgentLabel,
+        sourceChannel: 'workflow',
+        sourceChatId: metadata.workflowRunId,
+        routing: {
+          agentId: metadata.workflowAgentId || 'main',
+          source: 'workflow',
+          accountId: 'default',
+          peerKind: 'subagent',
+          peerId: metadata.workflowRunId,
+        },
+      },
+    });
     await store.updateMetadata(sessionKey, {
       sessionType: 'workflow-subagent',
       hiddenFromSessionList: true,

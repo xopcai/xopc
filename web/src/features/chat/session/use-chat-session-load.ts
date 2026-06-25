@@ -7,7 +7,6 @@ import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
 import { isViewingSession, resolveViewSessionKey } from '@/features/chat/session/chat-session-view';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
-import { followOptimisticSessionRegistration } from '@/features/chat/session/optimistic-new-session-handoff';
 import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
@@ -84,34 +83,6 @@ export function useChatSessionLoad(deps: {
       }
     },
     [sessionMgrRef, refreshModelThinkingSupport],
-  );
-
-  const followOptimisticRegistration = useCallback(
-    (ctx: {
-      sessionKey: string;
-      register: Promise<SessionInfo>;
-      replaceNavigate?: boolean;
-      search?: string;
-    }) => {
-      followOptimisticSessionRegistration({
-        ...ctx,
-        navigateToSession,
-        onError: (msg) => store().setShellError(msg),
-        onReconciled: (key, session) => {
-          store().setCommittedSnapshot(key, {
-            messages: [],
-            hasMore: false,
-            name: session.name ?? null,
-          });
-          void applySessionAgentConfig(key);
-        },
-        onRegistered: (key, session) => {
-          if (session.name) store().patchSessionMeta(key, { name: session.name });
-          void applySessionAgentConfig(key);
-        },
-      });
-    },
-    [navigateToSession, applySessionAgentConfig],
   );
 
   const pollSessionNameAfterTurn = useCallback(() => {
@@ -256,8 +227,8 @@ export function useChatSessionLoad(deps: {
                 replaceNavigate: true,
                 onOpened: (key) => {
                   store().setCommittedSnapshot(key, { messages: [], hasMore: false, name: null });
+                  void applySessionAgentConfig(key);
                 },
-                followRegistration: followOptimisticRegistration,
               });
             }
           }
@@ -292,7 +263,6 @@ export function useChatSessionLoad(deps: {
       refreshModelThinkingSupport,
       resolveAgentIdForPost,
       sessionMgrRef,
-      followOptimisticRegistration,
     ],
   );
 
@@ -352,8 +322,8 @@ export function useChatSessionLoad(deps: {
         navigateToSession,
         onOpened: (key) => {
           store().setCommittedSnapshot(key, { messages: [], hasMore: false, name: null });
+          void applySessionAgentConfig(key);
         },
-        followRegistration: followOptimisticRegistration,
       });
     },
     [
@@ -363,7 +333,7 @@ export function useChatSessionLoad(deps: {
       resolveAgentIdForPost,
       sessionKey,
       sessionMgrRef,
-      followOptimisticRegistration,
+      applySessionAgentConfig,
     ],
   );
 

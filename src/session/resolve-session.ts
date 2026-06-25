@@ -1,12 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
 import { SessionConfigSchema, type Config } from '../config/schema.js';
-import { resolveDefaultAgentId } from '../agent/agent-scope.js';
-import {
-  normalizeAgentId,
-  resolveAgentIdFromSessionKey,
-} from '../routing/agent-session-key.js';
-import { parseSessionKey } from '../routing/session-key.js';
 import {
   normalizeThinkLevel,
   normalizeVerboseLevel,
@@ -15,7 +9,7 @@ import {
 } from '../agent/transcript/thinking-types.js';
 import { createLogger } from '../utils/logger.js';
 import {
-  findSessionKeyByTranscriptId,
+  findSessionKeyBySessionId,
   getSessionMetadata,
   getSessionPersistedLevels,
   requireXopcDatabase,
@@ -57,15 +51,7 @@ export async function resolveSessionKeyForRequest(opts: {
 
   let sessionKey = explicitKey;
   if (requestedSessionId && !sessionKey) {
-    sessionKey = findSessionKeyByTranscriptId(requestedSessionId) ?? undefined;
-  }
-  if (requestedSessionId && !sessionKey) {
-    const storeAgentId = explicitKey
-      ? resolveAgentIdFromSessionKey(explicitKey)
-      : opts.agentId?.trim()
-        ? normalizeAgentId(opts.agentId)
-        : resolveDefaultAgentId(opts.cfg);
-    sessionKey = `agent:${normalizeAgentId(opts.agentId ?? storeAgentId)}:explicit:${requestedSessionId}`;
+    sessionKey = findSessionKeyBySessionId(requestedSessionId) ?? undefined;
   }
 
   const sessionMetadata = sessionKey ? getSessionMetadata(sessionKey) : null;
@@ -82,16 +68,15 @@ export async function resolveSession(opts: {
   const { sessionKey, sessionMetadata } = await resolveSessionKeyForRequest(opts);
   const now = Date.now();
 
-  const parsed = sessionKey ? parseSessionKey(sessionKey) : null;
-  const peerKind = parsed?.peerKind;
+  const routing = sessionMetadata?.routing;
+  const peerKind = routing?.peerKind;
   const resetType = resolveSessionResetType({
-    sessionKey,
     isGroup: peerKind === 'group' || peerKind === 'channel',
-    isThread: Boolean(parsed?.threadId),
+    isThread: Boolean(routing?.threadId),
   });
   const channelReset = resolveChannelResetConfig({
     sessionCfg,
-    channel: parsed?.source ?? sessionMetadata?.sourceChannel,
+    channel: routing?.source ?? sessionMetadata?.sourceChannel,
   });
   const resetPolicy = resolveSessionResetPolicy({
     sessionCfg,
@@ -121,13 +106,13 @@ export async function resolveSession(opts: {
     : { fresh: false };
   const fresh = freshness.fresh;
   const sessionId =
-    opts.sessionId?.trim() || (fresh ? sessionMetadata?.transcriptId : undefined) || randomUUID();
+    opts.sessionId?.trim() || (fresh ? sessionMetadata?.sessionId : undefined) || randomUUID();
   const isNewSession = !fresh && !opts.sessionId?.trim();
 
   if (isNewSession && sessionKey) {
     log.debug(
-      { sessionKey, previousSessionId: sessionMetadata?.transcriptId, sessionId, resetType },
-      'Session reset boundary — new transcript id for turn',
+      { sessionKey, previousSessionId: sessionMetadata?.sessionId, sessionId, resetType },
+      'Session reset boundary: new session id for turn',
     );
   }
 

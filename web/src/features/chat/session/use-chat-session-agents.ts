@@ -16,7 +16,7 @@ import {
 } from '@/features/chat/session/chat-session-defaults';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { isSkillsOnlyConfigReload } from '@/features/gateway/config-reload-event';
-import { getAgentIdFromWebSessionKey } from '@/lib/web-session-agent';
+import { getSessionDetail } from '@/features/sessions/session-api';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export function useChatSessionAgents(opts: {
@@ -28,12 +28,20 @@ export function useChatSessionAgents(opts: {
 }) {
   const { navigate, sessionKeyRef, sessionKey, isNewRoute, locationState } = opts;
   const token = useGatewayStore((s) => s.token);
+  const sessionAgentKey = sessionKey?.trim() ?? '';
 
   const { data: chatAgentsData, mutate: mutateChatAgents } = useSWR(
     token ? ['gateway-chat-agents', token] : null,
     fetchChatAgents,
     { revalidateOnFocus: false },
   );
+
+  const { data: currentSession } = useSWR(
+    token && sessionAgentKey ? ['gateway-chat-session-agent', token, sessionAgentKey] : null,
+    () => getSessionDetail(sessionAgentKey),
+    { revalidateOnFocus: false },
+  );
+  const currentSessionAgentId = currentSession?.routing?.agentId?.trim().toLowerCase() ?? '';
 
   useEffect(() => {
     const onConfigReload = (event: Event) => {
@@ -69,9 +77,7 @@ export function useChatSessionAgents(opts: {
   }, [chatAgentsData]);
 
   const resolveAgentIdForPost = useCallback((): string | undefined => {
-    const key = sessionKeyRef.current;
-    const fromKey = key ? getAgentIdFromWebSessionKey(key) : null;
-    if (fromKey) return fromKey;
+    if (sessionKeyRef.current && currentSessionAgentId) return currentSessionAgentId;
 
     const agents = chatAgentsRef.current;
     const pref = (preferredAgentIdRef.current ?? '').trim().toLowerCase();
@@ -79,7 +85,7 @@ export function useChatSessionAgents(opts: {
     const valid = new Set(agents.items.map((i) => i.id));
     if (pref && valid.has(pref)) return pref;
     return agents.defaultId;
-  }, [sessionKeyRef]);
+  }, [currentSessionAgentId, sessionKeyRef]);
 
   const onChatAgentChange = useCallback(
     (id: string) => {
@@ -91,12 +97,12 @@ export function useChatSessionAgents(opts: {
         /* noop */
       }
       const curKey = sessionKeyRef.current;
-      const curAgent = curKey ? getAgentIdFromWebSessionKey(curKey) : null;
+      const curAgent = curKey ? currentSessionAgentId || preferredAgentIdRef.current : null;
       if (curAgent !== next) {
         navigate('/chat/new', { replace: false });
       }
     },
-    [navigate, sessionKeyRef],
+    [currentSessionAgentId, navigate, sessionKeyRef],
   );
 
   useEffect(() => {
@@ -111,7 +117,7 @@ export function useChatSessionAgents(opts: {
 
   useLayoutEffect(() => {
     if (!sessionKey) return;
-    const agentFromSession = getAgentIdFromWebSessionKey(sessionKey);
+    const agentFromSession = currentSessionAgentId;
     if (!agentFromSession || preferredAgentIdRef.current === agentFromSession) return;
     preferredAgentIdRef.current = agentFromSession;
     setPreferredAgentId(agentFromSession);
@@ -120,7 +126,7 @@ export function useChatSessionAgents(opts: {
     } catch {
       /* noop */
     }
-  }, [sessionKey]);
+  }, [currentSessionAgentId, sessionKey]);
 
   useLayoutEffect(() => {
     if (!isNewRoute) return;
@@ -138,11 +144,11 @@ export function useChatSessionAgents(opts: {
 
   const displayAgentId = useMemo(
     () =>
-      (sessionKey && getAgentIdFromWebSessionKey(sessionKey)) ||
+      currentSessionAgentId ||
       preferredAgentId ||
       chatAgentsData?.defaultId ||
       'main',
-    [sessionKey, preferredAgentId, chatAgentsData],
+    [currentSessionAgentId, preferredAgentId, chatAgentsData],
   );
 
   const showChatAgentSelector = (chatAgentsData?.items.length ?? 0) > 1;

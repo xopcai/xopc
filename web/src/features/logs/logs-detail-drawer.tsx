@@ -18,7 +18,7 @@ type Props = {
   onCopiedJson: () => void;
   onFilterByRequestId?: (requestId: string) => void;
   onFilterBySessionId?: (sessionId: string) => void;
-  onOpenChat?: (sessionId: string) => void;
+  onOpenChat?: (target: { sessionKey?: string; sessionId?: string }) => void;
 };
 
 export function LogsDetailDrawer({
@@ -98,6 +98,7 @@ export function LogsDetailDrawer({
                   message: L.message,
                   metadata: L.metadata,
                   requestId: L.requestId,
+                  sessionKey: L.sessionKey,
                   sessionId: L.sessionId,
                   phase: L.phase,
                   stackTrace: L.stackTrace,

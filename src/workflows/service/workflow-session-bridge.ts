@@ -38,7 +38,21 @@ export class WorkflowSessionBridge {
     const sessionName = truncateSessionName(params.goal.trim() || params.definitionTitle || params.definitionId);
 
     const store = this.gateway.sessionIndexInstance.getStore();
-    await store.resolveTranscriptPath(sessionKey);
+    await store.resolveTranscriptPath(sessionKey, {
+      metadata: {
+        sessionType: WORKFLOW_SESSION_TYPE,
+        hiddenFromSessionList: true,
+        sourceChannel: 'workflow',
+        sourceChatId: params.runId,
+        routing: {
+          agentId: params.agentId,
+          source: 'workflow',
+          accountId: 'default',
+          peerKind: 'run',
+          peerId: params.runId,
+        },
+      },
+    });
     await store.updateMetadata(sessionKey, {
       sessionType: WORKFLOW_SESSION_TYPE,
       hiddenFromSessionList: true,

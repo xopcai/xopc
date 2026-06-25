@@ -59,7 +59,7 @@ export interface TurnDispatcherConfig {
   getConfig: () => Config | undefined;
   /** Strict accessor — required for direct-turn paths that must have a config. */
   requireConfig: () => Config;
-  parseSessionKey: (sessionKey: string) => { channel: string; chatId: string };
+  resolveSessionEndpoint: (sessionKey: string) => Promise<{ channel: string; chatId: string }>;
   /** Establish per-session context (also creates the Agent + subscribes to events). */
   initSessionContext: (sessionKey: string, channel: string, chatId: string) => SessionContext;
   /** Per-session config hydration: workspace, model, thinking. */
@@ -168,7 +168,7 @@ export class TurnDispatcher {
     const c = this.cfg;
     return {
       log: this.log,
-      parseSessionKey: c.parseSessionKey,
+      resolveSessionEndpoint: c.resolveSessionEndpoint,
       initDirectStreamingSession: c.initSessionContext,
       registerWebchatSsePublisher: (sk, publisher) =>
         c.sessionState.registerWebchatPublisher(sk, publisher),
@@ -232,7 +232,7 @@ export class TurnDispatcher {
     return {
       log: this.log,
       config: cfg,
-      parseSessionKey: c.parseSessionKey,
+      resolveSessionEndpoint: c.resolveSessionEndpoint,
       initSessionContext: (sk, channel, chatId) => {
         void c.initSessionContext(sk, channel, chatId);
       },

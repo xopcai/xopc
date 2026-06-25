@@ -70,7 +70,6 @@ import type { SkillMarkdownPreviewPayload } from './skills/types.js';
 import type { AgentServiceConfig, StreamHandle } from './service.types.js';
 import { PersistentGoalService } from './goals/persistent-goal-service.js';
 import { reconcileManagedDreamingCronJobs } from './service/reconcile-dreaming-cron.js';
-import { parseOutboundSessionKey } from './service/parse-outbound-session-key.js';
 import { parseNoteAttachmentTarget } from '../notes/attachment-ref.js';
 
 import {
@@ -438,7 +437,7 @@ export class AgentService {
         if (!c) throw new Error('AgentService requires config.config');
         return c;
       },
-      parseSessionKey: (sk) => this.parseSessionKey(sk),
+      resolveSessionEndpoint: (sk) => this.resolveSessionEndpoint(sk),
       initSessionContext: (sk, channel, chatId) => this.initSessionContext(sk, channel, chatId),
       sessionHydrator: this.sessionHydrator,
       prepareInboundAttachments: (sk, att) => this.prepareInboundAttachments(sk, att),
@@ -809,8 +808,11 @@ export class AgentService {
     return out;
   }
 
-  private parseSessionKey(sessionKey: string): { channel: string; chatId: string } {
-    return parseOutboundSessionKey(sessionKey, this.config.config);
+  private async resolveSessionEndpoint(sessionKey: string): Promise<{ channel: string; chatId: string }> {
+    const metadata = await this.sessionStore.getMetadata(sessionKey).catch(() => null);
+    const channel = metadata?.routing?.source?.trim() || metadata?.sourceChannel?.trim() || 'cli';
+    const chatId = metadata?.routing?.peerId?.trim() || metadata?.sourceChatId?.trim() || 'main';
+    return { channel, chatId };
   }
 
   private initSessionContext(

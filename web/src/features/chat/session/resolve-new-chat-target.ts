@@ -5,12 +5,12 @@ import {
 } from '@/features/chat/session/reusable-empty-shell';
 import { readWebchatEmptyShellCache } from '@/features/chat/session/webchat-empty-shell-cache';
 import type { SessionManager } from '@/features/chat/session/session-manager';
-import { normalizeAgentId } from '@/lib/webchat-session-key';
+import { normalizeAgentId } from '@/lib/agent-id';
 
 export type NewChatResolution =
   | { kind: 'noop'; sessionKey: string }
   | { kind: 'reuse'; sessionKey: string; session: SessionInfo }
-  | { kind: 'create'; sessionKey: string; register: Promise<SessionInfo> };
+  | { kind: 'create'; sessionKey: string; session: SessionInfo };
 
 function findSessionRow(sessions: SessionInfo[], key: string): SessionInfo | undefined {
   const k = key.trim();
@@ -58,8 +58,8 @@ export async function resolveNewChatTarget(opts: {
   const current = opts.currentSessionKey?.trim() || null;
 
   if (opts.forceNew) {
-    const { sessionKey, register } = opts.sessionMgr.openOptimisticNewSession(agentId);
-    return { kind: 'create', sessionKey, register };
+    const session = await opts.sessionMgr.createSession({ agentId });
+    return { kind: 'create', sessionKey: session.key, session };
   }
 
   const sessions = await loadAllWebchatSessions(opts.sessionMgr, agentId);
@@ -76,6 +76,6 @@ export async function resolveNewChatTarget(opts: {
     return { kind: 'reuse', sessionKey: reusable.key, session: reusable };
   }
 
-  const { sessionKey, register } = opts.sessionMgr.openOptimisticNewSession(agentId);
-  return { kind: 'create', sessionKey, register };
+  const session = await opts.sessionMgr.createSession({ agentId });
+  return { kind: 'create', sessionKey: session.key, session };
 }

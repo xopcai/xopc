@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 
 import { loadConfig } from '../../../../config/loader.js';
 import {
-  getCurrentTranscriptId,
+  getCurrentSessionId,
   getSqliteDatabase,
   requireXopcDatabase,
   listSessionMetadata,
@@ -58,31 +58,31 @@ export async function checkSessionIntegrity(ctx: DoctorContext): Promise<CheckRe
   const { items } = listSessionMetadata({ limit: 100_000 });
 
   for (const session of items) {
-    const transcriptId = getCurrentTranscriptId(session.key);
-    if (!transcriptId) {
+    const sessionId = getCurrentSessionId(session.key);
+    if (!sessionId) {
       issues.push(`missing transcript for ${session.key}`);
       continue;
     }
-    if (transcriptId !== session.transcriptId) {
-      issues.push(`transcript id mismatch for ${session.key}`);
+    if (sessionId !== session.sessionId) {
+      issues.push(`session id mismatch for ${session.key}`);
     }
     const transcript = db
-      .prepare(`SELECT transcript_id FROM transcripts WHERE transcript_id = ? AND status = 'active'`)
-      .get(transcriptId) as { transcript_id?: string } | undefined;
-    if (!transcript?.transcript_id) {
+      .prepare(`SELECT session_id FROM transcripts WHERE session_id = ? AND status = 'active'`)
+      .get(sessionId) as { session_id?: string } | undefined;
+    if (!transcript?.session_id) {
       issues.push(`active transcript row missing for ${session.key}`);
     }
   }
 
   const orphanTranscripts = db
     .prepare(
-      `SELECT t.transcript_id FROM transcripts t
-       LEFT JOIN sessions s ON s.current_transcript_id = t.transcript_id
+      `SELECT t.session_id FROM transcripts t
+       LEFT JOIN sessions s ON s.session_id = t.session_id
        WHERE t.status = 'active' AND s.session_key IS NULL`,
     )
-    .all() as Array<{ transcript_id: string }>;
+    .all() as Array<{ session_id: string }>;
   for (const row of orphanTranscripts) {
-    issues.push(`orphan active transcript ${row.transcript_id}`);
+    issues.push(`orphan active transcript ${row.session_id}`);
   }
 
   if (issues.length === 0) {
