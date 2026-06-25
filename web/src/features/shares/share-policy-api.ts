@@ -7,6 +7,7 @@ export type SharePolicyState = {
   defaultTtlHours: number;
   maxTtlDays: number;
   maxActiveShares: number;
+  maxActiveSites: number;
   maxFileSizeMb: number;
   inlinePreviewMimes: string[];
 };
@@ -16,6 +17,7 @@ const DEFAULT_SHARE_POLICY: SharePolicyState = {
   defaultTtlHours: 24,
   maxTtlDays: 7,
   maxActiveShares: 100,
+  maxActiveSites: 5,
   maxFileSizeMb: 100,
   inlinePreviewMimes: [
     'image/png',
@@ -51,6 +53,7 @@ export function normalizeSharePolicyFromConfig(config: unknown): SharePolicyStat
   const c = isRecord(config) ? config : {};
   const gw = isRecord(c.gateway) ? c.gateway : {};
   const share = isRecord(gw.share) ? gw.share : {};
+  const siteShare = isRecord(gw.siteShare) ? gw.siteShare : {};
 
   const defaultTtlMs =
     typeof share.defaultTtlMs === 'number' && Number.isFinite(share.defaultTtlMs)
@@ -73,6 +76,10 @@ export function normalizeSharePolicyFromConfig(config: unknown): SharePolicyStat
       typeof share.maxActiveShares === 'number' && Number.isFinite(share.maxActiveShares)
         ? Math.max(1, Math.min(10_000, Math.floor(share.maxActiveShares)))
         : DEFAULT_SHARE_POLICY.maxActiveShares,
+    maxActiveSites:
+      typeof siteShare.maxActiveSites === 'number' && Number.isFinite(siteShare.maxActiveSites)
+        ? Math.max(1, Math.min(1_000, Math.floor(siteShare.maxActiveSites)))
+        : DEFAULT_SHARE_POLICY.maxActiveSites,
     maxFileSizeMb: Math.max(1, Math.round(maxFileSize / BYTES_PER_MB)),
     inlinePreviewMimes: normalizeStringList(share.inlinePreviewMimes, 32).length
       ? normalizeStringList(share.inlinePreviewMimes, 32)
@@ -92,6 +99,12 @@ export function validateSharePolicy(state: SharePolicyState): string | null {
   }
   if (defaultTtlMs > maxTtlMs) {
     return 'Default TTL cannot exceed maximum TTL.';
+  }
+  if (state.maxActiveShares < 1 || state.maxActiveShares > 10_000) {
+    return 'Maximum active shares must be between 1 and 10,000.';
+  }
+  if (state.maxActiveSites < 1 || state.maxActiveSites > 1_000) {
+    return 'Maximum active site shares must be between 1 and 1,000.';
   }
   if (state.maxFileSizeMb < 1 || state.maxFileSizeMb > 10_240) {
     return 'Maximum file size must be between 1 MB and 10 GB.';
@@ -116,6 +129,9 @@ export async function patchSharePolicy(state: SharePolicyState): Promise<void> {
           maxActiveShares: state.maxActiveShares,
           maxFileSize: state.maxFileSizeMb * BYTES_PER_MB,
           inlinePreviewMimes: state.inlinePreviewMimes,
+        },
+        siteShare: {
+          maxActiveSites: state.maxActiveSites,
         },
       },
     }),

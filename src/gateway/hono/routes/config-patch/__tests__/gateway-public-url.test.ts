@@ -25,6 +25,15 @@ function minimalConfig(): Config {
 }
 
 describe('applyGatewayPatch publicUrl', () => {
+  it('persists site share policy fields', () => {
+    const cfg = minimalConfig();
+    const result = applyGatewayPatch(cfg, {
+      gateway: { siteShare: { maxActiveSites: 20 } },
+    });
+    expect(result.ok).toBe(true);
+    expect(cfg.gateway?.siteShare?.maxActiveSites).toBe(20);
+  });
+
   it('persists a normalized https publicUrl', () => {
     const cfg = minimalConfig();
     const result = applyGatewayPatch(cfg, {
