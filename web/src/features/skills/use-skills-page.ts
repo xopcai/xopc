@@ -958,6 +958,8 @@ export function useSkillsPage() {
 
   const runDelete = async () => {
     const id = confirmId;
+    const shouldCloseDetail =
+      detailOpen && detailSource === 'catalog' && detailDirectoryId === id;
     setConfirmOpen(false);
     setConfirmId(null);
     if (!id) return;
@@ -966,6 +968,14 @@ export function useSkillsPage() {
       await deleteSkill(id);
       skipNextSkillsReloadRef.current = true;
       await load();
+      if (shouldCloseDetail) {
+        setDetailOpen(false);
+        setDetailSource('catalog');
+        setDetailTitle('');
+        setDetailCatalogPreview(null);
+        setDetailMarketplacePreview(null);
+        setDetailError(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : sk.deleteFailed);
     }
