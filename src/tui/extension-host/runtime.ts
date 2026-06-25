@@ -61,7 +61,7 @@ import type { TuiBottomBar } from '../components/tui-bottom-bar.js';
 import type { TuiState } from '../tui-types.js';
 import { theme } from '../theme.js';
 import { getGitBranchCached } from '../tui-git-branch.js';
-import { createSkillsAutocompleteProvider } from '../tui-skills-autocomplete.js';
+import { createTuiFileAutocompleteProvider } from '../tui-file-autocomplete.js';
 import { createTuiExtensionHost, invokeTuiExtensionRegistrars } from './host.js';
 import { ChainedAutocompleteProvider, WrappedAutocompleteProvider } from './autocomplete.js';
 import {
@@ -146,6 +146,11 @@ export interface CreateTuiExtensionRuntimeOptions {
   reload?: () => Promise<void>;
   sendUserMessage?: TuiReplacedSessionContext['sendUserMessage'];
   sendMessage?: TuiReplacedSessionContext['sendMessage'];
+  searchWorkspaceFiles?: (
+    sessionKey: string,
+    query: string,
+    options?: { limit?: number },
+  ) => Promise<Array<{ name: string; path: string; isDirectory: boolean }>>;
   cwd: string;
   fdPath: string | null;
   openOverlay: (component: Component, options?: OverlayOptions) => OverlayHandle | void;
@@ -206,16 +211,18 @@ export function createTuiExtensionRuntime(
   const surface = new TuiExtensionSurface();
   const slashCommands: TuiExtensionSlashCommand[] = [];
   const shortcuts: TuiExtensionShortcut[] = [];
-  const autocompleteProviders: TuiAutocompleteProvider[] = [
-    createSkillsAutocompleteProvider(),
-  ];
+  const autocompleteProviders: TuiAutocompleteProvider[] = [];
+  if (opts.searchWorkspaceFiles) {
+    autocompleteProviders.push(createTuiFileAutocompleteProvider(opts.searchWorkspaceFiles));
+  }
+  const baseAutocompleteProviderCount = autocompleteProviders.length;
   const autocompleteProviderFactories: TuiAutocompleteProviderFactory[] = [];
   const disposers: Array<() => void> = [];
 
   const baseProvider = new CombinedAutocompleteProvider(
     opts.baseSlashCommands.map((c) => ({ name: c.name, description: c.description })),
     opts.cwd,
-    opts.fdPath,
+    null,
   );
 
   const chainedProvider = new ChainedAutocompleteProvider(
@@ -922,7 +929,7 @@ export function createTuiExtensionRuntime(
       opts.setEditorComponent?.(undefined);
       slashCommands.length = 0;
       shortcuts.length = 0;
-      autocompleteProviders.length = 1;
+      autocompleteProviders.length = baseAutocompleteProviderCount;
       autocompleteProviderFactories.length = 0;
       invalidate();
     },

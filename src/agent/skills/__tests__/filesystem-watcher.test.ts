@@ -71,7 +71,7 @@ describe('SkillFilesystemWatcher', () => {
     watcher.watchWorkspace(workspaceDir);
 
     const workspaceWatcher = createdWatchers[1];
-    const skillPath = path.join(workspaceDir, 'skills', 'demo', 'SKILL.md');
+    const skillPath = path.join(workspaceDir, '.xopc', 'skills', 'demo', 'SKILL.md');
     workspaceWatcher?.emit('add', skillPath);
     workspaceWatcher?.emit('change', skillPath);
 
@@ -97,11 +97,14 @@ describe('SkillFilesystemWatcher', () => {
     const ignored = workspaceCall![1].ignored;
 
     expect(ignored(path.join(workspaceDir, 'src'), { isDirectory: () => true })).toBe(true);
-    expect(ignored(path.join(workspaceDir, 'skills'), { isDirectory: () => true })).toBe(false);
-    expect(ignored(path.join(workspaceDir, 'skills', 'demo'), { isDirectory: () => true })).toBe(false);
-    expect(ignored(path.join(workspaceDir, 'skills', '.tmp-demo-1'), { isDirectory: () => true })).toBe(true);
-    expect(ignored(path.join(workspaceDir, 'skills', 'demo', 'README.md'), {})).toBe(true);
-    expect(ignored(path.join(workspaceDir, 'skills', 'demo', 'SKILL.md'), {})).toBe(false);
+    expect(ignored(path.join(workspaceDir, 'skills'), { isDirectory: () => true })).toBe(true);
+    expect(ignored(path.join(workspaceDir, '.xopc'), { isDirectory: () => true })).toBe(false);
+    expect(ignored(path.join(workspaceDir, '.xopc', 'settings.json'), {})).toBe(true);
+    expect(ignored(path.join(workspaceDir, '.xopc', 'skills'), { isDirectory: () => true })).toBe(false);
+    expect(ignored(path.join(workspaceDir, '.xopc', 'skills', 'demo'), { isDirectory: () => true })).toBe(false);
+    expect(ignored(path.join(workspaceDir, '.xopc', 'skills', '.tmp-demo-1'), { isDirectory: () => true })).toBe(true);
+    expect(ignored(path.join(workspaceDir, '.xopc', 'skills', 'demo', 'README.md'), {})).toBe(true);
+    expect(ignored(path.join(workspaceDir, '.xopc', 'skills', 'demo', 'SKILL.md'), {})).toBe(false);
 
     watcher.dispose();
   });

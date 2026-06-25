@@ -26,6 +26,7 @@ export interface PipelineDocument {
   description?: string;
   provider?: string;
   include?: string[];
+  timeoutSeconds?: number;
   args: Record<string, PipelineArgDef>;
   pipeline: PipelineStep[];
   onError?: PipelineStep[];
@@ -75,6 +76,8 @@ export function parseBrowserPipeline(yamlSource: string): PipelineParseResult {
     ? doc.include.filter((x): x is string => typeof x === 'string')
     : undefined;
 
+  const timeoutSeconds = typeof doc.timeoutSeconds === 'number' ? doc.timeoutSeconds : undefined;
+
   // args
   const argsRaw = (doc.args && typeof doc.args === 'object' && !Array.isArray(doc.args)) ? doc.args as Record<string, unknown> : {};
   const args: Record<string, PipelineArgDef> = {};
@@ -93,24 +96,22 @@ export function parseBrowserPipeline(yamlSource: string): PipelineParseResult {
     }
   }
 
-  // pipeline
-  const pipelineRaw = doc.pipeline;
-  if (!Array.isArray(pipelineRaw)) {
-    errors.push({ path: 'pipeline', message: '`pipeline` must be an array of steps.' });
-    return { ok: false, errors };
-  }
-
+  function parseSteps(rawSteps: unknown, path: string, required: boolean): PipelineStep[] {
+    if (!Array.isArray(rawSteps)) {
+      if (required) errors.push({ path, message: `\`${path}\` must be an array of steps.` });
+      return [];
+    }
   const pipeline: PipelineStep[] = [];
-  for (let i = 0; i < pipelineRaw.length; i++) {
-    const step = pipelineRaw[i];
+    for (let i = 0; i < rawSteps.length; i++) {
+      const step = rawSteps[i];
     if (!step || typeof step !== 'object' || Array.isArray(step)) {
-      errors.push({ path: `pipeline[${i}]`, message: 'Each step must be a YAML mapping.' });
+        errors.push({ path: `${path}[${i}]`, message: 'Each step must be a YAML mapping.' });
       continue;
     }
     const stepObj = step as Record<string, unknown>;
     const actionKeys = Object.keys(stepObj);
     if (actionKeys.length !== 1) {
-      errors.push({ path: `pipeline[${i}]`, message: `Each step must have exactly one action key, found ${actionKeys.length}: [${actionKeys.join(', ')}].` });
+        errors.push({ path: `${path}[${i}]`, message: `Each step must have exactly one action key, found ${actionKeys.length}: [${actionKeys.join(', ')}].` });
       continue;
     }
     const action = actionKeys[0];
@@ -125,29 +126,11 @@ export function parseBrowserPipeline(yamlSource: string): PipelineParseResult {
       pipeline.push({ action, args: { value: actionArgs } });
     }
   }
-
-  // on_error
-  const onErrorRaw = doc.on_error;
-  let onError: PipelineStep[] | undefined;
-  if (Array.isArray(onErrorRaw)) {
-    onError = [];
-    for (let i = 0; i < onErrorRaw.length; i++) {
-      const step = onErrorRaw[i];
-      if (!step || typeof step !== 'object' || Array.isArray(step)) continue;
-      const stepObj = step as Record<string, unknown>;
-      const actionKeys = Object.keys(stepObj);
-      if (actionKeys.length !== 1) continue;
-      const action = actionKeys[0];
-      const actionArgs = stepObj[action];
-      if (typeof actionArgs === 'string') {
-        onError.push({ action, args: actionArgs });
-      } else if (actionArgs && typeof actionArgs === 'object' && !Array.isArray(actionArgs)) {
-        onError.push({ action, args: actionArgs as Record<string, unknown> });
-      } else {
-        onError.push({ action, args: {} });
-      }
-    }
+    return pipeline;
   }
+
+  const pipeline = parseSteps(doc.pipeline, 'pipeline', true);
+  const onError = doc.on_error === undefined ? undefined : parseSteps(doc.on_error, 'on_error', false);
 
   if (errors.length > 0) {
     return { ok: false, errors };
@@ -155,7 +138,7 @@ export function parseBrowserPipeline(yamlSource: string): PipelineParseResult {
 
   return {
     ok: true,
-    document: { name, description, provider, include, args, pipeline, onError },
+    document: { name, description, provider, include, timeoutSeconds, args, pipeline, onError },
     errors: [],
   };
 }

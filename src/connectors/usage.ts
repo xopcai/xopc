@@ -25,6 +25,8 @@ export function getConnectorUsageFromMarker(marker: unknown): ConnectorUsageReco
     lastHealthCheckAt: typeof record.lastHealthCheckAt === 'string' ? record.lastHealthCheckAt : undefined,
     lastHealthStatus: typeof record.lastHealthStatus === 'string' ? record.lastHealthStatus as ConnectorUsageRecord['lastHealthStatus'] : undefined,
     lastToolCount: typeof record.lastToolCount === 'number' ? record.lastToolCount : undefined,
+    lastResourceCount: typeof record.lastResourceCount === 'number' ? record.lastResourceCount : undefined,
+    lastPromptCount: typeof record.lastPromptCount === 'number' ? record.lastPromptCount : undefined,
   };
 }
 
@@ -50,6 +52,8 @@ export function getConnectorAuditFromMarker(marker: unknown): ConnectorAuditReco
       status: typeof record.status === 'string' ? record.status as ConnectorAuditRecord['status'] : undefined,
       ok: typeof record.ok === 'boolean' ? record.ok : undefined,
       toolCount: typeof record.toolCount === 'number' ? record.toolCount : undefined,
+      resourceCount: typeof record.resourceCount === 'number' ? record.resourceCount : undefined,
+      promptCount: typeof record.promptCount === 'number' ? record.promptCount : undefined,
     }];
   });
 }
@@ -83,11 +87,15 @@ export function recordConnectorHealthUsage(
     lastHealthCheckAt: new Date().toISOString(),
     lastHealthStatus: result.status,
     lastToolCount: result.toolCount,
+    lastResourceCount: result.resourceCount,
+    lastPromptCount: result.promptCount,
   } satisfies ConnectorUsageRecord;
   appendConnectorAuditRecord(config, instanceId, {
     action: 'health_check',
     status: result.status,
     ok: result.ok,
     toolCount: result.toolCount,
+    resourceCount: result.resourceCount,
+    promptCount: result.promptCount,
   });
 }

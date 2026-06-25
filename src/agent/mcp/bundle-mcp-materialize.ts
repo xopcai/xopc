@@ -16,11 +16,37 @@ import {
   TOOL_NAME_SEPARATOR,
 } from "./bundle-mcp-names.js";
 import type { BundleMcpToolRuntime, SessionMcpRuntime } from "./bundle-mcp-types.js";
+import type { McpCatalogPrompt, McpCatalogResource } from "./bundle-mcp-types.js";
 
 export type McpGatewayToolEntry = {
   name: string;
   shortName: string;
   description: string;
+};
+
+export type McpGatewayResourceEntry = {
+  uri: string;
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+};
+
+export type McpGatewayPromptEntry = {
+  name: string;
+  title?: string;
+  description?: string;
+  argumentCount: number;
+};
+
+export type McpGatewayCapabilitySummary = {
+  serverId: string;
+  toolCount: number;
+  resourceCount: number;
+  promptCount: number;
+  tools: McpGatewayToolEntry[];
+  resources: McpGatewayResourceEntry[];
+  prompts: McpGatewayPromptEntry[];
 };
 
 function readMaterializedToolDescription(tool: AnyAgentTool): string {
@@ -57,6 +83,75 @@ export async function listBundleMcpServerToolsForGateway(params: {
   });
   try {
     return mapBundleMcpToolsForGateway(runtime.tools, params.serverId);
+  } finally {
+    await runtime.dispose();
+  }
+}
+
+function mapBundleMcpResourcesForGateway(
+  resources: McpCatalogResource[],
+  serverId: string,
+): McpGatewayResourceEntry[] {
+  return resources
+    .filter((resource) => resource.serverName === serverId)
+    .map((resource) => ({
+      uri: resource.uri,
+      name: resource.name,
+      title: resource.title,
+      description: resource.description,
+      mimeType: resource.mimeType,
+    }));
+}
+
+function mapBundleMcpPromptsForGateway(
+  prompts: McpCatalogPrompt[],
+  serverId: string,
+): McpGatewayPromptEntry[] {
+  return prompts
+    .filter((prompt) => prompt.serverName === serverId)
+    .map((prompt) => ({
+      name: prompt.name,
+      title: prompt.title,
+      description: prompt.description,
+      argumentCount: prompt.argumentCount,
+    }));
+}
+
+export async function listBundleMcpServerCapabilitiesForGateway(params: {
+  workspaceDir: string;
+  cfg?: Config;
+  serverId: string;
+}): Promise<McpGatewayCapabilitySummary> {
+  const createRuntime =
+    (await import("./bundle-mcp-runtime.js")).createSessionMcpRuntime;
+  const runtime = createRuntime({
+    sessionId: `bundle-mcp:${crypto.randomUUID()}`,
+    workspaceDir: params.workspaceDir,
+    cfg: params.cfg,
+  });
+  try {
+    const catalog = await runtime.getCatalog();
+    const tools = mapBundleMcpToolsForGateway(
+      await materializeBundleMcpToolsForRun({ runtime }).then(async (toolRuntime) => {
+        try {
+          return toolRuntime.tools;
+        } finally {
+          await toolRuntime.dispose();
+        }
+      }),
+      params.serverId,
+    );
+    const resources = mapBundleMcpResourcesForGateway(catalog.resources, params.serverId);
+    const prompts = mapBundleMcpPromptsForGateway(catalog.prompts, params.serverId);
+    return {
+      serverId: params.serverId,
+      toolCount: tools.length,
+      resourceCount: resources.length,
+      promptCount: prompts.length,
+      tools,
+      resources,
+      prompts,
+    };
   } finally {
     await runtime.dispose();
   }

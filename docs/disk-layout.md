@@ -11,7 +11,7 @@ For narrative setup (init, templates, env vars), see [State directory & workspac
 | **State directory** | Global config, credentials, logs, cron, global skills/extensions cache, managed tooling. |
 | **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: curated memory, **`profile/`** Markdown (`SOUL.md`, …), inbound/TTS blobs. Session transcripts live in **`xopc.db`**, not under `sessions/`. |
 | **Agent dir** `…/agents/<agentId>/agent/` | Process state: `agent.json`, per-agent credentials, IPC inbox, pid/socket, small machine state, extension installs, outbound crash-recovery queue. |
-| **Markdown workspace** | User project tree: tool `cwd`, daily `memory/*.md`, `media/generated`, user `skills/`, arbitrary files. |
+| **Markdown workspace** | User project tree: tool `cwd`, daily `memory/*.md`, `media/generated`, project `.xopc/skills/`, arbitrary files. |
 
 Paths below use `~/.xopc` as the default state root; override with `XOPC_STATE_DIR`, `XOPC_PROFILE`, or `XOPC_HOME` (see [workspace.md](workspace.md#environment-variables-quick-reference)).
 
@@ -70,7 +70,7 @@ Resolved by `resolveAgentWorkspaceDir(config, agentId)` — often **`<stateDir>/
 |------|---------|
 | `memory/` | Daily or topical notes (`YYYY-MM-DD.md`); `memory_search` / tool cwd. |
 | `media/generated/` | Generated images and similar outputs. |
-| `skills/` | User-authored skills. |
+| `.xopc/skills/` | Project-local user-authored skills. |
 | *arbitrary files* | `read` / `write` / `edit` tool targets. |
 
 Internal state is **not** written here on new installs. This tree is the only supported layout: persona Markdown and machine state follow the table at top. There is **no** automatic import from older “everything under the markdown workspace” layouts—use `xopc init` for the full state tree, or `xopc setup` / `xopc onboard` for config + profile Markdown seeds, and move any old data yourself if you are upgrading from another fork.

@@ -1,9 +1,8 @@
 import type { Hono } from 'hono';
 
 import {
-  createBundleMcpToolRuntime,
+  listBundleMcpServerCapabilitiesForGateway,
   listBundleMcpServerToolsForGateway,
-  mapBundleMcpToolsForGateway,
 } from '../../../agent/mcp/bundle-mcp-materialize.js';
 import { loadMergedBundleMcpConfig } from '../../../agent/mcp/bundle-mcp-config.js';
 import { canonicalizeConfiguredMcpServer, normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
@@ -54,6 +53,25 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
     }
   });
 
+  authenticated.get('/api/mcp/servers/:id/capabilities', async (c) => {
+    const id = c.req.param('id');
+    const cfg = deps.service.currentConfig;
+    const workspaceDir = getWorkspacePath(cfg) || './workspace';
+    try {
+      const capabilities = await listBundleMcpServerCapabilitiesForGateway({
+        workspaceDir,
+        cfg,
+        serverId: id,
+      });
+      return c.json({ ok: true, payload: capabilities });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : String(err) },
+        500,
+      );
+    }
+  });
+
   authenticated.post('/api/mcp/servers/:id/test', async (c) => {
     const id = c.req.param('id');
     const cfg = deps.service.currentConfig;
@@ -84,13 +102,18 @@ export function registerMcpRoutes(authenticated: Hono, deps: AuthenticatedRouteD
             },
           }
         : cfg;
-      const runtime = await createBundleMcpToolRuntime({
+      const capabilities = await listBundleMcpServerCapabilitiesForGateway({
         workspaceDir,
         cfg: testCfg,
+        serverId: id,
       });
-      const tools = mapBundleMcpToolsForGateway(runtime.tools, id);
-      await runtime.dispose();
-      return c.json({ ok: true, payload: { serverId: id, toolCount: tools.length, tools } });
+      return c.json({
+        ok: true,
+        payload: {
+          ...capabilities,
+          serverId: id,
+        },
+      });
     } catch (err) {
       return c.json(
         { ok: false, error: err instanceof Error ? err.message : String(err) },

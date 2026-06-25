@@ -6,6 +6,7 @@ import { assertBrowserUrlAllowed, checkPostRedirectUrl, containsApiKeyPattern } 
 import { checkWebsiteBlocklist } from '../../agent/tools/url-safety.js';
 import { resolveBrowserCommandTimeoutMs } from '../browser-command-timeout.js';
 import { truncateSnapshotAtBoundary } from '../snapshot-helpers.js';
+import { isTruthyValue, resolvePath, valueContains } from '../pipeline/template.js';
 
 import type { BrowserActionContext, BrowserActionResult } from './types.js';
 
@@ -22,6 +23,24 @@ function ok(action: string, text: string, data?: unknown, artifacts?: BrowserAct
 
 function fail(action: string, code: string, message: string, diagnostics?: BrowserActionResult['diagnostics']): BrowserActionResult {
   return { ok: false, action, error: { code, message }, diagnostics };
+}
+
+function pipelineLast(ctx: BrowserActionContext): unknown {
+  return ctx.pipeline?.last;
+}
+
+function valueFromArgs(ctx: BrowserActionContext, args: Record<string, unknown>): unknown {
+  if ('value' in args) return args.value;
+  if (typeof args.path === 'string') return resolvePath(pipelineLast(ctx), args.path);
+  return pipelineLast(ctx);
+}
+
+function compareValues(a: unknown, b: unknown): number {
+  const av = typeof a === 'number' ? a : String(a ?? '');
+  const bv = typeof b === 'number' ? b : String(b ?? '');
+  if (av < bv) return -1;
+  if (av > bv) return 1;
+  return 0;
 }
 
 function formatAxSnapshot(data: unknown, maxLen: number): string {
@@ -256,26 +275,104 @@ export async function runExtensionRegistryAction(
       return ok(name, 'Wait completed.');
     }
 
+    case 'wait_for_timeout': {
+      const ms = typeof args.ms === 'number' ? args.ms : typeof args.timeout_ms === 'number' ? args.timeout_ms : 1000;
+      const r = await ext.sendCommand('wait', { ms }, { timeout: ms + 1000 });
+      if (!r.ok) return fail(name, 'WAIT_TIMEOUT', r.error ?? 'wait failed');
+      return ok(name, `Waited ${ms}ms.`);
+    }
+
     case 'output':
-      return ok(name, 'Output captured.', args.value ?? ctx.pipelineData);
+      return ok(name, 'Output captured.', valueFromArgs(ctx, args));
 
     case 'assert': {
-      const value = String(args.value ?? ctx.pipelineData ?? '');
-      const contains = args.contains as string | undefined;
-      const equals = args.equals as string | undefined;
-      if (contains && !value.includes(contains)) {
-        return fail(name, 'ASSERTION_FAILED', `Expected value to contain "${contains}"`);
+      const actual = valueFromArgs(ctx, args);
+      if ('equals' in args && JSON.stringify(actual) !== JSON.stringify(args.equals)) {
+        return fail(name, 'ASSERTION_FAILED', `Expected value to equal ${JSON.stringify(args.equals)}`);
       }
-      if (equals !== undefined && value !== equals) {
-        return fail(name, 'ASSERTION_FAILED', `Expected value to equal "${equals}"`);
+      if ('contains' in args && !valueContains(actual, args.contains)) {
+        return fail(name, 'ASSERTION_FAILED', `Expected value to contain ${JSON.stringify(args.contains)}`);
+      }
+      if (args.truthy === true && !isTruthyValue(actual)) {
+        return fail(name, 'ASSERTION_FAILED', 'Expected value to be truthy');
+      }
+      if (args.exists === true && (actual === undefined || actual === null || actual === '')) {
+        return fail(name, 'ASSERTION_FAILED', 'Expected value to exist');
       }
       return ok(name, 'Assertion passed.');
+    }
+
+    case 'select': {
+      const source = 'from' in args ? args.from : pipelineLast(ctx);
+      const path = String(args.path ?? args.value ?? '');
+      const value = path ? resolvePath(source, path) : source;
+      return ok(name, typeof value === 'string' ? value : JSON.stringify(value, null, 2), value);
+    }
+
+    case 'map': {
+      const source = 'from' in args ? args.from : pipelineLast(ctx);
+      if (!Array.isArray(source)) return fail(name, 'INVALID_INPUT', 'map input must be an array');
+      const path = String(args.path ?? '');
+      const value = path ? source.map((item) => resolvePath(item, path)) : source;
+      return ok(name, JSON.stringify(value, null, 2), value);
+    }
+
+    case 'filter': {
+      const source = 'from' in args ? args.from : pipelineLast(ctx);
+      if (!Array.isArray(source)) return fail(name, 'INVALID_INPUT', 'filter input must be an array');
+      const path = String(args.path ?? '');
+      const value = source.filter((item) => {
+        const itemValue = path ? resolvePath(item, path) : item;
+        if ('equals' in args) return JSON.stringify(itemValue) === JSON.stringify(args.equals);
+        if ('contains' in args) return valueContains(itemValue, args.contains);
+        return isTruthyValue(itemValue);
+      });
+      return ok(name, JSON.stringify(value, null, 2), value);
+    }
+
+    case 'sort': {
+      const source = 'from' in args ? args.from : pipelineLast(ctx);
+      if (!Array.isArray(source)) return fail(name, 'INVALID_INPUT', 'sort input must be an array');
+      const path = String(args.path ?? '');
+      const direction = String(args.direction ?? 'asc');
+      const value = [...source].sort((a, b) => {
+        const cmp = compareValues(path ? resolvePath(a, path) : a, path ? resolvePath(b, path) : b);
+        return direction === 'desc' ? -cmp : cmp;
+      });
+      return ok(name, JSON.stringify(value, null, 2), value);
+    }
+
+    case 'limit': {
+      const source = 'from' in args ? args.from : pipelineLast(ctx);
+      if (!Array.isArray(source)) return fail(name, 'INVALID_INPUT', 'limit input must be an array');
+      const count = Math.max(0, Number(args.count ?? args.limit ?? 10));
+      const offset = Math.max(0, Number(args.offset ?? 0));
+      const value = source.slice(offset, offset + count);
+      return ok(name, JSON.stringify(value, null, 2), value);
     }
 
     case 'network_start':
     case 'network_events':
     case 'network_stop':
     case 'cdp':
+    case 'wait_for_navigation':
+    case 'wait_for_function':
+    case 'wait_for_network_idle':
+    case 'element_text':
+    case 'element_attribute':
+    case 'bounding_box':
+    case 'set_input_files':
+    case 'cookies':
+    case 'get_cookies':
+    case 'add_cookies':
+    case 'clear_cookies':
+    case 'tabs':
+    case 'list_tabs':
+    case 'new_tab':
+    case 'switch_tab':
+    case 'fetch':
+    case 'collect':
+    case 'tap':
       return fail(name, 'NOT_SUPPORTED', `Action "${name}" is not available with the Chrome Extension backend`);
 
     default:

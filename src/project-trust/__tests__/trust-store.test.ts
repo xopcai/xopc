@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, realpathSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -37,6 +37,17 @@ describe('ProjectTrustStore', () => {
     try {
       expect(hasTrustRequiringProjectResources(dir)).toBe(false);
       mkdirSync(join(dir, '.xopc', 'extensions'), { recursive: true });
+      expect(hasTrustRequiringProjectResources(dir)).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('detects root AGENTS.md as a trust-requiring project resource', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'xopc-trust-agents-'));
+    try {
+      expect(hasTrustRequiringProjectResources(dir)).toBe(false);
+      writeFileSync(join(dir, 'AGENTS.md'), '# Project rules\n');
       expect(hasTrustRequiringProjectResources(dir)).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });

@@ -1,5 +1,57 @@
 import type { ConnectorDefinition } from './types.js';
 
+function remoteMcpConnector(params: {
+  id: string;
+  displayName: string;
+  description: string;
+  category: ConnectorDefinition['category'];
+  tags: string[];
+}): ConnectorDefinition {
+  return {
+    id: params.id,
+    version: '1.0.0',
+    displayName: params.displayName,
+    description: params.description,
+    category: params.category,
+    kind: 'mcp',
+    source: 'builtin',
+    capabilities: ['tools', 'resources', 'prompts', 'auth.apiKey', 'runtime.mcp.streamableHttp'],
+    tags: params.tags,
+    auth: { mode: 'apiKey' },
+    setup: {
+      secrets: [
+        {
+          key: 'AUTHORIZATION_HEADER',
+          label: 'Authorization header value',
+          description: 'Full Authorization header value for the remote MCP endpoint, for example "Bearer ...".',
+          required: true,
+        },
+      ],
+      config: [
+        {
+          key: 'url',
+          label: 'MCP endpoint URL',
+          type: 'string',
+          required: true,
+          placeholder: 'https://example.com/mcp',
+          description: 'Streamable HTTP MCP endpoint exposed by your provider or gateway.',
+        },
+      ],
+    },
+    runtime: {
+      type: 'mcp',
+      serverId: params.id,
+      serverTemplate: {
+        url: '{{config.url}}',
+        transport: 'streamable-http',
+        headers: {
+          Authorization: '{{secrets.AUTHORIZATION_HEADER}}',
+        },
+      },
+    },
+  };
+}
+
 export const BUILTIN_CONNECTORS: readonly ConnectorDefinition[] = [
   {
     id: 'fetch',
@@ -120,4 +172,107 @@ export const BUILTIN_CONNECTORS: readonly ConnectorDefinition[] = [
       },
     },
   },
+  {
+    id: 'memory',
+    version: '1.0.0',
+    displayName: 'Memory',
+    description: 'Give the agent a simple MCP knowledge graph memory store.',
+    category: 'data',
+    kind: 'mcp',
+    source: 'builtin',
+    capabilities: ['tools', 'resources', 'runtime.mcp.stdio', 'memory_source'],
+    tags: ['memory', 'knowledge', 'personalization'],
+    auth: { mode: 'none' },
+    setup: {},
+    runtime: {
+      type: 'mcp',
+      serverId: 'memory',
+      serverTemplate: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-memory'],
+      },
+    },
+  },
+  {
+    id: 'sequential-thinking',
+    version: '1.0.0',
+    displayName: 'Sequential Thinking',
+    description: 'Add a structured reasoning scratchpad MCP server for multi-step tasks.',
+    category: 'automation',
+    kind: 'mcp',
+    source: 'builtin',
+    capabilities: ['tools', 'runtime.mcp.stdio'],
+    tags: ['reasoning', 'planning', 'utility'],
+    auth: { mode: 'none' },
+    setup: {},
+    runtime: {
+      type: 'mcp',
+      serverId: 'sequential-thinking',
+      serverTemplate: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-sequential-thinking'],
+      },
+    },
+  },
+  {
+    id: 'brave-search',
+    version: '1.0.0',
+    displayName: 'Brave Search',
+    description: 'Search the web through the Brave Search MCP server.',
+    category: 'docs',
+    kind: 'mcp',
+    source: 'builtin',
+    capabilities: ['tools', 'auth.apiKey', 'runtime.mcp.stdio'],
+    tags: ['search', 'web', 'research'],
+    auth: { mode: 'apiKey' },
+    setup: {
+      secrets: [
+        {
+          key: 'BRAVE_API_KEY',
+          label: 'Brave API key',
+          description: 'Stored in the xopc credential store and passed to the MCP server at runtime.',
+          required: true,
+        },
+      ],
+    },
+    runtime: {
+      type: 'mcp',
+      serverId: 'brave-search',
+      serverTemplate: {
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-brave-search'],
+        env: {
+          BRAVE_API_KEY: '{{secrets.BRAVE_API_KEY}}',
+        },
+      },
+    },
+  },
+  remoteMcpConnector({
+    id: 'notion',
+    displayName: 'Notion',
+    description: 'Connect a Notion-compatible remote MCP endpoint for pages, databases, and workspace context.',
+    category: 'docs',
+    tags: ['notion', 'docs', 'workspace'],
+  }),
+  remoteMcpConnector({
+    id: 'slack',
+    displayName: 'Slack',
+    description: 'Connect a Slack-compatible remote MCP endpoint for workspace messages and actions.',
+    category: 'automation',
+    tags: ['slack', 'messages', 'work'],
+  }),
+  remoteMcpConnector({
+    id: 'linear',
+    displayName: 'Linear',
+    description: 'Connect a Linear-compatible remote MCP endpoint for issues, projects, and triage workflows.',
+    category: 'code',
+    tags: ['linear', 'issues', 'work'],
+  }),
+  remoteMcpConnector({
+    id: 'google-drive',
+    displayName: 'Google Drive',
+    description: 'Connect a Google Drive-compatible remote MCP endpoint for documents and shared files.',
+    category: 'docs',
+    tags: ['google', 'drive', 'docs'],
+  }),
 ];

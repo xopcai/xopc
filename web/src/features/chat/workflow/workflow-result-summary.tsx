@@ -31,6 +31,7 @@ export type WorkflowResultSummaryLabels = {
 
 interface FindingLike {
   title?: string;
+  claim?: string;
   file?: string;
   line?: number | string;
   severity?: string;
@@ -143,8 +144,8 @@ export const WorkflowResultSummary = memo(function WorkflowResultSummary({
           {labels.openQuestionsHeading}
         </summary>
         <ul className="mt-1 space-y-0.5 text-sm text-fg-muted">
-          {openQuestions.slice(0, MAX_ITEMS).map((q) => (
-            <li key={q} className="flex gap-2">
+          {openQuestions.slice(0, MAX_ITEMS).map((q, index) => (
+            <li key={`${q}:${index}`} className="flex gap-2">
               <span className="text-fg-disabled">•</span>
               <span className="min-w-0 break-words">{q}</span>
             </li>
@@ -201,8 +202,8 @@ function StringList({
         {heading}
       </summary>
       <ul className="mt-1 space-y-0.5 text-sm text-fg-muted">
-        {visible.map((item) => (
-          <li key={item} className="flex gap-2">
+        {visible.map((item, index) => (
+          <li key={`${item}:${index}`} className="flex gap-2">
             <span className="text-fg-disabled">•</span>
             <span className="min-w-0 break-words">{item}</span>
           </li>
@@ -231,8 +232,8 @@ function FindingList({
         {heading}
       </summary>
       <ul className="mt-1 space-y-1">
-        {visible.map((it) => (
-          <FindingRow key={`${it.file ?? ''}:${it.line ?? ''}:${it.title ?? it.reason ?? it.fix ?? ''}`} item={it} />
+        {visible.map((it, index) => (
+          <FindingRow key={findingKey(it, index)} item={it} />
         ))}
       </ul>
       {items.length > visible.length ? (
@@ -258,6 +259,7 @@ function FindingRow({ item }: { item: FindingLike }) {
       : item.file
     : item.source ?? '';
   const tag = item.dimension ?? item.lens ?? '';
+  const title = item.title ?? item.claim ?? item.reason ?? item.fix ?? '(no title)';
 
   return (
     <li className="flex min-w-0 items-start gap-2 text-sm">
@@ -273,7 +275,7 @@ function FindingRow({ item }: { item: FindingLike }) {
       <div className="min-w-0 flex-1">
         <div className="min-w-0">
           {tag ? <span className="mr-1.5 text-xs text-fg-subtle">{tag}</span> : null}
-          <span className="text-fg">{item.title ?? item.reason ?? '(no title)'}</span>
+          <span className="text-fg">{title}</span>
         </div>
         {fileLabel ? (
           <div className="truncate font-mono text-xs text-fg-subtle" title={fileLabel}>
@@ -284,6 +286,23 @@ function FindingRow({ item }: { item: FindingLike }) {
       </div>
     </li>
   );
+}
+
+function findingKey(item: FindingLike, index: number) {
+  const stableParts = [
+    item.file,
+    item.line,
+    item.title,
+    item.claim,
+    item.reason,
+    item.fix,
+    item.source,
+    item.dimension,
+    item.lens,
+  ]
+    .map((part) => (part == null ? '' : String(part).trim()))
+    .filter(Boolean);
+  return stableParts.length > 0 ? `${stableParts.join(':')}:${index}` : `finding:${index}`;
 }
 
 function RawJsonBlock({ value, heading, hideHeading }: { value: unknown; heading: string; hideHeading?: boolean }) {

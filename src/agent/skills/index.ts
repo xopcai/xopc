@@ -8,6 +8,7 @@ import { formatSkillsForPrompt } from './format-skills-prompt.js';
 import { parseRequiredEnvVarNames } from './required-env-vars.js';
 import { parseSkillMetadata } from './parse-skill-metadata.js';
 import { parseSkillToolConditions } from './skill-tool-gating.js';
+import { resolveWorkspaceSkillsDir } from './workspace-skills-dir.js';
 import type { Skill, SkillDiagnostic, LoadSkillsResult, SkillConfig, SkillsConfig } from './types.js';
 
 const log = createLogger('SkillLoader');
@@ -187,7 +188,7 @@ function loadSkillFromFile(
       };
     }
 
-    // Derive category from directory path: skills/creative/algorithmic-art → 'creative'
+    // Derive category from directory path: .xopc/skills/creative/algorithmic-art → 'creative'
     // Only assign a category when the skill is nested at least two levels below rootDir.
     let category: string | undefined;
     if (rootDir) {
@@ -285,7 +286,7 @@ export function loadSkills(options: {
   }
 
   if (workspaceDir) {
-    const discovered = discoverSkills(join(workspaceDir, 'skills'), 'workspace');
+    const discovered = discoverSkills(resolveWorkspaceSkillsDir(workspaceDir), 'workspace');
     diagnostics.push(...discovered.diagnostics);
     const workspaceSkills = discovered.skills;
     for (const skill of workspaceSkills) {

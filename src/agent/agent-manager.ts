@@ -31,6 +31,7 @@ import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
 import { loadProfileMarkdownFiles, extractTextContent } from './context/workspace.js';
 import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
+import { loadProjectAgentsContextFile } from './bootstrap/project-agents-context.js';
 import type { EmbeddedContextFile } from './bootstrap/types.js';
 import { AgentToolsFactory } from './tools/factory.js';
 import { parseMcpToolName } from './mcp/bundle-mcp-policy.js';
@@ -67,6 +68,7 @@ import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-run
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
 import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
+import { ProjectTrustStore, hasTrustRequiringProjectResources } from '../project-trust/trust-store.js';
 
 const log = createLogger('AgentManager');
 
@@ -139,6 +141,10 @@ export interface AgentManagerConfig {
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike | undefined;
   /** Runtime notification for UI/CLI shells that cache skill catalogs. */
   onSkillsUpdated?: (payload: { reason: 'disk' | 'config' }) => void;
+  /**
+   * Runtime trust override. Persistent "do not trust" entries still take precedence.
+   */
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean | null | undefined;
 }
 
 export interface AgentInstance {
@@ -180,6 +186,7 @@ export class AgentManager implements AgentInstanceGateway {
   private lastExplicitSkillDiskRefreshAt = 0;
   private skillsUpdatedTimer: NodeJS.Timeout | undefined;
   private pendingSkillsUpdatedReason: 'disk' | 'config' | undefined;
+  private projectTrustStore = new ProjectTrustStore();
 
   constructor(config: AgentManagerConfig) {
     this.config = config;
@@ -237,6 +244,17 @@ export class AgentManager implements AgentInstanceGateway {
       return fromMap;
     }
     return resolveEffectiveAgentProfileForSession(cfg, sessionKey).resolvedWorkspacePath;
+  }
+
+  private getWorkspaceRuntimeForSession(sessionKey: string | undefined): WorkspaceRuntime {
+    const resolvedPath = sessionKey
+      ? this.getResolvedWorkspaceForSession(sessionKey)
+      : this.baseWorkspacePath;
+    return this.workspaceRuntimes.getOrCreate(resolvedPath);
+  }
+
+  private getCurrentWorkspaceRuntime(): WorkspaceRuntime {
+    return this.getWorkspaceRuntimeForSession(this.config.getCurrentContext?.()?.sessionKey);
   }
 
   /**
@@ -312,10 +330,8 @@ export class AgentManager implements AgentInstanceGateway {
       bus: this.config.bus,
       getConfig: () => this.mergedConfig(),
       getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),
-      getBuiltinMemoryStore: () =>
-        this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).builtinMemoryStore,
-      getMemoryManager: () =>
-        this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).memoryManager,
+      getBuiltinMemoryStore: () => this.getCurrentWorkspaceRuntime().builtinMemoryStore,
+      getMemoryManager: () => this.getCurrentWorkspaceRuntime().memoryManager,
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getCronService: this.config.getCronService,
@@ -353,12 +369,11 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   getMemoryManager(): MemoryManager {
-    return this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).memoryManager;
+    return this.getCurrentWorkspaceRuntime().memoryManager;
   }
 
   private getMemoryManagerForSession(sessionKey: string): MemoryManager {
-    const path = this.getResolvedWorkspaceForSession(sessionKey);
-    return this.workspaceRuntimes.getOrCreate(path).memoryManager;
+    return this.getWorkspaceRuntimeForSession(sessionKey).memoryManager;
   }
 
   /**
@@ -402,9 +417,9 @@ export class AgentManager implements AgentInstanceGateway {
       agent: inst.agent,
       registeredToolNames: inst.registeredToolNames,
       skillAllowlist: inst.effectiveProfile.skillsAllowlist,
-      workspacePath: inst.resolvedWorkspacePath,
+      workspacePath: this.getResolvedWorkspaceForSession(sessionKey),
       lastAssistantText: this.getLastAssistantContent(sessionKey),
-      workspaceRuntime: this.workspaceRuntimes.getOrCreate(inst.resolvedWorkspacePath),
+      workspaceRuntime: this.getWorkspaceRuntimeForSession(sessionKey),
     });
   }
 
@@ -414,11 +429,8 @@ export class AgentManager implements AgentInstanceGateway {
   expandSkillUserText(text: string): string {
     const ctx = this.config.getCurrentContext?.();
     const sessionKey = ctx?.sessionKey;
-    const path = sessionKey
-      ? this.getResolvedWorkspaceForSession(sessionKey)
-      : this.baseWorkspacePath;
     const inst = sessionKey ? this.agents.get(sessionKey) : undefined;
-    return this.workspaceRuntimes.getOrCreate(path).skillManager.expandCommand(text, {
+    return this.getWorkspaceRuntimeForSession(sessionKey).skillManager.expandCommand(text, {
       skillAllowlist: inst?.effectiveProfile.skillsAllowlist,
       registeredToolNames: inst?.registeredToolNames,
     });
@@ -426,7 +438,7 @@ export class AgentManager implements AgentInstanceGateway {
 
   /** Structured SKILL.md preview for the gateway console. */
   getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {
-    const skill = this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath).skillManager.findSkill(skillName);
+    const skill = this.getCurrentWorkspaceRuntime().skillManager.findSkill(skillName);
     if (!skill) return null;
 
     return {
@@ -446,6 +458,28 @@ export class AgentManager implements AgentInstanceGateway {
     return loadProfileMarkdownFiles(profileDir);
   }
 
+  private isProjectWorkspaceTrusted(workspaceDir: string): boolean {
+    if (!hasTrustRequiringProjectResources(workspaceDir)) {
+      return false;
+    }
+
+    const persisted = this.projectTrustStore.get(workspaceDir);
+    if (persisted === false) {
+      return false;
+    }
+    if (persisted === true) {
+      return true;
+    }
+
+    try {
+      return this.config.isWorkspaceTrusted?.(workspaceDir) === true;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log.warn({ err, workspaceDir, errorMessage }, `Workspace trust override failed: ${errorMessage}`);
+      return false;
+    }
+  }
+
   private resolveContextFilesForSession(
     sessionKey: string,
     profile: EffectiveAgentProfile,
@@ -462,6 +496,19 @@ export class AgentManager implements AgentInstanceGateway {
       excludeHeartbeat: excludeHeartbeat ?? !heartbeatEnabled,
       contextInjection,
     });
+    const shouldAppendProjectContext =
+      contextInjection === 'always' ||
+      (contextInjection === 'continuation-skip' && contextFiles.length > 0);
+    const workspaceDir = this.getResolvedWorkspaceForSession(sessionKey);
+    if (
+      shouldAppendProjectContext &&
+      this.isProjectWorkspaceTrusted(workspaceDir)
+    ) {
+      const projectAgentsFile = loadProjectAgentsContextFile(workspaceDir);
+      if (projectAgentsFile) {
+        contextFiles.push(projectAgentsFile);
+      }
+    }
     return contextFiles;
   }
 
@@ -494,7 +541,7 @@ export class AgentManager implements AgentInstanceGateway {
   getSkillCatalogSnapshot(): SkillCatalogSnapshot {
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
-    const rt = this.workspaceRuntimes.getOrCreate(this.baseWorkspacePath);
+    const rt = this.getCurrentWorkspaceRuntime();
     return {
       catalog: rt.skillManager
         .getSkills()
@@ -562,10 +609,11 @@ export class AgentManager implements AgentInstanceGateway {
       touched.add(resolvedPath);
     }
     for (const instance of this.agents.values()) {
-      const rt = this.workspaceRuntimes.getOrCreate(instance.resolvedWorkspacePath);
-      if (!touched.has(instance.resolvedWorkspacePath)) {
+      const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
+      const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
+      if (!touched.has(resolvedWorkspacePath)) {
         rt.skillManager.refreshPromptFromConfig();
-        touched.add(instance.resolvedWorkspacePath);
+        touched.add(resolvedWorkspacePath);
       }
       const contextFiles = this.resolveContextFilesForSession(
         instance.sessionKey,
@@ -573,7 +621,7 @@ export class AgentManager implements AgentInstanceGateway {
       );
       const newPrompt = rt.systemPromptBuilder.build(contextFiles, {
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
-        workspaceOverride: instance.resolvedWorkspacePath,
+        workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
         systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
@@ -649,9 +697,10 @@ export class AgentManager implements AgentInstanceGateway {
 
     const touched = new Set<string>();
     for (const instance of this.agents.values()) {
-      const rt = this.workspaceRuntimes.getOrCreate(instance.resolvedWorkspacePath);
-      if (!touched.has(instance.resolvedWorkspacePath)) {
-        touched.add(instance.resolvedWorkspacePath);
+      const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
+      const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
+      if (!touched.has(resolvedWorkspacePath)) {
+        touched.add(resolvedWorkspacePath);
       }
       const contextFiles = this.resolveContextFilesForSession(
         instance.sessionKey,
@@ -659,7 +708,7 @@ export class AgentManager implements AgentInstanceGateway {
       );
       const newPrompt = rt.systemPromptBuilder.rebuild(contextFiles, {
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
-        workspaceOverride: instance.resolvedWorkspacePath,
+        workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
         systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
@@ -795,7 +844,8 @@ export class AgentManager implements AgentInstanceGateway {
     if (!instance) return;
 
     const cfg = this.config.config!;
-    const rt = this.workspaceRuntimes.getOrCreate(instance.resolvedWorkspacePath);
+    const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(sessionKey);
+    const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
     const contextFiles = this.resolveContextFilesForSession(sessionKey, instance.effectiveProfile);
     const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
     const thinkingLevel =
@@ -805,7 +855,7 @@ export class AgentManager implements AgentInstanceGateway {
 
     instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
       externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
-      workspaceOverride: instance.resolvedWorkspacePath,
+      workspaceOverride: resolvedWorkspacePath,
       profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
       systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
       skillAllowlist: instance.effectiveProfile.skillsAllowlist,
@@ -1007,7 +1057,8 @@ export class AgentManager implements AgentInstanceGateway {
       instance.agent.state.model = model;
 
       const cfg = this.config.config!;
-      const rt = this.workspaceRuntimes.getOrCreate(instance.resolvedWorkspacePath);
+      const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(sessionKey);
+      const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
       const contextFiles = this.resolveContextFilesForSession(
         sessionKey,
         instance.effectiveProfile,
@@ -1020,7 +1071,7 @@ export class AgentManager implements AgentInstanceGateway {
 
       instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
-        workspaceOverride: instance.resolvedWorkspacePath,
+        workspaceOverride: resolvedWorkspacePath,
         profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
         systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,

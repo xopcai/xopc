@@ -103,7 +103,7 @@ export function getSlashCommands(
     { name: 'trust', description: 'Manage project trust and show extension security policy' },
     { name: 'name', description: 'Show or set current session display name' },
     { name: 'reset', description: 'Reset current session transcript and reload history' },
-    { name: 'clear', description: 'Alias for /reset' },
+    { name: 'clear', description: 'Clear the TUI view without resetting the session' },
     { name: 'list', description: 'List sessions' },
     { name: 'resume', description: `Open session picker (or ${sessionKey})` },
     { name: 'tree', description: 'Show grouped session tree' },
@@ -113,9 +113,10 @@ export function getSlashCommands(
     { name: 'reasoning', description: 'Set reasoning visibility (e.g. /reasoning stream)' },
     { name: 'verbose', description: 'Toggle verbose mode' },
     { name: 'status', description: 'Show agent status' },
-    { name: 'config', description: 'Show or update configuration' },
+    { name: 'config', description: 'Show current configuration' },
     { name: 'context', description: 'Show context budget' },
     { name: 'btw', description: 'Side question without saving to session' },
+    { name: 'aside', description: 'Alias for /btw' },
     { name: 'export', description: 'Export session (markdown/html/json)' },
     { name: 'import', description: 'Import an xopc JSON session export' },
     { name: 'share', description: 'Create a share link for a workspace file/folder/site' },
@@ -126,7 +127,7 @@ export function getSlashCommands(
     { name: 'hotkeys', description: 'Show resolved keyboard shortcuts (pi-style)' },
     { name: 'changelog', description: 'Show version history' },
     { name: 'workflows', description: 'List saved workflows (built-in + ~/.xopc/workflows/)' },
-    { name: 'workflow', description: 'Workflow subcommands: list, view <name>, save <name>' },
+    { name: 'workflow', description: 'Workflow subcommands: list, view <name>' },
   ];
 }
 
@@ -634,11 +635,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           return;
         }
         if (subcommand === 'save') {
-          chatLog.addSystem('/workflow save is available through the workflow tool after a generated workflow run.');
+          chatLog.addSystem('/workflow save is not a TUI command. Save generated workflows through the workflow tool.');
           tui.requestRender();
           return;
         }
-        chatLog.addSystem('Usage: /workflow list | /workflow view <name> | /workflow save <name>');
+        chatLog.addSystem('Usage: /workflow list | /workflow view <name>');
         tui.requestRender();
         return;
       }
@@ -689,6 +690,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         const modelRef = commandArgs.trim();
         if (!modelRef) {
           chatLog.addSystem('Usage: /switch <provider/model>');
+          tui.requestRender();
+          return;
+        }
+        if (!deps.switchModel) {
+          chatLog.addSystem('Model switching is not available in this mode.');
           tui.requestRender();
           return;
         }
@@ -769,6 +775,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         });
         return;
       case 'recover':
+        if (!deps.recoverStream) {
+          chatLog.addSystem('Stream recovery is not available in this mode.');
+          tui.requestRender();
+          return;
+        }
         void Promise.resolve(deps.recoverStream?.())
           .catch((err: unknown) => {
             const errorMessage = err instanceof Error ? err.message : String(err);
@@ -777,6 +788,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           .finally(() => tui.requestRender());
         return;
       case 'retry':
+        if (!deps.retryLastMessage) {
+          chatLog.addSystem('Retry is not available in this mode.');
+          tui.requestRender();
+          return;
+        }
         void Promise.resolve(deps.retryLastMessage?.())
           .catch((err: unknown) => {
             const errorMessage = err instanceof Error ? err.message : String(err);
@@ -798,6 +814,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         tui.requestRender();
         return;
       case 'copy':
+        if (!deps.copyLastAssistant) {
+          chatLog.addSystem('Copy is not available in this mode.');
+          tui.requestRender();
+          return;
+        }
         void Promise.resolve(deps.copyLastAssistant?.()).then(() => {
           tui.requestRender();
         });
@@ -810,6 +831,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           tui.requestRender();
           return;
         }
+        if (!deps.renameCurrentSession) {
+          chatLog.addSystem('Session rename is not available in this mode.');
+          tui.requestRender();
+          return;
+        }
         void Promise.resolve(deps.renameCurrentSession?.(name)).then(() => {
           tui.requestRender();
         });
@@ -817,20 +843,43 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
       }
       case 'resume':
       case 'sessions':
+        if (!uiOverlays) {
+          chatLog.addSystem('Session picker is not available in this mode. Use /list to show sessions.');
+          tui.requestRender();
+          return;
+        }
         uiOverlays?.openSessionPicker();
         return;
       case 'scoped-models':
       case 'scopedmodels':
+        if (!uiOverlays) {
+          chatLog.addSystem('Scoped model picker is not available in this mode.');
+          tui.requestRender();
+          return;
+        }
         uiOverlays?.openScopedModels();
         return;
       case 'think': {
         const level = normalizeThinkLevel(commandArgs);
         if (!commandArgs.trim()) {
+          if (!uiOverlays) {
+            const current = state.sessionInfo.thinkingLevel?.trim();
+            chatLog.addSystem(
+              current ? `Thinking level: ${current}` : 'Usage: /think <off|low|medium|high>',
+            );
+            tui.requestRender();
+            return;
+          }
           uiOverlays?.openThinkingSelector();
           return;
         }
         if (!level) {
           chatLog.addSystem(`Invalid thinking level: ${commandArgs}`);
+          tui.requestRender();
+          return;
+        }
+        if (!deps.setThinkingLevel) {
+          chatLog.addSystem('Thinking level changes are not available in this mode.');
           tui.requestRender();
           return;
         }
@@ -856,6 +905,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           tui.requestRender();
           return;
         }
+        if (!deps.setReasoningLevel) {
+          chatLog.addSystem('Reasoning visibility changes are not available in this mode.');
+          tui.requestRender();
+          return;
+        }
         void Promise.resolve(deps.setReasoningLevel?.(level)).then(() => {
           tui.requestRender();
         });
@@ -869,17 +923,32 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           tui.requestRender();
           return;
         }
+        if (!deps.setVerboseLevel) {
+          chatLog.addSystem('Verbose mode changes are not available in this mode.');
+          tui.requestRender();
+          return;
+        }
         void Promise.resolve(deps.setVerboseLevel?.(level)).then(() => {
           tui.requestRender();
         });
         return;
       }
       case 'settings':
+        if (!uiOverlays) {
+          chatLog.addSystem('Settings are not available in this mode.');
+          tui.requestRender();
+          return;
+        }
         uiOverlays?.openSettings();
         return;
       case 'reload':
       case 'reload-keybindings':
       case 'reload-keybind':
+        if (!uiOverlays) {
+          chatLog.addSystem('Reload is not available in this mode.');
+          tui.requestRender();
+          return;
+        }
         void Promise.resolve(uiOverlays?.reloadKeybindings())
           .then(() => {
             chatLog.addSystem('Reloaded keybindings, TUI settings, theme, and extension UI.');
@@ -892,6 +961,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           });
         return;
       case 'compact':
+        if (!deps.runCompaction) {
+          chatLog.addSystem('Compaction is not available in this mode.');
+          tui.requestRender();
+          return;
+        }
         void deps.runCompaction?.(commandArgs.trim() || undefined);
         return;
       default:
@@ -942,7 +1016,11 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         void runReset();
         return;
       case 'clear':
-        void runReset();
+        chatLog.clearAll();
+        state.messageFollowUpQueue.length = 0;
+        state.steeringQueue.length = 0;
+        chatLog.addSystem('TUI view cleared. Session transcript was not reset.');
+        tui.requestRender();
         return;
       default:
         break;

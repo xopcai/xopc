@@ -1,4 +1,4 @@
-import { Braces, Layers3, Play, Search, UsersRound } from 'lucide-react';
+import { Braces, CopyPlus, Eye, Layers3, Pencil, Play, Search, UsersRound } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -28,27 +28,33 @@ function WorkflowPickCard({
   language,
   labels,
   onPick,
+  onDetail,
+  onEdit,
 }: {
   definition: WorkflowDefinition;
   language: StoredLanguage;
   labels: WorkflowsMessages;
   onPick: (definition: WorkflowDefinition) => void;
+  onDetail: (definition: WorkflowDefinition) => void;
+  onEdit: (definition: WorkflowDefinition) => void;
 }) {
   const localized = resolveWorkflowLocalizedCopy(definition, language);
   const scale = agentScaleLabel(definition, labels);
   const isUser = definition.metadata.source === 'user';
 
   return (
-    <button
-      type="button"
-      onClick={() => onPick(definition)}
+    <article
       className={cn(
         'group flex h-full flex-col rounded-xl border border-edge-subtle bg-surface-base p-4 text-left transition-colors',
         'hover:border-accent/40 hover:bg-surface-hover',
-        interaction.focusRingPanel,
       )}
     >
-      <div className="flex items-start justify-between gap-2">
+      <button
+        type="button"
+        onClick={() => onDetail(definition)}
+        className={cn('flex flex-1 flex-col text-left', interaction.focusRingPanel)}
+      >
+        <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <span
@@ -74,27 +80,43 @@ function WorkflowPickCard({
           <span className="line-clamp-2 text-sm font-semibold leading-5 text-fg">{definition.title}</span>
         </div>
         <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-fg opacity-80 transition-opacity group-hover:opacity-100">
-          <Play className="size-3.5" aria-hidden />
+          <Eye className="size-3.5" aria-hidden />
         </span>
-      </div>
+        </div>
 
-      {localized.description ? (
-        <p className="mt-2 line-clamp-2 text-xs leading-5 text-fg-muted">{localized.description}</p>
-      ) : null}
-
-      <div className="mt-auto flex flex-wrap items-center gap-3 pt-3 text-[11px] text-fg-subtle">
-        <span className="inline-flex items-center gap-1">
-          <Layers3 className="size-3" aria-hidden />
-          {interpolate(labels.phaseCount, { count: definition.phases.length })}
-        </span>
-        {scale ? (
-          <span className="inline-flex items-center gap-1">
-            <UsersRound className="size-3" aria-hidden />
-            {scale}
-          </span>
+        {localized.description ? (
+          <p className="mt-2 line-clamp-2 text-xs leading-5 text-fg-muted">{localized.description}</p>
         ) : null}
+
+        <div className="mt-auto flex flex-wrap items-center gap-3 pt-3 text-[11px] text-fg-subtle">
+          <span className="inline-flex items-center gap-1">
+            <Layers3 className="size-3" aria-hidden />
+            {interpolate(labels.phaseCount, { count: definition.phases.length })}
+          </span>
+          {scale ? (
+            <span className="inline-flex items-center gap-1">
+              <UsersRound className="size-3" aria-hidden />
+              {scale}
+            </span>
+          ) : null}
+        </div>
+      </button>
+
+      <div className="mt-4 flex flex-wrap gap-2 border-t border-edge-subtle pt-3">
+        <Button type="button" variant="primary" className="h-8 flex-1 rounded-lg text-xs" onClick={() => onPick(definition)}>
+          <Play className="size-3.5" aria-hidden />
+          {labels.runWorkflow}
+        </Button>
+        <Button type="button" variant="secondary" className="h-8 rounded-lg text-xs" onClick={() => onDetail(definition)}>
+          <Eye className="size-3.5" aria-hidden />
+          {labels.viewDetails}
+        </Button>
+        <Button type="button" variant="secondary" className="h-8 rounded-lg text-xs" onClick={() => onEdit(definition)}>
+          {isUser ? <Pencil className="size-3.5" aria-hidden /> : <CopyPlus className="size-3.5" aria-hidden />}
+          {isUser ? labels.editWorkflow : labels.copyAndEditWorkflow}
+        </Button>
       </div>
-    </button>
+    </article>
   );
 }
 
@@ -110,10 +132,14 @@ export function WorkflowPickLibrary({
   definitions,
   language,
   onPick,
+  onDetail,
+  onEdit,
 }: {
   definitions: WorkflowDefinition[];
   language: StoredLanguage;
   onPick: (definition: WorkflowDefinition) => void;
+  onDetail: (definition: WorkflowDefinition) => void;
+  onEdit: (definition: WorkflowDefinition) => void;
 }) {
   const labels = messages(language).workflows;
   const [query, setQuery] = useState('');
@@ -182,6 +208,8 @@ export function WorkflowPickLibrary({
                       language={language}
                       labels={labels}
                       onPick={onPick}
+                      onDetail={onDetail}
+                      onEdit={onEdit}
                     />
                   ))}
                 </div>
@@ -197,6 +225,8 @@ export function WorkflowPickLibrary({
                 language={language}
                 labels={labels}
                 onPick={onPick}
+                onDetail={onDetail}
+                onEdit={onEdit}
               />
             ))}
           </div>

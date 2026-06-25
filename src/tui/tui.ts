@@ -15,7 +15,7 @@ import { Buffer } from 'node:buffer';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import type {
@@ -299,6 +299,11 @@ function resolveStartupWorkingDirectory(opts: TuiOptions, isLocalMode: boolean):
   return undefined;
 }
 
+function isPathSameOrInside(parentDir: string, childDir: string): boolean {
+  const rel = relative(resolve(parentDir), resolve(childDir));
+  return rel === '' || (!!rel && !rel.startsWith('..') && !isAbsolute(rel));
+}
+
 function assistantMessagePlainText(message: AgentMessage): string {
   const content = (message as { content?: unknown }).content;
   if (typeof content === 'string') return content;
@@ -336,14 +341,17 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   let tuiSettings = loadTuiSettings();
   initTuiTheme({ themeId: opts.theme ?? tuiSettings.theme });
   const state = createInitialState(startup.sessionKey);
+  const startupWorkingDirectory = resolveStartupWorkingDirectory(opts, isLocalMode);
+  const implicitTrustedWorkspace = startupWorkingDirectory ?? (isLocalMode ? process.cwd() : undefined);
   const projectTrustStore = new ProjectTrustStore();
   let projectTrustSessionDecision: boolean | null = null;
   const isCurrentProjectTrusted = () => {
     if (projectTrustSessionDecision !== null) return projectTrustSessionDecision;
+    const persisted = projectTrustStore.get(process.cwd());
+    if (persisted !== null) return persisted;
     if (!hasTrustRequiringProjectResources(process.cwd())) return true;
-    return projectTrustStore.get(process.cwd()) === true;
+    return !!implicitTrustedWorkspace && isPathSameOrInside(implicitTrustedWorkspace, process.cwd());
   };
-  let projectTrustPromptShown = false;
   const sessionStateDir = resolveStateDir();
   const sessionDatabasePath = resolveXopcDatabasePath();
   const sessionSnapshot = new TuiSessionSnapshot(
@@ -381,9 +389,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   }
 
   const client: TuiBackend = isLocalMode
-    ? new EmbeddedBackend({ extensionRegistry })
+    ? new EmbeddedBackend({
+        extensionRegistry,
+        implicitTrustedWorkspace,
+        isWorkspaceTrusted: () => projectTrustSessionDecision,
+      })
     : new GatewaySseBackend({ url: opts.url ?? 'http://localhost:3120', token: opts.token });
-  const startupWorkingDirectory = resolveStartupWorkingDirectory(opts, isLocalMode);
   if (startupWorkingDirectory) {
     state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
   }
@@ -988,6 +999,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     getEditorText: () => editor.getExpandedText?.() ?? editor.getText(),
     setEditorComponent,
     getEditorComponent: () => editorComponentFactory,
+    searchWorkspaceFiles: (sessionKey, query, options) =>
+      client.searchWorkspaceFiles?.(sessionKey, query, options) ?? Promise.resolve([]),
     getThemeObject: () => theme,
     getAllThemes: getAllExtensionThemes,
     getTheme: getExtensionTheme,
@@ -1568,15 +1581,23 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const runBtwQuery = async (question: string) => {
     const previousStatus = state.activityStatus;
+    const runId = `btw-${randomUUID()}`;
     try {
       setActivityStatus('waiting');
       state.progressMessage = 'btw';
+      chatLog.addUser(`/btw ${question}`);
+      chatLog.addStatus(theme.dim('BTW running...'));
+      tui.requestRender();
       const result = await client.btwQuery(state.currentSessionKey, question);
       if (result.error) {
         chatLog.addSystem(`BTW failed: ${result.error}`);
         return;
       }
-      chatLog.addSystem(`BTW\n\n${result.text}`);
+      chatLog.finalizeAssistant({
+        role: 'assistant',
+        content: [{ type: 'text', text: `BTW\n\n${result.text}` }],
+        timestamp: Date.now(),
+      } as AgentMessage, runId);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       chatLog.addSystem(`BTW failed: ${errorMessage}`);
@@ -2396,18 +2417,6 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       showStartupCardOnce();
       if (state.activeRunId) {
         void recoverActiveRunFromHistory('broadcast reconnect');
-      }
-      if (
-        !projectTrustPromptShown &&
-        isLocalMode &&
-        projectTrustSessionDecision === null &&
-        hasTrustRequiringProjectResources(process.cwd()) &&
-        projectTrustStore.get(process.cwd()) === null
-      ) {
-        projectTrustPromptShown = true;
-        chatLog.addSystem(
-          'Project-local xopc resources detected. Use /trust to trust this folder, trust a parent folder, or keep it untrusted.',
-        );
       }
       updateHeader();
       updateFooter();

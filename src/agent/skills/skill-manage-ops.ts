@@ -11,6 +11,7 @@ import { resolveSkillsDir } from '../../config/paths.js';
 import type { Skill } from './types.js';
 import type { SkillsConfig } from './types.js';
 import { scanSkillDirectory, formatScanSummary } from './scanner.js';
+import { resolveWorkspaceSkillsDir } from './workspace-skills-dir.js';
 
 export const SKILL_MANAGE_ALLOWED_SUBDIRS = new Set(['references', 'templates', 'scripts', 'assets']);
 
@@ -106,7 +107,7 @@ export function resolveGlobalSkillsRoot(): string {
 }
 
 export function resolveWorkspaceSkillsRoot(workspace: string): string {
-  return resolve(workspace, 'skills');
+  return resolveWorkspaceSkillsDir(workspace);
 }
 
 export function canWriteToPath(

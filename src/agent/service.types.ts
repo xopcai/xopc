@@ -49,6 +49,11 @@ export interface AgentServiceConfig {
   }) => void;
   /** Gateway/TUI: local skill catalog changed or skill config toggles changed. */
   onSkillsUpdated?: (payload: { reason: 'disk' | 'config' }) => void;
+  /**
+   * Runtime trust override. Local TUI uses this to trust the startup workspace
+   * without persisting a trust entry; gateway mode leaves trust fully persistent.
+   */
+  isWorkspaceTrusted?: (workspaceDir: string) => boolean | null | undefined;
   /** Gateway: persisted workflow runs. */
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike;
   /** Gateway: resolves bound source context (e.g. Note-grounded chat) before each turn. */

@@ -7,6 +7,22 @@ import { resolveModel } from '../../providers/index.js';
 
 type BtwLog = { warn: (obj: Record<string, unknown>, msg: string) => void };
 
+function textFromCompleteContent(content: unknown): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (!Array.isArray(content)) {
+    return '';
+  }
+  return content
+    .filter(
+      (c): c is { type: 'text'; text: string } =>
+        c?.type === 'text' && typeof (c as { text?: unknown }).text === 'string',
+    )
+    .map((c) => c.text || '')
+    .join('');
+}
+
 function formatMessagesForBtw(messages: AgentMessage[]): string {
   return messages
     .map((m) => {
@@ -80,16 +96,8 @@ export async function runBtwQuery(opts: {
       temperature: 0.4,
       signal: controller.signal as AbortSignal,
     });
-    const text = Array.isArray(out.content)
-      ? out.content
-          .filter(
-            (c): c is { type: 'text'; text: string } =>
-              c.type === 'text' && typeof (c as { text?: unknown }).text === 'string',
-          )
-          .map((c) => c.text || '')
-          .join('')
-      : '';
-    return { text: text.trim() };
+    const text = textFromCompleteContent((out as { content?: unknown }).content).trim();
+    return text ? { text } : { text: '', error: 'No text returned from model.' };
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
     opts.log.warn({ err, sessionKey: opts.sessionKey, errorMessage: em }, 'btwQuery failed');

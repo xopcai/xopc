@@ -31,6 +31,8 @@
     "badgeUser": "Custom",
     "runWorkflow": "Run",
     "viewDetails": "Details",
+    "editWorkflow": "Edit",
+    "copyAndEditWorkflow": "Copy and edit",
     "deleteWorkflow": "Delete",
     "deleteConfirm": "Delete custom workflow \"{{name}}\"? This cannot be undone.",
     "deleteWorkflowSuccess": "Workflow deleted.",
@@ -43,6 +45,12 @@
     "manageDialogHint": "Save a JavaScript workflow script to ~/.xopc/workflows/. The filename must match meta.name.",
     "createWorkflowTitle": "Add workflow",
     "createWorkflowHint": "Choose AI creation or manual editing. Both paths validate the workflow before saving.",
+    "createWorkflowHintFromCopy": "This starts from a built-in template. Save it as-is, or ask AI to revise it first.",
+    "editWorkflowTitle": "Edit workflow",
+    "editWorkflowHint": "Modify a custom workflow. Edit manually, or ask AI to revise the current script.",
+    "copyWorkflowNotice": "Copied from built-in workflow \"{{title}}\". After saving, this becomes your custom workflow and does not change the original template.",
+    "editWorkflowNotice": "Editing custom workflow \"{{title}}\". Saving will overwrite the current custom version.",
+    "editWorkflowSourceMissing": "This workflow does not have an editable script source.",
     "createWorkflowAiTab": "Create with AI",
     "createWorkflowManualTab": "Manual editor",
     "nlBuilderTitle": "Create workflow with AI",
@@ -50,6 +58,8 @@
     "nlBuilderOpen": "Create with AI",
     "nlBuilderPromptLabel": "Workflow goal",
     "nlBuilderPromptPlaceholder": "Example: Create a weekly code quality audit that checks recent changes, finds risks, and returns an action list.",
+    "nlBuilderEditPromptLabel": "Revision request",
+    "nlBuilderEditPromptPlaceholder": "Example: Keep the current phase structure, add failure diagnosis, and return an action list.",
     "nlBuilderMaxPhases": "Max phases",
     "nlBuilderMaxAgents": "Max agents",
     "nlBuilderAllowNetwork": "Allow network",
@@ -57,6 +67,7 @@
     "nlBuilderGenerate": "Generate draft",
     "nlBuilderGenerating": "Generating…",
     "nlBuilderImprove": "Improve draft",
+    "nlBuilderRewriteExisting": "Revise current script with AI",
     "nlBuilderGenerateFailed": "Failed to generate workflow draft.",
     "nlBuilderSaveAndStart": "Save and start",
     "nlBuilderPermissions": "Permissions",
@@ -72,9 +83,34 @@
     "validationFailed": "Fix these issues before saving.",
     "validationPreview": "Preview ready: {{phaseCount}} phases detected.",
     "validateWorkflowFailed": "Failed to validate workflow.",
-    "library": "Workflow library",
     "noDefinitions": "No workflows match your filters.",
     "noDefinitionsHint": "Try another filter, or add a custom workflow script under ~/.xopc/workflows/.",
+    "viewModes": {
+      "operations": "List",
+      "board": "Board"
+    },
+    "operationSections": {
+      "attention": {
+        "title": "Needs attention",
+        "description": "Failed, timed out, or cancelled runs that may need recovery.",
+        "empty": "No runs need attention."
+      },
+      "running": {
+        "title": "Running",
+        "description": "Workflow runs currently executing.",
+        "empty": "No workflows are running."
+      },
+      "queued": {
+        "title": "Queued",
+        "description": "Runs waiting for execution.",
+        "empty": "No queued workflow runs."
+      },
+      "recent": {
+        "title": "Recently completed",
+        "description": "Succeeded runs available for review.",
+        "empty": "No completed runs in this view."
+      }
+    },
     "boardStart": "Start run",
     "boardEmptyTitle": "No workflow runs yet",
     "boardEmptyHint": "Start a run to create a task card. Progress and results live in the linked chat session.",
@@ -154,6 +190,12 @@
     "diagnosticTimeoutHint": "The run hit its time limit. Try lowering concurrency, narrowing the goal, or increasing limits before rerunning.",
     "diagnosticCancelledHint": "No further agents will start. You can rerun when ready.",
     "diagnosticPartialHint": "Some agents reported errors even though the run completed. Review the process tree before acting on the result.",
+    "reliabilityTitle": "Reliability and exceptions",
+    "reliabilityHint": "Signals that may affect how much you should trust or reuse this result.",
+    "nextActionsTitle": "Next actions",
+    "primaryActionsTitle": "Continue",
+    "recoveryActionsTitle": "Recover",
+    "resultActionsTitle": "Use result",
     "diagnosticsTitle": "Diagnostics",
     "diagnosticsHint": "Focused failure signals from the run, failed agents, and failed steps.",
     "diagnosticsRunError": "Run error",
@@ -192,6 +234,8 @@
     "metadataDefinitionHash": "Definition hash",
     "metadataPermissions": "Permissions",
     "metadataRetryOf": "Retry of",
+    "debugDetailsTitle": "Debug details",
+    "debugDetailsHint": "Subagent prompts, outputs, metadata, and audit fields for troubleshooting.",
     "definitionHashMatches": "matches current",
     "definitionHashDrifted": "current changed",
     "definitionHashCurrentUnknown": "current unknown",

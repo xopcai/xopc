@@ -122,7 +122,7 @@ install:
    - 内置技能随 XOPC 安装提供。
    
 2. **Workspace** - 工作区特定的技能
-   - 位置：`<workspace>/skills/`
+   - 位置：`<workspace>/.xopc/skills/`
    - 优先级最高
 
 3. **Global** - 全局技能

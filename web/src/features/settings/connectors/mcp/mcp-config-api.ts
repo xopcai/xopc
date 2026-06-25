@@ -13,6 +13,21 @@ export type McpToolInfo = {
   description?: string;
 };
 
+export type McpResourceInfo = {
+  uri: string;
+  name: string;
+  title?: string;
+  description?: string;
+  mimeType?: string;
+};
+
+export type McpPromptInfo = {
+  name: string;
+  title?: string;
+  description?: string;
+  argumentCount: number;
+};
+
 export type McpTransportKind = 'stdio' | 'sse' | 'streamable-http';
 
 export type McpServerRow = {
@@ -213,7 +228,11 @@ export async function patchMcpSettings(
 export type McpServerTestResult = {
   serverId: string;
   toolCount: number;
+  resourceCount: number;
+  promptCount: number;
   tools: McpToolInfo[];
+  resources: McpResourceInfo[];
+  prompts: McpPromptInfo[];
 };
 
 /** Accept legacy `string[]` or `{ name, description? }[]` from the gateway. */
@@ -242,13 +261,79 @@ function normalizeMcpTools(tools: unknown): McpToolInfo[] {
   return out;
 }
 
+function normalizeMcpResources(resources: unknown): McpResourceInfo[] {
+  if (!Array.isArray(resources)) return [];
+  const out: McpResourceInfo[] = [];
+  for (const item of resources) {
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as {
+      uri?: unknown;
+      name?: unknown;
+      title?: unknown;
+      description?: unknown;
+      mimeType?: unknown;
+    };
+    if (typeof raw.uri !== 'string' || typeof raw.name !== 'string') continue;
+    const uri = raw.uri.trim();
+    const name = raw.name.trim();
+    if (!uri || !name) continue;
+    out.push({
+      uri,
+      name,
+      title: typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : undefined,
+      description:
+        typeof raw.description === 'string' && raw.description.trim()
+          ? raw.description.trim()
+          : undefined,
+      mimeType:
+        typeof raw.mimeType === 'string' && raw.mimeType.trim() ? raw.mimeType.trim() : undefined,
+    });
+  }
+  return out;
+}
+
+function normalizeMcpPrompts(prompts: unknown): McpPromptInfo[] {
+  if (!Array.isArray(prompts)) return [];
+  const out: McpPromptInfo[] = [];
+  for (const item of prompts) {
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as {
+      name?: unknown;
+      title?: unknown;
+      description?: unknown;
+      argumentCount?: unknown;
+    };
+    if (typeof raw.name !== 'string') continue;
+    const name = raw.name.trim();
+    if (!name) continue;
+    out.push({
+      name,
+      title: typeof raw.title === 'string' && raw.title.trim() ? raw.title.trim() : undefined,
+      description:
+        typeof raw.description === 'string' && raw.description.trim()
+          ? raw.description.trim()
+          : undefined,
+      argumentCount: typeof raw.argumentCount === 'number' ? raw.argumentCount : 0,
+    });
+  }
+  return out;
+}
+
 export async function testMcpServer(
   serverId: string,
   server?: Record<string, unknown>,
 ): Promise<McpServerTestResult> {
   const res = await fetchJson<{
     ok?: boolean;
-    payload?: { serverId?: string; toolCount?: number; tools?: unknown };
+    payload?: {
+      serverId?: string;
+      toolCount?: number;
+      resourceCount?: number;
+      promptCount?: number;
+      tools?: unknown;
+      resources?: unknown;
+      prompts?: unknown;
+    };
     error?: string;
   }>(
     apiUrl(`/api/mcp/servers/${encodeURIComponent(serverId)}/test`),
@@ -261,10 +346,17 @@ export async function testMcpServer(
     throw new Error(res.error ?? 'MCP test failed');
   }
   const tools = normalizeMcpTools(res.payload.tools);
+  const resources = normalizeMcpResources(res.payload.resources);
+  const prompts = normalizeMcpPrompts(res.payload.prompts);
   return {
     serverId: res.payload.serverId ?? serverId,
     toolCount: typeof res.payload.toolCount === 'number' ? res.payload.toolCount : tools.length,
+    resourceCount:
+      typeof res.payload.resourceCount === 'number' ? res.payload.resourceCount : resources.length,
+    promptCount: typeof res.payload.promptCount === 'number' ? res.payload.promptCount : prompts.length,
     tools,
+    resources,
+    prompts,
   };
 }
 

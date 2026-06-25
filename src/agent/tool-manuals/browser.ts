@@ -44,7 +44,13 @@ export const browserUseManual = `# Browser Tool Manual
 | \`keys\` / \`press\` | Keyboard input | \`key\` |
 | \`console\` / \`eval\` | Run JavaScript | \`javascript\` |
 | \`images\` | Collect images on the page | \`selector\`, \`maxImages\` |
-| \`wait\` | Wait for element/time | \`selector\` / \`text\` / \`ms\`, \`timeout_ms\` |
+| \`wait\` | Wait for element/text/function/time | \`selector\` / \`text\` / \`function\` / \`ms\`, \`state\`, \`timeout_ms\` |
+| \`wait_for_navigation\` | Wait for page load state | \`wait_until\`, \`timeout_ms\` |
+| \`wait_for_network_idle\` | Wait until network is idle | \`timeout_ms\` |
+| \`element_text\` | Read element text | \`selector\` |
+| \`element_attribute\` | Read element attribute | \`selector\`, \`attribute\` |
+| \`bounding_box\` | Read element box | \`selector\` |
+| \`network_start\` / \`network_events\` / \`network_stop\` | Capture network events | \`url_pattern\`, \`include_body\` |
 | \`dialog\` | Handle dialogs | \`action\` (accept/dismiss) |
 | \`close\` | Close the current page | — |
 
@@ -107,6 +113,9 @@ For multi-step, reusable flows. Uses a brocli-style YAML DSL.
 \`\`\`yaml
 name: pipeline-name
 description: What this flow does
+timeoutSeconds: 60
+include:
+  - ./shared-login.yaml
 args:
   url:
     type: string
@@ -128,6 +137,10 @@ pipeline:
   - wait:
       selector: body
       timeout_ms: 10000
+  - element_text:
+      selector: h1
+  - assert:
+      contains: Results
   - screenshot:
       path: ./artifacts/result.png
       full_page: true
@@ -144,8 +157,54 @@ on_error:
 
 1. One action per step
 2. Use \`\${{ args.xxx }}\` for parameters
-3. Use \`\${{ data }}\` or \`\${{ data | json }}\` for the previous step's result
-4. Use \`on_error\` to collect diagnostics after failure
+3. Use \`\${{ last }}\` or \`\${{ last | json }}\` for the previous step result
+4. Use \`\${{ outputs.0 }}\` for prior \`output\` values and \`\${{ vars.name }}\` for values from \`set_var\`
+5. Use \`include\` for shared YAML fragments; relative includes resolve from the current pipeline file
+6. Use \`on_error\` to collect diagnostics after failure
+
+### Stable pipeline actions
+
+\`\`\`yaml
+pipeline:
+  - network_start:
+      url_pattern: /api/search
+      include_body: true
+  - click:
+      text: Search
+  - wait_for_network_idle:
+      timeout_ms: 10000
+  - collect: {}
+  - filter:
+      path: type
+      equals: response
+  - limit:
+      count: 3
+  - output:
+      value: \${{ last }}
+\`\`\`
+
+Control flow:
+
+\`\`\`yaml
+pipeline:
+  - retry:
+      times: 3
+      delay_ms: 500
+      pipeline:
+        - wait:
+            selector: button.submit
+            timeout_ms: 3000
+        - click:
+            selector: button.submit
+  - if:
+      condition: \${{ last }}
+      then:
+        - output:
+            value: clicked
+      else:
+        - output:
+            value: missing
+\`\`\`
 
 ### Validate without running
 
