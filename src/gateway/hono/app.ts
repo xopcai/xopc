@@ -17,7 +17,10 @@ import { isLoopbackIpAddress, isTrustedProxyAddress } from '../client-ip.js';
 import { resolveReverseProxyPublicUrl } from '../public-url.js';
 import { auth } from './middleware/auth.js';
 import { operatorScopes } from './middleware/scopes.js';
-import { createStrictRateLimitMiddleware } from './middleware/strict-rate-limit.js';
+import {
+  createChannelRateLimitMiddleware,
+  createStrictRateLimitMiddleware,
+} from './middleware/strict-rate-limit.js';
 import { logContextMiddleware } from './middleware/log-context.js';
 import { logger } from './middleware/logger.js';
 import { routeErrorMiddleware } from './middleware/route-errors.js';
@@ -253,6 +256,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
     }),
   });
+  const channelRateLimitMiddleware = createChannelRateLimitMiddleware({
+    getTrustedProxyContext: () => ({
+      trustedProxies: service.currentConfig.gateway?.trustedProxies,
+      allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,
+    }),
+  });
 
   const sseConfig = {
     service,
@@ -262,6 +271,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   registerAuthenticatedRoutes(app, authenticated, {
     service,
     strictRateLimitMiddleware,
+    channelRateLimitMiddleware,
     sseConfig,
   });
 

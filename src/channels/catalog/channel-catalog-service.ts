@@ -1,4 +1,8 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import type { Config } from '../../config/schema.js';
+import { resolveStateDir } from '../../config/paths-state.js';
 import {
   buildExtensionMetadataSnapshot,
   resolveExtensionLoaderOptionsFromConfig,
@@ -7,7 +11,7 @@ import type { ExtensionMetadataSnapshot } from '../../extensions/extension-metad
 import type { ManifestRegistryEntry } from '../../extensions/manifest-registry.js';
 import type { ChannelContributionDeclaration } from '../../extensions/types/manifest.js';
 
-import type { ChannelCatalog, ChannelCatalogEntry } from './channel-catalog-types.js';
+import type { ChannelCatalog, ChannelCatalogEntry, ChannelSetupIssue, ChannelSetupStatus } from './channel-catalog-types.js';
 
 type BuildChannelCatalogOptions = {
   locale?: string;
@@ -42,6 +46,14 @@ function normalizeConfigPath(channelId: string, raw: string | undefined): `chann
   return trimmed as `channels.${string}`;
 }
 
+function configChannelKey(entry: ChannelCatalogEntry | undefined, channelId: string): string {
+  const path = entry?.configPath;
+  if (path?.startsWith('channels.')) {
+    return path.slice('channels.'.length).split('.')[0] || channelId;
+  }
+  return channelId;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -50,22 +62,59 @@ function hasNonEmptyString(value: unknown): boolean {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function readTextFileIfPresent(filePath: string | undefined): string {
+  if (!filePath?.trim()) return '';
+  try {
+    return readFileSync(filePath.trim(), 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
+function readJsonFileIfPresent(filePath: string): unknown {
+  try {
+    if (!existsSync(filePath)) return undefined;
+    return JSON.parse(readFileSync(filePath, 'utf8')) as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveTelegramToken(account: Record<string, unknown>): string {
+  const inline = typeof account.botToken === 'string' ? account.botToken.trim() : '';
+  if (inline) return inline;
+  return readTextFileIfPresent(typeof account.tokenFile === 'string' ? account.tokenFile : undefined);
+}
+
+function resolveWeixinAccountIds(raw: unknown): string[] {
+  const accounts = isRecord(raw) && isRecord(raw.accounts) ? Object.keys(raw.accounts) : [];
+  const indexed = readJsonFileIfPresent(join(resolveStateDir(), 'weixin', 'accounts.json'));
+  if (!Array.isArray(indexed)) return accounts;
+  return [...new Set([
+    ...indexed.filter((id): id is string => typeof id === 'string' && id.trim() !== ''),
+    ...accounts,
+  ])];
+}
+
+function hasConfiguredWeixinAccount(raw: unknown): boolean {
+  const accounts = isRecord(raw) && isRecord(raw.accounts) ? raw.accounts : {};
+  for (const accountId of resolveWeixinAccountIds(raw)) {
+    const accountCfg = accounts[accountId];
+    if (isRecord(accountCfg) && accountCfg.enabled === false) continue;
+    const accountData = readJsonFileIfPresent(join(resolveStateDir(), 'weixin', 'accounts', `${accountId}.json`));
+    if (isRecord(accountData) && hasNonEmptyString(accountData.token)) return true;
+  }
+  return false;
+}
+
 function hasConfiguredTelegramCredential(raw: unknown): boolean {
   if (!isRecord(raw)) return false;
   const accounts = raw.accounts;
   if (!isRecord(accounts)) return false;
   return Object.values(accounts).some((account) => {
     if (!isRecord(account) || account.enabled === false) return false;
-    return hasNonEmptyString(account.botToken) || hasNonEmptyString(account.tokenFile);
+    return hasNonEmptyString(resolveTelegramToken(account));
   });
-}
-
-function hasConfiguredWeixinAccount(raw: unknown): boolean {
-  if (!isRecord(raw)) return false;
-  if (raw.enabled === true) return true;
-  const accounts = raw.accounts;
-  if (!isRecord(accounts)) return false;
-  return Object.values(accounts).some((account) => isRecord(account) && account.enabled !== false);
 }
 
 function hasConfiguredFeishuCredential(raw: unknown): boolean {
@@ -80,6 +129,106 @@ function hasConfiguredFeishuCredential(raw: unknown): boolean {
     const appSecret = hasNonEmptyString(account.appSecret) ? account.appSecret : raw.appSecret;
     return hasNonEmptyString(appId) && hasNonEmptyString(appSecret);
   });
+}
+
+function issue(params: {
+  code: string;
+  fieldPath?: string;
+  message: string;
+  action?: ChannelSetupIssue['action'];
+}): ChannelSetupIssue {
+  return {
+    code: params.code,
+    severity: 'required',
+    fieldPath: params.fieldPath,
+    message: params.message,
+    action: params.action ?? 'open_config',
+  };
+}
+
+function readConfigPath(value: unknown, path: string): unknown {
+  let current = value;
+  for (const part of path.split('.')) {
+    if (!isRecord(current)) return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
+function isEmptyConfigValue(value: unknown): boolean {
+  if (value === undefined || value === null) return true;
+  if (typeof value === 'string') return value.trim().length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+function schemaFieldTitle(schema: Record<string, unknown>, path: string): string {
+  let current: unknown = schema;
+  for (const part of path.split('.')) {
+    if (!isRecord(current)) break;
+    const props = current.properties;
+    if (!isRecord(props)) break;
+    current = props[part];
+  }
+  if (isRecord(current) && typeof current.title === 'string' && current.title.trim()) {
+    return current.title.trim();
+  }
+  return path;
+}
+
+function collectRequiredSchemaIssues(
+  entry: ChannelCatalogEntry | undefined,
+  raw: unknown,
+): ChannelSetupIssue[] {
+  const schema = entry?.configSchema;
+  if (!isRecord(schema)) return [];
+  const required = schema.required;
+  if (!Array.isArray(required)) return [];
+  return required
+    .map(String)
+    .filter((fieldPath) => fieldPath !== 'enabled')
+    .filter((fieldPath) => isEmptyConfigValue(readConfigPath(raw, fieldPath)))
+    .map((fieldPath) => issue({
+      code: 'config.missing_required',
+      fieldPath,
+      message: `Missing required field: ${schemaFieldTitle(schema, fieldPath)}.`,
+    }));
+}
+
+function collectChannelSetupIssues(
+  id: string,
+  raw: unknown,
+  entry: ChannelCatalogEntry | undefined,
+): ChannelSetupIssue[] {
+  if (id === 'telegram' && !hasConfiguredTelegramCredential(raw)) {
+    return [issue({
+      code: 'telegram.missing_credential',
+      fieldPath: 'accounts.default.botToken',
+      message: 'Telegram requires at least one enabled account with a Bot Token or token file.',
+      action: 'open_config',
+    })];
+  }
+  if (id === 'weixin' && !hasConfiguredWeixinAccount(raw)) {
+    return [issue({
+      code: 'weixin.missing_account',
+      fieldPath: 'accounts',
+      message: 'Weixin requires at least one logged-in account before it can run.',
+      action: 'run_setup',
+    })];
+  }
+  if ((id === 'feishu' || id === 'lark') && !hasConfiguredFeishuCredential(raw)) {
+    return [issue({
+      code: 'feishu.missing_credentials',
+      fieldPath: 'appId',
+      message: 'Feishu/Lark requires App ID and App Secret credentials.',
+      action: 'open_config',
+    })];
+  }
+  return collectRequiredSchemaIssues(entry, raw);
+}
+
+function hasChannelSetupOutsideConfig(id: string, raw: unknown): boolean {
+  return id === 'weixin' && hasConfiguredWeixinAccount(raw);
 }
 
 function withoutUndefined(value: Record<string, unknown>): Record<string, unknown> {
@@ -200,14 +349,28 @@ export function buildChannelCatalogForConfig(config: Config, options: BuildChann
   return buildChannelCatalogFromSnapshot(snapshot, options);
 }
 
-export function isChannelConfigured(config: Config, channelId: string): boolean {
+export function getChannelSetupStatus(
+  config: Config,
+  channelId: string,
+  entry?: ChannelCatalogEntry,
+): ChannelSetupStatus {
   const id = normalizeChannelId(channelId);
-  const raw = (config.channels as Record<string, unknown> | undefined)?.[id];
-  if (!raw) return false;
-  if (id === 'telegram') return hasConfiguredTelegramCredential(raw);
-  if (id === 'weixin') return hasConfiguredWeixinAccount(raw);
-  if (id === 'feishu' || id === 'lark') return hasConfiguredFeishuCredential(raw);
-  return isRecord(raw) ? raw.enabled === true || Object.keys(raw).length > 0 : true;
+  const configKey = normalizeChannelId(configChannelKey(entry, id));
+  const raw = (config.channels as Record<string, unknown> | undefined)?.[configKey];
+  const enabled = isRecord(raw) && raw.enabled === true;
+  const issues = collectChannelSetupIssues(id, raw, entry);
+  const hasAnyConfig = isRecord(raw) ? Object.keys(raw).some((key) => key !== 'enabled') : Boolean(raw);
+  const ready = issues.length === 0 && (enabled || hasAnyConfig || hasChannelSetupOutsideConfig(id, raw));
+  return {
+    enabled,
+    ready,
+    state: enabled ? (ready ? 'ready' : 'needs_setup') : 'disabled',
+    issues,
+  };
+}
+
+export function isChannelConfigured(config: Config, channelId: string): boolean {
+  return getChannelSetupStatus(config, channelId).ready;
 }
 
 export function getConfiguredChannelIds(config: Config): string[] {

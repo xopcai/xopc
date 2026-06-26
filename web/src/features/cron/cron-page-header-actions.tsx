@@ -1,8 +1,8 @@
-import { LayoutTemplate, Plus, RefreshCw } from 'lucide-react';
+import { LayoutTemplate, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import type { MessageBundle } from '@/i18n/messages';
-import { cn } from '@/lib/cn';
 
 type CronCopy = MessageBundle['cron'];
 
@@ -26,17 +26,7 @@ export function CronPageHeaderActions({
   const busy = loading || runHistoryLoading;
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-      <Button
-        type="button"
-        variant="ghost"
-        className="size-9 shrink-0 p-0"
-        disabled={busy}
-        title={c.refresh}
-        aria-label={c.refresh}
-        onClick={() => void onRefresh()}
-      >
-        <RefreshCw className={cn('size-4', busy && 'animate-spin')} strokeWidth={1.75} />
-      </Button>
+      <RefreshButton className="size-9 shrink-0 p-0" loading={busy} label={c.refresh} onClick={onRefresh} />
       <Button type="button" variant="secondary" className="gap-2" onClick={onOpenTemplatePicker}>
         <LayoutTemplate className="size-4" strokeWidth={1.75} />
         {c.fromTemplate}

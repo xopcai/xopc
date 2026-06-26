@@ -12,7 +12,6 @@ import {
   ListChecks,
   ListFilter,
   Plus,
-  RefreshCw,
   RotateCcw,
   Search,
   Settings2,
@@ -24,6 +23,7 @@ import { type DragEvent, useCallback, useEffect, useLayoutEffect, useMemo, useSt
 import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/api/registry-api';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { messages } from '@/i18n/messages';
@@ -1227,17 +1227,7 @@ export function GoalsPage() {
             className="h-9 w-36 rounded-lg border border-edge bg-surface-muted py-2 pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent sm:w-56 lg:w-72"
           />
         </label>
-        <Button
-          type="button"
-          variant="ghost"
-          className="size-9 shrink-0 p-0"
-          disabled={loading}
-          title={t.refresh}
-          aria-label={t.refresh}
-          onClick={() => void refresh()}
-        >
-          <RefreshCw className={cn('size-4', loading && 'animate-spin')} strokeWidth={1.75} aria-hidden />
-        </Button>
+        <RefreshButton className="size-9 shrink-0 p-0" loading={loading} label={t.refresh} onClick={refresh} />
         <Button type="button" variant="primary" className="h-9 rounded-lg" disabled={busy === 'create'} onClick={() => setCreateDialogOpen(true)}>
           <Plus className="size-4" aria-hidden />
           {t.create}

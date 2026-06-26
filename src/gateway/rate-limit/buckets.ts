@@ -72,6 +72,7 @@ class BucketRegistry {
   private authFailureSignature?: string;
 
   private strictApiLimiter?: RateLimiter;
+  private channelApiLimiter?: RateLimiter;
   private tunnelMutateLimiter?: RateLimiter;
   private pairingExchangeLimiter?: FailureLimiter;
   private sharePublicShortLimiter?: RateLimiter;
@@ -103,6 +104,14 @@ class BucketRegistry {
       this.strictApiLimiter = new RateLimiter({ maxRequests: 15, windowMs: 60_000 });
     }
     return this.strictApiLimiter;
+  }
+
+  /** Channel mutation/action endpoints — 20 req / 60 s per client IP. */
+  channelApi(): RateLimiter {
+    if (!this.channelApiLimiter) {
+      this.channelApiLimiter = new RateLimiter({ maxRequests: 20, windowMs: 60_000 });
+    }
+    return this.channelApiLimiter;
   }
 
   /** Tunnel mutation calls — 12 req / 5 min per gateway-token fingerprint. */
@@ -153,12 +162,14 @@ class BucketRegistry {
   destroyAll(): void {
     this.authFailureLimiter?.destroy();
     this.strictApiLimiter?.destroy();
+    this.channelApiLimiter?.destroy();
     this.tunnelMutateLimiter?.destroy();
     this.pairingExchangeLimiter?.destroy();
     this.sharePublicShortLimiter?.destroy();
     this.sharePublicLongLimiter?.destroy();
     this.authFailureLimiter = undefined;
     this.strictApiLimiter = undefined;
+    this.channelApiLimiter = undefined;
     this.tunnelMutateLimiter = undefined;
     this.pairingExchangeLimiter = undefined;
     this.sharePublicShortLimiter = undefined;
@@ -170,6 +181,7 @@ class BucketRegistry {
   resetAllForTests(): void {
     this.authFailureLimiter?.resetForTests();
     this.strictApiLimiter?.resetForTests();
+    this.channelApiLimiter?.resetForTests();
     this.tunnelMutateLimiter?.resetForTests();
     this.pairingExchangeLimiter?.resetForTests();
     this.sharePublicShortLimiter?.resetForTests();

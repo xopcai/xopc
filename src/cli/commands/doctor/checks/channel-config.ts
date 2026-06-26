@@ -1,6 +1,9 @@
 import { existsSync } from 'node:fs';
 
-import { buildChannelCatalogForConfig } from '../../../../channels/catalog/channel-catalog-service.js';
+import {
+  buildChannelCatalogForConfig,
+  getChannelSetupStatus,
+} from '../../../../channels/catalog/channel-catalog-service.js';
 import { loadConfig } from '../../../../config/loader.js';
 import type { Config } from '../../../../config/schema.js';
 import type { CheckResult, DoctorContext } from '../types.js';
@@ -57,6 +60,24 @@ export async function checkChannelConfig(ctx: DoctorContext): Promise<CheckResul
       status: 'fail',
       message: `Enabled channel(s) are not declared by installed extensions: ${unknownIds.join(', ')}.`,
       hints: ['Install or enable an extension that declares each channel contribution.'],
+    };
+  }
+
+  const notReady = enabledIds
+    .map((id) => ({ id, status: getChannelSetupStatus(cfg, id, catalog.byId.get(id)) }))
+    .filter((item) => !item.status.ready);
+  if (notReady.length > 0) {
+    return {
+      id: 'channel-config',
+      label: 'Channels',
+      status: 'fail',
+      message: `Enabled channel(s) need setup before they can run: ${notReady.map((item) => item.id).join(', ')}.`,
+      hints: notReady.flatMap((item) => {
+        const issues = item.status.issues.length > 0
+          ? item.status.issues.map((issue) => `${item.id}: ${issue.message}`)
+          : [`${item.id}: complete the required channel setup or disable the channel.`];
+        return issues;
+      }),
     };
   }
 

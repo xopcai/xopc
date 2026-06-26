@@ -1,11 +1,11 @@
-import { Folder, RefreshCw } from 'lucide-react';
+import { Folder } from 'lucide-react';
 
 import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import { LogsExportMenu } from '@/features/logs/logs-export-menu';
 import { LogsLevelPopover } from '@/features/logs/logs-level-popover';
 import type { LogEntry } from '@/features/logs/log.types';
-import { cn } from '@/lib/cn';
 import type { LogsMessages } from '@/i18n/messages';
 
 type Props = {
@@ -64,22 +64,12 @@ export function LogsPageHeader({
               <span className="rounded-full bg-surface-hover px-1.5 text-xs text-fg-muted">{fileCount}</span>
             ) : null}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
+          <RefreshButton
             className="h-9 min-h-[44px] min-w-[44px] px-2 sm:min-h-9 sm:min-w-0"
-            title={L.refresh}
-            aria-label={L.refresh}
+            loading={loading}
+            label={L.refresh}
             onClick={onRefreshAll}
-          >
-            <RefreshCw
-              className={cn(
-                'size-4 transition-transform duration-150 ease-out motion-reduce:transition-none',
-                loading && 'animate-spin motion-reduce:animate-none',
-              )}
-              strokeWidth={1.75}
-            />
-          </Button>
+          />
         </div>
       </div>
     </header>

@@ -1,10 +1,18 @@
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { ManifestRegistry } from '../../../extensions/manifest-registry.js';
 import type { ExtensionMetadataSnapshot } from '../../../extensions/extension-metadata-snapshot.js';
 import { normalizeExtensionManifest } from '../../../extensions/normalize-manifest.js';
 
-import { buildChannelCatalogFromSnapshot, isChannelConfigured } from '../channel-catalog-service.js';
+import {
+  buildChannelCatalogFromSnapshot,
+  getChannelSetupStatus,
+  isChannelConfigured,
+} from '../channel-catalog-service.js';
 
 describe('channel catalog service', () => {
   function snapshotWithManifest(manifest: ReturnType<typeof normalizeExtensionManifest>): ExtensionMetadataSnapshot {
@@ -66,6 +74,182 @@ describe('channel catalog service', () => {
     expect(isChannelConfigured({ channels: { feishu: { enabled: true } } } as any, 'feishu')).toBe(false);
     expect(isChannelConfigured({ channels: { feishu: { enabled: true, appId: 'app', appSecret: 'secret' } } } as any, 'feishu')).toBe(true);
     expect(isChannelConfigured({ channels: { feishu: { enabled: true, accounts: { default: { appId: 'app', appSecret: 'secret' } } } } } as any, 'feishu')).toBe(true);
+  });
+
+  it('uses contribution configPath when checking Feishu/Lark setup', () => {
+    const manifest = normalizeExtensionManifest({
+      id: 'feishu-channel-extension',
+      name: 'Feishu Channel Extension',
+      kind: 'channel',
+      channels: ['lark'],
+      channelContributions: {
+        lark: {
+          label: 'Feishu/Lark',
+          configPath: 'channels.feishu',
+          configSchema: {
+            type: 'object',
+            properties: {
+              enabled: { type: 'boolean' },
+              appId: { type: 'string' },
+              appSecret: { type: 'string' },
+            },
+          },
+        },
+      },
+    });
+    const entry = buildChannelCatalogFromSnapshot(snapshotWithManifest(manifest)).byId.get('lark');
+
+    expect(getChannelSetupStatus({
+      channels: { feishu: { enabled: false, appId: 'app', appSecret: 'secret' } },
+    } as any, 'lark', entry)).toMatchObject({
+      enabled: false,
+      ready: true,
+      state: 'disabled',
+      issues: [],
+    });
+  });
+
+  it('reports enabled channels with missing setup as not ready', () => {
+    const telegram = getChannelSetupStatus({ channels: { telegram: { enabled: true } } } as any, 'telegram');
+    expect(telegram).toMatchObject({
+      enabled: true,
+      ready: false,
+      state: 'needs_setup',
+      issues: [{ code: 'telegram.missing_credential', fieldPath: 'accounts.default.botToken' }],
+    });
+
+    const prevStateDir = process.env.XOPC_STATE_DIR;
+    const stateDir = mkdtempSync(join(tmpdir(), 'xopc-empty-weixin-state-'));
+    try {
+      process.env.XOPC_STATE_DIR = stateDir;
+      const weixin = getChannelSetupStatus({ channels: { weixin: { enabled: true } } } as any, 'weixin');
+      expect(weixin).toMatchObject({
+        enabled: true,
+        ready: false,
+        state: 'needs_setup',
+        issues: [{ code: 'weixin.missing_account', fieldPath: 'accounts' }],
+      });
+    } finally {
+      if (prevStateDir === undefined) {
+        delete process.env.XOPC_STATE_DIR;
+      } else {
+        process.env.XOPC_STATE_DIR = prevStateDir;
+      }
+      rmSync(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it('marks Weixin ready when login state exists on disk', () => {
+    const prevStateDir = process.env.XOPC_STATE_DIR;
+    const stateDir = mkdtempSync(join(tmpdir(), 'xopc-weixin-state-'));
+    try {
+      process.env.XOPC_STATE_DIR = stateDir;
+      const weixinDir = join(stateDir, 'weixin');
+      const accountsDir = join(weixinDir, 'accounts');
+      mkdirSync(accountsDir, { recursive: true });
+      writeFileSync(join(weixinDir, 'accounts.json'), JSON.stringify(['default'], null, 2));
+      writeFileSync(join(accountsDir, 'default.json'), JSON.stringify({ token: 'token' }, null, 2));
+
+      expect(getChannelSetupStatus({ channels: { weixin: { enabled: true } } } as any, 'weixin')).toMatchObject({
+        enabled: true,
+        ready: true,
+        state: 'ready',
+        issues: [],
+      });
+      expect(getChannelSetupStatus({ channels: { weixin: { enabled: false } } } as any, 'weixin')).toMatchObject({
+        enabled: false,
+        ready: true,
+        state: 'disabled',
+        issues: [],
+      });
+      expect(getChannelSetupStatus({ channels: {} } as any, 'weixin')).toMatchObject({
+        enabled: false,
+        ready: true,
+        state: 'disabled',
+        issues: [],
+      });
+    } finally {
+      if (prevStateDir === undefined) {
+        delete process.env.XOPC_STATE_DIR;
+      } else {
+        process.env.XOPC_STATE_DIR = prevStateDir;
+      }
+      rmSync(stateDir, { recursive: true, force: true });
+    }
+  });
+
+  it('validates Telegram token files like the runtime loader', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'xopc-telegram-token-'));
+    try {
+      const tokenFile = join(tempDir, 'bot-token.txt');
+      writeFileSync(tokenFile, '123:abc\n');
+
+      expect(getChannelSetupStatus({
+        channels: {
+          telegram: {
+            enabled: true,
+            accounts: { default: { tokenFile } },
+          },
+        },
+      } as any, 'telegram')).toMatchObject({
+        enabled: true,
+        ready: true,
+        state: 'ready',
+        issues: [],
+      });
+
+      expect(getChannelSetupStatus({
+        channels: {
+          telegram: {
+            enabled: true,
+            accounts: { default: { tokenFile: join(tempDir, 'missing.txt') } },
+          },
+        },
+      } as any, 'telegram')).toMatchObject({
+        enabled: true,
+        ready: false,
+        state: 'needs_setup',
+        issues: [{ code: 'telegram.missing_credential' }],
+      });
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('uses channel schema required fields for generic setup readiness', () => {
+    const manifest = normalizeExtensionManifest({
+      id: 'demo-channel-extension',
+      name: 'Demo Channel Extension',
+      kind: 'channel',
+      channels: ['demo'],
+      channelContributions: {
+        demo: {
+          label: 'Demo',
+          configSchema: {
+            type: 'object',
+            required: ['apiKey'],
+            properties: {
+              enabled: { type: 'boolean' },
+              apiKey: { type: 'string', title: 'API key' },
+            },
+          },
+        },
+      },
+    });
+    const entry = buildChannelCatalogFromSnapshot(snapshotWithManifest(manifest)).byId.get('demo');
+
+    expect(getChannelSetupStatus({ channels: { demo: { enabled: true } } } as any, 'demo', entry)).toMatchObject({
+      enabled: true,
+      ready: false,
+      state: 'needs_setup',
+      issues: [{ code: 'config.missing_required', fieldPath: 'apiKey' }],
+    });
+    expect(getChannelSetupStatus({ channels: { demo: { enabled: true, apiKey: 'secret' } } } as any, 'demo', entry)).toMatchObject({
+      enabled: true,
+      ready: true,
+      state: 'ready',
+      issues: [],
+    });
   });
 
   it('localizes channel contribution metadata from manifest i18n', () => {

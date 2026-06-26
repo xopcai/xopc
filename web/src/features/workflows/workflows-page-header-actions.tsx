@@ -1,7 +1,7 @@
-import { Play, Plus, RefreshCw } from 'lucide-react';
+import { Play, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/cn';
+import { RefreshButton } from '@/components/ui/refresh-button';
 
 import type { useWorkflowsPage } from './use-workflows-page';
 
@@ -24,17 +24,7 @@ export function WorkflowsPageHeaderActions({ vm }: { vm: ReturnType<typeof useWo
         <Plus className="size-4" aria-hidden />
         {labels.addWorkflow}
       </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        className="size-9 shrink-0 p-0"
-        onClick={refreshAll}
-        disabled={loading}
-        title={labels.refresh}
-        aria-label={labels.refresh}
-      >
-        <RefreshCw className={cn('size-4', loading && 'animate-spin')} strokeWidth={1.75} aria-hidden />
-      </Button>
+      <RefreshButton className="size-9 shrink-0 p-0" loading={loading} label={labels.refresh} onClick={refreshAll} />
     </div>
   );
 }

@@ -11,7 +11,7 @@ import {
 import {
   buildChannelCatalogForConfig,
   buildChannelCatalogFromSnapshot,
-  isChannelConfigured,
+  getChannelSetupStatus,
 } from '../../../channels/catalog/channel-catalog-service.js';
 import type { Config } from '../../../config/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -35,6 +35,7 @@ function localeFromRequest(c: { req: { query(name: string): string | undefined; 
 
 export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
+  const channelRateLimitMiddleware = deps.channelRateLimitMiddleware ?? strictRateLimitMiddleware;
 
   authenticated.get('/api/channels/catalog', (c) => {
     const snapshot = service.getExtensionLoader()?.getManifestSnapshot();
@@ -42,17 +43,20 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     const catalog = snapshot
       ? buildChannelCatalogFromSnapshot(snapshot, { locale })
       : buildChannelCatalogForConfig(service.currentConfig, { locale });
-    const channelsCfg = service.currentConfig.channels as Record<string, { enabled?: boolean } | undefined> | undefined;
     const running = new Set(service.getRunningChannelIds());
     return c.json({
       ok: true,
       payload: {
-        channels: catalog.entries.map((entry) => ({
-          ...entry,
-          enabled: channelsCfg?.[entry.id]?.enabled === true,
-          configured: isChannelConfigured(service.currentConfig, entry.id),
-          runtime: running.has(entry.id) ? 'loaded' : 'missing',
-        })),
+        channels: catalog.entries.map((entry) => {
+          const setupStatus = getChannelSetupStatus(service.currentConfig, entry.id, entry);
+          return {
+            ...entry,
+            enabled: setupStatus.enabled,
+            configured: setupStatus.ready,
+            setupStatus,
+            runtime: running.has(entry.id) ? 'loaded' : 'missing',
+          };
+        }),
       },
     });
   });
@@ -80,7 +84,7 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     return c.json({ ok: true, payload: { config: value } });
   });
 
-  authenticated.post('/api/channels/:channelId/actions/:actionId', strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/channels/:channelId/actions/:actionId', channelRateLimitMiddleware, async (c) => {
     const channel = channelIdParam(c.req.param('channelId'));
     const action = c.req.param('actionId')?.trim() ?? '';
     if (!channel || !action) {
@@ -153,7 +157,7 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     return c.json({ ok: true, payload: { summary } });
   });
 
-  authenticated.post('/api/channels/:channelId/pairing/approve', strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/channels/:channelId/pairing/approve', channelRateLimitMiddleware, async (c) => {
     const channel = channelIdParam(c.req.param('channelId'));
     const body = await c.req.json().catch(() => ({}));
     const accountId =
@@ -171,7 +175,7 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     return c.json({ ok: true, payload: { senderId: result.senderId, alreadyPaired: result.alreadyPaired } });
   });
 
-  authenticated.post('/api/channels/:channelId/pairing/approve-sender', strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/channels/:channelId/pairing/approve-sender', channelRateLimitMiddleware, async (c) => {
     const channel = channelIdParam(c.req.param('channelId'));
     const body = await c.req.json().catch(() => ({}));
     const accountId =
@@ -189,7 +193,7 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     return c.json({ ok: true, payload: { senderId: result.senderId, alreadyPaired: result.alreadyPaired } });
   });
 
-  authenticated.delete('/api/channels/:channelId/pairing/paired', strictRateLimitMiddleware, async (c) => {
+  authenticated.delete('/api/channels/:channelId/pairing/paired', channelRateLimitMiddleware, async (c) => {
     const channel = channelIdParam(c.req.param('channelId'));
     const body = await c.req.json().catch(() => ({}));
     const accountId =
@@ -207,7 +211,7 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     return c.json({ ok: true, payload: { changed: result.changed } });
   });
 
-  authenticated.delete('/api/channels/:channelId/pairing/pending', strictRateLimitMiddleware, async (c) => {
+  authenticated.delete('/api/channels/:channelId/pairing/pending', channelRateLimitMiddleware, async (c) => {
     const channel = channelIdParam(c.req.param('channelId'));
     const body = await c.req.json().catch(() => ({}));
     const accountId =
@@ -235,7 +239,7 @@ export function registerChannelRoutes(authenticated: Hono, deps: AuthenticatedRo
     return c.json({ ok: true, payload: { checks } });
   });
 
-  authenticated.post('/api/channels/:channelId/restart', strictRateLimitMiddleware, async (c) => {
+  authenticated.post('/api/channels/:channelId/restart', channelRateLimitMiddleware, async (c) => {
     const channel = channelIdParam(c.req.param('channelId'));
     await service.restartChannel(channel);
     return c.json({ ok: true, payload: { restarted: true } });
