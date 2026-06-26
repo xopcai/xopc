@@ -7,6 +7,21 @@ import type {
 
 export type ChannelCatalogSource = 'workspace' | 'global' | 'bundled' | 'config';
 
+export interface ChannelSetupIssue {
+  code: string;
+  severity: 'required' | 'warning';
+  fieldPath?: string;
+  message: string;
+  action?: 'open_config' | 'run_setup' | 'run_doctor';
+}
+
+export interface ChannelSetupStatus {
+  enabled: boolean;
+  ready: boolean;
+  state: 'disabled' | 'needs_setup' | 'ready' | 'error';
+  issues: ChannelSetupIssue[];
+}
+
 export interface ChannelCatalogEntry {
   id: string;
   extensionId: string;

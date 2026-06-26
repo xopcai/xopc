@@ -260,6 +260,13 @@ export function ChannelSetupCard({
   const message = payloadMessage(state.payload);
   const qrContent = payloadQrContent(state.payload, entry.id);
   const qrImage = qrContent ? state.generatedQr : payloadQrImage(state.payload);
+  const qrStageActive = primary?.[1].result === 'qr' && (
+    autoStartPrimary ||
+    state.busy ||
+    state.payload?.type === 'qr' ||
+    state.payload?.type === 'poll'
+  );
+  const qrStageWaiting = state.busy || Boolean(qrContent && !qrImage);
   const formPayload = state.payload?.type === 'form' ? state.payload : null;
   const diagnostics = state.payload?.type === 'diagnostics' ? state.payload.checks : null;
 
@@ -303,13 +310,24 @@ export function ChannelSetupCard({
       {message ? <p className="mt-3 text-sm text-fg-muted">{message}</p> : null}
       {state.error ? <p className="mt-3 text-sm text-red-600 dark:text-red-400">{state.error}</p> : null}
 
-      {qrImage ? (
-        <div className={cn('flex flex-wrap items-start gap-4', compact ? 'justify-center' : 'mt-4')}>
-          <div className="rounded-lg border border-edge bg-white p-3">
-            <img src={qrImage} alt={`${entry.label} setup QR`} className="h-52 w-52 object-contain" />
+      {qrStageActive ? (
+        <div
+          className={cn(
+            'flex h-80 items-center justify-center gap-4 overflow-hidden rounded-lg border border-edge-subtle bg-surface-base px-3 py-3',
+            compact ? 'mt-1 flex-col text-center sm:h-64 sm:flex-row sm:text-left' : 'mt-4 flex-col sm:h-64 sm:flex-row',
+          )}
+        >
+          <div className="flex size-56 shrink-0 items-center justify-center rounded-lg border border-edge bg-white p-3">
+            {qrImage ? (
+              <img src={qrImage} alt={`${entry.label} setup QR`} className="size-52 object-contain" />
+            ) : (
+              <div className="flex size-52 items-center justify-center rounded-md bg-surface-base text-fg-muted">
+                <Loader2 className={cn('size-6', qrStageWaiting && 'animate-spin')} />
+              </div>
+            )}
           </div>
-          <div className={cn('max-w-sm text-sm text-fg-muted', compact && 'w-full text-center')}>
-            <p>{ch.waitingConfirmation}</p>
+          <div className={cn('min-w-0 max-w-sm text-sm text-fg-muted', compact && 'w-full sm:w-auto')}>
+            <p className="line-clamp-3">{qrImage ? ch.waitingConfirmation : ch.loading}</p>
             {qrContent ? (
               <a
                 className="mt-2 inline-flex items-center gap-1 text-accent hover:underline"

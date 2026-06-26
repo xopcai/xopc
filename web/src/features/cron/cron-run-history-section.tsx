@@ -1,6 +1,6 @@
-import { Clock, Loader2, RefreshCw } from 'lucide-react';
+import { Clock, Loader2 } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import type { CronJob, CronRunHistoryRow } from '@/features/cron/cron-api';
 import { navigateToSessionChat, navigateToWorkflowRun } from '@/features/cron/cron-page-lib';
 import {
@@ -49,17 +49,12 @@ export function CronRunHistorySection({
           </h2>
           <p className="text-xs text-fg-muted">{c.runHistoryHint}</p>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
+        <RefreshButton
           className="size-9 shrink-0 p-0"
-          disabled={runHistoryLoading}
-          title={c.refresh}
-          aria-label={c.refresh}
-          onClick={() => void onRefreshHistory()}
-        >
-          <RefreshCw className={cn('size-4', runHistoryLoading && 'animate-spin')} strokeWidth={1.75} />
-        </Button>
+          loading={runHistoryLoading}
+          label={c.refresh}
+          onClick={onRefreshHistory}
+        />
       </div>
       {runHistoryLoading && runHistory.length === 0 ? (
         <div className="flex justify-center py-16">

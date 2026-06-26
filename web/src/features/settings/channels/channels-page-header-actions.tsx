@@ -1,9 +1,7 @@
-import { RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 
-import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
-import { cn } from '@/lib/cn';
 
 export const ChannelsPageHeaderActions = memo(function ChannelsPageHeaderActions({
   ch,
@@ -19,17 +17,7 @@ export const ChannelsPageHeaderActions = memo(function ChannelsPageHeaderActions
   return (
     <div className="flex min-w-0 shrink-0 items-center justify-end gap-2">
       {saveOk ? <span className="text-sm text-fg-muted">{ch.saved}</span> : null}
-      <Button
-        type="button"
-        variant="ghost"
-        className="size-9 shrink-0 p-0"
-        disabled={refreshing}
-        title={ch.refresh}
-        aria-label={ch.refresh}
-        onClick={onRefresh}
-      >
-        <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} aria-hidden />
-      </Button>
+      <RefreshButton className="size-9 shrink-0 p-0" loading={refreshing} label={ch.refresh} onClick={onRefresh} />
     </div>
   );
 });

@@ -10,6 +10,21 @@ export type ChannelActionDescriptor = {
   schema?: Record<string, unknown>;
 };
 
+export type ChannelSetupIssue = {
+  code: string;
+  severity: 'required' | 'warning';
+  fieldPath?: string;
+  message: string;
+  action?: 'open_config' | 'run_setup' | 'run_doctor';
+};
+
+export type ChannelSetupStatus = {
+  enabled: boolean;
+  ready: boolean;
+  state: 'disabled' | 'needs_setup' | 'ready' | 'error';
+  issues: ChannelSetupIssue[];
+};
+
 export type ChannelCatalogEntry = {
   id: string;
   extensionId: string;
@@ -39,6 +54,7 @@ export type ChannelCatalogEntry = {
   };
   enabled?: boolean;
   configured?: boolean;
+  setupStatus?: ChannelSetupStatus;
   runtime?: string;
 };
 

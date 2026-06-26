@@ -1,9 +1,10 @@
-import { FolderOpen, RefreshCw, X } from 'lucide-react';
+import { FolderOpen, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import {
   FileTree,
 } from '@/features/file-tree/file-tree';
@@ -274,16 +275,12 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
               <h2 className="min-w-0 flex-1 truncate text-base font-semibold leading-tight tracking-tight text-fg">
                 {m.workspace.title}
               </h2>
-              <button
-                type="button"
-                className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
-                title={m.cron.refresh}
-                aria-label={m.cron.refresh}
-                disabled={loading}
-                onClick={() => void loadRoot()}
-              >
-                <RefreshCw className={cn('size-4', loading && 'animate-spin')} aria-hidden />
-              </button>
+              <RefreshButton
+                className="size-9 shrink-0 rounded-md p-0"
+                loading={loading}
+                label={m.cron.refresh}
+                onClick={loadRoot}
+              />
               <Button
                 type="button"
                 variant="ghost"

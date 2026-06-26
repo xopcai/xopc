@@ -40,9 +40,16 @@ function resolveClientIp(c: Context, deps: StrictRateLimitDeps): string {
   return getClientIpFromHeaders({ get: (name) => c.req.header(name) ?? undefined });
 }
 
-export function createStrictRateLimitMiddleware(deps: StrictRateLimitDeps) {
+function createClientRateLimitMiddleware(
+  deps: StrictRateLimitDeps,
+  options: {
+    limiter: () => ReturnType<typeof buckets.strictApi>;
+    exceededMessage: string;
+    reason: string;
+  },
+) {
   return createMiddleware(async (c, next) => {
-    const limiter = buckets.strictApi();
+    const limiter = options.limiter();
     const clientIp = resolveClientIp(c, deps);
     const result = limiter.consume(clientIp);
 
@@ -54,9 +61,9 @@ export function createStrictRateLimitMiddleware(deps: StrictRateLimitDeps) {
           path: c.req.path,
           method: c.req.method,
           retryAfterSec,
-          reason: 'strict_rate_limit_exceeded',
+          reason: options.reason,
         },
-        'Strict API rate limit exceeded',
+        options.exceededMessage,
       );
       c.header('Retry-After', String(retryAfterSec));
       c.header('X-RateLimit-Remaining', '0');
@@ -65,5 +72,21 @@ export function createStrictRateLimitMiddleware(deps: StrictRateLimitDeps) {
 
     c.header('X-RateLimit-Remaining', String(result.remaining));
     await next();
+  });
+}
+
+export function createStrictRateLimitMiddleware(deps: StrictRateLimitDeps) {
+  return createClientRateLimitMiddleware(deps, {
+    limiter: () => buckets.strictApi(),
+    exceededMessage: 'Strict API rate limit exceeded',
+    reason: 'strict_rate_limit_exceeded',
+  });
+}
+
+export function createChannelRateLimitMiddleware(deps: StrictRateLimitDeps) {
+  return createClientRateLimitMiddleware(deps, {
+    limiter: () => buckets.channelApi(),
+    exceededMessage: 'Channel API rate limit exceeded',
+    reason: 'channel_rate_limit_exceeded',
   });
 }

@@ -1,4 +1,4 @@
-import { ExternalLink, Loader2, Settings2 } from 'lucide-react';
+import { AlertTriangle, ExternalLink, Loader2, Settings2 } from 'lucide-react';
 import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -20,7 +20,7 @@ import { ChannelSetupCard, choosePrimaryChannelAction } from './channel-setup-ca
 import { ChannelSettingsShell } from './channel-settings-shell';
 import { ChannelsPageHeaderActions } from './channels-page-header-actions';
 import { ChannelsSettingsDialogFooter } from './channels-settings-dialog-footer';
-import { useChannelCatalog, type ChannelCatalogEntry } from './use-channel-catalog';
+import { useChannelCatalog, type ChannelCatalogEntry, type ChannelSetupIssue, type ChannelSetupStatus } from './use-channel-catalog';
 
 function configSwrKey(channelId: string | null): string | null {
   return channelId ? apiUrl(`/api/channels/${encodeURIComponent(channelId)}/config`) : null;
@@ -34,6 +34,8 @@ async function fetchChannelConfig(channelId: string): Promise<Record<string, unk
 }
 
 type ChannelsConfigMap = Record<string, { config?: Record<string, unknown> }>;
+
+const SCHEMA_FIELD_PATHS_MANAGED_OUTSIDE_FORM = ['enabled'];
 
 async function fetchChannelsConfigMap(): Promise<ChannelsConfigMap> {
   const data = await fetchJson<{ ok?: boolean; payload?: { config?: { channels?: ChannelsConfigMap } } }>(
@@ -50,22 +52,51 @@ function encodeAssetPath(entrypoint: string): string {
     .join('/');
 }
 
+function channelConfigKey(entry: ChannelCatalogEntry): string {
+  return entry.configPath.startsWith('channels.')
+    ? entry.configPath.slice('channels.'.length).split('.')[0] || entry.id
+    : entry.id;
+}
+
+function channelSetupStatus(entry: ChannelCatalogEntry): ChannelSetupStatus {
+  const ready = entry.configured === true;
+  const enabled = entry.enabled === true;
+  return entry.setupStatus ?? {
+    enabled,
+    ready,
+    state: enabled && !ready ? 'needs_setup' : enabled ? 'ready' : 'disabled',
+    issues: [],
+  };
+}
+
 function statusLabel(entry: ChannelCatalogEntry, ch: ReturnType<typeof messages>['channelsSettings']): string {
-  if (entry.enabled && entry.runtime === 'loaded') return ch.hubStatusRunning;
-  if (entry.enabled) return ch.hubStatusEnabled;
-  if (entry.configured) return ch.hubStatusConfigured;
+  const setup = channelSetupStatus(entry);
+  if (setup.state === 'needs_setup') return ch.hubStatusNeedsSetup;
+  if (setup.state === 'error') return ch.hubStatusError;
+  if (setup.enabled && setup.ready && entry.runtime === 'loaded') return ch.hubStatusRunning;
+  if (setup.enabled && setup.ready) return ch.hubStatusEnabled;
+  if (setup.ready) return ch.hubStatusConfigured;
   return ch.hubStatusNotConfigured;
 }
 
 function statusClass(entry: ChannelCatalogEntry): string {
-  if (entry.enabled && entry.runtime === 'loaded') return 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300';
-  if (entry.enabled || entry.configured) return 'bg-accent-soft text-accent';
+  const setup = channelSetupStatus(entry);
+  if (setup.state === 'needs_setup') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
+  if (setup.state === 'error') return 'bg-red-500/10 text-red-700 dark:text-red-300';
+  if (setup.enabled && setup.ready && entry.runtime === 'loaded') return 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300';
+  if (setup.enabled || setup.ready) return 'bg-accent-soft text-accent';
   return 'bg-surface-hover text-fg-muted';
 }
 
 function getBasicConfigPaths(entry: ChannelCatalogEntry | undefined): string[] {
-  if (!entry) return ['enabled'];
+  if (!entry) return [];
   const hints = entry.uiHints ?? {};
+  const schemaRequired = isRecord(entry.configSchema) && Array.isArray(entry.configSchema.required)
+    ? entry.configSchema.required.map(String)
+    : [];
+  const issuePaths = channelSetupStatus(entry).issues
+    .map((issue) => issue.fieldPath)
+    .filter((path): path is string => Boolean(path));
   const basic = Object.entries(hints)
     .filter(([, hint]) => {
       if (!isRecord(hint)) return false;
@@ -73,8 +104,10 @@ function getBasicConfigPaths(entry: ChannelCatalogEntry | undefined): string[] {
       const tags = Array.isArray(hint.tags) ? hint.tags.map(String) : [];
       return tags.includes('basic') || hint.advanced === false;
     })
-    .map(([path]) => path);
-  return basic.length > 0 ? basic : ['enabled'];
+    .map(([path]) => path)
+    .filter((path) => !SCHEMA_FIELD_PATHS_MANAGED_OUTSIDE_FORM.includes(path));
+  return Array.from(new Set([...basic, ...schemaRequired, ...issuePaths]))
+    .filter((path) => !SCHEMA_FIELD_PATHS_MANAGED_OUTSIDE_FORM.includes(path));
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -177,6 +210,10 @@ function channelSummary(
   ch: ReturnType<typeof messages>['channelsSettings'],
 ): string[] {
   const out: string[] = [];
+  const setup = channelSetupStatus(entry);
+  if (setup.issues.length > 0) {
+    out.push(setupIssueText(setup.issues[0], ch));
+  }
   if (config) {
     const fields = entry.ui?.card?.summaryFields ?? ['dmPolicy', 'streamMode', 'streaming.mode'];
     for (const field of fields) {
@@ -187,14 +224,17 @@ function channelSummary(
     if (accounts > 0) out.push(ch.cardAccounts.replace('{{count}}', String(accounts)));
   }
   if (out.length > 0) return out.slice(0, 2);
-  if (entry.configured) return [ch.hubStatusConfigured];
+  if (setup.ready) return [ch.hubStatusConfigured];
   return [];
 }
 
 function channelActionLabel(entry: ChannelCatalogEntry, ch: ReturnType<typeof messages>['channelsSettings']): string {
+  const setup = channelSetupStatus(entry);
   const primary = choosePrimaryChannelAction(entry);
-  if (primary?.[1].label) return primary[1].label;
-  return entry.configured ? ch.manageChannel : ch.startConfiguration;
+  if (setup.state === 'needs_setup') return primary?.[1].label ?? ch.completeSetup;
+  if (!setup.enabled && setup.ready) return ch.enableChannel;
+  if (setup.state === 'error') return ch.diagnose;
+  return setup.ready ? ch.manageChannel : primary?.[1].label ?? ch.startConfiguration;
 }
 
 function channelSetupHint(entry: ChannelCatalogEntry, ch: ReturnType<typeof messages>['channelsSettings']): string {
@@ -217,6 +257,16 @@ function channelCapabilityLabels(
   if (c.media === true) labels.push(ch.cardCapabilityMedia);
   if (c.doctor === true) labels.push(ch.cardCapabilityDoctor);
   return labels.slice(0, 3);
+}
+
+function setupIssueText(issue: ChannelSetupIssue, ch: ReturnType<typeof messages>['channelsSettings']): string {
+  if (issue.code === 'telegram.missing_credential') return ch.setupIssueTelegramMissingCredential;
+  if (issue.code === 'weixin.missing_account') return ch.setupIssueWeixinMissingAccount;
+  if (issue.code === 'feishu.missing_credentials') return ch.setupIssueFeishuMissingCredentials;
+  if (issue.code === 'config.missing_required' && issue.fieldPath) {
+    return ch.setupIssueMissingRequired.replace('{{field}}', issue.fieldPath);
+  }
+  return issue.message;
 }
 
 function ChannelIcon({ entry }: { entry: ChannelCatalogEntry }) {
@@ -302,8 +352,10 @@ function ChannelHubCard({
   onOpen: () => void;
   onToggle: () => void;
 }) {
+  const setup = channelSetupStatus(entry);
   const summary = channelSummary(entry, config, ch);
   const capabilityLabels = channelCapabilityLabels(entry, ch);
+  const canDirectEnable = !setup.enabled && setup.ready;
   return (
     <article
       className="flex min-h-[15.5rem] flex-col rounded-xl border border-edge-subtle bg-surface-panel p-4 shadow-surface transition-colors hover:border-edge"
@@ -319,7 +371,7 @@ function ChannelHubCard({
           </div>
         </div>
         <ChannelEnabledSwitch
-          checked={entry.enabled === true}
+          checked={setup.enabled}
           disabled={busy}
           label={ch.toggleChannel.replace('{{channel}}', entry.label)}
           onToggle={onToggle}
@@ -327,7 +379,7 @@ function ChannelHubCard({
       </div>
 
       <button type="button" onClick={onOpen} className="mt-5 min-h-[6.25rem] text-left">
-        {entry.configured ? (
+        {setup.ready ? (
           <>
             <p className="line-clamp-2 text-sm leading-6 text-fg-muted">{entry.description ?? entry.id}</p>
             {summary.length > 0 ? (
@@ -343,7 +395,9 @@ function ChannelHubCard({
         ) : (
           <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
             <p className="text-sm font-medium text-fg">{ch.cardSetupTitle}</p>
-            <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{channelSetupHint(entry, ch)}</p>
+            <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">
+              {summary[0] ?? channelSetupHint(entry, ch)}
+            </p>
             {capabilityLabels.length > 0 ? (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {capabilityLabels.map((label) => (
@@ -355,7 +409,7 @@ function ChannelHubCard({
             ) : null}
           </div>
         )}
-        {!entry.configured && entry.description ? (
+        {!setup.ready && entry.description ? (
           <p className="mt-3 truncate text-xs text-fg-subtle" title={entry.description}>
             {ch.cardAdapterLabel}: {entry.description}
           </p>
@@ -363,12 +417,41 @@ function ChannelHubCard({
       </button>
 
       <div className="mt-auto pt-4">
-        <Button type="button" variant="primary" className="w-full rounded-2xl py-2.5" onClick={onOpen}>
+        <Button type="button" variant="primary" className="w-full rounded-2xl py-2.5" onClick={canDirectEnable ? onToggle : onOpen}>
           {busy ? <Loader2 className="size-4 animate-spin" /> : null}
           {channelActionLabel(entry, ch)}
         </Button>
       </div>
     </article>
+  );
+}
+
+function ChannelSetupReadinessBanner({
+  entry,
+  ch,
+}: {
+  entry: ChannelCatalogEntry;
+  ch: ReturnType<typeof messages>['channelsSettings'];
+}) {
+  const setup = channelSetupStatus(entry);
+  if (setup.ready || setup.issues.length === 0) return null;
+  return (
+    <section className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-100">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold">{ch.setupReadinessTitle}</h3>
+          <p className="mt-1 text-sm leading-5 text-amber-900 dark:text-amber-200">
+            {setup.enabled ? ch.setupReadinessEnabledBody : ch.setupReadinessDisabledBody}
+          </p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900 dark:text-amber-200">
+            {setup.issues.map((issue) => (
+              <li key={`${issue.code}:${issue.fieldPath ?? ''}`}>{setupIssueText(issue, ch)}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -393,10 +476,11 @@ export function ChannelsSettingsPanel() {
     () => entries.find((entry) => entry.id === activeChannelId),
     [activeChannelId, entries],
   );
+  const activeConfigKey = activeEntry ? channelConfigKey(activeEntry) : null;
 
   const { data: remoteConfig, mutate: mutateConfig } = useSWR(
-    hasToken && activeEntry ? configSwrKey(activeEntry.id) : null,
-    () => fetchChannelConfig(activeEntry!.id),
+    hasToken && activeConfigKey ? configSwrKey(activeConfigKey) : null,
+    () => fetchChannelConfig(activeConfigKey!),
   );
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   const [saving, setSaving] = useState(false);
@@ -409,15 +493,20 @@ export function ChannelsSettingsPanel() {
     () => (activeEntry?.configSchema ?? { type: 'object', properties: {} }) as JsonSchema,
     [activeEntry?.configSchema],
   );
+  const formConfigSchema = useMemo(
+    () => omitSchemaPaths(fullConfigSchema, SCHEMA_FIELD_PATHS_MANAGED_OUTSIDE_FORM),
+    [fullConfigSchema],
+  );
   const basicConfigPaths = useMemo(() => getBasicConfigPaths(activeEntry), [activeEntry]);
   const basicConfigSchema = useMemo(
-    () => pickSchemaPaths(fullConfigSchema, basicConfigPaths),
-    [basicConfigPaths, fullConfigSchema],
+    () => pickSchemaPaths(formConfigSchema, basicConfigPaths),
+    [basicConfigPaths, formConfigSchema],
   );
   const advancedConfigSchema = useMemo(
-    () => omitSchemaPaths(fullConfigSchema, basicConfigPaths),
-    [basicConfigPaths, fullConfigSchema],
+    () => omitSchemaPaths(formConfigSchema, basicConfigPaths),
+    [basicConfigPaths, formConfigSchema],
   );
+  const hasBasicConfigFields = useMemo(() => hasSchemaFields(basicConfigSchema), [basicConfigSchema]);
   const schemaLabels = useMemo(() => ({
     defaultBooleanLabel: ch.schemaBooleanDefault,
     unsupportedArrayType: ch.schemaUnsupportedArrayType,
@@ -466,12 +555,13 @@ export function ChannelsSettingsPanel() {
 
   const saveConfig = useCallback(async () => {
     if (!activeEntry || !draft) return false;
+    const key = channelConfigKey(activeEntry);
     setSaving(true);
     setError(null);
     try {
       const res = await apiFetch(apiUrl('/api/config'), {
         method: 'PATCH',
-        body: JSON.stringify({ channels: { [activeEntry.id]: draft } }),
+        body: JSON.stringify({ channels: { [key]: draft } }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
@@ -491,12 +581,24 @@ export function ChannelsSettingsPanel() {
   }, [activeEntry, catalog, draft, mutateChannelsConfig, mutateConfig]);
 
   const toggleChannel = useCallback(async (entry: ChannelCatalogEntry) => {
+    const setup = channelSetupStatus(entry);
+    const key = channelConfigKey(entry);
+    const activeDraft = activeEntry?.id === entry.id ? draft : null;
+    if (!setup.enabled && !setup.ready && !activeDraft) {
+      openChannel(entry.id);
+      return;
+    }
     setToggleBusy(entry.id);
     setError(null);
     try {
+      const nextConfig = setup.enabled
+        ? { enabled: false }
+        : activeDraft
+          ? { ...activeDraft, enabled: true }
+          : { enabled: true };
       const res = await apiFetch(apiUrl('/api/config'), {
         method: 'PATCH',
-        body: JSON.stringify({ channels: { [entry.id]: { enabled: entry.enabled !== true } } }),
+        body: JSON.stringify({ channels: { [key]: nextConfig } }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
@@ -506,13 +608,14 @@ export function ChannelsSettingsPanel() {
       await mutateChannelsConfig();
       if (activeEntry?.id === entry.id) {
         await mutateConfig();
+        setDraft(null);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setToggleBusy(null);
     }
-  }, [activeEntry?.id, catalog, mutateChannelsConfig, mutateConfig]);
+  }, [activeEntry?.id, catalog, draft, mutateChannelsConfig, mutateConfig, openChannel]);
 
   const extensionModal = activeEntry?.ui?.modal;
   const showSchemaConfig = extensionModal?.placement !== 'replace-config';
@@ -537,7 +640,7 @@ export function ChannelsSettingsPanel() {
             <ChannelHubCard
               key={entry.id}
               entry={entry}
-              config={channelsConfig[entry.id]?.config}
+              config={channelsConfig[channelConfigKey(entry)]?.config}
               busy={toggleBusy === entry.id}
               ch={ch}
               onOpen={() => openChannel(entry.id)}
@@ -608,7 +711,7 @@ export function ChannelsSettingsPanel() {
                 <div className="flex shrink-0 items-center gap-2 pr-8">
                   <span className="hidden text-xs text-fg-muted sm:inline">{ch.enabledLabel}</span>
                   <ChannelEnabledSwitch
-                    checked={activeEntry.enabled === true}
+                    checked={channelSetupStatus(activeEntry).enabled}
                     disabled={toggleBusy === activeEntry.id}
                     label={ch.toggleChannel.replace('{{channel}}', activeEntry.label)}
                     onToggle={() => void toggleChannel(activeEntry)}
@@ -616,6 +719,8 @@ export function ChannelsSettingsPanel() {
                 </div>
               </div>
             </div>
+
+            <ChannelSetupReadinessBanner entry={activeEntry} ch={ch} />
 
             {extensionModal?.entrypoint && extensionModal.placement === 'before-config' ? (
               <ExtensionIframeHost
@@ -657,7 +762,7 @@ export function ChannelsSettingsPanel() {
               />
             ) : null}
 
-            {showSchemaConfig ? (
+            {showSchemaConfig && hasBasicConfigFields ? (
               <section className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
                 <div className="mb-4">
                   <h3 className="text-sm font-semibold text-fg">{ch.basicConfiguration}</h3>

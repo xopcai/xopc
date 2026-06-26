@@ -1,8 +1,8 @@
-import { Plus, RefreshCw, Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { memo } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/cn';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import type { MainTab } from '@/features/skills/skills-page.constants';
 import type { SkillsCopy } from '@/features/skills/skill-catalog-structured-preview';
 
@@ -27,17 +27,13 @@ export const SkillsPageHeaderEnd = memo(function SkillsPageHeaderEnd({
 }) {
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-      <Button
-        type="button"
-        variant="ghost"
+      <RefreshButton
         className="size-9 shrink-0 p-0"
-        disabled={loading}
+        loading={loading}
+        label={sk.reloadDiskAria}
         title={sk.reloadRuntime}
-        aria-label={sk.reloadDiskAria}
-        onClick={() => void onReloadClick()}
-      >
-        <RefreshCw className={cn('size-4', loading && 'animate-spin')} strokeWidth={1.75} />
-      </Button>
+        onClick={onReloadClick}
+      />
       <label className="relative flex min-h-9 min-w-0 max-w-sm cursor-text items-center rounded-pill border border-edge bg-surface-base py-1.5 pl-9 pr-3 shadow-surface dark:bg-surface-hover/40 sm:max-w-md">
         <Search
           className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled"

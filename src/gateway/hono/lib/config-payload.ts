@@ -6,7 +6,7 @@ import {
 import {
   buildChannelCatalogForConfig,
   buildChannelCatalogFromSnapshot,
-  isChannelConfigured,
+  getChannelSetupStatus,
 } from '../../../channels/catalog/channel-catalog-service.js';
 import { normalizeConfiguredMcpServers } from '../../../config/mcp-config-normalize.js';
 import type { Config } from '../../../config/schema.js';
@@ -169,12 +169,17 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
         typeof service.getChannelRuntimePlugin === 'function'
           ? service.getChannelRuntimePlugin(entry.id)
           : undefined;
-      const channelCfg = config.channels?.[entry.id] as Record<string, unknown> | undefined;
+      const channelCfgKey = entry.configPath.startsWith('channels.')
+        ? entry.configPath.slice('channels.'.length).split('.')[0] || entry.id
+        : entry.id;
+      const channelCfg = config.channels?.[channelCfgKey] as Record<string, unknown> | undefined;
+      const setupStatus = getChannelSetupStatus(config, entry.id, entry);
       return [
         entry.id,
         {
-          enabled: channelCfg?.enabled ?? false,
-          configured: isChannelConfigured(config, entry.id),
+          enabled: setupStatus.enabled,
+          configured: setupStatus.ready,
+          setupStatus,
           config: plugin?.configSurface?.buildConfigSurface(config) ?? channelCfg ?? {},
           schema: entry.configSchema,
           uiHints: entry.uiHints,
