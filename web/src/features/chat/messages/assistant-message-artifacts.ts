@@ -17,6 +17,10 @@ export const TOOL_NAMES_WITH_WORKSPACE_OUTPUT = new Set<string>([
   'image_generate',
 ]);
 
+const TOOL_NAMES_WITH_INPUT_FILE_ARTIFACTS = new Set<string>([
+  'create_share',
+]);
+
 function normalizeToolResultString(result: string | undefined | unknown): string {
   if (result == null) {
     return '';
@@ -207,13 +211,19 @@ export function collectAssistantWorkspaceOutputPaths(
       continue;
     }
     if (!TOOL_NAMES_WITH_WORKSPACE_OUTPUT.has(t.name)) {
+      if (!TOOL_NAMES_WITH_INPUT_FILE_ARTIFACTS.has(t.name)) {
+        continue;
+      }
+      const inputText = normalizeToolResultString(t.input);
+      if (inputText.trim()) {
+        mergeExtractedPaths(out, extractFilePathsFromToolResult(inputText));
+      }
       continue;
     }
     const text = normalizeToolResultString(t.result);
-    if (!text.trim()) {
-      continue;
+    if (text.trim()) {
+      mergeExtractedPaths(out, extractFilePathsFromToolResult(text));
     }
-    mergeExtractedPaths(out, extractFilePathsFromToolResult(text));
   }
 
   // Exact workspace-relative writer keys (from tools that emit `workspaceRelativePaths`).

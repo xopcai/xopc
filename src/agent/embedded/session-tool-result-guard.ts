@@ -601,7 +601,18 @@ class ToolResultGuard {
       if (!persisted) {
         return undefined;
       }
-      return this.originalAppend(capToolResultForPersistence(persisted, this.maxToolResultChars) as never);
+      const finalToolResult = capToolResultForPersistence(persisted, this.maxToolResultChars);
+      const result = this.originalAppend(finalToolResult as never);
+
+      if (this.opts.sessionKey) {
+        emitSessionTranscriptUpdate({
+          sessionKey: this.opts.sessionKey,
+          message: finalToolResult,
+          messageId: typeof result === 'string' ? result : undefined,
+        });
+      }
+
+      return result;
     }
 
     // Skip tool call extraction for aborted/errored assistant messages.

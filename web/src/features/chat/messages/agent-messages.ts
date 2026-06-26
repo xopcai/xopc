@@ -341,17 +341,20 @@ function mergeAssistantContent(m: WireMessage): MessageContent[] {
 
   const piTcs = m.toolCalls;
   if (Array.isArray(piTcs)) {
-    for (const call of piTcs) {
-      const id = call.id ?? crypto.randomUUID();
+    for (let i = 0; i < piTcs.length; i += 1) {
+      const call = piTcs[i];
+      const id = call.id ?? `tool-call-${i}-${call.name || 'tool'}`;
       if (blocks.some((b) => b.type === 'tool_use' && b.id === id)) {
         continue;
       }
+      const hasResult = typeof call.result === 'string';
       blocks.push({
         type: 'tool_use',
         id,
         name: call.name || 'tool',
         input: call.args,
-        status: 'running',
+        status: hasResult ? (call.isError ? 'error' : 'done') : 'running',
+        result: hasResult ? call.result : undefined,
       });
     }
   }
