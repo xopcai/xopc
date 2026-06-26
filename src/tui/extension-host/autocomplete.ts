@@ -11,7 +11,7 @@ import type {
 } from '../../extensions/types/tui.js';
 
 export interface ExtensionSlashCommandAutocompleteItem {
-  originalName: string;
+  originalName?: string;
   name: string;
   description: string;
 }
@@ -33,6 +33,7 @@ export class ChainedAutocompleteProvider implements AutocompleteProvider {
     private readonly baseSlashCommandNames: Set<string>,
     private readonly getSessionKey: () => string,
     private readonly cwd: string,
+    private readonly additionalSlashCommands: ExtensionSlashCommandAutocompleteItem[] = [],
   ) {}
 
   async getSuggestions(
@@ -47,12 +48,13 @@ export class ChainedAutocompleteProvider implements AutocompleteProvider {
     const beforeCursor = line.slice(0, cursorCol);
 
     const slashMatch = beforeCursor.match(/^\/([\w:-]*)$/);
-    if (slashMatch && this.extensionSlashCommands.length > 0) {
+    const slashCommands = [...this.additionalSlashCommands, ...this.extensionSlashCommands];
+    if (slashMatch && slashCommands.length > 0) {
       const query = (slashMatch[1] ?? '').toLowerCase();
       const prefix = `/${slashMatch[1] ?? ''}`;
-      const items: AutocompleteItem[] = this.extensionSlashCommands
-        .filter((c) => !this.baseSlashCommandNames.has(c.originalName))
-        .filter((c) => !query || c.name.startsWith(query))
+      const items: AutocompleteItem[] = slashCommands
+        .filter((c) => !this.baseSlashCommandNames.has(c.originalName ?? c.name))
+        .filter((c) => !query || c.name.toLowerCase().startsWith(query))
         .map((c) => ({
           value: `/${c.name}`,
           label: c.name,
@@ -112,6 +114,19 @@ export class ChainedAutocompleteProvider implements AutocompleteProvider {
     item: AutocompleteItem,
     prefix: string,
   ) {
+    if (prefix.startsWith('/') && item.value.startsWith('/')) {
+      const line = lines[cursorLine] ?? '';
+      const before = line.slice(0, cursorCol);
+      const start = before.length - prefix.length;
+      const nextLine = line.slice(0, start) + item.value + line.slice(cursorCol);
+      const nextLines = [...lines];
+      nextLines[cursorLine] = nextLine;
+      return {
+        lines: nextLines,
+        cursorLine,
+        cursorCol: start + item.value.length,
+      };
+    }
     if (prefix.startsWith('@')) {
       const line = lines[cursorLine] ?? '';
       const before = line.slice(0, cursorCol);

@@ -20,6 +20,8 @@ import type {
   TuiTranscriptTreeEntry,
   TuiAgentInfo,
   TuiWorkspaceFileSearchEntry,
+  TuiWorkflowRunStartRequest,
+  TuiWorkflowRunStartResult,
 } from '../tui-backend.js';
 import type { SessionInfo } from '../tui-types.js';
 import { computeTuiSessionStats } from '../tui-session-stats.js';
@@ -210,6 +212,35 @@ export class GatewaySseBackend implements TuiBackend {
       log.warn({ err, sessionKey, errorMessage }, `Gateway workspace file search failed: ${errorMessage}`);
       return [];
     }
+  }
+
+  async startWorkflowRun(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult> {
+    const goal = opts.goal?.trim();
+    const res = await gatewayFetch(this.baseUrl, '/api/workflows/runs', this.token, {
+      method: 'POST',
+      body: JSON.stringify({
+        definitionId: opts.definitionId,
+        agentId: opts.agentId,
+        parentSessionKey: opts.sessionKey,
+        source: { kind: 'chat', sessionKey: opts.sessionKey },
+        ...(goal ? { goal } : {}),
+        ...(opts.input !== undefined ? { input: opts.input } : {}),
+      }),
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      runId?: string;
+      sessionKey?: string;
+      error?: string;
+      code?: string;
+    };
+    if (!res.ok || !json.runId || !json.sessionKey) {
+      throw new Error(json.error ?? `Workflow start failed (${res.status})`);
+    }
+    return {
+      runId: json.runId,
+      sessionKey: json.sessionKey,
+      definitionId: opts.definitionId,
+    };
   }
 
   async resumeChat(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean; reason?: string }> {

@@ -52,6 +52,7 @@ export class ChatLog extends Container {
   private lastAssistantText = '';
   private lastStatusEntry: Container | null = null;
   private lastStatusText: Text | null = null;
+  private workflowStatusByRunId = new Map<string, { entry: Container; text: Text }>();
 
   constructor(private readonly keybindings?: KeybindingsManager) {
     super();
@@ -89,6 +90,9 @@ export class ChatLog extends Container {
       this.lastStatusEntry = null;
       this.lastStatusText = null;
     }
+    for (const [runId, status] of this.workflowStatusByRunId.entries()) {
+      if (status.entry === component) this.workflowStatusByRunId.delete(runId);
+    }
   }
 
   private append(component: Component): void {
@@ -111,6 +115,7 @@ export class ChatLog extends Container {
     this.lastAssistantText = '';
     this.lastStatusEntry = null;
     this.lastStatusText = null;
+    this.workflowStatusByRunId.clear();
   }
 
   private createAssistantMessage(message?: AgentMessage): AssistantMessageComponent {
@@ -145,6 +150,21 @@ export class ChatLog extends Container {
     entry.addChild(statusText);
     this.lastStatusEntry = entry;
     this.lastStatusText = statusText;
+    this.append(entry);
+  }
+
+  updateWorkflowRun(runId: string, text: string): void {
+    const existing = this.workflowStatusByRunId.get(runId);
+    if (existing) {
+      existing.text.setText(theme.system(text));
+      return;
+    }
+
+    const entry = new Container();
+    const statusText = new Text(theme.system(text), 1, 0);
+    entry.addChild(new Spacer(1));
+    entry.addChild(statusText);
+    this.workflowStatusByRunId.set(runId, { entry, text: statusText });
     this.append(entry);
   }
 

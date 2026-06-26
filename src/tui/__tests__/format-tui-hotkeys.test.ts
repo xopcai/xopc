@@ -73,6 +73,39 @@ it('includes model cycle and session picker descriptions', () => {
     expect(help.match(/\/share/g)?.length).toBe(1);
   });
 
+  it('includes skill slash commands in a dedicated help section', () => {
+    const help = formatTuiHelpText(
+      true,
+      createXopcTuiKeybindingsManager(),
+      [],
+      [
+        { name: 'skill:review', description: 'Apply skill to the next turn' },
+        { name: 'skill:tdd', description: 'Apply skill to the next turn' },
+      ],
+    );
+
+    expect(help).toContain('Skill commands:');
+    expect(help).toContain('/skill:review — Apply skill to the next turn');
+    expect(help).toContain('/skill:tdd — Apply skill to the next turn');
+  });
+
+  it('includes workflow slash commands in a dedicated help section', () => {
+    const help = formatTuiHelpText(
+      true,
+      createXopcTuiKeybindingsManager(),
+      [],
+      [],
+      [
+        { name: 'workflow:audit_repo', description: 'Run workflow' },
+        { name: 'workflow:weekly_review', description: 'Run workflow' },
+      ],
+    );
+
+    expect(help).toContain('Workflow commands:');
+    expect(help).toContain('/workflow:audit_repo — Run workflow');
+    expect(help).toContain('/workflow:weekly_review — Run workflow');
+  });
+
   it('exposes pi-style reload command alias', () => {
     expect(getSlashCommands(true).some((command) => command.name === 'reload')).toBe(true);
   });

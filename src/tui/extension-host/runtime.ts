@@ -117,6 +117,7 @@ export interface CreateTuiExtensionRuntimeOptions {
   bottomBar: TuiBottomBar;
   getState: () => TuiState;
   baseSlashCommands: Array<{ name: string; description: string }>;
+  additionalSlashCommands?: Array<{ originalName?: string; name: string; description: string }>;
   keybindings?: KeybindingsManager;
   addInputListener?: (handler: TuiTerminalInputHandler) => () => void;
   setTitle?: (title: string) => void;
@@ -232,6 +233,7 @@ export function createTuiExtensionRuntime(
     new Set(opts.baseSlashCommands.map((command) => command.name)),
     () => opts.getState().currentSessionKey,
     opts.cwd,
+    opts.additionalSlashCommands ?? [],
   );
   const autocompleteProvider = new WrappedAutocompleteProvider(
     chainedProvider,

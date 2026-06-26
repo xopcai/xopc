@@ -57,6 +57,23 @@ export interface RenderOptions {
   showResultPreviews?: boolean;
 }
 
+export type WorkflowPanelStatus =
+  | 'queued'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'cancelled'
+  | 'timeout'
+  | string;
+
+export interface WorkflowPanelOptions {
+  status?: WorkflowPanelStatus;
+  maxActiveAgents?: number;
+  maxRecentAgents?: number;
+  maxErrors?: number;
+  nowMs?: number;
+}
+
 export function renderWorkflowText(
   snapshot: WorkflowSnapshot,
   completed = false,
@@ -139,6 +156,109 @@ export function previewValue(value: unknown, max = 80): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
+export function renderWorkflowPanel(
+  snapshot: WorkflowSnapshot,
+  options: WorkflowPanelOptions = {},
+): string {
+  const status = options.status ?? inferPanelStatus(snapshot);
+  const activeAgents = snapshot.agents.filter((agent) => agent.status === 'running');
+  const queuedAgents = snapshot.agents.filter((agent) => agent.status === 'queued');
+  const activeLimit = options.maxActiveAgents ?? 4;
+  const recentLimit = options.maxRecentAgents ?? 4;
+  const durationText = formatDuration(resolveElapsedMs(snapshot, options.nowMs));
+  const counts = formatRunCounts(snapshot);
+
+  const lines = [
+    `◆ ${snapshot.name} ${statusText(status)} ${counts}${durationText ? ` ${durationText}` : ''}`,
+  ];
+
+  const phaseLines = renderPanelPhaseLines(snapshot);
+  if (phaseLines.length > 0) {
+    lines.push('', 'Phase', ...phaseLines);
+  }
+
+  const visibleActive = activeAgents.length > 0 ? activeAgents : queuedAgents;
+  if (visibleActive.length > 0) {
+    lines.push('', activeAgents.length > 0 ? 'Active' : 'Queued');
+    for (const agent of visibleActive.slice(0, activeLimit)) {
+      lines.push(...renderActiveAgentLines(agent));
+    }
+    if (visibleActive.length > activeLimit) {
+      lines.push(`  … ${visibleActive.length - activeLimit} more`);
+    }
+  }
+
+  const recent = recentCompletedAgents(snapshot).slice(0, recentLimit);
+  if (recent.length > 0) {
+    lines.push('', 'Recent');
+    for (const agent of recent) {
+      lines.push(renderRecentAgentLine(agent));
+    }
+  }
+
+  const errors = snapshot.agents.filter((agent) => agent.status === 'error' || agent.error);
+  if (errors.length > 0) {
+    lines.push('', 'Errors');
+    for (const agent of errors.slice(0, options.maxErrors ?? 3)) {
+      lines.push(
+        `  ✗ #${agent.id} ${shorten(agent.label, 28)}${
+          agent.error ? `: ${shorten(agent.error, 96)}` : ''
+        }`,
+      );
+    }
+    if (errors.length > (options.maxErrors ?? 3)) {
+      lines.push(`  … ${errors.length - (options.maxErrors ?? 3)} more`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+export function renderWorkflowFinalSummary(
+  snapshot: WorkflowSnapshot,
+  options: WorkflowPanelOptions = {},
+): string {
+  const status = options.status ?? inferPanelStatus(snapshot);
+  const durationText = formatDuration(resolveElapsedMs(snapshot, options.nowMs));
+  const lines = [
+    `◆ ${snapshot.name} ${statusText(status)} ${formatRunCounts(snapshot)}${durationText ? ` ${durationText}` : ''}`,
+  ];
+
+  const result = previewValue(snapshot.result, 280);
+  if (result) {
+    lines.push('', 'Result', `  ${result}`);
+  } else {
+    const fallback = recentCompletedAgents(snapshot)
+      .map((agent) => agent.resultPreview)
+      .find((value): value is string => Boolean(value));
+    if (fallback) {
+      lines.push('', 'Result', `  ${shorten(fallback, 280)}`);
+    }
+  }
+
+  const errors = snapshot.agents.filter((agent) => agent.status === 'error' || agent.error);
+  if (errors.length > 0) {
+    lines.push('', 'Errors');
+    for (const agent of errors.slice(0, options.maxErrors ?? 5)) {
+      lines.push(
+        `  ✗ #${agent.id} ${shorten(agent.label, 32)}${
+          agent.error ? `: ${shorten(agent.error, 120)}` : ''
+        }`,
+      );
+    }
+  }
+
+  const recent = recentCompletedAgents(snapshot).slice(0, options.maxRecentAgents ?? 5);
+  if (recent.length > 0) {
+    lines.push('', 'Completed');
+    for (const agent of recent) {
+      lines.push(renderRecentAgentLine(agent));
+    }
+  }
+
+  return lines.join('\n');
+}
+
 // ---------------------------------------------------------------------------
 
 function countAgents(agents: WorkflowAgentSnapshot[]) {
@@ -168,6 +288,125 @@ function statusIcon(status: WorkflowAgentStatus): string {
     case 'skipped':
       return '-';
   }
+}
+
+function statusText(status: WorkflowPanelStatus): string {
+  switch (status) {
+    case 'queued':
+      return 'queued';
+    case 'running':
+      return 'running';
+    case 'succeeded':
+      return '✓ completed';
+    case 'failed':
+      return '✗ failed';
+    case 'cancelled':
+      return 'cancelled';
+    case 'timeout':
+      return 'timeout';
+    default:
+      return String(status || 'running');
+  }
+}
+
+function inferPanelStatus(snapshot: WorkflowSnapshot): WorkflowPanelStatus {
+  if (snapshot.errorCount > 0) return 'failed';
+  if (snapshot.runningCount > 0) return 'running';
+  if (snapshot.doneCount + snapshot.skippedCount >= snapshot.agentCount && snapshot.agentCount > 0) {
+    return 'succeeded';
+  }
+  return 'queued';
+}
+
+function formatRunCounts(snapshot: WorkflowSnapshot): string {
+  const parts = [`${snapshot.doneCount}/${snapshot.agentCount} done`];
+  if (snapshot.runningCount > 0) parts.push(`${snapshot.runningCount} running`);
+  if (snapshot.errorCount > 0) parts.push(`${snapshot.errorCount} errors`);
+  if (snapshot.skippedCount > 0) parts.push(`${snapshot.skippedCount} skipped`);
+  return parts.join(' · ');
+}
+
+function resolveElapsedMs(snapshot: WorkflowSnapshot, nowMs = Date.now()): number | undefined {
+  if (snapshot.durationMs != null) return snapshot.durationMs;
+  const starts = snapshot.agents
+    .map((agent) => agent.startedAtMs)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  if (starts.length === 0) return undefined;
+  return Math.max(0, nowMs - Math.min(...starts));
+}
+
+function formatDuration(ms: number | undefined): string {
+  if (ms == null || !Number.isFinite(ms)) return '';
+  const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes < 60) return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  const hours = Math.floor(minutes / 60);
+  const restMinutes = minutes % 60;
+  return `${hours}:${String(restMinutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+function renderPanelPhaseLines(snapshot: WorkflowSnapshot): string[] {
+  const phaseNames = uniqueOrdered([
+    ...snapshot.phases,
+    ...(snapshot.currentPhase ? [snapshot.currentPhase] : []),
+    ...snapshot.agents.map((a) => a.phase).filter((p): p is string => Boolean(p)),
+  ]);
+  const out: string[] = [];
+  for (const phase of phaseNames) {
+    const agents = snapshot.agents.filter((agent) => agent.phase === phase);
+    const counts = countAgents(agents);
+    const complete = agents.length > 0 && counts.done + counts.error + counts.skipped === agents.length;
+    const marker =
+      counts.running > 0 || (!complete && snapshot.currentPhase === phase)
+        ? '▶'
+        : complete
+          ? '✓'
+          : '○';
+    const tail = [
+      counts.running > 0 ? `${counts.running} running` : '',
+      counts.error > 0 ? `${counts.error} errors` : '',
+      counts.skipped > 0 ? `${counts.skipped} skipped` : '',
+    ].filter(Boolean).join(' · ');
+    out.push(`  ${marker} ${phase} ${counts.done}/${agents.length}${tail ? ` · ${tail}` : ''}`);
+  }
+  return out;
+}
+
+function renderActiveAgentLines(agent: WorkflowAgentSnapshot): string[] {
+  const step = agent.currentStep || latestStepSummary(agent);
+  const iteration =
+    agent.iteration != null && agent.maxIterations != null
+      ? ` [${agent.iteration}/${agent.maxIterations}]`
+      : '';
+  const head = `  ${agent.status === 'running' ? '●' : '○'} #${agent.id} ${shorten(agent.label, 32)}${iteration}`;
+  return step ? [head, `     ${shorten(step, 96)}`] : [head];
+}
+
+function renderRecentAgentLine(agent: WorkflowAgentSnapshot): string {
+  const preview = agent.error || agent.resultPreview || latestStepResult(agent);
+  return `  ${statusIcon(agent.status)} #${agent.id} ${shorten(agent.label, 32)}${
+    preview ? ` — ${shorten(preview, 96)}` : ''
+  }`;
+}
+
+function recentCompletedAgents(snapshot: WorkflowSnapshot): WorkflowAgentSnapshot[] {
+  return [...snapshot.agents]
+    .filter((agent) => agent.status === 'done' || agent.status === 'error' || agent.status === 'skipped')
+    .reverse();
+}
+
+function latestStepSummary(agent: WorkflowAgentSnapshot): string {
+  const step =
+    [...(agent.steps ?? [])].reverse().find((entry) => entry.status === 'running') ??
+    agent.steps?.[agent.steps.length - 1];
+  if (!step) return '';
+  return step.detail ? `${step.label}: ${step.detail}` : step.label;
+}
+
+function latestStepResult(agent: WorkflowAgentSnapshot): string {
+  const step = [...(agent.steps ?? [])].reverse().find((entry) => entry.resultPreview || entry.error);
+  return step?.error || step?.resultPreview || '';
 }
 
 function stateSuffix(snapshot: WorkflowSnapshot): string {
