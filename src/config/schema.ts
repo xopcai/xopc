@@ -1287,6 +1287,12 @@ export const GoalsConfigSchema = z
      * subsequent turns evaluate progress per item (Hermes-style). When false, use legacy freeform judge only.
      */
     checklistMode: z.boolean().default(true),
+    /**
+     * empty_only preserves legacy behavior: the first post-turn decomposition runs only when the
+     * goal has no checklist. supplement_existing lets the first post-turn add non-duplicate judge
+     * criteria even when the user supplied initial acceptance criteria.
+     */
+    checklistDecomposePolicy: z.enum(['empty_only', 'supplement_existing']).default('empty_only'),
     /** Auto-pause after this many consecutive judge JSON/tool parse failures (Hermes default 3). */
     maxConsecutiveParseFailures: z.number().int().min(1).max(20).default(3),
     /** Judge LLM call timeout in ms (Hermes uses 60s). */
@@ -1511,6 +1517,7 @@ export const ConfigSchema = z.object({
   goals: {
     maxTurns: 20,
     checklistMode: true,
+    checklistDecomposePolicy: 'empty_only',
     maxConsecutiveParseFailures: 3,
     judgeTimeoutMs: 60_000,
     checklistHistoryChars: 24_000,

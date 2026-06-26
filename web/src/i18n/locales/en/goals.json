@@ -53,6 +53,8 @@
       "descriptionPlaceholder": "Relevant background, constraints, existing progress…",
       "criteriaTitle": "Acceptance criteria",
       "criteriaHint": "These become the checklist the judge uses to decide whether the goal is done.",
+      "checklistPolicyEmptyOnly": "When criteria are filled in, AI will not decompose extra criteria after the first turn.",
+      "checklistPolicySupplementExisting": "After the first turn, AI may add non-duplicate acceptance criteria.",
       "aiDraft": "Generate criteria",
       "criteriaPlaceholder": "Acceptance criterion {{index}}",
       "addCriteria": "Add acceptance criterion",

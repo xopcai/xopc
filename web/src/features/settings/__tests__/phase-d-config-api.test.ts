@@ -60,10 +60,11 @@ describe('Phase D config API normalizers', () => {
 
   it('normalizeGoalsConfigFromConfig maps judge timeout to seconds', () => {
     const state = normalizeGoalsConfigFromConfig({
-      goals: { judgeTimeoutMs: 90_000, maxTurns: 25 },
+      goals: { judgeTimeoutMs: 90_000, maxTurns: 25, checklistDecomposePolicy: 'supplement_existing' },
     });
     expect(state.judgeTimeoutSec).toBe(90);
     expect(state.maxTurns).toBe(25);
+    expect(state.checklistDecomposePolicy).toBe('supplement_existing');
   });
 
   it('normalizeSessionConfigFromConfig maps storage', () => {

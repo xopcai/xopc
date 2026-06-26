@@ -27,7 +27,11 @@ export const CONTINUATION_PROMPT_WITH_CHECKLIST_TEMPLATE = CONTINUATION_PROMPT_W
 
 export type GoalsEvaluateConfigSlice = Pick<
   GoalsConfig,
-  'checklistMode' | 'maxConsecutiveParseFailures' | 'judgeTimeoutMs' | 'checklistHistoryChars'
+  | 'checklistMode'
+  | 'checklistDecomposePolicy'
+  | 'maxConsecutiveParseFailures'
+  | 'judgeTimeoutMs'
+  | 'checklistHistoryChars'
 >;
 
 export type GoalPostTurnDecision = {
@@ -123,6 +127,7 @@ export async function evaluateAfterTurnHermesLike(
   if (checklistMode && !next.decomposed) {
     const dec = await decomposeGoalChecklist({
       goal: next.goal,
+      existingChecklist: next.checklist?.length ? renderChecklistNumbered(next.checklist) : undefined,
       judgeModelRef,
       signal,
       judgeTimeoutMs,

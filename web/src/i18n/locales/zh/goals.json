@@ -53,6 +53,8 @@
       "descriptionPlaceholder": "相关背景、限制条件、已有进展…",
       "criteriaTitle": "验收标准",
       "criteriaHint": "这些会成为评判器判断目标是否完成的验收清单。",
+      "checklistPolicyEmptyOnly": "已填写验收标准时，AI 首轮不会自动拆解补充。",
+      "checklistPolicySupplementExisting": "AI 首轮后仍会补充不重复的验收标准。",
       "aiDraft": "生成标准",
       "criteriaPlaceholder": "验收标准 {{index}}",
       "addCriteria": "添加验收标准",

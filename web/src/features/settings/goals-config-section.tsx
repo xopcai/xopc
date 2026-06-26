@@ -536,6 +536,25 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
             <input type="checkbox" className="ui-checkbox" checked={form.checklistMode} onChange={(e) => update({ checklistMode: e.target.checked })} />
             {t.checklistMode}
           </label>
+          <div className="sm:col-span-2">
+            <label className="mb-1 block text-sm font-medium text-fg">{t.checklistDecomposePolicy}</label>
+            <select
+              className={inputClassName()}
+              value={form.checklistDecomposePolicy}
+              disabled={!form.checklistMode}
+              onChange={(e) =>
+                update({
+                  checklistDecomposePolicy: e.target.value === 'supplement_existing'
+                    ? 'supplement_existing'
+                    : 'empty_only',
+                })
+              }
+            >
+              <option value="empty_only">{t.checklistDecomposePolicyEmptyOnly}</option>
+              <option value="supplement_existing">{t.checklistDecomposePolicySupplementExisting}</option>
+            </select>
+            <p className="mt-1 text-xs text-fg-subtle">{t.checklistDecomposePolicyHint}</p>
+          </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-fg">{t.parseFailures}</label>
             <input type="number" min={1} max={20} className={inputClassName()} value={form.maxConsecutiveParseFailures} onChange={(e) => update({ maxConsecutiveParseFailures: Number(e.target.value) || 3 })} />

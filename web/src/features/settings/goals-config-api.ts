@@ -6,6 +6,7 @@ export type GoalsConfigState = {
   maxTurns: number;
   judgeModelRef: string;
   checklistMode: boolean;
+  checklistDecomposePolicy: 'empty_only' | 'supplement_existing';
   maxConsecutiveParseFailures: number;
   judgeTimeoutSec: number;
   checklistHistoryChars: number;
@@ -29,6 +30,7 @@ const DEFAULT_GOALS_CONFIG: GoalsConfigState = {
   maxTurns: 20,
   judgeModelRef: '',
   checklistMode: true,
+  checklistDecomposePolicy: 'empty_only',
   maxConsecutiveParseFailures: 3,
   judgeTimeoutSec: 60,
   checklistHistoryChars: 24_000,
@@ -56,6 +58,10 @@ export function normalizeGoalsConfigFromConfig(config: unknown): GoalsConfigStat
         : DEFAULT_GOALS_CONFIG.maxTurns,
     judgeModelRef: typeof goals.judgeModelRef === 'string' ? goals.judgeModelRef : '',
     checklistMode: goals.checklistMode !== false,
+    checklistDecomposePolicy:
+      goals.checklistDecomposePolicy === 'supplement_existing'
+        ? 'supplement_existing'
+        : DEFAULT_GOALS_CONFIG.checklistDecomposePolicy,
     maxConsecutiveParseFailures:
       typeof goals.maxConsecutiveParseFailures === 'number' &&
       Number.isFinite(goals.maxConsecutiveParseFailures)
@@ -116,6 +122,7 @@ export async function patchGoalsConfig(state: GoalsConfigState): Promise<void> {
         maxTurns: state.maxTurns,
         ...(state.judgeModelRef.trim() ? { judgeModelRef: state.judgeModelRef.trim() } : { judgeModelRef: null }),
         checklistMode: state.checklistMode,
+        checklistDecomposePolicy: state.checklistDecomposePolicy,
         maxConsecutiveParseFailures: state.maxConsecutiveParseFailures,
         judgeTimeoutMs: state.judgeTimeoutSec * 1000,
         checklistHistoryChars: state.checklistHistoryChars,
