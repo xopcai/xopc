@@ -27,6 +27,8 @@ const HISTORY_TRUNC = 24_000;
 const DECOMPOSE_SYSTEM = (
   'You break a user goal into an EXTREMELY detailed checklist of concrete, verifiable completion criteria. ' +
   'Bias toward more items. Each item is one factual statement about finished work.\n\n' +
+  'If existing acceptance criteria are provided, return only missing supplemental criteria. ' +
+  'Do not repeat, rewrite, or replace existing criteria.\n\n' +
   'Reply ONLY with a single JSON object on one line:\n' +
   '{"items":[{"text":"..."},...]}\n' +
   'Use at least 3 items when the goal warrants it.'
@@ -75,6 +77,7 @@ export type DecomposeChecklistResult = {
 
 export async function decomposeGoalChecklist(opts: {
   goal: string;
+  existingChecklist?: string;
   judgeModelRef: string;
   signal?: AbortSignal;
   judgeTimeoutMs?: number;
@@ -105,10 +108,15 @@ export async function decomposeGoalChecklist(opts: {
   const merged = opts.signal ? AbortSignal.any([opts.signal, controller.signal]) : controller.signal;
 
   try {
+    const existingChecklist = opts.existingChecklist?.trim();
+    const decomposeUser = DECOMPOSE_USER.replace('{goal}', truncateGoalText(goal, GOAL_TRUNC)) +
+      (existingChecklist
+        ? `\n\nExisting acceptance criteria:\n${truncateGoalText(existingChecklist, GOAL_TRUNC)}\n\nReturn only missing supplemental criteria as JSON.`
+        : '');
     const user: UserMessage = {
       role: 'user',
       content:
-        `${DECOMPOSE_SYSTEM}\n\n${DECOMPOSE_USER.replace('{goal}', truncateGoalText(goal, GOAL_TRUNC))}` +
+        `${DECOMPOSE_SYSTEM}\n\n${decomposeUser}` +
         judgeResponseLanguageNote(locale),
       timestamp: Date.now(),
     };

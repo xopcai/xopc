@@ -1,6 +1,6 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
-import type { Config } from '../../config/schema.js';
+import type { Config, GoalsConfig } from '../../config/schema.js';
 import { getAgentDefaultModelRef } from '../../config/schema.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import { GoalService } from '../../goals/index.js';
@@ -41,6 +41,15 @@ function resolveJudgeModelRef(
   if (runtimeSessionModelRef?.trim()) return runtimeSessionModelRef.trim();
   if (config) return getAgentDefaultModelRef(config);
   return undefined;
+}
+
+export function shouldRunInitialChecklistDecomposition(input: {
+  checklistLength: number;
+  turnsUsed: number;
+  checklistDecomposePolicy?: GoalsConfig['checklistDecomposePolicy'];
+}): boolean {
+  if (input.checklistLength === 0) return true;
+  return input.checklistDecomposePolicy === 'supplement_existing' && input.turnsUsed === 0;
 }
 
 async function appendAssistantLine(apis: PersistentGoalApis, sessionKey: string, text: string): Promise<void> {
@@ -91,6 +100,12 @@ export async function handlePersistentGoalPostTurn(opts: {
   const goal = goalService.getActiveForSession(sessionKey);
   if (!goal || goal.status !== 'active') return;
 
+  const goalsCfg = config?.goals;
+  const shouldDecomposeChecklist = shouldRunInitialChecklistDecomposition({
+    checklistLength: goal.checklist.length,
+    turnsUsed: goal.turnsUsed,
+    checklistDecomposePolicy: goalsCfg?.checklistDecomposePolicy,
+  });
   const state: PersistentGoalState = {
     goal: goal.title,
     status: 'active',
@@ -100,7 +115,7 @@ export async function handlePersistentGoalPostTurn(opts: {
     lastTurnAt: goal.updatedAt,
     lastReason: goal.blockedReason,
     judgeModelRef: goal.judgeModelRef,
-    decomposed: goal.checklist.length > 0 ? true : undefined,
+    decomposed: shouldDecomposeChecklist ? undefined : true,
     uiLocale: goal.uiLocale,
     checklist: goal.checklist.map((it) => ({
       text: it.text,
@@ -118,7 +133,6 @@ export async function handlePersistentGoalPostTurn(opts: {
     return;
   }
 
-  const goalsCfg = config?.goals;
   const historyCap = goalsCfg?.checklistHistoryChars ?? 24_000;
   let historyExcerpt = '';
   try {

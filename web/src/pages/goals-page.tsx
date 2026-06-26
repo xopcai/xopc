@@ -25,7 +25,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/ui/refresh-button';
 import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/api/registry-api';
+import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
+import { normalizeGoalsConfigFromConfig, type GoalsConfigState } from '@/features/settings/goals-config-api';
 import { messages } from '@/i18n/messages';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -93,6 +95,7 @@ type GoalCreateOptions = {
   defaultAgentId: string;
   agents: GatewayAgentRow[];
   models: ConfiguredModel[];
+  checklistDecomposePolicy: GoalsConfigState['checklistDecomposePolicy'];
 };
 
 const BOARD_STATUSES: GoalStatus[] = ['active', 'paused', 'blocked', 'needs_input', 'done', 'archived'];
@@ -717,6 +720,11 @@ function GoalCreateDialog({
                   <div>
                     <h3 className="text-sm font-semibold text-fg">{t.createDialog.criteriaTitle}</h3>
                     <p className="mt-1 text-xs text-fg-muted">{t.createDialog.criteriaHint}</p>
+                    <p className="mt-1 text-xs text-fg-subtle">
+                      {options.checklistDecomposePolicy === 'supplement_existing'
+                        ? t.createDialog.checklistPolicySupplementExisting
+                        : t.createDialog.checklistPolicyEmptyOnly}
+                    </p>
                   </div>
                   <Button
                     type="button"
@@ -1045,6 +1053,7 @@ export function GoalsPage() {
     defaultAgentId: '',
     agents: [],
     models: [],
+    checklistDecomposePolicy: 'empty_only',
   });
   const [viewMode, setViewMode] = useState<GoalsViewMode>('focus');
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
@@ -1072,15 +1081,19 @@ export function GoalsPage() {
   useEffect(() => {
     let cancelled = false;
     async function loadCreateOptions() {
-      const [agentsResult, modelsResult] = await Promise.allSettled([
+      const [agentsResult, modelsResult, configResult] = await Promise.allSettled([
         fetchGatewayAgents(),
         fetchConfiguredModelsCached(),
+        fetchGatewayConfigSwrResponse(),
       ]);
       if (cancelled) return;
       setCreateOptions((prev) => {
         const defaultAgentId = agentsResult.status === 'fulfilled' ? agentsResult.value.defaultId : prev.defaultAgentId;
         const agents = agentsResult.status === 'fulfilled' ? agentsResult.value.agents : prev.agents;
         const models = modelsResult.status === 'fulfilled' ? modelsResult.value : prev.models;
+        const checklistDecomposePolicy = configResult.status === 'fulfilled'
+          ? normalizeGoalsConfigFromConfig(configResult.value.payload?.config).checklistDecomposePolicy
+          : prev.checklistDecomposePolicy;
         return {
           defaultAgentId,
           agents: agents.length ? agents : [{
@@ -1093,6 +1106,7 @@ export function GoalsPage() {
             tools: { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
           }],
           models,
+          checklistDecomposePolicy,
         };
       });
     }

@@ -21,6 +21,7 @@ const GoalsConfigPatchSchema = z.object({
   maxTurns: z.number().int().min(1).max(500).optional(),
   judgeModelRef: z.union([z.string(), z.null()]).optional(),
   checklistMode: z.boolean().optional(),
+  checklistDecomposePolicy: z.enum(['empty_only', 'supplement_existing']).optional(),
   maxConsecutiveParseFailures: z.number().int().min(1).max(20).optional(),
   judgeTimeoutMs: z.number().int().min(5_000).max(120_000).optional(),
   checklistHistoryChars: z.number().int().min(0).max(100_000).optional(),

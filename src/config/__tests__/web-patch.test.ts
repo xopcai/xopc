@@ -30,12 +30,14 @@ describe('web-patch merges', () => {
     const result = mergeGoalsConfigPatch(config, {
       judgeModelRef: 'openai/gpt-4o-mini',
       checklistMode: false,
+      checklistDecomposePolicy: 'supplement_existing',
       judgeTimeoutMs: 45_000,
     });
     expect(result).toEqual({ ok: true });
     expect(config.goals?.maxTurns).toBe(15);
     expect(config.goals?.judgeModelRef).toBe('openai/gpt-4o-mini');
     expect(config.goals?.checklistMode).toBe(false);
+    expect(config.goals?.checklistDecomposePolicy).toBe('supplement_existing');
     expect(config.goals?.judgeTimeoutMs).toBe(45_000);
   });
 
@@ -138,8 +140,8 @@ describe('web-patch resolve helpers', () => {
   it('resolveGoalsConfigForWeb parses goals schema', () => {
     expect(
       resolveGoalsConfigForWeb({
-        goals: { maxTurns: 30, checklistMode: false },
+        goals: { maxTurns: 30, checklistMode: false, checklistDecomposePolicy: 'supplement_existing' },
       } as Config),
-    ).toMatchObject({ maxTurns: 30, checklistMode: false });
+    ).toMatchObject({ maxTurns: 30, checklistMode: false, checklistDecomposePolicy: 'supplement_existing' });
   });
 });
