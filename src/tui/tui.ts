@@ -57,6 +57,7 @@ import { TuiHeader } from './components/tui-header.js';
 import {
   createTuiCommandHandler,
   getSlashCommands,
+  type SlashCommandDef,
 } from './tui-commands.js';
 import {
   formatTuiCompactionResult,
@@ -93,6 +94,12 @@ import { installTuiStdioFilter } from './tui-stdio-filter.js';
 import { withTuiSuspended } from './tui-suspend.js';
 import { extensionForImageMimeType, readClipboardImage } from './clipboard-image.js';
 import { copyTextToClipboard } from './clipboard-text.js';
+import {
+  renderWorkflowFinalSummary,
+  renderWorkflowPanel,
+} from '../agent/workflow/snapshot.js';
+import { isTerminalWorkflowRunStatus, type WorkflowRunView } from '../workflows/domain/index.js';
+import { runViewToSnapshot } from '../workflows/service/run-view-to-snapshot.js';
 import {
   applyThemeById,
   getCustomThemesDir,
@@ -696,6 +703,35 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const slashCommands = getSlashCommands(isLocalMode, keybindings);
+  const resourceSlashCommands: SlashCommandDef[] = [];
+  const skillSlashCommands: SlashCommandDef[] = [];
+  const workflowSlashCommands: SlashCommandDef[] = [];
+  const visibleWorkflowRunIds = new Set<string>();
+  const syncResourceSlashCommands = (resources: TuiStartupResources | undefined) => {
+    resourceSlashCommands.length = 0;
+    skillSlashCommands.length = 0;
+    for (const name of resources?.skills ?? []) {
+      const skillName = name.trim();
+      if (!skillName) continue;
+      const command = {
+        name: `skill:${skillName}`,
+        description: 'Apply skill to the next turn',
+      };
+      skillSlashCommands.push(command);
+      resourceSlashCommands.push(command);
+    }
+    workflowSlashCommands.length = 0;
+    for (const name of resources?.workflows ?? []) {
+      const workflowName = name.trim();
+      if (!workflowName) continue;
+      const command = {
+        name: `workflow:${workflowName}`,
+        description: 'Run workflow',
+      };
+      workflowSlashCommands.push(command);
+      resourceSlashCommands.push(command);
+    }
+  };
   let extensionWorkingMessage: string | undefined;
   let extensionWorkingVisible = true;
   let extensionWorkingIndicator: LoaderIndicatorOptions | undefined;
@@ -991,6 +1027,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     bottomBar,
     getState: () => state,
     baseSlashCommands: slashCommands,
+    additionalSlashCommands: resourceSlashCommands,
     keybindings,
     addInputListener: (handler) => tui.addInputListener(handler),
     setTitle: (title) => tui.terminal.setTitle(title),
@@ -1265,12 +1302,17 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const refreshStartupResources = async () => {
-    if (!client.getStartupResources) return;
+    if (!client.getStartupResources) {
+      startupResources = undefined;
+      syncResourceSlashCommands(undefined);
+      return;
+    }
     try {
       startupResources = await client.getStartupResources(state.currentSessionKey);
     } catch {
       startupResources = undefined;
     }
+    syncResourceSlashCommands(startupResources);
   };
 
   const showStartupCardOnce = () => {
@@ -1577,6 +1619,20 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     } finally {
       tui.requestRender();
     }
+  };
+
+  const startWorkflowRun = async (request: { definitionId: string; goal?: string }) => {
+    if (!client.startWorkflowRun) {
+      throw new Error('Workflow runs are not available in this mode.');
+    }
+    const result = await client.startWorkflowRun({
+      sessionKey: state.currentSessionKey,
+      definitionId: request.definitionId,
+      agentId: currentAgentId,
+      goal: request.goal,
+    });
+    visibleWorkflowRunIds.add(result.runId);
+    return result;
   };
 
   const runBtwQuery = async (question: string) => {
@@ -2022,9 +2078,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     exportSession: exportCurrentSession,
     importSession: importSessionExport,
     createShare: createShareLink,
+    startWorkflowRun,
     runBtwQuery,
     forkSession: forkCurrentSession,
     extensionSlashCommands: extensionRuntime.slashCommands,
+    skillSlashCommands,
+    workflowSlashCommands,
     extensionShortcuts: extensionRuntime.shortcuts,
     currentAgentId,
     setSession: async (rawKey) => {
@@ -2383,8 +2442,30 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     flushFollowUpQueue();
   };
 
+  const handleWorkflowRunUpdated = (data: Record<string, unknown>): boolean => {
+    const runId = typeof data.runId === 'string' ? data.runId : '';
+    const view = data.view && typeof data.view === 'object' ? data.view as WorkflowRunView : null;
+    if (!runId || !view || !visibleWorkflowRunIds.has(runId)) return false;
+
+    const snapshot = runViewToSnapshot(view);
+    const completed = isTerminalWorkflowRunStatus(view.run.status);
+    chatLog.updateWorkflowRun(runId, renderWorkflowPanel(snapshot, { status: view.run.status }));
+    if (completed) {
+      chatLog.addSystem(renderWorkflowFinalSummary(snapshot, { status: view.run.status }));
+      visibleWorkflowRunIds.delete(runId);
+      void refreshSessionInfoWithBorder().finally(() => {
+        updateFooter();
+      });
+    }
+    tui.requestRender();
+    return true;
+  };
+
   client.onEvent = (evt: TuiEvent) => {
     const data = (evt.data ?? {}) as Record<string, unknown>;
+    if (evt.event === 'workflow.run.updated' && handleWorkflowRunUpdated(data)) {
+      return;
+    }
     dispatchAgentEvent(
       evt.event,
       data,

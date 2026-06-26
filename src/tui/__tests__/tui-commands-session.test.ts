@@ -243,6 +243,84 @@ describe('TUI session slash commands', () => {
     expect(systems.at(-1)).toContain('/aside — Alias for /btw');
   });
 
+  it('/help lists skill slash commands', () => {
+    const systems: string[] = [];
+    const { handler } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+      skillSlashCommands: [
+        { name: 'skill:review', description: 'Apply skill to the next turn' },
+      ],
+    });
+
+    handler('/help');
+
+    expect(systems.at(-1)).toContain('Skill commands:');
+    expect(systems.at(-1)).toContain('/skill:review — Apply skill to the next turn');
+  });
+
+  it('forwards skill slash commands to the agent unchanged', () => {
+    const { handler, sendMessage } = makeHandler({
+      skillSlashCommands: [
+        { name: 'skill:review', description: 'Apply skill to the next turn' },
+      ],
+    });
+
+    handler('/skill:review audit this diff');
+
+    expect(sendMessage).toHaveBeenCalledWith('/skill:review audit this diff');
+  });
+
+  it('/help lists workflow slash commands', () => {
+    const systems: string[] = [];
+    const { handler } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+      workflowSlashCommands: [
+        { name: 'workflow:audit_repo', description: 'Run workflow' },
+      ],
+    });
+
+    handler('/help');
+
+    expect(systems.at(-1)).toContain('Workflow commands:');
+    expect(systems.at(-1)).toContain('/workflow:audit_repo — Run workflow');
+  });
+
+  it('starts workflow slash commands directly without routing through the agent', async () => {
+    const systems: string[] = [];
+    const startWorkflowRun = vi.fn(async () => ({
+      runId: 'run-1',
+      sessionKey: 'agent:main:webchat:default:direct:wf_run-1',
+      definitionId: 'audit_repo',
+    }));
+    const { handler, sendMessage } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+      workflowSlashCommands: [
+        { name: 'workflow:audit_repo', description: 'Run workflow' },
+      ],
+      startWorkflowRun,
+    });
+
+    handler('/workflow:audit_repo review current changes');
+    await vi.waitFor(() => expect(startWorkflowRun).toHaveBeenCalledOnce());
+
+    expect(startWorkflowRun).toHaveBeenCalledWith({
+      definitionId: 'audit_repo',
+      goal: 'review current changes',
+    });
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(systems.join('\n')).toContain('Starting workflow: audit_repo');
+    expect(systems.join('\n')).toContain('Workflow started: audit_repo');
+  });
+
   it('keeps built-in slash commands ahead of conflicting extension commands', () => {
     const systems: string[] = [];
     const extensionHandler = vi.fn();

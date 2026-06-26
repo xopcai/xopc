@@ -37,7 +37,8 @@ it('exposes native usage and context commands', () => {
     expect(commands).toContain('export');
     expect(commands).toContain('import');
     expect(commands).toContain('btw');
-    expect(commands).toContain('workflows');
+    expect(commands).toContain('workflow');
+    expect(commands).not.toContain('workflows');
     expect(commands).toContain('tree');
     expect(commands).toContain('changelog');
     expect(commands).toContain('login');

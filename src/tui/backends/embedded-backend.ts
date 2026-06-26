@@ -2,6 +2,7 @@ import type { ExtensionRegistryImpl } from '../../extensions/loader.js';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { AgentService } from '../../agent/index.js';
 import { listAgentEntries, normalizeAgentId } from '../../agent/agent-scope.js';
+import { resolveAgentIdFromSessionKey } from '../../routing/agent-session-key.js';
 import { parseModelRef } from '../../agent/models/selection.js';
 import { createCreateShareTool, isShareToolAvailable } from '../../agent/tools/create-share-tool.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
@@ -11,6 +12,12 @@ import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { getAvailableModels } from '../../providers/index.js';
 import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
 import type { ExportFormat } from '../../session/types.js';
+import { SessionIndex } from '../../session/index.js';
+import { openXopcDatabase } from '../../storage/sqlite/index.js';
+import { buildWorkflowChildTools } from '../../agent/workflow/workflow-child-tools.js';
+import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
+import { WorkflowRunService } from '../../workflows/service/workflow-run-service.js';
+import { WorkflowSessionBridge } from '../../workflows/service/workflow-session-bridge.js';
 import { createLogger } from '../../utils/logger.js';
 import type {
   ChatSendOptions,
@@ -26,6 +33,8 @@ import type {
   TuiTranscriptTreeEntry,
   TuiAgentInfo,
   TuiWorkspaceFileSearchEntry,
+  TuiWorkflowRunStartRequest,
+  TuiWorkflowRunStartResult,
 } from '../tui-backend.js';
 import type { SessionInfo } from '../tui-types.js';
 import { sessionMetadataToTuiItem } from '../tui-session-format.js';
@@ -57,6 +66,11 @@ function isPathSameOrInside(parentDir: string, childDir: string): boolean {
 export class EmbeddedBackend implements TuiBackend {
   private bus: MessageBus;
   private agent: AgentService | null = null;
+  private config: ReturnType<typeof loadConfig> | null = null;
+  private workspace = '';
+  private sessionIndex: SessionIndex | null = null;
+  private sessionIndexReady: Promise<void> | null = null;
+  private workflowRunService: WorkflowRunService | null = null;
   private running = false;
   private chatAbort: AbortController | null = null;
 
@@ -77,13 +91,24 @@ export class EmbeddedBackend implements TuiBackend {
     this.running = true;
 
     const config = loadConfig();
+    this.config = config;
     const workspace = getWorkspacePath(config);
+    this.workspace = workspace;
     const modelId = config.agents?.defaults?.models?.chat?.primary;
+    openXopcDatabase();
+    this.sessionIndex = new SessionIndex({ config });
+    this.sessionIndexReady = this.sessionIndex.initialize().catch((err: unknown) => {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage }, `Embedded session index initialization failed: ${errorMessage}`);
+      throw err;
+    });
 
     this.agent = new AgentService(this.bus, {
       workspace,
       model: modelId,
       config,
+      sessionStore: this.sessionIndex.getStore(),
+      getWorkflowRunService: () => this.getWorkflowRunService(),
       extensionRegistry: this.opts?.extensionRegistry,
       isWorkspaceTrusted: (workspaceDir) => {
         const explicit = this.opts?.isWorkspaceTrusted?.(workspaceDir);
@@ -124,8 +149,60 @@ export class EmbeddedBackend implements TuiBackend {
     return signal && !signal.aborted ? signal : undefined;
   }
 
+  private getWorkflowRunService(): WorkflowRunService {
+    if (this.workflowRunService) return this.workflowRunService;
+    if (!this.config || !this.sessionIndex || !this.agent) {
+      throw new Error('Embedded workflow runtime is not ready.');
+    }
+
+    const host: GatewayWorkflowHost = {
+      currentConfig: this.config,
+      currentWorkspacePath: this.workspace,
+      messageBusInstance: this.bus,
+      agentService: {
+        getModelForSession: (sessionKey) => this.agent!.getModelForSession(sessionKey),
+      },
+      sessionIndexInstance: this.sessionIndex,
+      emit: (event, payload) => {
+        this.onEvent?.({
+          event,
+          data: payload,
+          source: 'broadcast',
+        });
+      },
+    };
+
+    this.workflowRunService = new WorkflowRunService({
+      service: host,
+      sessionBridge: new WorkflowSessionBridge(host),
+      buildChildTools: buildWorkflowChildTools,
+    });
+    return this.workflowRunService;
+  }
+
   async getStartupResources(sessionKey: string) {
     return collectTuiStartupResources(loadConfig(), sessionKey);
+  }
+
+  async startWorkflowRun(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult> {
+    await this.sessionIndexReady;
+    const agentId = opts.agentId?.trim() || resolveAgentIdFromSessionKey(opts.sessionKey);
+    const result = await this.getWorkflowRunService().startWorkflowRun({
+      agentId,
+      definitionId: opts.definitionId,
+      parentSessionKey: opts.sessionKey,
+      source: { kind: 'chat', sessionKey: opts.sessionKey },
+      goal: opts.goal,
+      input: opts.input,
+    });
+    if (result.ok === false) {
+      throw new Error(result.message);
+    }
+    return {
+      runId: result.runId,
+      sessionKey: result.sessionKey,
+      definitionId: opts.definitionId,
+    };
   }
 
   async searchWorkspaceFiles(

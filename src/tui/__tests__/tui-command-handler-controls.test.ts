@@ -532,7 +532,7 @@ it('handles thinking command through native TUI controls', async () => {
       keybindings: createXopcTuiKeybindingsManager(),
     });
 
-    handler('/workflows');
+    handler('/workflow list');
     expect(systems.at(-1)).toContain('Workflows');
     expect(systems.at(-1)).toContain('audit_repo');
 

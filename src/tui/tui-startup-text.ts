@@ -100,7 +100,7 @@ export function formatTuiStartupText(input: {
       '',
       'Useful commands:',
       '  /help — Show all commands and shortcuts',
-      '  /workflows — List saved workflows',
+      '  /workflow list — List saved workflows',
       '  /models — List available models',
       '  /settings — Open TUI settings',
       '  /export — Export current session',

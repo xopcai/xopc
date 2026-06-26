@@ -126,6 +126,20 @@ export interface TuiWorkspaceFileSearchEntry {
   isDirectory: boolean;
 }
 
+export interface TuiWorkflowRunStartRequest {
+  sessionKey: string;
+  definitionId: string;
+  agentId?: string;
+  goal?: string;
+  input?: unknown;
+}
+
+export interface TuiWorkflowRunStartResult {
+  runId: string;
+  sessionKey: string;
+  definitionId: string;
+}
+
 /** Read-only transcript tree row for current-session navigation/inspection. */
 export interface TuiTranscriptTreeEntry {
   id: string;
@@ -181,6 +195,9 @@ export interface TuiBackend {
 
   /** Inject steering text into an active run (tool-boundary delivery). */
   steerChat(opts: { sessionKey: string; message: string }): Promise<{ ok: boolean }>;
+
+  /** Start a workflow run directly, without routing through the LLM. */
+  startWorkflowRun?(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult>;
 
   /** Load startup resources shown in `/start` and initial help. */
   getStartupResources?(sessionKey: string): Promise<TuiStartupResources>;
