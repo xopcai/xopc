@@ -20,7 +20,22 @@ describe('session-tool-result-guard', () => {
     } as never);
     sm.appendMessage({
       role: 'assistant',
-      content: [{ type: 'text', text: 'hi there' }],
+      content: [
+        { type: 'text', text: 'hi there' },
+        {
+          type: 'toolCall',
+          id: 'call-1',
+          name: 'image_generate',
+          arguments: { prompt: 'cat' },
+        },
+      ],
+      timestamp: Date.now(),
+    } as never);
+    sm.appendMessage({
+      role: 'toolResult',
+      toolCallId: 'call-1',
+      toolName: 'image_generate',
+      content: [{ type: 'text', text: 'Saved: /tmp/cat.png' }],
       timestamp: Date.now(),
     } as never);
 
@@ -28,6 +43,7 @@ describe('session-tool-result-guard', () => {
     const updates = listener.mock.calls.map(([update]) => update);
     expect(updates.some((update) => (update?.message as { role?: string })?.role === 'user')).toBe(true);
     expect(updates.some((update) => (update?.message as { role?: string })?.role === 'assistant')).toBe(true);
+    expect(updates.some((update) => (update?.message as { role?: string })?.role === 'toolResult')).toBe(true);
     unsubscribe();
   });
 

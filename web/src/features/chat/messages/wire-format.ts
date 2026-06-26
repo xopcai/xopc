@@ -20,7 +20,13 @@ export interface WireMessage {
   role?: string;
   content?: unknown;
   tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
-  toolCalls?: Array<{ id?: string; name: string; args?: Record<string, unknown> }>;
+  toolCalls?: Array<{
+    id?: string;
+    name: string;
+    args?: unknown;
+    result?: string;
+    isError?: boolean;
+  }>;
   /** Persisted media refs (`media://…`) on user/assistant turns. */
   media?: unknown;
   /** Inline / legacy attachment payloads on user/assistant turns. */

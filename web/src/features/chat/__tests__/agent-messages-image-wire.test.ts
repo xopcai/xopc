@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { collectAssistantWorkspaceOutputPaths } from '@/features/chat/messages/assistant-message-artifacts';
 import { normalizeAgentMessages } from '@/features/chat/messages/agent-messages';
 import { messageAttachmentsToWire } from '@/features/chat/messages/user-message-plain-text';
 
@@ -70,5 +71,59 @@ describe('normalizeAgentMessages user attachment wire shape', () => {
     if (block?.type === 'image') {
       expect(block.source?.data).toBe('data:image/png;base64,SGVsbG8=');
     }
+  });
+
+  it('restores generated image tool results from client history toolCalls', () => {
+    const ui = normalizeAgentMessages([
+      {
+        role: 'assistant',
+        content: 'Done.',
+        toolCalls: [
+          {
+            name: 'image_generate',
+            args: { prompt: 'a lake' },
+            result:
+              'Generated 1 image(s) with openai/gpt-image-1.\nSaved: /Users/test/workspace/media/generated/lake.png',
+          },
+        ],
+        timestamp: 4,
+      },
+    ]);
+
+    const block = ui[0]?.content.find((b) => b.type === 'tool_use');
+    expect(block).toMatchObject({
+      type: 'tool_use',
+      name: 'image_generate',
+      status: 'done',
+    });
+    if (block?.type === 'tool_use') {
+      expect(block.result).toContain('Saved: /Users/test/workspace/media/generated/lake.png');
+    }
+
+    const paths = collectAssistantWorkspaceOutputPaths(ui[0]?.content);
+    expect(paths.map((p) => p.fileName)).toEqual(['lake.png']);
+  });
+
+  it('collects shared generated files from create_share tool input when tool results are missing', () => {
+    const ui = normalizeAgentMessages([
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'toolCall',
+            id: 'call-share',
+            name: 'create_share',
+            arguments: {
+              filePath: '/Users/test/workspace/media/generated/lake.png',
+              title: 'Lake',
+            },
+          },
+        ],
+        timestamp: 5,
+      },
+    ]);
+
+    const paths = collectAssistantWorkspaceOutputPaths(ui[0]?.content);
+    expect(paths.map((p) => p.fileName)).toEqual(['lake.png']);
   });
 });
