@@ -1,6 +1,6 @@
 {
   "name": "@xopcai/xopc",
-  "version": "0.0.114",
+  "version": "0.0.115",
   "description": "Local-first Goal Loop OS for long-term AI work across terminal, web, desktop, mobile app, and messengers.",
   "packageManager": "pnpm@11.6.0",
   "type": "module",
