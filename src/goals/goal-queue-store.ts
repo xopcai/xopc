@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 
 import type { GoalQueueItemSnapshot, GoalQueueStatus } from './goal-queue-types.js';
+import type { UserTurnInput } from '../gateway/user-turn-input.js';
 
 type GoalQueueRow = {
   queue_id: string;
@@ -21,7 +22,7 @@ type GoalQueueRow = {
 };
 
 type GoalQueuePayload = {
-  message?: string;
+  userTurn?: UserTurnInput;
 };
 
 function parsePayload(raw: string): GoalQueuePayload {
@@ -46,7 +47,7 @@ function rowToSnapshot(row: GoalQueueRow): GoalQueueItemSnapshot {
     finishedAt: row.finished_at ?? undefined,
     nextRunAt: row.next_run_at ?? undefined,
     sessionKey: row.session_key ?? undefined,
-    message: payload.message,
+    userTurn: payload.userTurn,
     lastError: row.last_error ?? undefined,
     source: row.source,
   };
@@ -55,7 +56,7 @@ function rowToSnapshot(row: GoalQueueRow): GoalQueueItemSnapshot {
 export class GoalQueueStore {
   enqueue(input: {
     goalId: string;
-    message?: string;
+    userTurn?: UserTurnInput;
     maxRetries: number;
     source: GoalQueueItemSnapshot['source'];
   }): GoalQueueItemSnapshot {
@@ -76,7 +77,7 @@ export class GoalQueueStore {
         queue_id: randomUUID(),
         goal_id: input.goalId,
         status: 'queued',
-        payload_json: JSON.stringify({ message: input.message }),
+        payload_json: JSON.stringify({ userTurn: input.userTurn }),
         attempts: 0,
         max_retries: input.maxRetries,
         enqueued_at: now,
@@ -209,4 +210,3 @@ export class GoalQueueStore {
     });
   }
 }
-

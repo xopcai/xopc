@@ -1,4 +1,5 @@
 import type { GoalWithDetails } from './types.js';
+import type { UserTurnInput } from '../gateway/user-turn-input.js';
 
 export type GoalQueueStatus = 'queued' | 'running' | 'retry_waiting' | 'succeeded' | 'failed' | 'skipped';
 
@@ -13,7 +14,7 @@ export interface GoalQueueItemSnapshot {
   finishedAt?: number;
   nextRunAt?: number;
   sessionKey?: string;
-  message?: string;
+  userTurn?: UserTurnInput;
   lastError?: string;
   source: 'api' | 'cron' | 'workflow' | 'system';
 }
@@ -24,12 +25,12 @@ export interface GoalRunnerOptions {
   retryBaseMs?: number;
   ensureSession: (goal: GoalWithDetails) => Promise<string>;
   hasActiveRun: (sessionKey: string) => boolean;
-  runContinuation: (sessionKey: string, message: string) => Promise<void>;
+  runTurn: (sessionKey: string, userTurn: UserTurnInput) => Promise<void>;
   emit?: (type: string, payload: unknown) => void;
 }
 
 export interface EnqueueGoalRunOptions {
-  message?: string;
+  userTurn?: UserTurnInput;
   maxRetries?: number;
   source?: GoalQueueItemSnapshot['source'];
 }

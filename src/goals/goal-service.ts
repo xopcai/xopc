@@ -6,6 +6,7 @@ import type {
   Goal,
   GoalChecklistAddedBy,
   GoalChecklistStatus,
+  GoalContextAttachment,
   GoalJudgeDecision,
   GoalListQuery,
   GoalSource,
@@ -62,6 +63,7 @@ export class GoalService {
       ...goal,
       checklist: this.store.listChecklist(goalId),
       latestRun: this.store.listRuns(goalId, 1)[0],
+      contextMessage: this.store.getContextMessage(goalId) ?? undefined,
     };
   }
 
@@ -75,7 +77,18 @@ export class GoalService {
       ...goal,
       checklist: this.store.listChecklist(goal.id),
       latestRun: this.store.listRuns(goal.id, 1)[0],
+      contextMessage: this.store.getContextMessage(goal.id) ?? undefined,
     }));
+  }
+
+  setContextMessage(input: {
+    goalId: string;
+    text: string;
+    attachments?: GoalContextAttachment[];
+  }): GoalWithDetails | null {
+    if (!this.store.get(input.goalId)) return null;
+    this.store.setContextMessage(input);
+    return this.get(input.goalId);
   }
 
   update(goalId: string, patch: Partial<Pick<

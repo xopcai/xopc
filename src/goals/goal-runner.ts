@@ -2,12 +2,36 @@ import { GoalQueueStore } from './goal-queue-store.js';
 import { GoalService } from './goal-service.js';
 import type { EnqueueGoalRunOptions, GoalQueueItemSnapshot, GoalQueueStatus, GoalRunnerOptions } from './goal-queue-types.js';
 import type { GoalWithDetails } from './types.js';
+import { mediaRefsToUserTurnAttachments, type UserTurnInput } from '../gateway/user-turn-input.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('GoalRunner');
 
 function terminalGoalStatus(status: GoalWithDetails['status']): boolean {
   return status === 'done' || status === 'archived';
+}
+
+function buildInitialGoalTurn(goal: GoalWithDetails): UserTurnInput {
+  const context = goal.contextMessage;
+  const parts = [`Goal:\n${goal.title}`];
+  if (context?.text.trim()) {
+    parts.push(`Context:\n${context.text.trim()}`);
+  }
+  if (goal.checklist.length > 0) {
+    parts.push(`User-provided acceptance criteria:\n${goal.checklist.map((item, index) => `${index + 1}. ${item.text}`).join('\n')}`);
+  }
+  return {
+    text: parts.join('\n\n'),
+    attachments: mediaRefsToUserTurnAttachments(context?.attachments),
+    clientCreatedAtMs: Date.now(),
+  };
+}
+
+function buildFollowupGoalTurn(goal: GoalWithDetails): UserTurnInput {
+  return {
+    text: goal.nextAction || goal.title,
+    clientCreatedAtMs: Date.now(),
+  };
 }
 
 export class GoalRunner {
@@ -25,7 +49,13 @@ export class GoalRunner {
     const item = this.store.enqueue({
       goalId,
       maxRetries: Math.max(0, Math.floor(options.maxRetries ?? this.opts.defaultMaxRetries ?? 2)),
-      message: options.message?.trim() || undefined,
+      userTurn: options.userTurn && (options.userTurn.text.trim() || options.userTurn.attachments?.length)
+        ? {
+            ...options.userTurn,
+            text: options.userTurn.text.trim(),
+            clientCreatedAtMs: options.userTurn.clientCreatedAtMs ?? Date.now(),
+          }
+        : undefined,
       source: options.source ?? 'api',
     });
     this.emit('goal.queue.updated', item);
@@ -89,8 +119,8 @@ export class GoalRunner {
         this.retry(item, 'Goal session already has an active run');
         return;
       }
-      const message = item.message || activeGoal.nextAction || activeGoal.title;
-      await this.opts.runContinuation(sessionKey, message);
+      const userTurn = item.userTurn ?? (activeGoal.turnsUsed === 0 ? buildInitialGoalTurn(activeGoal) : buildFollowupGoalTurn(activeGoal));
+      await this.opts.runTurn(sessionKey, userTurn);
       this.finish(item, 'succeeded');
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

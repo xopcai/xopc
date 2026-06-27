@@ -38,13 +38,13 @@ describe('GoalQueueStore', () => {
   it('deduplicates active goal queue rows and claims due work', () => {
     const first = store.enqueue({
       goalId,
-      message: 'continue',
+      userTurn: { text: 'continue' },
       maxRetries: 2,
       source: 'api',
     });
     const duplicate = store.enqueue({
       goalId,
-      message: 'again',
+      userTurn: { text: 'again' },
       maxRetries: 2,
       source: 'api',
     });
@@ -57,7 +57,7 @@ describe('GoalQueueStore', () => {
       id: first.id,
       status: 'running',
       attempts: 1,
-      message: 'continue',
+      userTurn: { text: 'continue' },
     });
 
     const withSession = store.setSessionKey(first.id, 'agent:main:webchat:default:direct:run');

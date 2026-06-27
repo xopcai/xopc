@@ -62,7 +62,12 @@ export async function evaluateAfterTurnHermesLike(
   lastResponse: string,
   judgeModelRef: string,
   signal?: AbortSignal,
-  opts?: { goalsSlice?: Partial<GoalsEvaluateConfigSlice>; historyExcerpt?: string; uiLocale?: GoalUiLocale },
+  opts?: {
+    goalsSlice?: Partial<GoalsEvaluateConfigSlice>;
+    historyExcerpt?: string;
+    goalContextExcerpt?: string;
+    uiLocale?: GoalUiLocale;
+  },
 ): Promise<GoalPostTurnDecision> {
   const locale = opts?.uiLocale ?? resolveGoalUiLocale(state);
   const copy = goalEvaluateUserCopy(locale);
@@ -165,6 +170,7 @@ export async function evaluateAfterTurnHermesLike(
       numberedChecklist: renderChecklistNumbered(checklist),
       lastResponse,
       historyExcerpt: opts?.historyExcerpt ?? '',
+      goalContextExcerpt: opts?.goalContextExcerpt ?? '',
       judgeModelRef,
       signal,
       judgeTimeoutMs,

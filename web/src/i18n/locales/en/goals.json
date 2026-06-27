@@ -51,6 +51,7 @@
       "goalFallback": "the goal",
       "goalDescription": "Context",
       "descriptionPlaceholder": "Relevant background, constraints, existing progress…",
+      "addAttachment": "Add attachment",
       "criteriaTitle": "Acceptance criteria",
       "criteriaHint": "These become the checklist the judge uses to decide whether the goal is done.",
       "checklistPolicyEmptyOnly": "When criteria are filled in, AI will not decompose extra criteria after the first turn.",

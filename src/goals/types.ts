@@ -1,3 +1,5 @@
+import type { MediaRef } from '../media/types.js';
+
 export type GoalStatus = 'active' | 'paused' | 'blocked' | 'needs_input' | 'done' | 'archived';
 export type GoalPriority = 'low' | 'normal' | 'high';
 export type GoalSource = 'chat' | 'cli' | 'cron' | 'workflow' | 'channel' | 'api';
@@ -85,9 +87,20 @@ export interface GoalEvidence {
   createdAt: number;
 }
 
+export type GoalContextAttachment = MediaRef;
+
+export interface GoalContextMessage {
+  goalId: string;
+  text: string;
+  attachments: GoalContextAttachment[];
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface GoalWithDetails extends Goal {
   checklist: GoalChecklistItem[];
   latestRun?: GoalRun;
+  contextMessage?: GoalContextMessage;
 }
 
 export interface GoalListQuery {

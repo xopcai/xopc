@@ -5,6 +5,7 @@ import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../chat-limits.js';
 import { createLogger, updateAsyncLogContext } from '../../utils/logger.js';
 import { stringifySSEData } from './sse-json.js';
 import { resolveWebchatSessionKey } from '../resolve-webchat-session-key.js';
+import type { UserTurnAttachment } from '../user-turn-input.js';
 
 const log = createLogger('Gateway:SSE');
 
@@ -24,16 +25,7 @@ interface AgentRequestBody {
   /** Epoch ms when the client started this send (abort cutoff / stale POST drop). */
   clientCreatedAtMs?: number;
   thinking?: string;
-  attachments?: Array<{
-    type: string;
-    mimeType?: string;
-    data?: string;
-    uri?: string;
-    name?: string;
-    size?: number;
-    workspaceRelativePath?: string;
-    durationSeconds?: number;
-  }>;
+  attachments?: UserTurnAttachment[];
 }
 
 function isValidAgentRequest(body: unknown): body is AgentRequestBody {

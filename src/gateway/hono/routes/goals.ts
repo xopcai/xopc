@@ -15,6 +15,8 @@ import { buildSessionKey, sanitizeSegment } from '../../../routing/session-key.j
 import { getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { WorkflowRunSummary } from '../../../workflows/domain/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { MAX_CHAT_ATTACHMENTS, MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../../chat-limits.js';
+import type { UserTurnAttachment, UserTurnInput } from '../../user-turn-input.js';
 
 function parseLimit(raw: string | undefined, fallback = 50): number {
   if (!raw) return fallback;
@@ -51,6 +53,55 @@ function parseBodyGoalStatus(raw: unknown): GoalStatus | null {
 
 function parsePriority(raw: unknown): 'low' | 'normal' | 'high' | undefined {
   return raw === 'low' || raw === 'normal' || raw === 'high' ? raw : undefined;
+}
+
+function maxBase64CharsForBinary(maxBinaryBytes: number): number {
+  return 4 * Math.ceil(maxBinaryBytes / 3);
+}
+
+function parseUserTurnAttachment(raw: unknown): UserTurnAttachment | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const value = raw as Record<string, unknown>;
+  const type = typeof value.type === 'string' && value.type.trim() ? value.type.trim() : 'file';
+  const out: UserTurnAttachment = { type };
+  if (typeof value.id === 'string' && value.id.trim()) out.id = value.id.trim();
+  if (typeof value.mimeType === 'string' && value.mimeType.trim()) out.mimeType = value.mimeType.trim();
+  if (typeof value.data === 'string' && value.data.trim()) out.data = value.data;
+  if (typeof value.uri === 'string' && value.uri.trim()) out.uri = value.uri.trim();
+  if (typeof value.name === 'string' && value.name.trim()) out.name = value.name.trim();
+  if (typeof value.size === 'number' && Number.isFinite(value.size)) out.size = Math.max(0, Math.floor(value.size));
+  if (typeof value.workspaceRelativePath === 'string' && value.workspaceRelativePath.trim()) {
+    out.workspaceRelativePath = value.workspaceRelativePath.trim();
+  }
+  if (typeof value.durationSeconds === 'number' && Number.isFinite(value.durationSeconds)) {
+    out.durationSeconds = value.durationSeconds;
+  }
+  return out.data || out.uri ? out : null;
+}
+
+function parseUserTurnInput(raw: unknown): UserTurnInput | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const value = raw as Record<string, unknown>;
+  const text = typeof value.text === 'string' ? value.text.trim() : '';
+  const attachments = Array.isArray(value.attachments)
+    ? value.attachments.map(parseUserTurnAttachment).filter((item): item is UserTurnAttachment => item !== null)
+    : undefined;
+  if (!text && !attachments?.length) return undefined;
+  return { text, ...(attachments?.length ? { attachments } : {}) };
+}
+
+function validateUserTurnAttachments(attachments: UserTurnAttachment[] | undefined): string | null {
+  if (!attachments?.length) return null;
+  if (attachments.length > MAX_CHAT_ATTACHMENTS) {
+    return `Too many attachments (max ${MAX_CHAT_ATTACHMENTS})`;
+  }
+  const maxDataChars = maxBase64CharsForBinary(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES);
+  for (const attachment of attachments) {
+    if (attachment.data && attachment.data.length > maxDataChars) {
+      return `Attachment exceeds maximum size (${MAX_WEBCHAT_ATTACHMENT_FILE_BYTES} bytes)`;
+    }
+  }
+  return null;
 }
 
 type GoalActivityItem = {
@@ -196,7 +247,7 @@ function buildGoalActivities(input: {
       kind: 'queue',
       status: item.status,
       title: 'Goal queued',
-      summary: item.lastError || item.message || undefined,
+      summary: item.lastError || item.userTurn?.text || undefined,
       createdAt: item.finishedAt ?? item.startedAt ?? item.nextRunAt ?? item.enqueuedAt,
       link: item.sessionKey ? { type: 'chat', value: item.sessionKey } : undefined,
       data: item,
@@ -303,6 +354,12 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     if (!title) return c.json({ ok: false, error: 'Missing title' }, 400);
 
     const sessionKey = typeof body.sessionKey === 'string' && body.sessionKey.trim() ? body.sessionKey.trim() : undefined;
+    const contextMessage = parseUserTurnInput(body.contextMessage) ?? { text: '' };
+    const attachmentError = validateUserTurnAttachments(contextMessage.attachments);
+    if (attachmentError) return c.json({ ok: false, error: attachmentError }, 400);
+    const preparedContextAttachments = contextMessage.attachments?.length
+      ? await deps.service.agentService.prepareInboundAttachments(sessionKey ?? `goal:${Date.now()}`, contextMessage.attachments)
+      : undefined;
     const agentId =
       typeof body.agentId === 'string' && body.agentId.trim()
         ? body.agentId.trim()
@@ -315,7 +372,7 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
         : undefined;
     const goal = goals.create({
       title,
-      description: typeof body.description === 'string' ? body.description : undefined,
+      description: contextMessage.text || undefined,
       sessionKey,
       agentId,
       priority: body.priority === 'low' || body.priority === 'high' ? body.priority : 'normal',
@@ -329,9 +386,11 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
       config: cfg(),
     });
 
-    if (sessionKey) {
-      deps.service.enqueueWebchatPersistentGoalKickoff(sessionKey, title);
-    }
+    goals.setContextMessage({
+      goalId: goal.id,
+      text: contextMessage.text,
+      attachments: preparedContextAttachments,
+    });
 
     return c.json({ ok: true, goal: goals.get(goal.id) });
   });
@@ -508,7 +567,7 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
 
     const queued = deps.service.enqueueGoalRun(goalId, {
-      message: typeof body.message === 'string' ? body.message : undefined,
+      userTurn: parseUserTurnInput(body.userTurn),
       maxRetries: typeof body.maxRetries === 'number' && Number.isFinite(body.maxRetries) ? body.maxRetries : undefined,
       source: 'api',
     });
@@ -521,7 +580,7 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     if (!goals.get(goalId)) return c.json({ ok: false, error: 'Goal not found' }, 404);
     const item = deps.service.enqueueGoalRun(goalId, {
-      message: typeof body.message === 'string' ? body.message : undefined,
+      userTurn: parseUserTurnInput(body.userTurn),
       maxRetries: typeof body.maxRetries === 'number' && Number.isFinite(body.maxRetries) ? body.maxRetries : undefined,
       source: 'api',
     });

@@ -51,6 +51,7 @@
       "goalFallback": "这个目标",
       "goalDescription": "上下文",
       "descriptionPlaceholder": "相关背景、限制条件、已有进展…",
+      "addAttachment": "添加附件",
       "criteriaTitle": "验收标准",
       "criteriaHint": "这些会成为评判器判断目标是否完成的验收清单。",
       "checklistPolicyEmptyOnly": "已填写验收标准时，AI 首轮不会自动拆解补充。",
