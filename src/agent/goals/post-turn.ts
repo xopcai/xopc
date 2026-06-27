@@ -25,6 +25,24 @@ function buildHistoryExcerpt(messages: AgentMessage[], maxChars: number): string
   }
 }
 
+function buildGoalContextText(goal: NonNullable<ReturnType<GoalService['get']>>): string {
+  const lines = [`Title: ${goal.title}`];
+  if (goal.contextMessage?.text.trim()) {
+    lines.push(`Context:\n${goal.contextMessage.text.trim()}`);
+  }
+  if (goal.contextMessage?.attachments.length) {
+    lines.push(
+      [
+        'Attachments:',
+        ...goal.contextMessage.attachments.map((attachment) =>
+          `- ${attachment.name} (${attachment.mimeType}, ${attachment.size} bytes) ${attachment.uri}`,
+        ),
+      ].join('\n'),
+    );
+  }
+  return lines.join('\n\n');
+}
+
 function resolveJudgeModelRef(
   config: Config | undefined,
   sessionKey: string,
@@ -107,7 +125,7 @@ export async function handlePersistentGoalPostTurn(opts: {
     checklistDecomposePolicy: goalsCfg?.checklistDecomposePolicy,
   });
   const state: PersistentGoalState = {
-    goal: goal.title,
+    goal: buildGoalContextText(goal),
     status: 'active',
     turnsUsed: goal.turnsUsed,
     maxTurns: goal.maxTurns,
@@ -148,6 +166,7 @@ export async function handlePersistentGoalPostTurn(opts: {
   const decision = await evaluateAfterTurnHermesLike(state, assistantPlainText, judgeRef, signal, {
     goalsSlice: goalsCfg,
     historyExcerpt,
+    goalContextExcerpt: buildGoalContextText(goal),
     uiLocale: resolveGoalUiLocale(state),
   });
 

@@ -421,8 +421,8 @@ export class GatewayService {
           return sessionKey;
         },
         hasActiveRun: (sessionKey) => this.agentRunner.hasActiveRun(sessionKey),
-        runContinuation: (sessionKey, message) =>
-          this.agentRunner.runScheduledWebchatContinuation(sessionKey, message),
+        runTurn: (sessionKey, userTurn) =>
+          this.agentRunner.runScheduledWebchatTurn(sessionKey, userTurn),
         emit: (type, payload) => this.emit(type, payload),
       });
     }
@@ -459,10 +459,6 @@ export class GatewayService {
 
   getGoalQueueSnapshot() {
     return this.createGoalRunner().snapshot();
-  }
-
-  enqueueWebchatPersistentGoalKickoff(sessionKey: string, goalText: string): void {
-    this.agentRunner.enqueueWebchatPersistentGoalKickoff(sessionKey, goalText);
   }
 
   runAgent(

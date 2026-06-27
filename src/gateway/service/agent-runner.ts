@@ -10,9 +10,8 @@
  *   - `abortAgentRun(runId)` — POST /api/agent/abort + cleanup
  *   - `steerWebchatAgent(chatId, message)` — Agent.steer queue at tool boundary
  *   - `submitClarifyResponse(requestId, answer)` — UI answers a `clarify` call
- *   - `enqueueWebchatPersistentGoalKickoff(sessionKey, goalText)` — initial
- *     `/goal` kickoff posts the goal text as the next user turn
- *   - `drainScheduledWebchatContinuation(sk, msg)` — background continuation
+ *   - `runScheduledWebchatTurn(sk, userTurn)` — background webchat user turn
+ *   - `drainScheduledWebchatContinuation(sk, msg)` — background text continuation
  *     (extension scheduler + persistent-goal flow)
  *   - `clarifyForSession({ sessionKey, request })` — clarify-bridge dispatch
  *     used by `gatewayClarify.requestClarification` in AgentService
@@ -29,6 +28,7 @@ import type { SessionIndex } from '../../session/index.js';
 import { AgentRunRelay, type RelayEvent } from '../agent-run-relay.js';
 import { ClarifyBridge, type ClarifyBridgeRequest } from '../clarify-bridge.js';
 import { runGatewayAgent } from './run-gateway-agent.js';
+import type { UserTurnAttachment, UserTurnInput } from '../user-turn-input.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('Gateway:AgentRunner');
@@ -83,13 +83,7 @@ export class GatewayAgentRunner {
     message: string,
     channel: string,
     chatId: string,
-    attachments?: Array<{
-      type: string;
-      mimeType?: string;
-      data?: string;
-      name?: string;
-      size?: number;
-    }>,
+    attachments?: UserTurnAttachment[],
     thinking?: string,
     runOptions?: { signal?: AbortSignal; clientCreatedAtMs?: number },
   ): AsyncGenerator<
@@ -196,21 +190,18 @@ export class GatewayAgentRunner {
     return this.clarifyBridge.handleResponse(requestId, answer);
   }
 
-  /** Hermes-style: after HTTP sets a goal, enqueue the goal text as the next user turn. */
-  enqueueWebchatPersistentGoalKickoff(sessionKey: string, goalText: string): void {
-    queueMicrotask(() => {
-      void this.drainScheduledWebchatContinuation(sessionKey, goalText);
-    });
-  }
-
   /** Same execution path as scheduled continuation, but lets callers observe failures. */
-  async runScheduledWebchatContinuation(sessionKey: string, message: string): Promise<void> {
-    const gen = this.runAgent(message, 'webchat', sessionKey, undefined, undefined, {
-      clientCreatedAtMs: Date.now(),
+  async runScheduledWebchatTurn(sessionKey: string, userTurn: UserTurnInput): Promise<void> {
+    const gen = this.runAgent(userTurn.text, 'webchat', sessionKey, userTurn.attachments, undefined, {
+      clientCreatedAtMs: userTurn.clientCreatedAtMs ?? Date.now(),
     });
     for await (const _ of gen) {
       // Relay + `agent.stream` broadcast; UI attaches via pending runId + resume.
     }
+  }
+
+  async runScheduledWebchatContinuation(sessionKey: string, message: string): Promise<void> {
+    await this.runScheduledWebchatTurn(sessionKey, { text: message, clientCreatedAtMs: Date.now() });
   }
 
   /** Background drain for extension-initiated webchat turns (`scheduleWebchatContinuation`). */

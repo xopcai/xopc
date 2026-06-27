@@ -38,8 +38,10 @@ describe('goal routes', () => {
       createWorkflowRunService: () => ({}),
       getGoalQueueSnapshot: () => [],
       emit: vi.fn(),
-      enqueueWebchatPersistentGoalKickoff: vi.fn(),
       enqueueGoalRun: vi.fn(),
+      agentService: {
+        prepareInboundAttachments: vi.fn(async () => undefined),
+      },
       sessionIndexInstance: { saveMessages: vi.fn() },
       getActiveWebchatRunId: vi.fn(),
       abortAgentRun: vi.fn(),
@@ -52,6 +54,57 @@ describe('goal routes', () => {
     });
     return app;
   }
+
+  it('creates a goal with context attachments through the shared user turn shape', async () => {
+    const prepared = [{
+      id: 'ctx-file.txt',
+      bucket: 'inbound' as const,
+      type: 'document',
+      mimeType: 'text/plain',
+      name: 'ctx.txt',
+      size: 5,
+      uri: 'media://inbound/ctx-file.txt',
+      path: '/tmp/ctx-file.txt',
+    }];
+    const prepareInboundAttachments = vi.fn(async () => prepared);
+    const enqueueGoalRun = vi.fn();
+    const app = createApp({
+      agentService: { prepareInboundAttachments } as unknown as GatewayService['agentService'],
+      enqueueGoalRun,
+    });
+
+    const res = await app.request('/api/goals', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: 'Review uploaded design',
+        contextMessage: {
+          text: 'Use the attached notes as source context.',
+          attachments: [{
+            type: 'document',
+            mimeType: 'text/plain',
+            data: Buffer.from('hello').toString('base64'),
+            name: 'ctx.txt',
+            size: 5,
+          }],
+        },
+        source: 'api',
+      }),
+      headers: { 'content-type': 'application/json' },
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: true;
+      goal: NonNullable<ReturnType<GoalService['get']>>;
+    };
+    expect(body.goal.description).toBe('Use the attached notes as source context.');
+    expect(body.goal.contextMessage?.text).toBe('Use the attached notes as source context.');
+    expect(body.goal.contextMessage?.attachments).toEqual(prepared);
+    expect(prepareInboundAttachments).toHaveBeenCalledWith(expect.stringMatching(/^goal:/), [
+      expect.objectContaining({ name: 'ctx.txt', data: Buffer.from('hello').toString('base64') }),
+    ]);
+    expect(enqueueGoalRun).not.toHaveBeenCalled();
+  });
 
   it('archives a goal and aborts the active linked webchat run', async () => {
     const goals = new GoalService();

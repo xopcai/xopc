@@ -7,6 +7,8 @@ import type {
   GoalChecklistAddedBy,
   GoalChecklistItem,
   GoalChecklistStatus,
+  GoalContextAttachment,
+  GoalContextMessage,
   GoalEvent,
   GoalEvidence,
   GoalListQuery,
@@ -95,6 +97,14 @@ type EvidenceRow = {
   created_at: number;
 };
 
+type GoalContextRow = {
+  goal_id: string;
+  text: string;
+  attachments_json: string;
+  created_at: number;
+  updated_at: number;
+};
+
 function goalFromRow(row: GoalRow): Goal {
   return {
     id: row.goal_id,
@@ -172,6 +182,35 @@ function parseJsonStringArray(raw: string | null): string[] | undefined {
   if (!Array.isArray(value)) return undefined;
   const rows = value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
   return rows.length ? rows : undefined;
+}
+
+function parseGoalContextAttachments(raw: string): GoalContextAttachment[] {
+  const parsed = parseJsonField(raw);
+  if (!Array.isArray(parsed)) return [];
+  return parsed.filter((item): item is GoalContextAttachment => {
+    if (!item || typeof item !== 'object') return false;
+    const ref = item as Partial<GoalContextAttachment>;
+    return (
+      typeof ref.id === 'string' &&
+      (ref.bucket === 'inbound' || ref.bucket === 'tts' || ref.bucket === 'outbound') &&
+      typeof ref.type === 'string' &&
+      typeof ref.mimeType === 'string' &&
+      typeof ref.name === 'string' &&
+      typeof ref.size === 'number' &&
+      typeof ref.uri === 'string' &&
+      typeof ref.path === 'string'
+    );
+  });
+}
+
+function goalContextFromRow(row: GoalContextRow): GoalContextMessage {
+  return {
+    goalId: row.goal_id,
+    text: row.text,
+    attachments: parseGoalContextAttachments(row.attachments_json),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 function eventFromRow(row: EventRow): GoalEvent {
@@ -298,6 +337,51 @@ export class GoalStore {
       .prepare(`SELECT * FROM goals WHERE goal_id = ?`)
       .get(goalId) as GoalRow | undefined;
     return row ? goalFromRow(row) : null;
+  }
+
+  setContextMessage(input: {
+    goalId: string;
+    text: string;
+    attachments?: GoalContextAttachment[];
+  }): GoalContextMessage {
+    return runSqliteWriteTransaction((db) => {
+      const now = Date.now();
+      const existing = db
+        .prepare(`SELECT created_at FROM goal_context_messages WHERE goal_id = ?`)
+        .get(input.goalId) as { created_at: number } | undefined;
+      db.prepare(
+        `INSERT INTO goal_context_messages (goal_id, text, attachments_json, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(goal_id) DO UPDATE SET
+           text = excluded.text,
+           attachments_json = excluded.attachments_json,
+           updated_at = excluded.updated_at`,
+      ).run(
+        input.goalId,
+        input.text.trim(),
+        JSON.stringify(input.attachments ?? []),
+        existing?.created_at ?? now,
+        now,
+      );
+      insertGoalEvent(db, {
+        goalId: input.goalId,
+        kind: 'context_updated',
+        message: input.text.trim() || `${input.attachments?.length ?? 0} attachment(s)`,
+        data: { attachmentCount: input.attachments?.length ?? 0 },
+        createdAt: now,
+      });
+      const row = db
+        .prepare(`SELECT * FROM goal_context_messages WHERE goal_id = ?`)
+        .get(input.goalId) as GoalContextRow;
+      return goalContextFromRow(row);
+    });
+  }
+
+  getContextMessage(goalId: string): GoalContextMessage | null {
+    const row = getSqliteDatabase()
+      .prepare(`SELECT * FROM goal_context_messages WHERE goal_id = ?`)
+      .get(goalId) as GoalContextRow | undefined;
+    return row ? goalContextFromRow(row) : null;
   }
 
   getActiveForSession(sessionKey: string): Goal | null {

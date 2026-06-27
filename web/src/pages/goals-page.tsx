@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   ListChecks,
   ListFilter,
+  Paperclip,
   Plus,
   RotateCcw,
   Search,
@@ -25,6 +26,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/ui/refresh-button';
 import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/api/registry-api';
+import { ComposerAttachmentChips } from '@/features/chat/composer/composer-attachment-chips';
+import type { WireAttachment } from '@/features/chat/composer/composer.types';
+import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { normalizeGoalsConfigFromConfig, type GoalsConfigState } from '@/features/settings/goals-config-api';
@@ -67,7 +71,7 @@ type GoalQueueItem = {
   goalId: string;
   status: 'queued' | 'running' | 'retry_waiting' | 'succeeded' | 'failed' | 'skipped';
   source: 'manual' | 'cron' | 'workflow' | 'api';
-  message?: string;
+  userTurn?: { text?: string };
   enqueuedAt: number;
   startedAt?: number;
   finishedAt?: number;
@@ -79,9 +83,11 @@ type GoalQueueItem = {
 };
 
 type GoalsPageMessages = ReturnType<typeof messages>['goalsPage'];
+type ChatMessages = ReturnType<typeof messages>['chat'];
 type CreateGoalDraft = {
   title: string;
   description: string;
+  attachments: WireAttachment[];
   checklist: string[];
   priority: GoalItem['priority'];
   deadlineMode: 'none' | 'today' | 'tomorrow' | 'friday' | 'custom';
@@ -233,7 +239,10 @@ async function fetchGoalQueue(): Promise<GoalQueueItem[]> {
 
 async function createGoal(input: {
   title: string;
-  description?: string;
+  contextMessage: {
+    text: string;
+    attachments?: WireAttachment[];
+  };
   priority?: GoalItem['priority'];
   deadlineAt?: number;
   maxTurns?: number;
@@ -528,6 +537,7 @@ function emptyCreateDraft(): CreateGoalDraft {
   return {
     title: '',
     description: '',
+    attachments: [],
     checklist: [''],
     priority: 'normal',
     deadlineMode: 'none',
@@ -602,6 +612,7 @@ function normalizeChecklist(items: string[]): string[] {
 function GoalCreateDialog({
   open,
   t,
+  chat,
   busy,
   options,
   onClose,
@@ -609,6 +620,7 @@ function GoalCreateDialog({
 }: {
   open: boolean;
   t: GoalsPageMessages;
+  chat: ChatMessages;
   busy: boolean;
   options: GoalCreateOptions;
   onClose: () => void;
@@ -617,14 +629,16 @@ function GoalCreateDialog({
   const [draft, setDraft] = useState<CreateGoalDraft>(() => emptyCreateDraft());
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const attachmentTools = useComposerAttachments({ chat });
 
   useEffect(() => {
     if (!open) {
       setDraft(emptyCreateDraft());
       setAdvancedOpen(false);
       setLocalError(null);
+      attachmentTools.clearAttachments();
     }
-  }, [open]);
+  }, [attachmentTools.clearAttachments, open]);
 
   useEffect(() => {
     if (!open || !options.defaultAgentId) return;
@@ -669,7 +683,11 @@ function GoalCreateDialog({
       return;
     }
     try {
-      await onCreate({ ...draft, checklist: normalizeChecklist(draft.checklist) });
+      await onCreate({
+        ...draft,
+        attachments: attachmentTools.wireAttachmentsPayload(),
+        checklist: normalizeChecklist(draft.checklist),
+      });
       onClose();
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : t.errors.create);
@@ -705,13 +723,40 @@ function GoalCreateDialog({
               </label>
 
               <label className="grid gap-1.5">
-                <span className="text-sm font-medium text-fg">{t.createDialog.goalDescription}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-fg">{t.createDialog.goalDescription}</span>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-8 rounded-lg text-xs"
+                    onClick={() => attachmentTools.fileInputRef.current?.click()}
+                  >
+                    <Paperclip className="size-3.5" aria-hidden />
+                    {t.createDialog.addAttachment}
+                  </Button>
+                </div>
                 <textarea
                   value={draft.description}
                   onChange={(e) => patch({ description: e.target.value })}
                   placeholder={t.createDialog.descriptionPlaceholder}
                   rows={4}
                   className="resize-none rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                />
+                <input
+                  ref={attachmentTools.fileInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(event) => {
+                    const files = Array.from(event.currentTarget.files ?? []);
+                    event.currentTarget.value = '';
+                    void attachmentTools.processFiles(files);
+                  }}
+                />
+                <ComposerAttachmentChips
+                  attachments={attachmentTools.attachments}
+                  topPadded={false}
+                  onRemove={attachmentTools.removeAttachment}
                 />
               </label>
 
@@ -1007,7 +1052,7 @@ function GoalDetailDialog({
                   {formatMessage(t.attempt, { attempts: queueItem.attempts, max: queueItem.maxRetries + 1 })} · {formatDateTime(queueTime(queueItem), language)}
                 </p>
                 {queueItem.error ? <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">{queueItem.error}</p> : null}
-                {queueItem.message ? <p className="mt-2 text-sm text-fg-muted">{queueItem.message}</p> : null}
+                {queueItem.userTurn?.text ? <p className="mt-2 text-sm text-fg-muted">{queueItem.userTurn.text}</p> : null}
               </div>
             ) : null}
 
@@ -1207,7 +1252,10 @@ export function GoalsPage() {
     try {
       const goal = await createGoal({
         title: draft.title.trim(),
-        description: draft.description.trim() || undefined,
+        contextMessage: {
+          text: draft.description.trim(),
+          attachments: draft.attachments.length ? draft.attachments : undefined,
+        },
         priority: draft.priority,
         deadlineAt: Number.isFinite(deadlineAt) ? deadlineAt : undefined,
         maxTurns: Number.isFinite(maxTurns) ? maxTurns : undefined,
@@ -1447,6 +1495,7 @@ export function GoalsPage() {
       <GoalCreateDialog
         open={createDialogOpen}
         t={t}
+        chat={messages(language).chat}
         busy={busy === 'create'}
         options={createOptions}
         onClose={() => setCreateDialogOpen(false)}

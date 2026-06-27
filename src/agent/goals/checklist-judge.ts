@@ -201,6 +201,7 @@ export async function evaluateGoalChecklistJudge(opts: {
   numberedChecklist: string;
   lastResponse: string;
   historyExcerpt: string;
+  goalContextExcerpt?: string;
   judgeModelRef: string;
   signal?: AbortSignal;
   judgeTimeoutMs?: number;
@@ -226,6 +227,7 @@ export async function evaluateGoalChecklistJudge(opts: {
   const userBody =
     `Goal:\n${truncateGoalText(opts.goal, 2000)}\n\n` +
     `Current checklist (1-based indices):\n${opts.numberedChecklist}\n\n` +
+    `Original goal context and attachments:\n${truncateGoalText(opts.goalContextExcerpt ?? '', 4000) || '(none)'}\n\n` +
     `Agent's most recent response (snippet):\n${truncateGoalText(opts.lastResponse, RESPONSE_SNIPPET)}\n\n` +
     `Recent conversation excerpt (JSON or text, may be truncated):\n` +
     `${truncateGoalText(opts.historyExcerpt, HISTORY_TRUNC) || '(none)'}`;

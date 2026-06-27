@@ -19,6 +19,7 @@ import { ChatStreamMapper } from '../chat-stream/mapper.js';
 import type { ChatStreamEvent } from '../chat-stream/protocol.js';
 import type { AgentRunRelay } from '../agent-run-relay.js';
 import { MAX_CHAT_ATTACHMENTS } from '../chat-limits.js';
+import type { UserTurnAttachment } from '../user-turn-input.js';
 const log = createLogger('Gateway:Service');
 
 export type RunGatewayAgentYield = ChatStreamEvent;
@@ -42,16 +43,7 @@ export async function *runGatewayAgent(
   message: string,
   channel: string,
   chatId: string,
-  attachments?: Array<{
-    type: string;
-    mimeType?: string;
-    data?: string;
-    uri?: string;
-    name?: string;
-    size?: number;
-    workspaceRelativePath?: string;
-    durationSeconds?: number;
-  }>,
+  attachments?: UserTurnAttachment[],
   thinking?: string,
   runOptions?: { signal?: AbortSignal; clientCreatedAtMs?: number },
 ): AsyncGenerator<RunGatewayAgentYield, { status: string; summary: string }, unknown> {
