@@ -91,7 +91,12 @@ const frame = await agent(
 )
 
 if (!frame || !frame.options?.length) {
-  return { ok: false, reason: 'framing failed', question }
+  const output = { ok: false, reason: 'framing failed', question }
+  return {
+    summary: output.reason,
+    sections: [{ kind: 'json', title: 'Decision framing', value: output }],
+    structuredOutput: output,
+  }
 }
 
 const options = frame.options.slice(0, 4)
@@ -160,10 +165,19 @@ const recommendation = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   question,
   optionCount: options.length,
   ...(recommendation ?? { recommendation: 'recommendation failed', rationale: '', tradeoffs: [] }),
+}
+return {
+  summary: output.recommendation,
+  sections: [
+    { kind: 'text', title: 'Rationale', content: output.rationale },
+    { kind: 'questions', title: 'Trade-offs', items: output.tradeoffs },
+    { kind: 'questions', title: 'What would change the recommendation', items: output.whatWouldChange ?? [] },
+  ],
+  structuredOutput: output,
 }
 `

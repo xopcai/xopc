@@ -1,4 +1,4 @@
-import type { WorkflowDefinition, WorkflowRunStatus, WorkflowRunSummary, WorkflowRunView } from './workflow-api';
+import type { WorkflowDefinition, WorkflowResultEnvelope, WorkflowRunStatus, WorkflowRunSummary, WorkflowRunView } from './workflow-api';
 import { collectWorkflowSearchText } from './workflow-meta-locale';
 import {
   ACTIVE_RUN_STATUSES,
@@ -123,13 +123,14 @@ export function stringifyWorkflowResult(result: unknown): string {
   }
 }
 
-export function resolveWorkflowResultForDisplay(result: unknown): unknown {
-  if (result == null) return result;
-  if (typeof result === 'object' && result !== null && 'raw' in result) {
-    const raw = (result as { raw?: unknown }).raw;
-    return raw !== undefined ? raw : result;
-  }
-  return result;
+export function isWorkflowResultEnvelope(result: unknown): result is WorkflowResultEnvelope {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return false;
+  const record = result as Partial<WorkflowResultEnvelope>;
+  return typeof record.summary === 'string' && Array.isArray(record.sections);
+}
+
+export function resolveWorkflowResultForDisplay(result: unknown): WorkflowResultEnvelope | null {
+  return isWorkflowResultEnvelope(result) ? result : null;
 }
 
 /** Dedicated web chat session for a workflow run (from run metadata). */

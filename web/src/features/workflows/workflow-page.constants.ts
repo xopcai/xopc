@@ -29,6 +29,7 @@ export const WORKFLOW_RUN_PARAM = 'run';
 export const WORKFLOW_TRIGGER_FILTER_PARAM = 'trigger';
 export const WORKFLOW_DEF_PARAM = 'def';
 export const WORKFLOW_START_PARAM = 'start';
+export const WORKFLOW_COPY_PARAM = 'copy';
 
 export const WORKFLOW_TRIGGER_FILTERS = ['all', 'cron', 'webui', 'chat', 'api'] as const;
 export type WorkflowTriggerFilter = (typeof WORKFLOW_TRIGGER_FILTERS)[number];

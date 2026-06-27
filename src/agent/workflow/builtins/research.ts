@@ -77,7 +77,12 @@ const frame = await agent(
 )
 
 if (!frame || !frame.angles?.length) {
-  return { ok: false, reason: 'framing failed', question, depth }
+  const output = { ok: false, reason: 'framing failed', question, depth }
+  return {
+    summary: output.reason,
+    sections: [{ kind: 'json', title: 'Research framing', value: output }],
+    structuredOutput: output,
+  }
 }
 
 const angles = frame.angles.slice(0, maxAngles)
@@ -160,11 +165,20 @@ const synthesis = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   question,
   depth,
   angleCount: angles.length,
   ...(synthesis ?? { executiveSummary: 'synthesis failed', topFindings: [], contradictions: [] }),
+}
+return {
+  summary: output.executiveSummary,
+  sections: [
+    { kind: 'findings', title: 'Top findings', items: output.topFindings.map((item) => ({ title: item.claim, detail: item.source })) },
+    { kind: 'questions', title: 'Open questions', items: output.openQuestions ?? [] },
+    { kind: 'json', title: 'Contradictions', value: output.contradictions ?? [] },
+  ],
+  structuredOutput: output,
 }
 `

@@ -3,6 +3,7 @@ import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import type { WorkflowRunLinkEntry } from '@/features/workflows/parse-workflow-run-links';
+import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -29,7 +30,7 @@ export const WorkflowRunLinkCard = memo(function WorkflowRunLinkCard({
   return (
     <button
       type="button"
-      onClick={() => navigate(`/chat/${encodeURIComponent(link.workflowSessionKey)}`)}
+      onClick={() => navigate(workflowBoardHref(link.runId))}
       className={cn(
         'flex w-full items-start gap-3 rounded-2xl border border-edge bg-surface-panel px-4 py-3 text-left',
         'transition-colors hover:bg-surface-hover/60',
@@ -47,7 +48,7 @@ export const WorkflowRunLinkCard = memo(function WorkflowRunLinkCard({
         <span className="mt-1 block text-sm font-semibold text-fg">{link.definitionId}</span>
         <span className="mt-0.5 block truncate text-sm text-fg-muted">{title}</span>
         <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-accent-fg">
-          {labels.runLinkOpenChat}
+          {labels.taskOpenDetails}
           <ArrowUpRight className="size-3.5" aria-hidden />
         </span>
       </span>

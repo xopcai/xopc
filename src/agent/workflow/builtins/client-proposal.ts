@@ -142,10 +142,19 @@ const polished = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   understanding,
   structure,
   ...(polished ?? { valueProp: '', fullProposal: 'draft failed' }),
+}
+return {
+  summary: output.valueProp || 'Proposal draft complete.',
+  sections: [
+    { kind: 'text', title: 'Proposal', content: output.fullProposal },
+    { kind: 'questions', title: 'Client concerns', items: output.clientConcerns ?? [] },
+    { kind: 'questions', title: 'Flex points', items: output.flexPoints ?? [] },
+  ],
+  structuredOutput: output,
 }
 `

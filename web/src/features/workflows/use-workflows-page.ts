@@ -26,6 +26,7 @@ import {
 import {
   RUN_FETCH_LIMIT,
   WORKFLOW_AGENT_PARAM,
+  WORKFLOW_COPY_PARAM,
   WORKFLOW_DEF_PARAM,
   WORKFLOW_RUN_PARAM,
   WORKFLOW_SEARCH_PARAM,
@@ -139,13 +140,13 @@ export function useWorkflowsPage() {
   );
 
   const openWorkflowEditor = useCallback(
-    (definition: WorkflowDefinition) => {
+    (definition: WorkflowDefinition, forcedMode?: 'edit' | 'copy') => {
       const script = definition.runtime?.source ?? '';
       if (!script.trim()) {
         setActionError(labels.editWorkflowSourceMissing);
         return;
       }
-      const mode = definition.metadata.source === 'user' ? 'edit' : 'copy';
+      const mode = forcedMode ?? (definition.metadata.source === 'user' ? 'edit' : 'copy');
       const initialName = mode === 'edit' ? definition.name : buildWorkflowCopyName(definition);
       setActionError(null);
       setPickStartOpen(false);
@@ -275,10 +276,13 @@ export function useWorkflowsPage() {
   useEffect(() => {
     const defId = searchParams.get(WORKFLOW_DEF_PARAM);
     const shouldStart = searchParams.get(WORKFLOW_START_PARAM) === '1';
+    const shouldCopy = searchParams.get(WORKFLOW_COPY_PARAM) === '1';
     if (!defId || !definitions.length) return;
     const definition = definitions.find((item) => item.id === defId || item.name === defId);
     if (!definition) return;
-    if (shouldStart) {
+    if (shouldCopy) {
+      openWorkflowEditor(definition, 'copy');
+    } else if (shouldStart) {
       setStartDefinition(definition);
     } else {
       setDetailDefinition(definition);
@@ -286,8 +290,9 @@ export function useWorkflowsPage() {
     patchSearchParams((next) => {
       next.delete(WORKFLOW_DEF_PARAM);
       next.delete(WORKFLOW_START_PARAM);
+      next.delete(WORKFLOW_COPY_PARAM);
     });
-  }, [definitions, patchSearchParams, searchParams]);
+  }, [definitions, openWorkflowEditor, patchSearchParams, searchParams]);
 
   useEffect(() => {
     const refreshRuns = () => {

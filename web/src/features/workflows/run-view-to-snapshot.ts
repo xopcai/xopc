@@ -8,15 +8,6 @@ function agentNumericId(id: string, index: number): number {
   return index + 1;
 }
 
-function resolveResultPayload(result: WorkflowRunView['run']['result']): unknown {
-  if (result == null) return undefined;
-  if (typeof result === 'object' && result !== null && 'raw' in result) {
-    const raw = (result as { raw?: unknown }).raw;
-    return raw !== undefined ? raw : result;
-  }
-  return result;
-}
-
 /** Map gateway {@link WorkflowRunView} into chat {@link WorkflowSnapshot} for shared UI. */
 export function runViewToSnapshot(view: WorkflowRunView): WorkflowSnapshot {
   const phaseTitleById = new Map(view.phases.map((phase) => [phase.id, phase.title]));
@@ -71,6 +62,6 @@ export function runViewToSnapshot(view: WorkflowRunView): WorkflowSnapshot {
     errorCount: metrics.errorAgentCount,
     skippedCount: metrics.skippedAgentCount,
     durationMs: metrics.durationMs,
-    result: resolveResultPayload(view.run.result),
+    result: view.run.result,
   };
 }

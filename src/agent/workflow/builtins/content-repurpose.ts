@@ -124,10 +124,19 @@ const packaged = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   extracted,
   adaptations: adaptations.filter(Boolean),
   ...(packaged ?? { publishingOrder: [], summary: 'packaging failed' }),
+}
+return {
+  summary: output.summary,
+  sections: [
+    { kind: 'questions', title: 'Publishing order', items: output.publishingOrder },
+    { kind: 'questions', title: 'Cross-links', items: output.crossLinks ?? [] },
+    { kind: 'json', title: 'Adaptations', value: output.adaptations },
+  ],
+  structuredOutput: output,
 }
 `
