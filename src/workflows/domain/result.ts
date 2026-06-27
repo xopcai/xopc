@@ -6,7 +6,6 @@ export interface WorkflowResultEnvelope {
   artifacts?: WorkflowArtifactRef[];
   followUps?: WorkflowFollowUp[];
   structuredOutput?: unknown;
-  raw?: unknown;
 }
 
 /** Product-level outcome contract for reusable workflow deliverables. */

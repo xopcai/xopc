@@ -219,13 +219,27 @@ export interface WorkflowFollowUp {
 export interface WorkflowResultEnvelope {
   title?: string;
   summary: string;
-  sections?: unknown[];
+  sections: WorkflowResultSection[];
   actions?: unknown[];
   artifacts?: WorkflowArtifactRef[];
   followUps?: WorkflowFollowUp[];
   structuredOutput?: unknown;
-  raw?: unknown;
 }
+
+export type WorkflowResultSection =
+  | { kind: 'text'; title: string; content: string }
+  | {
+      kind: 'findings';
+      title: string;
+      items: Array<{ title: string; severity?: string; file?: string; line?: number; detail?: string; recommendation?: string }>;
+    }
+  | {
+      kind: 'risks';
+      title: string;
+      items: Array<{ title: string; severity?: string; likelihood?: 'low' | 'medium' | 'high'; impact?: string; mitigation?: string }>;
+    }
+  | { kind: 'questions'; title: string; items: string[] }
+  | { kind: 'json'; title: string; value: unknown };
 
 export interface WorkflowRun {
   id: string;
@@ -237,7 +251,7 @@ export interface WorkflowRun {
   status: WorkflowRunStatus;
   source: WorkflowRunSource;
   metadata?: WorkflowRunMetadata;
-  result?: unknown;
+  result?: WorkflowResultEnvelope;
   error?: { code: string; message: string; detail?: string; recoverable: boolean };
   metrics: WorkflowRunMetrics;
   createdAtMs: number;

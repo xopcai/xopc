@@ -161,11 +161,21 @@ const validation = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   request,
   scope,
   ...(plan ?? { summary: 'plan synthesis failed', phases: [], decisions: [], risks: [] }),
   validation: validation ?? { testCommands: [], manualChecks: [], rollbackNotes: [] },
+}
+return {
+  summary: output.summary,
+  sections: [
+    { kind: 'json', title: 'Plan phases', value: output.phases },
+    { kind: 'questions', title: 'Decisions', items: output.decisions ?? [] },
+    { kind: 'risks', title: 'Risks', items: output.risks.map((title) => ({ title })) },
+    { kind: 'json', title: 'Validation', value: output.validation },
+  ],
+  structuredOutput: output,
 }
 `

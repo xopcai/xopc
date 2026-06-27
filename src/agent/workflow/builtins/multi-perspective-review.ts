@@ -145,7 +145,7 @@ const goNoGo = skipAdversarial
       ? 'fix_first'
       : 'ship'
 
-return {
+const output = {
   ok: true,
   target,
   lenses: lenses.map((l) => l.name),
@@ -155,5 +155,13 @@ return {
   goNoGo,
   topRisks: confirmed.slice(0, 10),
   allVerdicts: verdict?.verdicts ?? [],
+}
+return {
+  summary: output.goNoGo === 'ship' ? 'No confirmed blocking risks.' : 'Confirmed risks need attention before shipping.',
+  sections: [
+    { kind: 'risks', title: 'Top risks', items: output.topRisks.map((item) => ({ title: item.title, severity: item.evidenceStrength === 'strong' ? 'high' : 'medium', detail: item.reason })) },
+    { kind: 'json', title: 'All verdicts', value: output.allVerdicts },
+  ],
+  structuredOutput: output,
 }
 `

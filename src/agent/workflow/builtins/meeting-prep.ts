@@ -128,7 +128,7 @@ const talkingPoints = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   meetingTopic,
   attendees,
@@ -136,5 +136,13 @@ return {
   context,
   agenda,
   talkingPoints,
+}
+return {
+  summary: output.talkingPoints?.closingAsk ?? output.goal,
+  sections: [
+    { kind: 'json', title: 'Agenda', value: output.agenda },
+    { kind: 'json', title: 'Talking points', value: output.talkingPoints },
+  ],
+  structuredOutput: output,
 }
 `

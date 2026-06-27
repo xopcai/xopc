@@ -105,7 +105,12 @@ const findings = await parallel(
 phase('Synthesize')
 const live = findings.filter(Boolean)
 if (!live.length) {
-  return { ok: true, scope, summary: 'No findings.', byDimension: {}, priorityActions: [] }
+  const output = { ok: true, scope, summary: 'No findings.', byDimension: {}, priorityActions: [] }
+  return {
+    summary: output.summary,
+    sections: [{ kind: 'json', title: 'Audit result', value: output }],
+    structuredOutput: output,
+  }
 }
 const byDimension = {}
 for (let i = 0; i < dimensions.length; i++) {
@@ -156,11 +161,19 @@ const summary = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   scope,
   dimensions: dimensions.map((d) => d.key),
   ...(summary ?? { topFindings: [], priorityActions: [], summary: 'synthesis failed' }),
   byDimension,
+}
+return {
+  summary: output.summary,
+  sections: [
+    { kind: 'findings', title: 'Top findings', items: output.topFindings.map((item) => ({ title: item.title, severity: item.severity, file: item.file, detail: item.fix })) },
+    { kind: 'json', title: 'Priority actions', value: output.priorityActions },
+  ],
+  structuredOutput: output,
 }
 `

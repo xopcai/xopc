@@ -254,7 +254,7 @@ return { ok: false }
 
     expect(view.run.status).toBe('failed');
     expect(view.run.error?.code).toBe('result_validation_failed');
-    expect(view.run.error?.message).toContain('must have required property');
+    expect(view.run.error?.message).toContain('Workflow scripts must return a WorkflowResultEnvelope');
   });
 
   it('maps engine timeout to timeout status', async () => {

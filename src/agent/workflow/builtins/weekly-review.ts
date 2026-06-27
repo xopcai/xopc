@@ -118,10 +118,18 @@ const plan = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   collected,
   analysis,
   ...(plan ?? { priorities: [], weeklyTheme: 'planning failed' }),
+}
+return {
+  summary: output.weeklyTheme,
+  sections: [
+    { kind: 'json', title: 'Priorities', value: output.priorities },
+    { kind: 'json', title: 'Analysis', value: output.analysis },
+  ],
+  structuredOutput: output,
 }
 `

@@ -156,10 +156,18 @@ const ranking = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   triage,
   ...(ranking ?? { topCauses: [], summary: 'ranking failed', immediateActions: [] }),
   byHypothesis,
+}
+return {
+  summary: output.summary,
+  sections: [
+    { kind: 'risks', title: 'Top causes', items: output.topCauses.map((item) => ({ title: item.hypothesis, severity: item.likelihood, detail: item.summary, mitigation: item.nextStep })) },
+    { kind: 'questions', title: 'Immediate actions', items: output.immediateActions ?? [] },
+  ],
+  structuredOutput: output,
 }
 `

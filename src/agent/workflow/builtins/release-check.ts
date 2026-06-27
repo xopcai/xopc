@@ -150,12 +150,21 @@ const verdict = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   target,
   checks: checks.map((check) => check.key),
   scope,
   ...(verdict ?? { recommendation: 'ship_after_checks', summary: 'verdict failed', blockers: [], finalChecklist: [] }),
   byCheck,
+}
+return {
+  summary: output.summary,
+  sections: [
+    { kind: 'risks', title: 'Blockers', items: output.blockers.map((title) => ({ title, severity: 'high' })) },
+    { kind: 'questions', title: 'Final checklist', items: output.finalChecklist },
+    { kind: 'questions', title: 'Commands to run', items: output.commandsToRun ?? [] },
+  ],
+  structuredOutput: output,
 }
 `

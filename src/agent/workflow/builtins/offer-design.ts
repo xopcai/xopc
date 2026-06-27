@@ -147,11 +147,20 @@ const positioning = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   inventory,
   packages,
   pricing,
   ...(positioning ?? { valueProp: 'positioning failed', launchChecklist: [] }),
+}
+return {
+  summary: output.valueProp,
+  sections: [
+    { kind: 'json', title: 'Packages', value: output.packages },
+    { kind: 'json', title: 'Pricing', value: output.pricing },
+    { kind: 'questions', title: 'Launch checklist', items: output.launchChecklist },
+  ],
+  structuredOutput: output,
 }
 `

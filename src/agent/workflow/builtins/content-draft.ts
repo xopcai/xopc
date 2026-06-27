@@ -81,7 +81,12 @@ const brief = await agent(
 )
 
 if (!brief || !brief.angles?.length) {
-  return { ok: false, reason: 'briefing failed', topic, audience, format }
+  const output = { ok: false, reason: 'briefing failed', topic, audience, format }
+  return {
+    summary: output.reason,
+    sections: [{ kind: 'json', title: 'Draft briefing', value: output }],
+    structuredOutput: output,
+  }
 }
 
 const angles = brief.angles.slice(0, 3)
@@ -131,12 +136,20 @@ const finalDraft = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   topic,
   audience,
   format,
   angleCount: angles.length,
   ...(finalDraft ?? { body: 'draft synthesis failed', rationale: '' }),
+}
+return {
+  summary: output.rationale || output.title || 'Draft complete.',
+  sections: [
+    { kind: 'text', title: output.title ?? 'Draft', content: output.body },
+    { kind: 'questions', title: 'Short variants', items: output.shortVariants ?? [] },
+  ],
+  structuredOutput: output,
 }
 `

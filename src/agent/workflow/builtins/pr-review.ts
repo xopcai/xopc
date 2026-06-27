@@ -156,11 +156,19 @@ const verdict = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   target: reviewTarget,
   scope,
   ...(verdict ?? { recommendation: 'fix_first', summary: 'verdict failed', blockers: [], suggestions: [] }),
   byReviewer,
+}
+return {
+  summary: output.summary,
+  sections: [
+    { kind: 'findings', title: 'Blockers', items: output.blockers.map((item) => ({ title: item.title, severity: 'high', file: item.file, detail: item.fix })) },
+    { kind: 'findings', title: 'Suggestions', items: output.suggestions.map((item) => ({ title: item.title, severity: item.severity, file: item.file })) },
+  ],
+  structuredOutput: output,
 }
 `

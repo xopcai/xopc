@@ -30,10 +30,15 @@ export type WorkflowAgentDetailModalLabels = {
   elapsedHeading: string;
   currentStepHeading: string;
   executionHeading: string;
+  outputHeading: string;
+  stepsHeading: string;
+  transcriptHeading: string;
   promptHeading: string;
   logsHeading: string;
   runningPlaceholder: string;
 };
+
+type AgentDetailTab = 'output' | 'steps' | 'transcript' | 'prompt' | 'logs';
 
 function statusLabel(agent: WorkflowAgentSnapshot, labels: WorkflowAgentDetailModalLabels): string {
   switch (agent.status) {
@@ -78,6 +83,7 @@ export const WorkflowAgentDetailModal = memo(function WorkflowAgentDetailModal({
 }) {
   const [sessionMessages, setSessionMessages] = useState<Message[]>([]);
   const [sessionLoadError, setSessionLoadError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<AgentDetailTab>('output');
 
   const runId = snapshot?.runId;
   const agentId = agent?.id;
@@ -118,6 +124,10 @@ export const WorkflowAgentDetailModal = memo(function WorkflowAgentDetailModal({
       window.removeEventListener('session-transcript-updated', onTranscriptUpdated);
     };
   }, [open, runId, agentId, agentSessionKey, ownerAgentId]);
+
+  useEffect(() => {
+    if (open) setActiveTab('output');
+  }, [open, agentId]);
 
   const readonlyMessages = useMemo(() => sessionMessages, [sessionMessages]);
 
@@ -190,54 +200,81 @@ export const WorkflowAgentDetailModal = memo(function WorkflowAgentDetailModal({
                 </section>
               </div>
 
-              <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto px-5 py-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(18rem,0.9fr)]">
-                <section className="min-w-0">
-                  <div className="mb-2 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                    {labels.executionHeading}
-                  </div>
-                  {showTranscriptPlaceholder ? (
-                    <div className="text-xs text-fg-subtle">{labels.runningPlaceholder}</div>
-                  ) : null}
-                  {sessionLoadError ? (
-                    <div className="mb-2 rounded-md border border-edge-subtle bg-surface-hover/30 px-2 py-1 text-xs text-fg-subtle">
-                      {sessionLoadError}
-                    </div>
-                  ) : null}
-                  {readonlyMessages.length > 0 ? (
-                    <ReadonlyMessageThread
-                      messages={readonlyMessages}
-                      sessionKey={agentSessionKey ?? sessionKey}
-                      reasoningLevel="stream"
-                      compact
-                    />
-                  ) : null}
-                </section>
-
-                <aside className="min-w-0 space-y-4">
-                  <section className="min-w-0">
-                    <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                      {labels.promptHeading}
-                    </div>
-                    <pre className="mt-2 max-h-[min(38vh,18rem)] min-w-0 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-edge-subtle bg-surface-hover/30 p-2 font-mono text-xs text-fg-muted">
-                      {agent.prompt}
-                    </pre>
-                  </section>
-
-                  {snapshot && snapshot.logs.length > 0 ? (
-                    <section className="min-w-0 border-t border-edge-subtle pt-4">
-                      <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                        {labels.logsHeading}
-                      </div>
-                      <div className="mt-2 max-h-[min(32vh,14rem)] space-y-0.5 overflow-y-auto font-mono text-xs text-fg-subtle">
-                        {snapshot.logs.map((line) => (
-                          <div key={line} className="wrap-break-word">
-                            {line}
-                          </div>
-                        ))}
-                      </div>
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <AgentDetailTabs activeTab={activeTab} onChange={setActiveTab} labels={labels} />
+                <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                  {activeTab === 'output' ? (
+                    <section className="space-y-4">
+                      <section className="rounded-lg border border-edge-subtle bg-surface-panel p-3">
+                        <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                          {labels.outputHeading}
+                        </div>
+                        <div className={cn(
+                          'mt-2 whitespace-pre-wrap wrap-break-word text-sm leading-6',
+                          agent.error ? 'font-mono text-rose-600 dark:text-rose-400' : 'text-fg-muted',
+                        )}>
+                          {agent.error || agent.resultPreview || agent.currentStep || labels.runningPlaceholder}
+                        </div>
+                      </section>
                     </section>
                   ) : null}
-                </aside>
+
+                  {activeTab === 'steps' ? (
+                    <section className="space-y-2">
+                      {(agent.steps ?? []).map((step) => (
+                        <div key={step.id} className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="min-w-0 text-sm font-medium text-fg">{step.label}</div>
+                            <span className="text-xs text-fg-subtle">{step.status}</span>
+                          </div>
+                          {step.detail ? <div className="mt-1 break-words text-xs text-fg-muted">{step.detail}</div> : null}
+                          {step.resultPreview || step.error ? (
+                            <div className="mt-1 whitespace-pre-wrap break-words font-mono text-xs text-fg-subtle">
+                              {step.error || step.resultPreview}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </section>
+                  ) : null}
+
+                  {activeTab === 'transcript' ? (
+                    <section className="min-w-0">
+                      {showTranscriptPlaceholder ? (
+                        <div className="text-xs text-fg-subtle">{labels.runningPlaceholder}</div>
+                      ) : null}
+                      {sessionLoadError ? (
+                        <div className="mb-2 rounded-md border border-edge-subtle bg-surface-hover/30 px-2 py-1 text-xs text-fg-subtle">
+                          {sessionLoadError}
+                        </div>
+                      ) : null}
+                      {readonlyMessages.length > 0 ? (
+                        <ReadonlyMessageThread
+                          messages={readonlyMessages}
+                          sessionKey={agentSessionKey ?? sessionKey}
+                          reasoningLevel="stream"
+                          compact
+                        />
+                      ) : null}
+                    </section>
+                  ) : null}
+
+                  {activeTab === 'prompt' ? (
+                    <pre className="min-w-0 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-md border border-edge-subtle bg-surface-hover/30 p-3 font-mono text-xs leading-5 text-fg-muted">
+                      {agent.prompt}
+                    </pre>
+                  ) : null}
+
+                  {activeTab === 'logs' && snapshot ? (
+                    <div className="space-y-0.5 font-mono text-xs text-fg-subtle">
+                      {snapshot.logs.map((line) => (
+                        <div key={line} className="wrap-break-word">
+                          {line}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </>
           ) : null}
@@ -252,6 +289,50 @@ function MetricBlock({ label, children }: { label: string; children: ReactNode }
     <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2">
       <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{label}</div>
       <div className="mt-1 min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function AgentDetailTabs({
+  activeTab,
+  onChange,
+  labels,
+}: {
+  activeTab: AgentDetailTab;
+  onChange: (tab: AgentDetailTab) => void;
+  labels: WorkflowAgentDetailModalLabels;
+}) {
+  const tabs: Array<{ id: AgentDetailTab; label: string }> = [
+    { id: 'output', label: labels.outputHeading },
+    { id: 'steps', label: labels.stepsHeading },
+    { id: 'transcript', label: labels.transcriptHeading },
+    { id: 'prompt', label: labels.promptHeading },
+    { id: 'logs', label: labels.logsHeading },
+  ];
+
+  return (
+    <div className="flex shrink-0 overflow-x-auto border-b border-edge px-5 py-2">
+      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === tab.id}
+          onClick={() => onChange(tab.id)}
+          className={cn(
+            'shrink-0 rounded-lg px-3 py-2 text-sm font-medium',
+            interaction.focusRingPanel,
+            interaction.press,
+            activeTab === tab.id
+              ? 'bg-accent-soft text-accent-fg'
+              : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+          )}
+        >
+          {tab.label}
+        </button>
+      ))}
+      </div>
     </div>
   );
 }

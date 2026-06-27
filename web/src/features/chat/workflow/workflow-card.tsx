@@ -12,7 +12,7 @@
  * ErrorCard) stay pure presentational and unit-testable on their own.
  */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CircleStop, Copy, Check, GitBranch, MoreHorizontal, Save } from 'lucide-react';
 
@@ -28,6 +28,7 @@ import type { WorkflowPhaseRowLabels } from './workflow-phase-row';
 import { ProgressTree, RunningProgressPanel } from './workflow-progress-display';
 import { WorkflowResultSummary, type WorkflowResultSummaryLabels } from './workflow-result-summary';
 import type { WorkflowAgentSnapshot } from './workflow.types';
+import { isWorkflowResultEnvelope, stringifyWorkflowResult, workflowBoardHref } from '@/features/workflows/workflow-page.utils';
 import {
   classifyFailure,
   buildWorkflowFailureContext,
@@ -91,7 +92,6 @@ export const WorkflowCard = memo(function WorkflowCard({
   startedAt,
   sessionKey,
   onAbort,
-  onSendChatMessage,
   labels,
   className,
 }: WorkflowCardProps) {
@@ -148,37 +148,40 @@ export const WorkflowCard = memo(function WorkflowCard({
   // ----- copy result -----
   const [copied, setCopied] = useState(false);
   const handleCopy = useCallback(async () => {
-    if (!snapshot) return;
-    const text =
-      typeof snapshot.result === 'string' ? snapshot.result : safeStringify(snapshot.result);
+    if (!snapshot || !isWorkflowResultEnvelope(snapshot.result)) return;
+    const text = stringifyWorkflowResult(snapshot.result);
     const ok = await copyTextToClipboard(text);
     if (!ok) return;
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   }, [snapshot]);
 
-  // ----- save as named -----
-  const [savePromptOpen, setSavePromptOpen] = useState(false);
-  const [saveName, setSaveName] = useState('');
-  const saveInputRef = useRef<HTMLInputElement | null>(null);
-  useEffect(() => {
-    if (savePromptOpen) {
-      if (!saveName) setSaveName(snapshot?.name ?? '');
-      window.setTimeout(() => saveInputRef.current?.focus(), 0);
-    }
-  }, [savePromptOpen, saveName, snapshot?.name]);
-  const dispatchSave = useCallback(() => {
-    const cleaned = saveName.trim();
-    if (!cleaned || !onSendChatMessage) return;
-    onSendChatMessage(`/workflow save ${cleaned}`);
-    setSavePromptOpen(false);
-  }, [saveName, onSendChatMessage]);
-
   const openInWorkflows = useCallback(() => {
+    const runId = snapshot?.runId?.trim();
+    if (runId) {
+      navigate(workflowBoardHref(runId));
+      return;
+    }
+    const name = snapshot?.name?.trim();
+    if (name) navigate(`/workflows?tab=catalog&def=${encodeURIComponent(name)}`);
+  }, [navigate, snapshot?.name, snapshot?.runId]);
+
+  const openWorkflowCopyEditor = useCallback(() => {
     const name = snapshot?.name?.trim();
     if (!name) return;
-    navigate(`/workflows?tab=catalog&def=${encodeURIComponent(name)}`);
+    navigate(`/workflows?def=${encodeURIComponent(name)}&copy=1`);
   }, [navigate, snapshot?.name]);
+
+  const handleCardClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    const runId = snapshot?.runId?.trim();
+    if (!runId) return;
+    const target = event.target;
+    if (target instanceof Element) {
+      const interactive = target.closest('button,a,input,textarea,select,summary,[role="button"]');
+      if (interactive) return;
+    }
+    navigate(workflowBoardHref(runId));
+  }, [navigate, snapshot?.runId]);
 
   // ----- render -----
   if (isWorkflowFailureOutcome(block) || (status === 'completed' && !snapshot)) {
@@ -265,10 +268,10 @@ export const WorkflowCard = memo(function WorkflowCard({
           >
             {copied ? <Check className="size-4 text-emerald-600 dark:text-emerald-400" /> : <Copy className="size-4" />}
           </button>
-          {onSendChatMessage ? (
+          {snapshot?.name ? (
             <button
               type="button"
-              onClick={() => setSavePromptOpen((v) => !v)}
+              onClick={openWorkflowCopyEditor}
               className={cn(
                 'inline-flex size-7 items-center justify-center rounded-md text-fg-muted',
                 'hover:bg-surface-hover hover:text-fg',
@@ -321,8 +324,10 @@ export const WorkflowCard = memo(function WorkflowCard({
   return (
     <>
     <div
+      onClick={handleCardClick}
       className={cn(
         'min-w-0 rounded-xl border border-edge bg-surface-panel shadow-surface',
+        snapshot?.runId && 'cursor-pointer hover:bg-surface-hover/35',
         className,
       )}
       role="group"
@@ -342,57 +347,13 @@ export const WorkflowCard = memo(function WorkflowCard({
         labels={labels.header}
       />
 
-      {savePromptOpen && status === 'completed' ? (
-        <div className="flex min-w-0 items-center gap-2 border-b border-edge-subtle px-3 py-2">
-          <input
-            ref={saveInputRef}
-            type="text"
-            value={saveName}
-            onChange={(e) => setSaveName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') dispatchSave();
-              else if (e.key === 'Escape') setSavePromptOpen(false);
-            }}
-            placeholder={labels.savePlaceholder}
-            className={cn(
-              'min-w-0 flex-1 rounded-md border border-edge bg-surface-base px-2 py-1 text-sm text-fg',
-              'placeholder:text-fg-disabled',
-              interaction.focusRingPanel,
-            )}
-          />
-          <button
-            type="button"
-            onClick={dispatchSave}
-            disabled={!saveName.trim()}
-            className={cn(
-              'inline-flex h-7 items-center rounded-md bg-accent px-2.5 text-xs font-medium text-fg-onAccent',
-              'hover:bg-accent-hover',
-              interaction.transition,
-              interaction.focusRingPanel,
-              interaction.disabled,
-            )}
-          >
-            {labels.saveSubmit}
-          </button>
-          <button
-            type="button"
-            onClick={() => setSavePromptOpen(false)}
-            className={cn(
-              'inline-flex h-7 items-center rounded-md px-2 text-xs text-fg-muted',
-              'hover:bg-surface-hover hover:text-fg',
-              interaction.transition,
-              interaction.focusRingPanel,
-            )}
-          >
-            {labels.saveCancel}
-          </button>
-        </div>
-      ) : null}
-
       {!collapsed ? (
         <div className="space-y-3 px-3 py-2.5">
           {status === 'completed' && snapshot ? (
-            <WorkflowResultSummary result={snapshot.result} labels={labels.result} />
+            <WorkflowResultSummary
+              result={isWorkflowResultEnvelope(snapshot.result) ? snapshot.result : null}
+              labels={labels.result}
+            />
           ) : null}
 
           {status === 'running' && snapshot ? (
@@ -464,10 +425,3 @@ function extractScriptPreview(block: ToolUseContent): string | undefined {
   return undefined;
 }
 
-function safeStringify(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}

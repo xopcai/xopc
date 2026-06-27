@@ -83,7 +83,12 @@ const frame = await agent(
 )
 
 if (!frame || !frame.competitors?.length) {
-  return { ok: false, reason: 'framing failed', market }
+  const output = { ok: false, reason: 'framing failed', market }
+  return {
+    summary: output.reason,
+    sections: [{ kind: 'json', title: 'Scan framing', value: output }],
+    structuredOutput: output,
+  }
 }
 
 const competitors = frame.competitors.slice(0, 4)
@@ -136,11 +141,20 @@ const synthesis = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   market,
   competitorCount: competitors.length,
   scans: scans.filter(Boolean),
   ...(synthesis ?? { matrixSummary: 'synthesis failed', whitespace: [], positioningAngles: [] }),
+}
+return {
+  summary: output.matrixSummary,
+  sections: [
+    { kind: 'questions', title: 'Whitespace opportunities', items: output.whitespace },
+    { kind: 'questions', title: 'Positioning angles', items: output.positioningAngles },
+    { kind: 'json', title: 'Competitor scans', value: output.scans },
+  ],
+  structuredOutput: output,
 }
 `

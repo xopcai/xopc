@@ -259,8 +259,9 @@ export class WorkflowEngine {
       if (currentPhaseId) {
         await appendEvent('phase_completed', { phaseId: currentPhaseId });
       }
-      assertWorkflowOutput(definition, runtimeResult.result);
-      await appendEvent('run_completed', { result: toWorkflowResultEnvelope(runtimeResult.result) });
+      const result = requireWorkflowResultEnvelope(runtimeResult.result);
+      assertWorkflowOutput(definition, result);
+      await appendEvent('run_completed', { result });
       await this.callHooks((hook) => hook.afterRun?.({ runId, status: 'succeeded' }));
     } catch (err) {
       await eventQueue;
@@ -884,24 +885,6 @@ function truncate(value: string, maxLength: number): string {
   return `${trimmed.slice(0, maxLength - 1)}…`;
 }
 
-function toWorkflowResultEnvelope(value: unknown): WorkflowResultEnvelope {
-  if (isWorkflowResultEnvelope(value)) {
-    return value;
-  }
-  if (typeof value === 'string') {
-    return {
-      summary: truncate(value, 800),
-      sections: [{ kind: 'text', title: 'Result', content: value }],
-      raw: value,
-    };
-  }
-  return {
-    summary: 'Workflow completed.',
-    sections: [{ kind: 'json', title: 'Result', value }],
-    raw: value,
-  };
-}
-
 function assertWorkflowOutput(definition: WorkflowDefinition, value: unknown): void {
   const validation = validateWorkflowJsonSchema(definition.outputSchema, value);
   if (validation.ok) return;
@@ -919,6 +902,17 @@ function isWorkflowResultEnvelope(value: unknown): value is WorkflowResultEnvelo
   }
   const record = value as Partial<WorkflowResultEnvelope>;
   return typeof record.summary === 'string' && Array.isArray(record.sections);
+}
+
+function requireWorkflowResultEnvelope(value: unknown): WorkflowResultEnvelope {
+  if (isWorkflowResultEnvelope(value)) {
+    return value;
+  }
+  throw new WorkflowEngineRunError(
+    'result_validation_failed',
+    'Workflow scripts must return a WorkflowResultEnvelope with summary and sections.',
+    false,
+  );
 }
 
 function toWorkflowRunError(err: unknown, wasAborted: boolean, abortReason?: unknown): WorkflowRunError {

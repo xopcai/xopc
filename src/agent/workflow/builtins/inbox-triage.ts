@@ -135,10 +135,20 @@ const actionList = await agent(
   },
 )
 
-return {
+const output = {
   ok: true,
   classified,
   prioritized,
   ...(actionList ?? { focusTheme: 'triage failed', topThree: [] }),
+}
+return {
+  summary: output.focusTheme,
+  sections: [
+    { kind: 'json', title: 'Top three', value: output.topThree },
+    { kind: 'questions', title: 'Quick wins', items: output.quickWins ?? [] },
+    { kind: 'questions', title: 'Delegate or automate', items: output.delegateOrAutomate ?? [] },
+    { kind: 'questions', title: 'Parking lot', items: output.parkingLot ?? [] },
+  ],
+  structuredOutput: output,
 }
 `
