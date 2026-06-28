@@ -12,7 +12,10 @@ describe('attachment-ref (web)', () => {
       noteId: 'n1',
       attachmentId: 'a1',
     });
-    expect(parseNoteAttachmentTarget('/api/notes/n1/media/a1')).toBeNull();
+    expect(parseNoteAttachmentTarget('/api/notes/n1/media/a1')).toEqual({
+      noteId: 'n1',
+      attachmentId: 'a1',
+    });
   });
 });
 
