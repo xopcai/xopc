@@ -1090,7 +1090,7 @@ export const TTSConfigSchema = z
   .object({
     enabled: z.boolean().default(false),
     /** Primary provider id — any registered SpeechProviderPlugin id. */
-    provider: z.string().min(1).default('openai'),
+    provider: z.string().min(1).default('edge'),
     trigger: z.enum(['off', 'always', 'inbound', 'tagged']).default('always'),
     fallback: TTSFallbackConfigSchema.optional(),
     maxTextLength: z.number().int().min(1).default(512), // Conservative default to accommodate all providers (Alibaba limit is 512)
@@ -1389,6 +1389,15 @@ export const McpConfigSchema = z
 export type McpServerConfig = z.infer<typeof McpServerSchema>;
 export type McpConfig = z.infer<typeof McpConfigSchema>;
 
+export const ConnectorsConfigSchema = z
+  .object({
+    instances: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+  })
+  .strict()
+  .optional();
+
+export type ConnectorsConfig = z.infer<typeof ConnectorsConfigSchema>;
+
 // ============================================
 // Root Config
 // ============================================
@@ -1403,6 +1412,7 @@ export const ConfigSchema = z.object({
   workspace: WorkspaceConfigSchema,
   tools: ToolsConfigSchema,
   mcp: McpConfigSchema,
+  connectors: ConnectorsConfigSchema,
   cron: CronConfigSchema,
   goals: GoalsConfigSchema.optional(),
   extensions: ExtensionsConfigSchema.default({}),

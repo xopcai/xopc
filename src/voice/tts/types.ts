@@ -94,7 +94,7 @@ export interface TTSSummarizationConfig {
 
 export const DEFAULT_TTS_CONFIG: TTSConfig = {
   enabled: false,
-  provider: 'openai',
+  provider: 'edge',
   trigger: 'always',
   fallback: {
     enabled: true,

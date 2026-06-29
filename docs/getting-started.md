@@ -1,6 +1,6 @@
 # Getting Started
 
-Install **xopc**, add at least one LLM provider key, then use the **CLI**, **TUI**, **gateway** (browser console), or the **Electron** app. This page is aligned with the website flow: quick bootstrap, onboarding, first chat.
+XOPC turns goals into loops: it remembers context, coordinates AI, and sustains long-term progress. Install **xopc**, add at least one LLM provider key, then use the **CLI**, **TUI**, **gateway** (browser console), or the **Electron** app.
 
 ## Up and running in 30 seconds
 

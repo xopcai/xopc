@@ -197,7 +197,7 @@ function buildSynthesisRequest(
 }
 
 /** Convert SpeechSynthesisResult → TTSResult shape (audio/format/provider). */
-function toLegacyResult(
+function toTtsResult(
   resolved: ResolvedSpeechProvider,
   result: SpeechSynthesisResult,
   durationSeconds: number | undefined,
@@ -298,7 +298,7 @@ export async function speak(
       }
 
       return {
-        ...toLegacyResult(resolved, result, durationSeconds),
+        ...toTtsResult(resolved, result, durationSeconds),
         attempts,
         ...(fallbackFrom ? { fallbackFrom } : {}),
         attemptedProviders,
@@ -363,7 +363,7 @@ export async function speakWithProvider(
   const durationSeconds = (Date.now() - startTime) / 1000;
 
   return {
-    ...toLegacyResult(resolved, result, durationSeconds),
+    ...toTtsResult(resolved, result, durationSeconds),
     attempts: [
       {
         provider: providerName,

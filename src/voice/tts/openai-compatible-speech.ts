@@ -69,7 +69,7 @@ export interface OpenAiCompatibleSpeechProviderExtraJsonBodyField {
 export interface OpenAiCompatibleSpeechProviderOptions {
   /** Canonical provider id (e.g. "openai", "minimax"). */
   id: string;
-  /** Optional aliases for back-compat config strings. */
+  /** Optional aliases for provider lookup. */
   aliases?: readonly string[];
   /** Human-readable label for error messages and logs (e.g. "OpenAI", "MiniMax"). */
   label: string;

@@ -3,7 +3,7 @@ import {
   headersToRecord,
   recordToHeaders,
   type McpHeaderEntry,
-} from '@/features/settings/connectors/mcp/mcp-headers-utils';
+} from '@/features/connectors/mcp/mcp-headers-utils';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 

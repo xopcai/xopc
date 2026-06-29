@@ -4,13 +4,19 @@ import { CredentialResolver } from '../../auth/credentials.js';
 import type { Config } from '../../config/schema.js';
 import { getConnectorDefinition, listConnectorCatalog } from '../catalog.js';
 import { installConnector, uninstallConnector } from '../install.js';
+import { setConnectorEnabled } from '../lifecycle.js';
 import { listConnectorInstances } from '../instances.js';
 import { materializeConnectorMcpServer } from '../materialize.js';
+import { createConnectorSetupSecretRequest, submitConnectorSetupSecret } from '../setup-secrets.js';
+import { canUseComposioAction, getComposioToolkitScope, setComposioToolkitScope } from '../composio.js';
 import { completeConnectorOAuth, startConnectorOAuth } from '../oauth.js';
+import { searchConnectorRegistries } from '../registries/search.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
   delete process.env.XOPC_GITHUB_OAUTH_CLIENT_ID;
+  delete process.env.XOPC_SMITHERY_API_KEY;
+  delete process.env.SMITHERY_API_KEY;
 });
 
 describe('connectors catalog', () => {
@@ -62,6 +68,56 @@ describe('materializeConnectorMcpServer', () => {
       },
     });
     expect(JSON.stringify(result.server)).not.toContain('ghp_demo');
+  });
+});
+
+describe('connector registry search', () => {
+  it('does not hit remote registries for empty discovery queries', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch');
+
+    const results = await searchConnectorRegistries({ query: '', page: 1, pageSize: 24 });
+
+    expect(results.map((result) => result.source)).toEqual(['mcp_official', 'smithery', 'modelscope']);
+    expect(results.every((result) => result.connectors.length === 0)).toBe(true);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('searches Smithery without requiring an API key for discovery', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        servers: [
+          {
+            qualifiedName: 'weather/example',
+            displayName: 'Weather Example',
+            description: 'Weather MCP server.',
+          },
+        ],
+      }),
+    } as Response);
+
+    const results = await searchConnectorRegistries({ source: 'smithery', query: 'weath', pageSize: 5 });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        headers: { Accept: 'application/json' },
+      }),
+    );
+    expect(results[0]?.connectors[0]).toMatchObject({
+      id: 'smithery-weather-example',
+      displayName: 'Weather Example',
+      setup: {
+        secrets: [expect.objectContaining({ key: 'SMITHERY_AUTHORIZATION_HEADER' })],
+      },
+      runtime: {
+        type: 'mcp',
+        serverTemplate: {
+          url: 'https://server.smithery.ai/weather/example/mcp',
+          headers: { Authorization: '{{secrets.SMITHERY_AUTHORIZATION_HEADER}}' },
+        },
+      },
+    });
   });
 });
 
@@ -153,6 +209,11 @@ describe('connector install and instances', () => {
       xopcConnector: { managed: true, connectorId: 'fetch' },
     });
 
+    const disabled = setConnectorEnabled(config, 'fetch', false);
+    expect(disabled.enabled).toBe(false);
+    expect(disabled.status).toBe('disabled');
+    expect(config.mcp?.servers?.fetch?.xopcConnector?.enabled).toBe(false);
+
     const removed = uninstallConnector(config, 'fetch');
 
     expect(removed.connectorId).toBe('fetch');
@@ -179,6 +240,41 @@ describe('connector install and instances', () => {
 
     await expect(installConnector(config, 'github', {}, resolver)).rejects.toThrow(/Connect GitHub with OAuth/);
     expect(config.mcp?.servers?.github).toBeUndefined();
+  });
+
+  it('stores connector setup secret refs without exposing raw values to config', async () => {
+    const request = createConnectorSetupSecretRequest({ key: 'BRAVE_API_KEY' });
+    expect(request.ref).toMatch(/^secret:\/\//);
+    expect(submitConnectorSetupSecret(request.ref, 'brave_secret')).toBe(true);
+    const config = { mcp: { servers: {} } } as Config;
+    const resolver = { saveApiKey: vi.fn() } as unknown as CredentialResolver;
+
+    await installConnector(config, 'brave-search', { secrets: { BRAVE_API_KEY: request.ref } }, resolver);
+
+    expect(resolver.saveApiKey).toHaveBeenCalledWith('connector-brave-search-brave_api_key', 'brave_secret', { profileName: 'default' });
+    expect(JSON.stringify(config)).not.toContain('brave_secret');
+  });
+
+  it('installs a non-MCP Composio connector instance with scoped action gates', async () => {
+    const config = {} as Config;
+
+    const instance = await installConnector(config, 'composio-gmail', {});
+
+    expect(instance).toMatchObject({
+      instanceId: 'composio-gmail',
+      connectorId: 'composio-gmail',
+      materialized: { type: 'composio', id: 'composio-gmail' },
+    });
+    expect(config.connectors?.instances?.['composio-gmail']).toMatchObject({
+      runtime: { type: 'composio', toolkit: 'gmail' },
+      scope: 'read',
+      xopcConnector: { managed: true, connectorId: 'composio-gmail' },
+    });
+    expect(getComposioToolkitScope(config, 'gmail')).toBe('read');
+    expect(canUseComposioAction(config, 'GMAIL_FETCH_EMAILS').ok).toBe(true);
+    expect(canUseComposioAction(config, 'GMAIL_SEND_EMAIL').ok).toBe(false);
+    setComposioToolkitScope(config, 'gmail', 'write');
+    expect(canUseComposioAction(config, 'GMAIL_SEND_EMAIL').ok).toBe(true);
   });
 
   it('installs GitHub with OAuth token references and no plaintext token in config', async () => {

@@ -83,13 +83,20 @@ export function recordConnectorHealthUsage(
   if (!marker) {
     return;
   }
+  const checkedAt = new Date().toISOString();
   marker.usage = {
-    lastHealthCheckAt: new Date().toISOString(),
+    lastHealthCheckAt: checkedAt,
     lastHealthStatus: result.status,
     lastToolCount: result.toolCount,
     lastResourceCount: result.resourceCount,
     lastPromptCount: result.promptCount,
   } satisfies ConnectorUsageRecord;
+  if (result.ok) {
+    marker.lastConnectedAt = checkedAt;
+    delete marker.lastError;
+  } else if (result.error) {
+    marker.lastError = result.error;
+  }
   appendConnectorAuditRecord(config, instanceId, {
     action: 'health_check',
     status: result.status,

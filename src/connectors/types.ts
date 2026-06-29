@@ -1,4 +1,4 @@
-export type ConnectorKind = 'mcp' | 'cli' | 'http' | 'channel' | 'browser' | 'extension' | 'builtin';
+export type ConnectorKind = 'mcp' | 'cli' | 'http' | 'channel' | 'browser' | 'extension' | 'builtin' | 'composio' | 'nativeTool' | 'memorySource';
 
 export type ConnectorCategory = 'code' | 'docs' | 'browser' | 'data' | 'automation' | 'custom';
 
@@ -44,11 +44,29 @@ export type ConnectorConfigField = {
   description?: string;
 };
 
-export type ConnectorRuntimeDefinition = {
-  type: 'mcp';
-  serverId: string;
-  serverTemplate: Record<string, unknown>;
-};
+export type ConnectorRuntimeDefinition =
+  | {
+      type: 'mcp';
+      serverId: string;
+      serverTemplate: Record<string, unknown>;
+    }
+  | {
+      type: 'channel';
+      channelId: string;
+      pluginId: string;
+    }
+  | {
+      type: 'composio';
+      toolkit: string;
+    }
+  | {
+      type: 'nativeTool';
+      toolsetId: string;
+    }
+  | {
+      type: 'memorySource';
+      sourceKind: string;
+    };
 
 export type ConnectorDefinition = {
   id: string;
@@ -98,12 +116,21 @@ export type ConnectorInstance = {
   connectorId: string;
   displayName: string;
   enabled: boolean;
-  status: 'installed' | 'not_configured' | 'failed' | 'disabled';
+  status: 'installed' | 'not_configured' | 'failed' | 'disabled' | 'connecting' | 'connected' | 'unauthorized' | 'degraded';
+  connectionStatus?: 'unknown' | 'disconnected' | 'connecting' | 'connected' | 'unauthorized' | 'error' | 'disabled';
+  authStatus?: 'unknown' | 'none' | 'connected' | 'missing' | 'expired' | 'unauthorized';
+  lastConnectedAt?: string;
+  lastError?: string;
   secretStatus: Record<string, boolean>;
-  materialized: {
-    type: 'mcp';
-    serverId: string;
-  };
+  materialized:
+    | {
+        type: 'mcp';
+        serverId: string;
+      }
+    | {
+        type: 'channel' | 'composio' | 'nativeTool' | 'memorySource';
+        id: string;
+      };
   usage: ConnectorUsageRecord;
   audit: ConnectorAuditRecord[];
 };
@@ -116,6 +143,8 @@ export type ConnectorHealthStatus =
   | 'tools_list_failed'
   | 'timeout'
   | 'network_failed'
+  | 'unauthorized'
+  | 'disabled'
   | 'unknown_error';
 
 export type ConnectorHealthResult = {
@@ -141,4 +170,8 @@ export type ManagedConnectorMarker = {
   managed: true;
   connectorId: string;
   version: string;
+  enabled?: boolean;
+  lastConnectedAt?: string;
+  lastError?: string;
+  displayName?: string;
 };

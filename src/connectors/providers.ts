@@ -1,4 +1,5 @@
 import { BUILTIN_CONNECTORS } from './builtin-catalog.js';
+import { COMPOSIO_CONNECTORS } from './composio.js';
 import type { ConnectorDefinition } from './types.js';
 
 export type ConnectorProvider = {
@@ -15,7 +16,15 @@ export const builtinConnectorProvider: ConnectorProvider = {
   },
 };
 
-const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [builtinConnectorProvider];
+export const composioConnectorProvider: ConnectorProvider = {
+  id: 'composio',
+  displayName: 'Composio connectors',
+  listConnectors() {
+    return COMPOSIO_CONNECTORS;
+  },
+};
+
+const CONNECTOR_PROVIDERS: readonly ConnectorProvider[] = [builtinConnectorProvider, composioConnectorProvider];
 
 export function listConnectorProviders(): ConnectorProvider[] {
   return [...CONNECTOR_PROVIDERS];

@@ -199,7 +199,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
    * Response: { ok: true, payload: { audio: string, format: string, provider: string } }
    */
   authenticated.post('/api/voice/tts-test', strictRateLimitMiddleware, async (c) => {
-    let body: { text?: unknown; provider?: unknown; model?: unknown; voice?: unknown } = {};
+    let body: { text?: unknown; provider?: unknown; model?: unknown; voice?: unknown; providerConfig?: unknown } = {};
     try {
       body = (await c.req.json()) as typeof body;
     } catch {
@@ -217,10 +217,18 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     const config = service.currentConfig as Config;
     const baseTtsConfig = mergeTtsConfigFromAppConfig(config.messages?.tts);
     const provider = typeof body.provider === 'string' && body.provider.trim() ? body.provider.trim() : baseTtsConfig.provider;
+    const providerConfig =
+      body.providerConfig && typeof body.providerConfig === 'object' && !Array.isArray(body.providerConfig)
+        ? (body.providerConfig as Record<string, unknown>)
+        : undefined;
     const ttsConfig = {
       ...baseTtsConfig,
       enabled: true,
       provider,
+      providers: {
+        ...(baseTtsConfig.providers ?? {}),
+        ...(providerConfig ? { [provider]: { ...(baseTtsConfig.providers?.[provider] ?? {}), ...providerConfig } } : {}),
+      },
       fallback: { enabled: false, order: [provider] },
     };
 
@@ -232,6 +240,7 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
     }
 
     try {
+      const startedAt = Date.now();
       const result = await speak(text, ttsConfig, {
         appConfig: config,
         parseDirectives: false,
@@ -240,13 +249,26 @@ export function registerVoiceRoutes(authenticated: Hono, deps: AuthenticatedRout
           ...(typeof body.voice === 'string' && body.voice.trim() ? { voice: body.voice.trim() } : {}),
         },
       });
+      if (!result.audio.length) {
+        throw new Error(`TTS provider "${result.provider}" returned empty audio`);
+      }
+      const mimeType =
+        result.format === 'opus' || result.format === 'ogg'
+          ? 'audio/ogg'
+          : result.format === 'mp3' || result.format === 'mpeg'
+            ? 'audio/mpeg'
+            : result.format === 'wav'
+              ? 'audio/wav'
+              : `audio/${result.format}`;
       return c.json({
         ok: true,
         payload: {
           audio: result.audio.toString('base64'),
+          mimeType,
           format: result.format,
           provider: result.provider,
-          ...(result.duration !== undefined ? { duration: result.duration } : {}),
+          latencyMs: Date.now() - startedAt,
+          audioSize: result.audio.length,
         },
       });
     } catch (error) {

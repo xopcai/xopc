@@ -125,10 +125,33 @@
     "apiKeyHide": "隐藏",
     "apiKeyNotInConfigFile": "配置文件中没有该服务商的密钥（请检查环境变量）。",
     "apiKeyRevealFailed": "无法从配置文件读取密钥。",
+    "overview": {
+      "title": "语音状态",
+      "description": "快速确认助手现在能不能听、会不会说。",
+      "input": "输入",
+      "replies": "回复",
+      "voice": "声音",
+      "ready": "可用",
+      "off": "关闭"
+    },
+    "behavior": {
+      "title": "语音应该如何工作",
+      "description": "先选择用户能感知的行为，引擎细节放在下方。",
+      "modes": {
+        "text": { "title": "仅文字", "description": "不使用语音输入，也不朗读回复。" },
+        "listen": { "title": "听我说话", "description": "转写语音输入，但仍用文字回复。" },
+        "conversation": { "title": "我说话时也语音回复", "description": "语音输入、语音回复，适合作为聊天默认模式。" },
+        "always": { "title": "始终朗读回复", "description": "每条助手回复都会朗读。" }
+      }
+    },
+    "inputEngine": {
+      "title": "语音输入引擎",
+      "description": "转写服务商、模型、API Key 与备用策略。"
+    },
     "stt": {
-      "title": "语音转文字（STT）",
-      "description": "使用阿里云 DashScope 或 OpenAI Whisper 将收到的语音转为文字。",
-      "enable": "启用 STT",
+      "title": "语音输入（STT）",
+      "description": "将语音消息转写成文字，让助手能够阅读。",
+      "enable": "启用语音输入",
       "enableDesc": "开启后，可将语音消息转写给智能体使用。",
       "provider": "STT 服务商",
       "alibaba": "阿里云 DashScope",
@@ -140,11 +163,11 @@
       "fallbackDesc": "主服务商失败时尝试备用服务商。"
     },
     "tts": {
-      "title": "文字转语音（TTS）",
-      "description": "在启用时把助手回复合成为语音。",
-      "enable": "启用 TTS",
-      "enableDesc": "开启后，按下方触发模式执行 TTS。",
-      "trigger": "触发",
+      "title": "助手语音回复（TTS）",
+      "description": "在需要时把助手回复合成为音频。",
+      "enable": "启用语音回复",
+      "enableDesc": "开启后，助手回复会按下方规则朗读。",
+      "trigger": "朗读回复",
       "triggerOff": "关闭",
       "triggerAlways": "始终",
       "triggerInbound": "仅入站语音",
@@ -153,15 +176,51 @@
       "triggerDescAlways": "对助手消息尝试使用 TTS。",
       "triggerDescInbound": "仅当用户发送语音时以语音回复。",
       "triggerDescTagged": "仅在使用 [[tts]] 指令时。",
-      "provider": "TTS 服务商",
+      "triggerHelp": "选择什么时候把助手文字回复转换成语音。",
+      "provider": "语音引擎",
       "providerOpenai": "OpenAI TTS",
       "providerEdge": "Microsoft Edge（免费）",
       "providerLocalCli": "本地 CLI（离线）",
       "voice": "音色",
+      "alwaysWarning": "始终朗读会在高频聊天中打扰用户，只建议在明确以语音为主的通道中开启。",
+      "statusTitle": "当前语音回复状态",
+      "statusOff": "语音回复已关闭，助手仍会正常发送文字回复。",
+      "statusReady": "已可用：",
+      "statusNeedsSetup": "需要配置：",
+      "advanced": {
+        "title": "引擎设置",
+        "description": "API Key、模型、音色与服务商专属选项。"
+      },
+      "configured": "可用",
+      "needsKey": "需密钥",
+      "noKeyNeeded": "免密钥",
+      "providerHints": {
+        "edge": "免费、配置快，适合测试和轻量使用。",
+        "openai": "低延迟、音色选择多；需要 OpenAI Key。",
+        "alibaba": "中文语音效果好；需要 DASHSCOPE_API_KEY。",
+        "minimax": "高质量音色；异步生成可能较慢。",
+        "localCli": "通过 Piper、sherpa-onnx、mlx-audio 或自定义脚本在本地私有合成。",
+        "generic": "扩展语音服务商，请在下方配置所需字段。"
+      },
+      "test": {
+        "title": "试听音色",
+        "description": "用当前服务商、模型和音色生成一小段样例，确认效果后再用于聊天。",
+        "sampleText": "你好，我是你的助手。启用语音输出后，我可以朗读助手回复。",
+        "play": "试听",
+        "stop": "停止",
+        "generating": "生成中…",
+        "playing": "播放中",
+        "ready": "已生成",
+        "emptyText": "请输入要合成的文本。",
+        "playFailed": "音频播放失败。"
+      },
       "edgeHint": "Microsoft Edge TTS — 无需 API Key。",
       "localCli": {
+        "preset": "命令模板",
+        "presetPlaceholder": "选择本地引擎模板…",
+        "presetDesc": "从 Piper、sherpa-onnx 或 mlx-audio 的安全模板开始；试听前请替换路径。",
         "command": "CLI 命令",
-        "commandDesc": "Shell 模板；占位符：{{Text}}、{{OutputBase}}。",
+        "commandDesc": "Shell 模板；占位符：{{Text}}、{{OutputPath}}、{{OutputDir}}、{{OutputBase}}。",
         "commandPlaceholder": "mlx_audio.tts.generate --text \"{{Text}}\" --file_prefix {{OutputBase}}",
         "cwd": "工作目录",
         "cwdDesc": "可选；默认使用网关工作目录。",

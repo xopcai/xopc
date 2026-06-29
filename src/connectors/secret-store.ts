@@ -1,4 +1,5 @@
 import { CredentialResolver } from '../auth/credentials.js';
+import { consumeConnectorSetupSecretRef } from './setup-secrets.js';
 import type { ConnectorDefinition, ConnectorInstallInput, ConnectorSecretReference } from './types.js';
 
 function normalizeSecretSegment(value: string): string {
@@ -41,10 +42,13 @@ export async function saveConnectorSecrets(
 ): Promise<void> {
   for (const secret of definition.setup.secrets ?? []) {
     const rawValue = input.secrets?.[secret.key];
-    if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
+    const resolvedValue = typeof rawValue === 'string' && rawValue.trim().startsWith('secret://')
+      ? consumeConnectorSetupSecretRef(rawValue)
+      : rawValue;
+    if (typeof resolvedValue !== 'string' || resolvedValue.trim().length === 0) {
       continue;
     }
-    await resolver.saveApiKey(connectorSecretProviderId(definition.id, secret.key), rawValue.trim(), {
+    await resolver.saveApiKey(connectorSecretProviderId(definition.id, secret.key), resolvedValue.trim(), {
       profileName: 'default',
     });
   }

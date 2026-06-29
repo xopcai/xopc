@@ -5,7 +5,7 @@ const base = '/xopc/'
 
 export default defineConfig({
   title: 'xopc',
-  description: 'Local-first Goal Loop OS for long-term AI work across terminal, web, desktop, messengers, and mobile app.',
+  description: 'XOPC is a local-first AI system that remembers context, coordinates AI, and sustains long-term progress.',
   base,
   // esbuild 0.28+ errors when downleveling destructuring for Vite's legacy
   // default dev target. Apply the feature override to both Vite transforms and
@@ -29,13 +29,13 @@ export default defineConfig({
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
     ['link', { rel: 'apple-touch-icon', href: `${base}favicon.svg` }],
-    ['meta', { property: 'og:title', content: 'xopc - Local-first Goal Loop OS' }],
-    ['meta', { property: 'og:description', content: 'One AI assistant that keeps long-term goals moving across terminal, web, desktop, messengers, and mobile app.' }],
+    ['meta', { property: 'og:title', content: 'xopc - Turn goals into loops' }],
+    ['meta', { property: 'og:description', content: 'Keep what matters moving. A local-first AI system that remembers context, coordinates AI, and sustains long-term progress.' }],
     ['meta', { property: 'og:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
     ['meta', { property: 'og:type', content: 'website' }],
     ['meta', { name: 'twitter:card', content: 'summary_large_image' }],
-    ['meta', { name: 'twitter:title', content: 'xopc - Local-first Goal Loop OS' }],
-    ['meta', { name: 'twitter:description', content: 'One AI assistant that keeps long-term goals moving across terminal, web, desktop, messengers, and mobile app.' }],
+    ['meta', { name: 'twitter:title', content: 'xopc - Turn goals into loops' }],
+    ['meta', { name: 'twitter:description', content: 'Keep what matters moving. A local-first AI system that remembers context, coordinates AI, and sustains long-term progress.' }],
     ['meta', { name: 'twitter:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
   ],
   locales: {

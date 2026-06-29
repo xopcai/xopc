@@ -1,12 +1,12 @@
 import type { ReactNode } from 'react';
 
-import { McpHeadersEditor } from '@/features/settings/connectors/mcp/mcp-headers-editor';
+import { McpHeadersEditor } from '@/features/connectors/mcp/mcp-headers-editor';
 import {
   connectionTimeoutSeconds,
   parseConnectionTimeoutSeconds,
   type McpServerRow,
   type McpTransportKind,
-} from '@/features/settings/connectors/mcp/mcp-config-api';
+} from '@/features/connectors/mcp/mcp-config-api';
 import type { McpSettingsMessages } from '@/i18n/messages';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';

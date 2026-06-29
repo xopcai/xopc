@@ -7,7 +7,6 @@ import {
   loadAgentDefaultsSettingsPage,
   loadAppManagementSettingsPanel,
   loadAppearanceSettingsPanel,
-  loadConnectorsSettingsPanel,
   loadDreamingSettingsPanel,
   loadGatewaySettingsPanel,
   loadGoalsSettingsPanel,
@@ -30,7 +29,6 @@ const SECTIONS: SettingsSectionId[] = [
   'app-management',
   'agent-defaults',
   'agent-browser',
-  'connectors',
   'credentials',
   'gateway',
   'heartbeat',
@@ -47,9 +45,6 @@ const AgentDefaultsTabbedPage = lazy(() =>
 );
 const AgentBrowserSettingsPage = lazy(() =>
   loadAgentBrowserSettingsPage().then((m) => ({ default: m.AgentBrowserSettingsPage })),
-);
-const ConnectorsSettingsPanel = lazy(() =>
-  loadConnectorsSettingsPanel().then((m) => ({ default: m.ConnectorsSettingsPanel })),
 );
 const AppearanceSettingsPanel = lazy(() =>
   loadAppearanceSettingsPanel().then((m) => ({ default: m.AppearanceSettingsPanel })),
@@ -124,10 +119,6 @@ export function SettingsPage() {
 
   if (id === 'agent-browser') {
     return renderLazySection(AgentBrowserSettingsPage);
-  }
-
-  if (id === 'connectors') {
-    return renderLazySection(ConnectorsSettingsPanel);
   }
 
   if (id === 'appearance') {
