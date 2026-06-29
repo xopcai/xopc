@@ -48,7 +48,7 @@ export function ComposioConnectorPanel({ instance }: { instance: ConnectorInstan
         listComposioConnections().catch(() => []),
         listComposioTools(toolkit).catch(() => []),
         listComposioTriggerEvents(20).catch(() => []),
-        getComposioScope(toolkit).catch(() => 'read' as ComposioScope),
+        getComposioScope(toolkit).catch((): ComposioScope => 'read'),
       ]);
       setConnections(nextConnections.filter((connection) => connection.toolkit.toLowerCase() === toolkit.toLowerCase()));
       setTools(nextTools);

@@ -37,6 +37,40 @@ describe('userMessageFromSsePayload', () => {
 });
 
 describe('shouldReplaceOptimisticUserRow', () => {
+  it('keeps optimistic attachments when an early server row has only matching text', () => {
+    const optimistic: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: 'see image' }],
+      attachments: [{ type: 'image', name: 'a.png', mimeType: 'image/png', data: 'abc' }],
+      timestamp: 1000,
+    };
+    const server: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: 'see image' }],
+      timestamp: 1005,
+    };
+    expect(shouldReplaceOptimisticUserRow(optimistic, server)).toBe(false);
+  });
+
+  it('keeps all optimistic attachments until the server row has all media metadata', () => {
+    const optimistic: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: 'see images' }],
+      attachments: [
+        { type: 'image', name: 'a.png', mimeType: 'image/png', data: 'a' },
+        { type: 'image', name: 'b.png', mimeType: 'image/png', data: 'b' },
+      ],
+      timestamp: 1000,
+    };
+    const partialServer: Message = {
+      role: 'user',
+      content: [{ type: 'text', text: 'see images' }],
+      attachments: [{ type: 'image', name: 'a.png', mimeType: 'image/png', uri: 'media://inbound/a.png' }],
+      timestamp: 1005,
+    };
+    expect(shouldReplaceOptimisticUserRow(optimistic, partialServer)).toBe(false);
+  });
+
   it('replaces optimistic send when server adds media metadata', () => {
     const optimistic: Message = {
       role: 'user',
