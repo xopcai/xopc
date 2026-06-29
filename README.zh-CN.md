@@ -6,8 +6,9 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>Goal Loop OS，目标持续循环。</strong><br />
-  一个本地优先的长期目标 AI 助手：在终端、网页、桌面、移动端和 IM 里持续推进目标、行动与反馈。
+  <strong>把目标变成循环。</strong><br />
+  让真正重要的事情，持续向前。<br />
+  XOPC 是一个 Local-first AI 系统，持续记住上下文，协调 AI 推进下一步，让长期目标不断向前。
 </p>
 
 <p align="center">
@@ -34,7 +35,7 @@
 
 ## 适合谁
 
-- **长期项目** —— 把方向、下一步行动、反馈和重新校准放进同一个循环，不让目标断在一次次聊天里。
+- **长期项目** —— 把目标变成可持续的循环：上下文、下一步行动、反馈和重新校准始终连在一起。
 - **独立开发者 / One Person Company** —— 同一个助手覆盖 CLI、TUI、网页、桌面、Telegram、微信和飞书/Lark。
 - **本地优先 AI 工作流** —— 自带 API Key，云端/本地模型混用，支持 skills/extensions，数据默认在 **`~/.xopc/`**。
 
@@ -128,7 +129,7 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 
 ## 为什么选 xopc
 
-- 🔁 **循环驱动，而非一次性对话** — 把目标、行动与反馈持续连起来，目标不会因为对话断点就停住。
+- 🔁 **循环驱动，而非一次性对话** — XOPC 持续记住上下文，协调 AI 推进下一步，让真正重要的事情不断向前。
 
 - 🏠 **你的机器** — 配置与数据在 **`~/.xopc/`**，无强制云端、无意外账单。
 - 🔑 **自带钥匙** — OpenAI、Anthropic、Google、DeepSeek、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端本地可混用，一行配置切换目录模型。详见 **[模型](https://xopcai.github.io/xopc/zh/models)**。

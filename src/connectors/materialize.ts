@@ -92,6 +92,7 @@ export function materializeConnectorMcpServer(
     managed: true,
     connectorId: definition.id,
     version: definition.version,
+    displayName: definition.displayName,
   };
   const server = {
     ...(rawServer as Record<string, unknown>),

@@ -12,7 +12,7 @@
  *     string.
  */
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -118,6 +118,18 @@ function parseDirectiveTokenInternal(
   }
 }
 
+async function waitForNonEmptyFile(filePath: string, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + Math.min(Math.max(timeoutMs, 1000), 5000);
+  while (Date.now() < deadline) {
+    try {
+      if (statSync(filePath).size > 0) return;
+    } catch {
+      // The Edge package may resolve before the file is visible on slower filesystems.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
 async function synthesizeToBuffer(
   text: string,
   config: EdgeTtsConfig,
@@ -149,7 +161,11 @@ async function synthesizeToBuffer(
       timeout: timeoutMs,
     });
     await tts.ttsPromise(text, outputPath);
+    await waitForNonEmptyFile(outputPath, timeoutMs);
     const buffer = readFileSync(outputPath);
+    if (buffer.length === 0) {
+      throw new Error(`Edge TTS produced an empty ${format} file for voice ${voice}`);
+    }
     return { buffer, outputFormat: format, ext };
   } finally {
     try {

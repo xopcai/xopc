@@ -6,6 +6,7 @@ export const loadNotesPage = () => import('@/pages/notes-page');
 export const loadNoteDetailPage = () => import('@/features/notes/note-detail-page');
 export const loadWorkflowsPage = () => import('@/pages/workflows-page');
 export const loadSkillsPage = () => import('@/pages/skills-page');
+export const loadConnectorsPage = () => import('@/pages/connectors-page');
 export const loadLogsPage = () => import('@/pages/logs-page');
 export const loadSettingsPage = () => import('@/pages/settings-page');
 export const loadAgentsSettingsPage = () => import('@/features/settings/agents');
@@ -18,7 +19,6 @@ export const loadSharePreviewPage = () => import('@/pages/share-preview-page');
 export const loadSetupStatusPanel = () => import('@/features/settings/setup-checklist/setup-status-panel');
 export const loadAgentDefaultsSettingsPage = () => import('@/features/settings/agents/agent-defaults-tabbed-page');
 export const loadAgentBrowserSettingsPage = () => import('@/features/settings/agents/agent-browser-settings-page');
-export const loadConnectorsSettingsPanel = () => import('@/features/settings/connectors/connectors-settings');
 export const loadAppearanceSettingsPanel = () => import('@/features/settings/appearance-settings');
 export const loadKeyboardShortcutsSettingsPanel = () => import('@/features/settings/keyboard-shortcuts-settings');
 export const loadSystemSettingsPanel = () => import('@/features/settings/system-settings-panel');
@@ -55,7 +55,6 @@ function preloadSettingsSection(path: string) {
   if (section === 'overview') return preload(loadSetupStatusPanel);
   if (section === 'agent-defaults') return preload(loadAgentDefaultsSettingsPage);
   if (section === 'agent-browser') return preload(loadAgentBrowserSettingsPage);
-  if (section === 'connectors') return preload(loadConnectorsSettingsPanel);
   if (section === 'appearance') return preload(loadAppearanceSettingsPanel);
   if (section === 'keyboard-shortcuts') return preload(loadKeyboardShortcutsSettingsPanel);
   if (section === 'system') return preload(loadSystemSettingsPanel);
@@ -75,6 +74,7 @@ export function preloadRouteForPath(to: string) {
   const path = pathWithoutSearch(to);
 
   if (path === '/skills') return preload(loadSkillsPage);
+  if (path === '/connectors') return preload(loadConnectorsPage);
   if (path === '/cron') return preload(loadCronPage);
   if (path === '/goals') return preload(loadGoalsPage);
   if (path.startsWith('/goals/')) return preload(loadGoalDetailPage);

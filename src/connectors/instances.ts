@@ -23,32 +23,98 @@ function secretStatusForServer(server: Record<string, unknown>): Record<string, 
   return status;
 }
 
+function connectorInstanceFromRecord(instanceId: string, record: Record<string, unknown>): ConnectorInstance[] {
+  const marker = record.xopcConnector;
+  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return [];
+  const markerRecord = marker as Record<string, unknown>;
+  if (markerRecord.managed !== true || typeof markerRecord.connectorId !== 'string') return [];
+  const connectorId = markerRecord.connectorId;
+  const definition = getConnectorDefinition(connectorId);
+  const runtime = record.runtime && typeof record.runtime === 'object' && !Array.isArray(record.runtime)
+    ? record.runtime as Record<string, unknown>
+    : {};
+  const runtimeType = typeof runtime.type === 'string' ? runtime.type : 'composio';
+  const enabled = markerRecord.enabled !== false;
+  return [{
+    instanceId,
+    connectorId,
+    displayName: definition?.displayName ?? (typeof markerRecord.displayName === 'string' ? markerRecord.displayName : connectorId),
+    enabled,
+    status: enabled ? 'installed' : 'disabled',
+    connectionStatus: enabled ? 'unknown' : 'disabled',
+    authStatus: definition?.auth.mode === 'none' ? 'none' : 'unknown',
+    lastConnectedAt: typeof markerRecord.lastConnectedAt === 'string' ? markerRecord.lastConnectedAt : undefined,
+    lastError: typeof markerRecord.lastError === 'string' ? markerRecord.lastError : undefined,
+    secretStatus: {},
+    materialized: runtimeType === 'composio'
+      ? { type: 'composio', id: instanceId }
+      : runtimeType === 'channel'
+        ? { type: 'channel', id: instanceId }
+        : runtimeType === 'nativeTool'
+          ? { type: 'nativeTool', id: instanceId }
+          : { type: 'memorySource', id: instanceId },
+    usage: getConnectorUsageFromMarker(marker),
+    audit: getConnectorAuditFromMarker(marker),
+  }];
+}
+
 export function listConnectorInstances(config: Config): ConnectorInstance[] {
   const servers = config.mcp?.servers ?? {};
-  return Object.entries(servers)
+  const mcpInstances = Object.entries(servers)
     .flatMap(([serverId, server]) => {
       if (!isManagedConnectorServer(server)) {
         return [];
       }
       const connectorId = server.xopcConnector.connectorId;
       const definition = getConnectorDefinition(connectorId);
+      const enabled = server.xopcConnector.enabled !== false;
+      const usage = getConnectorUsageFromMarker(server.xopcConnector);
+      const lastHealthStatus = usage.lastHealthStatus;
+      const connectionStatus: ConnectorInstance['connectionStatus'] = !enabled
+        ? 'disabled'
+        : lastHealthStatus === 'ok'
+          ? 'connected'
+          : lastHealthStatus === 'unauthorized'
+            ? 'unauthorized'
+            : lastHealthStatus
+              ? 'error'
+              : 'unknown';
+      const authStatus: ConnectorInstance['authStatus'] = definition?.auth.mode === 'none'
+        ? 'none'
+        : lastHealthStatus === 'missing_secret'
+          ? 'missing'
+          : lastHealthStatus === 'unauthorized'
+            ? 'unauthorized'
+            : 'unknown';
+      const status: ConnectorInstance['status'] = enabled ? (lastHealthStatus === 'ok' ? 'connected' : 'installed') : 'disabled';
       return [
         {
           instanceId: serverId,
           connectorId,
-          displayName: definition?.displayName ?? connectorId,
-          enabled: true,
-          status: 'installed' as const,
+          displayName: definition?.displayName ?? server.xopcConnector.displayName ?? connectorId,
+          enabled,
+          status,
+          connectionStatus,
+          authStatus,
+          lastConnectedAt: server.xopcConnector.lastConnectedAt,
+          lastError: server.xopcConnector.lastError,
           secretStatus: secretStatusForServer(server),
           materialized: {
             type: 'mcp' as const,
             serverId,
           },
-          usage: getConnectorUsageFromMarker(server.xopcConnector),
+          usage,
           audit: getConnectorAuditFromMarker(server.xopcConnector),
         },
       ];
-    })
+    });
+  const genericInstances = Object.entries(config.connectors?.instances ?? {})
+    .flatMap(([instanceId, record]) => (
+      record && typeof record === 'object' && !Array.isArray(record)
+        ? connectorInstanceFromRecord(instanceId, record as Record<string, unknown>)
+        : []
+    ));
+  return [...mcpInstances, ...genericInstances]
     .sort((left, right) => left.displayName.localeCompare(right.displayName));
 }
 

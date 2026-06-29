@@ -1,8 +1,8 @@
 {
   "name": "@xopcai/xopc",
   "version": "0.0.115",
-  "description": "Local-first Goal Loop OS for long-term AI work across terminal, web, desktop, mobile app, and messengers.",
-  "packageManager": "pnpm@11.6.0",
+  "description": "Local-first AI system that remembers context, coordinates AI, and sustains long-term progress.",
+  "packageManager": "pnpm@11.9.0",
   "type": "module",
   "main": "dist/src/index.js",
   "types": "dist/src/index.d.ts",

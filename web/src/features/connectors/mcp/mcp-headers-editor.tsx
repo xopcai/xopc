@@ -1,7 +1,7 @@
 import { ClipboardPaste, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { parseHeadersPaste, type McpHeaderEntry } from '@/features/settings/connectors/mcp/mcp-headers-utils';
+import { parseHeadersPaste, type McpHeaderEntry } from '@/features/connectors/mcp/mcp-headers-utils';
 import { readTextFromClipboard } from '@/lib/copy-to-clipboard';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';

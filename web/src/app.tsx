@@ -11,6 +11,7 @@ import {
   loadAgentsSettingsPage,
   loadAppsPage,
   loadChannelsPage,
+  loadConnectorsPage,
   loadCronPage,
   loadGoalDetailPage,
   loadGoalsPage,
@@ -38,6 +39,7 @@ const NotesPage = lazy(() => loadNotesPage().then((m) => ({ default: m.NotesPage
 const NoteDetailPage = lazy(() => loadNoteDetailPage().then((m) => ({ default: m.NoteDetailPage })));
 const WorkflowsPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowsPage })));
 const SkillsPage = lazy(() => loadSkillsPage().then((m) => ({ default: m.SkillsPage })));
+const ConnectorsPage = lazy(() => loadConnectorsPage().then((m) => ({ default: m.ConnectorsPage })));
 const LogsPage = lazy(() => loadLogsPage().then((m) => ({ default: m.LogsPage })));
 const SettingsPage = lazy(() => loadSettingsPage().then((m) => ({ default: m.SettingsPage })));
 const AgentsSettingsDetailPage = lazy(() =>
@@ -195,6 +197,14 @@ const router = createHashRouter([
         ),
       },
       {
+        path: 'connectors',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <ConnectorsPage />
+          </Suspense>
+        ),
+      },
+      {
         path: 'channels',
         children: [
           {
@@ -214,10 +224,6 @@ const router = createHashRouter([
             ),
           },
         ],
-      },
-      {
-        path: 'mcp',
-        element: <Navigate to="/settings/connectors" replace />,
       },
       {
         path: 'agents',
@@ -275,10 +281,6 @@ const router = createHashRouter([
           {
             path: 'channels',
             element: <Navigate to="/channels" replace />,
-          },
-          {
-            path: 'mcp',
-            element: <Navigate to="/settings/connectors" replace />,
           },
           {
             path: 'cron',

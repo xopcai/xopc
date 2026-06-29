@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: Goal Loop OS
-  tagline: "一个本地优先的长期目标 AI 助手：在终端、网页、桌面、手机端和即时通讯里持续推进目标、行动与反馈。"
+  text: 把目标变成循环。
+  tagline: "让真正重要的事情，持续向前。XOPC 是一个 Local-first AI 系统，持续记住上下文，协调 AI 推进下一步，让长期目标不断向前。"
   image:
     src: /logo.svg
     alt: xopc
@@ -17,6 +17,9 @@ hero:
       link: https://github.com/xopcai/xopc
 
 features:
+  - title: 🔁 循环驱动，而非一次性对话
+    details: "XOPC 把上下文、下一步行动、反馈和重新校准放进同一个循环，让长期目标不会断在一次次聊天里。"
+    link: /zh/cron
   - title: 🏠 默认本地优先
     details: "xopc 运行在你自己的硬件上。配置、工作区文件、凭据和本地状态默认都在 ~/.xopc/。没有强制云端。"
     link: /zh/configuration

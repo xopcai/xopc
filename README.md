@@ -6,8 +6,9 @@
 <h1 align="center"><a href="https://xopc.ai">xopc</a></h1>
 
 <p align="center">
-  <strong>Goal Loop OS. Long-term AI in one loop.</strong><br />
-  A local-first AI assistant that keeps long-term goals moving across terminal, web, desktop, mobile app, and messengers.
+  <strong>Turn goals into loops.</strong><br />
+  Keep what matters moving.<br />
+  XOPC is a local-first AI system that remembers context, coordinates AI, and sustains long-term progress.
 </p>
 
 <p align="center">
@@ -34,7 +35,7 @@
 
 ## Built for
 
-- **Long-running projects** — keep direction, next actions, feedback, and recalibration in one loop instead of losing context between chats.
+- **Long-running projects** — turn goals into durable loops: context, next actions, feedback, and recalibration stay connected across chats.
 - **One-person companies and solo builders** — use the same assistant from CLI, TUI, Web, Desktop, Telegram, WeChat, and Feishu/Lark.
 - **Local-first AI workflows** — bring your own keys, mix cloud/local models, add skills/extensions, and keep data under **`~/.xopc/`**.
 
@@ -128,7 +129,7 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 
 ## Why xopc
 
-- 🔁 **Goal loops, not one-shot chats** — keep long-term direction, action, and feedback moving together.
+- 🔁 **Goal loops, not one-shot chats** — XOPC remembers context, coordinates AI, and keeps what matters moving.
 
 - 🏠 **Your machine** — Data and config under **`~/.xopc/`**. No mandatory cloud or surprise bills.
 - 🔑 **Bring your own keys** — OpenAI, Anthropic, Google, DeepSeek, Ollama, LM Studio, vLLM, and **20+** providers. Mix cloud and local; switch catalog models in one config line. See **[Models](https://xopcai.github.io/xopc/models)**.

@@ -3,8 +3,8 @@ import { useMemo, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import { Button } from '@/components/ui/button';
-import type { McpToolInfo } from '@/features/settings/connectors/mcp/mcp-config-api';
-import { toolMatchesQuery } from '@/features/settings/connectors/mcp/mcp-tools-utils';
+import type { McpToolInfo } from '@/features/connectors/mcp/mcp-config-api';
+import { toolMatchesQuery } from '@/features/connectors/mcp/mcp-tools-utils';
 import { cn } from '@/lib/cn';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';

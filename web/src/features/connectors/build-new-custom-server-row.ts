@@ -1,7 +1,7 @@
 import {
   emptyMcpServerRow,
   type McpServerRow,
-} from '@/features/settings/connectors/mcp/mcp-config-api';
+} from '@/features/connectors/mcp/mcp-config-api';
 
 export function buildNewCustomServerRow(
   existingCustomServers: McpServerRow[],

@@ -14,6 +14,9 @@ function classifyConnectorHealthError(error: unknown): ConnectorHealthStatus {
   if (/ECONN|ENOTFOUND|network|fetch failed/i.test(message)) {
     return 'network_failed';
   }
+  if (/401|unauthorized|forbidden|permission denied/i.test(message)) {
+    return 'unauthorized';
+  }
   if (/missing|required|credential|api key|token/i.test(message)) {
     return 'missing_secret';
   }
@@ -36,6 +39,9 @@ function healthActionForStatus(status: ConnectorHealthStatus): string | undefine
   if (status === 'startup_failed') {
     return 'Verify the connector runtime dependency is installed and reachable.';
   }
+  if (status === 'unauthorized') {
+    return 'Reconnect the connector or refresh its credentials.';
+  }
   return undefined;
 }
 
@@ -53,6 +59,21 @@ export async function testConnectorInstance(config: Config, serverId: string): P
       resources: [],
       prompts: [],
       error: `Connector instance not found: ${serverId}`,
+    };
+  }
+
+  if (!instance.enabled) {
+    return {
+      serverId,
+      ok: false,
+      status: 'disabled',
+      toolCount: 0,
+      resourceCount: 0,
+      promptCount: 0,
+      tools: [],
+      resources: [],
+      prompts: [],
+      action: 'Enable the connector before running a health check.',
     };
   }
 

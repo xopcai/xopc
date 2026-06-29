@@ -186,6 +186,7 @@ export class MessageSender {
     this._notifyServerAbort();
     this._abort?.abort();
     this._abort = undefined;
+    this._clearPendingRun();
   }
 
   /** Best-effort server-side abort (runId) so the agent stops even if the HTTP signal is flaky. */

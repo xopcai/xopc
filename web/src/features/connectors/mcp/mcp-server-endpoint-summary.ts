@@ -1,4 +1,4 @@
-import type { McpServerRow } from '@/features/settings/connectors/mcp/mcp-config-api';
+import type { McpServerRow } from '@/features/connectors/mcp/mcp-config-api';
 
 export function mcpServerEndpointSummary(row: McpServerRow): string {
   if (row.transport === 'stdio') {

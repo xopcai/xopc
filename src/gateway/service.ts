@@ -69,6 +69,7 @@ import {
 } from './startup-readiness.js';
 import { createGatewayStartupTrace, type GatewayStartupTrace } from './startup-trace.js';
 import { closeXopcDatabase, openXopcDatabase } from '../storage/sqlite/index.js';
+import { startConnectorSupervisor, type ConnectorSupervisor } from '../connectors/supervisor.js';
 
 export type {
   GatewayChannelStartupPhase1Metrics,
@@ -125,6 +126,7 @@ export class GatewayService {
   private workflowRunServiceInstance: WorkflowRunService | null = null;
   private goalRunner: GoalRunner | null = null;
   private goalNotifications: GoalNotificationService | null = null;
+  private connectorSupervisor: ConnectorSupervisor | null = null;
 
   /**
    * Webchat agent invocation surface (`runAgent`, `abortAgentRun`, `steer*`,
@@ -775,6 +777,11 @@ export class GatewayService {
 
     this.ensureHeartbeatService().start(heartbeatRunnerConfigFromConfig(this.config));
 
+    this.connectorSupervisor = startConnectorSupervisor({
+      getConfig: () => this.config,
+      saveConfig: (cfg) => this.saveConfig(cfg),
+    });
+
     void import('../browser/providers/browser-ext-install.js')
       .then(({ ensureBrowserExtensionOnStartup }) => ensureBrowserExtensionOnStartup(this.config))
       .catch((err) => log.warn({ err }, 'Browser extension artifact ensure failed'));
@@ -957,6 +964,8 @@ export class GatewayService {
 
     // Stop heartbeat service
     this.heartbeatService?.stop();
+    this.connectorSupervisor?.stop();
+    this.connectorSupervisor = null;
 
     // Stop browser extension WS server (shared acquire/release with BrowserManager)
     if (this.browserExtensionRelease) {

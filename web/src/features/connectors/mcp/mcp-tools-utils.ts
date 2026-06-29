@@ -1,4 +1,4 @@
-import type { McpToolInfo } from '@/features/settings/connectors/mcp/mcp-config-api';
+import type { McpToolInfo } from '@/features/connectors/mcp/mcp-config-api';
 
 function displayToolName(fullName: string | undefined, stripPrefix?: string): string {
   if (!fullName) return '';

@@ -1,5 +1,5 @@
-import { ExternalLink, Loader2, Mic, Volume2 } from 'lucide-react';
-import { useCallback, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
+import { ExternalLink, Loader2, Mic, Play, Square, Volume2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import {
   fetchVoiceSttProviders,
   normalizeVoiceSettings,
   patchVoiceSettings,
+  testTtsVoice,
   type SttProviderListEntry,
   type TtsProviderListEntry,
   type VoiceConfigFieldMetadata,
@@ -73,6 +74,21 @@ function selectClassName(): string {
   return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
 }
 
+function audioBytesLabel(bytes: number | undefined): string {
+  if (!bytes || bytes <= 0) return '';
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function makeAudioUrl(base64: string, mimeType: string): string {
+  const binary = window.atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return URL.createObjectURL(new Blob([bytes], { type: mimeType }));
+}
+
 const STT_ALIBABA_FALLBACK = [
   { id: 'paraformer-v2', name: 'Paraformer v2' },
   { id: 'paraformer-v1', name: 'Paraformer v1' },
@@ -111,72 +127,21 @@ const TTS_MINIMAX_VOICES_FALLBACK = [
   { id: 'female-shaonv', name: 'Female Shaonv (少女音)' },
 ];
 
-const FALLBACK_TTS_PROVIDERS: TtsProviderListEntry[] = [
+const TTS_LOCAL_CLI_PRESETS = [
   {
-    id: 'openai',
-    capability: 'tts',
-    displayName: 'OpenAI',
-    aliases: [],
-    configured: false,
-    fields: [],
-    diagnostics: { requiresApiKey: true, configPath: 'messages.tts.providers.openai' },
+    id: 'piper',
+    command: 'piper --model /path/to/voice.onnx --output_file "{{OutputPath}}"',
+    outputFormat: 'wav' as const,
   },
   {
-    id: 'alibaba',
-    capability: 'tts',
-    displayName: 'Alibaba DashScope',
-    aliases: [],
-    configured: false,
-    fields: [],
-    diagnostics: { requiresApiKey: true, configPath: 'messages.tts.providers.alibaba' },
+    id: 'sherpa-onnx',
+    command: 'sherpa-onnx-offline-tts --text "{{Text}}" --output-filename "{{OutputPath}}"',
+    outputFormat: 'wav' as const,
   },
   {
-    id: 'minimax',
-    capability: 'tts',
-    displayName: 'MiniMax',
-    aliases: [],
-    configured: false,
-    fields: [],
-    diagnostics: { requiresApiKey: true, configPath: 'messages.tts.providers.minimax' },
-  },
-  {
-    id: 'edge',
-    capability: 'tts',
-    displayName: 'Microsoft Edge',
-    aliases: [],
-    configured: false,
-    fields: [],
-    diagnostics: { requiresApiKey: false, configPath: 'messages.tts.providers.edge' },
-  },
-  {
-    id: 'tts-local-cli',
-    capability: 'tts',
-    displayName: 'Local CLI',
-    aliases: ['cli', 'local-cli'],
-    configured: false,
-    fields: [],
-    diagnostics: { requiresApiKey: false, configPath: 'messages.tts.providers.tts-local-cli' },
-  },
-];
-
-const FALLBACK_STT_PROVIDERS: SttProviderListEntry[] = [
-  {
-    id: 'alibaba',
-    capability: 'stt',
-    displayName: 'Alibaba DashScope',
-    aliases: ['dashscope', 'paraformer'],
-    configured: false,
-    fields: [],
-    diagnostics: { requiresApiKey: true, configPath: 'tools.media.audio.providers.alibaba' },
-  },
-  {
-    id: 'openai',
-    capability: 'stt',
-    displayName: 'OpenAI Whisper',
-    aliases: [],
-    configured: false,
-    fields: [],
-    diagnostics: { requiresApiKey: true, configPath: 'tools.media.audio.providers.openai' },
+    id: 'mlx-audio',
+    command: 'python -m mlx_audio.tts.generate --text "{{Text}}" --file_prefix "{{OutputBase}}"',
+    outputFormat: 'wav' as const,
   },
 ];
 
@@ -207,6 +172,36 @@ function ttsProviderLabel(id: string, v: VoiceSettingsMessages): string {
       return 'MiniMax';
     default:
       return id;
+  }
+}
+
+function ttsTriggerLabel(trigger: VoiceSettingsState['tts']['trigger'], v: VoiceSettingsMessages): string {
+  switch (trigger) {
+    case 'off':
+      return v.tts.triggerOff;
+    case 'always':
+      return v.tts.triggerAlways;
+    case 'inbound':
+      return v.tts.triggerInbound;
+    case 'tagged':
+      return v.tts.triggerTagged;
+  }
+}
+
+function providerCapabilityHint(id: string, v: VoiceSettingsMessages): string {
+  switch (id) {
+    case 'edge':
+      return v.tts.providerHints.edge;
+    case 'openai':
+      return v.tts.providerHints.openai;
+    case 'alibaba':
+      return v.tts.providerHints.alibaba;
+    case 'minimax':
+      return v.tts.providerHints.minimax;
+    case 'tts-local-cli':
+      return v.tts.providerHints.localCli;
+    default:
+      return v.tts.providerHints.generic;
   }
 }
 
@@ -326,12 +321,12 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
   });
 
   const ttsProviders = useMemo(
-    () => voiceProviders?.providers ?? FALLBACK_TTS_PROVIDERS,
+    () => voiceProviders?.providers ?? [],
     [voiceProviders],
   );
 
   const sttProviders = useMemo(
-    () => voiceSttProviders?.providers ?? FALLBACK_STT_PROVIDERS,
+    () => voiceSttProviders?.providers ?? [],
     [voiceSttProviders],
   );
 
@@ -639,6 +634,8 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
       <div className="flex flex-col gap-4">
+        <VoiceOverview v={v} stt={stt} tts={tts} />
+
         <SttSection
           v={v}
           apiKeyLabels={apiKeyLabels}
@@ -676,6 +673,49 @@ export function VoiceSettingsPanel({ embedded = false }: { embedded?: boolean } 
   );
 }
 
+function VoiceOverview({
+  v,
+  stt,
+  tts,
+}: {
+  v: VoiceSettingsMessages;
+  stt: VoiceSettingsState['stt'];
+  tts: VoiceSettingsState['tts'];
+}) {
+  const replyVoice =
+    tts.provider === 'openai'
+      ? tts.openai?.voice
+      : tts.provider === 'alibaba'
+        ? tts.alibaba?.voice
+        : tts.provider === 'minimax'
+          ? tts.minimax?.voice
+          : tts.provider === 'edge'
+            ? tts.edge?.voice
+            : undefined;
+  return (
+    <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
+      <div className="mb-4">
+        <div className="text-sm font-semibold text-fg">{v.overview.title}</div>
+        <p className="mt-1 text-xs text-fg-muted">{v.overview.description}</p>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <VoiceStatusPill label={v.overview.input} value={stt.enabled ? `${v.overview.ready} · ${sttProviderLabel(stt.provider, v)}` : v.overview.off} ready={stt.enabled} />
+        <VoiceStatusPill label={v.overview.replies} value={tts.enabled ? ttsTriggerLabel(tts.trigger, v) : v.overview.off} ready={tts.enabled && tts.trigger !== 'off'} />
+        <VoiceStatusPill label={v.overview.voice} value={tts.enabled ? `${ttsProviderLabel(tts.provider, v)}${replyVoice ? ` · ${replyVoice}` : ''}` : v.overview.off} ready={tts.enabled} />
+      </div>
+    </section>
+  );
+}
+
+function VoiceStatusPill({ label, value, ready }: { label: string; value: string; ready: boolean }) {
+  return (
+    <div className="rounded-xl border border-edge bg-surface-panel px-3 py-2.5">
+      <div className="text-xs text-fg-muted">{label}</div>
+      <div className={cn('mt-1 text-sm font-medium', ready ? 'text-fg' : 'text-fg-muted')}>{value}</div>
+    </div>
+  );
+}
+
 function SttSection({
   v,
   apiKeyLabels,
@@ -708,22 +748,8 @@ function SttSection({
       seen.add(entry.id);
       options.push(entry);
     }
-    if (stt.provider && !seen.has(stt.provider)) {
-      options.push({
-        id: stt.provider,
-        capability: 'stt',
-        displayName: stt.provider,
-        aliases: [],
-        configured: false,
-        fields: [
-          { key: 'apiKey', label: 'API Key', type: 'password', secret: true },
-          { key: 'model', label: 'Model', type: 'string' },
-        ],
-        diagnostics: { requiresApiKey: true, configPath: `tools.media.audio.providers.${stt.provider}` },
-      });
-    }
     return options;
-  }, [sttProviders, stt.provider]);
+  }, [sttProviders]);
 
   const activeProvider = providerOptions.find((entry) => entry.id === stt.provider);
   const extensionProviderSlice = stt.providers?.[stt.provider];
@@ -765,18 +791,14 @@ function SttSection({
         <p className="mt-1 text-xs text-fg-muted">{v.stt.description}</p>
       </div>
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-2 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
-          <div>
-            <div className="text-sm font-medium text-fg">{v.stt.enable}</div>
-            <p className="text-xs text-fg-muted">{v.stt.enableDesc}</p>
-          </div>
-          <input
-            type="checkbox"
-            className="ui-checkbox"
-            checked={stt.enabled}
-            onChange={(e) => updateStt({ enabled: e.target.checked })}
-          />
-        </div>
+        <ProminentVoiceToggle
+          checked={stt.enabled}
+          title={v.stt.enable}
+          description={v.stt.enableDesc}
+          onLabel={v.overview.ready}
+          offLabel={v.overview.off}
+          onChange={(enabled) => updateStt({ enabled })}
+        />
 
         {stt.enabled ? (
           <>
@@ -931,14 +953,6 @@ function TtsSection({
   updateTtsMinimax: (p: Partial<NonNullable<VoiceSettingsState['tts']['minimax']>>) => void;
   updateTtsLocalCli: (p: Partial<NonNullable<VoiceSettingsState['tts']['tts-local-cli']>>) => void;
 }) {
-  const triggerDesc = (t: string) => {
-    if (t === 'off') return v.tts.triggerDescOff;
-    if (t === 'always') return v.tts.triggerDescAlways;
-    if (t === 'inbound') return v.tts.triggerDescInbound;
-    if (t === 'tagged') return v.tts.triggerDescTagged;
-    return '';
-  };
-
   const ttsOpenai = models?.tts?.openai?.length ? models.tts.openai : TTS_OPENAI_MODELS_FALLBACK;
   const ttsVoicesOpenai = models?.ttsVoices?.openai?.length ? models.ttsVoices.openai : TTS_OPENAI_VOICES_FALLBACK;
   const ttsAlibaba = models?.tts?.alibaba?.length ? models.tts.alibaba : TTS_ALIBABA_MODELS_FALLBACK;
@@ -949,6 +963,26 @@ function TtsSection({
     ? models.ttsVoices.minimax
     : TTS_MINIMAX_VOICES_FALLBACK;
 
+  const [testText, setTestText] = useState(v.tts.test.sampleText);
+  const [testState, setTestState] = useState<
+    | { status: 'idle' }
+    | { status: 'loading' }
+    | { status: 'playing'; summary: string }
+    | { status: 'done'; summary: string }
+    | { status: 'error'; message: string }
+  >({ status: 'idle' });
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
+
+  const stopTestAudio = useCallback(() => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
+  }, []);
+
   const providerOptions = useMemo(() => {
     const seen = new Set<string>();
     const options: TtsProviderListEntry[] = [];
@@ -957,23 +991,8 @@ function TtsSection({
       seen.add(entry.id);
       options.push(entry);
     }
-    if (tts.provider && !seen.has(tts.provider)) {
-      options.push({
-        id: tts.provider,
-        capability: 'tts',
-        displayName: tts.provider,
-        aliases: [],
-        configured: false,
-        fields: [
-          { key: 'apiKey', label: 'API Key', type: 'password', secret: true },
-          { key: 'model', label: 'Model', type: 'string' },
-          { key: 'voice', label: 'Voice', type: 'string' },
-        ],
-        diagnostics: { requiresApiKey: true, configPath: `messages.tts.providers.${tts.provider}` },
-      });
-    }
     return options;
-  }, [ttsProviders, tts.provider]);
+  }, [ttsProviders]);
 
   const activeProvider = providerOptions.find((entry) => entry.id === tts.provider);
   const providerSlice = tts.providers?.[tts.provider];
@@ -988,6 +1007,78 @@ function TtsSection({
   const additionalFields = (activeProvider?.fields ?? []).filter(
     (field) => !['apiKey', 'model', 'voice'].includes(field.key),
   );
+  const providerNeedsKey = Boolean(activeProvider?.diagnostics.requiresApiKey);
+  const providerReady = Boolean(activeProvider?.configured) || !providerNeedsKey;
+  const statusTone = !tts.enabled
+    ? 'muted'
+    : providerReady
+      ? 'ready'
+      : 'action';
+
+  const currentModel =
+    tts.provider === 'openai'
+      ? tts.openai?.model
+      : tts.provider === 'alibaba'
+        ? tts.alibaba?.model
+        : tts.provider === 'minimax'
+          ? tts.minimax?.model
+          : undefined;
+  const currentVoice =
+    tts.provider === 'openai'
+      ? tts.openai?.voice
+      : tts.provider === 'alibaba'
+        ? tts.alibaba?.voice
+        : tts.provider === 'minimax'
+          ? tts.minimax?.voice
+          : tts.provider === 'edge'
+            ? tts.edge?.voice
+            : undefined;
+
+  useEffect(() => () => stopTestAudio(), [stopTestAudio]);
+
+  const handleProviderSelect = useCallback(
+    (providerId: string) => {
+      updateTts({ provider: providerId });
+      setTestState({ status: 'idle' });
+    },
+    [updateTts],
+  );
+
+  const handleTestVoice = useCallback(async () => {
+    const text = testText.trim();
+    if (!text) {
+      setTestState({ status: 'error', message: v.tts.test.emptyText });
+      return;
+    }
+    stopTestAudio();
+    setTestState({ status: 'loading' });
+    try {
+      const result = await testTtsVoice({
+        text,
+        provider: tts.provider,
+        providerConfig: schemaProviderSlice,
+        ...(currentModel ? { model: currentModel } : {}),
+        ...(currentVoice ? { voice: currentVoice } : {}),
+      });
+      const url = makeAudioUrl(result.audio, result.mimeType);
+      audioUrlRef.current = url;
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      const summary = [
+        result.provider,
+        result.format,
+        result.latencyMs !== undefined ? `${result.latencyMs}ms` : undefined,
+        audioBytesLabel(result.audioSize),
+      ].filter(Boolean).join(' · ');
+      audio.addEventListener('ended', () => setTestState({ status: 'done', summary }), { once: true });
+      audio.addEventListener('error', () => setTestState({ status: 'error', message: v.tts.test.playFailed }), { once: true });
+      await audio.play();
+      setTestState({ status: 'playing', summary });
+    } catch (err) {
+      stopTestAudio();
+      setTestState({ status: 'error', message: err instanceof Error ? err.message : String(err) });
+    }
+  }, [currentModel, currentVoice, schemaProviderSlice, stopTestAudio, testText, tts.provider, v.tts.test.emptyText, v.tts.test.playFailed]);
 
   const updateProviderSlice = useCallback(
     (patch: Record<string, unknown>) => {
@@ -1029,17 +1120,33 @@ function TtsSection({
         <p className="mt-1 text-xs text-fg-muted">{v.tts.description}</p>
       </div>
       <div className="space-y-4">
-        <div className="flex items-center justify-between gap-2 rounded-xl bg-surface-hover/50 px-3 py-2.5 dark:bg-surface-hover/35">
-          <div>
-            <div className="text-sm font-medium text-fg">{v.tts.enable}</div>
-            <p className="text-xs text-fg-muted">{v.tts.enableDesc}</p>
-          </div>
-          <input
-            type="checkbox"
-            className="ui-checkbox"
-            checked={tts.enabled}
-            onChange={(e) => updateTts({ enabled: e.target.checked })}
-          />
+        <ProminentVoiceToggle
+          checked={tts.enabled}
+          title={v.tts.enable}
+          description={v.tts.enableDesc}
+          onLabel={v.overview.ready}
+          offLabel={v.overview.off}
+          onChange={(enabled) => updateTts({ enabled })}
+        />
+
+        <div
+          className={cn(
+            'rounded-xl border px-3 py-2.5 text-sm',
+            statusTone === 'ready'
+              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-800 dark:text-emerald-100'
+              : statusTone === 'action'
+                ? 'border-amber-300/50 bg-amber-50 text-amber-900 dark:border-amber-300/30 dark:bg-amber-400/10 dark:text-amber-100'
+                : 'border-edge bg-surface-panel text-fg-muted',
+          )}
+        >
+          <div className="font-medium text-fg">{v.tts.statusTitle}</div>
+          <p className="mt-1 text-xs">
+            {!tts.enabled
+              ? v.tts.statusOff
+              : providerReady
+                ? `${v.tts.statusReady} ${ttsProviderLabel(tts.provider, v)}${currentVoice ? ` · ${currentVoice}` : ''}`
+                : `${v.tts.statusNeedsSetup} ${ttsProviderLabel(tts.provider, v)} · ${activeProvider?.diagnostics.envKeys?.join(', ') ?? v.stt.apiKey}`}
+          </p>
         </div>
 
         {tts.enabled ? (
@@ -1050,23 +1157,22 @@ function TtsSection({
                 <select
                   className={selectClassName()}
                   value={tts.trigger}
-                  onChange={(e) =>
-                    updateTts({ trigger: e.target.value as VoiceSettingsState['tts']['trigger'] })
-                  }
+                  onChange={(e) => updateTts({ trigger: e.target.value as VoiceSettingsState['tts']['trigger'] })}
                 >
                   <option value="off">{v.tts.triggerOff}</option>
-                  <option value="always">{v.tts.triggerAlways}</option>
                   <option value="inbound">{v.tts.triggerInbound}</option>
                   <option value="tagged">{v.tts.triggerTagged}</option>
+                  <option value="always">{v.tts.triggerAlways}</option>
                 </select>
-                <p className="text-xs text-fg-subtle">{triggerDesc(tts.trigger)}</p>
+                <p className="text-xs text-fg-subtle">{v.tts.triggerHelp}</p>
               </div>
+
               <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.tts.provider}</FieldLabel>
                 <select
                   className={selectClassName()}
                   value={tts.provider}
-                  onChange={(e) => updateTts({ provider: e.target.value })}
+                  onChange={(e) => handleProviderSelect(e.target.value)}
                 >
                   {providerOptions.map((entry) => (
                     <option key={entry.id} value={entry.id}>
@@ -1074,9 +1180,27 @@ function TtsSection({
                     </option>
                   ))}
                 </select>
+                <p className="text-xs text-fg-subtle">
+                  {activeProvider?.configured
+                    ? v.tts.configured
+                    : activeProvider?.diagnostics.requiresApiKey
+                      ? `${v.tts.needsKey} · ${activeProvider.diagnostics.envKeys?.join(', ') ?? v.stt.apiKey}`
+                      : v.tts.noKeyNeeded}
+                  {' · '}
+                  {activeProvider?.description ?? providerCapabilityHint(tts.provider, v)}
+                </p>
               </div>
             </div>
 
+            <details
+              className="rounded-xl border border-edge bg-surface-panel p-3"
+              open={!providerReady || tts.provider === 'tts-local-cli'}
+            >
+              <summary className="cursor-pointer text-sm font-medium text-fg marker:text-fg-muted">
+                {v.tts.advanced.title}
+                <span className="ml-2 text-xs font-normal text-fg-muted">{v.tts.advanced.description}</span>
+              </summary>
+              <div className="mt-3 space-y-3">
             {tts.provider === 'openai' ||
             tts.provider === 'alibaba' ||
             tts.provider === 'minimax' ? (
@@ -1191,6 +1315,26 @@ function TtsSection({
             {tts.provider === 'tts-local-cli' ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <FieldLabel>{v.tts.localCli.preset}</FieldLabel>
+                  <select
+                    className={selectClassName()}
+                    value=""
+                    onChange={(e) => {
+                      const preset = TTS_LOCAL_CLI_PRESETS.find((item) => item.id === e.target.value);
+                      if (!preset) return;
+                      updateTtsLocalCli({ command: preset.command, outputFormat: preset.outputFormat });
+                    }}
+                  >
+                    <option value="">{v.tts.localCli.presetPlaceholder}</option>
+                    {TTS_LOCAL_CLI_PRESETS.map((preset) => (
+                      <option key={preset.id} value={preset.id}>
+                        {preset.id}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-fg-subtle">{v.tts.localCli.presetDesc}</p>
+                </div>
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
                   <FieldLabel>{v.tts.localCli.command}</FieldLabel>
                   <input
                     className={cn(inputClassName(), 'font-mono text-xs')}
@@ -1277,10 +1421,124 @@ function TtsSection({
                 ))}
               </div>
             ) : null}
+              </div>
+            </details>
+
+            <div className="rounded-xl border border-edge bg-surface-panel p-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <div className="text-sm font-medium text-fg">{v.tts.test.title}</div>
+                  <p className="mt-1 text-xs text-fg-muted">{v.tts.test.description}</p>
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => void handleTestVoice()}
+                    disabled={testState.status === 'loading'}
+                    className="h-9"
+                  >
+                    {testState.status === 'loading' ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />}
+                    {testState.status === 'loading' ? v.tts.test.generating : v.tts.test.play}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      stopTestAudio();
+                      setTestState((prev) => prev.status === 'playing' ? { status: 'done', summary: prev.summary } : { status: 'idle' });
+                    }}
+                    disabled={testState.status !== 'playing'}
+                    className="h-9"
+                  >
+                    <Square className="size-4" />
+                    {v.tts.test.stop}
+                  </Button>
+                </div>
+              </div>
+              <textarea
+                className={cn(inputClassName(), 'mt-3 min-h-20 resize-y')}
+                value={testText}
+                onChange={(e) => setTestText(e.target.value)}
+                maxLength={1000}
+              />
+              <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="text-fg-subtle">{testText.length}/1000</span>
+                {testState.status === 'playing' || testState.status === 'done' ? (
+                  <span className="text-emerald-700 dark:text-emerald-200">
+                    {testState.status === 'playing' ? v.tts.test.playing : v.tts.test.ready} · {testState.summary}
+                  </span>
+                ) : null}
+                {testState.status === 'error' ? (
+                  <span className="text-red-600 dark:text-red-400">{testState.message}</span>
+                ) : null}
+              </div>
+            </div>
           </>
         ) : null}
       </div>
     </section>
+  );
+}
+
+function ProminentVoiceToggle({
+  checked,
+  title,
+  description,
+  onLabel,
+  offLabel,
+  onChange,
+}: {
+  checked: boolean;
+  title: string;
+  description: string;
+  onLabel: string;
+  offLabel: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'group flex w-full items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition-colors',
+        settingsInputFocusClass,
+        checked
+          ? 'border-accent/45 bg-accent/10 text-fg shadow-surface dark:bg-accent/15'
+          : 'border-edge bg-surface-panel text-fg hover:border-accent/35 hover:bg-surface-hover',
+      )}
+    >
+      <span className="min-w-0">
+        <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-fg">
+          {title}
+          <span
+            className={cn(
+              'rounded-full px-2 py-0.5 text-[11px] font-medium',
+              checked ? 'bg-accent text-white' : 'bg-surface-hover text-fg-muted',
+            )}
+          >
+            {checked ? onLabel : offLabel}
+          </span>
+        </span>
+        <span className="mt-1 block text-xs leading-relaxed text-fg-muted">{description}</span>
+      </span>
+      <span
+        className={cn(
+          'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors',
+          checked ? 'border-accent bg-accent' : 'border-edge bg-surface-hover group-hover:border-accent/40',
+        )}
+        aria-hidden
+      >
+        <span
+          className={cn(
+            'size-5 rounded-full bg-white shadow-surface transition-transform',
+            checked ? 'translate-x-5' : 'translate-x-0.5',
+          )}
+        />
+      </span>
+    </button>
   );
 }
 

@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: xopc
-  text: Goal Loop OS
-  tagline: "A local-first AI assistant that keeps long-term goals moving across terminal, web, desktop, mobile app, and messengers."
+  text: Turn goals into loops.
+  tagline: "Keep what matters moving. XOPC is a local-first AI system that remembers context, coordinates AI, and sustains long-term progress."
   image:
     light: /logo.svg
     dark: /logo-dark.svg
@@ -18,6 +18,9 @@ hero:
       link: https://github.com/xopcai/xopc
 
 features:
+  - title: 🔁 Goal loops, not one-shot chats
+    details: "XOPC keeps context, next actions, feedback, and recalibration in motion so long-term goals do not disappear between conversations."
+    link: /cron
   - title: 🏠 Local-first by default
     details: "xopc runs on your hardware. Config, workspace files, credentials, and local state live under ~/.xopc/. No mandatory cloud."
     link: /configuration

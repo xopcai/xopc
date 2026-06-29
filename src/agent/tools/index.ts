@@ -38,6 +38,7 @@ export {
 } from './web-extract.js';
 
 export { createMessageTool } from './communication.js';
+export { createComposioExecuteTool } from './composio-tool.js';
 
 export { createSendMediaTool } from './send-media.js';
 export { createReadMediaTool } from './media-read-tool.js';

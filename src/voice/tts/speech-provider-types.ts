@@ -145,8 +145,8 @@ export interface SpeechProviderPlugin {
   /** Canonical provider id. Must be unique within the registry. */
   id: SpeechProviderId;
   /**
-   * Optional aliases (e.g. `["openai-tts"]` for back-compat with old config keys).
-   * Aliases participate in lookup but `id` is the canonical persisted name.
+   * Optional aliases for provider lookup. Aliases participate in lookup but
+   * `id` is the canonical persisted name.
    */
   aliases?: readonly string[];
 

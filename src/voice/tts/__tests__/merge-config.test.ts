@@ -5,7 +5,7 @@ import type { Config } from '../../../config/schema.js';
 describe('mergeTtsConfigFromAppConfig', () => {
   it('fills defaults when tts is undefined', () => {
     const merged = mergeTtsConfigFromAppConfig(undefined);
-    expect(merged.provider).toBe('openai');
+    expect(merged.provider).toBe('edge');
     expect(merged.providers?.openai?.model).toBe('tts-1');
     expect(merged.fallback?.order?.length).toBeGreaterThan(0);
   });

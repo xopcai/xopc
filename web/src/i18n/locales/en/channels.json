@@ -125,10 +125,33 @@
     "apiKeyHide": "Hide",
     "apiKeyNotInConfigFile": "No key stored in the config file for this provider (check environment variables).",
     "apiKeyRevealFailed": "Could not load key from config.",
+    "overview": {
+      "title": "Voice status",
+      "description": "A quick check of what the assistant can hear and speak right now.",
+      "input": "Input",
+      "replies": "Replies",
+      "voice": "Voice",
+      "ready": "Ready",
+      "off": "Off"
+    },
+    "behavior": {
+      "title": "How voice should work",
+      "description": "Choose the user-facing behavior first. Engine details stay below.",
+      "modes": {
+        "text": { "title": "Text only", "description": "No voice input or spoken replies." },
+        "listen": { "title": "Listen to my voice", "description": "Transcribe voice input, but reply in text." },
+        "conversation": { "title": "Speak replies when I speak", "description": "Voice in, voice out. Best default for chat channels." },
+        "always": { "title": "Always speak replies", "description": "Read every assistant reply aloud." }
+      }
+    },
+    "inputEngine": {
+      "title": "Voice input engine",
+      "description": "Provider, model, API key, and fallback for transcription."
+    },
     "stt": {
-      "title": "Speech-to-text (STT)",
-      "description": "Transcribe inbound voice using Alibaba DashScope or OpenAI Whisper.",
-      "enable": "Enable STT",
+      "title": "Voice input (STT)",
+      "description": "Transcribe voice messages so the assistant can read them.",
+      "enable": "Enable voice input",
       "enableDesc": "When on, voice messages can be transcribed for the agent.",
       "provider": "STT provider",
       "alibaba": "Alibaba DashScope",
@@ -140,11 +163,11 @@
       "fallbackDesc": "Try the other provider if the primary request fails."
     },
     "tts": {
-      "title": "Text-to-speech (TTS)",
-      "description": "Synthesize assistant replies as audio when enabled.",
-      "enable": "Enable TTS",
-      "enableDesc": "When on, TTS runs according to the trigger mode below.",
-      "trigger": "Trigger",
+      "title": "Assistant voice replies (TTS)",
+      "description": "Generate audio when the assistant should speak back.",
+      "enable": "Enable voice replies",
+      "enableDesc": "When on, assistant replies can be spoken according to the rule below.",
+      "trigger": "Speak replies",
       "triggerOff": "Off",
       "triggerAlways": "Always",
       "triggerInbound": "Inbound voice only",
@@ -153,15 +176,51 @@
       "triggerDescAlways": "Apply TTS to all assistant messages.",
       "triggerDescInbound": "Only reply with voice when the user sends voice.",
       "triggerDescTagged": "Only when the [[tts]] directive is used.",
-      "provider": "TTS provider",
+      "triggerHelp": "Choose when assistant text should be converted to speech.",
+      "provider": "Voice engine",
       "providerOpenai": "OpenAI TTS",
       "providerEdge": "Microsoft Edge (free)",
       "providerLocalCli": "Local CLI (offline)",
       "voice": "Voice",
+      "alwaysWarning": "Always-on voice can be noisy in busy chats. Use it only when the channel is meant to be audio-first.",
+      "statusTitle": "Current voice reply status",
+      "statusOff": "Voice replies are off. Text replies are unchanged.",
+      "statusReady": "Ready with",
+      "statusNeedsSetup": "Needs setup for",
+      "advanced": {
+        "title": "Engine setup",
+        "description": "API key, model, voice, and provider-specific options."
+      },
+      "configured": "Ready",
+      "needsKey": "Needs key",
+      "noKeyNeeded": "No key",
+      "providerHints": {
+        "edge": "Free and quick for setup; best for testing or casual use.",
+        "openai": "Low latency and broad voice selection; requires an OpenAI key.",
+        "alibaba": "Strong Chinese voices through DashScope; requires DASHSCOPE_API_KEY.",
+        "minimax": "High quality voices; async generation can be slower.",
+        "localCli": "Private local synthesis through Piper, sherpa-onnx, mlx-audio, or your own script.",
+        "generic": "Extension speech provider. Configure the required fields below."
+      },
+      "test": {
+        "title": "Test voice",
+        "description": "Generate a short sample with the selected provider, model, and voice before saving it for chats.",
+        "sampleText": "Hi, I can read assistant replies aloud when voice output is enabled.",
+        "play": "Play test",
+        "stop": "Stop",
+        "generating": "Generating…",
+        "playing": "Playing",
+        "ready": "Ready",
+        "emptyText": "Enter text to synthesize.",
+        "playFailed": "Audio playback failed."
+      },
       "edgeHint": "Microsoft Edge TTS — no API key required.",
       "localCli": {
+        "preset": "Command preset",
+        "presetPlaceholder": "Choose a local engine template…",
+        "presetDesc": "Starts from a safe template for Piper, sherpa-onnx, or mlx-audio. Replace paths before testing.",
         "command": "CLI command",
-        "commandDesc": "Shell template; placeholders: {{Text}}, {{OutputBase}}.",
+        "commandDesc": "Shell template; placeholders: {{Text}}, {{OutputPath}}, {{OutputDir}}, {{OutputBase}}.",
         "commandPlaceholder": "mlx_audio.tts.generate --text \"{{Text}}\" --file_prefix {{OutputBase}}",
         "cwd": "Working directory",
         "cwdDesc": "Optional. Defaults to the gateway working directory.",

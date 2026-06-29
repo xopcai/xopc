@@ -2,8 +2,7 @@
  * STT/TTS settings aligned with the gateway config payload.
  *
  * Wire format: the gateway exposes `stt` (mapped from `tools.media.audio`) and
- * `tts` (mapped from `messages.tts`) for backwards-friendly REST shape; this
- * file mirrors those keys 1:1.
+ * `tts` (mapped from `messages.tts`). This file mirrors those keys 1:1.
  *
  * Provider id for TTS is intentionally an open `string` so extension-registered
  * SpeechProviderPlugins (e.g. `tts-local-cli`) appear in the dropdown without
