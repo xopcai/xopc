@@ -47,14 +47,20 @@ export function shouldReplaceOptimisticUserRow(optimistic: Message, server: Mess
 
   const optText = extractUserMessagePlainText(optimistic.content).trim();
   const srvText = extractUserMessagePlainText(server.content).trim();
+  const optAtt = optimistic.attachments?.length ?? 0;
+  const srvAtt = server.attachments?.length ?? 0;
+  const serverPreservesOptimisticAttachments = optAtt === 0 || srvAtt >= optAtt;
 
-  if (optText && srvText && (optText === srvText || srvText.startsWith(optText))) {
+  if (
+    serverPreservesOptimisticAttachments &&
+    optText &&
+    srvText &&
+    (optText === srvText || srvText.startsWith(optText))
+  ) {
     return true;
   }
 
-  const optAtt = optimistic.attachments?.length ?? 0;
-  const srvAtt = server.attachments?.length ?? 0;
-  if (optAtt > 0 && srvAtt > 0) {
+  if (optAtt > 0 && serverPreservesOptimisticAttachments) {
     const tsDelta = Math.abs((server.timestamp ?? 0) - (optimistic.timestamp ?? 0));
     if (tsDelta <= OPTIMISTIC_USER_REPLACE_WINDOW_MS) {
       return true;
