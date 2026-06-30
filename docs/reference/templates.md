@@ -9,7 +9,6 @@ Template resolution at runtime: `XOPC_TEMPLATE_PATH` (if set), else a walk to `d
 | File | Purpose |
 |------|---------|
 | [SOUL.md](/reference/templates/SOUL) | Agent's core identity, personality and values |
-| [USER.md](/reference/templates/USER) | Information about you, preferences and needs |
 | [TOOLS.md](/reference/templates/TOOLS) | Tool usage instructions and best practices |
 | [AGENTS.md](/reference/templates/AGENTS) | Agent collaboration guidelines |
 | [MEMORY.md](/reference/templates/MEMORY) | Key information storage and memory index |
@@ -18,15 +17,14 @@ Template resolution at runtime: `XOPC_TEMPLATE_PATH` (if set), else a walk to `d
 
 ## System prompt load order
 
-These files are read from the **Markdown workspace root** (when present) and assembled into the agent system prompt **in this order**:
+These files are read from the agent profile root and assembled into the agent system prompt **in this order**. The global user profile is read separately from **`user/PROFILE.md`** before the agent profile.
 
 1. **SOUL.md**
 2. **IDENTITY.md**
-3. **USER.md**
-4. **TOOLS.md**
-5. **AGENTS.md**
-6. **HEARTBEAT.md**
-7. **MEMORY.md**
+3. **TOOLS.md**
+4. **AGENTS.md**
+5. **HEARTBEAT.md**
+6. **MEMORY.md**
 
 **CONTEXT.md** and **SKILLS.md** are **not** part of the default system-prompt profile list, so they are **not** injected automatically. `xopc init` does **not** create them; add them at the workspace root yourself if you want. The seed used by `onboard` / `agents add` copies the files listed above—it does **not** add `CONTEXT.md` / `SKILLS.md` from this docs folder unless you place them yourself.
 
@@ -39,7 +37,7 @@ Memory files support dynamic updates:
 
 The agent can search and read memories via `memory_search` and `memory_get` tools.
 
-**Curated memory** (optional): **`agents/<agentId>/memories/MEMORY.md`** and **`USER.md`** hold bounded, tool-edited entries separate from **`agents/<agentId>/profile/MEMORY.md`** (system-prompt profile index). See [Curated memory](../workspace.md#curated-memory) and [Configuration](../configuration.md) for the selected agent manifest's `memory` policy.
+**Curated memory** (optional): **`agents/<agentId>/memories/MEMORY.md`** and **`user/MEMORY.md`** hold bounded, tool-edited entries separate from **`agents/<agentId>/profile/MEMORY.md`** (system-prompt profile index) and **`user/PROFILE.md`** (editable user profile). See [Curated memory](../workspace.md#curated-memory) and [Configuration](../configuration.md) for the selected agent manifest's `memory` policy.
 
 ## See also
 

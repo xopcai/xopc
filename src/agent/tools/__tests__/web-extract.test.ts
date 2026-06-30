@@ -17,6 +17,35 @@ function htmlBody(inner: string) {
   return `<html><head></head><body>${inner}</body></html>`;
 }
 
+function configWithGlobalModel() {
+  return {
+    agents: {
+      default: 'main',
+      defaultPreset: 'default',
+      capabilityPresets: {
+        default: {
+          id: 'default',
+          name: 'Global defaults',
+          models: { defaultRole: 'deep', roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } } },
+        },
+      },
+      list: [
+        {
+          id: 'main',
+          identity: { name: 'Main', role: 'General assistant' },
+          responsibilities: { primary: ['Help the user complete tasks'] },
+          workspace: { root: '~/.xopc/workspace/main' },
+          tools: { builtin: {} },
+          skills: { mode: 'all' },
+          memory: { mode: 'confirmWrite', sources: ['session'] },
+          workflows: {},
+          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+        },
+      ],
+    },
+  } as import('../../../config/schema.js').Config;
+}
+
 describe('stripHtmlBoilerplate', () => {
   it('removes script, style, svg, noscript, and HTML comments', () => {
     const raw = htmlBody(
@@ -55,7 +84,7 @@ describe('createWebExtractTool', () => {
       'fetch',
       vi.fn().mockRejectedValue(new Error('network down')),
     );
-    const tool = createWebExtractTool({ getConfig: () => undefined });
+    const tool = createWebExtractTool({ getConfig: () => configWithGlobalModel() });
     const r = await tool.execute('1', { url: 'https://example.com/doc' });
     expect((r.content[0] as { text: string }).text).toContain('Failed to extract');
     expect((r.content[0] as { text: string }).text).toContain('network down');
@@ -72,7 +101,7 @@ describe('createWebExtractTool', () => {
         text: () => Promise.resolve('<html><body>short</body></html>'),
       }),
     );
-    const tool = createWebExtractTool({ getConfig: () => undefined });
+    const tool = createWebExtractTool({ getConfig: () => configWithGlobalModel() });
     const r = await tool.execute('2', { url: 'https://example.com/tiny' });
     expect((r.content[0] as { text: string }).text).toContain('no extractable content');
     expect(vi.mocked(complete)).not.toHaveBeenCalled();
@@ -88,7 +117,7 @@ describe('createWebExtractTool', () => {
         text: () => Promise.resolve(htmlBody(longText)),
       }),
     );
-    const tool = createWebExtractTool({ getConfig: () => undefined });
+    const tool = createWebExtractTool({ getConfig: () => configWithGlobalModel() });
     await tool.execute('3', {
       url: 'https://example.com/p',
       instruction: 'pricing table only',
@@ -100,7 +129,7 @@ describe('createWebExtractTool', () => {
     expect(messages[0]?.content).toContain('FOCUS: pricing table only');
   });
 
-  it('uses config default maxLength when param omitted', async () => {
+  it('uses param maxLength when provided', async () => {
     const longText = '<p>' + 'word '.repeat(80) + '</p>';
     vi.stubGlobal(
       'fetch',
@@ -110,17 +139,8 @@ describe('createWebExtractTool', () => {
         text: () => Promise.resolve(htmlBody(longText)),
       }),
     );
-    const tool = createWebExtractTool({
-      getConfig: () =>
-        ({
-          agents: {
-            defaults: {
-              webExtract: { maxLength: 99 },
-            },
-          },
-        }) as import('../../../config/schema.js').Config,
-    });
-    await tool.execute('4', { url: 'https://example.com/q' });
+    const tool = createWebExtractTool({ getConfig: () => configWithGlobalModel() });
+    await tool.execute('4', { url: 'https://example.com/q', maxLength: 99 });
     expect(complete).toHaveBeenCalled();
     const call = vi.mocked(complete).mock.calls[0];
     expect(call[2]).toMatchObject({ maxTokens: expect.any(Number) });
@@ -143,7 +163,7 @@ describe('createWebExtractTool', () => {
       content: [{ type: 'text', text: blob }],
     } as Awaited<ReturnType<typeof complete>>);
 
-    const tool = createWebExtractTool({ getConfig: () => undefined });
+    const tool = createWebExtractTool({ getConfig: () => configWithGlobalModel() });
     const r = await tool.execute('5', {
       url: 'https://example.com/long-out',
       maxLength: 120,
@@ -163,7 +183,7 @@ describe('createWebExtractTool', () => {
         json: () => Promise.resolve({ a: 1 }),
       }),
     );
-    const tool = createWebExtractTool({ getConfig: () => undefined });
+    const tool = createWebExtractTool({ getConfig: () => configWithGlobalModel() });
     await tool.execute('6', { url: 'https://example.com/api' });
     expect(complete).toHaveBeenCalled();
     const call = vi.mocked(complete).mock.calls[0];

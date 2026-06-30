@@ -6,7 +6,12 @@ import { isSkillEnabled, createSkillConfigManager } from '../agent/skills/config
 import { createWorkflowCatalog } from '../agent/workflow/catalog.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { getWorkspacePath } from '../config/index.js';
-import { resolveAgentProfileDir, resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
+import {
+  resolveAgentProfileDir,
+  resolveBundledSkillsDir,
+  resolveStateDir,
+  resolveUserProfilePath,
+} from '../config/paths.js';
 import { listConnectorInstances } from '../connectors/instances.js';
 import type { Config } from '../config/schema.js';
 import type { TuiStartupResources } from './tui-backend.js';
@@ -22,7 +27,7 @@ export function collectTuiStartupResources(config: Config, sessionKey?: string):
   const workspaceDir = profile.resolvedWorkspacePath || getWorkspacePath(config);
 
   const context = uniqueSorted(
-    resolveBootstrapFilesSync({ profileDir, sessionKey })
+    resolveBootstrapFilesSync({ profileDir, userProfilePath: resolveUserProfilePath(), sessionKey })
       .filter((file) => !file.missing)
       .map((file) => file.name || basename(file.path)),
   );

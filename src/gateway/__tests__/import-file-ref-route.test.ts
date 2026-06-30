@@ -21,7 +21,30 @@ function authHeaders(): Record<string, string> {
 function buildConfig(workspaceRoot: string): Partial<Config> {
   return {
     gateway: { port: 18790, corsOrigins: [] },
-    agents: { defaults: { workspace: workspaceRoot } },
+    agents: {
+      default: 'main',
+      defaultPreset: 'default',
+      capabilityPresets: {
+        default: {
+          id: 'default',
+          name: 'Global defaults',
+          models: { defaultRole: 'deep', roles: { deep: { model: 'test/test-model' } } },
+        },
+      },
+      list: [
+        {
+          id: 'main',
+          identity: { name: 'Main', role: 'General assistant' },
+          responsibilities: { primary: ['Help the user complete tasks'] },
+          workspace: { root: workspaceRoot },
+          tools: { builtin: {} },
+          skills: { mode: 'all' },
+          memory: { mode: 'confirmWrite', sources: ['session'] },
+          workflows: {},
+          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+        },
+      ],
+    },
   } as Partial<Config>;
 }
 
@@ -67,7 +90,7 @@ describe('POST /api/workspace/import-file-ref/:id', () => {
   });
 
   function newApp() {
-    const cfg = buildConfig(parentDir);
+    const cfg = buildConfig(workspaceRoot);
     const service = createMockService(cfg, workspaceRoot);
     return createHonoApp({ service, token: TOKEN });
   }
@@ -172,7 +195,7 @@ describe('POST /api/workspace/import-file-ref/:id', () => {
   it('returns 413 when source exceeds maxBytes', async () => {
     // 2 KiB source with maxBytes=1024 in cfg.
     const cfg: Partial<Config> = {
-      ...buildConfig(parentDir),
+      ...buildConfig(workspaceRoot),
       workspace: { import: { targetDir: 'imports', maxBytes: 1024, allowOverwrite: true } },
     } as Partial<Config>;
     const service = createMockService(cfg, workspaceRoot);

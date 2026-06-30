@@ -7,7 +7,7 @@ This page tracks how xopc documentation should improve from "feature notes" into
 xopc already has broad documentation coverage, but quality is uneven:
 
 - Some pages still mix user guidance, internal design notes, and historical behavior.
-- The first-run path now points users to `onboard --quick` and `tui --local`.
+- The first-run path now points users to model setup first, an optional personal profile, and then a local or Web chat.
 - High-priority task guides now exist for model setup, Telegram, gateway exposure, second agents, and broken setup diagnosis.
 - English and Chinese pages can drift, so high-priority user guides should stay paired.
 - CLI docs can drift from `xopc --help` as commands are added or renamed.

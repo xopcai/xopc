@@ -28,7 +28,19 @@ Or create manually:
 {
   "agents": {
     "default": "main",
-    "capabilityPresets": {},
+    "defaultPreset": "default",
+    "capabilityPresets": {
+      "default": {
+        "id": "default",
+        "name": "Global defaults",
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "anthropic/claude-sonnet-4-5" }
+          }
+        }
+      }
+    },
     "list": [
       {
         "id": "main",
@@ -42,12 +54,6 @@ Or create manually:
           "primary": ["Help the user complete tasks"]
         },
         "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "anthropic/claude-sonnet-4-5" }
-          }
-        },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
         "memory": {
@@ -74,7 +80,19 @@ Or create manually:
 {
   "agents": {
     "default": "main",
+    "defaultPreset": "default",
     "capabilityPresets": {
+      "default": {
+        "id": "default",
+        "name": "Global defaults",
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "anthropic/claude-sonnet-4-5" },
+            "small": { "model": "openai/gpt-4o-mini", "description": "Fast low-cost model" }
+          }
+        }
+      },
       "safe-coder": {
         "id": "safe-coder",
         "name": "Safe coder",
@@ -100,13 +118,6 @@ Or create manually:
           "primary": ["Help the user complete tasks"]
         },
         "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "anthropic/claude-sonnet-4-5" },
-            "small": { "model": "openai/gpt-4o-mini", "description": "Fast low-cost model" }
-          }
-        },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
         "memory": {
@@ -194,19 +205,20 @@ Or create manually:
 
 ### agents
 
-Agent configuration has three parts: optional **`default`** id, reusable **`capabilityPresets`**, and concrete **`list`** entries. Each `agents.list[]` entry is an Agent Capability Manifest. Routing and session keys use the **first segment** of the session key as the agent id; the runtime resolves exactly one enabled manifest and applies any declared presets from `extends`. There is no `agents.defaults` merge layer.
+Agent configuration has four parts: optional **`default`** agent id, **`defaultPreset`** for global defaults, reusable **`capabilityPresets`**, and concrete **`list`** entries. Each `agents.list[]` entry is an Agent Capability Manifest. Routing and session keys use the **first segment** of the session key as the agent id; the runtime resolves exactly one enabled manifest, applies `defaultPreset` first, then applies any declared presets from `extends`. There is no `agents.defaults` merge layer.
 
 #### Top-level `agents` fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `default` | string | Optional. Default agent id when the session key or API does not specify one. If omitted: first **enabled** manifest in `list`, else `main`. |
+| `defaultPreset` | string | Global preset id applied to every agent before its own `extends`. Defaults to `default`. Use this for the shared model and baseline capabilities. |
 | `capabilityPresets` | object | Named reusable policy patches keyed by preset id. Presets may define model roles, tools, skills, memory, workflows, boundaries, runtime limits, and locks. |
 | `list` | array | Concrete Agent Capability Manifests. Each entry must be complete enough to run on its own after preset resolution. |
 
 #### `agents.list` entries
 
-Each entry must include **`id`**, **`identity`**, **`responsibilities`**, **`workspace`**, **`models`**, **`tools`**, **`skills`**, **`memory`**, **`workflows`**, and **`boundaries`**. Profile Markdown still lives under **`agents/<id>/profile/`** for long-form persona/context files, but the structured manifest is the source of truth for runtime policy.
+Each entry must include **`id`**, **`identity`**, **`responsibilities`**, **`workspace`**, **`tools`**, **`skills`**, **`memory`**, **`workflows`**, and **`boundaries`**. `models` is optional on the agent because the global default preset normally owns the shared model roles. Profile Markdown still lives under **`agents/<id>/profile/`** for long-form persona/context files, but the structured manifest is the source of truth for runtime policy.
 
 | Field | Type | Description |
 |-------|------|-------------|

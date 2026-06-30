@@ -14,7 +14,6 @@ const __dirname = dirname(__filename);
 export const TEMPLATE_FILES = [
   'SOUL.md',
   'IDENTITY.md',
-  'USER.md',
   'TOOLS.md',
   'AGENTS.md',
   'HEARTBEAT.md',
@@ -106,7 +105,7 @@ This folder is home. Treat it that way.
 
 ## Session Startup
 
-Use runtime-provided startup context first. Bootstrap files (SOUL, USER, MEMORY, etc.) are injected by xopc on /new and /reset.
+Use runtime-provided startup context first. Bootstrap files (global user profile, SOUL, MEMORY, etc.) are injected by xopc on /new and /reset.
 
 Do not manually reread startup files unless the user asks or the provided context is incomplete.
 
@@ -151,15 +150,6 @@ _Fill this in during your first conversation._
 - **Creature:**
 - **Vibe:**
 - **Emoji:**
-`,
-    'USER.md': `# USER.md - About Your Human
-
-_Learn about the person you're helping._
-
-- **Name:**
-- **What to call them:**
-- **Timezone:**
-- **Notes:**
 `,
     'TOOLS.md': `# TOOLS.md - Local Notes
 

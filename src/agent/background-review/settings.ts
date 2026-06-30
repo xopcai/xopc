@@ -9,21 +9,16 @@ export interface BackgroundReviewSettings {
   maxDurationMs: number;
 }
 
-export function resolveBackgroundReviewSettings(config: Config | undefined): BackgroundReviewSettings {
-  const raw = (config?.agents as unknown as {
-    defaults?: {
-      backgroundReview?: Partial<BackgroundReviewSettings>;
-    };
-  } | undefined)?.defaults?.backgroundReview;
+export function resolveBackgroundReviewSettings(_config: Config | undefined): BackgroundReviewSettings {
   const numberOrDefault = (value: unknown, fallback: number): number =>
     typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.trunc(value) : fallback;
 
   return {
-    enabled: raw?.enabled === true,
-    memoryNudgeInterval: numberOrDefault(raw?.memoryNudgeInterval, 10),
-    skillNudgeInterval: numberOrDefault(raw?.skillNudgeInterval, 10),
-    maxToolRounds: numberOrDefault(raw?.maxToolRounds, 8),
-    maxHistoryMessages: numberOrDefault(raw?.maxHistoryMessages, 80),
-    maxDurationMs: numberOrDefault(raw?.maxDurationMs, 120_000),
+    enabled: false,
+    memoryNudgeInterval: numberOrDefault(undefined, 10),
+    skillNudgeInterval: numberOrDefault(undefined, 10),
+    maxToolRounds: numberOrDefault(undefined, 8),
+    maxHistoryMessages: numberOrDefault(undefined, 80),
+    maxDurationMs: numberOrDefault(undefined, 120_000),
   };
 }

@@ -142,10 +142,19 @@ function workspacePathFromConfig(cfg: unknown): string {
   if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return '';
   const agents = (cfg as { agents?: unknown }).agents;
   if (!agents || typeof agents !== 'object' || Array.isArray(agents)) return '';
-  const defaults = (agents as { defaults?: unknown }).defaults;
-  if (!defaults || typeof defaults !== 'object' || Array.isArray(defaults)) return '';
-  const w = (defaults as { workspace?: unknown }).workspace;
-  return typeof w === 'string' ? w : '';
+  const agentRecord = agents as { default?: unknown; list?: unknown };
+  if (!Array.isArray(agentRecord.list)) return '';
+  const defaultId = typeof agentRecord.default === 'string' ? agentRecord.default : '';
+  const selected =
+    agentRecord.list.find((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+      return defaultId ? (entry as { id?: unknown }).id === defaultId : true;
+    }) ?? agentRecord.list[0];
+  if (!selected || typeof selected !== 'object' || Array.isArray(selected)) return '';
+  const workspace = (selected as { workspace?: unknown }).workspace;
+  if (!workspace || typeof workspace !== 'object' || Array.isArray(workspace)) return '';
+  const root = (workspace as { root?: unknown }).root;
+  return typeof root === 'string' ? root : '';
 }
 
 type HeartbeatUi = {

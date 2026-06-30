@@ -54,6 +54,7 @@ export function resolveEffectiveAgentManifestForAgent(config: Config, agentId: s
   return resolveEffectiveAgentManifest({
     agent,
     presets: config.agents.capabilityPresets,
+    defaultPresetId: config.agents.defaultPreset,
   }).manifest;
 }
 

@@ -1,11 +1,11 @@
 /**
- * Bounded curated memory: agent home `memories/MEMORY.md` + `USER.md`, §-delimited entries.
+ * Bounded curated memory: agent home `memories/MEMORY.md` + global `user/MEMORY.md`, §-delimited entries.
  * Snapshot for system prompt is captured at load time and not mutated until next load.
  */
 
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import lockfile from 'proper-lockfile';
 
 import type { MemorySnapshot, MemoryStoreConfig } from './types.js';
@@ -22,7 +22,7 @@ export class BuiltinMemoryStore {
 
   constructor(private readonly config: MemoryStoreConfig) {}
 
-  /** When false, USER.md is omitted from the snapshot and should not be edited via `curated_memory`. */
+  /** When false, global user memory is omitted from the snapshot and should not be edited via `curated_memory`. */
   isUserProfileEnabled(): boolean {
     return this.config.userProfileEnabled !== false;
   }
@@ -32,13 +32,18 @@ export class BuiltinMemoryStore {
     return this.config.memoriesDir;
   }
 
+  /** Global user memory file (`~/.xopc/user/MEMORY.md`). */
+  get userMemoryPath(): string {
+    return this.config.userMemoryPath;
+  }
+
   /** Workspace whose MEMORY.md and daily notes participate in local memory search. */
   get workspaceDir(): string {
     return this.config.workspaceDir;
   }
 
   pathFor(target: 'memory' | 'user'): string {
-    return join(this.memoriesDir, target === 'memory' ? 'MEMORY.md' : 'USER.md');
+    return target === 'memory' ? join(this.memoriesDir, 'MEMORY.md') : this.userMemoryPath;
   }
 
   /**
@@ -52,7 +57,7 @@ export class BuiltinMemoryStore {
     this.userEntries =
       this.config.userProfileEnabled === false
         ? []
-        : this.parseFileContent(this.readPathSync(join(this.memoriesDir, 'USER.md')));
+        : this.parseFileContent(this.readPathSync(this.userMemoryPath));
     this.memoryEntries = dedupePreserveOrder(this.memoryEntries);
     this.userEntries = dedupePreserveOrder(this.userEntries);
     this.snapshot = {
@@ -236,7 +241,7 @@ export class BuiltinMemoryStore {
     fn: () => Promise<T>,
   ): Promise<T> {
     const filePath = this.pathFor(target);
-    await mkdir(this.memoriesDir, { recursive: true });
+    await mkdir(dirname(filePath), { recursive: true });
     if (!existsSync(filePath)) {
       await writeFile(filePath, '', 'utf-8');
     }
@@ -269,6 +274,7 @@ export class BuiltinMemoryStore {
     const filePath = this.pathFor(target);
     const content = entries.join(MEMORY_ENTRY_DELIMITER);
     const tmpPath = `${filePath}.tmp.${Date.now()}`;
+    await mkdir(dirname(filePath), { recursive: true });
     await writeFile(tmpPath, content, 'utf-8');
     await rename(tmpPath, filePath);
   }

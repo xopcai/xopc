@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from 'fs/promises';
 import { existsSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import {
   resolveStateDir,
@@ -9,6 +9,7 @@ import {
   resolveConfigPath,
   resolveAgentHomeDir,
   resolveAgentProfileDir,
+  resolveUserProfilePath,
   WORKSPACE_FILES,
 } from '../../config/paths.js';
 import { loadConfig, saveConfig } from '../../config/loader.js';
@@ -140,12 +141,13 @@ _This file is yours to evolve. As you learn who you are, update it._
     log.info({ path: identityPath }, 'Created IDENTITY.md');
   }
 
-  // USER.md - User information (empty template)
-  const userPath = join(profileDir, WORKSPACE_FILES.USER);
+  // Global user profile (shared by all agents)
+  const userPath = resolveUserProfilePath();
   if (!existsSync(userPath)) {
-    const userContent = `# USER.md - About Your Human
+    await mkdir(dirname(userPath), { recursive: true });
+    const userContent = `# PROFILE.md - About You
 
-_Learn about the person you're helping. Update this as you go._
+_Shared by all agents. Update this as your preferences and context change._
 
 - **Name:**
 - **What to call them:**
@@ -158,7 +160,7 @@ _Learn about the person you're helping. Update this as you go._
 _(What do they care about? What projects are they working on? Build this over time.)_
 `;
     await writeFile(userPath, userContent, 'utf-8');
-    log.info({ path: userPath }, 'Created USER.md');
+    log.info({ path: userPath }, 'Created global user PROFILE.md');
   }
 
   // AGENTS.md - Behavior guidelines

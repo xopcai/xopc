@@ -15,7 +15,7 @@ const TOKEN = 'pairing-test-token';
 function pairingConfig(): Partial<Config> {
   return {
     gateway: { port: 18790, corsOrigins: [] },
-    agents: { defaults: {} },
+    agents: { defaultPreset: 'default', capabilityPresets: {}, list: [] },
     channels: {
       telegram: {
         enabled: true,

@@ -2,9 +2,10 @@
   "settingsSections": {
     "overview": "系统状态",
     "appearance": "偏好设置",
+    "user-profile": "个人资料",
     "agent": "智能体",
     "agent-browser": "浏览器",
-    "capability-presets": "能力预设",
+    "capability-presets": "共享配置",
     "connectors": "连接器",
     "providers": "服务商与密钥",
     "credentials": "模型与能力",
@@ -30,13 +31,36 @@
   "settingsPage": {
     "comingSoon": "设置 · {{title}}（即将推出）。"
   },
+  "userProfileSettings": {
+    "title": "个人资料",
+    "subtitle": "这些信息会被所有智能体共享，用来了解如何称呼你、你的时区和长期偏好。",
+    "sectionTitle": "关于我",
+    "sectionSubtitle": "把稳定偏好和背景放在这里，避免每个智能体都维护一份用户文件。",
+    "loading": "加载中…",
+    "loadError": "无法加载个人资料。",
+    "save": "保存",
+    "saving": "保存中…",
+    "saved": "已保存",
+    "saveError": "保存失败。",
+    "callName": "姓名或称呼",
+    "callNamePlaceholder": "希望智能体如何称呼你？",
+    "pronouns": "代词",
+    "pronounsPlaceholder": "选择或输入代词",
+    "timezone": "时区",
+    "timezoneCustom": "自定义时区",
+    "timezoneDetect": "检测",
+    "notes": "备注",
+    "notesPlaceholder": "稳定偏好、当前项目、沟通方式，或所有智能体都应知道的信息。",
+    "custom": "自定义…",
+    "note": "这里会保存到全局个人资料，不属于任何单个智能体。需要长期回忆的持久事实会单独写入 user/MEMORY.md。"
+  },
   "capabilityPresetsSettings": {
-    "title": "能力预设",
-    "subtitle": "管理多个智能体共享的模型、工具、技能、记忆和边界策略。修改预设会影响所有继承它的智能体。",
-    "needToken": "请先保存网关访问令牌后再管理能力预设。",
+    "title": "共享配置",
+    "subtitle": "管理多个智能体复用的模型、工具、技能、记忆和边界设置。修改后会影响所有使用它的智能体。",
+    "needToken": "请先保存网关访问令牌后再管理共享配置。",
     "loading": "加载中…",
     "saveError": "保存失败",
-    "newPreset": "新建预设",
+    "newPreset": "新建共享配置",
     "closeDialog": "关闭",
     "tabs": {
       "overview": "概览",
@@ -47,8 +71,8 @@
     },
     "starters": {
       "blank": {
-        "title": "空白预设",
-        "description": "从基础信息开始，只配置你确实需要复用的策略。"
+        "title": "空白配置",
+        "description": "从基础信息开始，只配置你确实需要复用的设置。"
       },
       "safe-coder": {
         "title": "安全编码",
@@ -63,26 +87,26 @@
         "description": "适合轻量任务，把模型角色组织为快速、低成本优先。"
       }
     },
-    "listTitle": "预设列表",
-    "listHint": "使用数量显示有多少智能体直接继承该预设。",
-    "empty": "暂无能力预设。能力预设用于复用多个智能体共享的运行策略。",
-    "overviewTitle": "这个预设是什么",
-    "overviewHint": "先明确预设的名字、用途和影响范围，再进入具体策略。",
+    "listTitle": "共享配置",
+    "listHint": "使用数量显示有多少智能体正在使用该共享配置。",
+    "empty": "暂无共享配置。可用它复用多个智能体的运行设置。",
+    "overviewTitle": "这个配置是什么",
+    "overviewHint": "先明确名称、用途和影响范围，再进入具体设置。",
     "editorTitle": "基础信息",
-    "editorHint": "名称和描述帮助用户识别这个共享策略。策略字段会在后续分区编辑。",
-    "idLabel": "预设 ID",
+    "editorHint": "名称和描述帮助用户识别这个可复用配置。具体设置会在后续分区编辑。",
+    "idLabel": "配置 ID",
     "nameLabel": "名称",
     "namePlaceholder": "安全编码",
     "descriptionLabel": "描述",
-    "descriptionPlaceholder": "说明这个预设适合哪些智能体，以及它会限制或开启哪些能力。",
+    "descriptionPlaceholder": "说明这个配置适合哪些智能体，以及它会开启或限制哪些权限。",
     "versionLabel": "版本",
     "save": "保存",
     "delete": "删除",
     "usageTitle": "使用情况",
-    "usageHint": "保存前确认哪些智能体会受到该预设影响。",
-    "noUsage": "当前没有智能体使用这个预设。",
+    "usageHint": "保存前确认哪些智能体会受到影响。",
+    "noUsage": "当前没有智能体使用这个共享配置。",
     "modelsTitle": "模型策略",
-    "modelsHint": "为这个共享预设声明可复用的模型角色。留空表示该预设不设置模型角色。",
+    "modelsHint": "为这个共享配置声明可复用的模型用途。留空表示该配置不设置模型。",
     "modelRoleIdLabel": "角色 ID",
     "modelRoleDescriptionLabel": "描述",
     "addModelRole": "添加模型角色",
@@ -112,7 +136,7 @@
     "invalidModelRef": "每个模型角色都需要 provider/model 格式的模型引用。",
     "saveModels": "保存模型策略",
     "toolsTitle": "工具权限",
-    "toolsHint": "只配置这个预设要覆盖的共享工具边界；未覆盖的工具交给智能体或其他预设决定。",
+    "toolsHint": "只配置这个共享配置要覆盖的工具权限；未覆盖的工具交给智能体或其他共享配置决定。",
     "toolModes": {
       "inherit": "不覆盖",
       "allow": "允许",
@@ -127,11 +151,11 @@
     "toolsQuickCodingMode": "编码模式",
     "toolsEmptyBuiltin": "网关暂未返回内置工具列表。",
     "toolsOverrideSummaryTitle": "当前显式覆盖",
-    "toolsNoOverrides": "暂无覆盖。这个预设不会改变任何工具权限。",
+    "toolsNoOverrides": "暂无覆盖。这个共享配置不会改变任何工具权限。",
     "saveTools": "保存工具权限",
     "lockedByPreset": "已锁定",
-    "skillsTitle": "技能策略",
-    "skillsHint": "控制继承该预设的智能体能看到哪些技能。",
+    "skillsTitle": "可用技能",
+    "skillsHint": "控制使用该共享配置的智能体能看到哪些技能。",
     "skillModeLabels": {
       "inherit": "不覆盖",
       "all": "全部技能",
@@ -153,19 +177,19 @@
     "skillsEmptyCatalog": "目录中暂无技能。",
     "skillsNoDescription": "SKILL.md 元数据中暂无描述。",
     "skillsOverrideSummaryTitle": "当前技能覆盖",
-    "skillsInheritSummary": "不覆盖技能策略。继承该预设的智能体将继续使用自身或其他预设的技能策略。",
+    "skillsInheritSummary": "不覆盖可用技能。使用该配置的智能体将继续使用自身或其他共享配置的技能设置。",
     "skillsAllSummary": "显式允许全部技能。",
     "skillsOffSummary": "显式关闭技能。",
     "skillsAllowSummary": "仅允许 {{count}} 个已选择技能。",
     "skillsDenySummary": "排除 {{count}} 个已选择技能。",
-    "saveSkills": "保存技能策略",
-    "unsavedTitle": "有未保存的预设改动",
+    "saveSkills": "保存技能设置",
+    "unsavedTitle": "共享配置有未保存改动",
     "unsavedImpact": "保存后会影响 {{count}} 个智能体。",
     "unsavedNoImpact": "保存后暂不会影响任何智能体。",
     "noUnsavedTitle": "没有未保存改动",
     "noUnsavedHint": "当前预设配置已保存。",
     "discard": "丢弃",
-    "savePreset": "保存预设"
+    "savePreset": "保存共享配置"
   },
   "modelsHub": {
     "subtitle": "配置服务商密钥、自定义模型、能力模型和默认使用状态。",
@@ -356,9 +380,7 @@
       "channelConfigured": "已连接至少一个消息通道",
       "channelMissing": "尚未配置消息通道",
       "skillsConfigured": "已有 {{count}} 个可用技能",
-      "skillsMissing": "尚未安装技能",
-      "presetsConfigured": "已配置 {{count}} 个智能体",
-      "presetsMissing": "启动智能体尚未初始化"
+      "skillsMissing": "尚未安装技能"
     },
     "items": {
       "gateway": {
@@ -380,10 +402,6 @@
       "skill": {
         "title": "安装技能",
         "description": "从市场或目录安装技能，扩展智能体能力。"
-      },
-      "presets": {
-        "title": "添加预设智能体",
-        "description": "创建专用智能体（如编程、写作等）以应对不同任务。"
       }
     },
     "scenarios": {
@@ -394,7 +412,6 @@
         "stepProviders": "配置 LLM 服务商密钥",
         "stepDefaultModel": "选择默认对话模型",
         "stepChannel": "连接消息通道",
-        "stepPresets": "查看专用智能体",
         "stepCron": "设置定时任务",
         "stepSkills": "从目录安装技能"
       },
@@ -405,7 +422,7 @@
         },
         "multiChannel": {
           "title": "多频道助手",
-          "description": "从 Telegram 等通道回复，并为不同场景配置专用智能体。"
+          "description": "连接 Telegram 等通道，让同一个助手可以从网页和消息应用回复。"
         },
         "automation": {
           "title": "自动化工作流",
@@ -910,7 +927,7 @@
   },
   "mcpSettings": {
     "title": "外部工具 (MCP)",
-    "subtitle": "配置出站 MCP 服务（stdio 或 HTTP），供嵌入式 Agent 运行时使用。工具权限由各 Agent manifest 控制。",
+    "subtitle": "配置出站 MCP 服务（stdio 或 HTTP），供嵌入式智能体运行时使用。工具权限由各智能体配置控制。",
     "loading": "正在加载 MCP 配置…",
     "saved": "MCP 配置已保存。",
     "save": "保存",
@@ -966,7 +983,7 @@
     "toolsDialogSearchPlaceholder": "按名称或描述搜索…",
     "toolsDialogSearchEmpty": "没有匹配的工具。",
     "toolsDialogClose": "关闭",
-    "disableHint": "若需禁止某 Agent 使用 MCP，请在该 Agent manifest 中将对应 MCP 工具策略设为 deny。",
+    "disableHint": "若需禁止某智能体使用 MCP，请在该智能体配置中拒绝对应 MCP 工具。",
     "transportLabels": {
       "stdio": "stdio",
       "sse": "SSE",

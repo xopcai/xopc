@@ -23,6 +23,10 @@ function collectProviderIdsFromConfig(cfg: Config): Set<string> {
     }
   };
 
+  for (const preset of Object.values(cfg.agents.capabilityPresets ?? {})) {
+    addRoles(preset.models?.roles);
+  }
+
   const list = cfg.agents?.list;
   if (Array.isArray(list)) {
     for (const e of list) {

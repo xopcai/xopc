@@ -387,14 +387,11 @@ export function providerSupportsApiKey(provider: string): boolean {
 // Dynamic Default Model Resolution
 // ============================================
 
-/** Preferred default model when no explicit model is configured. */
-const DEFAULT_FALLBACK_MODEL = 'openai/gpt-5.5';
-
 /**
  * Get a default model reference.
  * Priority:
- * 1. Explicitly configured model in the default agent manifest (if set and available)
- * 2. Default fallback: openai/gpt-5.5
+ * 1. Effective model inherited from the global default preset / agent presets / agent override
+ * 2. Empty string when onboarding still needs to choose a global default model
  */
 export async function getDefaultModel(config?: Config | null | undefined): Promise<string> {
   const modelRef = config ? getAgentDefaultModelRef(config) : undefined;
@@ -410,16 +407,15 @@ export async function getDefaultModel(config?: Config | null | undefined): Promi
     return modelRef;
   }
 
-  return DEFAULT_FALLBACK_MODEL;
+  return '';
 }
 
 /**
  * Synchronous default model resolution for constructors and sync code paths.
  * Uses catalog/registry only (no async credential checks).
  *
- * When no model is explicitly configured, returns the preferred default
- * (`openai/gpt-5.5`) rather than picking an arbitrary first model from the
- * full catalog.
+ * When no model is explicitly configured, returns an empty string so setup
+ * flows can prompt for the global default model.
  */
 export function getDefaultModelSync(config?: Config | null | undefined): string {
   const modelRef = config ? getAgentDefaultModelRef(config) : undefined;
@@ -427,7 +423,7 @@ export function getDefaultModelSync(config?: Config | null | undefined): string 
     return modelRef;
   }
 
-  return DEFAULT_FALLBACK_MODEL;
+  return '';
 }
 
 // Re-export ModelRegistry for advanced use cases

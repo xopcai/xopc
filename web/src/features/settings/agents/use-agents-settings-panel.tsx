@@ -147,9 +147,7 @@ export function useAgentsSettingsPanel() {
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
 
-  const profileSaveRef = useRef<(() => Promise<void>) | null>(null);
   const overviewSaveProfileMarkdownRef = useRef<(() => Promise<void>) | null>(null);
-  const [profileDirty, setProfileDirty] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
   const trackedAgentsSyncRef = useRef<{ data: GatewayAgentsPayload | null; routeAgentId?: string }>({
@@ -659,8 +657,6 @@ export function useAgentsSettingsPanel() {
     switch (panel) {
       case 'overview':
         return overviewRestDirty || overviewProfile.dirty;
-      case 'profile':
-        return profileDirty;
       default:
         return true;
     }
@@ -680,10 +676,6 @@ export function useAgentsSettingsPanel() {
           onSaveAgentEdits(),
           overviewSaveProfileMarkdownRef.current?.() ?? Promise.resolve(),
         ]);
-        showSavedFlash();
-        break;
-      case 'profile':
-        await profileSaveRef.current?.();
         showSavedFlash();
         break;
       case 'tools':
@@ -767,9 +759,7 @@ export function useAgentsSettingsPanel() {
       );
     },
     overviewSaveProfileMarkdownRef,
-    profileSaveRef,
     overviewProfile,
-    setProfileDirty,
     filesLoading: profileFiles.filesLoading,
     files: profileFiles.files,
     activeFile: profileFiles.activeFile,

@@ -71,9 +71,6 @@ export async function checkWorkspaceStatus(ctx: DoctorContext): Promise<CheckRes
     };
   }
 
-  if (!hasProfileFile(WORKSPACE_FILES.USER)) {
-    hints.push(`${WORKSPACE_FILES.USER} is optional; add a user profile for better context.`);
-  }
   if (!hasProfileFile(WORKSPACE_FILES.TOOLS)) {
     hints.push(`${WORKSPACE_FILES.TOOLS} is optional; add tool notes if you use many tools.`);
   }

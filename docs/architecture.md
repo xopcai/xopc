@@ -65,7 +65,7 @@ Runtime data (config, credentials, per-agent sessions, the Markdown **workspace*
 **AgentService** is the runtime that:
 
 1. Accepts user messages from channels or the Web console.
-2. Builds the system prompt from **profile Markdown** under each agent’s **`agents/<id>/profile/`** directory (`SOUL.md`, `USER.md`, `AGENTS.md`, `TOOLS.md`, …) plus optional memory snippets.
+2. Builds the system prompt from the global **`user/PROFILE.md`**, **profile Markdown** under each agent’s **`agents/<id>/profile/`** directory (`SOUL.md`, `IDENTITY.md`, `AGENTS.md`, `TOOLS.md`, …), plus optional memory snippets.
 3. Persists **session** transcripts and runs **compaction** when configured.
 4. Runs **built-in and extension tools** with progress feedback for long steps.
 
@@ -116,7 +116,7 @@ User (Telegram/Gateway/CLI)
 ┌─────────────────────┐
 │   AgentService      │
 │  ┌───────────────┐  │
-│  │ Load profile Markdown │  │ ← `agents/<id>/profile/` (SOUL.md, USER.md, TOOLS.md, AGENTS.md, …)
+│  │ Load profile Markdown │  │ ← `user/PROFILE.md` + `agents/<id>/profile/` (SOUL.md, IDENTITY.md, TOOLS.md, AGENTS.md, …)
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │

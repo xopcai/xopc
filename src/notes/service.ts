@@ -118,7 +118,10 @@ function buildCatalysisPrompt(note: Note): string {
 }
 
 async function buildAiCatalysisReport(note: Note, config?: Config): Promise<NoteCatalysisReport> {
-  const modelRef = getDefaultModelSync(config) ?? 'openai/gpt-5.5';
+  const modelRef = getDefaultModelSync(config);
+  if (!modelRef) {
+    throw new Error('No global default model configured');
+  }
   const resolved = resolveModel(modelRef);
   const messages: UserMessage[] = [{ role: 'user', content: buildCatalysisPrompt(note), timestamp: Date.now() }];
   const response = await complete(resolved, { messages }, { temperature: 0.2 });

@@ -37,9 +37,9 @@ Resolved by `resolveAgentHomeDir(config, agentId)`. Typical layout:
 
 | Path | Purpose |
 |------|---------|
-| `profile/` | Profile Markdown for the system prompt stack: `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (separate from curated `memories/`), optional `agent-avatar.*` for the gateway console. |
+| `profile/` | Agent profile Markdown for the system prompt stack: `SOUL.md`, `IDENTITY.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (separate from curated `memories/`), optional `agent-avatar.*` for the gateway console. Global user profile lives in `user/PROFILE.md`. |
 | `sessions/` | Legacy directory (optional); may remain from older installs. New installs store transcripts in `xopc.db` only. |
-| `memories/` | Curated structured store (`MEMORY.md`, `USER.md`; entries separated by a fixed delimiter — `BuiltinMemoryStore`). |
+| `memories/` | Agent curated structured store (`MEMORY.md`; entries separated by a fixed delimiter — `BuiltinMemoryStore`). Global user memory lives in `user/MEMORY.md`. |
 | `inbound/` | Persisted inbound attachments (non-image binaries); transcript paths use `inbound/...` relative to agent home. |
 | `tts/` | Cached outbound TTS audio per session. |
 | `agent/` | See **Agent dir** below. |

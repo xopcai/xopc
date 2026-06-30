@@ -333,7 +333,7 @@ export interface CreatePipelineParams {
   botId: string;
   agentInvoke: PipelineOptions['agentInvoke'];
   onError?: PipelineOptions['onError'];
-  /** IANA timezone — matches userTimezone from agent config / USER.md */
+  /** IANA timezone — matches userTimezone from config or global user profile */
   timezone?: string;
 }
 

@@ -2,9 +2,10 @@
   "settingsSections": {
     "overview": "System status",
     "appearance": "Preferences",
+    "user-profile": "User profile",
     "agent": "Agent",
     "agent-browser": "Browser",
-    "capability-presets": "Capability presets",
+    "capability-presets": "Shared settings",
     "connectors": "Connectors",
     "providers": "Providers & keys",
     "credentials": "Models & capabilities",
@@ -30,13 +31,36 @@
   "settingsPage": {
     "comingSoon": "Settings · {{title}} (coming soon)."
   },
+  "userProfileSettings": {
+    "title": "User profile",
+    "subtitle": "Shared context about you. Every agent can use this profile; individual agent pages only describe the agent.",
+    "sectionTitle": "About you",
+    "sectionSubtitle": "Keep stable preferences and context here so agents do not each need their own user file.",
+    "loading": "Loading…",
+    "loadError": "Could not load user profile.",
+    "save": "Save",
+    "saving": "Saving…",
+    "saved": "Saved",
+    "saveError": "Save failed.",
+    "callName": "Name or nickname",
+    "callNamePlaceholder": "What should agents call you?",
+    "pronouns": "Pronouns",
+    "pronounsPlaceholder": "Select or enter pronouns",
+    "timezone": "Timezone",
+    "timezoneCustom": "Custom timezone",
+    "timezoneDetect": "Detect",
+    "notes": "Notes",
+    "notesPlaceholder": "Stable preferences, current projects, communication style, or anything all agents should know.",
+    "custom": "Custom…",
+    "note": "Saved to the global user profile, not to any single agent. Durable facts for long-term recall are stored separately in user/MEMORY.md."
+  },
   "capabilityPresetsSettings": {
-    "title": "Capability presets",
-    "subtitle": "Manage shared model, tool, skill, memory, and boundary policies used by multiple agents. Preset changes affect every agent that extends them.",
-    "needToken": "Save the gateway access token before managing capability presets.",
+    "title": "Shared settings",
+    "subtitle": "Manage reusable model, tool, skill, memory, and boundary settings for multiple agents. Changes affect every agent that uses them.",
+    "needToken": "Save the gateway access token before managing shared settings.",
     "loading": "Loading…",
     "saveError": "Save failed",
-    "newPreset": "New preset",
+    "newPreset": "New shared setting",
     "closeDialog": "Close",
     "tabs": {
       "overview": "Overview",
@@ -47,8 +71,8 @@
     },
     "starters": {
       "blank": {
-        "title": "Blank preset",
-        "description": "Start from basics and only configure policy you truly want to reuse."
+        "title": "Blank setting",
+        "description": "Start from basics and only configure choices you truly want to reuse."
       },
       "safe-coder": {
         "title": "Safe coding",
@@ -63,26 +87,26 @@
         "description": "For lightweight work where fast and cheaper model roles should be preferred."
       }
     },
-    "listTitle": "Presets",
-    "listHint": "Usage count shows how many agents directly extend each preset.",
-    "empty": "No capability presets yet. Presets reuse shared runtime policy across agents.",
-    "overviewTitle": "What this preset is",
-    "overviewHint": "Define the preset's name, purpose, and blast radius before editing concrete policies.",
+    "listTitle": "Shared settings",
+    "listHint": "Usage count shows how many agents use each shared setting.",
+    "empty": "No shared settings yet. Use them to reuse runtime choices across agents.",
+    "overviewTitle": "What this setting is",
+    "overviewHint": "Define the name, purpose, and impact before editing concrete settings.",
     "editorTitle": "Basics",
-    "editorHint": "Name and description identify this shared policy. Policy fields are edited in the following sections.",
-    "idLabel": "Preset ID",
+    "editorHint": "Name and description identify this reusable setting. Details are edited in the following sections.",
+    "idLabel": "Setting ID",
     "nameLabel": "Name",
     "namePlaceholder": "Safe coding",
     "descriptionLabel": "Description",
-    "descriptionPlaceholder": "Explain which agents should use this preset and what abilities it enables or restricts.",
+    "descriptionPlaceholder": "Explain which agents should use this setting and what access it enables or restricts.",
     "versionLabel": "Version",
     "save": "Save",
     "delete": "Delete",
     "usageTitle": "Usage",
     "usageHint": "Check which agents will be affected before saving changes.",
-    "noUsage": "No agents use this preset yet.",
+    "noUsage": "No agents use this shared setting yet.",
     "modelsTitle": "Model strategy",
-    "modelsHint": "Declare reusable model roles for this shared preset. Leave empty when the preset should not set model roles.",
+    "modelsHint": "Declare reusable model roles for this shared setting. Leave empty when it should not set model roles.",
     "modelRoleIdLabel": "Role ID",
     "modelRoleDescriptionLabel": "Description",
     "addModelRole": "Add model role",
@@ -112,7 +136,7 @@
     "invalidModelRef": "Each model role needs a provider/model ref.",
     "saveModels": "Save model strategy",
     "toolsTitle": "Tool permissions",
-    "toolsHint": "Only configure shared tool boundaries this preset should override; untouched tools remain controlled by agents or other presets.",
+    "toolsHint": "Only configure shared tool access this setting should override; untouched tools remain controlled by agents or other shared settings.",
     "toolModes": {
       "inherit": "No override",
       "allow": "Allow",
@@ -127,11 +151,11 @@
     "toolsQuickCodingMode": "Coding mode",
     "toolsEmptyBuiltin": "The gateway did not return any built-in tools yet.",
     "toolsOverrideSummaryTitle": "Current explicit overrides",
-    "toolsNoOverrides": "No overrides yet. This preset will not change tool permissions.",
+    "toolsNoOverrides": "No overrides yet. This shared setting will not change tool access.",
     "saveTools": "Save tool permissions",
     "lockedByPreset": "locked",
-    "skillsTitle": "Skill policy",
-    "skillsHint": "Control which skills are visible to agents that extend this preset.",
+    "skillsTitle": "Available skills",
+    "skillsHint": "Control which skills are visible to agents that use this shared setting.",
     "skillModeLabels": {
       "inherit": "No override",
       "all": "All skills",
@@ -153,19 +177,19 @@
     "skillsEmptyCatalog": "No skills in the catalog.",
     "skillsNoDescription": "No description in SKILL.md metadata.",
     "skillsOverrideSummaryTitle": "Current skill override",
-    "skillsInheritSummary": "Does not override skill policy. Agents extending this preset keep their own or other presets' skill policy.",
+    "skillsInheritSummary": "Does not override available skills. Agents using this setting keep their own or other shared skill settings.",
     "skillsAllSummary": "Explicitly allows all skills.",
     "skillsOffSummary": "Explicitly turns skills off.",
     "skillsAllowSummary": "Allows only {{count}} selected skill(s).",
     "skillsDenySummary": "Excludes {{count}} selected skill(s).",
-    "saveSkills": "Save skill policy",
-    "unsavedTitle": "Preset has unsaved changes",
+    "saveSkills": "Save skill settings",
+    "unsavedTitle": "Shared setting has unsaved changes",
     "unsavedImpact": "Saving will affect {{count}} agent(s).",
     "unsavedNoImpact": "Saving will not affect any agents yet.",
     "noUnsavedTitle": "No unsaved changes",
     "noUnsavedHint": "Current preset settings are saved.",
     "discard": "Discard",
-    "savePreset": "Save preset"
+    "savePreset": "Save shared setting"
   },
   "modelsHub": {
     "subtitle": "Configure provider keys, the model catalog, capability models, and setup health.",
@@ -356,9 +380,7 @@
       "channelConfigured": "At least one channel connected",
       "channelMissing": "No channel configured yet",
       "skillsConfigured": "{{count}} skill(s) available",
-      "skillsMissing": "No skills installed yet",
-      "presetsConfigured": "{{count}} agent(s) configured",
-      "presetsMissing": "Starter agents are not initialized"
+      "skillsMissing": "No skills installed yet"
     },
     "items": {
       "gateway": {
@@ -380,10 +402,6 @@
       "skill": {
         "title": "Install a skill",
         "description": "Browse the marketplace or catalog to extend agent capabilities."
-      },
-      "presets": {
-        "title": "Add preset agents",
-        "description": "Create specialized agents (Coder, Writer, etc.) for different tasks."
       }
     },
     "scenarios": {
@@ -394,7 +412,6 @@
         "stepProviders": "Configure LLM provider keys",
         "stepDefaultModel": "Choose default chat model",
         "stepChannel": "Connect a messaging channel",
-        "stepPresets": "Review specialized agents",
         "stepCron": "Set up scheduled tasks",
         "stepSkills": "Install skills from the catalog"
       },
@@ -405,7 +422,7 @@
         },
         "multiChannel": {
           "title": "Multi-channel assistant",
-          "description": "Reply from Telegram or other channels with dedicated agents for different contexts."
+          "description": "Connect Telegram or another channel so the same assistant can reply from the web console and messaging apps."
         },
         "automation": {
           "title": "Automation workflow",
@@ -910,7 +927,7 @@
   },
   "mcpSettings": {
     "title": "External tools (MCP)",
-    "subtitle": "Configure outbound MCP servers (stdio or HTTP) for embedded agent runs. Tool access is controlled by each agent manifest.",
+    "subtitle": "Configure outbound MCP servers (stdio or HTTP) for embedded agent runs. Tool access is controlled by each agent's settings.",
     "loading": "Loading MCP configuration…",
     "saved": "MCP configuration saved.",
     "save": "Save",
@@ -966,7 +983,7 @@
     "toolsDialogSearchPlaceholder": "Search by name or description…",
     "toolsDialogSearchEmpty": "No tools match your search.",
     "toolsDialogClose": "Close",
-    "disableHint": "To block MCP tools for an agent, set the corresponding MCP tool policy to deny in that agent manifest.",
+    "disableHint": "To block MCP tools for an agent, deny the corresponding MCP tool in that agent's settings.",
     "transportLabels": {
       "stdio": "stdio",
       "sse": "SSE",

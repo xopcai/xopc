@@ -95,7 +95,32 @@ describe('resolveFileReferenceCandidate', () => {
     await mkdir(profile, { recursive: true });
     await writeFile(join(profile, 'IDENTITY.md'), 'ok');
 
-    const cfg = { agents: { defaults: {}, list: [{ id: 'a', default: true }] } } as Config;
+    const cfg = {
+      agents: {
+        default: 'a',
+        defaultPreset: 'default',
+        capabilityPresets: {
+          default: {
+            id: 'default',
+            name: 'Global defaults',
+            models: { defaultRole: 'deep', roles: { deep: { model: 'test/test-model' } } },
+          },
+        },
+        list: [
+          {
+            id: 'a',
+            identity: { name: 'A', role: 'Assistant' },
+            responsibilities: { primary: ['Help the user complete tasks'] },
+            workspace: { root: workspace },
+            tools: { builtin: {} },
+            skills: { mode: 'all' },
+            memory: { mode: 'confirmWrite', sources: ['session'] },
+            workflows: {},
+            boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+          },
+        ],
+      },
+    } as Config;
     const built = buildFilePathClassifierContext(cfg, 'agent:a:webchat:default:direct:1');
     const ctx = {
       ...built,

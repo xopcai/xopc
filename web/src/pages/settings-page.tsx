@@ -10,6 +10,7 @@ import {
   loadGoalsSettingsPanel,
   loadHeartbeatSettingsPanel,
   loadKeyboardShortcutsSettingsPanel,
+  loadUserProfileSettingsPanel,
   loadCapabilityPresetsSettingsPanel,
   loadModelsHubPanel,
   loadRemoteAccessHub,
@@ -24,6 +25,7 @@ const SECTIONS: SettingsSectionId[] = [
   'overview',
   'appearance',
   'keyboard-shortcuts',
+  'user-profile',
   'system',
   'app-management',
   'credentials',
@@ -43,6 +45,9 @@ const AppearanceSettingsPanel = lazy(() =>
 );
 const KeyboardShortcutsSettingsPanel = lazy(() =>
   loadKeyboardShortcutsSettingsPanel().then((m) => ({ default: m.KeyboardShortcutsSettingsPanel })),
+);
+const UserProfileSettingsPanel = lazy(() =>
+  loadUserProfileSettingsPanel().then((m) => ({ default: m.UserProfileSettingsPanel })),
 );
 const SystemSettingsPanel = lazy(() => loadSystemSettingsPanel().then((m) => ({ default: m.SystemSettingsPanel })));
 const AppManagementSettingsPanel = lazy(() =>
@@ -114,6 +119,10 @@ export function SettingsPage() {
 
   if (id === 'keyboard-shortcuts') {
     return renderLazySection(KeyboardShortcutsSettingsPanel);
+  }
+
+  if (id === 'user-profile') {
+    return renderLazySection(UserProfileSettingsPanel);
   }
 
   if (id === 'system') {

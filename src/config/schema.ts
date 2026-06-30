@@ -1,6 +1,10 @@
 import { z } from 'zod';
 
-import { AgentManifestSchema, CapabilityPresetSchema } from '../agent-manifest/schema.js';
+import {
+  AgentConfigEntrySchema,
+  CapabilityPresetSchema,
+  DEFAULT_CAPABILITY_PRESET_ID,
+} from '../agent-manifest/schema.js';
 import { checkCacheDir } from '../browser/cache-dir-policy.js';
 import { validatePublicUrl } from './public-url.js';
 
@@ -81,14 +85,25 @@ export type AgentTypedModel = AgentTypedModelRole & { id: string };
 export const AgentsConfigSchema = z.object({
   /** Default agent id when not specified (routing / session creation). */
   default: z.string().optional(),
-  /** Legacy agent defaults kept for migration/tests and read defensively by runtime helpers. */
-  defaults: z.record(z.string(), z.unknown()).optional(),
+  /** Protected global defaults preset applied before each agent's own presets. */
+  defaultPreset: z.string().default(DEFAULT_CAPABILITY_PRESET_ID),
   capabilityPresets: z.record(z.string(), CapabilityPresetSchema).default({}),
-  list: z.array(AgentManifestSchema).default([]),
+  list: z.array(AgentConfigEntrySchema).default([]),
 }).strict().default({
   default: 'main',
-  defaults: {},
-  capabilityPresets: {},
+  defaultPreset: DEFAULT_CAPABILITY_PRESET_ID,
+  capabilityPresets: {
+    [DEFAULT_CAPABILITY_PRESET_ID]: {
+      id: DEFAULT_CAPABILITY_PRESET_ID,
+      name: 'Global defaults',
+      description: 'Default capabilities inherited by every agent.',
+      version: 1,
+      models: {
+        defaultRole: 'deep',
+        roles: {},
+      },
+    },
+  },
   list: [
     {
       id: 'main',
@@ -103,12 +118,6 @@ export const AgentsConfigSchema = z.object({
         primary: ['Help the user complete tasks'],
       },
       workspace: { root: '~/.xopc/workspace/main' },
-      models: {
-        defaultRole: 'deep',
-        roles: {
-          deep: { model: 'openai/gpt-4.1' },
-        },
-      },
       tools: { builtin: {} },
       skills: { mode: 'all' },
       memory: {
@@ -1148,7 +1157,19 @@ export const ConfigSchema = z.object({
 }).default({
   agents: {
     default: 'main',
-    capabilityPresets: {},
+    defaultPreset: DEFAULT_CAPABILITY_PRESET_ID,
+    capabilityPresets: {
+      [DEFAULT_CAPABILITY_PRESET_ID]: {
+        id: DEFAULT_CAPABILITY_PRESET_ID,
+        name: 'Global defaults',
+        description: 'Default capabilities inherited by every agent.',
+        version: 1,
+        models: {
+          defaultRole: 'deep',
+          roles: {},
+        },
+      },
+    },
     list: [
       {
         id: 'main',
@@ -1163,12 +1184,6 @@ export const ConfigSchema = z.object({
           primary: ['Help the user complete tasks'],
         },
         workspace: { root: '~/.xopc/workspace/main' },
-        models: {
-          defaultRole: 'deep',
-          roles: {
-            deep: { model: 'openai/gpt-4.1' },
-          },
-        },
         tools: { builtin: {} },
         skills: { mode: 'all' },
         memory: {
@@ -1299,17 +1314,6 @@ export interface ParsedModelRef {
 }
 
 export function getAgentDefaultModelRef(config: Config): string | undefined {
-  const legacyModel = (config.agents as unknown as {
-    defaults?: { model?: string | { primary?: string } };
-  } | undefined)?.defaults?.model;
-  if (typeof legacyModel === 'string') {
-    const trimmed = legacyModel.trim();
-    if (trimmed) return trimmed;
-  } else if (legacyModel && typeof legacyModel === 'object') {
-    const primary = legacyModel.primary?.trim();
-    if (primary) return primary;
-  }
-
   const list = Array.isArray(config.agents?.list) ? config.agents.list : [];
   const defaultId =
     config.agents?.default?.trim() ||
@@ -1317,10 +1321,35 @@ export function getAgentDefaultModelRef(config: Config): string | undefined {
     list[0]?.id;
   const agent = list.find((entry) => entry.enabled !== false && entry.id === defaultId) ?? list[0];
   if (!agent) return undefined;
-  const roles = agent.models?.roles ?? {};
-  const defaultRole = agent.models?.defaultRole ?? Object.keys(roles)[0];
-  const role = defaultRole ? roles[defaultRole] : undefined;
-  return role?.model.trim() || undefined;
+
+  let modelRef: string | undefined;
+  const visited = new Set<string>();
+  const applyModels = (models: AgentModelsConfig | undefined): void => {
+    const roles = models?.roles ?? {};
+    const defaultRole = models?.defaultRole ?? Object.keys(roles)[0];
+    const role = defaultRole ? roles[defaultRole] : undefined;
+    const next = role?.model.trim();
+    if (next) modelRef = next;
+  };
+  const applyPreset = (presetId: string): void => {
+    if (visited.has(presetId)) return;
+    visited.add(presetId);
+    const preset = config.agents.capabilityPresets[presetId];
+    if (!preset) return;
+    for (const parent of preset.extends ?? []) {
+      applyPreset(parent);
+    }
+    applyModels(preset.models);
+  };
+
+  applyPreset(config.agents.defaultPreset);
+  for (const presetId of agent.extends ?? []) {
+    if (presetId !== config.agents.defaultPreset) {
+      applyPreset(presetId);
+    }
+  }
+  applyModels(agent.models);
+  return modelRef;
 }
 
 /** `provider/model` or null when invalid. */

@@ -26,12 +26,15 @@ interface MemoryMatch {
 export interface MemorySearchOptions {
   maxResults?: number;
   minScore?: number;
-  /** Absolute path to agent-scoped curated memories dir (MEMORY.md + USER.md). */
+  /** Absolute path to agent-scoped curated memories dir (MEMORY.md). */
   memoriesDir?: string;
+  /** Absolute path to global user memory (`~/.xopc/user/MEMORY.md`). */
+  userMemoryPath?: string;
   agentId?: string;
 }
 
-const CURATED_MEMORY_FILENAMES = new Set(['MEMORY.md', 'USER.md']);
+const AGENT_MEMORY_FILENAME = 'MEMORY.md';
+const USER_MEMORY_DISPLAY_PATH = 'user/MEMORY.md';
 
 function ensureMemoryDatabase(): void {
   requireXopcDatabase();
@@ -41,17 +44,16 @@ function fallbackMemorySearch(
   baseDir: string,
   query: string,
   options: Required<Pick<MemorySearchOptions, 'maxResults' | 'minScore'>> &
-    Pick<MemorySearchOptions, 'memoriesDir'>,
+    Pick<MemorySearchOptions, 'memoriesDir' | 'userMemoryPath'>,
 ): MemoryMatch[] {
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return [];
 
   const memoriesDir = options.memoriesDir;
-  const curatedPaths = memoriesDir
-    ? [...CURATED_MEMORY_FILENAMES]
-        .map((filename) => join(memoriesDir, filename))
-        .filter((path) => existsSync(path))
-    : [];
+  const curatedPaths = [
+    ...(memoriesDir ? [join(memoriesDir, AGENT_MEMORY_FILENAME)].filter((path) => existsSync(path)) : []),
+    ...(options.userMemoryPath && existsSync(options.userMemoryPath) ? [options.userMemoryPath] : []),
+  ];
   const candidatePaths = [...curatedPaths, join(baseDir, 'MEMORY.md')].filter((path) => existsSync(path));
 
   const matches: MemoryMatch[] = [];
@@ -63,9 +65,12 @@ function fallbackMemorySearch(
       if (!line.toLowerCase().includes(normalizedQuery)) continue;
       const score = 1;
       if (score < options.minScore) continue;
-      const file = memoriesDir && path.startsWith(memoriesDir)
-        ? path.slice(memoriesDir.length).replace(/^[/\\]/, '')
-        : relative(baseDir, path).replace(/\\/g, '/');
+      const file =
+        options.userMemoryPath && path === options.userMemoryPath
+          ? USER_MEMORY_DISPLAY_PATH
+          : memoriesDir && path.startsWith(memoriesDir)
+            ? path.slice(memoriesDir.length).replace(/^[/\\]/, '')
+            : relative(baseDir, path).replace(/\\/g, '/');
       matches.push({ file, lines: line, score, lineNumbers: [i + 1] });
     }
   }
@@ -82,12 +87,12 @@ export async function memorySearch(
   query: string,
   options: MemorySearchOptions = {},
 ): Promise<MemoryMatch[]> {
-  const { maxResults = 5, minScore = 0.3, memoriesDir, agentId } = options;
+  const { maxResults = 5, minScore = 0.3, memoriesDir, userMemoryPath, agentId } = options;
   const resolvedAgentId = agentId ?? resolveAgentIdFromMemoriesDir(memoriesDir);
 
   try {
     ensureMemoryDatabase();
-    syncMemoryIndex({ agentId: resolvedAgentId, workspaceDir: baseDir, memoriesDir });
+    syncMemoryIndex({ agentId: resolvedAgentId, workspaceDir: baseDir, memoriesDir, userMemoryPath });
     const hits = searchMemoryIndex({
       agentId: resolvedAgentId,
       query,
@@ -103,7 +108,7 @@ export async function memorySearch(
   } catch (err) {
     const em = err instanceof Error ? err.message : String(err);
     log.warn({ err, errorMessage: em, agentId: resolvedAgentId }, `Memory FTS search failed: ${em}`);
-    return fallbackMemorySearch(baseDir, query, { maxResults, minScore, memoriesDir });
+    return fallbackMemorySearch(baseDir, query, { maxResults, minScore, memoriesDir, userMemoryPath });
   }
 }
 
@@ -117,16 +122,22 @@ export function memoryGet(
   from?: number,
   lines?: number,
   memoriesDir?: string,
+  userMemoryPath?: string,
 ): { content: string; lineNumbers: { start: number; end: number } } | null {
   let fullPath = path.startsWith('/') ? path : join(baseDir, path);
 
-  if (!existsSync(fullPath) && memoriesDir) {
-    const segments = path.split(/[/\\]/);
-    const filename = segments.pop() ?? path;
-    if (CURATED_MEMORY_FILENAMES.has(filename)) {
-      const candidatePath = join(memoriesDir, filename);
-      if (existsSync(candidatePath)) {
-        fullPath = candidatePath;
+  if (!existsSync(fullPath)) {
+    const normalized = path.replace(/\\/g, '/');
+    if (normalized === USER_MEMORY_DISPLAY_PATH && userMemoryPath && existsSync(userMemoryPath)) {
+      fullPath = userMemoryPath;
+    } else if (memoriesDir) {
+      const segments = normalized.split('/');
+      const filename = segments.pop() ?? normalized;
+      if (filename === AGENT_MEMORY_FILENAME) {
+        const candidatePath = join(memoriesDir, AGENT_MEMORY_FILENAME);
+        if (existsSync(candidatePath)) {
+          fullPath = candidatePath;
+        }
       }
     }
   }

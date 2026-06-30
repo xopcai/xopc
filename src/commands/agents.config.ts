@@ -45,7 +45,6 @@ export function applyAgentConfig(
     identity: { name: agentId, role: 'Agent', language: 'en', tone: 'direct' },
     responsibilities: { primary: ['Help the user complete tasks'] },
     workspace: { root: `~/.xopc/workspace/${agentId}` },
-    models: { defaultRole: 'deep', roles: { deep: { model: params.model ?? 'openai/gpt-4.1' } } },
     tools: { builtin: {} },
     skills: { mode: 'all' as const },
     memory: { mode: 'confirmWrite' as const, sources: ['session' as const, 'curated' as const], writePolicy: { curated: 'confirm' as const } },
@@ -57,7 +56,15 @@ export function applyAgentConfig(
     enabled: base.enabled ?? true,
     ...(params.workspace ? { workspace: { root: params.workspace } } : {}),
     ...(params.models ? { models: params.models } : {}),
-    ...(params.model ? { models: { ...base.models, defaultRole: 'deep', roles: { ...base.models.roles, deep: { model: params.model } } } } : {}),
+    ...(params.model
+      ? {
+          models: {
+            ...(base.models ?? {}),
+            defaultRole: 'deep',
+            roles: { ...(base.models?.roles ?? {}), deep: { model: params.model } },
+          },
+        }
+      : {}),
     ...(params.skills ? { skills: { mode: 'allowlist' as const, allow: params.skills } } : {}),
     ...(nextTools ? { tools: nextTools } : {}),
   };
@@ -72,7 +79,6 @@ export function applyAgentConfig(
         identity: { name: resolveDefaultAgentId(cfg), role: 'Agent', language: 'en', tone: 'direct' },
         responsibilities: { primary: ['Help the user complete tasks'] },
         workspace: { root: `~/.xopc/workspace/${resolveDefaultAgentId(cfg)}` },
-        models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
         tools: { builtin: {} },
         skills: { mode: 'all' },
         memory: { mode: 'confirmWrite', sources: ['session', 'curated'], writePolicy: { curated: 'confirm' } },

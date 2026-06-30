@@ -1,11 +1,8 @@
-import { join } from 'node:path';
-
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../config/schema.js';
 import { resolveStateDir } from '../config/paths-state.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
-import { resolveDefaultAgentId, resolveUserPath } from '../agent/agent-scope.js';
 import { readPostCompactionContext } from '../agent/reply/post-compaction-context.js';
 import { createLogger } from '../utils/logger.js';
 import { SessionCompactor, type CompactionConfig, type CompactionResult } from '../agent/memory/compaction.js';
@@ -83,12 +80,6 @@ export class SessionStore {
   }
 
   private resolveWorkspaceCwd(sessionKey: string): string {
-    const legacyWorkspace = (this.options.config.agents as unknown as {
-      defaults?: { workspace?: string };
-    }).defaults?.workspace?.trim();
-    if (legacyWorkspace) {
-      return join(resolveUserPath(legacyWorkspace), resolveDefaultAgentId(this.options.config));
-    }
     return resolveEffectiveAgentProfileForSession(this.options.config, sessionKey).resolvedWorkspacePath;
   }
 

@@ -2,6 +2,8 @@ import { z } from 'zod';
 
 const IdSchema = z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/);
 
+export const DEFAULT_CAPABILITY_PRESET_ID = 'default';
+
 export const ManifestModelRoleSchema = z
   .object({
     model: z.string().min(1),
@@ -280,6 +282,10 @@ export const AgentManifestSchema = z
   })
   .strict();
 
+export const AgentConfigEntrySchema = AgentManifestSchema.extend({
+  models: ModelPolicySchema.optional(),
+}).strict();
+
 export const CapabilityPresetSchema = z
   .object({
     id: IdSchema,
@@ -299,6 +305,7 @@ export const CapabilityPresetSchema = z
   .strict();
 
 export type AgentManifest = z.infer<typeof AgentManifestSchema>;
+export type AgentConfigEntry = z.infer<typeof AgentConfigEntrySchema>;
 export type CapabilityPreset = z.infer<typeof CapabilityPresetSchema>;
 export type EffectiveAgentManifest = AgentManifest;
 export type ToolPolicy = z.infer<typeof ToolPolicySchema>;

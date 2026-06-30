@@ -92,6 +92,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       maxResults: request.maxResults,
       minScore: request.minScore,
       memoriesDir: this.store.memoriesDir,
+      userMemoryPath: this.store.userMemoryPath,
       agentId,
     });
     return results.map((entry) => {
@@ -142,6 +143,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       request.from,
       request.lines,
       this.store.memoriesDir,
+      this.store.userMemoryPath,
     );
     if (!result) return null;
     const path = request.path ?? request.id ?? '';
@@ -200,7 +202,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         content,
         source: {
           provider: this.id,
-          path: target === 'user' ? 'USER.md' : 'MEMORY.md',
+          path: sourcePathForTarget(target),
         },
       }),
     );
@@ -224,7 +226,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         source: {
           ...(request.source ?? {}),
           provider: this.id,
-          path: target === 'user' ? 'USER.md' : 'MEMORY.md',
+          path: sourcePathForTarget(target),
         },
         tags: request.tags,
       }),
@@ -245,7 +247,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         workspaceId: existing?.scope.workspaceId ?? request.scope?.workspaceId ?? this.workspaceDir,
         sessionKey: existing?.scope.sessionKey ?? request.scope?.sessionKey,
         content: request.content,
-        source: existing?.source ?? { provider: this.id, path: target === 'user' ? 'USER.md' : 'MEMORY.md' },
+        source: existing?.source ?? { provider: this.id, path: sourcePathForTarget(target) },
         tags: existing?.tags,
       });
     } else if (request.matchText) {
@@ -313,14 +315,19 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 }
 
 function inferKindFromPath(path: string): MemoryRecord['kind'] {
-  if (path.endsWith('USER.md')) return 'user_profile';
-  if (path.endsWith('MEMORY.md')) return 'agent_note';
-  if (/^memory\/\d{4}-\d{2}-\d{2}\.md$/.test(path)) return 'daily_note';
+  const normalized = path.replace(/\\/g, '/');
+  if (normalized === 'user/MEMORY.md' || normalized.endsWith('/user/MEMORY.md')) return 'user_profile';
+  if (/^memory\/\d{4}-\d{2}-\d{2}\.md$/.test(normalized)) return 'daily_note';
+  if (normalized.endsWith('MEMORY.md')) return 'agent_note';
   return 'workspace_fact';
 }
 
 function targetForKind(kind: MemoryRecord['kind']): 'memory' | 'user' {
   return kind === 'user_profile' ? 'user' : 'memory';
+}
+
+function sourcePathForTarget(target: 'memory' | 'user'): string {
+  return target === 'user' ? 'user/MEMORY.md' : 'MEMORY.md';
 }
 
 function parseLineAddress(id: string): { path: string; lineStart?: number; lineEnd?: number } {

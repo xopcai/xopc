@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { USER_PROFILE_FILENAME } from '../../config/paths.js';
 import { stripFrontMatter } from '../context/workspace.js';
 import {
   DEFAULT_AGENTS_FILENAME,
@@ -9,7 +10,7 @@ import {
   DEFAULT_MEMORY_FILENAME,
   DEFAULT_SOUL_FILENAME,
   DEFAULT_TOOLS_FILENAME,
-  DEFAULT_USER_FILENAME,
+  REQUIRED_AGENT_PROFILE_MARKDOWN_FILE_SET,
 } from '../context/workspace.js';
 import type { BootstrapFileName, WorkspaceBootstrapFile } from './types.js';
 
@@ -18,7 +19,6 @@ const PROFILE_LOAD_ORDER: BootstrapFileName[] = [
   DEFAULT_SOUL_FILENAME,
   DEFAULT_TOOLS_FILENAME,
   DEFAULT_IDENTITY_FILENAME,
-  DEFAULT_USER_FILENAME,
   DEFAULT_HEARTBEAT_FILENAME,
   DEFAULT_MEMORY_FILENAME,
 ];
@@ -34,9 +34,20 @@ function readProfileFile(filePath: string): string | null {
   }
 }
 
+export function loadUserProfileBootstrapFile(userProfilePath: string | undefined): WorkspaceBootstrapFile[] {
+  if (!userProfilePath) {
+    return [];
+  }
+  const filePath = resolve(userProfilePath);
+  const content = readProfileFile(filePath);
+  return content !== null
+    ? [{ name: USER_PROFILE_FILENAME, path: filePath, content, missing: false }]
+    : [];
+}
+
 /**
  * Load bootstrap profile Markdown from `agents/<id>/profile/`.
- * MEMORY.md is omitted when absent; other slots emit missing markers.
+ * Required files emit missing markers; optional files are omitted when absent.
  */
 export function loadProfileBootstrapFiles(profileDir: string): WorkspaceBootstrapFile[] {
   const resolvedDir = resolve(profileDir);
@@ -45,19 +56,10 @@ export function loadProfileBootstrapFiles(profileDir: string): WorkspaceBootstra
   for (const name of PROFILE_LOAD_ORDER) {
     const filePath = join(resolvedDir, name);
 
-    if (name === DEFAULT_MEMORY_FILENAME) {
-      const content = readProfileFile(filePath);
-      if (content === null) {
-        continue;
-      }
-      result.push({ name, path: filePath, content, missing: false });
-      continue;
-    }
-
     const content = readProfileFile(filePath);
     if (content !== null) {
       result.push({ name, path: filePath, content, missing: false });
-    } else {
+    } else if (REQUIRED_AGENT_PROFILE_MARKDOWN_FILE_SET.has(name)) {
       result.push({ name, path: filePath, missing: true });
     }
   }

@@ -3,7 +3,8 @@ import { Command } from 'commander';
 
 import { CredentialResolver } from '../../auth/credentials.js';
 import { loadConfig, saveConfig } from '../../config/index.js';
-import type { Config } from '../../config/schema.js';
+import { getAgentDefaultModelRef, type Config } from '../../config/schema.js';
+import { prepareUpdateGlobalDefaults } from '../../gateway/global-defaults-admin.js';
 import {
   getAllModels,
   getAvailableModels,
@@ -63,37 +64,22 @@ type ModelsAuthLoginOptions = {
 };
 
 function currentModelRef(config: Config): string | undefined {
-  const legacyDefault = (config.agents as unknown as { defaults?: { model?: string } }).defaults?.model?.trim();
-  if (legacyDefault) return legacyDefault;
-
-  const list = Array.isArray(config.agents?.list) ? config.agents.list : [];
-  const id =
-    config.agents?.default ??
-    list.find((entry) => (entry as { default?: boolean }).default === true)?.id ??
-    list[0]?.id;
-  const agent = list.find((entry) => entry.id === id) ?? list[0];
-  const roles = agent?.models?.roles ?? {};
-  const defaultRole = agent?.models?.defaultRole ?? Object.keys(roles)[0];
-  return defaultRole ? roles[defaultRole]?.model : undefined;
+  return getAgentDefaultModelRef(config);
 }
 
 function setDefaultModel(config: Config, modelRef: string): Config {
-  const list = Array.isArray(config.agents?.list) ? config.agents.list : [];
-  const id = config.agents?.default ?? list[0]?.id ?? 'main';
-  const index = list.findIndex((entry) => entry.id === id);
-  if (index >= 0) {
-    const agent = list[index]!;
-    const defaultRole = agent.models?.defaultRole || 'deep';
-    list[index] = {
-      ...agent,
-      models: {
-        ...agent.models,
-        defaultRole,
-        roles: { ...agent.models?.roles, [defaultRole]: { model: modelRef } },
+  const prep = prepareUpdateGlobalDefaults(config, {
+    models: {
+      defaultRole: 'deep',
+      roles: {
+        deep: { model: modelRef },
       },
-    };
+    },
+  });
+  if (prep.ok === false) {
+    throw new Error(prep.error);
   }
-  return config;
+  return prep.data.nextConfig;
 }
 
 function modelRef(provider: string, id: string): string {
@@ -154,7 +140,7 @@ async function runModelsList(options: ModelsListOptions): Promise<void> {
   }
 
   console.log('\nUsage:');
-  console.log('   xopc models set openai/gpt-5.5');
+  console.log('   xopc models set deepseek/deepseek-chat');
   console.log('   xopc models auth login --provider anthropic');
   console.log('   xopc models auth paste-api-key --provider deepseek');
 }
@@ -194,8 +180,7 @@ async function runModelsSet(model: string): Promise<void> {
   const config = loadConfig(ctx.configPath);
   const resolved = resolveModel(model);
   const ref = modelRef(resolved.provider, resolved.id);
-  setDefaultModel(config, ref);
-  await saveConfig(config, ctx.configPath);
+  await saveConfig(setDefaultModel(config, ref), ctx.configPath);
   console.log(`✅ Default model set: ${ref}`);
 }
 
@@ -287,7 +272,7 @@ function createModelsCommand(_ctx: CLIContext): Command {
       formatExamples([
         'xopc models list',
         'xopc models status',
-        'xopc models set openai/gpt-5.5',
+        'xopc models set deepseek/deepseek-chat',
         'xopc models auth list',
         'xopc models auth login --provider anthropic',
         'xopc models auth paste-api-key --provider deepseek',

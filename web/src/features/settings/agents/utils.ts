@@ -5,7 +5,6 @@ import { settingsInputFocusClass } from '@/lib/form-field-width';
 
 export type AgentPanel =
   | 'overview'
-  | 'profile'
   | 'files'
   | 'models'
   | 'tools'

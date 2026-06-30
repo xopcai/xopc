@@ -19,9 +19,11 @@ import {
   prepareUpdateAgent,
   readAgentAvatarFile,
   readAgentProfileFile,
+  readUserProfileFile,
   runAfterDeletePurge,
   writeAgentAvatarFromBase64,
   writeAgentProfileFile,
+  writeUserProfileFile,
   type CreateAgentBody,
 } from '../../agents-admin.js';
 import {
@@ -174,6 +176,28 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     return c.json({ ok: true, payload });
   });
 
+  authenticated.get('/api/user-profile', async (c) => {
+    const res = await readUserProfileFile();
+    if (res.ok === false) {
+      return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
+    }
+    return c.json({ ok: true, payload: res.data });
+  });
+
+  authenticated.put('/api/user-profile', strictRateLimitMiddleware, async (c) => {
+    let content = '';
+    try {
+      const body = (await c.req.json()) as { content?: unknown };
+      content = typeof body.content === 'string' ? body.content : '';
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const res = await writeUserProfileFile(content);
+    if (res.ok === false) {
+      return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
+    }
+    return c.json({ ok: true, payload: res.data });
+  });
 
   authenticated.post('/api/agents', strictRateLimitMiddleware, async (c) => {
     let body: Record<string, unknown> = {};

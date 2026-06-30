@@ -251,6 +251,25 @@ export async function saveAgentProfileFileContent(agentId: string, name: string,
   );
 }
 
+export async function fetchUserProfileContent(): Promise<string> {
+  const res = await fetchJson<{ ok?: boolean; payload?: { content?: string } }>(
+    apiUrl('/api/user-profile'),
+  );
+  const c = res.payload?.content;
+  if (typeof c !== 'string') {
+    throw new Error('Invalid user profile response');
+  }
+  return c;
+}
+
+export async function saveUserProfileContent(content: string): Promise<void> {
+  await fetchJson(apiUrl('/api/user-profile'), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  });
+}
+
 export type AgentAvatarMime = 'image/png' | 'image/jpeg' | 'image/webp';
 
 function mimeFromFile(file: File): AgentAvatarMime | null {

@@ -169,10 +169,10 @@ function comparablePreset(preset: CapabilityPresetRow | null) {
 function presetSummary(preset: CapabilityPresetRow): string {
   const parts = [
     preset.models?.roles ? `${Object.keys(preset.models.roles).length} model roles` : '',
-    preset.tools?.builtin ? `${Object.keys(preset.tools.builtin).length} tool policies` : '',
+    preset.tools?.builtin ? `${Object.keys(preset.tools.builtin).length} tool access settings` : '',
     preset.skills ? `skills: ${preset.skills.mode}` : '',
   ].filter(Boolean);
-  return parts.join(' · ') || 'No policy patches';
+  return parts.join(' · ') || 'No shared settings yet';
 }
 
 function starterDraft(id: StarterId): Draft {
@@ -180,7 +180,7 @@ function starterDraft(id: StarterId): Draft {
     return {
       id: 'safe-coder',
       name: 'Safe Coder',
-      description: 'Shared policy for coding agents: code-oriented model roles, careful shell usage, and focused engineering skills.',
+      description: 'Shared settings for coding agents: code-oriented model roles, careful shell usage, and focused engineering skills.',
       version: '1',
       modelRows: [
         { id: 'deep', model: '', description: 'Complex implementation and planning' },
@@ -196,7 +196,7 @@ function starterDraft(id: StarterId): Draft {
     return {
       id: 'read-only-research',
       name: 'Read-only Research',
-      description: 'Shared policy for reading, searching, and summarizing without modifying files or running shell commands.',
+      description: 'Shared settings for reading, searching, and summarizing without modifying files or running shell commands.',
       version: '1',
       modelRows: [
         { id: 'deep', model: '', description: 'Synthesis and long-context reading' },
@@ -211,7 +211,7 @@ function starterDraft(id: StarterId): Draft {
     return {
       id: 'low-cost-assistant',
       name: 'Low-cost Assistant',
-      description: 'Shared policy for lightweight agents that should prefer faster or cheaper model roles.',
+      description: 'Shared settings for lightweight agents that should prefer faster or cheaper model roles.',
       version: '1',
       modelRows: [
         { id: 'deep', model: '', description: 'Default low-cost model' },

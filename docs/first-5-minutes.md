@@ -30,7 +30,7 @@ iex (irm https://xopc.ai/install.ps1)
 xopc onboard --quick
 ```
 
-`--quick` is the short guided path: choose a model/provider, save credentials, and skip gateway/channel setup for now.
+`--quick` is the short guided path: choose a model/provider and save credentials. Gateway, channels, skills, and extra agents can wait.
 
 You can use cloud providers with your own keys, or local/model-server options such as Ollama, LM Studio, and vLLM when configured.
 
@@ -68,7 +68,7 @@ When the local path works, choose the next surface:
 | Web console | `xopc gateway` | Browser chat, settings, logs |
 | Desktop | GitHub Releases or `pnpm run electron:build` | Native app |
 | Mobile | [xopc-app](https://github.com/xopcai/xopc-app) + gateway pairing | iOS/Android client for your gateway; see [Mobile app](./mobile-app.md) |
-| Messengers | `xopc onboard` then configure channels | Telegram, WeChat, Feishu/Lark |
+| Messengers | Open `Channels` after the gateway is running | Telegram, WeChat, Feishu/Lark |
 
 ## If it helped
 

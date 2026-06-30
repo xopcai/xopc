@@ -8,7 +8,6 @@ import {
 import type { ChannelManager } from '../channels/manager.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 
 import {
   SessionStore,
@@ -74,13 +73,12 @@ import { parseNoteAttachmentTarget } from '../notes/attachment-ref.js';
 
 import {
   resolveAgentHomeDir,
-  resolveAgentProfileDir,
   resolveDefaultAgentId,
 } from './agent-scope.js';
 import {
   extractProfileAgentId,
-  resolveEffectiveAgentProfileForSession,
 } from '../config/agent-profile.js';
+import { resolveUserProfilePath } from '../config/paths.js';
 import { cleanTrailingErrors } from './memory/message-sanitizer.js';
 import { MemoryFlushService } from './memory/memory-flush.js';
 import type { MemoryFlushConfig } from './memory/memory-flush.js';
@@ -941,16 +939,16 @@ export class AgentService {
     return effectiveWorkspacePathForSession(cfg, sessionKey, sc);
   }
 
-  /**
+   /**
    * Best-effort timezone resolution for webchat envelope timestamps.
-   * Reads `USER.md` under the agent `profile/` directory and extracts a `Timezone:` line.
+   * Reads the global user profile and extracts a `Timezone:` line.
    */
   resolveUserTimezoneForSession(sessionKey: string): string | undefined {
+    void sessionKey;
     try {
       const cfg = this.effectiveAppConfig();
       if (!cfg) return undefined;
-      const { agentId } = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
-      const userPath = join(resolveAgentProfileDir(cfg, agentId), 'USER.md');
+      const userPath = resolveUserProfilePath();
       if (!existsSync(userPath)) return undefined;
       const raw = readFileSync(userPath, 'utf-8');
       const match = raw.match(/Timezone:\s*(.+)/i);

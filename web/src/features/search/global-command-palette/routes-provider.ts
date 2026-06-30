@@ -16,12 +16,13 @@ export type RouteHitSeed = {
 /**
  * Tabs for which the command palette offers a deep-link shortcut.
  *
- * Manifest-first agent management lives under `/agents`; browser automation is
- * the only remaining standalone agent-related settings route.
+ * Manifest-first agent management lives under `/agents`; user profile and
+ * browser automation are standalone agent-related settings routes.
  */
-const AGENT_SETTINGS_PALETTE_TABS: readonly Tab[] = ['settingsAgentBrowser'];
+const AGENT_SETTINGS_PALETTE_TABS: readonly Tab[] = ['settingsUserProfile', 'settingsAgentBrowser'];
 
 const AGENT_SETTINGS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
+  settingsUserProfile: ['user', 'profile', 'preferences', 'timezone'],
   settingsAgentBrowser: ['browser', 'playwright', 'automation'],
 };
 

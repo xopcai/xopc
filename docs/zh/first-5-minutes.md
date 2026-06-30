@@ -30,7 +30,7 @@ iex (irm https://xopc.ai/install.ps1)
 xopc onboard --quick
 ```
 
-`--quick` 是最短配置流程：选择模型服务商，保存凭据，暂时跳过网关和频道设置。
+`--quick` 是最短配置流程：选择模型服务商并保存凭据。网关、频道、技能和额外 agent 都可以之后再配。
 
 你可以使用云端模型 API Key，也可以配置 Ollama、LM Studio、vLLM 等本地或自部署模型服务。
 
@@ -68,7 +68,7 @@ xopc tui --local
 | 网页控制台 | `xopc gateway` | 在浏览器中聊天、改设置、看日志 |
 | 桌面端 | GitHub Releases 或 `pnpm run electron:build` | 桌面应用 |
 | 手机端 | [xopc-app](https://github.com/xopcai/xopc-app) + 网关配对 | iOS/Android 网关客户端；见 [手机端 App](./mobile-app.md) |
-| 即时通讯 | `xopc onboard` 后配置频道 | Telegram、微信、飞书/Lark |
+| 即时通讯 | 启动网关后打开 `频道` 页面 | Telegram、微信、飞书/Lark |
 
 ## 如果它有帮助
 

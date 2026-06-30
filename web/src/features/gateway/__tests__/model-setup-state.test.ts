@@ -6,15 +6,15 @@ function config(model: string, providers: Record<string, string>) {
   return {
     agents: {
       default: 'main',
-      list: [
-        {
-          id: 'main',
+      defaultPreset: 'default',
+      capabilityPresets: {
+        default: {
           models: {
             defaultRole: 'deep',
-            roles: { deep: { model } },
+            roles: model ? { deep: { model } } : {},
           },
         },
-      ],
+      },
     },
     providers,
   };
@@ -33,27 +33,27 @@ describe('needsModelOrProviders', () => {
     ).toBe(true);
   });
 
-  it('is false when a provider is configured and default model is set', () => {
+  it('is false when global default model is set', () => {
     expect(
       needsModelOrProviders(config('openai/gpt-4', { openai: '***', anthropic: '' })),
     ).toBe(false);
   });
 
-  it('treats length-preserving bullet masks as configured providers', () => {
+  it('ignores masked provider values when global default model is set', () => {
     expect(
       needsModelOrProviders(config('deepseek/deepseek-v4-flash', { deepseek: '••••••••••••••••••••••••••••••••', openai: '' })),
     ).toBe(false);
   });
 
-  it('is true when provider ok but default model missing', () => {
+  it('is true when provider ok but global default model missing', () => {
     expect(
       needsModelOrProviders(config('', { openai: '***' })),
     ).toBe(true);
   });
 
-  it('is true when default model is set but no provider is configured', () => {
+  it('is false when global default model is set even before provider metadata loads', () => {
     expect(
       needsModelOrProviders(config('openai/gpt-4', { openai: '' })),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

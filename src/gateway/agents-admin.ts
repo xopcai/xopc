@@ -3,7 +3,7 @@
  */
 
 import { cp, mkdir, readdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
-import { join, resolve as pathResolve } from 'node:path';
+import { dirname, join, resolve as pathResolve } from 'node:path';
 
 import {
   DEFAULT_AGENT_ID,
@@ -16,7 +16,10 @@ import {
   resolveUserPath,
   validateAgentIdForNewAgent,
 } from '../agent/agent-scope.js';
-import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from '../agent/context/workspace.js';
+import {
+  AGENT_PROFILE_MARKDOWN_SYSTEM_FILES,
+  REQUIRED_AGENT_PROFILE_MARKDOWN_FILE_SET,
+} from '../agent/context/workspace.js';
 import { seedAgentProfileMarkdownFiles } from '../agent/context/workspace-seed.js';
 import {
   resolveEffectiveAgentManifest,
@@ -29,7 +32,7 @@ import {
   removeAgentDirsFromDisk,
 } from '../commands/agents.config.js';
 import type { AgentModelsConfig, Config } from '../config/schema.js';
-import { WORKSPACE_FILES } from '../config/paths.js';
+import { resolveUserProfilePath, WORKSPACE_FILES } from '../config/paths.js';
 import { resolveEffectiveAgentProfile } from '../config/agent-profile.js';
 import type { AgentTypedModel } from '../config/schema.js';
 import { resolveEffectiveTypedModels } from '../config/agent-typed-models.js';
@@ -213,6 +216,7 @@ export function getGatewayAgentEffectiveManifest(
       data: resolveEffectiveAgentManifest({
         agent: entry,
         presets: cfg.agents.capabilityPresets,
+        defaultPresetId: cfg.agents.defaultPreset,
       }),
     };
   } catch (err) {
@@ -418,7 +422,6 @@ export function prepareUpdateAgent(
       identity: { name: agentId, role: 'Agent', language: 'en', tone: 'direct' },
       responsibilities: { primary: ['Help the user complete tasks'] },
       workspace: { root: `~/.xopc/workspace/${agentId}` },
-      models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
       tools: { builtin: {} },
       skills: { mode: 'all' },
       memory: { mode: 'confirmWrite', sources: ['session', 'curated'], writePolicy: { curated: 'confirm' } },
@@ -455,13 +458,17 @@ export function prepareUpdateAgent(
   }
   if (body.models !== undefined) {
     if (body.models === null) {
-      return { ok: false, error: 'models cannot be null; every agent manifest needs model roles', status: 400 };
+      delete entry.models;
     } else {
       if (body.models.defaultRole !== undefined) {
         if (body.models.defaultRole === null || !body.models.defaultRole.trim()) {
           return { ok: false, error: 'models.defaultRole must be a non-empty string', status: 400 };
         }
-        entry.models = { ...entry.models, defaultRole: body.models.defaultRole.trim() };
+        entry.models = {
+          defaultRole: body.models.defaultRole.trim(),
+          roles: entry.models?.roles ?? {},
+          ...(entry.models?.policy ? { policy: entry.models.policy } : {}),
+        };
       }
       if (Object.hasOwn(body.models, 'roles')) {
         if (body.models.roles !== undefined) {
@@ -478,12 +485,19 @@ export function prepareUpdateAgent(
                 row.description ? { model: row.model, description: row.description } : { model: row.model },
               ]),
           );
-          entry.models = { ...entry.models, roles };
+          entry.models = {
+            defaultRole: entry.models?.defaultRole ?? Object.keys(roles)[0] ?? 'deep',
+            roles,
+            ...(entry.models?.policy ? { policy: entry.models.policy } : {}),
+          };
         }
       }
-      if (!entry.models.roles[entry.models.defaultRole]) {
+      const roles = entry.models?.roles ?? {};
+      const defaultRole = entry.models?.defaultRole ?? Object.keys(roles)[0];
+      if (!defaultRole || !roles[defaultRole]) {
         return { ok: false, error: 'models.defaultRole must reference models.roles', status: 400 };
       }
+      entry.models = { ...entry.models, defaultRole };
     }
   }
 
@@ -605,6 +619,9 @@ export async function listAgentProfileFiles(
         updatedAtMs: st.mtimeMs,
       });
     } catch {
+      if (!REQUIRED_AGENT_PROFILE_MARKDOWN_FILE_SET.has(name)) {
+        continue;
+      }
       files.push({ name, missing: true });
     }
   }
@@ -663,6 +680,25 @@ export async function writeAgentProfileFile(
   }
   await writeFile(abs, content, 'utf-8');
   return { ok: true, data: { agentId: id, path: abs } };
+}
+
+export async function readUserProfileFile(): Promise<AgentAdminResult<{ content: string; path: string }>> {
+  const path = resolveUserProfilePath();
+  try {
+    const content = await readFile(path, 'utf-8');
+    return { ok: true, data: { content, path } };
+  } catch {
+    return { ok: true, data: { content: '', path } };
+  }
+}
+
+export async function writeUserProfileFile(
+  content: string,
+): Promise<AgentAdminResult<{ path: string }>> {
+  const path = resolveUserProfilePath();
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, content, 'utf-8');
+  return { ok: true, data: { path } };
 }
 
 // ---------------------------------------------------------------------------

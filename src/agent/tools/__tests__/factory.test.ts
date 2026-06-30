@@ -15,11 +15,26 @@ describe('AgentToolsFactory', () => {
           browser: { enabled: false, backend: 'extension' },
           agents: {
             default: 'main',
+            defaultPreset: 'default',
+            capabilityPresets: {
+              default: {
+                id: 'default',
+                name: 'Global defaults',
+                models: { defaultRole: 'deep', roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } } },
+              },
+            },
             list: [
               {
                 id: 'main',
                 enabled: true,
-                models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
+                identity: { name: 'Main', role: 'General assistant' },
+                responsibilities: { primary: ['Help the user complete tasks'] },
+                workspace: { root: '/tmp/xopc-tools-factory-test' },
+                tools: { builtin: {} },
+                skills: { mode: 'all' },
+                memory: { mode: 'confirmWrite', sources: ['session'] },
+                workflows: {},
+                boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
               },
             ],
           },

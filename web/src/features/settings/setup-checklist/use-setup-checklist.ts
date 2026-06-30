@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import useSWR from 'swr';
 
 import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
-import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { fetchProviderMetaList } from '@/features/settings/providers-api';
 import { getSkills } from '@/features/skills/skill-list-api';
@@ -24,10 +23,6 @@ import {
   logsHealthSwrKey,
   setupDoctorSwrKey,
 } from './setup-diagnostics-api';
-
-function computePresetsDone(agents: { id: string }[] | undefined): boolean {
-  return Boolean(agents && agents.length > 1);
-}
 
 export function useSetupChecklist(): {
   ready: boolean;
@@ -63,15 +58,6 @@ export function useSetupChecklist(): {
     isLoading: providerMetaLoading,
     mutate: mutateProviderMeta,
   } = useSWR(Boolean(token) ? 'setup-checklist-provider-meta' : null, fetchProviderMetaList, {
-    revalidateOnFocus: false,
-  });
-
-  const {
-    data: agentsData,
-    error: agentsError,
-    isLoading: agentsLoading,
-    mutate: mutateAgents,
-  } = useSWR(Boolean(token) ? 'setup-checklist-agents' : null, fetchGatewayAgents, {
     revalidateOnFocus: false,
   });
 
@@ -116,7 +102,6 @@ export function useSetupChecklist(): {
     !configLoading &&
     !skillsLoading &&
     !providerMetaLoading &&
-    !agentsLoading &&
     !doctorLoading &&
     !logsLoading &&
     !browserDiagnosticsLoading
@@ -125,7 +110,6 @@ export function useSetupChecklist(): {
     configError ||
     skillsError ||
     providerMetaError ||
-    agentsError ||
     doctorError,
   );
 
@@ -134,8 +118,6 @@ export function useSetupChecklist(): {
     const skillCount = skillsData?.catalog?.length ?? 0;
     const metaConfigured = providerMeta?.filter((p) => p.configured).length ?? 0;
     const metaTotal = providerMeta?.length ?? 0;
-    const agentCount = agentsData?.agents.length ?? 0;
-    const presetsDone = computePresetsDone(agentsData?.agents);
 
     return buildSetupStatusSnapshot({
       hasToken: Boolean(token),
@@ -146,8 +128,6 @@ export function useSetupChecklist(): {
       doctorChecks,
       logsHealth,
       browserDiagnostics,
-      presetsDone,
-      agentCount,
       labels: {
         gatewayOnline: l.gatewayOnline,
         gatewayOffline: l.gatewayOffline,
@@ -163,19 +143,16 @@ export function useSetupChecklist(): {
         channelMissing: l.channelMissing,
         skillsConfigured: (count) => l.skillsConfigured.replace('{{count}}', String(count)),
         skillsMissing: l.skillsMissing,
-        presetsConfigured: l.presetsConfigured.replace('{{count}}', String(agentCount)),
-        presetsMissing: l.presetsMissing,
         readyToChat: m.setupStatus.requiredCompleteMessage,
       },
     });
-  }, [token, ready, sseConnected, configData, skillsData, providerMeta, agentsData, doctorChecks, logsHealth, browserDiagnostics, l, m.setupStatus.requiredCompleteMessage]);
+  }, [token, ready, sseConnected, configData, skillsData, providerMeta, doctorChecks, logsHealth, browserDiagnostics, l, m.setupStatus.requiredCompleteMessage]);
 
   const refresh = async () => {
     await Promise.all([
       mutateConfig(),
       mutateSkills(),
       mutateProviderMeta(),
-      mutateAgents(),
       mutateDoctor(),
       mutateLogs(),
       mutateBrowserDiagnostics(),

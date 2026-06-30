@@ -1,10 +1,10 @@
+import { USER_PROFILE_FILENAME } from '../../config/paths.js';
 import { isCronSessionKey, isSubagentSessionKey } from '../../routing/session-key.js';
 import {
   DEFAULT_AGENTS_FILENAME,
   DEFAULT_IDENTITY_FILENAME,
   DEFAULT_SOUL_FILENAME,
   DEFAULT_TOOLS_FILENAME,
-  DEFAULT_USER_FILENAME,
 } from '../context/workspace.js';
 import type { WorkspaceBootstrapFile } from './types.js';
 
@@ -13,7 +13,7 @@ const MINIMAL_BOOTSTRAP_ALLOWLIST = new Set<string>([
   DEFAULT_TOOLS_FILENAME,
   DEFAULT_SOUL_FILENAME,
   DEFAULT_IDENTITY_FILENAME,
-  DEFAULT_USER_FILENAME,
+  USER_PROFILE_FILENAME,
 ]);
 
 /** Subagent and cron sessions omit MEMORY.md and other heavy profile files. */

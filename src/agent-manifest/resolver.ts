@@ -1,7 +1,9 @@
 import {
+  AgentConfigEntrySchema,
   AgentManifestSchema,
   CapabilityPresetSchema,
-  type AgentManifest,
+  DEFAULT_CAPABILITY_PRESET_ID,
+  type AgentConfigEntry,
   type CapabilityPreset,
   type EffectiveAgentManifest,
 } from './schema.js';
@@ -12,8 +14,9 @@ export interface ResolveManifestResult {
 }
 
 export interface ResolveManifestParams {
-  agent: AgentManifest;
+  agent: AgentConfigEntry;
   presets?: Record<string, CapabilityPreset>;
+  defaultPresetId?: string;
 }
 
 type JsonObject = Record<string, unknown>;
@@ -108,12 +111,17 @@ function presetPatch(preset: CapabilityPreset): JsonObject {
 }
 
 export function resolveEffectiveAgentManifest(params: ResolveManifestParams): ResolveManifestResult {
-  const agent = AgentManifestSchema.parse(params.agent);
+  const agent = AgentConfigEntrySchema.parse(params.agent);
   const presets = Object.fromEntries(
     Object.entries(params.presets ?? {}).map(([id, preset]) => [id, CapabilityPresetSchema.parse(preset)]),
   );
+  const defaultPresetId = params.defaultPresetId ?? DEFAULT_CAPABILITY_PRESET_ID;
+  const presetIds = [
+    ...(presets[defaultPresetId] ? [defaultPresetId] : []),
+    ...(agent.extends ?? []).filter((id) => id !== defaultPresetId),
+  ];
   const chain: CapabilityPreset[] = [];
-  for (const presetId of agent.extends ?? []) {
+  for (const presetId of presetIds) {
     resolvePresetChain(presetId, presets, [], chain);
   }
 

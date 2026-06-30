@@ -11,6 +11,7 @@ describe('MemoryManager', () => {
     const store = new BuiltinMemoryStore({
       workspaceDir: '/tmp',
       memoriesDir: '/tmp/memories',
+      userMemoryPath: '/tmp/user/MEMORY.md',
       memoryCharLimit: 100,
       userCharLimit: 100,
     });
@@ -25,6 +26,7 @@ describe('MemoryManager', () => {
     const store = new BuiltinMemoryStore({
       workspaceDir: '/tmp',
       memoriesDir: '/tmp/memories',
+      userMemoryPath: '/tmp/user/MEMORY.md',
       memoryCharLimit: 100,
       userCharLimit: 100,
     });
