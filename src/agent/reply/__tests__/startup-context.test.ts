@@ -11,14 +11,9 @@ import {
 } from '../startup-context.js';
 
 describe('startup-context', () => {
-  it('shouldApplyStartupContext respects applyOn', () => {
+  it('shouldApplyStartupContext applies on new and reset turns', () => {
     expect(shouldApplyStartupContext({ action: 'new' })).toBe(true);
-    expect(
-      shouldApplyStartupContext({
-        action: 'reset',
-        cfg: { agents: { defaults: { startupContext: { applyOn: ['new'] } } } },
-      }),
-    ).toBe(false);
+    expect(shouldApplyStartupContext({ action: 'reset' })).toBe(true);
   });
 
   it('buildSessionStartupContextPrelude loads recent daily memory', () => {

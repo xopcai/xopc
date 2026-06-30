@@ -4,7 +4,7 @@
 
 import type { AgentTypedModel, Config } from './schema.js';
 import { parseModelRef } from './schema.js';
-import { listAgentEntries, normalizeAgentId } from '../agent/agent-scope.js';
+import { resolveEffectiveAgentManifestForAgent } from './agent-profile.js';
 
 export type { AgentTypedModel };
 
@@ -19,11 +19,8 @@ function rolesToEntries(
 
 export function resolveEffectiveTypedModels(config: Config, agentId: string): Map<string, AgentTypedModel> {
   const out = new Map<string, AgentTypedModel>();
-  const id = normalizeAgentId(agentId);
-  const entry = listAgentEntries(config).find(
-    (candidate) => candidate.enabled !== false && normalizeAgentId(candidate.id) === id,
-  );
-  for (const modelRole of rolesToEntries(entry?.models?.roles)) {
+  const manifest = resolveEffectiveAgentManifestForAgent(config, agentId);
+  for (const modelRole of rolesToEntries(manifest.models.roles)) {
     out.set(modelRole.id, modelRole);
   }
   return out;

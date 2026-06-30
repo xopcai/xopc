@@ -50,12 +50,14 @@ export const FILENAMES = {
 export const WORKSPACE_FILES = {
   SOUL: 'SOUL.md',
   IDENTITY: 'IDENTITY.md',
-  USER: 'USER.md',
   AGENTS: 'AGENTS.md',
   TOOLS: 'TOOLS.md',
   HEARTBEAT: 'HEARTBEAT.md',
   MEMORY: 'MEMORY.md',
 } as const;
+
+export const USER_PROFILE_FILENAME = 'PROFILE.md';
+export const USER_MEMORY_FILENAME = 'MEMORY.md';
 
 // ============================================
 // Path Resolution Functions
@@ -80,6 +82,21 @@ export function resolveCredentialsDir(): string {
  */
 export function resolveAuthProfilesPath(): string {
   return join(resolveCredentialsDir(), FILENAMES.CREDENTIALS_PROFILES);
+}
+
+/** Global user profile root (`~/.xopc/user/`). */
+export function resolveUserDir(): string {
+  return join(resolveStateDir(), 'user');
+}
+
+/** Global human/user profile Markdown (`~/.xopc/user/PROFILE.md`). */
+export function resolveUserProfilePath(): string {
+  return join(resolveUserDir(), USER_PROFILE_FILENAME);
+}
+
+/** Global human/user long-term memory Markdown (`~/.xopc/user/MEMORY.md`). */
+export function resolveUserMemoryPath(): string {
+  return join(resolveUserDir(), USER_MEMORY_FILENAME);
 }
 
 /**

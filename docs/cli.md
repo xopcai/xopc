@@ -126,7 +126,7 @@ xopc profile delete staging --force
 
 ## onboard
 
-Interactive setup wizard for xopc (gateway defaults: `127.0.0.1:18790`, token auth; no prompts for bind/port/token).
+Interactive setup wizard for xopc. The first-run path focuses on model credentials and the default chat model; the Web console can optionally collect a personal profile before opening chat. Gateway defaults remain `127.0.0.1:18790` with token auth and no prompts for bind/port/token.
 
 ```bash
 xopc onboard
@@ -144,7 +144,7 @@ xopc onboard
 **Examples:**
 
 ```bash
-# Full interactive setup (default)
+# Guided first-run setup (default)
 xopc onboard
 
 # Configure LLM model only
@@ -157,8 +157,9 @@ xopc onboard --channels
 **Features:**
 - Auto-detects if workspace needs setup
 - Configure LLM provider and model
-- Configure messaging channels (Telegram, Weixin QR via channel menu, …)
-- Apply gateway defaults with auto-generated token when missing
+- Keeps default agent setup internal; users do not need to create or select an agent before chatting
+- Leaves messaging channels, skills, and extra agents for later settings
+- Applies gateway defaults with auto-generated token when missing
 - At the end (interactive): choose **Terminal UI (embedded)** or **Gateway (OS service)** or exit
 
 ---

@@ -176,7 +176,6 @@ const PROFILE_SYSTEM_MARKDOWN_NAME_LOWER = new Set(
   [
     'SOUL.md',
     'IDENTITY.md',
-    'USER.md',
     'TOOLS.md',
     'AGENTS.md',
     'HEARTBEAT.md',

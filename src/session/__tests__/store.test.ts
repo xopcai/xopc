@@ -38,7 +38,32 @@ describe('SessionStore', () => {
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(tempDir, 'xopc.db') });
     store = new SessionStore({
-      config: ConfigSchema.parse({ agents: { defaults: { workspace: tempDir } } }),
+      config: ConfigSchema.parse({
+        agents: {
+          default: 'main',
+          defaultPreset: 'default',
+          capabilityPresets: {
+            default: {
+              id: 'default',
+              name: 'Global defaults',
+              models: { defaultRole: 'deep', roles: { deep: { model: 'test/test-model' } } },
+            },
+          },
+          list: [
+            {
+              id: 'main',
+              identity: { name: 'Main', role: 'General assistant' },
+              responsibilities: { primary: ['Help the user complete tasks'] },
+              workspace: { root: join(tempDir, 'main') },
+              tools: { builtin: {} },
+              skills: { mode: 'all' },
+              memory: { mode: 'confirmWrite', sources: ['session'] },
+              workflows: {},
+              boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+            },
+          ],
+        },
+      }),
     });
     await store.initialize();
   });

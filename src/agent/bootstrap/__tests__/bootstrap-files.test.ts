@@ -20,17 +20,30 @@ function fixtureProfileDir(prefix: string): string {
 }
 
 describe('bootstrap-files', () => {
-  it('loads profile files in OpenClaw order and skips absent MEMORY', () => {
+  it('loads profile files in OpenClaw order and skips absent optional files', () => {
     const profileDir = fixtureProfileDir('xopc-bootstrap-');
     writeFileSync(join(profileDir, 'AGENTS.md'), '# agents');
     writeFileSync(join(profileDir, 'SOUL.md'), '# soul');
-    writeFileSync(join(profileDir, 'USER.md'), '# user');
+    writeFileSync(join(profileDir, 'IDENTITY.md'), '# identity');
 
     const files = loadProfileBootstrapFiles(profileDir);
     const names = files.map((f) => f.name);
     expect(names.indexOf('AGENTS.md')).toBeLessThan(names.indexOf('SOUL.md'));
-    expect(names.indexOf('SOUL.md')).toBeLessThan(names.indexOf('USER.md'));
+    expect(names.indexOf('SOUL.md')).toBeLessThan(names.indexOf('IDENTITY.md'));
     expect(names).not.toContain(DEFAULT_MEMORY_FILENAME);
+    expect(names).not.toContain('TOOLS.md');
+    expect(names).not.toContain('HEARTBEAT.md');
+  });
+
+  it('emits missing markers only for required profile files', () => {
+    const profileDir = fixtureProfileDir('xopc-bootstrap-missing-');
+    writeFileSync(join(profileDir, 'SOUL.md'), '# soul');
+
+    const files = loadProfileBootstrapFiles(profileDir);
+    expect(files.find((f) => f.name === 'IDENTITY.md')?.missing).toBe(true);
+    expect(files.some((f) => f.name === 'AGENTS.md')).toBe(false);
+    expect(files.some((f) => f.name === 'USER.md')).toBe(false);
+    expect(files.some((f) => f.name === DEFAULT_MEMORY_FILENAME)).toBe(false);
   });
 
   it('filters MEMORY for subagent sessions', () => {

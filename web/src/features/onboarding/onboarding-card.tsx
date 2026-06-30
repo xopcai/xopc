@@ -1,5 +1,5 @@
 import { ExternalLink } from 'lucide-react';
-import { useCallback, useMemo, useReducer } from 'react';
+import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
@@ -10,7 +10,18 @@ import { OnboardingModelSelect } from '@/features/onboarding/onboarding-model-se
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
 import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
 import { patchProviderApiKeys } from '@/features/settings/providers-api';
-import { applyGatewayAgentsPayloadToCaches, fetchGatewayAgents, updateGatewayAgent } from '@/features/settings/agents-admin-api';
+import {
+  fetchUserProfileContent,
+  saveUserProfileContent,
+} from '@/features/settings/agents-admin-api';
+import { fetchGlobalDefaults, updateGlobalDefaultModels } from '@/features/settings/global-defaults-api';
+import {
+  detectBrowserTimezone,
+  parseUserMarkdown,
+  serializeUserMarkdown,
+  TIMEZONE_OPTIONS,
+  type UserFields,
+} from '@/features/settings/agents/agent-profile-markdown';
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
 import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
@@ -23,7 +34,7 @@ interface OnboardingCardProps {
 }
 
 type OnboardingState = {
-  step: 'provider' | 'apiKey' | 'model';
+  step: 'provider' | 'apiKey' | 'model' | 'profile';
   selectedProvider: string | null;
   apiKey: string;
   busy: boolean;
@@ -31,6 +42,7 @@ type OnboardingState = {
   models: ConfiguredModel[];
   selectedModelId: string | null;
   modelsLoading: boolean;
+  profile: UserFields;
 };
 
 type OnboardingAction =
@@ -46,6 +58,12 @@ const initialOnboarding: OnboardingState = {
   models: [],
   selectedModelId: null,
   modelsLoading: false,
+  profile: {
+    callName: '',
+    pronouns: '',
+    timezone: detectBrowserTimezone(),
+    notes: '',
+  },
 };
 
 function onboardingReducer(state: OnboardingState, action: OnboardingAction): OnboardingState {
@@ -62,11 +80,14 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
   const o = messages(language).onboarding;
 
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
-  const { step, selectedProvider, apiKey, busy, error, models, selectedModelId, modelsLoading } = state;
+  const { step, selectedProvider, apiKey, busy, error, models, selectedModelId, modelsLoading, profile } = state;
 
   const stepLabel = useMemo(
-    () => o.stepOf.replace('{{current}}', String(step === 'provider' ? 1 : step === 'apiKey' ? 2 : 3)).replace('{{total}}', '3'),
-    [o.stepOf, step],
+    () => {
+      if (step === 'profile') return o.optionalStep;
+      return o.stepOf.replace('{{current}}', String(step === 'provider' ? 1 : step === 'apiKey' ? 2 : 3)).replace('{{total}}', '3');
+    },
+    [o.optionalStep, o.stepOf, step],
   );
 
   const loadModels = useCallback(async (providerId: string) => {
@@ -97,6 +118,31 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
     }
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const defaults = await fetchGlobalDefaults();
+        const recommendation = defaults.recommendations[0];
+        if (!recommendation || cancelled) return;
+        dispatch({
+          type: 'patch',
+          patch: {
+            selectedProvider: recommendation.provider,
+            step: 'model',
+            error: null,
+          },
+        });
+        await loadModels(recommendation.provider);
+      } catch {
+        /* keep the manual provider step */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadModels]);
+
   const onContinueApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;
     dispatch({ type: 'patch', patch: { busy: true, error: null } });
@@ -111,37 +157,71 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
     }
   };
 
-  const onStartChatting = async () => {
+  const loadProfileDraft = async () => {
+    try {
+      const content = await fetchUserProfileContent();
+      const parsed = parseUserMarkdown(content);
+      dispatch({
+        type: 'patch',
+        patch: {
+          profile: {
+            ...parsed,
+            timezone: parsed.timezone || detectBrowserTimezone(),
+          },
+        },
+      });
+    } catch {
+      dispatch({
+        type: 'patch',
+        patch: {
+          profile: {
+            ...profile,
+            timezone: profile.timezone || detectBrowserTimezone(),
+          },
+        },
+      });
+    }
+  };
+
+  const onContinueModelSetup = async () => {
     if (!selectedProvider || !selectedModelId) return;
     const modelRef = models.find((m) => m.id === selectedModelId)?.id ?? selectedModelId;
     dispatch({ type: 'patch', patch: { busy: true, error: null } });
     try {
-      const agentsPayload = await fetchGatewayAgents();
-      const defaultAgent = agentsPayload.agents.find((agent) => agent.id === agentsPayload.defaultId) ?? agentsPayload.agents[0];
-      if (!defaultAgent) {
-        throw new Error('No default agent configured');
-      }
-      const defaultRole = defaultAgent.typedModels.defaultRole || defaultAgent.typedModels.effective[0]?.id || 'deep';
-      const roles = Object.fromEntries(
-        defaultAgent.typedModels.effective.map((row) => [
-          row.id,
-          row.description ? { model: row.model, description: row.description } : { model: row.model },
-        ]),
-      );
-      roles[defaultRole] = { ...(roles[defaultRole] ?? {}), model: modelRef };
-      const updatedAgents = await updateGatewayAgent(defaultAgent.id, {
-        models: { defaultRole, roles },
+      await updateGlobalDefaultModels({
+        defaultRole: 'deep',
+        roles: {
+          deep: { model: modelRef },
+        },
       });
-      await applyGatewayAgentsPayloadToCaches(updatedAgents);
       void revalidateGatewayConfig();
       void invalidateConfiguredModelsCache();
       dispatchConfigReload();
+      await loadProfileDraft();
+      dispatch({ type: 'patch', patch: { step: 'profile' } });
+    } catch (e) {
+      dispatch({ type: 'patch', patch: { error: e instanceof Error ? e.message : String(e) } });
+    } finally {
+      dispatch({ type: 'patch', patch: { busy: false } });
+    }
+  };
+
+  const onFinish = async (saveProfile: boolean) => {
+    dispatch({ type: 'patch', patch: { busy: true, error: null } });
+    try {
+      if (saveProfile) {
+        await saveUserProfileContent(serializeUserMarkdown(profile));
+      }
       await onComplete();
     } catch (e) {
       dispatch({ type: 'patch', patch: { error: e instanceof Error ? e.message : String(e) } });
     } finally {
       dispatch({ type: 'patch', patch: { busy: false } });
     }
+  };
+
+  const patchProfile = (patch: Partial<UserFields>) => {
+    dispatch({ type: 'patch', patch: { profile: { ...profile, ...patch } } });
   };
 
   return (
@@ -296,7 +376,64 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
                 type="button"
                 className="bg-accent text-white hover:bg-accent/90"
                 disabled={busy || !selectedModelId || modelsLoading}
-                onClick={() => void onStartChatting()}
+                onClick={() => void onContinueModelSetup()}
+              >
+                {o.continue}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        {step === 'profile' ? (
+          <div className="flex flex-col gap-4">
+            <div>
+              <h3 className="text-base font-medium text-fg">{o.profileTitle}</h3>
+              <p className="mt-1 text-sm text-fg-muted">{o.profileSubtitle}</p>
+            </div>
+            <label className="block text-sm font-medium text-fg">
+              {o.profileCallNameLabel}
+              <input
+                value={profile.callName}
+                onChange={(event) => patchProfile({ callName: event.target.value })}
+                placeholder={o.profileCallNamePlaceholder}
+                className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
+              />
+            </label>
+            <label className="block text-sm font-medium text-fg">
+              {o.profileTimezoneLabel}
+              <select
+                value={profile.timezone}
+                onChange={(event) => patchProfile({ timezone: event.target.value })}
+                className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
+              >
+                <option value="">{o.profileTimezonePlaceholder}</option>
+                {TIMEZONE_OPTIONS.map((tz) => (
+                  <option key={tz.value} value={tz.value}>
+                    {language === 'zh' ? tz.labelZh : tz.labelEn}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-fg">
+              {o.profileNotesLabel}
+              <textarea
+                value={profile.notes}
+                onChange={(event) => patchProfile({ notes: event.target.value })}
+                placeholder={o.profileNotesPlaceholder}
+                rows={4}
+                className="mt-1 w-full resize-none rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
+              />
+            </label>
+            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+            <div className="flex flex-wrap justify-between gap-2">
+              <Button type="button" variant="secondary" disabled={busy} onClick={() => void onFinish(false)}>
+                {o.skipProfile}
+              </Button>
+              <Button
+                type="button"
+                className="bg-accent text-white hover:bg-accent/90"
+                disabled={busy}
+                onClick={() => void onFinish(true)}
               >
                 {o.startChatting}
               </Button>

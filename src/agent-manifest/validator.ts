@@ -1,4 +1,4 @@
-import type { AgentManifest, CapabilityPreset, EffectiveAgentManifest } from './schema.js';
+import type { AgentConfigEntry, CapabilityPreset, EffectiveAgentManifest } from './schema.js';
 import { resolveEffectiveAgentManifest } from './resolver.js';
 
 export type ManifestIssueSeverity = 'error' | 'warning';
@@ -17,8 +17,9 @@ export interface ManifestCatalogs {
 }
 
 export interface ValidateManifestParams {
-  agent: AgentManifest;
+  agent: AgentConfigEntry;
   presets?: Record<string, CapabilityPreset>;
+  defaultPresetId?: string;
   catalogs?: ManifestCatalogs;
 }
 
@@ -135,6 +136,7 @@ export function validateAgentManifest(params: ValidateManifestParams): ValidateM
     manifest = resolveEffectiveAgentManifest({
       agent: params.agent,
       presets: params.presets,
+      defaultPresetId: params.defaultPresetId,
     }).manifest;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

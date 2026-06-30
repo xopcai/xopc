@@ -39,10 +39,9 @@ describe('post-compaction-context', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null when postCompactionSections is empty', () => {
-    const result = readPostCompactionContextFromAgentsMd(SAMPLE_AGENTS, {
-      cfg: { agents: { defaults: { compaction: { postCompactionSections: [] } } } },
-    });
-    expect(result).toBeNull();
+  it('uses the fixed default post-compaction sections', () => {
+    const result = readPostCompactionContextFromAgentsMd(SAMPLE_AGENTS, {});
+    expect(result).toContain('Session Startup');
+    expect(result).toContain('Red Lines');
   });
 });

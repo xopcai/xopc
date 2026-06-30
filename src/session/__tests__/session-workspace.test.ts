@@ -31,15 +31,28 @@ describe('normalizeWorkingDirectoryInput', () => {
 describe('effectiveWorkspacePathForSession', () => {
   const minimalCfg = {
     agents: {
-      defaults: {
-        workspace: '~/default-ws',
-        model: 'x/y',
-        maxTokens: 100,
-        temperature: 0,
-        maxToolIterations: 1,
-        maxRequestsPerTurn: 1,
-        maxToolFailuresPerTurn: 1,
+      default: 'main',
+      defaultPreset: 'default',
+      capabilityPresets: {
+        default: {
+          id: 'default',
+          name: 'Global defaults',
+          models: { defaultRole: 'deep', roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } } },
+        },
       },
+      list: [
+        {
+          id: 'main',
+          identity: { name: 'Main', role: 'General assistant' },
+          responsibilities: { primary: ['Help the user complete tasks'] },
+          workspace: { root: '~/default-ws' },
+          tools: { builtin: {} },
+          skills: { mode: 'all' },
+          memory: { mode: 'confirmWrite', sources: ['session'] },
+          workflows: {},
+          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+        },
+      ],
     },
   } as unknown as Config;
 

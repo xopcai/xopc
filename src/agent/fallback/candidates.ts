@@ -17,28 +17,12 @@ export interface FallbackAttempt {
   code?: string;
 }
 
-// Get default model dynamically
-function getDefaultModelParts(config?: Config): { provider: string; model: string } {
+function getDefaultModelParts(config?: Config): ModelCandidate | null {
   const defaultModel = getDefaultModelSync(config);
+  if (!defaultModel) return null;
   const parts = defaultModel.split('/');
-  return {
-    provider: parts[0] || 'anthropic',
-    model: parts[1] || 'claude-sonnet-4-5',
-  };
-}
-
-function getConfiguredFallbackRefs(config?: Config): string[] | undefined {
-  const legacyModel = (config?.agents as unknown as {
-    defaults?: { model?: { fallbacks?: unknown } };
-  } | undefined)?.defaults?.model;
-  if (
-    legacyModel &&
-    typeof legacyModel === 'object' &&
-    Array.isArray(legacyModel.fallbacks)
-  ) {
-    return legacyModel.fallbacks.filter((value): value is string => typeof value === 'string');
-  }
-  return undefined;
+  if (!parts[0] || !parts[1]) return null;
+  return { provider: parts[0], model: parts[1] };
 }
 
 /**
@@ -63,12 +47,12 @@ export function resolveFallbackCandidates(params: {
   const { cfg, provider: inputProvider, model: inputModel, fallbacksOverride } = params;
 
   const primaryRef = getDefaultModelSync(cfg);
-  const fallbacks = fallbacksOverride ?? getConfiguredFallbackRefs(cfg);
+  const fallbacks = fallbacksOverride;
 
   const defaultParts = getDefaultModelParts(cfg);
   const primaryResolved = parseModelRef(primaryRef || getDefaultModelSync(cfg));
-  const provider = inputProvider.trim() || primaryResolved?.provider || defaultParts.provider;
-  const model = inputModel.trim() || primaryResolved?.model || defaultParts.model;
+  const provider = inputProvider.trim() || primaryResolved?.provider || defaultParts?.provider || '';
+  const model = inputModel.trim() || primaryResolved?.model || defaultParts?.model || '';
 
   const candidates: ModelCandidate[] = [];
   const seen = new Set<string>();
@@ -82,7 +66,9 @@ export function resolveFallbackCandidates(params: {
     candidates.push(c);
   };
 
-  addCandidate({ provider, model });
+  if (provider && model) {
+    addCandidate({ provider, model });
+  }
 
   if (fallbacks) {
     for (const fb of fallbacks) {

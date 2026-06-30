@@ -17,20 +17,32 @@ const labels = {
   channelMissing: 'no channel',
   skillsConfigured: (count: number) => `${count} skills`,
   skillsMissing: 'no skills',
-  presetsConfigured: 'presets ok',
-  presetsMissing: 'presets missing',
   readyToChat: 'ready',
 };
+
+function configWithGlobalModel(model: string) {
+  return {
+    agents: {
+      defaultPreset: 'default',
+      capabilityPresets: {
+        default: {
+          models: {
+            defaultRole: 'deep',
+            roles: model ? { deep: { model } } : {},
+          },
+        },
+      },
+    },
+  };
+}
 
 describe('buildSetupStatusSnapshot', () => {
   it('marks required steps incomplete when provider and model are missing', () => {
     const snapshot = buildSetupStatusSnapshot({
       hasToken: true,
       sseConnected: true,
-      config: { agents: { defaults: { model: '' } }, providers: {} },
+      config: { ...configWithGlobalModel(''), providers: {} },
       skillCount: 0,
-      presetsDone: false,
-      agentCount: 1,
       labels,
     });
 
@@ -44,12 +56,10 @@ describe('buildSetupStatusSnapshot', () => {
       hasToken: true,
       sseConnected: true,
       config: {
-        agents: { defaults: { model: 'openai/gpt-4o' } },
+        ...configWithGlobalModel('openai/gpt-4o'),
         providers: { openai: '***' },
       },
       skillCount: 0,
-      presetsDone: false,
-      agentCount: 1,
       labels,
     });
 
@@ -63,20 +73,17 @@ describe('buildSetupStatusSnapshot', () => {
       hasToken: true,
       sseConnected: true,
       config: {
-        agents: { defaults: { model: 'openai/gpt-4o' } },
+        ...configWithGlobalModel('openai/gpt-4o'),
         providers: { openai: '***' },
       },
       skillCount: 0,
       providerMeta: { configured: 3, total: 23 },
-      presetsDone: true,
-      agentCount: 2,
       labels,
     });
 
     expect(snapshot.providerMetaConfigured).toBe(3);
     expect(snapshot.providerMetaTotal).toBe(23);
     expect(snapshot.checklist.find((i) => i.id === 'provider')?.detail).toBe('3/23 ready');
-    expect(snapshot.checklist.find((i) => i.id === 'presets')?.done).toBe(true);
   });
 
   it('does not count channel catalog metadata as configured', () => {
@@ -94,8 +101,6 @@ describe('buildSetupStatusSnapshot', () => {
         },
       },
       skillCount: 0,
-      presetsDone: false,
-      agentCount: 1,
       labels,
     });
 
@@ -117,8 +122,6 @@ describe('buildSetupStatusSnapshot', () => {
         },
       },
       skillCount: 0,
-      presetsDone: false,
-      agentCount: 1,
       labels,
     });
 
@@ -130,7 +133,7 @@ describe('buildSetupStatusSnapshot', () => {
       hasToken: true,
       sseConnected: true,
       config: {
-        agents: { defaults: { model: 'openai/gpt-4o' } },
+        ...configWithGlobalModel('openai/gpt-4o'),
         providers: { openai: '***' },
       },
       skillCount: 0,
@@ -152,8 +155,6 @@ describe('buildSetupStatusSnapshot', () => {
           fixed: false,
         },
       ],
-      presetsDone: false,
-      agentCount: 1,
       labels,
     });
 
@@ -168,7 +169,6 @@ describe('readOverviewBrowserDiagnosticsInput', () => {
     expect(
       readOverviewBrowserDiagnosticsInput({
         browser: { enabled: true, backend: 'cdp' },
-        agents: { defaults: { browser: { enabled: false, backend: 'extension' } } },
       }),
     ).toEqual({ enabled: true, backend: 'cdp' });
   });

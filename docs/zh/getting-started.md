@@ -2,7 +2,7 @@
 
 这页用于查看完整起步地图：安装方式、配置模式、使用入口，以及下一步该读哪篇文档。
 
-如果你还没有真正跑过 xopc，先看 [5分钟快速入门](./first-5-minutes.md)。那篇只保留一条可靠路径：安装、`xopc onboard --quick`、然后 `xopc tui --local`。
+如果你还没有真正跑过 xopc，先看 [5分钟快速入门](./first-5-minutes.md)。那篇只保留一条可靠路径：安装、配置模型、然后开始本地对话。
 
 ## xopc 有哪些入口
 
@@ -39,7 +39,7 @@ xopc 是一个包，提供多个使用入口：
 | 目标 | 命令 | 说明 |
 | --- | --- | --- |
 | 快速本地试用 | `xopc onboard --quick` | 只配置模型凭据，跳过 gateway 和频道 |
-| 完整引导配置 | `xopc onboard` | 模型、工作区、可选频道、gateway 使用提示 |
+| 首次引导配置 | 网页控制台 onboarding 或 `xopc onboard` | 先配置模型，可选补充个人资料，然后进入对话 |
 | 只生成基础文件 | `xopc setup` | 只生成配置和工作区骨架 |
 | 稍后配置模型 | `xopc providers set-key <provider>` 和 `xopc models set <provider>/<model>` | 见 [配置第一个模型](./how-to/configure-first-model.md) |
 
@@ -99,4 +99,3 @@ pnpm run docs:build
 | gateway 没响应 | `xopc gateway status` 和 `xopc gateway health` |
 | 频道不回复 | `xopc channels show <channel>` 和 gateway 日志 |
 | 本地问题不明确 | `xopc doctor`，然后 `xopc logs tail` |
-

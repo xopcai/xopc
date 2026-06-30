@@ -17,7 +17,13 @@ vi.mock('../../../providers/index.js', () => ({
 }));
 
 vi.mock('../../../config/index.js', () => ({
-  loadConfig: vi.fn(() => ({ agents: { defaults: {} } })),
+  loadConfig: vi.fn(() => ({
+    agents: {
+      defaultPreset: 'default',
+      capabilityPresets: { default: { id: 'default', models: { defaultRole: 'deep', roles: {} } } },
+      list: [],
+    },
+  })),
   saveConfig: vi.fn(async () => {}),
 }));
 

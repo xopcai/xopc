@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import type { AgentManifest } from '../../agent-manifest/index.js';
 import type { Config } from '../../config/schema.js';
 import {
   extractAvatarFromIdentityMarkdown,
   getGatewayAgentEffectiveManifest,
+  listAgentProfileFiles,
   listGatewayAgents,
   prepareCreateAgent,
   prepareDeleteAgent,
@@ -234,5 +238,28 @@ describe('agents-admin', () => {
   it('readAgentProfileFile rejects unsupported filename', async () => {
     const r = await readAgentProfileFile(minimalConfig(), 'main', '../../../etc/passwd');
     expect(r.ok).toBe(false);
+  });
+
+  it('listAgentProfileFiles hides missing optional profile files', async () => {
+    const prevStateDir = process.env.XOPC_STATE_DIR;
+    const stateDir = mkdtempSync(join(tmpdir(), 'xopc-agents-admin-'));
+    process.env.XOPC_STATE_DIR = stateDir;
+    try {
+      const profileDir = join(stateDir, 'agents', 'main', 'profile');
+      mkdirSync(profileDir, { recursive: true });
+      writeFileSync(join(profileDir, 'SOUL.md'), '# soul', 'utf-8');
+      writeFileSync(join(profileDir, 'IDENTITY.md'), '# identity', 'utf-8');
+
+      const r = await listAgentProfileFiles(minimalConfig(), 'main');
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.data.files.map((f) => f.name)).toEqual(['IDENTITY.md', 'SOUL.md']);
+    } finally {
+      if (prevStateDir === undefined) {
+        delete process.env.XOPC_STATE_DIR;
+      } else {
+        process.env.XOPC_STATE_DIR = prevStateDir;
+      }
+    }
   });
 });

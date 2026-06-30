@@ -7,8 +7,7 @@ export type SetupChecklistItemId =
   | 'provider'
   | 'defaultModel'
   | 'channel'
-  | 'skill'
-  | 'presets';
+  | 'skill';
 
 export type SetupChecklistItemState = {
   id: SetupChecklistItemId;
@@ -62,8 +61,6 @@ export type SetupStatusSnapshot = {
   channelConfigured: boolean;
   skillInstalled: boolean;
   skillCount: number;
-  presetsDone: boolean;
-  agentCount: number;
   checklist: SetupChecklistItemState[];
   readiness: ReadinessPipelineItem[];
   issues: SetupIssue[];
@@ -86,9 +83,28 @@ function readDefaultModel(config: unknown): string {
   if (!config || typeof config !== 'object') return '';
   const agents = (config as Record<string, unknown>).agents;
   if (!agents || typeof agents !== 'object' || Array.isArray(agents)) return '';
-  const defaults = (agents as Record<string, unknown>).defaults;
-  if (!defaults || typeof defaults !== 'object' || Array.isArray(defaults)) return '';
-  const model = (defaults as Record<string, unknown>).model;
+  const agentRecord = agents as Record<string, unknown>;
+  const defaultPreset = typeof agentRecord.defaultPreset === 'string' && agentRecord.defaultPreset.trim()
+    ? agentRecord.defaultPreset.trim()
+    : 'default';
+  const presets = agentRecord.capabilityPresets;
+  const preset = presets && typeof presets === 'object' && !Array.isArray(presets)
+    ? (presets as Record<string, unknown>)[defaultPreset]
+    : undefined;
+  const models = preset && typeof preset === 'object' && !Array.isArray(preset)
+    ? (preset as Record<string, unknown>).models
+    : undefined;
+  if (!models || typeof models !== 'object' || Array.isArray(models)) return '';
+  const modelRecord = models as Record<string, unknown>;
+  const roles = modelRecord.roles;
+  if (!roles || typeof roles !== 'object' || Array.isArray(roles)) return '';
+  const roleMap = roles as Record<string, unknown>;
+  const defaultRole = typeof modelRecord.defaultRole === 'string' && modelRecord.defaultRole.trim()
+    ? modelRecord.defaultRole.trim()
+    : Object.keys(roleMap)[0];
+  const role = defaultRole ? roleMap[defaultRole] : undefined;
+  if (!role || typeof role !== 'object' || Array.isArray(role)) return '';
+  const model = (role as Record<string, unknown>).model;
   return typeof model === 'string' ? model.trim() : '';
 }
 
@@ -209,8 +225,6 @@ export function buildSetupStatusSnapshot(input: {
   doctorChecks?: DoctorCheck[];
   logsHealth?: LogsHealth | null;
   browserDiagnostics?: BrowserDiagnostic[];
-  presetsDone: boolean;
-  agentCount: number;
   labels: {
     gatewayOnline: string;
     gatewayOffline: string;
@@ -223,8 +237,6 @@ export function buildSetupStatusSnapshot(input: {
     channelMissing: string;
     skillsConfigured: (count: number) => string;
     skillsMissing: string;
-    presetsConfigured: string;
-    presetsMissing: string;
     readyToChat: string;
   };
 }): SetupStatusSnapshot {
@@ -277,12 +289,6 @@ export function buildSetupStatusSnapshot(input: {
         ? input.labels.skillsConfigured(input.skillCount)
         : input.labels.skillsMissing,
     },
-    {
-      id: 'presets',
-      done: input.presetsDone,
-      optional: true,
-      detail: input.presetsDone ? input.labels.presetsConfigured : input.labels.presetsMissing,
-    },
   ];
 
   const requiredComplete = checklist.filter((item) => !item.optional).every((item) => item.done);
@@ -311,7 +317,7 @@ export function buildSetupStatusSnapshot(input: {
       status: statusFromDone(defaultModelConfigured),
       title: 'Default model',
       detail: defaultModelConfigured ? input.labels.modelConfigured(defaultModel) : input.labels.modelMissing,
-      path: '/agents',
+      path: '/settings/credentials?tab=services',
     },
     {
       id: 'ready',
@@ -347,8 +353,6 @@ export function buildSetupStatusSnapshot(input: {
     channelConfigured,
     skillInstalled,
     skillCount: input.skillCount,
-    presetsDone: input.presetsDone,
-    agentCount: input.agentCount,
     checklist,
     readiness,
     issues,
@@ -375,9 +379,6 @@ export function scenarioStepState(
   }
   if (stepLabelKey === 'stepChannel') {
     return { done: snapshot.channelConfigured, status: snapshot.channelConfigured ? 'pass' : 'warn' };
-  }
-  if (stepLabelKey === 'stepPresets') {
-    return { done: snapshot.presetsDone, status: snapshot.presetsDone ? 'pass' : 'warn' };
   }
   if (stepLabelKey === 'stepSkills') {
     return { done: snapshot.skillInstalled, status: snapshot.skillInstalled ? 'pass' : 'warn' };

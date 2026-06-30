@@ -53,8 +53,15 @@ type PaletteRow = { id: string; title: string; subtitle?: string };
 
 type PaletteLayer = 'main' | 'models' | 'agents';
 
-function buildChatModelPatch(modelRef: string) {
-  return { agents: { defaults: { models: { chat: { primary: modelRef } } } } };
+function buildGlobalDefaultModelPatch(modelRef: string) {
+  return {
+    models: {
+      defaultRole: 'deep',
+      roles: {
+        deep: { model: modelRef },
+      },
+    },
+  };
 }
 
 function iconFor(hit: GlobalHit) {
@@ -524,10 +531,10 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
         const row = displayedLayerRows[selectedIndex - 1];
         if (!row) return;
         void (async () => {
-          await fetchJson(apiUrl('/api/config'), {
+          await fetchJson(apiUrl('/api/global-defaults'), {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(buildChatModelPatch(row.id)),
+            body: JSON.stringify(buildGlobalDefaultModelPatch(row.id)),
           });
           void revalidateGatewayConfig();
           dispatchConfigReload();
@@ -647,10 +654,10 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
                       onClick={() => {
                         if (paletteLayer === 'models') {
                           void (async () => {
-                            await fetchJson(apiUrl('/api/config'), {
+                            await fetchJson(apiUrl('/api/global-defaults'), {
                               method: 'PATCH',
                               headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify(buildChatModelPatch(row.id)),
+                              body: JSON.stringify(buildGlobalDefaultModelPatch(row.id)),
                             });
                             void revalidateGatewayConfig();
                             dispatchConfigReload();

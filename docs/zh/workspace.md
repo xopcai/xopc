@@ -60,7 +60,6 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 |------|------|
 | `SOUL.md` | 原则与「你是谁」。 |
 | `IDENTITY.md` | 名称、描述、语言、头像、语气与边界；这是 UI 展示身份和模型实际读取身份的唯一来源。 |
-| `USER.md` | 关于人类用户的笔记。 |
 | `TOOLS.md` | 环境相关的工具提示（主机、设备等）。 |
 | `AGENTS.md` | 安全与协作规范。 |
 | `HEARTBEAT.md` | 心跳 / 主动巡检配置（空或仅注释则跳过相关调用）。 |
@@ -80,7 +79,7 @@ CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**（主智能体
 
 ### 托管记忆（`agents/<agentId>/memories/`） {#curated-memory}
 
-与 **`agents/<agentId>/profile/MEMORY.md`**（系统提示用 profile 索引）以及工作区内可检索的 `memory/*.md` 不同，**`agents/<agentId>/memories/`** 使用 **`MEMORY.md`（助手笔记）** 与 **`USER.md`（用户画像）** 存放 **有上限、以 § 分隔** 的条目。是否注入快照、是否允许运行中写入，由所选 agent manifest 的 `memory` 策略控制；运行中可通过 **`curated_memory`** 工具读写磁盘上的最新内容。
+与 **`agents/<agentId>/profile/MEMORY.md`**（系统提示用 profile 索引）以及工作区内可检索的 `memory/*.md` 不同，**`agents/<agentId>/memories/`** 使用 **`MEMORY.md`（助手笔记）** 存放有上限、以 § 分隔的条目。全局用户记忆位于 **`user/MEMORY.md`**。是否注入快照、是否允许运行中写入，由所选 agent manifest 的 `memory` 策略控制；运行中可通过 **`curated_memory`** 工具读写磁盘上的最新内容。
 
 ## 运行时到底用哪个「工作空间」？
 

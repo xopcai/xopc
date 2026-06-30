@@ -85,6 +85,39 @@ function createMockModelManager() {
   };
 }
 
+function configWithCompaction(enabled: boolean) {
+  return {
+    agents: {
+      default: 'main',
+      defaultPreset: 'default',
+      capabilityPresets: {
+        default: {
+          id: 'default',
+          name: 'Global defaults',
+          models: { defaultRole: 'deep', roles: { deep: { model: 'test/test-model' } } },
+        },
+      },
+      list: [
+        {
+          id: 'main',
+          identity: { name: 'Main', role: 'General assistant' },
+          responsibilities: { primary: ['Help the user complete tasks'] },
+          workspace: { root: '/tmp/workspace' },
+          tools: { builtin: {} },
+          skills: { mode: 'all' },
+          memory: {
+            mode: 'confirmWrite',
+            sources: ['session'],
+            retention: { compaction: enabled },
+          },
+          workflows: {},
+          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+        },
+      ],
+    },
+  };
+}
+
 // ---- Tests ----
 
 describe('pre-turn auto-compaction', () => {
@@ -169,7 +202,7 @@ describe('pre-turn auto-compaction', () => {
     expect(mockRunXopcEmbeddedTurn).toHaveBeenCalled();
   });
 
-  it('respects compaction.enabled=false config', async () => {
+  it('respects memory.retention.compaction=false config', async () => {
     const sessionStore = createMockSessionStore({ needsCompaction: true });
     const agentManager = createMockAgentManager();
     const modelManager = createMockModelManager();
@@ -180,9 +213,7 @@ describe('pre-turn auto-compaction', () => {
       sessionStore: sessionStore as any,
       agentManager: agentManager as any,
       modelManager: modelManager as any,
-      getConfig: () => ({
-        agents: { defaults: { compaction: { enabled: false } } },
-      }) as any,
+      getConfig: () => configWithCompaction(false) as any,
     });
 
     // Even though prepareCompaction would say yes, we never call it

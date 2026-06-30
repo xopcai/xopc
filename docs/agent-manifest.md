@@ -1,6 +1,6 @@
 # Agent Capability Manifest
 
-Agent runtime configuration is manifest-first. Each runnable agent is a structured object under `agents.list[]`; shared behavior is factored into `agents.capabilityPresets`.
+Agent runtime configuration is manifest-first. Each runnable agent is a structured object under `agents.list[]`; global defaults come from `agents.defaultPreset`, and reusable behavior is factored into `agents.capabilityPresets`.
 
 ## Manifest Shape
 
@@ -19,13 +19,6 @@ Agent runtime configuration is manifest-first. Each runnable agent is a structur
     "outOfScope": ["Actions forbidden by user or policy"]
   },
   "workspace": { "root": "~/.xopc/workspace/main" },
-  "models": {
-    "defaultRole": "deep",
-    "roles": {
-      "deep": { "model": "anthropic/claude-sonnet-4-5" },
-      "small": { "model": "openai/gpt-4o-mini" }
-    }
-  },
   "tools": {
     "builtin": {
       "shell": { "mode": "confirm", "scope": "workspace" }
@@ -50,9 +43,10 @@ Agent runtime configuration is manifest-first. Each runnable agent is a structur
 
 - `agents.default` selects the default manifest id.
 - `agents.list[]` is the only runnable agent registry.
-- `extends` applies named `agents.capabilityPresets` before the manifest's own fields.
+- `agents.defaultPreset` applies one global preset before every agent.
+- `extends` applies named `agents.capabilityPresets` after the global preset and before the manifest's own fields.
 - There is no `agents.defaults` layer and no implicit compatibility merge.
-- Model roles are named slots. Runtime code asks for a role id, then resolves it to `provider/model`.
+- Model roles are named slots. Put shared model roles in the global default preset; only add `models` to an agent when it should override them.
 - Tool policy uses explicit `allow`, `confirm`, or `deny` modes instead of disable lists.
 
 ## Product Surface

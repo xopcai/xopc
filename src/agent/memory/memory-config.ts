@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 
 import type { Config } from '../../config/schema.js';
+import { resolveUserMemoryPath } from '../../config/paths.js';
 import { resolveEffectiveAgentManifestForAgent } from '../../config/agent-profile.js';
 import { resolveAgentHomeDir, resolveAgentIdForWorkspacePath } from '../agent-scope.js';
 
@@ -34,6 +35,7 @@ export function resolveBuiltinMemoryStoreConfig(
   return {
     workspaceDir,
     memoriesDir,
+    userMemoryPath: config != null ? resolveUserMemoryPath() : join(workspaceDir, 'user', 'MEMORY.md'),
     memoryCharLimit: manifest?.memory.retention?.maxItems ?? 2200,
     userCharLimit: 1375,
     userProfileEnabled: manifest?.memory.sources.includes('userProfile') ?? true,

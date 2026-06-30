@@ -273,9 +273,5 @@ export function resolveAgentIdForWorkspacePath(cfg: Config, resolvedWorkspacePat
 }
 
 export function getDefaultWorkspacePath(cfg: Config): string {
-  const legacyWorkspace = (cfg.agents as unknown as { defaults?: { workspace?: string } }).defaults?.workspace?.trim();
-  if (legacyWorkspace) {
-    return join(resolveUserPath(legacyWorkspace), resolveDefaultAgentId(cfg));
-  }
   return resolveAgentWorkspaceDir(cfg, resolveDefaultAgentId(cfg));
 }

@@ -97,15 +97,12 @@ function resolveExtractionModel(config?: Config) {
     }
   }
 
-  for (const candidate of ['openai/gpt-4o-mini', 'google/gemini-2.0-flash']) {
-    try {
-      return resolveModel(candidate);
-    } catch {
-      /* next */
-    }
+  const defaultRef = getDefaultModelSync(config);
+  if (!defaultRef) {
+    throw new Error('No global default model configured for web extraction');
   }
 
-  return resolveModel(getDefaultModelSync(config));
+  return resolveModel(defaultRef);
 }
 
 function buildExtractionSystemPrompt(maxLength: number): string {
@@ -389,13 +386,8 @@ async function synthesizeChunkSummaries(
 
 type WebExtractParams = { url: string; instruction?: string; maxLength?: number };
 
-function resolveConfiguredMaxLength(config: Config | undefined): number {
-  const value = (config?.agents as unknown as {
-    defaults?: { webExtract?: { maxLength?: unknown } };
-  } | undefined)?.defaults?.webExtract?.maxLength;
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
-    ? Math.trunc(value)
-    : DEFAULT_WEB_EXTRACT_MAX_LENGTH;
+function resolveConfiguredMaxLength(): number {
+  return DEFAULT_WEB_EXTRACT_MAX_LENGTH;
 }
 
 export function createWebExtractTool(deps: WebExtractDeps): AgentTool {
@@ -424,7 +416,7 @@ export function createWebExtractTool(deps: WebExtractDeps): AgentTool {
     ): Promise<AgentToolResult<{ url: string; extractedLength: number }>> {
       const { url, instruction } = params as WebExtractParams;
       const cfg = deps.getConfig();
-      const maxLength = (params as WebExtractParams).maxLength ?? resolveConfiguredMaxLength(cfg);
+      const maxLength = (params as WebExtractParams).maxLength ?? resolveConfiguredMaxLength();
 
       try {
         // SSRF protection

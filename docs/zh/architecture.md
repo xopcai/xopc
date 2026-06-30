@@ -65,7 +65,7 @@
 **AgentService** 负责：
 
 1. 接收来自通道或 Web 控制台的用户消息。  
-2. 从各智能体 **`agents/<id>/profile/`** 下的 **profile Markdown**（`SOUL.md`、`USER.md`、`AGENTS.md`、`TOOLS.md` 等）与可选记忆片段组装系统 Prompt。  
+2. 从全局 **`user/PROFILE.md`**、各智能体 **`agents/<id>/profile/`** 下的 **profile Markdown**（`SOUL.md`、`IDENTITY.md`、`AGENTS.md`、`TOOLS.md` 等）与可选记忆片段组装系统 Prompt。  
 3. 持久化 **会话** transcript，并在配置开启时做 **压缩**。  
 4. 执行 **内置与扩展工具**，对耗时步骤给出进度反馈。
 
@@ -116,7 +116,7 @@ Telegram、微信、网页聊天及扩展提供的通道，共用进入智能体
 ┌─────────────────────┐
 │   AgentService      │
 │  ┌───────────────┐  │
-│  │ 加载 profile  │  │ ← `agents/<id>/profile/`（SOUL.md, USER.md, TOOLS.md, AGENTS.md）
+│  │ 加载 profile  │  │ ← `user/PROFILE.md` + `agents/<id>/profile/`（SOUL.md, IDENTITY.md, TOOLS.md, AGENTS.md）
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │

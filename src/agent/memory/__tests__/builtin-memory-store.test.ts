@@ -43,6 +43,7 @@ describe('BuiltinMemoryStore', () => {
     const store = new BuiltinMemoryStore({
       workspaceDir: dir,
       memoriesDir,
+      userMemoryPath: join(dir, 'user', 'MEMORY.md'),
       memoryCharLimit: 100,
       userCharLimit: 100,
     });
@@ -51,14 +52,16 @@ describe('BuiltinMemoryStore', () => {
     expect(store.getSnapshot().user).toBe('');
   });
 
-  it('ignores USER.md when userProfileEnabled is false', () => {
+  it('ignores global user memory when userProfileEnabled is false', () => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-mem-'));
     const memDir = join(dir, 'memories');
-    mkdirSync(memDir, { recursive: true });
-    writeFileSync(join(memDir, 'USER.md'), 'should not appear', 'utf-8');
+    const userMemoryPath = join(dir, 'user', 'MEMORY.md');
+    mkdirSync(join(dir, 'user'), { recursive: true });
+    writeFileSync(userMemoryPath, 'should not appear', 'utf-8');
     const store = new BuiltinMemoryStore({
       workspaceDir: dir,
       memoriesDir: memDir,
+      userMemoryPath,
       memoryCharLimit: 100,
       userCharLimit: 100,
       userProfileEnabled: false,
@@ -73,6 +76,7 @@ describe('BuiltinMemoryStore', () => {
     const store = new BuiltinMemoryStore({
       workspaceDir: dir,
       memoriesDir,
+      userMemoryPath: join(dir, 'user', 'MEMORY.md'),
       memoryCharLimit: 2000,
       userCharLimit: 2000,
     });
@@ -92,6 +96,7 @@ describe('BuiltinMemoryStore', () => {
     const store = new BuiltinMemoryStore({
       workspaceDir: dir,
       memoriesDir: join(dir, 'memories'),
+      userMemoryPath: join(dir, 'user', 'MEMORY.md'),
       memoryCharLimit: 2000,
       userCharLimit: 2000,
     });

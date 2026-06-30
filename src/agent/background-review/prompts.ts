@@ -4,7 +4,7 @@ Focus on:
 1. Has the user revealed things about themselves — persona, desires, preferences, or personal details worth remembering?
 2. Has the user expressed expectations about how you should behave, their work style, or how they want you to operate?
 
-Use curated_memory (MEMORY.md for agent-facing notes, USER.md for user profile) only for durable facts that will still matter in future sessions.
+Use curated_memory (MEMORY.md for agent-facing notes, user/MEMORY.md for global user memory) only for durable facts that will still matter in future sessions.
 If nothing is worth saving, reply with exactly: Nothing to save.`;
 
 export const SKILL_REVIEW_USER_PROMPT = `Review the conversation above and consider saving or updating a skill if appropriate.
@@ -16,7 +16,7 @@ If nothing is worth saving, reply with exactly: Nothing to save.`;
 
 export const COMBINED_REVIEW_USER_PROMPT = `Review the conversation above for two separate concerns:
 
-**Curated memory (declarative):** Has the user revealed durable facts about themselves, preferences, or how they want you to behave? If so, save with curated_memory (MEMORY.md vs USER.md per tool rules).
+**Curated memory (declarative):** Has the user revealed durable facts about themselves, preferences, or how they want you to behave? If so, save with curated_memory (MEMORY.md vs user/MEMORY.md per tool rules).
 
 **Skills (procedural):** Was a non-trivial reusable workflow established (trial-and-error, environment-specific steps)? Use skills_list / skill_view, then skill_manage to create or patch.
 

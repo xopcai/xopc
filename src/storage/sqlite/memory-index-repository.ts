@@ -12,7 +12,8 @@ export type MemorySearchHit = {
   lineNumbers: number[];
 };
 
-const CURATED_MEMORY_FILENAMES = new Set(['MEMORY.md', 'USER.md']);
+const AGENT_MEMORY_FILENAME = 'MEMORY.md';
+const USER_MEMORY_DISPLAY_PATH = 'user/MEMORY.md';
 const MEMORY_SYNC_CACHE_TTL_MS = 30_000;
 
 type MemorySyncCache = {
@@ -37,14 +38,16 @@ function getDailyMemoryPath(baseDir: string, date?: Date): string {
   return join(baseDir, 'memory', `${year}-${month}-${day}.md`);
 }
 
-function getCuratedMemoryPaths(memoriesDir: string | undefined): string[] {
-  if (!memoriesDir) return [];
-  return [join(memoriesDir, 'MEMORY.md'), join(memoriesDir, 'USER.md')].filter((p) => existsSync(p));
+function getCuratedMemoryPaths(memoriesDir: string | undefined, userMemoryPath: string | undefined): string[] {
+  return [
+    ...(memoriesDir ? [join(memoriesDir, AGENT_MEMORY_FILENAME)] : []),
+    ...(userMemoryPath ? [userMemoryPath] : []),
+  ].filter((p) => existsSync(p));
 }
 
-function collectMemoryPaths(baseDir: string, memoriesDir?: string): string[] {
+function collectMemoryPaths(baseDir: string, memoriesDir?: string, userMemoryPath?: string): string[] {
   const paths: string[] = [];
-  paths.push(...getCuratedMemoryPaths(memoriesDir));
+  paths.push(...getCuratedMemoryPaths(memoriesDir, userMemoryPath));
 
   const longTermPath = join(baseDir, 'MEMORY.md');
   if (existsSync(longTermPath)) {
@@ -67,13 +70,21 @@ function collectMemoryPaths(baseDir: string, memoriesDir?: string): string[] {
   return paths;
 }
 
-function displayPath(baseDir: string, memoriesDir: string | undefined, absPath: string): string {
+function displayPath(
+  baseDir: string,
+  memoriesDir: string | undefined,
+  userMemoryPath: string | undefined,
+  absPath: string,
+): string {
   const normalized = absPath.replace(/\\/g, '/');
+  if (userMemoryPath && normalized === userMemoryPath.replace(/\\/g, '/')) {
+    return USER_MEMORY_DISPLAY_PATH;
+  }
   if (memoriesDir) {
     const memoriesRoot = memoriesDir.replace(/\\/g, '/');
     if (normalized.startsWith(memoriesRoot)) {
       const filename = normalized.slice(memoriesRoot.length).replace(/^\//, '');
-      if (CURATED_MEMORY_FILENAMES.has(filename)) {
+      if (filename === AGENT_MEMORY_FILENAME) {
         return filename;
       }
     }
@@ -94,12 +105,13 @@ function indexFile(
   agentId: string,
   baseDir: string,
   memoriesDir: string | undefined,
+  userMemoryPath: string | undefined,
   absPath: string,
 ): void {
   const content = readFileSync(absPath, 'utf-8');
   const mtimeMs = statSync(absPath).mtimeMs;
   const hash = contentHash(content);
-  const relPath = displayPath(baseDir, memoriesDir, absPath);
+  const relPath = displayPath(baseDir, memoriesDir, userMemoryPath, absPath);
   const fileId = `${agentId}:${relPath}`;
 
   const existing = db
@@ -144,21 +156,22 @@ export function syncMemoryIndex(params: {
   agentId: string;
   workspaceDir: string;
   memoriesDir?: string;
+  userMemoryPath?: string;
 }): void {
-  const cacheKey = `${params.agentId}:${params.workspaceDir}:${params.memoriesDir ?? ''}`;
+  const cacheKey = `${params.agentId}:${params.workspaceDir}:${params.memoriesDir ?? ''}:${params.userMemoryPath ?? ''}`;
   const now = Date.now();
   const cached = memorySyncCache.get(cacheKey);
   if (cached && now - cached.timestamp < MEMORY_SYNC_CACHE_TTL_MS) {
     return;
   }
 
-  const paths = collectMemoryPaths(params.workspaceDir, params.memoriesDir);
+  const paths = collectMemoryPaths(params.workspaceDir, params.memoriesDir, params.userMemoryPath);
   memorySyncCache.set(cacheKey, { timestamp: now, paths });
   runSqliteWriteTransaction((db) => {
     const seen = new Set<string>();
     for (const absPath of paths) {
-      seen.add(`${params.agentId}:${displayPath(params.workspaceDir, params.memoriesDir, absPath)}`);
-      indexFile(db, params.agentId, params.workspaceDir, params.memoriesDir, absPath);
+      seen.add(`${params.agentId}:${displayPath(params.workspaceDir, params.memoriesDir, params.userMemoryPath, absPath)}`);
+      indexFile(db, params.agentId, params.workspaceDir, params.memoriesDir, params.userMemoryPath, absPath);
     }
 
     const stale = db

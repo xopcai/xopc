@@ -13,6 +13,7 @@ import {
 } from '../../../config/models-json.js';
 import type { Config } from '../../../config/schema.js';
 import { getAgentDefaultModelRef } from '../../../config/schema.js';
+import { prepareUpdateGlobalDefaults } from '../../../gateway/global-defaults-admin.js';
 import {
   getAllProviders,
   getApiKeyFromEnv,
@@ -40,19 +41,26 @@ type CustomApiKind = 'openai-completions' | 'openai-responses' | 'anthropic-mess
 function setPrimaryModel(config: Config, workspacePath: string, modelRef: string): Config {
   const id = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
   const index = config.agents.list.findIndex((entry) => entry.id === id);
+  let nextConfig = config;
   if (index >= 0) {
     const agent = config.agents.list[index]!;
-    config.agents.list[index] = {
+    const nextList = [...config.agents.list];
+    nextList[index] = {
       ...agent,
       workspace: { root: workspacePath },
-      models: {
-        ...agent.models,
-        defaultRole: agent.models.defaultRole || 'deep',
-        roles: { ...agent.models.roles, [agent.models.defaultRole || 'deep']: { model: modelRef } },
-      },
     };
+    nextConfig = { ...config, agents: { ...config.agents, list: nextList } };
   }
-  return config;
+  const prep = prepareUpdateGlobalDefaults(nextConfig, {
+    models: {
+      defaultRole: 'deep',
+      roles: { deep: { model: modelRef } },
+    },
+  });
+  if (prep.ok === false) {
+    throw new Error(prep.error);
+  }
+  return prep.data.nextConfig;
 }
 
 function formatRecommended(provider: string): string | undefined {

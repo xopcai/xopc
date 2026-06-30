@@ -18,7 +18,6 @@ import { AgentEffectiveCapabilityTab } from './tabs/agent-effective-capability-t
 import { AgentFilesTab } from './tabs/agent-files-tab';
 import { AgentModelsTab } from './tabs/agent-models-tab';
 import { AgentOverviewTab } from './tabs/agent-overview-tab';
-import { AgentProfileTab } from './tabs/agent-profile-tab';
 import { AgentSkillsTab } from './tabs/agent-skills-tab';
 import { AgentToolsTab } from './tabs/agent-tools-tab';
 import type { OverviewProfileDraft } from './hooks/use-agent-overview-profile-markdown';
@@ -53,7 +52,6 @@ export type AgentsEditorPanelContentProps = {
   onUpdateAgentExtends: (nextExtends: string[]) => void;
   onOpenCapabilityPreset: (presetId: string) => void;
   overviewSaveProfileMarkdownRef: MutableRefObject<(() => Promise<void>) | null>;
-  profileSaveRef: MutableRefObject<(() => Promise<void>) | null>;
   overviewProfile: {
     profileMarkdownLoading: boolean;
     draft: OverviewProfileDraft | null;
@@ -63,7 +61,6 @@ export type AgentsEditorPanelContentProps = {
     setAvatarDialogOpen: (open: boolean) => void;
     toggleSoulPreviewMode: () => void;
   };
-  setProfileDirty: (v: boolean) => void;
   filesLoading: boolean;
   files: Awaited<ReturnType<typeof fetchAgentProfileFiles>> | null;
   activeFile: string | null;
@@ -138,9 +135,7 @@ export function AgentsEditorPanelContent({
   onUpdateAgentExtends,
   onOpenCapabilityPreset,
   overviewSaveProfileMarkdownRef: _overviewSaveProfileMarkdownRef,
-  profileSaveRef,
   overviewProfile,
-  setProfileDirty,
   filesLoading,
   files,
   activeFile,
@@ -227,12 +222,6 @@ export function AgentsEditorPanelContent({
         onTryInChat={onTryInChat}
         onEditModelStrategy={() => onPanelChange?.('models')}
       />
-    );
-  }
-
-  if (panel === 'profile') {
-    return (
-      <AgentProfileTab a={a} agentId={selected.id} saveRef={profileSaveRef} onDirtyChange={setProfileDirty} />
     );
   }
 

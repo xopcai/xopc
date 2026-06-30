@@ -12,6 +12,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsKeyboardShortcuts'
   | 'settingsAgents'
   | 'settingsCapabilityPresets'
+  | 'settingsUserProfile'
   | 'settingsCredentials'
   | 'settingsProviders'
   | 'settingsModels'
@@ -37,6 +38,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsAppManagement: 'app-management',
   settingsAgents: 'agents',
   settingsCapabilityPresets: 'capability-presets',
+  settingsUserProfile: 'user-profile',
   settingsCredentials: 'credentials',
   settingsProviders: 'credentials',
   settingsModels: 'credentials',
@@ -99,7 +101,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'credentials', tabs: ['settingsCredentials'] },
   {
     id: 'agent',
-    tabs: ['settingsCapabilityPresets', 'settingsAgentBrowser'],
+    tabs: ['settingsUserProfile', 'settingsCapabilityPresets', 'settingsAgentBrowser'],
   },
   {
     id: 'connection',

@@ -54,13 +54,12 @@ When the CLI runs **without** a loaded config file, **`XOPC_WORKSPACE`** wins if
 
 ### Profile Markdown (persona & memory index)
 
-These files are injected into the system prompt as **Project Context** (OpenClaw-aligned bootstrap). Location: **`agents/<agentId>/profile/`** (same filenames). Runtime loads them on each agent run; agents should not manually reread SOUL/USER/MEMORY at session start unless the user asks or context is incomplete.
+These files are injected into the system prompt as **Project Context** (OpenClaw-aligned bootstrap). Location: **`agents/<agentId>/profile/`** (same filenames). Runtime also injects the global user profile from **`user/PROFILE.md`** when present. Agents should not manually reread startup context at session start unless the user asks or context is incomplete.
 
 | File | Role |
 |------|------|
 | `SOUL.md` | Principles and “who you are” for the agent. |
 | `IDENTITY.md` | Name, description, language, avatar, tone, boundaries. This is the source of truth for UI display identity and model-visible identity. |
-| `USER.md` | Notes about the human user. |
 | `TOOLS.md` | Environment-specific tool hints (hosts, devices, …). |
 | `AGENTS.md` | Session Startup, Red Lines, and collaboration guidelines. |
 | `HEARTBEAT.md` | Heartbeat / proactive check configuration (dynamic Project Context when enabled). |
@@ -82,7 +81,7 @@ Per-session overrides (SQLite `session_config`), **inbound** blobs (`inbound/`),
 
 ### Curated memory (`agents/<agentId>/memories/`) {#curated-memory}
 
-Separate from **`agents/<agentId>/profile/MEMORY.md`** (system-prompt profile index) and from workspace `memory/*.md` (searchable snippets), **`agents/<agentId>/memories/`** holds **bounded, §-delimited** entries in `MEMORY.md` (agent notes) and `USER.md` (user profile). A frozen snapshot is injected only when manifest `memory` policy allows it; the agent can update live files via the **`curated_memory`** tool.
+Separate from **`agents/<agentId>/profile/MEMORY.md`** (system-prompt profile index) and from workspace `memory/*.md` (searchable snippets), **`agents/<agentId>/memories/`** holds bounded agent notes in `MEMORY.md`. Global user memory lives in **`user/MEMORY.md`**. A frozen snapshot is injected only when manifest `memory` policy allows it; the agent can update live files via the **`curated_memory`** tool.
 
 ## Which path is “the” workspace at runtime?
 

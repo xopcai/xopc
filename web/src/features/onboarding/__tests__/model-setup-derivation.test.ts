@@ -2,16 +2,32 @@ import { describe, expect, it } from 'vitest';
 
 import { computeNeedsModelSetup, type ModelSetupDerivationInput } from '@/features/onboarding/model-setup-derivation';
 
+function configWithGlobalModel(model: string) {
+  return {
+    agents: {
+      defaultPreset: 'default',
+      capabilityPresets: {
+        default: {
+          models: {
+            defaultRole: 'deep',
+            roles: model ? { deep: { model } } : {},
+          },
+        },
+      },
+    },
+  };
+}
+
 const readyInput: ModelSetupDerivationInput = {
   enabled: true,
   ready: true,
   configError: undefined,
   modelsError: undefined,
   config: {
-    agents: { defaults: { model: 'openai/gpt-4o' } },
+    ...configWithGlobalModel('openai/gpt-4o'),
     providers: { openai: '***' },
   },
-  modelsData: [{ id: 'openai/gpt-5.5', name: 'GPT-5.5', provider: 'openai' }],
+  modelsData: [{ id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai' }],
 };
 
 describe('computeNeedsModelSetup', () => {
@@ -39,7 +55,7 @@ describe('computeNeedsModelSetup', () => {
     expect(
       computeNeedsModelSetup({
         ...readyInput,
-        config: { agents: { defaults: { model: '' } }, providers: {} },
+        config: { ...configWithGlobalModel(''), providers: {} },
       }),
     ).toBe(true);
   });
@@ -62,7 +78,7 @@ describe('computeNeedsModelSetup', () => {
       computeNeedsModelSetup({
         ...readyInput,
         config: {
-          agents: { defaults: { model: 'deepseek/deepseek-v4-flash' } },
+          ...configWithGlobalModel('deepseek/deepseek-v4-flash'),
           providers: { deepseek: '••••••••••••••••••••••••••••••••', openai: '' },
         },
         modelsData: [{ id: 'deepseek/deepseek-v4-flash', name: 'DeepSeek V4 Flash', provider: 'deepseek' }],

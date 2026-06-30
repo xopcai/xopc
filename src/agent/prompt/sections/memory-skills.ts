@@ -58,7 +58,7 @@ export function buildMemorySection(params: {
     '',
     '- **Daily notes:** `memory/YYYY-MM-DD.md` — raw logs (runtime may preload recent days on /new or reset)',
     '- **Long-term:** profile `MEMORY.md` — curated memories in Project Context when present',
-    '- **Curated store:** agent home `memories/MEMORY.md` and `memories/USER.md` — use `curated_memory` for live read/write',
+    '- **Curated store:** agent home `memories/MEMORY.md` and global `user/MEMORY.md` — use `curated_memory` for live read/write',
     '',
     '### Writing to Memory',
     '',

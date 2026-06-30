@@ -20,6 +20,7 @@ export const loadSharePreviewPage = () => import('@/pages/share-preview-page');
 export const loadSetupStatusPanel = () => import('@/features/settings/setup-checklist/setup-status-panel');
 export const loadAppearanceSettingsPanel = () => import('@/features/settings/appearance-settings');
 export const loadKeyboardShortcutsSettingsPanel = () => import('@/features/settings/keyboard-shortcuts-settings');
+export const loadUserProfileSettingsPanel = () => import('@/features/settings/user-profile-settings-panel');
 export const loadSystemSettingsPanel = () => import('@/features/settings/system-settings-panel');
 export const loadAppManagementSettingsPanel = () => import('@/features/settings/app-management-settings-panel');
 export const loadModelsHubPanel = () => import('@/features/settings/models-hub/models-hub-panel');
@@ -56,6 +57,7 @@ function preloadSettingsSection(path: string) {
   if (section === 'overview') return preload(loadSetupStatusPanel);
   if (section === 'appearance') return preload(loadAppearanceSettingsPanel);
   if (section === 'keyboard-shortcuts') return preload(loadKeyboardShortcutsSettingsPanel);
+  if (section === 'user-profile') return preload(loadUserProfileSettingsPanel);
   if (section === 'system') return preload(loadSystemSettingsPanel);
   if (section === 'app-management') return preload(loadAppManagementSettingsPanel);
   if (section === 'credentials') return preload(loadModelsHubPanel);

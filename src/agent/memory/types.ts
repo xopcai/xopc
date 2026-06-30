@@ -1,16 +1,20 @@
 /**
- * Built-in curated memory (MEMORY.md + USER.md under the agent home `memories/` dir).
+ * Built-in curated memory:
+ * - agent notes: `~/.xopc/agents/<id>/memories/MEMORY.md`
+ * - user memory: `~/.xopc/user/MEMORY.md`
  */
 
 export interface MemoryStoreConfig {
   workspaceDir: string;
   /** Absolute path to `…/agents/<id>/memories/` (not under markdown workspace). */
   memoriesDir: string;
+  /** Absolute path to global user memory (`~/.xopc/user/MEMORY.md`). */
+  userMemoryPath: string;
   /** Max chars for MEMORY.md entries (excluding delimiter overhead in limit check uses joined body). */
   memoryCharLimit: number;
-  /** Max chars for USER.md entries. */
+  /** Max chars for global user memory entries. */
   userCharLimit: number;
-  /** When false, USER.md is not loaded into the snapshot or shown in the system prompt. */
+  /** When false, global user memory is not loaded into the snapshot or shown in the system prompt. */
   userProfileEnabled?: boolean;
 }
 

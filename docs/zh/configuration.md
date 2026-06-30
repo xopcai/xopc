@@ -28,7 +28,19 @@ xopc onboard
 {
   "agents": {
     "default": "main",
-    "capabilityPresets": {},
+    "defaultPreset": "default",
+    "capabilityPresets": {
+      "default": {
+        "id": "default",
+        "name": "全局默认能力",
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "anthropic/claude-sonnet-4-5" }
+          }
+        }
+      }
+    },
     "list": [
       {
         "id": "main",
@@ -42,12 +54,6 @@ xopc onboard
           "primary": ["帮助用户完成任务"]
         },
         "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "anthropic/claude-sonnet-4-5" }
-          }
-        },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
         "memory": {
@@ -74,7 +80,19 @@ xopc onboard
 {
   "agents": {
     "default": "main",
+    "defaultPreset": "default",
     "capabilityPresets": {
+      "default": {
+        "id": "default",
+        "name": "全局默认能力",
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "anthropic/claude-sonnet-4-5" },
+            "small": { "model": "openai/gpt-4o-mini", "description": "快速低成本模型" }
+          }
+        }
+      },
       "safe-coder": {
         "id": "safe-coder",
         "name": "Safe coder",
@@ -100,13 +118,6 @@ xopc onboard
           "primary": ["帮助用户完成任务"]
         },
         "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "anthropic/claude-sonnet-4-5" },
-            "small": { "model": "openai/gpt-4o-mini", "description": "快速低成本模型" }
-          }
-        },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
         "memory": {
@@ -195,19 +206,20 @@ xopc onboard
 
 ### agents
 
-智能体配置分为三部分：可选的顶层 **`default`**（默认 agent id）、可复用的 **`capabilityPresets`**，以及具体的 **`list`** 条目。每个 `agents.list[]` 条目都是一个 Agent Capability Manifest。路由与 session key 的**第一段**即为 agent id；运行时会解析一个 enabled manifest，并应用其 `extends` 声明的 presets。当前配置模型里没有 `agents.defaults` 合并层。
+智能体配置分为四部分：可选的顶层 **`default`**（默认 agent id）、**`defaultPreset`**（全局默认能力）、可复用的 **`capabilityPresets`**，以及具体的 **`list`** 条目。每个 `agents.list[]` 条目都是一个 Agent Capability Manifest。路由与 session key 的**第一段**即为 agent id；运行时会解析一个 enabled manifest，先应用 `defaultPreset`，再应用它在 `extends` 中声明的 presets。当前配置模型里没有 `agents.defaults` 合并层。
 
 #### 顶层 `agents` 字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `default` | string | 可选。未在会话键/API 中指定 agent 时使用的默认 id。未设置时：取 **`list` 中第一个 enabled 的 id**，否则 **`main`**。 |
+| `defaultPreset` | string | 应用于所有 agent 的全局 preset id，默认 `default`。共享模型和基础能力应放在这里。 |
 | `capabilityPresets` | object | 按 preset id 索引的可复用策略补丁。可包含模型角色、工具、技能、记忆、工作流、边界和运行时限制等。 |
 | `list` | array | 具体的 Agent Capability Manifest。每条在应用 presets 后应足以独立运行。 |
 
 #### `agents.list` 条目
 
-每条至少包含 **`id`**、**`identity`**、**`responsibilities`**、**`workspace`**、**`models`**、**`tools`**、**`skills`**、**`memory`**、**`workflows`** 和 **`boundaries`**。长文本 profile 仍可放在 **`agents/<id>/profile/`**，但结构化 manifest 是运行时策略的来源。
+每条至少包含 **`id`**、**`identity`**、**`responsibilities`**、**`workspace`**、**`tools`**、**`skills`**、**`memory`**、**`workflows`** 和 **`boundaries`**。`models` 在 agent 上是可选的，因为共享模型角色通常由全局默认 preset 负责。长文本 profile 仍可放在 **`agents/<id>/profile/`**，但结构化 manifest 是运行时策略的来源。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|

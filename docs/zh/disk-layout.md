@@ -37,9 +37,9 @@
 
 | 路径 | 用途 |
 |------|------|
-| `profile/` | 系统提示用 profile Markdown：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（与托管 `memories/` 不同），以及网关可选 `agent-avatar.*`。 |
+| `profile/` | 智能体自身的系统提示用 profile Markdown：`SOUL.md`、`IDENTITY.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（与托管 `memories/` 不同），以及网关可选 `agent-avatar.*`。全局个人资料位于 `user/PROFILE.md`。 |
 | `sessions/` | 遗留目录（可选）；旧版安装可能仍存在。新安装仅将 transcript 写入 `xopc.db`。 |
-| `memories/` | 托管结构化存储（`MEMORY.md`、`USER.md`，条目以固定分隔符分段 — `BuiltinMemoryStore`）。 |
+| `memories/` | 智能体托管结构化存储（`MEMORY.md`，条目以固定分隔符分段 — `BuiltinMemoryStore`）。全局用户记忆位于 `user/MEMORY.md`。 |
 | `inbound/` | 入站附件（非图片二进制）落盘；transcript 中相对路径为相对 agent home 的 `inbound/...`。 |
 | `tts/` | 按会话缓存的出站 TTS 音频。 |
 | `agent/` | 见下节 **智能体状态目录**。 |

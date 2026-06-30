@@ -619,18 +619,7 @@ function readImageGenerationAutoProviderFallbackFromDefaults(d: Record<string, u
 
 /** Parse the browser settings draft from a gateway config root object. */
 export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
-  const agents =
-    cfg && typeof cfg === 'object' && !Array.isArray(cfg) && 'agents' in cfg
-      ? (cfg as { agents?: unknown }).agents
-      : undefined;
-  const defaults =
-    agents && typeof agents === 'object' && !Array.isArray(agents) && 'defaults' in agents
-      ? (agents as { defaults?: unknown }).defaults
-      : undefined;
-  const d =
-    defaults && typeof defaults === 'object' && !Array.isArray(defaults)
-      ? (defaults as Record<string, unknown>)
-      : {};
+  const d: Record<string, unknown> = {};
   const modelConfig =
     d.models && typeof d.models === 'object' && !Array.isArray(d.models)
       ? (d.models as Record<string, unknown>)

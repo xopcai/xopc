@@ -82,10 +82,21 @@ describe('resolveFallbackCandidates', () => {
     process.env.OPENAI_API_KEY = 'test';
     const candidates = resolveFallbackCandidates({
       cfg: {
-        agents: { defaults: { model: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: ['openai/gpt-4o'] } } },
+        agents: {
+          defaultPreset: 'default',
+          capabilityPresets: {
+            default: {
+              models: {
+                defaultRole: 'deep',
+                roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } },
+              },
+            },
+          },
+        },
       } as any,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
+      fallbacksOverride: ['openai/gpt-4o'],
     });
     expect(candidates.length).toBeGreaterThanOrEqual(2);
     expect(candidates[0]).toEqual({ provider: 'anthropic', model: 'claude-sonnet-4-5' });
@@ -98,7 +109,17 @@ describe('resolveFallbackCandidates', () => {
     process.env.OPENAI_API_KEY = 'test';
     const candidates = resolveFallbackCandidates({
       cfg: {
-        agents: { defaults: { model: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: ['openai/gpt-4o'] } } },
+        agents: {
+          defaultPreset: 'default',
+          capabilityPresets: {
+            default: {
+              models: {
+                defaultRole: 'deep',
+                roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } },
+              },
+            },
+          },
+        },
       } as any,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
@@ -114,10 +135,21 @@ describe('resolveFallbackCandidates', () => {
     process.env.ANTHROPIC_API_KEY = 'test';
     const candidates = resolveFallbackCandidates({
       cfg: {
-        agents: { defaults: { model: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: ['anthropic/claude-sonnet-4-5'] } } },
+        agents: {
+          defaultPreset: 'default',
+          capabilityPresets: {
+            default: {
+              models: {
+                defaultRole: 'deep',
+                roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } },
+              },
+            },
+          },
+        },
       } as any,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
+      fallbacksOverride: ['anthropic/claude-sonnet-4-5'],
     });
     const keys = candidates.map(c => `${c.provider}/${c.model}`);
     expect(keys.length).toBe(new Set(keys).size);
@@ -129,10 +161,21 @@ describe('resolveFallbackCandidates', () => {
     delete process.env.OPENAI_API_KEY;
     const candidates = resolveFallbackCandidates({
       cfg: {
-        agents: { defaults: { model: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: ['openai/gpt-4o', 'unconfigured/model'] } } },
+        agents: {
+          defaultPreset: 'default',
+          capabilityPresets: {
+            default: {
+              models: {
+                defaultRole: 'deep',
+                roles: { deep: { model: 'anthropic/claude-sonnet-4-5' } },
+              },
+            },
+          },
+        },
       } as any,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
+      fallbacksOverride: ['openai/gpt-4o', 'unconfigured/model'],
     });
     // Only anthropic should be included, openai is filtered out
     expect(candidates).toHaveLength(1);

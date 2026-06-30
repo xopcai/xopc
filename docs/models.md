@@ -8,7 +8,7 @@ xopc supports custom model providers via `~/.xopc/models.json`.
 
 The **gateway console** (Settings → Providers) and **`xopc models`** use the same built-in ids as pi-ai. **Environment variable names** are centralized in `src/providers/env-keys.ts` (`PROVIDER_ENV_MAP`). For a single table aligned with `xopc.json` → **`providers`**, see [Configuration — `providers`](/configuration#providers).
 
-**Default chat model:** xopc uses the catalog-driven baseline **`openai/gpt-5.5`** when no explicit model is configured. Use `xopc onboard` or the gateway console to choose any catalog model and configure its credentials.
+**Default chat model:** xopc does not assume a vendor model. `xopc onboard` and the gateway console configure the global default preset (`agents.defaultPreset`), and every agent inherits that model unless it explicitly overrides a model role.
 
 Included built-ins cover, among others: **DeepSeek**, **OpenAI**, **Anthropic**, **Google** / **Vertex**, **Azure OpenAI**, **AWS Bedrock**, **Groq**, **xAI**, **Mistral**, **Cerebras**, **OpenRouter**, **Vercel AI Gateway**, **Zhipu z.ai**, **MiniMax** (intl + CN), **Kimi for coding**, **Moonshot** (`moonshotai`, `moonshotai-cn`), **Hugging Face**, **Fireworks**, **Together**, **OpenCode** / **OpenCode Go**, **Cloudflare Workers AI** and **Cloudflare AI Gateway**, **GitHub Copilot**, **OpenAI Codex** (OAuth), **Google Gemini CLI** / **Antigravity** (token or key flows), and **Xiaomi MiMo** (see below). **DashScope** (`dashscope`) is an xopc env id for image/STT/TTS HTTP APIs, not an LLM `KnownProvider` in pi-ai.
 

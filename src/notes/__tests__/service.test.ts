@@ -8,6 +8,36 @@ vi.mock('@earendil-works/pi-ai', async (importOriginal) => {
 
 import { NotesService } from '../service.js';
 import type { Note, NoteSnapshot, NoteSnapshotEntry, SnapshotTrigger } from '../types.js';
+import type { Config } from '../../config/schema.js';
+
+function configWithGlobalModel(model = 'anthropic/claude-sonnet-4-5'): Config {
+  return {
+    agents: {
+      default: 'main',
+      defaultPreset: 'default',
+      capabilityPresets: {
+        default: {
+          id: 'default',
+          name: 'Global defaults',
+          models: { defaultRole: 'deep', roles: { deep: { model } } },
+        },
+      },
+      list: [
+        {
+          id: 'main',
+          identity: { name: 'Main', role: 'General assistant' },
+          responsibilities: { primary: ['Help the user complete tasks'] },
+          workspace: { root: '~/.xopc/workspace/main' },
+          tools: { builtin: {} },
+          skills: { mode: 'all' },
+          memory: { mode: 'confirmWrite', sources: ['session'] },
+          workflows: {},
+          boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+        },
+      ],
+    },
+  } as Config;
+}
 
 class MemoryNotesStore {
   private notes = new Map<string, Note>();
@@ -173,7 +203,7 @@ describe('NotesService markdown sync and AI edit', () => {
     } as never);
 
     const note = await service.createNote({ title: 'AI 创作平台', markdown: '帮助用户把想法推进成成果。', capturedVia: { channel: 'web' } });
-    const result = await service.catalyzeNote(note.id);
+    const result = await service.catalyzeNote(note.id, configWithGlobalModel());
     expect(result?.report.valueHypothesis).toBe('把零散想法沉淀为可验证的个人创作闭环。');
     expect(result?.note.aiDeep?.catalysis?.status).toBe('catalyzed');
     expect(result?.note.aiDeep?.catalysis?.report?.nextActions[0]).toMatchObject({ kind: 'task', text: '写出第一个可验证场景' });
@@ -183,7 +213,7 @@ describe('NotesService markdown sync and AI edit', () => {
   it('falls back to local catalysis when the model call fails', async () => {
     vi.mocked(complete).mockRejectedValueOnce(new Error('model unavailable'));
     const note = await service.createNote({ title: '离线想法', markdown: 'Local-first 的 AI Agent 产品。', capturedVia: { channel: 'web' } });
-    const result = await service.catalyzeNote(note.id);
+    const result = await service.catalyzeNote(note.id, configWithGlobalModel());
     expect(result?.report.originalNoteId).toBe(note.id);
     expect(result?.report.title).toContain('离线想法');
     expect(result?.note.aiDeep?.catalysis?.status).toBe('catalyzed');

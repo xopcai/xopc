@@ -1,5 +1,5 @@
 /**
- * Bidirectional parser for agent profile Markdown (IDENTITY.md, USER.md, SOUL.md).
+ * Bidirectional parser for agent/user profile Markdown (IDENTITY.md, PROFILE.md, SOUL.md).
  *
  * Converts structured form fields ↔ Markdown so the settings UI can use friendly
  * inputs while keeping the on-disk format compatible with the agent runtime.
@@ -93,7 +93,7 @@ export function serializeIdentityMarkdown(fields: IdentityFields): string {
 }
 
 // ---------------------------------------------------------------------------
-// USER.md (human side of the profile)
+// PROFILE.md (global human/user profile)
 // ---------------------------------------------------------------------------
 
 export interface UserFields {
@@ -111,7 +111,7 @@ const USER_DEFAULTS: UserFields = {
 };
 
 /**
- * Parse USER.md content into structured fields.
+ * Parse PROFILE.md content into structured fields.
  *
  * Handles the template format:
  *   - **Name:** value
@@ -184,11 +184,11 @@ export function parseUserMarkdown(content: string): UserFields {
 }
 
 /**
- * Serialize structured user fields back to USER.md Markdown.
+ * Serialize structured user fields back to PROFILE.md Markdown.
  */
 export function serializeUserMarkdown(fields: UserFields): string {
   const lines = [
-    '# USER.md - About Your Human',
+    '# PROFILE.md - About You',
     '',
     `- **Name:** ${fields.callName}`,
     `- **Pronouns:** ${fields.pronouns}`,

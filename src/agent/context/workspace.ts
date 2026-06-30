@@ -20,7 +20,6 @@ export const DEFAULT_AGENTS_FILENAME = 'AGENTS.md';
 export const DEFAULT_SOUL_FILENAME = 'SOUL.md';
 export const DEFAULT_TOOLS_FILENAME = 'TOOLS.md';
 export const DEFAULT_IDENTITY_FILENAME = 'IDENTITY.md';
-export const DEFAULT_USER_FILENAME = 'USER.md';
 export const DEFAULT_HEARTBEAT_FILENAME = 'HEARTBEAT.md';
 export const DEFAULT_MEMORY_FILENAME = 'MEMORY.md';
 
@@ -29,7 +28,6 @@ export type AgentProfileMarkdownFilename =
   | typeof DEFAULT_SOUL_FILENAME
   | typeof DEFAULT_TOOLS_FILENAME
   | typeof DEFAULT_IDENTITY_FILENAME
-  | typeof DEFAULT_USER_FILENAME
   | typeof DEFAULT_HEARTBEAT_FILENAME
   | typeof DEFAULT_MEMORY_FILENAME;
 
@@ -39,12 +37,21 @@ export type AgentProfileMarkdownFilename =
 export const AGENT_PROFILE_MARKDOWN_SYSTEM_FILES: readonly AgentProfileMarkdownFilename[] = [
   DEFAULT_SOUL_FILENAME,
   DEFAULT_IDENTITY_FILENAME,
-  DEFAULT_USER_FILENAME,
   DEFAULT_TOOLS_FILENAME,
   DEFAULT_AGENTS_FILENAME,
   DEFAULT_HEARTBEAT_FILENAME,
   DEFAULT_MEMORY_FILENAME,
 ];
+
+/** Files that should be surfaced when missing. Other profile files are optional overlays. */
+export const REQUIRED_AGENT_PROFILE_MARKDOWN_FILES: readonly AgentProfileMarkdownFilename[] = [
+  DEFAULT_SOUL_FILENAME,
+  DEFAULT_IDENTITY_FILENAME,
+];
+
+export const REQUIRED_AGENT_PROFILE_MARKDOWN_FILE_SET: ReadonlySet<string> = new Set(
+  REQUIRED_AGENT_PROFILE_MARKDOWN_FILES,
+);
 
 export interface WorkspaceProfileMarkdownFile {
   name: AgentProfileMarkdownFilename;
@@ -180,7 +187,7 @@ export function loadProfileMarkdownFiles(profileDir: string): ProfileMarkdownFil
       } catch (err) {
         log.warn({ file: filename, err }, 'Failed to load profile Markdown file');
       }
-    } else {
+    } else if (REQUIRED_AGENT_PROFILE_MARKDOWN_FILE_SET.has(filename)) {
       const hint = join(profileDir, filename);
       files.push({
         name: filename,

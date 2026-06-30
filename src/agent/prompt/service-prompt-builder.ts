@@ -4,12 +4,8 @@
  * Combines base system prompt with skill prompts and bootstrap Project Context.
  */
 
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-
 import type { Config } from '../../config/schema.js';
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
-import { DEFAULT_USER_FILENAME } from '../context/workspace.js';
 import type { SkillManager } from '../skills/skill-manager.js';
 import { createSkillConfigManager } from '../skills/config.js';
 import { selectSkillsVisibleInPrompt } from '../skills/format-skills-prompt.js';
@@ -62,8 +58,6 @@ export class SystemPromptBuilder {
 
   build(contextFiles: EmbeddedContextFile[], options: SystemPromptBuildOptions): string {
     const ws = options.workspaceOverride ?? this.workspace;
-    const profilePathRoot = options.profileMarkdownPathRoot ?? ws;
-
     if (options.systemPromptOverride?.trim()) {
       const skillPrompt =
         options.skillPromptText !== undefined
@@ -91,7 +85,7 @@ export class SystemPromptBuilder {
     }
 
     const heartbeatEnabled = this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false;
-    const userTimezone = this.extractTimezone(contextFiles, profilePathRoot);
+    const userTimezone = this.extractTimezone(contextFiles);
 
     const ttsMerged = mergeTtsConfigFromAppConfig(this.config.messages?.tts);
     const reg = options.registeredToolNames ?? [];
@@ -172,27 +166,14 @@ export class SystemPromptBuilder {
     return this.build(contextFiles, options);
   }
 
-  private extractTimezone(contextFiles: EmbeddedContextFile[], profilePathRoot: string): string | undefined {
+  private extractTimezone(contextFiles: EmbeddedContextFile[]): string | undefined {
     const userContext = contextFiles.find((file) =>
-      file.path.replace(/\\/g, '/').toLowerCase().endsWith('/user.md'),
+      file.path.replace(/\\/g, '/').toLowerCase().endsWith('/user/profile.md'),
     );
     if (userContext?.content) {
       const match = userContext.content.match(/Timezone:\s*(.+)/i);
       if (match) {
         return match[1].trim();
-      }
-    }
-
-    const primaryPath = join(profilePathRoot, DEFAULT_USER_FILENAME);
-    if (existsSync(primaryPath)) {
-      try {
-        const raw = readFileSync(primaryPath, 'utf-8');
-        const match = raw.match(/Timezone:\s*(.+)/i);
-        if (match) {
-          return match[1].trim();
-        }
-      } catch {
-        /* ignore */
       }
     }
 
@@ -225,12 +206,11 @@ export class SystemPromptBuilder {
     },
   ): string {
     const ws = options?.workspaceOverride ?? this.workspace;
-    const profilePathRoot = options?.profileMarkdownPathRoot ?? ws;
     const resolved = resolveSystemPromptBuildParams(this.config, {
       workspaceDir: ws,
       sessionKey: options?.sessionKey,
       toolNames: options?.registeredToolNames,
-      userTimezone: this.extractTimezone(contextFiles, profilePathRoot),
+      userTimezone: this.extractTimezone(contextFiles),
       externalMemoryInstructions: options?.externalMemoryInstructions,
       heartbeatEnabled: this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false,
     });

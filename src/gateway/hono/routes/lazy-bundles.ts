@@ -111,7 +111,7 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'agents',
-    match: (path) => startsWithAny(path, ['/api/agents', '/api/voice/models']),
+    match: (path) => startsWithAny(path, ['/api/agents', '/api/user-profile', '/api/voice/models']),
     load: async () => {
       const { registerAgentsRoutes } = await import('./agents.js');
       return { register: registerAgentsRoutes };
@@ -119,10 +119,16 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'capability-presets',
-    match: (path) => startsWithAny(path, ['/api/capability-presets']),
+    match: (path) => startsWithAny(path, ['/api/capability-presets', '/api/global-defaults']),
     load: async () => {
       const { registerCapabilityPresetsRoutes } = await import('./capability-presets.js');
-      return { register: registerCapabilityPresetsRoutes };
+      const { registerGlobalDefaultsRoutes } = await import('./global-defaults.js');
+      return {
+        register: (authenticated, deps) => {
+          registerCapabilityPresetsRoutes(authenticated, deps);
+          registerGlobalDefaultsRoutes(authenticated, deps);
+        },
+      };
     },
   },
   {

@@ -85,15 +85,8 @@ export function readPostCompactionContextFromAgentsMd(
   agentsMdContent: string,
   options?: PostCompactionContextOptions,
 ): string | null {
-  const compaction = (options?.cfg?.agents as unknown as {
-    defaults?: { compaction?: { enabled?: boolean; postCompactionSections?: string[] } };
-  } | undefined)?.defaults?.compaction;
-  if (compaction?.enabled === false) {
-    return null;
-  }
-  const sectionNames = Array.isArray(compaction?.postCompactionSections)
-    ? compaction.postCompactionSections
-    : DEFAULT_POST_COMPACTION_SECTIONS;
+  void options;
+  const sectionNames = DEFAULT_POST_COMPACTION_SECTIONS;
 
   if (sectionNames.length === 0) {
     return null;

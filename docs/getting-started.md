@@ -2,7 +2,7 @@
 
 Use this page after you want the full map: install options, setup modes, surfaces, and where to go next.
 
-If you have not tried xopc yet, start with [First 5 Minutes](./first-5-minutes.md). That tutorial keeps one reliable path: install, `xopc onboard --quick`, then `xopc tui --local`.
+If you have not tried xopc yet, start with [First 5 Minutes](./first-5-minutes.md). That tutorial keeps one reliable path: install, configure a model, then start a local chat.
 
 ## What xopc runs
 
@@ -39,7 +39,7 @@ xopc is one package with several surfaces:
 | Goal | Command | Notes |
 | --- | --- | --- |
 | Fast local trial | `xopc onboard --quick` | Model credentials only; skips gateway and channels |
-| Full guided setup | `xopc onboard` | Model, workspace, optional channels, gateway guidance |
+| Guided first run | Web console onboarding or `xopc onboard` | Model first, optional personal profile, then chat |
 | Create base files | `xopc setup` | Creates config/workspace skeleton only |
 | Configure a model later | `xopc providers set-key <provider>` and `xopc models set <provider>/<model>` | See [Configure your first model](./how-to/configure-first-model.md) |
 
@@ -99,4 +99,3 @@ pnpm run docs:build
 | Gateway does not respond | `xopc gateway status` and `xopc gateway health` |
 | Channel does not reply | `xopc channels show <channel>` and gateway logs |
 | Unknown local failure | `xopc doctor`, then `xopc logs tail` |
-
