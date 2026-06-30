@@ -63,16 +63,25 @@ type ModelsAuthLoginOptions = {
 };
 
 function currentModelRef(config: Config): string | undefined {
-  return config.agents?.defaults?.models?.chat?.primary;
+  const id = config.agents.default ?? config.agents.list[0]?.id;
+  const agent = config.agents.list.find((entry) => entry.id === id) ?? config.agents.list[0];
+  return agent?.models.roles[agent.models.defaultRole]?.model;
 }
 
 function setDefaultModel(config: Config, modelRef: string): Config {
-  config.agents = config.agents ?? {};
-  config.agents.defaults = config.agents.defaults ?? {} as NonNullable<Config['agents']>['defaults'];
-  config.agents.defaults.models = {
-    ...config.agents.defaults.models,
-    chat: { primary: modelRef, fallbacks: [] },
-  };
+  const id = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
+  const index = config.agents.list.findIndex((entry) => entry.id === id);
+  if (index >= 0) {
+    const agent = config.agents.list[index]!;
+    config.agents.list[index] = {
+      ...agent,
+      models: {
+        ...agent.models,
+        defaultRole: agent.models.defaultRole || 'deep',
+        roles: { ...agent.models.roles, [agent.models.defaultRole || 'deep']: { model: modelRef } },
+      },
+    };
+  }
   return config;
 }
 

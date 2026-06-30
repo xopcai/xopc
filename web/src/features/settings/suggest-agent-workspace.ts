@@ -1,10 +1,8 @@
-/**
- * Default workspace path suggestion for a new agent (`~/.xopc/workspace/<agentId>`; parent is `agents.defaults.workspace`).
- */
+/** Default workspace path suggestion for a new agent (`~/.xopc/workspace/<agentId>`). */
 
 import { normalizeAgentId } from '@/lib/agent-id';
 
-/** Gateway default when `agents.defaults.workspace` is unset. */
+/** Gateway default workspace parent for new agent manifests. */
 export const DEFAULT_AGENT_WORKSPACE = '~/.xopc/workspace';
 
 /** Empty string if `name` is blank; else `~/.xopc/workspace/<agentId>`. */

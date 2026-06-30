@@ -136,12 +136,6 @@ async function maybeAutoCompactBeforeTurn(opts: {
 }): Promise<void> {
   const { sessionKey, sessionStore, agentManager, model, config, onEvent } = opts;
 
-  // Respect the compaction.enabled flag
-  const compactionConfig = config?.agents?.defaults?.compaction;
-  if (compactionConfig?.enabled === false) {
-    return;
-  }
-
   const contextWindow = (model as { contextWindow?: number }).contextWindow ?? 128_000;
   const messages = await sessionStore.load(sessionKey);
   const prep = sessionStore.prepareCompaction(sessionKey, messages, contextWindow);

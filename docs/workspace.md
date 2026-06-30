@@ -4,7 +4,7 @@ For a concise map of **profile Markdown**, **agent home**, and the **Markdown wo
 
 xopc keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for inbox, inbound/TTS blobs, curated memory, and runtime files. **Session transcripts** live in **`xopc.db`** (SQLite) at the state root. Separately, the **agent workspace** is the Markdown root the runtime uses as tool `cwd`, for daily `memory/` notes, user files, and extensions under that tree.
 
-Paths come from your **main config file** (default `<stateDir>/xopc.json`) and optional env overrides. **`xopc init`** and **`xopc agents add`** create directories and seed templates. The **Markdown workspace** (tool `cwd` and project files) is **not** the same folder as `agents/<id>/` state: by default each agent id uses `<stateDir>/workspace/<agentId>/` (the default agent id is `main`), or under **`agents.defaults.workspace`** as a **parent** directory (`<expanded>/<agentId>/`), or an explicit per-list **`workspace`** path.
+Paths come from your **main config file** (default `<stateDir>/xopc.json`) and optional env overrides. **`xopc init`** and **`xopc agents add`** create directories and seed templates. The **Markdown workspace** (tool `cwd` and project files) is **not** the same folder as `agents/<id>/` state: each manifest owns `agents.list[].workspace.root`; when unavailable during fallback resolution xopc uses `<stateDir>/workspace/<agentId>/`.
 
 ## State directory root
 
@@ -25,7 +25,7 @@ These are shared across agents unless noted.
 
 | Path | Role |
 |------|------|
-| `xopc.json` | Main configuration (providers, gateway, channels, `agents.defaults`, …). |
+| `xopc.json` | Main configuration (providers, gateway, channels, `agents.list`, `agents.capabilityPresets`, …). |
 | `xopc.db` | SQLite database: sessions, transcripts, per-session config, compaction checkpoints, FTS5 search. |
 | `credentials/` | Global secrets; `auth-profiles.json`; `oauth/<provider>.json` for OAuth tokens. |
 | `extensions/` | Installed extensions and `extensions-lock.json`. |
@@ -48,7 +48,7 @@ Session metadata and transcripts live in **`~/.xopc/xopc.db`** (SQLite).
 
 ## Agent workspace directory (Markdown root)
 
-With a normal config, each agent gets an explicit **`workspace`** path or inherits **`join(agents.defaults.workspace, <agentId>)`**, or falls back to **`<stateDir>/workspace/<agentId>`** when `agents.defaults.workspace` is unset.
+With a normal config, each agent gets an explicit **`agents.list[].workspace.root`** path. Fallback resolution uses **`<stateDir>/workspace/<agentId>`**.
 
 When the CLI runs **without** a loaded config file, **`XOPC_WORKSPACE`** wins if set (full path to the primary agent’s Markdown root); otherwise the primary Markdown tree defaults to **`<stateDir>/workspace/main`**. **`xopc init`** creates **`agents/<id>/`**, the Markdown workspace, and seeds profile Markdown under **`agents/<id>/profile/`** from built-in templates (filenames in [Workspace templates](/reference/templates)) only when missing. **`xopc agents add`** updates **`agents.list`**, creates directories, and seeds profile files (see [CLI](cli.md#agents)).
 
@@ -66,7 +66,7 @@ These files are injected into the system prompt as **Project Context** (OpenClaw
 | `HEARTBEAT.md` | Heartbeat / proactive check configuration (dynamic Project Context when enabled). |
 | `MEMORY.md` | Curated long-term memory index (main session only; omitted for subagent/cron). |
 
-On `/new` and `/reset`, xopc may also prepend recent **`memory/YYYY-MM-DD.md`** excerpts to the first user turn (`agents.defaults.startupContext`). **`agents/<id>/memories/`** is **not** injected into the prompt; use the `curated_memory` tool for live read/write.
+On `/new` and `/reset`, workspace memory snippets may be injected only when the selected manifest/workflow enables that runtime behavior. **`agents/<id>/memories/`** is controlled by manifest `memory` policy; use the `curated_memory` tool for live read/write.
 
 Other root Markdown files (for example `CONTEXT.md` or `SKILLS.md`) are optional and are **not** loaded into the default system prompt unless you wire them in yourself (e.g. read via tools or custom workflow).
 
@@ -82,7 +82,7 @@ Per-session overrides (SQLite `session_config`), **inbound** blobs (`inbound/`),
 
 ### Curated memory (`agents/<agentId>/memories/`) {#curated-memory}
 
-Separate from **`agents/<agentId>/profile/MEMORY.md`** (system-prompt profile index) and from workspace `memory/*.md` (searchable snippets), **`agents/<agentId>/memories/`** holds **bounded, §-delimited** entries in `MEMORY.md` (agent notes) and `USER.md` (user profile). A frozen snapshot is injected into the system prompt when enhanced memory is enabled; the agent can update live files via the **`curated_memory`** tool. Behavior and limits are configured under **`agents.defaults.memory`** ([Configuration](configuration.md)).
+Separate from **`agents/<agentId>/profile/MEMORY.md`** (system-prompt profile index) and from workspace `memory/*.md` (searchable snippets), **`agents/<agentId>/memories/`** holds **bounded, §-delimited** entries in `MEMORY.md` (agent notes) and `USER.md` (user profile). A frozen snapshot is injected only when manifest `memory` policy allows it; the agent can update live files via the **`curated_memory`** tool.
 
 ## Which path is “the” workspace at runtime?
 
@@ -92,7 +92,7 @@ Two related ideas:
 
 2. **CLI** (no explicit `--workspace` on the root command) — **`XOPC_WORKSPACE`** if set, otherwise **`<stateDir>/workspace/main`** (or your profile/state dir equivalent).
 
-After `xopc init`, profile Markdown for `main` lives under **`~/.xopc/agents/main/profile/`** by default. The Markdown workspace remains **`agents.defaults.workspace/main`** when that parent is set (schema default `~/.xopc/workspace` → `~/.xopc/workspace/main`), or **`<stateDir>/workspace/main`** when it is not. Per-list **`agents.list[].workspace`** overrides the derived Markdown path for that agent only.
+After `xopc init`, profile Markdown for `main` lives under **`~/.xopc/agents/main/profile/`** by default. The Markdown workspace is the selected manifest's **`workspace.root`**, commonly `~/.xopc/workspace/main`.
 
 ## Environment variables (quick reference)
 
@@ -102,7 +102,7 @@ After `xopc init`, profile Markdown for `main` lives under **`~/.xopc/agents/mai
 | `XOPC_PROFILE` | Profile-specific state directory |
 | `XOPC_HOME` | Home override for default state path |
 | `XOPC_CONFIG` / `XOPC_CONFIG_PATH` | Config file location |
-| `XOPC_WORKSPACE` | Primary agent Markdown root when no `--workspace` (full path; not the `agents.defaults.workspace` parent) |
+| `XOPC_WORKSPACE` | Primary agent Markdown root when no `--workspace` (full path) |
 | `XOPC_CREDENTIALS_DIR` | Global credentials directory |
 | `XOPC_LOG_DIR` | Log file directory |
 

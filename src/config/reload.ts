@@ -243,7 +243,7 @@ export class ConfigHotReloader {
       return;
     }
 
-    if (path.startsWith('agents.defaults.')) {
+    if (path.startsWith('agents.list') || path.startsWith('agents.capabilityPresets')) {
       if (this.callbacks.onAgentDefaultsReload) {
         await Promise.resolve(this.callbacks.onAgentDefaultsReload(newConfig));
       }

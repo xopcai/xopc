@@ -32,24 +32,9 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'models.providers', kind: 'hot', description: 'Model provider API keys, base URLs' },
   { prefix: 'models.mode', kind: 'hot', description: 'Model merge mode' },
   
-  // Agent defaults - hot reload
-  { prefix: 'agents.defaults.models', kind: 'hot', description: 'Model configuration' },
-  { prefix: 'agents.defaults.maxTaskDurationMs', kind: 'hot', description: 'Per-turn wall-clock timeout (ms)' },
-  { prefix: 'agents.defaults.maxTokens', kind: 'hot', description: 'Max tokens' },
-  { prefix: 'agents.defaults.temperature', kind: 'hot', description: 'Temperature' },
-  { prefix: 'agents.defaults.maxToolIterations', kind: 'hot', description: 'Max tool iterations' },
-  { prefix: 'agents.defaults.compaction', kind: 'hot', description: 'Compaction settings' },
-  { prefix: 'agents.defaults.pruning', kind: 'hot', description: 'Pruning settings' },
-  { prefix: 'agents.defaults.webExtract', kind: 'hot', description: 'Web extract model and limits' },
-  { prefix: 'agents.defaults.browser', kind: 'hot', description: 'Browser automation (Playwright) tools' },
-  { prefix: 'agents.defaults.delegate', kind: 'hot', description: 'delegate_task sub-agent tool' },
-  { prefix: 'agents.defaults.executeCode', kind: 'hot', description: 'execute_code sandbox tool' },
-  {
-    prefix: 'agents.defaults.backgroundReview',
-    kind: 'hot',
-    description: 'Post-turn memory/skill nudge + background review',
-  },
-  { prefix: 'agents.defaults.workspace', kind: 'none', description: 'Workspace path - no runtime effect' },
+  { prefix: 'agents.list', kind: 'hot', description: 'Agent manifests' },
+  { prefix: 'agents.capabilityPresets', kind: 'hot', description: 'Agent capability presets' },
+  { prefix: 'agents.default', kind: 'hot', description: 'Default agent id' },
   
   // Gateway - restart required
   { prefix: 'gateway.bind', kind: 'restart', description: 'Gateway bind mode' },

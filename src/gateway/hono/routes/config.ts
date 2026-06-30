@@ -113,7 +113,7 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
   /** POST /api/agents/browser/reveal-cloud-api-key — plaintext browser cloud apiKey from config only. */
   authenticated.post('/api/agents/browser/reveal-cloud-api-key', strictRateLimitMiddleware, async (c) => {
     const config = service.currentConfig as Config;
-    const apiKey = config.agents?.defaults?.browser?.cloud?.apiKey?.trim() || null;
+    const apiKey = config.browser?.cloud?.apiKey?.trim() || null;
     return c.json({
       ok: true,
       payload: { apiKey, source: apiKey ? ('config' as const) : ('none' as const) },

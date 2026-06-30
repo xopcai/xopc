@@ -147,11 +147,7 @@ export function createBrowserUseTool(deps: CreateBrowserUseToolDeps): AgentTool<
         await mgr.ensureConnected();
         const ext = mgr.getExtensionProvider();
         if (ext) {
-          const timeout = deps.getConfig?.()?.agents?.defaults?.browser?.commandTimeout;
-          const timeoutMs =
-            typeof timeout === 'number' && Number.isFinite(timeout) && timeout > 0
-              ? Math.floor(timeout * 1000)
-              : 30_000;
+          const timeoutMs = 30_000;
           const urlRes = await ext.sendCommand('get_url', {}, { timeout: timeoutMs });
           const titleRes = await ext.sendCommand('get_title', {}, { timeout: timeoutMs });
           const snapRes = await ext.sendCommand('snapshot', {}, { timeout: timeoutMs });

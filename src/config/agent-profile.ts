@@ -1,94 +1,36 @@
-/**
- * Effective agent profile: merges `agents.defaults` with `agents.list` entry.
- * Subagent session keys fall back to the configured default agent id for profile lookup.
- */
-
+import { resolveEffectiveAgentManifest, type EffectiveAgentManifest } from '../agent-manifest/index.js';
+import { normalizeAgentId, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/transcript/thinking-types.js';
-import type { Config } from './schema.js';
-import type { AgentModelConfig } from './schema.js';
-import { getAgentDefaultModelRef } from './schema.js';
-import { resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
-import { getDefaultAgentId, agentExists } from '../routing/resolve-route.js';
+import { agentExists, getDefaultAgentId } from '../routing/resolve-route.js';
 import { parseSessionKey } from '../routing/session-key.js';
+import type { Config } from './schema.js';
 
 export { resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 
-export type { AgentModelConfig };
-
 export interface EffectiveAgentTools {
-  /** Tool names to exclude (merged: union of defaults + list entry disables). */
-  disable: Set<string>;
+  denied: Set<string>;
 }
 
 export interface EffectiveAgentProfile {
   agentId: string;
-  /** Resolved absolute Markdown workspace path (tool cwd, attachments, daily memory/, …). */
+  manifest: EffectiveAgentManifest;
   resolvedWorkspacePath: string;
-  /** Primary model ref (provider/model); may be empty → runtime default. */
   primaryModelRef: string | undefined;
   fallbacks: string[];
   thinkingDefault?: ThinkLevel;
   reasoningDefault?: ReasoningLevel;
   verboseDefault?: VerboseLevel;
   systemPromptOverride?: string;
-  /** Skill names visible in `<available_skills>`; undefined means all enabled skills, empty means none. */
   skillsAllowlist?: string[];
   tools: EffectiveAgentTools;
   params: Record<string, unknown>;
 }
 
-function mergeModelConfig(
-  base: AgentModelConfig | undefined,
-  override: AgentModelConfig | undefined,
-): AgentModelConfig | undefined {
-  if (override === undefined) return base;
-  if (base === undefined) return override;
-  return {
-    primary: override.primary ?? base.primary,
-    fallbacks: override.fallbacks ?? base.fallbacks,
-  };
+function findAgentManifest(config: Config, agentId: string) {
+  const id = normalizeAgentId(agentId);
+  return config.agents.list.find((agent) => agent.enabled !== false && normalizeAgentId(agent.id) === id);
 }
 
-function primaryAndFallbacksFromModelConfig(
-  raw: AgentModelConfig | undefined,
-): { primary?: string; fallbacks: string[] } {
-  const primary = raw?.primary?.trim();
-  const fallbacks = Array.isArray(raw?.fallbacks)
-    ? raw.fallbacks.map((s) => s.trim()).filter(Boolean)
-    : [];
-  return { primary: primary || undefined, fallbacks };
-}
-
-function mergeDisableLists(a?: string[], b?: string[]): Set<string> {
-  const out = new Set<string>();
-  for (const x of a ?? []) {
-    const s = String(x).trim();
-    if (s) {
-      out.add(s);
-    }
-  }
-  for (const x of b ?? []) {
-    const s = String(x).trim();
-    if (s) {
-      out.add(s);
-    }
-  }
-  return out;
-}
-
-function resolveSkillsAllowlist(defaultsSkills: string[] | undefined, entrySkills: string[] | undefined): string[] | undefined {
-  if (entrySkills !== undefined) {
-    return [...entrySkills];
-  }
-  if (defaultsSkills !== undefined) {
-    return [...defaultsSkills];
-  }
-  return undefined;
-}
-
-/**
- * Agent id used for config lookup from a session key (subagent keys → default agent).
- */
 export function extractProfileAgentId(sessionKey: string | undefined | null, config: Config): string {
   const parsed = parseSessionKey(sessionKey ?? '');
   if (!parsed) {
@@ -104,49 +46,42 @@ export function extractProfileAgentId(sessionKey: string | undefined | null, con
   return aid.toLowerCase();
 }
 
-/**
- * Merge `agents.defaults` with the matching `agents.list` entry.
- */
+export function resolveEffectiveAgentManifestForAgent(config: Config, agentId: string): EffectiveAgentManifest {
+  const agent = findAgentManifest(config, agentId) ?? findAgentManifest(config, getDefaultAgentId(config));
+  if (!agent) {
+    throw new Error(`No enabled agent manifest found for "${agentId}"`);
+  }
+  return resolveEffectiveAgentManifest({
+    agent,
+    presets: config.agents.capabilityPresets,
+  }).manifest;
+}
+
+export function resolveEffectiveAgentManifestForSession(
+  config: Config,
+  sessionKey: string | undefined | null,
+): EffectiveAgentManifest {
+  return resolveEffectiveAgentManifestForAgent(config, extractProfileAgentId(sessionKey, config));
+}
+
 export function resolveEffectiveAgentProfile(config: Config, agentId: string): EffectiveAgentProfile {
-  const defaults = config.agents?.defaults;
-  const list = config.agents?.list;
-  const entry = Array.isArray(list)
-    ? list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === agentId.toLowerCase())
-    : undefined;
-
-  const resolvedWorkspacePath = resolveAgentWorkspaceDir(config, agentId);
-
-  const mergedModel = mergeModelConfig(defaults?.models?.chat, entry?.models?.chat);
-  const { primary: primaryFromMerged, fallbacks: fallbacksFromMerged } = primaryAndFallbacksFromModelConfig(mergedModel);
-  const globalDefault = getAgentDefaultModelRef(config);
-  const primaryModelRef = primaryFromMerged?.trim() || globalDefault;
-
-  const disable = mergeDisableLists(
-    defaults?.tools?.disable as string[] | undefined,
-    entry?.tools?.disable as string[] | undefined,
-  );
-
-  const params: Record<string, unknown> = {
-    ...(defaults?.params as Record<string, unknown> | undefined),
-    ...(entry?.params as Record<string, unknown> | undefined),
-  };
+  const manifest = resolveEffectiveAgentManifestForAgent(config, agentId);
+  const defaultModel = manifest.models.roles[manifest.models.defaultRole]?.model;
+  const deniedTools = Object.entries(manifest.tools.builtin)
+    .filter(([, policy]) => policy.mode === 'deny')
+    .map(([name]) => name);
+  const skillsAllowlist = manifest.skills.mode === 'allowlist' ? [...(manifest.skills.allow ?? [])] : undefined;
 
   return {
-    agentId: agentId.toLowerCase(),
-    resolvedWorkspacePath,
-    primaryModelRef,
-    fallbacks: fallbacksFromMerged,
-    thinkingDefault: entry?.thinkingDefault ?? defaults?.thinkingDefault,
-    reasoningDefault: entry?.reasoningDefault ?? defaults?.reasoningDefault,
-    verboseDefault: entry?.verboseDefault ?? defaults?.verboseDefault,
-    systemPromptOverride: entry?.systemPromptOverride?.trim()
-      ? entry.systemPromptOverride
-      : defaults?.systemPromptOverride?.trim()
-        ? defaults.systemPromptOverride
-        : undefined,
-    skillsAllowlist: resolveSkillsAllowlist(defaults?.skills, entry?.skills),
-    tools: { disable },
-    params,
+    agentId: manifest.id,
+    manifest,
+    resolvedWorkspacePath: resolveAgentWorkspaceDir(config, manifest.id),
+    primaryModelRef: defaultModel?.trim() || undefined,
+    fallbacks: [],
+    systemPromptOverride: manifest.prompt?.customInstructions,
+    skillsAllowlist,
+    tools: { denied: new Set(deniedTools) },
+    params: {},
   };
 }
 
@@ -154,6 +89,5 @@ export function resolveEffectiveAgentProfileForSession(
   config: Config,
   sessionKey: string | undefined | null,
 ): EffectiveAgentProfile {
-  const id = extractProfileAgentId(sessionKey, config);
-  return resolveEffectiveAgentProfile(config, id);
+  return resolveEffectiveAgentProfile(config, extractProfileAgentId(sessionKey, config));
 }

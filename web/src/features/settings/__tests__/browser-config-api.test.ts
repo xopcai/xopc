@@ -8,20 +8,16 @@ import {
 describe('browser config API', () => {
   it('parses extension connectionTimeout and cloak fingerprint fields', () => {
     const state = parseAgentDefaultsFromConfig({
-      agents: {
-        defaults: {
-          browser: {
-            enabled: true,
-            backend: 'cloakbrowser',
-            extension: { port: 19999, host: '10.0.0.1', connectionTimeout: 45_000 },
-            cloakbrowser: {
-              timezone: 'America/New_York',
-              locale: 'en-US',
-              webrtcIp: '203.0.113.10',
-              fingerprintPlatform: 'macos',
-              extraArgs: ['--disable-dev-shm-usage', '  '],
-            },
-          },
+      browser: {
+        enabled: true,
+        backend: 'cloakbrowser',
+        extension: { port: 19999, host: '10.0.0.1', connectionTimeout: 45_000 },
+        cloakbrowser: {
+          timezone: 'America/New_York',
+          locale: 'en-US',
+          webrtcIp: '203.0.113.10',
+          fingerprintPlatform: 'macos',
+          extraArgs: ['--disable-dev-shm-usage', '  '],
         },
       },
     });
@@ -37,14 +33,10 @@ describe('browser config API', () => {
 
   it('round-trips local backend through parse → build → parse', () => {
     const initial = parseAgentDefaultsFromConfig({
-      agents: {
-        defaults: {
-          browser: {
-            enabled: true,
-            backend: 'local',
-            headless: true,
-          },
-        },
+      browser: {
+        enabled: true,
+        backend: 'local',
+        headless: true,
       },
     });
 
@@ -54,7 +46,7 @@ describe('browser config API', () => {
     expect(built.backend).toBe('local');
 
     const roundTripped = parseAgentDefaultsFromConfig({
-      agents: { defaults: { browser: built } },
+      browser: built,
     });
     expect(roundTripped.browserBackend).toBe('local');
     expect(roundTripped.browserHeadless).toBe(true);
@@ -73,13 +65,12 @@ describe('browser config API', () => {
 
     expect(buildBrowserConfigFromAgentDefaults(state)).toMatchObject({
       enabled: true,
-      backend: null,
+      backend: 'extension',
       extension: {
         port: 19820,
         host: '127.0.0.1',
         connectionTimeout: 30_000,
       },
-      cloakbrowser: null,
     });
 
     const cloakState = {
@@ -103,32 +94,28 @@ describe('browser config API', () => {
 
   it('round-trips cloak advanced fields through parse → build → parse', () => {
     const initial = parseAgentDefaultsFromConfig({
-      agents: {
-        defaults: {
-          browser: {
-            enabled: true,
-            backend: 'cloakbrowser',
-            humanize: false,
-            humanPreset: 'default',
-            cloakbrowser: {
-              keepOpen: false,
-              temporaryProfile: true,
-              cacheDir: '~/.xopc/bin/cloak',
-              binaryPath: '/tmp/chromium',
-              timezone: 'Asia/Tokyo',
-              locale: 'ja-JP',
-              webrtcIp: '198.51.100.2',
-              fingerprintPlatform: 'windows',
-              extraArgs: ['--no-sandbox'],
-            },
-          },
+      browser: {
+        enabled: true,
+        backend: 'cloakbrowser',
+        humanize: false,
+        humanPreset: 'default',
+        cloakbrowser: {
+          keepOpen: false,
+          temporaryProfile: true,
+          cacheDir: '~/.xopc/bin/cloak',
+          binaryPath: '/tmp/chromium',
+          timezone: 'Asia/Tokyo',
+          locale: 'ja-JP',
+          webrtcIp: '198.51.100.2',
+          fingerprintPlatform: 'windows',
+          extraArgs: ['--no-sandbox'],
         },
       },
     });
 
     const built = buildBrowserConfigFromAgentDefaults(initial);
     const roundTripped = parseAgentDefaultsFromConfig({
-      agents: { defaults: { browser: built } },
+      browser: built,
     });
 
     expect(roundTripped.browserBackend).toBe('cloakbrowser');
@@ -154,6 +141,6 @@ describe('browser config API', () => {
       browserCloakExtraArgs: '  \n  ',
     });
 
-    expect((built.cloakbrowser as { extraArgs: unknown }).extraArgs).toBeNull();
+    expect((built.cloakbrowser as { extraArgs?: unknown }).extraArgs).toBeUndefined();
   });
 });

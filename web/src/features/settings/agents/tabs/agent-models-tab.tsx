@@ -42,8 +42,8 @@ export function AgentModelsTab(props: {
       />
       <div className="mb-4 grid gap-2 rounded-lg border border-edge-subtle bg-surface-base/60 p-3 text-xs text-fg-muted dark:border-edge">
         <div>
-          <span className="font-medium text-fg">{a.modelsDefaultsLabel}</span>{' '}
-          {formatTypedModelsSummary(selected.typedModels.defaults)}
+          <span className="font-medium text-fg">{a.modelsPresetLabel}</span>{' '}
+          {formatTypedModelsSummary(selected.typedModels.preset)}
         </div>
         <div>
           <span className="font-medium text-fg">{a.modelsEffectiveLabel}</span>{' '}
@@ -55,14 +55,22 @@ export function AgentModelsTab(props: {
           rows={modelRows}
           onChange={setModelRows}
           disabled={busy}
+          defaultRole={selected.typedModels.defaultRole}
           chat={chat}
           labels={{
             id: a.typedModelIdLabel,
             description: a.typedModelDescriptionLabel,
             add: a.addTypedModel,
             remove: a.removeTypedModel,
+            recommendedTitle: a.typedModelRecommendedTitle,
+            customTitle: a.typedModelCustomTitle,
+            defaultBadge: a.typedModelDefaultBadge,
+            addPurpose: a.addTypedModelPurpose,
+            noCustomRoles: a.typedModelNoCustomRoles,
             idPlaceholder: a.typedModelIdPlaceholder,
             descriptionPlaceholder: a.typedModelDescriptionPlaceholder,
+            roleNames: a.typedModelRoleNames,
+            roleDescriptions: a.typedModelRoleDescriptions,
           }}
         />
       </div>

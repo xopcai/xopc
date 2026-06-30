@@ -26,12 +26,7 @@ import type {
   ImageGenerationSourceImage,
 } from '../image/generation/types.js';
 import { applyImageGenerationModelConfigDefaults } from '../image/image-helpers.js';
-import {
-  buildToolModelConfigFromCandidates,
-  coerceToolModelConfig,
-  hasToolModelConfig,
-  type ToolModelConfig,
-} from '../image/tool-model-config.js';
+import type { ToolModelConfig } from '../image/tool-model-config.js';
 
 const DEFAULT_COUNT = 1;
 const MAX_COUNT = 9;
@@ -191,26 +186,32 @@ async function loadInputImages(params: {
 export { parseImageDataUrl };
 
 export function resolveImageGenerationModelConfigForTool(params: { cfg?: Config }): ToolModelConfig | null {
-  const explicit = coerceToolModelConfig(params.cfg?.agents?.defaults?.imageGenerationModel);
-  if (hasToolModelConfig(explicit)) {
-    return explicit;
-  }
   // Step 2: tool default = enumerate every provider whose isConfigured() is true,
   // ordered as registered. No more hard-coded openai/dashscope fallback.
   const providers = listImageGenerationProvidersSummary(params.cfg);
-  const candidates = providers
-    .filter((p) => {
-      const provider = getImageGenerationProvider(p.id, params.cfg);
-      try {
-        return provider?.isConfigured?.({ cfg: params.cfg }) ?? false;
-      } catch {
-        return false;
-      }
-    })
-    .map((p) => `${p.id}/${p.defaultModel ?? p.models[0] ?? ''}`)
-    .filter((s) => /^[a-z0-9-]+\/.+/.test(s));
+  const candidates: string[] = [];
+  for (const providerSummary of providers) {
+    const provider = getImageGenerationProvider(providerSummary.id, params.cfg);
+    let configured = false;
+    try {
+      configured = provider?.isConfigured?.({ cfg: params.cfg }) ?? false;
+    } catch {
+      configured = false;
+    }
+    const modelRef = `${providerSummary.id}/${providerSummary.defaultModel ?? providerSummary.models[0] ?? ''}`;
+    if (configured && /^[a-z0-9-]+\/.+/.test(modelRef) && !candidates.includes(modelRef)) {
+      candidates.push(modelRef);
+    }
+  }
 
-  return buildToolModelConfigFromCandidates({ explicit, candidates });
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return {
+    primary: candidates[0],
+    ...(candidates.length > 1 ? { fallbacks: candidates.slice(1) } : {}),
+  };
 }
 
 async function saveGeneratedImages(params: {
@@ -321,6 +322,7 @@ export function createImageGenerateTool(options: {
       try {
         const result = await generateImage({
           cfg: effectiveCfg,
+          modelConfig: imageGenerationModelConfig,
           prompt,
           ...(modelOverride ? { modelOverride } : {}),
           count,

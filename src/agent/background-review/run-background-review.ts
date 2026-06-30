@@ -8,7 +8,6 @@ import { createExtensionAwareStreamFn } from '../../providers/extension-stream-b
 import { createLogger } from '../../utils/logger.js';
 
 import { extractTextContent } from '../context/workspace.js';
-import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
 import { shouldRegisterCuratedMemoryTool } from '../memory/memory-config.js';
 import type { MemoryManager } from '../memory/manager.js';
 import {
@@ -50,7 +49,6 @@ export interface RunBackgroundReviewParams {
   skillAllowlist?: string[];
   workspacePath: string;
   skillManager: SkillManager;
-  builtinMemoryStore: BuiltinMemoryStore;
   memoryManager: MemoryManager;
   getConfig: () => Config | undefined;
   onSkillsFilesystemMutate: () => void;
@@ -67,7 +65,6 @@ export async function runBackgroundReviewTurn(params: RunBackgroundReviewParams)
     skillAllowlist,
     workspacePath,
     skillManager,
-    builtinMemoryStore,
     memoryManager,
     getConfig,
     onSkillsFilesystemMutate,
@@ -83,13 +80,7 @@ export async function runBackgroundReviewTurn(params: RunBackgroundReviewParams)
   const rawTools: any[] = [];
 
   if (reviewMemory && shouldRegisterCuratedMemoryTool(getConfig())) {
-    rawTools.push(
-      createCuratedMemoryTool(() => builtinMemoryStore, {
-        onMemoryWrite: (action, target, content) => {
-          memoryManager.onMemoryWrite(action, target, content);
-        },
-      }),
-    );
+    rawTools.push(createCuratedMemoryTool(() => memoryManager));
   }
 
   if (reviewSkills) {

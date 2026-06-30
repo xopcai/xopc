@@ -44,11 +44,9 @@ export function registerAgentsCli(program: Command): void {
       const cfg = loadConfig();
       const rows = listAgentEntries(cfg).map((a) => ({
         id: normalizeAgentId(a.id),
-        default: a.default === true,
         enabled: a.enabled !== false,
         workspace: a.workspace,
-        agentDir: a.agentDir,
-        model: a.models?.chat,
+        model: a.models.roles[a.models.defaultRole]?.model,
       }));
       const def = resolveDefaultAgentId(cfg);
       if (opts.json) {
@@ -72,12 +70,11 @@ export function registerAgentsCli(program: Command): void {
     .argument('<name>', 'Agent display name / id seed')
     .requiredOption('--workspace <dir>', 'Workspace directory for this agent')
     .option('--model <id>', 'Model id (e.g. anthropic/claude-sonnet-4-5)')
-    .option('--agent-dir <dir>', 'Override internal agent state directory')
     .option('--json', 'Output JSON summary')
     .action(
       async (
         name: string,
-        opts: { workspace?: string; model?: string; agentDir?: string; json?: boolean },
+        opts: { workspace?: string; model?: string; json?: boolean },
       ) => {
         const cfg = loadConfig();
         const idRes = validateAgentIdForNewAgent(undefined, name);
@@ -92,7 +89,6 @@ export function registerAgentsCli(program: Command): void {
           agentId,
           workspace,
           ...(opts.model?.trim() ? { model: opts.model.trim() } : {}),
-          ...(opts.agentDir?.trim() ? { agentDir: opts.agentDir.trim() } : {}),
         });
 
         const configPath = resolveConfigPath();

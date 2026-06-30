@@ -85,11 +85,7 @@ export function readPostCompactionContextFromAgentsMd(
   agentsMdContent: string,
   options?: PostCompactionContextOptions,
 ): string | null {
-  const cfg = options?.cfg;
-  const configuredSections = cfg?.agents?.defaults?.compaction?.postCompactionSections;
-  const sectionNames = Array.isArray(configuredSections)
-    ? configuredSections
-    : DEFAULT_POST_COMPACTION_SECTIONS;
+  const sectionNames = DEFAULT_POST_COMPACTION_SECTIONS;
 
   if (sectionNames.length === 0) {
     return null;
@@ -108,8 +104,7 @@ export function readPostCompactionContextFromAgentsMd(
     'UTC';
   const nowMs = options?.nowMs ?? Date.now();
   const dateStamp = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(nowMs));
-  const maxContextChars =
-    cfg?.agents?.defaults?.contextLimits?.postCompactionMaxChars ?? MAX_CONTEXT_CHARS;
+  const maxContextChars = MAX_CONTEXT_CHARS;
 
   const combined = sections.join('\n\n').replaceAll('YYYY-MM-DD', dateStamp);
   const safeContent =
@@ -118,12 +113,11 @@ export function readPostCompactionContextFromAgentsMd(
       : combined;
 
   const isDefaultSections =
-    !Array.isArray(configuredSections) ||
-    (configuredSections.length === DEFAULT_POST_COMPACTION_SECTIONS.length &&
-      configuredSections.every(
+    sectionNames.length === DEFAULT_POST_COMPACTION_SECTIONS.length &&
+      sectionNames.every(
         (name, index) =>
           normalizeHeading(name) === normalizeHeading(DEFAULT_POST_COMPACTION_SECTIONS[index] ?? ''),
-      ));
+      );
 
   const prose = isDefaultSections
     ? 'Session was just compacted. The conversation summary above is a hint, NOT a substitute for your startup sequence. ' +

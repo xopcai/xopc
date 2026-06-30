@@ -125,21 +125,35 @@ export function AgentsListGrid(props: {
           const descTrim = agentListDisplayDescription(ag, a);
           const capabilityMeta = agentCapabilityMeta(ag, a);
           const capabilityLabels = agentCapabilityLabels(ag, a);
+          const openAgent = () => {
+            if (busy) return;
+            onOpenAgent(ag.id);
+          };
           return (
             <li key={ag.id} className="h-full min-h-0">
-              <article className="flex min-h-[15.5rem] flex-col rounded-xl border border-edge-subtle bg-surface-panel p-4 shadow-surface transition-colors hover:border-edge">
+              <article
+                role="button"
+                tabIndex={busy ? -1 : 0}
+                aria-disabled={busy}
+                aria-label={`${title} ${monoId}`}
+                onClick={openAgent}
+                onKeyDown={(event) => {
+                  if (busy) return;
+                  if (event.key !== 'Enter' && event.key !== ' ') return;
+                  event.preventDefault();
+                  onOpenAgent(ag.id);
+                }}
+                className={cn(
+                  'flex min-h-[15.5rem] cursor-pointer flex-col rounded-xl border border-edge-subtle bg-surface-panel p-4 shadow-surface',
+                  'transition-[border-color,transform,box-shadow] duration-150 ease-out',
+                  'hover:border-edge-strong',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+                  'aria-disabled:pointer-events-none aria-disabled:cursor-not-allowed aria-disabled:opacity-60',
+                  interaction.pressCard,
+                )}
+              >
                 <div className="flex items-start justify-between gap-4">
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => onOpenAgent(ag.id)}
-                    className={cn(
-                      'flex min-w-0 items-start gap-3 text-left',
-                      'rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-                      'disabled:pointer-events-none disabled:opacity-50',
-                      interaction.pressCard,
-                    )}
-                  >
+                  <div className="flex min-w-0 items-start gap-3 text-left">
                     <div
                       className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-surface-base text-fg ring-1 ring-edge-subtle/40"
                       aria-hidden
@@ -152,7 +166,7 @@ export function AgentsListGrid(props: {
                         {monoId}
                       </p>
                     </div>
-                  </button>
+                  </div>
                   {ag.isDefault ? (
                     <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">
                       {a.defaultBadge}
@@ -164,16 +178,7 @@ export function AgentsListGrid(props: {
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onOpenAgent(ag.id)}
-                  className={cn(
-                    'mt-5 min-h-[6.25rem] text-left',
-                    'rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-                    'disabled:pointer-events-none disabled:opacity-50',
-                  )}
-                >
+                <div className="mt-5 min-h-[6.25rem] text-left">
                   <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
                     <p
                       className={cn(
@@ -196,14 +201,17 @@ export function AgentsListGrid(props: {
                       </TextTooltip>
                     ))}
                   </div>
-                </button>
+                </div>
 
                 <div className="mt-auto pt-4">
                   <Button
                     type="button"
                     variant="secondary"
                     disabled={busy}
-                    onClick={() => onChatWithAgent(ag.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onChatWithAgent(ag.id);
+                    }}
                     className="w-full rounded-2xl py-2.5"
                   >
                     <MessageSquarePlus className="size-4 shrink-0" strokeWidth={2} aria-hidden />

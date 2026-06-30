@@ -9,10 +9,9 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsAppearance'
   | 'settingsSystem'
   | 'settingsAppManagement'
-  | 'settingsAgentDefaults'
-  | 'settingsAgentBrowser'
   | 'settingsKeyboardShortcuts'
   | 'settingsAgents'
+  | 'settingsCapabilityPresets'
   | 'settingsCredentials'
   | 'settingsProviders'
   | 'settingsModels'
@@ -36,9 +35,8 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsKeyboardShortcuts: 'keyboard-shortcuts',
   settingsSystem: 'system',
   settingsAppManagement: 'app-management',
-  settingsAgentDefaults: 'agent-defaults',
-  settingsAgentBrowser: 'agent-browser',
   settingsAgents: 'agents',
+  settingsCapabilityPresets: 'capability-presets',
   settingsCredentials: 'credentials',
   settingsProviders: 'credentials',
   settingsModels: 'credentials',
@@ -91,10 +89,8 @@ export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
  *
  *   - `credentials` group: one Models & Capabilities center for keys, catalog,
  *     capability models, and setup health.
- *   - `agent` group: 9 → 3. The agent-defaults page (`/settings/agent-defaults`)
- *     has internal tabs for chat / workspace / runtime / context / memory /
- *     tools / skills / system-prompt. Browser remains a first-level rail item
- *     because it is a core default next to model and chat settings.
+ *   - `agent` group: manifest-first. Agent identity, workspace, model roles,
+ *     tools, skills, memory, and boundaries are managed from `/agents`.
  *
  * Electron system group and extensions append in `SettingsPageLayout`.
  */
@@ -103,7 +99,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'credentials', tabs: ['settingsCredentials'] },
   {
     id: 'agent',
-    tabs: ['settingsAgentDefaults', 'settingsAgentBrowser'],
+    tabs: ['settingsCapabilityPresets', 'settingsAgentBrowser'],
   },
   {
     id: 'connection',
@@ -169,17 +165,7 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'skills') return '/skills';
   if (tab === 'connectors') return '/connectors';
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
-  if (tab === 'settingsAgentDefaults') return '/settings/agent-defaults';
-  if (tab === 'settingsAgentChat') return '/settings/agent-defaults';
-  if (tab === 'settingsAgentGeneration') return '/settings/agent-defaults?tab=generation';
-  if (tab === 'settingsAgentWorkspace') return '/settings/agent-defaults?tab=workspace';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
-  if (tab === 'settingsAgentRuntime') return '/settings/agent-defaults?tab=runtime';
-  if (tab === 'settingsAgentContext') return '/settings/agent-defaults?tab=context';
-  if (tab === 'settingsAgentMemory') return '/settings/agent-defaults?tab=memory';
-  if (tab === 'settingsAgentTools') return '/settings/agent-defaults?tab=tools';
-  if (tab === 'settingsAgentSkills') return '/settings/agent-defaults?tab=skills';
-  if (tab === 'settingsAgentSystemPrompt') return '/settings/agent-defaults?tab=system-prompt';
   if (tab === 'settingsProviders') return '/settings/credentials?tab=providers';
   if (tab === 'settingsModels') return '/settings/credentials?tab=catalog';
   if (tab === 'settingsImageModels') return '/settings/credentials?tab=image-models';

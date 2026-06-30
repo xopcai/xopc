@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  isAgentDefaultsTabVisibleInMode,
-  isBrowserSettingsTabVisibleInMode,
   isGatewaySettingsTabVisibleInMode,
 } from '@/navigation/settings-field-visibility';
 import {
@@ -24,13 +22,7 @@ describe('settings-nav-visibility', () => {
   });
 
   it('hides advanced field tabs in simple mode', () => {
-    expect(isAgentDefaultsTabVisibleInMode('model-strategy', 'simple')).toBe(true);
-    expect(isAgentDefaultsTabVisibleInMode('runtime', 'simple')).toBe(false);
     expect(isGatewaySettingsTabVisibleInMode('network', 'simple')).toBe(true);
     expect(isGatewaySettingsTabVisibleInMode('security', 'simple')).toBe(false);
-    expect(isBrowserSettingsTabVisibleInMode('overview', 'simple')).toBe(true);
-    expect(isBrowserSettingsTabVisibleInMode('cloakbrowser', 'simple')).toBe(true);
-    expect(isBrowserSettingsTabVisibleInMode('local', 'simple')).toBe(false);
-    expect(isBrowserSettingsTabVisibleInMode('cdp', 'simple')).toBe(false);
   });
 });

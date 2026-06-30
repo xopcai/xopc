@@ -40,7 +40,7 @@ export async function runWithImageModelFallback<T>(params: {
   });
   if (refs.length === 0) {
     throw new Error(
-      'No image model configured. Set agents.defaults.imageModel.primary or add fallbacks.',
+      'No image-capable model is available.',
     );
   }
 

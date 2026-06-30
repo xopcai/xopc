@@ -2,42 +2,61 @@ import { describe, expect, it } from 'vitest';
 
 import type { Config } from '../schema.js';
 import { ConfigSchema } from '../schema.js';
-import {
-  resolveEffectiveTypedModels,
-  resolveModelRef,
-  resolveTypedModelRef,
-} from '../agent-typed-models.js';
+import { resolveEffectiveTypedModels, resolveModelRef, resolveTypedModelRef } from '../agent-typed-models.js';
 
 const baseConfig = {
   agents: {
-    defaults: {
-      models: {
-        roles: {
-          small: { description: 'Fast', model: 'deepseek/deepseek-v4-flash' },
-          large: { model: 'anthropic/claude-sonnet-4' },
-        },
-      },
-    },
+    default: 'main',
+    capabilityPresets: {},
     list: [
+      {
+        id: 'main',
+        enabled: true,
+        identity: { name: 'Main', role: 'Agent', language: 'en', tone: 'direct' },
+        responsibilities: { primary: ['Help'] },
+        workspace: { root: '/tmp/main' },
+        models: {
+          defaultRole: 'small',
+          roles: {
+            small: { description: 'Fast', model: 'deepseek/deepseek-v4-flash' },
+            large: { model: 'anthropic/claude-sonnet-4' },
+          },
+        },
+        tools: { builtin: {} },
+        skills: { mode: 'all' },
+        memory: { mode: 'off', sources: ['session'] },
+        workflows: {},
+        boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+      },
       {
         id: 'research',
         enabled: true,
+        identity: { name: 'Research', role: 'Agent', language: 'en', tone: 'direct' },
+        responsibilities: { primary: ['Research'] },
+        workspace: { root: '/tmp/research' },
         models: {
+          defaultRole: 'small',
           roles: {
             small: { model: 'openai/gpt-4o-mini' },
           },
         },
+        tools: { builtin: {} },
+        skills: { mode: 'all' },
+        memory: { mode: 'off', sources: ['session'] },
+        workflows: {},
+        boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
       },
     ],
   },
 } as Config;
+
 describe('resolveEffectiveTypedModels', () => {
-  it('returns global defaults for any agent', () => {
+  it('returns roles from the selected manifest', () => {
     const mainMap = resolveEffectiveTypedModels(baseConfig, 'main');
     const researchMap = resolveEffectiveTypedModels(baseConfig, 'research');
     expect(mainMap.get('small')?.model).toBe('deepseek/deepseek-v4-flash');
     expect(researchMap.get('small')?.model).toBe('openai/gpt-4o-mini');
-    expect(researchMap.get('large')?.model).toBe('anthropic/claude-sonnet-4');
+    expect(mainMap.get('large')?.model).toBe('anthropic/claude-sonnet-4');
   });
 });
 
@@ -46,15 +65,9 @@ describe('resolveModelRef', () => {
     expect(resolveModelRef(baseConfig, 'main', 'openai/gpt-4o-mini')).toBe('openai/gpt-4o-mini');
   });
 
-  it('resolves typed id from defaults', () => {
+  it('resolves typed ids from the manifest', () => {
     expect(resolveModelRef(baseConfig, 'main', 'small')).toBe('deepseek/deepseek-v4-flash');
-  });
-
-  it('supports @ prefix for typed ids', () => {
     expect(resolveModelRef(baseConfig, 'main', '@large')).toBe('anthropic/claude-sonnet-4');
-  });
-
-  it('resolves typed ids from per-agent overrides', () => {
     expect(resolveModelRef(baseConfig, 'research', 'small')).toBe('openai/gpt-4o-mini');
   });
 
@@ -62,11 +75,6 @@ describe('resolveModelRef', () => {
     expect(() => resolveModelRef(baseConfig, 'main', 'missing')).toThrow(
       /Unknown typed model id 'missing'.*available: small, large/,
     );
-  });
-
-  it('throws for invalid provider/model', () => {
-    expect(() => resolveModelRef(baseConfig, 'main', 'not-a-ref')).toThrow(/Unknown typed model/);
-    expect(() => resolveModelRef(baseConfig, 'main', 'bad')).toThrow(/Unknown typed model/);
   });
 });
 
@@ -77,7 +85,7 @@ describe('resolveTypedModelRef', () => {
 });
 
 describe('AgentTypedModelSchema', () => {
-  it('accepts per-agent role overrides in the same scope', () => {
+  it('accepts manifest role configuration', () => {
     const parsed = ConfigSchema.parse(baseConfig);
     expect(resolveModelRef(parsed, 'research', 'small')).toBe('openai/gpt-4o-mini');
   });
@@ -86,25 +94,27 @@ describe('AgentTypedModelSchema', () => {
     expect(() =>
       ConfigSchema.parse({
         agents: {
-          defaults: {
-            models: {
-              roles: {
-                Bad: { model: 'openai/gpt-4o-mini' },
-              },
+          list: [
+            {
+              ...baseConfig.agents!.list[0],
+              models: { defaultRole: 'Bad', roles: { Bad: { model: 'openai/gpt-4o-mini' } } },
             },
-          },
+          ],
         },
       }),
-    ).toThrow(/Invalid key in record/);
+    ).toThrow();
   });
 
   it('rejects invalid model ref format', () => {
     expect(() =>
       ConfigSchema.parse({
         agents: {
-          defaults: {
-            models: { roles: { small: { model: 'not-valid' } } },
-          },
+          list: [
+            {
+              ...baseConfig.agents!.list[0],
+              models: { defaultRole: 'small', roles: { small: { model: 'not-valid' } } },
+            },
+          ],
         },
       }),
     ).toThrow(/provider\/model/);

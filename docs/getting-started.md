@@ -1,257 +1,102 @@
 # Getting Started
 
-XOPC turns goals into loops: it remembers context, coordinates AI, and sustains long-term progress. Install **xopc**, add at least one LLM provider key, then use the **CLI**, **TUI**, **gateway** (browser console), or the **Electron** app.
+Use this page after you want the full map: install options, setup modes, surfaces, and where to go next.
 
-## Up and running in 30 seconds
+If you have not tried xopc yet, start with [First 5 Minutes](./first-5-minutes.md). That tutorial keeps one reliable path: install, `xopc onboard --quick`, then `xopc tui --local`.
 
-Install the CLI, run onboarding, and start chatting in the terminal — three steps:
+## What xopc runs
 
-```bash
-# Homepage default path (macOS, Linux, WSL)
-curl -fsSL https://xopc.ai/install.sh | bash
+xopc is one package with several surfaces:
 
-# Optional: npm path
-npm install -g @xopcai/xopc
+| Surface | Entry point | Requires gateway |
+| --- | --- | --- |
+| CLI one-shot | `xopc agent -m "..."` | No |
+| Interactive CLI | `xopc agent -i` | No |
+| Local TUI | `xopc tui --local` | No |
+| Gateway console | `xopc gateway`, then open the printed URL | Yes |
+| Gateway TUI | `xopc tui --gateway` or `xopc tui --url ...` | Yes |
+| Channels | Telegram, Weixin, Feishu/Lark configs under `channels.*` | Yes |
+| Desktop app | GitHub Releases or `pnpm run electron:build` | Bundled gateway |
 
-xopc onboard --quick  # model only, then launch locally
-xopc tui --local
-```
+## Requirements
 
-**China mirror:** `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
+- Node.js **22** or newer for the CLI package.
+- `pnpm` only when building from this repository.
+- At least one model provider key, local model server, or configured OpenAI-compatible endpoint.
 
-The sections below cover gateway, channels, desktop, and troubleshooting in more detail.
+## Install options
 
-## Terminal demo
+| Method | Command | Use when |
+| --- | --- | --- |
+| Installer script | `curl -fsSL https://xopc.ai/install.sh \| bash` | macOS, Linux, WSL, Termux |
+| Windows installer script | `iex (irm https://xopc.ai/install.ps1)` | PowerShell |
+| npm package | `npm install -g @xopcai/xopc` | Node.js 22+ is already installed |
+| China npm mirror | `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com` | npmjs access is slow |
+| Source build | `pnpm install && pnpm run build` | Developing xopc itself |
 
-[![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
+## Setup modes
 
-## 1. Prerequisites
+| Goal | Command | Notes |
+| --- | --- | --- |
+| Fast local trial | `xopc onboard --quick` | Model credentials only; skips gateway and channels |
+| Full guided setup | `xopc onboard` | Model, workspace, optional channels, gateway guidance |
+| Create base files | `xopc setup` | Creates config/workspace skeleton only |
+| Configure a model later | `xopc providers set-key <provider>` and `xopc models set <provider>/<model>` | See [Configure your first model](./how-to/configure-first-model.md) |
 
-- **Node.js** **22** or newer (`node -v`)
-- **pnpm**: required only when [building from source](#option-3-build-from-source) in this repo (`pnpm --version`)
+Configuration is stored in `~/.xopc/xopc.json` by default. Override it with `XOPC_CONFIG` or `XOPC_CONFIG_PATH`.
 
-End users can install the published CLI with **`npm install -g @xopcai/xopc`** (or `pnpm add -g`).
+## Choose the next surface
 
-## 2. Installation
+After the local TUI works, choose one next step:
 
-### Option 1: Install from script (Recommended)
+| Need | Start here |
+| --- | --- |
+| Browser chat, settings, logs | [Gateway](./gateway.md) |
+| Telegram bot | [Connect Telegram](./how-to/connect-telegram.md) |
+| Mobile access | [Mobile app](./mobile-app.md) and [Remote access](./remote-access.md) |
+| Another dedicated agent | [Create a second agent](./how-to/create-second-agent.md) |
+| Gateway on another device | [Expose the gateway safely](./how-to/expose-gateway-safely.md) |
+| Broken setup | [Diagnose setup issues](./how-to/diagnose-broken-setup.md) |
 
-```bash
-curl -fsSL https://xopc.ai/install.sh | bash
-```
+## Core paths
 
-Windows:
+| Topic | Page |
+| --- | --- |
+| CLI commands | [CLI](./cli.md) |
+| TUI behavior | [Terminal UI](./tui.md) |
+| Configuration fields | [Configuration](./configuration.md) and [Configuration reference](./reference/configuration.md) |
+| Models and providers | [Models](./models.md) |
+| Channels | [Channels](./channels/index.md) |
+| Tools | [Tools](./tools.md) |
+| Skills | [Skills](./skills.md) |
+| Extensions | [Extensions](./extensions.md) |
+| Session routing | [Routing system](./routing-system.md) |
 
-```powershell
-iex (irm https://xopc.ai/install.ps1)
-```
-
-Installer includes optional `--cn` (shell) and `-Cn` (PowerShell) flags and also installs Node.js 22+ if needed.
-
-### Option 2: Install from npm
-
-```bash
-npm install -g @xopcai/xopc
-```
-
-### Option 3: Build from source
+## Development from source
 
 ```bash
 git clone https://github.com/xopcai/xopc.git
 cd xopc
 pnpm install
+pnpm run dev -- --help
 pnpm run build
 ```
 
-## 3. Configuration
-
-### Interactive Setup (Recommended)
-
-Use the `onboard` wizard for guided setup:
+Common checks:
 
 ```bash
-xopc onboard
-# or: pnpm run dev -- onboard
+pnpm test
+pnpm run typecheck
+pnpm run docs:build
 ```
-
-The wizard will guide you through:
-1. Creating the primary Markdown workspace directory (typically `~/.xopc/workspace/main/` when using default config)
-2. Generating default **`~/.xopc/xopc.json`**
-3. Choosing a catalog model/provider and API key (the wizard highlights current recommended models)
-4. Optional messaging channels (**Telegram**, **WeChat (Weixin)**, **Feishu/Lark**)
-5. Gateway Web console (and optional **`xopc tui`** vs gateway choice at the end)
-
-### Quick onboarding
-
-For the shortest guided path, configure only the model and skip gateway/channel setup:
-
-```bash
-xopc onboard --quick
-xopc tui --local
-```
-
-Use the full wizard later when you want the Web console or messaging channels:
-
-```bash
-xopc onboard
-```
-
-### Minimal file setup
-
-For minimal setup without interactive prompts:
-
-```bash
-xopc setup
-```
-
-This creates basic config and workspace files only; it does not guide you through model credentials.
-
-### Manual Configuration
-
-Edit `~/.xopc/xopc.json` directly:
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5",
-      "max_tokens": 8192,
-      "temperature": 0.7
-    }
-  },
-  "providers": {
-    "anthropic": "${ANTHROPIC_API_KEY}"
-  }
-}
-```
-
-> **Tip:** Use environment variables for API keys (e.g., `ANTHROPIC_API_KEY`).
-
-## 4. First chat (CLI or TUI)
-
-### One-shot (`agent`)
-
-```bash
-xopc agent -m "Explain what an LLM is in one sentence."
-# from a dev clone: pnpm run dev -- agent -m "…"
-```
-
-### Interactive TTY (`agent -i`)
-
-```bash
-xopc agent -i
-# from a dev clone: pnpm run dev -- agent -i
-```
-
-You’ll see a `You:` prompt. **Ctrl+C** to exit.
-
-### Full-screen TUI (no gateway required)
-
-```bash
-xopc tui --local
-```
-
-See [Terminal UI (TUI)](./tui.md) for gateway-connected mode (`xopc tui`) and session flags.
-
-## 5. Gateway, OS service, and channels
-
-### Telegram (example)
-
-1. **Get Bot Token**: Open Telegram, search [@BotFather](https://t.me/BotFather), send `/newbot`
-
-2. **Configure** in `~/.xopc/xopc.json`:
-
-```json
-{
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "defaults": {
-        "dmPolicy": "pairing"
-      },
-      "accounts": {
-        "default": {
-          "botToken": "YOUR_BOT_TOKEN",
-          "dmPolicy": "allowlist",
-          "allowFrom": [123456789]
-        }
-      }
-    }
-  }
-}
-```
-
-3. **Start the gateway** (foreground — logs show the URL and token):
-
-```bash
-xopc gateway
-# from a dev clone: pnpm run dev -- gateway
-```
-
-4. **Chat** in Telegram, or open the **Web console** in a browser (default port is often **18790** unless you changed `gateway.port`).
-
-### Run the gateway as an OS service
-
-```bash
-xopc gateway service install
-xopc gateway service start
-```
-
-Then use **`xopc gateway status`**, **`xopc gateway stop`**, **`xopc gateway restart`**, and **`xopc gateway logs`** as needed. See [Gateway](./gateway.md).
-
-### Web console URL
-
-After `xopc gateway`, open the URL printed in the terminal (commonly `http://localhost:18790` if that is your configured port).
-
-### Other bundled channels
-
-**WeChat** and **Feishu/Lark** are configured under **`channels.*`** in the same JSON file. See [Channels](./channels/index.md).
-
-## 6. Electron desktop (optional)
-
-Prebuilt **macOS / Windows / Linux** installers are published on **[GitHub Releases](https://github.com/xopcai/xopc/releases)** when available (Windows: `xopc-<version>-x64.exe` or `xopc-<version>-arm64.exe`). They bundle the gateway and the same React console as the browser UI.
-
-<video controls playsinline width="100%" style="max-width: 960px; border-radius: 8px;">
-  <source src="https://xopc.ai/xopc-demo.mp4" type="video/mp4" />
-</video>
-
-To build locally from a clone:
-
-```bash
-pnpm install
-pnpm run electron:build   # outputs under dist/release/
-```
-
-## 7. What's Next?
-
-Explore these guides to unlock more features:
-
-| Guide | Description |
-|-------|-------------|
-| [CLI Reference](/cli) | All available commands |
-| [Configuration](/configuration) | Full config reference |
-| [Extensions](/extensions) | Extend functionality |
-| [Skills](/skills) | Add domain-specific knowledge |
-| [Tools](/tools) | Built-in tools reference |
-| [Channels](/channels) | Telegram, WeChat, Feishu, web chat |
-| [TUI](/tui) | Full-screen terminal UI |
-| [Routing](/routing-system) | Session keys and agent bindings |
-| [Models](/models) | LLM provider configuration |
 
 ## Troubleshooting
 
-### Common Issues
+| Symptom | Check |
+| --- | --- |
+| Config does not load | `xopc config validate` |
+| Model calls fail | `xopc models status` and provider credentials |
+| Gateway does not respond | `xopc gateway status` and `xopc gateway health` |
+| Channel does not reply | `xopc channels show <channel>` and gateway logs |
+| Unknown local failure | `xopc doctor`, then `xopc logs tail` |
 
-| Issue | Solution |
-|-------|----------|
-| `ERR_MODULE_NOT_FOUND` | Run `pnpm install` |
-| `Cannot find module '@xopcai/...'` | Run `pnpm run build` |
-| Config not loading | Verify `~/.xopc/xopc.json` is valid JSON |
-| Bot not responding | Check `TELEGRAM_BOT_TOKEN` and bot status |
-| API key errors | Verify environment variables are set |
-
-### Getting Help
-
-- Check [Documentation](/) for detailed guides
-- Review [AGENTS.md](https://github.com/xopcai/xopc/blob/main/AGENTS.md) for development guide
-- View logs: `xopc gateway logs --follow`

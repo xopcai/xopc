@@ -1,6 +1,7 @@
 import type { Hono } from 'hono';
 
 import { AgentModelsSchema, type Config, parseModelRef } from '../../../config/schema.js';
+import { MemoryPolicySchema, ToolPolicySetSchema } from '../../../agent-manifest/schema.js';
 import { getVoiceModelsConfig } from '../../../config/voice.js';
 import {
   isProviderConfigured,
@@ -10,6 +11,7 @@ import { normalizeAgentId } from '../../../agent/agent-scope.js';
 import {
   deleteAgentAvatarFile,
   finalizeCreateAgentDirs,
+  getGatewayAgentEffectiveManifest,
   listAgentProfileFiles,
   listGatewayAgents,
   prepareCreateAgent,
@@ -26,10 +28,6 @@ import {
   resolveImageGenerationCapabilities,
   resolveImageUnderstandingCapabilities,
 } from '../../image-capabilities.js';
-import {
-  agentModelFallbacksToArray,
-  agentModelRefToString,
-} from '../lib/agent-model.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 function parseProfileFiles(raw: unknown): Record<string, string> | undefined | { error: string } {
@@ -64,13 +62,16 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
   }
   const body = raw as Record<string, unknown>;
   if (Object.hasOwn(body, 'model')) {
-    return { error: 'model is not supported; use models.chat.primary' };
+    return { error: 'model is not supported; use models.defaultRole and models.roles' };
   }
   if (Object.hasOwn(body, 'toolsDisable')) {
-    return { error: 'toolsDisable is not supported; use tools.disable' };
+    return { error: 'toolsDisable was removed; use tools.builtin policies' };
   }
   if (Object.hasOwn(body, 'typedModels')) {
     return { error: 'typedModels is not supported; use models.roles' };
+  }
+  if (Object.hasOwn(body, 'agentDir')) {
+    return { error: 'agentDir was removed from agent manifests' };
   }
   if (Object.hasOwn(body, 'name')) {
     return { error: 'name is not supported; write IDENTITY.md in profileFiles' };
@@ -85,7 +86,6 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
   if (models && !models.success) {
     return { error: `models ${models.error.issues[0]?.message ?? 'is invalid'}` };
   }
-  const agentDir = typeof body.agentDir === 'string' ? body.agentDir : undefined;
   const id = typeof body.id === 'string' ? body.id : undefined;
   const skills = Object.hasOwn(body, 'skills')
     ? Array.isArray(body.skills)
@@ -101,14 +101,11 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
     if (toolsRaw === null || typeof toolsRaw !== 'object' || Array.isArray(toolsRaw)) {
       return { error: 'tools must be an object' };
     }
-    const disableRaw = (toolsRaw as Record<string, unknown>).disable;
-    if (disableRaw !== undefined && !Array.isArray(disableRaw)) {
-      return { error: 'tools.disable must be an array' };
+    const parsedTools = ToolPolicySetSchema.safeParse(toolsRaw);
+    if (!parsedTools.success) {
+      return { error: `tools ${parsedTools.error.issues[0]?.message ?? 'is invalid'}` };
     }
-    const disable = Array.isArray(disableRaw)
-      ? disableRaw.map((x: unknown) => String(x).trim()).filter(Boolean)
-      : undefined;
-    tools = disable !== undefined ? { disable } : {};
+    tools = parsedTools.data;
   }
   let profileFiles: Record<string, string> | undefined;
   if (Object.hasOwn(body, 'profileFiles')) {
@@ -125,7 +122,6 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
   return {
     workspace,
     ...(models && models.data !== undefined ? { models: models.data } : {}),
-    ...(agentDir !== undefined ? { agentDir } : {}),
     ...(id !== undefined ? { id } : {}),
     ...(skills !== undefined ? { skills } : {}),
     ...(tools !== undefined ? { tools } : {}),
@@ -135,8 +131,8 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
 }
 
 type PatchModels = {
-  chat?: { primary: string; fallbacks?: string[] } | null;
-  roles?: Record<string, { model: string; description?: string }> | null;
+  defaultRole?: string | null;
+  roles?: Record<string, { model: string; description?: string }>;
 };
 
 function parsePatchModels(raw: unknown): PatchModels | null | undefined | { error: string } {
@@ -151,20 +147,12 @@ function parsePatchModels(raw: unknown): PatchModels | null | undefined | { erro
   }
   const body = raw as Record<string, unknown>;
   const out: PatchModels = {};
-  if (Object.hasOwn(body, 'chat')) {
-    if (body.chat === null) {
-      out.chat = null;
-    } else {
-      const parsed = AgentModelsSchema.safeParse({ chat: body.chat });
-      if (!parsed.success) {
-        return { error: `models.chat ${parsed.error.issues[0]?.message ?? 'is invalid'}` };
-      }
-      out.chat = parsed.data?.chat;
-    }
+  if (Object.hasOwn(body, 'defaultRole')) {
+    out.defaultRole = body.defaultRole === null ? null : String(body.defaultRole ?? '').trim();
   }
   if (Object.hasOwn(body, 'roles')) {
     if (body.roles === null) {
-      out.roles = null;
+      return { error: 'models.roles must be an object' };
     } else {
       const parsed = AgentModelsSchema.safeParse({ roles: body.roles });
       if (!parsed.success) {
@@ -225,6 +213,15 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
   });
 
+  authenticated.get('/api/agents/:id/effective-manifest', async (c) => {
+    const id = normalizeAgentId(c.req.param('id') ?? '');
+    const res = getGatewayAgentEffectiveManifest(service.currentConfig as Config, id);
+    if (res.ok === false) {
+      return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
+    }
+    return c.json({ ok: true, payload: res.data });
+  });
+
   authenticated.patch('/api/agents/:id', strictRateLimitMiddleware, async (c) => {
     const id = normalizeAgentId(c.req.param('id') ?? '');
     let body: Record<string, unknown> = {};
@@ -234,13 +231,16 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
     }
     if (Object.hasOwn(body, 'model')) {
-      return c.json({ ok: false, error: { message: 'model is not supported; use models.chat' } }, 400);
+      return c.json({ ok: false, error: { message: 'model is not supported; use models.defaultRole and models.roles' } }, 400);
     }
     if (Object.hasOwn(body, 'typedModels')) {
       return c.json({ ok: false, error: { message: 'typedModels is not supported; use models.roles' } }, 400);
     }
     if (Object.hasOwn(body, 'toolsDisable')) {
-      return c.json({ ok: false, error: { message: 'toolsDisable is not supported; use tools.disable' } }, 400);
+      return c.json({ ok: false, error: { message: 'toolsDisable was removed; use tools.builtin policies' } }, 400);
+    }
+    if (Object.hasOwn(body, 'agentDir')) {
+      return c.json({ ok: false, error: { message: 'agentDir was removed from agent manifests' } }, 400);
     }
     if (Object.hasOwn(body, 'name')) {
       return c.json({ ok: false, error: { message: 'name is not supported; edit IDENTITY.md' } }, 400);
@@ -254,21 +254,24 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
         : Array.isArray(body.skills)
           ? body.skills.map((x: unknown) => String(x).trim()).filter(Boolean)
           : undefined;
-    let toolsPatch: { disable?: string[] | null } | null | undefined;
+    const extendsPatch = Object.hasOwn(body, 'extends')
+      ? Array.isArray(body.extends)
+        ? body.extends.map((x: unknown) => String(x).trim()).filter(Boolean)
+        : undefined
+      : undefined;
+    if (Object.hasOwn(body, 'extends') && extendsPatch === undefined) {
+      return c.json({ ok: false, error: { message: 'extends must be an array' } }, 400);
+    }
+    let toolsPatch: CreateAgentBody['tools'] | null | undefined;
     if (Object.hasOwn(body, 'tools')) {
       if (body.tools === null) {
         toolsPatch = null;
       } else if (typeof body.tools === 'object' && !Array.isArray(body.tools)) {
-        const disable = (body.tools as Record<string, unknown>).disable;
-        if (disable === null) {
-          toolsPatch = { disable: null };
-        } else if (disable === undefined) {
-          toolsPatch = {};
-        } else if (Array.isArray(disable)) {
-          toolsPatch = { disable: disable.map((x: unknown) => String(x).trim()).filter(Boolean) };
-        } else {
-          return c.json({ ok: false, error: { message: 'tools.disable must be an array or null' } }, 400);
+        const parsedTools = ToolPolicySetSchema.safeParse(body.tools);
+        if (!parsedTools.success) {
+          return c.json({ ok: false, error: { message: `tools ${parsedTools.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
         }
+        toolsPatch = parsedTools.data;
       } else {
         return c.json({ ok: false, error: { message: 'tools must be an object or null' } }, 400);
       }
@@ -277,19 +280,23 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (isParseError(modelsPatch)) {
       return c.json({ ok: false, error: { message: modelsPatch.error } }, 400);
     }
+    let memoryPatch: Config['agents']['list'][number]['memory'] | undefined;
+    if (Object.hasOwn(body, 'memory')) {
+      const parsedMemory = MemoryPolicySchema.safeParse(body.memory);
+      if (!parsedMemory.success) {
+        return c.json({ ok: false, error: { message: `memory ${parsedMemory.error.issues[0]?.message ?? 'is invalid'}` } }, 400);
+      }
+      memoryPatch = parsedMemory.data;
+    }
 
     const prep = prepareUpdateAgent(service.currentConfig as Config, id, {
       workspace: typeof body.workspace === 'string' ? body.workspace : undefined,
+      ...(extendsPatch !== undefined ? { extends: extendsPatch } : {}),
       ...(modelsPatch !== undefined ? { models: modelsPatch } : {}),
-      agentDir:
-        body.agentDir === null
-          ? null
-          : typeof body.agentDir === 'string'
-            ? body.agentDir
-            : undefined,
       setDefault: body.setDefault === true,
       ...(skillsPatch !== undefined ? { skills: skillsPatch } : {}),
       ...(toolsPatch !== undefined ? { tools: toolsPatch } : {}),
+      ...(memoryPatch !== undefined ? { memory: memoryPatch } : {}),
     });
     if (prep.ok === false) {
       return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
@@ -417,13 +424,11 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
       ok: true,
       payload: {
         current: {
-          imageModel: agentModelRefToString(config.agents?.defaults?.imageModel) ?? null,
-          imageModelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.imageModel),
-          imageGenerationModel: agentModelRefToString(config.agents?.defaults?.imageGenerationModel) ?? null,
-          imageGenerationModelFallbacks: agentModelFallbacksToArray(
-            config.agents?.defaults?.imageGenerationModel,
-          ),
-          mediaMaxMb: config.agents?.defaults?.mediaMaxMb ?? null,
+          imageModel: null,
+          imageModelFallbacks: [],
+          imageGenerationModel: null,
+          imageGenerationModelFallbacks: [],
+          mediaMaxMb: null,
         },
         imageGeneration: { providers: imageGenerationProviders },
         imageUnderstanding: { providers: imageUnderstandingProviders },

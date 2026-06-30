@@ -4,6 +4,7 @@ import { apiUrl } from '@/lib/url';
 
 import type {
   AgentProfileFileEntry,
+  GatewayAgentEffectiveManifestPayload,
   GatewayAgentRow,
   GatewayAgentsPayload,
   GatewayConfigBinding,
@@ -12,6 +13,7 @@ import type {
 
 export type {
   AgentProfileFileEntry,
+  GatewayAgentEffectiveManifestPayload,
   GatewayAgentRow,
   GatewayAgentsPayload,
   GatewayAgentSkillsInfo,
@@ -20,22 +22,43 @@ export type {
   SkillCatalogRow,
 } from './types/agent-gateway';
 
+type ToolPolicyPatch = {
+  mode: 'allow' | 'confirm' | 'deny';
+  scope?: 'readonly' | 'workspace' | 'unrestricted';
+  limits?: {
+    maxCallsPerTurn?: number;
+    timeoutMs?: number;
+  };
+};
+
+type ToolPolicySetPatch = {
+  builtin?: Record<string, ToolPolicyPatch>;
+  mcp?: {
+    servers?: Record<string, ToolPolicyPatch>;
+    tools?: Record<string, ToolPolicyPatch>;
+  };
+};
+
 function normalizeAgentRow(raw: GatewayAgentRow): GatewayAgentRow {
   const profileDir = typeof raw.profileDir === 'string' ? raw.profileDir.trim() : '';
-  const typedDefaults = raw.typedModels?.defaults ?? [];
+  const typedPreset = raw.typedModels?.preset ?? [];
   const typedEntry = raw.typedModels?.entry;
-  const typedEffective = raw.typedModels?.effective ?? typedDefaults;
+  const typedEffective = raw.typedModels?.effective ?? typedPreset;
   return {
     ...raw,
     profileDir,
     ...(typeof raw.avatar === 'string' && raw.avatar.trim() ? { avatar: raw.avatar.trim() } : {}),
-    skills: raw.skills ?? { defaults: [] },
-    tools: raw.tools ?? { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
+    skills: raw.skills ? { ...raw.skills, preset: raw.skills.preset ?? [] } : { preset: [] },
+    tools: raw.tools
+      ? { ...raw.tools, presetDenied: raw.tools.presetDenied ?? [] }
+      : { presetDenied: [], entryDisable: [], effectiveDisable: [] },
     typedModels: {
-      defaults: typedDefaults,
+      defaultRole: raw.typedModels.defaultRole,
+      preset: typedPreset,
       ...(typedEntry !== undefined ? { entry: typedEntry } : {}),
       effective: typedEffective,
     },
+    extends: Array.isArray(raw.extends) ? raw.extends : [],
   };
 }
 
@@ -55,6 +78,18 @@ export async function fetchGatewayAgents(): Promise<GatewayAgentsPayload> {
   };
 }
 
+export async function fetchGatewayAgentEffectiveManifest(
+  agentId: string,
+): Promise<GatewayAgentEffectiveManifestPayload> {
+  const res = await fetchJson<{ ok?: boolean; payload?: GatewayAgentEffectiveManifestPayload }>(
+    apiUrl(`/api/agents/${encodeURIComponent(agentId)}/effective-manifest`),
+  );
+  if (!res.payload?.manifest || typeof res.payload.sources !== 'object' || res.payload.sources === null) {
+    throw new Error('Invalid /api/agents/:id/effective-manifest response');
+  }
+  return res.payload;
+}
+
 export type CreateGatewayAgentResult = GatewayAgentsPayload & { createdAgentId: string };
 
 export async function applyGatewayAgentsPayloadToCaches(payload: GatewayAgentsPayload): Promise<void> {
@@ -69,12 +104,11 @@ export async function createGatewayAgent(body: {
   id?: string;
   workspace: string;
   models?: {
-    chat?: { primary: string; fallbacks?: string[] };
+    defaultRole?: string;
     roles?: Record<string, { model: string; description?: string }>;
   };
-  agentDir?: string;
   skills?: string[];
-  tools?: { disable?: string[] };
+  tools?: ToolPolicySetPatch;
   profileFiles?: Record<string, string>;
   cloneFrom?: string;
 }): Promise<CreateGatewayAgentResult> {
@@ -103,14 +137,14 @@ export async function updateGatewayAgent(
   id: string,
   body: {
     workspace?: string;
+    extends?: string[];
     models?: {
-      chat?: { primary: string; fallbacks?: string[] } | null;
-      roles?: Record<string, { model: string; description?: string }> | null;
+      defaultRole?: string | null;
+      roles?: Record<string, { model: string; description?: string }>;
     } | null;
-    agentDir?: string | null;
     setDefault?: boolean;
     skills?: string[] | null;
-    tools?: { disable?: string[] | null } | null;
+    tools?: ToolPolicySetPatch | null;
   },
 ): Promise<GatewayAgentsPayload> {
   const res = await fetchJson<{ ok?: boolean; payload?: GatewayAgentsPayload }>(

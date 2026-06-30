@@ -31,8 +31,6 @@ import {
   type ProviderConfig,
   type ValidationResult,
 } from '../models-json-api';
-import { useAgentDefaultsForm } from '../agents/use-agent-defaults-form';
-
 import { ModelEditDialogContent } from './models-model-edit-dialog';
 import { ProviderAddDialog } from './models-provider-add-dialog';
 import {
@@ -93,7 +91,6 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const ms = m.modelsSettings;
-  const agentVm = useAgentDefaultsForm(m.agentSettings);
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
@@ -177,14 +174,7 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
     [config, baseline],
   );
 
-  // The chat-model fallback chain lives under Agent defaults > Model strategy,
-  // so this panel no longer renders or
-  // saves agent defaults. We still load `useAgentDefaultsForm` above
-  // because the agent-defaults page may not be mounted yet — invoking the
-  // hook here keeps the form's SWR cache warm for fast cross-tab load —
-  // but the dirty/save coordination below is intentionally left in place
-  // and degrades to no-op (`agentVm.dirty` stays false).
-  const combinedDirty = dirty || agentVm.dirty;
+  const combinedDirty = dirty;
 
   const stats = useMemo(() => {
     const ids = Object.keys(config.providers);
@@ -256,10 +246,9 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
   };
 
   const runSave = async () => {
-    if (saving || agentVm.saving) return;
+    if (saving) return;
     const hadJsonDirty = dirty;
-    const hadAgentDirty = agentVm.dirty;
-    if (!hadJsonDirty && !hadAgentDirty) return;
+    if (!hadJsonDirty) return;
 
     dispatchUi({ type: 'patch', patch: { error: null, saveOk: false } });
     try {
@@ -271,12 +260,6 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
           dispatchUi({ type: 'patch', patch: { validation: null } });
         } finally {
           dispatchUi({ type: 'patch', patch: { saving: false } });
-        }
-      }
-      if (hadAgentDirty && agentVm.form) {
-        const agentOk = await agentVm.save();
-        if (!agentOk) {
-          throw new Error(m.agentSettings.saveError);
         }
       }
       dispatchUi({ type: 'patch', patch: { saveOk: true } });
@@ -299,13 +282,12 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
           : {}),
       },
     });
-    agentVm.discard();
-  }, [baseline, editorMode, agentVm]);
+  }, [baseline, editorMode]);
 
   useSaveBarRegistration({
     id: 'models',
     dirty: combinedDirty,
-    saving: saving || agentVm.saving,
+    saving,
     save: runSave,
     discard: runDiscard,
   });
@@ -507,7 +489,7 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
               variant="secondary"
               className="inline-flex min-h-9 min-w-[7.5rem] justify-center"
               onClick={runDiscard}
-              disabled={loading || saving || agentVm.saving || !combinedDirty}
+              disabled={loading || saving || !combinedDirty}
             >
               {ms.discard}
             </Button>
@@ -516,9 +498,9 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
               variant="secondary"
               className="inline-flex min-h-9 min-w-[7.5rem] justify-center"
               onClick={() => void runSave()}
-              disabled={loading || saving || agentVm.saving || !combinedDirty}
+              disabled={loading || saving || !combinedDirty}
             >
-              {saving || agentVm.saving ? (
+              {saving ? (
                 <>
                   <Loader2 className="mr-1 size-4 animate-spin" />
                   {ms.saving}
@@ -566,13 +548,6 @@ export function ModelsSettingsPanel({ embedded = false }: { embedded?: boolean }
           {error}
         </p>
       ) : null}
-      {agentVm.error ? (
-        <p className="flex items-center gap-1 text-sm text-red-600 dark:text-red-400" role="alert">
-          <AlertCircle className="size-4 shrink-0" />
-          {agentVm.error}
-        </p>
-      ) : null}
-
       {validation && validation.errors.length > 0 ? (
         <div
           className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 dark:border-amber-800 dark:bg-amber-950/30"

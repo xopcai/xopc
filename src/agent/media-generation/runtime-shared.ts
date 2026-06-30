@@ -32,8 +32,8 @@ export interface CapabilityProviderCandidate {
 
 export interface ResolveCapabilityModelCandidatesParams {
   cfg?: Config;
-  /** Active capability model config, e.g. cfg.agents.defaults.imageGenerationModel. */
-  modelConfig: AgentModelConfig | undefined;
+  /** Active capability model config from a manifest/runtime policy. */
+  modelConfig: { primary?: string; fallbacks?: string[] } | AgentModelConfig | undefined;
   /** Caller-supplied per-call override (highest priority). */
   modelOverride?: string;
   /** Optional ref parser; defaults to {@link parseCapabilityModelRef}. */
@@ -114,7 +114,7 @@ function safeListProviders(
 
 /** Normalize an {@link AgentModelConfig} to `{ primary?, fallbacks }`. */
 function normalizeModelConfig(
-  cfg: AgentModelConfig | undefined,
+  cfg: ResolveCapabilityModelCandidatesParams['modelConfig'],
 ): { primary?: string; fallbacks: string[] } {
   if (!cfg) return { fallbacks: [] };
   return {
@@ -314,8 +314,8 @@ export function buildNoCapabilityModelConfiguredMessage(
   params: BuildNoCapabilityModelConfiguredMessageParams,
 ): string {
   const lines: string[] = [
-    `No ${params.capabilityLabel} model configured. Set agents.defaults.${params.modelConfigKey} ` +
-      `to a "<provider>/<model>" value (or pass modelOverride at call site).`,
+    `No ${params.capabilityLabel} model configured. Add a manifest/runtime model policy for ${params.modelConfigKey} ` +
+      `or pass modelOverride at call site.`,
   ];
   if (params.providers.length > 0) {
     lines.push('Registered providers:');

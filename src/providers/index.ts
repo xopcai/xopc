@@ -9,7 +9,7 @@ import {
 	type Model,
 	type Api,
 } from '@earendil-works/pi-ai';
-import type { Config } from '../config/schema.js';
+import { getAgentDefaultModelRef, type Config } from '../config/schema.js';
 import { getModelRegistry } from './model-registry.js';
 import { CredentialResolver, resolveApiKey, hasCredentials } from '../auth/credentials.js';
 import { hasProviderAuthOnDiskSync } from '../auth/sync-provider-auth.js';
@@ -393,24 +393,21 @@ const DEFAULT_FALLBACK_MODEL = 'openai/gpt-5.5';
 /**
  * Get a default model reference.
  * Priority:
- * 1. Explicitly configured model in agents.defaults.models.chat (if set and available)
+ * 1. Explicitly configured model in the default agent manifest (if set and available)
  * 2. Default fallback: openai/gpt-5.5
  */
 export async function getDefaultModel(config?: Config | null | undefined): Promise<string> {
-  const defaultModel = config?.agents?.defaults?.models?.chat;
-  if (defaultModel) {
-    const modelRef = defaultModel.primary;
-    if (modelRef) {
-      const availableModels = await getAvailableModels();
-      const configured = availableModels.find(m => 
-        `${m.provider}/${m.id}` === modelRef ||
-        m.id === modelRef
-      );
-      if (configured) {
-        return `${configured.provider}/${configured.id}`;
-      }
-      return modelRef;
+  const modelRef = config ? getAgentDefaultModelRef(config) : undefined;
+  if (modelRef) {
+    const availableModels = await getAvailableModels();
+    const configured = availableModels.find(m =>
+      `${m.provider}/${m.id}` === modelRef ||
+      m.id === modelRef
+    );
+    if (configured) {
+      return `${configured.provider}/${configured.id}`;
     }
+    return modelRef;
   }
 
   return DEFAULT_FALLBACK_MODEL;
@@ -425,12 +422,9 @@ export async function getDefaultModel(config?: Config | null | undefined): Promi
  * full catalog.
  */
 export function getDefaultModelSync(config?: Config | null | undefined): string {
-  const defaultModel = config?.agents?.defaults?.models?.chat;
-  if (defaultModel) {
-    const modelRef = defaultModel.primary;
-    if (modelRef) {
-      return modelRef;
-    }
+  const modelRef = config ? getAgentDefaultModelRef(config) : undefined;
+  if (modelRef) {
+    return modelRef;
   }
 
   return DEFAULT_FALLBACK_MODEL;

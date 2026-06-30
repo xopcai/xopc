@@ -27,17 +27,8 @@ export type Tab =
   | 'settingsSearch'
   | 'settingsDreams'
   | 'settingsGoals'
-  | 'settingsAgentDefaults'
-  | 'settingsAgentChat'
-  | 'settingsAgentWorkspace'
   | 'settingsAgentBrowser'
-  | 'settingsAgentGeneration'
-  | 'settingsAgentRuntime'
-  | 'settingsAgentContext'
-  | 'settingsAgentMemory'
-  | 'settingsAgentTools'
-  | 'settingsAgentSkills'
-  | 'settingsAgentSystemPrompt'
+  | 'settingsCapabilityPresets'
   | 'settingsAgents'
   | 'settingsKeyboardShortcuts'
   | 'settingsSystem'
@@ -47,16 +38,8 @@ export type SettingsSectionId =
   | 'overview'
   | 'appearance'
   | 'agent'
-  | 'agent-defaults'
-  | 'agent-chat'
-  | 'agent-workspace'
   | 'agent-browser'
-  | 'agent-runtime'
-  | 'agent-context'
-  | 'agent-memory'
-  | 'agent-tools'
-  | 'agent-skills'
-  | 'agent-system-prompt'
+  | 'capability-presets'
   | 'providers'
   | 'credentials'
   | 'models'
@@ -104,9 +87,6 @@ export function tabLabel(lang: StoredLanguage, tab: Tab): string {
   const m = messages(lang);
   if (tab === 'settingsAgents') {
     return m.nav.agents;
-  }
-  if (tab === 'settingsAgentDefaults') {
-    return m.nav.settingsAgentChat;
   }
   return m.nav[tab];
 }

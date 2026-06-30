@@ -12,10 +12,7 @@ export interface InitWorkspaceCoreOptions {
   workspacePath: string;
   /** When set with a new config file, overrides schema default port (e.g. Electron). */
   gatewayPort?: number;
-  /**
-   * When true, sets `agents.defaults.workspace` to `dirname(workspacePath)` (parent of the
-   * Markdown root being initialised, e.g. `…/workspace` when `workspacePath` is `…/workspace/main`).
-   */
+  /** When true, sets the default agent manifest workspace root to `workspacePath`. */
   persistWorkspacePath?: boolean;
   /** Optional channel plugin validator (CLI/gateway only; Electron omits). */
   assertChannelPlugins?: (cfg: Config) => void | Promise<void>;
@@ -68,7 +65,7 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
   const gatewayPortDefaulted = options.gatewayPort ?? 18790;
   const persistWorkspacePath = options.persistWorkspacePath ?? false;
   const { configPath, workspacePath, assertChannelPlugins } = options;
-  const persistedDefaultsWorkspace = persistWorkspacePath ? dirname(workspacePath) : undefined;
+  const persistedWorkspaceRoot = persistWorkspacePath ? workspacePath : undefined;
 
   mkdirSync(dirname(configPath), { recursive: true });
 
@@ -101,16 +98,19 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
       ? gatewayPortDefaulted
       : (config.gateway?.port ?? 18790);
 
-  const agentsDefaults = {
-    ...config.agents.defaults,
-    ...(persistedDefaultsWorkspace !== undefined ? { workspace: persistedDefaultsWorkspace } : {}),
-  };
+  const defaultAgentId = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
+  const agentsList =
+    persistedWorkspaceRoot === undefined
+      ? config.agents.list
+      : config.agents.list.map((agent) =>
+          agent.id === defaultAgentId ? { ...agent, workspace: { root: persistedWorkspaceRoot } } : agent,
+        );
 
   const nextConfig: Config = {
     ...config,
     agents: {
       ...config.agents,
-      defaults: agentsDefaults,
+      list: agentsList,
     },
     gateway: {
       ...config.gateway,

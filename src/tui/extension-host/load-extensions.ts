@@ -19,7 +19,7 @@ export async function loadExtensionsForTuiLocalMode(runtime?: {
     workspaceDir,
     extensionsDir: resolveExtensionsDir(),
   });
-  loader.setConfig(config);
+  loader.setConfig(config as Parameters<ExtensionLoader['setConfig']>[0]);
   if (runtime) {
     loader.setRuntimeContext(runtime);
   }

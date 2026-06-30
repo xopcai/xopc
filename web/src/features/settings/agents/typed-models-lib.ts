@@ -73,7 +73,7 @@ export function formatTypedModelsSummary(
   return rows.map((r) => `${r.id} → ${r.model}`).join(', ');
 }
 
-export function typedModelsRowsFromEntry(
+export function typedModelsRowsFromList(
   entry: Array<{ id: string; model: string; description?: string }> | undefined,
 ): AgentTypedModelRow[] {
   return (entry ?? []).map((r) => ({

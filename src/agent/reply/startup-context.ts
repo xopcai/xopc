@@ -14,28 +14,19 @@ export function shouldApplyStartupContext(params: {
   cfg?: Config;
   action: 'new' | 'reset';
 }): boolean {
-  const startupContext = params.cfg?.agents?.defaults?.startupContext;
-  if (startupContext?.enabled === false) {
-    return false;
-  }
-  const applyOn = startupContext?.applyOn;
-  if (!Array.isArray(applyOn) || applyOn.length === 0) {
-    return true;
-  }
-  return applyOn.includes(params.action);
+  return false;
 }
 
 function resolveStartupContextLimits(cfg?: Config) {
-  const startupContext = cfg?.agents?.defaults?.startupContext;
   const clampInt = (value: number | undefined, fallback: number, min: number, max: number) => {
     const numeric = Number.isFinite(value) ? Math.trunc(value as number) : fallback;
     return Math.min(max, Math.max(min, numeric));
   };
   return {
-    dailyMemoryDays: clampInt(startupContext?.dailyMemoryDays, STARTUP_MEMORY_DAILY_DAYS, 1, 14),
-    maxFileBytes: clampInt(startupContext?.maxFileBytes, STARTUP_MEMORY_FILE_MAX_BYTES, 1, 65536),
-    maxFileChars: clampInt(startupContext?.maxFileChars, STARTUP_MEMORY_FILE_MAX_CHARS, 1, 10000),
-    maxTotalChars: clampInt(startupContext?.maxTotalChars, STARTUP_MEMORY_TOTAL_MAX_CHARS, 1, 50000),
+    dailyMemoryDays: clampInt(undefined, STARTUP_MEMORY_DAILY_DAYS, 1, 14),
+    maxFileBytes: clampInt(undefined, STARTUP_MEMORY_FILE_MAX_BYTES, 1, 65536),
+    maxFileChars: clampInt(undefined, STARTUP_MEMORY_FILE_MAX_CHARS, 1, 10000),
+    maxTotalChars: clampInt(undefined, STARTUP_MEMORY_TOTAL_MAX_CHARS, 1, 50000),
   };
 }
 

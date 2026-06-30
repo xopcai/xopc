@@ -1,4 +1,6 @@
 import type { Config } from '../../../config/schema.js';
+import { resolveDefaultAgentId } from '../../agent-scope.js';
+import { resolveEffectiveAgentManifestForAgent } from '../../../config/agent-profile.js';
 import {
   DEFAULT_DEEP_CRON,
   DEFAULT_LIGHT_CRON,
@@ -80,16 +82,12 @@ function optionalTrimmedString(value: unknown): string | undefined {
 
 // ── Resolver ───────────────────────────────────────────────────────────
 
-/**
- * Resolve the full three-phase dreaming config from the app Config.
- *
- * Reads through `any` so it can ship independently of the schema evolution.
- * Expected shape: `agents.defaults.memory.dreaming.{ enabled, frequency, timezone, phases.{light,deep,rem}.* }`
- */
+/** Resolve the full three-phase dreaming config from the default agent manifest. */
 export function resolveDreamingConfig(cfg: Config | undefined): DreamingResolvedConfig {
-  const anyCfg = cfg as any;
-  const dreaming = anyCfg?.agents?.defaults?.memory?.dreaming;
-  const enabled = dreaming?.enabled === true;
+  const agentId = cfg ? resolveDefaultAgentId(cfg) : undefined;
+  const manifest = cfg && agentId ? resolveEffectiveAgentManifestForAgent(cfg, agentId) : undefined;
+  const dreaming = manifest?.memory.dreaming;
+  const enabled = dreaming?.enabled === true && manifest?.memory.mode !== 'off';
 
   const frequency = trimmedStringOr(dreaming?.frequency, DEFAULT_DEEP_CRON);
   const timezone = optionalTrimmedString(dreaming?.timezone);
@@ -145,4 +143,3 @@ export function getPhaseCron(config: DreamingResolvedConfig, phase: DreamingPhas
 export function isPhaseEnabled(config: DreamingResolvedConfig, phase: DreamingPhaseId): boolean {
   return config.enabled && config.phases[phase].enabled;
 }
-

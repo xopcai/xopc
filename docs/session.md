@@ -59,7 +59,7 @@ Runtime session keys use the OpenClaw-aligned form **`agent:{agentId}:{rest}`**:
 | Channel peer | `agent:main:telegram:default:direct:123456` | Routed inbound/outbound chats |
 | Shorthand | `mytopic` on CLI/TUI | Expanded to `agent:{currentAgentId}:mytopic` |
 
-The `agentId` segment selects which **`agents.list`** entry (merged over `agents.defaults`) owns workspace, model defaults, and on-disk agent home (`agents/<id>/`). Prefer full `agent:…` keys in scripts; shorthand is fine for interactive TUI.
+The `agentId` segment selects one enabled **`agents.list`** manifest, with any declared `capabilityPresets` applied. That effective manifest owns workspace, model roles, tool policy, and agent home (`agents/<id>/`). Prefer full `agent:…` keys in scripts; shorthand is fine for interactive TUI.
 
 ---
 

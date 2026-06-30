@@ -66,7 +66,7 @@ describe('initWorkspace', () => {
     }
   });
 
-  it('persists agents.defaults.workspace as dirname(workspacePath) when persistWorkspacePath', async () => {
+  it('persists default agent workspace root when persistWorkspacePath', async () => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-init-persist-'));
     try {
       const configPath = join(root, 'xopc.json');
@@ -77,7 +77,8 @@ describe('initWorkspace', () => {
         persistWorkspacePath: true,
         skipChannelPluginValidation: true,
       });
-      expect(result.config.agents?.defaults?.workspace).toBe(join(root, 'workspace'));
+      const main = result.config.agents?.list.find((agent) => agent.id === 'main');
+      expect(main?.workspace.root).toBe(workspacePath);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

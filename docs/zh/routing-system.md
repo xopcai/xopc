@@ -5,24 +5,19 @@
 ## Session Key 格式
 
 ```
-{agentId}:{source}:{accountId}:{peerKind}:{peerId}[:thread:{threadId}]
+agent:{agentId}:{rest}
 ```
 
-| 字段 | 说明 | 示例 |
-|------|------|------|
-| `agentId` | 智能体 ID | `main`, `coder` |
-| `source` | 消息来源 | `telegram`, `gateway`, `cli` |
-| `accountId` | 账号标识 | `default`, `work` |
-| `peerKind` | 对话类型 | `dm`, `group`, `direct` |
-| `peerId` | 对话 ID | `123456`, `-100123456` |
+第一段固定为 `agent`，第二段选择 agent manifest，后续路径取决于 scope 与通道。
 
 ### 示例
 
 ```
-main:telegram:default:dm:123456
-main:telegram:default:group:-100123456
-main:gateway:default:direct:chat_abc123
-main:cli:default:direct:cli
+agent:main:main
+agent:main:telegram:default:direct:123456
+agent:main:telegram:group:-100123456
+agent:main:gateway:direct:chat_abc123
+agent:main:cli:direct:cli
 ```
 
 ## 配置
@@ -35,7 +30,7 @@ main:cli:default:direct:cli
 
 ### 运行时有效配置（effective profile）
 
-Session key 的第一段为 `agentId` 时，运行时会将 **`agents.defaults`** 与该 id 在 **`agents.list`** 中**已启用**的条目合并（可覆盖 `workspace`、`model`、`agentDir`、`tools.disable`、`systemPromptOverride`、`skills`、思考默认值等）。若 `agentId` 在列表中不存在或已禁用，则按上面的**默认智能体**解析配置。磁盘上的 `~/.xopc/agents/<id>/` 等路径与上述配置一致解析；**网关/运行时以 `config.json` 为准**。
+对于 `agent:{agentId}:...` session key，运行时会解析 **`agents.list`** 中匹配且 enabled 的 manifest，并应用其 `extends` 声明的 **`agents.capabilityPresets`**。若 `agentId` 不存在或已禁用，则按上面的**默认智能体**解析配置。磁盘上的 `~/.xopc/agents/<id>/` 等路径与上述配置一致解析；**网关/运行时以 `config.json` 为准**。
 
 `match.peerId` 支持简单的 `*` 通配（例如 Telegram 超级群 `-100*`）。
 
@@ -43,12 +38,32 @@ Session key 的第一段为 `agentId` 时，运行时会将 **`agents.defaults`*
 {
   "agents": {
     "default": "main",
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5"
-    },
+    "capabilityPresets": {},
     "list": [
-      { "id": "main", "name": "主助手" },
-      { "id": "coder", "name": "编程助手" }
+      {
+        "id": "main",
+        "identity": { "name": "Main", "role": "通用助手", "language": "zh-CN", "tone": "direct" },
+        "responsibilities": { "primary": ["帮助用户"] },
+        "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": { "defaultRole": "deep", "roles": { "deep": { "model": "anthropic/claude-sonnet-4-5" } } },
+        "tools": { "builtin": {} },
+        "skills": { "mode": "all" },
+        "memory": { "mode": "off", "sources": ["session"] },
+        "workflows": {},
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
+      },
+      {
+        "id": "coder",
+        "identity": { "name": "Coder", "role": "编程助手", "language": "zh-CN", "tone": "direct" },
+        "responsibilities": { "primary": ["帮助处理代码任务"] },
+        "workspace": { "root": "~/.xopc/workspace/coder" },
+        "models": { "defaultRole": "deep", "roles": { "deep": { "model": "anthropic/claude-sonnet-4-5" } } },
+        "tools": { "builtin": { "shell": { "mode": "confirm", "scope": "workspace" } } },
+        "skills": { "mode": "all" },
+        "memory": { "mode": "off", "sources": ["session"] },
+        "workflows": {},
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
+      }
     ]
   },
   "bindings": [

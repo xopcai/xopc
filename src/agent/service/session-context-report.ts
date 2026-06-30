@@ -80,7 +80,7 @@ export function formatSessionContextReport(input: SessionContextReportInput): st
   );
 
   if (mode === 'detail') {
-    lines.push('', '*Compaction config (agents.defaults.compaction):*', '```json');
+    lines.push('', '*Compaction config:*', '```json');
     lines.push(JSON.stringify(compaction ?? {}, null, 2));
     lines.push('```', '', '*Window stats:*', '```json');
     lines.push(JSON.stringify(windowStats ?? {}, null, 2));

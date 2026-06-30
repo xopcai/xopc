@@ -27,6 +27,8 @@ export default defineConfig({
     '!./extensions/google/src/**/__tests__/**/*.ts',
     './extensions/fal/src/**/*.ts',
     '!./extensions/fal/src/**/__tests__/**/*.ts',
+    './extensions/demo-memory/src/**/*.ts',
+    '!./extensions/demo-memory/src/**/__tests__/**/*.ts',
   ],
   outDir: 'dist',
   root: '.',

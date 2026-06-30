@@ -26,7 +26,7 @@ export async function resolveInboundImageContentParts(params: {
     return [
       {
         type: 'text' as const,
-        text: `[${params.images.length} image(s) attached; configure agents.defaults.imageModel to describe them.]`,
+        text: `[${params.images.length} image(s) attached; no image-capable model is available to describe them.]`,
       },
     ];
   }

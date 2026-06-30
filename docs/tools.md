@@ -29,7 +29,7 @@ Extensions may add further tools.
 
 **MCP tools:** Registered at runtime from `mcp.servers` (and extension `.mcp.json` manifests). Names use `serverId__toolName`. See [MCP](mcp.md).
 
-**Conditionally enabled:** Some capabilities need explicit settings: e.g. `session_search` needs session persistence; `web_extract` uses `agents.defaults.webExtract.model` or `XOPC_WEB_EXTRACT_MODEL`; skills write policy is `skills.agentWritePolicy`; skill discovery can be gated with `skills.toolGating` and metadata. For skills CLI (`xopc skills hub …`), see [Skills](skills.md).
+**Conditionally enabled:** Some capabilities need explicit settings or agent policy: e.g. `session_search` needs session persistence; `web_extract` can use `XOPC_WEB_EXTRACT_MODEL`; skills write policy is `skills.agentWritePolicy`; skill discovery can be gated with `skills.toolGating` and metadata. For skills CLI (`xopc skills hub …`), see [Skills](skills.md).
 
 ---
 
@@ -217,7 +217,7 @@ Fetches a URL and returns page content for the agent (HTTP client; timeouts appl
 
 Fetches HTML or JSON, reduces boilerplate, then runs a configured extraction model to return markdown-oriented output. Optional `instruction` and `maxLength` (default from config or about 15000 characters). Very large pages are processed in **chunks** so extraction can complete without loading the entire document into one model call (internal size limits still apply).
 
-**Config:** `agents.defaults.webExtract.model` or `XOPC_WEB_EXTRACT_MODEL`.
+**Config:** `XOPC_WEB_EXTRACT_MODEL` when you need to force a specific extraction model.
 
 ---
 
@@ -266,15 +266,15 @@ Loads a labeled snippet from a memory file.
 
 ### `curated_memory`
 
-Read/write curated files under **`agents/<agentId>/memories/`** (`MEMORY.md`, `USER.md`, section boundaries per format). These files are **not** injected into the system prompt; use this tool for live read/write. Disabled when `agents.defaults.memory.enabled` is false or `useEnhancedSystem` is false. If `userProfileEnabled` is false, profile writes are rejected (reads may still work).
+Read/write curated files under **`agents/<agentId>/memories/`** (`MEMORY.md`, `USER.md`, section boundaries per format). These files are separate from profile Markdown under **`agents/<agentId>/profile/`**; use this tool for live read/write when the selected agent manifest allows curated memory writes.
 
 See [Configuration](configuration.md) and [Curated memory](workspace.md#curated-memory).
 
 ### `session_search`
 
-Searches other sessions’ transcripts (keyword or semantic-style query; optional per-session summaries). Requires persistence and wiring; summary model: `agents.defaults.sessionSearch.summaryModel` or `XOPC_SESSION_SEARCH_MODEL`.
+Searches other sessions’ transcripts (keyword or semantic-style query; optional per-session summaries). Requires SQLite session persistence. Set `XOPC_SESSION_SEARCH_MODEL` when you need to force the model used for per-session summaries.
 
-See [Configuration](configuration.md) for `agents.defaults.sessionSearch`.
+See [Session management](session.md) and [Configuration](configuration.md).
 
 ---
 
@@ -320,13 +320,13 @@ Inbound images: if the **session model** supports vision, images are passed in t
 
 Analyzes images (paths or URLs) with the resolved vision model. Optional `prompt`. Often unnecessary when the user already attached images and the session model is multimodal.
 
-**Config:** `agents.defaults.imageModel` (string or `{ primary, fallbacks }`), `agents.defaults.mediaMaxMb`.
+Image understanding is resolved from the selected agent/runtime image capability settings and configured providers. Use `xopc image status` to inspect current behavior.
 
 ### `image_generate`
 
 Generates an image and saves under `workspace/media/generated/` on success. `action: "list"` lists available generation providers/models.
 
-**Config:** `agents.defaults.imageGenerationModel` (string or `{ primary, fallbacks }`).
+Generation provider availability is discovered at runtime from configured providers. Use `xopc image providers` to inspect available options.
 
 Programmatic generation may support reference images for some providers; the `image_generate` tool surface may not expose every option.
 
@@ -334,19 +334,19 @@ Programmatic generation may support reference images for some providers; the `im
 
 ## Browser (optional)
 
-Registered when `agents.defaults.browser.enabled` is true. Install browsers once if required, e.g. `npx playwright install chromium`.
+Registered when browser automation is enabled by config and allowed by the selected agent manifest. Install browsers once if required, e.g. `npx playwright install chromium`.
 
 | Tool | Purpose |
 |------|---------|
 | `browser_use` | Unified browser automation tool. Use `mode: "command"` with actions such as `open` / `navigate`, `snapshot`, `click`, `type`, `scroll`, `keys` / `press`, `screenshot`, `console` / `eval`, `images`, `dialog`, `cdp`, `close`, `wait`, and network helpers; or `mode: "pipeline"` for YAML pipelines. For complex tasks, call `tool_manual({ tool: "browser_use" })` first. |
 
-To disable browser automation for an agent, add `browser_use` to `agents.defaults.tools.disable` or `agents.list[].tools.disable`.
+To disable browser automation for an agent, set the selected agent manifest's `tools.builtin.browser_use.mode` to `"deny"` or omit browser access from the relevant capability preset.
 
-**URL policy:** Navigation rejects URLs that embed credentials, target **cloud metadata / IMDS** hosts and link-local ranges (always, even if private URLs are allowed), or contain patterns that look like **API keys or tokens** in the query (anti-exfiltration). Set `agents.defaults.browser.allowPrivateUrls` to skip **private-IP** blocking only; metadata and suspicious token patterns remain blocked.
+**URL policy:** Navigation rejects URLs that embed credentials, target **cloud metadata / IMDS** hosts and link-local ranges (always, even if private URLs are allowed), or contain patterns that look like **API keys or tokens** in the query (anti-exfiltration). Top-level `browser.allowPrivateUrls` relaxes private-IP blocking only; metadata and suspicious token patterns remain blocked.
 
-**Backends:** `agents.defaults.browser.cloudProvider` — `local` (default Playwright), `browserbase`, or `browser-use`. Optional `cdpUrl` connects directly to a CDP WebSocket and bypasses the cloud provider. Per-tab timeouts: `commandTimeout` (seconds). **Dialogs:** `dialogPolicy` (`must_respond` \| `auto_dismiss` \| `auto_accept`) and `dialogTimeoutSeconds` interact with the CDP supervisor.
+**Backends:** top-level `browser.backend` selects the browser backend (`local`, `cdp`, `cloud`, `extension`, or `cloakbrowser`). Optional `browser.cdpUrl` connects directly to a CDP WebSocket. Per-command timeouts use `browser.commandTimeout` (seconds). **Dialogs:** `browser.dialogPolicy` (`must_respond` \| `auto_dismiss` \| `auto_accept`) and `browser.dialogTimeoutSeconds` interact with the CDP supervisor.
 
-Uses a per-session tab; `agents.defaults.browser.headless` defaults to true when enabled.
+Uses a per-session tab; `browser.headless` controls whether local browser runs show a visible window.
 
 ---
 
@@ -356,13 +356,13 @@ Uses a per-session tab; `agents.defaults.browser.headless` defaults to true when
 
 Runs a **sub-agent** with a fresh context (no parent transcript) and returns a **text summary** only. Parameters include `goal`, optional `context`, optional `toolset` (subset of allowed tools), optional `maxIterations` (default 30). Sub-agents cannot use nested `delegate_task`, `clarify`, outbound messaging, memory tools, `todo`, `cronjob`, or skill management.
 
-**Config:** `agents.defaults.delegate.enabled`.
+Availability is controlled by the selected agent manifest and capability presets.
 
 ### `execute_code`
 
 Runs JavaScript in a VM with `tools.*` wrappers for an allowlisted set (`web_search`, `web_fetch`, `read_file`, `write_file`, `grep`, `find`, `shell`, `skills_list`, `skill_view`) plus `console.log`. Wall clock, tool-call count, and stdout/stderr sizes are capped.
 
-**Config:** `agents.defaults.executeCode.enabled`. Not a strong security boundary (`node:vm`); enable only with trusted models and environments; you can disable via `disabledTools` including `execute_code`.
+Availability is controlled by the selected agent manifest and capability presets. Not a strong security boundary (`node:vm`); enable only with trusted models and environments.
 
 ---
 

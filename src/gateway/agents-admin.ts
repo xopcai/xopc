@@ -19,6 +19,10 @@ import {
 import { AGENT_PROFILE_MARKDOWN_SYSTEM_FILES } from '../agent/context/workspace.js';
 import { seedAgentProfileMarkdownFiles } from '../agent/context/workspace-seed.js';
 import {
+  resolveEffectiveAgentManifest,
+  type ResolveManifestResult,
+} from '../agent-manifest/resolver.js';
+import {
   applyAgentConfig,
   findAgentEntryIndex,
   pruneAgentConfig,
@@ -35,7 +39,8 @@ import { isPathUnderWorkspace, resolveWorkspaceSafePath } from './workspace-edit
 const EDITABLE_PROFILE_MARKDOWN_NAMES = new Set<string>([...AGENT_PROFILE_MARKDOWN_SYSTEM_FILES]);
 
 export type GatewayAgentTypedModelsInfo = {
-  defaults: AgentTypedModel[];
+  defaultRole: string;
+  preset: AgentTypedModel[];
   entry?: AgentTypedModel[];
   effective: AgentTypedModel[];
 };
@@ -52,14 +57,15 @@ export type GatewayAgentRow = {
   profileDir: string;
   model?: { primary?: string; fallbacks?: string[] };
   typedModels: GatewayAgentTypedModelsInfo;
+  extends: string[];
   isDefault: boolean;
   skills: {
-    defaults: string[];
+    preset: string[];
     entry?: string[];
     effectiveAllowlist?: string[];
   };
   tools: {
-    defaultsDisable: string[];
+    presetDenied: string[];
     entryDisable: string[];
     effectiveDisable: string[];
   };
@@ -70,6 +76,8 @@ export type GatewayAgentsListResponse = {
   agents: GatewayAgentRow[];
   builtinToolIds: string[];
 };
+
+export type GatewayAgentEffectiveManifestResponse = ResolveManifestResult;
 
 function collectAgentIdsForList(cfg: Config): string[] {
   const entries = listAgentEntries(cfg).filter((e) => e.enabled !== false);
@@ -126,9 +134,9 @@ export async function listGatewayAgents(
 ): Promise<GatewayAgentsListResponse> {
   const defaultId = resolveDefaultAgentId(cfg);
   const agents: GatewayAgentRow[] = [];
-  const defaultsSkills = cfg.agents?.defaults?.skills;
-  const defaultsDisable = cfg.agents?.defaults?.tools?.disable ?? [];
-  const defaultsTypedModels = rolesToTypedModels(cfg.agents?.defaults?.models?.roles);
+  const presetSkills: string[] | undefined = undefined;
+  const presetDenied: string[] = [];
+  const presetTypedModels: ReturnType<typeof rolesToTypedModels> = [];
   for (const id of collectAgentIdsForList(cfg)) {
     const profile = resolveEffectiveAgentProfile(cfg, id);
     const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
@@ -139,8 +147,10 @@ export async function listGatewayAgents(
             ...(profile.fallbacks.length > 0 ? { fallbacks: profile.fallbacks } : {}),
           }
         : undefined;
-    const entrySkills = entry?.skills;
-    const entryDisable = entry?.tools?.disable ?? [];
+    const entrySkills = entry?.skills.mode === 'allowlist' ? entry.skills.allow ?? [] : undefined;
+    const entryDisable = Object.entries(entry?.tools.builtin ?? {})
+      .filter(([, policy]) => policy.mode === 'deny')
+      .map(([name]) => name);
     const entryTypedModels = rolesToTypedModels(entry?.models?.roles);
     const effectiveTypedModels = [...resolveEffectiveTypedModels(cfg, id).values()].sort((a, b) =>
       a.id.localeCompare(b.id),
@@ -163,22 +173,24 @@ export async function listGatewayAgents(
       profileDir: resolveAgentProfileDir(cfg, id),
       ...(model ? { model } : {}),
       typedModels: {
-        defaults: [...defaultsTypedModels],
+        defaultRole: profile.manifest.models.defaultRole,
+        preset: [...presetTypedModels],
         ...(entryTypedModels.length > 0 ? { entry: entryTypedModels } : {}),
         effective: effectiveTypedModels,
       },
+      extends: [...(entry?.extends ?? [])],
       isDefault: id === defaultId,
       skills: {
-        defaults: defaultsSkills ? [...defaultsSkills] : [],
+        preset: presetSkills ? [...presetSkills] : [],
         ...(entrySkills !== undefined ? { entry: [...entrySkills] } : {}),
         ...(profile.skillsAllowlist !== undefined
           ? { effectiveAllowlist: [...profile.skillsAllowlist] }
           : {}),
       },
       tools: {
-        defaultsDisable: [...defaultsDisable],
+        presetDenied: [...presetDenied],
         entryDisable: [...entryDisable],
-        effectiveDisable: [...profile.tools.disable].sort((a, b) => a.localeCompare(b)),
+        effectiveDisable: [...profile.tools.denied].sort((a, b) => a.localeCompare(b)),
       },
     });
   }
@@ -186,16 +198,41 @@ export async function listGatewayAgents(
   return { defaultId, agents, builtinToolIds: [...GATEWAY_BUILTIN_TOOL_IDS] };
 }
 
+export function getGatewayAgentEffectiveManifest(
+  cfg: Config,
+  agentIdRaw: string,
+): AgentAdminResult<GatewayAgentEffectiveManifestResponse> {
+  const agentId = normalizeAgentId(agentIdRaw);
+  const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === agentId);
+  if (!entry) {
+    return { ok: false, error: `agent "${agentId}" not found`, status: 404 };
+  }
+  try {
+    return {
+      ok: true,
+      data: resolveEffectiveAgentManifest({
+        agent: entry,
+        presets: cfg.agents.capabilityPresets,
+      }),
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+      status: 400,
+    };
+  }
+}
+
 export type CreateAgentBody = {
   /** Optional id seed; normalized agent id defaults from `profileFiles["IDENTITY.md"]` name when omitted. */
   id?: string;
   workspace: string;
   models?: AgentModelsConfig;
-  agentDir?: string;
   /** Initial `agents.list[].skills` for the new entry. */
   skills?: string[];
   /** Initial `agents.list[].tools` for the new entry. */
-  tools?: { disable?: string[] };
+  tools?: NonNullable<Config['agents']['list']>[number]['tools'];
   /** Profile markdown files to write after seeding (e.g. `IDENTITY.md`, `SOUL.md`). */
   profileFiles?: Record<string, string>;
   /** Clone from an existing agent id — copies config entry fields and profile directory. */
@@ -266,41 +303,29 @@ export function prepareCreateAgent(
 
   const wsAbs = resolveUserPath(workspace);
 
-  const effectiveModels = body.models ?? cloneSourceEntry?.models;
+  const rawModels = body.models ?? cloneSourceEntry?.models;
+  const effectiveModels =
+    rawModels?.roles
+      ? {
+          defaultRole: rawModels.defaultRole ?? Object.keys(rawModels.roles)[0] ?? 'deep',
+          roles: rawModels.roles,
+        }
+      : undefined;
+  if (effectiveModels && !effectiveModels.roles[effectiveModels.defaultRole]) {
+    return { ok: false, error: 'models.defaultRole must reference models.roles', status: 400 };
+  }
 
   let next = applyAgentConfig(cfg, {
     agentId,
     workspace: wsAbs,
     ...(effectiveModels ? { models: effectiveModels } : {}),
-    ...(body.agentDir?.trim() ? { agentDir: body.agentDir.trim() } : {}),
     ...(body.skills !== undefined
       ? { skills: body.skills.map((s) => String(s).trim()).filter(Boolean) }
-      : cloneSourceEntry?.skills !== undefined && body.cloneFrom
-        ? { skills: [...cloneSourceEntry.skills] }
+      : cloneSourceEntry?.skills.mode === 'allowlist' && body.cloneFrom
+        ? { skills: [...(cloneSourceEntry.skills.allow ?? [])] }
         : {}),
+    ...(body.tools !== undefined ? { tools: body.tools } : cloneSourceEntry?.tools && body.cloneFrom ? { tools: cloneSourceEntry.tools } : {}),
   });
-
-  // Resolve tools: explicit body > clone source > none
-  const tools = body.tools ?? cloneSourceEntry?.tools;
-  if (tools !== undefined) {
-    const list = [...listAgentEntries(next)];
-    const idx = findAgentEntryIndex(list, agentId);
-    if (idx >= 0) {
-      type Entry = (typeof list)[number];
-      const entry: Entry = { ...list[idx] };
-      const disable = tools.disable?.map((s) => String(s).trim()).filter(Boolean) ?? [];
-      entry.tools = { ...entry.tools, ...(disable.length > 0 ? { disable } : {}) };
-
-      list[idx] = entry;
-      next = {
-        ...next,
-        agents: {
-          ...next.agents,
-          list,
-        },
-      };
-    }
-  }
 
   return { ok: true, data: { nextConfig: next, agentId, workspace: wsAbs } };
 }
@@ -364,16 +389,18 @@ export async function finalizeCreateAgentDirs(
 
 export type UpdateAgentBody = {
   workspace?: string;
+  extends?: string[];
   models?: {
-    chat?: { primary: string; fallbacks?: string[] } | null;
-    roles?: Record<string, { model: string; description?: string }> | null;
+    defaultRole?: string | null;
+    roles?: Record<string, { model: string; description?: string }>;
   } | null;
-  agentDir?: string | null;
   setDefault?: boolean;
-  /** Replace `agents.list[].skills`; `null` removes the key (inherit defaults). */
+  /** Replace `agents.list[].skills`; `null` resets to all skills. */
   skills?: string[] | null;
-  /** Replace `agents.list[].tools`; `null` removes the key (inherit defaults). */
-  tools?: { disable?: string[] | null } | null;
+  /** Replace `agents.list[].tools`; `null` resets to no explicit policies. */
+  tools?: NonNullable<Config['agents']['list']>[number]['tools'] | null;
+  /** Replace `agents.list[].memory`; every agent manifest owns its memory policy. */
+  memory?: NonNullable<Config['agents']['list']>[number]['memory'];
 };
 
 export function prepareUpdateAgent(
@@ -385,7 +412,19 @@ export function prepareUpdateAgent(
   let list = [...listAgentEntries(cfg)];
   let idx = findAgentEntryIndex(list, agentId);
   if (idx < 0 && agentId === resolveDefaultAgentId(cfg)) {
-    list = [...list, { id: agentId, enabled: true as const }];
+    list = [...list, {
+      id: agentId,
+      enabled: true as const,
+      identity: { name: agentId, role: 'Agent', language: 'en', tone: 'direct' },
+      responsibilities: { primary: ['Help the user complete tasks'] },
+      workspace: { root: `~/.xopc/workspace/${agentId}` },
+      models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
+      tools: { builtin: {} },
+      skills: { mode: 'all' },
+      memory: { mode: 'confirmWrite', sources: ['session', 'curated'], writePolicy: { curated: 'confirm' } },
+      workflows: {},
+      boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+    }];
     idx = list.length - 1;
   }
   if (idx < 0) {
@@ -398,39 +437,34 @@ export function prepareUpdateAgent(
   if (body.workspace !== undefined) {
     const w = body.workspace.trim();
     if (w) {
-      entry.workspace = resolveUserPath(w);
+      entry.workspace = { root: resolveUserPath(w) };
+    }
+  }
+  if (body.extends !== undefined) {
+    const nextExtends = Array.from(new Set(body.extends.map((id) => normalizeAgentId(id)).filter(Boolean)));
+    for (const presetId of nextExtends) {
+      if (!cfg.agents.capabilityPresets[presetId]) {
+        return { ok: false, error: `capability preset "${presetId}" not found`, status: 400 };
+      }
+    }
+    if (nextExtends.length > 0) {
+      entry.extends = nextExtends;
+    } else {
+      delete entry.extends;
     }
   }
   if (body.models !== undefined) {
     if (body.models === null) {
-      delete entry.models;
+      return { ok: false, error: 'models cannot be null; every agent manifest needs model roles', status: 400 };
     } else {
-      if (Object.hasOwn(body.models, 'chat')) {
-        if (body.models.chat === null) {
-          if (entry.models) {
-            delete entry.models.chat;
-          }
-        } else if (body.models.chat !== undefined) {
-          const primary = body.models.chat.primary.trim();
-          if (!primary) {
-            return { ok: false, error: 'models.chat.primary must be a non-empty string', status: 400 };
-          }
-          const fallbacks = body.models.chat.fallbacks?.map((s) => s.trim()).filter(Boolean);
-          entry.models = {
-            ...entry.models,
-            chat: {
-              primary,
-              ...(fallbacks && fallbacks.length > 0 ? { fallbacks } : {}),
-            },
-          };
+      if (body.models.defaultRole !== undefined) {
+        if (body.models.defaultRole === null || !body.models.defaultRole.trim()) {
+          return { ok: false, error: 'models.defaultRole must be a non-empty string', status: 400 };
         }
+        entry.models = { ...entry.models, defaultRole: body.models.defaultRole.trim() };
       }
       if (Object.hasOwn(body.models, 'roles')) {
-        if (body.models.roles === null) {
-          if (entry.models) {
-            delete entry.models.roles;
-          }
-        } else if (body.models.roles !== undefined) {
+        if (body.models.roles !== undefined) {
           const roles = Object.fromEntries(
             Object.entries(body.models.roles)
               .map(([id, row]) => ({
@@ -447,50 +481,35 @@ export function prepareUpdateAgent(
           entry.models = { ...entry.models, roles };
         }
       }
-      if (entry.models && Object.keys(entry.models).length === 0) {
-        delete entry.models;
+      if (!entry.models.roles[entry.models.defaultRole]) {
+        return { ok: false, error: 'models.defaultRole must reference models.roles', status: 400 };
       }
-    }
-  }
-  if (body.agentDir !== undefined) {
-    if (body.agentDir === null || String(body.agentDir).trim() === '') {
-      delete entry.agentDir;
-    } else {
-      entry.agentDir = String(body.agentDir).trim();
     }
   }
 
   if (body.skills !== undefined) {
     if (body.skills === null) {
-      delete entry.skills;
+      entry.skills = { mode: 'all' };
     } else {
       const next = body.skills.map((s) => String(s).trim()).filter(Boolean);
       if (next.length === 0) {
-        entry.skills = [];
+        entry.skills = { mode: 'allowlist', allow: [] };
       } else {
-        entry.skills = next;
+        entry.skills = { mode: 'allowlist', allow: next };
       }
     }
   }
 
   if (body.tools !== undefined) {
     if (body.tools === null) {
-      delete entry.tools;
+      entry.tools = { builtin: {} };
     } else {
-      if (Object.hasOwn(body.tools, 'disable')) {
-        if (body.tools.disable === null) {
-          if (entry.tools) {
-            delete entry.tools.disable;
-            if (Object.keys(entry.tools).length === 0) {
-              delete entry.tools;
-            }
-          }
-        } else if (body.tools.disable !== undefined) {
-          const next = body.tools.disable.map((s) => String(s).trim()).filter(Boolean);
-          entry.tools = { ...entry.tools, disable: next };
-        }
-      }
+      entry.tools = body.tools;
     }
+  }
+
+  if (body.memory !== undefined) {
+    entry.memory = body.memory;
   }
 
   list[idx] = entry;

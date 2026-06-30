@@ -178,7 +178,6 @@ export class BackgroundReviewCoordinator {
       skillAllowlist: ctx.skillAllowlist ? [...ctx.skillAllowlist] : undefined,
       workspacePath: ctx.workspacePath,
       skillManager: ctx.workspaceRuntime.skillManager,
-      builtinMemoryStore: ctx.workspaceRuntime.builtinMemoryStore,
       memoryManager: ctx.workspaceRuntime.memoryManager,
       getConfig: () => this.opts.getConfig(),
       onSkillsFilesystemMutate: this.opts.onSkillsFilesystemMutate,

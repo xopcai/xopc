@@ -48,9 +48,8 @@ export function resolveFallbackCandidates(params: {
 }): ModelCandidate[] {
   const { cfg, provider: inputProvider, model: inputModel, fallbacksOverride } = params;
 
-  const modelConfig = cfg?.agents?.defaults?.models?.chat;
-  const primaryRef = modelConfig?.primary;
-  const fallbacks = fallbacksOverride ?? modelConfig?.fallbacks;
+  const primaryRef = getDefaultModelSync(cfg);
+  const fallbacks = fallbacksOverride;
 
   const defaultParts = getDefaultModelParts(cfg);
   const primaryResolved = parseModelRef(primaryRef || getDefaultModelSync(cfg));

@@ -28,12 +28,6 @@ import { getAllProviders, isProviderConfigured } from '../../../providers/index.
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { GatewayService } from '../../service.js';
 import { safeToolsWebForGet } from '../../config-tools-web.js';
-import {
-  agentImageGenerationModelAutoProviderFallback,
-  agentImageGenerationModelTimeoutMs,
-  agentModelFallbacksToArray,
-  agentModelRefToString,
-} from './agent-model.js';
 import { buildSafeProvidersConfigForWeb } from './safe-providers-config.js';
 import { maskSttConfigForWeb, maskTtsConfigForWeb } from './safe-voice-config.js';
 
@@ -90,7 +84,7 @@ function maskBrowserCloudConfigForWeb(cloud: unknown): Record<string, unknown> |
   return Object.keys(safe).length > 0 ? safe : null;
 }
 
-export function buildSafeBrowserConfigForWeb(browser: Config['agents']['defaults']['browser'] | undefined) {
+export function buildSafeBrowserConfigForWeb(browser: unknown) {
   if (!browser || typeof browser !== 'object') {
     return {
       enabled: false,
@@ -111,45 +105,64 @@ export function buildSafeBrowserConfigForWeb(browser: Config['agents']['defaults
   }
 
   return {
-    enabled: browser.enabled !== false,
-    headless: browser.headless === true,
-    allowPrivateUrls: browser.allowPrivateUrls === true,
+    enabled: (browser as Record<string, unknown>).enabled !== false,
+    headless: (browser as Record<string, unknown>).headless === true,
+    allowPrivateUrls: (browser as Record<string, unknown>).allowPrivateUrls === true,
     commandTimeout:
-      typeof browser.commandTimeout === 'number' && Number.isFinite(browser.commandTimeout)
-        ? Math.floor(browser.commandTimeout)
+      typeof (browser as Record<string, unknown>).commandTimeout === 'number' &&
+      Number.isFinite((browser as Record<string, unknown>).commandTimeout as number)
+        ? Math.floor((browser as Record<string, unknown>).commandTimeout as number)
         : null,
     backend:
-      browser.backend === 'local' ||
-      browser.backend === 'cdp' ||
-      browser.backend === 'cloud' ||
-      browser.backend === 'extension' ||
-      browser.backend === 'cloakbrowser'
-        ? browser.backend
+      (browser as Record<string, unknown>).backend === 'local' ||
+      (browser as Record<string, unknown>).backend === 'cdp' ||
+      (browser as Record<string, unknown>).backend === 'cloud' ||
+      (browser as Record<string, unknown>).backend === 'extension' ||
+      (browser as Record<string, unknown>).backend === 'cloakbrowser'
+        ? (browser as Record<string, unknown>).backend
         : null,
     cloudProvider:
-      browser.cloudProvider === 'browserbase' || browser.cloudProvider === 'browser-use'
-        ? browser.cloudProvider
+      (browser as Record<string, unknown>).cloudProvider === 'browserbase' ||
+      (browser as Record<string, unknown>).cloudProvider === 'browser-use'
+        ? (browser as Record<string, unknown>).cloudProvider
         : null,
-    cloud: maskBrowserCloudConfigForWeb(browser.cloud),
-    cdpUrl: typeof browser.cdpUrl === 'string' && browser.cdpUrl.trim() ? browser.cdpUrl.trim() : null,
-    extension: browser.extension && typeof browser.extension === 'object' && !Array.isArray(browser.extension)
-      ? browser.extension
+    cloud: maskBrowserCloudConfigForWeb((browser as Record<string, unknown>).cloud),
+    cdpUrl:
+      typeof (browser as Record<string, unknown>).cdpUrl === 'string' &&
+      ((browser as Record<string, unknown>).cdpUrl as string).trim()
+        ? ((browser as Record<string, unknown>).cdpUrl as string).trim()
+        : null,
+    extension:
+      (browser as Record<string, unknown>).extension &&
+      typeof (browser as Record<string, unknown>).extension === 'object' &&
+      !Array.isArray((browser as Record<string, unknown>).extension)
+        ? (browser as Record<string, unknown>).extension
       : null,
     cloakbrowser:
-      browser.cloakbrowser && typeof browser.cloakbrowser === 'object' && !Array.isArray(browser.cloakbrowser)
-        ? browser.cloakbrowser
+      (browser as Record<string, unknown>).cloakbrowser &&
+      typeof (browser as Record<string, unknown>).cloakbrowser === 'object' &&
+      !Array.isArray((browser as Record<string, unknown>).cloakbrowser)
+        ? (browser as Record<string, unknown>).cloakbrowser
         : null,
-    humanize: typeof browser.humanize === 'boolean' ? browser.humanize : null,
-    humanPreset: browser.humanPreset === 'default' || browser.humanPreset === 'careful' ? browser.humanPreset : null,
+    humanize:
+      typeof (browser as Record<string, unknown>).humanize === 'boolean'
+        ? (browser as Record<string, unknown>).humanize
+        : null,
+    humanPreset:
+      (browser as Record<string, unknown>).humanPreset === 'default' ||
+      (browser as Record<string, unknown>).humanPreset === 'careful'
+        ? (browser as Record<string, unknown>).humanPreset
+        : null,
     dialogPolicy:
-      browser.dialogPolicy === 'must_respond' ||
-      browser.dialogPolicy === 'auto_accept' ||
-      browser.dialogPolicy === 'auto_dismiss'
-        ? browser.dialogPolicy
+      (browser as Record<string, unknown>).dialogPolicy === 'must_respond' ||
+      (browser as Record<string, unknown>).dialogPolicy === 'auto_accept' ||
+      (browser as Record<string, unknown>).dialogPolicy === 'auto_dismiss'
+        ? (browser as Record<string, unknown>).dialogPolicy
         : null,
     dialogTimeoutSeconds:
-      typeof browser.dialogTimeoutSeconds === 'number' && Number.isFinite(browser.dialogTimeoutSeconds)
-        ? Math.floor(browser.dialogTimeoutSeconds)
+      typeof (browser as Record<string, unknown>).dialogTimeoutSeconds === 'number' &&
+      Number.isFinite((browser as Record<string, unknown>).dialogTimeoutSeconds as number)
+        ? Math.floor((browser as Record<string, unknown>).dialogTimeoutSeconds as number)
         : null,
   };
 }
@@ -194,48 +207,16 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
         .filter((e) => e.enabled !== false)
         .map((e) => ({
           id: normalizeAgentId(e.id),
+          identity: e.identity,
+          workspace: e.workspace,
+          models: e.models,
+          tools: e.tools,
+          skills: e.skills,
+          memory: e.memory,
+          workflows: e.workflows,
+          boundaries: e.boundaries,
         })),
-      defaults: {
-        model: agentModelRefToString(config.agents?.defaults?.models?.chat) ?? '',
-        modelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.models?.chat),
-        imageModel: agentModelRefToString(config.agents?.defaults?.imageModel) ?? null,
-        imageModelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.imageModel),
-        imageGenerationModel: agentModelRefToString(config.agents?.defaults?.imageGenerationModel) ?? null,
-        imageGenerationModelFallbacks: agentModelFallbacksToArray(
-          config.agents?.defaults?.imageGenerationModel,
-        ),
-        imageGenerationModelTimeoutMs: agentImageGenerationModelTimeoutMs(
-          config.agents?.defaults?.imageGenerationModel,
-        ),
-        imageGenerationModelAutoProviderFallback: agentImageGenerationModelAutoProviderFallback(
-          config.agents?.defaults?.imageGenerationModel,
-        ),
-        mediaMaxMb: config.agents?.defaults?.mediaMaxMb,
-        maxTokens: config.agents?.defaults?.maxTokens,
-        temperature: config.agents?.defaults?.temperature,
-        maxToolIterations: config.agents?.defaults?.maxToolIterations,
-        workspace: config.agents?.defaults?.workspace,
-        thinkingDefault: config.agents?.defaults?.thinkingDefault,
-        reasoningDefault: config.agents?.defaults?.reasoningDefault,
-        verboseDefault: config.agents?.defaults?.verboseDefault,
-        browser: buildSafeBrowserConfigForWeb(config.agents?.defaults?.browser),
-        maxTaskDurationMs: config.agents?.defaults?.maxTaskDurationMs,
-        maxRequestsPerTurn: config.agents?.defaults?.maxRequestsPerTurn,
-        maxToolFailuresPerTurn: config.agents?.defaults?.maxToolFailuresPerTurn,
-        compaction: config.agents?.defaults?.compaction,
-        pruning: config.agents?.defaults?.pruning,
-        memory: config.agents?.defaults?.memory,
-        sessionSearch: config.agents?.defaults?.sessionSearch,
-        backgroundReview: config.agents?.defaults?.backgroundReview,
-        webExtract: config.agents?.defaults?.webExtract,
-        delegate: config.agents?.defaults?.delegate,
-        executeCode: config.agents?.defaults?.executeCode,
-        systemPromptOverride: config.agents?.defaults?.systemPromptOverride,
-        skills: config.agents?.defaults?.skills,
-        tools: config.agents?.defaults?.tools,
-        models: config.agents?.defaults?.models,
-        params: config.agents?.defaults?.params,
-      },
+      capabilityPresets: config.agents?.capabilityPresets ?? {},
     },
     channels: channelsPayload,
     providers: Object.fromEntries(
@@ -322,6 +303,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
       skillsMarketplaceProvider: config.gateway?.skillsMarketplaceProvider ?? 'skillhub',
       skillsStoreBaseUrl: config.gateway?.skillsStoreBaseUrl ?? 'https://store.xopc.ai',
     },
+    browser: buildSafeBrowserConfigForWeb(config.browser),
     cron: resolveCronConfigForWeb(config),
     goals: resolveGoalsConfigForWeb(config),
     session: resolveSessionConfigForWeb(config),

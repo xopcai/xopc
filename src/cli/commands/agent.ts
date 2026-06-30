@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { AgentService } from '../../agent/index.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
+import { getAgentDefaultModelRef } from '../../config/schema.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
@@ -50,7 +51,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
         return;
       }
 
-      const modelFromConfig = config.agents?.defaults?.models?.chat?.primary;
+      const modelFromConfig = getAgentDefaultModelRef(config);
       const modelId = (options.model?.trim() || modelFromConfig) as string | undefined;
       const bus = new MessageBus();
 

@@ -85,7 +85,7 @@ export function agentImageGenerationModelAutoProviderFallback(ref: unknown): boo
 }
 
 /**
- * PATCH body normalizer for `agents.defaults.imageGenerationModel`. Always
+ * PATCH body normalizer for image-generation model refs. Always
  * emits `{ primary, fallbacks?, timeoutMs?, autoProviderFallback? }`. Returns
  * `undefined` when the input has no usable primary so the caller can skip the
  * assignment.

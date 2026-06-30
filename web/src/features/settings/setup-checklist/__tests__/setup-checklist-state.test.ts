@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildSetupStatusSnapshot } from '@/features/settings/setup-checklist/setup-checklist-state';
+import {
+  buildSetupStatusSnapshot,
+  readOverviewBrowserDiagnosticsInput,
+} from '@/features/settings/setup-checklist/setup-checklist-state';
 
 const labels = {
   gatewayOnline: 'online',
@@ -157,5 +160,16 @@ describe('buildSetupStatusSnapshot', () => {
     expect(snapshot.healthTier).toBe('blocked');
     expect(snapshot.issues.map((issue) => issue.id)).toEqual(['provider-auth', 'cron-health']);
     expect(snapshot.issues[0]?.path).toBe('/settings/credentials');
+  });
+});
+
+describe('readOverviewBrowserDiagnosticsInput', () => {
+  it('reads top-level browser runtime config', () => {
+    expect(
+      readOverviewBrowserDiagnosticsInput({
+        browser: { enabled: true, backend: 'cdp' },
+        agents: { defaults: { browser: { enabled: false, backend: 'extension' } } },
+      }),
+    ).toEqual({ enabled: true, backend: 'cdp' });
   });
 });

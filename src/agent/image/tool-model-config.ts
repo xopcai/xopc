@@ -78,10 +78,10 @@ function firstVisionModelRef(provider: string): string | undefined {
 }
 
 /**
- * Effective image understanding model: explicit `agents.defaults.imageModel`, else inferred from configured providers.
+ * Effective image understanding model inferred from configured providers.
  */
 export function resolveImageModelConfigForTool(params: { cfg?: Config }): ToolModelConfig | null {
-  const explicit = coerceToolModelConfig(params.cfg?.agents?.defaults?.imageModel);
+  const explicit = coerceToolModelConfig(undefined);
   if (hasToolModelConfig(explicit)) {
     return explicit;
   }

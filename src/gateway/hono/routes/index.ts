@@ -3,6 +3,7 @@ import type { Hono } from 'hono';
 import { registerAgentStreamRoutes } from './agent-stream.js';
 import { registerSessionsRoutes } from './sessions.js';
 import { registerStatusRoutes } from './status.js';
+import { registerMemoryRoutes } from './memory.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
   mountAppLazyRoutePrefixes,
@@ -16,6 +17,7 @@ export function registerCoreAuthenticatedRoutes(
   registerStatusRoutes(authenticated, deps);
   registerAgentStreamRoutes(authenticated, deps);
   registerSessionsRoutes(authenticated, deps);
+  registerMemoryRoutes(authenticated, deps);
 }
 
 export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps: AuthenticatedRouteDeps): void {

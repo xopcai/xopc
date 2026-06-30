@@ -100,7 +100,7 @@ export const BrowserVisionSchema = Type.Object({
   prompt: Type.Optional(
     Type.String({
       description:
-        'What to analyze in the screenshot (default: describe the visible UI state). Requires `agents.defaults.imageModel` to be configured.',
+        'What to analyze in the screenshot (default: describe the visible UI state). Requires an available image model.',
     }),
   ),
   selector: Type.Optional(

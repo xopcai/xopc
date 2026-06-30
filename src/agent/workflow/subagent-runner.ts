@@ -260,8 +260,6 @@ function safeResolveDefaultModel(get: () => Model<Api>): Model<Api> | null {
 function resolveSubagentStreamMode(
   getConfig: () => Config | undefined,
 ): 'off' | 'steps' | 'full' {
-  const mode = getConfig()?.agents?.defaults?.workflow?.subagentStream;
-  if (mode === 'off' || mode === 'steps' || mode === 'full') return mode;
   return 'steps';
 }
 

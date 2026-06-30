@@ -53,16 +53,11 @@ function toMs(ctx: BrowserActionContext): number {
 
 /** Whether humanize mode is active for this context (local/cdp/cloakbrowser only). */
 function isHumanizeEnabled(ctx: BrowserActionContext): boolean {
-  const browser = ctx.config?.agents?.defaults?.browser;
-  if (!browser?.humanize) return false;
-  // Extension backend has its own event dispatch — humanize is not applicable
-  const backend = browser.backend;
-  if (backend === 'extension') return false;
-  return true;
+  return false;
 }
 
 function humanPreset(ctx: BrowserActionContext): HumanPreset {
-  return (ctx.config?.agents?.defaults?.browser?.humanPreset as HumanPreset) ?? 'default';
+  return 'default';
 }
 
 async function ariaSnapshot(page: Page, selector: string | undefined, maxLength: number, timeoutMs: number): Promise<string> {
@@ -144,7 +139,7 @@ const navigateAction: BrowserActionHandler = async (ctx, args) => {
   const url = String(args.url ?? '');
   if (!url) return fail('navigate', 'MISSING_URL', 'url is required');
 
-  const allowPrivate = ctx.config?.agents?.defaults?.browser?.allowPrivateUrls === true;
+  const allowPrivate = false;
   if (containsApiKeyPattern(url)) return fail('navigate', 'BLOCKED', 'URL contains API key/token');
   const block = checkWebsiteBlocklist(url, ctx.config?.tools?.web?.blocklist);
   if (block) return fail('navigate', 'BLOCKED', block.message);

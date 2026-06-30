@@ -3,12 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { buildRouteSeeds } from '@/features/search/global-command-palette/routes-provider';
 
 describe('buildRouteSeeds', () => {
-  it('includes agent defaults slice routes for command palette navigation', () => {
+  it('maps browser settings to the standalone browser route', () => {
     const seeds = buildRouteSeeds('en');
-    const context = seeds.find((s) => s.id === 'route:settings:agent:settingsAgentContext');
-    const memory = seeds.find((s) => s.id === 'route:settings:agent:settingsAgentMemory');
-    expect(context?.path).toBe('/settings/agent-defaults?tab=context');
-    expect(memory?.path).toBe('/settings/agent-defaults?tab=memory');
-    expect(context?.keywords).toContain('compaction');
+    const browser = seeds.find((s) => s.id === 'route:settings:agent:settingsAgentBrowser');
+    expect(browser?.path).toBe('/settings/agent-browser');
+    expect(browser?.keywords).toContain('browser');
   });
 });

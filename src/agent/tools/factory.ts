@@ -40,7 +40,6 @@ import {
 } from './index.js';
 import { createCuratedMemoryTool } from './curated-memory-tool.js';
 import { createSessionSearchTool } from './session-search-tool.js';
-import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { shouldRegisterCuratedMemoryTool } from '../memory/memory-config.js';
 import type { SessionStore } from '../../session/store.js';
@@ -87,8 +86,6 @@ export interface ToolFactoryDeps {
   getConfig?: () => Config | undefined;
   /** Session / default chat model for vision tool description. */
   getPrimaryModel?: () => Model<Api>;
-  /** Built-in curated memory store (agent home `memories/`). */
-  getBuiltinMemoryStore?: () => BuiltinMemoryStore;
   /** Memory orchestration (prefetch/sync + external tools). */
   getMemoryManager?: () => MemoryManager;
   /** Session store for `session_search`. */
@@ -120,7 +117,6 @@ export interface CreateCoreToolsOptions {
   disabledTools?: Set<string>;
   /** Optional primary model for image tool heuristics. */
   getPrimaryModel?: () => Model<Api>;
-  getBuiltinMemoryStore?: () => BuiltinMemoryStore;
   getMemoryManager?: () => MemoryManager;
   /** When set, registers `skills_list` and `skill_view` bound to this workspace\'s skills. */
   getSkillManager?: () => SkillManager;
@@ -143,9 +139,8 @@ export class AgentToolsFactory {
   private browserReadinessKey(): string {
     const cfg = this.deps.getConfig?.();
     const backend = resolveBrowserBackendFromConfig(cfg);
-    const ext = cfg?.agents?.defaults?.browser?.extension;
-    const host = typeof ext?.host === 'string' && ext.host.trim() ? ext.host.trim() : '127.0.0.1';
-    const port = typeof ext?.port === 'number' ? ext.port : 19820;
+    const host = '127.0.0.1';
+    const port = 19820;
     const cdpUrl = backend.mode === 'cdp' ? backend.config.wsEndpoint : '';
     const cloudKind = backend.mode === 'cloud' ? backend.config.type : '';
     return `${backend.mode}@${host}:${port}|${cdpUrl}|${cloudKind}`;
@@ -183,18 +178,7 @@ export class AgentToolsFactory {
   private browserSupervisorForTask(taskId: string): CdpSupervisor {
     let s = this.browserTaskSupervisors.get(taskId);
     if (!s) {
-      const b = this.deps.getConfig?.()?.agents?.defaults?.browser;
-      const dialogPolicy =
-        b?.dialogPolicy === 'must_respond' || b?.dialogPolicy === 'auto_accept' || b?.dialogPolicy === 'auto_dismiss'
-          ? b.dialogPolicy
-          : 'auto_dismiss';
-      const dialogTimeoutSeconds =
-        typeof b?.dialogTimeoutSeconds === 'number' &&
-        Number.isFinite(b.dialogTimeoutSeconds) &&
-        b.dialogTimeoutSeconds >= 1
-          ? Math.floor(b.dialogTimeoutSeconds)
-          : 300;
-      s = new CdpSupervisor({ dialogPolicy, dialogTimeoutSeconds });
+      s = new CdpSupervisor({ dialogPolicy: 'auto_dismiss', dialogTimeoutSeconds: 300 });
       this.browserTaskSupervisors.set(taskId, s);
     }
     return s;
@@ -215,7 +199,7 @@ export class AgentToolsFactory {
   private ensureBrowserManager(): BrowserManager {
     if (!this.browserManager) {
       this.browserManager = new BrowserManager({
-        getHeadless: () => this.deps.getConfig?.()?.agents?.defaults?.browser?.headless === true,
+        getHeadless: () => false,
         getBackend: () => resolveBrowserBackendFromConfig(this.deps.getConfig?.()),
       });
     }
@@ -243,9 +227,6 @@ export class AgentToolsFactory {
     const workspace = options?.workspace ?? this.deps.workspace;
     const { bus } = this.deps;
     const getPrimary = options?.getPrimaryModel ?? this.deps.getPrimaryModel;
-    const getBuiltin = options?.getBuiltinMemoryStore ?? this.deps.getBuiltinMemoryStore;
-    const builtinStore = getBuiltin?.();
-    const memoriesDir = builtinStore?.memoriesDir;
     const getMemMgr = options?.getMemoryManager ?? this.deps.getMemoryManager;
     const getSkillMgr = options?.getSkillManager;
     const disabled = options?.disabledTools;
@@ -253,6 +234,7 @@ export class AgentToolsFactory {
     const primary = getPrimary?.();
     const modelHasVision = primary?.input?.includes('image') ?? false;
     const cfg = this.deps.getConfig?.();
+    const browserEnabled = cfg?.browser?.enabled !== false;
     const recordGoalEvidence = createGoalEvidenceRecorder({
       getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
     });
@@ -357,15 +339,15 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      createMemorySearchTool({ workspaceDir: workspace, memoriesDir }),
-      createMemoryGetTool({ workspaceDir: workspace, memoriesDir }),
-      ...(getBuiltin && shouldRegisterCuratedMemoryTool(this.deps.getConfig?.())
+      ...(getMemMgr
         ? [
-            createCuratedMemoryTool(getBuiltin, {
-              onMemoryWrite: (action, target, content) => {
-                getMemMgr?.().onMemoryWrite(action, target, content);
-              },
-            }),
+            createMemorySearchTool({ workspaceDir: workspace, getMemoryManager: () => getMemMgr() }),
+            createMemoryGetTool({ workspaceDir: workspace, getMemoryManager: () => getMemMgr() }),
+          ]
+        : []),
+      ...(getMemMgr && shouldRegisterCuratedMemoryTool(this.deps.getConfig?.())
+        ? [
+            createCuratedMemoryTool(() => getMemMgr()),
           ]
         : []),
       ...(getMemMgr?.().getAdditionalTools() ?? []),
@@ -386,7 +368,7 @@ export class AgentToolsFactory {
           ]
         : []),
       createGoalTool(),
-      ...(cfg?.agents?.defaults?.browser?.enabled !== false
+      ...(browserEnabled
         ? [
             createBrowserUseTool({
               getManager: () => this.ensureBrowserManager(),
@@ -402,7 +384,7 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      ...(cfg?.agents?.defaults?.workflow?.enabled !== false && primary
+      ...(primary
         ? [
             createWorkflowTool({
               catalog: createWorkflowCatalog(),
@@ -414,7 +396,7 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      ...(cfg?.agents?.defaults?.delegate?.enabled === true && primary
+      ...(false && primary
         ? [
             createDelegateTool({
               workspace,
@@ -473,9 +455,7 @@ export class AgentToolsFactory {
 
     const wrapped = wrapToolsWithProtection(bundled, this.deps.toolExecutorConfig);
 
-    const executeEnabled =
-      cfg?.agents?.defaults?.executeCode?.enabled === true &&
-      !coreOptions?.disabledTools?.has('execute_code');
+    const executeEnabled = false && !coreOptions?.disabledTools?.has('execute_code');
 
     if (executeEnabled) {
       const sandboxMap = buildSandboxToolMap(wrapped);

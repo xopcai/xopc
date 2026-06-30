@@ -1,14 +1,6 @@
-import type { AgentDefaultsTabId } from '@/features/settings/agents/agent-defaults-tabs';
-import type { BrowserTabId } from '@/features/settings/agents/agent-defaults-panels/browser/browser-tabs';
 import type { SettingsMode } from '@/stores/settings-mode-store';
 
-/** Agent defaults internal tabs hidden in simple mode. */
-export const SIMPLE_MODE_HIDDEN_AGENT_DEFAULTS_TABS = new Set<AgentDefaultsTabId>([
-  'runtime',
-  'context',
-  'memory',
-  'system-prompt',
-]);
+type BrowserTabId = 'overview' | 'extension' | 'local' | 'cloakbrowser' | 'cdp' | 'cloud';
 
 export type GatewaySettingsTabId =
   | 'network'
@@ -24,29 +16,11 @@ export const SIMPLE_MODE_HIDDEN_GATEWAY_TABS = new Set<GatewaySettingsTabId>([
   'advanced',
 ]);
 
-/** Browser settings tabs hidden in simple mode. */
-export const SIMPLE_MODE_HIDDEN_BROWSER_TABS = new Set<BrowserTabId>([
+const SIMPLE_MODE_HIDDEN_BROWSER_TABS = new Set<BrowserTabId>([
   'local',
   'cdp',
   'cloud',
 ]);
-
-export function isAgentDefaultsTabVisibleInMode(
-  tab: AgentDefaultsTabId,
-  mode: SettingsMode,
-): boolean {
-  if (mode === 'advanced') {
-    return true;
-  }
-  return !SIMPLE_MODE_HIDDEN_AGENT_DEFAULTS_TABS.has(tab);
-}
-
-export function visibleAgentDefaultsTabs(
-  tabs: readonly AgentDefaultsTabId[],
-  mode: SettingsMode,
-): AgentDefaultsTabId[] {
-  return tabs.filter((tab) => isAgentDefaultsTabVisibleInMode(tab, mode));
-}
 
 export function isGatewaySettingsTabVisibleInMode(
   tab: GatewaySettingsTabId,
@@ -77,10 +51,6 @@ export function visibleBrowserSettingsTabs(
   mode: SettingsMode,
 ): BrowserTabId[] {
   return tabs.filter((tab) => isBrowserSettingsTabVisibleInMode(tab, mode));
-}
-
-export function fallbackAgentDefaultsTab(_mode: SettingsMode): AgentDefaultsTabId {
-  return 'model-strategy';
 }
 
 export function fallbackGatewaySettingsTab(): GatewaySettingsTabId {

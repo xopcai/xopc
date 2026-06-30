@@ -5,24 +5,19 @@ How inbound traffic maps to **session keys**, **agents**, and optional **identit
 ## Session Key Format
 
 ```
-{agentId}:{source}:{accountId}:{peerKind}:{peerId}[:thread:{threadId}]
+agent:{agentId}:{rest}
 ```
 
-| Field | Description | Example |
-|-------|-------------|---------|
-| `agentId` | Agent identifier | `main`, `coder` |
-| `source` | Message source | `telegram`, `gateway`, `cli` |
-| `accountId` | Account identifier | `default`, `work` |
-| `peerKind` | Conversation type | `dm`, `group`, `direct` |
-| `peerId` | Conversation ID | `123456`, `-100123456` |
+The first segment is always `agent`. The second segment selects the agent manifest. The remaining path depends on scope and channel.
 
 ### Examples
 
 ```
-main:telegram:default:dm:123456
-main:telegram:default:group:-100123456
-main:gateway:default:direct:chat_abc123
-main:cli:default:direct:cli
+agent:main:main
+agent:main:telegram:default:direct:123456
+agent:main:telegram:group:-100123456
+agent:main:gateway:direct:chat_abc123
+agent:main:cli:direct:cli
 ```
 
 ## Configuration
@@ -35,7 +30,7 @@ Register agents under `agents.list`. **Binding rules** (`bindings`) are evaluate
 
 ### Effective runtime profile
 
-For a session key `agentId:…`, the agent runtime merges **`agents.defaults`** with the matching **enabled** row in **`agents.list`** (per-agent `workspace`, `model`, `agentDir`, `tools.disable`, `systemPromptOverride`, `skills`, thinking defaults, etc.). If `agentId` is unknown or disabled in `list`, profile resolution falls back to the **default agent** id above. On-disk layout under `~/.xopc/agents/<id>/` follows the same config-driven resolution — gateway behavior is **`config.json`** only.
+For a session key `agentId:…`, the agent runtime resolves the matching **enabled** manifest in **`agents.list`** and applies any declared **`agents.capabilityPresets`** from `extends`. If `agentId` is unknown or disabled, resolution falls back to the **default agent** id above. On-disk layout under `~/.xopc/agents/<id>/` follows the same config-driven resolution — gateway behavior is **`config.json`** only.
 
 `match.peerId` supports simple `*` glob patterns (e.g. `-100*` for Telegram supergroups).
 
@@ -43,12 +38,32 @@ For a session key `agentId:…`, the agent runtime merges **`agents.defaults`** 
 {
   "agents": {
     "default": "main",
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5"
-    },
+    "capabilityPresets": {},
     "list": [
-      { "id": "main", "name": "Main Assistant" },
-      { "id": "coder", "name": "Coding Assistant" }
+      {
+        "id": "main",
+        "identity": { "name": "Main", "role": "General assistant", "language": "en", "tone": "direct" },
+        "responsibilities": { "primary": ["Help the user"] },
+        "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": { "defaultRole": "deep", "roles": { "deep": { "model": "anthropic/claude-sonnet-4-5" } } },
+        "tools": { "builtin": {} },
+        "skills": { "mode": "all" },
+        "memory": { "mode": "off", "sources": ["session"] },
+        "workflows": {},
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
+      },
+      {
+        "id": "coder",
+        "identity": { "name": "Coder", "role": "Software assistant", "language": "en", "tone": "direct" },
+        "responsibilities": { "primary": ["Help with code tasks"] },
+        "workspace": { "root": "~/.xopc/workspace/coder" },
+        "models": { "defaultRole": "deep", "roles": { "deep": { "model": "anthropic/claude-sonnet-4-5" } } },
+        "tools": { "builtin": { "shell": { "mode": "confirm", "scope": "workspace" } } },
+        "skills": { "mode": "all" },
+        "memory": { "mode": "off", "sources": ["session"] },
+        "workflows": {},
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
+      }
     ]
   },
   "bindings": [

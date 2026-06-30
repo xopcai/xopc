@@ -39,7 +39,7 @@ xopc 使用 **profile Markdown** 模板定义智能体行为与知识。执行 `
 
 智能体可以通过 `memory_search` 和 `memory_get` 工具搜索和读取记忆。
 
-**托管记忆**（可选）：**`agents/<agentId>/memories/MEMORY.md`** 与 **`USER.md`** 存放有上限、可由 `curated_memory` 维护的条目，与 **`agents/<agentId>/profile/MEMORY.md`**（系统提示用 profile）不同。见 [托管记忆](../workspace.md#curated-memory) 与 [配置参考](../configuration.md)（`agents.defaults.memory`）。
+**托管记忆**（可选）：**`agents/<agentId>/memories/MEMORY.md`** 与 **`USER.md`** 存放有上限、可由 `curated_memory` 维护的条目，与 **`agents/<agentId>/profile/MEMORY.md`**（系统提示用 profile）不同。见 [托管记忆](../workspace.md#curated-memory) 与 [配置参考](../configuration.md) 中所选 agent manifest 的 `memory` 策略。
 
 ## 编辑建议
 

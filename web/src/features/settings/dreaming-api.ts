@@ -39,6 +39,8 @@ export type PhaseLastRun =
   | { exists: true; path: string; raw: unknown };
 
 export type DreamingGatewayStatus = {
+  agentId: string;
+  memory: Record<string, unknown>;
   workspaceDir: string;
   config: {
     enabled: boolean;
@@ -147,4 +149,3 @@ export async function fetchDreamingEvents(limit = 50): Promise<DreamingEvent[]> 
   const res = await fetchJson<{ ok?: boolean; payload?: { events: DreamingEvent[] } }>(apiUrl(`/api/dreaming/events${q}`));
   return res.payload?.events ?? [];
 }
-

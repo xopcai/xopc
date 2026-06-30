@@ -2,7 +2,7 @@ import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-// --- Nested shapes (align with `src/config/schema.ts` AgentDefaultsSchema) ---
+// --- Nested shapes (align with `src/config/schema.ts`) ---
 
 export type AgentDefaultsCompactionState = {
   enabled: boolean;
@@ -54,7 +54,6 @@ export type AgentDefaultsWebExtractState = {
 
 import type { AgentTypedModelRow } from '@/features/settings/agents/typed-models-lib';
 import {
-  cleanTypedModelsForPatch,
   parseTypedModelsFromConfig,
 } from '@/features/settings/agents/typed-models-lib';
 
@@ -64,7 +63,7 @@ export type AgentDefaultsExecuteCodeState = { enabled: boolean };
 
 export interface AgentDefaultsState {
   model: string;
-  /** provider/model refs tried when the primary fails (stored as `agents.defaults.models.chat.fallbacks`). */
+  /** Provider/model refs tried when the primary fails. */
   modelFallbacks: string[];
   imageModel: string;
   imageModelFallbacks: string[];
@@ -83,9 +82,9 @@ export interface AgentDefaultsState {
   maxRequestsPerTurn: number;
   maxToolFailuresPerTurn: number;
   workspace: string;
-  /** `browser_use` tool (`agents.defaults.browser.enabled`). */
+  /** `browser_use` runtime (`browser.enabled`). */
   browserEnabled: boolean;
-  /** Headless Chromium when browser tools are on (`agents.defaults.browser.headless`; default false = visible window). */
+  /** Headless Chromium when browser tools are on (`browser.headless`; default false = visible window). */
   browserHeadless: boolean;
   /** Skip private-IP blocking (cloud metadata always blocked). */
   browserAllowPrivateUrls: boolean;
@@ -147,13 +146,13 @@ export interface AgentDefaultsState {
   delegate: AgentDefaultsDelegateState;
   executeCode: AgentDefaultsExecuteCodeState;
   systemPromptOverride: string;
-  /** Maps to `agents.defaults.skills` (allowlist). */
+  /** Agent skill allowlist draft. */
   skillsAllowlist: string[];
-  /** Maps to `agents.defaults.tools.disable`. */
+  /** Built-in tool deny list draft. */
   toolsDisable: string[];
-  /** Named model roles for workflows (`agents.defaults.models`). */
+  /** Named model roles for workflows. */
   typedModels: AgentTypedModelRow[];
-  /** JSON for `agents.defaults.params`. */
+  /** JSON runtime params draft. */
   paramsJson: string;
 }
 
@@ -227,17 +226,6 @@ function normalizeModelFallbacks(raw: unknown): string[] {
   return f.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
 }
 
-function configFromApiResponse(res: unknown): unknown {
-  if (!res || typeof res !== 'object') return undefined;
-  const r = res as Record<string, unknown>;
-  const payload = r.payload;
-  if (payload && typeof payload === 'object' && 'config' in payload) {
-    return (payload as { config?: unknown }).config;
-  }
-  if ('config' in r) return r.config;
-  return undefined;
-}
-
 function truthyBrowserFlag(v: unknown): boolean {
   return v === true || v === 'true' || v === 1;
 }
@@ -272,8 +260,8 @@ type BrowserFieldsPick = Pick<
   | 'browserDialogTimeout'
 >;
 
-function parseBrowserFromDefaults(d: Record<string, unknown>): BrowserFieldsPick {
-  const browser = d.browser;
+function parseBrowserConfig(raw: unknown): BrowserFieldsPick {
+  const browser = raw;
   if (!browser || typeof browser !== 'object' || Array.isArray(browser)) {
     return {
       browserEnabled: true,
@@ -629,7 +617,7 @@ function readImageGenerationAutoProviderFallbackFromDefaults(d: Record<string, u
   return false;
 }
 
-/** Parse `agents.defaults` from a gateway config root object. */
+/** Parse the browser settings draft from a gateway config root object. */
 export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
   const agents =
     cfg && typeof cfg === 'object' && !Array.isArray(cfg) && 'agents' in cfg
@@ -661,7 +649,8 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     Array.isArray(igf) && igf.every((x) => typeof x === 'string')
       ? igf
       : normalizeModelFallbacks(d.imageGenerationModel);
-  const browserFields = parseBrowserFromDefaults(d);
+  const root = cfg && typeof cfg === 'object' && !Array.isArray(cfg) ? (cfg as Record<string, unknown>) : {};
+  const browserFields = parseBrowserConfig(root.browser);
   const maxTaskMs =
     typeof d.maxTaskDurationMs === 'number' && Number.isFinite(d.maxTaskDurationMs)
       ? d.maxTaskDurationMs
@@ -713,221 +702,72 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
   };
 }
 
-function buildMemoryPatch(m: AgentDefaultsMemoryState): Record<string, unknown> {
-  const o: Record<string, unknown> = {
-    enabled: m.enabled,
-    useEnhancedSystem: m.useEnhancedSystem,
-    userProfileEnabled: m.userProfileEnabled,
-  };
-  if (m.provider === 'none' || m.provider === 'stub') {
-    o.provider = m.provider;
-  } else {
-    o.provider = null;
-  }
-  if (m.injectionFrequency === 'every-turn' || m.injectionFrequency === 'first-turn') {
-    o.injectionFrequency = m.injectionFrequency;
-  } else {
-    o.injectionFrequency = null;
-  }
-  o.memoryCharLimit = m.memoryCharLimit ?? null;
-  o.userCharLimit = m.userCharLimit ?? null;
-  o.contextCadence = m.contextCadence ?? null;
-  o.dialecticCadence = m.dialecticCadence ?? null;
-  return o;
-}
-
-/** @throws {SyntaxError} on invalid JSON; {Error} if not a plain object. */
-export function parseParamsJsonForSave(paramsJson: string): Record<string, unknown> | null {
-  const trimmed = paramsJson.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const parsed: unknown = JSON.parse(trimmed);
-  if (parsed === null) {
-    return null;
-  }
-  if (typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new Error('params must be a JSON object');
-  }
-  return parsed as Record<string, unknown>;
-}
-
-/** Maps agent-defaults browser fields to `agents.defaults.browser` for PATCH payloads. */
+/** Maps browser form fields to top-level `browser` for PATCH payloads. */
 export function buildBrowserConfigFromAgentDefaults(state: AgentDefaultsState): Record<string, unknown> {
-  return {
+  const config: Record<string, unknown> = {
     enabled: state.browserEnabled,
     headless: state.browserHeadless,
     allowPrivateUrls: state.browserAllowPrivateUrls,
-    commandTimeout: state.browserCommandTimeout ?? null,
-    backend: state.browserBackend === 'extension' ? null : state.browserBackend,
-    cloudProvider: state.browserCloudProvider === 'local' ? null : state.browserCloudProvider,
-    cloud: state.browserBackend === 'cloud'
+    ...(state.browserCommandTimeout !== undefined ? { commandTimeout: state.browserCommandTimeout } : {}),
+    backend: state.browserBackend,
+    ...(state.browserCloudProvider !== 'local' ? { cloudProvider: state.browserCloudProvider } : {}),
+    ...(state.browserBackend === 'cloud'
       ? {
-          apiKey: state.browserCloudApiKey.trim() || null,
-          projectId: state.browserCloudProjectId.trim() || null,
-          region: state.browserCloudRegion.trim() || null,
+          cloud: {
+            ...(state.browserCloudApiKey.trim() ? { apiKey: state.browserCloudApiKey.trim() } : {}),
+            ...(state.browserCloudProjectId.trim() ? { projectId: state.browserCloudProjectId.trim() } : {}),
+            ...(state.browserCloudRegion.trim() ? { region: state.browserCloudRegion.trim() } : {}),
+          },
         }
-      : null,
-    cdpUrl: state.browserCdpUrl.trim() || null,
-    extension: state.browserBackend === 'extension'
+      : {}),
+    ...(state.browserCdpUrl.trim() ? { cdpUrl: state.browserCdpUrl.trim() } : {}),
+    ...(state.browserBackend === 'extension'
       ? {
-          port: state.browserExtensionPort ?? null,
-          host: state.browserExtensionHost.trim() || null,
-          connectionTimeout: state.browserExtensionConnectionTimeout ?? null,
+          extension: {
+            ...(state.browserExtensionPort !== undefined ? { port: state.browserExtensionPort } : {}),
+            ...(state.browserExtensionHost.trim() ? { host: state.browserExtensionHost.trim() } : {}),
+            ...(state.browserExtensionConnectionTimeout !== undefined
+              ? { connectionTimeout: state.browserExtensionConnectionTimeout }
+              : {}),
+          },
         }
-      : null,
-    cloakbrowser: state.browserBackend === 'cloakbrowser'
+      : {}),
+    ...(state.browserBackend === 'cloakbrowser'
       ? {
-          keepOpen: state.browserCloakKeepOpen,
-          temporaryProfile: state.browserCloakTemporaryProfile,
-          cacheDir: state.browserCloakCacheDir.trim() || null,
-          binaryPath: state.browserCloakBinaryPath.trim() || null,
-          timezone: state.browserCloakTimezone.trim() || null,
-          locale: state.browserCloakLocale.trim() || null,
-          webrtcIp: state.browserCloakWebrtcIp.trim() || null,
-          fingerprintPlatform: state.browserCloakFingerprintPlatform.trim() || null,
-          extraArgs: (() => {
-            const args = state.browserCloakExtraArgs
-              .split('\n')
-              .map((line) => line.trim())
-              .filter(Boolean);
-            return args.length > 0 ? args : null;
-          })(),
+          cloakbrowser: {
+            keepOpen: state.browserCloakKeepOpen,
+            temporaryProfile: state.browserCloakTemporaryProfile,
+            ...(state.browserCloakCacheDir.trim() ? { cacheDir: state.browserCloakCacheDir.trim() } : {}),
+            ...(state.browserCloakBinaryPath.trim() ? { binaryPath: state.browserCloakBinaryPath.trim() } : {}),
+            ...(state.browserCloakTimezone.trim() ? { timezone: state.browserCloakTimezone.trim() } : {}),
+            ...(state.browserCloakLocale.trim() ? { locale: state.browserCloakLocale.trim() } : {}),
+            ...(state.browserCloakWebrtcIp.trim() ? { webrtcIp: state.browserCloakWebrtcIp.trim() } : {}),
+            ...(state.browserCloakFingerprintPlatform.trim()
+              ? { fingerprintPlatform: state.browserCloakFingerprintPlatform.trim() }
+              : {}),
+            ...(() => {
+              const args = state.browserCloakExtraArgs
+                .split('\n')
+                .map((line) => line.trim())
+                .filter(Boolean);
+              return args.length > 0 ? { extraArgs: args } : {};
+            })(),
+          },
+          humanize: state.browserHumanize,
+          humanPreset: state.browserHumanPreset,
         }
-      : null,
-    humanize: state.browserBackend === 'cloakbrowser' ? state.browserHumanize : null,
-    humanPreset: state.browserBackend === 'cloakbrowser' ? state.browserHumanPreset : null,
-    dialogPolicy: state.browserDialogPolicy === 'auto_dismiss' ? null : state.browserDialogPolicy,
-    dialogTimeoutSeconds: state.browserDialogTimeout ?? null,
+      : {}),
+    ...(state.browserDialogPolicy !== 'auto_dismiss' ? { dialogPolicy: state.browserDialogPolicy } : {}),
+    ...(state.browserDialogTimeout !== undefined ? { dialogTimeoutSeconds: state.browserDialogTimeout } : {}),
   };
+  return config;
 }
 
-export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'));
-  const cfg = configFromApiResponse(res);
-  return parseAgentDefaultsFromConfig(cfg ?? {});
-}
-
-export async function patchAgentDefaults(state: AgentDefaultsState): Promise<void> {
-  const fallbacks = state.modelFallbacks.flatMap((s) => {
-    const v = s.trim();
-    return v ? [v] : [];
-  });
-  const primaryRef = state.model.trim();
-  // Always object-form; backend deletes the slot when the field is null.
-  const modelField: unknown = primaryRef
-    ? fallbacks.length > 0
-      ? { primary: primaryRef, fallbacks }
-      : { primary: primaryRef }
-    : null;
-
-  const imageFbs = state.imageModelFallbacks.flatMap((s) => {
-    const v = s.trim();
-    return v ? [v] : [];
-  });
-  const imagePrimary = state.imageModel.trim();
-  const imageModelField: unknown = imagePrimary
-    ? imageFbs.length > 0
-      ? { primary: imagePrimary, fallbacks: imageFbs }
-      : { primary: imagePrimary }
-    : null;
-
-  const imageGenFbs = state.imageGenerationModelFallbacks.flatMap((s) => {
-    const v = s.trim();
-    return v ? [v] : [];
-  });
-  const imageGenPrimary = state.imageGenerationModel.trim();
-  const imageGenTimeoutMs =
-    typeof state.imageGenerationModelTimeoutMs === 'number' &&
-    state.imageGenerationModelTimeoutMs > 0
-      ? Math.floor(state.imageGenerationModelTimeoutMs)
-      : null;
-  const imageGenAuto = state.imageGenerationModelAutoProviderFallback === true;
-  const imageGenerationModelField: unknown = imageGenPrimary
-    ? {
-        primary: imageGenPrimary,
-        ...(imageGenFbs.length > 0 ? { fallbacks: imageGenFbs } : {}),
-        ...(imageGenTimeoutMs ? { timeoutMs: imageGenTimeoutMs } : {}),
-        ...(imageGenAuto ? { autoProviderFallback: true } : {}),
-      }
-    : null;
-
-  const maxTaskDurationMs: number | null =
-    state.maxTaskDurationMinutes === undefined || state.maxTaskDurationMinutes === null
-      ? null
-      : (() => {
-          const n = Math.floor(state.maxTaskDurationMinutes);
-          const ms = n * 60_000;
-          if (ms < 60_000 || ms > 14_400_000) {
-            return null;
-          }
-          return ms;
-        })();
-
-  const skillsClean = state.skillsAllowlist.flatMap((s) => {
-    const v = s.trim();
-    return v ? [v] : [];
-  });
-  const toolsDisableClean = state.toolsDisable.flatMap((s) => {
-    const v = s.trim();
-    return v ? [v] : [];
-  });
-
-  const paramsParsed = parseParamsJsonForSave(state.paramsJson);
-  const params =
-    paramsParsed === null || Object.keys(paramsParsed).length === 0 ? null : paramsParsed;
-
-  const typedModelsClean = cleanTypedModelsForPatch(state.typedModels);
-
-  const defaults: Record<string, unknown> = {
-    models: {
-      chat: modelField,
-      ...(typedModelsClean ?? {}),
-    },
-    imageModel: imageModelField,
-    imageGenerationModel: imageGenerationModelField,
-    mediaMaxMb: state.mediaMaxMb ?? null,
-    maxTokens: state.maxTokens,
-    temperature: state.temperature,
-    maxToolIterations: state.maxToolIterations,
-    maxTaskDurationMs,
-    maxRequestsPerTurn: state.maxRequestsPerTurn,
-    maxToolFailuresPerTurn: state.maxToolFailuresPerTurn,
-    workspace: state.workspace,
-    browser: buildBrowserConfigFromAgentDefaults(state),
-    thinkingDefault: state.thinkingDefault,
-    reasoningDefault: state.reasoningDefault,
-    verboseDefault: state.verboseDefault,
-    compaction: { ...state.compaction },
-    pruning: { ...state.pruning },
-    memory: buildMemoryPatch(state.memory),
-    sessionSearch: {
-      summaryModel: state.sessionSearch.summaryModel.trim() || null,
-    },
-    backgroundReview: {
-      enabled: state.backgroundReview.enabled,
-      memoryNudgeInterval: state.backgroundReview.memoryNudgeInterval,
-      skillNudgeInterval: state.backgroundReview.skillNudgeInterval,
-      maxToolRounds: state.backgroundReview.maxToolRounds,
-      maxHistoryMessages: state.backgroundReview.maxHistoryMessages,
-      maxDurationMs: state.backgroundReview.maxDurationMs,
-    },
-    webExtract: {
-      model: state.webExtract.model.trim() || null,
-      maxLength: state.webExtract.maxLength ?? null,
-    },
-    delegate: { enabled: state.delegate.enabled },
-    executeCode: { enabled: state.executeCode.enabled },
-    systemPromptOverride: state.systemPromptOverride.trim() || null,
-    skills: skillsClean.length > 0 ? skillsClean : null,
-    tools: { disable: toolsDisableClean.length > 0 ? toolsDisableClean : null },
-    params,
-  };
-
+export async function patchBrowserSettings(state: AgentDefaultsState): Promise<void> {
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
     body: JSON.stringify({
-      agents: { defaults },
+      browser: buildBrowserConfigFromAgentDefaults(state),
     }),
   });
   void revalidateGatewayConfig();

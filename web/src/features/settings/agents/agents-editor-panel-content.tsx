@@ -8,10 +8,13 @@ import type {
   GatewayConfigBinding,
   SkillCatalogRow,
 } from '@/features/settings/agents-admin-api';
+import type { CapabilityPresetRow } from '@/features/settings/capability-presets/capability-presets-api';
 import type { AgentsSettingsMessages, ChatMessages, MessageBundle } from '@/i18n/messages';
+import { MemoryPage } from '@/pages/memory-page';
 
 import { AgentChannelsTab } from './tabs/agent-channels-tab';
 import { AgentCronTab } from './tabs/agent-cron-tab';
+import { AgentEffectiveCapabilityTab } from './tabs/agent-effective-capability-tab';
 import { AgentFilesTab } from './tabs/agent-files-tab';
 import { AgentModelsTab } from './tabs/agent-models-tab';
 import { AgentOverviewTab } from './tabs/agent-overview-tab';
@@ -46,6 +49,9 @@ export type AgentsEditorPanelContentProps = {
   onSetDefault: () => void;
   onSaveAgentEdits: () => void;
   onDelete: (purge: boolean) => void;
+  capabilityPresets: CapabilityPresetRow[];
+  onUpdateAgentExtends: (nextExtends: string[]) => void;
+  onOpenCapabilityPreset: (presetId: string) => void;
   overviewSaveProfileMarkdownRef: MutableRefObject<(() => Promise<void>) | null>;
   profileSaveRef: MutableRefObject<(() => Promise<void>) | null>;
   overviewProfile: {
@@ -104,6 +110,7 @@ export type AgentsEditorPanelContentProps = {
   agentCronJobs: CronJob[];
   onSetCronJobAgent: (job: CronJob, agentKey: string) => void;
   onTryInChat?: () => void;
+  onPanelChange?: (panel: AgentPanel) => void;
 };
 
 export function AgentsEditorPanelContent({
@@ -127,6 +134,9 @@ export function AgentsEditorPanelContent({
   onSetDefault,
   onSaveAgentEdits,
   onDelete,
+  capabilityPresets,
+  onUpdateAgentExtends,
+  onOpenCapabilityPreset,
   overviewSaveProfileMarkdownRef: _overviewSaveProfileMarkdownRef,
   profileSaveRef,
   overviewProfile,
@@ -177,6 +187,7 @@ export function AgentsEditorPanelContent({
   agentCronJobs,
   onSetCronJobAgent,
   onTryInChat,
+  onPanelChange,
 }: AgentsEditorPanelContentProps) {
   if (!selected) {
     return <p className="text-sm text-fg-muted">{a.selectAgentHint}</p>;
@@ -200,6 +211,9 @@ export function AgentsEditorPanelContent({
         onSetDefault={onSetDefault}
         onSaveAgentEdits={onSaveAgentEdits}
         onDelete={onDelete}
+        capabilityPresets={capabilityPresets}
+        onUpdateAgentExtends={onUpdateAgentExtends}
+        onOpenCapabilityPreset={onOpenCapabilityPreset}
         hideInlineSave
         profileMarkdownLoading={overviewProfile.profileMarkdownLoading}
         profileDraft={overviewProfile.draft}
@@ -211,6 +225,7 @@ export function AgentsEditorPanelContent({
         defaultModel={defaultModel}
         defaultWorkspace={defaultWorkspace}
         onTryInChat={onTryInChat}
+        onEditModelStrategy={() => onPanelChange?.('models')}
       />
     );
   }
@@ -290,6 +305,15 @@ export function AgentsEditorPanelContent({
       />
     );
   }
+
+  if (panel === 'memory') {
+    return <MemoryPage embedded agentId={selected.id} />;
+  }
+
+  if (panel === 'effective') {
+    return <AgentEffectiveCapabilityTab a={a} selected={selected} />;
+  }
+
   if (panel === 'channels') {
     return (
       <AgentChannelsTab

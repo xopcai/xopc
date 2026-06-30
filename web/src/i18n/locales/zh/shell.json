@@ -36,21 +36,12 @@
     "settingsDreams": "梦境",
     "settingsCron": "定时任务",
     "settingsGoals": "目标评判",
-    "settingsAgentDefaults": "智能体配置",
-    "settingsAgentChat": "模型策略",
-    "settingsAgentWorkspace": "工作区",
     "settingsAgentBrowser": "浏览器",
-    "settingsAgentRuntime": "单轮限制",
-    "settingsAgentContext": "上下文",
-    "settingsAgentMemory": "记忆",
-    "settingsAgentTools": "工具",
-    "settingsAgentSkills": "默认可用技能",
-    "settingsAgentSystemPrompt": "系统提示词",
+    "settingsCapabilityPresets": "能力预设",
     "settingsAgents": "智能体",
     "settingsKeyboardShortcuts": "快捷键",
     "settingsSystem": "系统授权",
-    "settingsAppManagement": "应用管理",
-    "settingsAgentGeneration": "生成参数"
+    "settingsAppManagement": "应用管理"
   },
   "token": {
     "title": "需要身份验证",

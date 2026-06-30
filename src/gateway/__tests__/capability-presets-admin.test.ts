@@ -1,0 +1,120 @@
+import { describe, expect, it } from 'vitest';
+
+import type { AgentManifest } from '../../agent-manifest/index.js';
+import type { Config } from '../../config/schema.js';
+import {
+  listCapabilityPresets,
+  prepareCreateCapabilityPreset,
+  prepareDeleteCapabilityPreset,
+  prepareUpdateCapabilityPreset,
+} from '../capability-presets-admin.js';
+
+function manifest(id: string, patch: Partial<AgentManifest> = {}): AgentManifest {
+  return {
+    id,
+    enabled: true,
+    identity: { name: id, role: 'Agent', language: 'en', tone: 'direct' },
+    responsibilities: { primary: ['Help'] },
+    workspace: { root: `/tmp/${id}` },
+    models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
+    tools: { builtin: {} },
+    skills: { mode: 'all' },
+    memory: { mode: 'off', sources: ['session'] },
+    workflows: {},
+    boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+    ...patch,
+  };
+}
+
+function minimalConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    gateway: { port: 18790, corsOrigins: [] },
+    agents: {
+      default: 'main',
+      capabilityPresets: {},
+      list: [manifest('main')],
+    },
+    channels: {},
+    ...overrides,
+  } as Config;
+}
+
+describe('capability-presets-admin', () => {
+  it('creates and lists capability presets with usage', () => {
+    const created = prepareCreateCapabilityPreset(minimalConfig(), {
+      id: 'safe-coder',
+      name: 'Safe Coder',
+      description: 'Shared coding guardrails',
+    });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const cfg = created.data.nextConfig;
+    cfg.agents.list = [manifest('coder', { extends: ['safe-coder'] })];
+
+    const payload = listCapabilityPresets(cfg);
+    expect(payload.presets[0]?.id).toBe('safe-coder');
+    expect(payload.presets[0]?.usage).toEqual([{ agentId: 'coder', agentName: 'coder' }]);
+  });
+
+  it('updates patch fields and supports null field removal', () => {
+    const cfg = minimalConfig({
+      agents: {
+        default: 'main',
+        capabilityPresets: {
+          'safe-coder': {
+            id: 'safe-coder',
+            name: 'Safe Coder',
+            version: 1,
+            description: 'old',
+            tools: { builtin: { shell: { mode: 'confirm', scope: 'workspace' } } },
+          },
+        },
+        list: [manifest('main')],
+      },
+    } as Partial<Config>);
+
+    const updated = prepareUpdateCapabilityPreset(cfg, 'safe-coder', {
+      description: null,
+      skills: { mode: 'allowlist', allow: ['diagnose'] },
+    });
+    expect(updated.ok).toBe(true);
+    if (!updated.ok) return;
+    const preset = updated.data.nextConfig.agents.capabilityPresets['safe-coder'];
+    expect(preset?.description).toBeUndefined();
+    expect(preset?.skills).toEqual({ mode: 'allowlist', allow: ['diagnose'] });
+    expect(preset?.tools?.builtin.shell?.mode).toBe('confirm');
+  });
+
+  it('rejects preset cycles', () => {
+    const cfg = minimalConfig({
+      agents: {
+        default: 'main',
+        capabilityPresets: {
+          a: { id: 'a', name: 'A', version: 1, extends: ['b'] },
+          b: { id: 'b', name: 'B', version: 1 },
+        },
+        list: [manifest('main')],
+      },
+    } as Partial<Config>);
+    const updated = prepareUpdateCapabilityPreset(cfg, 'b', { extends: ['a'] });
+    expect(updated.ok).toBe(false);
+    if (updated.ok) return;
+    expect(updated.error).toContain('cycle');
+  });
+
+  it('protects presets that are used by agents from deletion', () => {
+    const cfg = minimalConfig({
+      agents: {
+        default: 'main',
+        capabilityPresets: {
+          'safe-coder': { id: 'safe-coder', name: 'Safe Coder', version: 1 },
+        },
+        list: [manifest('coder', { extends: ['safe-coder'] })],
+      },
+    } as Partial<Config>);
+    const deleted = prepareDeleteCapabilityPreset(cfg, 'safe-coder');
+    expect(deleted.ok).toBe(false);
+    if (deleted.ok) return;
+    expect(deleted.status).toBe(409);
+  });
+});

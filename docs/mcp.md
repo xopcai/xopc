@@ -92,16 +92,11 @@ Add an `mcp` block to your config file:
 
 You cannot set both `command` and `url` on the same server entry.
 
-### CLI quick edits
+### Editing configuration
 
-```bash
-xopc mcp list
-xopc mcp show teambition
-xopc mcp set fetch '{"command":"npx","args":["-y","@modelcontextprotocol/server-fetch"]}'
-xopc mcp unset fetch
-```
+Current `xopc --help` does not expose `mcp` as a root command. Edit `mcp.servers` in `xopc.json` directly, or use the gateway console when available.
 
-See [MCP CLI & API](./cli/mcp.md) for the full command reference and inbound `xopc mcp serve`.
+See [MCP CLI & API](./cli/mcp.md) for historical commands retained for installs or development branches that still expose them.
 
 ---
 

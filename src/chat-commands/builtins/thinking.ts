@@ -19,14 +19,7 @@ import {
   type ReasoningLevel,
   type VerboseLevel,
 } from '../../agent/transcript/thinking-types.js';
-import { applyConfigOverrides, setConfigOverride } from '../../config/runtime-overrides.js';
-import type { Config } from '../../config/schema.js';
 import type { SessionConfigStore } from '../../session/index.js';
-
-function effectiveAgentDefaults(ctx: CommandContext) {
-  const base = (ctx.getConfig?.() ?? ctx.config) as Config;
-  return applyConfigOverrides(base).agents?.defaults;
-}
 
 async function stripSessionAgentFields(
   store: SessionConfigStore | undefined,
@@ -48,6 +41,17 @@ async function stripSessionAgentFields(
   }
 }
 
+async function setSessionAgentField<K extends 'thinkingLevel' | 'reasoningLevel' | 'verboseLevel'>(
+  store: SessionConfigStore | undefined,
+  sessionKey: string,
+  field: K,
+  value: K extends 'thinkingLevel' ? ThinkLevel : K extends 'reasoningLevel' ? ReasoningLevel : VerboseLevel,
+): Promise<void> {
+  if (!store) return;
+  const existing = (await store.get(sessionKey)) ?? {};
+  await store.set(sessionKey, { ...existing, [field]: value });
+}
+
 // Think command
 const thinkCommand: CommandDefinition = {
   id: 'agent.think',
@@ -62,8 +66,7 @@ const thinkCommand: CommandDefinition = {
 
     if (!args.trim()) {
       // Show current thinking level
-      const currentLevel =
-        (await ctx.getThinkingLevel?.()) ?? effectiveAgentDefaults(ctx)?.thinkingDefault;
+      const currentLevel = await ctx.getThinkingLevel?.();
       
       return {
         content: `🧠 *Thinking Level*\n\n` +
@@ -95,8 +98,7 @@ const thinkCommand: CommandDefinition = {
       };
     }
     
-    setConfigOverride(['agents', 'defaults', 'thinkingDefault'], level);
-    await stripSessionAgentFields(ctx.getSessionConfigStore?.(), ctx.sessionKey, ['thinkingLevel']);
+    await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.sessionKey, 'thinkingLevel', level);
     ctx.syncAgentThinkingLevel?.(level);
 
     const levelDescriptions: Record<ThinkLevel, string> = {
@@ -133,8 +135,7 @@ const reasoningCommand: CommandDefinition = {
 
     if (!args.trim()) {
       // Show current reasoning level
-      const currentLevel =
-        (await ctx.getReasoningLevel?.()) ?? effectiveAgentDefaults(ctx)?.reasoningDefault;
+      const currentLevel = await ctx.getReasoningLevel?.();
       
       return {
         content: `💭 *Reasoning Visibility*\n\n` +
@@ -161,8 +162,7 @@ const reasoningCommand: CommandDefinition = {
       };
     }
     
-    setConfigOverride(['agents', 'defaults', 'reasoningDefault'], level);
-    await stripSessionAgentFields(ctx.getSessionConfigStore?.(), ctx.sessionKey, ['reasoningLevel']);
+    await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.sessionKey, 'reasoningLevel', level);
 
     const modeDescriptions: Record<ReasoningLevel, string> = {
       off: 'Hide reasoning from user',
@@ -194,12 +194,10 @@ const verboseCommand: CommandDefinition = {
 
     if (!args.trim()) {
       // Toggle verbose mode
-      const currentLevel =
-        (await ctx.getVerboseLevel?.()) ?? effectiveAgentDefaults(ctx)?.verboseDefault;
+      const currentLevel = await ctx.getVerboseLevel?.();
       const newLevel: VerboseLevel = currentLevel === 'on' ? 'off' : 'on';
 
-      setConfigOverride(['agents', 'defaults', 'verboseDefault'], newLevel);
-      await stripSessionAgentFields(ctx.getSessionConfigStore?.(), ctx.sessionKey, ['verboseLevel']);
+      await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.sessionKey, 'verboseLevel', newLevel);
 
       return {
         content: `📝 *Verbose Mode*\n\n` +
@@ -221,8 +219,7 @@ const verboseCommand: CommandDefinition = {
       };
     }
     
-    setConfigOverride(['agents', 'defaults', 'verboseDefault'], level);
-    await stripSessionAgentFields(ctx.getSessionConfigStore?.(), ctx.sessionKey, ['verboseLevel']);
+    await setSessionAgentField(ctx.getSessionConfigStore?.(), ctx.sessionKey, 'verboseLevel', level);
 
     const modeDescriptions: Record<VerboseLevel, string> = {
       off: 'Minimal output',
@@ -250,11 +247,10 @@ const enhancedStatusCommand: CommandDefinition = {
   handler: async (ctx: CommandContext) => {
     await ctx.setTyping(true);
 
-    const defaults = effectiveAgentDefaults(ctx);
     const currentModel = ctx.getCurrentModel();
-    const thinkingLevel = (await ctx.getThinkingLevel?.()) ?? defaults?.thinkingDefault;
-    const reasoningLevel = (await ctx.getReasoningLevel?.()) ?? defaults?.reasoningDefault;
-    const verboseLevel = (await ctx.getVerboseLevel?.()) ?? defaults?.verboseDefault;
+    const thinkingLevel = await ctx.getThinkingLevel?.();
+    const reasoningLevel = await ctx.getReasoningLevel?.();
+    const verboseLevel = await ctx.getVerboseLevel?.();
     const usage = await ctx.getUsage();
     
     // Build status message

@@ -112,11 +112,7 @@ function isAnyChannelConfigured(config: unknown): boolean {
 
 function readBrowserConfig(config: unknown): { enabled: boolean; backend: string } {
   if (!config || typeof config !== 'object') return { enabled: false, backend: 'extension' };
-  const agents = (config as Record<string, unknown>).agents;
-  if (!agents || typeof agents !== 'object' || Array.isArray(agents)) return { enabled: false, backend: 'extension' };
-  const defaults = (agents as Record<string, unknown>).defaults;
-  if (!defaults || typeof defaults !== 'object' || Array.isArray(defaults)) return { enabled: false, backend: 'extension' };
-  const browser = (defaults as Record<string, unknown>).browser;
+  const browser = (config as Record<string, unknown>).browser;
   if (!browser || typeof browser !== 'object' || Array.isArray(browser)) return { enabled: false, backend: 'extension' };
   const record = browser as Record<string, unknown>;
   return {
@@ -132,7 +128,7 @@ function statusFromDone(done: boolean): DoctorCheckStatus {
 function issuePath(id: string): string | undefined {
   if (id === 'provider-auth') return '/settings/credentials';
   if (id === 'config-health') return '/settings/gateway';
-  if (id === 'state-integrity' || id === 'workspace-status') return '/settings/agent-defaults?tab=workspace';
+  if (id === 'state-integrity' || id === 'workspace-status') return '/agents';
   if (id === 'database-schema' || id === 'session-integrity') return '/settings/sessions';
   if (id === 'channel-config' || id === 'channel-pairing-pending' || id.startsWith('channel:')) return '/channels';
   if (id === 'security-audit') return '/settings/gateway';
@@ -315,7 +311,7 @@ export function buildSetupStatusSnapshot(input: {
       status: statusFromDone(defaultModelConfigured),
       title: 'Default model',
       detail: defaultModelConfigured ? input.labels.modelConfigured(defaultModel) : input.labels.modelMissing,
-      path: '/settings/agent-defaults',
+      path: '/agents',
     },
     {
       id: 'ready',

@@ -2,6 +2,18 @@
 
 xopc 所有配置集中在 `~/.xopc/xopc.json` 文件中。
 
+如果你是在完成具体任务，请优先看 how-to：
+
+| 任务 | 指南 |
+| --- | --- |
+| 配置模型 | [如何配置第一个模型](how-to/configure-first-model.md) |
+| 接入 Telegram | [如何接入 Telegram](how-to/connect-telegram.md) |
+| 从其它设备访问 gateway | [如何安全暴露 gateway](how-to/expose-gateway-safely.md) |
+| 添加另一个 agent | [如何创建第二个 agent](how-to/create-second-agent.md) |
+| 排查损坏的设置 | [如何诊断损坏的设置](how-to/diagnose-broken-setup.md) |
+
+本页其余内容是 `xopc.json` 结构参考。
+
 ## 快速开始
 
 运行交互式设置向导：
@@ -15,11 +27,38 @@ xopc onboard
 ```json
 {
   "agents": {
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5",
-      "max_tokens": 8192,
-      "temperature": 0.7
-    }
+    "default": "main",
+    "capabilityPresets": {},
+    "list": [
+      {
+        "id": "main",
+        "identity": {
+          "name": "Main",
+          "role": "General assistant",
+          "language": "zh-CN",
+          "tone": "direct"
+        },
+        "responsibilities": {
+          "primary": ["帮助用户完成任务"]
+        },
+        "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "anthropic/claude-sonnet-4-5" }
+          }
+        },
+        "tools": { "builtin": {} },
+        "skills": { "mode": "all" },
+        "memory": {
+          "mode": "confirmWrite",
+          "sources": ["session", "curated"],
+          "writePolicy": { "curated": "confirm" }
+        },
+        "workflows": {},
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
+      }
+    ]
   },
   "providers": {
     "anthropic": "${ANTHROPIC_API_KEY}"
@@ -34,16 +73,52 @@ xopc onboard
 ```json
 {
   "agents": {
-    "defaults": {
-      "workspace": "~/.xopc/workspace",
-      "model": {
-        "primary": "anthropic/claude-sonnet-4-5",
-        "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
-      },
-      "max_tokens": 8192,
-      "temperature": 0.7,
-      "max_tool_iterations": 20
-    }
+    "default": "main",
+    "capabilityPresets": {
+      "safe-coder": {
+        "id": "safe-coder",
+        "name": "Safe coder",
+        "tools": {
+          "builtin": {
+            "shell": { "mode": "confirm", "scope": "workspace" }
+          }
+        },
+        "memory": { "mode": "confirmWrite", "sources": ["session", "curated"] }
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "extends": ["safe-coder"],
+        "identity": {
+          "name": "Main",
+          "role": "General assistant",
+          "language": "zh-CN",
+          "tone": "direct"
+        },
+        "responsibilities": {
+          "primary": ["帮助用户完成任务"]
+        },
+        "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "anthropic/claude-sonnet-4-5" },
+            "small": { "model": "openai/gpt-4o-mini", "description": "快速低成本模型" }
+          }
+        },
+        "tools": { "builtin": {} },
+        "skills": { "mode": "all" },
+        "memory": {
+          "mode": "confirmWrite",
+          "sources": ["session", "curated"],
+          "writePolicy": { "curated": "confirm" }
+        },
+        "workflows": {},
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] },
+        "runtime": { "timeoutMs": 180000, "maxToolFailuresPerTurn": 3 }
+      }
+    ]
   },
   "providers": {
     "openai": "${OPENAI_API_KEY}",
@@ -83,9 +158,7 @@ xopc onboard
         "maxResults": 5,
         "providers": [{ "type": "brave", "apiKey": "BSA_your_key_here" }]
       }
-    }
-  },
-  "tools": {
+    },
     "media": {
       "audio": {
         "enabled": true,
@@ -122,62 +195,47 @@ xopc onboard
 
 ### agents
 
-智能体配置分为三部分：可选的顶层 **`default`**（默认 agent id）、共享的 **`defaults`**、以及 **`list`** 中的多条身份。路由与 session key 的**第一段**即为 agent id；运行时会把 **`agents.defaults`** 与 `list` 里匹配且 **enabled** 的条目**合并**成该会话的**有效配置**（模型、工作区、工具、提示词等）。
+智能体配置分为三部分：可选的顶层 **`default`**（默认 agent id）、可复用的 **`capabilityPresets`**，以及具体的 **`list`** 条目。每个 `agents.list[]` 条目都是一个 Agent Capability Manifest。路由与 session key 的**第一段**即为 agent id；运行时会解析一个 enabled manifest，并应用其 `extends` 声明的 presets。当前配置模型里没有 `agents.defaults` 合并层。
 
 #### 顶层 `agents` 字段
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `default` | string | 可选。未在会话键/API 中指定 agent 时使用的默认 id。未设置时：取 **`list` 中带 `default: true` 的条目**，否则 **`list` 中第一个 enabled 的 id**，否则 **`main`**。 |
-| `defaults` | object | 全局基线，见下文 **agents.defaults**。 |
-| `list` | array | 多个 agent id；每条可覆盖运行时字段。可读身份保存在 `agents/<id>/profile/IDENTITY.md`。 |
+| `default` | string | 可选。未在会话键/API 中指定 agent 时使用的默认 id。未设置时：取 **`list` 中第一个 enabled 的 id**，否则 **`main`**。 |
+| `capabilityPresets` | object | 按 preset id 索引的可复用策略补丁。可包含模型角色、工具、技能、记忆、工作流、边界和运行时限制等。 |
+| `list` | array | 具体的 Agent Capability Manifest。每条在应用 presets 后应足以独立运行。 |
 
 #### `agents.list` 条目
 
-每条至少包含 **`id`**，其余字段均为可选运行时覆盖（与 `defaults` 中同类字段形状一致）。显示名称、描述、语言、头像以及模型实际看到的身份都来自 **`agents/<id>/profile/IDENTITY.md`**，不写在 config 中。
+每条至少包含 **`id`**、**`identity`**、**`responsibilities`**、**`workspace`**、**`models`**、**`tools`**、**`skills`**、**`memory`**、**`workflows`** 和 **`boundaries`**。长文本 profile 仍可放在 **`agents/<id>/profile/`**，但结构化 manifest 是运行时策略的来源。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `id` | string | 智能体 id（`agentId`，也是 session key 的第一段）。 |
-| `default` | boolean | 可选。为 `true` 时，在**未**设置顶层 **`agents.default`** 的情况下将该条目标记为默认 agent。 |
-| `enabled` | boolean | 默认 `true`。为 `false` 时该 id 不参与路由默认，且有效配置解析会回退到默认 agent。 |
-| `workspace` | string | 可选。该 agent 的 **Markdown 工作区**根路径（支持 `~`）。工具 `cwd`、按日的 `memory/` 与用户文件在此。profile Markdown（`SOUL.md` 等）位于 **`agents/<id>/profile/`**。入站/TTS 与托管 `memories/` 解析在 **`agents/<id>/`**（agent 主目录），不在此目录内。 |
-| `agentDir` | string | 可选。覆盖 **内部** agent 状态目录（凭证、`agent.json`、收件箱、pid 等），默认 `<stateDir>/agents/<id>/agent`。 |
-| `models` | object | 每个智能体的聊天模型与命名模型角色覆盖。形状同 `agents.defaults.models`；`models.roles` 按角色 id 覆盖默认值。 |
-| `thinkingDefault` | string | 可选：`off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`adaptive`。 |
-| `reasoningDefault` | string | 可选：`off`、`on`、`stream`。 |
-| `verboseDefault` | string | 可选：`off`、`on`、`full`。 |
-| `systemPromptOverride` | string | 可选。若设置，则替换常规基础系统提示词；技能 XML 仍会追加（受 `skills` 白名单约束）。 |
-| `skills` | string[] | 可选。技能 **名称** 白名单，仅这些会出现在 `<available_skills>`。 |
-| `tools` | object | 可选。`{ "disable": ["工具名", ...] }`，按内置工具的 **name** 禁用（如 `shell`、`web_search`、`session_search`、`image`；禁用扩展工具用 `extensions`）。 |
-| `params` | object | 可选，预留。 |
+| `extends` | string[] | 可选。引用 `agents.capabilityPresets` 中的 preset id，后面的 preset 和 manifest 本身会覆盖前面的字段。 |
+| `enabled` | boolean | 默认 `true`。为 `false` 时不参与路由和运行时解析。 |
+| `identity` | object | 结构化身份：`name`、`role`，以及可选的 `description`、`language`、`tone`、`avatar`。 |
+| `responsibilities` | object | `primary`，以及可选的 `secondary`、`outOfScope`。 |
+| `workspace.root` | string | 该 agent 的 Markdown 工作区根路径（支持 `~`）。工具 `cwd`、按日记忆和用户文件在此。 |
+| `models.defaultRole` | string | 工作流或会话未指定模型角色时使用的默认角色 id。 |
+| `models.roles` | object | 命名模型角色。每个角色形如 `{ "model": "provider/model", "description": "..." }`。 |
+| `tools.builtin` | object | 内置工具策略：`{ "mode": "allow" \| "confirm" \| "deny", "scope"?: "readonly" \| "workspace" \| "unrestricted" }`。 |
+| `tools.mcp` | object | 可选 MCP server/tool 策略。 |
+| `skills` | object | 技能可见性策略：`all`、`allowlist`、`denylist` 或 `off`。 |
+| `memory` | object | 记忆模式、来源、写入策略、保留策略和隐私设置。 |
+| `workflows` | object | 可选的默认/允许/建议工作流策略。 |
+| `boundaries` | object | 需要确认、禁止和升级处理的边界规则。 |
+| `runtime` | object | 可选运行时限制，如 `maxTurns`、`timeoutMs`、`maxToolFailuresPerTurn`。 |
+| `prompt` | object | 可选结构化 prompt 自定义。 |
 
-同类可选字段也可写在 **`agents.defaults`** 里作为全局默认（例如 `agents.defaults.tools.disable` 会与每条 list 的 disable **合并**）。
+请使用 **`xopc agents add`** / **`xopc agents delete`** 管理 `agents.list` 和目录；不存在独立于配置文件之外的 agent 注册表。
 
-**说明：** 磁盘路径（`~/.xopc/agents/<id>/` 下的会话与内部状态、以及各 agent 的 Markdown 工作区，即 **`agents.defaults.workspace/<agentId>`** 或 **`<状态目录>/workspace/<agentId>`**）均按 **`config.json`** 解析（`agents.list`、`agents.defaults`、可选的 `agentDir`）。用户编辑、模型读取的 agent 身份是 **`profile/IDENTITY.md`**。请使用 **`xopc agents add`** / **`agents delete`** 管理列表与目录；**不存在**独立于配置之外的 agent「注册表」。
-
-#### agents.defaults
-
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `workspace` | string | `~/.xopc/workspace` | Markdown 工作区的**父目录**；每个智能体解析为 `<展开路径>/<agentId>/`（如 `~/.xopc/workspace/main`） |
-| `models` | object | — | 聊天模型链与命名模型角色。 |
-| `max_tokens` | number | `8192` | 最大输出 tokens |
-| `temperature` | number | `0.7` | 温度参数 (0-2) |
-| `max_tool_iterations` | number | `20` | 最大工具调用次数 |
-| `imageModel` | object | — | `image`、`browser_use` 工具及**主模型不支持视觉**时对入站图做描述的视觉模型。使用 `{ primary, fallbacks }`。详见 [图像与视觉](image-multimodal.md)。 |
-| `imageGenerationModel` | object | — | `image_generate` 的文生图模型链（如 `openai/gpt-image-1`、`dashscope/wan2.6-t2i`）。使用 `{ primary, fallbacks }`。详见 [图像与视觉](image-multimodal.md)。 |
-| `mediaMaxMb` | number | — | 可选。`image` 工具从路径或 URL 加载单张图片时的最大体积（**MB**）。 |
-
-#### agents.defaults.models
+#### `agents.list[].models`
 
 ```json
 {
   "models": {
-    "chat": {
-      "primary": "anthropic/claude-sonnet-4-5",
-      "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
-    },
+    "defaultRole": "deep",
     "roles": {
       "small": {
         "model": "openai/gpt-4o-mini",
@@ -193,48 +251,7 @@ xopc onboard
 
 模型 ID 格式：`provider/model-id`（如 `anthropic/claude-opus-4-5`）。
 
-每个智能体的 `agents.list[].models.roles` 会按 id 覆盖默认角色；`agents.list[].models.chat` 会覆盖默认聊天模型链。
-
-**`imageModel`**、**`imageGenerationModel`** 也可使用与 **`model`** 相同的 **`{ primary, fallbacks }`** 对象，以配置视觉或文生图的有序降级链。
-
-#### agents.defaults.memory
-
-**`agents/<agentId>/memories/`** 下的托管长期记忆（`MEMORY.md` / `USER.md`）、可选的 **stub** 外部记忆后端（用于接线测试），以及用户轮次上 **prefetch** 注入（在用户消息前加 `<memory-context>` 围栏）的控制项。目录说明见 [托管记忆](workspace.md#curated-memory)。
-
-| 字段 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `enabled` | boolean | `true` | 总开关。为 `false` 时：无 curated 快照、无 `curated_memory` 工具、不加载外部 memory 提供方、不做 prefetch/sync。 |
-| `useEnhancedSystem` | boolean | `true` | 为 `false` 时：关闭 curated 快照与 `curated_memory`；**`agents/<id>/profile/MEMORY.md`** 仍会参与系统提示。 |
-| `userProfileEnabled` | boolean | `true` | 为 `false` 时：系统提示不包含 `USER.md`；`curated_memory` 不能修改 `user` 目标（仍可读）。 |
-| `memoryCharLimit` | number | `2200` | `MEMORY.md` 条目合计字符上限。 |
-| `userCharLimit` | number | `1375` | `USER.md` 条目合计字符上限。 |
-| `provider` | string | `none` | 外部提供方：`none` 或 `stub`（`enabled` 为 `false` 时不生效）。 |
-| `injectionFrequency` | string | `every-turn` | Prefetch 注入策略：`every-turn` 或 `first-turn`（仅会话中第一条用户消息）。 |
-| `contextCadence` | number | `1` | 当 `injectionFrequency` 为 `every-turn` 时，在第 1、1+N、1+2N… 轮注入 prefetch（最小为 `1`）。 |
-| `dialecticCadence` | number | — | 预留字段，供将来外部 dialectic 同步节奏使用（尚未接线）。 |
-
-#### agents.defaults.sessionSearch
-
-跨会话 transcript 检索（`session_search` 工具，需会话持久化可用时注册）。
-
-| 字段 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `summaryModel` | string | — | 按会话摘要所用模型（如 `openai/gpt-4o-mini`）。设置后优先于环境变量 `XOPC_SESSION_SEARCH_MODEL`。 |
-
-#### agents.defaults.browser
-
-统一的 **`browser_use`** 工具会在 `enabled` 为 `true` 时注册。本机模式需先安装 Chromium：`npx playwright install chromium`。工具行为与 URL 策略见 [工具说明](./tools.md)中的「浏览器（可选）」一节。
-
-| 字段 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `enabled` | boolean | — | 为 `true` 时注册浏览器自动化工具。 |
-| `headless` | boolean | 启用浏览器时多为 `true` | 无界面运行浏览器。 |
-| `allowPrivateUrls` | boolean | — | 为 `true` 时允许导航到私网 IP；**云元数据 / IMDS** 与 URL 内可疑凭据模式仍拦截。 |
-| `commandTimeout` | number | `30` | 单次浏览器命令超时（秒，最小 `5`）。 |
-| `cloudProvider` | string | — | `local` \| `browserbase` \| `browser-use`；省略或 `local` 为进程内 Playwright。 |
-| `cdpUrl` | string | — | 可选：已有浏览器的 CDP WebSocket 地址；设置时绕过 `cloudProvider`。 |
-| `dialogPolicy` | string | — | `must_respond` \| `auto_dismiss` \| `auto_accept`，配合 CDP 监督器处理 JS 对话框。 |
-| `dialogTimeoutSeconds` | number | `300` | 自动处理对话框相关超时（秒，最小 `1`）。 |
+模型角色是 manifest 局部配置，也可以由 `capabilityPresets` 提供。工作流可引用这些角色名，而不是硬编码具体 `provider/model`。
 
 ---
 
@@ -740,7 +757,7 @@ xopc 支持环境变量存储敏感数据：
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `XOPC_CONFIG` | 自定义配置文件路径 |
 | `XOPC_WORKSPACE` | 自定义工作区目录 |
-| `XOPC_SESSION_SEARCH_MODEL` | 未设置 `agents.defaults.sessionSearch.summaryModel` 时，`session_search` 摘要使用的默认模型 |
+| `XOPC_SESSION_SEARCH_MODEL` | `session_search` 需要生成会话摘要时使用的默认模型 |
 | `XOPC_LOG_LEVEL` | 日志级别（trace/debug/info/warn/error/fatal） |
 | `XOPC_LOG_DIR` | 日志目录路径 |
 | `XOPC_LOG_CONSOLE` | 启用控制台输出（true/false） |

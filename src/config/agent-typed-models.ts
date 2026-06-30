@@ -1,5 +1,5 @@
 /**
- * Named model roles from `agents.defaults.models.roles` plus per-agent overrides.
+ * Named model roles from the selected agent manifest.
  */
 
 import type { AgentTypedModel, Config } from './schema.js';
@@ -19,9 +19,6 @@ function rolesToEntries(
 
 export function resolveEffectiveTypedModels(config: Config, agentId: string): Map<string, AgentTypedModel> {
   const out = new Map<string, AgentTypedModel>();
-  for (const modelRole of rolesToEntries(config.agents?.defaults?.models?.roles)) {
-    out.set(modelRole.id, modelRole);
-  }
   const id = normalizeAgentId(agentId);
   const entry = listAgentEntries(config).find(
     (candidate) => candidate.enabled !== false && normalizeAgentId(candidate.id) === id,

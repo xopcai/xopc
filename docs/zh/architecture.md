@@ -93,8 +93,8 @@
 ## 记忆与会话
 
 - **会话** — 按智能体存放的对话历史（与 Markdown「工作空间」项目目录不是同一套路径）。  
-- **托管记忆** — 可选的 `memories/` 与相关工具，由 `agents.defaults.memory` 控制。  
-- **压缩** — 上下文窗口管理，由 `agents.defaults.compaction` / `pruning` 等配置。
+- **托管记忆** — 可选的 `memories/` 与相关工具，由所选 agent manifest 的 `memory` 策略控制。  
+- **压缩** — 上下文窗口管理与裁剪属于运行时 / 会话行为，由配置和 agent 策略控制。
 
 ## 通道与扩展
 

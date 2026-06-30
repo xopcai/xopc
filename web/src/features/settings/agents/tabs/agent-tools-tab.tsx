@@ -36,15 +36,15 @@ export function AgentToolsTab(props: {
   const language = useLocaleStore((s) => s.language);
   const adv = messages(language).agentSettings.advanced;
 
-  const defaultsDisableSet = useMemo(
+  const presetDeniedSet = useMemo(
     () =>
       new Set(
-        selected.tools.defaultsDisable.flatMap((s) => {
+        selected.tools.presetDenied.flatMap((s) => {
           const v = String(s).trim();
           return v ? [v] : [];
         }),
       ),
-    [selected.tools.defaultsDisable],
+    [selected.tools.presetDenied],
   );
 
   const onDisableSetChange = useCallback(
@@ -78,7 +78,7 @@ export function AgentToolsTab(props: {
           loading={false}
           disableSet={toolEntryDisable}
           onDisableSetChange={onDisableSetChange}
-          defaultsDisableSet={defaultsDisableSet}
+          defaultsDisableSet={presetDeniedSet}
           getToolDescription={getToolDescription}
           getGroupTitle={getGroupTitle}
           quickActionsDisabled={busy}
@@ -92,7 +92,7 @@ export function AgentToolsTab(props: {
             quickHighRiskOff: adv.toolsDisableQuickHighRiskOff,
             quickNoOutbound: adv.toolsDisableQuickNoOutbound,
             notInBuiltin: adv.toolsDisableNotInBuiltin,
-            lockedByDefaults: a.toolsLockedByDefaults,
+            lockedByDefaults: a.toolsLockedByPreset,
           }}
         />
       </div>

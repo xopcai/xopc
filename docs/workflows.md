@@ -278,36 +278,32 @@ This is experimental — defaults will not change unless real-world usage confir
 
 ## Configuration
 
-Workflow runtime limits live under `agents.defaults.workflow`. Typed model roles (`agents.defaults.models`) let scripts reference `small` / `large` instead of hard-coded `provider/model` strings. Typed model roles are global defaults only.
+Workflow availability and limits are controlled by the selected agent manifest and any `capabilityPresets` it extends. Typed model roles under `agents.list[].models.roles` let scripts reference `small` / `large` instead of hard-coded `provider/model` strings.
 
 ```jsonc
 {
   "agents": {
-    "defaults": {
-      "model": { "primary": "anthropic/claude-sonnet-4" },
-      "models": [
-        {
-          "id": "small",
-          "description": "Fast/cheap for fan-out subtasks",
-          "model": "deepseek/deepseek-v4-flash"
-        },
-        {
-          "id": "large",
-          "description": "High quality for synthesis",
-          "model": "anthropic/claude-sonnet-4"
-        }
-      ],
-      "workflow": {
-        "enabled": true,           // set to false to drop the workflow tool entirely
-        "maxConcurrency": 16,      // upper bound on parallel subagents per workflow run
-        "maxSubagents": 1000,      // hard cap on total subagents in one run (runaway guard)
-        "defaultTimeoutSec": 1800  // wall-clock timeout per workflow run (30 min)
-      }
-    },
+    "default": "research",
+    "capabilityPresets": {},
     "list": [
       {
         "id": "research",
-        "models": [{ "id": "small", "model": "openai/gpt-4o-mini" }]
+        "identity": { "name": "Research", "role": "Research assistant" },
+        "responsibilities": { "primary": ["Run research workflows"] },
+        "workspace": { "root": "~/.xopc/workspace/research" },
+        "models": {
+          "defaultRole": "large",
+          "roles": {
+            "small": { "model": "deepseek/deepseek-v4-flash", "description": "Fast fan-out subtasks" },
+            "large": { "model": "anthropic/claude-sonnet-4", "description": "High quality synthesis" }
+          }
+        },
+        "tools": { "builtin": {} },
+        "skills": { "mode": "all" },
+        "memory": { "mode": "off", "sources": ["session"] },
+        "workflows": { "enabled": true },
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] },
+        "runtime": { "timeoutMs": 1800000 }
       }
     ]
   }

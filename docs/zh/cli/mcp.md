@@ -46,13 +46,15 @@ MCP 服务器写在 `~/.xopc/xopc.json` 的 `mcp.servers` 下：
 
 ## 关闭 MCP 工具
 
-在 `agents.defaults.tools.disable` 或某个 `agents.list` 条目的 `tools.disable` 中加入 `bundle-mcp`。单个工具名格式为 `服务器ID__工具名`。
+在所选 agent manifest 的 MCP / 工具策略中拒绝不希望暴露的 server 或 tool。物化后的单个工具名格式为 `服务器ID__工具名`。
 
 ---
 
-## CLI
+## CLI 状态
 
-### 管理服务器
+当前 `xopc --help` 不暴露 `mcp` 作为顶层命令。请通过 `xopc.json` 中的 `mcp.servers` 和可用的网关控制台管理 MCP。下面命令仅保留给仍暴露历史 MCP CLI 的安装或开发分支参考。
+
+### 历史服务器管理命令
 
 ```bash
 xopc mcp list

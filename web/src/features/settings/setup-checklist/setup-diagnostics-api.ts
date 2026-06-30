@@ -90,6 +90,10 @@ function browserStatus(installed: boolean | undefined): DoctorCheckStatus {
   return installed ? 'pass' : 'warn';
 }
 
+function browserSettingsPath(tab: string): string {
+  return `/settings/agent-browser?tab=${encodeURIComponent(tab)}`;
+}
+
 export function browserDiagnosticsSwrKey(input: BrowserDiagnosticsInput | null): [string, BrowserDiagnosticsInput] | null {
   if (!input?.enabled) return null;
   return ['setup-browser-diagnostics', input];
@@ -108,7 +112,7 @@ export async function fetchBrowserDiagnostics(input: BrowserDiagnosticsInput): P
       label: 'Browser: Playwright',
       status: browserStatus(installed),
       message: installed ? 'Local Chromium is installed.' : (data.payload?.reason ?? 'Local Chromium is not installed.'),
-      path: '/settings/agent-browser?tab=local',
+      path: browserSettingsPath('local'),
     }];
   }
 
@@ -124,7 +128,7 @@ export async function fetchBrowserDiagnostics(input: BrowserDiagnosticsInput): P
       message: installed
         ? `CloakBrowser ${data.payload?.version ?? ''}`.trim()
         : 'CloakBrowser is not installed.',
-      path: '/settings/agent-browser?tab=cloakbrowser',
+      path: browserSettingsPath('cloakbrowser'),
     }];
   }
 
@@ -148,7 +152,7 @@ export async function fetchBrowserDiagnostics(input: BrowserDiagnosticsInput): P
             ? 'Chrome extension needs refresh.'
             : 'Chrome extension is installed but not connected.'
           : 'Chrome extension is not installed.',
-      path: '/settings/agent-browser?tab=extension',
+      path: browserSettingsPath('extension'),
     }];
   }
 
@@ -157,6 +161,6 @@ export async function fetchBrowserDiagnostics(input: BrowserDiagnosticsInput): P
     label: 'Browser',
     status: 'skip',
     message: `Browser backend "${input.backend}" is not checked on this overview.`,
-    path: '/settings/agent-browser',
+    path: browserSettingsPath(input.backend || 'overview'),
   }];
 }

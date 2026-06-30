@@ -185,14 +185,29 @@ xopc extensions dev ./my-extension
 ```json
 {
   "agents": {
-    "defaults": {
-      "model": "deepseek/deepseek-chat",
-      "max_tokens": 8192
-    }
+    "default": "main",
+    "list": [
+      {
+        "id": "main",
+        "identity": { "name": "Main", "role": "通用助手", "language": "zh-CN" },
+        "responsibilities": { "primary": ["帮助用户完成任务"] },
+        "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "deepseek/deepseek-chat" }
+          }
+        },
+        "tools": { "builtin": {} },
+        "skills": { "mode": "all" },
+        "memory": { "mode": "confirmWrite", "sources": ["session"] },
+        "workflows": {},
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
+      }
+    ]
   },
   "providers": {
-    "deepseek": "${DEEPSEEK_API_KEY}",
-    "openai": "${OPENAI_API_KEY}"
+    "deepseek": "${DEEPSEEK_API_KEY}"
   }
 }
 ```

@@ -10,11 +10,10 @@ import { OnboardingModelSelect } from '@/features/onboarding/onboarding-model-se
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
 import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
 import { patchProviderApiKeys } from '@/features/settings/providers-api';
+import { applyGatewayAgentsPayloadToCaches, fetchGatewayAgents, updateGatewayAgent } from '@/features/settings/agents-admin-api';
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
-import { fetchJson } from '@/lib/fetch';
 import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
-import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -117,17 +116,23 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
     const modelRef = models.find((m) => m.id === selectedModelId)?.id ?? selectedModelId;
     dispatch({ type: 'patch', patch: { busy: true, error: null } });
     try {
-      await fetchJson(apiUrl('/api/config'), {
-        method: 'PATCH',
-        body: JSON.stringify({
-          agents: {
-            defaults: {
-              // Backend PATCH expects chat model refs under agents.defaults.models.chat.
-              models: { chat: { primary: modelRef } },
-            },
-          },
-        }),
+      const agentsPayload = await fetchGatewayAgents();
+      const defaultAgent = agentsPayload.agents.find((agent) => agent.id === agentsPayload.defaultId) ?? agentsPayload.agents[0];
+      if (!defaultAgent) {
+        throw new Error('No default agent configured');
+      }
+      const defaultRole = defaultAgent.typedModels.defaultRole || defaultAgent.typedModels.effective[0]?.id || 'deep';
+      const roles = Object.fromEntries(
+        defaultAgent.typedModels.effective.map((row) => [
+          row.id,
+          row.description ? { model: row.model, description: row.description } : { model: row.model },
+        ]),
+      );
+      roles[defaultRole] = { ...(roles[defaultRole] ?? {}), model: modelRef };
+      const updatedAgents = await updateGatewayAgent(defaultAgent.id, {
+        models: { defaultRole, roles },
       });
+      await applyGatewayAgentsPayloadToCaches(updatedAgents);
       void revalidateGatewayConfig();
       void invalidateConfiguredModelsCache();
       dispatchConfigReload();

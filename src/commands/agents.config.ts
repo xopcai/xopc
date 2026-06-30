@@ -29,7 +29,6 @@ export function applyAgentConfig(
   params: {
     agentId: string;
     workspace?: string;
-    agentDir?: string;
     model?: string;
     models?: AgentEntry['models'];
     skills?: string[];
@@ -39,23 +38,47 @@ export function applyAgentConfig(
   const agentId = normalizeAgentId(params.agentId);
   const list = listAgentEntries(cfg);
   const index = findAgentEntryIndex(list, agentId);
-  const base = index >= 0 ? list[index] : { id: agentId, enabled: true as const };
+  const nextTools = params.tools;
+  const base = index >= 0 ? list[index] : {
+    id: agentId,
+    enabled: true as const,
+    identity: { name: agentId, role: 'Agent', language: 'en', tone: 'direct' },
+    responsibilities: { primary: ['Help the user complete tasks'] },
+    workspace: { root: `~/.xopc/workspace/${agentId}` },
+    models: { defaultRole: 'deep', roles: { deep: { model: params.model ?? 'openai/gpt-4.1' } } },
+    tools: { builtin: {} },
+    skills: { mode: 'all' as const },
+    memory: { mode: 'confirmWrite' as const, sources: ['session' as const, 'curated' as const], writePolicy: { curated: 'confirm' as const } },
+    workflows: {},
+    boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+  };
   const nextEntry: AgentEntry = {
     ...base,
     enabled: base.enabled ?? true,
-    ...(params.workspace ? { workspace: params.workspace } : {}),
-    ...(params.agentDir ? { agentDir: params.agentDir } : {}),
+    ...(params.workspace ? { workspace: { root: params.workspace } } : {}),
     ...(params.models ? { models: params.models } : {}),
-    ...(params.model ? { models: { ...base.models, chat: { primary: params.model } } } : {}),
-    ...(params.skills ? { skills: params.skills } : {}),
-    ...(params.tools ? { tools: params.tools } : {}),
+    ...(params.model ? { models: { ...base.models, defaultRole: 'deep', roles: { ...base.models.roles, deep: { model: params.model } } } } : {}),
+    ...(params.skills ? { skills: { mode: 'allowlist' as const, allow: params.skills } } : {}),
+    ...(nextTools ? { tools: nextTools } : {}),
   };
   const nextList = [...list];
   if (index >= 0) {
     nextList[index] = nextEntry;
   } else {
     if (nextList.length === 0 && agentId !== normalizeAgentId(resolveDefaultAgentId(cfg))) {
-      nextList.push({ id: resolveDefaultAgentId(cfg), enabled: true });
+      nextList.push({
+        id: resolveDefaultAgentId(cfg),
+        enabled: true,
+        identity: { name: resolveDefaultAgentId(cfg), role: 'Agent', language: 'en', tone: 'direct' },
+        responsibilities: { primary: ['Help the user complete tasks'] },
+        workspace: { root: `~/.xopc/workspace/${resolveDefaultAgentId(cfg)}` },
+        models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
+        tools: { builtin: {} },
+        skills: { mode: 'all' },
+        memory: { mode: 'confirmWrite', sources: ['session', 'curated'], writePolicy: { curated: 'confirm' } },
+        workflows: {},
+        boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+      });
     }
     nextList.push(nextEntry);
   }
@@ -75,7 +98,7 @@ export function pruneAgentConfig(
   const id = normalizeAgentId(agentId);
   const agents = listAgentEntries(cfg);
   const nextAgentsList = agents.filter((e) => normalizeAgentId(e.id) !== id);
-  const nextAgents = nextAgentsList.length > 0 ? nextAgentsList : undefined;
+  const nextAgents = nextAgentsList.length > 0 ? nextAgentsList : [];
 
   const bindings = cfg.bindings ?? [];
   const filteredBindings = bindings.filter((b) => normalizeAgentId(b.agentId) !== id);
@@ -83,7 +106,7 @@ export function pruneAgentConfig(
   return {
     config: {
       ...cfg,
-      agents: nextAgents ? { ...cfg.agents, list: nextAgents } : { ...cfg.agents, list: undefined },
+      agents: { ...cfg.agents, list: nextAgents },
       bindings: filteredBindings,
     },
     removedBindings: bindings.length - filteredBindings.length,

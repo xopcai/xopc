@@ -5,7 +5,6 @@ import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
-import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   dreamingSwrKey,
   fetchDreamingEvents,
@@ -158,8 +157,6 @@ export function DreamingSettingsPanel() {
     [setSearchParams],
   );
 
-  const { data: cfgData } = useGatewayConfigSwr(hasToken);
-
   const [ui, dispatchUi] = useReducer(uiPatchReducer<DreamingUi>, initialDreamingUi);
   const {
     actionBusy,
@@ -295,9 +292,11 @@ export function DreamingSettingsPanel() {
   const disabled = !hasToken || isLoading || Boolean(actionBusy);
 
   const cfgFromGateway = useMemo(() => {
-    const rawCfg = cfgData?.payload?.config;
+    const rawCfg = data?.config;
     return normalizeDreamingFromConfig(rawCfg ?? {});
-  }, [cfgData]);
+  }, [data]);
+  const cfgAgentId = data?.agentId ?? 'main';
+  const cfgBaseMemory = data?.memory;
 
   useEffect(() => {
     if (!hasToken) {
@@ -319,7 +318,7 @@ export function DreamingSettingsPanel() {
     if (!cfgForm) return;
     dispatchUi({ type: 'patch', patch: { cfgSaving: true, cfgOk: false, cfgError: null } });
     try {
-      await patchDreamingConfig(cfgForm);
+      await patchDreamingConfig(cfgAgentId, cfgForm, cfgBaseMemory);
       dispatchCfg({ type: 'saved', value: cfgForm });
       cfgDirtyRef.current = false;
       dispatchUi({ type: 'patch', patch: { cfgOk: true } });
@@ -332,7 +331,7 @@ export function DreamingSettingsPanel() {
     } finally {
       dispatchUi({ type: 'patch', patch: { cfgSaving: false } });
     }
-  }, [cfgForm, mutate]);
+  }, [cfgAgentId, cfgBaseMemory, cfgForm, mutate]);
 
   const setDreamingEnabled = useCallback(
     async (enabled: boolean) => {
@@ -343,7 +342,7 @@ export function DreamingSettingsPanel() {
       dispatchCfg({ type: 'set', value: next });
       dispatchUi({ type: 'patch', patch: { enableSaving: true, cfgOk: false, cfgError: null } });
       try {
-        await patchDreamingConfig(next);
+        await patchDreamingConfig(cfgAgentId, next, cfgBaseMemory);
         dispatchCfg({ type: 'saved', value: next });
         cfgDirtyRef.current = false;
         dispatchUi({ type: 'patch', patch: { cfgOk: true } });
@@ -358,7 +357,7 @@ export function DreamingSettingsPanel() {
         dispatchUi({ type: 'patch', patch: { enableSaving: false } });
       }
     },
-    [cfgForm, hasToken, mutate],
+    [cfgAgentId, cfgBaseMemory, cfgForm, hasToken, mutate],
   );
 
   const dreamingEnabled = cfgForm?.enabled ?? cfgFromGateway.enabled;

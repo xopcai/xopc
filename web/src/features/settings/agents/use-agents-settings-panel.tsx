@@ -10,6 +10,7 @@ import {
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { fetchCapabilityPresets } from '@/features/settings/capability-presets/capability-presets-api';
 import {
   createGatewayAgent,
   deleteGatewayAgent,
@@ -19,7 +20,6 @@ import {
   type GatewayAgentRow,
   type GatewayAgentsPayload,
 } from '@/features/settings/agents-admin-api';
-import { parseAgentDefaultsFromConfig } from '@/features/settings/config-api';
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
 import { suggestWorkspaceFromAgentName } from '@/features/settings/suggest-agent-workspace';
@@ -41,7 +41,40 @@ import { useAgentsToolsSkillsLocalState } from './hooks/use-agents-tools-skills-
 import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-defaults';
 
 import type { AgentPanel } from './utils';
-import { cleanTypedModelsForPatch, validateTypedModelsForSave } from './typed-models-lib';
+import {
+  cleanTypedModelsForPatch,
+  typedModelsRowsFromList,
+  validateTypedModelsForSave,
+  type AgentTypedModelRow,
+} from './typed-models-lib';
+
+function modelRolePatchForOverview(agent: GatewayAgentRow, modelRef: string) {
+  const roleId = agent.typedModels.defaultRole;
+  return {
+    defaultRole: roleId,
+    roles: {
+      [roleId]: { model: modelRef },
+    },
+  };
+}
+
+function modelRowsForPresetReset(agent: GatewayAgentRow): AgentTypedModelRow[] {
+  const presetRows = typedModelsRowsFromList(agent.typedModels.preset);
+  if (presetRows.some((row) => row.id === agent.typedModels.defaultRole)) {
+    return presetRows;
+  }
+  return typedModelsRowsFromList(agent.typedModels.effective);
+}
+
+function builtinDenyPolicyFromDisableSet(disableSet: Set<string>) {
+  return Object.fromEntries(
+    Array.from(disableSet)
+      .map((id) => id.trim())
+      .filter(Boolean)
+      .toSorted((x, y) => x.localeCompare(y))
+      .map((id) => [id, { mode: 'deny' as const }]),
+  );
+}
 
 export function useAgentsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
@@ -69,6 +102,12 @@ export function useAgentsSettingsPanel() {
     isLoading: agentsLoading,
     mutate: mutateAgents,
   } = useSWR(agentsSwrKey, fetchGatewayAgents, { revalidateOnFocus: false });
+  const {
+    data: capabilityPresetsData,
+    mutate: mutateCapabilityPresets,
+  } = useSWR(hasToken ? 'settings-capability-presets' : null, fetchCapabilityPresets, {
+    revalidateOnFocus: false,
+  });
 
   const { data: gatewayCfgData } = useGatewayConfigSwr(hasToken);
 
@@ -77,12 +116,11 @@ export function useAgentsSettingsPanel() {
     [gatewayCfgData],
   );
 
-  const globalAgentDefaults = useMemo(
-    () => parseAgentDefaultsFromConfig(gatewayCfgData?.payload?.config ?? {}),
-    [gatewayCfgData],
-  );
-
   const data: GatewayAgentsPayload | null = swrAgentsData ?? null;
+  const defaultAgent = useMemo(() => {
+    if (!data) return null;
+    return data.agents.find((agent) => agent.id === data.defaultId) ?? data.agents[0] ?? null;
+  }, [data]);
   const loading = Boolean(hasToken && agentsLoading);
   const [error, setError] = useState<string | null>(null);
   const loadError =
@@ -154,7 +192,7 @@ export function useAgentsSettingsPanel() {
     if (searchParams.get('panel') !== 'defaults') {
       return;
     }
-    navigate('/settings/agent-defaults', {
+    navigate(routeAgentId ? agentsAppDetailPath(routeAgentId) : AGENTS_APP_LIST_PATH, {
       replace: true,
       state: {
         [SETTINGS_BACK_PATH_STATE_KEY]: routeAgentId
@@ -392,7 +430,9 @@ export function useAgentsSettingsPanel() {
       const next = await createGatewayAgent({
         workspace,
         ...(createAgentId.trim() ? { id: createAgentId.trim() } : {}),
-        ...(createModel.trim() ? { models: { chat: { primary: createModel.trim() } } } : {}),
+        ...(createModel.trim()
+          ? { models: { defaultRole: 'deep', roles: { deep: { model: createModel.trim() } } } }
+          : {}),
         profileFiles: { 'IDENTITY.md': identityMd },
         ...(duplicateSourceId ? { cloneFrom: duplicateSourceId } : {}),
       });
@@ -423,7 +463,7 @@ export function useAgentsSettingsPanel() {
     try {
       const next = await updateGatewayAgent(selected.id, {
         workspace: editWorkspace.trim() || undefined,
-        models: { chat: editModel.trim() ? { primary: editModel.trim() } : null },
+        ...(editModel.trim() ? { models: modelRolePatchForOverview(selected, editModel.trim()) } : {}),
       });
       void mutateAgents(next, { revalidate: false });
     } catch (err) {
@@ -485,8 +525,9 @@ export function useAgentsSettingsPanel() {
     setBusy(true);
     setError(null);
     try {
-      const toolsDisable = Array.from(toolsSkills.toolEntryDisable).toSorted((x, y) => x.localeCompare(y));
-      const next = await updateGatewayAgent(selected.id, { tools: { disable: toolsDisable } });
+      const next = await updateGatewayAgent(selected.id, {
+        tools: { builtin: builtinDenyPolicyFromDisableSet(toolsSkills.toolEntryDisable) },
+      });
       void mutateAgents(next, { revalidate: false });
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
@@ -502,7 +543,7 @@ export function useAgentsSettingsPanel() {
     setBusy(true);
     setError(null);
     try {
-      const next = await updateGatewayAgent(selected.id, { tools: { disable: null } });
+      const next = await updateGatewayAgent(selected.id, { tools: null });
       void mutateAgents(next, { revalidate: false });
       toolsSkills.setToolEntryDisable(new Set());
     } catch (err) {
@@ -543,12 +584,20 @@ export function useAgentsSettingsPanel() {
     if (!selected) {
       return;
     }
+    const resetRows = modelRowsForPresetReset(selected);
+    const resetPatch = cleanTypedModelsForPatch(resetRows);
+    if (!resetPatch?.roles?.[selected.typedModels.defaultRole]) {
+      setError(a.typedModelsInvalidModel);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const next = await updateGatewayAgent(selected.id, { models: { roles: null } });
+      const next = await updateGatewayAgent(selected.id, {
+        models: { defaultRole: selected.typedModels.defaultRole, roles: resetPatch.roles },
+      });
       void mutateAgents(next, { revalidate: false });
-      toolsSkills.setModelRows([]);
+      toolsSkills.setModelRows(resetRows);
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
     } finally {
@@ -575,7 +624,24 @@ export function useAgentsSettingsPanel() {
       setBusy(false);
     }
   }
-  const footerSaveNotApplicable = panel === 'channels' || panel === 'cron';
+
+  async function onUpdateAgentExtends(nextExtends: string[]) {
+    if (!selected) {
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await updateGatewayAgent(selected.id, { extends: nextExtends });
+      void mutateAgents(next, { revalidate: false });
+      void mutateCapabilityPresets();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : a.saveError);
+    } finally {
+      setBusy(false);
+    }
+  }
+  const footerSaveNotApplicable = panel === 'channels' || panel === 'cron' || panel === 'effective' || panel === 'memory';
 
   const overviewRestDirty = (() => {
     if (!selected || panel !== 'overview') return false;
@@ -679,8 +745,8 @@ export function useAgentsSettingsPanel() {
     setEditWorkspace,
     editModel,
     setEditModel,
-    defaultModel: globalAgentDefaults.model,
-    defaultWorkspace: globalAgentDefaults.workspace,
+    defaultModel: defaultAgent?.model?.primary ?? '',
+    defaultWorkspace: defaultAgent?.workspace ?? '',
     onSetDefault: () => {
       if (!selected) return;
       void onSetDefault(selected);
@@ -691,6 +757,15 @@ export function useAgentsSettingsPanel() {
       void onDelete(selected, purge);
     },
     onTryInChat: () => void handleTryInChat(),
+    capabilityPresets: capabilityPresetsData?.presets ?? [],
+    onUpdateAgentExtends: (nextExtends: string[]) => void onUpdateAgentExtends(nextExtends),
+    onOpenCapabilityPreset: (presetId: string) => {
+      navigate(
+        presetId
+          ? `/settings/capability-presets?preset=${encodeURIComponent(presetId)}`
+          : '/settings/capability-presets',
+      );
+    },
     overviewSaveProfileMarkdownRef,
     profileSaveRef,
     overviewProfile,
@@ -740,6 +815,7 @@ export function useAgentsSettingsPanel() {
     cronLoading: cron.cronLoading,
     agentCronJobs: cron.agentCronJobs,
     onSetCronJobAgent: (job, key) => void cron.onSetCronJobAgent(job, key),
+    onPanelChange: setPanel,
   };
 
   return {
