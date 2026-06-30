@@ -22,6 +22,7 @@ import type { ResolvedExtensionConfig } from '../extensions/types/index.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { SessionIndex } from '../session/index.js';
 import type { Config } from '../config/schema.js';
+import { getAgentDefaultModelRef } from '../config/schema.js';
 import { wireTunnelEventsToGateway } from '../tunnel/gateway-lifecycle.js';
 import {
   stopTailscaleExposure,
@@ -292,7 +293,7 @@ export class GatewayService {
     const cronRef: { service?: CronService } = { service: this.cronService };
     this._agentService = new AgentService(this.bus, {
       workspace: this.workspacePath,
-      model: this.config.agents?.defaults?.models?.chat?.primary,
+      model: getAgentDefaultModelRef(this.config),
       config: this.config,
       sessionStore: this.sessionIndex.getStore(),
       onSessionMetadataUpdated: (sessionKey, patch) => {
@@ -1022,7 +1023,7 @@ export class GatewayService {
   }
 
   /**
-   * Start/stop/rebind the Chrome extension bridge when `agents.defaults.browser` changes.
+   * Start/stop/rebind the Chrome extension bridge.
    * PATCH saves update config in memory without re-running gateway startup, so this must run on save too.
    */
   async reconcileBrowserExtensionServer(): Promise<void> {
@@ -1040,21 +1041,10 @@ export class GatewayService {
       return;
     }
 
-    const browser = (this.config.agents?.defaults as Record<string, unknown> | undefined)?.browser as
-      | Record<string, unknown>
-      | undefined;
-    const ext = browser?.extension as Record<string, unknown> | undefined;
-    const port = typeof ext?.port === 'number' ? ext.port : 19820;
-    const host = typeof ext?.host === 'string' && ext.host ? ext.host : '127.0.0.1';
-    const connectionTimeout =
-      typeof ext?.connectionTimeout === 'number' && ext.connectionTimeout >= 1000
-        ? Math.floor(ext.connectionTimeout)
-        : undefined;
-    const cmdSec = browser?.commandTimeout;
-    const commandTimeout =
-      typeof cmdSec === 'number' && Number.isFinite(cmdSec) && cmdSec > 0
-        ? Math.floor(cmdSec * 1000)
-        : undefined;
+    const port = 19820;
+    const host = '127.0.0.1';
+    const connectionTimeout = undefined;
+    const commandTimeout = undefined;
     const bindKey = `${host}:${port}`;
 
     if (this.browserExtensionRelease && this.browserExtensionBindKey === bindKey) {
@@ -1089,7 +1079,7 @@ export class GatewayService {
             phase: 'browser_extension_ws',
             bindPort: port,
             bindHost: host,
-            hint: 'Another process holds this port (default 19820). Stop it or set agents.defaults.browser.extension.port.',
+            hint: 'Another process holds the browser extension bridge port 19820. Stop it before starting xopc.',
           },
           `Browser extension WS server port is already in use: ${host}:${port}`,
         );

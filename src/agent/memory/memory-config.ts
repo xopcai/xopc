@@ -1,45 +1,42 @@
 import { join } from 'node:path';
 
 import type { Config } from '../../config/schema.js';
+import { resolveEffectiveAgentManifestForAgent } from '../../config/agent-profile.js';
 import { resolveAgentHomeDir, resolveAgentIdForWorkspacePath } from '../agent-scope.js';
 
 import type { MemoryStoreConfig } from './types.js';
 
 /** When false, curated `memories/` (under agent home) + external memory providers are off. */
 export function isMemorySubsystemEnabled(config: Config | undefined): boolean {
-  return config?.agents?.defaults?.memory?.enabled !== false;
+  if (!config) return true;
+  return config.agents.list.some((agent) => agent.enabled !== false && agent.memory.mode !== 'off');
 }
 
 /** Curated memory tool + agent-home `memories/` store (not injected into system prompt). */
 export function isCuratedMemoryInPrompt(config: Config | undefined): boolean {
-  const m = config?.agents?.defaults?.memory;
-  if (m?.enabled === false) {
-    return false;
-  }
-  if (m?.useEnhancedSystem === false) {
-    return false;
-  }
-  return true;
+  if (!config) return true;
+  return config.agents.list.some((agent) => agent.enabled !== false && agent.memory.sources.includes('curated'));
 }
 
 export function resolveBuiltinMemoryStoreConfig(
   workspaceDir: string,
   config: Config | undefined,
 ): MemoryStoreConfig {
-  const m = config?.agents?.defaults?.memory;
+  const agentId = config != null ? resolveAgentIdForWorkspacePath(config, workspaceDir) : undefined;
+  const manifest = config && agentId ? resolveEffectiveAgentManifestForAgent(config, agentId) : undefined;
   const memoriesDir =
     config != null
       ? join(
-          resolveAgentHomeDir(config, resolveAgentIdForWorkspacePath(config, workspaceDir)),
+          resolveAgentHomeDir(config, agentId ?? 'main'),
           'memories',
         )
       : join(workspaceDir, 'memories');
   return {
     workspaceDir,
     memoriesDir,
-    memoryCharLimit: m?.memoryCharLimit ?? 2200,
-    userCharLimit: m?.userCharLimit ?? 1375,
-    userProfileEnabled: m?.userProfileEnabled !== false,
+    memoryCharLimit: manifest?.memory.retention?.maxItems ?? 2200,
+    userCharLimit: 1375,
+    userProfileEnabled: manifest?.memory.sources.includes('userProfile') ?? true,
   };
 }
 
@@ -51,16 +48,7 @@ export function shouldInjectMemoryPrefetchThisTurn(
   config: Config | undefined,
   turnNumber: number,
 ): boolean {
-  const m = config?.agents?.defaults?.memory;
-  const freq = m?.injectionFrequency ?? 'every-turn';
-  if (freq === 'first-turn') {
-    return turnNumber === 1;
-  }
-  const cadence = m?.contextCadence ?? 1;
-  if (cadence <= 1) {
-    return true;
-  }
-  return (turnNumber - 1) % cadence === 0;
+  return turnNumber >= 1;
 }
 
 export function shouldRegisterCuratedMemoryTool(config: Config | undefined): boolean {

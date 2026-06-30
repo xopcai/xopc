@@ -50,37 +50,26 @@ export default defineConfig({
           alt: 'xopc'
         },
         nav: [
-          { text: 'Home', link: '/' },
           { text: 'Guide', link: '/first-5-minutes' },
-          { text: 'Reference', link: '/reference/templates' }
+          { text: 'Reference', link: '/configuration' }
         ],
         sidebar: [
           {
-            text: 'Getting Started',
+            text: 'Start',
             items: [
-              { text: 'Introduction', link: '/' },
               { text: 'First 5 Minutes', link: '/first-5-minutes' },
-              { text: 'Quick Start', link: '/getting-started' }
-            ]
-          },
-          {
-            text: 'Core Concepts',
-            items: [
-              { text: 'Architecture', link: '/architecture' },
-              { text: 'On-disk layout', link: '/disk-layout' },
-              { text: 'State & workspace layout', link: '/workspace' },
-              { text: 'Configuration', link: '/configuration' },
-              { text: 'Routing System', link: '/routing-system' },
-              { text: 'CLI', link: '/cli' },
-              { text: 'Updates', link: '/update' },
-              { text: 'Tools', link: '/tools' },
-              { text: 'Extensions', link: '/extensions' },
+              { text: 'Getting Started', link: '/getting-started' },
               { text: 'Models', link: '/models' }
             ]
           },
           {
-            text: 'Features',
+            text: 'Use xopc',
             items: [
+              { text: 'CLI', link: '/cli' },
+              { text: 'Terminal UI (tui)', link: '/tui' },
+              { text: 'Gateway console', link: '/gateway' },
+              { text: 'Mobile app', link: '/mobile-app' },
+              { text: 'Session', link: '/session' },
               {
                 text: 'Channels',
                 collapsed: true,
@@ -94,25 +83,56 @@ export default defineConfig({
               },
               { text: 'Voice (STT/TTS)', link: '/voice' },
               { text: 'Image & vision', link: '/image-multimodal' },
-              { text: 'Progress Feedback', link: '/progress' },
-              { text: 'Terminal UI (tui)', link: '/tui' },
-              { text: 'Gateway', link: '/gateway' },
-              { text: 'Mobile app', link: '/mobile-app' },
+              { text: 'Progress Feedback', link: '/progress' }
+            ]
+          },
+          {
+            text: 'How-to guides',
+            items: [
+              { text: 'Configure your first model', link: '/how-to/configure-first-model' },
+              { text: 'Connect Telegram', link: '/how-to/connect-telegram' },
+              { text: 'Expose gateway safely', link: '/how-to/expose-gateway-safely' },
+              { text: 'Create a second agent', link: '/how-to/create-second-agent' },
+              { text: 'Diagnose setup issues', link: '/how-to/diagnose-broken-setup' }
+            ]
+          },
+          {
+            text: 'Operate xopc',
+            items: [
+              { text: 'Configuration', link: '/configuration' },
               { text: 'Remote access', link: '/remote-access' },
-              { text: 'Session', link: '/session' },
+              { text: 'Network', link: '/network' },
+              { text: 'Tailscale', link: '/gateway/tailscale' },
+              { text: 'SSH tunnel', link: '/gateway/remote' },
+              { text: 'Trusted proxy', link: '/gateway/trusted-proxy' },
+              { text: 'Updates', link: '/update' },
+              { text: 'Heartbeat', link: '/heartbeat' }
+            ]
+          },
+          {
+            text: 'Extend xopc',
+            items: [
+              { text: 'Agents', link: '/agent-manifest' },
+              { text: 'Routing System', link: '/routing-system' },
+              { text: 'Tools', link: '/tools' },
               { text: 'Skills', link: '/skills' },
               { text: 'Skills Testing', link: '/skills-testing' },
+              { text: 'Extensions', link: '/extensions' },
               { text: 'MCP', link: '/mcp' },
               { text: 'Cron', link: '/cron' },
-              { text: 'Dynamic Workflows', link: '/workflows' },
-              { text: 'Heartbeat', link: '/heartbeat' }
+              { text: 'Dynamic Workflows', link: '/workflows' }
             ]
           },
           {
             text: 'Reference',
             items: [
+              { text: 'Configuration reference', link: '/reference/configuration' },
+              { text: 'Architecture', link: '/architecture' },
+              { text: 'On-disk layout', link: '/disk-layout' },
+              { text: 'State & workspace layout', link: '/workspace' },
               { text: 'Templates', link: '/reference/templates' },
-              { text: 'UI Design System', link: '/design/ui-design-system' }
+              { text: 'UI Design System', link: '/design/ui-design-system' },
+              { text: 'Documentation Quality', link: '/documentation-quality' }
             ]
           }
         ],
@@ -134,37 +154,26 @@ export default defineConfig({
           alt: 'xopc'
         },
         nav: [
-          { text: '首页', link: '/zh/' },
           { text: '指南', link: '/zh/first-5-minutes' },
-          { text: '参考', link: '/zh/reference/templates' }
+          { text: '参考', link: '/zh/configuration' }
         ],
         sidebar: [
           {
             text: '快速开始',
             items: [
-              { text: '简介', link: '/zh/' },
               { text: '5分钟快速入门', link: '/zh/first-5-minutes' },
-              { text: '快速上手', link: '/zh/getting-started' }
-            ]
-          },
-          {
-            text: '核心概念',
-            items: [
-              { text: '架构设计', link: '/zh/architecture' },
-              { text: '磁盘与目录布局', link: '/zh/disk-layout' },
-              { text: '状态目录与工作空间', link: '/zh/workspace' },
-              { text: '配置参考', link: '/zh/configuration' },
-              { text: 'Session 路由', link: '/zh/routing-system' },
-              { text: 'CLI 命令', link: '/zh/cli' },
-              { text: '更新', link: '/zh/update' },
-              { text: '内置工具', link: '/zh/tools' },
-              { text: '扩展系统', link: '/zh/extensions' },
+              { text: '快速上手', link: '/zh/getting-started' },
               { text: '模型支持', link: '/zh/models' }
             ]
           },
           {
-            text: '功能特性',
+            text: '使用 xopc',
             items: [
+              { text: 'CLI 命令', link: '/zh/cli' },
+              { text: '终端界面 (tui)', link: '/zh/tui' },
+              { text: '网关控制台', link: '/zh/gateway' },
+              { text: '手机端 App', link: '/zh/mobile-app' },
+              { text: '会话管理', link: '/zh/session' },
               {
                 text: '消息通道',
                 collapsed: true,
@@ -178,25 +187,52 @@ export default defineConfig({
               },
               { text: '语音（STT/TTS）', link: '/zh/voice' },
               { text: '图像与视觉', link: '/zh/image-multimodal' },
-              { text: '进度反馈', link: '/zh/progress' },
-              { text: '终端界面 (tui)', link: '/zh/tui' },
-              { text: '网关服务', link: '/zh/gateway' },
-              { text: '手机端 App', link: '/zh/mobile-app' },
+              { text: '进度反馈', link: '/zh/progress' }
+            ]
+          },
+          {
+            text: '任务指南',
+            items: [
+              { text: '配置第一个模型', link: '/zh/how-to/configure-first-model' },
+              { text: '接入 Telegram', link: '/zh/how-to/connect-telegram' },
+              { text: '安全暴露 gateway', link: '/zh/how-to/expose-gateway-safely' },
+              { text: '创建第二个 agent', link: '/zh/how-to/create-second-agent' },
+              { text: '诊断设置问题', link: '/zh/how-to/diagnose-broken-setup' }
+            ]
+          },
+          {
+            text: '运维 xopc',
+            items: [
+              { text: '配置参考', link: '/zh/configuration' },
               { text: '远程访问', link: '/zh/remote-access' },
-              { text: '会话管理', link: '/zh/session' },
+              { text: '更新', link: '/zh/update' },
+              { text: '心跳监控', link: '/zh/heartbeat' }
+            ]
+          },
+          {
+            text: '扩展 xopc',
+            items: [
+              { text: 'Agent Manifest', link: '/agent-manifest' },
+              { text: 'Session 路由', link: '/zh/routing-system' },
+              { text: '内置工具', link: '/zh/tools' },
               { text: '技能系统', link: '/zh/skills' },
               { text: '技能测试', link: '/zh/skills-testing' },
+              { text: '扩展系统', link: '/zh/extensions' },
               { text: 'MCP', link: '/zh/mcp' },
               { text: '定时任务', link: '/zh/cron' },
-              { text: '动态工作流', link: '/zh/workflows' },
-              { text: '心跳监控', link: '/zh/heartbeat' }
+              { text: '动态工作流', link: '/zh/workflows' }
             ]
           },
           {
             text: '参考',
             items: [
+              { text: '配置参考', link: '/zh/reference/configuration' },
+              { text: '架构设计', link: '/zh/architecture' },
+              { text: '磁盘与目录布局', link: '/zh/disk-layout' },
+              { text: '状态目录与工作空间', link: '/zh/workspace' },
               { text: '模板文件', link: '/zh/reference/templates' },
-              { text: '控制台 UI 设计规范', link: '/design/ui-design-system' }
+              { text: '控制台 UI 设计规范', link: '/design/ui-design-system' },
+              { text: '文档质量计划', link: '/zh/documentation-quality' }
             ]
           }
         ],

@@ -46,13 +46,15 @@ Extension `.mcp.json` manifests merge with user config (user wins on id collisio
 
 ## Disable MCP tools
 
-Add `bundle-mcp` to `agents.defaults.tools.disable` or a per-agent `tools.disable` list. Individual tools use names `serverId__toolName`.
+Set the selected agent manifest's MCP/tool policy to deny the server or tool you do not want exposed. Individual materialized tools use names `serverId__toolName`.
 
 ---
 
-## CLI
+## CLI status
 
-### Manage servers
+Current `xopc --help` does not expose `mcp` as a root command. Manage MCP servers through `mcp.servers` in `xopc.json` and the gateway console when available. The examples below are retained only for installs or development branches that still expose the historical MCP CLI.
+
+### Historical server management commands
 
 ```bash
 xopc mcp list

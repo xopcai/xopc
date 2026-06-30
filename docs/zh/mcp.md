@@ -95,16 +95,11 @@ XOPC 支持两类 MCP 能力：
 
 同一服务器条目 **不能** 同时配置 `command` 和 `url`。
 
-### 用 CLI 快速改配置
+### 编辑配置
 
-```bash
-xopc mcp list
-xopc mcp show teambition
-xopc mcp set fetch '{"command":"npx","args":["-y","@modelcontextprotocol/server-fetch"]}'
-xopc mcp unset fetch
-```
+当前 `xopc --help` 不暴露 `mcp` 作为顶层命令。请直接编辑 `xopc.json` 中的 `mcp.servers`，或在可用时使用网关控制台。
 
-入站桥接与其它子命令见 [MCP CLI 与 API](./cli/mcp.md)。
+[MCP CLI 与 API](./cli/mcp.md) 保留历史命令，供仍暴露这些子命令的安装或开发分支参考。
 
 ---
 

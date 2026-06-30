@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { AgentManifestSchema, CapabilityPresetSchema } from '../agent-manifest/schema.js';
 import { checkCacheDir } from '../browser/cache-dir-policy.js';
 import { validatePublicUrl } from './public-url.js';
 
@@ -47,7 +48,7 @@ const AgentTypedModelRolesSchema = z
 
 export const AgentModelsSchema = z
   .object({
-    chat: AgentModelRefSchema.optional(),
+    defaultRole: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/).optional(),
     roles: AgentTypedModelRolesSchema,
   })
   .strict()
@@ -77,387 +78,104 @@ export type AgentImageGenerationModelConfig = z.infer<typeof AgentImageGeneratio
 
 export type AgentTypedModel = AgentTypedModelRole & { id: string };
 
-export const AgentDefaultsSchema = z.object({
-  /** Parent directory: each agent’s Markdown root is `<expanded>/<agentId>/` (e.g. `.../workspace/main`). */
-  workspace: z.string().default('~/.xopc/workspace'),
-  /** Chat model and named model roles. */
-  models: AgentModelsSchema,
-  /** Vision / image understanding model (provider/model). Falls back to heuristics when unset. */
-  imageModel: AgentModelRefSchema.optional(),
-  /** Image generation model (provider/model), e.g. openai/gpt-image-1. Supports plugin-based providers (OpenAI / DashScope / MiniMax / Google / Fal). */
-  imageGenerationModel: AgentImageGenerationModelSchema.optional(),
-  /** Max image size for image tool loads (MB). */
-  mediaMaxMb: z.number().positive().optional(),
-  maxTokens: z.number().default(8192),
-  temperature: z.number().default(0.7),
-  maxToolIterations: z.number().default(20),
-  // Wall-clock limit for one user turn (LLM + tools). Default 30m if unset; cap 4h.
-  maxTaskDurationMs: z.number().min(60000).max(14_400_000).optional(),
-  // Reliability settings
-  maxRequestsPerTurn: z.number().min(10).max(200).default(50),
-  maxToolFailuresPerTurn: z.number().min(1).max(20).default(3),
-  // Thinking ability settings
-  thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive']).optional(),
-  reasoningDefault: z.enum(['off', 'on', 'stream']).optional(),
-  verboseDefault: z.enum(['off', 'on', 'full']).optional(),
-  bootstrapMaxChars: z.number().int().positive().optional(),
-  bootstrapTotalMaxChars: z.number().int().positive().optional(),
-  bootstrapPromptTruncationWarning: z.enum(['off', 'once', 'always']).optional(),
-  /**
-   * Controls when profile bootstrap context is injected into the system prompt:
-   * - `always`: inject on every /new and /reset (default, backward-compatible)
-   * - `continuation-skip`: inject on the first turn, skip on continuation turns
-   * - `never`: never inject bootstrap content
-   */
-  contextInjection: z.enum(['always', 'continuation-skip', 'never']).optional(),
-  startupContext: z
-    .object({
-      enabled: z.boolean().optional(),
-      applyOn: z.array(z.enum(['new', 'reset'])).optional(),
-      dailyMemoryDays: z.number().int().min(1).optional(),
-      maxFileBytes: z.number().int().positive().optional(),
-      maxFileChars: z.number().int().positive().optional(),
-      maxTotalChars: z.number().int().positive().optional(),
-    })
-    .optional(),
-  contextLimits: z
-    .object({
-      postCompactionMaxChars: z.number().int().positive().optional(),
-    })
-    .optional(),
-  compaction: z.object({
-    enabled: z.boolean().default(true),
-    mode: z.enum(['default', 'safeguard']).default('default'),
-    reserveTokens: z.number().default(8000),
-    triggerThreshold: z.number().min(0.5).max(0.95).default(0.8),
-    minMessagesBeforeCompact: z.number().default(10),
-    keepRecentMessages: z.number().default(5),
-    // Dual-strategy compaction
-    evictionWindow: z.number().min(0.1).max(0.5).default(0.2),
-    retentionWindow: z.number().min(3).max(20).default(6),
-    postCompactionSections: z.array(z.string()).optional(),
-  }).optional(),
-  pruning: z.object({
-    enabled: z.boolean().default(true),
-    maxToolResultChars: z.number().default(10000),
-    headKeepRatio: z.number().default(0.3),
-    tailKeepRatio: z.number().default(0.3),
-  }).optional(),
-  memoryFlush: z.object({
-    enabled: z.boolean().default(true),
-    /** Trigger flush when usagePercent exceeds this threshold (relative to contextWindow). */
-    threshold: z.number().min(0.5).max(1.0).default(0.88),
-    /** Soft threshold: extra token buffer subtracted from contextWindow when computing threshold. */
-    softThresholdTokens: z.number().int().min(0).default(4000),
-    /** Force flush after this many compactions in the current session. */
-    afterCompactions: z.number().int().min(1).default(2),
-    /** Max characters per flush entry written to daily notes. */
-    maxEntryChars: z.number().int().positive().default(2000),
-    /** Include tool call history from structuredSummary in flush entry. */
-    includeToolHistory: z.boolean().default(true),
-  }).optional(),
-  /**
-   * Curated memory (`agents/<id>/memories/`) + pluggable external provider.
-   * Only one external provider at a time.
-   */
-  memory: z
-    .object({
-      /** Master switch: `curated_memory` tool, prefetch, and external provider. Default true. */
-      enabled: z.boolean().optional(),
-      /** When false, disable curated_memory tool and memory subsystem helpers. Default true. */
-      useEnhancedSystem: z.boolean().optional(),
-      /** Include USER.md in snapshot. Default true. */
-      userProfileEnabled: z.boolean().optional(),
-      memoryCharLimit: z.number().positive().optional(),
-      userCharLimit: z.number().positive().optional(),
-      provider: z.enum(['none', 'stub']).optional(),
-      /** How often prefetched external memory is injected into the user message. */
-      injectionFrequency: z.enum(['every-turn', 'first-turn']).optional(),
-      /** Inject prefetch on turns 1, 1+N, 1+2N, … (only when injectionFrequency is every-turn). Min 1. */
-      contextCadence: z.number().int().min(1).optional(),
-      /** Reserved for future external “dialectic” sync cadence (not wired yet). */
-      dialecticCadence: z.number().int().min(1).optional(),
-      /**
-       * Background memory consolidation ("dreaming"): three-phase sleep model that
-       * promotes short-term recall signals into long-term memory (`MEMORY.md`).
-       *
-       * Phases:
-       * - **light** — fast, frequent sweep (default every 6 h): dedup + signal collection.
-       * - **deep**  — daily deep promotion (default 3 AM): score-gated write to MEMORY.md.
-       * - **rem**   — weekly pattern discovery (default Sun 5 AM): cross-session insight mining.
-       */
-      dreaming: z
-        .object({
-          enabled: z.boolean().optional(),
-          /** Default deep-phase cron when `phases.deep.cron` is omitted. */
-          frequency: z.string().optional(),
-          timezone: z.string().optional(),
-          phases: z
-            .object({
-              light: z
-                .object({
-                  enabled: z.boolean().optional(),
-                  cron: z.string().optional(),
-                  lookbackDays: z.number().int().min(1).optional(),
-                  limit: z.number().int().min(0).optional(),
-                  dedupeSimilarity: z.number().min(0).max(1).optional(),
-                })
-                .optional(),
-              deep: z
-                .object({
-                  enabled: z.boolean().optional(),
-                  cron: z.string().optional(),
-                  minScore: z.number().min(0).max(1).optional(),
-                  minRecallCount: z.number().int().min(1).optional(),
-                  minUniqueQueries: z.number().int().min(1).optional(),
-                  limit: z.number().int().min(0).optional(),
-                  recencyHalfLifeDays: z.number().min(1).optional(),
-                  maxAgeDays: z.number().int().min(1).optional(),
-                })
-                .optional(),
-              rem: z
-                .object({
-                  enabled: z.boolean().optional(),
-                  cron: z.string().optional(),
-                  lookbackDays: z.number().int().min(1).optional(),
-                  limit: z.number().int().min(0).optional(),
-                  minPatternStrength: z.number().min(0).max(1).optional(),
-                })
-                .optional(),
-            })
-            .optional(),
-        })
-        .optional(),
-    })
-    .optional(),
-  /** Cross-session transcript search (`session_search` tool). */
-  sessionSearch: z
-    .object({
-      /** Model ref for per-session summaries (e.g. openai/gpt-4o-mini). */
-      summaryModel: z.string().optional(),
-    })
-    .optional(),
-  /**
-   * Post-turn background review (Hermes-style): optional quiet follow-up that may call
-   * `curated_memory` / `skill_manage` so durable facts and reusable workflows persist
-   * without bloating the main user-visible turn.
-   */
-  backgroundReview: z
-    .object({
-      /** When true, nudges may run after successful turns. Default false (opt-in). */
-      enabled: z.boolean().optional(),
-      /** User-turn cadence for memory review. 0 disables the memory channel. Default 10. */
-      memoryNudgeInterval: z.number().int().min(0).optional(),
-      /** LLM rounds without `skill_manage` before a skill review. 0 disables the skill channel. Default 10. */
-      skillNudgeInterval: z.number().int().min(0).optional(),
-      /** Max tool executions for the review agent. Default 8. */
-      maxToolRounds: z.number().int().min(1).max(32).optional(),
-      /** Max prior messages passed into the review context (tail). Default 80. */
-      maxHistoryMessages: z.number().int().min(10).max(200).optional(),
-      /** Wall-clock cap for the review run (ms). Default 120000. */
-      maxDurationMs: z.number().int().min(30_000).max(600_000).optional(),
-    })
-    .optional(),
-  /** LLM pass for `web_extract` (markdown-focused extraction). */
-  webExtract: z
-    .object({
-      model: z.string().optional(),
-      maxLength: z.number().positive().optional(),
-    })
-    .optional(),
-  /**
-   * Browser capability via unified `browser_use` tool. Enabled by default (set `enabled: false` to disable).
-   * The local Playwright backend requires Chromium on the gateway host: `npx playwright install chromium`.
-   */
-  browser: z
-    .object({
-      enabled: z.boolean().optional(),
-      /** Run browser in headless mode (default: false — visible window). */
-      headless: z.boolean().optional(),
-      /** When true, skip private-IP blocking for browser navigation (cloud metadata endpoints are always blocked). */
-      allowPrivateUrls: z.boolean().optional(),
-      /** Browser command timeout in seconds (default: 30). */
-      commandTimeout: z.number().min(5).optional(),
-      /** Browser backend mode (default: 'extension'). Also: 'local' (Playwright), 'cdp', 'cloud', or 'cloakbrowser'. */
-      backend: z.enum(['local', 'cdp', 'cloud', 'extension', 'cloakbrowser']).optional(),
-      /** Cloud browser backend: 'local' (default Playwright), 'browserbase', or 'browser-use'. */
-      cloudProvider: z.enum(['local', 'browserbase', 'browser-use']).optional(),
-      /** Cloud browser credentials and optional session hints. */
-      cloud: z.object({
-        /** API key for the selected cloud provider. Environment variables are still supported as fallback. */
-        apiKey: z.string().optional(),
-        /** Browserbase project id. Falls back to BROWSERBASE_PROJECT_ID. */
-        projectId: z.string().optional(),
-        /** Optional cloud provider region. */
-        region: z.string().optional(),
-      }).optional(),
-      /** Direct CDP WebSocket endpoint URL (bypasses cloud provider). */
-      cdpUrl: z.string().optional(),
-      /** Chrome Extension bridge settings (only used when backend = 'extension'). */
-      extension: z.object({
-        /** WebSocket server port. Default: 19820. */
-        port: z.number().min(1024).max(65535).optional(),
-        /** Host to bind. Default: 127.0.0.1. */
-        host: z.string().optional(),
-        /** Timeout waiting for extension connection (ms). Default: 30000. */
-        connectionTimeout: z.number().min(1000).optional(),
-      }).optional(),
-      /** JS dialog handling policy: 'must_respond' (agent must act), 'auto_dismiss', or 'auto_accept'. */
-      dialogPolicy: z.enum(['must_respond', 'auto_dismiss', 'auto_accept']).optional(),
-      /** Dialog auto-dismiss/accept timeout in seconds (default: 300). */
-      dialogTimeoutSeconds: z.number().min(1).optional(),
-      /** Enable humanized input simulation (Bezier mouse, per-char typing, wheel scroll). Default: false. */
-      humanize: z.boolean().optional(),
-      /** Humanize behavior preset: 'default' (fast) or 'careful' (slower, more realistic). Default: 'careful'. */
-      humanPreset: z.enum(['default', 'careful']).optional(),
-      /** CloakBrowser settings (only used when backend = 'cloakbrowser'). */
-      cloakbrowser: z.object({
-        /** Keep browser process alive between tasks. Default: true. */
-        keepOpen: z.boolean().optional(),
-        /** Create a temporary profile directory, cleaned up on close. Default: false. */
-        temporaryProfile: z.boolean().optional(),
-        /** Directory for cached CloakBrowser binaries. Must live under the user's home directory. Default: ~/.xopc/bin/cloakbrowser. */
-        cacheDir: z
-          .string()
-          .optional()
-          .superRefine((v, ctx) => {
-            const r = checkCacheDir(v);
-            if (r.ok === false) ctx.addIssue({ code: 'custom', message: r.message });
-          }),
-        /** Override the CloakBrowser binary path (skip auto-download). */
-        binaryPath: z.string().optional(),
-        /** Timezone to emulate (e.g. "America/New_York"). */
-        timezone: z.string().optional(),
-        /** Locale to emulate (e.g. "en-US"). */
-        locale: z.string().optional(),
-        /** Public IP for WebRTC leak prevention. */
-        webrtcIp: z.string().optional(),
-        /** Platform to emulate in fingerprint (e.g. "windows", "macos"). */
-        fingerprintPlatform: z.string().optional(),
-        /** Extra Chromium launch args (override defaults with same --key= prefix). */
-        extraArgs: z.array(z.string()).optional(),
-      }).optional(),
-    })
-    .optional(),
-  /** Sub-agent delegation (`delegate_task`). Opt-in. */
-  delegate: z
-    .object({
-      enabled: z.boolean().optional(),
-    })
-    .optional(),
-  /** Sandboxed `execute_code` (programmatic tool calls). Opt-in. */
-  executeCode: z
-    .object({
-      enabled: z.boolean().optional(),
-    })
-    .optional(),
-  /**
-   * Dynamic workflows (`workflow` tool). On by default — disable to remove the
-   * tool from the agent surface entirely. Subagents spawned by workflows still
-   * obey the global `delegate` allowlist; `maxSubagents` caps a single workflow
-   * run, `defaultTimeoutSec` caps wall-clock per run.
-   */
-  workflow: z
-    .object({
-      enabled: z.boolean().default(true),
-      maxConcurrency: z.number().int().min(1).max(64).default(16),
-      maxSubagents: z.number().int().min(1).max(10000).default(1000),
-      defaultTimeoutSec: z.number().int().min(60).max(14_400).default(1800),
-      /** Subagent live progress in workflow snapshots: tool steps only, or full text stream. */
-      subagentStream: z.enum(['off', 'steps', 'full']).default('steps'),
-    })
-    .optional(),
-  /** Optional full system prompt replacement (merged with per-agent entry; entry wins). */
-  systemPromptOverride: z.string().optional(),
-  /** Skill names visible to agents that inherit defaults. Omitted means all enabled skills; empty means none. */
-  skills: z.array(z.string()).optional(),
-  /** Disable built-in tools by name (e.g. `shell`, `web_search`). */
-  tools: z
-    .object({
-      disable: z.array(z.string()).optional(),
-    })
-    .optional(),
-  /** Opaque per-process params (reserved for extensions / future use). */
-  params: z.record(z.string(), z.unknown()).optional(),
-});
-
-export const AgentConfigSchema = z.object({
-  id: z.string(),
-  /** When true, this entry is the default routing agent. */
-  default: z.boolean().optional(),
-  enabled: z.boolean().default(true),
-  /** Per-agent workspace root (`~` expanded at runtime). */
-  workspace: z.string().optional(),
-  /**
-   * Internal agent state directory (`…/credentials`, `agent.json`, pid, inbox).
-   * Default: `<stateDir>/agents/<id>/agent`.
-   */
-  agentDir: z.string().optional(),
-  models: AgentModelsSchema,
-  thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive']).optional(),
-  reasoningDefault: z.enum(['off', 'on', 'stream']).optional(),
-  verboseDefault: z.enum(['off', 'on', 'full']).optional(),
-  systemPromptOverride: z.string().optional(),
-  /** Skill names visible to this agent in `<available_skills>`. Omitted means inherit defaults (or all enabled skills). */
-  skills: z.array(z.string()).optional(),
-  tools: z
-    .object({
-      disable: z.array(z.string()).optional(),
-    })
-    .optional(),
-  params: z.record(z.string(), z.unknown()).optional(),
-});
-
 export const AgentsConfigSchema = z.object({
   /** Default agent id when not specified (routing / session creation). */
   default: z.string().optional(),
-  defaults: AgentDefaultsSchema.optional(),
-  list: z.array(AgentConfigSchema).optional(),
-  /** One-time starter agent bootstrap marker. Agents remain ordinary list entries after initialization. */
-  starterAgentsInitializedVersion: z.number().int().min(0).optional(),
-}).default({
-  defaults: {
-    workspace: '~/.xopc/workspace',
-    // `model` is intentionally omitted — resolved dynamically at runtime.
-    maxTokens: 8192,
-    temperature: 0.7,
-    maxToolIterations: 20,
-    maxRequestsPerTurn: 50,
-    maxToolFailuresPerTurn: 3,
-    thinkingDefault: 'medium',
-    reasoningDefault: 'stream',
-    verboseDefault: 'full',
-    compaction: {
+  capabilityPresets: z.record(z.string(), CapabilityPresetSchema).default({}),
+  list: z.array(AgentManifestSchema).default([]),
+}).strict().default({
+  default: 'main',
+  capabilityPresets: {},
+  list: [
+    {
+      id: 'main',
       enabled: true,
-      mode: 'default',
-      reserveTokens: 8000,
-      triggerThreshold: 0.8,
-      minMessagesBeforeCompact: 10,
-      keepRecentMessages: 5,
-      evictionWindow: 0.2,
-      retentionWindow: 6,
+      identity: {
+        name: 'Main',
+        role: 'General assistant',
+        language: 'en',
+        tone: 'direct',
+      },
+      responsibilities: {
+        primary: ['Help the user complete tasks'],
+      },
+      workspace: { root: '~/.xopc/workspace/main' },
+      models: {
+        defaultRole: 'deep',
+        roles: {
+          deep: { model: 'openai/gpt-4.1' },
+        },
+      },
+      tools: { builtin: {} },
+      skills: { mode: 'all' },
+      memory: {
+        mode: 'confirmWrite',
+        sources: ['session', 'curated'],
+        writePolicy: { curated: 'confirm' },
+      },
+      workflows: {},
+      boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
     },
-    pruning: {
-      enabled: true,
-      maxToolResultChars: 10000,
-      headKeepRatio: 0.3,
-      tailKeepRatio: 0.3,
-    },
-    memoryFlush: {
-      enabled: true,
-      threshold: 0.88,
-      softThresholdTokens: 4000,
-      afterCompactions: 2,
-      maxEntryChars: 2000,
-      includeToolHistory: true,
-    },
-    browser: {
-      enabled: true,
-      headless: false,
-      backend: 'extension',
-    },
-  },
-} as any);
+  ],
+});
+
+const BrowserCloudConfigSchema = z
+  .object({
+    apiKey: z.string().optional(),
+    projectId: z.string().optional(),
+    region: z.string().optional(),
+  })
+  .strict()
+  .optional();
+
+const BrowserExtensionConfigSchema = z
+  .object({
+    port: z.number().int().min(1024).max(65535).optional(),
+    host: z.string().min(1).optional(),
+    connectionTimeout: z.number().int().positive().optional(),
+  })
+  .strict()
+  .optional();
+
+const BrowserCloakConfigSchema = z
+  .object({
+    keepOpen: z.boolean().optional(),
+    temporaryProfile: z.boolean().optional(),
+    cacheDir: z.string().optional().superRefine((value, ctx) => {
+      const result = checkCacheDir(value);
+      if (result.ok === false) {
+        ctx.addIssue({ code: 'custom', message: result.message });
+      }
+    }),
+    binaryPath: z.string().optional(),
+    timezone: z.string().optional(),
+    locale: z.string().optional(),
+    webrtcIp: z.string().optional(),
+    fingerprintPlatform: z.string().optional(),
+    extraArgs: z.array(z.string()).optional(),
+  })
+  .strict()
+  .optional();
+
+export const BrowserConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    backend: z.enum(['local', 'cdp', 'cloud', 'extension', 'cloakbrowser']).default('extension'),
+    headless: z.boolean().optional(),
+    allowPrivateUrls: z.boolean().optional(),
+    commandTimeout: z.number().int().min(5).max(900).optional(),
+    cloudProvider: z.enum(['local', 'browserbase', 'browser-use']).optional(),
+    cloud: BrowserCloudConfigSchema,
+    cdpUrl: z.string().optional(),
+    extension: BrowserExtensionConfigSchema,
+    cloakbrowser: BrowserCloakConfigSchema,
+    humanize: z.boolean().optional(),
+    humanPreset: z.enum(['default', 'careful']).optional(),
+    dialogPolicy: z.enum(['must_respond', 'auto_dismiss', 'auto_accept']).optional(),
+    dialogTimeoutSeconds: z.number().int().positive().optional(),
+  })
+  .strict()
+  .default({ enabled: true, backend: 'extension' });
 
 // ============================================
 // Channel Configs (per-channel Zod lives in bundled extensions; root schema is open)
@@ -753,7 +471,7 @@ export type TunnelConfig = z.infer<typeof TunnelConfigSchema>;
 
 /**
  * Workspace-scoped concerns (file import, etc.). Distinct from
- * `agents.defaults.workspace`, which is the workspace *path*; this block carries
+ * agent manifest workspace roots; this block carries
  * feature configuration for workspace-related routes.
  */
 export const WorkspaceImportConfigSchema = z.object({
@@ -1280,7 +998,7 @@ export const GoalsConfigSchema = z
   .object({
     /** Max continuation turns before auto-pause (Hermes default 20). */
     maxTurns: z.number().int().min(1).max(500).default(20),
-    /** Optional judge model ref; defaults to `agents.defaults.models.chat`. */
+    /** Optional judge model ref; defaults to the active agent model. */
     judgeModelRef: z.string().optional(),
     /**
      * When true (default), first post-turn runs a decomposition judge to build a checklist;
@@ -1408,6 +1126,7 @@ export const ConfigSchema = z.object({
   session: SessionConfigSchema,
   channels: ChannelsConfigSchema,
   gateway: GatewayConfigSchema,
+  browser: BrowserConfigSchema,
   tunnel: TunnelConfigSchema.optional(),
   workspace: WorkspaceConfigSchema,
   tools: ToolsConfigSchema,
@@ -1425,45 +1144,39 @@ export const ConfigSchema = z.object({
   commands: CommandsConfigSchema,
 }).default({
   agents: {
-    defaults: {
-      workspace: '~/.xopc/workspace',
-      // `model` is intentionally omitted — resolved dynamically at runtime.
-      maxTokens: 8192,
-      temperature: 0.7,
-      maxToolIterations: 20,
-      maxRequestsPerTurn: 50,
-      maxToolFailuresPerTurn: 3,
-      thinkingDefault: 'medium',
-      reasoningDefault: 'stream',
-      verboseDefault: 'full',
-      compaction: {
+    default: 'main',
+    capabilityPresets: {},
+    list: [
+      {
+        id: 'main',
         enabled: true,
-        mode: 'default',
-        reserveTokens: 8000,
-        triggerThreshold: 0.8,
-        minMessagesBeforeCompact: 10,
-        keepRecentMessages: 5,
-        evictionWindow: 0.2,
-        retentionWindow: 6,
+        identity: {
+          name: 'Main',
+          role: 'General assistant',
+          language: 'en',
+          tone: 'direct',
+        },
+        responsibilities: {
+          primary: ['Help the user complete tasks'],
+        },
+        workspace: { root: '~/.xopc/workspace/main' },
+        models: {
+          defaultRole: 'deep',
+          roles: {
+            deep: { model: 'openai/gpt-4.1' },
+          },
+        },
+        tools: { builtin: {} },
+        skills: { mode: 'all' },
+        memory: {
+          mode: 'confirmWrite',
+          sources: ['session', 'curated'],
+          writePolicy: { curated: 'confirm' },
+        },
+        workflows: {},
+        boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
       },
-      pruning: {
-        enabled: true,
-        maxToolResultChars: 10000,
-        headKeepRatio: 0.3,
-        tailKeepRatio: 0.3,
-      },
-      memoryFlush: {
-        enabled: true,
-        threshold: 0.88,
-        softThresholdTokens: 4000,
-        afterCompactions: 2,
-        maxEntryChars: 2000,
-        includeToolHistory: true,
-      },
-      browser: {
-        backend: 'extension',
-      },
-    },
+    ],
   },
   bindings: [],
   session: {
@@ -1509,6 +1222,10 @@ export const ConfigSchema = z.object({
     corsOrigins: [],
     skillsMarketplaceProvider: 'skillhub',
     skillsStoreBaseUrl: 'https://store.xopc.ai',
+  },
+  browser: {
+    enabled: true,
+    backend: 'extension' as const,
   },
   tools: {
     web: {
@@ -1559,7 +1276,6 @@ export const ConfigSchema = z.object({
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
-export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
 export type GatewayAuthConfig = z.infer<typeof GatewayAuthSchema>;
 export type GatewayTrustedProxyConfig = z.infer<typeof GatewayTrustedProxySchema>;
 export type GatewayAuthRateLimitConfig = z.infer<typeof GatewayAuthRateLimitSchema>;
@@ -1579,12 +1295,12 @@ export interface ParsedModelRef {
   model: string;
 }
 
-/**
- * Primary chat model ref from `agents.defaults.models.chat`. Returns undefined when unset.
- */
 export function getAgentDefaultModelRef(config: Config): string | undefined {
-  const ref = config.agents?.defaults?.models?.chat?.primary?.trim();
-  return ref || undefined;
+  const defaultId = config.agents.default?.trim() || config.agents.list[0]?.id;
+  const agent = config.agents.list.find((entry) => entry.enabled !== false && entry.id === defaultId) ?? config.agents.list[0];
+  if (!agent) return undefined;
+  const role = agent.models.roles[agent.models.defaultRole];
+  return role?.model.trim() || undefined;
 }
 
 /** `provider/model` or null when invalid. */

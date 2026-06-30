@@ -1,9 +1,11 @@
 import type { Config } from '../../config/schema.js';
+import { resolveEffectiveAgentManifestForAgent } from '../../config/agent-profile.js';
+import { resolveAgentIdForWorkspacePath } from '../agent-scope.js';
 import { BuiltinMemoryStore } from './builtin-memory-store.js';
 import { BuiltinMemoryProvider } from './builtin-provider.js';
 import { isMemorySubsystemEnabled } from './memory-config.js';
-import { MemoryManager } from './manager.js';
-import { StubMemoryProvider } from './stub-memory-provider.js';
+import { MemoryManager, type MemoryManagerOptions } from './manager.js';
+import { loadMemoryPluginProviders } from './plugin-discovery.js';
 
 export type MemoryProviderId = 'none' | 'stub';
 
@@ -12,20 +14,37 @@ export function createMemoryManagerFromConfig(
   store: BuiltinMemoryStore,
   config: Config | undefined,
 ): MemoryManager {
-  const mgr = new MemoryManager();
+  const routing = resolveMemoryManagerOptions(_workspaceDir, config);
+  const enabled = isMemorySubsystemEnabled(config);
+  const mgr = new MemoryManager({
+    ...routing,
+    ...(enabled ? { loadProviders: () => loadMemoryPluginProviders({ config }) } : {}),
+  });
   mgr.addProvider(new BuiltinMemoryProvider(store));
 
-  if (!isMemorySubsystemEnabled(config)) {
+  if (!enabled) {
     return mgr;
   }
 
-  const id = (config?.agents?.defaults?.memory?.provider ?? 'none') as MemoryProviderId;
-  if (id === 'stub') {
-    const stub = new StubMemoryProvider();
-    if (stub.isAvailable()) {
-      mgr.addProvider(stub);
-    }
-  }
-
   return mgr;
+}
+
+function resolveMemoryManagerOptions(
+  workspaceDir: string,
+  config: Config | undefined,
+): Omit<MemoryManagerOptions, 'loadProviders'> {
+  if (!config) return {};
+  const agentId = resolveAgentIdForWorkspacePath(config, workspaceDir);
+  const manifest = resolveEffectiveAgentManifestForAgent(config, agentId);
+  const providerRouting = manifest.memory.providerRouting;
+  if (!providerRouting) return {};
+  return {
+    searchStrategy: providerRouting.searchStrategy,
+    writeStrategy: providerRouting.writeStrategy,
+    writePolicy: {
+      allowExternalWrites: providerRouting.allowExternalWrites,
+      allowedProviderIds: providerRouting.allowedProviderIds,
+      autoWriteKinds: providerRouting.autoWriteKinds,
+    },
+  };
 }

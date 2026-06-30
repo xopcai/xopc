@@ -17,9 +17,13 @@ type StarterAgent = {
   displayName: string;
   description: string;
   emoji: string;
-  tools?: { disable?: string[] };
+  tools?: NonNullable<Config['agents']['list']>[number]['tools'];
   profileFiles: Record<string, string>;
 };
+
+function denyTools(names: string[]): NonNullable<Config['agents']['list']>[number]['tools'] {
+  return { builtin: Object.fromEntries(names.map((name) => [name, { mode: 'deny' as const }])) };
+}
 
 function identity(params: { name: string; description: string; creature: string; emoji: string }): string {
   return `# IDENTITY.md - Who Am I?\n\n- **Name:** ${params.name}\n- **Description:** ${params.description}\n- **Language:** en\n- **Creature:** ${params.creature}\n- **Emoji:** ${params.emoji}\n- **Avatar:**\n`;
@@ -47,7 +51,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     displayName: 'Coder',
     description: 'Software development, debugging, refactoring, and tests.',
     emoji: '💻',
-    tools: { disable: ['image_generate', 'send_message', 'send_media', 'cronjob'] },
+    tools: denyTools(['image_generate', 'send_message', 'send_media', 'cronjob']),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
         name: 'Coder',
@@ -64,7 +68,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     displayName: 'Writer',
     description: 'Drafting, editing, rewriting, and audience-aware content.',
     emoji: '✍️',
-    tools: { disable: ['shell', 'browser_use', 'send_message', 'send_media', 'cronjob', 'bundle-mcp'] },
+    tools: denyTools(['shell', 'browser_use', 'send_message', 'send_media', 'cronjob', 'bundle-mcp']),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
         name: 'Writer',
@@ -81,7 +85,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     displayName: 'Researcher',
     description: 'Deep research, source comparison, and fact synthesis.',
     emoji: '🔍',
-    tools: { disable: ['shell', 'write_file', 'edit_file', 'send_message', 'send_media', 'cronjob'] },
+    tools: denyTools(['shell', 'write_file', 'edit_file', 'send_message', 'send_media', 'cronjob']),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
         name: 'Researcher',
@@ -98,7 +102,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     displayName: 'Data Analyst',
     description: 'Data cleaning, analysis, visualization, and reproducible reports.',
     emoji: '📊',
-    tools: { disable: ['browser_use', 'send_message', 'send_media', 'cronjob'] },
+    tools: denyTools(['browser_use', 'send_message', 'send_media', 'cronjob']),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
         name: 'Data Analyst',
@@ -115,7 +119,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     displayName: 'Creative',
     description: 'Visual direction, image prompts, design critique, and creative options.',
     emoji: '🎨',
-    tools: { disable: ['shell', 'send_message', 'send_media', 'cronjob'] },
+    tools: denyTools(['shell', 'send_message', 'send_media', 'cronjob']),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
         name: 'Creative',
@@ -153,10 +157,6 @@ export function materializeStarterAgentFiles(cfg: Config): void {
 }
 
 export function ensureStarterAgentsInitialized(cfg: Config): { config: Config; changed: boolean } {
-  if ((cfg.agents?.starterAgentsInitializedVersion ?? 0) >= STARTER_AGENTS_INITIALIZED_VERSION) {
-    return { config: cfg, changed: false };
-  }
-
   let next = cfg;
   for (const starter of STARTER_AGENTS) {
     if (hasAgentEntry(next, starter.id)) continue;
@@ -165,14 +165,6 @@ export function ensureStarterAgentsInitialized(cfg: Config): { config: Config; c
       ...(starter.tools ? { tools: starter.tools } : {}),
     });
   }
-
-  next = {
-    ...next,
-    agents: {
-      ...next.agents,
-      starterAgentsInitializedVersion: STARTER_AGENTS_INITIALIZED_VERSION,
-    },
-  };
 
   materializeStarterAgentFiles(next);
   return { config: next, changed: next !== cfg };

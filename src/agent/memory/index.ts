@@ -1,6 +1,7 @@
 export { BuiltinMemoryStore, MEMORY_ENTRY_DELIMITER, scanForThreats } from './builtin-memory-store.js';
 export { BuiltinMemoryProvider } from './builtin-provider.js';
 export { buildMemoryContextBlock, sanitizeMemoryContextFenceEscapes } from './context-fence.js';
+export { MemoryContextAssembler } from './context-assembler.js';
 export { createMemoryManagerFromConfig } from './create-memory-manager.js';
 export { injectPrefetchIntoUserMessage } from './inject-prefetch.js';
 export {

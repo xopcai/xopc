@@ -36,7 +36,7 @@ export function AgentSkillsTab(props: {
     hideInlineSave,
   } = props;
 
-  /** When inheriting defaults, checkboxes reflect the effective visible-skill list. */
+  /** When inheriting preset policy, checkboxes reflect the effective visible-skill list. */
   function isCheckedInheritMode(id: string): boolean {
     const eff = selected.skills.effectiveAllowlist;
     if (eff === undefined) {
@@ -89,7 +89,7 @@ export function AgentSkillsTab(props: {
         </Link>
       </div>
       <p className="mt-2 shrink-0 text-xs text-fg-muted">
-        {a.skillsDefaultsLabel} {selected.skills.defaults.length ? selected.skills.defaults.join(', ') : '—'}
+        {a.skillsPresetLabel} {selected.skills.preset.length ? selected.skills.preset.join(', ') : '—'}
       </p>
       <p className="shrink-0 text-xs text-fg-muted">
         {a.skillsEffectiveLabel}{' '}

@@ -33,7 +33,7 @@ export type BuiltinToolsDisableUiProps = {
   /** Disabled tool ids for this config scope (defaults or agents.list entry). */
   disableSet: Set<string>;
   onDisableSetChange: (next: Set<string>) => void;
-  /** For `agentEntry`: tools disabled in `agents.defaults` — cannot be enabled from the entry editor. */
+  /** Tools denied by inherited manifest policy — cannot be enabled from the entry editor. */
   defaultsDisableSet?: Set<string>;
   /** Extra disable ids not in `builtinToolIds` (defaults editor only). */
   unknownDisabledIds?: string[];

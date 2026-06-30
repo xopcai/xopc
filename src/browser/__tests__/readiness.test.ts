@@ -32,7 +32,7 @@ const extDoctor = browserExtDoctor as unknown as ReturnType<typeof vi.fn>;
 const extSnap = getExtensionBrowserServerSnapshot as unknown as ReturnType<typeof vi.fn>;
 
 function cfg(browser: Record<string, unknown>): Config {
-  return { agents: { defaults: { browser } } } as unknown as Config;
+  return { browser } as unknown as Config;
 }
 
 describe('buildBrowserSetupDeepLink', () => {
@@ -124,7 +124,7 @@ describe('checkBrowserReadiness', () => {
   it('cdp: returns cdp_unreachable on probe failure', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('ECONNREFUSED')));
     const err = await checkBrowserReadiness(
-      cfg({ cdpUrl: 'ws://127.0.0.1:65000/devtools/browser/x' }),
+      cfg({ backend: 'cdp', cdpUrl: 'ws://127.0.0.1:65000/devtools/browser/x' }),
     );
     expect(err?.hint.backend).toBe('cdp');
     expect(err?.hint.reason).toBe('cdp_unreachable');
@@ -133,12 +133,12 @@ describe('checkBrowserReadiness', () => {
   it('cdp: null on healthy /json/version', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('{}', { status: 200 })));
     expect(
-      await checkBrowserReadiness(cfg({ cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x' })),
+      await checkBrowserReadiness(cfg({ backend: 'cdp', cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x' })),
     ).toBeNull();
   });
 
   it('cloud: returns cloud_api_key_missing when neither config nor env has a key', async () => {
-    const err = await checkBrowserReadiness(cfg({ cloudProvider: 'browserbase' }));
+    const err = await checkBrowserReadiness(cfg({ backend: 'cloud', cloudProvider: 'browserbase' }));
     expect(err?.hint.backend).toBe('cloud');
     expect(err?.hint.reason).toBe('cloud_api_key_missing');
   });
@@ -146,13 +146,13 @@ describe('checkBrowserReadiness', () => {
   it('cloud: null when config supplies a key', async () => {
     expect(
       await checkBrowserReadiness(
-        cfg({ cloudProvider: 'browserbase', cloud: { apiKey: 'sk-test' } }),
+        cfg({ backend: 'cloud', cloudProvider: 'browserbase', cloud: { apiKey: 'sk-test' } }),
       ),
     ).toBeNull();
   });
 
   it('cloud: null when env supplies a key for browser-use', async () => {
     process.env.BROWSER_USE_API_KEY = 'env-test';
-    expect(await checkBrowserReadiness(cfg({ cloudProvider: 'browser-use' }))).toBeNull();
+    expect(await checkBrowserReadiness(cfg({ backend: 'cloud', cloudProvider: 'browser-use' }))).toBeNull();
   });
 });

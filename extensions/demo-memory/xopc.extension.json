@@ -1,0 +1,15 @@
+{
+  "id": "demo-memory",
+  "name": "Demo Memory Provider",
+  "description": "In-memory memory provider used to validate the extension memory provider pipeline.",
+  "version": "1.0.0",
+  "kind": "memory",
+  "main": "src/index.js",
+  "enabledByDefault": true,
+  "contracts": {
+    "memoryProviders": ["demo-memory"]
+  },
+  "engines": {
+    "xopc": ">=0.0.116 <1.0.0"
+  }
+}

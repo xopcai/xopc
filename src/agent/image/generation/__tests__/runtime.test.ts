@@ -19,13 +19,7 @@ function buildProviderMock(overrides: Partial<ImageGenerationProvider> & { id: s
   } as ImageGenerationProvider;
 }
 
-const baseCfg = {
-  agents: {
-    defaults: {
-      imageGenerationModel: { primary: 'mock/mock-default' },
-    },
-  },
-} as any;
+const baseModelConfig = { primary: 'mock/mock-default' };
 
 describe('generateImage runtime', () => {
   it('returns provider/model/attempts on success and surfaces normalization metadata', async () => {
@@ -45,7 +39,7 @@ describe('generateImage runtime', () => {
     });
 
     const result = await generateImage(
-      { cfg: baseCfg, prompt: 'cat', size: '1000x1000' },
+      { cfg: undefined, modelConfig: baseModelConfig, prompt: 'cat', size: '1000x1000' },
       {
         getProvider: () => provider,
         listProviders: () => [provider],
@@ -76,19 +70,15 @@ describe('generateImage runtime', () => {
       })),
     });
 
-    const cfg = {
-      agents: {
-        defaults: {
-          imageGenerationModel: {
-            primary: 'failing/failing-default',
-            fallbacks: ['good/good-default'],
-          },
-        },
-      },
-    } as any;
-
     const result = await generateImage(
-      { cfg, prompt: 'p' },
+      {
+        cfg: undefined,
+        modelConfig: {
+          primary: 'failing/failing-default',
+          fallbacks: ['good/good-default'],
+        },
+        prompt: 'p',
+      },
       {
         getProvider: (id) => (id === 'failing' ? failing : succeeding),
         listProviders: () => [failing, succeeding],
@@ -113,15 +103,9 @@ describe('generateImage runtime', () => {
       }),
     });
 
-    const cfg = {
-      agents: {
-        defaults: { imageGenerationModel: { primary: 'failing/failing-default' } },
-      },
-    } as any;
-
     await expect(
       generateImage(
-        { cfg, prompt: 'p' },
+        { cfg: undefined, modelConfig: { primary: 'failing/failing-default' }, prompt: 'p' },
         {
           getProvider: () => failing,
           listProviders: () => [failing],
@@ -134,15 +118,9 @@ describe('generateImage runtime', () => {
   });
 
   it('records "config" reason when candidate provider is not registered', async () => {
-    const cfg = {
-      agents: {
-        defaults: { imageGenerationModel: { primary: 'unknown/x' } },
-      },
-    } as any;
-
     await expect(
       generateImage(
-        { cfg, prompt: 'p' },
+        { cfg: undefined, modelConfig: { primary: 'unknown/x' }, prompt: 'p' },
         {
           getProvider: () => undefined,
           listProviders: () => [],

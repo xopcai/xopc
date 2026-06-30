@@ -10,13 +10,12 @@ export interface BackgroundReviewSettings {
 }
 
 export function resolveBackgroundReviewSettings(config: Config | undefined): BackgroundReviewSettings {
-  const br = config?.agents?.defaults?.backgroundReview;
   return {
-    enabled: br?.enabled === true,
-    memoryNudgeInterval: br?.memoryNudgeInterval ?? 10,
-    skillNudgeInterval: br?.skillNudgeInterval ?? 10,
-    maxToolRounds: br?.maxToolRounds ?? 8,
-    maxHistoryMessages: br?.maxHistoryMessages ?? 80,
-    maxDurationMs: br?.maxDurationMs ?? 120_000,
+    enabled: false,
+    memoryNudgeInterval: 10,
+    skillNudgeInterval: 10,
+    maxToolRounds: 8,
+    maxHistoryMessages: 80,
+    maxDurationMs: 120_000,
   };
 }

@@ -380,18 +380,8 @@ export async function ensureBrowserExtensionArtifacts(opts?: {
   };
 }
 
-/**
- * Gateway startup hook: ensure artifacts when extension backend is enabled or prior install exists.
- */
-export async function ensureBrowserExtensionOnStartup(config: {
-  agents?: { defaults?: { browser?: { backend?: string } } };
-}): Promise<void> {
-  const backend = config.agents?.defaults?.browser?.backend;
-  const cacheDir = resolveBinDir();
-  const metaExists = existsSync(resolveMetaPath(cacheDir));
-  if (backend !== 'extension' && !metaExists) {
-    return;
-  }
+/** Gateway startup hook: ensure extension artifacts for the fixed extension backend. */
+export async function ensureBrowserExtensionOnStartup(_config: unknown): Promise<void> {
   await ensureBrowserExtensionArtifacts();
 }
 

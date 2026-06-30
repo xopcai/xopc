@@ -16,7 +16,6 @@ import {
 } from '@/navigation';
 import type { SettingsShellNavGroup } from '@/navigation';
 import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode } from '@/navigation/settings-nav-visibility';
-import { isAgentDefaultsNavActive, isAgentDefaultsNavTab } from '@/navigation/agent-defaults-nav';
 import { isElectron } from '@/lib/electron-env';
 import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-window-chrome';
 import { preloadRouteForPath } from '@/lib/route-preload';
@@ -101,9 +100,7 @@ function SettingsNavGroupBlock({
             onFocus={() => preloadRouteForPath(pathForTab(tab))}
             className={({ isActive: routerActive }) =>
               settingsNavLinkClass({
-                isActive: isAgentDefaultsNavTab(tab)
-                  ? isAgentDefaultsNavActive(tab, location)
-                  : routerActive,
+                isActive: routerActive,
               })
             }
           >
@@ -186,9 +183,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
       railNavGroups
         .flatMap((group) => visibleSettingsNavTabs(group, settingsMode))
         .find((tab) =>
-          isAgentDefaultsNavTab(tab)
-            ? isAgentDefaultsNavActive(tab, location)
-            : location.pathname === pathForTab(tab),
+          location.pathname === pathForTab(tab),
         ),
     [location, railNavGroups, settingsMode],
   );

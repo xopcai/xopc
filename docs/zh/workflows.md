@@ -278,36 +278,32 @@ if (!live.length) return { ok: false, reason: 'no findings' }
 
 ## 配置
 
-运行限制在 `agents.defaults.workflow`。类型化模型角色（`agents.defaults.models`）让脚本引用 `small` / `large` 而非硬编码 `provider/model`。类型化模型角色仅支持全局默认配置。
+工作流可用性和运行限制由所选 agent manifest 及其 `capabilityPresets` 控制。`agents.list[].models.roles` 下的类型化模型角色让脚本引用 `small` / `large`，而不必硬编码 `provider/model`。
 
 ```jsonc
 {
   "agents": {
-    "defaults": {
-      "model": { "primary": "anthropic/claude-sonnet-4" },
-      "models": [
-        {
-          "id": "small",
-          "description": "Fast/cheap for fan-out subtasks",
-          "model": "deepseek/deepseek-v4-flash"
-        },
-        {
-          "id": "large",
-          "description": "High quality for synthesis",
-          "model": "anthropic/claude-sonnet-4"
-        }
-      ],
-      "workflow": {
-        "enabled": true,
-        "maxConcurrency": 16,
-        "maxSubagents": 1000,
-        "defaultTimeoutSec": 1800
-      }
-    },
+    "default": "research",
+    "capabilityPresets": {},
     "list": [
       {
         "id": "research",
-        "models": [{ "id": "small", "model": "openai/gpt-4o-mini" }]
+        "identity": { "name": "Research", "role": "研究助手", "language": "zh-CN" },
+        "responsibilities": { "primary": ["运行研究工作流"] },
+        "workspace": { "root": "~/.xopc/workspace/research" },
+        "models": {
+          "defaultRole": "large",
+          "roles": {
+            "small": { "model": "deepseek/deepseek-v4-flash", "description": "快速扇出子任务" },
+            "large": { "model": "anthropic/claude-sonnet-4", "description": "高质量综合" }
+          }
+        },
+        "tools": { "builtin": {} },
+        "skills": { "mode": "all" },
+        "memory": { "mode": "off", "sources": ["session"] },
+        "workflows": { "enabled": true },
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] },
+        "runtime": { "timeoutMs": 1800000 }
       }
     ]
   }

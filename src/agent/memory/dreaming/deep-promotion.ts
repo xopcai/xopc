@@ -17,6 +17,7 @@ import {
   type DreamingDeepPhaseSkipped,
 } from './last-run.js';
 import type { DreamingDeepConfig } from './config.js';
+import type { MemoryManager } from '../manager.js';
 import {
   clamp01,
   compareCandidatesByScore,
@@ -98,6 +99,7 @@ function buildDeepLastRun(base: {
 export async function runDreamingDeepPromotion(params: {
   workspaceDir: string;
   config?: Partial<DreamingDeepConfig>;
+  memoryManager?: MemoryManager;
   now?: Date;
 }): Promise<{
   ok: boolean;
@@ -257,6 +259,30 @@ export async function runDreamingDeepPromotion(params: {
 
       const nowIso = now.toISOString();
       for (const c of appliedCandidates) {
+        const writeResult = await params.memoryManager?.write({
+          kind: 'derived_insight',
+          content: c.snippet,
+          source: {
+            provider: 'dreaming',
+            path: c.path,
+            lineStart: c.startLine,
+            lineEnd: c.endLine,
+          },
+          tags: ['dreaming', 'promoted'],
+        });
+        params.memoryManager?.recordSignal({
+          source: 'dreaming',
+          recordId: writeResult?.record?.id,
+          score: c.score,
+          content: c.snippet,
+          metadata: {
+            path: c.path,
+            startLine: c.startLine,
+            endLine: c.endLine,
+            recallCount: c.recallCount,
+            avgScore: c.avgScore,
+          },
+        });
         const entry = store.entries[c.key];
         if (entry) {
           entry.promotedAt = nowIso;
@@ -334,4 +360,3 @@ export async function runDreamingDeepPromotion(params: {
     throw err;
   }
 }
-

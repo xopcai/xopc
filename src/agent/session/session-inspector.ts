@@ -47,7 +47,7 @@ export interface SessionInspectorOptions {
   getConfig: () => Config | undefined;
   /**
    * Nominal context window the session is budgeted against. Currently derived
-   * from `agents.defaults.maxTokens * 4`, defaulting to 128k.
+   * from the active model metadata, defaulting to 128k.
    */
   getContextWindow: () => number;
 }
@@ -147,18 +147,8 @@ export class SessionInspector {
     const workspace = effectiveWorkspacePathForSession(cfg, sessionKey, sc);
     const estTokens = await this.opts.sessionStore.estimateTokenUsage(sessionKey, messages);
     const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
-    const defaults = cfg.agents?.defaults;
-    const compaction = defaults?.compaction;
-    const tools = defaults?.tools;
-
-    const toolsSummary =
-      tools && typeof tools === 'object'
-        ? Object.entries(tools as Record<string, unknown>)
-            .filter(([, v]) => v === true)
-            .map(([k]) => k)
-            .slice(0, 16)
-            .join(', ') || '(none explicitly true)'
-        : '(see agents.defaults.tools in config)';
+    const deniedTools = [...profile.tools.denied].sort((a, b) => a.localeCompare(b));
+    const toolsSummary = deniedTools.length > 0 ? `denied: ${deniedTools.join(', ')}` : '(no denied tools)';
 
     return formatSessionContextReport({
       sessionKey,
@@ -169,10 +159,10 @@ export class SessionInspector {
       messageCount: messages.length,
       contextWindowNominal: cw,
       estimatedTranscriptTokens: estTokens,
-      thinkingDefault: defaults?.thinkingDefault,
-      reasoningDefault: defaults?.reasoningDefault,
-      verboseDefault: defaults?.verboseDefault,
-      compaction,
+      thinkingDefault: undefined,
+      reasoningDefault: undefined,
+      verboseDefault: undefined,
+      compaction: undefined,
       toolsFlagsSummary: toolsSummary,
       windowStats: computed.windowStats,
       compactionRunStats: computed.compactionStats,
@@ -196,11 +186,11 @@ export class SessionInspector {
       this.opts.modelManager.setSessionProfileDefault(sessionKey, profileModelRef);
     }
 
-    const defThink = cfg.agents?.defaults?.thinkingDefault ?? 'medium';
+    const defThink = 'medium';
     const level = await resolveEffectiveThinkingLevel(this.opts.sessionConfigStore, sessionKey, null, defThink);
-    const defReason = (cfg.agents?.defaults?.reasoningDefault ?? 'stream') as ReasoningLevel;
+    const defReason = 'stream' as ReasoningLevel;
     const reasoningLevel = await resolveEffectiveReasoningLevel(this.opts.sessionConfigStore, sessionKey, defReason);
-    const defVerbose = (cfg.agents?.defaults?.verboseDefault ?? 'full') as VerboseLevel;
+    const defVerbose = 'full' as VerboseLevel;
     const verboseLevel = await resolveVerboseLevel(this.opts.sessionConfigStore, sessionKey, defVerbose);
     const model = this.opts.modelManager.getModelForSession(sessionKey);
     return {

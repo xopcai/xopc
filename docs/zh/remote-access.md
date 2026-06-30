@@ -74,10 +74,10 @@ xopc tailscale status
 ### 说明
 
 - **Serve** 要求 `gateway.bind=loopback`。
-- **Funnel**（经 Tailscale 暴露到公网）风险较高，且需要密码认证 — 见 [Tailscale](../gateway/tailscale.md)。
+- **Funnel**（经 Tailscale 暴露到公网）风险较高，且需要密码认证 — 见 [Tailscale](/gateway/tailscale)。
 - Tailscale 暴露与 `tunnel.autoStart` **不能同时启用**。
 
-更多细节：[Tailscale Serve / Funnel](../gateway/tailscale.md)（英文）。
+更多细节：[Tailscale Serve / Funnel](/gateway/tailscale)（英文）。
 
 ---
 
@@ -278,7 +278,7 @@ Gateway 仍绑定 loopback 时，公网访问 Tab 可为移动配对推荐局域
 适用于 **反向代理自己负责用户认证** 的场景（Pomerium、oauth2-proxy、企业 SSO 等），由 Gateway 信任请求头中的用户身份 — 与「[反向代理](#reverse-proxy)」Tab 不同，后者保留 Bearer token 鉴权：
 
 - 保持 `gateway.bind=loopback`。
-- 配置 [可信代理认证](../gateway/trusted-proxy.md)（英文）：`gateway.auth.mode = "trusted-proxy"`，配置 `trustedProxies` CIDR 与 `auth.trustedProxy.userHeader`。
+- 配置 [可信代理认证](/gateway/trusted-proxy)（英文）：`gateway.auth.mode = "trusted-proxy"`，配置 `trustedProxies` CIDR 与 `auth.trustedProxy.userHeader`。
 - 禁止从公网直接访问 Gateway 端口。
 
 移动 App 的配对流程 **不使用** 此模式（手机无法提供 SSO 身份）。
@@ -302,9 +302,9 @@ Gateway 仍绑定 loopback 时，公网访问 Tab 可为移动配对推荐局域
 ## 相关文档
 
 - [网络说明](../network.md)（英文）
-- [Tailscale Serve / Funnel](../gateway/tailscale.md)（英文）
+- [Tailscale Serve / Funnel](/gateway/tailscale)（英文）
 - [FRP 隧道安全](../tunnel-security.md)（英文）
 - [SSH 与 CLI 远程模式](../gateway/remote.md)（英文）
-- [可信代理认证](../gateway/trusted-proxy.md)（英文）
+- [可信代理认证](/gateway/trusted-proxy)（英文）
 - [Gateway 配置](./gateway.md)
 - [配置参考](./configuration.md)

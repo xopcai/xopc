@@ -29,7 +29,7 @@
 
 **MCP 工具：** 运行时根据 `mcp.servers`（及扩展 `.mcp.json`）注册，命名格式为 `服务器ID__工具名`。详见 [MCP](mcp.md)。
 
-**条件注册举例：** `session_search` 依赖会话持久化；`web_extract` 使用 `agents.defaults.webExtract.model` 或 `XOPC_WEB_EXTRACT_MODEL`；技能写入受 `skills.agentWritePolicy` 约束；技能发现可通过 `skills.toolGating` 与元数据门控。Skills Hub CLI：`xopc skills hub pull|update|lock`，见 [Skills 指南](./skills.md)。
+**条件注册举例：** `session_search` 依赖会话持久化；`web_extract` 可通过 `XOPC_WEB_EXTRACT_MODEL` 指定抽取模型；技能写入受 `skills.agentWritePolicy` 约束；技能发现可通过 `skills.toolGating` 与元数据门控。Skills Hub CLI：`xopc skills hub pull|update|lock`，见 [Skills 指南](./skills.md)。
 
 ---
 
@@ -217,7 +217,7 @@
 
 抓取 HTML 或 JSON、去掉明显噪声后，用配置的抽取模型生成偏 Markdown 的结果。可选 `instruction`、`maxLength`（默认来自配置或约 15000 字符）。**超大页面**会按块分段抽取，避免单次把整页塞进模型（内部仍有体积上限）。
 
-**配置：** `agents.defaults.webExtract.model` 或 `XOPC_WEB_EXTRACT_MODEL`。
+**配置：** 需要强制指定抽取模型时使用 `XOPC_WEB_EXTRACT_MODEL`。
 
 ---
 
@@ -266,15 +266,15 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 ### `curated_memory`
 
-读写 **`agents/<agentId>/memories/`** 下的 **`MEMORY.md`**、**`USER.md`**（章节边界按格式约定）。系统提示里保留会话开始时的**快照**；本工具读写磁盘上的**实时**状态。`agents.defaults.memory.enabled` 为 false 或 `useEnhancedSystem` 为 false 时不注册。`userProfileEnabled` 为 false 时，对用户画像的写入会被拒绝（读可能仍可用）。
+读写 **`agents/<agentId>/memories/`** 下的 **`MEMORY.md`**、**`USER.md`**（章节边界按格式约定）。这些文件与 **`agents/<agentId>/profile/`** 下的 profile Markdown 分离；当所选 agent manifest 允许 curated memory 写入时，可用本工具读写实时状态。
 
 详见 [配置参考](./configuration.md) 与 [托管记忆](./workspace.md#curated-memory)。
 
 ### `session_search`
 
-检索**其它会话**的 transcript（关键词或类语义检索；可按会话生成摘要）。需持久化与接入；摘要模型：`agents.defaults.sessionSearch.summaryModel` 或 `XOPC_SESSION_SEARCH_MODEL`。
+检索**其它会话**的 transcript（关键词或类语义检索；可按会话生成摘要）。需要 SQLite 会话持久化。需要强制指定摘要模型时使用 `XOPC_SESSION_SEARCH_MODEL`。
 
-详见 [配置参考](./configuration.md) 中 `agents.defaults.sessionSearch`。
+详见 [会话管理](./session.md) 与 [配置参考](./configuration.md)。
 
 ---
 
@@ -312,19 +312,19 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 ## 图像与文生图
 
-入站图片：若**会话主模型**支持视觉，则随用户消息传入；否则可能先用 **`imageModel`（含回退）** 转成文字描述。详见 [图像与视觉](./image-multimodal.md)。
+入站图片：若**会话主模型**支持视觉，则随用户消息传入；否则可能先用可用的视觉模型转成文字描述。详见 [图像与视觉](./image-multimodal.md)。
 
 ### `image`
 
 对路径或 URL 上的图片做视觉理解；可选 `prompt`。用户已附图且主模型多模态时，往往不必再调。
 
-**配置：** `agents.defaults.imageModel`（字符串或 `{ primary, fallbacks }`）、`agents.defaults.mediaMaxMb`。
+图像理解由所选 agent/runtime 的图像能力设置和已配置 provider 解析。使用 `xopc image status` 查看当前行为。
 
 ### `image_generate`
 
 文生图；成功时保存到工作区 `media/generated/`。`action: "list"` 可列出已注册的文生图提供方与模型。
 
-**配置：** `agents.defaults.imageGenerationModel`（字符串或 `{ primary, fallbacks }`）。
+生成 provider 会根据当前配置在运行时发现。使用 `xopc image providers` 查看可用选项。
 
 程序化接口可能对部分厂商支持参考图；`image_generate` 工具未必暴露全部参数。
 
@@ -332,19 +332,19 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 ## 浏览器（可选）
 
-`agents.defaults.browser.enabled` 为 true 时注册。若需本机浏览器，可执行如：`npx playwright install chromium`。
+当浏览器自动化已在配置中启用，并被所选 agent manifest 允许时注册。若需本机浏览器，可执行如：`npx playwright install chromium`。
 
 | 工具 | 作用 |
 |------|------|
 | `browser_use` | 统一的浏览器自动化工具。可用 `mode: "command"` 执行 `open` / `navigate`、`snapshot`、`click`、`type`、`scroll`、`keys` / `press`、`screenshot`、`console` / `eval`、`images`、`dialog`、`cdp`、`close`、`wait`、网络辅助等动作；也可用 `mode: "pipeline"` 执行 YAML pipeline。复杂任务先调用 `tool_manual({ tool: "browser_use" })`。 |
 
-如需为某个 agent 禁用浏览器自动化，在 `agents.defaults.tools.disable` 或 `agents.list[].tools.disable` 中加入 `browser_use`。
+如需为某个 agent 禁用浏览器自动化，将该 agent manifest 的 `tools.builtin.browser_use.mode` 设为 `"deny"`，或从相关 capability preset 中移除浏览器权限。
 
-**URL 策略：** 拒绝带内嵌凭据的 URL、指向**云元数据 / IMDS** 及链路本地地址的导航（即使允许私网也仍拦截），以及查询串里疑似 **API Key / Token 外泄** 的模式。`agents.defaults.browser.allowPrivateUrls` 仅放宽**私网 IP** 拦截；元数据与可疑凭据模式仍拦截。
+**URL 策略：** 拒绝带内嵌凭据的 URL、指向**云元数据 / IMDS** 及链路本地地址的导航（即使允许私网也仍拦截），以及查询串里疑似 **API Key / Token 外泄** 的模式。顶层 `browser.allowPrivateUrls` 仅放宽**私网 IP** 拦截；元数据与可疑凭据模式仍拦截。
 
-**运行后端：** `agents.defaults.browser.cloudProvider` — `local`（默认 Playwright）、`browserbase`、`browser-use`。可选 `cdpUrl` 直连 CDP WebSocket，绕过云厂商封装。单次操作超时：`commandTimeout`（秒）。**对话框：** `dialogPolicy`（`must_respond` \| `auto_dismiss` \| `auto_accept`）与 `dialogTimeoutSeconds` 配合 CDP 监督器。
+**运行后端：** 顶层 `browser.backend` 选择浏览器后端（`local`、`cdp`、`cloud`、`extension`、`cloakbrowser`）。可选 `browser.cdpUrl` 直连 CDP WebSocket。单次操作超时：`browser.commandTimeout`（秒）。**对话框：** `browser.dialogPolicy`（`must_respond` \| `auto_dismiss` \| `auto_accept`）与 `browser.dialogTimeoutSeconds` 配合 CDP 监督器。
 
-每会话独立标签；`agents.defaults.browser.headless` 在启用时默认可为 true。
+每会话独立标签；`browser.headless` 控制本机浏览器是否显示窗口。
 
 ---
 
@@ -354,13 +354,13 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 子智能体**独立上下文**（无父会话 transcript），仅返回**文字摘要**。含 `goal`、`context`、`toolset`、`maxIterations`（默认 30）等。子智能体不能嵌套 `delegate_task`，也不能用 `clarify`、外发消息、记忆、`todo`、`cronjob`、Skills 管理类工具。
 
-**配置：** `agents.defaults.delegate.enabled`。
+可用性由所选 agent manifest 与 capability presets 控制。
 
 ### `execute_code`
 
 在 VM 中执行 JavaScript，暴露白名单内的 `tools.*`（如 `web_search`、`web_fetch`、`read_file`、`write_file`、`grep`、`find`、`shell`、`skills_list`、`skill_view`）及 `console.log`。执行时间、工具调用次数、输出体量均有上限。
 
-**配置：** `agents.defaults.executeCode.enabled`。`node:vm` **不是**强隔离边界；仅建议在可信模型与环境开启；也可通过 `disabledTools` 禁用 `execute_code`。
+可用性由所选 agent manifest 与 capability presets 控制。`node:vm` **不是**强隔离边界；仅建议在可信模型与环境开启。
 
 ---
 

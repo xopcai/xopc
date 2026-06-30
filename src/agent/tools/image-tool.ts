@@ -16,10 +16,6 @@ function pickMaxBytes(cfg?: Config, maxBytesMb?: number): number {
   if (typeof maxBytesMb === 'number' && Number.isFinite(maxBytesMb) && maxBytesMb > 0) {
     return Math.floor(maxBytesMb * 1024 * 1024);
   }
-  const configured = cfg?.agents?.defaults?.mediaMaxMb;
-  if (typeof configured === 'number' && Number.isFinite(configured) && configured > 0) {
-    return Math.floor(configured * 1024 * 1024);
-  }
   return 20 * 1024 * 1024;
 }
 
@@ -36,7 +32,7 @@ export function createImageTool(options: {
 
   const description = options.modelHasVision
     ? 'Analyze one or more images with a vision model. Use `image` for a single path/URL, or `images` for multiple (up to 20). Only use when images were NOT already in the user message.'
-    : 'Analyze one or more images using the configured image model (agents.defaults.imageModel). Use `image` or `images` for paths/URLs; optional `prompt` for what to extract.';
+    : 'Analyze one or more images using the available image model. Use `image` or `images` for paths/URLs; optional `prompt` for what to extract.';
 
   const localRoots = [options.workspace];
 

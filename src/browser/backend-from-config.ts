@@ -7,113 +7,83 @@ import type { BrowserBackend, CloakBrowserConfig } from './providers/types.js';
  * True when browser tools are enabled and the resolved backend is extension (including default).
  */
 export function shouldRunExtensionBridgeServer(cfg: Config | undefined): boolean {
-  const b = cfg?.agents?.defaults?.browser;
-  if (b?.enabled === false) return false;
-  return resolveBrowserBackendFromConfig(cfg).mode === 'extension';
+  return cfg?.browser?.enabled !== false && resolveBrowserBackendFromConfig(cfg).mode === 'extension';
 }
 
 /**
- * Resolve browser backend from agent defaults.
+ * Resolve browser backend from root browser runtime config.
  * Precedence: `backend: 'extension'` → `cloakbrowser` → `cdpUrl` (CDP) → `cloudProvider` (remote) → `local` (explicit) → extension (default).
  */
 export function resolveBrowserBackendFromConfig(cfg: Config | undefined): BrowserBackend {
-  const b = cfg?.agents?.defaults?.browser;
-  const headless = b?.headless === true;
-
-  if (b?.backend === 'extension') {
-    const ex = b.extension;
-    const cmdSec = b.commandTimeout;
+  const browser = cfg?.browser;
+  if (browser?.enabled === false) {
+    return { mode: 'extension', config: {} };
+  }
+  const commandTimeout = resolveCommandTimeoutMs(browser?.commandTimeout);
+  const backend = browser?.backend ?? 'extension';
+  if (backend === 'extension') {
+    const ext = browser?.extension;
     return {
       mode: 'extension',
       config: {
-        port: ex?.port,
-        host: ex?.host,
-        connectionTimeout: ex?.connectionTimeout,
-        commandTimeout:
-          typeof cmdSec === 'number' && Number.isFinite(cmdSec) && cmdSec > 0
-            ? Math.floor(cmdSec * 1000)
-            : undefined,
+        ...(ext?.port !== undefined ? { port: ext.port } : {}),
+        ...(ext?.host ? { host: ext.host } : {}),
+        ...(ext?.connectionTimeout !== undefined ? { connectionTimeout: ext.connectionTimeout } : {}),
+        commandTimeout,
       },
     };
   }
-
-  if (b?.backend === 'cloakbrowser') {
-    const cb = b.cloakbrowser;
+  if (backend === 'cloakbrowser') {
     return {
       mode: 'cloakbrowser',
-      config: {
-        headless,
-        keepOpen: cb?.keepOpen,
-        temporaryProfile: cb?.temporaryProfile,
-        cacheDir: cb?.cacheDir,
-        binaryPath: cb?.binaryPath,
-        timezone: cb?.timezone,
-        locale: cb?.locale,
-        webrtcIp: cb?.webrtcIp,
-        fingerprintPlatform: cb?.fingerprintPlatform,
-        extraArgs: cb?.extraArgs,
-        humanize: b.humanize ?? true,
-        humanPreset: (b.humanPreset as 'default' | 'careful') ?? 'careful',
-      },
+      config: cloakBrowserConfigFromAgentDefaults(cfg),
     };
   }
-
-  const cdpUrl = typeof b?.cdpUrl === 'string' ? b.cdpUrl.trim() : '';
-  if (cdpUrl.length > 0) {
-    return { mode: 'cdp', config: { wsEndpoint: cdpUrl } };
+  if (backend === 'cdp' && browser?.cdpUrl?.trim()) {
+    return { mode: 'cdp', config: { wsEndpoint: browser.cdpUrl.trim() } };
   }
-  const cp = b?.cloudProvider;
-  if (cp === 'browserbase' || cp === 'browser-use') {
-    const cloud = b.cloud;
-    const apiKey = typeof cloud?.apiKey === 'string' ? cloud.apiKey.trim() : undefined;
-    const projectId = typeof cloud?.projectId === 'string' ? cloud.projectId.trim() : undefined;
-    const region = typeof cloud?.region === 'string' ? cloud.region.trim() : undefined;
+  if (backend === 'cloud') {
+    const provider = browser?.cloudProvider === 'browserbase' || browser?.cloudProvider === 'browser-use'
+      ? browser.cloudProvider
+      : 'browserbase';
     return {
       mode: 'cloud',
       config: {
-        type: cp,
-        ...(apiKey ? { apiKey } : {}),
-        ...(projectId ? { projectId } : {}),
-        ...(region ? { region } : {}),
+        type: provider,
+        ...(browser?.cloud?.apiKey ? { apiKey: browser.cloud.apiKey } : {}),
+        ...(browser?.cloud?.projectId ? { projectId: browser.cloud.projectId } : {}),
+        ...(browser?.cloud?.region ? { region: browser.cloud.region } : {}),
       },
     };
   }
-
-  if (b?.backend === 'local') {
-    return { mode: 'local', headless };
+  if (backend === 'local') {
+    return { mode: 'local', headless: browser?.headless === true };
   }
-
-  const ex = b?.extension;
-  const cmdSec = b?.commandTimeout;
-  return {
-    mode: 'extension',
-    config: {
-      port: ex?.port,
-      host: ex?.host,
-      connectionTimeout: ex?.connectionTimeout,
-      commandTimeout:
-        typeof cmdSec === 'number' && Number.isFinite(cmdSec) && cmdSec > 0
-          ? Math.floor(cmdSec * 1000)
-          : undefined,
-    },
-  };
+  return { mode: 'extension', config: { commandTimeout } };
 }
 
 /** CloakBrowser launch options aligned with saved agent defaults (headed for manual use). */
 export function cloakBrowserConfigFromAgentDefaults(cfg: Config | undefined): CloakBrowserConfig {
-  const b = cfg?.agents?.defaults?.browser;
-  const cb = b?.cloakbrowser;
+  const browser = cfg?.browser;
+  const cloak = browser?.cloakbrowser;
   return {
     headless: false,
-    keepOpen: cb?.keepOpen,
-    temporaryProfile: cb?.temporaryProfile,
-    cacheDir: cb?.cacheDir,
-    binaryPath: cb?.binaryPath,
-    timezone: cb?.timezone,
-    locale: cb?.locale,
-    webrtcIp: cb?.webrtcIp,
-    fingerprintPlatform: cb?.fingerprintPlatform,
-    extraArgs: cb?.extraArgs,
+    ...(cloak?.keepOpen !== undefined ? { keepOpen: cloak.keepOpen } : {}),
+    ...(cloak?.temporaryProfile !== undefined ? { temporaryProfile: cloak.temporaryProfile } : {}),
+    ...(cloak?.cacheDir ? { cacheDir: cloak.cacheDir } : {}),
+    ...(cloak?.binaryPath ? { binaryPath: cloak.binaryPath } : {}),
+    ...(cloak?.timezone ? { timezone: cloak.timezone } : {}),
+    ...(cloak?.locale ? { locale: cloak.locale } : {}),
+    ...(cloak?.webrtcIp ? { webrtcIp: cloak.webrtcIp } : {}),
+    ...(cloak?.fingerprintPlatform ? { fingerprintPlatform: cloak.fingerprintPlatform } : {}),
+    ...(cloak?.extraArgs ? { extraArgs: cloak.extraArgs } : {}),
+    humanize: browser?.humanize ?? true,
+    humanPreset: browser?.humanPreset ?? 'careful',
     reuseExisting: true,
   };
+}
+
+function resolveCommandTimeoutMs(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return 30_000;
+  return Math.min(900, Math.max(5, Math.floor(value))) * 1000;
 }

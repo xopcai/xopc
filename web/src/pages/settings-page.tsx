@@ -3,8 +3,6 @@ import { Navigate, useParams } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
 import {
-  loadAgentBrowserSettingsPage,
-  loadAgentDefaultsSettingsPage,
   loadAppManagementSettingsPanel,
   loadAppearanceSettingsPanel,
   loadDreamingSettingsPanel,
@@ -12,6 +10,7 @@ import {
   loadGoalsSettingsPanel,
   loadHeartbeatSettingsPanel,
   loadKeyboardShortcutsSettingsPanel,
+  loadCapabilityPresetsSettingsPanel,
   loadModelsHubPanel,
   loadRemoteAccessHub,
   loadSetupStatusPanel,
@@ -27,9 +26,8 @@ const SECTIONS: SettingsSectionId[] = [
   'keyboard-shortcuts',
   'system',
   'app-management',
-  'agent-defaults',
-  'agent-browser',
   'credentials',
+  'capability-presets',
   'gateway',
   'heartbeat',
   'tunnel',
@@ -40,12 +38,6 @@ const SECTIONS: SettingsSectionId[] = [
 ];
 
 const SetupStatusPanel = lazy(() => loadSetupStatusPanel().then((m) => ({ default: m.SetupStatusPanel })));
-const AgentDefaultsTabbedPage = lazy(() =>
-  loadAgentDefaultsSettingsPage().then((m) => ({ default: m.AgentDefaultsTabbedPage })),
-);
-const AgentBrowserSettingsPage = lazy(() =>
-  loadAgentBrowserSettingsPage().then((m) => ({ default: m.AgentBrowserSettingsPage })),
-);
 const AppearanceSettingsPanel = lazy(() =>
   loadAppearanceSettingsPanel().then((m) => ({ default: m.AppearanceSettingsPanel })),
 );
@@ -69,6 +61,9 @@ const DreamingSettingsPanel = lazy(() =>
   loadDreamingSettingsPanel().then((m) => ({ default: m.DreamingSettingsPanel })),
 );
 const GoalsSettingsPanel = lazy(() => loadGoalsSettingsPanel().then((m) => ({ default: m.GoalsSettingsPanel })));
+const CapabilityPresetsSettingsPanel = lazy(() =>
+  loadCapabilityPresetsSettingsPanel().then((m) => ({ default: m.CapabilityPresetsSettingsPanel })),
+);
 
 function SettingsSectionFallback() {
   return (
@@ -113,14 +108,6 @@ export function SettingsPage() {
 
   const title = m.settingsSections[id];
 
-  if (id === 'agent-defaults') {
-    return renderLazySection(AgentDefaultsTabbedPage);
-  }
-
-  if (id === 'agent-browser') {
-    return renderLazySection(AgentBrowserSettingsPage);
-  }
-
   if (id === 'appearance') {
     return renderLazySection(AppearanceSettingsPanel);
   }
@@ -139,6 +126,10 @@ export function SettingsPage() {
 
   if (id === 'credentials') {
     return renderLazySection(ModelsHubPanel);
+  }
+
+  if (id === 'capability-presets') {
+    return renderLazySection(CapabilityPresetsSettingsPanel);
   }
 
   if (id === 'gateway') {

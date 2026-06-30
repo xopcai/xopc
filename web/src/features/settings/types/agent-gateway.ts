@@ -1,17 +1,18 @@
 export type GatewayAgentSkillsInfo = {
-  defaults: string[];
+  preset: string[];
   entry?: string[];
   effectiveAllowlist?: string[];
 };
 
 export type GatewayAgentToolsInfo = {
-  defaultsDisable: string[];
+  presetDenied: string[];
   entryDisable: string[];
   effectiveDisable: string[];
 };
 
 export type GatewayAgentTypedModelsInfo = {
-  defaults: Array<{ id: string; model: string; description?: string }>;
+  defaultRole: string;
+  preset: Array<{ id: string; model: string; description?: string }>;
   entry?: Array<{ id: string; model: string; description?: string }>;
   effective: Array<{ id: string; model: string; description?: string }>;
 };
@@ -27,6 +28,7 @@ export type GatewayAgentRow = {
   profileDir: string;
   model?: { primary?: string; fallbacks?: string[] };
   typedModels: GatewayAgentTypedModelsInfo;
+  extends: string[];
   isDefault: boolean;
   skills: GatewayAgentSkillsInfo;
   tools: GatewayAgentToolsInfo;
@@ -36,6 +38,55 @@ export type GatewayAgentsPayload = {
   defaultId: string;
   agents: GatewayAgentRow[];
   builtinToolIds: string[];
+};
+
+export type GatewayAgentEffectiveManifestPayload = {
+  manifest: {
+    id: string;
+    enabled?: boolean;
+    extends?: string[];
+    identity?: {
+      name?: string;
+      role?: string;
+      language?: string;
+      tone?: string;
+    };
+    workspace?: { root?: string };
+    models?: {
+      defaultRole?: string;
+      roles?: Record<string, { model: string; description?: string }>;
+    };
+    tools?: {
+      builtin?: Record<string, { mode: 'allow' | 'confirm' | 'deny'; scope?: string }>;
+    };
+    skills?: {
+      mode?: 'all' | 'allowlist' | 'denylist' | 'off';
+      allow?: string[];
+      deny?: string[];
+    };
+    memory?: {
+      mode?: string;
+      sources?: string[];
+      writePolicy?: Record<string, string>;
+      providerRouting?: {
+        searchStrategy?: string;
+        writeStrategy?: string;
+        allowExternalWrites?: boolean;
+        allowedProviderIds?: string[];
+        autoWriteKinds?: string[];
+      };
+    };
+    workflows?: {
+      default?: string;
+      allowed?: string[];
+    };
+    boundaries?: {
+      requiresConfirmation?: string[];
+      forbidden?: string[];
+      escalation?: string[];
+    };
+  };
+  sources: Record<string, string>;
 };
 
 export type GatewayConfigBinding = {

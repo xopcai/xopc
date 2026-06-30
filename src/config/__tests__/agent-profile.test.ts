@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+
+import type { AgentManifest } from '../../agent-manifest/index.js';
 import type { Config } from '../schema.js';
 import { expandWorkspacePathString } from '../workspace-path.js';
 import {
@@ -7,27 +9,42 @@ import {
   resolveEffectiveAgentProfileForSession,
 } from '../agent-profile.js';
 
+function manifest(id: string, patch: Partial<AgentManifest> = {}): AgentManifest {
+  return {
+    id,
+    enabled: true,
+    identity: { name: id, role: 'Agent', language: 'en', tone: 'direct' },
+    responsibilities: { primary: ['Help the user complete tasks'] },
+    workspace: { root: `~/.xopc/workspace/${id}` },
+    models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
+    tools: { builtin: {} },
+    skills: { mode: 'all' },
+    memory: { mode: 'confirmWrite', sources: ['session', 'curated'], writePolicy: { curated: 'confirm' } },
+    workflows: {},
+    boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+    ...patch,
+  };
+}
+
 function minimalConfig(overrides: Partial<Config> = {}): Config {
   return {
     agents: {
-      defaults: {
-        workspace: '~/.xopc/workspace',
-        maxTokens: 8192,
-        temperature: 0.7,
-        maxToolIterations: 20,
-        maxRequestsPerTurn: 50,
-        maxToolFailuresPerTurn: 3,
-        tools: { disable: ['grep'] },
+      default: 'main',
+      capabilityPresets: {
+        code: {
+          id: 'code',
+          name: 'Code',
+          tools: { builtin: { grep: { mode: 'deny' } } },
+        },
       },
       list: [
-        { id: 'main', enabled: true },
-        {
-          id: 'coder',
-          enabled: true,
-          workspace: '~/coder-ws',
-          models: { chat: { primary: 'anthropic/claude-3-5-sonnet-20241022' } },
-          tools: { disable: ['shell'] },
-        },
+        manifest('main'),
+        manifest('coder', {
+          extends: ['code'],
+          workspace: { root: '~/coder-ws' },
+          models: { defaultRole: 'deep', roles: { deep: { model: 'anthropic/claude-3-5-sonnet-20241022' } } },
+          tools: { builtin: { shell: { mode: 'deny' } } },
+        }),
       ],
     },
     bindings: [],
@@ -65,29 +82,20 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
 }
 
 describe('agent-profile', () => {
-  it('merges defaults with list entry for workspace and model', () => {
-    const cfg = minimalConfig();
-    const p = resolveEffectiveAgentProfile(cfg, 'coder');
+  it('resolves workspace and default role model from manifest', () => {
+    const p = resolveEffectiveAgentProfile(minimalConfig(), 'coder');
     expect(p.primaryModelRef).toBe('anthropic/claude-3-5-sonnet-20241022');
     expect(p.resolvedWorkspacePath).toContain('coder-ws');
   });
 
-  it('resolves main workspace under defaults.workspace parent', () => {
-    const cfg = minimalConfig();
-    const p = resolveEffectiveAgentProfile(cfg, 'main');
-    expect(p.resolvedWorkspacePath).toMatch(/workspace[/\\]main$/);
+  it('applies capability presets before agent policies', () => {
+    const p = resolveEffectiveAgentProfile(minimalConfig(), 'coder');
+    expect(p.tools.denied.has('grep')).toBe(true);
+    expect(p.tools.denied.has('shell')).toBe(true);
   });
 
-  it('merges tool disable lists from defaults and list', () => {
-    const cfg = minimalConfig();
-    const p = resolveEffectiveAgentProfile(cfg, 'coder');
-    expect(p.tools.disable.has('grep')).toBe(true);
-    expect(p.tools.disable.has('shell')).toBe(true);
-  });
-
-  it('defaults to all enabled skills when no skill allowlist is configured', () => {
-    const cfg = minimalConfig();
-    const p = resolveEffectiveAgentProfile(cfg, 'main');
+  it('uses all skills when manifest skill mode is all', () => {
+    const p = resolveEffectiveAgentProfile(minimalConfig(), 'main');
     expect(p.skillsAllowlist).toBeUndefined();
   });
 
@@ -97,21 +105,19 @@ describe('agent-profile', () => {
       ...base,
       agents: {
         ...base.agents!,
-        defaults: { ...base.agents!.defaults!, skills: [] },
+        list: [manifest('main', { skills: { mode: 'allowlist', allow: [] } })],
       },
     };
     const p = resolveEffectiveAgentProfile(cfg, 'main');
     expect(p.skillsAllowlist).toEqual([]);
   });
-  it('extractProfileAgentId falls back to main for unknown agent id', () => {
-    const cfg = minimalConfig();
-    expect(extractProfileAgentId('nope:webchat:default:direct:x', cfg)).toBe('main');
+
+  it('extractProfileAgentId falls back to default agent for unknown ids', () => {
+    expect(extractProfileAgentId('nope:webchat:default:direct:x', minimalConfig())).toBe('main');
   });
 
   it('resolveEffectiveAgentProfileForSession parses agent id from key', () => {
-    const cfg = minimalConfig();
-    const key = 'agent:coder:telegram:acc_default:direct:123';
-    const p = resolveEffectiveAgentProfileForSession(cfg, key);
+    const p = resolveEffectiveAgentProfileForSession(minimalConfig(), 'agent:coder:telegram:acc_default:direct:123');
     expect(p.agentId).toBe('coder');
     expect(p.resolvedWorkspacePath).toContain('coder-ws');
   });
@@ -120,19 +126,5 @@ describe('agent-profile', () => {
     const p = expandWorkspacePathString('~/foo');
     expect(p).not.toContain('~');
     expect(p.length).toBeGreaterThan(4);
-  });
-
-  it('uses join(defaults.workspace, id) when list entry has no workspace field', () => {
-    const base = minimalConfig();
-    const cfg: Config = {
-      ...base,
-      agents: {
-        ...base.agents!,
-        default: 'main',
-        list: [{ id: 'coder', enabled: true, model: { primary: 'openai/gpt-4o' } }],
-      },
-    };
-    const p = resolveEffectiveAgentProfile(cfg, 'coder');
-    expect(p.resolvedWorkspacePath).toMatch(/workspace[/\\]coder$/);
   });
 });

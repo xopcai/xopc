@@ -7,34 +7,53 @@ import {
   shouldInjectMemoryPrefetchThisTurn,
 } from '../memory-config.js';
 import type { Config } from '../../../config/schema.js';
+import type { AgentManifest } from '../../../agent-manifest/index.js';
 
-function cfg(overrides: Config['agents']): Config {
-  return { agents: overrides };
+function manifest(memory: AgentManifest['memory']): AgentManifest {
+  return {
+    id: 'main',
+    enabled: true,
+    identity: { name: 'main', role: 'Agent', language: 'en', tone: 'direct' },
+    responsibilities: { primary: ['Help'] },
+    workspace: { root: '/w' },
+    models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
+    tools: { builtin: {} },
+    skills: { mode: 'all' },
+    memory,
+    workflows: {},
+    boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+  };
+}
+
+function cfg(memory: AgentManifest['memory']): Config {
+  return {
+    agents: {
+      default: 'main',
+      capabilityPresets: {},
+      list: [manifest(memory)],
+    },
+  } as Config;
 }
 
 describe('memory-config', () => {
   it('isMemorySubsystemEnabled defaults true', () => {
     expect(isMemorySubsystemEnabled(undefined)).toBe(true);
-    expect(isMemorySubsystemEnabled(cfg({ defaults: {} }))).toBe(true);
+    expect(isMemorySubsystemEnabled(cfg({ mode: 'confirmWrite', sources: ['session'] }))).toBe(true);
   });
 
   it('isMemorySubsystemEnabled respects enabled: false', () => {
     expect(
-      isMemorySubsystemEnabled(
-        cfg({ defaults: { memory: { enabled: false } } }),
-      ),
+      isMemorySubsystemEnabled(cfg({ mode: 'off', sources: ['session'] })),
     ).toBe(false);
   });
 
   it('isCuratedMemoryInPrompt false when enabled or useEnhancedSystem off', () => {
     expect(isCuratedMemoryInPrompt(undefined)).toBe(true);
     expect(
-      isCuratedMemoryInPrompt(cfg({ defaults: { memory: { enabled: false } } })),
+      isCuratedMemoryInPrompt(cfg({ mode: 'off', sources: ['session'] })),
     ).toBe(false);
     expect(
-      isCuratedMemoryInPrompt(
-        cfg({ defaults: { memory: { useEnhancedSystem: false } } }),
-      ),
+      isCuratedMemoryInPrompt(cfg({ mode: 'confirmWrite', sources: ['session'] })),
     ).toBe(false);
   });
 
@@ -47,34 +66,17 @@ describe('memory-config', () => {
 
     const custom = resolveBuiltinMemoryStoreConfig(
       '/w',
-      cfg({
-        defaults: {
-          memory: {
-            memoryCharLimit: 100,
-            userCharLimit: 50,
-            userProfileEnabled: false,
-          },
-        },
-      }),
+      cfg({ mode: 'confirmWrite', sources: ['session'], retention: { compaction: true, maxItems: 100 } }),
     );
     expect(custom.memoryCharLimit).toBe(100);
-    expect(custom.userCharLimit).toBe(50);
     expect(custom.userProfileEnabled).toBe(false);
   });
 
-  it('shouldInjectMemoryPrefetchThisTurn: every-turn with cadence', () => {
-    const c = cfg({
-      defaults: { memory: { injectionFrequency: 'every-turn', contextCadence: 3 } },
-    });
+  it('shouldInjectMemoryPrefetchThisTurn injects on every turn', () => {
+    const c = cfg({ mode: 'confirmWrite', sources: ['session'] });
     expect(shouldInjectMemoryPrefetchThisTurn(c, 1)).toBe(true);
-    expect(shouldInjectMemoryPrefetchThisTurn(c, 2)).toBe(false);
-    expect(shouldInjectMemoryPrefetchThisTurn(c, 3)).toBe(false);
+    expect(shouldInjectMemoryPrefetchThisTurn(c, 2)).toBe(true);
+    expect(shouldInjectMemoryPrefetchThisTurn(c, 3)).toBe(true);
     expect(shouldInjectMemoryPrefetchThisTurn(c, 4)).toBe(true);
-  });
-
-  it('shouldInjectMemoryPrefetchThisTurn: first-turn only', () => {
-    const c = cfg({ defaults: { memory: { injectionFrequency: 'first-turn' } } });
-    expect(shouldInjectMemoryPrefetchThisTurn(c, 1)).toBe(true);
-    expect(shouldInjectMemoryPrefetchThisTurn(c, 2)).toBe(false);
   });
 });

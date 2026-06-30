@@ -1,8 +1,8 @@
 // Memory search tools for xopc agent
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { memorySearch, memoryGet } from '../prompt/memory/index.js';
 import { recordDreamingRecalls } from '../memory/dreaming/short-term-store.js';
+import type { MemoryManager } from '../memory/manager.js';
 
 // =============================================================================
 // Memory Search Tool
@@ -17,12 +17,11 @@ type MemorySearchParams = { query: string; maxResults?: number; minScore?: numbe
 
 export interface MemoryToolOptions {
   workspaceDir: string;
-  /** Agent home curated memories dir, e.g. ~/.xopc/agents/<id>/memories/ */
-  memoriesDir?: string;
+  getMemoryManager: () => MemoryManager;
 }
 
 export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
-  const { workspaceDir, memoriesDir } = options;
+  const { workspaceDir, getMemoryManager } = options;
   return {
     name: 'memory_search',
     label: '🔍 Memory Search',
@@ -38,18 +37,52 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
       const { query, maxResults, minScore } = params as MemorySearchParams;
 
       try {
-        const results = await memorySearch(workspaceDir, query, { maxResults, minScore, memoriesDir });
+        const results = await getMemoryManager().search({ query, maxResults, minScore });
+        for (const result of results) {
+          getMemoryManager().recordSignal({
+            source: 'search_recall',
+            recordId: result.record.id,
+            score: result.score,
+            content: result.snippet,
+            metadata: {
+              providerId: result.citation.providerId,
+              path: result.citation.path,
+              lineStart: result.citation.lineStart,
+              lineEnd: result.citation.lineEnd,
+            },
+          });
+        }
         // Dreaming: record short-term recall evidence from memory_search.
         // Only records workspace daily notes (`memory/YYYY-MM-DD.md`) and ignores curated/long-term files.
-        void recordDreamingRecalls({ workspaceDir, query, matches: results }).catch(() => {});
+        void recordDreamingRecalls({
+          workspaceDir,
+          query,
+          matches: results.map((entry) => ({
+            file: entry.citation.path ?? entry.record.source.path ?? entry.record.id,
+            lines: entry.snippet,
+            score: entry.score,
+            lineNumbers:
+              entry.citation.lineStart != null
+                ? [entry.citation.lineStart, entry.citation.lineEnd ?? entry.citation.lineStart]
+                : [],
+          })),
+        }).catch(() => {});
         const withCitations = results.map((entry) => ({
-          ...entry,
-          citation: `${entry.file}#L${entry.lineNumbers[0]}${entry.lineNumbers.length > 1 ? `-L${entry.lineNumbers[entry.lineNumbers.length - 1]}` : ''}`,
-          snippet: `${entry.lines.trim()}\n\nSource: ${entry.file}#L${entry.lineNumbers[0]}${entry.lineNumbers.length > 1 ? `-L${entry.lineNumbers[entry.lineNumbers.length - 1]}` : ''}`,
+          id: entry.record.id,
+          kind: entry.record.kind,
+          file: entry.citation.path ?? entry.record.source.path,
+          lines: entry.snippet,
+          score: entry.score,
+          lineNumbers:
+            entry.citation.lineStart != null
+              ? [entry.citation.lineStart, entry.citation.lineEnd ?? entry.citation.lineStart]
+              : [],
+          citation: `${entry.citation.path ?? entry.record.id}${entry.citation.lineStart != null ? `#L${entry.citation.lineStart}${entry.citation.lineEnd && entry.citation.lineEnd !== entry.citation.lineStart ? `-L${entry.citation.lineEnd}` : ''}` : ''}`,
+          snippet: `${entry.snippet.trim()}\n\nSource: ${entry.citation.path ?? entry.record.id}${entry.citation.lineStart != null ? `#L${entry.citation.lineStart}${entry.citation.lineEnd && entry.citation.lineEnd !== entry.citation.lineStart ? `-L${entry.citation.lineEnd}` : ''}` : ''}`,
         }));
 
         return {
-          content: [{ type: 'text', text: JSON.stringify({ results: withCitations, provider: 'simple' }, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify({ results: withCitations, provider: 'memory-manager' }, null, 2) }],
           details: { results: withCitations },
         };
       } catch (err) {
@@ -75,7 +108,7 @@ const MemoryGetSchema = Type.Object({
 type MemoryGetParams = { path: string; from?: number; lines?: number };
 
 export function createMemoryGetTool(options: MemoryToolOptions): AgentTool {
-  const { workspaceDir, memoriesDir } = options;
+  const { getMemoryManager } = options;
   return {
     name: 'memory_get',
     label: '📄 Memory Get',
@@ -90,7 +123,7 @@ export function createMemoryGetTool(options: MemoryToolOptions): AgentTool {
       const { path, from, lines } = params as MemoryGetParams;
 
       try {
-        const result = memoryGet(workspaceDir, path, from, lines, memoriesDir);
+        const result = await getMemoryManager().read({ path, from, lines });
         if (!result) {
           return {
             content: [{ type: 'text', text: `File not found: ${path}` }],
@@ -98,8 +131,8 @@ export function createMemoryGetTool(options: MemoryToolOptions): AgentTool {
           };
         }
         return {
-          content: [{ type: 'text', text: result.content }],
-          details: { path, text: result.content, lineNumbers: result.lineNumbers },
+          content: [{ type: 'text', text: result.record.content }],
+          details: { path, text: result.record.content, lineNumbers: result.lineNumbers },
         };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

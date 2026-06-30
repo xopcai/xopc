@@ -8,19 +8,15 @@ import {
 } from '../backend-from-config.js';
 import { resolveBrowserCommandTimeoutMs } from '../browser-command-timeout.js';
 
+function cfg(browser: Record<string, unknown>): Config {
+  return { browser } as unknown as Config;
+}
+
 describe('resolveBrowserBackendFromConfig', () => {
   it('prefers cdpUrl over cloudProvider', () => {
-    const cfg = {
-      agents: {
-        defaults: {
-          browser: {
-            cloudProvider: 'browserbase' as const,
-            cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x',
-          },
-        },
-      },
-    } as unknown as Config;
-    const b = resolveBrowserBackendFromConfig(cfg);
+    const b = resolveBrowserBackendFromConfig(
+      cfg({ backend: 'cdp', cloudProvider: 'browserbase' as const, cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x' }),
+    );
     expect(b.mode).toBe('cdp');
     if (b.mode === 'cdp') {
       expect(b.config.wsEndpoint).toContain('9222');
@@ -28,10 +24,7 @@ describe('resolveBrowserBackendFromConfig', () => {
   });
 
   it('uses cloud when no cdpUrl', () => {
-    const cfg = {
-      agents: { defaults: { browser: { cloudProvider: 'browser-use' as const } } },
-    } as unknown as Config;
-    const b = resolveBrowserBackendFromConfig(cfg);
+    const b = resolveBrowserBackendFromConfig(cfg({ backend: 'cloud', cloudProvider: 'browser-use' as const }));
     expect(b.mode).toBe('cloud');
     if (b.mode === 'cloud') {
       expect(b.config.type).toBe('browser-use');
@@ -39,18 +32,13 @@ describe('resolveBrowserBackendFromConfig', () => {
   });
 
   it('uses extension when backend is extension', () => {
-    const cfg = {
-      agents: {
-        defaults: {
-          browser: {
-            backend: 'extension' as const,
-            extension: { port: 19999, host: '127.0.0.1', connectionTimeout: 5000 },
-            commandTimeout: 45,
-          },
-        },
-      },
-    } as unknown as Config;
-    const b = resolveBrowserBackendFromConfig(cfg);
+    const b = resolveBrowserBackendFromConfig(
+      cfg({
+        backend: 'extension' as const,
+        extension: { port: 19999, host: '127.0.0.1', connectionTimeout: 5000 },
+        commandTimeout: 45,
+      }),
+    );
     expect(b.mode).toBe('extension');
     if (b.mode === 'extension') {
       expect(b.config?.port).toBe(19999);
@@ -61,17 +49,11 @@ describe('resolveBrowserBackendFromConfig', () => {
   });
 
   it('prefers extension backend over cdpUrl when both set', () => {
-    const cfg = {
-      agents: {
-        defaults: {
-          browser: {
-            backend: 'extension' as const,
-            cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x',
-          },
-        },
-      },
-    } as unknown as Config;
-    expect(resolveBrowserBackendFromConfig(cfg).mode).toBe('extension');
+    expect(
+      resolveBrowserBackendFromConfig(
+        cfg({ backend: 'extension' as const, cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x' }),
+      ).mode,
+    ).toBe('extension');
   });
 
   it('defaults to extension', () => {
@@ -79,46 +61,36 @@ describe('resolveBrowserBackendFromConfig', () => {
   });
 
   it('uses local only when backend is explicitly local', () => {
-    const cfg = { agents: { defaults: { browser: { backend: 'local' as const } } } } as unknown as Config;
-    const b = resolveBrowserBackendFromConfig(cfg);
+    const b = resolveBrowserBackendFromConfig(cfg({ backend: 'local' as const }));
     expect(b.mode).toBe('local');
     if (b.mode === 'local') expect(b.headless).toBe(false);
   });
 
   it('local headless only when explicitly local and headless true', () => {
-    const cfg = {
-      agents: { defaults: { browser: { backend: 'local' as const, headless: true } } },
-    } as unknown as Config;
-    const b = resolveBrowserBackendFromConfig(cfg);
+    const b = resolveBrowserBackendFromConfig(cfg({ backend: 'local' as const, headless: true }));
     expect(b.mode).toBe('local');
     if (b.mode === 'local') expect(b.headless).toBe(true);
   });
 
   it('headless without backend still defaults to extension', () => {
-    const cfg = { agents: { defaults: { browser: { headless: true } } } } as unknown as Config;
-    expect(resolveBrowserBackendFromConfig(cfg).mode).toBe('extension');
+    expect(resolveBrowserBackendFromConfig(cfg({ headless: true })).mode).toBe('extension');
   });
 
   it('uses cloakbrowser when backend is cloakbrowser', () => {
-    const cfg = {
-      agents: {
-        defaults: {
-          browser: {
-            backend: 'cloakbrowser' as const,
-            humanize: true,
-            humanPreset: 'careful' as const,
-            cloakbrowser: {
-              keepOpen: true,
-              temporaryProfile: false,
-              timezone: 'America/New_York',
-              locale: 'en-US',
-              webrtcIp: '1.2.3.4',
-            },
-          },
+    const b = resolveBrowserBackendFromConfig(
+      cfg({
+        backend: 'cloakbrowser' as const,
+        humanize: true,
+        humanPreset: 'careful' as const,
+        cloakbrowser: {
+          keepOpen: true,
+          temporaryProfile: false,
+          timezone: 'America/New_York',
+          locale: 'en-US',
+          webrtcIp: '1.2.3.4',
         },
-      },
-    } as unknown as Config;
-    const b = resolveBrowserBackendFromConfig(cfg);
+      }),
+    );
     expect(b.mode).toBe('cloakbrowser');
     if (b.mode === 'cloakbrowser') {
       expect(b.config?.keepOpen).toBe(true);
@@ -132,16 +104,7 @@ describe('resolveBrowserBackendFromConfig', () => {
   });
 
   it('cloakbrowser defaults humanize to true when not specified', () => {
-    const cfg = {
-      agents: {
-        defaults: {
-          browser: {
-            backend: 'cloakbrowser' as const,
-          },
-        },
-      },
-    } as unknown as Config;
-    const b = resolveBrowserBackendFromConfig(cfg);
+    const b = resolveBrowserBackendFromConfig(cfg({ backend: 'cloakbrowser' as const }));
     expect(b.mode).toBe('cloakbrowser');
     if (b.mode === 'cloakbrowser') {
       expect(b.config?.humanize).toBe(true);
@@ -150,50 +113,39 @@ describe('resolveBrowserBackendFromConfig', () => {
   });
 
   it('prefers cloakbrowser backend over cdpUrl when both set', () => {
-    const cfg = {
-      agents: {
-        defaults: {
-          browser: {
-            backend: 'cloakbrowser' as const,
-            cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x',
-          },
-        },
-      },
-    } as unknown as Config;
-    expect(resolveBrowserBackendFromConfig(cfg).mode).toBe('cloakbrowser');
+    expect(
+      resolveBrowserBackendFromConfig(
+        cfg({ backend: 'cloakbrowser' as const, cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x' }),
+      ).mode,
+    ).toBe('cloakbrowser');
   });
 });
 
 describe('cloakBrowserConfigFromAgentDefaults', () => {
   it('builds headed launch config from saved cloakbrowser settings', () => {
-    const cfg = {
-      agents: {
-        defaults: {
-          browser: {
-            backend: 'cloakbrowser' as const,
-            headless: true,
-            cloakbrowser: {
-              keepOpen: true,
-              temporaryProfile: false,
-              cacheDir: '/Users/me/.xopc/bin/cloakbrowser',
-              timezone: 'America/New_York',
-              extraArgs: ['--disable-dev-shm-usage'],
-            },
+    expect(
+      cloakBrowserConfigFromAgentDefaults(
+        cfg({
+          backend: 'cloakbrowser' as const,
+          headless: true,
+          cloakbrowser: {
+            keepOpen: true,
+            temporaryProfile: false,
+            cacheDir: '/Users/me/.xopc/bin/cloakbrowser',
+            timezone: 'America/New_York',
+            extraArgs: ['--disable-dev-shm-usage'],
           },
-        },
-      },
-    } as unknown as Config;
-    expect(cloakBrowserConfigFromAgentDefaults(cfg)).toEqual({
+        }),
+      ),
+    ).toEqual({
       headless: false,
       keepOpen: true,
       temporaryProfile: false,
       cacheDir: '/Users/me/.xopc/bin/cloakbrowser',
-      binaryPath: undefined,
       timezone: 'America/New_York',
-      locale: undefined,
-      webrtcIp: undefined,
-      fingerprintPlatform: undefined,
       extraArgs: ['--disable-dev-shm-usage'],
+      humanize: true,
+      humanPreset: 'careful',
       reuseExisting: true,
     });
   });
@@ -201,42 +153,25 @@ describe('cloakBrowserConfigFromAgentDefaults', () => {
 
 describe('shouldRunExtensionBridgeServer', () => {
   it('starts for default extension backend (null backend)', () => {
-    const cfg = {
-      agents: { defaults: { browser: { enabled: true } } },
-    } as unknown as Config;
-    expect(shouldRunExtensionBridgeServer(cfg)).toBe(true);
+    expect(shouldRunExtensionBridgeServer(cfg({ enabled: true }))).toBe(true);
   });
 
   it('starts when backend is explicitly extension', () => {
-    const cfg = {
-      agents: { defaults: { browser: { backend: 'extension' as const } } },
-    } as unknown as Config;
-    expect(shouldRunExtensionBridgeServer(cfg)).toBe(true);
+    expect(shouldRunExtensionBridgeServer(cfg({ backend: 'extension' as const }))).toBe(true);
   });
 
   it('does not start when browser is disabled', () => {
-    const cfg = {
-      agents: { defaults: { browser: { enabled: false, backend: 'extension' as const } } },
-    } as unknown as Config;
-    expect(shouldRunExtensionBridgeServer(cfg)).toBe(false);
+    expect(shouldRunExtensionBridgeServer(cfg({ enabled: false, backend: 'extension' as const }))).toBe(false);
   });
 
   it('does not start for local backend', () => {
-    const cfg = {
-      agents: { defaults: { browser: { backend: 'local' as const } } },
-    } as unknown as Config;
-    expect(shouldRunExtensionBridgeServer(cfg)).toBe(false);
+    expect(shouldRunExtensionBridgeServer(cfg({ backend: 'local' as const }))).toBe(false);
   });
 
   it('does not start when cdpUrl selects CDP backend', () => {
-    const cfg = {
-      agents: {
-        defaults: {
-          browser: { cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x' },
-        },
-      },
-    } as unknown as Config;
-    expect(shouldRunExtensionBridgeServer(cfg)).toBe(false);
+    expect(
+      shouldRunExtensionBridgeServer(cfg({ backend: 'cdp', cdpUrl: 'ws://127.0.0.1:9222/devtools/browser/x' })),
+    ).toBe(false);
   });
 });
 
@@ -246,7 +181,6 @@ describe('resolveBrowserCommandTimeoutMs', () => {
   });
 
   it('respects configured seconds', () => {
-    const cfg = { agents: { defaults: { browser: { commandTimeout: 60 } } } } as unknown as Config;
-    expect(resolveBrowserCommandTimeoutMs(cfg)).toBe(60_000);
+    expect(resolveBrowserCommandTimeoutMs(cfg({ commandTimeout: 60 }))).toBe(60_000);
   });
 });

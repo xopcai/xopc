@@ -9,6 +9,7 @@ import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
 import { ExtensionProvider } from '@/features/extensions/extension-provider';
 import {
   loadAgentsSettingsPage,
+  loadAgentBrowserSettingsPage,
   loadAppsPage,
   loadChannelsPage,
   loadConnectorsPage,
@@ -44,6 +45,9 @@ const LogsPage = lazy(() => loadLogsPage().then((m) => ({ default: m.LogsPage })
 const SettingsPage = lazy(() => loadSettingsPage().then((m) => ({ default: m.SettingsPage })));
 const AgentsSettingsDetailPage = lazy(() =>
   loadAgentsSettingsPage().then((m) => ({ default: m.AgentsSettingsPanel })),
+);
+const AgentBrowserSettingsPage = lazy(() =>
+  loadAgentBrowserSettingsPage().then((m) => ({ default: m.AgentBrowserSettingsPage })),
 );
 const ChannelsPage = lazy(() => loadChannelsPage().then((m) => ({ default: m.ChannelsSettingsPanel })));
 const AppsPage = lazy(() => loadAppsPage().then((m) => ({ default: m.AppsPage })));
@@ -287,6 +291,10 @@ const router = createHashRouter([
             element: <Navigate to="/cron?tab=settings" replace />,
           },
           {
+            path: 'memory',
+            element: <Navigate to="/agents" replace />,
+          },
+          {
             path: 'sessions',
             element: (
               <Suspense fallback={<SecondaryRouteFallback />}>
@@ -317,6 +325,14 @@ const router = createHashRouter([
           {
             path: 'agents/:agentId',
             element: <RedirectLegacySettingsAgentsDetail />,
+          },
+          {
+            path: 'agent-browser',
+            element: (
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <AgentBrowserSettingsPage />
+              </Suspense>
+            ),
           },
           {
             path: 'extensions/debug',

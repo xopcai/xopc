@@ -118,6 +118,14 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
+    id: 'capability-presets',
+    match: (path) => startsWithAny(path, ['/api/capability-presets']),
+    load: async () => {
+      const { registerCapabilityPresetsRoutes } = await import('./capability-presets.js');
+      return { register: registerCapabilityPresetsRoutes };
+    },
+  },
+  {
     id: 'auth-registry-extensions',
     match: (path) =>
       startsWithAny(path, [

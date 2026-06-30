@@ -145,8 +145,7 @@ export function resolveDefaultAgentId(cfg: Config): string {
   if (agents.length === 0) {
     return DEFAULT_AGENT_ID;
   }
-  const defaults = agents.filter((a) => a?.default === true);
-  const chosen = (defaults[0] ?? agents[0])?.id?.trim();
+  const chosen = agents[0]?.id?.trim();
   return chosen ? normalizeAgentId(chosen) : DEFAULT_AGENT_ID;
 }
 
@@ -160,15 +159,11 @@ function resolveAgentEntry(cfg: Config, agentId: string): AgentEntry | undefined
  */
 export function resolveAgentWorkspaceDir(cfg: Config, agentId: string): string {
   const id = normalizeAgentId(agentId);
-  const configured = resolveAgentEntry(cfg, id)?.workspace?.trim();
+  const configured = resolveAgentEntry(cfg, id)?.workspace?.root?.trim();
   if (configured) {
     return resolveUserPath(configured);
   }
   const defaultAgentId = resolveDefaultAgentId(cfg);
-  const fallback = cfg.agents?.defaults?.workspace?.trim();
-  if (fallback) {
-    return join(resolveUserPath(fallback), id);
-  }
   if (id === defaultAgentId) {
     return resolveDefaultAgentWorkspaceDir(process.env);
   }
@@ -181,10 +176,6 @@ export function resolveAgentWorkspaceDir(cfg: Config, agentId: string): string {
  */
 export function resolveAgentDir(cfg: Config, agentId: string): string {
   const id = normalizeAgentId(agentId);
-  const configured = resolveAgentEntry(cfg, id)?.agentDir?.trim();
-  if (configured) {
-    return resolveUserPath(configured);
-  }
   const root = resolveStateDir(process.env);
   return join(root, 'agents', id, 'agent');
 }

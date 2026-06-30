@@ -18,6 +18,7 @@ import type {
 } from './types.js';
 import { getSessionDisplayName } from './session-key.js';
 import type { Config } from '../config/schema.js';
+import { getAgentDefaultModelRef } from '../config/schema.js';
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { MessageBus } from '../infra/bus/index.js';
 import type { SessionStore, SessionConfigStore } from '../session/index.js';
@@ -256,8 +257,7 @@ export class CommandContextImpl implements CommandContext {
       return this.deps.getCurrentModel();
     }
     
-    // Fallback to config default
-    return this.config.agents?.defaults?.models?.chat?.primary || 'minimax/minimax-m2.1';
+    return getAgentDefaultModelRef(this.config);
   }
 
   async listModels(): Promise<ModelInfo[]> {
@@ -365,8 +365,7 @@ export class CommandContextImpl implements CommandContext {
         return sessionConfig.thinkingLevel;
       }
     }
-    // Fallback to agent default
-    return this.config.agents?.defaults?.thinkingDefault;
+    return undefined;
   }
 
   /**
@@ -442,8 +441,7 @@ export class CommandContextImpl implements CommandContext {
         return sessionConfig.reasoningLevel;
       }
     }
-    // Fallback to agent default
-    return this.config.agents?.defaults?.reasoningDefault;
+    return undefined;
   }
 
   /**
@@ -467,8 +465,7 @@ export class CommandContextImpl implements CommandContext {
         return sessionConfig.verboseLevel;
       }
     }
-    // Fallback to agent default
-    return this.config.agents?.defaults?.verboseDefault;
+    return undefined;
   }
 
   /**

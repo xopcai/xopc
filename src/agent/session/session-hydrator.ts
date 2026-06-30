@@ -82,12 +82,11 @@ export class SessionHydrator {
    * override > agent default) and apply it to the live agent instance.
    */
   async thinking(sessionKey: string, requestOverride?: string | null): Promise<void> {
-    const def = this.opts.getConfig()?.agents?.defaults?.thinkingDefault;
     const level = await resolveEffectiveThinkingLevel(
       this.opts.sessionConfigStore,
       sessionKey,
       requestOverride,
-      def,
+      undefined,
     );
     this.opts.agentManager.setThinkingLevel(sessionKey, level);
   }

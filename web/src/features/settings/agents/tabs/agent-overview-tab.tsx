@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useCallback } from 'react';
-import { AlertTriangle, Cog, Eye, MessageSquarePlus, Pencil, Sparkles, Trash2, User, X } from 'lucide-react';
+import { useCallback, useRef } from 'react';
+import { AlertTriangle, ArrowDown, ArrowUp, Cog, ExternalLink, Eye, MessageSquarePlus, Pencil, Plus, Sparkles, Trash2, User, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
@@ -8,10 +8,9 @@ import { MarkdownView } from '@/components/markdown/markdown-view';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
+import type { CapabilityPresetRow } from '@/features/settings/capability-presets/capability-presets-api';
 import type { OverviewProfileDraft } from '@/features/settings/agents/hooks/use-agent-overview-profile-markdown';
-import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
-import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ghostIconButton, interaction } from '@/lib/interaction';
@@ -48,6 +47,9 @@ export function AgentOverviewTab(props: {
   onSetDefault: () => void;
   onSaveAgentEdits: () => void;
   onDelete: (purge: boolean) => void;
+  capabilityPresets: CapabilityPresetRow[];
+  onUpdateAgentExtends: (nextExtends: string[]) => void;
+  onOpenCapabilityPreset: (presetId: string) => void;
   hideInlineSave?: boolean;
   profileMarkdownLoading: boolean;
   profileDraft: OverviewProfileDraft | null;
@@ -59,6 +61,7 @@ export function AgentOverviewTab(props: {
   defaultModel?: string;
   defaultWorkspace?: string;
   onTryInChat?: () => void;
+  onEditModelStrategy?: () => void;
 }) {
   const {
     a,
@@ -76,6 +79,9 @@ export function AgentOverviewTab(props: {
     onSetDefault,
     onSaveAgentEdits,
     onDelete,
+    capabilityPresets,
+    onUpdateAgentExtends,
+    onOpenCapabilityPreset,
     hideInlineSave,
     profileMarkdownLoading,
     profileDraft,
@@ -87,10 +93,12 @@ export function AgentOverviewTab(props: {
     defaultModel = '',
     defaultWorkspace = '',
     onTryInChat,
+    onEditModelStrategy,
   } = props;
 
   const language = useLocaleStore((s) => s.language);
   const isDark = useThemeStore((s) => s.resolved === 'dark');
+  const workspaceFieldRef = useRef<HTMLDivElement | null>(null);
 
   const identity = profileDraft?.identity ?? { name: '', description: '', language: '', creature: '', emoji: '', avatar: '' };
   const soulTemplate = profileDraft?.soulTemplate ?? 'professional';
@@ -105,6 +113,18 @@ export function AgentOverviewTab(props: {
   );
 
   const inputClass = agentsSettingsInputClass();
+  const availablePresetIds = capabilityPresets
+    .map((preset) => preset.id)
+    .filter((id) => !selected?.extends.includes(id));
+  const selectedPresetId = availablePresetIds[0] ?? '';
+  const presetById = new Map(capabilityPresets.map((preset) => [preset.id, preset]));
+  const focusWorkspaceField = useCallback(() => {
+    const field = workspaceFieldRef.current;
+    field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => {
+      field?.querySelector('input')?.focus();
+    }, 180);
+  }, []);
 
   if (!selected) {
     return <p className="text-sm text-fg-muted">{a.selectAgentHint}</p>;
@@ -118,8 +138,129 @@ export function AgentOverviewTab(props: {
         defaultWorkspace={defaultWorkspace}
         agentModel={editModel}
         agentWorkspace={editWorkspace}
-        settingsState={{ [SETTINGS_BACK_PATH_STATE_KEY]: agentsAppDetailPath(selected.id) }}
+        onEditModelStrategy={onEditModelStrategy}
+        onEditWorkspace={focusWorkspaceField}
       />
+
+      <SettingsFormSection>
+        <SettingsFormSectionHeader
+          icon={Sparkles}
+          title={a.capabilityPresetsTitle}
+          subtitle={a.capabilityPresetsHint}
+          trailing={
+            <Button
+              type="button"
+              variant="secondary"
+              className="text-xs"
+              disabled={busy}
+              onClick={() => onOpenCapabilityPreset('')}
+            >
+              <ExternalLink className="size-3.5" aria-hidden />
+              {a.capabilityPresetsManage}
+            </Button>
+          }
+        />
+        <div className="flex flex-col gap-2">
+          {selected.extends.length > 0 ? (
+            selected.extends.map((presetId, index) => {
+              const preset = presetById.get(presetId);
+              return (
+                <div
+                  key={presetId}
+                  className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <button
+                    type="button"
+                    className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    onClick={() => onOpenCapabilityPreset(presetId)}
+                  >
+                    <div className="truncate text-sm font-medium text-fg">{preset?.name ?? presetId}</div>
+                    <div className="mt-0.5 truncate font-mono text-[11px] text-fg-muted">{presetId}</div>
+                    {preset?.description ? (
+                      <div className="mt-1 line-clamp-2 text-xs text-fg-muted">{preset.description}</div>
+                    ) : null}
+                  </button>
+                  <div className="flex shrink-0 flex-wrap gap-1.5">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="size-8 rounded-lg p-0"
+                      disabled={busy || index === 0}
+                      aria-label={a.capabilityPresetMoveUp}
+                      onClick={() => {
+                        const next = [...selected.extends];
+                        [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                        onUpdateAgentExtends(next);
+                      }}
+                    >
+                      <ArrowUp className="size-3.5" aria-hidden />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="size-8 rounded-lg p-0"
+                      disabled={busy || index === selected.extends.length - 1}
+                      aria-label={a.capabilityPresetMoveDown}
+                      onClick={() => {
+                        const next = [...selected.extends];
+                        [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                        onUpdateAgentExtends(next);
+                      }}
+                    >
+                      <ArrowDown className="size-3.5" aria-hidden />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="size-8 rounded-lg p-0"
+                      disabled={busy}
+                      aria-label={a.capabilityPresetRemove}
+                      onClick={() => onUpdateAgentExtends(selected.extends.filter((id) => id !== presetId))}
+                    >
+                      <Trash2 className="size-3.5" aria-hidden />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="rounded-lg border border-dashed border-edge-subtle px-3 py-3 text-sm text-fg-muted">
+              {a.capabilityPresetsEmpty}
+            </div>
+          )}
+        </div>
+        {availablePresetIds.length > 0 ? (
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <select
+              className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg focus:border-edge-strong focus:outline-none"
+              disabled={busy}
+              defaultValue={selectedPresetId}
+              onChange={(e) => {
+                e.currentTarget.dataset.value = e.target.value;
+              }}
+            >
+              {availablePresetIds.map((presetId) => (
+                <option key={presetId} value={presetId}>
+                  {presetById.get(presetId)?.name ?? presetId}
+                </option>
+              ))}
+            </select>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={busy || !selectedPresetId}
+              onClick={(e) => {
+                const select = e.currentTarget.parentElement?.querySelector('select');
+                const presetId = select?.value || selectedPresetId;
+                if (presetId) onUpdateAgentExtends([...selected.extends, presetId]);
+              }}
+            >
+              <Plus className="size-4" aria-hidden />
+              {a.capabilityPresetAdd}
+            </Button>
+          </div>
+        ) : null}
+      </SettingsFormSection>
 
       {/* ===== Section 1: Basic Identity ===== */}
       <SettingsFormSection>
@@ -288,7 +429,7 @@ export function AgentOverviewTab(props: {
               ) : null}
             </div>
           </div>
-          <div className="flex flex-col gap-1.5 text-sm sm:col-span-2">
+          <div ref={workspaceFieldRef} className="flex flex-col gap-1.5 text-sm sm:col-span-2">
             <span className="font-medium text-fg">{a.workspacePath}</span>
             <DirectoryPickerPathField
               value={editWorkspace}

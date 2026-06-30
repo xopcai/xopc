@@ -4,6 +4,8 @@ import path from 'node:path';
 
 import { type Config } from '../../../config/schema.js';
 import { getWorkspacePath } from '../../../config/workspace-path-helpers.js';
+import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
+import { resolveEffectiveAgentManifestForAgent } from '../../../config/agent-profile.js';
 import { resolveDreamingConfig } from '../../../agent/memory/dreaming/config.js';
 import {
   DREAMING_CRON_NAME,
@@ -158,6 +160,8 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
     }
 
+    const agentId = resolveDefaultAgentId(cfg);
+    const manifest = resolveEffectiveAgentManifestForAgent(cfg, agentId);
     const resolved = resolveDreamingConfig(cfg);
     const { store } = await loadDreamingStore({ workspaceDir });
     const lock = await readLockInfo(workspaceDir);
@@ -172,6 +176,8 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({
       ok: true,
       payload: {
+        agentId,
+        memory: manifest.memory,
         workspaceDir,
         config: resolved,
         storePath: SHORT_TERM_RECALL_STORE_RELATIVE,
@@ -299,4 +305,3 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, payload: { events } });
   });
 }
-

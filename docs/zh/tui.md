@@ -25,7 +25,7 @@ xopc tui
 xopc tui --url http://localhost:18790 --token <你的网关令牌>
 ```
 
-命令内置的默认地址为 `http://localhost:3120`。若你配置里的 **`gateway.port`** 不同（项目里常见默认是 **18790**），请用 **`--url`** 显式指定。
+网关模式会优先使用配置中的 gateway URL；默认 gateway 端口是 **18790**。如果网关运行在其它主机或端口，请用 **`--url`** 显式指定。
 
 查看或生成令牌：
 

@@ -8,11 +8,11 @@ const BOOTSTRAP_HEAD_RATIO = 0.75;
 const BOOTSTRAP_TAIL_RATIO = 0.25;
 
 export function resolveBootstrapMaxChars(config?: Config): number {
-  return config?.agents?.defaults?.bootstrapMaxChars ?? DEFAULT_BOOTSTRAP_MAX_CHARS;
+  return DEFAULT_BOOTSTRAP_MAX_CHARS;
 }
 
 export function resolveBootstrapTotalMaxChars(config?: Config): number {
-  return config?.agents?.defaults?.bootstrapTotalMaxChars ?? DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS;
+  return DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS;
 }
 
 function clampToBudget(content: string, budget: number): string {

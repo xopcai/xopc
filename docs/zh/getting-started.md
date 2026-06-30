@@ -1,245 +1,102 @@
-# 快速开始
+# 快速上手
 
-XOPC 把目标变成循环：持续记住上下文，协调 AI 推进下一步，让长期目标不断向前。装好 **xopc**、配上至少一家大模型厂商的密钥后，就可以用 **命令行**、**全屏终端（TUI）**、**网关网页控制台** 或 **Electron 桌面版**。
+这页用于查看完整起步地图：安装方式、配置模式、使用入口，以及下一步该读哪篇文档。
 
-## 30 秒，立即开始
+如果你还没有真正跑过 xopc，先看 [5分钟快速入门](./first-5-minutes.md)。那篇只保留一条可靠路径：安装、`xopc onboard --quick`、然后 `xopc tui --local`。
 
-网站主推的起步方式是：安装 CLI、运行 onboard、在终端开聊——三步即可上手：
+## xopc 有哪些入口
 
-```bash
-# 官网默认路径（macOS、Linux、WSL）
-curl -fsSL https://xopc.ai/install.sh | bash
+xopc 是一个包，提供多个使用入口：
 
-# 备选：npm 安装
-npm install -g @xopcai/xopc
-xopc onboard --quick  # 只配置模型，然后本地启动
-xopc tui --local
-```
+| 入口 | 启动方式 | 是否需要 gateway |
+| --- | --- | --- |
+| CLI 单次调用 | `xopc agent -m "..."` | 否 |
+| CLI 交互模式 | `xopc agent -i` | 否 |
+| 本地 TUI | `xopc tui --local` | 否 |
+| 网页控制台 | `xopc gateway`，然后打开终端打印的 URL | 是 |
+| Gateway TUI | `xopc tui --gateway` 或 `xopc tui --url ...` | 是 |
+| 消息频道 | `channels.*` 下配置 Telegram、微信、飞书/Lark | 是 |
+| 桌面端 | GitHub Releases 或 `pnpm run electron:build` | 内置 gateway |
 
-**国内镜像：** `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
+## 环境要求
 
-Windows:
+- CLI 包需要 Node.js **22** 或更新版本。
+- 只有从源码构建本仓库时才需要 `pnpm`。
+- 至少配置一个模型厂商密钥、本地模型服务，或 OpenAI-compatible endpoint。
 
-```powershell
-iex (irm https://xopc.ai/install.ps1)
-```
+## 安装方式
 
-下文会展开网关、频道、桌面版与故障排除等细节。
+| 方式 | 命令 | 适合 |
+| --- | --- | --- |
+| 安装脚本 | `curl -fsSL https://xopc.ai/install.sh \| bash` | macOS、Linux、WSL、Termux |
+| Windows 安装脚本 | `iex (irm https://xopc.ai/install.ps1)` | PowerShell |
+| npm 包 | `npm install -g @xopcai/xopc` | 已安装 Node.js 22+ |
+| 国内 npm 镜像 | `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com` | npmjs 访问较慢 |
+| 源码构建 | `pnpm install && pnpm run build` | 开发 xopc 本体 |
 
-## 终端演示
+## 配置模式
 
-[![asciinema](https://asciinema.org/a/PlH1sYqOiV3malzu.svg)](https://asciinema.org/a/PlH1sYqOiV3malzu)
+| 目标 | 命令 | 说明 |
+| --- | --- | --- |
+| 快速本地试用 | `xopc onboard --quick` | 只配置模型凭据，跳过 gateway 和频道 |
+| 完整引导配置 | `xopc onboard` | 模型、工作区、可选频道、gateway 使用提示 |
+| 只生成基础文件 | `xopc setup` | 只生成配置和工作区骨架 |
+| 稍后配置模型 | `xopc providers set-key <provider>` 和 `xopc models set <provider>/<model>` | 见 [配置第一个模型](./how-to/configure-first-model.md) |
 
-## 1. 环境要求
+默认配置文件是 `~/.xopc/xopc.json`。可用 `XOPC_CONFIG` 或 `XOPC_CONFIG_PATH` 指向其它路径。
 
-- **Node.js**：**22** 及以上（`node -v`）
-- **pnpm**：仅在下方的从源码构建步骤需要（`pnpm --version`）
+## 选择下一步入口
 
-日常使用可直接 **`npm install -g @xopcai/xopc`**（或 `pnpm add -g`），不必先装 pnpm。
+本地 TUI 跑通后，再选择一个下一步：
 
-## 2. 安装
+| 需求 | 从这里开始 |
+| --- | --- |
+| 浏览器聊天、设置、日志 | [网关](./gateway.md) |
+| Telegram bot | [接入 Telegram](./how-to/connect-telegram.md) |
+| 手机访问 | [手机端 App](./mobile-app.md) 和 [远程访问](./remote-access.md) |
+| 创建另一个专用 agent | [创建第二个 agent](./how-to/create-second-agent.md) |
+| 让其它设备访问 gateway | [安全暴露 gateway](./how-to/expose-gateway-safely.md) |
+| 设置坏了需要排障 | [诊断设置问题](./how-to/diagnose-broken-setup.md) |
 
-### 方式一：一键安装（推荐）
+## 核心文档路径
 
-```bash
-curl -fsSL https://xopc.ai/install.sh | bash
-```
+| 主题 | 页面 |
+| --- | --- |
+| CLI 命令 | [CLI](./cli.md) |
+| TUI 行为 | [终端界面](./tui.md) |
+| 配置字段 | [配置](./configuration.md) 和 [配置参考](./reference/configuration.md) |
+| 模型和厂商 | [模型](./models.md) |
+| 消息频道 | [频道](./channels/index.md) |
+| 工具 | [工具](./tools.md) |
+| 技能 | [技能](./skills.md) |
+| 扩展 | [扩展](./extensions.md) |
+| 会话路由 | [Session 路由](./routing-system.md) |
 
-### 方式二：从 npm 安装
-
-```bash
-npm install -g @xopcai/xopc
-```
-
-### 方式三：从源码构建
+## 从源码开发
 
 ```bash
 git clone https://github.com/xopcai/xopc.git
 cd xopc
 pnpm install
+pnpm run dev -- --help
 pnpm run build
 ```
 
-## 3. 配置
-
-### 交互式配置（推荐）
+常用检查：
 
 ```bash
-xopc onboard
-# 本仓库开发时：pnpm run dev -- onboard
+pnpm test
+pnpm run typecheck
+pnpm run docs:build
 ```
-
-向导一般会带你完成：
-
-1. 创建主 Markdown 工作区（默认常见路径如 `~/.xopc/workspace/main/`）
-2. 生成默认 **`~/.xopc/xopc.json`**
-3. 选择目录中的模型/厂商并填写 API Key（向导会展示当前推荐模型）
-4. 按需配置 **Telegram、微信、飞书/Lark** 等机器人（可跳过）
-5. 网关网页控制台，以及结束时可选 **TUI** 或 **网关** 用法提示
-
-### 快速 onboard
-
-最短的引导路径：只配置模型，跳过网关和频道设置。
-
-```bash
-xopc onboard --quick
-xopc tui --local
-```
-
-需要网页控制台或即时通讯频道时，再运行完整向导：
-
-```bash
-xopc onboard
-```
-
-### 快速生成文件（无交互）
-
-```bash
-xopc setup
-```
-
-只生成基础配置与工作区骨架，不逐步提问，也不会引导配置模型密钥。
-
-### 手写配置
-
-编辑 **`~/.xopc/xopc.json`**（也可用环境变量 **`XOPC_CONFIG`** / **`XOPC_CONFIG_PATH`** 指向别的路径）：
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5",
-      "max_tokens": 8192,
-      "temperature": 0.7
-    }
-  },
-  "providers": {
-    "anthropic": "${ANTHROPIC_API_KEY}"
-  }
-}
-```
-
-> **提示：** API Key 建议放在环境变量里（如 `ANTHROPIC_API_KEY`），配置里用 `${…}` 引用。
-
-## 4. 第一次对话（命令行或 TUI）
-
-### 只问一句（`agent`）
-
-```bash
-xopc agent -m "用一句话解释什么是 LLM。"
-# 本仓库开发时：pnpm run dev -- agent -m "…"
-```
-
-### 普通终端里多轮聊（`agent -i`）
-
-```bash
-xopc agent -i
-# 本仓库开发时：pnpm run dev -- agent -i
-```
-
-出现 `You:` 后输入内容回车发送，**Ctrl+C** 退出。
-
-### 全屏终端（可不先起网关）
-
-```bash
-xopc tui --local
-```
-
-连已启动的网关、选会话等用法见 **[终端界面（TUI）](./tui.md)**。
-
-## 5. 网关、系统服务与频道
-
-### 以 Telegram 为例
-
-1. **拿 Bot Token**：Telegram 里搜 [@BotFather](https://t.me/BotFather)，发 `/newbot` 按提示创建机器人。
-
-2. 在 **`~/.xopc/xopc.json`** 里增加 **`channels.telegram`**：
-
-```json
-{
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "defaults": {
-        "dmPolicy": "pairing"
-      },
-      "accounts": {
-        "default": {
-          "botToken": "YOUR_BOT_TOKEN",
-          "dmPolicy": "allowlist",
-          "allowFrom": [123456789]
-        }
-      }
-    }
-  }
-}
-```
-
-3. **前台启动网关**（终端里会打印访问地址和 token）：
-
-```bash
-xopc gateway
-# 本仓库开发时：pnpm run dev -- gateway
-```
-
-4. 去 **Telegram** 找机器人发消息，或在浏览器打开 **网页控制台**（端口以终端输出为准，常见默认 **18790**，具体看 `gateway.port`）。
-
-### 以 OS 服务运行网关
-
-```bash
-xopc gateway service install
-xopc gateway service start
-```
-
-之后可用 **`xopc gateway status`**、**`xopc gateway stop`**、**`xopc gateway restart`**、**`xopc gateway logs`**。详见 **[网关](./gateway.md)**。
-
-### 其它内置频道
-
-**微信、飞书/Lark** 同样在 **`channels.*`** 里配置，并需**先起网关**。总览与私聊策略见 **[频道](./channels/index.md)**。
-
-## 6. Electron 桌面版（可选）
-
-**macOS / Windows / Linux** 的安装包见 **[GitHub Releases](https://github.com/xopcai/xopc/releases)**（有发版时；Windows 为 `xopc-<版本>-x64.exe` 或 `xopc-<版本>-arm64.exe`）。与浏览器里打开的是同一套网关 + 网页控制台。
-
-<video controls playsinline width="100%" style="max-width: 960px; border-radius: 8px;">
-  <source src="https://xopc.ai/xopc-demo.mp4" type="video/mp4" />
-</video>
-
-在本仓库里自行打包：
-
-```bash
-pnpm install
-pnpm run electron:build   # 产物在 dist/release/
-```
-
-## 7. 接下来看哪里
-
-| 指南 | 说明 |
-|------|------|
-| [CLI 参考](/zh/cli) | 子命令与参数 |
-| [配置](/zh/configuration) | `xopc.json` 全字段 |
-| [扩展](/zh/extensions) | 插件与加载时机 |
-| [技能](/zh/skills) | SKILL.md |
-| [工具](/zh/tools) | 内置工具 |
-| [频道](/zh/channels) | Telegram、微信、飞书、网页对话 |
-| [TUI](/zh/tui) | 全屏终端 |
-| [路由](/zh/routing-system) | 会话 key 与智能体绑定 |
-| [模型](/zh/models) | 厂商与密钥 |
 
 ## 故障排除
 
-### 常见问题
+| 现象 | 检查 |
+| --- | --- |
+| 配置无法加载 | `xopc config validate` |
+| 模型调用失败 | `xopc models status` 和对应厂商凭据 |
+| gateway 没响应 | `xopc gateway status` 和 `xopc gateway health` |
+| 频道不回复 | `xopc channels show <channel>` 和 gateway 日志 |
+| 本地问题不明确 | `xopc doctor`，然后 `xopc logs tail` |
 
-| 现象 | 处理 |
-|------|------|
-| `ERR_MODULE_NOT_FOUND` | 在本仓库根目录执行 `pnpm install` |
-| `Cannot find module '@xopcai/...'` | 先 `pnpm run build` |
-| 读不到配置 | 确认 **`~/.xopc/xopc.json`** 是合法 JSON |
-| 机器人不回 | 查 Token、策略、`channels.*.enabled` |
-| 模型报错 | 查对应厂商环境变量 / 控制台密钥 |
-
-### 需要更多帮助
-
-- 站点内其它中文页：[文档首页](/zh/)
-- 开发约定：[AGENTS.md](https://github.com/xopcai/xopc/blob/main/AGENTS.md)
-- 看网关日志：`xopc gateway logs --follow`

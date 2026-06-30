@@ -2,15 +2,7 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
-import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
-
-export interface CuratedMemoryToolOptions {
-  onMemoryWrite?: (
-    action: 'add' | 'replace' | 'remove',
-    target: 'memory' | 'user',
-    content: string,
-  ) => void;
-}
+import type { MemoryManager } from '../memory/manager.js';
 
 const CuratedMemorySchema = Type.Object({
   action: Type.Union([
@@ -34,8 +26,7 @@ type CuratedMemoryParams = {
 };
 
 export function createCuratedMemoryTool(
-  getStore: () => BuiltinMemoryStore,
-  options?: CuratedMemoryToolOptions,
+  getMemoryManager: () => MemoryManager,
 ): AgentTool {
   return {
     name: 'curated_memory',
@@ -49,24 +40,13 @@ export function createCuratedMemoryTool(
       params: any,
       _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
-      const store = getStore();
+      const memoryManager = getMemoryManager();
       const { action, target } = params as CuratedMemoryParams;
 
       try {
-        if (target === 'user' && !store.isUserProfileEnabled() && action !== 'read') {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: 'User profile (USER.md) is disabled in config (`agents.defaults.memory.userProfileEnabled`).',
-              },
-            ],
-            details: { error: 'user_profile_disabled' },
-          };
-        }
-
         if (action === 'read') {
-          const entries = store.getLiveEntries(target);
+          const records = await memoryManager.list({ target });
+          const entries = records.map((record) => record.content);
           const text = JSON.stringify(
             { target, entries, count: entries.length },
             null,
@@ -80,14 +60,18 @@ export function createCuratedMemoryTool(
 
         if (action === 'add') {
           const content = (params as CuratedMemoryParams).content?.trim() ?? '';
-          const result = await store.add(target, content);
+          const result = await memoryManager.write({
+            kind: target === 'user' ? 'user_profile' : 'agent_note',
+            target,
+            content,
+          });
           if (!result.success) {
             return {
               content: [{ type: 'text', text: result.error ?? 'Unknown error' }],
               details: { error: result.error },
             };
           }
-          options?.onMemoryWrite?.('add', target, content);
+          memoryManager.onMemoryWrite('add', target, content);
           return {
             content: [{ type: 'text', text: result.message ?? 'OK' }],
             details: { success: true },
@@ -97,14 +81,14 @@ export function createCuratedMemoryTool(
         if (action === 'replace') {
           const oldText = (params as CuratedMemoryParams).old_text?.trim() ?? '';
           const newContent = (params as CuratedMemoryParams).content?.trim() ?? '';
-          const result = await store.replace(target, oldText, newContent);
+          const result = await memoryManager.update({ target, matchText: oldText, content: newContent });
           if (!result.success) {
             return {
               content: [{ type: 'text', text: result.error ?? 'Unknown error' }],
               details: { error: result.error },
             };
           }
-          options?.onMemoryWrite?.('replace', target, newContent);
+          memoryManager.onMemoryWrite('replace', target, newContent);
           return {
             content: [{ type: 'text', text: result.message ?? 'OK' }],
             details: { success: true },
@@ -112,14 +96,14 @@ export function createCuratedMemoryTool(
         }
 
         const oldText = (params as CuratedMemoryParams).old_text?.trim() ?? '';
-        const result = await store.remove(target, oldText);
+        const result = await memoryManager.delete({ target, matchText: oldText });
         if (!result.success) {
           return {
             content: [{ type: 'text', text: result.error ?? 'Unknown error' }],
             details: { error: result.error },
           };
         }
-        options?.onMemoryWrite?.('remove', target, oldText);
+        memoryManager.onMemoryWrite('remove', target, oldText);
         return {
           content: [{ type: 'text', text: result.message ?? 'OK' }],
           details: { success: true },

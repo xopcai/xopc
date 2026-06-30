@@ -571,17 +571,16 @@ function resolveWorkflowRunLimits(params: {
   concurrency?: number;
   maxSubagents?: number;
 }): { concurrency: number; maxSubagents: number; timeoutSec: number } {
-  const cfg = params.config.agents?.defaults?.workflow;
   const configuredMaxConcurrency = normalizePositiveInt(
-    cfg?.maxConcurrency,
+    undefined,
     params.definition.defaults.concurrency,
   );
   const configuredMaxSubagents = normalizePositiveInt(
-    cfg?.maxSubagents,
+    undefined,
     params.definition.defaults.maxSubagents,
   );
   const configuredTimeoutSec = normalizePositiveInt(
-    cfg?.defaultTimeoutSec,
+    undefined,
     params.definition.defaults.timeoutSec,
   );
 

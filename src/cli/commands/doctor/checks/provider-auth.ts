@@ -17,46 +17,18 @@ function collectProviderIdsFromConfig(cfg: Config): Set<string> {
 
   addRef(getAgentDefaultModelRef(cfg));
 
-  const addModelConfig = (raw: { primary?: string; fallbacks?: string[] } | undefined) => {
-    addRef(raw?.primary);
-    if (Array.isArray(raw?.fallbacks)) {
-      for (const f of raw.fallbacks) {
-        addRef(typeof f === 'string' ? f : undefined);
-      }
-    }
-  };
   const addRoles = (roles: Record<string, { model?: string }> | undefined) => {
     for (const role of Object.values(roles ?? {})) {
       addRef(role.model);
     }
   };
 
-  addModelConfig(cfg.agents?.defaults?.models?.chat);
-  addRoles(cfg.agents?.defaults?.models?.roles);
-
   const list = cfg.agents?.list;
   if (Array.isArray(list)) {
     for (const e of list) {
-      addModelConfig(e?.models?.chat);
       addRoles(e?.models?.roles);
     }
   }
-
-  const raw = cfg.agents?.defaults?.imageModel;
-  if (raw && typeof raw === 'object' && 'fallbacks' in raw && Array.isArray(raw.fallbacks)) {
-    for (const f of raw.fallbacks) {
-      addRef(typeof f === 'string' ? f : undefined);
-    }
-  }
-
-  const img = cfg.agents?.defaults?.imageModel;
-  if (typeof img === 'string') addRef(img);
-  else if (img && typeof img === 'object' && 'primary' in img) {
-    addRef(typeof img.primary === 'string' ? img.primary : undefined);
-  }
-
-  const ss = cfg.agents?.defaults?.sessionSearch?.summaryModel;
-  if (typeof ss === 'string') addRef(ss);
 
   return ids;
 }

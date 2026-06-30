@@ -45,12 +45,7 @@ afterEach(() => {
 });
 
 function makeTool() {
-  // Provide an explicit imageGenerationModel so the tool factory doesn't have
-  // to enumerate `isProviderConfiguredSync` (which only knows real providers).
-  const config = {
-    agents: { defaults: { imageGenerationModel: { primary: 'mock/mock-default' } } },
-  } as any;
-  const tool = createImageGenerateTool({ workspace, config });
+  const tool = createImageGenerateTool({ workspace, config: {} as any });
   expect(tool).not.toBeNull();
   return tool!;
 }

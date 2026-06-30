@@ -61,7 +61,7 @@ export interface AgentOrchestratorConfig {
   getAgentInternalStorageRootForSession?: (sessionKey: string) => string;
   /** Fire-and-forget after full session persist (e.g. LLM session title); not called from mid-turn snapshots. */
   enqueueAutoTitle?: (sessionKey: string) => void;
-  /** For per-turn timeout via `agents.defaults.maxTaskDurationMs`. */
+  /** For per-turn timeout. */
   getConfig?: () => Config | undefined;
   /** Channel streaming: token/tool events from pi embedded session. */
   onEmbeddedStreamEvent?: (sessionKey: string, event: EmbeddedStreamEvent) => void;
@@ -152,7 +152,11 @@ export class AgentOrchestrator {
           };
           await appendDreamingEvent(workspaceDir, event);
         } else {
-          const result = await runDreamingDeepPromotion({ workspaceDir, config: resolved.phases.deep });
+          const result = await runDreamingDeepPromotion({
+            workspaceDir,
+            config: resolved.phases.deep,
+            memoryManager: this.agentManager.getMemoryManagerForSession(sessionKey),
+          });
           const event: DreamingEvent = {
             timestamp: new Date().toISOString(), phase: 'deep',
             ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,

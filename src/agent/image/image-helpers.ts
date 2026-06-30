@@ -56,7 +56,7 @@ export function coerceImageAssistantText(params: {
 }
 
 export function coerceImageModelConfig(cfg?: Config): ImageModelConfig {
-  return coerceToolModelConfig(cfg?.agents?.defaults?.imageModel);
+  return coerceToolModelConfig(undefined);
 }
 
 export function applyImageGenerationModelConfigDefaults(
@@ -70,19 +70,7 @@ export function applyImageGenerationModelConfigDefaults(
   if (!primary) {
     return cfg;
   }
-  return {
-    ...cfg,
-    agents: {
-      ...cfg.agents,
-      defaults: {
-        ...cfg.agents?.defaults,
-        imageGenerationModel: {
-          primary,
-          ...(imageGenerationModelConfig.fallbacks?.length ? { fallbacks: imageGenerationModelConfig.fallbacks } : {}),
-        },
-      },
-    },
-  };
+  return cfg;
 }
 
 export function resolvePromptAndModelOverride(

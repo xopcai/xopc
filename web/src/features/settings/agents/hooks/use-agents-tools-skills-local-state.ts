@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 
 import type { AgentPanel } from '../utils';
-import { typedModelsRowsFromEntry, type AgentTypedModelRow } from '../typed-models-lib';
+import { typedModelsRowsFromList, type AgentTypedModelRow } from '../typed-models-lib';
 
 function toolDisableFromSelected(selected: GatewayAgentRow): Set<string> {
   return new Set(selected.tools.entryDisable);
@@ -40,7 +40,7 @@ export function useAgentsToolsSkillsLocalState(options: {
       setSkillsPick(next.pick);
     }
     if (selected && panel === 'models') {
-      setModelRows(typedModelsRowsFromEntry(selected.typedModels.entry));
+      setModelRows(typedModelsRowsFromList(selected.typedModels.effective));
     }
   }
 

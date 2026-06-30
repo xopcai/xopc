@@ -27,7 +27,7 @@ describe('ExtensionRegistryImpl reload registry', () => {
     });
     expect(reg.getMatchingReloadRegistrations(['extensions.feishu.token'])).toHaveLength(1);
     expect(reg.getMatchingReloadRegistrations(['channels.feishu.accounts'])).toHaveLength(1);
-    expect(reg.getMatchingReloadRegistrations(['agents.defaults.models.chat'])).toHaveLength(0);
+    expect(reg.getMatchingReloadRegistrations(['agents.list.0.models.roles.deep'])).toHaveLength(0);
   });
 
   it('empty configPrefixes matches any changed path batch', () => {

@@ -16,45 +16,24 @@ export type RouteHitSeed = {
 /**
  * Tabs for which the command palette offers a deep-link shortcut.
  *
- * M3.1 collapsed most agent-defaults slices into one rail item. The palette
- * still seeds each important settings destination so users can cmd-K →
- * "browser" / "memory" / "skills" → jump directly.
+ * Manifest-first agent management lives under `/agents`; browser automation is
+ * the only remaining standalone agent-related settings route.
  */
-const AGENT_DEFAULTS_PALETTE_TABS: readonly Tab[] = [
-  'settingsAgentChat',
-  'settingsAgentGeneration',
-  'settingsAgentWorkspace',
-  'settingsAgentBrowser',
-  'settingsAgentRuntime',
-  'settingsAgentContext',
-  'settingsAgentMemory',
-  'settingsAgentTools',
-  'settingsAgentSkills',
-  'settingsAgentSystemPrompt',
-];
+const AGENT_SETTINGS_PALETTE_TABS: readonly Tab[] = ['settingsAgentBrowser'];
 
-const AGENT_DEFAULTS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
-  settingsAgentChat: ['model', 'fallback', 'role', 'strategy'],
-  settingsAgentGeneration: ['temperature', 'sampling', 'thinking', 'reasoning'],
-  settingsAgentWorkspace: ['workspace', 'directory', 'folder', 'attachments'],
+const AGENT_SETTINGS_ROUTE_KEYWORDS: Partial<Record<Tab, string[]>> = {
   settingsAgentBrowser: ['browser', 'playwright', 'automation'],
-  settingsAgentRuntime: ['limits', 'turn', 'timeout', 'tool', 'iterations'],
-  settingsAgentContext: ['context', 'compaction', 'pruning', 'tokens'],
-  settingsAgentMemory: ['memory', 'review', 'session', 'search'],
-  settingsAgentTools: ['tools', 'web', 'extract', 'code'],
-  settingsAgentSkills: ['skills', 'allowlist', 'marketplace'],
-  settingsAgentSystemPrompt: ['system', 'prompt', 'instructions'],
 };
 
-function buildAgentDefaultsRouteSeeds(language: StoredLanguage, settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode']): RouteHitSeed[] {
+function buildAgentSettingsRouteSeeds(language: StoredLanguage, settingsMode: ReturnType<typeof useSettingsModeStore.getState>['mode']): RouteHitSeed[] {
   const m = messages(language);
-  const subtitle = m.commandPalette.routes.agentDefaultsSubtitle;
-  return AGENT_DEFAULTS_PALETTE_TABS.filter((tab) => isSettingsTabVisibleInMode(tab, settingsMode)).map((tab) => ({
+  const subtitle = m.commandPalette.routes.agentsSubtitle;
+  return AGENT_SETTINGS_PALETTE_TABS.filter((tab) => isSettingsTabVisibleInMode(tab, settingsMode)).map((tab) => ({
     id: `route:settings:agent:${tab}`,
     title: tabLabel(language, tab),
     subtitle,
     path: pathForTab(tab),
-    keywords: ['agent', 'defaults', 'config', ...(AGENT_DEFAULTS_ROUTE_KEYWORDS[tab] ?? [])],
+    keywords: ['agent', 'manifest', 'preset', 'config', ...(AGENT_SETTINGS_ROUTE_KEYWORDS[tab] ?? [])],
   }));
 }
 
@@ -234,7 +213,7 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       path: '/settings/gateway',
       keywords: ['server', 'port', 'auth', 'token'],
     },
-    ...buildAgentDefaultsRouteSeeds(language, settingsMode),
+      ...buildAgentSettingsRouteSeeds(language, settingsMode),
   ],
     settingsMode,
   );

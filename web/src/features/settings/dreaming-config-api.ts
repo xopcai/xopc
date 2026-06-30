@@ -106,10 +106,9 @@ function toNum(value: unknown, fallback: number): number {
 
 export function normalizeDreamingFromConfig(config: unknown): DreamingConfigState {
   const c = isRecord(config) ? config : {};
-  const agents = isRecord(c.agents) ? c.agents : {};
-  const defaults = isRecord(agents.defaults) ? agents.defaults : {};
-  const memory = isRecord(defaults.memory) ? defaults.memory : {};
-  const dreaming = isRecord(memory.dreaming) ? memory.dreaming : {};
+  const memory = isRecord(c.memory) ? c.memory : {};
+  const rootDreaming = isRecord(c.dreaming) ? c.dreaming : {};
+  const dreaming = isRecord(memory.dreaming) ? memory.dreaming : rootDreaming;
   const phases = isRecord(dreaming.phases) ? dreaming.phases : {};
   const lightRaw = isRecord(phases.light) ? phases.light : {};
   const deepRaw = isRecord(phases.deep) ? phases.deep : {};
@@ -149,45 +148,51 @@ export function normalizeDreamingFromConfig(config: unknown): DreamingConfigStat
   };
 }
 
-export async function patchDreamingConfig(state: DreamingConfigState): Promise<void> {
+export async function patchDreamingConfig(
+  agentId: string,
+  state: DreamingConfigState,
+  baseMemory: Record<string, unknown> | undefined,
+): Promise<void> {
   const freq = state.frequency.trim();
   const tz = state.timezone.trim();
 
-  await fetchJson(apiUrl('/api/config'), {
+  await fetchJson(apiUrl(`/api/agents/${encodeURIComponent(agentId)}`), {
     method: 'PATCH',
     body: JSON.stringify({
-      agents: {
-        defaults: {
-          memory: {
-            dreaming: {
-              enabled: Boolean(state.enabled),
-              frequency: freq || null,
-              timezone: tz || null,
-              phases: {
-                light: {
-                  enabled: Boolean(state.light.enabled),
-                  cron: state.light.cron.trim() || null,
-                  lookbackDays: Math.max(1, Math.floor(state.light.lookbackDays)),
-                  limit: Math.max(0, Math.floor(state.light.limit)),
-                  dedupeSimilarity: clamp01(state.light.dedupeSimilarity, LIGHT_DEFAULTS.dedupeSimilarity),
-                },
-                deep: {
-                  enabled: Boolean(state.deep.enabled),
-                  cron: state.deep.cron.trim() || null,
-                  minScore: clamp01(state.deep.minScore, DEEP_DEFAULTS.minScore),
-                  minRecallCount: Math.max(1, Math.floor(state.deep.minRecallCount)),
-                  limit: Math.max(0, Math.floor(state.deep.limit)),
-                  recencyHalfLifeDays: Math.max(1, state.deep.recencyHalfLifeDays),
-                  maxAgeDays: Math.max(1, state.deep.maxAgeDays),
-                },
-                rem: {
-                  enabled: Boolean(state.rem.enabled),
-                  cron: state.rem.cron.trim() || null,
-                  lookbackDays: Math.max(1, Math.floor(state.rem.lookbackDays)),
-                  limit: Math.max(0, Math.floor(state.rem.limit)),
-                  minPatternStrength: clamp01(state.rem.minPatternStrength, REM_DEFAULTS.minPatternStrength),
-                },
-              },
+      memory: {
+        ...(baseMemory ?? {}),
+        mode: state.enabled ? 'confirmWrite' : typeof baseMemory?.mode === 'string' ? baseMemory.mode : 'off',
+        sources: Array.isArray(baseMemory?.sources) ? baseMemory.sources : ['session', 'curated', 'workspace'],
+        writePolicy: isRecord(baseMemory?.writePolicy)
+          ? baseMemory.writePolicy
+          : { curated: 'confirm', workspace: 'confirm' },
+        dreaming: {
+          enabled: Boolean(state.enabled),
+          ...(freq ? { frequency: freq } : {}),
+          ...(tz ? { timezone: tz } : {}),
+          phases: {
+            light: {
+              enabled: Boolean(state.light.enabled),
+              ...(state.light.cron.trim() ? { cron: state.light.cron.trim() } : {}),
+              lookbackDays: Math.max(1, Math.floor(state.light.lookbackDays)),
+              limit: Math.max(0, Math.floor(state.light.limit)),
+              dedupeSimilarity: clamp01(state.light.dedupeSimilarity, LIGHT_DEFAULTS.dedupeSimilarity),
+            },
+            deep: {
+              enabled: Boolean(state.deep.enabled),
+              ...(state.deep.cron.trim() ? { cron: state.deep.cron.trim() } : {}),
+              minScore: clamp01(state.deep.minScore, DEEP_DEFAULTS.minScore),
+              minRecallCount: Math.max(1, Math.floor(state.deep.minRecallCount)),
+              limit: Math.max(0, Math.floor(state.deep.limit)),
+              recencyHalfLifeDays: Math.max(1, state.deep.recencyHalfLifeDays),
+              maxAgeDays: Math.max(1, state.deep.maxAgeDays),
+            },
+            rem: {
+              enabled: Boolean(state.rem.enabled),
+              ...(state.rem.cron.trim() ? { cron: state.rem.cron.trim() } : {}),
+              lookbackDays: Math.max(1, Math.floor(state.rem.lookbackDays)),
+              limit: Math.max(0, Math.floor(state.rem.limit)),
+              minPatternStrength: clamp01(state.rem.minPatternStrength, REM_DEFAULTS.minPatternStrength),
             },
           },
         },
@@ -197,4 +202,3 @@ export async function patchDreamingConfig(state: DreamingConfigState): Promise<v
 
   void revalidateGatewayConfig();
 }
-

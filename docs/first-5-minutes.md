@@ -42,6 +42,8 @@ xopc tui --local
 
 This starts the embedded terminal UI. It does not require a gateway process.
 
+You should see a full-screen terminal chat. If it exits immediately, run `xopc doctor` and check the model status with `xopc models status`.
+
 ## 4. Try a goal-loop prompt
 
 Paste this:

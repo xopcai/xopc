@@ -43,7 +43,7 @@ interface HeartbeatConfig {
 ```json
 {
   "heartbeat": {
-    "intervalMs": 300000,  // 5 分钟
+    "intervalMs": 300000,
     "enabled": true
   }
 }

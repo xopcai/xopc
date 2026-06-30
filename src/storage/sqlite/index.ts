@@ -107,6 +107,26 @@ export {
   type MemorySearchHit,
 } from './memory-index-repository.js';
 export {
+  appendMemorySignal,
+  appendMemoryTraceEvent,
+  deleteMemoryRecord,
+  getMemoryProviderState,
+  getMemoryRecord,
+  listMemorySignals,
+  listMemoryTraceEvents,
+  listMemoryRecords,
+  searchMemoryRecords,
+  setMemoryProviderState,
+  upsertMemoryRecord,
+  type AppendMemorySignalInput,
+  type AppendMemoryTraceEventInput,
+  type ListMemoryRecordsOptions,
+  type MemorySignalRowPayload,
+  type MemoryTraceEventPayload,
+  type SearchMemoryRecordsOptions,
+  type UpsertMemoryRecordInput,
+} from './memory-records-repository.js';
+export {
   deleteSessionConfig,
   getSessionConfig,
   hasSessionConfig,

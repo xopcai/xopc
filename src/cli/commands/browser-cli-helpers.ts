@@ -21,7 +21,7 @@ async function getManager(): Promise<BrowserManager> {
   _manager = new BrowserManager({
     getHeadless: () => {
       if (typeof browserCliHeadlessOverride === 'boolean') return browserCliHeadlessOverride;
-      return config?.agents?.defaults?.browser?.headless === true;
+      return false;
     },
     getBackend: () => resolveBrowserBackendFromConfig(config),
   });
@@ -153,18 +153,15 @@ export async function doctorCli(): Promise<void> {
 
   // Check config
   try {
-    const config = await loadConfig();
-    const browser = config?.agents?.defaults?.browser;
+    await loadConfig();
     console.log(`\nConfig:`);
-    console.log(`  enabled: ${browser?.enabled !== false}`);
-    console.log(`  headless: ${browser?.headless === true}`);
-    console.log(`  backend: ${browser?.backend ?? 'extension'}`);
-    console.log(`  provider: ${browser?.cloudProvider ?? 'local'}`);
-    if (browser?.cdpUrl) console.log(`  cdp: ${browser.cdpUrl}`);
-    if (browser?.backend === 'extension' || browser?.extension) {
-      const ext = browser?.extension;
-      const port = ext?.port ?? 19820;
-      const host = ext?.host ?? '127.0.0.1';
+    console.log(`  enabled: true`);
+    console.log(`  headless: false`);
+    console.log(`  backend: extension`);
+    console.log(`  provider: local`);
+    {
+      const port = 19820;
+      const host = '127.0.0.1';
       console.log(`\nExtension Bridge:`);
       console.log(`  endpoint: ws://${host}:${port}/browser-ext`);
       try {

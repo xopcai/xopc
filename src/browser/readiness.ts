@@ -10,6 +10,7 @@
 import type { Config } from '../config/schema.js';
 
 import { resolveBrowserBackendFromConfig } from './backend-from-config.js';
+import type { CloakBrowserConfig, ExtensionConnectionConfig } from './providers/types.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('browser-readiness');
@@ -59,7 +60,7 @@ function hint(
   return { backend, reason, detail, deepLink: buildBrowserSetupDeepLink(backend) };
 }
 
-async function checkExtension(cfg: Config | undefined): Promise<BrowserSetupHint | null> {
+async function checkExtension(config: ExtensionConnectionConfig | undefined): Promise<BrowserSetupHint | null> {
   try {
     const { browserExtDoctor } = await import('./providers/browser-ext-install.js');
     const doctor = await browserExtDoctor();
@@ -70,11 +71,11 @@ async function checkExtension(cfg: Config | undefined): Promise<BrowserSetupHint
     return hint('extension', 'extension_not_installed', e instanceof Error ? e.message : String(e));
   }
 
-  const ext = cfg?.agents?.defaults?.browser?.extension;
-  const host = (typeof ext?.host === 'string' && ext.host.trim()) ? ext.host.trim() : '127.0.0.1';
-  const port = (typeof ext?.port === 'number' && ext.port >= 1024 && ext.port <= 65535)
-    ? Math.floor(ext.port)
-    : 19820;
+  const host = config?.host?.trim() || '127.0.0.1';
+  const port =
+    typeof config?.port === 'number' && config.port >= 1024 && config.port <= 65535
+      ? Math.floor(config.port)
+      : 19820;
 
   try {
     const { getExtensionBrowserServerSnapshot } = await import(
@@ -126,13 +127,12 @@ async function checkLocal(): Promise<BrowserSetupHint | null> {
   }
 }
 
-async function checkCloak(cfg: Config | undefined): Promise<BrowserSetupHint | null> {
-  const cb = cfg?.agents?.defaults?.browser?.cloakbrowser;
+async function checkCloak(config: CloakBrowserConfig | undefined): Promise<BrowserSetupHint | null> {
   try {
     const { cloakBrowserDoctor } = await import('./providers/cloakbrowser.js');
     const doctor = await cloakBrowserDoctor({
-      cacheDir: cb?.cacheDir,
-      binaryPath: cb?.binaryPath,
+      ...(config?.cacheDir ? { cacheDir: config.cacheDir } : {}),
+      ...(config?.binaryPath ? { binaryPath: config.binaryPath } : {}),
     });
     if (!doctor.installed) {
       return hint(
@@ -173,19 +173,20 @@ async function checkCdp(cdpUrl: string): Promise<BrowserSetupHint | null> {
   }
 }
 
-function checkCloud(cfg: Config | undefined, providerType: 'browserbase' | 'browser-use'): BrowserSetupHint | null {
-  const cloud = cfg?.agents?.defaults?.browser?.cloud;
-  const cfgKey = typeof cloud?.apiKey === 'string' ? cloud.apiKey.trim() : '';
-  if (cfgKey) return null;
+function checkCloud(params: {
+  apiKey?: string;
+  providerType: 'browserbase' | 'browser-use';
+}): BrowserSetupHint | null {
+  if (params.apiKey?.trim()) return null;
   const envKey =
-    providerType === 'browserbase'
+    params.providerType === 'browserbase'
       ? process.env.BROWSERBASE_API_KEY?.trim()
       : process.env.BROWSER_USE_API_KEY?.trim();
   if (envKey) return null;
   return hint(
     'cloud',
     'cloud_api_key_missing',
-    `no API key configured for ${providerType}`,
+    `no API key configured for ${params.providerType}`,
   );
 }
 
@@ -204,19 +205,19 @@ export async function checkBrowserReadiness(
   try {
     switch (backend.mode) {
       case 'extension':
-        probe = await checkExtension(cfg);
+        probe = await checkExtension(backend.config);
         break;
       case 'local':
         probe = await checkLocal();
         break;
       case 'cloakbrowser':
-        probe = await checkCloak(cfg);
+        probe = await checkCloak(backend.config);
         break;
       case 'cdp':
         probe = await checkCdp(backend.config.wsEndpoint);
         break;
       case 'cloud':
-        probe = checkCloud(cfg, backend.config.type);
+        probe = checkCloud({ providerType: backend.config.type, apiKey: backend.config.apiKey });
         break;
     }
   } catch (e) {

@@ -216,7 +216,9 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 | Section | Purpose |
 |---------|---------|
 | `providers` | LLM API keys |
-| `agents.defaults` | Default model, typed model roles (`models[]`), limits, temperature |
+| `agents.default` | Default agent id for routing/session creation |
+| `agents.capabilityPresets` | Reusable manifest policy patches (models, tools, skills, memory, runtime, boundaries) |
+| `agents.list` | Agent Capability Manifests: identity, responsibilities, workspace, model roles, tools, skills, memory, workflows, boundaries |
 | `channels` | Telegram and other channel configs |
 | `gateway` | HTTP + SSE |
 | `mcp` | Outbound MCP server registry (`mcp.servers`) + session idle TTL |
@@ -225,9 +227,9 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 
 ### Multiple agents (`agents.list`)
 
-Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by the main config file (`xopc.json` by default) — `agents.defaults` merged with the matching entry in **`agents.list`**. Default agent id: **`agents.default`**, else a `list` entry with **`default: true`**, else the first enabled entry, else **`main`**. Display identity (name, description, language, avatar) is read from **`~/.xopc/agents/<id>/profile/IDENTITY.md`**. On-disk paths (`~/.xopc/agents/<id>/` including **`profile/`** Markdown, Markdown workspace roots) resolve from the same config via **`src/agent/agent-scope.ts`**.
+Runtime behavior is manifest-first. The selected **session key** agent id resolves to one enabled entry in **`agents.list`**; that manifest may `extends` zero or more **`agents.capabilityPresets`**. There is no `agents.defaults` merge layer. Default agent id: **`agents.default`**, else the first enabled manifest, else **`main`**. Display identity is part of the manifest and may be enriched from **`~/.xopc/agents/<id>/profile/IDENTITY.md`** for Markdown/profile editing. On-disk paths (`~/.xopc/agents/<id>/` including **`profile/`** Markdown, Markdown workspace roots) resolve from the same config via **`src/agent/agent-scope.ts`**.
 
-**Typed model roles** (`agents.defaults.models.roles` and per-agent `agents.list[].models.roles`): named slots like `small` / `large` mapping to `provider/model` refs. Per-agent roles override defaults by id. Workflows reference them in `agent({ model: 'small' })` or `meta.phases[].model`. Resolution: `src/config/agent-typed-models.ts`.
+**Typed model roles** live in `agents.list[].models.roles` (and optional preset patches): named slots like `small` / `large` mapping to `provider/model` refs. Workflows reference them in `agent({ model: 'small' })` or `meta.phases[].model`. Resolution: `src/config/agent-typed-models.ts`.
 
 Use **`xopc agents list`**, **`xopc agents add`**, **`xopc agents delete`** to manage `agents.list` and initialize directories — there is no separate agent registry outside config.
 
@@ -325,7 +327,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | i18n | `web/src/i18n/messages.ts` (`en` / `zh`) |
 | Global styles + tokens | `web/src/styles/globals.css` (`@theme { … }` for semantic colors) |
 
-**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`. Full-screen **settings** shell: `/settings/gateway`, `/settings/agent-mcp`, `/settings/appearance`, `/settings/providers`, `/settings/models`, `/settings/agents`, `/settings/search`, `/settings/heartbeat`, **`/settings/cron`**, **`/settings/skills`**, `/settings/sessions`, `/settings/logs`, **`/settings/channels`**, `/settings/voice`. **Agent defaults** merge into `/settings/agent-defaults` with `?tab=` slices (`chat`, `workspace`, `browser`, `runtime`, `context`, `memory`, `tools`, `skills`, `system-prompt`); legacy `#/settings/agent-*` paths redirect to the matching tab. Goal checking (`cron.goals`) lives on the **Cron** page, not agent defaults. The settings left rail lists each agent-defaults slice; command palette includes the same routes. Top-level **`/cron`**, **`/skills`**, **`/channels`**, **`/mcp`**, `/sessions`, `/logs` redirect into the matching `/settings/...` route (bookmark-safe).
+**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`. Agent manifests are managed at `/agents` and `/agents/:agentId`. Full-screen **settings** shell: `/settings/gateway`, `/settings/appearance`, `/settings/credentials`, `/settings/heartbeat`, `/settings/sessions`, `/settings/logs`, plus top-level `/cron`, `/skills`, `/channels`, `/connectors`, `/apps`, `/goals`, `/workflows`. Removed agent-defaults routes (`#/settings/agent-defaults`, `#/settings/agent-browser`) redirect to `/agents`.
 
 **Gateway integration:**
 
@@ -366,7 +368,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | Telegram silent | Token, BotFather, policies |
 | No logs in console | `XOPC_LOG_LEVEL`, file logging flags |
 | Cron idle | `cron.enabled` in config |
-| `browser_use` tool error at first use | Enable `agents.defaults.browser.enabled`; install Chromium once with `npx playwright install chromium` (`playwright-core` does not ship browsers) |
+| `browser_use` tool error at first use | Allow the `browser_use` built-in in the agent manifest tool policy; install Chromium once with `npx playwright install chromium` (`playwright-core` does not ship browsers) |
 
 ---
 

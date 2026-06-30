@@ -15,8 +15,7 @@ const MAX_SUMMARY_CHARS = 20_000;
 
 function resolveSummaryModel(getConfig?: () => Config | undefined) {
   const envRef = process.env.XOPC_SESSION_SEARCH_MODEL?.trim();
-  const configRef = getConfig?.()?.agents?.defaults?.sessionSearch?.summaryModel?.trim();
-  const ref = envRef || configRef;
+  const ref = envRef;
   if (ref) {
     try {
       return resolveModel(ref);

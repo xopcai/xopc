@@ -330,7 +330,6 @@ export class AgentManager implements AgentInstanceGateway {
       bus: this.config.bus,
       getConfig: () => this.mergedConfig(),
       getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),
-      getBuiltinMemoryStore: () => this.getCurrentWorkspaceRuntime().builtinMemoryStore,
       getMemoryManager: () => this.getCurrentWorkspaceRuntime().memoryManager,
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
@@ -372,7 +371,7 @@ export class AgentManager implements AgentInstanceGateway {
     return this.getCurrentWorkspaceRuntime().memoryManager;
   }
 
-  private getMemoryManagerForSession(sessionKey: string): MemoryManager {
+  getMemoryManagerForSession(sessionKey: string): MemoryManager {
     return this.getWorkspaceRuntimeForSession(sessionKey).memoryManager;
   }
 
@@ -488,7 +487,7 @@ export class AgentManager implements AgentInstanceGateway {
     const cfg = this.config.config!;
     const profileDir = resolveAgentProfileDir(cfg, profile.agentId);
     const heartbeatEnabled = cfg.gateway?.heartbeat?.includeSystemPromptSection ?? false;
-    const contextInjection = cfg.agents?.defaults?.contextInjection ?? 'always';
+    const contextInjection = 'always';
     const { contextFiles } = resolveBootstrapContextSync({
       profileDir,
       config: cfg,
@@ -555,7 +554,6 @@ export class AgentManager implements AgentInstanceGateway {
 
   getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
     const cfg = this.config.config!;
-    const defaultsAllowlist = cfg.agents?.defaults?.skills;
     const entry = Array.isArray(cfg.agents?.list)
       ? cfg.agents.list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === agentId.toLowerCase())
       : undefined;
@@ -591,8 +589,7 @@ export class AgentManager implements AgentInstanceGateway {
       loadedAt: rt.skillManager.getLoadedAt(),
       diagnostics: rt.skillManager.getDiagnostics(),
       status: rt.skillManager.getStatus(),
-      ...(defaultsAllowlist !== undefined ? { defaultsAllowlist: [...defaultsAllowlist] } : {}),
-      ...(entry?.skills !== undefined ? { agentAllowlist: [...entry.skills] } : {}),
+      ...(entry?.skills.mode === 'allowlist' ? { agentAllowlist: [...(entry.skills.allow ?? [])] } : {}),
       ...(profile.skillsAllowlist !== undefined ? { effectiveAllowlist: [...profile.skillsAllowlist] } : {}),
       skills,
     };
@@ -749,7 +746,7 @@ export class AgentManager implements AgentInstanceGateway {
 
     if (isMemorySubsystemEnabled(cfg)) {
       void rt.memoryManager
-        .initializeAll(sessionKey, { workspace: resolvedPath })
+        .initializeAll(sessionKey, { workspace: resolvedPath, agentId: profile.agentId })
         .catch((err) => log.warn({ err, sessionKey }, 'memory initializeAll failed'));
     }
 
@@ -951,9 +948,8 @@ export class AgentManager implements AgentInstanceGateway {
     const tools = this.toolsFactory.createAllTools({
       workspace: resolvedWorkspacePath,
       profileMarkdownRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
-      disabledTools: profile.tools.disable,
+      disabledTools: profile.tools.denied,
       getPrimaryModel: () => this.resolveModelStringToModel(modelRef),
-      getBuiltinMemoryStore: () => rt.builtinMemoryStore,
       getMemoryManager: () => rt.memoryManager,
       getSkillManager: () => rt.skillManager,
     });

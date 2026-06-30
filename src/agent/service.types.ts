@@ -1,6 +1,6 @@
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
-import type { Config, AgentDefaults } from '../config/schema.js';
+import type { Config } from '../config/schema.js';
 import type { SessionStore } from '../session/store.js';
 import type { CronService } from '../cron/service.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
@@ -12,7 +12,6 @@ export interface AgentServiceConfig {
   workspace: string;
   model?: string;
   config?: Config;
-  agentDefaults?: AgentDefaults;
   extensionRegistry?: ExtensionRegistry;
   maxRequestsPerTurn?: number;
   maxToolFailuresPerTurn?: number;

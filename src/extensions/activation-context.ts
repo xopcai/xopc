@@ -150,14 +150,22 @@ function defaultModelId(config: unknown): string | undefined {
   const root = config as Record<string, unknown> | undefined;
   const agents = root?.agents;
   if (!isRecord(agents)) return undefined;
-  const defaults = agents.defaults;
-  if (!isRecord(defaults)) return undefined;
-  const models = defaults.models;
+  const list = agents.list;
+  if (!Array.isArray(list)) return undefined;
+  const defaultId = typeof agents.default === 'string' ? agents.default : undefined;
+  const entry =
+    list.find((candidate) => isRecord(candidate) && candidate.id === defaultId) ??
+    list.find((candidate) => isRecord(candidate) && candidate.enabled !== false);
+  if (!isRecord(entry)) return undefined;
+  const models = entry.models;
   if (!isRecord(models)) return undefined;
-  const model = models.chat;
-  if (isRecord(model)) {
-    const primary = model.primary;
-    if (typeof primary === 'string' && primary.trim().length > 0) return primary;
+  const defaultRole = typeof models.defaultRole === 'string' ? models.defaultRole : undefined;
+  const roles = models.roles;
+  if (!defaultRole || !isRecord(roles)) return undefined;
+  const role = roles[defaultRole];
+  if (isRecord(role)) {
+    const model = role.model;
+    if (typeof model === 'string' && model.trim().length > 0) return model;
   }
   return undefined;
 }

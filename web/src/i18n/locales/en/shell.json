@@ -36,21 +36,12 @@
     "settingsDreams": "Dreams",
     "settingsCron": "Scheduled tasks",
     "settingsGoals": "Goal judge",
-    "settingsAgentDefaults": "Agent settings",
-    "settingsAgentChat": "Model strategy",
-    "settingsAgentWorkspace": "Workspace",
     "settingsAgentBrowser": "Browser",
-    "settingsAgentRuntime": "Turn limits",
-    "settingsAgentContext": "Context",
-    "settingsAgentMemory": "Memory",
-    "settingsAgentTools": "Tools",
-    "settingsAgentSkills": "Default skill allowlist",
-    "settingsAgentSystemPrompt": "System prompt",
+    "settingsCapabilityPresets": "Capability presets",
     "settingsAgents": "Agents",
     "settingsKeyboardShortcuts": "Keyboard shortcuts",
     "settingsSystem": "System permissions",
-    "settingsAppManagement": "App management",
-    "settingsAgentGeneration": "Generation"
+    "settingsAppManagement": "App management"
   },
   "token": {
     "title": "Authentication required",

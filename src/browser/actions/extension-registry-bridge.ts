@@ -67,7 +67,7 @@ export async function runExtensionRegistryAction(
   }
 
   const timeout = toMs(ctx);
-  const allowPrivate = ctx.config?.agents?.defaults?.browser?.allowPrivateUrls === true;
+  const allowPrivate = false;
 
   switch (name) {
     case 'open':

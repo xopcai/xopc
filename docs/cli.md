@@ -29,21 +29,35 @@ pnpm run dev -- <command>
 
 | Command | Description |
 |---------|-------------|
+| `init` | Initialize xopc state directories, config, and agent workspace |
 | `setup` | Initialize config and workspace |
+| `profile` | Manage isolated state profiles |
 | `onboard` | Interactive setup wizard |
 | `channels` | Channel login (`channels login`) and DM pairing approval (`channels pairing approve`) |
-| `agents` | Manage multi-agent entries in config (`list`, add, delete) |
+| `auth` | Manage authentication credentials |
 | `agent` | Chat with Agent |
 | `tui` | Full-screen terminal UI (gateway or `--local` embedded) — see [TUI](./tui.md) |
+| `tunnel` | Manage FRP remote access tunnel |
 | `gateway` | Start REST gateway |
-| `cron` | Manage scheduled tasks |
-| `extension` | Manage extensions |
-| `skills` | Manage skills |
-| `mcp` | Manage MCP servers (`list`, `show`, `set`, `unset`, `serve`) — see [MCP](./mcp.md) |
-| `config` | View/edit configuration |
-| `image` | Image understanding / generation defaults (`status`, `set-understanding`, `set-generation`, fallbacks, `providers`) |
 | `session` | Manage sessions |
+| `doctor` | Check installation health and diagnose common issues |
 | `update` | Check for and install xopc updates (extension sync + gateway restart) — see [Updates](./update.md) |
+| `logs` | Manage and query logs |
+| `cron` | Manage scheduled tasks |
+| `goal` | Manage durable goals |
+| `config` | View/edit configuration |
+| `image` | Inspect image runtime behavior and provider availability |
+| `models` | List and manage models and model auth |
+| `providers` | Manage LLM provider credentials |
+| `voice` | Configure text-to-speech output |
+| `search` | Manage web-search providers |
+| `skills` | Manage skills |
+| `tailscale` | Show Tailscale status for gateway remote access |
+| `browser` | Browser automation commands |
+| `agents` | Manage multi-agent entries in config (`list`, `add`, `delete`) |
+| `extensions` | Manage extensions |
+
+MCP server management is documented in [MCP](./mcp.md). It is currently not shown as a root command in `xopc --help`; use the gateway settings and MCP configuration docs for supported setup paths.
 
 ---
 
@@ -572,19 +586,9 @@ xopc skills test --skip-examples
 
 ## mcp
 
-Manage outbound MCP servers and run the inbound channel bridge.
+Current `xopc --help` does not expose `mcp` as a root command. Manage outbound MCP servers through `mcp.servers` in `xopc.json` and the gateway console when available.
 
-```bash
-xopc mcp list
-xopc mcp show fetch
-xopc mcp set fetch '{"command":"npx","args":["-y","@modelcontextprotocol/server-fetch"]}'
-xopc mcp unset fetch
-
-# Inbound stdio bridge → gateway
-xopc mcp serve --url http://127.0.0.1:18790 --token-file ~/.xopc/gateway.token
-```
-
-See [MCP](./mcp.md) for configuration and Web UI, and [MCP CLI & API](./cli/mcp.md) for flags and REST endpoints.
+See [MCP](./mcp.md) for configuration and Web UI. [MCP CLI & API](./cli/mcp.md) documents historical commands for installs or development branches that still expose them.
 
 ---
 
@@ -685,18 +689,13 @@ Edit values with `xopc config set` / `xopc config unset`, or open the file path 
 
 ## image
 
-Manage **`agents.defaults.imageModel`**, **`imageGenerationModel`**, **`mediaMaxMb`**, and their fallback lists without editing JSON paths by hand.
+Inspect current image runtime behavior and available image generation providers.
 
 ```bash
 xopc image status
 xopc image status --json
-xopc image set-understanding openai/gpt-4o
-xopc image set-generation openai/gpt-image-1
-xopc image add-fallback understanding anthropic/claude-sonnet-4-5
-xopc image add-fallback generation dashscope/wan2.6-t2i
-xopc image remove-fallback understanding 0
 xopc image providers
-xopc image set-max-size 10
+xopc image providers --json
 ```
 
 See [Image & vision](image-multimodal.md).

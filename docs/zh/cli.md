@@ -34,21 +34,35 @@ pnpm run dev -- <command>
 
 | 命令 | 描述 |
 |------|------|
+| `init` | 初始化 xopc 状态目录、配置和 agent 工作区 |
 | `setup` | 初始化配置文件和工作区目录 |
+| `profile` | 管理隔离状态 profile |
 | `onboard` | 交互式设置向导（LLM、渠道、Gateway） |
 | `channels` | 渠道登录（`channels login`）与私聊配对批准（`channels pairing approve`） |
-| `agents` | 管理 `config.json` 中的多个智能体（`agents.list`：列出、添加、删除） |
+| `auth` | 管理认证凭据 |
 | `agent` | 与智能体对话 |
 | `tui` | 全屏终端对话界面（连网关或 `--local` 嵌入式）— 详见 [TUI](./tui.md) |
+| `tunnel` | 管理 FRP 远程访问隧道 |
 | `gateway` | 启动 REST 网关 |
-| `cron` | 管理定时任务 |
-| `extension` | 管理扩展 |
-| `skills` | 管理技能（安装、启用、配置、测试） |
-| `mcp` | 管理 MCP 服务器（`list`、`show`、`set`、`unset`、`serve`）— 见 [MCP](./mcp.md) |
-| `config` | 查看和编辑配置（非交互式） |
-| `image` | 图像理解 / 文生图默认项（`status`、`set-understanding`、`set-generation`、备用链、`providers` 等） |
 | `session` | 管理会话 |
+| `doctor` | 检查安装健康状态并诊断常见问题 |
 | `update` | 检查并安装 xopc 更新（含扩展同步与 gateway 重启）— 见 [更新](./update.md) |
+| `logs` | 管理和查询日志 |
+| `cron` | 管理定时任务 |
+| `goal` | 管理长期目标 |
+| `config` | 查看和编辑配置（非交互式） |
+| `image` | 查看图像运行时行为和可用 provider |
+| `models` | 列出和管理模型及模型认证 |
+| `providers` | 管理 LLM provider 凭据 |
+| `voice` | 配置 TTS 输出 |
+| `search` | 管理 web search provider |
+| `skills` | 管理技能（安装、启用、配置、测试） |
+| `tailscale` | 查看网关远程访问的 Tailscale 状态 |
+| `browser` | 浏览器自动化命令 |
+| `agents` | 管理 `config.json` 中的多个智能体（`agents.list`：列出、添加、删除） |
+| `extensions` | 管理扩展 |
+
+MCP 配置见 [MCP](./mcp.md)。当前 `xopc --help` 不展示 `mcp` 作为顶层命令；请以网关设置和 MCP 配置文档为准。
 
 ---
 
@@ -553,18 +567,13 @@ my-extension/
 
 ## image
 
-维护 **`agents.defaults.imageModel`**、**`imageGenerationModel`**、**`mediaMaxMb`** 及备用模型列表，无需手写长配置路径。
+查看当前图像运行时行为和可用的图像生成 provider。
 
 ```bash
 xopc image status
 xopc image status --json
-xopc image set-understanding openai/gpt-4o
-xopc image set-generation openai/gpt-image-1
-xopc image add-fallback understanding anthropic/claude-sonnet-4-5
-xopc image add-fallback generation dashscope/wan2.6-t2i
-xopc image remove-fallback understanding 0
 xopc image providers
-xopc image set-max-size 10
+xopc image providers --json
 ```
 
 详见 [图像与视觉](image-multimodal.md)。
@@ -704,19 +713,9 @@ xopc skills test security --deep
 
 ## mcp
 
-管理出站 MCP 服务器，或启动入站 stdio 桥接。
+当前 `xopc --help` 不暴露 `mcp` 作为顶层命令。请通过 `xopc.json` 中的 `mcp.servers` 和可用的网关控制台管理出站 MCP 服务器。
 
-```bash
-xopc mcp list
-xopc mcp show fetch
-xopc mcp set fetch '{"command":"npx","args":["-y","@modelcontextprotocol/server-fetch"]}'
-xopc mcp unset fetch
-
-# 入站 stdio 桥接 → 网关
-xopc mcp serve --url http://127.0.0.1:18790 --token-file ~/.xopc/gateway.token
-```
-
-配置与控制台操作见 [MCP](./mcp.md)，CLI 参数与 REST 接口见 [MCP CLI 与 API](./cli/mcp.md)。
+配置与控制台操作见 [MCP](./mcp.md)。[MCP CLI 与 API](./cli/mcp.md) 保留历史命令，供仍暴露这些子命令的安装或开发分支参考。
 
 ---
 

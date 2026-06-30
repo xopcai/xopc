@@ -323,7 +323,7 @@ export class AgentService {
       sessionConfigStore: this.sessionConfigStore,
       sessionHydrator: this.sessionHydrator,
       getConfig: () => this.effectiveAppConfig(),
-      getThinkingDefault: () => this.effectiveAppConfig()?.agents?.defaults?.thinkingDefault,
+      getThinkingDefault: () => undefined,
       getThinkingDefaultForSession: (sessionKey: string) =>
         this.agentManager.getThinkingDefaultForSession(sessionKey),
       workspaceRoot: this.workspaceDir,
@@ -488,21 +488,20 @@ export class AgentService {
   }
 
   private createSessionStore(): SessionStore {
-    const sessionStoreDefaults = this.config.agentDefaults || this.config.config?.agents?.defaults;
     const windowConfig: Partial<WindowConfig> = {
       maxMessages: 100,
-      keepRecentMessages: sessionStoreDefaults?.maxToolIterations || 20,
+      keepRecentMessages: 20,
       preserveSystemMessages: true,
     };
     const compactionConfig: Partial<CompactionConfig> = {
-      enabled: sessionStoreDefaults?.compaction?.enabled ?? true,
-      mode: (sessionStoreDefaults?.compaction?.mode as 'extractive' | 'abstractive' | 'structured') || 'abstractive',
-      reserveTokens: sessionStoreDefaults?.compaction?.reserveTokens || 8000,
-      triggerThreshold: sessionStoreDefaults?.compaction?.triggerThreshold || 0.8,
-      minMessagesBeforeCompact: sessionStoreDefaults?.compaction?.minMessagesBeforeCompact || 10,
-      keepRecentMessages: sessionStoreDefaults?.compaction?.keepRecentMessages || 10,
-      evictionWindow: sessionStoreDefaults?.compaction?.evictionWindow || 0.2,
-      retentionWindow: sessionStoreDefaults?.compaction?.retentionWindow || 6,
+      enabled: true,
+      mode: 'abstractive',
+      reserveTokens: 8000,
+      triggerThreshold: 0.8,
+      minMessagesBeforeCompact: 10,
+      keepRecentMessages: 10,
+      evictionWindow: 0.2,
+      retentionWindow: 6,
     };
     const appCfg = this.config.config;
     if (!appCfg) {
@@ -542,11 +541,9 @@ export class AgentService {
   }
 
   private initializeReliabilityModules(): void {
-    const defaults = this.config.agentDefaults || this.config.config?.agents?.defaults;
-
     this.errorTracker = new ToolErrorTracker({
-      maxFailuresPerTool: defaults?.maxToolFailuresPerTurn || 3,
-      maxTotalFailures: defaults?.maxToolFailuresPerTurn ? defaults.maxToolFailuresPerTurn + 2 : 5,
+      maxFailuresPerTool: 3,
+      maxTotalFailures: 5,
       resetOnTurnEnd: true,
     });
 
@@ -558,7 +555,7 @@ export class AgentService {
     });
 
     this.requestLimiter = new RequestLimiter({
-      maxRequestsPerTurn: defaults?.maxRequestsPerTurn || 50,
+      maxRequestsPerTurn: 50,
       warnThreshold: 0.8,
       softLimit: false,
     });
@@ -1032,15 +1029,13 @@ export class AgentService {
   }
 
   private resolveMemoryFlushConfig(): MemoryFlushConfig {
-    const defaults = this.config.agentDefaults || this.config.config?.agents?.defaults;
-    const raw = defaults?.memoryFlush;
     return {
-      enabled: raw?.enabled ?? true,
-      threshold: raw?.threshold ?? 0.88,
-      softThresholdTokens: raw?.softThresholdTokens ?? 4000,
-      afterCompactions: raw?.afterCompactions ?? 2,
-      maxEntryChars: raw?.maxEntryChars ?? 2000,
-      includeToolHistory: raw?.includeToolHistory ?? true,
+      enabled: true,
+      threshold: 0.88,
+      softThresholdTokens: 4000,
+      afterCompactions: 2,
+      maxEntryChars: 2000,
+      includeToolHistory: true,
     };
   }
 
@@ -1084,8 +1079,7 @@ export class AgentService {
   }
 
   private getContextWindow(): number {
-    const defaults = this.config.agentDefaults || this.config.config?.agents?.defaults;
-    return defaults?.maxTokens ? defaults.maxTokens * 4 : 128000;
+    return 128000;
   }
 
   private dispose(): void {

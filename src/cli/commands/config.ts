@@ -105,9 +105,9 @@ function createConfigCommand(ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopc config get agents.defaults.models.chat',
-        'xopc config set agents.defaults.temperature 0.8',
-        'xopc config unset agents.defaults.max_tokens',
+        'xopc config get agents.list',
+        'xopc config get agents.capabilityPresets',
+        'xopc config set agents.default main',
         'xopc config show',
         'xopc config validate',
         'xopc config token              # Show gateway token info',
@@ -299,8 +299,8 @@ register({
   metadata: {
     category: 'utility',
     examples: [
-      'xopc config get agents.defaults.models.chat',
-      'xopc config set agents.defaults.temperature 0.8',
+      'xopc config get agents.list',
+      'xopc config set agents.default main',
       'xopc config show',
       'xopc config validate',
       'xopc config token',

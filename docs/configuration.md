@@ -1,6 +1,18 @@
-# Configuration Reference
+# Configuration
 
 All xopc configuration is centralized in `~/.xopc/xopc.json`.
+
+Use task guides first when you are trying to accomplish something:
+
+| Task | Guide |
+| --- | --- |
+| Configure a model | [How to configure your first model](how-to/configure-first-model.md) |
+| Connect Telegram | [How to connect Telegram](how-to/connect-telegram.md) |
+| Reach the gateway from another device | [How to expose the gateway safely](how-to/expose-gateway-safely.md) |
+| Add another agent | [How to create a second agent](how-to/create-second-agent.md) |
+| Debug a broken setup | [How to diagnose a broken setup](how-to/diagnose-broken-setup.md) |
+
+The rest of this page is reference material for the `xopc.json` shape.
 
 ## Quick Start
 
@@ -15,11 +27,38 @@ Or create manually:
 ```json
 {
   "agents": {
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5",
-      "max_tokens": 8192,
-      "temperature": 0.7
-    }
+    "default": "main",
+    "capabilityPresets": {},
+    "list": [
+      {
+        "id": "main",
+        "identity": {
+          "name": "Main",
+          "role": "General assistant",
+          "language": "en",
+          "tone": "direct"
+        },
+        "responsibilities": {
+          "primary": ["Help the user complete tasks"]
+        },
+        "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "anthropic/claude-sonnet-4-5" }
+          }
+        },
+        "tools": { "builtin": {} },
+        "skills": { "mode": "all" },
+        "memory": {
+          "mode": "confirmWrite",
+          "sources": ["session", "curated"],
+          "writePolicy": { "curated": "confirm" }
+        },
+        "workflows": {},
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
+      }
+    ]
   },
   "providers": {
     "anthropic": "${ANTHROPIC_API_KEY}"
@@ -34,16 +73,52 @@ Or create manually:
 ```json
 {
   "agents": {
-    "defaults": {
-      "workspace": "~/.xopc/workspace",
-      "model": {
-        "primary": "anthropic/claude-sonnet-4-5",
-        "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
-      },
-      "max_tokens": 8192,
-      "temperature": 0.7,
-      "max_tool_iterations": 20
-    }
+    "default": "main",
+    "capabilityPresets": {
+      "safe-coder": {
+        "id": "safe-coder",
+        "name": "Safe coder",
+        "tools": {
+          "builtin": {
+            "shell": { "mode": "confirm", "scope": "workspace" }
+          }
+        },
+        "memory": { "mode": "confirmWrite", "sources": ["session", "curated"] }
+      }
+    },
+    "list": [
+      {
+        "id": "main",
+        "extends": ["safe-coder"],
+        "identity": {
+          "name": "Main",
+          "role": "General assistant",
+          "language": "en",
+          "tone": "direct"
+        },
+        "responsibilities": {
+          "primary": ["Help the user complete tasks"]
+        },
+        "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "anthropic/claude-sonnet-4-5" },
+            "small": { "model": "openai/gpt-4o-mini", "description": "Fast low-cost model" }
+          }
+        },
+        "tools": { "builtin": {} },
+        "skills": { "mode": "all" },
+        "memory": {
+          "mode": "confirmWrite",
+          "sources": ["session", "curated"],
+          "writePolicy": { "curated": "confirm" }
+        },
+        "workflows": {},
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] },
+        "runtime": { "timeoutMs": 180000, "maxToolFailuresPerTurn": 3 }
+      }
+    ]
   },
   "providers": {
     "openai": "${OPENAI_API_KEY}",
@@ -82,9 +157,7 @@ Or create manually:
         "maxResults": 5,
         "providers": [{ "type": "brave", "apiKey": "BSA_your_key_here" }]
       }
-    }
-  },
-  "tools": {
+    },
     "media": {
       "audio": {
         "enabled": true,
@@ -121,62 +194,47 @@ Or create manually:
 
 ### agents
 
-Agent configuration has three parts: optional **`default`** id, shared **`defaults`**, and per-identity **`list`** entries. Routing and session keys use the **first segment** of the session key as the agent id; the **effective profile** for that turn merges `defaults` with the matching enabled `list` row (model, workspace, tools, prompts, etc.).
+Agent configuration has three parts: optional **`default`** id, reusable **`capabilityPresets`**, and concrete **`list`** entries. Each `agents.list[]` entry is an Agent Capability Manifest. Routing and session keys use the **first segment** of the session key as the agent id; the runtime resolves exactly one enabled manifest and applies any declared presets from `extends`. There is no `agents.defaults` merge layer.
 
 #### Top-level `agents` fields
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `default` | string | Optional. Default agent id when the session key or API does not specify one. If omitted: first `list` entry with **`default: true`**, else first **enabled** entry in `list`, else `main`. |
-| `defaults` | object | Baseline settings merged into every agent (see **agents.defaults** below). |
-| `list` | array | Registered agent ids; each object can override runtime fields for that id. Human-readable identity lives in `agents/<id>/profile/IDENTITY.md`. |
+| `default` | string | Optional. Default agent id when the session key or API does not specify one. If omitted: first **enabled** manifest in `list`, else `main`. |
+| `capabilityPresets` | object | Named reusable policy patches keyed by preset id. Presets may define model roles, tools, skills, memory, workflows, boundaries, runtime limits, and locks. |
+| `list` | array | Concrete Agent Capability Manifests. Each entry must be complete enough to run on its own after preset resolution. |
 
 #### `agents.list` entries
 
-Each entry must include **`id`**. Other fields are optional runtime overrides (same shapes as in `defaults` where applicable). Display name, description, language, avatar, and model-visible identity are read from **`agents/<id>/profile/IDENTITY.md`**, not from config.
+Each entry must include **`id`**, **`identity`**, **`responsibilities`**, **`workspace`**, **`models`**, **`tools`**, **`skills`**, **`memory`**, **`workflows`**, and **`boundaries`**. Profile Markdown still lives under **`agents/<id>/profile/`** for long-form persona/context files, but the structured manifest is the source of truth for runtime policy.
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | Agent id (also the first segment of the session key). |
-| `default` | boolean | Optional. When `true`, marks this entry as the default agent when top-level **`agents.default`** is unset. |
-| `enabled` | boolean | Default `true`. When `false`, the id is ignored for routing defaults and effective profile resolution falls back to the default agent. |
-| `workspace` | string | Per-agent **Markdown workspace** root (`~` expanded). Tool `cwd`, daily `memory/`, and user files. Profile Markdown (`SOUL.md`, …) lives under **`agents/<id>/profile/`**. Inbound/TTS blobs and curated `memories/` live under **`agents/<id>/`** (agent home), not as siblings of unrelated trees inside this directory. |
-| `agentDir` | string | Optional. Overrides the **internal** agent state directory (`credentials`, `agent.json`, inbox, pid) — default `<stateDir>/agents/<id>/agent`. |
-| `models` | object | Per-agent chat model and named model role overrides. Same shape as `agents.defaults.models`; `models.roles` merges over defaults by role id. |
-| `thinkingDefault` | string | Optional. One of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `adaptive`. |
-| `reasoningDefault` | string | Optional. `off`, `on`, `stream`. |
-| `verboseDefault` | string | Optional. `off`, `on`, `full`. |
-| `systemPromptOverride` | string | Optional. When set, replaces the usual base system prompt; skills block is still appended (subject to `skills` allowlist). |
-| `skills` | string[] | Optional. Allowlist of skill **names** for `<available_skills>`; when set, only those skills are advertised. |
-| `tools` | object | Optional. `{ "disable": ["tool_name", ...] }` — built-in tools to omit by **tool name** (e.g. `shell`, `web_search`, `session_search`, `image`; use `extensions` to disable extension tools). |
-| `params` | object | Optional. Reserved for future use. |
+| `extends` | string[] | Optional list of preset ids from `agents.capabilityPresets`. Later presets and the manifest override earlier fields. |
+| `enabled` | boolean | Default `true`. When `false`, the id is ignored for routing and runtime resolution. |
+| `identity` | object | Structured display/model identity: `name`, `role`, optional `description`, `language`, `tone`, `avatar`. |
+| `responsibilities` | object | `primary`, optional `secondary`, and optional `outOfScope` lists. |
+| `workspace.root` | string | Per-agent Markdown workspace root (`~` expanded). Tool `cwd`, daily `memory/`, and user files. |
+| `models.defaultRole` | string | Role id used when a workflow/session does not request a named role. |
+| `models.roles` | object | Named model roles. Each role uses `{ "model": "provider/model", "description": "..." }`. |
+| `tools.builtin` | object | Built-in tool policy by tool name: `{ "mode": "allow" | "confirm" | "deny", "scope"?: "readonly" | "workspace" | "unrestricted" }`. |
+| `tools.mcp` | object | Optional MCP server/tool policies. |
+| `skills` | object | Skill visibility policy: `all`, `allowlist`, `denylist`, or `off`. |
+| `memory` | object | Memory mode, sources, write policy, retention, and privacy. |
+| `workflows` | object | Optional default/allowed/suggested workflow policy. |
+| `boundaries` | object | Confirmation, forbidden, and escalation rules. |
+| `runtime` | object | Optional runtime limits (`maxTurns`, `timeoutMs`, `maxToolFailuresPerTurn`). |
+| `prompt` | object | Optional structured prompt customizations. |
 
-The same optional keys can appear under **`agents.defaults`** for global defaults (e.g. `agents.defaults.tools.disable` merged with per-agent disables).
+Use **`xopc agents add`** / **`agents delete`** to manage entries and directories; there is no separate agent registry outside config.
 
-**Note:** On-disk paths (`~/.xopc/agents/<id>/` for sessions and internal state, per-agent Markdown workspace under **`agents.defaults.workspace/<agentId>`** or `<stateDir>/workspace/<agentId>`) are **derived from `config.json`** (`agents.list`, `agents.defaults`, optional `agentDir` overrides). The agent identity users edit and the model sees is **`profile/IDENTITY.md`**. Use **`xopc agents add`** / **`agents delete`** to manage entries and directories; there is no separate agent “registry” outside config.
-
-#### agents.defaults
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `workspace` | string | `~/.xopc/workspace` | **Parent** directory for Markdown workspaces; each agent resolves to `<expanded>/<agentId>/` (e.g. `~/.xopc/workspace/main`) |
-| `models` | object | — | Chat model chain and named model roles. |
-| `max_tokens` | number | `8192` | Maximum output tokens |
-| `temperature` | number | `0.7` | Temperature (0-2) |
-| `max_tool_iterations` | number | `20` | Max tool call iterations |
-| `imageModel` | object | — | Vision model for the `image` and `browser_use` tools and for **describing** inbound images when the session model does not support vision. Uses `{ primary, fallbacks }`. See [Image & vision](image-multimodal.md). |
-| `imageGenerationModel` | object | — | Image generation chain for `image_generate` (e.g. `openai/gpt-image-1`, `dashscope/wan2.6-t2i`). Uses `{ primary, fallbacks }`. See [Image & vision](image-multimodal.md). |
-| `mediaMaxMb` | number | — | Optional. Max size in **MB** when the `image` tool loads files from disk or URLs. |
-
-#### agents.defaults.models
+#### models.roles
 
 ```json
 {
   "models": {
-    "chat": {
-      "primary": "anthropic/claude-sonnet-4-5",
-      "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
-    },
+    "defaultRole": "deep",
     "roles": {
       "small": {
         "model": "openai/gpt-4o-mini",
@@ -192,46 +250,7 @@ The same optional keys can appear under **`agents.defaults`** for global default
 
 Model ID format: `provider/model-id` (e.g., `anthropic/claude-opus-4-5`).
 
-Per-agent `agents.list[].models.roles` merges over default roles by id; `agents.list[].models.chat` overrides the default chat model chain.
-
-#### agents.defaults.memory
-
-Curated long-term memory under **`agents/<agentId>/memories/`** (`MEMORY.md` / `USER.md`), optional **stub** external provider for wiring tests, and controls for **prefetch** injection (fenced `<memory-context>` prefix on user turns). See [Curated memory](workspace.md#curated-memory).
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Master switch. When `false`: no curated snapshot, no `curated_memory` tool, no external memory provider, no prefetch/sync. |
-| `useEnhancedSystem` | boolean | `true` | When `false`: disable curated snapshot and `curated_memory`; **`agents/<id>/profile/MEMORY.md`** still applies. |
-| `userProfileEnabled` | boolean | `true` | When `false`: omit `USER.md` from the system prompt; `curated_memory` cannot mutate the `user` target (read still allowed). |
-| `memoryCharLimit` | number | `2200` | Max characters for `MEMORY.md` entries (total). |
-| `userCharLimit` | number | `1375` | Max characters for `USER.md` entries (total). |
-| `provider` | string | `none` | External provider: `none` or `stub` (ignored when `enabled` is `false`). |
-| `injectionFrequency` | string | `every-turn` | Prefetch injection: `every-turn` or `first-turn` (first user message of the session only). |
-| `contextCadence` | number | `1` | When `injectionFrequency` is `every-turn`, inject prefetch on turns 1, 1+N, 1+2N, … (minimum `1`). |
-| `dialecticCadence` | number | — | Reserved for future external sync cadence (not wired yet). |
-
-#### agents.defaults.sessionSearch
-
-Cross-session transcript search via the `session_search` tool (when session persistence is available).
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `summaryModel` | string | — | Model ref for per-session summaries (e.g. `openai/gpt-4o-mini`). Overrides env `XOPC_SESSION_SEARCH_MODEL` when set. |
-
-#### agents.defaults.browser
-
-The unified **`browser_use`** tool is registered when `enabled` is true. Install Chromium once for local mode: `npx playwright install chromium`. Tool behavior and URL policy: [Tools — Browser](tools.md#browser-optional).
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | — | When `true`, registers browser automation tools. |
-| `headless` | boolean | `true` (when browser enabled) | Run browser without a visible window. |
-| `allowPrivateUrls` | boolean | — | When `true`, allows navigation to private IP ranges; **cloud metadata / IMDS** and suspicious token-in-URL patterns stay blocked. |
-| `commandTimeout` | number | `30` | Seconds per browser command (minimum `5`). |
-| `cloudProvider` | string | — | `local` \| `browserbase` \| `browser-use`. Omit or `local` for in-process Playwright. |
-| `cdpUrl` | string | — | Optional WebSocket URL to an existing browser (CDP); bypasses `cloudProvider` when set. |
-| `dialogPolicy` | string | — | `must_respond` \| `auto_dismiss` \| `auto_accept` — how JS dialogs are handled with the CDP supervisor. |
-| `dialogTimeoutSeconds` | number | `300` | Timeout for auto dialog handling (minimum `1`). |
+Preset model patches use the same `models` shape, without requiring a complete manifest.
 
 ---
 
@@ -744,7 +763,7 @@ xopc supports environment variables for sensitive data:
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `XOPC_CONFIG` | Custom config file path |
 | `XOPC_WORKSPACE` | Custom workspace directory |
-| `XOPC_SESSION_SEARCH_MODEL` | Default model for `session_search` summaries when `agents.defaults.sessionSearch.summaryModel` is unset |
+| `XOPC_SESSION_SEARCH_MODEL` | Default model for `session_search` summaries when the selected manifest does not provide a summary model role |
 | `XOPC_LOG_LEVEL` | Log level (trace/debug/info/warn/error/fatal) |
 | `XOPC_LOG_DIR` | Log directory path |
 | `XOPC_LOG_CONSOLE` | Enable console output (true/false) |

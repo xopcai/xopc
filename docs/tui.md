@@ -25,8 +25,7 @@ xopc tui --url http://localhost:18790 --token <your-gateway-token>
 xopc tui --gateway
 ```
 
-Gateway mode defaults to `http://localhost:3120` when no `--url` is provided.
-If your `gateway.port` in config is different (the project default is often **18790**), pass **`--url`** explicitly.
+Gateway mode uses the gateway URL from config when available; the default gateway port is **18790**. If you run the gateway on another host or port, pass **`--url`** explicitly.
 
 Obtain or rotate a token with:
 

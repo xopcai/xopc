@@ -122,12 +122,26 @@ export interface ConfigInfo {
 
 function agentDefaultModelFromGatewayConfig(c: unknown): string {
   if (!c || typeof c !== 'object') return '';
-  const raw = (c as { agents?: { defaults?: { models?: { chat?: unknown } } } }).agents?.defaults?.models?.chat;
-  if (raw === undefined || raw === null) return '';
-  if (typeof raw === 'string') return raw.trim();
-  if (typeof raw === 'object' && raw !== null && 'primary' in raw) {
-    const p = (raw as { primary?: unknown }).primary;
-    return typeof p === 'string' ? p.trim() : '';
+  const agents = (c as { agents?: unknown }).agents;
+  if (!agents || typeof agents !== 'object' || Array.isArray(agents)) return '';
+  const root = agents as Record<string, unknown>;
+  const list = Array.isArray(root.list) ? root.list : [];
+  const defaultId = typeof root.default === 'string' && root.default.trim() ? root.default.trim() : '';
+  const entry =
+    list.find((item) => item && typeof item === 'object' && (item as { id?: unknown }).id === defaultId) ??
+    list.find((item) => item && typeof item === 'object');
+  if (!entry || typeof entry !== 'object') return '';
+  const models = (entry as { models?: unknown }).models;
+  if (!models || typeof models !== 'object' || Array.isArray(models)) return '';
+  const defaultRole = (models as { defaultRole?: unknown }).defaultRole;
+  const roles = (models as { roles?: unknown }).roles;
+  if (typeof defaultRole !== 'string' || !roles || typeof roles !== 'object' || Array.isArray(roles)) {
+    return '';
+  }
+  const role = (roles as Record<string, unknown>)[defaultRole];
+  if (role && typeof role === 'object' && !Array.isArray(role)) {
+    const model = (role as { model?: unknown }).model;
+    return typeof model === 'string' ? model.trim() : '';
   }
   return '';
 }

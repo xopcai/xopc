@@ -22,7 +22,7 @@ function printGitHubStarHint(): void {
 
 async function setupNonInteractive(_configPath: string, existingConfig: Config): Promise<Config> {
   console.log('\n🤖 AI Model Configuration (Non-Interactive Mode)\n');
-  console.log('Current config:', JSON.stringify(existingConfig.agents?.defaults?.models?.chat, null, 2));
+  console.log('Current agent manifests:', JSON.stringify(existingConfig.agents?.list ?? [], null, 2));
   console.log('\n💡 To configure in interactive mode, run: xopc onboard');
   console.log('💡 Or set up manually in:', _configPath);
   return existingConfig;

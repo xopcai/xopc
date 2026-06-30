@@ -23,7 +23,7 @@ export async function resolveEmbeddedMcpToolsForTurn(params: {
   const profile = params.cfg
     ? resolveEffectiveAgentProfileForSession(params.cfg, params.sessionKey)
     : undefined;
-  const disabledTools = profile?.tools.disable;
+  const disabledTools = profile?.tools.denied;
 
   if (
     !shouldCreateBundleMcpRuntimeForAttempt({

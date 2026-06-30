@@ -204,7 +204,7 @@ export async function* runProcessDirectStreaming(
 
       await hydratePerTurnState(deps, sessionKey, input.thinking);
       {
-        const defReason = (deps.getConfig()?.agents?.defaults?.reasoningDefault ?? 'stream') as ReasoningLevel;
+        const defReason = 'stream' as ReasoningLevel;
         reasoningLevel = await resolveEffectiveReasoningLevel(deps.sessionConfigStore, sessionKey, defReason);
       }
 

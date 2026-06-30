@@ -32,6 +32,11 @@ export class BuiltinMemoryStore {
     return this.config.memoriesDir;
   }
 
+  /** Workspace whose MEMORY.md and daily notes participate in local memory search. */
+  get workspaceDir(): string {
+    return this.config.workspaceDir;
+  }
+
   pathFor(target: 'memory' | 'user'): string {
     return join(this.memoriesDir, target === 'memory' ? 'MEMORY.md' : 'USER.md');
   }

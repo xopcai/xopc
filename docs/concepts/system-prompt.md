@@ -27,21 +27,21 @@ The following project context files have been loaded:
 
 Runtime loads bootstrap files from **`agents/<agentId>/profile/`** in a fixed order (see [Workspace](workspace.md)):
 
-- Per-file and total character budgets: `agents.defaults.bootstrapMaxChars` (default 12000), `bootstrapTotalMaxChars` (default 60000)
+- Per-file and total character budgets are runtime constants unless exposed by a future manifest runtime field.
 - Subagent and cron sessions omit `MEMORY.md` (allowlist: AGENTS, TOOLS, SOUL, IDENTITY, USER)
-- `agents.defaults.contextInjection`: `always` (default), `continuation-skip` (inject profile context into the system prompt once per session; cleared on session reset / agent eviction), or `never`
+- Profile context injection follows the selected manifest/runtime policy and session state.
 
 Implementation: `src/agent/bootstrap/`, assembled in `src/agent/prompt/system-prompt.ts`.
 
 ## Startup context (`/new`, `/reset`)
 
-When a session is cleared or a new webchat session starts, the first user turn may prepend recent daily memory from `memory/YYYY-MM-DD.md` with a `[Startup context loaded by runtime]` marker. Configure via `agents.defaults.startupContext` (enabled by default, `applyOn: ['new','reset']`).
+When a session is cleared or a new webchat session starts, the first user turn may prepend recent daily memory from `memory/YYYY-MM-DD.md` with a `[Startup context loaded by runtime]` marker when the selected manifest/workflow enables that behavior.
 
 Agents must not claim they manually read files when startup context was injected by runtime.
 
 ## Post-compaction refresh
 
-After transcript compaction, xopc appends a context row with excerpts from AGENTS.md sections **Session Startup** and **Red Lines** (configurable via `agents.defaults.compaction.postCompactionSections`; `[]` disables). Budget: `agents.defaults.contextLimits.postCompactionMaxChars` (default 1800).
+After transcript compaction, xopc may append a context row with excerpts from AGENTS.md sections **Session Startup** and **Red Lines** according to runtime compaction policy.
 
 ## Curated memory vs profile MEMORY
 

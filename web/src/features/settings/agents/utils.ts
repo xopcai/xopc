@@ -10,6 +10,8 @@ export type AgentPanel =
   | 'models'
   | 'tools'
   | 'skills'
+  | 'memory'
+  | 'effective'
   | 'channels'
   | 'cron';
 

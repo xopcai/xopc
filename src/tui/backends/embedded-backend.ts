@@ -8,6 +8,7 @@ import { createCreateShareTool, isShareToolAvailable } from '../../agent/tools/c
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
+import { getAgentDefaultModelRef } from '../../config/schema.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { getAvailableModels } from '../../providers/index.js';
 import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
@@ -94,7 +95,7 @@ export class EmbeddedBackend implements TuiBackend {
     this.config = config;
     const workspace = getWorkspacePath(config);
     this.workspace = workspace;
-    const modelId = config.agents?.defaults?.models?.chat?.primary;
+    const modelId = getAgentDefaultModelRef(config);
     openXopcDatabase();
     this.sessionIndex = new SessionIndex({ config });
     this.sessionIndexReady = this.sessionIndex.initialize().catch((err: unknown) => {
@@ -394,7 +395,7 @@ export class EmbeddedBackend implements TuiBackend {
   async getSessionInfo(sessionKey: string): Promise<SessionInfo> {
     if (!this.agent) {
       const config = loadConfig();
-      const model = config.agents?.defaults?.models?.chat?.primary;
+      const model = getAgentDefaultModelRef(config);
       return { model: model ?? undefined };
     }
     try {
@@ -417,7 +418,7 @@ export class EmbeddedBackend implements TuiBackend {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.warn({ err, sessionKey, errorMessage }, `getSessionInfo failed: ${errorMessage}`);
       const config = loadConfig();
-      const model = config.agents?.defaults?.models?.chat?.primary;
+      const model = getAgentDefaultModelRef(config);
       return { model: model ?? undefined };
     }
   }

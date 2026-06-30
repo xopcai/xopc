@@ -13,7 +13,7 @@
  * after every gateway-touching patch lands, so it sees the merged shape.
  */
 import type { Config } from '../../../../config/schema.js';
-import { BindingsConfigSchema, McpConfigSchema } from '../../../../config/schema.js';
+import { BindingsConfigSchema, BrowserConfigSchema, McpConfigSchema } from '../../../../config/schema.js';
 import { CredentialResolver } from '../../../../auth/credentials.js';
 import { isMaskedSecretPatchValue } from '../../lib/mask-secret-length.js';
 import { applyToolsWebPatch } from '../../../config-tools-web.js';
@@ -67,6 +67,17 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
     if (sessionResult.ok === false) {
       return patchError(sessionResult.message);
     }
+  }
+
+  if (body.browser !== undefined) {
+    if (typeof body.browser !== 'object' || body.browser === null || Array.isArray(body.browser)) {
+      return patchError('browser must be an object');
+    }
+    const parsed = BrowserConfigSchema.safeParse(body.browser);
+    if (!parsed.success) {
+      return patchError(parsed.error.issues.map((i) => i.message).join('; '));
+    }
+    config.browser = parsed.data;
   }
 
   if (

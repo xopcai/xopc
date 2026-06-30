@@ -62,7 +62,7 @@ Resolved by `resolveAgentDir(config, agentId)`.
 
 ## Markdown workspace
 
-Resolved by `resolveAgentWorkspaceDir(config, agentId)` — often **`<stateDir>/workspace/<agentId>`** when `agents.defaults.workspace` is unset, or **`join(<agents.defaults.workspace>, <agentId>)`** when set, or an explicit per-list `workspace` path.
+Resolved by `resolveAgentWorkspaceDir(config, agentId)` from the selected agent manifest. In current configs this is usually **`agents.list[].workspace.root`** (for example `~/.xopc/workspace/main`), with **`<stateDir>/workspace/<agentId>`** as the fallback for generated defaults.
 
 **Intended contents** (user-visible / tool-facing):
 

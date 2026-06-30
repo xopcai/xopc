@@ -646,14 +646,15 @@ function GoalCreateDialog({
   }, [open, options.defaultAgentId]);
 
   const patch = (next: Partial<CreateGoalDraft>) => setDraft((prev) => ({ ...prev, ...next }));
-  const agents = options.agents.length ? options.agents : [{
+  const agents: GatewayAgentRow[] = options.agents.length ? options.agents : [{
     id: options.defaultAgentId || 'main',
     workspace: '',
     profileDir: '',
-    typedModels: { defaults: [], effective: [] },
+    typedModels: { defaultRole: 'deep', preset: [], effective: [] },
+    extends: [],
     isDefault: true,
-    skills: { defaults: [] },
-    tools: { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
+    skills: { preset: [] },
+    tools: { presetDenied: [], entryDisable: [], effectiveDisable: [] },
   } satisfies GatewayAgentRow];
   const selectedAgent = agents.find((agent) => agent.id === draft.agentId) ?? agents.find((agent) => agent.id === options.defaultAgentId) ?? agents[0];
   const selectedAgentId = draft.agentId || selectedAgent?.id || 'main';
@@ -1145,10 +1146,11 @@ export function GoalsPage() {
             id: defaultAgentId || 'main',
             workspace: '',
             profileDir: '',
-            typedModels: { defaults: [], effective: [] },
+            typedModels: { defaultRole: 'deep', preset: [], effective: [] },
+            extends: [],
             isDefault: true,
-            skills: { defaults: [] },
-            tools: { defaultsDisable: [], entryDisable: [], effectiveDisable: [] },
+            skills: { preset: [] },
+            tools: { presetDenied: [], entryDisable: [], effectiveDisable: [] },
           }],
           models,
           checklistDecomposePolicy,

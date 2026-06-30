@@ -15,14 +15,14 @@ export const SCENARIO_PRESETS: readonly ScenarioPreset[] = [
     id: 'lightChat',
     steps: [
       { path: '/settings/credentials?tab=providers', labelKey: 'stepProviders' },
-      { path: '/settings/agent-defaults', labelKey: 'stepDefaultModel' },
+      { path: '/agents', labelKey: 'stepDefaultModel' },
     ],
   },
   {
     id: 'multiChannel',
     steps: [
       { path: '/settings/credentials?tab=providers', labelKey: 'stepProviders' },
-      { path: '/settings/agent-defaults', labelKey: 'stepDefaultModel' },
+      { path: '/agents', labelKey: 'stepDefaultModel' },
       { path: '/channels', labelKey: 'stepChannel' },
       { path: '/agents', labelKey: 'stepPresets' },
     ],

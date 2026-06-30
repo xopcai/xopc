@@ -65,7 +65,7 @@ async function loadChannelPluginsForOnboard(config: Config): Promise<ChannelPlug
   }
 
   const loader = new ExtensionLoader(resolveExtensionLoaderOptionsFromConfig(config));
-  loader.setConfig(config);
+  loader.setConfig(config as Parameters<ExtensionLoader['setConfig']>[0]);
   loader.setManifestSnapshot(snapshot);
   await loader.loadExtensions(extensionConfigs);
   return loader.getRegistry().channelPlugins;

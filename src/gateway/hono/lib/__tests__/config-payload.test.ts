@@ -62,23 +62,39 @@ describe('buildSafeBrowserConfigForWeb', () => {
 });
 
 describe('buildSafeWebConfigPayload', () => {
-  it('includes agent default typed models for config round trips', async () => {
+  it('includes manifest typed models for config round trips', async () => {
     const payload = await buildSafeWebConfigPayload({
       currentConfig: {
         agents: {
-          defaults: {
-            models: [
-              { id: 'small', description: 'Fast model', model: 'ollama/AutoGLM-Phone-9B:latest' },
-            ],
-          },
+          default: 'main',
+          capabilityPresets: {},
+          list: [
+            {
+              id: 'main',
+              enabled: true,
+              identity: { name: 'Main', role: 'Agent', language: 'en', tone: 'direct' },
+              responsibilities: { primary: ['Help'] },
+              workspace: { root: '/tmp/main' },
+              models: {
+                defaultRole: 'small',
+                roles: { small: { description: 'Fast model', model: 'ollama/AutoGLM-Phone-9B:latest' } },
+              },
+              tools: { builtin: {} },
+              skills: { mode: 'all' },
+              memory: { mode: 'off', sources: ['session'] },
+              workflows: {},
+              boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
+            },
+          ],
         },
         channels: {},
       },
     } as never);
 
-    expect(payload.agents.defaults.models).toEqual([
-      { id: 'small', description: 'Fast model', model: 'ollama/AutoGLM-Phone-9B:latest' },
-    ]);
+    expect(payload.agents.list[0]?.models.roles.small).toEqual({
+      description: 'Fast model',
+      model: 'ollama/AutoGLM-Phone-9B:latest',
+    });
   });
 });
 

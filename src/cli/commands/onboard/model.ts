@@ -12,6 +12,7 @@ import {
   type ModelsJsonConfig,
 } from '../../../config/models-json.js';
 import type { Config } from '../../../config/schema.js';
+import { getAgentDefaultModelRef } from '../../../config/schema.js';
 import {
   getAllProviders,
   getApiKeyFromEnv,
@@ -36,23 +37,21 @@ import { colors } from '../../utils/colors.js';
 type ModelChoice = { value: string; name: string; description?: string };
 type CustomApiKind = 'openai-completions' | 'openai-responses' | 'anthropic-messages';
 
-function ensureAgentDefaults(config: Config, workspacePath: string): NonNullable<Config['agents']>['defaults'] {
-  config.agents = config.agents || {};
-  config.agents.defaults = config.agents.defaults || {
-    workspace: workspacePath,
-    maxTokens: 8192,
-    temperature: 0.7,
-    maxToolIterations: 20,
-    maxRequestsPerTurn: 50,
-    maxToolFailuresPerTurn: 3,
-  };
-  config.agents.defaults.workspace = workspacePath;
-  return config.agents.defaults;
-}
-
 function setPrimaryModel(config: Config, workspacePath: string, modelRef: string): Config {
-  const defaults = ensureAgentDefaults(config, workspacePath);
-  defaults.models = { ...defaults.models, chat: { primary: modelRef, fallbacks: [] } };
+  const id = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
+  const index = config.agents.list.findIndex((entry) => entry.id === id);
+  if (index >= 0) {
+    const agent = config.agents.list[index]!;
+    config.agents.list[index] = {
+      ...agent,
+      workspace: { root: workspacePath },
+      models: {
+        ...agent.models,
+        defaultRole: agent.models.defaultRole || 'deep',
+        roles: { ...agent.models.roles, [agent.models.defaultRole || 'deep']: { model: modelRef } },
+      },
+    };
+  }
   return config;
 }
 
@@ -300,7 +299,7 @@ export async function setupModel(existingConfig: Config | null, ctx: CLIContext)
   console.log('\n🤖 Step: AI Model\n');
 
   const config = existingConfig || ({} as Config);
-  const currentModel = config?.agents?.defaults?.models?.chat?.primary;
+  const currentModel = getAgentDefaultModelRef(config);
 
   if (currentModel) {
     console.log('Current model:', currentModel);

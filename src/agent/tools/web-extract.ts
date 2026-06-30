@@ -87,11 +87,7 @@ export function stripHtmlBoilerplate(
 
 function resolveExtractionModel(config?: Config) {
   const envRef = process.env.XOPC_WEB_EXTRACT_MODEL?.trim();
-  const configRef =
-    typeof config?.agents?.defaults?.webExtract?.model === 'string'
-      ? config.agents.defaults.webExtract.model.trim()
-      : '';
-  const ref = envRef || configRef;
+  const ref = envRef;
 
   if (ref) {
     try {
@@ -419,9 +415,7 @@ export function createWebExtractTool(deps: WebExtractDeps): AgentTool {
     ): Promise<AgentToolResult<{ url: string; extractedLength: number }>> {
       const { url, instruction } = params as WebExtractParams;
       const cfg = deps.getConfig();
-      const configuredDefault =
-        cfg?.agents?.defaults?.webExtract?.maxLength ?? DEFAULT_WEB_EXTRACT_MAX_LENGTH;
-      const maxLength = (params as WebExtractParams).maxLength ?? configuredDefault;
+      const maxLength = (params as WebExtractParams).maxLength ?? DEFAULT_WEB_EXTRACT_MAX_LENGTH;
 
       try {
         // SSRF protection

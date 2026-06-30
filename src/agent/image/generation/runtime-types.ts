@@ -8,6 +8,7 @@
  */
 
 import type { Config } from '../../../config/schema.js';
+import type { ToolModelConfig } from '../tool-model-config.js';
 import type { AuthProfileStore } from '../../../providers/auth-runtime/index.js';
 import type { FallbackAttempt } from '../../failover-error.js';
 import type {
@@ -29,6 +30,7 @@ export interface GenerateImageParams {
   prompt: string;
   agentDir?: string;
   authStore?: AuthProfileStore;
+  modelConfig?: ToolModelConfig;
   modelOverride?: string;
   count?: number;
   size?: string;

@@ -1,7 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
 import { readAgentMessageContent } from './agent-message-access.js';
-import { buildMemoryContextBlock } from './context-fence.js';
+import { MemoryContextAssembler } from './context-assembler.js';
 import type { MemoryManager } from './manager.js';
 
 /**
@@ -18,8 +18,11 @@ export async function injectPrefetchIntoUserMessage(
     return userMessage;
   }
 
-  const raw = await memoryManager.prefetchAll(q, { sessionId: sessionKey });
-  const block = buildMemoryContextBlock(raw);
+  const block = await new MemoryContextAssembler().assemble({
+    memoryManager,
+    sessionKey,
+    query: q,
+  });
   if (!block.trim()) {
     return userMessage;
   }

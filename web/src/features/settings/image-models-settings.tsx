@@ -1,12 +1,11 @@
 import { Loader2, Save, Server } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 
-import { createFormDraftReducer, uiPatchReducer } from '@/lib/settings-form-draft';
+import { uiPatchReducer } from '@/lib/settings-form-draft';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { useExtensions } from '@/features/extensions/extension-provider';
-import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { SettingsCollapsibleSection } from '@/features/settings/settings-collapsible-section';
 import { fetchImageProvidersList } from '@/features/settings/fetch-image-providers';
@@ -15,45 +14,14 @@ import {
   type ImageProviderCredentialsPanelMessages,
 } from '@/features/settings/image-provider-credentials-panel';
 import { IMAGE_PROVIDERS_SWR_KEY } from '@/features/settings/image-providers-swr-key';
-import {
-  ImageModelPrimarySelectors,
-  ImageModelFallbackChains,
-} from '@/features/settings/agents/agent-defaults-panels/image-model-chains-section';
-import {
-  fetchAgentDefaults,
-  parseParamsJsonForSave,
-  patchAgentDefaults,
-  type AgentDefaultsState,
-} from '@/features/settings/config-api';
 import { useImageProviderCredentials } from '@/features/settings/use-image-provider-credentials';
-import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { apiUrl } from '@/lib/url';
-import { cn } from '@/lib/cn';
 import { showToast } from '@/lib/toast';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-function inputClass(): string {
-  return cn(
-    'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
-    'placeholder:text-fg-subtle',
-    settingsInputFocusClass,
-  );
-}
-
 const imageProvidersSwrKey = () => apiUrl(IMAGE_PROVIDERS_SWR_KEY);
-
-function pickImageDefaultsSlice(s: AgentDefaultsState) {
-  return {
-    imageModel: s.imageModel,
-    imageModelFallbacks: s.imageModelFallbacks,
-    imageGenerationModel: s.imageGenerationModel,
-    imageGenerationModelFallbacks: s.imageGenerationModelFallbacks,
-    imageGenerationModelTimeoutMs: s.imageGenerationModelTimeoutMs,
-    imageGenerationModelAutoProviderFallback: s.imageGenerationModelAutoProviderFallback,
-  };
-}
 
 function panelMessagesFromBundle(t: MessageBundle['imageModelsSettings']): ImageProviderCredentialsPanelMessages {
   return {
@@ -106,17 +74,13 @@ function panelMessagesFromBundle(t: MessageBundle['imageModelsSettings']): Image
   };
 }
 
-const agentDefaultsFormReducer = createFormDraftReducer<AgentDefaultsState>();
-
 type ImageModelsUi = {
-  loading: boolean;
   saving: boolean;
   savedFlash: boolean;
   error: string | undefined;
 };
 
 const initialImageModelsUi: ImageModelsUi = {
-  loading: true,
   saving: false,
   savedFlash: false,
   error: undefined,
@@ -130,41 +94,13 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [formDraft, dispatchForm] = useReducer(agentDefaultsFormReducer, { form: null, baseline: null });
-  const state = formDraft.form;
-  const baseline = formDraft.baseline;
   const [ui, dispatchUi] = useReducer(uiPatchReducer<ImageModelsUi>, initialImageModelsUi);
-  const { loading, saving, error } = ui;
+  const { saving, error } = ui;
 
   const extensions = useExtensions();
   const extensionIds = useMemo(() => new Set(extensions.map((e) => e.id)), [extensions]);
 
-  const reload = useCallback(async () => {
-    if (!hasToken) return;
-    dispatchUi({ type: 'patch', patch: { loading: true, error: undefined } });
-    try {
-      const fresh = await fetchAgentDefaults();
-      const snapshot = structuredClone(fresh);
-      dispatchForm({ type: 'sync', value: snapshot });
-    } catch (err) {
-      dispatchUi({
-        type: 'patch',
-        patch: { error: err instanceof Error ? err.message : String(err) },
-      });
-    } finally {
-      dispatchUi({ type: 'patch', patch: { loading: false } });
-    }
-  }, [hasToken]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
-
-  const patchAgentDefaultsLocal = useCallback((patch: Partial<AgentDefaultsState>) => {
-    dispatchForm({ type: 'patch', patch });
-  }, []);
-
-  const { data: providers = [] } = useSWR(
+  const { data: providers = [], isLoading: providersLoading } = useSWR(
     hasToken ? imageProvidersSwrKey() : null,
     fetchImageProvidersList,
     { revalidateOnFocus: false },
@@ -175,18 +111,9 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
   // otherwise stay collapsed to keep the page short for new users.
   const hasConfiguredProvider = providers.some((p) => p.configured);
 
-  const gwSwr = useGatewayConfigSwr(hasToken);
-
   const cred = useImageProviderCredentials(providers);
 
-  const dirty = useMemo(() => {
-    if (!state || !baseline) return false;
-    return (
-      JSON.stringify(pickImageDefaultsSlice(state)) !== JSON.stringify(pickImageDefaultsSlice(baseline))
-    );
-  }, [state, baseline]);
-
-  const anyDirty = dirty || cred.credDirty;
+  const anyDirty = cred.credDirty;
 
   useEffect(() => {
     if (!anyDirty) return;
@@ -199,39 +126,11 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
   }, [anyDirty]);
 
   const onSave = useCallback(async () => {
-    if (!state) return;
     dispatchUi({ type: 'patch', patch: { saving: true, error: undefined } });
     try {
-      try {
-        void parseParamsJsonForSave(state.paramsJson);
-      } catch (e) {
-        dispatchUi({
-          type: 'patch',
-          patch: {
-            error:
-              e instanceof SyntaxError
-                ? m.agentSettings.advanced.paramsInvalidJson
-                : e instanceof Error
-                  ? e.message
-                  : m.agentSettings.advanced.paramsInvalidJson,
-          },
-        });
-        return;
-      }
-      // Save agent defaults + credentials in parallel
-      const savePromises: Promise<void>[] = [];
-      if (dirty) {
-        savePromises.push(
-          patchAgentDefaults(state).then(() => {
-            dispatchForm({ type: 'saved', value: structuredClone(state) });
-            void gwSwr.mutate?.();
-          }),
-        );
-      }
       if (cred.credDirty) {
-        savePromises.push(cred.saveCredentials(t.credentialsSaveError));
+        await cred.saveCredentials(t.credentialsSaveError);
       }
-      await Promise.all(savePromises);
       dispatchUi({ type: 'patch', patch: { savedFlash: true } });
       showToast({ type: 'success', title: t.saved });
     } catch (err) {
@@ -242,14 +141,12 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
     } finally {
       dispatchUi({ type: 'patch', patch: { saving: false } });
     }
-  }, [state, dirty, gwSwr, m.agentSettings, cred, t.credentialsSaveError]);
+  }, [cred, t.credentialsSaveError, t.saved]);
 
   const onDiscard = useCallback(() => {
-    if (!baseline) return;
-    dispatchForm({ type: 'discard' });
     if (cred.credDirty) cred.onDiscardCredentials();
     dispatchUi({ type: 'patch', patch: { error: undefined, savedFlash: false } });
-  }, [baseline, cred]);
+  }, [cred]);
 
   useSaveBarRegistration({
     id: 'image-models',
@@ -287,7 +184,7 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
     );
   }
 
-  if (loading || !state) {
+  if (providersLoading) {
     return (
       <div className={stubFlexClass}>
         <Loader2 className="size-4 animate-spin" /> Loading…
@@ -320,74 +217,6 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
           {error}
         </div>
       ) : null}
-
-      {/* Primary model selectors — always visible */}
-      <ImageModelPrimarySelectors
-        form={state}
-        update={patchAgentDefaultsLocal}
-        a={m.agentSettings}
-        chat={m.chat}
-      />
-
-      {/* Fallback chains — collapsed by default */}
-      <SettingsCollapsibleSection
-        advancedOnly
-        showLabel={t.fallbackChainsTitle}
-        hideLabel={t.fallbackChainsTitle}
-      >
-        <ImageModelFallbackChains
-          form={state}
-          update={patchAgentDefaultsLocal}
-          a={m.agentSettings}
-          chat={m.chat}
-        />
-      </SettingsCollapsibleSection>
-
-      {/* Runtime tuning — collapsed by default */}
-      <SettingsCollapsibleSection
-        advancedOnly
-        showLabel={t.runtimeTuningTitle}
-        hideLabel={t.runtimeTuningTitle}
-      >
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-fg">{t.timeoutLabel}</label>
-            <input
-              type="number"
-              min={0}
-              step={1000}
-              className={cn(inputClass(), 'max-w-48')}
-              value={state.imageGenerationModelTimeoutMs ?? ''}
-              placeholder="120000"
-              onChange={(e) => {
-                const raw = e.target.value.trim();
-                const next = raw === '' ? null : Math.max(0, Math.floor(Number(raw)));
-                patchAgentDefaultsLocal({
-                  imageGenerationModelTimeoutMs: next && next > 0 ? next : null,
-                });
-              }}
-            />
-            <p className="text-xs text-fg-subtle">{t.timeoutHint}</p>
-          </div>
-          <label className="flex items-start gap-3 text-sm">
-            <input
-              type="checkbox"
-              className="mt-0.5"
-              checked={state.imageGenerationModelAutoProviderFallback}
-              onChange={(e) =>
-                patchAgentDefaultsLocal({
-                  imageGenerationModelAutoProviderFallback: e.target.checked,
-                })
-              }
-              aria-label={t.autoFallbackLabel}
-            />
-            <span className="flex flex-col gap-0.5">
-              <span className="font-medium text-fg">{t.autoFallbackLabel}</span>
-              <span className="text-xs text-fg-subtle">{t.autoFallbackHint}</span>
-            </span>
-          </label>
-        </div>
-      </SettingsCollapsibleSection>
 
       {/* Provider credentials — collapsed; expands if user already has configured providers */}
       <SettingsCollapsibleSection

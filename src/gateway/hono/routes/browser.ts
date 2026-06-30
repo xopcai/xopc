@@ -139,9 +139,7 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
 
   // Browser extension bridge status — gateway-side check so frontend doesn't cross-origin fetch.
   authenticated.get('/api/browser/extension-status', async (c) => {
-    const config: Config = service.currentConfig as Config;
-    const browser = config?.agents?.defaults?.browser as Record<string, unknown> | undefined;
-    const target = resolveExtensionStatusTarget(browser, {
+    const target = resolveExtensionStatusTarget(undefined, {
       probe: c.req.query('probe'),
       host: c.req.query('host'),
       port: c.req.query('port'),
@@ -164,7 +162,7 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
     }
 
     if (!target) {
-      const backend = typeof browser?.backend === 'string' ? browser.backend : 'extension';
+      const backend = 'extension';
       return c.json({ running: false, connected: false, backend, artifacts });
     }
     const snapshot = await readExtensionBridgeSnapshot();
@@ -527,9 +525,7 @@ export function registerBrowserRoutes(authenticated: Hono, deps: AuthenticatedRo
     // The masked sentinel means "use the stored config key".
     let apiKey = apiKeyRaw;
     if (apiKey === '***' || apiKey === '••••••••••••') {
-      const stored =
-        (service.currentConfig as Config)?.agents?.defaults?.browser?.cloud?.apiKey;
-      apiKey = typeof stored === 'string' ? stored.trim() : '';
+      apiKey = '';
     }
     if (!apiKey) {
       if (provider === 'browserbase') apiKey = process.env.BROWSERBASE_API_KEY ?? '';
