@@ -14,10 +14,20 @@ export function shouldApplyStartupContext(params: {
   cfg?: Config;
   action: 'new' | 'reset';
 }): boolean {
-  return false;
+  const startupContext = (params.cfg?.agents as unknown as {
+    defaults?: { startupContext?: { enabled?: boolean; applyOn?: string[] } };
+  } | undefined)?.defaults?.startupContext;
+  if (startupContext?.enabled === false) {
+    return false;
+  }
+  const applyOn = startupContext?.applyOn;
+  if (Array.isArray(applyOn) && applyOn.length > 0) {
+    return applyOn.includes(params.action);
+  }
+  return true;
 }
 
-function resolveStartupContextLimits(cfg?: Config) {
+function resolveStartupContextLimits(_cfg?: Config) {
   const clampInt = (value: number | undefined, fallback: number, min: number, max: number) => {
     const numeric = Number.isFinite(value) ? Math.trunc(value as number) : fallback;
     return Math.min(max, Math.max(min, numeric));

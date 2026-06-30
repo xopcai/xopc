@@ -63,22 +63,33 @@ type ModelsAuthLoginOptions = {
 };
 
 function currentModelRef(config: Config): string | undefined {
-  const id = config.agents.default ?? config.agents.list[0]?.id;
-  const agent = config.agents.list.find((entry) => entry.id === id) ?? config.agents.list[0];
-  return agent?.models.roles[agent.models.defaultRole]?.model;
+  const legacyDefault = (config.agents as unknown as { defaults?: { model?: string } }).defaults?.model?.trim();
+  if (legacyDefault) return legacyDefault;
+
+  const list = Array.isArray(config.agents?.list) ? config.agents.list : [];
+  const id =
+    config.agents?.default ??
+    list.find((entry) => (entry as { default?: boolean }).default === true)?.id ??
+    list[0]?.id;
+  const agent = list.find((entry) => entry.id === id) ?? list[0];
+  const roles = agent?.models?.roles ?? {};
+  const defaultRole = agent?.models?.defaultRole ?? Object.keys(roles)[0];
+  return defaultRole ? roles[defaultRole]?.model : undefined;
 }
 
 function setDefaultModel(config: Config, modelRef: string): Config {
-  const id = config.agents.default ?? config.agents.list[0]?.id ?? 'main';
-  const index = config.agents.list.findIndex((entry) => entry.id === id);
+  const list = Array.isArray(config.agents?.list) ? config.agents.list : [];
+  const id = config.agents?.default ?? list[0]?.id ?? 'main';
+  const index = list.findIndex((entry) => entry.id === id);
   if (index >= 0) {
-    const agent = config.agents.list[index]!;
-    config.agents.list[index] = {
+    const agent = list[index]!;
+    const defaultRole = agent.models?.defaultRole || 'deep';
+    list[index] = {
       ...agent,
       models: {
         ...agent.models,
-        defaultRole: agent.models.defaultRole || 'deep',
-        roles: { ...agent.models.roles, [agent.models.defaultRole || 'deep']: { model: modelRef } },
+        defaultRole,
+        roles: { ...agent.models?.roles, [defaultRole]: { model: modelRef } },
       },
     };
   }

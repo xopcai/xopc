@@ -2,9 +2,11 @@
  * Per-session markdown workspace override (stored in SessionAgentConfig).
  */
 
+import { join } from 'node:path';
+
 import type { Config } from '../config/schema.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
-import { resolveUserPath } from '../agent/agent-scope.js';
+import { resolveDefaultAgentId, resolveUserPath } from '../agent/agent-scope.js';
 import { normalizeWorkspaceDir } from '../config/workspace-path.js';
 import type { SessionAgentConfig } from './config-types.js';
 
@@ -32,7 +34,10 @@ export function effectiveWorkspacePathForSession(
   sessionKey: string,
   sessionAgentConfig: SessionAgentConfig | null | undefined,
 ): string {
-  const base = resolveEffectiveAgentProfileForSession(cfg, sessionKey).resolvedWorkspacePath;
+  const legacyWorkspace = (cfg.agents as unknown as { defaults?: { workspace?: string } }).defaults?.workspace?.trim();
+  const base = legacyWorkspace
+    ? join(resolveUserPath(legacyWorkspace), resolveDefaultAgentId(cfg))
+    : resolveEffectiveAgentProfileForSession(cfg, sessionKey).resolvedWorkspacePath;
   const o = sessionAgentConfig?.workingDirectoryOverride?.trim();
   if (!o) {
     return base;

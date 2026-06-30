@@ -81,10 +81,13 @@ export type AgentTypedModel = AgentTypedModelRole & { id: string };
 export const AgentsConfigSchema = z.object({
   /** Default agent id when not specified (routing / session creation). */
   default: z.string().optional(),
+  /** Legacy agent defaults kept for migration/tests and read defensively by runtime helpers. */
+  defaults: z.record(z.string(), z.unknown()).optional(),
   capabilityPresets: z.record(z.string(), CapabilityPresetSchema).default({}),
   list: z.array(AgentManifestSchema).default([]),
 }).strict().default({
   default: 'main',
+  defaults: {},
   capabilityPresets: {},
   list: [
     {
@@ -1296,10 +1299,27 @@ export interface ParsedModelRef {
 }
 
 export function getAgentDefaultModelRef(config: Config): string | undefined {
-  const defaultId = config.agents.default?.trim() || config.agents.list[0]?.id;
-  const agent = config.agents.list.find((entry) => entry.enabled !== false && entry.id === defaultId) ?? config.agents.list[0];
+  const legacyModel = (config.agents as unknown as {
+    defaults?: { model?: string | { primary?: string } };
+  } | undefined)?.defaults?.model;
+  if (typeof legacyModel === 'string') {
+    const trimmed = legacyModel.trim();
+    if (trimmed) return trimmed;
+  } else if (legacyModel && typeof legacyModel === 'object') {
+    const primary = legacyModel.primary?.trim();
+    if (primary) return primary;
+  }
+
+  const list = Array.isArray(config.agents?.list) ? config.agents.list : [];
+  const defaultId =
+    config.agents?.default?.trim() ||
+    list.find((entry) => (entry as { default?: boolean }).default === true)?.id?.trim() ||
+    list[0]?.id;
+  const agent = list.find((entry) => entry.enabled !== false && entry.id === defaultId) ?? list[0];
   if (!agent) return undefined;
-  const role = agent.models.roles[agent.models.defaultRole];
+  const roles = agent.models?.roles ?? {};
+  const defaultRole = agent.models?.defaultRole ?? Object.keys(roles)[0];
+  const role = defaultRole ? roles[defaultRole] : undefined;
   return role?.model.trim() || undefined;
 }
 

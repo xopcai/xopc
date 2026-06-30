@@ -18,10 +18,10 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-function buildConfig(parentDir: string): Partial<Config> {
+function buildConfig(workspaceRoot: string): Partial<Config> {
   return {
     gateway: { port: 18790, corsOrigins: [] },
-    agents: { defaults: { workspace: parentDir } },
+    agents: { defaults: { workspace: workspaceRoot } },
   } as Partial<Config>;
 }
 

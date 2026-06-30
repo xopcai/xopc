@@ -55,7 +55,7 @@ export function coerceImageAssistantText(params: {
   throw new Error(`Image model returned no text (${params.provider}/${params.model}).`);
 }
 
-export function coerceImageModelConfig(cfg?: Config): ImageModelConfig {
+export function coerceImageModelConfig(_cfg?: Config): ImageModelConfig {
   return coerceToolModelConfig(undefined);
 }
 

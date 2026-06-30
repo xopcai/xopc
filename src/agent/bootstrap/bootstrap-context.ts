@@ -7,11 +7,11 @@ const MIN_BOOTSTRAP_FILE_BUDGET_CHARS = 64;
 const BOOTSTRAP_HEAD_RATIO = 0.75;
 const BOOTSTRAP_TAIL_RATIO = 0.25;
 
-export function resolveBootstrapMaxChars(config?: Config): number {
+export function resolveBootstrapMaxChars(_config?: Config): number {
   return DEFAULT_BOOTSTRAP_MAX_CHARS;
 }
 
-export function resolveBootstrapTotalMaxChars(config?: Config): number {
+export function resolveBootstrapTotalMaxChars(_config?: Config): number {
   return DEFAULT_BOOTSTRAP_TOTAL_MAX_CHARS;
 }
 

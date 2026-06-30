@@ -135,6 +135,12 @@ async function maybeAutoCompactBeforeTurn(opts: {
   onEvent?: (event: EmbeddedStreamEvent) => void;
 }): Promise<void> {
   const { sessionKey, sessionStore, agentManager, model, config, onEvent } = opts;
+  const compaction = (config?.agents as unknown as {
+    defaults?: { compaction?: { enabled?: boolean } };
+  } | undefined)?.defaults?.compaction;
+  if (compaction?.enabled === false) {
+    return;
+  }
 
   const contextWindow = (model as { contextWindow?: number }).contextWindow ?? 128_000;
   const messages = await sessionStore.load(sessionKey);

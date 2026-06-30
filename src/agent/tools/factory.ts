@@ -442,7 +442,6 @@ export class AgentToolsFactory {
   createAllTools(coreOptions?: CreateCoreToolsOptions): AgentTool<any, any>[] {
     const coreTools = this.createCoreTools(coreOptions);
     const disableExtensions = coreOptions?.disabledTools?.has('extensions');
-    const cfg = this.deps.getConfig?.();
 
     let bundled: AgentTool<any, any>[];
     if (!this.deps.extensionRegistry || disableExtensions) {

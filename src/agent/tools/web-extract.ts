@@ -389,6 +389,15 @@ async function synthesizeChunkSummaries(
 
 type WebExtractParams = { url: string; instruction?: string; maxLength?: number };
 
+function resolveConfiguredMaxLength(config: Config | undefined): number {
+  const value = (config?.agents as unknown as {
+    defaults?: { webExtract?: { maxLength?: unknown } };
+  } | undefined)?.defaults?.webExtract?.maxLength;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+    ? Math.trunc(value)
+    : DEFAULT_WEB_EXTRACT_MAX_LENGTH;
+}
+
 export function createWebExtractTool(deps: WebExtractDeps): AgentTool {
   return {
     name: 'web_extract',
@@ -415,7 +424,7 @@ export function createWebExtractTool(deps: WebExtractDeps): AgentTool {
     ): Promise<AgentToolResult<{ url: string; extractedLength: number }>> {
       const { url, instruction } = params as WebExtractParams;
       const cfg = deps.getConfig();
-      const maxLength = (params as WebExtractParams).maxLength ?? DEFAULT_WEB_EXTRACT_MAX_LENGTH;
+      const maxLength = (params as WebExtractParams).maxLength ?? resolveConfiguredMaxLength(cfg);
 
       try {
         // SSRF protection

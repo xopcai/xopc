@@ -28,14 +28,26 @@ export function needsModelOrProviders(config: unknown): boolean {
     rawProviders && typeof rawProviders === 'object' && !Array.isArray(rawProviders)
       ? (rawProviders as Record<string, unknown>)
       : {};
-  const hasProvider = Object.values(providers).some(
-    (v) => typeof v === 'string' && isMaskedSecret(v),
-  );
+  const hasProvider = Object.values(providers).some((v) => {
+    if (typeof v === 'string') {
+      return v.trim().length > 0 || isMaskedSecret(v);
+    }
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const apiKey = (v as { apiKey?: unknown }).apiKey;
+      return typeof apiKey === 'string' && (apiKey.trim().length > 0 || isMaskedSecret(apiKey));
+    }
+    return false;
+  });
 
   const agents = c.agents;
   let model = '';
   if (agents && typeof agents === 'object' && !Array.isArray(agents)) {
     const agentRoot = agents as Record<string, unknown>;
+    const defaults = agentRoot.defaults;
+    if (defaults && typeof defaults === 'object' && !Array.isArray(defaults)) {
+      const legacyModel = (defaults as { model?: unknown }).model;
+      if (typeof legacyModel === 'string') model = legacyModel;
+    }
     const list = Array.isArray(agentRoot.list) ? agentRoot.list : [];
     const defaultId = typeof agentRoot.default === 'string' && agentRoot.default.trim() ? agentRoot.default.trim() : '';
     const entry =
