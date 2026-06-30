@@ -145,7 +145,9 @@ export function resolveDefaultAgentId(cfg: Config): string {
   if (agents.length === 0) {
     return DEFAULT_AGENT_ID;
   }
-  const chosen = agents[0]?.id?.trim();
+  const chosen =
+    agents.find((entry) => (entry as { default?: boolean }).default === true)?.id?.trim() ??
+    agents[0]?.id?.trim();
   return chosen ? normalizeAgentId(chosen) : DEFAULT_AGENT_ID;
 }
 
@@ -159,7 +161,8 @@ function resolveAgentEntry(cfg: Config, agentId: string): AgentEntry | undefined
  */
 export function resolveAgentWorkspaceDir(cfg: Config, agentId: string): string {
   const id = normalizeAgentId(agentId);
-  const configured = resolveAgentEntry(cfg, id)?.workspace?.root?.trim();
+  const workspace = resolveAgentEntry(cfg, id)?.workspace as { root?: string } | string | undefined;
+  const configured = (typeof workspace === 'string' ? workspace : workspace?.root)?.trim();
   if (configured) {
     return resolveUserPath(configured);
   }
@@ -270,5 +273,9 @@ export function resolveAgentIdForWorkspacePath(cfg: Config, resolvedWorkspacePat
 }
 
 export function getDefaultWorkspacePath(cfg: Config): string {
+  const legacyWorkspace = (cfg.agents as unknown as { defaults?: { workspace?: string } }).defaults?.workspace?.trim();
+  if (legacyWorkspace) {
+    return join(resolveUserPath(legacyWorkspace), resolveDefaultAgentId(cfg));
+  }
   return resolveAgentWorkspaceDir(cfg, resolveDefaultAgentId(cfg));
 }

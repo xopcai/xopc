@@ -258,7 +258,7 @@ function safeResolveDefaultModel(get: () => Model<Api>): Model<Api> | null {
 }
 
 function resolveSubagentStreamMode(
-  getConfig: () => Config | undefined,
+  _getConfig: () => Config | undefined,
 ): 'off' | 'steps' | 'full' {
   return 'steps';
 }

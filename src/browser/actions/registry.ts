@@ -52,11 +52,11 @@ function toMs(ctx: BrowserActionContext): number {
 }
 
 /** Whether humanize mode is active for this context (local/cdp/cloakbrowser only). */
-function isHumanizeEnabled(ctx: BrowserActionContext): boolean {
+function isHumanizeEnabled(_ctx: BrowserActionContext): boolean {
   return false;
 }
 
-function humanPreset(ctx: BrowserActionContext): HumanPreset {
+function humanPreset(_ctx: BrowserActionContext): HumanPreset {
   return 'default';
 }
 

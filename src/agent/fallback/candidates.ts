@@ -27,6 +27,20 @@ function getDefaultModelParts(config?: Config): { provider: string; model: strin
   };
 }
 
+function getConfiguredFallbackRefs(config?: Config): string[] | undefined {
+  const legacyModel = (config?.agents as unknown as {
+    defaults?: { model?: { fallbacks?: unknown } };
+  } | undefined)?.defaults?.model;
+  if (
+    legacyModel &&
+    typeof legacyModel === 'object' &&
+    Array.isArray(legacyModel.fallbacks)
+  ) {
+    return legacyModel.fallbacks.filter((value): value is string => typeof value === 'string');
+  }
+  return undefined;
+}
+
 /**
  * Parse model reference string into provider/model parts.
  * Uses the unified implementation from selection.ts.
@@ -49,7 +63,7 @@ export function resolveFallbackCandidates(params: {
   const { cfg, provider: inputProvider, model: inputModel, fallbacksOverride } = params;
 
   const primaryRef = getDefaultModelSync(cfg);
-  const fallbacks = fallbacksOverride;
+  const fallbacks = fallbacksOverride ?? getConfiguredFallbackRefs(cfg);
 
   const defaultParts = getDefaultModelParts(cfg);
   const primaryResolved = parseModelRef(primaryRef || getDefaultModelSync(cfg));

@@ -21,7 +21,7 @@ import {
 } from '../../agent/transcript/thinking-types.js';
 import type { SessionConfigStore } from '../../session/index.js';
 
-async function stripSessionAgentFields(
+async function _stripSessionAgentFields(
   store: SessionConfigStore | undefined,
   sessionKey: string,
   fields: Array<'thinkingLevel' | 'reasoningLevel' | 'verboseLevel'>,

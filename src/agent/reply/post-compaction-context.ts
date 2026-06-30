@@ -85,7 +85,15 @@ export function readPostCompactionContextFromAgentsMd(
   agentsMdContent: string,
   options?: PostCompactionContextOptions,
 ): string | null {
-  const sectionNames = DEFAULT_POST_COMPACTION_SECTIONS;
+  const compaction = (options?.cfg?.agents as unknown as {
+    defaults?: { compaction?: { enabled?: boolean; postCompactionSections?: string[] } };
+  } | undefined)?.defaults?.compaction;
+  if (compaction?.enabled === false) {
+    return null;
+  }
+  const sectionNames = Array.isArray(compaction?.postCompactionSections)
+    ? compaction.postCompactionSections
+    : DEFAULT_POST_COMPACTION_SECTIONS;
 
   if (sectionNames.length === 0) {
     return null;
@@ -144,11 +152,14 @@ export function readPostCompactionContext(params: {
   if (!cfg) {
     return null;
   }
-  const agentId =
-    params.agentId ??
-    (params.sessionKey && cfg
-      ? resolveEffectiveAgentProfileForSession(cfg, params.sessionKey).agentId
-      : undefined);
+  let agentId = params.agentId;
+  if (!agentId && params.sessionKey) {
+    try {
+      agentId = resolveEffectiveAgentProfileForSession(cfg, params.sessionKey).agentId;
+    } catch {
+      return null;
+    }
+  }
   if (!agentId) {
     return null;
   }

@@ -16,7 +16,7 @@ export const MAX_AGENT_TURN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
 /** Default per-turn timeout (30 minutes). */
 export const DEFAULT_AGENT_TURN_TIMEOUT_MS = 30 * 60 * 1000;
 
-export function resolveAgentTurnTimeoutMs(config?: Config): number {
+export function resolveAgentTurnTimeoutMs(_config?: Config): number {
   return DEFAULT_AGENT_TURN_TIMEOUT_MS;
 }
 
