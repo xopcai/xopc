@@ -2,6 +2,7 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import { appendMemoryTraceEvent } from '../../storage/sqlite/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { proposeMemoryCandidatesFromTurn } from './candidate-extractor.js';
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
 import type {
   MemoryDeleteRequest,
@@ -140,17 +141,18 @@ export class MemoryManager {
     }
   }
 
-  syncAll(userContent: string, assistantContent: string, options?: { sessionId?: string }): void {
+  async syncAll(userContent: string, assistantContent: string, options?: { sessionId?: string }): Promise<void> {
     const event: MemorySyncEvent = {
       type: 'turn',
       userContent,
       assistantContent,
       sessionId: options?.sessionId,
     };
+    await this.proposeCandidatesFromTurn(event);
     for (const p of this.providers) {
       const started = Date.now();
       try {
-        p.sync?.(event);
+        await p.sync?.(event);
         this.trace('sync', p.id, event, {
           resultCount: 1,
           durationMs: Date.now() - started,
@@ -163,6 +165,27 @@ export class MemoryManager {
           sessionKey: options?.sessionId,
         });
         log.warn({ err, id: p.id }, 'memory sync failed');
+      }
+    }
+  }
+
+  private async proposeCandidatesFromTurn(event: Extract<MemorySyncEvent, { type: 'turn' }>): Promise<void> {
+    const candidates = proposeMemoryCandidatesFromTurn({
+      userContent: event.userContent,
+      assistantContent: event.assistantContent,
+      sessionKey: event.sessionId,
+    });
+    for (const candidate of candidates) {
+      try {
+        await this.write({
+          ...candidate,
+          scope: {
+            ...(candidate.scope ?? {}),
+            ...(event.sessionId ? { sessionKey: event.sessionId } : {}),
+          },
+        });
+      } catch (err) {
+        log.debug({ err, sessionKey: event.sessionId }, 'memory candidate proposal failed');
       }
     }
   }
@@ -413,7 +436,10 @@ export class MemoryManager {
     operation: 'write' | 'update' | 'delete',
     request: MemoryWriteRequest | MemoryUpdateRequest | MemoryDeleteRequest,
   ): Promise<MemoryWriteResult> {
-    const providers = this.providersForWrite();
+    const providers =
+      operation === 'write' && (request as MemoryWriteRequest).status === 'candidate'
+        ? this.providers.filter((provider) => provider.capabilities.local)
+        : this.providersForWrite();
     const errors: string[] = [];
     let firstSuccess: MemoryWriteResult | null = null;
 
@@ -483,6 +509,9 @@ export class MemoryManager {
     }
     if (operation === 'write') {
       const writeRequest = request as MemoryWriteRequest;
+      if (writeRequest.status === 'candidate' && !provider.capabilities.local) {
+        return false;
+      }
       if (
         this.writePolicy.autoWriteKinds &&
         this.writePolicy.autoWriteKinds.length > 0 &&

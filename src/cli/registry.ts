@@ -14,7 +14,7 @@ export function createDefaultContext(
   opts?: { config?: string; workspace?: string; verbose?: boolean }
 ): CLIContext {
   return {
-    configPath: opts?.config || process.env.XOPC_CONFIG || resolveConfigPath(),
+    configPath: opts?.config || process.env.XOPC_CONFIG || process.env.XOPC_CONFIG_PATH || resolveConfigPath(),
     workspacePath: opts?.workspace || process.env.XOPC_WORKSPACE || resolveDefaultAgentWorkspaceDir(),
     isVerbose: (opts?.verbose ?? (argv.includes('--verbose') || argv.includes('-v'))),
     argv,

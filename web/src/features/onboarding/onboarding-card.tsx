@@ -31,6 +31,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 interface OnboardingCardProps {
   onComplete: () => void | Promise<void>;
   onDismiss: () => void;
+  canDismiss?: boolean;
 }
 
 type OnboardingState = {
@@ -75,7 +76,7 @@ function onboardingReducer(state: OnboardingState, action: OnboardingAction): On
   }
 }
 
-export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
+export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: OnboardingCardProps) {
   const language = useLocaleStore((s) => s.language);
   const o = messages(language).onboarding;
 
@@ -257,13 +258,15 @@ export function OnboardingCard({ onComplete, onDismiss }: OnboardingCardProps) {
               >
                 {language === 'zh' ? '高级设置…' : 'More settings…'}
               </Link>
-              <button
-                type="button"
-                className="text-xs font-medium text-fg-muted hover:text-fg hover:underline"
-                onClick={onDismiss}
-              >
-                {o.skipSetup}
-              </button>
+              {canDismiss ? (
+                <button
+                  type="button"
+                  className="text-xs font-medium text-fg-muted hover:text-fg hover:underline"
+                  onClick={onDismiss}
+                >
+                  {o.skipSetup}
+                </button>
+              ) : null}
             </div>
           </div>
         ) : null}

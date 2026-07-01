@@ -324,6 +324,8 @@ export function useChatSessionStreaming(deps: {
       }
 
       try {
+        await sessionMgrRef.current.ensureSessionExists(chatId);
+
         const sendStreamCallbacks = createAgentStreamMessagingCallbacks({
           chatId,
           shouldApplyStreamUpdate,

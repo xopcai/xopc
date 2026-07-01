@@ -4,6 +4,7 @@ import { Command } from 'commander';
 import { ROOT_COMMAND_DESCRIPTION } from './command-manifest.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { resolveCommandName, tryLoadCommand, loadAllCommands } from './command-loaders.js';
+import { isHelpOrVersionInvocation } from './argv.js';
 
 // Lazy logger flush so that pure parameter-parsing paths (--help, --version,
 // `<unknown>`) never load the logger barrel. Imports `logger/shutdown.js`
@@ -24,6 +25,14 @@ import { parsedOpts, getContextWithOpts } from './context.js';
 // `tui` is intentionally omitted: `await runTui()` completes when the user exits
 // the TUI and the process must call `process.exit` (interactive stdin stays open).
 const LONG_RUNNING_COMMANDS = new Set(['gateway', 'agent']);
+
+export function argvWithDefaultCommand(argv: string[], defaultCommand = 'tui'): string[] {
+  const target = resolveCommandName(argv);
+  if (target || isHelpOrVersionInvocation(argv)) {
+    return argv;
+  }
+  return [...argv, defaultCommand];
+}
 
 function isExtensionsDevCommand(command: Command): boolean {
   return command.name() === 'dev' && command.parent?.name() === 'extensions';
@@ -86,7 +95,8 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
     return index < 2;
   });
 
-  const target = resolveCommandName(filteredArgv);
+  const argvToParse = argvWithDefaultCommand(filteredArgv);
+  const target = resolveCommandName(argvToParse);
   let loaded = false;
   if (target) {
     loaded = await tryLoadCommand(program, ctx, target, getContextWithOpts);
@@ -98,5 +108,5 @@ export async function runCli(argv: string[] = process.argv): Promise<void> {
     await loadAllCommands(program, ctx, getContextWithOpts);
   }
 
-  program.parse(filteredArgv);
+  program.parse(argvToParse);
 }

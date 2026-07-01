@@ -30,6 +30,28 @@ type SessionLoadResult = {
 
 const _sessionLoadInflight = new Map<string, Promise<SessionLoadResult>>();
 
+export function parseWebchatSessionKeyForCreate(
+  sessionKey: string,
+): { agentId: string; channel: string; chatId: string } | null {
+  const parts = sessionKey.trim().split(':');
+  if (parts.length < 6) return null;
+  const [scope, agentId, channel, accountId, peerKind, ...peerParts] = parts;
+  const chatId = peerParts.join(':').trim();
+  if (scope !== 'agent') return null;
+  if (!agentId?.trim()) return null;
+  if (channel !== 'webchat') return null;
+  if (accountId !== 'default' || peerKind !== 'direct') return null;
+  if (!chatId) return null;
+  return { agentId: agentId.trim().toLowerCase(), channel, chatId };
+}
+
+async function readErrorMessage(res: Response): Promise<string> {
+  const body = (await res.json().catch(() => ({}))) as {
+    error?: string | { message?: string };
+  };
+  return typeof body.error === 'string' ? body.error : body.error?.message ?? `HTTP ${res.status}`;
+}
+
 /** Session list + history via REST; auth from `apiFetch` (gateway token store). */
 export class SessionManager {
   /**
@@ -180,6 +202,37 @@ export class SessionManager {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as { session: SessionInfo };
     return data.session;
+  }
+
+  async ensureSessionExists(sessionKey: string): Promise<void> {
+    const trimmed = sessionKey.trim();
+    if (!trimmed) throw new Error('Session key is required');
+
+    const resolved = await apiFetch(apiUrl('/api/sessions/resolve'), {
+      method: 'POST',
+      body: JSON.stringify({ sessionKey: trimmed }),
+    });
+    if (resolved.ok) return;
+    if (resolved.status !== 404) {
+      throw new Error(await readErrorMessage(resolved));
+    }
+
+    const parsed = parseWebchatSessionKeyForCreate(trimmed);
+    if (!parsed) {
+      throw new Error('Session not found');
+    }
+
+    const created = await apiFetch(apiUrl('/api/sessions'), {
+      method: 'POST',
+      body: JSON.stringify({
+        channel: parsed.channel,
+        agentId: parsed.agentId,
+        chat_id: parsed.chatId,
+      }),
+    });
+    if (!created.ok) {
+      throw new Error(await readErrorMessage(created));
+    }
   }
 
   /** Lightweight name read after auto-title (matches `ui` SessionManager). */

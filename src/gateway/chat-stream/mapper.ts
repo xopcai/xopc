@@ -115,8 +115,15 @@ export class ChatStreamMapper {
     const messageId = this.ensureAssistantMessageId();
     const delta = event.assistantMessageEvent as { type?: unknown; delta?: unknown } | undefined;
     if (delta?.type === 'text_delta' && typeof delta.delta === 'string' && delta.delta) {
-      this.currentAssistantText += delta.delta;
-      return [this.make('assistant_delta', { messageId, delta: delta.delta })];
+      const text = extractTextFromMessage(message);
+      const suffixFromMessage = appendSuffix(this.currentAssistantText, text);
+      const suffix = text ? suffixFromMessage : appendSuffix(this.currentAssistantText, delta.delta);
+      if (!suffix) {
+        if (text) this.currentAssistantText = text;
+        return [];
+      }
+      this.currentAssistantText = text || `${this.currentAssistantText}${suffix}`;
+      return [this.make('assistant_delta', { messageId, delta: suffix })];
     }
     if (delta?.type === 'thinking_delta' && typeof delta.delta === 'string' && delta.delta) {
       return [this.make('thinking_delta', { messageId, delta: delta.delta })];

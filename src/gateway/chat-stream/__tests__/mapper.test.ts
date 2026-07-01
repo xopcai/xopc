@@ -38,6 +38,25 @@ describe('ChatStreamMapper', () => {
     expect(end[0]).toMatchObject({ payload: { delta: 'i' } });
   });
 
+  it('does not duplicate text when a provider reports cumulative text_delta chunks', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+
+    const first = m.map({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Hey! What can' }] },
+      assistantMessageEvent: { type: 'text_delta', delta: 'Hey! What can' },
+    });
+    const second = m.map({
+      type: 'message_update',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'Hey! What can I help you with today?' }] },
+      assistantMessageEvent: { type: 'text_delta', delta: 'Hey! What can I help you with today?' },
+    });
+
+    expect(first[0]).toMatchObject({ type: 'assistant_delta', payload: { delta: 'Hey! What can' } });
+    expect(second[0]).toMatchObject({ type: 'assistant_delta', payload: { delta: ' I help you with today?' } });
+  });
+
   it('maps TTS audio before the gateway run_end and targets the last assistant', () => {
     const m = mapper();
     m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });

@@ -16,7 +16,7 @@
 
 | 段 | 用途 |
 | --- | --- |
-| `agents` | Agent manifests、全局默认 preset、capability presets、默认 agent id |
+| `agents` | Agent manifests、可选 capability presets、默认 agent id |
 | `providers` | LLM provider API key 引用和 provider id |
 | `bindings` | 将入站 channel / peer 路由到 agent |
 | `session` | 会话 scope、identity links、reset 行为 |
@@ -37,25 +37,18 @@
 {
   "agents": {
     "default": "main",
-    "defaultPreset": "default",
-    "capabilityPresets": {
-      "default": {
-        "id": "default",
-        "name": "全局默认能力",
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "deepseek/deepseek-chat" }
-          }
-        }
-      }
-    },
     "list": [
       {
         "id": "main",
-        "identity": { "name": "Main", "role": "通用助手", "language": "zh-CN" },
-        "responsibilities": { "primary": ["帮助用户完成任务"] },
+        "identity": { "name": "Main", "role": "General assistant" },
+        "responsibilities": { "primary": ["Help the user complete tasks"] },
         "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "deepseek/deepseek-v4-flash" }
+          }
+        },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
         "memory": { "mode": "confirmWrite", "sources": ["session"] },
@@ -63,8 +56,11 @@
         "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
       }
     ]
+  },
+  "providers": {
+    "deepseek": "${DEEPSEEK_API_KEY}"
   }
 }
 ```
 
-当前没有 `agents.defaults` 合并层。全局默认能力写在 `agents.defaultPreset` 指向的 preset，复用策略写在 `agents.capabilityPresets`，具体 agent 写在 `agents.list[]`。
+当前没有 `agents.defaults` 合并层。可运行的 agent 写在 `agents.list[]`；只有需要复用策略补丁时才使用 `agents.capabilityPresets` 和 `agents.defaultPreset`。

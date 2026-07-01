@@ -10,7 +10,7 @@ xopc already has broad documentation coverage, but quality is uneven:
 - The first-run path now points users to model setup first, an optional personal profile, and then a local or Web chat.
 - High-priority task guides now exist for model setup, Telegram, gateway exposure, second agents, and broken setup diagnosis.
 - English and Chinese pages can drift, so high-priority user guides should stay paired.
-- CLI docs can drift from `xopc --help` as commands are added or renamed.
+- CLI docs can drift from `xopc --help` and default command behavior as commands are added or renamed.
 
 ## Documentation Model
 

@@ -11,6 +11,7 @@ xopc 提供丰富的 CLI 命令用于管理、对话和配置。
 npm install -g @xopcai/xopc
 
 # 直接使用命令
+xopc              # 打开本地 TUI
 xopc <command>
 ```
 
@@ -23,6 +24,7 @@ cd xopc
 pnpm install
 
 # 使用 pnpm run dev -- 前缀
+pnpm run dev --          # 打开本地 TUI
 pnpm run dev -- <command>
 ```
 
@@ -38,10 +40,10 @@ pnpm run dev -- <command>
 | `setup` | 初始化配置文件和工作区目录 |
 | `profile` | 管理隔离状态 profile |
 | `onboard` | 交互式设置向导（LLM、渠道、Gateway） |
-| `channels` | 渠道登录（`channels login`）与私聊配对批准（`channels pairing approve`） |
+| `channels` | 渠道目录/配置管理与私聊配对批准（`channels pairing approve`） |
 | `auth` | 管理认证凭据 |
 | `agent` | 与智能体对话 |
-| `tui` | 全屏终端对话界面（连网关或 `--local` 嵌入式）— 详见 [TUI](./tui.md) |
+| `tui` | 全屏终端对话界面（默认嵌入式，可选网关模式）— 详见 [TUI](./tui.md) |
 | `tunnel` | 管理 FRP 远程访问隧道 |
 | `gateway` | 启动 REST 网关 |
 | `session` | 管理会话 |
@@ -63,6 +65,40 @@ pnpm run dev -- <command>
 | `extensions` | 管理扩展 |
 
 MCP 配置见 [MCP](./mcp.md)。当前 `xopc --help` 不展示 `mcp` 作为顶层命令；请以网关设置和 MCP 配置文档为准。
+
+### 子命令索引
+
+具体选项以 `xopc <command> --help` 为准。下表对应当前 `xopc --help` 暴露的命令集合。
+
+| 命令 | 支持的子命令 |
+|------|--------------|
+| `init` | 无子命令 |
+| `setup` | 无子命令 |
+| `profile` | `list`、`create`、`delete`、`switch` |
+| `onboard` | 无子命令 |
+| `channels` | `list`、`show`、`enable`、`disable`、`config`、`pairing` |
+| `auth` | `list`、`set`、`get`、`remove`、`login`、`logout`、`profiles`、`clear`、`providers` |
+| `agent` | 无子命令 |
+| `tui` | 无子命令 |
+| `tunnel` | `prefetch`、`consent`、`secret`、`start`、`stop`、`status`、`qr`、`broker` |
+| `gateway` | `token`、`status`、`health`、`call`、`probe`、`stop`、`restart`、`logs`、`service`、`ssh-tunnel` |
+| `session` | `list`、`info`、`delete`、`delete-many`、`rename`、`tag`、`untag`、`archive`、`unarchive`、`pin`、`unpin`、`search`、`grep`、`export`、`stats`、`cleanup` |
+| `doctor` | 无子命令 |
+| `update` | 无子命令 |
+| `logs` | `list`、`query`、`stats`、`tail`、`clean`、`rotate` |
+| `cron` | `list`、`add`、`remove`、`enable`、`disable`、`run`、`trigger` |
+| `goal` | `list`、`new`、`show`、`pause`、`resume`、`archive`、`runs`、`checklist`、`evidence` |
+| `config` | `get`、`set`、`unset`、`show`、`validate`、`token`、`path` |
+| `image` | `status`、`providers` |
+| `models` | `list`、`status`、`set`、`auth`（`list`、`login`、`paste-api-key`、`logout`） |
+| `providers` | `list`、`set-key`、`unset-key`、`schema` |
+| `voice` | `status`、`enable`、`disable`、`schema` |
+| `search` | `list`、`add`、`remove`、`schema` |
+| `skills` | `list`、`install`、`enable`、`disable`、`status`、`audit`、`config`、`hub`、`test` |
+| `tailscale` | `status` |
+| `browser` | `open`、`state`、`click`、`type`、`screenshot`、`validate`、`run`、`doctor`、`close`、`cloakbrowser`、`extension` |
+| `agents` | `list`、`add`、`delete` |
+| `extensions` | `list`、`inspect`、`freeze`、`health`、`verify`、`doctor`、`audit`、`pack`、`create`、`dev`、`install`、`search`、`publish`、`update` |
 
 ---
 
@@ -174,16 +210,16 @@ xopc onboard --gateway
 
 ## channels
 
-在运行 CLI 的机器上（与网关同机时才能批准飞书/微信侧收到的配对码）完成渠道 **登录**（扫码 / 凭证流）以及 **私聊配对批准**。
+在运行 CLI 的机器上管理消息渠道目录、配置块和 **私聊配对批准**。扫码或凭证流以具体渠道文档和网关控制台为准。
 
-### channels login
+### 渠道目录与配置
 
 ```bash
-xopc channels login
-xopc channels login --channel weixin
-xopc channels login --channel feishu
-xopc channels login --channel feishu
-xopc channels login --account <account-id>
+xopc channels list
+xopc channels show telegram
+xopc channels enable telegram
+xopc channels disable telegram
+xopc channels config set-json telegram '{"enabled":true}'
 ```
 
 各通道字段与控制台流程见 **[消息通道](./channels/index.md)**。
@@ -286,8 +322,9 @@ xopc agent -m "Continue our discussion" -s my-session
 **快速开始：**
 
 ```bash
-xopc tui                              # 网关模式（CLI 内置默认地址；可用 --url 覆盖）
-xopc tui --local                      # 嵌入式 AgentService，无需网关
+xopc                                  # 等同于 xopc tui；嵌入式模式
+xopc tui                              # 嵌入式 AgentService，无需网关
+xopc tui --gateway                    # 强制网关模式
 xopc tui --url http://localhost:18790 --token <令牌>
 xopc tui -s <sessionKey> -m "你好"     # 指定会话 + 可选首条消息
 ```
@@ -296,6 +333,7 @@ xopc tui -s <sessionKey> -m "你好"     # 指定会话 + 可选首条消息
 |------|------|
 | `--url <url>` | 网关根 URL |
 | `--token <token>` | 网关 Bearer 令牌 |
+| `--gateway` | 强制网关模式 |
 | `-s, --session <key>` | 要恢复的会话键；省略时新建 `tui-<uuid>` 会话 |
 | `-m, --message <text>` | 连接成功后自动发送一条 |
 | `--local` | 嵌入式模式（不连网关） |
@@ -390,6 +428,10 @@ xopc gateway service start
 在 `xopc.json` 中设置 **`commands.restart: false`** 可禁用 SIGUSR1 重启。
 
 ---
+
+## cron
+
+管理定时任务。
 
 ### 添加任务
 

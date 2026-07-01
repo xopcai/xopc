@@ -134,6 +134,8 @@ async function runOnce(params: {
 }): Promise<GatewayBenchSample> {
   const tempRoot = mkdtempSync(join(tmpdir(), 'xopc-gateway-bench-'));
   const configPath = join(tempRoot, 'xopc.json');
+  const workspacePath = join(tempRoot, 'workspace');
+  mkdirSync(workspacePath, { recursive: true });
   writeFileSync(
     configPath,
     `${JSON.stringify(
@@ -169,6 +171,8 @@ async function runOnce(params: {
         env: {
           ...process.env,
           XOPC_CONFIG_PATH: configPath,
+          XOPC_CONFIG: configPath,
+          XOPC_WORKSPACE: workspacePath,
           XOPC_STATE_DIR: tempRoot,
           XOPC_HOME: tempRoot,
           XOPC_SKIP_CHANNELS: '1',

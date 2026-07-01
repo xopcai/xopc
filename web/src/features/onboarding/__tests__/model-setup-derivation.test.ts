@@ -60,6 +60,74 @@ describe('computeNeedsModelSetup', () => {
     ).toBe(true);
   });
 
+  it('returns true for the first-run default preset shape with no role model', () => {
+    expect(
+      computeNeedsModelSetup({
+        ...readyInput,
+        config: {
+          agents: {
+            default: 'main',
+            defaultPreset: 'default',
+            capabilityPresets: {
+              default: {
+                id: 'default',
+                name: 'Global defaults',
+                models: {
+                  defaultRole: 'deep',
+                  roles: {},
+                },
+              },
+            },
+            list: [
+              {
+                id: 'main',
+                enabled: true,
+              },
+            ],
+          },
+          providers: { custom: '***' },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it('uses the default agent model when the global default preset is intentionally empty', () => {
+    expect(
+      computeNeedsModelSetup({
+        ...readyInput,
+        config: {
+          agents: {
+            default: 'coder',
+            defaultPreset: 'default',
+            capabilityPresets: {
+              default: {
+                id: 'default',
+                name: 'Global defaults',
+                models: {
+                  defaultRole: 'deep',
+                  roles: {},
+                },
+              },
+            },
+            list: [
+              {
+                id: 'coder',
+                enabled: true,
+                models: {
+                  defaultRole: 'deep',
+                  roles: {
+                    deep: { model: 'openai/gpt-4o' },
+                  },
+                },
+              },
+            ],
+          },
+          providers: { openai: '***' },
+        },
+      }),
+    ).toBe(false);
+  });
+
   it('returns true when config is ok but no usable models', () => {
     expect(
       computeNeedsModelSetup({

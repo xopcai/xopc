@@ -81,7 +81,7 @@ export class MemoryPrefetchCoordinator {
     }
     const assistant = this.opts.getLastAssistantContent(sessionKey) ?? '';
     const mm = this.opts.getMemoryManagerForSession(sessionKey);
-    mm.syncAll(userPlainText, assistant, { sessionId: sessionKey });
+    void mm.syncAll(userPlainText, assistant, { sessionId: sessionKey });
     mm.queuePrefetchAll(userPlainText, { sessionId: sessionKey });
   }
 }

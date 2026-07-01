@@ -44,22 +44,6 @@ import {
   installSkillFromZip,
   listManagedSkillDirs,
 } from '../../agent/skills/managed-store.js';
-import {
-  downloadFromMarketplace,
-  getMarketplacePackageDetail,
-  getMarketplaceProviderDisplayName,
-  listMarketplaceCategories,
-  listMarketplacePackages,
-  listRegisteredProviders,
-  resolveSkillsMarketplaceProvider,
-} from '../../agent/skills/skills-marketplace.js';
-import {
-  downloadExtensionStoreZipBuffer,
-  fetchMarketplacePackageDetail,
-  resolveExtensionZipDownloadUrl,
-  resolveExtensionsStoreBaseUrl,
-} from '../../agent/skills/marketplace/adapters/store/store-api-client.js';
-import { installExtensionFromStoreZip, peekExtensionIdFromStoreZip } from '../../extensions/install.js';
 import { createSkillConfigManager } from '../../agent/skills/config.js';
 import { removeSkillsLockEntry } from '../../agent/skills/hub-lock.js';
 import { getExtensionLockfileManager } from '../../extensions/lockfile.js';
@@ -170,12 +154,14 @@ export class GatewayMarketplaceService {
     params: SkillsStoreListParams,
     provider?: string,
   ): Promise<UnifiedMarketplaceListResponse> {
+    const { listMarketplacePackages } = await import('../../agent/skills/skills-marketplace.js');
     return listMarketplacePackages(this.opts.getConfig(), params, provider);
   }
 
   async fetchSkillsCategories(
     provider?: string,
   ): Promise<{ items: MarketplaceCategoryOption[] }> {
+    const { listMarketplaceCategories } = await import('../../agent/skills/skills-marketplace.js');
     return listMarketplaceCategories(this.opts.getConfig(), provider);
   }
 
@@ -183,6 +169,7 @@ export class GatewayMarketplaceService {
     packageName: string,
     provider?: string,
   ): Promise<UnifiedMarketplacePackageDetail> {
+    const { getMarketplacePackageDetail } = await import('../../agent/skills/skills-marketplace.js');
     return getMarketplacePackageDetail(this.opts.getConfig(), packageName, provider);
   }
 
@@ -192,6 +179,7 @@ export class GatewayMarketplaceService {
     overwrite?: boolean;
     provider?: string;
   }): Promise<SkillInstallResultPayload> {
+    const { downloadFromMarketplace } = await import('../../agent/skills/skills-marketplace.js');
     const { buffer, skillId } = await downloadFromMarketplace(
       this.opts.getConfig(),
       opts.name,
@@ -201,7 +189,11 @@ export class GatewayMarketplaceService {
     return this.installSkillZip(buffer, { skillId, overwrite: opts.overwrite ?? false });
   }
 
-  getSkillsProvider(): { provider: string; displayName: string } {
+  async getSkillsProvider(): Promise<{ provider: string; displayName: string }> {
+    const {
+      getMarketplaceProviderDisplayName,
+      resolveSkillsMarketplaceProvider,
+    } = await import('../../agent/skills/skills-marketplace.js');
     const provider = resolveSkillsMarketplaceProvider(this.opts.getConfig());
     return {
       provider,
@@ -210,7 +202,8 @@ export class GatewayMarketplaceService {
   }
 
   /** All registered marketplace providers (built-in + extension-contributed). */
-  getSkillsProviders(): Array<{ id: string; displayName: string }> {
+  async getSkillsProviders(): Promise<Array<{ id: string; displayName: string }>> {
+    const { listRegisteredProviders } = await import('../../agent/skills/skills-marketplace.js');
     return listRegisteredProviders();
   }
 
@@ -248,6 +241,10 @@ export class GatewayMarketplaceService {
 
   /** xopc-store extension package preview (type must be `extension`). */
   async fetchExtensionPackageDetail(packageName: string): Promise<MarketplacePackageDetail> {
+    const {
+      fetchMarketplacePackageDetail,
+      resolveExtensionsStoreBaseUrl,
+    } = await import('../../agent/skills/marketplace/adapters/store/store-api-client.js');
     const base = resolveExtensionsStoreBaseUrl(this.opts.getConfig());
     const detail = await fetchMarketplacePackageDetail(base, packageName.trim());
     if (detail.type !== 'extension') {
@@ -274,6 +271,15 @@ export class GatewayMarketplaceService {
       throw new Error('Package name is required');
     }
     const cfg = this.opts.getConfig();
+    const {
+      downloadExtensionStoreZipBuffer,
+      resolveExtensionZipDownloadUrl,
+      resolveExtensionsStoreBaseUrl,
+    } = await import('../../agent/skills/marketplace/adapters/store/store-api-client.js');
+    const {
+      installExtensionFromStoreZip,
+      peekExtensionIdFromStoreZip,
+    } = await import('../../extensions/install.js');
     const storeBase = resolveExtensionsStoreBaseUrl(cfg);
     const targetDir = resolveExtensionsDir();
     mkdirSync(targetDir, { recursive: true });

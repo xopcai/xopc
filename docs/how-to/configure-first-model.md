@@ -33,7 +33,7 @@ xopc models list --provider deepseek
 Set the default model:
 
 ```bash
-xopc models set deepseek/deepseek-chat
+xopc models set deepseek/deepseek-v4-flash
 ```
 
 Check the result:
@@ -45,7 +45,7 @@ xopc models status
 ## 3. Try a local chat
 
 ```bash
-xopc tui --local
+xopc
 ```
 
 If the model call fails, run:

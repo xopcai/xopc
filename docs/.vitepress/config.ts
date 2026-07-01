@@ -67,6 +67,7 @@ export default defineConfig({
             items: [
               { text: 'CLI', link: '/cli' },
               { text: 'Terminal UI (tui)', link: '/tui' },
+              { text: 'PC Desktop app', link: '/desktop-app' },
               { text: 'Gateway console', link: '/gateway' },
               { text: 'Mobile app', link: '/mobile-app' },
               { text: 'Session', link: '/session' },
@@ -171,6 +172,7 @@ export default defineConfig({
             items: [
               { text: 'CLI 命令', link: '/zh/cli' },
               { text: '终端界面 (tui)', link: '/zh/tui' },
+              { text: 'PC 桌面端', link: '/zh/desktop-app' },
               { text: '网关控制台', link: '/zh/gateway' },
               { text: '手机端 App', link: '/zh/mobile-app' },
               { text: '会话管理', link: '/zh/session' },

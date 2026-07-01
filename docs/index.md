@@ -27,9 +27,9 @@ features:
   - title: 🔑 Bring your own keys. Any model.
     details: "DeepSeek, OpenAI, Anthropic, Google, Ollama, LM Studio, vLLM, Bedrock, Azure — 20+ providers. Run offline or mix cloud and local. Switch models in one config line."
     link: /models
-  - title: 📡 One brain, every screen
+  - title: 📡 One assistant, every surface
     details: "The same assistant across TUI, CLI, browser, desktop app, xopc-app on iOS/Android, and messengers. No sync needed. It's all one system."
-    link: /channels
+    link: /desktop-app
   - title: 🧩 Grows with you. Never outgrow it.
     details: "xopc skills install · xopc extensions install — extend capabilities with reusable modules, tools, channels, and UI panels without forking core."
     link: /extensions

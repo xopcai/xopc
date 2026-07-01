@@ -117,13 +117,18 @@ export {
   listMemoryRecords,
   searchMemoryRecords,
   setMemoryProviderState,
+  setMemoryTraceFeedback,
+  summarizeMemoryRecallFeedback,
   upsertMemoryRecord,
   type AppendMemorySignalInput,
   type AppendMemoryTraceEventInput,
   type ListMemoryRecordsOptions,
+  type MemoryRecallFeedbackSummary,
   type MemorySignalRowPayload,
+  type MemoryTraceFeedback,
   type MemoryTraceEventPayload,
   type SearchMemoryRecordsOptions,
+  type SetMemoryTraceFeedbackInput,
   type UpsertMemoryRecordInput,
 } from './memory-records-repository.js';
 export {

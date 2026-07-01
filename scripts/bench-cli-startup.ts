@@ -8,6 +8,8 @@ type BenchCase = {
   args: string[];
   firstOutputBudgetMs?: number;
   exitBudgetMs?: number;
+  killAfterFirstOutputMs?: number;
+  allowSignalExit?: boolean;
 };
 
 type BenchSample = {
@@ -42,6 +44,13 @@ const DEFAULT_CASES: BenchCase[] = [
   { id: 'help', args: ['--help'], firstOutputBudgetMs: 1000, exitBudgetMs: 1500 },
   { id: 'gatewayHelp', args: ['gateway', '--help'], firstOutputBudgetMs: 1000, exitBudgetMs: 1500 },
   { id: 'configShowHelp', args: ['config', '--help'], firstOutputBudgetMs: 1000, exitBudgetMs: 1500 },
+  {
+    id: 'tuiInteractive',
+    args: ['tui', '--local'],
+    firstOutputBudgetMs: 2500,
+    killAfterFirstOutputMs: 250,
+    allowSignalExit: true,
+  },
 ];
 
 function parseFlagValue(flag: string): string | undefined {
@@ -93,17 +102,18 @@ function summarize(samples: BenchSample[], benchCase: BenchCase): BenchSummary {
     minMs: Math.round(sortedDurations[0]!),
     maxMs: Math.round(sortedDurations[sortedDurations.length - 1]!),
     firstOutputAvgMs: firstOutputAverage === null ? null : Math.round(firstOutputAverage),
-    passedBudget: exitBudgetPassed && firstOutputBudgetPassed,
+    passedBudget: (benchCase.killAfterFirstOutputMs === undefined ? exitBudgetPassed : true) && firstOutputBudgetPassed,
   };
 }
 
-function runOnce(params: { entry: string; args: string[]; timeoutMs: number }): Promise<BenchSample> {
+function runOnce(params: { entry: string; benchCase: BenchCase; timeoutMs: number }): Promise<BenchSample> {
   return new Promise((resolve) => {
     const startedAt = performance.now();
     let firstOutputMs: number | null = null;
     let stdout = '';
     let stderr = '';
-    const child = spawn(process.execPath, [params.entry, ...params.args], {
+    let killAfterFirstOutput: NodeJS.Timeout | null = null;
+    const child = spawn(process.execPath, [params.entry, ...params.benchCase.args], {
       env: {
         ...process.env,
         XOPC_LOG_CONSOLE: 'false',
@@ -117,7 +127,15 @@ function runOnce(params: { entry: string; args: string[]; timeoutMs: number }): 
     }, params.timeoutMs);
 
     const markFirstOutput = (): void => {
-      firstOutputMs ??= performance.now() - startedAt;
+      if (firstOutputMs !== null) {
+        return;
+      }
+      firstOutputMs = performance.now() - startedAt;
+      if (params.benchCase.killAfterFirstOutputMs !== undefined) {
+        killAfterFirstOutput = setTimeout(() => {
+          child.kill('SIGTERM');
+        }, params.benchCase.killAfterFirstOutputMs);
+      }
     };
 
     child.stdout.on('data', (chunk: Buffer) => {
@@ -130,6 +148,7 @@ function runOnce(params: { entry: string; args: string[]; timeoutMs: number }): 
     });
     child.on('exit', (exitCode, signal) => {
       clearTimeout(timeout);
+      if (killAfterFirstOutput) clearTimeout(killAfterFirstOutput);
       resolve({
         durationMs: performance.now() - startedAt,
         firstOutputMs,
@@ -154,11 +173,11 @@ async function main(): Promise<void> {
   const result: BenchResult = { entry, cases: [] };
   for (const benchCase of cases) {
     for (let index = 0; index < warmup; index += 1) {
-      await runOnce({ entry, args: benchCase.args, timeoutMs });
+      await runOnce({ entry, benchCase, timeoutMs });
     }
     const samples: BenchSample[] = [];
     for (let index = 0; index < runs; index += 1) {
-      samples.push(await runOnce({ entry, args: benchCase.args, timeoutMs }));
+      samples.push(await runOnce({ entry, benchCase, timeoutMs }));
     }
     result.cases.push({ ...benchCase, samples, summary: summarize(samples, benchCase) });
   }
