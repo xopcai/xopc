@@ -3,8 +3,10 @@ import { randomUUID } from 'node:crypto';
 import type {
   MemoryKind,
   MemoryRecord,
+  MemorySensitivity,
   MemorySearchResult,
   MemorySignal,
+  MemoryStatus,
 } from '../../agent/memory/types.js';
 import { escapeFts5Query } from './fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
@@ -20,6 +22,11 @@ type MemoryRecordRow = {
   source_json: string;
   confidence: number | null;
   tags_json: string;
+  status: string;
+  sensitivity: string;
+  evidence_json: string;
+  review_after: number | null;
+  expires_at: number | null;
   created_at: number;
   updated_at: number;
 };
@@ -39,6 +46,11 @@ export interface UpsertMemoryRecordInput {
   source?: MemoryRecord['source'];
   confidence?: number;
   tags?: string[];
+  status?: MemoryStatus;
+  sensitivity?: MemorySensitivity;
+  evidence?: MemoryRecord['evidence'];
+  reviewAfter?: string;
+  expiresAt?: string;
   nowMs?: number;
 }
 
@@ -47,6 +59,7 @@ export interface ListMemoryRecordsOptions {
   agentId?: string;
   workspaceId?: string;
   kind?: MemoryKind;
+  status?: MemoryStatus;
   limit?: number;
   offset?: number;
 }
@@ -57,6 +70,7 @@ export interface SearchMemoryRecordsOptions {
   workspaceId?: string;
   providerId?: string;
   kinds?: MemoryKind[];
+  statuses?: MemoryStatus[];
   maxResults?: number;
   minScore?: number;
 }
@@ -109,9 +123,21 @@ type MemoryTraceRow = {
   selected_record_ids_json: string;
   skipped_reason: string | null;
   error: string | null;
+  feedback_json: string;
   duration_ms: number;
   created_at: number;
 };
+
+export type MemoryTraceFeedbackOutcome = 'helpful' | 'not_helpful' | 'mixed' | 'irrelevant';
+
+export interface MemoryTraceFeedback {
+  outcome: MemoryTraceFeedbackOutcome;
+  score?: number;
+  reason?: string;
+  source?: 'user' | 'evaluator' | 'system';
+  createdAt: string;
+  updatedAt?: string;
+}
 
 export interface AppendMemoryTraceEventInput {
   sessionKey?: string;
@@ -123,7 +149,17 @@ export interface AppendMemoryTraceEventInput {
   selectedRecordIds?: string[];
   skippedReason?: string;
   error?: string;
+  feedback?: MemoryTraceFeedback;
   durationMs?: number;
+  nowMs?: number;
+}
+
+export interface SetMemoryTraceFeedbackInput {
+  traceId: string;
+  feedback: Omit<MemoryTraceFeedback, 'createdAt' | 'updatedAt'> & {
+    createdAt?: string;
+    updatedAt?: string;
+  };
   nowMs?: number;
 }
 
@@ -138,8 +174,20 @@ export interface MemoryTraceEventPayload {
   selectedRecordIds: string[];
   skippedReason?: string;
   error?: string;
+  feedback?: MemoryTraceFeedback;
   durationMs: number;
   createdAt: string;
+}
+
+export interface MemoryRecallFeedbackSummary {
+  recordId: string;
+  helpful: number;
+  notHelpful: number;
+  mixed: number;
+  irrelevant: number;
+  total: number;
+  averageScore: number | null;
+  lastFeedbackAt?: string;
 }
 
 function parseStringArray(json: string): string[] {
@@ -149,6 +197,98 @@ function parseStringArray(json: string): string[] {
   } catch {
     return [];
   }
+}
+
+function parseEvidence(json: string): MemoryRecord['evidence'] {
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item): item is NonNullable<MemoryRecord['evidence']>[number] =>
+      Boolean(item) && typeof item === 'object',
+    );
+  } catch {
+    return [];
+  }
+}
+
+function parseMemoryTraceFeedback(json: string): MemoryTraceFeedback | undefined {
+  try {
+    const parsed = JSON.parse(json) as unknown;
+    if (!parsed || typeof parsed !== 'object') return undefined;
+    const obj = parsed as Record<string, unknown>;
+    const outcome = obj.outcome;
+    if (
+      outcome !== 'helpful' &&
+      outcome !== 'not_helpful' &&
+      outcome !== 'mixed' &&
+      outcome !== 'irrelevant'
+    ) {
+      return undefined;
+    }
+    return {
+      outcome,
+      ...(typeof obj.score === 'number' ? { score: obj.score } : {}),
+      ...(typeof obj.reason === 'string' ? { reason: obj.reason } : {}),
+      ...(obj.source === 'user' || obj.source === 'evaluator' || obj.source === 'system'
+        ? { source: obj.source }
+        : {}),
+      createdAt: typeof obj.createdAt === 'string' ? obj.createdAt : new Date(0).toISOString(),
+      ...(typeof obj.updatedAt === 'string' ? { updatedAt: obj.updatedAt } : {}),
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeMemoryTraceFeedback(
+  input: SetMemoryTraceFeedbackInput['feedback'],
+  nowMs = Date.now(),
+  existing?: MemoryTraceFeedback,
+): MemoryTraceFeedback {
+  const score = typeof input.score === 'number'
+    ? Math.max(-1, Math.min(1, input.score))
+    : undefined;
+  const reason = typeof input.reason === 'string' && input.reason.trim()
+    ? input.reason.trim().slice(0, 1000)
+    : undefined;
+  const nowIso = new Date(nowMs).toISOString();
+  return {
+    outcome: input.outcome,
+    ...(score != null ? { score } : {}),
+    ...(reason ? { reason } : {}),
+    ...(input.source ? { source: input.source } : {}),
+    createdAt: input.createdAt ?? existing?.createdAt ?? nowIso,
+    updatedAt: input.updatedAt ?? nowIso,
+  };
+}
+
+function memoryTraceRowToPayload(row: MemoryTraceRow): MemoryTraceEventPayload {
+  const feedback = parseMemoryTraceFeedback(row.feedback_json);
+  return {
+    traceId: row.trace_id,
+    ...(row.session_key ? { sessionKey: row.session_key } : {}),
+    ...(row.turn_id ? { turnId: row.turn_id } : {}),
+    phase: row.phase,
+    providerId: row.provider_id,
+    request: parseJsonValue(row.request_json, {}),
+    ...(row.result_count != null ? { resultCount: row.result_count } : {}),
+    selectedRecordIds: parseStringArray(row.selected_record_ids_json),
+    ...(row.skipped_reason ? { skippedReason: row.skipped_reason } : {}),
+    ...(row.error ? { error: row.error } : {}),
+    ...(feedback ? { feedback } : {}),
+    durationMs: row.duration_ms,
+    createdAt: new Date(row.created_at).toISOString(),
+  };
+}
+
+function parseOptionalTimestamp(value: string | undefined): number | null {
+  if (!value?.trim()) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function timestampToIso(value: number | null): string | undefined {
+  return value == null ? undefined : new Date(value).toISOString();
 }
 
 function parseSource(json: string): MemoryRecord['source'] {
@@ -164,6 +304,7 @@ function rowToRecord(row: MemoryRecordRow): MemoryRecord {
   return {
     id: row.record_id,
     kind: row.kind as MemoryKind,
+    status: row.status as MemoryStatus,
     scope: {
       agentId: row.agent_id,
       ...(row.workspace_id ? { workspaceId: row.workspace_id } : {}),
@@ -172,6 +313,10 @@ function rowToRecord(row: MemoryRecordRow): MemoryRecord {
     content: row.content,
     source: parseSource(row.source_json),
     ...(row.confidence != null ? { confidence: row.confidence } : {}),
+    sensitivity: row.sensitivity as MemorySensitivity,
+    evidence: parseEvidence(row.evidence_json),
+    ...(timestampToIso(row.review_after) ? { reviewAfter: timestampToIso(row.review_after) } : {}),
+    ...(timestampToIso(row.expires_at) ? { expiresAt: timestampToIso(row.expires_at) } : {}),
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     tags: parseStringArray(row.tags_json),
@@ -198,6 +343,10 @@ function upsertMemoryRecordFts(
 export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord {
   const id = input.id ?? randomUUID();
   const now = input.nowMs ?? Date.now();
+  const status = input.status ?? 'active';
+  const sensitivity = input.sensitivity ?? 'normal';
+  const reviewAfter = parseOptionalTimestamp(input.reviewAfter);
+  const expiresAt = parseOptionalTimestamp(input.expiresAt);
   const source = {
     ...(input.source ?? {}),
     provider: input.source?.provider ?? input.providerId,
@@ -207,8 +356,9 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
     db.prepare(
       `INSERT INTO memory_records (
         record_id, provider_id, kind, agent_id, workspace_id, session_key,
-        content, source_json, confidence, tags_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        content, source_json, confidence, tags_json, status, sensitivity,
+        evidence_json, review_after, expires_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         provider_id = excluded.provider_id,
         kind = excluded.kind,
@@ -219,6 +369,11 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
         source_json = excluded.source_json,
         confidence = excluded.confidence,
         tags_json = excluded.tags_json,
+        status = excluded.status,
+        sensitivity = excluded.sensitivity,
+        evidence_json = excluded.evidence_json,
+        review_after = excluded.review_after,
+        expires_at = excluded.expires_at,
         updated_at = excluded.updated_at`,
     ).run(
       id,
@@ -231,6 +386,11 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
       JSON.stringify(source),
       input.confidence ?? null,
       JSON.stringify(input.tags ?? []),
+      status,
+      sensitivity,
+      JSON.stringify(input.evidence ?? []),
+      reviewAfter,
+      expiresAt,
       now,
       now,
     );
@@ -240,6 +400,7 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
   return {
     id,
     kind: input.kind,
+    status,
     scope: {
       agentId: input.agentId,
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
@@ -248,6 +409,10 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
     content: input.content,
     source,
     ...(input.confidence != null ? { confidence: input.confidence } : {}),
+    sensitivity,
+    evidence: input.evidence ?? [],
+    ...(reviewAfter != null ? { reviewAfter: new Date(reviewAfter).toISOString() } : {}),
+    ...(expiresAt != null ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
     createdAt: new Date(now).toISOString(),
     updatedAt: new Date(now).toISOString(),
     tags: input.tags ?? [],
@@ -279,6 +444,10 @@ export function listMemoryRecords(options: ListMemoryRecordsOptions = {}): Memor
   if (options.kind) {
     where.push('kind = ?');
     params.push(options.kind);
+  }
+  if (options.status) {
+    where.push('status = ?');
+    params.push(options.status);
   }
   const limit = Math.max(1, Math.min(500, options.limit ?? 100));
   const offset = Math.max(0, options.offset ?? 0);
@@ -315,6 +484,9 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
     filters.push(`f.kind IN (${options.kinds.map(() => '?').join(', ')})`);
     params.push(...options.kinds);
   }
+  const statuses = options.statuses && options.statuses.length > 0 ? options.statuses : ['active'];
+  filters.push(`r.status IN (${statuses.map(() => '?').join(', ')})`);
+  params.push(...statuses);
 
   const maxResults = Math.max(1, Math.min(50, options.maxResults ?? 5));
   const minScore = options.minScore ?? 0;
@@ -480,12 +652,15 @@ export function setMemoryProviderState(providerId: string, scopeKey: string, sta
 export function appendMemoryTraceEvent(input: AppendMemoryTraceEventInput): string {
   const id = randomUUID();
   const now = input.nowMs ?? Date.now();
+  const feedback = input.feedback
+    ? normalizeMemoryTraceFeedback(input.feedback, now)
+    : undefined;
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT INTO memory_trace_events (
         trace_id, session_key, turn_id, phase, provider_id, request_json,
-        result_count, selected_record_ids_json, skipped_reason, error, duration_ms, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        result_count, selected_record_ids_json, skipped_reason, error, feedback_json, duration_ms, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.sessionKey ?? null,
@@ -497,6 +672,7 @@ export function appendMemoryTraceEvent(input: AppendMemoryTraceEventInput): stri
       JSON.stringify(input.selectedRecordIds ?? []),
       input.skippedReason ?? null,
       input.error ?? null,
+      JSON.stringify(feedback ?? {}),
       Math.max(0, Math.floor(input.durationMs ?? 0)),
       now,
     );
@@ -533,20 +709,90 @@ export function listMemoryTraceEvents(options: {
        LIMIT ?`,
     )
     .all(...params, limit) as MemoryTraceRow[];
-  return rows.map((row) => ({
-    traceId: row.trace_id,
-    ...(row.session_key ? { sessionKey: row.session_key } : {}),
-    ...(row.turn_id ? { turnId: row.turn_id } : {}),
-    phase: row.phase,
-    providerId: row.provider_id,
-    request: parseJsonValue(row.request_json, {}),
-    ...(row.result_count != null ? { resultCount: row.result_count } : {}),
-    selectedRecordIds: parseStringArray(row.selected_record_ids_json),
-    ...(row.skipped_reason ? { skippedReason: row.skipped_reason } : {}),
-    ...(row.error ? { error: row.error } : {}),
-    durationMs: row.duration_ms,
-    createdAt: new Date(row.created_at).toISOString(),
-  }));
+  return rows.map(memoryTraceRowToPayload);
+}
+
+export function setMemoryTraceFeedback(input: SetMemoryTraceFeedbackInput): MemoryTraceEventPayload | null {
+  const existing = getSqliteDatabase()
+    .prepare(`SELECT * FROM memory_trace_events WHERE trace_id = ?`)
+    .get(input.traceId) as MemoryTraceRow | undefined;
+  if (!existing) {
+    return null;
+  }
+  const feedback = normalizeMemoryTraceFeedback(
+    input.feedback,
+    input.nowMs,
+    parseMemoryTraceFeedback(existing.feedback_json),
+  );
+  runSqliteWriteTransaction((db) => {
+    db.prepare(`UPDATE memory_trace_events SET feedback_json = ? WHERE trace_id = ?`)
+      .run(JSON.stringify(feedback), input.traceId);
+  });
+  return memoryTraceRowToPayload({ ...existing, feedback_json: JSON.stringify(feedback) });
+}
+
+export function summarizeMemoryRecallFeedback(options: {
+  recordId?: string;
+  providerId?: string;
+  sessionKey?: string;
+  limit?: number;
+} = {}): MemoryRecallFeedbackSummary[] {
+  const where = ['phase IN (?, ?)'];
+  const params: Array<string | number> = ['search', 'inject'];
+  if (options.providerId) {
+    where.push('provider_id = ?');
+    params.push(options.providerId);
+  }
+  if (options.sessionKey) {
+    where.push('session_key = ?');
+    params.push(options.sessionKey);
+  }
+  const limit = Math.max(1, Math.min(5000, options.limit ?? 1000));
+  const rows = getSqliteDatabase()
+    .prepare(
+      `SELECT * FROM memory_trace_events
+       WHERE ${where.join(' AND ')}
+       ORDER BY created_at DESC
+       LIMIT ?`,
+    )
+    .all(...params, limit) as MemoryTraceRow[];
+
+  const summaries = new Map<string, MemoryRecallFeedbackSummary & { scoreTotal: number; scoreCount: number }>();
+  for (const row of rows) {
+    const feedback = parseMemoryTraceFeedback(row.feedback_json);
+    if (!feedback) continue;
+    const recordIds = parseStringArray(row.selected_record_ids_json);
+    for (const recordId of recordIds) {
+      if (options.recordId && recordId !== options.recordId) continue;
+      const current = summaries.get(recordId) ?? {
+        recordId,
+        helpful: 0,
+        notHelpful: 0,
+        mixed: 0,
+        irrelevant: 0,
+        total: 0,
+        averageScore: null,
+        scoreTotal: 0,
+        scoreCount: 0,
+      };
+      if (feedback.outcome === 'helpful') current.helpful += 1;
+      if (feedback.outcome === 'not_helpful') current.notHelpful += 1;
+      if (feedback.outcome === 'mixed') current.mixed += 1;
+      if (feedback.outcome === 'irrelevant') current.irrelevant += 1;
+      current.total += 1;
+      if (typeof feedback.score === 'number') {
+        current.scoreTotal += feedback.score;
+        current.scoreCount += 1;
+        current.averageScore = current.scoreTotal / current.scoreCount;
+      }
+      current.lastFeedbackAt ??= feedback.updatedAt ?? feedback.createdAt;
+      summaries.set(recordId, current);
+    }
+  }
+
+  return [...summaries.values()]
+    .map(({ scoreTotal: _scoreTotal, scoreCount: _scoreCount, ...summary }) => summary)
+    .sort((a, b) => b.total - a.total);
 }
 
 function parseJsonValue(json: string, fallback: unknown): unknown {

@@ -74,15 +74,22 @@ export function getApiKeySync(provider: string): string | undefined {
  * @throws if model not found
  */
 export function resolveModel(ref: string): Model<Api> {
+	const trimmedRef = typeof ref === 'string' ? ref.trim() : '';
+	if (!trimmedRef) {
+		throw new Error(
+			'No default model configured. Choose a model in onboarding or set agents.capabilityPresets.default.models.roles.<role>.model.',
+		);
+	}
+
 	// First try ModelRegistry (includes custom models)
 	const registry = getModelRegistry();
-	const customModel = registry.resolve(ref);
+	const customModel = registry.resolve(trimmedRef);
 	if (customModel) {
 		return customModel;
 	}
 
-	if (ref.includes('/')) {
-		const [provider, modelId] = ref.split('/');
+	if (trimmedRef.includes('/')) {
+		const [provider, modelId] = trimmedRef.split('/');
 		const piAiModel = getPiAiModel(provider as any, modelId as any);
 		if (piAiModel) return normalizeProviderModel(piAiModel as Model<Api>);
 
@@ -92,13 +99,13 @@ export function resolveModel(ref: string): Model<Api> {
 			const pluginModel = plugin.models.find(m => m.id === modelId);
 			if (pluginModel) return pluginModelToModel(provider, pluginModel);
 		}
-		throw new Error(`Model not found: ${ref}`);
+		throw new Error(`Model not found: ${trimmedRef}`);
 	}
 
 	for (const provider of getPiAiProviders()) {
 		try {
 			const models = getPiAiModels(provider);
-			const found = models.find(m => m.id === ref);
+			const found = models.find(m => m.id === trimmedRef);
 			if (found) return normalizeProviderModel(found as Model<Api>);
 		} catch {
 			continue;
@@ -107,11 +114,11 @@ export function resolveModel(ref: string): Model<Api> {
 
 	const pluginRegistry = getProviderRegistry();
 	for (const plugin of pluginRegistry.listAll()) {
-		const found = plugin.models.find(m => m.id === ref);
+		const found = plugin.models.find(m => m.id === trimmedRef);
 		if (found) return pluginModelToModel(plugin.id, found);
 	}
 
-	throw new Error(`Model not found: ${ref}. Use format: provider/model-id`);
+	throw new Error(`Model not found: ${trimmedRef}. Use format: provider/model-id`);
 }
 
 export function getModelsByProvider(provider: string): readonly Model<Api>[] {

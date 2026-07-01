@@ -2,7 +2,7 @@
 
 这页用于查看完整起步地图：安装方式、配置模式、使用入口，以及下一步该读哪篇文档。
 
-如果你还没有真正跑过 xopc，先看 [5分钟快速入门](./first-5-minutes.md)。那篇只保留一条可靠路径：安装、配置模型、然后开始本地对话。
+如果你还没有真正跑过 xopc，优先从 [PC 桌面端](./desktop-app.md) 开始；偏终端用户看 [5分钟快速入门](./first-5-minutes.md)。
 
 ## xopc 有哪些入口
 
@@ -12,11 +12,11 @@ xopc 是一个包，提供多个使用入口：
 | --- | --- | --- |
 | CLI 单次调用 | `xopc agent -m "..."` | 否 |
 | CLI 交互模式 | `xopc agent -i` | 否 |
-| 本地 TUI | `xopc tui --local` | 否 |
+| 本地 TUI | `xopc` 或 `xopc tui` | 否 |
+| PC 桌面端 | GitHub Releases | 内置 gateway |
 | 网页控制台 | `xopc gateway`，然后打开终端打印的 URL | 是 |
 | Gateway TUI | `xopc tui --gateway` 或 `xopc tui --url ...` | 是 |
 | 消息频道 | `channels.*` 下配置 Telegram、微信、飞书/Lark | 是 |
-| 桌面端 | GitHub Releases 或 `pnpm run electron:build` | 内置 gateway |
 
 ## 环境要求
 
@@ -47,10 +47,12 @@ xopc 是一个包，提供多个使用入口：
 
 ## 选择下一步入口
 
-本地 TUI 跑通后，再选择一个下一步：
+选择一个下一步：
 
 | 需求 | 从这里开始 |
 | --- | --- |
+| 最省心的开始方式 | [PC 桌面端](./desktop-app.md) |
+| 最快终端首次使用 | [5分钟快速入门](./first-5-minutes.md) |
 | 浏览器聊天、设置、日志 | [网关](./gateway.md) |
 | Telegram bot | [接入 Telegram](./how-to/connect-telegram.md) |
 | 手机访问 | [手机端 App](./mobile-app.md) 和 [远程访问](./remote-access.md) |

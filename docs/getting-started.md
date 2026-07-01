@@ -2,7 +2,7 @@
 
 Use this page after you want the full map: install options, setup modes, surfaces, and where to go next.
 
-If you have not tried xopc yet, start with [First 5 Minutes](./first-5-minutes.md). That tutorial keeps one reliable path: install, configure a model, then start a local chat.
+If you have not tried xopc yet, start with the [PC Desktop app](./desktop-app.md) for the friendliest path, or [First 5 Minutes](./first-5-minutes.md) for a terminal-first path.
 
 ## What xopc runs
 
@@ -12,11 +12,11 @@ xopc is one package with several surfaces:
 | --- | --- | --- |
 | CLI one-shot | `xopc agent -m "..."` | No |
 | Interactive CLI | `xopc agent -i` | No |
-| Local TUI | `xopc tui --local` | No |
+| Local TUI | `xopc` or `xopc tui` | No |
+| PC Desktop app | GitHub Releases | Bundled gateway |
 | Gateway console | `xopc gateway`, then open the printed URL | Yes |
 | Gateway TUI | `xopc tui --gateway` or `xopc tui --url ...` | Yes |
 | Channels | Telegram, Weixin, Feishu/Lark configs under `channels.*` | Yes |
-| Desktop app | GitHub Releases or `pnpm run electron:build` | Bundled gateway |
 
 ## Requirements
 
@@ -47,10 +47,12 @@ Configuration is stored in `~/.xopc/xopc.json` by default. Override it with `XOP
 
 ## Choose the next surface
 
-After the local TUI works, choose one next step:
+Choose one next step:
 
 | Need | Start here |
 | --- | --- |
+| Easiest first run | [PC Desktop app](./desktop-app.md) |
+| Fastest terminal first run | [First 5 Minutes](./first-5-minutes.md) |
 | Browser chat, settings, logs | [Gateway](./gateway.md) |
 | Telegram bot | [Connect Telegram](./how-to/connect-telegram.md) |
 | Mobile access | [Mobile app](./mobile-app.md) and [Remote access](./remote-access.md) |

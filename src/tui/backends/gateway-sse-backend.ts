@@ -42,6 +42,17 @@ function normalizeGatewayModelChoice(model: TuiModelChoice): TuiModelChoice {
   return { ...model, id };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+export function normalizeGatewaySseEvent(evt: TuiEvent): TuiEvent {
+  if (evt.event !== 'agent.stream' || !isRecord(evt.data)) return evt;
+  const inner = evt.data.event;
+  if (!isRecord(inner) || typeof inner.type !== 'string' || !inner.type) return evt;
+  return { event: inner.type, data: inner, source: evt.source };
+}
+
 /** Fetch wrapper that adds auth headers. */
 async function gatewayFetch(
   baseUrl: string,
@@ -991,7 +1002,7 @@ export class GatewaySseBackend implements TuiBackend {
             }
             const data = parseSSEData(sseEvent.data);
             if (data !== null) {
-              this.onEvent?.({ event: sseEvent.event, data, source: 'broadcast' });
+              this.onEvent?.(normalizeGatewaySseEvent({ event: sseEvent.event, data, source: 'broadcast' }));
             }
           },
           this.eventAbort!.signal,

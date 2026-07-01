@@ -8,7 +8,7 @@ export type RootHelpCommand = {
   description: string;
 };
 
-export const ROOT_COMMAND_DESCRIPTION = 'Ultra-Lightweight Personal AI Assistant';
+export const ROOT_COMMAND_DESCRIPTION = 'Ultra-Lightweight Personal AI Assistant. Run `xopc` with no command to open the local TUI.';
 
 export const ROOT_HELP_OPTIONS: RootHelpOption[] = [
   { flags: '-V, --version', description: 'output the version number' },

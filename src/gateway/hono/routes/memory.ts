@@ -4,7 +4,11 @@ import { BuiltinMemoryStore } from '../../../agent/memory/builtin-memory-store.j
 import { createMemoryManagerFromConfig } from '../../../agent/memory/create-memory-manager.js';
 import { resolveBuiltinMemoryStoreConfig } from '../../../agent/memory/memory-config.js';
 import { discoverMemoryPlugins } from '../../../agent/memory/plugin-discovery.js';
-import type { MemoryKind } from '../../../agent/memory/types.js';
+import type {
+  MemoryKind,
+  MemorySensitivity,
+  MemoryStatus,
+} from '../../../agent/memory/types.js';
 import { MemoryPolicySchema } from '../../../agent-manifest/schema.js';
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import { resolveEffectiveAgentManifestForAgent } from '../../../config/agent-profile.js';
@@ -19,6 +23,8 @@ import {
   listMemorySignals,
   listMemoryTraceEvents,
   searchMemoryRecords,
+  setMemoryTraceFeedback,
+  summarizeMemoryRecallFeedback,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -30,6 +36,32 @@ const MEMORY_KINDS = new Set<MemoryKind>([
   'daily_note',
   'session_summary',
   'derived_insight',
+  'task_lesson',
+  'tool_preference',
+  'long_term_goal',
+]);
+
+const MEMORY_STATUSES = new Set<MemoryStatus>([
+  'candidate',
+  'active',
+  'needs_review',
+  'stale',
+  'archived',
+  'rejected',
+]);
+
+const MEMORY_SENSITIVITIES = new Set<MemorySensitivity>([
+  'normal',
+  'personal',
+  'secret',
+  'regulated',
+]);
+
+const MEMORY_TRACE_FEEDBACK_OUTCOMES = new Set([
+  'helpful',
+  'not_helpful',
+  'mixed',
+  'irrelevant',
 ]);
 
 function parseLimit(raw: string | undefined, fallback = 100): number {
@@ -37,9 +69,26 @@ function parseLimit(raw: string | undefined, fallback = 100): number {
   return Number.isFinite(parsed) ? Math.max(1, Math.min(500, parsed)) : fallback;
 }
 
+function parseFeedbackSummaryLimit(raw: string | undefined): number {
+  const parsed = raw ? Number.parseInt(raw, 10) : 1000;
+  return Number.isFinite(parsed) ? Math.max(1, Math.min(5000, parsed)) : 1000;
+}
+
 function parseKind(raw: unknown): MemoryKind | undefined {
   return typeof raw === 'string' && MEMORY_KINDS.has(raw as MemoryKind)
     ? (raw as MemoryKind)
+    : undefined;
+}
+
+function parseStatus(raw: unknown): MemoryStatus | undefined {
+  return typeof raw === 'string' && MEMORY_STATUSES.has(raw as MemoryStatus)
+    ? (raw as MemoryStatus)
+    : undefined;
+}
+
+function parseSensitivity(raw: unknown): MemorySensitivity | undefined {
+  return typeof raw === 'string' && MEMORY_SENSITIVITIES.has(raw as MemorySensitivity)
+    ? (raw as MemorySensitivity)
     : undefined;
 }
 
@@ -112,6 +161,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       agentId: c.req.query('agentId') || undefined,
       workspaceId: c.req.query('workspaceId') || undefined,
       kind: parseKind(c.req.query('kind')),
+      status: parseStatus(c.req.query('status')),
       limit: parseLimit(c.req.query('limit')),
       offset: c.req.query('offset') ? Number.parseInt(c.req.query('offset')!, 10) : 0,
     });
@@ -131,6 +181,9 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
       kinds: Array.isArray(body.kinds)
         ? body.kinds.map(parseKind).filter((v): v is MemoryKind => Boolean(v))
+        : undefined,
+      statuses: Array.isArray(body.statuses)
+        ? body.statuses.map(parseStatus).filter((v): v is MemoryStatus => Boolean(v))
         : undefined,
       maxResults: typeof body.maxResults === 'number' ? body.maxResults : undefined,
       minScore: typeof body.minScore === 'number' ? body.minScore : undefined,
@@ -157,6 +210,15 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       source: body.source && typeof body.source === 'object' ? body.source : undefined,
       confidence: typeof body.confidence === 'number' ? body.confidence : undefined,
       tags: Array.isArray(body.tags) ? body.tags.filter((tag): tag is string => typeof tag === 'string') : undefined,
+      status: parseStatus(body.status),
+      sensitivity: parseSensitivity(body.sensitivity),
+      evidence: Array.isArray(body.evidence)
+        ? body.evidence.filter((item: unknown): item is NonNullable<Parameters<typeof upsertMemoryRecord>[0]['evidence']>[number] =>
+            Boolean(item) && typeof item === 'object',
+          )
+        : undefined,
+      reviewAfter: typeof body.reviewAfter === 'string' ? body.reviewAfter : undefined,
+      expiresAt: typeof body.expiresAt === 'string' ? body.expiresAt : undefined,
     });
     return c.json({ record }, 201);
   });
@@ -176,6 +238,15 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       source: body.source && typeof body.source === 'object' ? body.source : existing.source,
       confidence: typeof body.confidence === 'number' ? body.confidence : existing.confidence,
       tags: Array.isArray(body.tags) ? body.tags.filter((tag): tag is string => typeof tag === 'string') : existing.tags,
+      status: parseStatus(body.status) ?? existing.status,
+      sensitivity: parseSensitivity(body.sensitivity) ?? existing.sensitivity,
+      evidence: Array.isArray(body.evidence)
+        ? body.evidence.filter((item: unknown): item is NonNullable<Parameters<typeof upsertMemoryRecord>[0]['evidence']>[number] =>
+            Boolean(item) && typeof item === 'object',
+          )
+        : existing.evidence,
+      reviewAfter: typeof body.reviewAfter === 'string' ? body.reviewAfter : existing.reviewAfter,
+      expiresAt: typeof body.expiresAt === 'string' ? body.expiresAt : existing.expiresAt,
     });
     return c.json({ record });
   });
@@ -205,6 +276,40 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       limit: parseLimit(c.req.query('limit')),
     });
     return c.json({ traces });
+  });
+
+  authenticated.patch('/api/memory/traces/:traceId/feedback', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const outcome = typeof body.outcome === 'string' && MEMORY_TRACE_FEEDBACK_OUTCOMES.has(body.outcome)
+      ? body.outcome
+      : undefined;
+    if (!outcome) {
+      return c.json({ error: 'Missing or invalid required field: outcome' }, 400);
+    }
+    const source = body.source === 'user' || body.source === 'evaluator' || body.source === 'system'
+      ? body.source
+      : undefined;
+    const trace = setMemoryTraceFeedback({
+      traceId: c.req.param('traceId'),
+      feedback: {
+        outcome,
+        ...(typeof body.score === 'number' ? { score: body.score } : {}),
+        ...(typeof body.reason === 'string' ? { reason: body.reason } : {}),
+        ...(source ? { source } : {}),
+      },
+    });
+    if (!trace) return c.json({ error: 'Memory trace not found' }, 404);
+    return c.json({ trace });
+  });
+
+  authenticated.get('/api/memory/feedback-summary', (c) => {
+    const summaries = summarizeMemoryRecallFeedback({
+      recordId: c.req.query('recordId') || undefined,
+      providerId: c.req.query('providerId') || undefined,
+      sessionKey: c.req.query('sessionKey') || undefined,
+      limit: parseFeedbackSummaryLimit(c.req.query('limit')),
+    });
+    return c.json({ summaries });
   });
 
   authenticated.post('/api/memory/signals', async (c) => {

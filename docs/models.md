@@ -1,37 +1,81 @@
-# Custom Models Configuration
+# Models and Providers
 
-xopc supports custom model providers via `~/.xopc/models.json`.
-
-**Built-in catalog:** First-class provider IDs match **`@earendil-works/pi-ai` `KnownProvider`** (the same set the CLI and gateway UI surface for API keys). Other vendors (e.g. DashScope-compatible chat with provider id **`dashscope`**) are configured with a **`providers.<id>`** block: `baseUrl`, `apiKey`, and `api` (often `openai-completions`). See `.docs/provider-alignment-plan.md` for examples.
+xopc can use built-in LLM providers directly, and `~/.xopc/models.json` is only needed when you add custom providers, local runtimes, or per-model overrides.
 
 ## Built-in LLM providers (pi-ai)
 
-The **gateway console** (Settings → Providers) and **`xopc models`** use the same built-in ids as pi-ai. **Environment variable names** are centralized in `src/providers/env-keys.ts` (`PROVIDER_ENV_MAP`). For a single table aligned with `xopc.json` → **`providers`**, see [Configuration — `providers`](/configuration#providers).
+The **gateway console** (Settings → Providers), **`xopc providers`**, and **`xopc models`** use the same built-in provider ids as `@earendil-works/pi-ai`. For most users, start with a built-in provider instead of editing `models.json`.
 
-**Default chat model:** xopc does not assume a vendor model. `xopc onboard` and the gateway console configure the global default preset (`agents.defaultPreset`), and every agent inherits that model unless it explicitly overrides a model role.
+**Recommended starter model:** use **DeepSeek V4 Flash** with model ref `deepseek/deepseek-v4-flash`. It is the default recommended fast path in the console because it has strong price/performance and works through a simple API key.
 
-Included built-ins cover, among others: **DeepSeek**, **OpenAI**, **Anthropic**, **Google** / **Vertex**, **Azure OpenAI**, **AWS Bedrock**, **Groq**, **xAI**, **Mistral**, **Cerebras**, **OpenRouter**, **Vercel AI Gateway**, **Zhipu z.ai**, **MiniMax** (intl + CN), **Kimi for coding**, **Moonshot** (`moonshotai`, `moonshotai-cn`), **Hugging Face**, **Fireworks**, **Together**, **OpenCode** / **OpenCode Go**, **Cloudflare Workers AI** and **Cloudflare AI Gateway**, **GitHub Copilot**, **OpenAI Codex** (OAuth), **Google Gemini CLI** / **Antigravity** (token or key flows), and **Xiaomi MiMo** (see below). **DashScope** (`dashscope`) is an xopc env id for image/STT/TTS HTTP APIs, not an LLM `KnownProvider` in pi-ai.
+```json
+{
+  "agents": {
+    "default": "main",
+    "list": [
+      {
+        "id": "main",
+        "identity": { "name": "Main", "role": "General assistant" },
+        "responsibilities": { "primary": ["Help the user complete tasks"] },
+        "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "deepseek/deepseek-v4-flash" }
+          }
+        },
+        "tools": { "builtin": {} },
+        "skills": { "mode": "all" },
+        "memory": { "mode": "confirmWrite", "sources": ["session"] },
+        "workflows": {},
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
+      }
+    ]
+  },
+  "providers": {
+    "deepseek": "${DEEPSEEK_API_KEY}"
+  }
+}
+```
 
-### Xiaomi MiMo (`xiaomi` and `xiaomi-token-plan-*`)
+You can also set the same key from the terminal:
 
-Xiaomi ships **four** provider ids—different **API endpoints and products**, not redundant copies:
+```bash
+export DEEPSEEK_API_KEY="sk-..."
+```
 
-| Provider id | Use case | API host (pi-ai defaults) | Env var (typical) |
-|-------------|-----------|----------------------------|-------------------|
-| `xiaomi` | Pay-as-you-go API billing | `api.xiaomimimo.com` | `XIAOMI_API_KEY` |
-| `xiaomi-token-plan-cn` | Token plan · China | `token-plan-cn.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_CN_API_KEY` |
-| `xiaomi-token-plan-ams` | Token plan · Amsterdam | `token-plan-ams.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_AMS_API_KEY` |
-| `xiaomi-token-plan-sgp` | Token plan · Singapore | `token-plan-sgp.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` |
+**Default chat model:** xopc resolves the selected agent from `agents.default` and `agents.list`. Put model roles under `agents.list[].models.roles`; workflows can then reference those typed roles instead of hard-coding a model everywhere.
 
-Keys are created in the **[MiMo open platform](https://platform.xiaomimimo.com/#/console/api-keys)**. Pick the **model ref** whose `provider/` prefix matches the key you were given.
+Included built-ins cover, among others: **DeepSeek**, **OpenAI**, **Anthropic**, **Google** / **Vertex**, **Azure OpenAI**, **AWS Bedrock**, **Groq**, **xAI**, **Mistral**, **Cerebras**, **OpenRouter**, **Vercel AI Gateway**, **Zhipu z.ai**, **MiniMax** (intl + CN), **Kimi for coding**, **Moonshot** (`moonshotai`, `moonshotai-cn`), **Hugging Face**, **Fireworks**, **Together**, **OpenCode** / **OpenCode Go**, **Cloudflare Workers AI** and **Cloudflare AI Gateway**, **GitHub Copilot**, **OpenAI Codex** (OAuth), **Google Gemini CLI** / **Antigravity** (token or key flows), and **Xiaomi MiMo**. **DashScope** (`dashscope`) is an xopc env id for image/STT/TTS HTTP APIs, not an LLM `KnownProvider` in pi-ai.
 
-### OAuth vs API key (LLM)
+### Built-in provider credentials
 
-Several providers support **OAuth** (browser login, stored under `~/.xopc/credentials/oauth/` or auth profiles). **`openai-codex`** is **OAuth-only** for normal Codex access (no static vendor API key in the Providers UI). **`github-copilot`** may use a GitHub token via env vars or OAuth depending on your setup—see `PROVIDER_ENV_MAP`.
+Built-in provider credentials can come from OAuth, saved API keys, `xopc.json`, or environment variables. Resolution order is:
+
+| Priority | Source | Example | Best for |
+|----------|--------|---------|----------|
+| 1 | Saved auth profile from the console or `xopc auth` / `xopc providers set-key` | OAuth access token or pasted API key | Desktop/console setup and refreshable OAuth |
+| 2 | `xopc.json` `providers` config | `"deepseek": "${DEEPSEEK_API_KEY}"` | Reproducible workspace config without committing secrets |
+| 3 | Environment variable from `PROVIDER_ENV_MAP` | `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_OAUTH_TOKEN` | Shell, CI, containers, and server deployments |
+
+Use OAuth when the provider requires browser login or short-lived tokens. Use API keys for providers such as DeepSeek, OpenAI, OpenRouter, and most OpenAI-compatible services. Use environment variables when you do not want secrets written into config files.
+
+Important OAuth/API-key cases:
+
+| Provider id | Credential path |
+|-------------|-----------------|
+| `deepseek` | API key via Settings → Providers, `xopc providers set-key deepseek`, `providers.deepseek`, or `DEEPSEEK_API_KEY` |
+| `openai` | API key via saved key, config, or `OPENAI_API_KEY` |
+| `anthropic` | OAuth token or API key; env supports `ANTHROPIC_OAUTH_TOKEN` and `ANTHROPIC_API_KEY` |
+| `openai-codex` | OAuth-only for normal Codex access |
+| `google-gemini-cli` / `google-antigravity` | OAuth token or API key flows, depending on your setup |
+| `github-copilot` | GitHub token via env vars or OAuth, depending on your setup |
+
+Xiaomi MiMo is still available through `xiaomi` and `xiaomi-token-plan-*`; choose the provider id that matches the endpoint and token plan attached to your key.
 
 ---
 
-## Quick Start
+## Custom Provider Quick Start
 
 Create `~/.xopc/models.json`:
 
@@ -216,7 +260,7 @@ Customize specific built-in models:
 
 ## API Key Resolution
 
-The `apiKey` field supports three formats:
+For custom providers in `models.json`, the `apiKey` field supports three formats:
 
 ### 1. Shell Command
 

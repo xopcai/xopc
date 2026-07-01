@@ -1,8 +1,8 @@
 # 5分钟快速入门
 
-这篇文档帮你用最短路径从「在 GitHub 上看到 xopc」到「本地开聊」。
+这篇文档帮你用最短终端路径从「在 GitHub 上看到 xopc」到「本地开聊」。
 
-如果你只是想先体验核心功能，暂时不想配置网页控制台、桌面端、手机端或即时通讯入口，按下面步骤走即可。
+对大多数用户来说，[PC 桌面端](./desktop-app.md) 是最省心的开始方式：安装应用，在界面里完成模型设置，然后直接在内置控制台聊天。偏终端，或当前平台暂时没有桌面发布包时，再按本文流程走。
 
 ## 1. 安装
 
@@ -37,10 +37,10 @@ xopc onboard --quick
 ## 3. 启动本地 TUI
 
 ```bash
-xopc tui --local
+xopc
 ```
 
-这会直接打开本地终端界面，不需要先启动网关。
+这会直接打开本地终端界面，等同于 `xopc tui`，不需要先启动网关。
 
 你应该看到一个全屏终端聊天界面。如果它立刻退出，先运行 `xopc doctor`，再用 `xopc models status` 检查模型状态。
 
@@ -64,16 +64,10 @@ xopc tui --local
 
 | 入口 | 命令 | 适合 |
 | --- | --- | --- |
+| PC 桌面端 | GitHub Releases | 最省心的开始方式；原生应用 + 内嵌 gateway |
 | CLI | `xopc agent -i` | 最小终端聊天 |
 | 网页控制台 | `xopc gateway` | 在浏览器中聊天、改设置、看日志 |
-| 桌面端 | GitHub Releases 或 `pnpm run electron:build` | 桌面应用 |
 | 手机端 | [xopc-app](https://github.com/xopcai/xopc-app) + 网关配对 | iOS/Android 网关客户端；见 [手机端 App](./mobile-app.md) |
 | 即时通讯 | 启动网关后打开 `频道` 页面 | Telegram、微信、飞书/Lark |
-
-## 如果它有帮助
-
-欢迎给仓库点个 Star，让更多开发者看到 xopc：
-
-https://github.com/xopcai/xopc
 
 完整说明见 [快速开始](./getting-started.md)。

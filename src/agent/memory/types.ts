@@ -30,7 +30,27 @@ export type MemoryKind =
   | 'workspace_fact'
   | 'daily_note'
   | 'session_summary'
-  | 'derived_insight';
+  | 'derived_insight'
+  | 'task_lesson'
+  | 'tool_preference'
+  | 'long_term_goal';
+
+export type MemoryStatus =
+  | 'candidate'
+  | 'active'
+  | 'needs_review'
+  | 'stale'
+  | 'archived'
+  | 'rejected';
+
+export type MemorySensitivity = 'normal' | 'personal' | 'secret' | 'regulated';
+
+export interface MemoryEvidence {
+  sessionKey?: string;
+  turnId?: string;
+  toolCallId?: string;
+  sourceText?: string;
+}
 
 export interface MemoryScope {
   agentId: string;
@@ -52,6 +72,7 @@ export interface MemoryCitation {
 export interface MemoryRecord {
   id: string;
   kind: MemoryKind;
+  status?: MemoryStatus;
   scope: MemoryScope;
   content: string;
   source: {
@@ -62,6 +83,10 @@ export interface MemoryRecord {
     provider?: string;
   };
   confidence?: number;
+  sensitivity?: MemorySensitivity;
+  evidence?: MemoryEvidence[];
+  reviewAfter?: string;
+  expiresAt?: string;
   createdAt: string;
   updatedAt: string;
   tags?: string[];
@@ -108,6 +133,12 @@ export interface MemoryWriteRequest {
   target?: 'memory' | 'user';
   tags?: string[];
   source?: MemoryRecord['source'];
+  confidence?: number;
+  status?: MemoryStatus;
+  sensitivity?: MemorySensitivity;
+  evidence?: MemoryEvidence[];
+  reviewAfter?: string;
+  expiresAt?: string;
   approved?: boolean;
 }
 

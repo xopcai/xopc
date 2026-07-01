@@ -207,7 +207,7 @@ if (!live.length) return { ok: false, reason: 'no findings' }
 
 | 端 | 运行中可见内容 |
 |---|---|
-| TUI（`xopc tui --local`） | 实时进度树，快照变化即更新。 |
+| TUI（`xopc` 或 `xopc tui`） | 实时进度树，快照变化即更新。 |
 | 网关控制台 | 独立工作流 Chat 会话 — WorkflowCard 经 SSE 推送；`#/workflows` 看板显示运行状态；卡片或看板可取消/重试。 |
 | Telegram | **实时原地编辑**。开始时发一条消息，默认每 5 s 编辑一次；阶段变化、新错误、完成等关键事件会绕过节流。 |
 | 飞书 / Lark | **实时原地编辑**。与 Telegram 相同（`im.v1.message.update`）；默认 5 s 节流。 |

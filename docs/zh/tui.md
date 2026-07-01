@@ -1,6 +1,6 @@
-# 终端界面（`xopc tui`）
+# 终端界面（`xopc` / `xopc tui`）
 
-**`tui`** 命令会打开全屏终端对话界面，底层使用 [`@earendil-works/pi-tui`](https://www.npmjs.com/package/@earendil-works/pi-tui)。流式展示助手回复、工具调用与思考块，体验上接近网关网页聊天，但完全在终端内完成。
+直接运行 **`xopc`** 会打开与 **`xopc tui`** 相同的全屏终端对话界面，底层使用 [`@earendil-works/pi-tui`](https://www.npmjs.com/package/@earendil-works/pi-tui)。流式展示助手回复、工具调用与思考块，体验上接近网关网页聊天，但完全在终端内完成。
 
 命令行参数与速查见 [CLI 命令参考 — tui](./cli.md#tui)。
 
@@ -10,18 +10,18 @@
 
 | 方式 | 参数 | 是否需要网关 | 适用场景 |
 |------|------|----------------|----------|
-| **网关模式** | 默认 | 需要已启动的 `xopc gateway` | 与 Web 控制台共用会话、连接远程网关、在 TUI 里列出会话/模型等 |
-| **嵌入式** | `--local` | 不需要 | 仅用本机配置与工作区快速对话，不经过 HTTP |
+| **嵌入式** | 默认；`xopc` 或 `xopc tui` | 不需要 | 仅用本机配置与工作区快速对话，不经过 HTTP |
+| **网关模式** | `--gateway`、`--url`、`--token` | 需要已启动的 `xopc gateway` | 与 Web 控制台共用会话、连接远程网关 |
 
 ---
 
-## 网关模式（默认）
+## 网关模式
 
 1. 先启动网关（见 [网关服务](./gateway.md)）。
 2. 将 TUI 指到网关的根地址；若网关启用鉴权，需带上令牌：
 
 ```bash
-xopc tui
+xopc tui --gateway
 xopc tui --url http://localhost:18790 --token <你的网关令牌>
 ```
 
@@ -35,21 +35,20 @@ xopc gateway token
 
 ---
 
-## 嵌入式模式（`--local`）
+## 嵌入式模式（默认）
 
 在**进程内**运行 **`AgentService`**（与无 TUI 的 `agent` 命令同源）：读取 `xopc.json`、工作区与默认模型，**不**依赖网关进程。
 
 ```bash
-xopc tui --local
+xopc
+xopc tui
 ```
 
 **嵌入式模式下的限制：**
 
-- 未接入会话列表、模型列表接口；`/sessions`、无参数的 `/model` / `/models` 会得到空列表或不可用提示；**`/model <id>`** 无法切换模型（未实现 PATCH）。
-- 当前版本不会从磁盘拉取历史聊天记录。
-- **`/reset`** 会重启嵌入式运行时，相当于清空本次内存态会话。
-
-若要在 TUI 中切换会话与模型，建议使用 **网关模式**。
+- 嵌入式模式现在使用与 agent/gateway 路径相同的 SQLite-backed session store，支持历史、会话列表、模型列表、会话配置 patch、压缩、导入/导出、fork、transcript tree label 和 share helpers。
+- 少量 gateway-only 的运维状态仍来自 gateway broadcast stream，进程内运行时不可用。
+- **`/reset`** 和 **`/new`** 会重置 session transcript（归档并生成新的 `sessionId`），同时保留相同 session key 和已持久化 overrides。嵌入式模式走进程内 reset 路径；gateway 模式调用 `POST /api/sessions/:key/reset`。
 
 ---
 
@@ -61,7 +60,8 @@ xopc tui --local
 | `--token <token>` | 网关 `Authorization: Bearer` 令牌。 |
 | `-s, --session <key>` | 要恢复的会话键；省略时新建 `agent:{currentAgent}:tui-<uuid>` 会话，并在退出后打印恢复命令。 |
 | `-m, --message <text>` | 连接成功后自动发送一条消息，界面保持打开。 |
-| `--local` | 嵌入式模式（不连网关）。 |
+| `--local` | 显式使用嵌入式模式（与默认行为相同）。 |
+| `--gateway` | 强制使用网关模式。 |
 | `--thinking <level>` | 思考等级覆盖，语义与网关 / `agent` 一致。 |
 
 示例：
@@ -97,19 +97,77 @@ To resume this session: xopc tui --session agent:main:tui-019eddd8-d108-7554-b97
 
 ## 斜杠命令
 
+`/help` 会打印运行时真实命令列表，包括 skill、workflow 和 extension 动态注册的命令。
+
+### Agent、模型和会话
+
 | 命令 | 说明 |
 |------|------|
-| `/help` | 列出命令。 |
-| `/model` | 带参数：设置会话模型（`provider/model`）。无参数：列出模型（**仅网关模式**）。 |
-| `/models` | 同无参数的 `/model`。 |
-| `/session <key>` | 切换会话并清空当前屏幕上的对话区。 |
-| `/sessions` | 列出会话（**仅网关模式**）。 |
-| `/new`、`/reset` | 必要时中止；`/reset` 还会在服务端重置会话（嵌入式下为重启本地 agent）。 |
-| `/abort` | 中止当前运行。 |
+| `/agent` | 显示当前 agent id 和 session key。 |
+| `/agent <id>` | 切换到另一个已启用 agent，session key 会改写为 `agent:<id>:<current-session-suffix>`。它**不会**迁移已有 transcript，且助手正在回复时不能切换。 |
+| `/agents` | 有 overlay 时打开 agent 选择器；否则列出已配置 agents。 |
+| `/model [搜索词]` | 打开模型选择器，可用搜索词过滤。 |
+| `/models` | 列出可用模型。 |
+| `/switch <provider/model>` | 切换当前会话模型；可先用 `/models` 复制合法 model ref。 |
+| `/scoped-models` | 选择 **Ctrl+P / Shift+Ctrl+P** 循环切换时使用的模型集合。 |
+| `/session` 或 `/status` | 显示当前会话、agent、模型、活动状态和统计。 |
+| `/usage` | 显示当前会话 token 使用统计。 |
+| `/list` | 列出会话。 |
+| `/resume` 或 `/sessions` | 打开会话选择器（**Ctrl+Shift+P**）。 |
+| `/tree` | 可用时打开 transcript/session 树；否则打印分组会话树。 |
+| `/name [名称]` | 查看或设置当前会话显示名称。 |
+| `/new` | 创建新的隔离 `tui-<uuid>` 会话。 |
+| `/fork [message-id]` | 从某条用户消息或当前 transcript fork 到新会话。 |
+| `/clone [名称]` | 复制当前会话 transcript 到新会话。 |
+| `/reset` 或 `/restart` | 必要时中止当前运行，重置当前会话 transcript，并重新加载历史。 |
+| `/clear` | 只清空当前 TUI 可见日志；不会重置已保存 transcript。 |
+
+### 运行控制
+
+| 命令 | 说明 |
+|------|------|
+| `/abort`、`/stop`、`/cancel` | 中止当前运行。 |
+| `/recover` | 重新加载历史，并在可用时重新附着到停滞的流。 |
+| `/retry` | 必要时中止当前运行，然后重新发送最后一条用户消息。 |
 | `/thinking` | 开关思考区显示（等同 **Ctrl+T**）。 |
+| `/think [off\|low\|medium\|high]` | 查看或设置 thinking level；无参数时有 overlay 则打开选择器。 |
+| `/reasoning [off\|on\|stream]` | 查看或设置 reasoning 可见性。 |
+| `/verbose [off\|summary\|debug]` | 循环或设置 verbose 输出等级。 |
 | `/tools` | 开关工具块展开（等同 **Ctrl+O**）。 |
-| `/status` | 显示连接与活动状态（**仅网关模式**）。 |
-| `/exit`、`/quit` | 退出 TUI。 |
+| `/compact [原因]` | 压缩会话历史；压缩期间消息会排队。 |
+| `/copy` | 在剪贴板能力可用时复制最后一条助手回复。 |
+| `/btw <问题>` 或 `/aside <问题>` | 用当前会话作为只读背景问一个旁路问题，答案不会写入会话。 |
+| `/exit` 或 `/quit` | 退出 TUI。 |
+
+### 配置和诊断
+
+| 命令 | 说明 |
+|------|------|
+| `/settings` | 打开 TUI 设置 overlay：主题、思考展示、工具展开、双 Escape 行为、终端进度等。 |
+| `/hotkeys` 或 `/keys` | 显示解析后的快捷键，包括 `~/.xopc/keybindings.json` 覆盖。 |
+| `/reload` | 重新加载快捷键、TUI 设置、主题和 extension UI。 |
+| `/reload-keybindings` | 重新加载 `~/.xopc/keybindings.json`。 |
+| `/config` | 显示当前 TUI / 会话配置。 |
+| `/context` | 显示上下文预算和使用情况。 |
+| `/trust` | 打开项目 trust 选项，或打印 trust / 安全策略详情。 |
+| `/login [provider]` | 在 TUI 内执行支持的 OAuth provider 登录。API key provider 仍用 `xopc auth set` 或 `xopc providers set-key`。 |
+| `/logout [provider]` | 无参数时列出已保存 auth profiles；带 provider 时删除该 provider 的已保存 profiles。环境变量和配置文件凭据不会变化。 |
+| `/debug` | 将 TUI debug 快照写入磁盘。 |
+| `/changelog` | 显示版本历史。 |
+| `/start` | 重新显示启动欢迎信息。 |
+
+### 文件、workflow 和扩展
+
+| 命令 | 说明 |
+|------|------|
+| `/export [路径或格式]` | 将当前会话导出为 Markdown、HTML 或 JSON。 |
+| `/import <path>` | 导入 xopc JSON 会话导出。 |
+| `/share <workspace-path> [friend\|colleague\|public] [--site\|--zip\|--file]` | 为工作区文件、目录或站点创建分享链接。 |
+| `/workflow list` | 列出已配置 workflow 定义。 |
+| `/workflow view <name>` | 查看 workflow 详情。 |
+| `/workflow:<name> [goal]` | 直接启动一个 workflow run。未知 `/name` 如果匹配 workflow，也可能被改写为 workflow run。 |
+| `/skill:<name> ...` | skill 提供的命令会转发给 agent。 |
+| Extension commands | 扩展可以注册 TUI-local 斜杠命令；这些命令会出现在 `/help` 中，并在 TUI 内处理。 |
 
 ---
 

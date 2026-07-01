@@ -202,7 +202,7 @@ async function promptLaunchAfterOnboard(
       {
         value: 'tui',
         name: 'Terminal UI (embedded)',
-        description: 'xopc tui --local — no gateway process required',
+        description: 'xopc — no gateway process required',
       },
       {
         value: 'gateway',
@@ -232,7 +232,7 @@ async function promptLaunchAfterOnboard(
   console.log('\n⏭️  You can start later:');
   console.log('   xopc gateway service install');
   console.log('   xopc gateway');
-  console.log('   xopc tui --local');
+  console.log('   xopc');
 }
 
 async function setupGateway(config: Config): Promise<Config> {

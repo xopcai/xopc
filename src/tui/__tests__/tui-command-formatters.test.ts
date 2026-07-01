@@ -369,7 +369,7 @@ it('exposes native usage and context commands', () => {
     expect(text).toContain('xopc TUI');
     expect(text).toContain('Session: agent:main:main');
     expect(text).toContain('Model: openai/gpt-5');
-    expect(text).toContain('Press /start to show full startup help and loaded resources.');
+    expect(text).toContain('Press /start to show full startup help.');
     expect(text).toContain('[Context]');
     expect(text).toContain('AGENTS.md');
     expect(text).toContain('[Skills]');

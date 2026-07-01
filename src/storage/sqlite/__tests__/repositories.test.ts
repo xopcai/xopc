@@ -27,8 +27,15 @@ import {
   restoreCompactionCheckpoint,
   setSessionConfig,
   appendTranscriptEntry,
+  appendMemoryTraceEvent,
   captureCompactionCheckpoint,
   paginateTranscriptMessages,
+  listMemoryRecords,
+  listMemoryTraceEvents,
+  searchMemoryRecords,
+  setMemoryTraceFeedback,
+  summarizeMemoryRecallFeedback,
+  upsertMemoryRecord,
 } from '../index.js';
 
 const SESSION_KEY = 'agent:main:webchat:default:dm:test-user';
@@ -207,5 +214,74 @@ describe('sqlite repositories', () => {
     const meta = getSessionMetadata(SESSION_KEY);
     expect(meta?.messageCount).toBe(20);
     expect(loadTranscriptRowsForSession(SESSION_KEY)).toHaveLength(20);
+  });
+
+  it('keeps candidate memory out of default recall until approved', () => {
+    const candidate = upsertMemoryRecord({
+      providerId: 'local',
+      kind: 'task_lesson',
+      agentId: 'main',
+      workspaceId: CWD,
+      content: 'Use the zeta migration checklist before memory schema changes.',
+      status: 'candidate',
+      sensitivity: 'normal',
+      evidence: [{ sessionKey: SESSION_KEY, sourceText: 'The migration checklist caught a bug.' }],
+      confidence: 0.82,
+      tags: ['migration'],
+    });
+
+    expect(listMemoryRecords({ status: 'candidate' }).map((record) => record.id)).toContain(candidate.id);
+    expect(searchMemoryRecords({ query: 'zeta migration checklist', agentId: 'main', workspaceId: CWD })).toHaveLength(0);
+
+    upsertMemoryRecord({
+      ...candidate,
+      providerId: 'local',
+      agentId: candidate.scope.agentId,
+      workspaceId: candidate.scope.workspaceId,
+      sessionKey: candidate.scope.sessionKey,
+      status: 'active',
+    });
+
+    const results = searchMemoryRecords({ query: 'zeta migration checklist', agentId: 'main', workspaceId: CWD });
+    expect(results[0]?.record.id).toBe(candidate.id);
+    expect(results[0]?.record.status).toBe('active');
+  });
+
+  it('records memory trace feedback and summarizes recall quality by record', () => {
+    const traceId = appendMemoryTraceEvent({
+      sessionKey: SESSION_KEY,
+      phase: 'search',
+      providerId: 'local',
+      request: { query: 'migration checklist' },
+      resultCount: 1,
+      selectedRecordIds: ['memory-record-1'],
+      durationMs: 12,
+    });
+
+    const updated = setMemoryTraceFeedback({
+      traceId,
+      feedback: {
+        outcome: 'helpful',
+        score: 0.8,
+        reason: 'The recalled checklist changed the final answer.',
+        source: 'evaluator',
+      },
+      nowMs: Date.parse('2026-01-01T00:00:00.000Z'),
+    });
+
+    expect(updated?.feedback?.outcome).toBe('helpful');
+    expect(updated?.feedback?.score).toBe(0.8);
+
+    const traces = listMemoryTraceEvents({ sessionKey: SESSION_KEY });
+    expect(traces[0]?.feedback?.reason).toContain('changed the final answer');
+
+    const summaries = summarizeMemoryRecallFeedback({ recordId: 'memory-record-1' });
+    expect(summaries[0]).toMatchObject({
+      recordId: 'memory-record-1',
+      helpful: 1,
+      notHelpful: 0,
+      total: 1,
+      averageScore: 0.8,
+    });
   });
 });

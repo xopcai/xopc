@@ -8,6 +8,7 @@ xopc provides a rich set of CLI commands for management, conversation, and confi
 
 ```bash
 npm install -g @xopcai/xopc
+xopc              # opens the local TUI
 xopc <command>
 ```
 
@@ -18,6 +19,7 @@ git clone https://github.com/xopcai/xopc.git
 cd xopc
 pnpm install
 
+pnpm run dev --          # opens the local TUI
 pnpm run dev -- <command>
 ```
 
@@ -33,10 +35,10 @@ pnpm run dev -- <command>
 | `setup` | Initialize config and workspace |
 | `profile` | Manage isolated state profiles |
 | `onboard` | Interactive setup wizard |
-| `channels` | Channel login (`channels login`) and DM pairing approval (`channels pairing approve`) |
+| `channels` | Channel catalog/config management and DM pairing approval (`channels pairing approve`) |
 | `auth` | Manage authentication credentials |
 | `agent` | Chat with Agent |
-| `tui` | Full-screen terminal UI (gateway or `--local` embedded) — see [TUI](./tui.md) |
+| `tui` | Full-screen terminal UI (embedded by default; gateway optional) — see [TUI](./tui.md) |
 | `tunnel` | Manage FRP remote access tunnel |
 | `gateway` | Start REST gateway |
 | `session` | Manage sessions |
@@ -58,6 +60,40 @@ pnpm run dev -- <command>
 | `extensions` | Manage extensions |
 
 MCP server management is documented in [MCP](./mcp.md). It is currently not shown as a root command in `xopc --help`; use the gateway settings and MCP configuration docs for supported setup paths.
+
+### Subcommand index
+
+Use `xopc <command> --help` for option-level details. This table tracks the commands currently exposed by `xopc --help`.
+
+| Command | Supported subcommands |
+|---------|-----------------------|
+| `init` | No subcommands |
+| `setup` | No subcommands |
+| `profile` | `list`, `create`, `delete`, `switch` |
+| `onboard` | No subcommands |
+| `channels` | `list`, `show`, `enable`, `disable`, `config`, `pairing` |
+| `auth` | `list`, `set`, `get`, `remove`, `login`, `logout`, `profiles`, `clear`, `providers` |
+| `agent` | No subcommands |
+| `tui` | No subcommands |
+| `tunnel` | `prefetch`, `consent`, `secret`, `start`, `stop`, `status`, `qr`, `broker` |
+| `gateway` | `token`, `status`, `health`, `call`, `probe`, `stop`, `restart`, `logs`, `service`, `ssh-tunnel` |
+| `session` | `list`, `info`, `delete`, `delete-many`, `rename`, `tag`, `untag`, `archive`, `unarchive`, `pin`, `unpin`, `search`, `grep`, `export`, `stats`, `cleanup` |
+| `doctor` | No subcommands |
+| `update` | No subcommands |
+| `logs` | `list`, `query`, `stats`, `tail`, `clean`, `rotate` |
+| `cron` | `list`, `add`, `remove`, `enable`, `disable`, `run`, `trigger` |
+| `goal` | `list`, `new`, `show`, `pause`, `resume`, `archive`, `runs`, `checklist`, `evidence` |
+| `config` | `get`, `set`, `unset`, `show`, `validate`, `token`, `path` |
+| `image` | `status`, `providers` |
+| `models` | `list`, `status`, `set`, `auth` (`list`, `login`, `paste-api-key`, `logout`) |
+| `providers` | `list`, `set-key`, `unset-key`, `schema` |
+| `voice` | `status`, `enable`, `disable`, `schema` |
+| `search` | `list`, `add`, `remove`, `schema` |
+| `skills` | `list`, `install`, `enable`, `disable`, `status`, `audit`, `config`, `hub`, `test` |
+| `tailscale` | `status` |
+| `browser` | `open`, `state`, `click`, `type`, `screenshot`, `validate`, `run`, `doctor`, `close`, `cloakbrowser`, `extension` |
+| `agents` | `list`, `add`, `delete` |
+| `extensions` | `list`, `inspect`, `freeze`, `health`, `verify`, `doctor`, `audit`, `pack`, `create`, `dev`, `install`, `search`, `publish`, `update` |
 
 ---
 
@@ -166,16 +202,16 @@ xopc onboard --channels
 
 ## channels
 
-Messaging channel **login** (QR / credentials flows) and **DM pairing approval** on the machine where you run the CLI (same host as the gateway when approving Feishu / Weixin pairing codes).
+Manage messaging channel catalog entries, config blocks, and **DM pairing approval** on the machine where you run the CLI. For QR or credential flows, use the channel-specific docs and gateway console when available.
 
-### channels login
+### Channel catalog and config
 
 ```bash
-xopc channels login
-xopc channels login --channel weixin
-xopc channels login --channel feishu
-xopc channels login --channel feishu
-xopc channels login --account <account-id>
+xopc channels list
+xopc channels show telegram
+xopc channels enable telegram
+xopc channels disable telegram
+xopc channels config set-json telegram '{"enabled":true}'
 ```
 
 See channel docs under [Channels](./channels/index.md) for what each integration expects.
@@ -270,8 +306,8 @@ Interactive terminal UI for chatting with the agent (streaming, tools, thinking)
 **Quick start:**
 
 ```bash
-xopc tui                              # embedded mode (default)
-xopc tui --local                      # embedded AgentService, no gateway
+xopc                                  # same as xopc tui; embedded mode
+xopc tui                              # embedded AgentService, no gateway
 xopc tui --gateway                    # force gateway mode
 xopc tui --url http://localhost:18790 --token <token>
 xopc tui -s <sessionKey> -m "Hello"   # resume session + optional first message

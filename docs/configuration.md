@@ -80,63 +80,28 @@ Or create manually:
 {
   "agents": {
     "default": "main",
-    "defaultPreset": "default",
-    "capabilityPresets": {
-      "default": {
-        "id": "default",
-        "name": "Global defaults",
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "anthropic/claude-sonnet-4-5" },
-            "small": { "model": "openai/gpt-4o-mini", "description": "Fast low-cost model" }
-          }
-        }
-      },
-      "safe-coder": {
-        "id": "safe-coder",
-        "name": "Safe coder",
-        "tools": {
-          "builtin": {
-            "shell": { "mode": "confirm", "scope": "workspace" }
-          }
-        },
-        "memory": { "mode": "confirmWrite", "sources": ["session", "curated"] }
-      }
-    },
     "list": [
       {
         "id": "main",
-        "extends": ["safe-coder"],
-        "identity": {
-          "name": "Main",
-          "role": "General assistant",
-          "language": "en",
-          "tone": "direct"
-        },
-        "responsibilities": {
-          "primary": ["Help the user complete tasks"]
-        },
+        "identity": { "name": "Main", "role": "General assistant" },
+        "responsibilities": { "primary": ["Help the user complete tasks"] },
         "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "deepseek/deepseek-v4-flash" }
+          }
+        },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
-        "memory": {
-          "mode": "confirmWrite",
-          "sources": ["session", "curated"],
-          "writePolicy": { "curated": "confirm" }
-        },
+        "memory": { "mode": "confirmWrite", "sources": ["session"] },
         "workflows": {},
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] },
-        "runtime": { "timeoutMs": 180000, "maxToolFailuresPerTurn": 3 }
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
       }
     ]
   },
   "providers": {
-    "openai": "${OPENAI_API_KEY}",
-    "anthropic": "${ANTHROPIC_API_KEY}",
-    "groq": "${GROQ_API_KEY}",
-    "google": "${GOOGLE_API_KEY}",
-    "minimax": "${MINIMAX_API_KEY}"
+    "deepseek": "${DEEPSEEK_API_KEY}"
   },
   "channels": {
     "telegram": {
@@ -205,20 +170,20 @@ Or create manually:
 
 ### agents
 
-Agent configuration has four parts: optional **`default`** agent id, **`defaultPreset`** for global defaults, reusable **`capabilityPresets`**, and concrete **`list`** entries. Each `agents.list[]` entry is an Agent Capability Manifest. Routing and session keys use the **first segment** of the session key as the agent id; the runtime resolves exactly one enabled manifest, applies `defaultPreset` first, then applies any declared presets from `extends`. There is no `agents.defaults` merge layer.
+Agent configuration is manifest-first. The required runtime entries live in **`agents.list`**; each entry is an Agent Capability Manifest. Routing and session keys use the **first segment** of the session key as the agent id. Reusable **`capabilityPresets`** and **`defaultPreset`** are optional policy patch mechanisms. There is no `agents.defaults` merge layer.
 
 #### Top-level `agents` fields
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `default` | string | Optional. Default agent id when the session key or API does not specify one. If omitted: first **enabled** manifest in `list`, else `main`. |
-| `defaultPreset` | string | Global preset id applied to every agent before its own `extends`. Defaults to `default`. Use this for the shared model and baseline capabilities. |
-| `capabilityPresets` | object | Named reusable policy patches keyed by preset id. Presets may define model roles, tools, skills, memory, workflows, boundaries, runtime limits, and locks. |
-| `list` | array | Concrete Agent Capability Manifests. Each entry must be complete enough to run on its own after preset resolution. |
+| `defaultPreset` | string | Optional. Global preset id applied before each agent's own `extends`. Defaults to `default` when omitted. Use it only when you want shared baseline capabilities. |
+| `capabilityPresets` | object | Optional. Named reusable policy patches keyed by preset id. Presets may define model roles, tools, skills, memory, workflows, boundaries, runtime limits, and locks. |
+| `list` | array | Concrete Agent Capability Manifests. Each entry can be complete on its own, including its own `models`. |
 
 #### `agents.list` entries
 
-Each entry must include **`id`**, **`identity`**, **`responsibilities`**, **`workspace`**, **`tools`**, **`skills`**, **`memory`**, **`workflows`**, and **`boundaries`**. `models` is optional on the agent because the global default preset normally owns the shared model roles. Profile Markdown still lives under **`agents/<id>/profile/`** for long-form persona/context files, but the structured manifest is the source of truth for runtime policy.
+Each entry must include **`id`**, **`identity`**, **`responsibilities`**, **`workspace`**, **`tools`**, **`skills`**, **`memory`**, **`workflows`**, and **`boundaries`**. Add **`models`** directly to the agent when the agent owns its model roles. Profile Markdown still lives under **`agents/<id>/profile/`** for long-form persona/context files, but the structured manifest is the source of truth for runtime policy.
 
 | Field | Type | Description |
 |-------|------|-------------|

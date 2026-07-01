@@ -207,7 +207,7 @@ If you want a workflow itself to produce a `todo`-shaped output, return a struct
 
 | Surface | What you see during a run |
 |---|---|
-| TUI (`xopc tui --local`) | Live progress tree, updated on every snapshot change. |
+| TUI (`xopc` or `xopc tui`) | Live progress tree, updated on every snapshot change. |
 | Gateway console | Dedicated workflow Chat session — WorkflowCard streams progress via SSE; board at `#/workflows` shows run status; cancel/retry from card or board. |
 | Telegram | **Live, edit-in-place.** A single message is sent at the start and edited every 5 s (default), with key events — phase change, new error, completion — bypassing the throttle for prompt visibility. |
 | Feishu / Lark | **Live, edit-in-place.** Same edit-in-place flow as Telegram (`im.v1.message.update`); 5 s default throttle. |

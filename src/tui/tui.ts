@@ -2493,9 +2493,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       }
       await refreshSessionInfoWithBorder();
       await refreshModelChoices();
-      await refreshStartupResources();
       await loadSessionHistory({ merge: true });
       showStartupCardOnce();
+      void refreshStartupResources().then(() => {
+        updateFooter();
+        tui.requestRender();
+      });
       if (state.activeRunId) {
         void recoverActiveRunFromHistory('broadcast reconnect');
       }

@@ -23,8 +23,7 @@ export function OnboardingDialog() {
   const open =
     Boolean(token) &&
     modelSetup.ready &&
-    modelSetup.needsSetup &&
-    !modelSetup.guideDismissed;
+    modelSetup.needsSetup;
 
   return (
     <Dialog.Root open={open}>
@@ -47,6 +46,7 @@ export function OnboardingDialog() {
               navigate('/chat');
             }}
             onDismiss={modelSetup.dismissPermanently}
+            canDismiss={false}
           />
         </Dialog.Content>
       </Dialog.Portal>

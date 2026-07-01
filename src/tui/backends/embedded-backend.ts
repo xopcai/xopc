@@ -1,6 +1,6 @@
 import type { ExtensionRegistryImpl } from '../../extensions/loader.js';
 import { isAbsolute, relative, resolve } from 'node:path';
-import { AgentService } from '../../agent/index.js';
+import type { AgentService } from '../../agent/service.js';
 import { listAgentEntries, normalizeAgentId } from '../../agent/agent-scope.js';
 import { resolveAgentIdFromSessionKey } from '../../routing/agent-session-key.js';
 import { parseModelRef } from '../../agent/models/selection.js';
@@ -10,7 +10,6 @@ import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
 import { getAgentDefaultModelRef } from '../../config/schema.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
-import { getAvailableModels } from '../../providers/index.js';
 import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
 import type { ExportFormat } from '../../session/types.js';
 import { SessionIndex } from '../../session/index.js';
@@ -67,6 +66,7 @@ function isPathSameOrInside(parentDir: string, childDir: string): boolean {
 export class EmbeddedBackend implements TuiBackend {
   private bus: MessageBus;
   private agent: AgentService | null = null;
+  private agentLoading: Promise<AgentService> | null = null;
   private config: ReturnType<typeof loadConfig> | null = null;
   private workspace = '';
   private sessionIndex: SessionIndex | null = null;
@@ -95,7 +95,6 @@ export class EmbeddedBackend implements TuiBackend {
     this.config = config;
     const workspace = getWorkspacePath(config);
     this.workspace = workspace;
-    const modelId = getAgentDefaultModelRef(config);
     openXopcDatabase();
     this.sessionIndex = new SessionIndex({ config });
     this.sessionIndexReady = this.sessionIndex.initialize().catch((err: unknown) => {
@@ -104,11 +103,47 @@ export class EmbeddedBackend implements TuiBackend {
       throw err;
     });
 
-    this.agent = new AgentService(this.bus, {
+    this.onConnected?.();
+    setTimeout(() => {
+      void this.ensureAgent().catch((err) => {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        log.error({ err, errorMessage }, `Embedded agent failed: ${errorMessage}`);
+        this.onDisconnected?.(errorMessage);
+      });
+    }, 750);
+
+    // Process outbound messages in background
+    this.processOutbound();
+  }
+
+  private async ensureAgent(): Promise<AgentService> {
+    if (this.agent) {
+      return this.agent;
+    }
+    if (this.agentLoading) {
+      return this.agentLoading;
+    }
+    if (!this.config || !this.sessionIndex) {
+      throw new Error('Embedded backend not started');
+    }
+
+    this.agentLoading = this.createAgent(this.config, this.sessionIndex);
+    try {
+      return await this.agentLoading;
+    } finally {
+      this.agentLoading = null;
+    }
+  }
+
+  private async createAgent(config: ReturnType<typeof loadConfig>, sessionIndex: SessionIndex): Promise<AgentService> {
+    const { AgentService } = await import('../../agent/service.js');
+    const workspace = this.workspace || getWorkspacePath(config);
+    const modelId = getAgentDefaultModelRef(config);
+    const agent = new AgentService(this.bus, {
       workspace,
       model: modelId,
       config,
-      sessionStore: this.sessionIndex.getStore(),
+      sessionStore: sessionIndex.getStore(),
       getWorkflowRunService: () => this.getWorkflowRunService(),
       extensionRegistry: this.opts?.extensionRegistry,
       isWorkspaceTrusted: (workspaceDir) => {
@@ -123,17 +158,9 @@ export class EmbeddedBackend implements TuiBackend {
         return undefined;
       },
     });
-
-    this.agent.start().then(() => {
-      this.onConnected?.();
-    }).catch((err) => {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      log.error({ err, errorMessage }, `Embedded agent failed: ${errorMessage}`);
-      this.onDisconnected?.(errorMessage);
-    });
-
-    // Process outbound messages in background
-    this.processOutbound();
+    this.agent = agent;
+    await agent.start();
+    return agent;
   }
 
   stop(): void {
@@ -223,7 +250,7 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {
-    if (!this.agent) throw new Error('Agent not started');
+    const agent = await this.ensureAgent();
 
     const runId = crypto.randomUUID();
     this.chatAbort?.abort();
@@ -245,7 +272,7 @@ export class EmbeddedBackend implements TuiBackend {
           ? opts.message
           : prependEnvelopeTimestamp(opts.message);
 
-        const stream = this.agent!.turnDispatcher.processDirectStreaming(
+        const stream = agent.turnDispatcher.processDirectStreaming(
           messageForAgent,
           opts.sessionKey,
           opts.attachments,
@@ -424,6 +451,7 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async listModels(): Promise<TuiModelChoice[]> {
+    const { getAvailableModels } = await import('../../providers/index.js');
     const models = await getAvailableModels();
     return models.map((model) => ({
       id: model.id,

@@ -16,7 +16,7 @@ For the full field reference, see [Configuration](../configuration.md). For task
 
 | Section | Purpose |
 | --- | --- |
-| `agents` | Agent manifests, global default preset, capability presets, default agent id |
+| `agents` | Agent manifests, optional capability presets, default agent id |
 | `providers` | LLM provider API key references and provider ids |
 | `bindings` | Route inbound channels/peers to agents |
 | `session` | Session scope, identity links, reset behavior |
@@ -37,25 +37,18 @@ Current agent configuration is manifest-first:
 {
   "agents": {
     "default": "main",
-    "defaultPreset": "default",
-    "capabilityPresets": {
-      "default": {
-        "id": "default",
-        "name": "Global defaults",
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "deepseek/deepseek-chat" }
-          }
-        }
-      }
-    },
     "list": [
       {
         "id": "main",
         "identity": { "name": "Main", "role": "General assistant" },
         "responsibilities": { "primary": ["Help the user complete tasks"] },
         "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "deepseek/deepseek-v4-flash" }
+          }
+        },
         "tools": { "builtin": {} },
         "skills": { "mode": "all" },
         "memory": { "mode": "confirmWrite", "sources": ["session"] },
@@ -63,8 +56,11 @@ Current agent configuration is manifest-first:
         "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
       }
     ]
+  },
+  "providers": {
+    "deepseek": "${DEEPSEEK_API_KEY}"
   }
 }
 ```
 
-There is no `agents.defaults` merge layer. Use `agents.defaultPreset` for global defaults, `agents.capabilityPresets` for reusable policy patches, and `agents.list[]` for concrete agents.
+There is no `agents.defaults` merge layer. Put runnable agents in `agents.list[]`. Use `agents.capabilityPresets` and `agents.defaultPreset` only when you want reusable policy patches.

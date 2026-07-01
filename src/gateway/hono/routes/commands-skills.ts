@@ -138,15 +138,17 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     }
   });
 
-  authenticated.get('/api/skills/marketplace/provider', (c) => {
-    const info = service.marketplace.getSkillsProvider();
+  authenticated.get('/api/skills/marketplace/provider', async (c) => {
+    const info = await service.marketplace.getSkillsProvider();
     return c.json({ ok: true, payload: info });
   });
 
   /** All registered marketplace providers (built-in + extension-contributed). */
-  authenticated.get('/api/skills/marketplace/providers', (c) => {
-    const providers = service.marketplace.getSkillsProviders();
-    const current = service.marketplace.getSkillsProvider();
+  authenticated.get('/api/skills/marketplace/providers', async (c) => {
+    const [providers, current] = await Promise.all([
+      service.marketplace.getSkillsProviders(),
+      service.marketplace.getSkillsProvider(),
+    ]);
     return c.json({ ok: true, payload: { providers, current: current.provider } });
   });
 

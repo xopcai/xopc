@@ -210,6 +210,33 @@ export class BuiltinMemoryProvider implements MemoryProvider {
 
   async write(request: MemoryWriteRequest): Promise<MemoryWriteResult> {
     const target = request.target ?? (request.kind === 'user_profile' ? 'user' : 'memory');
+    if (request.status === 'candidate') {
+      const record = upsertMemoryRecord({
+        providerId: this.id,
+        kind: target === 'user' ? 'user_profile' : request.kind,
+        agentId: request.scope?.agentId ?? this.agentId,
+        workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
+        sessionKey: request.scope?.sessionKey,
+        content: request.content,
+        source: {
+          ...(request.source ?? {}),
+          provider: this.id,
+          path: sourcePathForTarget(target),
+        },
+        confidence: request.confidence,
+        tags: request.tags,
+        status: 'candidate',
+        sensitivity: request.sensitivity,
+        evidence: request.evidence,
+        reviewAfter: request.reviewAfter,
+        expiresAt: request.expiresAt,
+      });
+      return {
+        success: true,
+        message: 'Memory candidate added to inbox',
+        record,
+      };
+    }
     const result = await this.store.add(target, request.content);
     if (!result.success) return { success: false, error: result.error };
     return {

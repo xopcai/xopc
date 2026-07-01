@@ -8,9 +8,9 @@ function createTuiCommand(_ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
+        'xopc                                        # Open embedded TUI (default command)',
         'xopc tui                                    # Embedded mode (default)',
         'xopc tui --gateway                          # Force gateway mode',
-        'xopc tui --local                            # Embedded mode (default)',
         'xopc tui --url http://host:3120 --token xxx # Connect to remote gateway',
         'xopc tui -s agent:main:tui-...              # Resume a session',
         'xopc tui -m "Summarize my inbox"            # Send a message on launch',
@@ -61,8 +61,8 @@ register({
   metadata: {
     category: 'runtime',
     examples: [
+      'xopc',
       'xopc tui',
-      'xopc tui --local',
       'xopc tui --gateway',
       'xopc tui --url http://host:3120',
     ],

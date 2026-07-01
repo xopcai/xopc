@@ -46,12 +46,22 @@
 
 ## Get started
 
-### Try in 3 minutes
+### Easiest start: PC desktop app
+
+For most users, the **PC desktop app** is the easiest way to start: install the app, finish model setup in the UI, then chat in the built-in console. It starts the local gateway for you.
+
+1. Download from **[GitHub Releases](https://github.com/xopcai/xopc/releases)** — macOS `.dmg`, Windows `.exe`, Linux `.AppImage` / `.deb`.
+2. Open xopc and complete model setup.
+3. Start chatting.
+
+See **[PC Desktop app](https://xopcai.github.io/xopc/desktop-app)** for install notes, build-from-source commands, and reserved screenshot/GIF/video file locations.
+
+### Fastest terminal path
 
 ```bash
 curl -fsSL https://xopc.ai/install.sh | bash
 xopc onboard --quick
-xopc tui --local
+xopc
 ```
 
 This path starts the embedded terminal UI: no gateway, desktop app, or messenger setup required.
@@ -82,12 +92,10 @@ The installer detects your OS, installs **Node.js ≥ 22** when needed, and inst
 
 ```bash
 xopc onboard          # faster: xopc onboard --quick
-xopc tui --local
+xopc                  # same as xopc tui; opens the local TUI
 ```
 
-> **New here?** Start with **`xopc tui --local`** (embedded agent, no gateway). Run **`xopc gateway`** when you want the **web console** or **messengers** (Telegram, WeChat, Feishu).
-
-If the first run works for you, please **[star the repo](https://github.com/xopcai/xopc)** so others can discover it.
+> **New here?** Use the **PC desktop app** for the easiest setup, or run **`xopc`** for the fastest terminal path. Run **`xopc gateway`** when you want the browser console or messengers without the desktop shell.
 
 ### npm (already have Node.js 22+)
 
@@ -143,10 +151,10 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 
 | Surface | How | Best for |
 | --- | --- | --- |
-| **TUI** | `xopc tui --local` (or `xopc tui --url …`) | Full keyboard, streaming, lowest friction to try |
+| **PC Desktop** | [GitHub Releases](#desktop-app) | Easiest start: native app + embedded gateway console |
+| **TUI** | `xopc` or `xopc tui` (remote: `xopc tui --url …`) | Full keyboard, streaming, fastest terminal path |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | Scripts and minimal TTY |
 | **Web** | `xopc gateway` → open console URL | Chat, settings, logs in the browser |
-| **Desktop** | [GitHub Releases](#desktop-app) or `pnpm run electron:build` | Native app (macOS, Windows, Linux) |
 | **Mobile** | [xopc-app](https://github.com/xopcai/xopc-app) + gateway pairing ([mobile app](https://xopcai.github.io/xopc/mobile-app), [remote access](https://xopcai.github.io/xopc/remote-access)) | Continue your loop on iOS/Android |
 | **Messengers** | `channels.*` + gateway | Telegram, WeChat, Feishu/Lark |
 
@@ -195,7 +203,7 @@ Default: **`~/.xopc/xopc.json`**.
         "models": {
           "defaultRole": "deep",
           "roles": {
-            "deep": { "model": "deepseek/deepseek-chat" }
+            "deep": { "model": "deepseek/deepseek-v4-flash" }
           }
         },
         "tools": { "builtin": {} },
@@ -242,7 +250,7 @@ No. xopc runs on your machine. Config, workspace files, credentials, and local s
 No. Bring your own keys for cloud providers, or use local/model-server options such as Ollama, LM Studio, and vLLM.
 
 **What is the fastest way to try it?**  
-Use **`xopc onboard --quick`** and **`xopc tui --local`**. That path avoids gateway, desktop, and messenger setup.
+For most users, install the **PC desktop app** from GitHub Releases and complete model setup in the UI. For terminal users, use **`xopc onboard --quick`** and then run **`xopc`**.
 
 **How is this different from another chat UI?**  
 xopc is organized around goal loops: direction, next action, feedback, and recalibration across multiple surfaces.
@@ -250,19 +258,20 @@ xopc is organized around goal loops: direction, next action, feedback, and recal
 **Can I use it from my phone or messengers?**  
 Yes. Start with local TUI first; when ready, run the gateway and use [xopc-app](https://github.com/xopcai/xopc-app) on iOS/Android, or configure Telegram, WeChat, or Feishu/Lark.
 
-If this answers your concerns, please **[star xopc](https://github.com/xopcai/xopc)** so more developers can find it.
-
----
-
 <a id="desktop-app"></a>
 <a id="electron-desktop"></a>
 
 ## Desktop app
 
+The PC desktop app is the easiest way to start for most users: it launches an embedded local gateway and opens the gateway console in a native window.
+
 1. Download from **[GitHub Releases](https://github.com/xopcai/xopc/releases)** — macOS `.dmg`, Windows `xopc-<version>-x64.exe` or `xopc-<version>-arm64.exe`, Linux `.AppImage` / `.deb`.
-2. Or use **`xopc gateway`** + the npm CLI until a build exists for your OS.
+2. Open the app, complete model setup, and start chatting.
+3. Or use **`xopc gateway`** + the npm CLI until a build exists for your OS.
 
 **Build from source:** `pnpm install && pnpm run electron:build` → `dist/release/`
+
+Docs and media placeholders: **[PC Desktop app](https://xopcai.github.io/xopc/desktop-app)**.
 
 ---
 
@@ -282,14 +291,6 @@ pnpm run build && pnpm test && pnpm run lint
 **[AGENTS.md](./AGENTS.md)** · **[CONTRIBUTING.md](./CONTRIBUTING.md)**
 
 **Issues:** [bug](https://github.com/xopcai/xopc/issues/new?template=bug_report.yml) · [feature](https://github.com/xopcai/xopc/issues/new?template=feature_request.yml) · [Q&A Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a) · [security advisory](https://github.com/xopcai/xopc/security/advisories/new) (not public issues)
-
----
-
-## Star history
-
-[![Star History Chart](https://api.star-history.com/svg?repos=xopcai/xopc&type=Date)](https://star-history.com/#xopcai/xopc&Date)
-
----
 
 ## Credits
 

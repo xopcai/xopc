@@ -33,7 +33,7 @@ xopc models list --provider deepseek
 设置默认模型：
 
 ```bash
-xopc models set deepseek/deepseek-chat
+xopc models set deepseek/deepseek-v4-flash
 ```
 
 检查结果：
@@ -45,7 +45,7 @@ xopc models status
 ## 3. 本地试聊
 
 ```bash
-xopc tui --local
+xopc
 ```
 
 如果模型调用失败：

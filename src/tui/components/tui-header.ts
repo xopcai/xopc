@@ -1,5 +1,5 @@
 import type { Component, KeybindingsManager } from '@earendil-works/pi-tui';
-import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
+import { truncateToWidth } from '@earendil-works/pi-tui';
 
 import { theme } from '../theme.js';
 import { formatKeyIds } from '../format-tui-hotkeys.js';
@@ -13,11 +13,7 @@ export type TuiHeaderModel = {
 
 const COMPACT_HINTS =
   'escape interrupt · ctrl+c/ctrl+d clear/exit · / commands · ! bash · ctrl+o tools';
-
-const EXPANDED_HINTS = [
-  'Press /start to show full startup help and loaded resources.',
-  'xopc can use skills, workflows, connectors, and project context.',
-];
+const STARTUP_HELP_HINT = 'Press /start to show full startup help and loaded resources.';
 
 /** Collapsible startup header (pi-style hints subset). */
 export class TuiHeader implements Component {
@@ -52,11 +48,6 @@ export class TuiHeader implements Component {
     return `${interrupt} interrupt · ${clear}/${exit} clear/exit · / commands · ! bash · ${tools} tools`;
   }
 
-  private getExpandedHints(): string[] {
-    if (!this.keybindings) return EXPANDED_HINTS;
-    return EXPANDED_HINTS;
-  }
-
   render(width: number): string[] {
     if (this.customComponent) {
       const rendered = this.customComponent.render(width);
@@ -69,13 +60,7 @@ export class TuiHeader implements Component {
 
     if (showHints) {
       lines.push(truncateToWidth(theme.dim(this.getCompactHints()), width, theme.dim('…')));
-      for (const hint of this.getExpandedHints()) {
-        if (visibleWidth(hint) <= width) {
-          lines.push(theme.dim(hint));
-        } else {
-          lines.push(truncateToWidth(theme.dim(hint), width, theme.dim('…')));
-        }
-      }
+      lines.push(truncateToWidth(theme.dim(STARTUP_HELP_HINT), width, theme.dim('…')));
     }
 
     for (const extLine of this.extensionLines) {

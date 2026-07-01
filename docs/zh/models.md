@@ -1,38 +1,82 @@
-# 自定义模型配置
+# 模型与服务商
 
-xopc 通过 `~/.xopc/models.json` 支持自定义模型服务商。
-
-**内置目录：** 与 **`@earendil-works/pi-ai` 的 `KnownProvider`** 一致；CLI 与网关 **设置 → 服务商** 对内置 id 的密钥、OAuth 与环境变量提示与此对齐。其它厂商（如仅用于文生图/STT/TTS 的 **`dashscope`**）在 **`models.json`** 里用 `providers.<id>` 配置 `baseUrl`、`apiKey`、`api` 等。
+xopc 可以直接使用内置 LLM 服务商；只有在添加自定义服务商、本地推理服务或覆盖模型元数据时，才需要编辑 `~/.xopc/models.json`。
 
 ## 内置 LLM 服务商（pi-ai）
 
-内置 **provider id** 与 pi-ai 一致；环境变量名以仓库内 **`src/providers/env-keys.ts`** 的 **`PROVIDER_ENV_MAP`** 为准。与 **`xopc.json` → `providers`** 对应的汇总表见 [配置说明 — `providers`](/zh/configuration#providers)。
+网关控制台 **设置 → 服务商**、**`xopc providers`** 和 **`xopc models`** 使用同一套 `@earendil-works/pi-ai` 内置 provider id。多数用户应优先使用内置服务商，而不是一开始就改 `models.json`。
 
-**默认对话模型**：xopc 不内置假定厂商模型。`xopc onboard` 与网关控制台会配置全局默认 preset（`agents.defaultPreset`），所有 agent 默认继承该模型；只有需要差异化时才在 agent 或其它 preset 中覆盖模型角色。
+**推荐起步模型**：建议使用 **DeepSeek V4 Flash**，模型引用为 `deepseek/deepseek-v4-flash`。这是控制台推荐的快速路径，价格/性能比较好，并且只需要配置 API Key。
 
-当前内置覆盖（节选）：**DeepSeek**、**OpenAI**、**Anthropic**、**Google / Vertex**、**Azure OpenAI**、**AWS Bedrock**、**Groq**、**xAI**、**Mistral**、**Cerebras**、**OpenRouter**、**Vercel AI Gateway**、**智谱 z.ai**、**MiniMax**（国际/国内）、**Kimi Coding**、**Moonshot**（`moonshotai` / `moonshotai-cn`）、**Hugging Face**、**Fireworks**、**Together**、**OpenCode / OpenCode Go**、**Cloudflare Workers AI** 与 **Cloudflare AI Gateway**、**GitHub Copilot**、**OpenAI Codex**（OAuth）、**Google Gemini CLI / Antigravity**、**小米 MiMo**（见下）。**`dashscope`** 为 xopc 侧文生图/语音等 HTTP 能力的环境 id，不是 pi-ai 的 LLM `KnownProvider`。
+```json
+{
+  "agents": {
+    "default": "main",
+    "list": [
+      {
+        "id": "main",
+        "identity": { "name": "Main", "role": "General assistant" },
+        "responsibilities": { "primary": ["Help the user complete tasks"] },
+        "workspace": { "root": "~/.xopc/workspace/main" },
+        "models": {
+          "defaultRole": "deep",
+          "roles": {
+            "deep": { "model": "deepseek/deepseek-v4-flash" }
+          }
+        },
+        "tools": { "builtin": {} },
+        "skills": { "mode": "all" },
+        "memory": { "mode": "confirmWrite", "sources": ["session"] },
+        "workflows": {},
+        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
+      }
+    ]
+  },
+  "providers": {
+    "deepseek": "${DEEPSEEK_API_KEY}"
+  }
+}
+```
 
-### 小米 MiMo（`xiaomi` 与 `xiaomi-token-plan-*`）
+也可以直接在终端设置同一个 key：
 
-小米提供 **四个** 内置 id，对应 **不同接口与计费产品**，并非重复项：
+```bash
+export DEEPSEEK_API_KEY="sk-..."
+```
 
-| Provider id | 用途 | 接口域（pi-ai 默认） | 典型环境变量 |
-|-------------|------|----------------------|--------------|
-| `xiaomi` | 按量 API 计费 | `api.xiaomimimo.com` | `XIAOMI_API_KEY` |
-| `xiaomi-token-plan-cn` | Token 套餐 · 中国 | `token-plan-cn.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_CN_API_KEY` |
-| `xiaomi-token-plan-ams` | Token 套餐 · 阿姆斯特丹 | `token-plan-ams.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_AMS_API_KEY` |
-| `xiaomi-token-plan-sgp` | Token 套餐 · 新加坡 | `token-plan-sgp.xiaomimimo.com` | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` |
+**默认对话模型**：xopc 从 `agents.default` 与 `agents.list` 解析当前 agent。模型角色放在 `agents.list[].models.roles` 下；workflow 可以引用这些 typed roles，避免在每个步骤里硬编码模型。
 
-密钥在 **[MiMo 开放平台](https://platform.xiaomimimo.com/#/console/api-keys)** 创建；模型引用 **`provider/model`** 中的 `provider` 须与所持有密钥类型一致。
+当前内置覆盖（节选）：**DeepSeek**、**OpenAI**、**Anthropic**、**Google / Vertex**、**Azure OpenAI**、**AWS Bedrock**、**Groq**、**xAI**、**Mistral**、**Cerebras**、**OpenRouter**、**Vercel AI Gateway**、**智谱 z.ai**、**MiniMax**（国际/国内）、**Kimi Coding**、**Moonshot**（`moonshotai` / `moonshotai-cn`）、**Hugging Face**、**Fireworks**、**Together**、**OpenCode / OpenCode Go**、**Cloudflare Workers AI** 与 **Cloudflare AI Gateway**、**GitHub Copilot**、**OpenAI Codex**（OAuth）、**Google Gemini CLI / Antigravity**、**小米 MiMo**。**`dashscope`** 为 xopc 侧文生图/语音等 HTTP 能力的环境 id，不是 pi-ai 的 LLM `KnownProvider`。
 
-### OAuth 与 API Key（LLM）
+### 内置服务商凭据
 
-部分服务商支持 **OAuth**（浏览器登录，凭据在 `~/.xopc/credentials/oauth/` 或 auth profiles）。**`openai-codex`** 正常使用为 **仅 OAuth**，网关「服务商」里不按静态厂商 API Key 配置。**`github-copilot`** 可使用环境变量中的 GitHub 类 token 或 OAuth，详见 `PROVIDER_ENV_MAP`。
+内置服务商凭据可以来自 OAuth、已保存 API Key、`xopc.json` 或环境变量。解析顺序如下：
+
+| 优先级 | 来源 | 示例 | 适合场景 |
+|--------|------|------|----------|
+| 1 | 控制台、`xopc auth` 或 `xopc providers set-key` 保存的 auth profile | OAuth access token 或粘贴的 API Key | 桌面端/控制台配置，以及可刷新的 OAuth |
+| 2 | `xopc.json` 的 `providers` 配置 | `"deepseek": "${DEEPSEEK_API_KEY}"` | 可复现的工作区配置，同时不提交密钥 |
+| 3 | `PROVIDER_ENV_MAP` 中的环境变量 | `DEEPSEEK_API_KEY`、`OPENAI_API_KEY`、`ANTHROPIC_OAUTH_TOKEN` | Shell、CI、容器和服务器部署 |
+
+服务商需要浏览器登录或短期 token 时使用 OAuth；DeepSeek、OpenAI、OpenRouter 和多数 OpenAI-compatible 服务通常使用 API Key；不希望密钥写入配置文件时使用环境变量。
+
+常见 OAuth/API Key 情况：
+
+| Provider id | 凭据路径 |
+|-------------|----------|
+| `deepseek` | Settings → Providers、`xopc providers set-key deepseek`、`providers.deepseek` 或 `DEEPSEEK_API_KEY` |
+| `openai` | 已保存 key、配置文件或 `OPENAI_API_KEY` |
+| `anthropic` | OAuth token 或 API Key；环境变量支持 `ANTHROPIC_OAUTH_TOKEN` 与 `ANTHROPIC_API_KEY` |
+| `openai-codex` | 正常 Codex 访问为 OAuth-only |
+| `google-gemini-cli` / `google-antigravity` | 按使用方式选择 OAuth token 或 API Key |
+| `github-copilot` | 视配置使用 GitHub token 环境变量或 OAuth |
+
+小米 MiMo 仍可通过 `xiaomi` 与 `xiaomi-token-plan-*` 使用；选择与你的接口和 token 套餐匹配的 provider id。
 
 ## 目录
 
 - [内置 LLM 服务商（pi-ai）](#内置-llm-服务商pi-ai)
-- [快速开始](#快速开始)
+- [自定义服务商快速开始](#自定义服务商快速开始)
 - [配置](#配置)
 - [支持的 API](#支持的-api)
 - [服务商配置](#提供商配置)
@@ -44,7 +88,7 @@ xopc 通过 `~/.xopc/models.json` 支持自定义模型服务商。
 - [API 端点](#api-端点)
 - [故障排除](#故障排除)
 
-## 快速开始
+## 自定义服务商快速开始
 
 创建 `~/.xopc/models.json`：
 
@@ -212,7 +256,7 @@ xopc 通过 `~/.xopc/models.json` 支持自定义模型服务商。
 
 ## API Key 解析方式
 
-`apiKey` 字段支持三种格式：
+对于 `models.json` 中的自定义服务商，`apiKey` 字段支持三种格式：
 
 ### 1. Shell 命令
 

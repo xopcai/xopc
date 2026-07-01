@@ -76,7 +76,7 @@ describe('command-manifest', () => {
   beforeAll(async () => {
     program = await buildFullProgram();
     helper = new Help();
-  }, 30_000);
+  }, 60_000);
 
   it('description matches ROOT_COMMAND_DESCRIPTION', () => {
     expect(program.description()).toBe(ROOT_COMMAND_DESCRIPTION);

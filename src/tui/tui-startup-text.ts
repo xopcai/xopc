@@ -70,14 +70,12 @@ export function formatTuiStartupText(input: {
   }
 
   lines.push(compactKeyLine(input.keybindings));
-  lines.push('Press /start to show full startup help and loaded resources.');
-  lines.push('');
-  lines.push(
-    'xopc can use skills, workflows, connectors, and project context. Ask it how to automate or connect services.',
-  );
+  lines.push('Press /start to show full startup help.');
 
   if (expanded) {
     lines.push(
+      '',
+      'xopc can use skills, workflows, connectors, and project context. Ask it how to automate or connect services.',
       '',
       'Ask xopc:',
       '  "what workflows are available?"',
@@ -86,14 +84,16 @@ export function formatTuiStartupText(input: {
     );
   }
 
-  lines.push('');
-  lines.push(...formatResourceSection('Context', input.resources?.context, { expanded }));
-  lines.push('');
-  lines.push(...formatResourceSection('Skills', input.resources?.skills, { expanded }));
-  lines.push('');
-  lines.push(...formatResourceSection('Workflows', input.resources?.workflows, { expanded }));
-  lines.push('');
-  lines.push(...formatResourceSection('Connectors', input.resources?.connectors, { expanded }));
+  if (expanded) {
+    lines.push('');
+    lines.push(...formatResourceSection('Context', input.resources?.context, { expanded }));
+    lines.push('');
+    lines.push(...formatResourceSection('Skills', input.resources?.skills, { expanded }));
+    lines.push('');
+    lines.push(...formatResourceSection('Workflows', input.resources?.workflows, { expanded }));
+    lines.push('');
+    lines.push(...formatResourceSection('Connectors', input.resources?.connectors, { expanded }));
+  }
 
   if (expanded) {
     lines.push(
