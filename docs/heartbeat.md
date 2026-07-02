@@ -1,31 +1,27 @@
 # Heartbeat Mechanism
 
-Heartbeat service is used to proactively monitor and wake up the Agent.
+Heartbeat is a lightweight gateway service for periodic health checks and proactive wake logic. It is separate from automations: automations own scheduled/manual/webhook work, while heartbeat keeps long-running gateway state observable.
 
 ## Overview
 
-The heartbeat mechanism regularly checks system status and proactively triggers the Agent when conditions are met.
-
-## How It Works
-
 ```
 ┌─────────────────┐
-│  Heartbeat       │
-│  Service        │
+│ Heartbeat       │
+│ Service         │
 └────────┬────────┘
          │
          ▼ (every intervalMs)
 ┌─────────────────┐
-│  Check Status   │
-│  - Cron Jobs    │
-│  - Memory       │
-│  - Config       │
+│ Check Status    │
+│ - Runtime       │
+│ - Memory        │
+│ - Config        │
 └────────┬────────┘
          │
-         ▼ (if condition met)
+         ▼
 ┌─────────────────┐
-│  Wake Agent     │
-│  (if enabled)   │
+│ Emit logs /     │
+│ wake checks     │
 └─────────────────┘
 ```
 
@@ -33,17 +29,17 @@ The heartbeat mechanism regularly checks system status and proactively triggers 
 
 ```typescript
 interface HeartbeatConfig {
-  intervalMs: number;   // Check interval (milliseconds)
-  enabled: boolean;     // Whether to enable
+  intervalMs: number;
+  enabled: boolean;
 }
 ```
 
-### Default Configuration
+Default configuration:
 
 ```json
 {
   "heartbeat": {
-    "intervalMs": 300000,  // 5 minutes
+    "intervalMs": 300000,
     "enabled": true
   }
 }
@@ -51,94 +47,28 @@ interface HeartbeatConfig {
 
 ## Use Cases
 
-### Regular Checks
+- Check gateway runtime health on a steady cadence.
+- Monitor memory and session pressure.
+- Surface configuration reload or wake conditions without coupling them to user turns.
 
-- Check pending scheduled tasks
-- Monitor memory usage
-- Check configuration changes
-
-### Conditional Trigger
-
-Proactively wake up when conditions are met:
-
-```typescript
-// Check if there are pending cron jobs
-const pendingJobs = cronService.getPendingJobs();
-if (pendingJobs.length > 0) {
-  // Trigger Agent to process
-}
-```
-
-## Programmatic Usage
-
-```typescript
-import { HeartbeatService } from '../heartbeat/service.js';
-import { CronService } from '../cron/service.js';
-
-const cronService = new CronService();
-const heartbeat = new HeartbeatService(cronService);
-
-// Start heartbeat
-heartbeat.start({
-  intervalMs: 60000,  // 1 minute
-  enabled: true
-});
-
-// Stop heartbeat
-heartbeat.stop();
-
-// Check status
-const status = heartbeat.isRunning();
-```
-
-## Monitoring Metrics
-
-Heartbeat service monitors:
-
-| Metric | Description |
-|--------|-------------|
-| `runningJobs` | Number of running cron jobs |
-| `pendingJobs` | Pending scheduled tasks |
-| `memoryUsage` | Memory usage |
-| `sessionCount` | Active session count |
-
-## Log Output
-
-Heartbeat service outputs status logs:
-
-```
-[Heartbeat] Active - 5 cron jobs running
-[Heartbeat] Checking pending jobs...
-[Heartbeat] Triggering wake for pending task
-```
-
-## Best Practices
-
-1. **Reasonable interval**: Set check frequency based on needs
-2. **Resource consideration**: Avoid too frequent checks
-3. **Log level**: Can reduce log level in production
-4. **Error handling**: Heartbeat errors should not affect main service
-
-## Relationship with Cron
+## Relationship with Automations
 
 | Component | Responsibility |
 |-----------|----------------|
-| **Cron** | Execute specific tasks on schedule |
-| **Heartbeat** | Regular checks and wake triggers |
+| **Automations** | Execute agent or workflow actions from manual, scheduled, or webhook triggers |
+| **Heartbeat** | Run periodic health checks and wake-related monitoring |
 
-They work together: Heartbeat monitors Cron job execution status.
+Automations do not depend on heartbeat to become due. The automation service computes and tracks its own `nextRunAtMs`; heartbeat remains a separate health and monitoring mechanism.
 
 ## Troubleshooting
 
 **Heartbeat not working?**
-- Confirm `enabled` is set to `true`
-- Check `intervalMs` configuration is valid
-- Check service logs
+
+- Confirm `heartbeat.enabled` is `true`.
+- Check `heartbeat.intervalMs`.
+- Check gateway logs for heartbeat service startup and runtime errors.
 
 **Triggering too frequently?**
-- Increase `intervalMs` value
-- Check trigger condition logic
 
-**Memory leak?**
-- Regularly restart service
-- Monitor memory usage trends
+- Increase `heartbeat.intervalMs`.
+- Review any wake condition tied to heartbeat checks.

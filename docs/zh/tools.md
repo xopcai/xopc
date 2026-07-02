@@ -1,6 +1,6 @@
 # 内置工具
 
-本文说明 xopc 智能体可调用的内置能力：读写工作区、执行命令、检索与浏览网页、对接通道与技能等。实际注册哪些工具取决于 **配置**、可选 **能力**（记忆、浏览器、TTS）、是否接入 **网关**（例如交互式 `clarify`、计划任务 `cronjob`），以及是否加载 **扩展**（扩展可向注册表追加工具）。
+本文说明 xopc 智能体可调用的内置能力：读写工作区、执行命令、检索与浏览网页、对接通道与技能等。实际注册哪些工具取决于 **配置**、可选 **能力**（记忆、浏览器、TTS）、是否接入 **网关**（例如交互式 `clarify`、自动化 `automation`），以及是否加载 **扩展**（扩展可向注册表追加工具）。
 
 ---
 
@@ -22,7 +22,7 @@
 | 浏览器（可选） | `browser_use` — 启用浏览器自动化时 |
 | 委托与代码（可选） | `delegate_task`, `execute_code` |
 | 多 Agent 编排（可选） | `workflow` — 通过确定性 JS 脚本扇出子 Agent。见 [动态工作流](workflows.md)。 |
-| 定时任务（可选） | `cronjob` — 运行时提供 Cron（常见为网关） |
+| 自动化（可选） | `automation` — 运行时提供自动化服务（常见为网关） |
 | MCP（可选） | `服务器ID__工具名` — 来自已配置的 MCP 服务；在 `tools.disable` 中加 `bundle-mcp` 可关闭全部 |
 
 扩展也可追加工具。
@@ -352,7 +352,7 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 ### `delegate_task`
 
-子智能体**独立上下文**（无父会话 transcript），仅返回**文字摘要**。含 `goal`、`context`、`toolset`、`maxIterations`（默认 30）等。子智能体不能嵌套 `delegate_task`，也不能用 `clarify`、外发消息、记忆、`todo`、`cronjob`、Skills 管理类工具。
+子智能体**独立上下文**（无父会话 transcript），仅返回**文字摘要**。含 `goal`、`context`、`toolset`、`maxIterations`（默认 30）等。子智能体不能嵌套 `delegate_task`，也不能用 `clarify`、外发消息、记忆、`todo`、`automation`、Skills 管理类工具。
 
 可用性由所选 agent manifest 与 capability presets 控制。
 
@@ -366,11 +366,11 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 
 ## 定时任务（网关）
 
-### `cronjob`
+### `automation`
 
-`list` / `create` / `update` / `remove` / `enable` / `disable` / `history`。创建/更新使用 `scheduleKind` 搭配 `cronExpr`、`at` 或 `everyMs`，并且只能选择一种 payload（`message`、`workflowDefinitionId` 或 `goalId`）。可选字段包括 cron 计划的 `tz`、`sessionTarget`、`agentId`、`workingDirectory`、`name`、`jobId` 等。
+`list` / `create` / `update` / `delete` / `run` / `pause` / `resume` / `history`。创建/更新使用与 `/api/automations` 相同的结构化 payload：一个触发器（`manual`、`schedule` 或 `webhook`）和一个动作（Agent 指令或工作流运行）。计划触发可使用 `once`、`interval` 或 cron 表达式。
 
-仅当运行时提供 `CronService` 时注册（网关部署常见）。创建/更新带简单提示安全检查。
+仅当运行时提供自动化服务时注册（网关部署常见）。
 
 ---
 
@@ -396,7 +396,7 @@ TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回�
 | `read_file` | 读取中 | 📖 |
 | `write_file` / `edit_file` | 写入中 | ✍️ |
 | `grep` / `find` / `web_*` | 检索中 | 🔍 |
-| `shell` / 浏览器 / `delegate_task` / `execute_code` / `cronjob` | 执行中 | ⚙️ |
+| `shell` / 浏览器 / `delegate_task` / `execute_code` / `automation` | 执行中 | ⚙️ |
 
 在配置的 `progress` 下可调整如 `level`、`streamToolProgress`、`heartbeatEnabled`。详见 [进度反馈](./progress.md)。
 

@@ -26,11 +26,10 @@ These are shared across agents unless noted.
 | Path | Role |
 |------|------|
 | `xopc.json` | Main configuration (providers, gateway, channels, `agents.list`, `agents.capabilityPresets`, …). |
-| `xopc.db` | SQLite database: sessions, transcripts, per-session config, compaction checkpoints, FTS5 search. |
+| `xopc.db` | SQLite database: sessions, transcripts, automations, per-session config, compaction checkpoints, FTS5 search. |
 | `credentials/` | Global secrets; `auth-profiles.json`; `oauth/<provider>.json` for OAuth tokens. |
 | `extensions/` | Installed extensions and `extensions-lock.json`. |
 | `skills/` | Skill packages (each skill is a folder with `SKILL.md`). |
-| `cron/` | `jobs.json` scheduled jobs. Run history is in **`xopc.db`** (`cron_runs`). |
 | `logs/` | Process logs (`xopc-<date>.log`), unless `XOPC_LOG_DIR` overrides. |
 | `bin/` | Managed CLI shim (e.g. `xopc`). |
 | `tools/` | Bundled tool runtimes (e.g. `tools/node/current/` for Node/npm used by tools). |
@@ -63,7 +62,7 @@ These files are injected into the system prompt as **Project Context** (OpenClaw
 | `TOOLS.md` | Environment-specific tool hints (hosts, devices, …). |
 | `AGENTS.md` | Session Startup, Red Lines, and collaboration guidelines. |
 | `HEARTBEAT.md` | Heartbeat / proactive check configuration (dynamic Project Context when enabled). |
-| `MEMORY.md` | Curated long-term memory index (main session only; omitted for subagent/cron). |
+| `MEMORY.md` | Curated long-term memory index (main session only; omitted for subagent/automation runs). |
 
 On `/new` and `/reset`, workspace memory snippets may be injected only when the selected manifest/workflow enables that runtime behavior. **`agents/<id>/memories/`** is controlled by manifest `memory` policy; use the `curated_memory` tool for live read/write.
 

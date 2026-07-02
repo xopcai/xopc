@@ -177,7 +177,7 @@ MCP runtimes are **scoped per session key** (conversation / agent context):
 
 - Created on first tool materialization for that session.
 - Reused until idle TTL expires or the runtime is torn down.
-- Disposed on: gateway shutdown, `mcp.*` config hot reload, session delete, agent evict, isolated cron job completion.
+- Disposed on: gateway shutdown, `mcp.*` config hot reload, session delete, agent evict, isolated automation run completion.
 
 Config changes under `mcp` trigger hot reload (see [Configuration rules](./configuration.md)).
 

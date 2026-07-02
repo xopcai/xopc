@@ -1,13 +1,15 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Activity, GitBranch, Pause, Play, Plus, RefreshCw, Trash2, X, Zap } from 'lucide-react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/workflows/workflow-api';
 import {
   automationApi,
   type Automation,
@@ -163,10 +165,18 @@ export function AutomationsPage() {
   const automationsSwr = useSWR('automations', () => automationApi.list(), { refreshInterval: 15_000 });
   const runsSwr = useSWR('automation-runs', () => automationApi.runs(50), { refreshInterval: 10_000 });
   const metricsSwr = useSWR('automation-metrics', () => automationApi.metrics(), { refreshInterval: 15_000 });
+  const workflowDefinitionsSwr = useSWR('automation-workflow-definitions', listWorkflowDefinitions);
+  const chatAgentsSwr = useSWR('automation-chat-agents', fetchChatAgents);
 
   const automations = automationsSwr.data?.automations ?? [];
   const runs = runsSwr.data?.runs ?? [];
   const metrics = metricsSwr.data;
+  const workflowDefinitions = useMemo(() => workflowDefinitionsSwr.data ?? [], [workflowDefinitionsSwr.data]);
+  const agentOptions = chatAgentsSwr.data?.items ?? [];
+  const workflowSelectionInvalid =
+    form.actionMode === 'workflow' &&
+    (!form.workflowId.trim() ||
+      (workflowDefinitions.length > 0 && !workflowDefinitions.some((workflow) => workflow.id === form.workflowId)));
   const templates = useMemo(
     () => [
       {
@@ -177,7 +187,12 @@ export function AutomationsPage() {
       {
         name: labels.templates.morningWorkflow.name,
         description: labels.templates.morningWorkflow.description,
-        form: { ...initialForm, name: labels.templates.morningWorkflow.formName, actionMode: 'workflow' as const, workflowId: 'daily-review' },
+        form: {
+          ...initialForm,
+          name: labels.templates.morningWorkflow.formName,
+          actionMode: 'workflow' as const,
+          workflowId: workflowDefinitions[0]?.id ?? '',
+        },
       },
       {
         name: labels.templates.webhookAgent.name,
@@ -185,7 +200,7 @@ export function AutomationsPage() {
         form: { ...initialForm, name: labels.templates.webhookAgent.formName, triggerMode: 'webhook' as const },
       },
     ],
-    [labels],
+    [labels, workflowDefinitions],
   );
 
   const reload = useCallback(async () => {
@@ -309,12 +324,22 @@ export function AutomationsPage() {
                 </Button>
               </Dialog.Close>
             </div>
-            <AutomationForm form={form} labels={labels} setForm={setForm} />
+            <AutomationForm
+              form={form}
+              labels={labels}
+              setForm={setForm}
+              workflowDefinitions={workflowDefinitions}
+              workflowsLoading={workflowDefinitionsSwr.isLoading}
+              agentOptions={agentOptions}
+              agentsLoading={chatAgentsSwr.isLoading}
+            />
             <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
               <Dialog.Close asChild>
                 <Button variant="ghost">{labels.cancel}</Button>
               </Dialog.Close>
-              <Button variant="primary" onClick={submitForm}>{labels.create}</Button>
+              <Button variant="primary" onClick={submitForm} disabled={workflowSelectionInvalid}>
+                {labels.create}
+              </Button>
             </div>
           </Dialog.Content>
         </Dialog.Portal>
@@ -439,12 +464,29 @@ function AutomationForm({
   form,
   labels,
   setForm,
+  workflowDefinitions,
+  workflowsLoading,
+  agentOptions,
+  agentsLoading,
 }: {
   form: FormState;
   labels: AutomationsMessages;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
+  workflowDefinitions: WorkflowDefinition[];
+  workflowsLoading: boolean;
+  agentOptions: ChatAgentOption[];
+  agentsLoading: boolean;
 }) {
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
+
+  useEffect(() => {
+    if (form.actionMode !== 'workflow') return;
+    if (form.workflowId.trim()) return;
+    const firstWorkflowId = workflowDefinitions[0]?.id;
+    if (!firstWorkflowId) return;
+    setForm((prev) => ({ ...prev, workflowId: firstWorkflowId }));
+  }, [form.actionMode, form.workflowId, setForm, workflowDefinitions]);
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
       <div className="grid gap-4">
@@ -498,12 +540,35 @@ function AutomationForm({
         ) : null}
 
         <Section title={labels.form.action} />
-        <select className={inputClass} value={form.actionMode} onChange={(e) => update({ actionMode: e.target.value as ActionMode })}>
+        <select
+          className={inputClass}
+          value={form.actionMode}
+          onChange={(e) => {
+            const actionMode = e.target.value as ActionMode;
+            update({
+              actionMode,
+              ...(actionMode === 'workflow' && !form.workflowId.trim() && workflowDefinitions[0]
+                ? { workflowId: workflowDefinitions[0].id }
+                : {}),
+            });
+          }}
+        >
           <option value="agent">{labels.action.runAgent}</option>
           <option value="workflow">{labels.action.runWorkflow}</option>
         </select>
         <Field label={labels.form.agent}>
-          <input className={inputClass} value={form.agentId} onChange={(e) => update({ agentId: e.target.value })} placeholder={labels.form.defaultAgent} />
+          <select
+            className={inputClass}
+            value={form.agentId}
+            onChange={(e) => update({ agentId: e.target.value })}
+          >
+            <option value="">{agentsLoading ? labels.form.loadingAgents : labels.form.defaultAgent}</option>
+            {agentOptions.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name || agent.id}
+              </option>
+            ))}
+          </select>
         </Field>
         {form.actionMode === 'agent' ? (
           <Field label={labels.form.instruction}>
@@ -511,8 +576,21 @@ function AutomationForm({
           </Field>
         ) : (
           <>
-            <Field label={labels.form.workflowId}>
-              <input className={inputClass} value={form.workflowId} onChange={(e) => update({ workflowId: e.target.value })} />
+            <Field label={labels.form.workflow}>
+              <select
+                className={inputClass}
+                value={form.workflowId}
+                onChange={(e) => update({ workflowId: e.target.value })}
+                disabled={workflowsLoading || workflowDefinitions.length === 0}
+              >
+                {workflowsLoading ? <option value="">{labels.form.loadingWorkflows}</option> : null}
+                {!workflowsLoading && workflowDefinitions.length === 0 ? <option value="">{labels.form.noWorkflows}</option> : null}
+                {workflowDefinitions.map((workflow) => (
+                  <option key={workflow.id} value={workflow.id}>
+                    {workflow.title || workflow.name}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label={labels.form.goal}>
               <textarea className={cn(inputClass, 'min-h-24 resize-y')} value={form.workflowGoal} onChange={(e) => update({ workflowGoal: e.target.value })} />

@@ -120,7 +120,7 @@ export default defineConfig({
               { text: 'Skills Testing', link: '/skills-testing' },
               { text: 'Extensions', link: '/extensions' },
               { text: 'MCP', link: '/mcp' },
-              { text: 'Cron', link: '/cron' },
+              { text: 'Automations', link: '/automations' },
               { text: 'Dynamic Workflows', link: '/workflows' }
             ]
           },
@@ -221,7 +221,7 @@ export default defineConfig({
               { text: '技能测试', link: '/zh/skills-testing' },
               { text: '扩展系统', link: '/zh/extensions' },
               { text: 'MCP', link: '/zh/mcp' },
-              { text: '定时任务', link: '/zh/cron' },
+              { text: '自动化', link: '/zh/automations' },
               { text: '动态工作流', link: '/zh/workflows' }
             ]
           },

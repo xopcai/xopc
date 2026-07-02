@@ -19,7 +19,7 @@ hero:
 features:
   - title: 🔁 循环驱动，而非一次性对话
     details: "XOPC 把上下文、下一步行动、反馈和重新校准放进同一个循环，让长期目标不会断在一次次聊天里。"
-    link: /zh/cron
+    link: /zh/automations
   - title: 🏠 默认本地优先
     details: "xopc 运行在你自己的硬件上。配置、工作区文件、凭据和本地状态默认都在 ~/.xopc/。没有强制云端。"
     link: /zh/configuration
@@ -32,9 +32,9 @@ features:
   - title: 🧩 能力可扩展，长期可维护
     details: "通过 xopc skills install 和 xopc extensions install 安装可复用模块，按需添加工具、通道和 UI 面板，通常不需要改核心代码。"
     link: /zh/extensions
-  - title: ⏰ Cron 定时
-    details: 摘要、提醒与报告按时间表推送。在你专注别处时，Agent 也能主动运行。
-    link: /zh/cron
+  - title: ⏰ 自动化
+    details: 定时、手动或 webhook 触发 Agent 与工作流运行。当你专注别处时，系统仍会持续推进。
+    link: /zh/automations
   - title: 🔀 动态工作流
     details: 确定性脚本扇出多个子 Agent——仓库审计、多视角评审、并行调研，实时进度可见。
     link: /zh/workflows

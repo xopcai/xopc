@@ -1,31 +1,27 @@
 # 心跳机制
 
-心跳服务用于主动监控和唤醒智能体。
+Heartbeat 是网关里的轻量周期检查服务，用于健康检查和主动唤醒相关逻辑。它与自动化分离：自动化负责计划、手动和 webhook 触发的工作；Heartbeat 负责让长期运行的网关状态可观测。
 
 ## 概述
 
-心跳机制定期检查系统状态，并在满足条件时主动触发智能体。
-
-## 工作原理
-
 ```
 ┌─────────────────┐
-│  Heartbeat       │
-│  Service        │
+│ Heartbeat       │
+│ Service         │
 └────────┬────────┘
          │
          ▼ (every intervalMs)
 ┌─────────────────┐
-│  Check Status   │
-│  - Cron Jobs    │
-│  - Memory       │
-│  - Config       │
+│ Check Status    │
+│ - Runtime       │
+│ - Memory        │
+│ - Config        │
 └────────┬────────┘
          │
-         ▼ (if condition met)
+         ▼
 ┌─────────────────┐
-│  Wake Agent     │
-│  (if enabled)   │
+│ Emit logs /     │
+│ wake checks     │
 └─────────────────┘
 ```
 
@@ -33,12 +29,12 @@
 
 ```typescript
 interface HeartbeatConfig {
-  intervalMs: number;   // 检查间隔（毫秒）
-  enabled: boolean;     // 是否启用
+  intervalMs: number;
+  enabled: boolean;
 }
 ```
 
-### 默认配置
+默认配置：
 
 ```json
 {
@@ -51,94 +47,28 @@ interface HeartbeatConfig {
 
 ## 使用场景
 
-### 定期检查
+- 按固定周期检查网关运行状态。
+- 监控内存和会话压力。
+- 在不依赖用户对话轮次的情况下暴露配置重载或唤醒条件。
 
-- 检查待处理的定时任务
-- 监控内存使用情况
-- 检查配置变更
-
-### 条件触发
-
-当满足条件时主动唤醒：
-
-```typescript
-// 检查是否有待处理的 cron 任务
-const pendingJobs = cronService.getPendingJobs();
-if (pendingJobs.length > 0) {
-  // 触发智能体处理
-}
-```
-
-## 程序化使用
-
-```typescript
-import { HeartbeatService } from '../heartbeat/service.js';
-import { CronService } from '../cron/service.js';
-
-const cronService = new CronService();
-const heartbeat = new HeartbeatService(cronService);
-
-// 启动心跳
-heartbeat.start({
-  intervalMs: 60000,  // 1 分钟
-  enabled: true
-});
-
-// 停止心跳
-heartbeat.stop();
-
-// 检查状态
-const status = heartbeat.isRunning();
-```
-
-## 监控指标
-
-心跳服务会监控：
-
-| 指标 | 描述 |
-|------|------|
-| `runningJobs` | 运行中的 cron 任务数 |
-| `pendingJobs` | 待处理的定时任务 |
-| `memoryUsage` | 内存使用情况 |
-| `sessionCount` | 活动会话数 |
-
-## 日志输出
-
-心跳服务会输出状态日志：
-
-```
-[Heartbeat] Active - 5 cron jobs running
-[Heartbeat] Checking pending jobs...
-[Heartbeat] Triggering wake for pending task
-```
-
-## 最佳实践
-
-1. **合理间隔**：根据需求设置检查频率
-2. **资源考虑**：避免过于频繁的检查
-3. **日志级别**：生产环境可降低日志级别
-4. **错误处理**：心跳错误不应影响主服务
-
-## 与 Cron 的关系
+## 与自动化的关系
 
 | 组件 | 职责 |
 |------|------|
-| **Cron** | 按时执行特定任务 |
-| **Heartbeat** | 定期检查并触发唤醒 |
+| **自动化** | 由手动、计划或 webhook 触发，执行 Agent 或工作流动作 |
+| **Heartbeat** | 执行周期健康检查和唤醒相关监控 |
 
-两者协同工作：Heartbeat 监控 Cron 任务的执行状态。
+自动化不依赖 Heartbeat 来判断是否到期。自动化服务会自行计算并维护 `nextRunAtMs`；Heartbeat 仍然是独立的健康检查与监控机制。
 
 ## 故障排除
 
 **心跳不工作？**
-- 确认 `enabled` 设为 `true`
-- 检查 `intervalMs` 配置有效
-- 查看服务日志
+
+- 确认 `heartbeat.enabled` 为 `true`。
+- 检查 `heartbeat.intervalMs`。
+- 查看网关日志中的 Heartbeat 启动和运行错误。
 
 **触发过于频繁？**
-- 增加 `intervalMs` 值
-- 检查触发条件逻辑
 
-**内存泄漏？**
-- 定期重启服务
-- 监控内存使用趋势
+- 增加 `heartbeat.intervalMs`。
+- 检查绑定在 Heartbeat 检查上的唤醒条件。

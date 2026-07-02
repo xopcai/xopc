@@ -255,7 +255,7 @@ xopc gateway --force
 
 使用前台 **`xopc gateway`**（`GatewayServer`）时，部分外连型通道会把 **`ChannelPlugin.start()`**（建立 Telegram polling、飞书 Socket 等）放到 **HTTP 已成功 `listen` 之后**，让 REST 与静态控制台先就绪：
 
-1. **阶段一**：所有通道执行 **`init()`**；未延后列表中的通道立刻 **`start()`**。会话、cron、heartbeat、智能体服务与原先一致。若启用了延后策略，**出站消费循环**会在阶段二之后再启动，避免与尚未 `start` 的通道抢跑。
+1. **阶段一**：所有通道执行 **`init()`**；未延后列表中的通道立刻 **`start()`**。会话、自动化、heartbeat、智能体服务会在 HTTP listen 前启动。若启用了延后策略，**出站消费循环**会在阶段二之后再启动，避免与尚未 `start` 的通道抢跑。
 2. **阶段二**：在 HTTP **`listen`** 回调中，对延后通道执行 **`start()`**，再 **重放持久化出站队列**，最后启动出站处理器。
 
 内置消息通道（**Telegram、微信、飞书**）在插件 meta 中声明延后；可通过 **`gateway.channelConnectDeferMode`** / **`channelConnectDeferIds`** / **`channelConnectDeferSkipIds`** 覆盖，详见 [配置说明 — 频道连接延后](configuration.md#频道连接延后)。
@@ -330,23 +330,22 @@ Content-Type: application/json
 }
 ```
 
-### 触发 Cron 任务
+### 运行自动化
 
 ```http
-POST /api/cron/trigger
+POST /api/automations/:id/run
 Content-Type: application/json
-
-{
-  "job_id": "abc123"
-}
 ```
 
 **响应**：
 
 ```json
 {
-  "status": "ok",
-  "message": "Task triggered"
+  "run": {
+    "id": "run_...",
+    "automationId": "automation_...",
+    "status": "queued"
+  }
 }
 ```
 
@@ -386,13 +385,20 @@ GET /health
 | GET | `/api/sessions` | 列出会话 |
 | GET | `/api/sessions/:key` | 获取会话 |
 | DELETE | `/api/sessions/:key` | 删除会话 |
-| GET | `/api/cron` | 列出定时任务 |
-| POST | `/api/cron/trigger` | 触发任务 |
+| GET | `/api/automations` | 列出自动化 |
+| POST | `/api/automations` | 创建自动化 |
+| GET | `/api/automations/metrics` | 读取自动化指标 |
+| GET | `/api/automations/:id` | 读取自动化 |
+| PATCH | `/api/automations/:id` | 更新自动化 |
+| DELETE | `/api/automations/:id` | 删除自动化 |
+| POST | `/api/automations/:id/run` | 立即运行自动化 |
+| POST | `/api/automations/:id/pause` | 暂停自动化 |
+| POST | `/api/automations/:id/resume` | 恢复自动化 |
+| GET | `/api/automation-runs` | 列出自动化运行记录 |
+| GET | `/api/automation-runs/:runId` | 读取自动化运行记录 |
+| POST | `/api/automation-runs/:runId/cancel` | 取消自动化运行 |
 | GET | `/health` | 健康检查 |
 | GET | `/api/logs` | 查询日志（需认证） |
-| POST | `/api/cron/create` | 创建定时任务 |
-| DELETE | `/api/cron/:id` | 删除定时任务 |
-| POST | `/api/cron/:id/toggle` | 启用/禁用定时任务 |
 | GET | `/api/providers` | 列出 LLM 提供方 |
 | GET | `/api/models` | 列出可用模型 |
 | GET | `/api/models-json` | 读取 models.json |

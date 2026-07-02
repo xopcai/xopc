@@ -50,7 +50,6 @@ pnpm run dev -- <command>
 | `doctor` | 检查安装健康状态并诊断常见问题 |
 | `update` | 检查并安装 xopc 更新（含扩展同步与 gateway 重启）— 见 [更新](./update.md) |
 | `logs` | 管理和查询日志 |
-| `cron` | 管理定时任务 |
 | `goal` | 管理长期目标 |
 | `config` | 查看和编辑配置（非交互式） |
 | `image` | 查看图像运行时行为和可用 provider |
@@ -86,7 +85,6 @@ MCP 配置见 [MCP](./mcp.md)。当前 `xopc --help` 不展示 `mcp` 作为顶�
 | `doctor` | 无子命令 |
 | `update` | 无子命令 |
 | `logs` | `list`、`query`、`stats`、`tail`、`clean`、`rotate` |
-| `cron` | `list`、`add`、`remove`、`enable`、`disable`、`run`、`trigger` |
 | `goal` | `list`、`new`、`show`、`pause`、`resume`、`archive`、`runs`、`checklist`、`evidence` |
 | `config` | `get`、`set`、`unset`、`show`、`validate`、`token`、`path` |
 | `image` | `status`、`providers` |
@@ -130,13 +128,13 @@ xopc setup --workspace ~/my-workspace
 - 创建 `~/.xopc/xopc.json`（如果不存在）
 - 创建工作区目录并在 `agents/<id>/profile/` 生成 profile Markdown（SOUL.md、IDENTITY.md 等）
 
-完整状态目录（agents、cron、logs 等）请使用 **`xopc init`**。
+完整状态目录（agents、logs 等）请使用 **`xopc init`**。
 
 ---
 
 ## init
 
-初始化完整 xopc 状态树（配置、`agents/<id>/`、cron、logs、profile Markdown 种子）。
+初始化完整 xopc 状态树（配置、`agents/<id>/`、logs、profile Markdown 种子）。
 
 ```bash
 xopc init
@@ -429,69 +427,11 @@ xopc gateway service start
 
 ---
 
-## cron
+## automations
 
-管理定时任务。
+自动化通过网关控制台 `#/automations` 或 REST API `/api/automations`、`/api/automation-runs` 管理。当前没有顶层 `xopc automations` 命令。
 
-### 添加任务
-
-```bash
-xopc cron add --cron "0 9 * * *" --message "Good morning!"
-xopc cron add --at 2026-06-24T09:00:00+08:00 --message "单次提醒"
-xopc cron add --every 30m --message "间隔检查"
-```
-
-**参数**：
-
-| 参数 | 描述 |
-|------|------|
-| `--cron` | Cron 表达式 |
-| `--tz` | `--cron` 的可选 IANA 时区 |
-| `--at` | 单次 ISO 时间或相对时长 |
-| `--every` | 固定间隔时长 |
-| `--message` | 定时发送的消息 |
-| `--workflow` | Workflow 定义 id |
-| `--name` | 任务名称 (可选) |
-
-**示例**：
-
-```bash
-# 每天 9 点
-xopc cron add --cron "0 9 * * *" --message "Daily update"
-
-# 工作日 18 点
-xopc cron add --cron "0 18 * * 1-5" --message "Time to wrap up!"
-
-# 每小时提醒
-xopc cron add --every 1h --message "Hourly reminder" --name hourly
-```
-
-### 删除任务
-
-```bash
-xopc cron remove <task-id>
-```
-
-**示例**：
-
-```bash
-xopc cron remove abc1
-```
-
-### 启用/禁用
-
-```bash
-xopc cron enable <task-id>
-xopc cron disable <task-id>
-```
-
-### 触发任务
-
-```bash
-xopc cron run <task-id>
-# 别名：
-xopc cron trigger <task-id>
-```
+触发器、动作、可靠性与 API 详见 [自动化](./automations.md)。
 
 ---
 
@@ -779,10 +719,6 @@ case "$1" in
   start)
     xopc gateway --port 18790
     ;;
-  cron)
-    shift
-    xopc cron "$@"
-    ;;
   extensions)
     shift
     xopc extensions "$@"
@@ -792,7 +728,7 @@ case "$1" in
     xopc skills "$@"
     ;;
   *)
-    echo "Usage: bot {chat|shell|start|cron|extension|skills}"
+    echo "Usage: bot {chat|shell|start|extension|skills}"
     ;;
 esac
 ```
@@ -802,7 +738,6 @@ esac
 ```bash
 bot chat Hello!
 bot start
-bot cron list
 bot extension list
 bot extension install xopc-extension-telegram
 bot skills list

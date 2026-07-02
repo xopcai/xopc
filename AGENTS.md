@@ -81,7 +81,7 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 | `infra/` | Infrastructure primitives (`retry`, rate-limit, `bus/` message bus) |
 | `extensions/` | Extension runtime; `extensions/sdk/` re-exports `@xopcai/xopc/extension-sdk` |
 
-Also present (follow local patterns): `auth/`, `chat-commands/` (in-chat slash commands), `cron/`, `daemon/`, `routing/`, `voice/stt/`, `voice/tts/`, `utils/` (`logger.ts` barrel → `logger/` implementation + `helpers.ts`), `markdown/`, `errors/`, etc.
+Also present (follow local patterns): `auth/`, `automations/`, `chat-commands/` (in-chat slash commands), `daemon/`, `routing/`, `voice/stt/`, `voice/tts/`, `utils/` (`logger.ts` barrel → `logger/` implementation + `helpers.ts`), `markdown/`, `errors/`, etc.
 
 **Gateway console (`web/`)** — React SPA (Vite + Tailwind v4): hash router, REST + SSE to the gateway, Zustand + SWR. Production build outputs to `dist/gateway/static/root` (same static root the gateway serves).
 
@@ -222,7 +222,6 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 | `channels` | Telegram and other channel configs |
 | `gateway` | HTTP + SSE |
 | `mcp` | Outbound MCP server registry (`mcp.servers`) + session idle TTL |
-| `cron` | Scheduled jobs |
 | `extensions` | Enable/disable extensions |
 
 ### Multiple agents (`agents.list`)
@@ -327,7 +326,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | i18n | `web/src/i18n/messages.ts` (`en` / `zh`) |
 | Global styles + tokens | `web/src/styles/globals.css` (`@theme { … }` for semantic colors) |
 
-**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`. Agent manifests are managed at `/agents` and `/agents/:agentId`. Full-screen **settings** shell: `/settings/gateway`, `/settings/appearance`, `/settings/credentials`, `/settings/heartbeat`, `/settings/sessions`, `/settings/logs`, plus top-level `/cron`, `/skills`, `/channels`, `/connectors`, `/apps`, `/goals`, `/workflows`. Removed agent-defaults routes (`#/settings/agent-defaults`, `#/settings/agent-browser`) redirect to `/agents`.
+**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`. Agent manifests are managed at `/agents` and `/agents/:agentId`. Full-screen **settings** shell: `/settings/gateway`, `/settings/appearance`, `/settings/credentials`, `/settings/heartbeat`, `/settings/sessions`, `/settings/logs`, plus top-level `/automations`, `/skills`, `/channels`, `/connectors`, `/apps`, `/goals`, `/workflows`. Removed agent-defaults routes (`#/settings/agent-defaults`, `#/settings/agent-browser`) redirect to `/agents`.
 
 **Gateway integration:**
 
@@ -367,7 +366,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | `package-lock.json` | Remove; use pnpm only |
 | Telegram silent | Token, BotFather, policies |
 | No logs in console | `XOPC_LOG_LEVEL`, file logging flags |
-| Cron idle | `cron.enabled` in config |
+| Automation idle | Check `#/automations`, `/api/automations/metrics`, and gateway logs |
 | `browser_use` tool error at first use | Allow the `browser_use` built-in in the agent manifest tool policy; install Chromium once with `npx playwright install chromium` (`playwright-core` does not ship browsers) |
 
 ---

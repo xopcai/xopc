@@ -18,7 +18,7 @@ xopc gateway --port 18790
 - ✅ 会话管理（`#/sessions`）
 - ✅ 设置（模型、网关 Token、语音等）
 - ✅ 日志查看
-- ✅ Cron 任务管理
+- ✅ 自动化管理
 
 ## 侧栏：按通道过滤会话
 
@@ -26,4 +26,3 @@ xopc gateway --port 18790
 
 - **网页** — 前端在 `GET /api/sessions` 返回结果上做客户端过滤。
 - **其它通道** — `GET /api/sessions?channel=<id>`（如 `telegram`、`weixin`、`feishu`），匹配 `SessionMetadata.sourceChannel`。
-

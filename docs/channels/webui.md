@@ -18,7 +18,7 @@ Open `http://localhost:18790` in your browser (or your configured bind address).
 - ✅ Session management (`#/sessions`, sidebar task list)
 - ✅ Settings (models, gateway token, voice, etc.)
 - ✅ Log viewer
-- ✅ Cron job management
+- ✅ Automation management
 
 ## Sidebar: filter sessions by channel
 
@@ -26,4 +26,3 @@ The sidebar session list can show **Web** / **Telegram** / **Weixin** / **Feishu
 
 - **Web** — lists sessions whose keys are treated as web UI sessions (client-side filter after `GET /api/sessions`).
 - **Other channels** — `GET /api/sessions?channel=<id>` (e.g. `telegram`, `weixin`, `feishu`), matching `SessionMetadata.sourceChannel`.
-

@@ -8,7 +8,7 @@ For narrative setup (init, templates, env vars), see [State directory & workspac
 
 | Area | Role |
 |------|------|
-| **State directory** | Global config, credentials, logs, cron, global skills/extensions cache, managed tooling. |
+| **State directory** | Global config, credentials, logs, global skills/extensions cache, managed tooling. |
 | **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: curated memory, **`profile/`** Markdown (`SOUL.md`, …), inbound/TTS blobs. Session transcripts live in **`xopc.db`**, not under `sessions/`. |
 | **Agent dir** `…/agents/<agentId>/agent/` | Process state: `agent.json`, per-agent credentials, IPC inbox, pid/socket, small machine state, extension installs, outbound crash-recovery queue. |
 | **Markdown workspace** | User project tree: tool `cwd`, daily `memory/*.md`, `media/generated`, project `.xopc/skills/`, arbitrary files. |
@@ -22,11 +22,10 @@ Default: `~/.xopc/`
 | Path | Purpose |
 |------|---------|
 | `xopc.json` | Main application config (unless `XOPC_CONFIG` / `XOPC_CONFIG_PATH` points elsewhere). |
-| `xopc.db` | Primary SQLite database: sessions, transcripts, per-session config, compaction checkpoints, FTS5 search index. |
+| `xopc.db` | Primary SQLite database: sessions, transcripts, automations, per-session config, compaction checkpoints, FTS5 search index. |
 | `credentials/` | Global secrets: `auth-profiles.json`, `oauth/<provider>.json`. |
 | `extensions/` | Installed extension packages, `extensions-lock.json`. |
 | `skills/` | Globally managed skill packages (`<id>/SKILL.md`). |
-| `cron/` | `jobs.json`, `logs/`, `runs/`. |
 | `logs/` | Application logs (overridable via `XOPC_LOG_DIR`). |
 | `bin/`, `tools/` | Managed CLI shim and tool runtimes. |
 | `models.json` | Optional custom model registry data. |

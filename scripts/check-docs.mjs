@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const root = process.cwd();
@@ -16,7 +16,10 @@ function markdownFilesFromGit() {
     cwd: root,
     encoding: 'utf8',
   });
-  return output.split('\n').filter(Boolean);
+  return output
+    .split('\n')
+    .filter(Boolean)
+    .filter((file) => existsSync(join(root, file)));
 }
 
 function findJsonBlocks(markdown) {
