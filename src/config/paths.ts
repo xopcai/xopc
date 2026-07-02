@@ -34,7 +34,6 @@ export const FILENAMES = {
   XOPC_DB: 'xopc.db',
   EXTENSIONS_LOCK: 'extensions-lock.json',
   CREDENTIALS_PROFILES: 'auth-profiles.json',
-  CRON_JOBS: 'jobs.json',
   WORKSPACE_STATE: 'workspace.json',
   SKILLS_CACHE: 'skills-cache.json',
   /** Hub / CLI install provenance for ~/.xopc/skills/<id>. */
@@ -242,20 +241,6 @@ export function resolveSkillPath(skillId: string): string {
  */
 export function resolveSkillsLockPath(): string {
   return join(resolveStateDir(), FILENAMES.SKILLS_LOCK);
-}
-
-/**
- * Resolve the cron directory
- */
-export function resolveCronDir(): string {
-  return join(resolveStateDir(), 'cron');
-}
-
-/**
- * Resolve the cron jobs file path
- */
-export function resolveCronJobsPath(): string {
-  return join(resolveCronDir(), FILENAMES.CRON_JOBS);
 }
 
 /**

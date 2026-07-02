@@ -26,7 +26,7 @@ export function SidebarFooter({
     void import('@/pages/settings-page');
     void import('@/pages/sessions-page');
     void import('@/pages/logs-page');
-    void import('@/pages/cron-page');
+    void import('@/pages/automations-page');
     void import('@/pages/skills-page');
   }, []);
 

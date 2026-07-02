@@ -2,7 +2,7 @@ import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../config/schema.js';
 import type { SessionStore } from '../session/store.js';
-import type { CronService } from '../cron/service.js';
+import type { AutomationService } from '../automations/index.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import type { ProgressStage } from './lifecycle/progress.js';
@@ -25,7 +25,7 @@ export interface AgentServiceConfig {
   gatewayClarify?: {
     requestClarification: GatewayClarifyRequestFn;
   };
-  getCronService?: () => CronService | undefined;
+  getAutomationService?: () => AutomationService | undefined;
   /**
    * Gateway: reuse the gateway `SessionManager` store so web API and agent share one index + files.
    * When omitted, `AgentService` creates its own `SessionStore` (CLI / embedded).

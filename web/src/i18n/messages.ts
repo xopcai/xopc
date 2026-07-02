@@ -5,7 +5,7 @@ import { en, zh } from './locales/bundle';
 export type Tab =
   | 'chat'
   | 'sessions'
-  | 'cron'
+  | 'automations'
   | 'skills'
   | 'connectors'
   | 'goals'

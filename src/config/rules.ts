@@ -74,9 +74,6 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   // Channels - hot reload (channel-specific prefixes are registered by channel plugins)
   { prefix: 'channels', kind: 'hot', description: 'Any channel subtree (e.g. future extensions)' },
   
-  // Cron - hot reload
-  { prefix: 'cron', kind: 'hot', description: 'Scheduled tasks' },
-  
   // Heartbeat lives under gateway.heartbeat in config JSON (not top-level `heartbeat`)
   { prefix: 'gateway.heartbeat', kind: 'hot', description: 'Heartbeat settings' },
   

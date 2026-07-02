@@ -17,7 +17,7 @@ describe('lazy route bundles', () => {
     expect(findAuthenticatedLazyRouteBundle('/api/config')?.id).toBe('config');
     expect(findAuthenticatedLazyRouteBundle('/api/logs/stream')?.id).toBe('logs');
     expect(findAuthenticatedLazyRouteBundle('/api/extensions')?.id).toBe('auth-registry-extensions');
-    expect(findAuthenticatedLazyRouteBundle('/api/cron/abc')?.id).toBe('cron');
+    expect(findAuthenticatedLazyRouteBundle('/api/automations/abc')?.id).toBe('automations');
   });
 
   it('keeps authenticated tunnel pair routes off the public lazy bundle', () => {

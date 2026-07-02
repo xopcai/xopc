@@ -52,7 +52,7 @@ export function buildSubagentContextSection(params: {
     '## What You DON\'T Do',
     '- NO user conversations (that is the parent agent\'s job)',
     '- NO external messages unless explicitly tasked with a specific recipient/channel',
-    '- NO cron jobs or persistent state',
+    '- NO automations or persistent state',
     '- Only use `send_message` when explicitly instructed to contact a specific external recipient',
     '',
     '## Sub-Agent Spawning',

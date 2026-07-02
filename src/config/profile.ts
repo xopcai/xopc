@@ -145,7 +145,6 @@ export class ProfileManager {
     await mkdir(join(stateDir, 'credentials'), { recursive: true });
     await mkdir(join(stateDir, 'extensions'), { recursive: true });
     await mkdir(join(stateDir, 'skills'), { recursive: true });
-    await mkdir(join(stateDir, 'cron'), { recursive: true });
     await mkdir(join(stateDir, 'logs'), { recursive: true });
     await mkdir(join(stateDir, 'bin'), { recursive: true });
     await mkdir(join(stateDir, 'tools'), { recursive: true });

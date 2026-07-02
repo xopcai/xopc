@@ -1,4 +1,5 @@
 import enAgents from './en/agents.json' with { type: 'json' };
+import enAutomations from './en/automations.json' with { type: 'json' };
 import enApps from './en/apps.json' with { type: 'json' };
 import enChannels from './en/channels.json' with { type: 'json' };
 import enChat from './en/chat.json' with { type: 'json' };
@@ -19,6 +20,7 @@ import enWorkflows from './en/workflows.json' with { type: 'json' };
 import enWorkspace from './en/workspace.json' with { type: 'json' };
 
 import zhAgents from './zh/agents.json' with { type: 'json' };
+import zhAutomations from './zh/automations.json' with { type: 'json' };
 import zhApps from './zh/apps.json' with { type: 'json' };
 import zhChannels from './zh/channels.json' with { type: 'json' };
 import zhChat from './zh/chat.json' with { type: 'json' };
@@ -41,6 +43,7 @@ import zhWorkspace from './zh/workspace.json' with { type: 'json' };
 /** Full English message tree; assembled from `locales/en/*.json` fragments. */
 export const en = {
   ...enAgents,
+  ...enAutomations,
   ...enApps,
   ...enChannels,
   ...enChat,
@@ -64,6 +67,7 @@ export const en = {
 /** Full Chinese message tree; assembled from `locales/zh/*.json` fragments. */
 export const zh = {
   ...zhAgents,
+  ...zhAutomations,
   ...zhApps,
   ...zhChannels,
   ...zhChat,

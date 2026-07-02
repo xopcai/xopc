@@ -1,5 +1,5 @@
 export const loadSessionsPage = () => import('@/pages/sessions-page');
-export const loadCronPage = () => import('@/pages/cron-page');
+export const loadAutomationsPage = () => import('@/pages/automations-page');
 export const loadGoalsPage = () => import('@/pages/goals-page');
 export const loadGoalDetailPage = () => import('@/pages/goal-detail-page');
 export const loadNotesPage = () => import('@/pages/notes-page');
@@ -78,7 +78,7 @@ export function preloadRouteForPath(to: string) {
 
   if (path === '/skills') return preload(loadSkillsPage);
   if (path === '/connectors') return preload(loadConnectorsPage);
-  if (path === '/cron') return preload(loadCronPage);
+  if (path === '/automations') return preload(loadAutomationsPage);
   if (path === '/goals') return preload(loadGoalsPage);
   if (path.startsWith('/goals/')) return preload(loadGoalDetailPage);
   if (path === '/notes') return preload(loadNotesPage);

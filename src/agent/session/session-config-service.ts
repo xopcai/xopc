@@ -4,9 +4,9 @@
  *
  * Previously these lived as four sibling methods on `AgentService`:
  *   - `patchSessionAgentConfig` (96 lines of validation + persistence)
- *   - `applyCronJobWorkingDirectory` (cron-specific working dir update)
- *   - `applyCronJobModelOverride` (cron-specific model update before session creation)
- *   - `clearCronSessionWorkingDirectoryOverride` (private helper)
+ *   - `applyAutomationWorkingDirectory` (automation working dir update)
+ *   - `applyAutomationModelOverride` (automation model update before session creation)
+ *   - `clearAutomationWorkingDirectoryOverride` (private helper)
  *   - `clearSessionModelOverride` (private helper)
  *
  * Extracted so `AgentService` no longer mixes "session bag" concerns with
@@ -121,11 +121,11 @@ export class SessionConfigService {
   }
 
   /**
-   * Sync persisted session working directory for an isolated cron run. Runs
-   * may change when the job is edited; an empty/missing input clears the
+   * Sync persisted session working directory for an automation run. Runs may
+   * change when the automation is edited; an empty/missing input clears the
    * override so the session uses the effective agent default.
    */
-  async applyCronJobWorkingDirectory(
+  async applyAutomationWorkingDirectory(
     sessionKey: string,
     workingDirectory: string | undefined,
   ): Promise<void> {
@@ -135,9 +135,9 @@ export class SessionConfigService {
       if (wdNorm.ok === false) {
         log.warn(
           { sessionKey, error: wdNorm.error },
-          'Cron job working directory invalid; using agent default',
+          'Automation working directory invalid; using agent default',
         );
-        await this.clearCronWorkingDirectoryOverride(sessionKey);
+        await this.clearAutomationWorkingDirectoryOverride(sessionKey);
         return;
       }
       await mkdir(wdNorm.path, { recursive: true });
@@ -145,16 +145,16 @@ export class SessionConfigService {
       this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, wdNorm.path);
       return;
     }
-    await this.clearCronWorkingDirectoryOverride(sessionKey);
+    await this.clearAutomationWorkingDirectoryOverride(sessionKey);
   }
 
   /**
-   * Persist a cron job model override before the direct turn creates/hydrates
+   * Persist an automation model override before the direct turn creates/hydrates
    * the AgentSession. Unlike the user-facing patch path, this must not call
-   * `agentManager.setModelForSession`, because the cron session usually does
-   * not exist yet.
+   * `agentManager.setModelForSession`, because the automation session usually
+   * does not exist yet.
    */
-  async applyCronJobModelOverride(
+  async applyAutomationModelOverride(
     sessionKey: string,
     model: string | undefined,
   ): Promise<boolean> {
@@ -187,7 +187,7 @@ export class SessionConfigService {
 
   // ── Internal helpers ───────────────────────────────────────────────────
 
-  private async clearCronWorkingDirectoryOverride(sessionKey: string): Promise<void> {
+  private async clearAutomationWorkingDirectoryOverride(sessionKey: string): Promise<void> {
     const existing = await this.opts.sessionConfigStore.get(sessionKey);
     if (existing?.workingDirectoryOverride) {
       const { workingDirectoryOverride: _removed, ...rest } = existing;

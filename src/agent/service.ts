@@ -68,7 +68,6 @@ import {
 import type { SkillMarkdownPreviewPayload } from './skills/types.js';
 import type { AgentServiceConfig, StreamHandle } from './service.types.js';
 import { PersistentGoalService } from './goals/persistent-goal-service.js';
-import { reconcileManagedDreamingCronJobs } from './service/reconcile-dreaming-cron.js';
 import { parseNoteAttachmentTarget } from '../notes/attachment-ref.js';
 
 import {
@@ -148,7 +147,7 @@ export class AgentService {
   /**
    * Direct-turn entry points: `processDirect` (one-shot), `processDirectStreaming`
    * (SSE generator), webchat steering and SSE injection. Public so the gateway,
-   * TUI, CLI, and cron jobs do not need to thread every call through `AgentService`.
+   * TUI, CLI, and automations do not need to thread every call through `AgentService`.
    */
   readonly turnDispatcher: TurnDispatcher;
   /**
@@ -276,7 +275,7 @@ export class AgentService {
       reasoningLevel: config.reasoningLevel,
       verboseLevel: config.verboseLevel,
       gatewayClarify: config.gatewayClarify,
-      getCronService: config.getCronService,
+      getAutomationService: config.getAutomationService,
       getWorkflowRunService: config.getWorkflowRunService,
       onSkillsUpdated: config.onSkillsUpdated,
       isWorkspaceTrusted: config.isWorkspaceTrusted,
@@ -704,10 +703,6 @@ export class AgentService {
   async start(): Promise<void> {
     await this.sessionConfigStore.initialize();
     await this.hookHandler.trigger('gateway_start', { port: 0, host: 'cli' });
-    await this.reconcileDreamingCronJob().catch((err) => {
-      const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, errorMessage: em }, `Dreaming cron reconcile failed: ${em}`);
-    });
     log.debug('Agent service started');
     void this.inboundLoop.start().catch((err) => {
       const em = err instanceof Error ? err.message : String(err);
@@ -725,20 +720,8 @@ export class AgentService {
     return Promise.resolve();
   }
 
-  /**
-   * Reconcile managed Dreaming cron job against the current effective config.
-   * Safe to call after config saves to apply changes without restarting the process.
-   */
   async reconcileDreamingNow(): Promise<void> {
-    await this.reconcileDreamingCronJob();
-  }
-
-  private async reconcileDreamingCronJob(): Promise<void> {
-    const cron = this.config.getCronService?.();
-    if (!cron) {
-      return;
-    }
-    await reconcileManagedDreamingCronJobs(cron, this.effectiveAppConfig());
+    return Promise.resolve();
   }
 
   /**

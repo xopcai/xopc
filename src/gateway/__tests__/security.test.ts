@@ -55,7 +55,6 @@ function createMockService(config: any = {}, listenPort?: number): GatewayServic
     getAuthMode: () => resolvedAuth.mode,
     getResolvedAuth: () => resolvedAuth,
     sessionManagerInstance: {} as any,
-    cronServiceInstance: {} as any,
     emit: () => {},
     listSessions: async () => ({ items: [], total: 0 }),
     getSession: async () => null,

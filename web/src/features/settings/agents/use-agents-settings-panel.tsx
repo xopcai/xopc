@@ -35,7 +35,6 @@ import { agentListDisplayName } from './agent-display-names';
 import { useAgentOverviewProfileMarkdown } from './hooks/use-agent-overview-profile-markdown';
 import { useAgentProfileFiles } from './hooks/use-agent-profile-files';
 import { useAgentsChannelBindings } from './hooks/use-agents-channel-bindings';
-import { useAgentsCronJobs } from './hooks/use-agents-cron-jobs';
 import { useAgentsSkillsCatalog } from './hooks/use-agents-skills-catalog';
 import { useAgentsToolsSkillsLocalState } from './hooks/use-agents-tools-skills-local-state';
 import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-defaults';
@@ -268,16 +267,6 @@ export function useAgentsSettingsPanel() {
     hasToken,
     bindingsFromConfig,
     gatewayCfgLoading: gatewayCfgData === undefined,
-    selected,
-    saveErrorMessage: a.saveError,
-    setBusy,
-    setError,
-  });
-
-  const cron = useAgentsCronJobs({
-    panel,
-    hasToken,
-    data,
     selected,
     saveErrorMessage: a.saveError,
     setBusy,
@@ -639,7 +628,7 @@ export function useAgentsSettingsPanel() {
       setBusy(false);
     }
   }
-  const footerSaveNotApplicable = panel === 'channels' || panel === 'cron' || panel === 'effective' || panel === 'memory';
+  const footerSaveNotApplicable = panel === 'channels' || panel === 'effective' || panel === 'memory';
 
   const overviewRestDirty = (() => {
     if (!selected || panel !== 'overview') return false;
@@ -802,9 +791,6 @@ export function useAgentsSettingsPanel() {
     refreshBindSessions: channels.refreshBindSessions,
     onRemoveBinding: (rule) => void channels.onRemoveBinding(rule),
     onAddBinding: channels.onAddBinding,
-    cronLoading: cron.cronLoading,
-    agentCronJobs: cron.agentCronJobs,
-    onSetCronJobAgent: (job, key) => void cron.onSetCronJobAgent(job, key),
     onPanelChange: setPanel,
   };
 

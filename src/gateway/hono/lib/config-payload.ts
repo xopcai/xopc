@@ -17,7 +17,6 @@ import {
 import { maskTunnelSecretForWeb } from '../../../tunnel/env.js';
 import { resolveShareConfig } from '../../../share/share-config.js';
 import {
-  resolveCronConfigForWeb,
   resolveGoalsConfigForWeb,
   resolveSessionConfigForWeb,
   resolveUpdateConfigForWeb,
@@ -304,7 +303,6 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
       skillsStoreBaseUrl: config.gateway?.skillsStoreBaseUrl ?? 'https://store.xopc.ai',
     },
     browser: buildSafeBrowserConfigForWeb(config.browser),
-    cron: resolveCronConfigForWeb(config),
     goals: resolveGoalsConfigForWeb(config),
     session: resolveSessionConfigForWeb(config),
     tunnel: {

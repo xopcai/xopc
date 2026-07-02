@@ -43,7 +43,7 @@ import { evictAllEmbeddedSessionRunners, evictEmbeddedSessionRunner } from './em
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { MessageBus } from '../infra/bus/index.js';
-import type { CronService } from '../cron/index.js';
+import type { AutomationService } from '../automations/index.js';
 import type { SessionStore } from '../session/store.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import type { SessionContext } from './session/session-context.js';
@@ -135,8 +135,8 @@ export interface AgentManagerConfig {
   reasoningLevel?: 'off' | 'on' | 'stream';
   verboseLevel?: 'off' | 'on' | 'full';
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
-  /** Gateway: exposes CronService for the `cronjob` tool. */
-  getCronService?: () => CronService | undefined;
+  /** Gateway: exposes AutomationService for the `automation` tool. */
+  getAutomationService?: () => AutomationService | undefined;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike | undefined;
   /** Runtime notification for UI/CLI shells that cache skill catalogs. */
@@ -333,7 +333,7 @@ export class AgentManager implements AgentInstanceGateway {
       getMemoryManager: () => this.getCurrentWorkspaceRuntime().memoryManager,
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
-      getCronService: this.config.getCronService,
+      getAutomationService: this.config.getAutomationService,
       getWorkflowRunService: this.config.getWorkflowRunService,
       getSkillIndexingContext: () => {
         const ctx = this.config.getCurrentContext?.();

@@ -99,13 +99,13 @@ describe('WorkflowRunService helpers', () => {
     });
   });
 
-  it('builds metadata with cron schedule and correlation fields', () => {
+  it('builds metadata with automation source and correlation fields', () => {
     const input = buildWorkflowRunInputEnvelope({ branch: 'main' }, 'Check release');
     const metadata = buildWorkflowRunMetadata({
       definition: createDefinition(),
       agentId: 'main',
       sessionKey: 'agent:main:webchat:default:direct:wf_run-abc',
-      source: { kind: 'cron', scheduleId: 'nightly', fireId: 'fire-1', scheduledAtMs: 123 },
+      source: { kind: 'automation', automationId: 'nightly', runId: 'run-1', scheduledAtMs: 123 },
       input,
       retryOfRunId: 'run-previous',
       idempotencyKey: 'idem-1',
@@ -113,13 +113,13 @@ describe('WorkflowRunService helpers', () => {
 
     expect(metadata).toMatchObject({
       sessionKey: 'agent:main:webchat:default:direct:wf_run-abc',
-      triggerSource: 'cron',
+      triggerSource: 'automation',
       agentId: 'main',
       retryOfRunId: 'run-previous',
       input,
       correlation: { idempotencyKey: 'idem-1' },
-      origin: { channel: 'cron', scheduleId: 'nightly', fireId: 'fire-1' },
-      schedule: { scheduleId: 'nightly', fireId: 'fire-1' },
+      origin: { channel: 'automation', automationId: 'nightly', runId: 'run-1' },
+      schedule: { automationId: 'nightly', runId: 'run-1', scheduledAtMs: 123 },
     });
   });
 

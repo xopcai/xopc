@@ -1,4 +1,4 @@
-import { Brain, Clock, FileText, Layers, ListChecks, Plug, Puzzle, User, Wrench } from 'lucide-react';
+import { Brain, FileText, Layers, ListChecks, Plug, Puzzle, User, Wrench } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -18,7 +18,6 @@ const mainNav: { id: AgentPanel; labelKey: keyof AgentsSettingsMessages; icon: t
 
 const advancedNav: { id: AgentPanel; labelKey: keyof AgentsSettingsMessages; icon: typeof Plug }[] = [
   { id: 'channels', labelKey: 'tabChannels', icon: Plug },
-  { id: 'cron', labelKey: 'tabCron', icon: Clock },
 ];
 
 export function AgentsEditorSidebar(props: {

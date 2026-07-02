@@ -15,26 +15,26 @@ export function buildAutomationActionHits(
   return [
     {
       kind: 'action',
-      id: 'action:cron:create',
-      title: a.createCron,
-      subtitle: a.createCronSubtitle,
+      id: 'action:automation:create',
+      title: 'Create automation',
+      subtitle: 'Open automations to create a trigger and action',
       groupLabel,
-      keywords: ['cron', 'schedule', 'job', 'timer'],
+      keywords: ['automation', 'schedule', 'trigger', 'action', 'timer'],
       run: () => {
         closePalette();
-        navigate('/cron?action=create');
+        navigate('/automations?action=create');
       },
     },
     {
       kind: 'action',
-      id: 'action:cron:manage',
-      title: a.manageCron,
-      subtitle: a.manageCronSubtitle,
+      id: 'action:automation:manage',
+      title: 'Manage automations',
+      subtitle: 'View automations and run history',
       groupLabel,
-      keywords: ['cron', 'schedule', 'tasks'],
+      keywords: ['automation', 'schedule', 'tasks', 'runs'],
       run: () => {
         closePalette();
-        navigate('/cron');
+        navigate('/automations');
       },
     },
     {

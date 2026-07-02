@@ -2,20 +2,12 @@ import { z } from 'zod';
 
 import type { Config } from './schema.js';
 import {
-  CronConfigSchema,
   GoalsConfigSchema,
   SessionConfigSchema,
   SessionDmScopeSchema,
   UpdateAutoConfigSchema,
   UpdateConfigSchema,
 } from './schema.js';
-
-const CronConfigPatchSchema = z.object({
-  enabled: z.boolean().optional(),
-  maxConcurrentJobs: z.number().int().min(1).max(100).optional(),
-  historyRetentionDays: z.number().int().min(1).max(365).optional(),
-  enableMetrics: z.boolean().optional(),
-});
 
 const GoalsConfigPatchSchema = z.object({
   maxTurns: z.number().int().min(1).max(500).optional(),
@@ -92,21 +84,6 @@ const GatewaySkillsPatchSchema = z.object({
   skillsMarketplaceProvider: z.string().min(1).optional(),
   skillsStoreBaseUrl: z.string().url().optional(),
 });
-
-export function mergeCronConfigPatch(
-  config: Config,
-  patch: Record<string, unknown>,
-): { ok: true } | { ok: false; message: string } {
-  const parsed = CronConfigPatchSchema.safeParse(patch);
-  if (!parsed.success) {
-    return { ok: false, message: parsed.error.issues.map((i) => i.message).join('; ') };
-  }
-  config.cron = {
-    ...(config.cron ?? CronConfigSchema.parse({})),
-    ...parsed.data,
-  };
-  return { ok: true };
-}
 
 export function mergeGoalsConfigPatch(
   config: Config,
@@ -243,15 +220,5 @@ export function resolveUpdateConfigForWeb(config: Config) {
       stableJitterHours: auto?.stableJitterHours ?? 12,
       betaCheckIntervalHours: auto?.betaCheckIntervalHours ?? 1,
     },
-  };
-}
-
-export function resolveCronConfigForWeb(config: Config) {
-  const cron = CronConfigSchema.parse(config.cron ?? {});
-  return {
-    enabled: cron.enabled !== false,
-    maxConcurrentJobs: cron.maxConcurrentJobs ?? 5,
-    historyRetentionDays: cron.historyRetentionDays ?? 7,
-    enableMetrics: cron.enableMetrics !== false,
   };
 }

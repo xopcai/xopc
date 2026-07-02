@@ -678,18 +678,6 @@ export const GatewayConfigSchema = z.object({
   skillsStoreBaseUrl: 'https://store.xopc.ai',
 });
 
-export const CronConfigSchema = z.object({
-  enabled: z.boolean().optional(),
-  maxConcurrentJobs: z.number().optional(),
-  historyRetentionDays: z.number().optional(),
-  enableMetrics: z.boolean().optional(),
-}).default({
-  enabled: true,
-  maxConcurrentJobs: 5,
-  historyRetentionDays: 7,
-  enableMetrics: true,
-});
-
 export const ModelsDevConfigSchema = z.object({
   enabled: z.boolean().default(true),
 }).default({
@@ -1144,7 +1132,6 @@ export const ConfigSchema = z.object({
   tools: ToolsConfigSchema,
   mcp: McpConfigSchema,
   connectors: ConnectorsConfigSchema,
-  cron: CronConfigSchema,
   goals: GoalsConfigSchema.optional(),
   extensions: ExtensionsConfigSchema.default({}),
   /** Per-vendor capability provider config (image / audio / video). */
@@ -1252,12 +1239,6 @@ export const ConfigSchema = z.object({
         providers: [],
       },
     },
-  },
-  cron: {
-    enabled: true,
-    maxConcurrentJobs: 5,
-    historyRetentionDays: 7,
-    enableMetrics: true,
   },
   goals: {
     maxTurns: 20,

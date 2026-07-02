@@ -8,21 +8,17 @@ import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import { resolveEffectiveAgentManifestForAgent } from '../../../config/agent-profile.js';
 import { resolveDreamingConfig } from '../../../agent/memory/dreaming/config.js';
 import {
-  DREAMING_CRON_NAME,
-  DREAMING_CRON_TAG,
   DREAMING_DIR_RELATIVE,
   DREAMING_LAST_RUN_RELATIVE,
-  DREAMING_LIGHT_CRON_NAME,
-  DREAMING_LIGHT_SWEEP_TOKEN,
-  DREAMING_REM_CRON_NAME,
-  DREAMING_REM_SWEEP_TOKEN,
-  DREAMING_SWEEP_TOKEN,
   SHORT_TERM_PROMOTION_LOCK_RELATIVE,
   SHORT_TERM_RECALL_STORE_RELATIVE,
   type DreamingPhaseId,
 } from '../../../agent/memory/dreaming/constants.js';
 import { readDreamingEvents } from '../../../agent/memory/dreaming/events.js';
 import { previewDreamingDeepPromotion } from '../../../agent/memory/dreaming/preview.js';
+import { runLightSweep } from '../../../agent/memory/dreaming/light-sweep.js';
+import { runDreamingDeepPromotion } from '../../../agent/memory/dreaming/deep-promotion.js';
+import { runRemPatterns } from '../../../agent/memory/dreaming/rem-patterns.js';
 import { parseDreamingLastRunFile, type DreamingDeepLastRun } from '../../../agent/memory/dreaming/last-run.js';
 import {
   loadDreamingStore,
@@ -141,15 +137,6 @@ function storeStats(store: DreamingStore): {
   };
 }
 
-function payloadMessageFromJob(job: any): string {
-  const p = job?.payload;
-  if (!p) return '';
-  if (p.kind === 'agentTurn' && typeof p.message === 'string') return p.message;
-  if (typeof p.text === 'string') return p.text;
-  if (typeof p.message === 'string') return p.message;
-  return '';
-}
-
 export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
 
@@ -218,41 +205,35 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
         ? (body.phase as DreamingPhaseId)
         : 'deep';
 
-    // Map phase → token + cron name for job lookup.
-    const phaseTokenMap: Record<DreamingPhaseId, { token: string; cronName: string }> = {
-      light: { token: DREAMING_LIGHT_SWEEP_TOKEN, cronName: DREAMING_LIGHT_CRON_NAME },
-      deep: { token: DREAMING_SWEEP_TOKEN, cronName: DREAMING_CRON_NAME },
-      rem: { token: DREAMING_REM_SWEEP_TOKEN, cronName: DREAMING_REM_CRON_NAME },
-    };
-    const { token, cronName } = phaseTokenMap[requestedPhase];
-
-    const jobs = await service.cronServiceInstance.listJobs();
-    const primary =
-      jobs.find((job) => payloadMessageFromJob(job) === token) ??
-      jobs.find((job) => job.name === cronName) ??
-      (requestedPhase === 'deep'
-        ? jobs.find((job) => (job.name?.includes?.(DREAMING_CRON_TAG) ?? false))
-        : undefined);
-
-    if (!primary) {
-      const dreaming = resolveDreamingConfig(service.currentConfig as Config);
-      const phaseEnabled = dreaming.enabled && dreaming.phases[requestedPhase].enabled;
-      const hint = phaseEnabled
-        ? `Dreaming ${requestedPhase} phase is enabled, but no cron job was found yet. Restart the gateway/agent process so it can reconcile managed cron jobs.`
-        : `Dreaming ${requestedPhase} phase is disabled in config. Enable it first.`;
-      return c.json({ ok: false, error: { message: `Dreaming ${requestedPhase} cron job not found. ${hint}` } }, 404);
+    const cfg = service.currentConfig as Config;
+    const workspaceDir = getWorkspacePath(cfg);
+    if (!workspaceDir) {
+      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    }
+    const dreaming = resolveDreamingConfig(cfg);
+    if (!dreaming.enabled || !dreaming.phases[requestedPhase].enabled) {
+      return c.json({
+        ok: false,
+        error: { message: `Dreaming ${requestedPhase} phase is disabled in config. Enable it first.` },
+      }, 400);
     }
 
     try {
-      // Broadcast phase start to all SSE subscribers (drives dreaming animation overlay).
       service.emit('dreaming.phase.start', { phase: requestedPhase, timestamp: new Date().toISOString() });
 
-      await service.cronServiceInstance.runJobNow(primary.id);
+      const result =
+        requestedPhase === 'light'
+          ? await runLightSweep({ workspaceDir, config: dreaming.phases.light })
+          : requestedPhase === 'rem'
+            ? await runRemPatterns({ workspaceDir, config: dreaming.phases.rem })
+            : await runDreamingDeepPromotion({
+                workspaceDir,
+                config: dreaming.phases.deep,
+              });
 
-      // Broadcast phase end (the cron job runs async, so this only marks "triggered").
       service.emit('dreaming.phase.end', { phase: requestedPhase, ok: true, timestamp: new Date().toISOString() });
 
-      return c.json({ ok: true, payload: { triggered: true, jobId: primary.id, phase: requestedPhase } });
+      return c.json({ ok: true, payload: { phase: requestedPhase, result } });
     } catch (err) {
       const em = err instanceof Error ? err.message : String(err);
       service.emit('dreaming.phase.end', { phase: requestedPhase, ok: false, error: em, timestamp: new Date().toISOString() });

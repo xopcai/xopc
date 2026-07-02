@@ -11,9 +11,9 @@ import {
   loadAgentsSettingsPage,
   loadAgentBrowserSettingsPage,
   loadAppsPage,
+  loadAutomationsPage,
   loadChannelsPage,
   loadConnectorsPage,
-  loadCronPage,
   loadGoalDetailPage,
   loadGoalsPage,
   loadExtensionDebugPage,
@@ -33,7 +33,7 @@ import { syncFontScaleAfterHydration, useFontScaleStore } from '@/stores/font-sc
 import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/stores/theme-store';
 
 const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.SessionsPage })));
-const CronPage = lazy(() => loadCronPage().then((m) => ({ default: m.CronPage })));
+const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const GoalsPage = lazy(() => loadGoalsPage().then((m) => ({ default: m.GoalsPage })));
 const GoalDetailPage = lazy(() => loadGoalDetailPage().then((m) => ({ default: m.GoalDetailPage })));
 const NotesPage = lazy(() => loadNotesPage().then((m) => ({ default: m.NotesPage })));
@@ -131,10 +131,10 @@ const router = createHashRouter([
         element: <Navigate to="/settings/logs" replace />,
       },
       {
-        path: 'cron',
+        path: 'automations',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
-            <CronPage />
+            <AutomationsPage />
           </Suspense>
         ),
       },
@@ -285,10 +285,6 @@ const router = createHashRouter([
           {
             path: 'channels',
             element: <Navigate to="/channels" replace />,
-          },
-          {
-            path: 'cron',
-            element: <Navigate to="/cron?tab=settings" replace />,
           },
           {
             path: 'memory',

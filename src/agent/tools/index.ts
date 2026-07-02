@@ -75,7 +75,7 @@ export {
   SANDBOX_ALLOWED_TOOLS,
 } from './execute-code-tool.js';
 
-export { createCronjobTool, scanCronPrompt } from './cronjob-tool.js';
+export { createAutomationTool, type AutomationToolDeps } from './automation-tool.js';
 export { createGoalTool } from './goal-tool.js';
 
 export { createSkillsListTool, createSkillViewTool, type SkillsToolsDeps } from './skills-tools.js';

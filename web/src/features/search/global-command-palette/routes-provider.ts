@@ -137,11 +137,11 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       keywords: ['telegram', 'pairing', 'approve', 'dm'],
     },
     {
-      id: 'route:cron',
-      title: m.nav.cron,
-      subtitle: r.cronSubtitle,
-      path: '/cron',
-      keywords: ['schedule', 'jobs', 'tasks', 'history', 'scheduler', 'timezone', 'concurrency', 'cron', 'automation'],
+      id: 'route:automations',
+      title: 'Automations',
+      subtitle: 'Triggers, actions, and run history',
+      path: '/automations',
+      keywords: ['automation', 'automations', 'schedule', 'tasks', 'history', 'scheduler'],
     },
     {
       id: 'route:settings:goals',

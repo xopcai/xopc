@@ -1,6 +1,6 @@
 import type { Dispatch, FormEvent, MutableRefObject, SetStateAction } from 'react';
 
-import type { ChannelStatus, CronJob, SessionChatId } from '@/features/cron/cron-api';
+import type { ChannelStatus, SessionChatId } from '@/features/settings/channel-recipient-api';
 import type {
   fetchAgentProfileFiles,
   GatewayAgentRow,
@@ -13,7 +13,6 @@ import type { AgentsSettingsMessages, ChatMessages, MessageBundle } from '@/i18n
 import { MemoryPage } from '@/pages/memory-page';
 
 import { AgentChannelsTab } from './tabs/agent-channels-tab';
-import { AgentCronTab } from './tabs/agent-cron-tab';
 import { AgentEffectiveCapabilityTab } from './tabs/agent-effective-capability-tab';
 import { AgentFilesTab } from './tabs/agent-files-tab';
 import { AgentModelsTab } from './tabs/agent-models-tab';
@@ -103,9 +102,6 @@ export type AgentsEditorPanelContentProps = {
   refreshBindSessions: () => void;
   onRemoveBinding: (rule: GatewayConfigBinding) => void;
   onAddBinding: (e: FormEvent) => void;
-  cronLoading: boolean;
-  agentCronJobs: CronJob[];
-  onSetCronJobAgent: (job: CronJob, agentKey: string) => void;
   onTryInChat?: () => void;
   onPanelChange?: (panel: AgentPanel) => void;
 };
@@ -178,9 +174,6 @@ export function AgentsEditorPanelContent({
   refreshBindSessions,
   onRemoveBinding,
   onAddBinding,
-  cronLoading,
-  agentCronJobs,
-  onSetCronJobAgent,
   onTryInChat,
   onPanelChange,
 }: AgentsEditorPanelContentProps) {
@@ -326,20 +319,6 @@ export function AgentsEditorPanelContent({
         selectRecipient={cCron.selectRecipient}
         onRemoveBinding={onRemoveBinding}
         onAddBinding={onAddBinding}
-      />
-    );
-  }
-
-  if (panel === 'cron' && data) {
-    return (
-      <AgentCronTab
-        a={a}
-        data={data}
-        selected={selected}
-        busy={busy}
-        cronLoading={cronLoading}
-        agentCronJobs={agentCronJobs}
-        onSetCronJobAgent={onSetCronJobAgent}
       />
     );
   }

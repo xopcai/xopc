@@ -30,7 +30,7 @@ export const GATEWAY_BUILTIN_TOOL_IDS = [
   'memory_get',
   'curated_memory',
   'session_search',
-  'cronjob',
+  'automation',
   'workflow',
   'delegate_task',
   'execute_code',

@@ -58,7 +58,6 @@ function createMockService(cfg: Partial<Config>, workspaceRoot: string): Gateway
     getHealth: () => ({ status: 'healthy', version: 'test', channels: [], uptime: 0 }),
     getChannelsStatus: () => [],
     sessionManagerInstance: {} as GatewayService['sessionManagerInstance'],
-    cronServiceInstance: {} as GatewayService['cronServiceInstance'],
     listSessions: async () => ({ items: [], total: 0 }),
     getSession: async () => null,
     reloadConfig: async () => ({ success: true }),

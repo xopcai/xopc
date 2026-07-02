@@ -110,7 +110,7 @@ export interface WorkflowRunMetrics {
 export type WorkflowRunSource =
   | { kind: 'chat'; sessionKey: string; messageId?: string }
   | { kind: 'webui'; sessionKey?: string; requestId?: string }
-  | { kind: 'cron'; scheduleId: string; fireId?: string; scheduledAtMs?: number }
+  | { kind: 'automation'; automationId: string; runId?: string; scheduledAtMs?: number }
   | { kind: 'api'; requestId?: string; idempotencyKey?: string }
   | { kind: 'im'; channel: string; chatId: string; messageId?: string; userId?: string }
   | Record<string, unknown>;
@@ -159,14 +159,14 @@ export interface WorkflowRunOrigin {
   sessionKey?: string;
   chatId?: string;
   messageId?: string;
-  scheduleId?: string;
-  fireId?: string;
+  automationId?: string;
+  runId?: string;
   requestId?: string;
 }
 
 export interface WorkflowRunScheduleMetadata {
-  scheduleId: string;
-  fireId?: string;
+  automationId: string;
+  runId?: string;
   scheduledAtMs?: number;
 }
 

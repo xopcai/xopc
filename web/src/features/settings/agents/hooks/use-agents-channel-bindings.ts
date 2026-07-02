@@ -6,7 +6,7 @@ import {
   getSessionChatIds,
   type ChannelStatus,
   type SessionChatId,
-} from '@/features/cron/cron-api';
+} from '@/features/settings/channel-recipient-api';
 import {
   patchGatewayBindings,
   type GatewayAgentRow,

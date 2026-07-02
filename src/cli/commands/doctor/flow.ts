@@ -12,7 +12,6 @@ import { checkSessionIntegrity } from './checks/session-integrity.js';
 import { checkGatewayService } from './checks/gateway-service.js';
 import { checkSecurityAudit } from './checks/security-audit.js';
 import { checkWorkspaceStatus } from './checks/workspace-status.js';
-import { checkCronHealth } from './checks/cron-health.js';
 import { checkVersionUpdate } from './checks/version-check.js';
 import { checkChannelPlugins } from './checks/channel-plugins.js';
 
@@ -29,7 +28,6 @@ const DOCTOR_CHECKS: DoctorCheck[] = [
   checkWorkspaceStatus,
   checkGatewayService,
   checkGatewayHealth,
-  checkCronHealth,
   checkSessionIntegrity,
 ];
 

@@ -11,7 +11,7 @@ import { setPairingBroadcastSink } from '../channels/pairing/pairing-events.js';
 import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
-import { CronService } from '../cron/index.js';
+import { AutomationService } from '../automations/index.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
 import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
@@ -87,7 +87,7 @@ export class GatewayService {
   private configPath: string;
   private _agentService: AgentService | null = null;
   private channelManager: ChannelManager;
-  private cronService: CronService;
+  private automationService: AutomationService;
   private notesService: NotesService;
   private extensionLoader: ExtensionLoader | null = null;
   private extensionMetadataSnapshot: import('../extensions/extension-metadata-snapshot.js').ExtensionMetadataSnapshot | null = null;
@@ -233,9 +233,7 @@ export class GatewayService {
       config: this.config,
     });
 
-    this.cronService = new CronService({
-      maxConcurrentJobs: this.config.cron?.maxConcurrentJobs,
-    });
+    this.automationService = new AutomationService();
 
     this.notesService = new NotesService(new NotesStore());
 
@@ -271,7 +269,6 @@ export class GatewayService {
       setConfig: (next) => { this.config = next; },
       getAgentService: () => this.ensureAgentService(),
       getChannelManager: () => this.channelManager,
-      getCronService: () => this.cronService,
       getHeartbeatService: () => this.heartbeatService,
       getExtensionLoader: () => this.extensionLoader,
       reconcileBrowserExtensionServer: () => this.reconcileBrowserExtensionServer(),
@@ -290,7 +287,6 @@ export class GatewayService {
       return this._agentService;
     }
 
-    const cronRef: { service?: CronService } = { service: this.cronService };
     this._agentService = new AgentService(this.bus, {
       workspace: this.workspacePath,
       model: getAgentDefaultModelRef(this.config),
@@ -313,7 +309,7 @@ export class GatewayService {
         });
       },
       extensionRegistry: this.extensionLoader?.getRegistry(),
-      getCronService: () => cronRef.service,
+      getAutomationService: () => this.automationService,
       getWorkflowRunService: () => this.createWorkflowRunService(),
       sourceContextResolver: async (binding) => {
         if (binding.kind !== 'note') return null;
@@ -343,16 +339,11 @@ export class GatewayService {
       switchModelForSession: (sk, id) => this._agentService!.switchModelForSession(sk, id),
     });
 
-    this.cronService.setDeps({
+    this.automationService.setDeps({
       agentService: this._agentService,
-      messageBus: this.bus,
-      heartbeatService: this.ensureHeartbeatService(),
-      sessionStore: this.sessionIndex.getStore(),
-      getDefaultCronAgentId: () => getDefaultAgentId(this.config),
+      getDefaultAgentId: () => getDefaultAgentId(this.config),
       workflowRunService: this.createWorkflowRunService(),
-      goalRunner: this.createGoalRunner(),
     });
-    cronRef.service = this.cronService;
 
     this._agentService.persistentGoals.setWebchatContinuationScheduler((sessionKey, message) => {
       const scheduleWhenIdle = () => {
@@ -379,7 +370,6 @@ export class GatewayService {
     this.heartbeatService = new HeartbeatService({
       agentService: this.ensureAgentService(),
       messageBus: this.bus,
-      cronService: this.cronService,
       sessionStore: this.sessionIndex.getStore(),
       getConfig: () => this.config,
     });
@@ -753,14 +743,10 @@ export class GatewayService {
     await trace.measure('sessions.initialize', () => this.sessionIndex.initialize());
     log.debug('Session manager initialized');
 
-    this.cronService.setDeps({
+    this.automationService.setDeps({
       agentService: this.agentService,
-      messageBus: this.bus,
-      heartbeatService: this.ensureHeartbeatService(),
-      sessionStore: this.sessionIndex.getStore(),
-      getDefaultCronAgentId: () => getDefaultAgentId(this.config),
+      getDefaultAgentId: () => getDefaultAgentId(this.config),
       workflowRunService: this.createWorkflowRunService(),
-      goalRunner: this.createGoalRunner(),
     });
 
     await trace.measure('workflows.reconcile', () => this.reconcileInterruptedWorkflowRuns());
@@ -769,10 +755,7 @@ export class GatewayService {
       this.emit('session.updated', { key: data.key, name: data.name, tags: data.tags });
     });
 
-    // Start cron service
-    if (this.config.cron?.enabled !== false) {
-      await trace.measure('cron.initialize', () => this.cronService.initialize());
-    }
+    await trace.measure('automations.initialize', () => this.automationService.initialize());
 
     await this.notesService.initialize();
 
@@ -993,8 +976,7 @@ export class GatewayService {
 
     await this.channelManager.stop();
 
-    // Stop cron service
-    await this.cronService.stop();
+    await this.automationService.stop();
 
     // Flush notes to disk
     await this.notesService.flush();
@@ -1381,9 +1363,8 @@ export class GatewayService {
     return resolveEffectiveGatewayPort(this.config, this.serviceConfig.listenPort);
   }
 
-
-  get cronServiceInstance(): CronService {
-    return this.cronService;
+  get automationServiceInstance(): AutomationService {
+    return this.automationService;
   }
 
   get notesServiceInstance(): NotesService {

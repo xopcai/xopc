@@ -66,7 +66,7 @@ export interface CancelWorkflowRunServiceResult {
 
 export type CancelWorkflowRunResult = CancelWorkflowRunServiceResult | WorkflowRunServiceErrorResult;
 
-/** Minimal surface for agent/cron callers (avoids importing the service class). */
+/** Minimal surface for agent/automation callers (avoids importing the service class). */
 export interface WorkflowRunServiceLike {
   startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult>;
 }

@@ -2,7 +2,7 @@ export type ScenarioPresetId = 'lightChat' | 'multiChannel' | 'automation';
 
 export type ScenarioPresetStep = {
   path: string;
-  labelKey: 'stepProviders' | 'stepDefaultModel' | 'stepChannel' | 'stepCron' | 'stepSkills';
+  labelKey: 'stepProviders' | 'stepDefaultModel' | 'stepChannel' | 'stepAutomation' | 'stepSkills';
 };
 
 export type ScenarioPreset = {
@@ -31,7 +31,7 @@ export const SCENARIO_PRESETS: readonly ScenarioPreset[] = [
     steps: [
       { path: '/settings/credentials?tab=services', labelKey: 'stepProviders' },
       { path: '/skills', labelKey: 'stepSkills' },
-      { path: '/cron', labelKey: 'stepCron' },
+      { path: '/automations', labelKey: 'stepAutomation' },
     ],
   },
 ];

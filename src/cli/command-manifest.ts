@@ -33,7 +33,6 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'doctor [options]', description: 'Check xopc installation health and diagnose common issues' },
   { name: 'update [options]', description: 'Check for and install xopc updates' },
   { name: 'logs', description: 'Manage and query logs' },
-  { name: 'cron', description: 'Manage scheduled tasks' },
   { name: 'goal', description: 'Manage durable goals' },
   { name: 'config [options]', description: 'View and edit configuration' },
   { name: 'image', description: 'Inspect image provider availability' },

@@ -9,7 +9,7 @@
  *   - `afterWeixinCredentialsPersisted` / `afterFeishuCredentialsPersisted`
  *     (QR-login follow-ups that bypass the watcher)
  *   - `ConfigHotReloader` (fs.watch → debounced per-section dispatch)
- *   - Eight section reload handlers (models / agents / channels / cron /
+ *   - Section reload handlers (models / agents / channels /
  *     heartbeat / tools / mcp / extensions)
  *   - `scheduleChannelPluginsAfterPersist` (coalesces rapid saves so
  *     Telegram/Weixin do not stop/start repeatedly)
@@ -27,7 +27,6 @@ import type { Config } from '../../config/schema.js';
 import type { Config as SurfaceConfig } from '../../config/config-surface.js';
 import type { AgentService } from '../../agent/service.js';
 import type { ChannelManager } from '../../channels/manager.js';
-import type { CronService } from '../../cron/index.js';
 import type { HeartbeatService } from '../heartbeat/index.js';
 import type { ExtensionLoader } from '../../extensions/loader.js';
 import type { MessageBus } from '../../infra/bus/index.js';
@@ -51,7 +50,6 @@ export interface GatewayConfigCoordinatorOptions {
   setConfig: (next: Config) => void;
   getAgentService: () => AgentService;
   getChannelManager: () => ChannelManager;
-  getCronService: () => CronService;
   getHeartbeatService: () => HeartbeatService | null;
   getExtensionLoader: () => ExtensionLoader | null;
   /** Re-evaluate browser-extension server attachment after agent defaults change. */
@@ -84,7 +82,7 @@ export class GatewayConfigCoordinator {
         onModelsReload: (newConfig) => this.handleModelsReload(newConfig),
         onAgentDefaultsReload: (newConfig) => this.handleAgentDefaultsReload(newConfig),
         onChannelsReload: (newConfig) => this.handleChannelsReload(newConfig),
-        onCronReload: (newConfig) => this.handleCronReload(newConfig),
+        onCronReload: (newConfig) => this.handleAutomationReload(newConfig),
         onHeartbeatReload: (newConfig) => this.handleHeartbeatReload(newConfig),
         onToolsReload: (newConfig) => this.handleToolsReload(newConfig),
         onMcpReload: (newConfig) => this.handleMcpReload(newConfig),
@@ -296,12 +294,11 @@ export class GatewayConfigCoordinator {
     })();
   }
 
-  private handleCronReload(newConfig: Config): void {
-    log.debug('Reloading cron config...');
+  private handleAutomationReload(newConfig: Config): void {
+    log.debug('Reloading automation-related config...');
     this.opts.setConfig(newConfig);
-    this.opts.getCronService().updateConfig(newConfig);
-    this.opts.emit('config.reload', { section: 'cron' });
-    log.debug('Cron config reloaded');
+    this.opts.emit('config.reload', { section: 'automations' });
+    log.debug('Automation-related config reloaded');
   }
 
   private handleHeartbeatReload(newConfig: Config): void {
@@ -414,10 +411,10 @@ export class GatewayConfigCoordinator {
     }
     this.opts.getAgentService().applyAgentDefaultsFromConfig(reloaded);
     await this.opts.reconcileBrowserExtensionServer();
-    // Hot-apply: reconcile managed dreaming cron jobs immediately after config persists.
+    // Keep dreaming runtime config fresh after persistence.
     await this.opts.getAgentService().reconcileDreamingNow().catch((err) => {
       const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, errorMessage: em }, `Dreaming cron reconcile after save failed: ${em}`);
+      log.warn({ err, errorMessage: em }, `Dreaming config refresh after save failed: ${em}`);
     });
     // Align watcher baseline before channel hooks run so fs `change` does not
     // re-apply the same diff concurrently.
