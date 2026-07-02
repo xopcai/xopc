@@ -118,7 +118,7 @@
     "boardWorkflowFilterAll": "全部工作流",
     "boardTriggerFilterAria": "按触发来源筛选",
     "boardTriggerFilterAll": "全部来源",
-    "boardTriggerFilterCron": "定时任务",
+    "boardTriggerFilterAutomation": "自动化",
     "boardTriggerFilterWebui": "控制台",
     "boardTriggerFilterChat": "聊天",
     "boardTriggerFilterApi": "API",

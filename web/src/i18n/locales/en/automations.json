@@ -1,0 +1,116 @@
+{
+  "automations": {
+    "title": "Automations",
+    "subtitle": "When something happens, run an agent or workflow.",
+    "refresh": "Refresh",
+    "new": "New",
+    "createTitle": "Create automation",
+    "create": "Create",
+    "cancel": "Cancel",
+    "close": "Close",
+    "none": "None",
+    "never": "Never",
+    "enabled": "Enabled",
+    "paused": "Paused",
+    "last": "Last",
+    "next": "Next",
+    "workflowPrefix": "workflow",
+    "metrics": {
+      "total": "Total",
+      "enabled": "Enabled",
+      "running": "Running",
+      "next": "Next"
+    },
+    "tabs": {
+      "automations": "Automations",
+      "runs": "Runs",
+      "templates": "Templates"
+    },
+    "templates": {
+      "dailyAgent": {
+        "name": "Daily agent briefing",
+        "description": "Ask an agent to prepare a daily summary.",
+        "instruction": "Prepare my daily briefing."
+      },
+      "morningWorkflow": {
+        "name": "Run workflow every morning",
+        "description": "Start a workflow on a fixed daily schedule.",
+        "formName": "Morning workflow"
+      },
+      "webhookAgent": {
+        "name": "Webhook to agent",
+        "description": "Trigger an agent from an external request.",
+        "formName": "Webhook agent task"
+      }
+    },
+    "empty": {
+      "automations": "No automations",
+      "runs": "No runs yet"
+    },
+    "info": {
+      "when": "When",
+      "run": "Run"
+    },
+    "trigger": {
+      "manual": "Manual",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "interval": "Interval",
+      "customCron": "Custom cron",
+      "webhook": "Webhook",
+      "onceAt": "Once at {time}",
+      "everyMinutes": "Every {minutes} min"
+    },
+    "action": {
+      "agent": "Agent",
+      "agentWithId": "Agent: {id}",
+      "workflowWithId": "Workflow: {id}",
+      "runAgent": "Run Agent",
+      "runWorkflow": "Run Workflow"
+    },
+    "status": {
+      "queued": "queued",
+      "running": "running",
+      "succeeded": "succeeded",
+      "failed": "failed",
+      "cancelled": "cancelled",
+      "timeout": "timeout",
+      "notRun": "not run"
+    },
+    "form": {
+      "name": "Name",
+      "description": "Description",
+      "trigger": "Trigger",
+      "time": "Time",
+      "day": "Day",
+      "everyMinutes": "Every minutes",
+      "expression": "Expression",
+      "secretId": "Secret id",
+      "action": "Action",
+      "agent": "Agent",
+      "defaultAgent": "Default agent",
+      "instruction": "Instruction",
+      "workflowId": "Workflow id",
+      "goal": "Goal",
+      "afterRun": "After run",
+      "webhookUrl": "Webhook URL",
+      "reliability": "Reliability",
+      "timeoutSeconds": "Timeout seconds",
+      "disableAfterFailures": "Disable after failures"
+    },
+    "afterRun": {
+      "none": "Do nothing",
+      "saveToSession": "Save to session",
+      "webhook": "Call webhook"
+    },
+    "weekdays": {
+      "monday": "Monday",
+      "tuesday": "Tuesday",
+      "wednesday": "Wednesday",
+      "thursday": "Thursday",
+      "friday": "Friday",
+      "saturday": "Saturday",
+      "sunday": "Sunday"
+    }
+  }
+}

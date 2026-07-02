@@ -3,15 +3,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import type { JobExecution } from '../../../cron/types.js';
 import type { Note } from '../../../notes/types.js';
 import {
-  appendCronRun,
   closeXopcDatabase,
-  deleteCronRunsForJob,
   openXopcDatabase,
-  readAllCronRuns,
-  readCronJobHistory,
   resetXopcDatabaseSingletonForTest,
   searchMemoryIndex,
   syncMemoryIndex,
@@ -34,33 +29,6 @@ describe('sqlite phase-6 repositories', () => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
     rmSync(stateDir, { recursive: true, force: true });
-  });
-
-  it('persists and trims cron runs per job', () => {
-    const jobId = 'job-1';
-    for (let i = 0; i < 5; i++) {
-      const execution: JobExecution = {
-        id: `run-${i}`,
-        jobId,
-        status: 'success',
-        startedAt: new Date(Date.UTC(2025, 0, 1, 0, 0, i)).toISOString(),
-        endedAt: new Date(Date.UTC(2025, 0, 1, 0, 0, i + 1)).toISOString(),
-        duration: 1000,
-        retryCount: 0,
-        summary: `run ${i}`,
-      };
-      appendCronRun(execution);
-    }
-
-    const history = readCronJobHistory(jobId, 10);
-    expect(history).toHaveLength(5);
-    expect(history[0].id).toBe('run-4');
-
-    const all = readAllCronRuns(3);
-    expect(all).toHaveLength(3);
-
-    deleteCronRunsForJob(jobId);
-    expect(readCronJobHistory(jobId, 10)).toHaveLength(0);
   });
 
   it('stores notes and supports FTS search', () => {

@@ -2,8 +2,7 @@ import type { Hono } from 'hono';
 
 import { listGatewayAgents } from '../../agents-admin.js';
 import { getTunnelService } from '../../../tunnel/index.js';
-import { describeSchedule } from '../../../cron/index.js';
-import type { CronRunHistoryRow, JobData } from '../../../cron/types.js';
+import type { Automation, AutomationRun } from '../../../automations/index.js';
 import type { WorkflowRunSummary } from '../../../workflows/domain/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -19,21 +18,22 @@ type HomeWorkflowRun = {
   metrics: WorkflowRunSummary['metrics'];
 };
 
-type HomeCronJob = {
+type HomeAutomation = {
   id: string;
   name?: string;
-  schedule: string;
+  trigger: string;
+  action: string;
   nextRunAt: string;
-  payloadKind: string;
 };
 
-type HomeCronRun = {
+type HomeAutomationRun = {
   id: string;
-  jobId: string;
-  jobName?: string;
-  status: CronRunHistoryRow['status'];
-  startedAt: string;
-  endedAt?: string;
+  automationId: string;
+  automationName?: string;
+  status: AutomationRun['status'];
+  createdAtMs: number;
+  startedAtMs?: number;
+  endedAtMs?: number;
   error?: string;
   summary?: string;
   sessionKey?: string;
@@ -54,30 +54,41 @@ function toHomeWorkflowRun(run: WorkflowRunSummary): HomeWorkflowRun {
   };
 }
 
-function payloadKind(job: JobData): string {
-  const payload = job.payload as { kind?: unknown } | undefined;
-  return typeof payload?.kind === 'string' ? payload.kind : 'unknown';
+function triggerLabel(automation: Automation): string {
+  const trigger = automation.trigger;
+  if (trigger.kind === 'manual') return 'manual';
+  if (trigger.kind === 'webhook') return 'webhook';
+  const schedule = trigger.schedule;
+  if (schedule.kind === 'once') return schedule.at;
+  if (schedule.kind === 'interval') return `every ${Math.round(schedule.everyMs / 60000)} minutes`;
+  return schedule.expr;
 }
 
-function toHomeCronJob(job: JobData): HomeCronJob | null {
-  if (!job.enabled || !job.state.nextRunAtMs) return null;
+function actionLabel(automation: Automation): string {
+  if (automation.action.kind === 'workflow') return `workflow:${automation.action.workflowId}`;
+  return automation.action.agentId ? `agent:${automation.action.agentId}` : 'agent';
+}
+
+function toHomeAutomation(automation: Automation): HomeAutomation | null {
+  if (!automation.enabled || !automation.state.nextRunAtMs) return null;
   return {
-    id: job.id,
-    name: job.name,
-    schedule: describeSchedule(job.schedule),
-    nextRunAt: new Date(job.state.nextRunAtMs).toISOString(),
-    payloadKind: payloadKind(job),
+    id: automation.id,
+    name: automation.name,
+    trigger: triggerLabel(automation),
+    action: actionLabel(automation),
+    nextRunAt: new Date(automation.state.nextRunAtMs).toISOString(),
   };
 }
 
-function toHomeCronRun(run: CronRunHistoryRow): HomeCronRun {
+function toHomeAutomationRun(run: AutomationRun): HomeAutomationRun {
   return {
     id: run.id,
-    jobId: run.jobId,
-    jobName: run.jobName,
+    automationId: run.automationId,
+    automationName: run.automationName,
     status: run.status,
-    startedAt: run.startedAt,
-    endedAt: run.endedAt,
+    createdAtMs: run.createdAtMs,
+    startedAtMs: run.startedAtMs,
+    endedAtMs: run.endedAtMs,
     error: run.error,
     summary: run.summary,
     sessionKey: run.sessionKey,
@@ -96,8 +107,8 @@ function toHomeCronRun(run: CronRunHistoryRow): HomeCronRun {
  *   - activeAgent: default agent identity for this gateway
  *   - gateway: readiness + public tunnel status
  *   - workflowRuns: active / attention / recent workflow runs
- *   - nextCronJobs: upcoming enabled schedules
- *   - recentCronRuns: latest cron executions
+ *   - upcomingAutomations: upcoming enabled automations
+ *   - recentAutomationRuns: latest automation executions
  */
 export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
@@ -118,16 +129,16 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       pendingTasks,
       recentSessions,
       workflowRuns,
-      cronJobs,
-      recentCronRuns,
+      automations,
+      automationRuns,
     ] = await Promise.all([
       notes.listNotes({ sortBy: 'lastOpenedAt', sortOrder: 'desc', limit: 10 }),
       notes.listNotes({ status: 'inbox', limit: 0 }),
       notes.listNotes({ pendingTasksOnly: true, sortBy: 'createdAt', sortOrder: 'desc', limit: 10 }),
       sessions.listSessions({ sortBy: 'updatedAt', sortOrder: 'desc', limit: 5 }),
       workflowRunStore.listRunSummaries(20),
-      service.cronServiceInstance.listJobs(),
-      service.cronServiceInstance.getAllRunsHistory(10),
+      service.automationServiceInstance.list(),
+      service.automationServiceInstance.listRuns({ limit: 10 }),
     ]);
 
     const activeWorkflowRuns = workflowRuns
@@ -139,9 +150,9 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       .slice(0, 5)
       .map(toHomeWorkflowRun);
     const recentWorkflowRuns = workflowRuns.slice(0, 5).map(toHomeWorkflowRun);
-    const nextCronJobs = cronJobs
-      .map(toHomeCronJob)
-      .filter((job): job is HomeCronJob => Boolean(job))
+    const upcomingAutomations = automations
+      .map(toHomeAutomation)
+      .filter((automation): automation is HomeAutomation => Boolean(automation))
       .sort((a, b) => Date.parse(a.nextRunAt) - Date.parse(b.nextRunAt))
       .slice(0, 5);
 
@@ -175,8 +186,8 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
         attention: attentionWorkflowRuns,
         recent: recentWorkflowRuns,
       },
-      nextCronJobs,
-      recentCronRuns: recentCronRuns.slice(0, 5).map(toHomeCronRun),
+      upcomingAutomations,
+      recentAutomationRuns: automationRuns.slice(0, 5).map(toHomeAutomationRun),
     });
   });
 }

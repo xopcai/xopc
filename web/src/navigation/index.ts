@@ -160,7 +160,7 @@ export function browserDocsUrl(language: StoredLanguage): string {
 export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
   if (tab === 'agents' || tab === 'settingsAgents') return '/agents';
-  if (tab === 'cron') return '/cron';
+  if (tab === 'automations') return '/automations';
   if (tab === 'goals') return '/goals';
   if (tab === 'settingsGoals') return '/settings/goals';
   if (tab === 'settingsKeyboardShortcuts') return '/settings/keyboard-shortcuts';

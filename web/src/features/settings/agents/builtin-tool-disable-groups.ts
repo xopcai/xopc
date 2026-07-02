@@ -15,7 +15,7 @@ export const BUILTIN_TOOL_UI_GROUPS = [
   },
   { key: 'media', toolIds: ['image', 'image_generate', 'read_media', 'create_share'] as const },
   { key: 'web', toolIds: ['web_search', 'web_fetch', 'web_extract', 'browser_use'] as const },
-  { key: 'misc', toolIds: ['session_status', 'dreaming', 'tool_manual', 'clarify', 'todo', 'cronjob', 'workflow', 'delegate_task'] as const },
+  { key: 'misc', toolIds: ['session_status', 'dreaming', 'tool_manual', 'clarify', 'todo', 'automation', 'workflow', 'delegate_task'] as const },
   { key: 'unknown', toolIds: ['skills_list', 'skill_view', 'skill_manage'] as const },
   { key: 'extensions', toolIds: ['extensions'] as const },
   { key: 'mcp', toolIds: ['bundle-mcp'] as const },

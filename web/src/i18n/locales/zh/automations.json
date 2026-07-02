@@ -1,0 +1,116 @@
+{
+  "automations": {
+    "title": "自动化",
+    "subtitle": "当事件发生时，运行智能体或工作流。",
+    "refresh": "刷新",
+    "new": "新建",
+    "createTitle": "创建自动化",
+    "create": "创建",
+    "cancel": "取消",
+    "close": "关闭",
+    "none": "无",
+    "never": "从未",
+    "enabled": "已启用",
+    "paused": "已暂停",
+    "last": "上次",
+    "next": "下次",
+    "workflowPrefix": "工作流",
+    "metrics": {
+      "total": "总数",
+      "enabled": "已启用",
+      "running": "运行中",
+      "next": "下次"
+    },
+    "tabs": {
+      "automations": "自动化",
+      "runs": "运行记录",
+      "templates": "模板"
+    },
+    "templates": {
+      "dailyAgent": {
+        "name": "每日智能体简报",
+        "description": "让智能体准备每日摘要。",
+        "instruction": "准备我的每日简报。"
+      },
+      "morningWorkflow": {
+        "name": "每天早上运行工作流",
+        "description": "按固定的每日计划启动工作流。",
+        "formName": "晨间工作流"
+      },
+      "webhookAgent": {
+        "name": "Webhook 触发智能体",
+        "description": "从外部请求触发智能体。",
+        "formName": "Webhook 智能体任务"
+      }
+    },
+    "empty": {
+      "automations": "暂无自动化",
+      "runs": "暂无运行记录"
+    },
+    "info": {
+      "when": "触发",
+      "run": "执行"
+    },
+    "trigger": {
+      "manual": "手动",
+      "daily": "每天",
+      "weekly": "每周",
+      "interval": "间隔",
+      "customCron": "自定义 cron",
+      "webhook": "Webhook",
+      "onceAt": "一次，于 {time}",
+      "everyMinutes": "每 {minutes} 分钟"
+    },
+    "action": {
+      "agent": "智能体",
+      "agentWithId": "智能体：{id}",
+      "workflowWithId": "工作流：{id}",
+      "runAgent": "运行智能体",
+      "runWorkflow": "运行工作流"
+    },
+    "status": {
+      "queued": "排队中",
+      "running": "运行中",
+      "succeeded": "成功",
+      "failed": "失败",
+      "cancelled": "已取消",
+      "timeout": "超时",
+      "notRun": "未运行"
+    },
+    "form": {
+      "name": "名称",
+      "description": "描述",
+      "trigger": "触发",
+      "time": "时间",
+      "day": "星期",
+      "everyMinutes": "每隔多少分钟",
+      "expression": "表达式",
+      "secretId": "密钥 ID",
+      "action": "动作",
+      "agent": "智能体",
+      "defaultAgent": "默认智能体",
+      "instruction": "指令",
+      "workflowId": "工作流 ID",
+      "goal": "目标",
+      "afterRun": "运行后",
+      "webhookUrl": "Webhook URL",
+      "reliability": "可靠性",
+      "timeoutSeconds": "超时秒数",
+      "disableAfterFailures": "失败后停用次数"
+    },
+    "afterRun": {
+      "none": "不处理",
+      "saveToSession": "保存到会话",
+      "webhook": "调用 Webhook"
+    },
+    "weekdays": {
+      "monday": "周一",
+      "tuesday": "周二",
+      "wednesday": "周三",
+      "thursday": "周四",
+      "friday": "周五",
+      "saturday": "周六",
+      "sunday": "周日"
+    }
+  }
+}

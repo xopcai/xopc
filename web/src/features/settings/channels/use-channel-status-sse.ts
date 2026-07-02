@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 
-import type { ChannelStatus } from '@/features/cron/cron-api';
+import type { ChannelStatus } from '@/features/settings/channel-recipient-api';
 
 export const CHANNEL_STATUS_SSE_EVENT = 'channels-status';
 

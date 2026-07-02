@@ -412,7 +412,7 @@
         "stepProviders": "配置 LLM 服务商密钥",
         "stepDefaultModel": "选择默认对话模型",
         "stepChannel": "连接消息通道",
-        "stepCron": "设置定时任务",
+        "stepAutomation": "创建自动化",
         "stepSkills": "从目录安装技能"
       },
       "presets": {

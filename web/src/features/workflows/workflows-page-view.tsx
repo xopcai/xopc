@@ -202,7 +202,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
             )}
           >
             <option value="all">{labels.boardTriggerFilterAll}</option>
-            <option value="cron">{labels.boardTriggerFilterCron}</option>
+            <option value="automation">{labels.boardTriggerFilterAutomation}</option>
             <option value="webui">{labels.boardTriggerFilterWebui}</option>
             <option value="chat">{labels.boardTriggerFilterChat}</option>
             <option value="api">{labels.boardTriggerFilterApi}</option>

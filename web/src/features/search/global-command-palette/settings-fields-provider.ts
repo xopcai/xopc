@@ -192,20 +192,20 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       keywords: ['search', 'engine', 'tavily', 'serper', 'brave', 'bing', '搜索引擎'],
     },
 
-    // --- Cron ---
+    // --- Automations ---
     {
-      id: 'field:cron:enabled',
-      title: isZh ? '定时任务开关' : 'Cron Enabled',
-      subtitle: isZh ? '启用/禁用定时调度器' : 'Enable or disable the scheduler',
-      path: '/cron?tab=settings',
-      keywords: ['cron', 'enabled', 'scheduler', 'timer', '定时', '调度'],
+      id: 'field:automations:enabled',
+      title: isZh ? '自动化' : 'Automations',
+      subtitle: isZh ? '创建和管理自动化' : 'Create and manage automations',
+      path: '/automations',
+      keywords: ['automation', 'automations', 'scheduler', 'timer', '自动化', '调度'],
     },
     {
-      id: 'field:cron:timezone',
-      title: isZh ? '定时任务时区' : 'Cron Timezone',
-      subtitle: isZh ? '调度器使用的时区' : 'Timezone for the scheduler',
-      path: '/cron?tab=settings',
-      keywords: ['timezone', 'tz', 'utc', 'cron', '时区'],
+      id: 'field:automations:runs',
+      title: isZh ? '自动化运行记录' : 'Automation Runs',
+      subtitle: isZh ? '查看自动化执行历史' : 'Review automation run history',
+      path: '/automations',
+      keywords: ['automation', 'runs', 'history', '自动化', '历史'],
     },
 
     // --- Channels ---

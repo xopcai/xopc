@@ -149,7 +149,6 @@ function issuePath(id: string): string | undefined {
   if (id === 'channel-config' || id === 'channel-pairing-pending' || id.startsWith('channel:')) return '/channels';
   if (id === 'security-audit') return '/settings/gateway';
   if (id === 'gateway-service' || id === 'gateway-health') return '/settings/gateway';
-  if (id === 'cron-health') return '/settings/goals';
   if (id === 'version-check') return '/settings/app-management';
   return undefined;
 }
@@ -181,7 +180,7 @@ function buildDiagnosticSignals(input: {
   const byId = new Map(input.doctorChecks.map((check) => [check.id, check]));
   const signals: SetupDiagnosticSignal[] = [];
 
-  for (const id of ['security-audit', 'channel-config', 'channel-pairing-pending', 'gateway-health', 'cron-health']) {
+  for (const id of ['security-audit', 'channel-config', 'channel-pairing-pending', 'gateway-health']) {
     const check = byId.get(id);
     if (check) {
       signals.push({
@@ -383,9 +382,8 @@ export function scenarioStepState(
   if (stepLabelKey === 'stepSkills') {
     return { done: snapshot.skillInstalled, status: snapshot.skillInstalled ? 'pass' : 'warn' };
   }
-  if (stepLabelKey === 'stepCron') {
-    const cron = snapshot.diagnosticSignals.find((signal) => signal.id === 'cron-health');
-    return { done: cron?.status === 'pass', status: cron?.status ?? 'skip' };
+  if (stepLabelKey === 'stepAutomation') {
+    return { done: true, status: 'pass' };
   }
   return { done: false, status: 'skip' };
 }

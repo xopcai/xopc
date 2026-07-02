@@ -118,7 +118,7 @@
     "boardWorkflowFilterAll": "All workflows",
     "boardTriggerFilterAria": "Filter by trigger source",
     "boardTriggerFilterAll": "All sources",
-    "boardTriggerFilterCron": "Cron",
+    "boardTriggerFilterAutomation": "Automation",
     "boardTriggerFilterWebui": "Console",
     "boardTriggerFilterChat": "Chat",
     "boardTriggerFilterApi": "API",

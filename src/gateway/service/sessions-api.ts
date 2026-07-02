@@ -274,7 +274,7 @@ export class GatewaySessionsApi {
   }
 
   /**
-   * Distinct chat-id pairs from sessions, grouped by channel. Used by cron job
+   * Distinct chat-id pairs from sessions, grouped by channel. Used by automation
    * configuration UI to seed the "send to existing chat" picker.
    */
   chatIds(channel?: string): Promise<

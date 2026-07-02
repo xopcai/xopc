@@ -56,15 +56,15 @@ describe('workflow board utils', () => {
 
   it('filters runs by trigger source', () => {
     const runs = [
-      run({ id: 'c1', status: 'running', source: { kind: 'cron', scheduleId: 'job-1' } }),
+      run({ id: 'c1', status: 'running', source: { kind: 'automation', automationId: 'auto-1' } }),
       run({ id: 'w1', status: 'running', source: { kind: 'webui' } }),
     ];
-    const cronOnly = filterRunsForBoard(runs, {
+    const automationOnly = filterRunsForBoard(runs, {
       searchQuery: '',
       workflowFilterId: '',
-      triggerFilter: 'cron',
+      triggerFilter: 'automation',
     });
-    expect(cronOnly.map((item) => item.id)).toEqual(['c1']);
+    expect(automationOnly.map((item) => item.id)).toEqual(['c1']);
   });
 
   it('caps succeeded column at 20 runs', () => {

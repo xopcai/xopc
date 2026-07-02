@@ -139,14 +139,6 @@ describe('buildSetupStatusSnapshot', () => {
       skillCount: 0,
       doctorChecks: [
         {
-          id: 'cron-health',
-          label: 'Cron',
-          status: 'warn',
-          message: 'Cron has a warning.',
-          hints: ['Open cron settings'],
-          fixed: false,
-        },
-        {
           id: 'provider-auth',
           label: 'Provider auth',
           status: 'fail',
@@ -159,7 +151,7 @@ describe('buildSetupStatusSnapshot', () => {
     });
 
     expect(snapshot.healthTier).toBe('blocked');
-    expect(snapshot.issues.map((issue) => issue.id)).toEqual(['provider-auth', 'cron-health']);
+    expect(snapshot.issues.map((issue) => issue.id)).toEqual(['provider-auth']);
     expect(snapshot.issues[0]?.path).toBe('/settings/credentials');
   });
 });

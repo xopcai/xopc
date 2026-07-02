@@ -49,7 +49,8 @@ const ROUTE_SCOPE_REQUIREMENTS: ReadonlyArray<{ prefix: string; scope: OperatorS
   // Write routes
   { prefix: '/api/agent', scope: WRITE_SCOPE },
   { prefix: '/api/sessions', scope: WRITE_SCOPE },
-  { prefix: '/api/cron', scope: WRITE_SCOPE },
+  { prefix: '/api/automations', scope: WRITE_SCOPE },
+  { prefix: '/api/automation-runs', scope: WRITE_SCOPE },
   { prefix: '/api/channels', scope: WRITE_SCOPE },
   { prefix: '/api/agents', scope: WRITE_SCOPE },
   { prefix: '/api/workspace', scope: WRITE_SCOPE },

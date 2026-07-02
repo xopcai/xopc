@@ -487,8 +487,8 @@ export function buildWorkflowRunMetadata(params: {
       idempotencyKey: params.idempotencyKey,
     },
     origin: buildWorkflowRunOrigin(params.source),
-    schedule: params.source.kind === 'cron'
-      ? { scheduleId: params.source.scheduleId, fireId: params.source.fireId }
+    schedule: params.source.kind === 'automation'
+      ? { automationId: params.source.automationId, runId: params.source.runId, scheduledAtMs: params.source.scheduledAtMs }
       : undefined,
     goalId,
   };
@@ -628,8 +628,8 @@ function buildWorkflowRunOrigin(source: WorkflowRunSource): WorkflowRunMetadata[
       return { channel: 'chat', sessionKey: source.sessionKey, messageId: source.messageId };
     case 'webui':
       return { channel: 'webui', sessionKey: source.sessionKey };
-    case 'cron':
-      return { channel: 'cron', scheduleId: source.scheduleId, fireId: source.fireId };
+    case 'automation':
+      return { channel: 'automation', automationId: source.automationId, runId: source.runId };
     case 'api':
       return { channel: 'api', requestId: source.requestId };
     case 'im':

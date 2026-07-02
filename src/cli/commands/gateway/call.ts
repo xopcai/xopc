@@ -14,7 +14,7 @@ const METHOD_ALIASES: Record<string, { method: 'GET' | 'POST'; path: string }> =
   sessions: { method: 'GET', path: '/api/sessions' },
   models: { method: 'GET', path: '/api/models' },
   channels: { method: 'GET', path: '/api/channels/status' },
-  cron: { method: 'GET', path: '/api/cron' },
+  automations: { method: 'GET', path: '/api/automations' },
   logs: { method: 'GET', path: '/api/logs' },
   agents: { method: 'GET', path: '/api/agents' },
 };

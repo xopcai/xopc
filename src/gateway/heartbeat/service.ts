@@ -2,7 +2,6 @@ import { readFile } from 'fs/promises';
 
 import type { AgentService } from '../../agent/service.js';
 import type { Config } from '../../config/schema.js';
-import { CronService } from '../../cron/service.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import type { SessionStore } from '../../session/store.js';
 import { appendCronEventLines } from '../../heartbeat/event-prompt.js';
@@ -59,7 +58,6 @@ export function heartbeatRunnerConfigFromConfig(cfg: Config): HeartbeatRunnerCon
 export interface HeartbeatServiceDeps {
   agentService: AgentService;
   messageBus: MessageBus;
-  cronService: CronService;
   sessionStore: SessionStore;
   /** Current app config (for HEARTBEAT.md path under the default agent `profile/` directory). */
   getConfig: () => Config;
@@ -127,16 +125,6 @@ export class HeartbeatService {
     if (!cfg?.enabled) {
       log.debug({ reasons: reasonSummary }, 'Heartbeat: skip (disabled)');
       return;
-    }
-
-    try {
-      const metrics = await this.deps.cronService.getMetrics();
-      log.trace(
-        { runningJobs: metrics.runningJobs, enabledJobs: metrics.enabledJobs },
-        'Heartbeat: cron metrics',
-      );
-    } catch {
-      /* optional */
     }
 
     if (cfg.activeHours && !isWithinActiveHours(cfg.activeHours)) {

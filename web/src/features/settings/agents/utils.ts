@@ -1,5 +1,5 @@
 import type { GatewayConfigBinding } from '@/features/settings/agents-admin-api';
-import type { CronJob, SessionChatId } from '@/features/cron/cron-api';
+import type { SessionChatId } from '@/features/settings/channel-recipient-api';
 import { cn } from '@/lib/cn';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 
@@ -11,8 +11,7 @@ export type AgentPanel =
   | 'skills'
   | 'memory'
   | 'effective'
-  | 'channels'
-  | 'cron';
+  | 'channels';
 
 export function agentsSettingsInputClass(): string {
   return cn(
@@ -21,14 +20,6 @@ export function agentsSettingsInputClass(): string {
     settingsInputFocusClass,
     'dark:border-edge',
   );
-}
-
-export function jobMatchesAgent(job: CronJob, agentId: string, defaultId: string): boolean {
-  const raw = job.agentId?.trim().toLowerCase();
-  if (raw) {
-    return raw === agentId.toLowerCase();
-  }
-  return agentId.toLowerCase() === defaultId.toLowerCase();
 }
 
 export function matchSummary(m: GatewayConfigBinding['match']): string {

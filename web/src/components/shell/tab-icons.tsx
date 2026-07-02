@@ -1,13 +1,13 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
-  Clock,
   Cloud,
   Cpu,
   FileText,
   FolderOpen,
   Globe,
   Heart,
+  Zap,
   Radio,
   Image as ImageIcon,
   Keyboard,
@@ -32,7 +32,7 @@ import type { Tab } from '@/i18n/messages';
 const TAB_ICONS: Record<Tab, LucideIcon> = {
   chat: MessageSquare,
   sessions: FolderOpen,
-  cron: Clock,
+  automations: Zap,
   skills: Layers,
   connectors: Plug,
   goals: Target,

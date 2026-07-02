@@ -31,7 +31,7 @@ export const WORKFLOW_DEF_PARAM = 'def';
 export const WORKFLOW_START_PARAM = 'start';
 export const WORKFLOW_COPY_PARAM = 'copy';
 
-export const WORKFLOW_TRIGGER_FILTERS = ['all', 'cron', 'webui', 'chat', 'api'] as const;
+export const WORKFLOW_TRIGGER_FILTERS = ['all', 'automation', 'webui', 'chat', 'api'] as const;
 export type WorkflowTriggerFilter = (typeof WORKFLOW_TRIGGER_FILTERS)[number];
 
 /** Tag membership for category chips — first matching category wins in filters. */

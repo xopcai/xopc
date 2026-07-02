@@ -99,7 +99,7 @@ function formatSourceSummary(source: WorkflowRunView['run']['source']): string {
   if (!source || typeof source !== 'object' || !('kind' in source)) return 'unknown';
   if (source.kind === 'chat') return `chat · ${source.sessionKey}`;
   if (source.kind === 'webui') return source.sessionKey ? `webui · ${source.sessionKey}` : 'webui';
-  if (source.kind === 'cron') return `cron · ${source.scheduleId}`;
+  if (source.kind === 'automation') return `automation · ${source.automationId}`;
   if (source.kind === 'api') return source.requestId ? `api · ${source.requestId}` : 'api';
   if (source.kind === 'im') return `${source.channel} · ${source.chatId}`;
   return String(source.kind);

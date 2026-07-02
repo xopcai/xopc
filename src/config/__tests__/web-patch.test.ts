@@ -2,29 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import type { Config } from '../schema.js';
 import {
-  mergeCronConfigPatch,
   mergeGoalsConfigPatch,
   mergeGatewaySkillsMarketplacePatch,
   mergeSessionConfigPatch,
   mergeUpdateConfigPatch,
-  resolveCronConfigForWeb,
   resolveGoalsConfigForWeb,
   resolveSessionConfigForWeb,
   resolveUpdateConfigForWeb,
 } from '../web-patch.js';
 
 describe('web-patch merges', () => {
-  it('merges cron globals', () => {
-    const config = {} as Config;
-    const result = mergeCronConfigPatch(config, {
-      enabled: false,
-      maxConcurrentJobs: 10,
-    });
-    expect(result).toEqual({ ok: true });
-    expect(config.cron?.enabled).toBe(false);
-    expect(config.cron?.maxConcurrentJobs).toBe(10);
-  });
-
   it('merges goals config', () => {
     const config = { goals: { maxTurns: 15 } } as Config;
     const result = mergeGoalsConfigPatch(config, {
@@ -101,15 +88,6 @@ describe('web-patch merges', () => {
 });
 
 describe('web-patch resolve helpers', () => {
-  it('resolveCronConfigForWeb applies defaults', () => {
-    expect(resolveCronConfigForWeb({} as Config)).toEqual({
-      enabled: true,
-      maxConcurrentJobs: 5,
-      historyRetentionDays: 7,
-      enableMetrics: true,
-    });
-  });
-
   it('resolveSessionConfigForWeb converts pruneAfterMs to days', () => {
     expect(
       resolveSessionConfigForWeb({

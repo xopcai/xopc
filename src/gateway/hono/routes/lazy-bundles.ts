@@ -172,11 +172,11 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
     },
   },
   {
-    id: 'cron',
-    match: (path) => startsWithAny(path, ['/api/cron']),
+    id: 'automations',
+    match: (path) => startsWithAny(path, ['/api/automations', '/api/automation-runs']),
     load: async () => {
-      const { registerCronRoutes } = await import('./cron.js');
-      return { register: registerCronRoutes };
+      const { registerAutomationRoutes } = await import('../../../automations/api/routes.js');
+      return { register: registerAutomationRoutes };
     },
   },
   {

@@ -6,8 +6,8 @@ import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
-import { getSessionChatIds, type ChannelStatus, type SessionChatId } from '@/features/cron/cron-api';
-import { formatRecipientOptionLabel } from '@/features/cron/cron-utils';
+import { getSessionChatIds, type ChannelStatus, type SessionChatId } from '@/features/settings/channel-recipient-api';
+import { formatRecipientOptionLabel } from '@/features/settings/channel-recipient-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { channelsStatusSwrKey, fetchChannelsStatusSwr } from '@/features/settings/channels-status-swr';
 import {

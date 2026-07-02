@@ -1,4 +1,4 @@
-import { getChannels } from '@/features/cron/cron-api';
+import { getChannels } from '@/features/settings/channel-recipient-api';
 import { apiUrl } from '@/lib/url';
 
 export function channelsStatusSwrKey(): string {

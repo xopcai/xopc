@@ -412,7 +412,7 @@
         "stepProviders": "Configure LLM provider keys",
         "stepDefaultModel": "Choose default chat model",
         "stepChannel": "Connect a messaging channel",
-        "stepCron": "Set up scheduled tasks",
+        "stepAutomation": "Create an automation",
         "stepSkills": "Install skills from the catalog"
       },
       "presets": {

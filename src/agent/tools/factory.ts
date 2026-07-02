@@ -37,6 +37,7 @@ import {
   createClarifyTool,
   createToolManualTool,
   createGoalTool,
+  createAutomationTool,
 } from './index.js';
 import { createCuratedMemoryTool } from './curated-memory-tool.js';
 import { createSessionSearchTool } from './session-search-tool.js';
@@ -58,8 +59,7 @@ import { createDelegateTool } from './delegate-tool.js';
 import { createWorkflowTool } from './workflow-tool.js';
 import { createWorkflowCatalog } from '../workflow/catalog.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
-import { createCronjobTool } from './cronjob-tool.js';
-import type { CronService } from '../../cron/index.js';
+import type { AutomationService } from '../../automations/index.js';
 import type { WorkflowRunServiceLike } from '../../workflows/service/workflow-run-service.types.js';
 import { createLogger } from '../../utils/logger.js';
 import type { SkillManager } from '../skills/skill-manager.js';
@@ -92,8 +92,8 @@ export interface ToolFactoryDeps {
   getSessionStore?: () => SessionStore;
   /** When set (gateway webchat), enables the `clarify` tool. */
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
-  /** Gateway: enables the `cronjob` tool. */
-  getCronService?: () => CronService | undefined;
+  /** Gateway: enables the `automation` tool. */
+  getAutomationService?: () => AutomationService | undefined;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
   getWorkflowRunService?: () => WorkflowRunServiceLike | undefined;
   /** Current session skill indexing (tool gating + allowlist); used by skills_list / skill_view. */
@@ -360,10 +360,10 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      ...(this.deps.getCronService
+      ...(this.deps.getAutomationService
         ? [
-            createCronjobTool({
-              getCronService: this.deps.getCronService,
+            createAutomationTool({
+              getAutomationService: this.deps.getAutomationService,
             }),
           ]
         : []),

@@ -29,7 +29,7 @@ type PresetToolPolicyEditorLabels = {
 };
 
 const READ_ONLY_WORKSPACE_DENY = ['write_file', 'edit_file', 'shell', 'execute_code'] as const;
-const HIGH_RISK_DENY = ['shell', 'execute_code', 'cronjob', 'extensions', 'bundle-mcp', 'skill_manage'] as const;
+const HIGH_RISK_DENY = ['shell', 'execute_code', 'automation', 'extensions', 'bundle-mcp', 'skill_manage'] as const;
 const NO_OUTBOUND_DENY = ['send_message', 'send_media', 'text_to_speech', 'create_share'] as const;
 const RESEARCH_ALLOW = ['read_file', 'list_dir', 'grep', 'find', 'web_search', 'web_fetch', 'web_extract'] as const;
 const RESEARCH_DENY = [...READ_ONLY_WORKSPACE_DENY, ...NO_OUTBOUND_DENY] as const;

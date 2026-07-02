@@ -100,7 +100,7 @@
     "nextRun": "下次执行",
     "status": "状态",
     "runHistoryTitle": "运行记录",
-    "runHistoryHint": "已完成的执行保存在 xopc.db（cron_runs 表）。点击刷新更新列表。",
+    "runHistoryHint": "已完成的执行保存在 xopc.db（automation_runs 表）。点击刷新更新列表。",
     "detailRunHistory": "最近执行",
     "detailWhatItDoes": "任务内容",
     "detailRunSettings": "运行配置",

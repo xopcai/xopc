@@ -1,6 +1,6 @@
 /**
  * `PATCH /api/config` — tail sections that are each <50 lines:
- *   update / cron / goals / session / gateway.{skillsMarketplaceProvider,
+ *   update / goals / session / gateway.{skillsMarketplaceProvider,
  *   skillsStoreBaseUrl} / providers / providersConfig / stt / tts / tools /
  *   tunnel / bindings / mcp.
  *
@@ -20,7 +20,6 @@ import { applyToolsWebPatch } from '../../../config-tools-web.js';
 import { mergeTunnelConfigPatch } from '../../../../tunnel/tunnel-config.js';
 import { canonicalizeConfiguredMcpServer } from '../../../../config/mcp-config-normalize.js';
 import {
-  mergeCronConfigPatch,
   mergeGatewaySkillsMarketplacePatch,
   mergeGoalsConfigPatch,
   mergeSessionConfigPatch,
@@ -36,16 +35,6 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
     const updateResult = mergeUpdateConfigPatch(config, body.update as Record<string, unknown>);
     if (updateResult.ok === false) {
       return patchError(updateResult.message);
-    }
-  }
-
-  if (body.cron !== undefined) {
-    if (typeof body.cron !== 'object' || body.cron === null || Array.isArray(body.cron)) {
-      return patchError('cron must be an object');
-    }
-    const cronResult = mergeCronConfigPatch(config, body.cron as Record<string, unknown>);
-    if (cronResult.ok === false) {
-      return patchError(cronResult.message);
     }
   }
 

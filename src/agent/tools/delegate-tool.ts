@@ -32,7 +32,7 @@ export const DELEGATE_BLOCKED_TOOLS = new Set([
   'session_search',
   'memory_search',
   'memory_get',
-  'cronjob',
+  'automation',
   'skills_list',
   'skill_view',
   'skill_manage',

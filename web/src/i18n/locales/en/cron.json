@@ -100,7 +100,7 @@
     "nextRun": "Next Run",
     "status": "Status",
     "runHistoryTitle": "Run History",
-    "runHistoryHint": "Completed runs are stored in xopc.db (cron_runs). Use Refresh to update.",
+    "runHistoryHint": "Completed runs are stored in xopc.db (automation_runs). Use Refresh to update.",
     "detailRunHistory": "Recent runs",
     "detailWhatItDoes": "What this task does",
     "detailRunSettings": "Run settings",

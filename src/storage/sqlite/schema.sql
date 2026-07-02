@@ -1,4 +1,4 @@
--- xopc SQLite schema: sessions, transcripts, cron, notes, memory, FTS
+-- xopc SQLite schema: sessions, transcripts, automations, notes, memory, FTS
 
 CREATE TABLE IF NOT EXISTS sessions (
   session_key              TEXT PRIMARY KEY,
@@ -118,55 +118,50 @@ CREATE VIRTUAL TABLE IF NOT EXISTS transcript_fts USING fts5(
   tokenize='unicode61'
 );
 
-CREATE TABLE IF NOT EXISTS cron_runs (
-  run_id            TEXT PRIMARY KEY,
-  job_id            TEXT NOT NULL,
-  status            TEXT NOT NULL,
-  started_at        INTEGER NOT NULL,
-  ended_at          INTEGER,
-  duration_ms       INTEGER,
-  error             TEXT,
-  output            TEXT,
-  retry_count       INTEGER NOT NULL DEFAULT 0,
-  summary           TEXT,
-  session_id        TEXT,
-  session_key       TEXT,
-  session_type      TEXT,
-  model             TEXT,
-  provider          TEXT,
-  usage_json        TEXT,
-  workflow_run_id   TEXT
+CREATE TABLE IF NOT EXISTS automations (
+  automation_id     TEXT PRIMARY KEY,
+  name              TEXT NOT NULL,
+  description       TEXT,
+  enabled           INTEGER NOT NULL,
+  trigger_json      TEXT NOT NULL,
+  action_json       TEXT NOT NULL,
+  after_run_json    TEXT,
+  reliability_json  TEXT,
+  state_json        TEXT NOT NULL DEFAULT '{}',
+  created_at_ms     INTEGER NOT NULL,
+  updated_at_ms     INTEGER NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_cron_runs_job_started
-  ON cron_runs(job_id, started_at DESC);
-CREATE INDEX IF NOT EXISTS idx_cron_runs_started
-  ON cron_runs(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_automations_enabled
+  ON automations(enabled, updated_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_automations_updated
+  ON automations(updated_at_ms DESC);
 
-CREATE TABLE IF NOT EXISTS cron_jobs (
-  job_id                  TEXT PRIMARY KEY,
-  name                    TEXT NOT NULL,
-  description             TEXT,
-  enabled                 INTEGER NOT NULL,
-  delete_after_run         INTEGER,
-  created_at_ms            INTEGER NOT NULL,
-  updated_at_ms            INTEGER NOT NULL,
-  schedule_json            TEXT NOT NULL,
-  session_target           TEXT NOT NULL,
-  wake_mode                TEXT NOT NULL,
-  agent_id                 TEXT,
-  session_key              TEXT,
-  working_directory        TEXT,
-  payload_json             TEXT NOT NULL,
-  delivery_json            TEXT,
-  failure_alert_json       TEXT,
-  state_json               TEXT NOT NULL DEFAULT '{}'
+CREATE TABLE IF NOT EXISTS automation_runs (
+  run_id                 TEXT PRIMARY KEY,
+  automation_id          TEXT NOT NULL,
+  automation_name        TEXT NOT NULL,
+  status                 TEXT NOT NULL,
+  trigger_snapshot_json  TEXT NOT NULL,
+  action_snapshot_json   TEXT NOT NULL,
+  manual                 INTEGER NOT NULL,
+  created_at_ms          INTEGER NOT NULL,
+  started_at_ms          INTEGER,
+  ended_at_ms            INTEGER,
+  duration_ms            INTEGER,
+  summary                TEXT,
+  error                  TEXT,
+  session_key            TEXT,
+  workflow_run_id        TEXT,
+  model                  TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_cron_jobs_enabled_next
-  ON cron_jobs(enabled, job_id);
-CREATE INDEX IF NOT EXISTS idx_cron_jobs_updated
-  ON cron_jobs(updated_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_automation_created
+  ON automation_runs(automation_id, created_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_created
+  ON automation_runs(created_at_ms DESC);
+CREATE INDEX IF NOT EXISTS idx_automation_runs_status_created
+  ON automation_runs(status, created_at_ms DESC);
 
 CREATE TABLE IF NOT EXISTS workflow_runs (
   run_id              TEXT PRIMARY KEY,
