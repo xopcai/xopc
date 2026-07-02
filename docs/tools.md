@@ -1,6 +1,6 @@
 # Built-in tools
 
-This page lists tools the xopc agent can call: read and edit files, run commands, search the web, talk to channels, manage skills, and more. Which tools are registered depends on your **config**, optional **features** (memory, browser, TTS), whether a **gateway** is running (e.g. `clarify`, `cronjob`), and **extensions** (extra tools from installed extensions).
+This page lists tools the xopc agent can call: read and edit files, run commands, search the web, talk to channels, manage skills, and more. Which tools are registered depends on your **config**, optional **features** (memory, browser, TTS), whether a **gateway** is running (e.g. `clarify`, `automation`), and **extensions** (extra tools from installed extensions).
 
 ---
 
@@ -22,7 +22,7 @@ This page lists tools the xopc agent can call: read and edit files, run commands
 | Browser (optional) | `browser_use` when browser automation is enabled |
 | Delegation & code (optional) | `delegate_task`, `execute_code` |
 | Multi-agent orchestration | `workflow` — fan-out subagents via a deterministic JS script. See [Dynamic Workflows](workflows.md). |
-| Scheduling (optional) | `cronjob` — when the runtime exposes cron (typical gateway setup) |
+| Automations (optional) | `automation` — when the runtime exposes the automation service (typical gateway setup) |
 | MCP (optional) | `serverId__toolName` — from configured MCP servers; disable all with `bundle-mcp` in `tools.disable` |
 
 Extensions may add further tools.
@@ -354,7 +354,7 @@ Uses a per-session tab; `browser.headless` controls whether local browser runs s
 
 ### `delegate_task`
 
-Runs a **sub-agent** with a fresh context (no parent transcript) and returns a **text summary** only. Parameters include `goal`, optional `context`, optional `toolset` (subset of allowed tools), optional `maxIterations` (default 30). Sub-agents cannot use nested `delegate_task`, `clarify`, outbound messaging, memory tools, `todo`, `cronjob`, or skill management.
+Runs a **sub-agent** with a fresh context (no parent transcript) and returns a **text summary** only. Parameters include `goal`, optional `context`, optional `toolset` (subset of allowed tools), optional `maxIterations` (default 30). Sub-agents cannot use nested `delegate_task`, `clarify`, outbound messaging, memory tools, `todo`, `automation`, or skill management.
 
 Availability is controlled by the selected agent manifest and capability presets.
 
@@ -368,11 +368,11 @@ Availability is controlled by the selected agent manifest and capability presets
 
 ## Scheduling (gateway)
 
-### `cronjob`
+### `automation`
 
-Lists and manages scheduled agent runs: `list`, `create`, `update`, `remove`, `enable`, `disable`, `history`. Create/update use `scheduleKind` with `cronExpr`, `at`, or `everyMs`, plus exactly one payload (`message`, `workflowDefinitionId`, or `goalId`). Optional fields include `tz` for cron schedules, `sessionTarget`, `agentId`, `workingDirectory`, `name`, and `jobId` as applicable.
+Lists and manages product automations: `list`, `create`, `update`, `delete`, `run`, `pause`, `resume`, `history`. Create/update use the same structured payloads as `/api/automations`: one trigger (`manual`, `schedule`, or `webhook`) and one action (`agent` instruction or `workflow` run). Scheduled triggers may use `once`, `interval`, or cron-expression schedules.
 
-Only registered when the runtime provides `CronService` (normal for gateway deployments). Includes basic prompt checks on create/update.
+Only registered when the runtime provides the automation service (normal for gateway deployments).
 
 ---
 
@@ -398,7 +398,7 @@ Long-running tools emit progress stages so UIs and channels (e.g. Telegram) can 
 | `read_file` | reading | 📖 |
 | `write_file` / `edit_file` | writing | ✍️ |
 | `grep` / `find` / `web_*` | searching | 🔍 |
-| `shell` / browser / `delegate_task` / `execute_code` / `cronjob` | executing | ⚙️ |
+| `shell` / browser / `delegate_task` / `execute_code` / `automation` | executing | ⚙️ |
 
 Configure verbosity under `progress` in config (e.g. `level`, `streamToolProgress`, `heartbeatEnabled`). Details: [Progress feedback](progress.md).
 

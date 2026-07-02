@@ -34,7 +34,7 @@ Recommended top-level groups:
 | Start | Get a first successful chat | First 5 Minutes, Getting Started, install paths |
 | Use xopc | Work from the main surfaces | TUI, Web console, Desktop, Mobile, Channels, Sessions, Goals |
 | Operate xopc | Run and maintain the system | Gateway, remote access, providers/models, logs, doctor, updates |
-| Extend xopc | Add capabilities | Agents, skills, extensions, MCP, tools, cron, workflows |
+| Extend xopc | Add capabilities | Agents, skills, extensions, MCP, tools, automations, workflows |
 | Reference | Exact lookup | CLI, configuration, API, disk layout, templates |
 
 ## First-Pass Fixes Completed

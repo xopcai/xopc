@@ -668,16 +668,11 @@ Voice 设置 UI 暴露常用字段（`command`、`cwd`、`outputFormat`、`timeo
 
 ---
 
-### cron
+### automations
 
-定时任务配置。
+自动化存储在 SQLite 中，并通过网关控制台/API 管理，不通过 `xopc.json` 配置。打开 `#/automations`，或使用 `/api/automations` 与 `/api/automation-runs`。
 
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `enabled` | boolean | `true` | 启用 cron |
-| `jobs` | array | `[]` | 定时任务列表 |
-
-查看 [Cron 文档](/zh/cron) 了解任务配置。
+触发器、动作、可靠性与运行历史见 [自动化](/zh/automations)。
 
 ---
 

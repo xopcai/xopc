@@ -237,7 +237,7 @@ Uses file-based locking instead of PID files:
 
 `GatewayServer` (foreground `xopc gateway`) defers **outbound connect** for some channel plugins until **after** the Node HTTP server reports listening:
 
-1. **Phase 1** — All channels run **`init()`**; channels that do **not** defer run **`start()`** immediately. Session manager, cron, heartbeat, and the agent service start as today. The **outbound drain loop** starts only after phase 2 when defer is active (so Telegram et al. are not raced by queued sends).
+1. **Phase 1** — All channels run **`init()`**; channels that do **not** defer run **`start()`** immediately. Session manager, automations, heartbeat, and the agent service start before HTTP listen. The **outbound drain loop** starts only after phase 2 when defer is active (so Telegram et al. are not raced by queued sends).
 2. **Phase 2** — In the HTTP **`listen`** callback, deferred channels run **`start()`**, then **pending outbound replay**, then the outbound processor.
 
 Bundled messaging channels (**Telegram**, **Weixin**, **Feishu**) declare deferral in plugin metadata. Override behavior with **`gateway.channelConnectDeferMode`** / **`channelConnectDeferIds`** / **`channelConnectDeferSkipIds`** — see [Configuration — Channel connect defer](configuration.md#channel-connect-defer).
@@ -339,22 +339,21 @@ Content-Type: application/json
 }
 ```
 
-### Trigger Cron Job
+### Run an Automation
 
 ```http
-POST /api/cron/trigger
+POST /api/automations/:id/run
 Content-Type: application/json
-
-{
-  "job_id": "abc123"
-}
 ```
 
 **Response:**
 ```json
 {
-  "status": "ok",
-  "message": "Task triggered"
+  "run": {
+    "id": "run_...",
+    "automationId": "automation_...",
+    "status": "queued"
+  }
 }
 ```
 
@@ -395,13 +394,20 @@ Creates a webchat-scoped session (or returns an existing empty one). JSON body (
 | GET | `/api/sessions` | List sessions |
 | GET | `/api/sessions/:key` | Get session |
 | DELETE | `/api/sessions/:key` | Delete session |
-| GET | `/api/cron` | List scheduled tasks |
-| POST | `/api/cron/trigger` | Trigger task |
+| GET | `/api/automations` | List automations |
+| POST | `/api/automations` | Create automation |
+| GET | `/api/automations/metrics` | Read automation metrics |
+| GET | `/api/automations/:id` | Read automation |
+| PATCH | `/api/automations/:id` | Update automation |
+| DELETE | `/api/automations/:id` | Delete automation |
+| POST | `/api/automations/:id/run` | Run automation now |
+| POST | `/api/automations/:id/pause` | Pause automation |
+| POST | `/api/automations/:id/resume` | Resume automation |
+| GET | `/api/automation-runs` | List automation runs |
+| GET | `/api/automation-runs/:runId` | Read automation run |
+| POST | `/api/automation-runs/:runId/cancel` | Cancel automation run |
 | GET | `/health` | Health check |
 | GET | `/api/logs` | Query logs (auth required) |
-| POST | `/api/cron/create` | Create scheduled task |
-| DELETE | `/api/cron/:id` | Delete scheduled task |
-| POST | `/api/cron/:id/toggle` | Enable/disable task |
 | GET | `/api/providers` | List LLM providers |
 | GET | `/api/models` | List available models |
 | GET | `/api/models-json` | Get models.json config |
@@ -703,7 +709,7 @@ open http://localhost:18790/
 - Session management
 - Configuration dialog
 - Log viewer
-- Cron job management
+- Automation management
 - Models configuration
 
 ---

@@ -20,7 +20,7 @@ hero:
 features:
   - title: 🔁 Goal loops, not one-shot chats
     details: "XOPC keeps context, next actions, feedback, and recalibration in motion so long-term goals do not disappear between conversations."
-    link: /cron
+    link: /automations
   - title: 🏠 Local-first by default
     details: "xopc runs on your hardware. Config, workspace files, credentials, and local state live under ~/.xopc/. No mandatory cloud."
     link: /configuration
@@ -33,9 +33,9 @@ features:
   - title: 🧩 Grows with you. Never outgrow it.
     details: "xopc skills install · xopc extensions install — extend capabilities with reusable modules, tools, channels, and UI panels without forking core."
     link: /extensions
-  - title: ⏰ Cron scheduling
-    details: Summaries, reminders, and reports on a timetable. Your agent runs while you focus elsewhere.
-    link: /cron
+  - title: ⏰ Automations
+    details: Scheduled, manual, and webhook-triggered agent or workflow runs. Your agent keeps moving while you focus elsewhere.
+    link: /automations
   - title: 🔀 Dynamic workflows
     details: Fan out subagents from deterministic scripts — repo audits, multi-perspective reviews, and parallel research with live progress.
     link: /workflows

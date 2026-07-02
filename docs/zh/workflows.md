@@ -15,7 +15,7 @@ xopc 工作流让一次提示可以扇出到多个隔离的子 Agent，再合并
 | **Chat（隐式）** | 例如「全面审计这个仓库」「从多个角度调研 X」。助手调用 `workflow` 工具，在**独立会话**中异步启动运行，并链接回当前 Chat。 |
 | **Chat（按名称）** | 「运行 audit_repo 工作流」；TUI 中输入 `/audit_repo`（会重写为对应提示）。 |
 | **网关 Workflows 页** | 打开 `#/workflows`，选择模板并启动；控制台会跳转到 `#/chat/<sessionKey>` 查看实时进度。 |
-| **Cron（workflowRun）** | 在 `#/settings/cron` 中选择任务类型 **工作流运行**，无需助手轮次。 |
+| **自动化** | 在 `#/automations` 中直接计划工作流运行，无需助手轮次。 |
 | **REST API** | `POST /api/workflows/runs`，传入 `definitionId`（返回 `{ runId, sessionKey }`）。 |
 
 高级用户也可通过 `workflow` 工具的 `script` 参数传入内联脚本。
@@ -184,16 +184,16 @@ const live = findings.filter(Boolean)
 if (!live.length) return { ok: false, reason: 'no findings' }
 ```
 
-## 与 Cron 结合
+## 与自动化结合
 
 两种模式：
 
-1. **直接工作流运行（推荐）** — 在 `#/settings/cron` 将任务类型设为 **工作流运行**，从目录下拉选择模板，填写结构化参数（若模板有定义）与可选目标。执行器直接调用 `WorkflowRunService`，无需助手轮次。默认 Cron 会**等待工作流进入终态**（最长约 35 分钟）后再标记成功或失败。可可选配置**投递频道**，在运行结束时接收摘要与结果预览。进度请在 `#/workflows` 或关联 Chat 会话查看。在 payload 上设置 `waitForCompletion: false` 可仅等待启动成功（即发即忘）。
-2. **定时消息 + 助手** — **消息**类定时任务可让 Agent 按名称运行工作流；助手会像普通 Chat 一样调用 `workflow` 工具。需要模型在轮次中自行决定如何调用工作流时使用此路径。
+1. **直接工作流运行（推荐）** — 在 `#/automations` 创建工作流自动化，选择模板，填写结构化输入或目标，并选择计划、手动或 webhook 触发。执行器直接调用 `WorkflowRunService`，无需助手轮次。
+2. **Agent 指令** — 自动化可以运行一条 Agent 指令，让 Agent 按名称调用工作流；助手会像普通 Chat 一样调用 `workflow` 工具。需要模型在轮次中自行决定如何调用工作流时使用此路径。
 
-**运维：** Cron 执行历史可跳转到 `#/workflows?run=<id>`；工作流看板可按触发来源筛选（如 **定时任务**）。工作流失败的 Cron 任务会按任务的 `maxRetries` 自动重试工作流，用尽后才标记 Cron 失败。
+**运维：** 自动化运行历史会记录关联的工作流运行 id。工作流看板可按触发来源筛选，包括自动化触发的运行。失败的工作流自动化遵循自动化的可靠性设置。
 
-详见 [定时任务](cron.md)。
+详见 [自动化](automations.md)。
 
 ## 与 todo 结合
 

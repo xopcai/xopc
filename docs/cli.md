@@ -45,7 +45,6 @@ pnpm run dev -- <command>
 | `doctor` | Check installation health and diagnose common issues |
 | `update` | Check for and install xopc updates (extension sync + gateway restart) — see [Updates](./update.md) |
 | `logs` | Manage and query logs |
-| `cron` | Manage scheduled tasks |
 | `goal` | Manage durable goals |
 | `config` | View/edit configuration |
 | `image` | Inspect image runtime behavior and provider availability |
@@ -81,7 +80,6 @@ Use `xopc <command> --help` for option-level details. This table tracks the comm
 | `doctor` | No subcommands |
 | `update` | No subcommands |
 | `logs` | `list`, `query`, `stats`, `tail`, `clean`, `rotate` |
-| `cron` | `list`, `add`, `remove`, `enable`, `disable`, `run`, `trigger` |
 | `goal` | `list`, `new`, `show`, `pause`, `resume`, `archive`, `runs`, `checklist`, `evidence` |
 | `config` | `get`, `set`, `unset`, `show`, `validate`, `token`, `path` |
 | `image` | `status`, `providers` |
@@ -125,13 +123,13 @@ xopc setup --workspace ~/my-workspace
 - Creates `~/.xopc/xopc.json` (if not exists)
 - Creates workspace directory with profile Markdown templates
 
-For full state directory layout (agents, cron, logs, profile seeds), use **`xopc init`** instead.
+For full state directory layout (agents, logs, profile seeds), use **`xopc init`** instead.
 
 ---
 
 ## init
 
-Initialize the full xopc state tree (config, `agents/<id>/`, cron, logs, profile Markdown seeds).
+Initialize the full xopc state tree (config, `agents/<id>/`, logs, profile Markdown seeds).
 
 ```bash
 xopc init
@@ -406,63 +404,11 @@ xopc gateway service start
 
 ---
 
-## cron
+## automations
 
-Manage scheduled tasks.
+Automations are managed through the Gateway console at `#/automations` or the REST API under `/api/automations` and `/api/automation-runs`. There is no top-level `xopc automations` command.
 
-### Add Task
-
-```bash
-xopc cron add --cron "0 9 * * *" --message "Good morning!"
-xopc cron add --at 2026-06-24T09:00:00+08:00 --message "One-time reminder"
-xopc cron add --every 30m --message "Interval check"
-```
-
-**Parameters:**
-
-| Parameter | Description |
-|-----------|-------------|
-| `--cron` | Cron expression |
-| `--tz` | Optional IANA timezone for `--cron` |
-| `--at` | One-time ISO timestamp or relative duration |
-| `--every` | Fixed interval duration |
-| `--message` | Message to send |
-| `--workflow` | Workflow definition id |
-| `--name` | Task name (optional) |
-
-**Examples:**
-
-```bash
-# Daily at 9am
-xopc cron add --cron "0 9 * * *" --message "Daily update"
-
-# Weekdays at 6pm
-xopc cron add --cron "0 18 * * 1-5" --message "Time to wrap up!"
-
-# Hourly reminder
-xopc cron add --every 1h --message "Hourly reminder" --name hourly
-```
-
-### Remove Task
-
-```bash
-xopc cron remove <task-id>
-```
-
-### Enable/Disable
-
-```bash
-xopc cron enable <task-id>
-xopc cron disable <task-id>
-```
-
-### Trigger Task
-
-```bash
-xopc cron run <task-id>
-# alias:
-xopc cron trigger <task-id>
-```
+See [Automations](./automations.md) for trigger, action, reliability, and API details.
 
 ---
 
@@ -797,10 +743,6 @@ case "$1" in
   start)
     xopc gateway --port 18790
     ;;
-  cron)
-    shift
-    xopc cron "$@"
-    ;;
   extensions)
     shift
     xopc extensions "$@"
@@ -814,7 +756,7 @@ case "$1" in
     xopc session "$@"
     ;;
   *)
-    echo "Usage: bot {chat|shell|start|cron|extension|skills|session}"
+    echo "Usage: bot {chat|shell|start|extension|skills|session}"
     ;;
 esac
 ```
@@ -823,7 +765,6 @@ esac
 ```bash
 bot chat Hello!
 bot start
-bot cron list
 bot extension list
 bot skills list
 bot session list

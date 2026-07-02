@@ -8,7 +8,7 @@
 
 | 区域 | 作用 |
 |------|------|
-| **状态目录** | 全局配置、凭据、日志、cron、全局 skills/extensions、托管工具链等。 |
+| **状态目录** | 全局配置、凭据、日志、全局 skills/extensions、托管工具链等。 |
 | **智能体主目录** `<stateDir>/agents/<agentId>/` | 按 `agentId` 隔离的运行时数据：托管记忆、**`profile/`** 下的 profile Markdown（`SOUL.md` 等）、入站/TTS 落盘。会话 transcript 存储在 **`xopc.db`**，而非 `sessions/`。 |
 | **智能体状态目录** `…/agents/<agentId>/agent/` | 进程状态：`agent.json`、各智能体凭据、IPC 收件箱、pid/socket、小型机器状态、扩展安装、出站崩溃恢复队列。 |
 | **Markdown 工作空间** | 用户项目树：工具 **cwd**、每日 `memory/*.md`、`media/generated`、项目 `.xopc/skills/`、任意用户文件。 |
@@ -22,11 +22,10 @@
 | 路径 | 用途 |
 |------|------|
 | `xopc.json` | 主配置（若未用 `XOPC_CONFIG` / `XOPC_CONFIG_PATH` 指向他处）。 |
-| `xopc.db` | 主 SQLite 数据库：会话、transcript、会话级配置、压缩检查点、FTS5 检索索引。 |
+| `xopc.db` | 主 SQLite 数据库：会话、transcript、自动化、会话级配置、压缩检查点、FTS5 检索索引。 |
 | `credentials/` | 全局密钥：`auth-profiles.json`、`oauth/<provider>.json`。 |
 | `extensions/` | 已安装扩展、`extensions-lock.json`。 |
 | `skills/` | 全局托管技能包（`<id>/SKILL.md`）。 |
-| `cron/` | `jobs.json`、`logs/`、`runs/`。 |
 | `logs/` | 应用日志（可用 `XOPC_LOG_DIR` 覆盖）。 |
 | `bin/`、`tools/` | CLI 包装与工具运行时。 |
 | `models.json` | 可选的自定义模型注册数据。 |

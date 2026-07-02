@@ -26,11 +26,10 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 | 路径 | 作用 |
 |------|------|
 | `xopc.json` | 主配置（服务商、网关、通道、`agents.list`、`agents.capabilityPresets` 等）。 |
-| `xopc.db` | SQLite 数据库：会话、transcript、会话级配置、压缩检查点、FTS5 检索。 |
+| `xopc.db` | SQLite 数据库：会话、transcript、自动化、会话级配置、压缩检查点、FTS5 检索。 |
 | `credentials/` | 全局凭据；`auth-profiles.json`；OAuth 令牌 `oauth/<provider>.json`。 |
 | `extensions/` | 已安装扩展与 `extensions-lock.json`。 |
 | `skills/` | 技能包目录（每个技能为含 `SKILL.md` 的文件夹）。 |
-| `cron/` | `jobs.json` 定时任务。运行历史存储在 **`xopc.db`**（`cron_runs` 表）。 |
 | `logs/` | 进程日志（`xopc-<date>.log`），可被 `XOPC_LOG_DIR` 覆盖。 |
 | `bin/` | 托管的 CLI 包装（如 `xopc`）。 |
 | `tools/` | 内置工具运行时（例如 `tools/node/current/` 下的 Node/npm）。 |

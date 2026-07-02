@@ -675,16 +675,11 @@ Periodic health check configuration.
 
 ---
 
-### cron
+### automations
 
-Scheduled tasks configuration.
+Automations are managed in SQLite and through the Gateway console/API, not through `xopc.json`. Open `#/automations` or use `/api/automations` and `/api/automation-runs`.
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable cron |
-| `jobs` | array | `[]` | List of cron jobs |
-
-See [Cron Documentation](/cron) for job configuration.
+See [Automations](/automations) for triggers, actions, reliability, and run history.
 
 ---
 

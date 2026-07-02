@@ -26,7 +26,7 @@
 | 快速开始 | 第一次成功对话 |
 | 使用 xopc | 从 TUI、网页、桌面、手机、IM 等入口工作 |
 | 运维 xopc | 运行、远程访问、模型、日志、更新、安全 |
-| 扩展 xopc | Agents、skills、extensions、MCP、tools、cron、workflows |
+| 扩展 xopc | Agents、skills、extensions、MCP、tools、automations、workflows |
 | 参考 | 精确查阅 CLI、配置、目录、模板、架构 |
 
 ## 已完成的第一批修复

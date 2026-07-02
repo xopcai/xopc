@@ -39,10 +39,10 @@ This page describes how xopc is structured and how the main pieces fit together.
         ┌────────────────────┼────────────────────┐
         │                    │                    │
         ▼                    ▼                    ▼
-  ┌──────────────┐     ┌──────────┐        ┌──────────┐
-  │ Channel bots │     │   Cron   │        │ Gateway  │
-  │ (bundled IM) │     │ Scheduler│        │   API    │
-  └──────────────┘     └──────────┘        └──────────┘
+  ┌──────────────┐     ┌─────────────┐     ┌──────────┐
+  │ Channel bots │     │ Automations │     │ Gateway  │
+  │ (bundled IM) │     │ Scheduler   │     │   API    │
+  └──────────────┘     └─────────────┘     └──────────┘
 ```
 
 ## Major components
@@ -51,7 +51,7 @@ This page describes how xopc is structured and how the main pieces fit together.
 |------|------|
 | **CLI** | Commands such as `agent`, `tui`, `gateway`, `config`, `onboard`, and extension management. |
 | **Agent** | Runs the model, tools, memory, skills, and session handling for each conversation. |
-| **Gateway** | HTTP server and static **Web console** (chat, settings, logs, channels, cron, …). |
+| **Gateway** | HTTP server and static **Web console** (chat, settings, logs, channels, automations, …). |
 | **Channels** | Bundled bots (Telegram, Weixin, Feishu/Lark) and gateway web chat share one outbound pipeline. |
 | **Extensions** | Optional add-ons (tools, hooks, channels, console panels) from your workspace, `~/.xopc/extensions/`, or the install bundle. |
 | **Config** | Single JSON file (default `~/.xopc/xopc.json`) plus environment variables for secrets. |
@@ -153,7 +153,7 @@ User Reply / Channel Response
 | CLI | Commander.js |
 | Validation | Zod (config) + TypeBox (tools) |
 | Logging | Pino |
-| Cron | cron-parser + internal scheduler |
+| Automations | cron-parser + internal scheduler |
 | HTTP Server | Hono |
 | Web UI | React + Vite + Tailwind v4 (gateway console) |
 | Testing | Vitest |

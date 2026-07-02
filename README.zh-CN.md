@@ -143,7 +143,7 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 - 🔑 **使用自己的密钥** — OpenAI、Anthropic、Google、DeepSeek、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端和本地模型可混用，一行配置即可切换模型。详见 **[模型](https://xopcai.github.io/xopc/zh/models)**。
 - 📱 **多个入口，同一个助手** — 终端、浏览器、桌面、[移动端 App](https://github.com/xopcai/xopc-app)、即时通讯共用同一套上下文，无需额外同步。
 - 🧩 **可按需扩展** — 通过 **`xopc skills install`** 和 **`xopc extensions install`** 扩展工具、频道与 UI；多 Agent 可按场景隔离。
-- ⏰ **支持主动任务** — 用 **Cron** 做定时摘要与提醒；用 **工作流**扇出多子 Agent 任务；用 **多 Agent** 管理不同工作区、工具与系统提示词。
+- ⏰ **支持主动任务** — 用 **自动化** 做定时摘要、提醒与工作流运行；用 **工作流**扇出多子 Agent 任务；用 **多 Agent** 管理不同工作区、工具与系统提示词。
 
 ---
 

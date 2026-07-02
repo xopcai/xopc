@@ -26,7 +26,6 @@
 | `tools` | Web search 和其它工具级设置 |
 | `messages` / `tts` | 出站消息和 TTS 设置 |
 | `mcp` | 出站 MCP server registry |
-| `cron` | 定时任务 |
 | `extensions` | 扩展开关和扩展专属配置 |
 
 ## Agent 配置

@@ -15,7 +15,7 @@ You almost never write the script yourself — describe the goal in plain langua
 | **Chat (implicit)** | Say *"do a thorough audit of this repo"* or *"research X from multiple angles"*. The assistant calls the `workflow` tool, which starts an async run in a **dedicated session** and links back to your current chat. |
 | **Chat (by name)** | *"run the audit_repo workflow"*, or in the TUI type `/audit_repo` (rewritten into the correct prompt). |
 | **Gateway Workflows page** | Open `#/workflows`, pick a template, start a run. The console navigates to `#/chat/<sessionKey>` for live progress. |
-| **Cron (`workflowRun`)** | Schedule a workflow directly from `#/settings/cron` (task kind **Workflow run**) — no assistant turn required. |
+| **Automation** | Schedule a workflow directly from `#/automations` — no assistant turn required. |
 | **REST API** | `POST /api/workflows/runs` with `definitionId` (returns `{ runId, sessionKey }`). |
 
 Power users can also pass an inline script via the `workflow` tool's `script` parameter.
@@ -184,16 +184,16 @@ const live = findings.filter(Boolean)
 if (!live.length) return { ok: false, reason: 'no findings' }
 ```
 
-## Combining with cron
+## Combining with automations
 
 Two patterns:
 
-1. **Direct workflow run (recommended)** — In `#/settings/cron`, set task kind to **Workflow run**, pick a template from the catalog dropdown, fill structured args (when the template defines them), and an optional goal. The executor calls `WorkflowRunService` directly (no assistant turn). By default cron **waits for a terminal workflow status** (up to ~35 minutes) before marking the job success or failure. Optionally pick a **delivery channel** to receive a summary and result preview when the run finishes. Track progress on `#/workflows` or the linked Chat session. Set `waitForCompletion: false` on the payload to fire-and-forget (success when the run starts).
-2. **Prompt + assistant** — A scheduled **message** task can ask the agent to run a workflow by name; the assistant then calls the `workflow` tool as in normal chat. Use this when a model should decide how to invoke the workflow mid-turn.
+1. **Direct workflow run (recommended)** — In `#/automations`, create a workflow automation, pick a template, fill structured input or a goal, and choose a schedule, manual trigger, or webhook trigger. The executor calls `WorkflowRunService` directly (no assistant turn).
+2. **Agent instruction** — An automation can run an agent instruction that asks the agent to run a workflow by name; the assistant then calls the `workflow` tool as in normal chat. Use this when a model should decide how to invoke the workflow mid-turn.
 
-**Operations:** Cron run history links to `#/workflows?run=<id>`. The workflows board can filter by trigger source (e.g. **Cron**). Failed workflow cron jobs retry the workflow up to the job’s `maxRetries` before marking the cron run failed.
+**Operations:** Automation run history records the linked workflow run id. The workflows board can filter by trigger source, including automation-triggered runs. Failed workflow automations follow the automation reliability settings.
 
-See [Scheduled Tasks (Cron)](cron.md) for schedules, delivery, and isolated-agent modes.
+See [Automations](automations.md) for triggers, actions, reliability, and run history.
 
 ## Combining with todo
 

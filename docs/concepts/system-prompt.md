@@ -28,7 +28,7 @@ The following project context files have been loaded:
 Runtime loads bootstrap files from **`agents/<agentId>/profile/`** in a fixed order (see [Workspace](workspace.md)):
 
 - Per-file and total character budgets are runtime constants unless exposed by a future manifest runtime field.
-- Subagent and cron sessions omit `MEMORY.md` (allowlist: AGENTS, TOOLS, SOUL, IDENTITY, USER)
+- Subagent and automation-run sessions omit `MEMORY.md` (allowlist: AGENTS, TOOLS, SOUL, IDENTITY, USER)
 - Profile context injection follows the selected manifest/runtime policy and session state.
 
 Implementation: `src/agent/bootstrap/`, assembled in `src/agent/prompt/system-prompt.ts`.
