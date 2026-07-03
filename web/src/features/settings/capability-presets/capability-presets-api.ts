@@ -3,6 +3,7 @@ import { apiUrl } from '@/lib/url';
 
 export type CapabilityPresetModelRole = {
   model: string;
+  fallbacks?: string[];
   description?: string;
 };
 
@@ -29,6 +30,7 @@ export type CapabilityPresetRow = {
 };
 
 export type CapabilityPresetsPayload = {
+  defaultPresetId: string;
   presets: CapabilityPresetRow[];
   agents: Array<{ id: string; name?: string; extends: string[] }>;
   builtinToolIds: string[];
@@ -40,6 +42,7 @@ export async function fetchCapabilityPresets(): Promise<CapabilityPresetsPayload
   );
   if (
     !Array.isArray(res.payload?.presets) ||
+    typeof res.payload.defaultPresetId !== 'string' ||
     !Array.isArray(res.payload.agents) ||
     !Array.isArray(res.payload.builtinToolIds)
   ) {
@@ -65,6 +68,7 @@ export async function createCapabilityPreset(body: {
   if (
     !presetId ||
     !presets ||
+    typeof presets.defaultPresetId !== 'string' ||
     !Array.isArray(presets.presets) ||
     !Array.isArray(presets.agents) ||
     !Array.isArray(presets.builtinToolIds)
@@ -94,6 +98,7 @@ export async function updateCapabilityPreset(
   );
   if (
     !Array.isArray(res.payload?.presets) ||
+    typeof res.payload.defaultPresetId !== 'string' ||
     !Array.isArray(res.payload.agents) ||
     !Array.isArray(res.payload.builtinToolIds)
   ) {
@@ -109,6 +114,7 @@ export async function deleteCapabilityPreset(id: string): Promise<CapabilityPres
   );
   if (
     !Array.isArray(res.payload?.presets) ||
+    typeof res.payload.defaultPresetId !== 'string' ||
     !Array.isArray(res.payload.agents) ||
     !Array.isArray(res.payload.builtinToolIds)
   ) {

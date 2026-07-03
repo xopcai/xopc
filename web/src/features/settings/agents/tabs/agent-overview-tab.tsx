@@ -48,6 +48,7 @@ export function AgentOverviewTab(props: {
   onSaveAgentEdits: () => void;
   onDelete: (purge: boolean) => void;
   capabilityPresets: CapabilityPresetRow[];
+  defaultPresetId?: string;
   onUpdateAgentExtends: (nextExtends: string[]) => void;
   onOpenCapabilityPreset: (presetId: string) => void;
   hideInlineSave?: boolean;
@@ -92,6 +93,7 @@ export function AgentOverviewTab(props: {
     toggleSoulPreviewMode,
     defaultModel = '',
     defaultWorkspace = '',
+    defaultPresetId = 'default',
     onTryInChat,
     onEditModelStrategy,
   } = props;
@@ -113,11 +115,18 @@ export function AgentOverviewTab(props: {
   );
 
   const inputClass = agentsSettingsInputClass();
+  const presetById = new Map(capabilityPresets.map((preset) => [preset.id, preset]));
+  const globalDefaultsPreset =
+    presetById.get(defaultPresetId) ?? {
+      id: defaultPresetId,
+      name: a.capabilityPresetsGlobalDefault,
+      description: a.capabilityPresetsGlobalDefaultHint,
+    };
+  const explicitPresetIds = selected?.extends.filter((id) => id !== defaultPresetId) ?? [];
   const availablePresetIds = capabilityPresets
     .map((preset) => preset.id)
-    .filter((id) => !selected?.extends.includes(id));
+    .filter((id) => id !== defaultPresetId && !explicitPresetIds.includes(id));
   const selectedPresetId = availablePresetIds[0] ?? '';
-  const presetById = new Map(capabilityPresets.map((preset) => [preset.id, preset]));
   const focusWorkspaceField = useCallback(() => {
     const field = workspaceFieldRef.current;
     field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -161,8 +170,32 @@ export function AgentOverviewTab(props: {
           }
         />
         <div className="flex flex-col gap-2">
-          {selected.extends.length > 0 ? (
-            selected.extends.map((presetId, index) => {
+          {globalDefaultsPreset ? (
+            <div className="flex flex-col gap-2 rounded-lg border border-accent/25 bg-accent-soft/20 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+              <button
+                type="button"
+                className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                onClick={() => onOpenCapabilityPreset(globalDefaultsPreset.id)}
+              >
+                <div className="flex min-w-0 items-center gap-2">
+                  <div className="truncate text-sm font-medium text-fg">
+                    {globalDefaultsPreset.name || a.capabilityPresetsGlobalDefault}
+                  </div>
+                  <span className="shrink-0 rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+                    {a.capabilityPresetsGlobalDefault}
+                  </span>
+                </div>
+                <div className="mt-0.5 truncate font-mono text-[11px] text-fg-muted">
+                  {globalDefaultsPreset.id}
+                </div>
+                <div className="mt-1 line-clamp-2 text-xs text-fg-muted">
+                  {globalDefaultsPreset.description || a.capabilityPresetsGlobalDefaultHint}
+                </div>
+              </button>
+            </div>
+          ) : null}
+          {explicitPresetIds.length > 0 ? (
+            explicitPresetIds.map((presetId, index) => {
               const preset = presetById.get(presetId);
               return (
                 <div
@@ -188,7 +221,7 @@ export function AgentOverviewTab(props: {
                       disabled={busy || index === 0}
                       aria-label={a.capabilityPresetMoveUp}
                       onClick={() => {
-                        const next = [...selected.extends];
+                        const next = [...explicitPresetIds];
                         [next[index - 1], next[index]] = [next[index], next[index - 1]];
                         onUpdateAgentExtends(next);
                       }}
@@ -199,10 +232,10 @@ export function AgentOverviewTab(props: {
                       type="button"
                       variant="secondary"
                       className="size-8 rounded-lg p-0"
-                      disabled={busy || index === selected.extends.length - 1}
+                      disabled={busy || index === explicitPresetIds.length - 1}
                       aria-label={a.capabilityPresetMoveDown}
                       onClick={() => {
-                        const next = [...selected.extends];
+                        const next = [...explicitPresetIds];
                         [next[index], next[index + 1]] = [next[index + 1], next[index]];
                         onUpdateAgentExtends(next);
                       }}
@@ -215,7 +248,7 @@ export function AgentOverviewTab(props: {
                       className="size-8 rounded-lg p-0"
                       disabled={busy}
                       aria-label={a.capabilityPresetRemove}
-                      onClick={() => onUpdateAgentExtends(selected.extends.filter((id) => id !== presetId))}
+                      onClick={() => onUpdateAgentExtends(explicitPresetIds.filter((id) => id !== presetId))}
                     >
                       <Trash2 className="size-3.5" aria-hidden />
                     </Button>
@@ -223,6 +256,10 @@ export function AgentOverviewTab(props: {
                 </div>
               );
             })
+          ) : globalDefaultsPreset ? (
+            <div className="rounded-lg border border-dashed border-edge-subtle px-3 py-3 text-sm text-fg-muted">
+              {a.capabilityPresetsEmptyAdditional}
+            </div>
           ) : (
             <div className="rounded-lg border border-dashed border-edge-subtle px-3 py-3 text-sm text-fg-muted">
               {a.capabilityPresetsEmpty}
@@ -252,7 +289,7 @@ export function AgentOverviewTab(props: {
               onClick={(e) => {
                 const select = e.currentTarget.parentElement?.querySelector('select');
                 const presetId = select?.value || selectedPresetId;
-                if (presetId) onUpdateAgentExtends([...selected.extends, presetId]);
+                if (presetId) onUpdateAgentExtends([...explicitPresetIds, presetId]);
               }}
             >
               <Plus className="size-4" aria-hidden />

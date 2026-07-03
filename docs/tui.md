@@ -201,7 +201,7 @@ Lines starting with **`/`** are treated as **slash commands** (not sent to the m
 
 ---
 
-## TUI extensions (Phase 4)
+## TUI extensions
 
 Extensions can contribute terminal UI when **`xopc tui`** starts. Register deferred callbacks from `register()`:
 

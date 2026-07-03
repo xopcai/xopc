@@ -19,7 +19,11 @@ export type TextAssistScenario =
   | 'generic.text'
   | 'cron.message'
   | 'cron.workflowGoal'
-  | 'workflow.arg';
+  | 'workflow.arg'
+  | 'workflow.goal'
+  | 'automation.instruction'
+  | 'automation.workflowGoal'
+  | 'automation.workflowInput';
 
 export interface TextAssistRequest {
   scenario?: TextAssistScenario | string;
@@ -125,6 +129,66 @@ const SCENARIOS: Record<TextAssistScenario, TextAssistScenarioDefinition> = {
       'Preserve names, IDs, links, file paths, variables, placeholders, and factual constraints.',
       'Do not alter other workflow arguments.',
       'If the input is empty, draft a concise value only when the context gives enough signal.',
+    ],
+  },
+  'workflow.goal': {
+    id: 'workflow.goal',
+    system:
+      'You rewrite goals for workflow runs started manually by a user. The workflow already defines the procedure; the goal defines the desired outcome for this run.',
+    userGuidance: [
+      'Make the goal concrete, bounded, and easy to verify.',
+      'Include success criteria and important constraints when implied by the input or workflow context.',
+      'Avoid step-by-step instructions unless the user already provided them as constraints.',
+    ],
+    outputRules: [
+      'Preserve workflow names, IDs, argument values, links, file paths, variables, and factual constraints.',
+      'Do not invent workflow capabilities, external facts, or hidden state.',
+      'If the input is empty, draft a goal from the workflow description and current inputs.',
+    ],
+  },
+  'automation.instruction': {
+    id: 'automation.instruction',
+    system:
+      'You rewrite instructions for an automation that will run an AI agent when its trigger fires.',
+    userGuidance: [
+      'Make the instruction executable at run time without relying on unstated context.',
+      'Clarify expected output, constraints, and any recurring schedule implications.',
+      'Keep it concise and operational.',
+    ],
+    outputRules: [
+      'Preserve names, IDs, links, file paths, variables, placeholders, and factual constraints.',
+      'Do not invent tools, credentials, channels, or external facts.',
+      'If the input is empty, draft an instruction only from the provided automation context.',
+    ],
+  },
+  'automation.workflowGoal': {
+    id: 'automation.workflowGoal',
+    system:
+      'You rewrite goals for workflow runs triggered by automations. The workflow defines the procedure; the goal defines the desired outcome.',
+    userGuidance: [
+      'Make the goal concrete, bounded, and easy to verify after the run.',
+      'Include success criteria and important constraints when implied by the input or context.',
+      'Respect the automation trigger; do not restate it unless it changes what the workflow should produce.',
+    ],
+    outputRules: [
+      'Preserve workflow names, IDs, argument values, links, file paths, variables, and factual constraints.',
+      'Do not invent workflow capabilities, business goals, external facts, or hidden state.',
+      'If the input is empty, draft a goal from the workflow description and automation context.',
+    ],
+  },
+  'automation.workflowInput': {
+    id: 'automation.workflowInput',
+    system:
+      'You improve one structured workflow input field for an automation-triggered workflow run.',
+    userGuidance: [
+      'Improve only this field value according to its schema, label, and workflow context.',
+      'Make the value clear, structured, and easy for the workflow to consume.',
+      'Avoid turning a field value into an overall goal unless the schema says the field is a goal.',
+    ],
+    outputRules: [
+      'Preserve names, IDs, links, file paths, variables, placeholders, and factual constraints.',
+      'Return only the field value, not JSON, commentary, or surrounding labels.',
+      'Do not alter other workflow inputs.',
     ],
   },
 };

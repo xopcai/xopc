@@ -46,7 +46,6 @@ export class SelfVerifyMiddleware {
   private config: SelfVerifyConfig;
   private turnCount = 0;
   private verificationRequested = false;
-  private lastVerificationPrompt = '';
 
   constructor(config: Partial<SelfVerifyConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -111,7 +110,6 @@ export class SelfVerifyMiddleware {
     this.fileEdits.clear();
     this.turnCount = 0;
     this.verificationRequested = false;
-    this.lastVerificationPrompt = '';
     log.debug('Self-verify middleware reset');
   }
 

@@ -1,1 +1,0 @@
-export { ModelsSettingsPanel } from './models';

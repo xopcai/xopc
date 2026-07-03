@@ -21,26 +21,6 @@ import {
 } from '../../agent/transcript/thinking-types.js';
 import type { SessionConfigStore } from '../../session/index.js';
 
-async function _stripSessionAgentFields(
-  store: SessionConfigStore | undefined,
-  sessionKey: string,
-  fields: Array<'thinkingLevel' | 'reasoningLevel' | 'verboseLevel'>,
-): Promise<void> {
-  if (!store) return;
-  const existing = await store.get(sessionKey);
-  if (!existing) return;
-  const next = { ...existing };
-  for (const f of fields) {
-    delete next[f];
-  }
-  const restKeys = Object.keys(next).filter((k) => k !== 'updatedAt');
-  if (restKeys.length === 0) {
-    await store.delete(sessionKey);
-  } else {
-    await store.set(sessionKey, next);
-  }
-}
-
 async function setSessionAgentField<K extends 'thinkingLevel' | 'reasoningLevel' | 'verboseLevel'>(
   store: SessionConfigStore | undefined,
   sessionKey: string,

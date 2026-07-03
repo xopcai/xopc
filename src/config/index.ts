@@ -9,7 +9,6 @@ export * from './profile.js';
 export * from './reload.js';
 export * from './diff.js';
 export * from './rules.js';
-export * from './defaults.js';
 export * from './integration.js';
 export * from './models-json.js';
 export * from './resolve-config-value.js';

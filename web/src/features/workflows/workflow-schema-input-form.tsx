@@ -1,15 +1,24 @@
 import { useMemo, useState } from 'react';
 
+import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
+import type { TextAssistScenario } from '@/features/ai-assist/ai-text-assist-api';
 import { cn } from '@/lib/cn';
 
 import type { JsonSchema } from './workflow-api';
 
-type SchemaInputValue = Record<string, unknown>;
+export type SchemaInputValue = Record<string, unknown>;
 
-interface SchemaField {
+export interface SchemaField {
   key: string;
   schema: JsonSchema;
   required: boolean;
+}
+
+export interface WorkflowSchemaAiAssistConfig {
+  locale: string;
+  disabled?: boolean;
+  context?: Record<string, unknown>;
+  scenario?: TextAssistScenario;
 }
 
 const inputClass =
@@ -24,6 +33,8 @@ export function WorkflowSchemaInputForm({
   value,
   onChange,
   labels,
+  aiAssist,
+  onValidChange,
 }: {
   schema: JsonSchema;
   value: SchemaInputValue;
@@ -35,6 +46,8 @@ export function WorkflowSchemaInputForm({
     booleanTrue: string;
     booleanFalse: string;
   };
+  aiAssist?: WorkflowSchemaAiAssistConfig;
+  onValidChange?: (valid: boolean, nextValue?: SchemaInputValue) => void;
 }) {
   const fields = useMemo(() => schemaToFields(schema), [schema]);
   const [rawOpen, setRawOpen] = useState(false);
@@ -56,12 +69,15 @@ export function WorkflowSchemaInputForm({
       const parsed = text.trim() ? JSON.parse(text) : {};
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         setRawError(labels.rawJsonInvalid);
+        onValidChange?.(false);
         return;
       }
       setRawError(null);
       onChange(parsed as SchemaInputValue);
+      onValidChange?.(true, parsed as SchemaInputValue);
     } catch {
       setRawError(labels.rawJsonInvalid);
+      onValidChange?.(false);
     }
   };
 
@@ -78,6 +94,7 @@ export function WorkflowSchemaInputForm({
             if (next) {
               setRawText(JSON.stringify(value, null, 2));
               setRawError(null);
+              onValidChange?.(true);
             }
           }}
         >
@@ -103,6 +120,8 @@ export function WorkflowSchemaInputForm({
               field={field}
               value={value[field.key]}
               labels={labels}
+              aiAssist={aiAssist}
+              allValues={value}
               onChange={(next) => setField(field.key, next)}
             />
           ))}
@@ -116,22 +135,47 @@ function SchemaFieldInput({
   field,
   value,
   labels,
+  aiAssist,
+  allValues,
   onChange,
 }: {
   field: SchemaField;
   value: unknown;
   labels: { booleanTrue: string; booleanFalse: string };
+  aiAssist?: WorkflowSchemaAiAssistConfig;
+  allValues: SchemaInputValue;
   onChange: (next: unknown) => void;
 }) {
   const title = field.schema.title || field.key;
   const description = typeof field.schema.description === 'string' ? field.schema.description : undefined;
   const type = Array.isArray(field.schema.type) ? field.schema.type[0] : field.schema.type;
   const enumValues = Array.isArray(field.schema.enum) ? field.schema.enum : [];
+  const showAiAssist = Boolean(aiAssist) && !enumValues.length && (type === 'string' || !type);
 
   return (
-    <label className="block">
-      <span className="text-xs font-medium text-fg">
-        {String(title)}{field.required ? ' *' : ''}
+    <div className="block">
+      <span className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium text-fg">
+          {String(title)}{field.required ? ' *' : ''}
+        </span>
+        {showAiAssist && aiAssist ? (
+          <AiTextAssistButton
+            value={typeof value === 'string' ? value : value == null ? '' : String(value)}
+            onApply={onChange}
+            fieldId={`workflow.schema.${field.key}`}
+            fieldLabel={String(title)}
+            scenario={aiAssist.scenario ?? 'workflow.arg'}
+            locale={aiAssist.locale}
+            context={{
+              ...aiAssist.context,
+              fieldKey: field.key,
+              fieldSchema: field.schema,
+              inputValues: allValues,
+            }}
+            disabled={aiAssist.disabled}
+            showLabel={false}
+          />
+        ) : null}
       </span>
       {description ? <p className="mt-0.5 text-xs leading-5 text-fg-subtle">{description}</p> : null}
       {enumValues.length > 0 ? (
@@ -165,11 +209,11 @@ function SchemaFieldInput({
           className={cn(inputClass, description && description.length > 80 ? 'min-h-20 resize-y' : 'min-h-10 resize-y')}
         />
       )}
-    </label>
+    </div>
   );
 }
 
-function schemaToFields(schema: JsonSchema): SchemaField[] {
+export function schemaToFields(schema: JsonSchema): SchemaField[] {
   const properties = schema.properties ?? {};
   const required = new Set(schema.required ?? []);
   return Object.entries(properties).map(([key, fieldSchema]) => ({
@@ -177,4 +221,14 @@ function schemaToFields(schema: JsonSchema): SchemaField[] {
     schema: fieldSchema,
     required: required.has(key),
   }));
+}
+
+export function validateWorkflowSchemaInput(schema: JsonSchema | undefined, value: SchemaInputValue): boolean {
+  if (!supportsWorkflowSchemaForm(schema) || !schema) return true;
+  return schemaToFields(schema).every((field) => {
+    if (!field.required) return true;
+    const raw = value[field.key];
+    if (raw === undefined || raw === null) return false;
+    return typeof raw === 'string' ? raw.trim().length > 0 : true;
+  });
 }

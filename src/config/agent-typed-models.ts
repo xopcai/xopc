@@ -9,7 +9,7 @@ import { resolveEffectiveAgentManifestForAgent } from './agent-profile.js';
 export type { AgentTypedModel };
 
 function rolesToEntries(
-  roles: Record<string, { model: string; description?: string }> | undefined,
+  roles: Record<string, { model: string; fallbacks?: string[]; description?: string }> | undefined,
 ): AgentTypedModel[] {
   return Object.entries(roles ?? {}).map(([id, role]) => ({
     id,

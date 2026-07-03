@@ -1,4 +1,5 @@
 import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
+import type { TextAssistScenario } from '@/features/ai-assist/ai-text-assist-api';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 import { cn } from '@/lib/cn';
@@ -13,6 +14,8 @@ type WorkflowsMessages = ReturnType<typeof messages>['workflows'];
 type WorkflowArgAiAssistConfig = {
   disabled?: boolean;
   context?: Record<string, unknown>;
+  argScenario?: TextAssistScenario;
+  goalScenario?: TextAssistScenario;
 };
 
 function ExamplePromptList({
@@ -103,7 +106,7 @@ export function WorkflowArgFieldsForm({
                   onApply={(next) => onArgValuesChange({ ...argValues, [field.key]: next })}
                   fieldId={`workflow.arg.${field.key}`}
                   fieldLabel={label}
-                  scenario="workflow.arg"
+                  scenario={aiAssist.argScenario ?? 'workflow.arg'}
                   locale={language}
                   context={{
                     ...aiAssist.context,
@@ -153,7 +156,7 @@ export function WorkflowArgFieldsForm({
                 onApply={onGoalChange}
                 fieldId="workflow.goal"
                 fieldLabel={labels.goalLabel}
-                scenario="cron.workflowGoal"
+                scenario={aiAssist.goalScenario ?? 'cron.workflowGoal'}
                 locale={language}
                 context={{
                   ...aiAssist.context,

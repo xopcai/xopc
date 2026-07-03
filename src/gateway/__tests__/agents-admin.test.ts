@@ -135,7 +135,14 @@ describe('agents-admin', () => {
     const cfg = minimalConfig({
       agents: {
         default: 'main',
+        defaultPreset: 'default',
         capabilityPresets: {
+          default: {
+            id: 'default',
+            name: 'Global defaults',
+            version: 1,
+            tools: { builtin: { web_search: { mode: 'allow' } } },
+          },
           'safe-coder': {
             id: 'safe-coder',
             name: 'Safe Coder',
@@ -159,7 +166,9 @@ describe('agents-admin', () => {
     const r = getGatewayAgentEffectiveManifest(cfg, 'coder');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
+    expect(r.data.presetChain).toEqual(['default', 'safe-coder']);
     expect(r.data.manifest.tools.builtin.shell?.mode).toBe('deny');
+    expect(r.data.manifest.tools.builtin.web_search?.mode).toBe('allow');
     expect(r.data.manifest.skills.mode).toBe('all');
     expect(r.data.manifest.models.roles.deep.model).toBe('anthropic/claude-sonnet-4-5');
     expect(r.data.sources['tools.builtin.shell.mode']).toBe('preset:safe-coder@1');

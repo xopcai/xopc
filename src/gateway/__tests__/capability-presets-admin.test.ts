@@ -31,6 +31,7 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
     gateway: { port: 18790, corsOrigins: [] },
     agents: {
       default: 'main',
+      defaultPreset: 'default',
       capabilityPresets: {},
       list: [manifest('main')],
     },
@@ -56,10 +57,46 @@ describe('capability-presets-admin', () => {
     expect(payload.presets[0]?.usage).toEqual([{ agentId: 'coder', agentName: 'coder' }]);
   });
 
+  it('lists every agent as usage for the global default preset', () => {
+    const cfg = minimalConfig({
+      agents: {
+        default: 'main',
+        defaultPreset: 'default',
+        capabilityPresets: {
+          default: {
+            id: 'default',
+            name: 'Global defaults',
+            version: 1,
+          },
+          'safe-coder': {
+            id: 'safe-coder',
+            name: 'Safe Coder',
+            version: 1,
+          },
+        },
+        list: [
+          manifest('main'),
+          manifest('coder', { extends: ['safe-coder'] }),
+        ],
+      },
+    } as Partial<Config>);
+
+    const payload = listCapabilityPresets(cfg);
+    const globalDefault = payload.presets.find((preset) => preset.id === 'default');
+    const sharedPreset = payload.presets.find((preset) => preset.id === 'safe-coder');
+
+    expect(globalDefault?.usage).toEqual([
+      { agentId: 'coder', agentName: 'coder' },
+      { agentId: 'main', agentName: 'main' },
+    ]);
+    expect(sharedPreset?.usage).toEqual([{ agentId: 'coder', agentName: 'coder' }]);
+  });
+
   it('updates patch fields and supports null field removal', () => {
     const cfg = minimalConfig({
       agents: {
         default: 'main',
+        defaultPreset: 'default',
         capabilityPresets: {
           'safe-coder': {
             id: 'safe-coder',
@@ -89,6 +126,7 @@ describe('capability-presets-admin', () => {
     const cfg = minimalConfig({
       agents: {
         default: 'main',
+        defaultPreset: 'default',
         capabilityPresets: {
           a: { id: 'a', name: 'A', version: 1, extends: ['b'] },
           b: { id: 'b', name: 'B', version: 1 },
@@ -106,6 +144,7 @@ describe('capability-presets-admin', () => {
     const cfg = minimalConfig({
       agents: {
         default: 'main',
+        defaultPreset: 'default',
         capabilityPresets: {
           'safe-coder': { id: 'safe-coder', name: 'Safe Coder', version: 1 },
         },

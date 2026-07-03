@@ -12,20 +12,20 @@ describe('typed-models-lib', () => {
     expect(
       parseTypedModelsFromConfig({
         roles: {
-          small: { model: 'deepseek/flash', description: 'Fast' },
+          small: { model: 'deepseek/flash', fallbacks: ['openai/gpt-4o'], description: 'Fast' },
           bad: { model: '' },
         },
       }),
-    ).toEqual([{ id: 'small', model: 'deepseek/flash', description: 'Fast' }]);
+    ).toEqual([{ id: 'small', model: 'deepseek/flash', fallbacks: ['openai/gpt-4o'], description: 'Fast' }]);
   });
 
   it('cleanTypedModelsForPatch dedupes and returns null when empty', () => {
     expect(
       cleanTypedModelsForPatch([
-        { id: 'small', model: 'openai/a', description: '' },
-        { id: 'small', model: 'openai/b', description: 'x' },
+        { id: 'small', model: 'openai/a', fallbacks: [], description: '' },
+        { id: 'small', model: 'openai/b', fallbacks: ['openai/a', 'bad', 'openai/b', 'anthropic/c'], description: 'x' },
       ]),
-    ).toEqual({ roles: { small: { description: 'x', model: 'openai/b' } } });
+    ).toEqual({ roles: { small: { description: 'x', model: 'openai/b', fallbacks: ['openai/a', 'anthropic/c'] } } });
     expect(cleanTypedModelsForPatch([])).toBeNull();
   });
 
@@ -36,24 +36,27 @@ describe('typed-models-lib', () => {
       invalidModel: 'bad model',
     };
     expect(validateTypedModelsForSave([], msg)).toBeNull();
-    expect(validateTypedModelsForSave([{ id: 'Bad', model: 'openai/x', description: '' }], msg)).toBe(
+    expect(validateTypedModelsForSave([{ id: 'Bad', model: 'openai/x', fallbacks: [], description: '' }], msg)).toBe(
       'bad id',
     );
     expect(
       validateTypedModelsForSave(
         [
-          { id: 'small', model: 'openai/x', description: '' },
-          { id: 'small', model: 'openai/y', description: '' },
+          { id: 'small', model: 'openai/x', fallbacks: [], description: '' },
+          { id: 'small', model: 'openai/y', fallbacks: [], description: '' },
         ],
         msg,
       ),
     ).toBe('dup');
+    expect(
+      validateTypedModelsForSave([{ id: 'small', model: 'openai/x', fallbacks: ['bad'], description: '' }], msg),
+    ).toBe('bad model');
   });
 
   it('formatTypedModelsSummary renders readable list', () => {
     expect(formatTypedModelsSummary([])).toBe('—');
-    expect(formatTypedModelsSummary([{ id: 'small', model: 'openai/mini' }])).toBe(
-      'small → openai/mini',
+    expect(formatTypedModelsSummary([{ id: 'small', model: 'openai/mini', fallbacks: ['openai/full'] }])).toBe(
+      'small -> openai/mini (+1)',
     );
   });
 });

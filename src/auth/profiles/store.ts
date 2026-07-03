@@ -113,43 +113,6 @@ function coerceAuthStore(raw: unknown): AuthProfileStore | null {
 	};
 }
 
-function mergeRecord<T>(
-	base?: Record<string, T>,
-	override?: Record<string, T>,
-): Record<string, T> | undefined {
-	if (!base && !override) {
-		return undefined;
-	}
-	if (!base) {
-		return { ...override };
-	}
-	if (!override) {
-		return { ...base };
-	}
-	return { ...base, ...override };
-}
-
-function _mergeAuthProfileStores(
-	base: AuthProfileStore,
-	override: AuthProfileStore,
-): AuthProfileStore {
-	if (
-		Object.keys(override.profiles).length === 0 &&
-		!override.order &&
-		!override.lastGood &&
-		!override.usageStats
-	) {
-		return base;
-	}
-	return {
-		version: Math.max(base.version, override.version ?? base.version),
-		profiles: { ...base.profiles, ...override.profiles },
-		order: mergeRecord(base.order, override.order),
-		lastGood: mergeRecord(base.lastGood, override.lastGood),
-		usageStats: mergeRecord(base.usageStats, override.usageStats),
-	};
-}
-
 /** Load auth profile store from disk */
 export function loadAuthProfileStore(dataDir?: string): AuthProfileStore {
 	const authPath = resolveAuthStorePath(dataDir);

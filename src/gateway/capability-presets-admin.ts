@@ -1,4 +1,8 @@
-import { CapabilityPresetSchema, type CapabilityPreset } from '../agent-manifest/schema.js';
+import {
+  CapabilityPresetSchema,
+  DEFAULT_CAPABILITY_PRESET_ID,
+  type CapabilityPreset,
+} from '../agent-manifest/schema.js';
 import type { Config } from '../config/schema.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
 
@@ -16,6 +20,7 @@ export type CapabilityPresetRow = CapabilityPreset & {
 };
 
 export type CapabilityPresetsListResponse = {
+  defaultPresetId: string;
   presets: CapabilityPresetRow[];
   agents: Array<{ id: string; name?: string; extends: string[] }>;
   builtinToolIds: string[];
@@ -51,8 +56,9 @@ function normalizePresetId(id: string): string {
 }
 
 function agentUsage(cfg: Config, presetId: string): CapabilityPresetAgentUsage[] {
+  const defaultPresetId = cfg.agents.defaultPreset || DEFAULT_CAPABILITY_PRESET_ID;
   return cfg.agents.list
-    .filter((agent) => (agent.extends ?? []).includes(presetId))
+    .filter((agent) => presetId === defaultPresetId || (agent.extends ?? []).includes(presetId))
     .map((agent) => ({
       agentId: agent.id,
       ...(agent.identity.name ? { agentName: agent.identity.name } : {}),
@@ -138,7 +144,7 @@ export function listCapabilityPresets(cfg: Config): CapabilityPresetsListRespons
       extends: [...(agent.extends ?? [])],
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
-  return { presets, agents, builtinToolIds: [...GATEWAY_BUILTIN_TOOL_IDS] };
+  return { defaultPresetId: cfg.agents.defaultPreset, presets, agents, builtinToolIds: [...GATEWAY_BUILTIN_TOOL_IDS] };
 }
 
 export function prepareCreateCapabilityPreset(
@@ -218,6 +224,9 @@ export function prepareDeleteCapabilityPreset(
   const presets = presetMap(cfg);
   if (!presets[presetId]) {
     return { ok: false, error: `capability preset "${presetId}" not found`, status: 404 };
+  }
+  if (presetId === cfg.agents.defaultPreset) {
+    return { ok: false, error: `capability preset "${presetId}" is the global default and cannot be deleted`, status: 409 };
   }
   const usage = agentUsage(cfg, presetId);
   if (usage.length > 0) {

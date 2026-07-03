@@ -58,7 +58,7 @@ function makeMultiAgentConfig(): any {
   };
 }
 
-describe('Layout alignment: Phase 1 — State Root & Workspace Paths', () => {
+describe('Layout alignment: state root and workspace paths', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
@@ -135,7 +135,7 @@ describe('Layout alignment: Phase 1 — State Root & Workspace Paths', () => {
   });
 });
 
-describe('Layout alignment: Phase 2 — Agent Internal Paths', () => {
+describe('Layout alignment: agent internal paths', () => {
   it('#5: resolveAgentProfileDir is agents/<id>/profile/', () => {
     const cfg = makeMultiAgentConfig();
     expect(resolveAgentProfileDir(cfg, 'main')).toBe(join(STATE_DIR, 'agents', 'main', 'profile'));
@@ -170,7 +170,7 @@ describe('Layout alignment: Phase 2 — Agent Internal Paths', () => {
   });
 });
 
-describe('Layout alignment: Phase 3 — Workspace State & Auth Profiles', () => {
+describe('Layout alignment: workspace state and auth profiles', () => {
   it('#6: workspace state dir is <workspace>/.xopc/', () => {
     const cfg = makeMultiAgentConfig();
     const wsDir = resolveAgentWorkspaceDir(cfg, 'main');

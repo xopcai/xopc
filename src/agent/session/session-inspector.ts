@@ -183,7 +183,7 @@ export class SessionInspector {
     const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
     const profileModelRef = profile.primaryModelRef?.trim();
     if (profileModelRef) {
-      this.opts.modelManager.setSessionProfileDefault(sessionKey, profileModelRef);
+      this.opts.modelManager.setSessionProfileDefault(sessionKey, profileModelRef, profile.fallbacks);
     }
 
     const defThink = 'medium';

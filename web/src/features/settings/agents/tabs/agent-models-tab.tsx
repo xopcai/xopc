@@ -60,6 +60,12 @@ export function AgentModelsTab(props: {
           labels={{
             id: a.typedModelIdLabel,
             description: a.typedModelDescriptionLabel,
+            primaryModel: a.typedModelPrimaryModelLabel,
+            fallbackModels: a.typedModelFallbackModelsLabel,
+            addFallback: a.typedModelAddFallback,
+            removeFallback: a.typedModelRemoveFallback,
+            fallbackPlaceholder: a.typedModelFallbackPlaceholder,
+            fallbackEmptyHint: a.typedModelFallbackEmptyHint,
             add: a.addTypedModel,
             remove: a.removeTypedModel,
             recommendedTitle: a.typedModelRecommendedTitle,

@@ -88,6 +88,32 @@ describe('agent-profile', () => {
     expect(p.resolvedWorkspacePath).toContain('coder-ws');
   });
 
+  it('resolves fallback chain from the default model role', () => {
+    const base = minimalConfig();
+    const cfg: Config = {
+      ...base,
+      agents: {
+        ...base.agents,
+        list: [
+          manifest('main', {
+            models: {
+              defaultRole: 'deep',
+              roles: {
+                deep: {
+                  model: 'anthropic/claude-3-5-sonnet-20241022',
+                  fallbacks: ['openai/gpt-4o', ' google/gemini-2.5-pro '],
+                },
+              },
+            },
+          }),
+        ],
+      },
+    };
+    const p = resolveEffectiveAgentProfile(cfg, 'main');
+    expect(p.primaryModelRef).toBe('anthropic/claude-3-5-sonnet-20241022');
+    expect(p.fallbacks).toEqual(['openai/gpt-4o', 'google/gemini-2.5-pro']);
+  });
+
   it('applies capability presets before agent policies', () => {
     const p = resolveEffectiveAgentProfile(minimalConfig(), 'coder');
     expect(p.tools.denied.has('grep')).toBe(true);

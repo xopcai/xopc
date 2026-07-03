@@ -94,6 +94,7 @@
       "workflow": "Workflow",
       "loadingWorkflows": "Loading workflows...",
       "noWorkflows": "No workflows",
+      "triggeredRun": "Runs on trigger",
       "goal": "Goal",
       "afterRun": "After run",
       "webhookUrl": "Webhook URL",

@@ -29,6 +29,13 @@ vi.mock('../../mcp/resolve-embedded-mcp-tools.js', () => ({
   mergeTurnTools: (base: unknown[]) => base,
 }));
 
+vi.mock('../../../providers/index.js', () => ({
+  resolveModel: (modelRef: string) => {
+    const [provider, id] = modelRef.split('/');
+    return { provider, id };
+  },
+}));
+
 // ---- Helpers ----
 
 function createMockSessionStore(opts: {
@@ -66,6 +73,7 @@ function createMockAgentManager() {
         tools: [],
         systemPrompt: 'You are a helpful assistant.',
         thinkingLevel: 'medium',
+        messages: [],
       },
     }),
     getResolvedWorkspaceForSession: vi.fn().mockReturnValue('/tmp/workspace'),
@@ -82,6 +90,8 @@ function createMockModelManager() {
       contextWindow: 128_000,
       id: 'test-model',
     }),
+    getFallbackCandidatesForSession: vi.fn().mockReturnValue([{ provider: 'test', model: 'test-model' }]),
+    applyResolvedModel: vi.fn(),
   };
 }
 
@@ -125,6 +135,8 @@ describe('pre-turn auto-compaction', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    mockRunXopcEmbeddedTurn.mockReset();
+    mockRunXopcEmbeddedTurn.mockResolvedValue({ ok: true });
     const mod = await import('../run-for-session.js');
     runEmbeddedTurnForSession = mod.runEmbeddedTurnForSession;
   });
@@ -200,6 +212,44 @@ describe('pre-turn auto-compaction', () => {
 
     // The embedded turn still ran
     expect(mockRunXopcEmbeddedTurn).toHaveBeenCalled();
+  });
+
+  it('tries fallback model when the primary embedded turn fails', async () => {
+    mockRunXopcEmbeddedTurn
+      .mockResolvedValueOnce({ ok: false, errorMessage: 'primary failed' })
+      .mockResolvedValueOnce({ ok: true, lastAssistantText: 'fallback ok' });
+    const sessionStore = createMockSessionStore({ needsCompaction: false });
+    const agentManager = createMockAgentManager();
+    const modelManager = {
+      ...createMockModelManager(),
+      getModelForSession: vi.fn().mockReturnValue('primary/model-a'),
+      getResolvedModelForSession: vi.fn().mockReturnValue({
+        contextWindow: 128_000,
+        provider: 'primary',
+        id: 'model-a',
+      }),
+      getFallbackCandidatesForSession: vi.fn().mockReturnValue([
+        { provider: 'primary', model: 'model-a' },
+        { provider: 'fallback', model: 'model-b' },
+      ]),
+    };
+
+    const result = await runEmbeddedTurnForSession({
+      sessionKey: 'agent:main:test-session',
+      userMessage: { role: 'user', content: 'test' } as AgentMessage,
+      sessionStore: sessionStore as any,
+      agentManager: agentManager as any,
+      modelManager: modelManager as any,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(mockRunXopcEmbeddedTurn).toHaveBeenCalledTimes(2);
+    expect(mockRunXopcEmbeddedTurn).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      modelRef: 'primary/model-a',
+    }));
+    expect(mockRunXopcEmbeddedTurn).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      modelRef: 'fallback/model-b',
+    }));
   });
 
   it('respects memory.retention.compaction=false config', async () => {

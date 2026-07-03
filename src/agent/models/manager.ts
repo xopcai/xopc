@@ -5,59 +5,19 @@
  * when a provider fails.
  */
 
-import { Agent, type AgentMessage } from '@earendil-works/pi-agent-core';
+import { Agent } from '@earendil-works/pi-agent-core';
 import type { Model, Api } from '@earendil-works/pi-ai';
 import { type Config, getAgentDefaultModelRef } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { resolveModel, getAllModels as getAllModelsFromProviders, getDefaultModelSync } from '../../providers/index.js';
-import {
-  isFailoverError,
-  describeFailoverError,
-  resolveFallbackCandidates,
-  type ModelCandidate,
-} from '../fallback/index.js';
+import { resolveFallbackCandidates, type ModelCandidate } from '../fallback/candidates.js';
 import { parseModelRef } from './selection.js';
-import {
-  isAssistantTurnAborted,
-  isAssistantTurnFailed,
-  maybeRetryTurnAfterTransientLlmFailure,
-} from '../orchestration/llm-turn-retry.js';
-import {
-  resolveAgentTurnTimeoutMs,
-  runAgentTurnWithTimeout,
-} from '../orchestration/run-agent-turn-with-timeout.js';
 
 const log = createLogger('ModelManager');
 
 export interface ModelManagerConfig {
   defaultModel?: string;
   config?: Config;
-}
-
-export interface RunResult {
-  content: string | null;
-  usage?: {
-    prompt_tokens: number;
-    completion_tokens: number;
-    total_tokens: number;
-  };
-}
-
-/**
- * Get the last assistant content from agent messages
- */
-function getLastAssistantContent(agent: Agent): string | null {
-  const messages = agent.state.messages;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
-    if (msg.role === 'assistant') {
-      return msg.content
-        .filter((c) => c.type === 'text')
-        .map((c) => c.text || '')
-        .join('');
-    }
-  }
-  return null;
 }
 
 export class ModelManager {
@@ -68,20 +28,13 @@ export class ModelManager {
   private sessionModels: Map<string, string> = new Map();
   /** Baseline model from `agents.list` / defaults merge when the session agent is created. */
   private sessionProfileDefaults: Map<string, string> = new Map();
-  private channelManager?: any;
+  private sessionProfileFallbacks: Map<string, string[]> = new Map();
 
   constructor(config: ModelManagerConfig = {}) {
     this.config = config.config;
     this.defaultModel = config.defaultModel || getDefaultModelSync(config.config);
     this.currentModelName = this.defaultModel;
     this.currentProvider = this.defaultModel.split('/')[0] || 'anthropic';
-  }
-
-  /**
-   * Set channel manager reference for accessing session-specific settings
-   */
-  setChannelManager(channelManager: any): void {
-    this.channelManager = channelManager;
   }
 
   /**
@@ -92,18 +45,26 @@ export class ModelManager {
     const ref = getAgentDefaultModelRef(config);
     this.defaultModel = ref ? ref : getDefaultModelSync(config);
     this.sessionProfileDefaults.clear();
+    this.sessionProfileFallbacks.clear();
   }
 
   /**
    * Set the config-derived default model for a session (from effective agent profile).
    * Cleared by {@link updateFromConfig} or {@link clearSessionProfileDefault}.
    */
-  setSessionProfileDefault(sessionKey: string, modelRef: string): void {
+  setSessionProfileDefault(sessionKey: string, modelRef: string, fallbacks: string[] = []): void {
     this.sessionProfileDefaults.set(sessionKey, modelRef);
+    const cleanFallbacks = fallbacks.map((ref) => ref.trim()).filter(Boolean);
+    if (cleanFallbacks.length > 0) {
+      this.sessionProfileFallbacks.set(sessionKey, cleanFallbacks);
+    } else {
+      this.sessionProfileFallbacks.delete(sessionKey);
+    }
   }
 
   clearSessionProfileDefault(sessionKey: string): void {
     this.sessionProfileDefaults.delete(sessionKey);
+    this.sessionProfileFallbacks.delete(sessionKey);
   }
 
   /**
@@ -205,6 +166,9 @@ export class ModelManager {
       cfg: this.config,
       provider: parsed.provider,
       model: parsed.model,
+      fallbacksOverride: this.sessionModels.has(sessionKey)
+        ? undefined
+        : this.sessionProfileFallbacks.get(sessionKey),
     });
   }
 
@@ -215,117 +179,6 @@ export class ModelManager {
     agent.state.model = model;
     this.currentModelName = modelRef;
     this.currentProvider = model.provider || 'unknown';
-  }
-
-  /**
-   * Run the agent with automatic model fallback on failure.
-   */
-  async runWithFallback(
-    agent: Agent,
-    sessionKey: string,
-    userMessage: AgentMessage,
-    provider: string,
-    model: string
-  ): Promise<RunResult> {
-    const candidates = resolveFallbackCandidates({
-      cfg: this.config ?? undefined,
-      provider,
-      model,
-    });
-
-    let lastError: unknown;
-
-    for (let i = 0; i < candidates.length; i++) {
-      const candidate = candidates[i];
-      const modelRef = `${candidate.provider}/${candidate.model}`;
-
-      let candidateModel: Model<Api>;
-      try {
-        candidateModel = resolveModel(modelRef);
-      } catch {
-        log.warn({ provider: candidate.provider, model: candidate.model }, 'Fallback model not found');
-        continue;
-      }
-
-      log.info(
-        { attempt: i + 1, total: candidates.length, provider: candidate.provider, model: candidate.model },
-        'Attempting model',
-      );
-
-      const beforeLen = agent.state.messages.length;
-
-      try {
-        this.applyResolvedModel(agent, candidateModel, modelRef);
-
-        const runTurn = async () => {
-          await agent.prompt(userMessage);
-          await agent.waitForIdle();
-          await maybeRetryTurnAfterTransientLlmFailure(agent, { sessionKey, log });
-        };
-
-        await runAgentTurnWithTimeout(agent, runTurn, resolveAgentTurnTimeoutMs(this.config));
-
-        if (isAssistantTurnAborted(agent)) {
-          const usage = (agent.state as { lastUsage?: RunResult['usage'] }).lastUsage;
-          return { content: getLastAssistantContent(agent), usage };
-        }
-
-        if (!isAssistantTurnFailed(agent)) {
-          const usage = (agent.state as { lastUsage?: RunResult['usage'] }).lastUsage;
-          log.info(
-            { provider: candidate.provider, model: candidate.model, success: true },
-            'Model call completed',
-          );
-          return { content: getLastAssistantContent(agent), usage };
-        }
-
-        lastError = new Error(`Assistant turn failed: ${modelRef}`);
-        log.warn(
-          { attempt: i + 1, sessionKey, modelRef },
-          'Model turn failed after retries, trying fallback',
-        );
-      } catch (err) {
-        lastError = err;
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          log.info({ sessionKey }, 'User aborted model call');
-          throw err;
-        }
-
-        const errorDetails = {
-          attempt: i + 1,
-          provider: candidate.provider,
-          model: candidate.model,
-          errorMessage: err instanceof Error ? err.message : String(err),
-        };
-
-        if (isFailoverError(err)) {
-          const described = describeFailoverError(err);
-          log.warn({ ...errorDetails, ...described }, 'Model call failed, trying fallback');
-        } else {
-          log.warn(errorDetails, 'Model call failed, trying fallback');
-        }
-      }
-
-      agent.state.messages = agent.state.messages.slice(0, beforeLen);
-    }
-
-    if (lastError) {
-      const em = lastError instanceof Error ? lastError.message : String(lastError);
-      const attemptedModelRefs = candidates.map((c) => `${c.provider}/${c.model}`);
-      log.error(
-        {
-          err: lastError instanceof Error ? lastError : undefined,
-          errorMessage: em,
-          attemptedCandidates: candidates.length,
-          attemptedModelRefs,
-          sessionKey,
-        },
-        `All model candidates failed (${candidates.length} refs): ${em}`,
-      );
-      throw lastError instanceof Error ? lastError : new Error(String(lastError));
-    }
-
-    return { content: null };
   }
 
   /**

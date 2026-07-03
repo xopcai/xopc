@@ -7,7 +7,11 @@ export type TextAssistScenario =
   | 'generic.text'
   | 'cron.message'
   | 'cron.workflowGoal'
-  | 'workflow.arg';
+  | 'workflow.arg'
+  | 'workflow.goal'
+  | 'automation.instruction'
+  | 'automation.workflowGoal'
+  | 'automation.workflowInput';
 
 export interface TextAssistRequest {
   scenario?: TextAssistScenario;

@@ -4,12 +4,19 @@ import { Activity, GitBranch, Pause, Play, Plus, RefreshCw, Trash2, X, Zap } fro
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/workflows/workflow-api';
+import {
+  resolveWorkflowInputPayload,
+  validateWorkflowInputEditorValue,
+} from '@/features/workflows/workflow-input-editor';
+import { WorkflowRunSetupPanel, type WorkflowRunSetupValue } from '@/features/workflows/workflow-run-setup-panel';
 import {
   automationApi,
   type Automation,
@@ -38,6 +45,8 @@ interface FormState {
   instruction: string;
   workflowId: string;
   workflowGoal: string;
+  workflowInput: WorkflowRunSetupValue;
+  workflowInputValid: boolean;
   timeoutSeconds: string;
   afterRunMode: 'none' | 'saveToSession' | 'webhook';
   webhookUrl: string;
@@ -58,6 +67,8 @@ const initialForm: FormState = {
   instruction: '',
   workflowId: '',
   workflowGoal: '',
+  workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
+  workflowInputValid: true,
   timeoutSeconds: '300',
   afterRunMode: 'none',
   webhookUrl: '',
@@ -95,7 +106,7 @@ function statusClass(status?: AutomationRun['status']) {
   return 'bg-surface-hover text-fg-muted';
 }
 
-function buildInput(form: FormState): AutomationInput {
+export function buildInput(form: FormState, selectedWorkflow: WorkflowDefinition | null): AutomationInput {
   const [hourRaw, minuteRaw] = form.time.split(':');
   const hour = Number.parseInt(hourRaw || '9', 10);
   const minute = Number.parseInt(minuteRaw || '0', 10);
@@ -120,13 +131,22 @@ function buildInput(form: FormState): AutomationInput {
     trigger = { kind: 'schedule', schedule: { kind: 'cron', expr: `${minute} ${hour} * * *` } };
   }
 
+  const workflowInput = resolveWorkflowInputPayload(selectedWorkflow, form.workflowInput);
+  const workflowGoal = form.workflowInput.goal.trim() || form.workflowGoal.trim();
   const action: AutomationAction =
     form.actionMode === 'workflow'
       ? {
           kind: 'workflow',
           workflowId: form.workflowId.trim(),
           ...(form.agentId.trim() ? { agentId: form.agentId.trim() } : {}),
-          ...(form.workflowGoal.trim() ? { goal: form.workflowGoal.trim() } : {}),
+          ...(workflowInput !== undefined ? { input: workflowInput } : {}),
+          ...(workflowGoal ? { goal: workflowGoal } : {}),
+          ...(form.workflowInput.concurrency.trim()
+            ? { concurrency: Math.max(1, Number.parseInt(form.workflowInput.concurrency, 10) || 1) }
+            : {}),
+          ...(form.workflowInput.maxSubagents.trim()
+            ? { maxSubagents: Math.max(1, Number.parseInt(form.workflowInput.maxSubagents, 10) || 1) }
+            : {}),
           timeoutSeconds: Math.max(1, Number.parseInt(form.timeoutSeconds, 10) || 300),
         }
       : {
@@ -173,10 +193,24 @@ export function AutomationsPage() {
   const metrics = metricsSwr.data;
   const workflowDefinitions = useMemo(() => workflowDefinitionsSwr.data ?? [], [workflowDefinitionsSwr.data]);
   const agentOptions = chatAgentsSwr.data?.items ?? [];
+  const selectedWorkflow = useMemo(
+    () => workflowDefinitions.find((workflow) => workflow.id === form.workflowId.trim()) ?? null,
+    [form.workflowId, workflowDefinitions],
+  );
   const workflowSelectionInvalid =
     form.actionMode === 'workflow' &&
     (!form.workflowId.trim() ||
       (workflowDefinitions.length > 0 && !workflowDefinitions.some((workflow) => workflow.id === form.workflowId)));
+  const workflowInputInvalid =
+    form.actionMode === 'workflow' && selectedWorkflow
+      ? !validateWorkflowInputEditorValue(selectedWorkflow, form.workflowInput, form.workflowInputValid).valid
+      : false;
+  const formCanSubmit =
+    Boolean(form.name.trim()) &&
+    (form.actionMode === 'workflow'
+      ? !workflowSelectionInvalid && !workflowInputInvalid
+      : Boolean(form.instruction.trim())) &&
+    (form.afterRunMode !== 'webhook' || Boolean(form.webhookUrl.trim()));
   const templates = useMemo(
     () => [
       {
@@ -209,8 +243,9 @@ export function AutomationsPage() {
 
   async function submitForm() {
     setError(null);
+    if (!formCanSubmit) return;
     try {
-      await automationApi.create(buildInput(form));
+      await automationApi.create(buildInput(form, selectedWorkflow));
       setForm(initialForm);
       setFormOpen(false);
       await reload();
@@ -329,15 +364,17 @@ export function AutomationsPage() {
               labels={labels}
               setForm={setForm}
               workflowDefinitions={workflowDefinitions}
+              selectedWorkflow={selectedWorkflow}
               workflowsLoading={workflowDefinitionsSwr.isLoading}
               agentOptions={agentOptions}
               agentsLoading={chatAgentsSwr.isLoading}
+              language={language}
             />
             <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
               <Dialog.Close asChild>
                 <Button variant="ghost">{labels.cancel}</Button>
               </Dialog.Close>
-              <Button variant="primary" onClick={submitForm} disabled={workflowSelectionInvalid}>
+              <Button variant="primary" onClick={submitForm} disabled={!formCanSubmit}>
                 {labels.create}
               </Button>
             </div>
@@ -465,17 +502,21 @@ function AutomationForm({
   labels,
   setForm,
   workflowDefinitions,
+  selectedWorkflow,
   workflowsLoading,
   agentOptions,
   agentsLoading,
+  language,
 }: {
   form: FormState;
   labels: AutomationsMessages;
   setForm: React.Dispatch<React.SetStateAction<FormState>>;
   workflowDefinitions: WorkflowDefinition[];
+  selectedWorkflow: WorkflowDefinition | null;
   workflowsLoading: boolean;
   agentOptions: ChatAgentOption[];
   agentsLoading: boolean;
+  language: StoredLanguage;
 }) {
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
 
@@ -484,7 +525,13 @@ function AutomationForm({
     if (form.workflowId.trim()) return;
     const firstWorkflowId = workflowDefinitions[0]?.id;
     if (!firstWorkflowId) return;
-    setForm((prev) => ({ ...prev, workflowId: firstWorkflowId }));
+    setForm((prev) => ({
+      ...prev,
+      workflowId: firstWorkflowId,
+      workflowGoal: '',
+      workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
+      workflowInputValid: true,
+    }));
   }, [form.actionMode, form.workflowId, setForm, workflowDefinitions]);
 
   return (
@@ -548,7 +595,12 @@ function AutomationForm({
             update({
               actionMode,
               ...(actionMode === 'workflow' && !form.workflowId.trim() && workflowDefinitions[0]
-                ? { workflowId: workflowDefinitions[0].id }
+                ? {
+                    workflowId: workflowDefinitions[0].id,
+                    workflowGoal: '',
+                    workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
+                    workflowInputValid: true,
+                  }
                 : {}),
             });
           }}
@@ -572,6 +624,23 @@ function AutomationForm({
         </Field>
         {form.actionMode === 'agent' ? (
           <Field label={labels.form.instruction}>
+            <div className="flex justify-end">
+              <AiTextAssistButton
+                value={form.instruction}
+                onApply={(instruction) => update({ instruction })}
+                fieldId="automation.instruction"
+                fieldLabel={labels.form.instruction}
+                scenario="automation.instruction"
+                locale={language}
+                context={{
+                  automationName: form.name,
+                  automationDescription: form.description,
+                  triggerMode: form.triggerMode,
+                  agentId: form.agentId,
+                }}
+                showLabel={false}
+              />
+            </div>
             <textarea className={cn(inputClass, 'min-h-32 resize-y')} value={form.instruction} onChange={(e) => update({ instruction: e.target.value })} />
           </Field>
         ) : (
@@ -580,7 +649,12 @@ function AutomationForm({
               <select
                 className={inputClass}
                 value={form.workflowId}
-                onChange={(e) => update({ workflowId: e.target.value })}
+                onChange={(e) => update({
+                  workflowId: e.target.value,
+                  workflowGoal: '',
+                  workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
+                  workflowInputValid: true,
+                })}
                 disabled={workflowsLoading || workflowDefinitions.length === 0}
               >
                 {workflowsLoading ? <option value="">{labels.form.loadingWorkflows}</option> : null}
@@ -592,9 +666,34 @@ function AutomationForm({
                 ))}
               </select>
             </Field>
-            <Field label={labels.form.goal}>
-              <textarea className={cn(inputClass, 'min-h-24 resize-y')} value={form.workflowGoal} onChange={(e) => update({ workflowGoal: e.target.value })} />
-            </Field>
+            {selectedWorkflow ? (
+              <WorkflowRunSetupPanel
+                definition={selectedWorkflow}
+                language={language}
+                value={form.workflowInput}
+                onChange={(workflowInput) => update({
+                  workflowInput,
+                  workflowGoal: workflowInput.goal,
+                  workflowInputValid: true,
+                })}
+                mode="automation"
+                badgeLabel={labels.form.triggeredRun}
+                onValidityChange={(validity) => update({ workflowInputValid: validity.valid })}
+                aiAssist={{
+                  inputScenario: 'automation.workflowInput',
+                  goalScenario: 'automation.workflowGoal',
+                  context: {
+                    automationName: form.name,
+                    automationDescription: form.description,
+                    triggerMode: form.triggerMode,
+                    workflowId: selectedWorkflow.id,
+                    workflowTitle: selectedWorkflow.title,
+                    workflowDescription: selectedWorkflow.description,
+                  },
+                }}
+                inputClassName="rounded-lg"
+              />
+            ) : null}
           </>
         )}
 
@@ -628,10 +727,10 @@ const inputClass = 'w-full rounded-lg border border-edge bg-surface-base px-3 py
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="grid gap-1.5">
+    <div className="grid gap-1.5">
       <span className="text-xs font-medium text-fg-muted">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 

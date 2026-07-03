@@ -134,7 +134,7 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
 
 type PatchModels = {
   defaultRole?: string | null;
-  roles?: Record<string, { model: string; description?: string }>;
+  roles?: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
 };
 
 function parsePatchModels(raw: unknown): PatchModels | null | undefined | { error: string } {

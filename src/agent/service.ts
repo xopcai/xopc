@@ -78,10 +78,8 @@ import {
   extractProfileAgentId,
 } from '../config/agent-profile.js';
 import { resolveUserProfilePath } from '../config/paths.js';
-import { cleanTrailingErrors } from './memory/message-sanitizer.js';
 import { MemoryFlushService } from './memory/memory-flush.js';
 import type { MemoryFlushConfig } from './memory/memory-flush.js';
-import { tryApplySessionTranscriptHygiene } from './transcript/transcript-hygiene.js';
 import {
   persistInboundAttachments,
   type InboundAttachmentInput,
@@ -117,8 +115,6 @@ export class AgentService {
   private hookRunner?: ExtensionHookRunner;
   private agentId: string;
   private workspaceDir: string;
-  private channelManagerRef: ChannelManager | null = null;
-  private bus: MessageBus;
   private config: AgentServiceConfig;
   private sessionTracker: SessionTracker;
   private modelManager: ModelManager;
@@ -201,7 +197,6 @@ export class AgentService {
   }
 
   constructor(bus: MessageBus, config: AgentServiceConfig) {
-    this.bus = bus;
     this.config = config;
     this.onSessionMetadataUpdated = config.onSessionMetadataUpdated;
     this.onSessionTranscriptUpdated = config.onSessionTranscriptUpdated;
@@ -605,8 +600,6 @@ export class AgentService {
   }
 
   setChannelManager(channelManager: ChannelManager): void {
-    this.modelManager.setChannelManager(channelManager);
-    this.channelManagerRef = channelManager;
     this.inboundLoop.setChannelManager(channelManager);
   }
 
@@ -773,17 +766,6 @@ export class AgentService {
         log.warn({ err, sessionKey }, 'Auto session title failed');
       }
     })();
-  }
-
-  private prepareLoadedSessionMessages(sessionKey: string, messages: AgentMessage[]): AgentMessage[] {
-    let out = cleanTrailingErrors(messages);
-    try {
-      const model = this.modelManager.getResolvedModelForSession(sessionKey);
-      out = tryApplySessionTranscriptHygiene(out, model);
-    } catch (err) {
-      log.warn({ err, sessionKey }, 'Transcript hygiene on load skipped');
-    }
-    return out;
   }
 
   private async resolveSessionEndpoint(sessionKey: string): Promise<{ channel: string; chatId: string }> {

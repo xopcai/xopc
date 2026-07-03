@@ -1,7 +1,7 @@
 /**
- * Extension System  Types
+ * Extension registration types.
  * 
- * Advanced features: Provider, Flag, Shortcut registration.
+ * Provider, flag, and shortcut registration contracts.
  */
 
 // ============================================================================

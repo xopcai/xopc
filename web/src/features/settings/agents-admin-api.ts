@@ -105,7 +105,7 @@ export async function createGatewayAgent(body: {
   workspace: string;
   models?: {
     defaultRole?: string;
-    roles?: Record<string, { model: string; description?: string }>;
+    roles?: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
   };
   skills?: string[];
   tools?: ToolPolicySetPatch;
@@ -140,7 +140,7 @@ export async function updateGatewayAgent(
     extends?: string[];
     models?: {
       defaultRole?: string | null;
-      roles?: Record<string, { model: string; description?: string }>;
+      roles?: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
     } | null;
     setDefault?: boolean;
     skills?: string[] | null;

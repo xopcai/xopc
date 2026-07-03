@@ -76,6 +76,7 @@ function typedRowsFromPreset(preset: CapabilityPresetRow | null): AgentTypedMode
     Object.entries(preset?.models?.roles ?? {}).map(([id, role]) => ({
       id,
       model: role.model,
+      fallbacks: role.fallbacks ?? [],
       description: role.description,
     })),
   );
@@ -182,10 +183,10 @@ function starterDraft(id: StarterId): Draft {
       name: 'Safe Coder',
       description: 'Shared settings for coding agents: code-oriented model roles, careful shell usage, and focused engineering skills.',
       version: '1',
-      modelRows: [
-        { id: 'deep', model: '', description: 'Complex implementation and planning' },
-        { id: 'code', model: '', description: 'Code edits and tests' },
-        { id: 'review', model: '', description: 'Review and risk checks' },
+        modelRows: [
+        { id: 'deep', model: '', fallbacks: [], description: 'Complex implementation and planning' },
+        { id: 'code', model: '', fallbacks: [], description: 'Code edits and tests' },
+        { id: 'review', model: '', fallbacks: [], description: 'Review and risk checks' },
       ],
       toolModes: { shell: 'deny', send_message: 'deny', send_media: 'deny' },
       skillMode: 'allowlist',
@@ -198,9 +199,9 @@ function starterDraft(id: StarterId): Draft {
       name: 'Read-only Research',
       description: 'Shared settings for reading, searching, and summarizing without modifying files or running shell commands.',
       version: '1',
-      modelRows: [
-        { id: 'deep', model: '', description: 'Synthesis and long-context reading' },
-        { id: 'fast', model: '', description: 'Quick summaries' },
+        modelRows: [
+        { id: 'deep', model: '', fallbacks: [], description: 'Synthesis and long-context reading' },
+        { id: 'fast', model: '', fallbacks: [], description: 'Quick summaries' },
       ],
       toolModes: { write_file: 'deny', edit_file: 'deny', shell: 'deny', send_message: 'deny', send_media: 'deny' },
       skillMode: 'all',
@@ -213,10 +214,10 @@ function starterDraft(id: StarterId): Draft {
       name: 'Low-cost Assistant',
       description: 'Shared settings for lightweight agents that should prefer faster or cheaper model roles.',
       version: '1',
-      modelRows: [
-        { id: 'deep', model: '', description: 'Default low-cost model' },
-        { id: 'fast', model: '', description: 'Low-latency replies' },
-        { id: 'cheap', model: '', description: 'Batch or summary work' },
+        modelRows: [
+        { id: 'deep', model: '', fallbacks: [], description: 'Default low-cost model' },
+        { id: 'fast', model: '', fallbacks: [], description: 'Low-latency replies' },
+        { id: 'cheap', model: '', fallbacks: [], description: 'Batch or summary work' },
       ],
       toolModes: {},
       skillMode: 'inherit',
@@ -250,11 +251,15 @@ export function CapabilityPresetsSettingsPanel() {
   const [localError, setLocalError] = useState<string | null>(null);
 
   const presets = data?.presets ?? [];
+  const defaultPresetId = data?.defaultPresetId ?? 'default';
+  const defaultPreset = presets.find((preset) => preset.id === defaultPresetId) ?? null;
+  const sharedPresets = presets.filter((preset) => preset.id !== defaultPresetId);
   const selected = useMemo(
     () => presets.find((preset) => preset.id === selectedId) ?? presets[0] ?? null,
     [presets, selectedId],
   );
   const isNew = !selected || draft.id.trim() !== selected.id;
+  const isDefaultPreset = Boolean(selected && selected.id === defaultPresetId);
   const dirty = JSON.stringify(comparableDraft(draft, selected)) !== JSON.stringify(comparablePreset(selected));
   const displayError = localError ?? (error instanceof Error ? error.message : null);
   const dialogOpen = searchParams.get('action') === 'new' || Boolean(searchParams.get('preset'));
@@ -432,15 +437,51 @@ export function CapabilityPresetsSettingsPanel() {
             </div>
           </SettingsFormSection>
 
+          {defaultPreset ? (
+            <SettingsFormSection>
+              <SettingsFormSectionHeader
+                icon={Layers}
+                title={cp.globalDefaultsTitle}
+                subtitle={cp.globalDefaultsHint}
+              />
+              <button
+                type="button"
+                onClick={() => selectPreset(defaultPreset)}
+                className="group rounded-lg border border-accent/25 bg-accent/5 px-4 py-3 text-left text-fg transition-colors hover:border-accent/40 hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-fg">{defaultPreset.name}</span>
+                      <span className="rounded-full border border-accent/25 bg-surface-panel px-2 py-0.5 text-[11px] font-medium text-accent">
+                        {cp.globalDefaultsBadge}
+                      </span>
+                    </div>
+                    <div className="mt-1 font-mono text-[11px] text-fg-subtle">{defaultPreset.id}</div>
+                  </div>
+                  <span className="shrink-0 rounded-full border border-edge-subtle bg-surface-panel px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+                    {cp.globalDefaultsInherited}
+                  </span>
+                </div>
+                {defaultPreset.description ? (
+                  <p className="mt-3 line-clamp-2 text-xs leading-relaxed text-fg-muted">
+                    {defaultPreset.description}
+                  </p>
+                ) : null}
+                <div className="mt-3 text-xs text-fg-subtle">{presetSummary(defaultPreset)}</div>
+              </button>
+            </SettingsFormSection>
+          ) : null}
+
           <SettingsFormSection>
             <SettingsFormSectionHeader icon={Layers} title={cp.listTitle} subtitle={cp.listHint} />
-            {presets.length === 0 ? (
+            {sharedPresets.length === 0 ? (
               <div className="rounded-lg border border-dashed border-edge-subtle px-3 py-4 text-sm text-fg-muted">
                 {cp.empty}
               </div>
             ) : (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {presets.map((preset) => (
+                {sharedPresets.map((preset) => (
                   <button
                     key={preset.id}
                     type="button"
@@ -591,6 +632,12 @@ export function CapabilityPresetsSettingsPanel() {
                   labels={{
                     id: cp.modelRoleIdLabel,
                     description: cp.modelRoleDescriptionLabel,
+                    primaryModel: cp.modelPrimaryModelLabel,
+                    fallbackModels: cp.modelFallbackModelsLabel,
+                    addFallback: cp.modelAddFallback,
+                    removeFallback: cp.modelRemoveFallback,
+                    fallbackPlaceholder: cp.modelFallbackPlaceholder,
+                    fallbackEmptyHint: cp.modelFallbackEmptyHint,
                     add: cp.addModelRole,
                     remove: cp.removeModelRole,
                     recommendedTitle: cp.modelRecommendedTitle,
@@ -713,7 +760,7 @@ export function CapabilityPresetsSettingsPanel() {
                       {cp.discard}
                     </Button>
                   ) : null}
-                  {selected ? (
+                  {selected && !isDefaultPreset ? (
                     <Button type="button" variant="secondary" disabled={busy} onClick={() => void onDelete()}>
                       <Trash2 className="size-4" aria-hidden />
                       {cp.delete}

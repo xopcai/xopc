@@ -26,6 +26,8 @@ export type AutomationAction =
       agentId?: string;
       input?: unknown;
       goal?: string;
+      concurrency?: number;
+      maxSubagents?: number;
       timeoutSeconds?: number;
     };
 
@@ -142,4 +144,3 @@ export const automationApi = {
       method: 'POST',
     }),
 };
-
