@@ -15,6 +15,7 @@ import {
   resolveEmbeddedMcpToolsForTurn,
 } from '../mcp/resolve-embedded-mcp-tools.js';
 import { createLogger } from '../../utils/logger.js';
+import { resolveModel } from '../../providers/index.js';
 
 const log = createLogger('EmbeddedTurnForSession');
 
@@ -99,22 +100,134 @@ export async function runEmbeddedTurnForSession(
     });
     const turnTools = mergeTurnTools(tools, mcpResolved.tools);
     try {
-      return await runXopcEmbeddedTurn({
-        sessionKey,
-        runId,
-        userMessage: userMessageForTurn,
-        images: params.llmImages,
-        model,
-        modelRef,
-        tools: turnTools,
-        systemPrompt,
-        thinkingLevel,
-        workspaceDir,
-        sessionStore,
-        timeoutMs: resolveAgentTurnTimeoutMs(config),
-        abortSignal: params.abortSignal,
-        onEvent: params.onEvent,
-      });
+      const candidates = typeof mm.getFallbackCandidatesForSession === 'function'
+        ? mm.getFallbackCandidatesForSession(sessionKey)
+        : [];
+      const candidateModelRefs = candidates.length > 0
+        ? candidates.map((candidate: { provider: string; model: string }) => `${candidate.provider}/${candidate.model}`)
+        : [modelRef];
+      log.info(
+        { sessionKey, runId, primaryModelRef: candidateModelRefs[0], candidateModelRefs },
+        'Agent model fallback candidates resolved',
+      );
+
+      let lastResult: RunXopcEmbeddedTurnResult | undefined;
+      let lastError: unknown;
+      const primaryModelRef = candidateModelRefs[0] ?? modelRef;
+      const beforeLen = Array.isArray((agent as any).state?.messages)
+        ? (agent as any).state.messages.length
+        : undefined;
+
+      for (let i = 0; i < candidateModelRefs.length; i++) {
+        const candidateModelRef = candidateModelRefs[i] ?? modelRef;
+        const isFallbackAttempt = i > 0;
+        let candidateModel = model;
+        if (candidateModelRef !== modelRef) {
+          try {
+            candidateModel = resolveModel(candidateModelRef) as RunXopcEmbeddedTurnParams['model'];
+          } catch (err) {
+            lastError = err;
+            log.warn(
+              { err, sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1, total: candidateModelRefs.length },
+              'Skipping model fallback candidate (resolve failed)',
+            );
+            continue;
+          }
+        }
+
+        if (typeof mm.applyResolvedModel === 'function') {
+          mm.applyResolvedModel(agent, candidateModel, candidateModelRef);
+        }
+        agentManager.setModelForSession(sessionKey, candidateModelRef);
+
+        if (isFallbackAttempt) {
+          log.info(
+            {
+              sessionKey,
+              runId,
+              primaryModelRef,
+              fallbackModelRef: candidateModelRef,
+              attempt: i + 1,
+              total: candidateModelRefs.length,
+            },
+            'Agent model fallback started',
+          );
+        }
+
+        try {
+          const turnResult = await runXopcEmbeddedTurn({
+            sessionKey,
+            runId,
+            userMessage: userMessageForTurn,
+            images: params.llmImages,
+            model: candidateModel,
+            modelRef: candidateModelRef,
+            tools: turnTools,
+            systemPrompt,
+            thinkingLevel,
+            workspaceDir,
+            sessionStore,
+            timeoutMs: resolveAgentTurnTimeoutMs(config),
+            abortSignal: params.abortSignal,
+            onEvent: params.onEvent,
+          });
+
+          if (turnResult.ok) {
+            if (isFallbackAttempt) {
+              log.info(
+                {
+                  sessionKey,
+                  runId,
+                  primaryModelRef,
+                  fallbackModelRef: candidateModelRef,
+                  attempt: i + 1,
+                  total: candidateModelRefs.length,
+                },
+                'Agent model fallback succeeded',
+              );
+            }
+            return turnResult;
+          }
+
+          lastResult = turnResult;
+          const hasNextCandidate = i + 1 < candidateModelRefs.length;
+          log.warn(
+            {
+              sessionKey,
+              runId,
+              modelRef: candidateModelRef,
+              attempt: i + 1,
+              total: candidateModelRefs.length,
+              hasNextCandidate,
+              errorMessage: turnResult.errorMessage,
+            },
+            hasNextCandidate
+              ? 'Agent model turn failed, trying fallback'
+              : 'Agent model turn failed, no fallback remains',
+          );
+        } catch (err) {
+          lastError = err;
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            throw err;
+          }
+          const hasNextCandidate = i + 1 < candidateModelRefs.length;
+          log.warn(
+            { err, sessionKey, runId, modelRef: candidateModelRef, attempt: i + 1, total: candidateModelRefs.length, hasNextCandidate },
+            hasNextCandidate
+              ? 'Agent model call threw, trying fallback'
+              : 'Agent model call threw, no fallback remains',
+          );
+        }
+
+        if (beforeLen !== undefined && Array.isArray((agent as any).state?.messages)) {
+          (agent as any).state.messages = (agent as any).state.messages.slice(0, beforeLen);
+        }
+      }
+
+      if (lastResult) return lastResult;
+      if (lastError instanceof Error) throw lastError;
+      if (lastError != null) throw new Error(String(lastError));
+      return { ok: false, errorMessage: 'No model candidates available' };
     } finally {
       await mcpResolved.dispose().catch(() => {});
     }

@@ -139,7 +139,6 @@ export class ModelRegistry {
 
 	// Performance caches
 	private _availableModelsCache: Model<Api>[] | undefined;
-	private _providersCache: string[] | undefined;
 	private _authStatusCache: Map<string, boolean> = new Map();
 
 	constructor(private modelsJsonPath: string = getModelsJsonPath()) {
@@ -181,7 +180,6 @@ export class ModelRegistry {
 		this.customProviderApiKeys.clear();
 		this.loadError = undefined;
 		this._availableModelsCache = undefined;
-		this._providersCache = undefined;
 		this._authStatusCache.clear();
 		this.prewarmPromise = null;
 		this.loadModels();
@@ -294,7 +292,6 @@ export class ModelRegistry {
 	private loadModels(): void {
 		// Clear caches before loading
 		this._availableModelsCache = undefined;
-		this._providersCache = undefined;
 		this._authStatusCache.clear();
 
 		// Load custom models and overrides from models.json

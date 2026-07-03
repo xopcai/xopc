@@ -7,7 +7,7 @@ import { selectDisplayMessages } from '@/features/chat/session/chat-session-view
 
 const sessionKey = 'agent:main:webchat:default:direct:abc';
 
-describe('Phase 3 store-backed display', () => {
+describe('store-backed chat display', () => {
   beforeEach(() => {
     useChatSessionStore.setState({ sessions: {} });
   });
@@ -30,7 +30,7 @@ describe('Phase 3 store-backed display', () => {
   });
 });
 
-describe('Phase 4 shell + metadata', () => {
+describe('chat shell and metadata state', () => {
   beforeEach(() => {
     useChatSessionStore.setState({
       focusedSessionKey: null,

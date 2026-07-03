@@ -151,6 +151,8 @@ export class AutomationActionExecutor {
       input: action.input,
       inputEnvelope: action.inputEnvelope,
       goal: action.goal,
+      concurrency: action.concurrency,
+      maxSubagents: action.maxSubagents,
       source: { kind: 'automation', automationId: automation.id, runId: run.id },
       idempotencyKey,
     });

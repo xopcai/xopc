@@ -153,6 +153,7 @@
     "advancedSettings": "高级设置",
     "concurrencyPlaceholder": "并发数（默认 {{default}}）",
     "maxSubagentsPlaceholder": "最大子 agent 数（默认 {{default}}）",
+    "timeoutSecondsPlaceholder": "超时秒数（默认 {{default}}）",
     "start": "启动工作流",
     "starting": "启动中…",
     "startSuccess": "工作流已启动。",

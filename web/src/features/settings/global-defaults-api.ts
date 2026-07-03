@@ -3,7 +3,7 @@ import { apiUrl } from '@/lib/url';
 
 export type GlobalDefaultModels = {
   defaultRole: string;
-  roles: Record<string, { model: string; description?: string }>;
+  roles: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
 };
 
 export type GlobalDefaultsProvider = {

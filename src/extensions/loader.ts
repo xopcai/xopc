@@ -318,7 +318,7 @@ export class ExtensionLoader {
   }
 
   /**
-   * Phase 1: build manifest registry (filesystem manifests only, no extension code load).
+   * Build the manifest registry from filesystem manifests without loading extension code.
    */
   buildManifestRegistry(): ManifestRegistry {
     if (this.manifestRegistry) {
@@ -330,14 +330,14 @@ export class ExtensionLoader {
   }
 
   /**
-   * Phase 2: activation planner over the manifest registry (pure logic).
+   * Plan activation from manifest metadata with pure logic.
    */
   planActivation(_context?: Partial<ActivationContext>): ActivationPlanner {
     return new ActivationPlanner(this.buildManifestRegistry());
   }
 
   /**
-   * Phase 3: load only extensions selected by the activation plan.
+   * Load only extensions selected by the activation plan.
    */
   async loadByActivationPlan(context?: ActivationPlanLoadOptions): Promise<void> {
     if (areExtensionsGloballyDisabled(this._appConfig as DiscoverConfig | undefined)) {

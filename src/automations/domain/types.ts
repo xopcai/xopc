@@ -30,6 +30,8 @@ export type AutomationAction =
       input?: unknown;
       inputEnvelope?: WorkflowRunInputEnvelope;
       goal?: string;
+      concurrency?: number;
+      maxSubagents?: number;
       timeoutSeconds?: number;
     };
 

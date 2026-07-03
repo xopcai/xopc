@@ -15,22 +15,12 @@ export interface CompactionHandlerConfig {
   accumulateUsage: boolean;
 }
 
-const DEFAULT_CONFIG: CompactionHandlerConfig = {
-  minMessages: 20,
-  maxTokens: 8000,
-  preserveReasoning: true,
-  accumulateUsage: true,
-};
-
 export class CompactionLifecycleHandler
   implements LifecycleHandler<LLMResponsePayload>
 {
   readonly name = 'CompactionLifecycleHandler';
-  private config: CompactionHandlerConfig;
 
-  constructor(config?: Partial<CompactionHandlerConfig>) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
-  }
+  constructor(_config?: Partial<CompactionHandlerConfig>) {}
 
   async handle(
     event: LifecycleEventData<LLMResponsePayload>,
@@ -42,7 +32,4 @@ export class CompactionLifecycleHandler
     logger.debug({ sessionKey, messageCount: event.payload?.usage?.total }, 'Compaction lifecycle event received');
   }
 
-  private shouldCompact(messageCount: number): boolean {
-    return messageCount >= this.config.minMessages;
-  }
 }

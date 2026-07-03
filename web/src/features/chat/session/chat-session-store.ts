@@ -18,7 +18,7 @@ import { defaultSessionMeta } from '@/features/chat/session/chat-session-default
 import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import { cloneMessageForRender, ensureAssistantMessage } from '@/features/chat/messages/streaming';
 
-/** Per-session chat UI + agent config (Phase 4). @see docs/web/chat-session-semantics.md */
+/** Per-session chat UI and agent config. @see docs/web/chat-session-semantics.md */
 export type ChatSessionSlice = {
   name: string | null;
   model: string;

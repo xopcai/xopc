@@ -8,15 +8,6 @@ export interface ModelCandidate {
   model: string;
 }
 
-export interface FallbackAttempt {
-  provider: string;
-  model: string;
-  error: string;
-  reason?: string;
-  status?: number;
-  code?: string;
-}
-
 function getDefaultModelParts(config?: Config): ModelCandidate | null {
   const defaultModel = getDefaultModelSync(config);
   if (!defaultModel) return null;

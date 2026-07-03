@@ -97,7 +97,7 @@ function collectAgentIdsForList(cfg: Config): string[] {
 }
 
 function rolesToTypedModels(
-  roles: Record<string, { model: string; description?: string }> | undefined,
+  roles: Record<string, { model: string; fallbacks?: string[]; description?: string }> | undefined,
 ): AgentTypedModel[] {
   return Object.entries(roles ?? {})
     .map(([id, role]) => ({ id, ...role }))
@@ -396,7 +396,7 @@ export type UpdateAgentBody = {
   extends?: string[];
   models?: {
     defaultRole?: string | null;
-    roles?: Record<string, { model: string; description?: string }>;
+    roles?: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
   } | null;
   setDefault?: boolean;
   /** Replace `agents.list[].skills`; `null` resets to all skills. */
@@ -477,12 +477,17 @@ export function prepareUpdateAgent(
               .map(([id, row]) => ({
                 id: id.trim(),
                 model: row.model.trim(),
+                fallbacks: (row.fallbacks ?? []).map((ref) => ref.trim()).filter(Boolean),
                 description: row.description?.trim(),
               }))
               .filter((row) => row.id && row.model)
               .map((row) => [
                 row.id,
-                row.description ? { model: row.model, description: row.description } : { model: row.model },
+                {
+                  model: row.model,
+                  ...(row.fallbacks.length > 0 ? { fallbacks: row.fallbacks } : {}),
+                  ...(row.description ? { description: row.description } : {}),
+                },
               ]),
           );
           entry.models = {

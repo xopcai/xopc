@@ -7,18 +7,31 @@ export const DEFAULT_CAPABILITY_PRESET_ID = 'default';
 export const ManifestModelRoleSchema = z
   .object({
     model: z.string().min(1),
+    fallbacks: z.array(z.string().min(1)).optional(),
     description: z.string().max(500).optional(),
   })
   .strict()
   .superRefine((entry, ctx) => {
-    const trimmed = entry.model.trim();
-    const idx = trimmed.indexOf('/');
-    if (idx <= 0 || idx === trimmed.length - 1) {
+    const validateRef = (ref: string) => {
+      const trimmed = ref.trim();
+      const idx = trimmed.indexOf('/');
+      return idx > 0 && idx < trimmed.length - 1;
+    };
+    if (!validateRef(entry.model)) {
       ctx.addIssue({
         code: 'custom',
         message: `model must be provider/model format (got '${entry.model}')`,
         path: ['model'],
       });
+    }
+    for (const [index, fallback] of (entry.fallbacks ?? []).entries()) {
+      if (!validateRef(fallback)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `fallback must be provider/model format (got '${fallback}')`,
+          path: ['fallbacks', index],
+        });
+      }
     }
   });
 

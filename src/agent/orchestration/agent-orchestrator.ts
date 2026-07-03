@@ -73,15 +73,11 @@ export class AgentOrchestrator {
   private agentManager: AgentManager;
   private sessionStore: SessionStore;
   private modelManager: ModelManager;
-  private eventHandler: AgentEventHandler;
   private feedbackCoordinator: FeedbackCoordinator;
   private sessionConfigStore: SessionConfigStore;
   private sessionHydrator: SessionHydrator;
   private getThinkingDefault: () => ThinkLevel | undefined;
   private getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
-  private workspaceRoot: string;
-  private getWorkspaceRootForSession?: (sessionKey: string) => string;
-  private getAgentInternalStorageRootForSession: (sessionKey: string) => string;
   private enqueueAutoTitle?: (sessionKey: string) => void;
   private getConfig?: () => Config | undefined;
   private onEmbeddedStreamEvent?: (sessionKey: string, event: EmbeddedStreamEvent) => void;
@@ -91,17 +87,11 @@ export class AgentOrchestrator {
     this.agentManager = config.agentManager;
     this.sessionStore = config.sessionStore;
     this.modelManager = config.modelManager;
-    this.eventHandler = config.eventHandler;
     this.feedbackCoordinator = config.feedbackCoordinator;
     this.sessionConfigStore = config.sessionConfigStore;
     this.sessionHydrator = config.sessionHydrator;
     this.getThinkingDefault = config.getThinkingDefault;
     this.getThinkingDefaultForSession = config.getThinkingDefaultForSession;
-    this.workspaceRoot = config.workspaceRoot;
-    this.getWorkspaceRootForSession = config.getWorkspaceRootForSession;
-    this.getAgentInternalStorageRootForSession =
-      config.getAgentInternalStorageRootForSession ??
-      ((sk) => this.getWorkspaceRootForSession?.(sk) ?? this.workspaceRoot);
     this.enqueueAutoTitle = config.enqueueAutoTitle;
     this.getConfig = config.getConfig;
     this.onEmbeddedStreamEvent = config.onEmbeddedStreamEvent;

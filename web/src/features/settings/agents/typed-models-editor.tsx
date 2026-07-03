@@ -24,6 +24,12 @@ export function TypedModelsEditor(props: {
   labels: {
     id: string;
     description: string;
+    primaryModel: string;
+    fallbackModels: string;
+    addFallback: string;
+    removeFallback: string;
+    fallbackPlaceholder: string;
+    fallbackEmptyHint: string;
     add: string;
     remove: string;
     recommendedTitle: string;
@@ -51,6 +57,26 @@ export function TypedModelsEditor(props: {
   const updateRow = (index: number, patch: Partial<AgentTypedModelRow>) => {
     const next = rows.map((row, i) => (i === index ? { ...row, ...patch } : row));
     onChange(next);
+  };
+
+  const updateFallback = (rowIndex: number, fallbackIndex: number, value: string) => {
+    const row = rows[rowIndex];
+    if (!row) return;
+    const fallbacks = [...(row.fallbacks ?? [])];
+    fallbacks[fallbackIndex] = value;
+    updateRow(rowIndex, { fallbacks });
+  };
+
+  const addFallback = (rowIndex: number) => {
+    const row = rows[rowIndex];
+    if (!row) return;
+    updateRow(rowIndex, { fallbacks: [...(row.fallbacks ?? []), ''] });
+  };
+
+  const removeFallback = (rowIndex: number, fallbackIndex: number) => {
+    const row = rows[rowIndex];
+    if (!row) return;
+    updateRow(rowIndex, { fallbacks: (row.fallbacks ?? []).filter((_, i) => i !== fallbackIndex) });
   };
 
   const removeRow = (index: number) => {
@@ -85,7 +111,7 @@ export function TypedModelsEditor(props: {
     return (
       <div
         key={rowKeysRef.current[index] ?? `typed-model-row-${index}`}
-        className="grid gap-3 rounded-lg border border-edge-subtle bg-surface-panel/40 p-3 sm:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto] sm:items-start dark:border-edge-subtle"
+        className="grid gap-3 rounded-lg border border-edge-subtle bg-surface-panel/40 p-3 lg:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto] lg:items-start dark:border-edge-subtle"
       >
         {options.recommended ? (
           <div className="min-w-0">
@@ -117,16 +143,69 @@ export function TypedModelsEditor(props: {
           </div>
         )}
         <div className="grid min-w-0 gap-2">
-          <ModelSelector
-            value={row.model}
-            disabled={disabled}
-            placeholder={chat.modelPlaceholder}
-            searchPlaceholder={chat.modelSearchPlaceholder}
-            noMatches={chat.modelNoMatches}
-            className="w-full max-w-none"
-            contentAlign="start"
-            onChange={(modelId) => updateRow(index, { model: modelId })}
-          />
+          <div className="grid gap-1.5">
+            <div className="text-xs font-medium text-fg-muted">{labels.primaryModel}</div>
+            <ModelSelector
+              value={row.model}
+              disabled={disabled}
+              placeholder={chat.modelPlaceholder}
+              searchPlaceholder={chat.modelSearchPlaceholder}
+              noMatches={chat.modelNoMatches}
+              className="w-full max-w-none"
+              contentAlign="start"
+              onChange={(modelId) => updateRow(index, { model: modelId })}
+            />
+          </div>
+          <div className="grid gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-medium text-fg-muted">{labels.fallbackModels}</div>
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-7 gap-1 px-2 text-xs"
+                disabled={disabled}
+                onClick={() => addFallback(index)}
+              >
+                <Plus className="size-3.5" strokeWidth={1.75} />
+                {labels.addFallback}
+              </Button>
+            </div>
+            {(row.fallbacks ?? []).length > 0 ? (
+              <div className="grid gap-1.5">
+                {(row.fallbacks ?? []).map((fallback, fallbackIndex) => (
+                  <div
+                    key={`${rowKeysRef.current[index] ?? index}-fallback-${fallbackIndex}`}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-2"
+                  >
+                    <ModelSelector
+                      value={fallback}
+                      disabled={disabled}
+                      placeholder={labels.fallbackPlaceholder}
+                      searchPlaceholder={chat.modelSearchPlaceholder}
+                      noMatches={chat.modelNoMatches}
+                      className="w-full max-w-none"
+                      contentAlign="start"
+                      onChange={(modelId) => updateFallback(index, fallbackIndex, modelId)}
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="shrink-0 px-2"
+                      disabled={disabled}
+                      aria-label={labels.removeFallback}
+                      onClick={() => removeFallback(index, fallbackIndex)}
+                    >
+                      <Trash2 className="size-4" strokeWidth={1.75} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-edge-subtle px-3 py-2 text-xs text-fg-muted">
+                {labels.fallbackEmptyHint}
+              </div>
+            )}
+          </div>
           <input
             type="text"
             className={inputClassName()}
@@ -172,6 +251,7 @@ export function TypedModelsEditor(props: {
                     id,
                     description: labels.roleDescriptions[id],
                     model: firstConfiguredModel,
+                    fallbacks: [],
                   })
                 }
               >
@@ -199,7 +279,7 @@ export function TypedModelsEditor(props: {
         variant="secondary"
         className="w-fit gap-1.5"
         disabled={disabled}
-        onClick={() => addRow({ id: '', description: '', model: firstConfiguredModel })}
+        onClick={() => addRow({ id: '', description: '', model: firstConfiguredModel, fallbacks: [] })}
       >
         <Plus className="size-4 shrink-0" strokeWidth={1.75} />
         {labels.add}

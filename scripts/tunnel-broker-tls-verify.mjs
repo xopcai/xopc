@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Verify broker-terminated TLS for tunnel subdomains (Phase 6).
+ * Verify broker-terminated TLS for tunnel subdomains.
  *
  * Env:
  *   TUNNEL_PUBLIC_URL  e.g. https://abcd1234.frp.xopc.ai
@@ -31,4 +31,4 @@ try {
   console.warn('TLS probe skipped:', err instanceof Error ? err.message : String(err));
 }
 
-console.log('Phase 6 broker TLS verification passed');
+console.log('Broker TLS verification passed');

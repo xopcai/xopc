@@ -7,9 +7,6 @@
 import type { Config } from '../../config/schema.js';
 import type { EmbeddedContextFile } from '../bootstrap/types.js';
 import type { SkillManager } from '../skills/skill-manager.js';
-import { createSkillConfigManager } from '../skills/config.js';
-import { selectSkillsVisibleInPrompt } from '../skills/format-skills-prompt.js';
-import { resolveStateDir } from '../../config/paths.js';
 import { buildSystemPrompt as buildBaseSystemPrompt } from './system-prompt.js';
 import { resolveSystemPromptBuildParams } from './system-prompt-params.js';
 import type { PromptMode, SilentReplyPromptMode } from './types.js';
@@ -178,17 +175,6 @@ export class SystemPromptBuilder {
     }
 
     return undefined;
-  }
-
-  private getSkillNamesForSkillsSection(options?: {
-    skillAllowlist?: string[];
-    registeredToolNames?: string[];
-  }): string[] {
-    const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
-    return selectSkillsVisibleInPrompt(this.skillManager.getSkills(), skillsConfig, {
-      skillAllowlist: options?.skillAllowlist,
-      registeredToolNames: options?.registeredToolNames,
-    }).map((s) => s.name);
   }
 
   getSkillPrompt(): string {

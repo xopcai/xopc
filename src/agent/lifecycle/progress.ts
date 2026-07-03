@@ -170,7 +170,6 @@ export class ProgressFeedbackManager {
   private currentStage: ProgressStage = 'idle';
   private currentTool: string | null = null;
   private taskStartTime: number = 0;
-  private lastHeartbeatTime: number = 0;
   private heartbeatTimer?: ReturnType<typeof setInterval>;
   private streamActive: boolean = false;
 
@@ -184,7 +183,6 @@ export class ProgressFeedbackManager {
 
   startTask(): void {
     this.taskStartTime = Date.now();
-    this.lastHeartbeatTime = Date.now();
     
     if (this.config.heartbeatEnabled) {
       this.startHeartbeat();
@@ -205,7 +203,6 @@ export class ProgressFeedbackManager {
       const elapsed = Date.now() - this.taskStartTime;
       if (elapsed >= this.config.longTaskThresholdMs) {
         this.callbacks.onHeartbeat?.(elapsed, this.currentStage);
-        this.lastHeartbeatTime = Date.now();
       }
     }, this.config.heartbeatIntervalMs);
   }

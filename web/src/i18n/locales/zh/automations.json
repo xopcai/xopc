@@ -94,6 +94,7 @@
       "workflow": "工作流",
       "loadingWorkflows": "正在加载工作流...",
       "noWorkflows": "暂无工作流",
+      "triggeredRun": "触发时运行",
       "goal": "目标",
       "afterRun": "运行后",
       "webhookUrl": "Webhook URL",

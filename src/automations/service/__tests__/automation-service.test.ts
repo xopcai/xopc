@@ -74,4 +74,44 @@ describe('AutomationService', () => {
     expect(updated?.state.lastRunStatus).toBe('succeeded');
     expect(updated?.state.runningRunId).toBeUndefined();
   });
+
+  it('passes workflow run limits to workflow automations', async () => {
+    const workflowCalls: unknown[] = [];
+    service.setDeps({
+      workflowRunService: {
+        startWorkflowRun: async (params) => {
+          workflowCalls.push(params);
+          return { ok: true, runId: 'workflow-run-1', sessionKey: 'agent:main:webchat:workflow-run-1' };
+        },
+      },
+    });
+
+    const automation = await service.create({
+      name: 'Workflow review',
+      trigger: { kind: 'manual' },
+      action: {
+        kind: 'workflow',
+        workflowId: 'review',
+        input: { target: 'current branch' },
+        goal: 'Find merge blockers.',
+        concurrency: 3,
+        maxSubagents: 5,
+      },
+    });
+
+    const queued = await service.runNow(automation.id);
+    const runs = await waitFor(
+      () => service.listRuns({ automationId: automation.id, limit: 5 }),
+      (items) => items.some((item) => item.id === queued.id && item.status === 'succeeded'),
+    );
+
+    expect(runs.find((item) => item.id === queued.id)?.workflowRunId).toBe('workflow-run-1');
+    expect(workflowCalls[0]).toMatchObject({
+      definitionId: 'review',
+      input: { target: 'current branch' },
+      goal: 'Find merge blockers.',
+      concurrency: 3,
+      maxSubagents: 5,
+    });
+  });
 });

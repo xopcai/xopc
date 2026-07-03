@@ -97,12 +97,33 @@ describe('agent manifest resolver', () => {
   it('merges capability presets then applies agent overrides', () => {
     const result = resolveEffectiveAgentManifest({ agent: baseAgent, presets });
 
+    expect(result.presetChain).toEqual(['base-safe', 'code-tools']);
     expect(result.manifest.tools.builtin.read_file).toEqual({ mode: 'allow', scope: 'workspace' });
     expect(result.manifest.tools.builtin.send_message).toEqual({ mode: 'confirm' });
     expect(result.manifest.tools.builtin.shell).toEqual({ mode: 'confirm', scope: 'workspace' });
     expect(result.manifest.memory.mode).toBe('confirmWrite');
     expect(result.sources['tools.builtin.read_file.mode']).toBe('preset:code-tools@2');
     expect(result.sources['tools.builtin.shell.mode']).toBe('agent:coder');
+  });
+
+  it('prepends the configured default preset when present', () => {
+    const result = resolveEffectiveAgentManifest({
+      agent: baseAgent,
+      presets: {
+        default: {
+          id: 'default',
+          name: 'Global defaults',
+          version: 1,
+          tools: { builtin: { web_search: { mode: 'allow' } } },
+        },
+        ...presets,
+      },
+      defaultPresetId: 'default',
+    });
+
+    expect(result.presetChain).toEqual(['default', 'base-safe', 'code-tools']);
+    expect(result.manifest.extends).toEqual(['base-safe', 'code-tools']);
+    expect(result.sources['tools.builtin.web_search.mode']).toBe('preset:default@1');
   });
 
   it('honors locked preset paths', () => {

@@ -27,7 +27,7 @@ import type {
   GatewayMethodHandler,
   HttpRequestHandler,
 } from '../types/core.js';
-import type { FlagConfig, FlagValue, ShortcutConfig } from '../types/phase4.js';
+import type { FlagConfig, FlagValue, ShortcutConfig } from '../types/registration.js';
 import type {
   ExtensionHookEvent,
   ExtensionHookHandler,

@@ -63,6 +63,7 @@ export function AgentEffectiveCapabilityTab(props: {
   );
 
   const manifest = data?.manifest;
+  const presetChain = data?.presetChain ?? manifest?.extends ?? [];
   const sources = data?.sources ?? {};
   const modelRoles = Object.entries(manifest?.models?.roles ?? {}).sort(([aId], [bId]) => aId.localeCompare(bId));
   const toolPolicies = Object.entries(manifest?.tools?.builtin ?? {}).sort(([aId], [bId]) => aId.localeCompare(bId));
@@ -94,7 +95,7 @@ export function AgentEffectiveCapabilityTab(props: {
                 {a.effectivePresetChain}
               </h4>
               <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-sm text-fg">
-                {manifest.extends?.length ? manifest.extends.join(' -> ') : a.effectiveNoPresets}
+                {presetChain.length ? presetChain.join(' -> ') : a.effectiveNoPresets}
               </div>
             </div>
 

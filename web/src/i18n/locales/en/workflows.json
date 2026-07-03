@@ -153,6 +153,7 @@
     "advancedSettings": "Advanced settings",
     "concurrencyPlaceholder": "Concurrency (default {{default}})",
     "maxSubagentsPlaceholder": "Max subagents (default {{default}})",
+    "timeoutSecondsPlaceholder": "Timeout seconds (default {{default}})",
     "start": "Start workflow",
     "starting": "Starting…",
     "startSuccess": "Workflow started.",

@@ -16,11 +16,11 @@ import {
   deleteNoteRecord,
 } from '../index.js';
 
-describe('sqlite phase-6 repositories', () => {
+describe('sqlite notes and memory repositories', () => {
   let stateDir: string;
 
   beforeEach(() => {
-    stateDir = mkdtempSync(join(tmpdir(), 'xopc-phase6-'));
+    stateDir = mkdtempSync(join(tmpdir(), 'xopc-notes-memory-'));
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
   });

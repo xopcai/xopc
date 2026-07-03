@@ -264,7 +264,6 @@ export function withTimeout<T extends (...args: any[]) => Promise<any>>(
  * Timeout manager for tracking execution statistics
  */
 export class TimeoutManager {
-  private config: TimeoutConfig;
   private executions: Array<{
     toolName: string;
     executionTimeMs: number;
@@ -272,9 +271,7 @@ export class TimeoutManager {
     timestamp: number;
   }> = [];
 
-  constructor(config: Partial<TimeoutConfig> = {}) {
-    this.config = { ...DEFAULT_CONFIG, ...config };
-  }
+  constructor(_config: Partial<TimeoutConfig> = {}) {}
 
   /**
    * Execute with timeout and track statistics

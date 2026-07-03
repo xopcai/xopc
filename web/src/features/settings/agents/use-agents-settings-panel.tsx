@@ -739,6 +739,7 @@ export function useAgentsSettingsPanel() {
     },
     onTryInChat: () => void handleTryInChat(),
     capabilityPresets: capabilityPresetsData?.presets ?? [],
+    defaultPresetId: capabilityPresetsData?.defaultPresetId,
     onUpdateAgentExtends: (nextExtends: string[]) => void onUpdateAgentExtends(nextExtends),
     onOpenCapabilityPreset: (presetId: string) => {
       navigate(

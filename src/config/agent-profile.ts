@@ -67,7 +67,8 @@ export function resolveEffectiveAgentManifestForSession(
 
 export function resolveEffectiveAgentProfile(config: Config, agentId: string): EffectiveAgentProfile {
   const manifest = resolveEffectiveAgentManifestForAgent(config, agentId);
-  const defaultModel = manifest.models.roles[manifest.models.defaultRole]?.model;
+  const defaultRoleModel = manifest.models.roles[manifest.models.defaultRole];
+  const defaultModel = defaultRoleModel?.model;
   const deniedTools = Object.entries(manifest.tools.builtin)
     .filter(([, policy]) => policy.mode === 'deny')
     .map(([name]) => name);
@@ -78,7 +79,7 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
     manifest,
     resolvedWorkspacePath: resolveAgentWorkspaceDir(config, manifest.id),
     primaryModelRef: defaultModel?.trim() || undefined,
-    fallbacks: [],
+    fallbacks: (defaultRoleModel?.fallbacks ?? []).map((ref) => ref.trim()).filter(Boolean),
     systemPromptOverride: manifest.prompt?.customInstructions,
     skillsAllowlist,
     tools: { denied: new Set(deniedTools) },

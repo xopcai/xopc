@@ -4,4 +4,4 @@
  * Model management and selection.
  */
 
-export { ModelManager, type ModelManagerConfig, type RunResult } from './manager.js';
+export { ModelManager, type ModelManagerConfig } from './manager.js';

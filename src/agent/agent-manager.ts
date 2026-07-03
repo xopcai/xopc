@@ -29,7 +29,7 @@ import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/i
 import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
 import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir, resolveUserProfilePath } from '../config/paths.js';
-import { loadProfileMarkdownFiles, extractTextContent } from './context/workspace.js';
+import { extractTextContent } from './context/workspace.js';
 import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
 import { loadProjectAgentsContextFile } from './bootstrap/project-agents-context.js';
 import type { EmbeddedContextFile } from './bootstrap/types.js';
@@ -395,7 +395,7 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   /**
-   * Call once per user turn before the main `agent.prompt` (via {@link runAgentTurnWithModelFallbacks} `beforeUserPrompt`).
+   * Call once per user turn before the main embedded agent turn.
    * Delegates to {@link BackgroundReviewCoordinator}.
    */
   beginBackgroundReviewUserTurn(sessionKey: string): void {
@@ -449,12 +449,6 @@ export class AgentManager implements AgentInstanceGateway {
       toolConditions: skill.toolConditions,
       requiredEnvVarNames: skill.requiredEnvVarNames,
     };
-  }
-
-  private loadProfileMarkdownForProfile(profile: EffectiveAgentProfile): ReturnType<typeof loadProfileMarkdownFiles> {
-    const cfg = this.config.config!;
-    const profileDir = resolveAgentProfileDir(cfg, profile.agentId);
-    return loadProfileMarkdownFiles(profileDir);
   }
 
   private isProjectWorkspaceTrusted(workspaceDir: string): boolean {
@@ -776,7 +770,7 @@ export class AgentManager implements AgentInstanceGateway {
     this.backgroundReview.attachToAgent(sessionKey, agent, registeredToolNames);
 
     const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
-    this.config.getModelManager?.().setSessionProfileDefault(sessionKey, modelRef);
+    this.config.getModelManager?.().setSessionProfileDefault(sessionKey, modelRef, profile.fallbacks);
 
     log.debug({ sessionKey, totalAgents: this.agents.size, agentId: profile.agentId }, 'Created new agent instance');
     return agent;

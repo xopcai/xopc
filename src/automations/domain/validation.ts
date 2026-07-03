@@ -72,6 +72,8 @@ export const AutomationActionSchema = z.discriminatedUnion('kind', [
     input: z.unknown().optional(),
     inputEnvelope: WorkflowRunInputEnvelopeSchema.optional(),
     goal: optionalTrimmedString(5000),
+    concurrency: z.number().int().min(1).max(50).optional(),
+    maxSubagents: z.number().int().min(1).max(100).optional(),
     timeoutSeconds: z.number().int().min(1).max(86400).optional(),
   }).strict(),
 ]);
@@ -138,4 +140,3 @@ export const UpdateAutomationSchema = AutomationSchema.omit({
 
 export type CreateAutomationInput = z.infer<typeof CreateAutomationSchema>;
 export type UpdateAutomationInput = z.infer<typeof UpdateAutomationSchema>;
-

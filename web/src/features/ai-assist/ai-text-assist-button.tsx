@@ -21,6 +21,7 @@ type AiTextAssistLabels = {
   preview: string;
   loading: string;
   empty: string;
+  generate: string;
   regenerate: string;
   applyCurrent: string;
   replace: string;
@@ -47,6 +48,7 @@ function labelsForLocale(locale: string): AiTextAssistLabels {
       preview: '预览',
       loading: '正在生成建议...',
       empty: '暂无内容',
+      generate: '生成建议',
       regenerate: '重新生成',
       applyCurrent: '应用当前内容',
       replace: '替换',
@@ -67,6 +69,7 @@ function labelsForLocale(locale: string): AiTextAssistLabels {
     preview: 'Preview',
     loading: 'Generating suggestion...',
     empty: 'No content',
+    generate: 'Generate suggestion',
     regenerate: 'Regenerate',
     applyCurrent: 'Apply current',
     replace: 'Replace',
@@ -164,12 +167,15 @@ export function AiTextAssistButton({
     });
   }, [context, fieldId, fieldLabel, format, generate, intent, locale, scenario]);
 
-  const requestSuggestion = useCallback(async () => {
+  const openAssist = useCallback(() => {
     setCurrentDraft(value);
     setCurrentMode('preview');
+    setDraft('');
+    setMode('edit');
+    setThinkingOpen(true);
+    reset();
     setOpen(true);
-    await generateSuggestion(value);
-  }, [generateSuggestion, value]);
+  }, [reset, value]);
 
   const regenerateSuggestion = useCallback(async () => {
     await generateSuggestion(currentDraft);
@@ -207,6 +213,7 @@ export function AiTextAssistButton({
 
   const canApply = !loading && !error && draft.trim().length > 0;
   const currentChanged = currentDraft !== value;
+  const hasGenerated = draft.trim().length > 0 || thinking.trim().length > 0 || Boolean(error);
 
   return (
     <>
@@ -217,7 +224,7 @@ export function AiTextAssistButton({
         title={labels.buttonTitle}
         aria-label={labels.buttonTitle}
         disabled={disabled || loading}
-        onClick={() => void requestSuggestion()}
+        onClick={openAssist}
       >
         <Sparkles className="size-3.5" strokeWidth={1.75} aria-hidden />
         {showLabel ? labels.buttonTitle : null}
@@ -405,8 +412,12 @@ export function AiTextAssistButton({
                   {labels.applyCurrent}
                 </Button>
                 <Button type="button" variant="secondary" disabled={loading} onClick={() => void regenerateSuggestion()}>
-                  <RefreshCw className="size-4" strokeWidth={1.75} aria-hidden />
-                  {labels.regenerate}
+                  {hasGenerated ? (
+                    <RefreshCw className="size-4" strokeWidth={1.75} aria-hidden />
+                  ) : (
+                    <Sparkles className="size-4" strokeWidth={1.75} aria-hidden />
+                  )}
+                  {hasGenerated ? labels.regenerate : labels.generate}
                 </Button>
                 <Button type="button" variant="secondary" disabled={!canApply} onClick={appendSuggestion}>
                   {labels.append}

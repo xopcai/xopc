@@ -10,6 +10,7 @@ import {
 
 export interface ResolveManifestResult {
   manifest: EffectiveAgentManifest;
+  presetChain: string[];
   sources: Record<string, string>;
 }
 
@@ -149,6 +150,7 @@ export function resolveEffectiveAgentManifest(params: ResolveManifestParams): Re
 
   return {
     manifest: AgentManifestSchema.parse({ ...merged, id: agent.id, enabled: agent.enabled, extends: agent.extends }),
+    presetChain: chain.map((preset) => preset.id),
     sources,
   };
 }

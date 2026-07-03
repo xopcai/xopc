@@ -48,6 +48,7 @@ export type AgentsEditorPanelContentProps = {
   onSaveAgentEdits: () => void;
   onDelete: (purge: boolean) => void;
   capabilityPresets: CapabilityPresetRow[];
+  defaultPresetId?: string;
   onUpdateAgentExtends: (nextExtends: string[]) => void;
   onOpenCapabilityPreset: (presetId: string) => void;
   overviewSaveProfileMarkdownRef: MutableRefObject<(() => Promise<void>) | null>;
@@ -128,6 +129,7 @@ export function AgentsEditorPanelContent({
   onSaveAgentEdits,
   onDelete,
   capabilityPresets,
+  defaultPresetId,
   onUpdateAgentExtends,
   onOpenCapabilityPreset,
   overviewSaveProfileMarkdownRef: _overviewSaveProfileMarkdownRef,
@@ -200,6 +202,7 @@ export function AgentsEditorPanelContent({
         onSaveAgentEdits={onSaveAgentEdits}
         onDelete={onDelete}
         capabilityPresets={capabilityPresets}
+        defaultPresetId={defaultPresetId}
         onUpdateAgentExtends={onUpdateAgentExtends}
         onOpenCapabilityPreset={onOpenCapabilityPreset}
         hideInlineSave

@@ -12,9 +12,9 @@ export type GatewayAgentToolsInfo = {
 
 export type GatewayAgentTypedModelsInfo = {
   defaultRole: string;
-  preset: Array<{ id: string; model: string; description?: string }>;
-  entry?: Array<{ id: string; model: string; description?: string }>;
-  effective: Array<{ id: string; model: string; description?: string }>;
+  preset: Array<{ id: string; model: string; fallbacks?: string[]; description?: string }>;
+  entry?: Array<{ id: string; model: string; fallbacks?: string[]; description?: string }>;
+  effective: Array<{ id: string; model: string; fallbacks?: string[]; description?: string }>;
 };
 
 export type GatewayAgentRow = {
@@ -54,7 +54,7 @@ export type GatewayAgentEffectiveManifestPayload = {
     workspace?: { root?: string };
     models?: {
       defaultRole?: string;
-      roles?: Record<string, { model: string; description?: string }>;
+      roles?: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
     };
     tools?: {
       builtin?: Record<string, { mode: 'allow' | 'confirm' | 'deny'; scope?: string }>;
@@ -86,6 +86,7 @@ export type GatewayAgentEffectiveManifestPayload = {
       escalation?: string[];
     };
   };
+  presetChain?: string[];
   sources: Record<string, string>;
 };
 

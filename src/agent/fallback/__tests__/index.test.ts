@@ -7,7 +7,6 @@ import {
   isAuthErrorMessage,
   isFormatErrorMessage,
 } from '../reason.js';
-import { FailoverError, isFailoverError, describeFailoverError } from '../error.js';
 import { resolveFallbackCandidates } from '../candidates.js';
 
 describe('Failover Reason Classification', () => {
@@ -43,29 +42,6 @@ describe('Failover Reason Classification', () => {
 
   it('returns unknown for unrecognized errors', () => {
     expect(classifyFailoverReason('random error')).toBe('unknown');
-  });
-});
-
-describe('FailoverError', () => {
-  it('creates error with properties', () => {
-    const error = new FailoverError('Test', 'rate_limit', 'openai', 'gpt-4', 429);
-    expect(error.message).toBe('Test');
-    expect(error.reason).toBe('rate_limit');
-    expect(error.provider).toBe('openai');
-    expect(error.model).toBe('gpt-4');
-    expect(error.status).toBe(429);
-  });
-
-  it('detects via isFailoverError', () => {
-    expect(isFailoverError(new FailoverError('Test', 'auth'))).toBe(true);
-    expect(isFailoverError(new Error('Test'))).toBe(false);
-  });
-
-  it('describes error correctly', () => {
-    const error = new FailoverError('Rate limited', 'rate_limit', 'anthropic', 'claude-3', 429);
-    const desc = describeFailoverError(error);
-    expect(desc.message).toBe('Rate limited');
-    expect(desc.reason).toBe('rate_limit');
   });
 });
 

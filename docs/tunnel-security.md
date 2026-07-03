@@ -96,7 +96,7 @@ Subdomain HTTPS is terminated at the broker with a wildcard certificate (`*.frp.
 Verify after cutover:
 
 ```bash
-TUNNEL_PUBLIC_URL=https://{sub}.frp.xopc.ai pnpm run tunnel:phase6:verify
+TUNNEL_PUBLIC_URL=https://{sub}.frp.xopc.ai pnpm run tunnel:broker-tls:verify
 ```
 
 ## Remote mobile API
