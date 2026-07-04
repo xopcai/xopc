@@ -1,4 +1,6 @@
+import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FileText } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
@@ -25,10 +27,23 @@ import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constant
 import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
 import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
 import { useWorkflowSessionMetadata } from '@/features/workflows/use-workflow-session-metadata';
-import { appendNoteContent, createTaskNote } from '@/features/notes/notes-api';
+import { appendNoteContent, createTaskNote, getNote } from '@/features/notes/notes-api';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
+import { showToast } from '@/lib/toast';
+import { Button } from '@/components/ui/button';
+
+type PendingSourceNoteSave = {
+  sourceNoteId: string;
+  resolve: () => void;
+  reject: () => void;
+};
+
+type SourceNoteSaveDraft = {
+  heading: string;
+  content: string;
+};
 
 export function ChatPage() {
   const language = useLocaleStore((s) => s.language);
@@ -42,7 +57,11 @@ export function ChatPage() {
   const routeComposerSeedMarkerRef = useRef<string | null>(null);
 
   const welcomeDraftSeq = useRef(0);
+  const pendingSourceNoteSaveRef = useRef<PendingSourceNoteSave | null>(null);
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
+  const [sourceNoteLoadedTitle, setSourceNoteLoadedTitle] = useState<string | null>(null);
+  const [sourceNoteSaveDraft, setSourceNoteSaveDraft] = useState<SourceNoteSaveDraft | null>(null);
+  const [sourceNoteSaveSubmitting, setSourceNoteSaveSubmitting] = useState(false);
 
   const { auth, session, messages: msgSlice, timeline, stream, followUp, clarify, agents } = useChatSession();
 
@@ -358,7 +377,36 @@ export function ChatPage() {
   ]);
 
   const sourceNoteId = workflowMeta?.sourceNoteId ?? null;
-  const sourceNoteTitle = workflowMeta?.sourceNoteTitle || m.chat.sourceNoteFallbackTitle;
+  useEffect(() => {
+    let cancelled = false;
+    setSourceNoteLoadedTitle(null);
+    if (!sourceNoteId) return undefined;
+    void getNote(sourceNoteId)
+      .then((note) => {
+        if (cancelled) return;
+        setSourceNoteLoadedTitle(note?.title?.trim() || null);
+      })
+      .catch(() => {
+        if (!cancelled) setSourceNoteLoadedTitle(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceNoteId]);
+
+  const sourceNoteTitle =
+    sourceNoteLoadedTitle || workflowMeta?.sourceNoteTitle || m.chat.sourceNoteFallbackTitle;
+  const closeSourceNoteSaveDialog = useCallback(() => {
+    pendingSourceNoteSaveRef.current?.reject();
+    pendingSourceNoteSaveRef.current = null;
+    setSourceNoteSaveDraft(null);
+    setSourceNoteSaveSubmitting(false);
+  }, []);
+
+  useEffect(() => {
+    closeSourceNoteSaveDialog();
+  }, [closeSourceNoteSaveDialog, sourceNoteId]);
+
   const timelineLabels = useMemo(
     () => ({
       title: m.chat.timelineTitle,
@@ -397,22 +445,112 @@ export function ChatPage() {
   const handleSaveAssistantToSourceNote = useCallback(
     async (content: string) => {
       if (!sourceNoteId) return;
-      await appendNoteContent(sourceNoteId, content, m.chat.sourceNoteAppendHeading);
+      pendingSourceNoteSaveRef.current?.reject();
+      setSourceNoteSaveSubmitting(false);
+      const sourceLine = m.chat.sourceNoteAppendSourceLine.replace(
+        '{{time}}',
+        new Date().toLocaleString(language),
+      );
+      setSourceNoteSaveDraft({
+        heading: m.chat.sourceNoteAppendHeading,
+        content: `${sourceLine}\n\n${content.trim()}`,
+      });
+      return new Promise<void>((resolve, reject) => {
+        pendingSourceNoteSaveRef.current = {
+          sourceNoteId,
+          resolve,
+          reject,
+        };
+      });
     },
-    [m.chat.sourceNoteAppendHeading, sourceNoteId],
+    [language, m.chat.sourceNoteAppendHeading, m.chat.sourceNoteAppendSourceLine, sourceNoteId],
   );
+
+  const handleConfirmSourceNoteSave = useCallback(async () => {
+    const pending = pendingSourceNoteSaveRef.current;
+    if (!pending || !sourceNoteSaveDraft) return;
+    const heading = sourceNoteSaveDraft.heading.trim() || m.chat.sourceNoteAppendHeading;
+    const content = sourceNoteSaveDraft.content.trim();
+    if (!content) return;
+
+    setSourceNoteSaveSubmitting(true);
+    try {
+      await appendNoteContent(pending.sourceNoteId, content, heading);
+      showToast({ type: 'success', title: m.chat.sourceNoteSaveSuccess });
+      window.dispatchEvent(
+        new CustomEvent('note-updated', {
+          detail: {
+            noteId: pending.sourceNoteId,
+            source: 'chat',
+            sessionKey: chatSessionKey,
+          },
+        }),
+      );
+      pending.resolve();
+      pendingSourceNoteSaveRef.current = null;
+      setSourceNoteSaveDraft(null);
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: m.chat.sourceNoteSaveFailed,
+        message: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      setSourceNoteSaveSubmitting(false);
+    }
+  }, [
+    chatSessionKey,
+    m.chat.sourceNoteAppendHeading,
+    m.chat.sourceNoteSaveFailed,
+    m.chat.sourceNoteSaveSuccess,
+    sourceNoteSaveDraft,
+  ]);
 
   const handleExtractAssistantTask = useCallback(
     async (content: string) => {
       if (!sourceNoteId) return;
       const title = content.trim().split(/\n+/)[0]?.replace(/^[-#*>\s]+/, '').trim() || m.chat.sourceNoteTaskFallbackTitle;
-      await createTaskNote(title.slice(0, 120), {
-        sourceNoteId,
-        sourceSessionKey: chatSessionKey,
-      });
+      try {
+        await createTaskNote(title.slice(0, 120), {
+          sourceNoteId,
+          sourceSessionKey: chatSessionKey,
+        });
+        showToast({ type: 'success', title: m.chat.sourceNoteTaskSuccess });
+      } catch (err) {
+        showToast({
+          type: 'error',
+          title: m.chat.sourceNoteTaskFailed,
+          message: err instanceof Error ? err.message : undefined,
+        });
+        throw err;
+      }
     },
-    [chatSessionKey, m.chat.sourceNoteTaskFallbackTitle, sourceNoteId],
+    [
+      chatSessionKey,
+      m.chat.sourceNoteTaskFailed,
+      m.chat.sourceNoteTaskFallbackTitle,
+      m.chat.sourceNoteTaskSuccess,
+      sourceNoteId,
+    ],
   );
+
+  const handleDraftSourceNoteDigest = useCallback(() => {
+    if (!sourceNoteId) return;
+    const prompt = m.chat.sourceNoteDigestPrompt.replace('{{title}}', sourceNoteTitle);
+    if (stream.streaming || stream.sending) {
+      void followUp.addPendingFollowUp(prompt);
+      showToast({ type: 'info', title: m.chat.sourceNoteDigestQueued });
+      return;
+    }
+    void stream.sendMessage(prompt);
+  }, [
+    followUp,
+    m.chat.sourceNoteDigestPrompt,
+    m.chat.sourceNoteDigestQueued,
+    sourceNoteId,
+    sourceNoteTitle,
+    stream,
+  ]);
 
   if (!auth.hasToken) {
     return (
@@ -450,16 +588,26 @@ export function ChatPage() {
         ) : null}
         {sourceNoteId ? (
           <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">
-            <div className="flex min-w-0 items-center justify-between gap-3 text-xs text-fg-muted">
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
               <span className="min-w-0 truncate">
                 {m.chat.sourceNoteBanner.replace('{{title}}', sourceNoteTitle)}
               </span>
-              <Link
-                to={`/notes/${encodeURIComponent(sourceNoteId)}`}
-                className="shrink-0 font-medium text-accent transition-colors hover:text-accent-fg"
-              >
-                {m.chat.sourceNoteOpen}
-              </Link>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-edge-subtle px-2 font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+                  onClick={handleDraftSourceNoteDigest}
+                >
+                  <FileText className="size-3.5" strokeWidth={1.75} aria-hidden />
+                  <span>{m.chat.sourceNoteDigestAction}</span>
+                </button>
+                <Link
+                  to={`/notes/${encodeURIComponent(sourceNoteId)}`}
+                  className="font-medium text-accent transition-colors hover:text-accent-fg"
+                >
+                  {m.chat.sourceNoteOpen}
+                </Link>
+              </div>
             </div>
           </div>
         ) : null}
@@ -625,6 +773,75 @@ export function ChatPage() {
           </div>
         </div>
       </div>
+
+      <Dialog.Root
+        open={sourceNoteSaveDraft !== null}
+        onOpenChange={(open) => {
+          if (!open && !sourceNoteSaveSubmitting) closeSourceNoteSaveDialog();
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(82vh,42rem)] w-[min(100%-2rem,44rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover outline-none">
+            <div className="shrink-0 border-b border-edge-subtle px-5 py-4">
+              <Dialog.Title className="text-base font-semibold text-fg">
+                {m.chat.sourceNoteSaveDialogTitle}
+              </Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-fg-muted">
+                {m.chat.sourceNoteSaveDialogDescription.replace('{{title}}', sourceNoteTitle)}
+              </Dialog.Description>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+              <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
+                <span>{m.chat.sourceNoteSaveDialogHeadingLabel}</span>
+                <input
+                  value={sourceNoteSaveDraft?.heading ?? ''}
+                  onChange={(event) =>
+                    setSourceNoteSaveDraft((draft) =>
+                      draft ? { ...draft, heading: event.target.value } : draft,
+                    )
+                  }
+                  className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm font-normal text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  disabled={sourceNoteSaveSubmitting}
+                />
+              </label>
+              <label className="flex min-h-0 flex-1 flex-col gap-1.5 text-sm font-medium text-fg">
+                <span>{m.chat.sourceNoteSaveDialogContentLabel}</span>
+                <textarea
+                  value={sourceNoteSaveDraft?.content ?? ''}
+                  onChange={(event) =>
+                    setSourceNoteSaveDraft((draft) =>
+                      draft ? { ...draft, content: event.target.value } : draft,
+                    )
+                  }
+                  className="min-h-[18rem] flex-1 resize-none rounded-lg border border-edge bg-surface-base px-3 py-2 font-mono text-xs leading-relaxed text-fg outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20"
+                  disabled={sourceNoteSaveSubmitting}
+                />
+              </label>
+            </div>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-edge-subtle px-5 py-4">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={closeSourceNoteSaveDialog}
+                disabled={sourceNoteSaveSubmitting}
+              >
+                {m.chat.sourceNoteSaveDialogCancel}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => void handleConfirmSourceNoteSave()}
+                disabled={sourceNoteSaveSubmitting || !sourceNoteSaveDraft?.content.trim()}
+              >
+                {sourceNoteSaveSubmitting
+                  ? m.chat.sourceNoteSaveDialogSaving
+                  : m.chat.sourceNoteSaveDialogConfirm}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <ScrollToBottomButton
         visible={!session.showSessionLoading && !atBottom}

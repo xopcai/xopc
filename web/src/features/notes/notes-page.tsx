@@ -1,5 +1,5 @@
 import { StickyNote, Search } from 'lucide-react';
-import { useCallback, useLayoutEffect, useMemo, useReducer, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import useSWR from 'swr';
@@ -69,6 +69,14 @@ export function NotesPage() {
   const showSkeleton = isLoading && !data;
   const notes = data?.items ?? [];
   const total = data?.total ?? 0;
+
+  useEffect(() => {
+    const onNoteUpdated = () => {
+      void mutate();
+    };
+    window.addEventListener('note-updated', onNoteUpdated);
+    return () => window.removeEventListener('note-updated', onNoteUpdated);
+  }, [mutate]);
 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);

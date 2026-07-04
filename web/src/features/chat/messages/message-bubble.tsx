@@ -280,6 +280,7 @@ export const MessageBubble = memo(function MessageBubble({
           2000,
         );
       })
+      .catch(() => undefined)
       .finally(() => setAssistantActionBusy(null));
   }, [assistantActionBusy, copyMarkdown, onSaveAssistantToSourceNote]);
 
@@ -295,6 +296,7 @@ export const MessageBubble = memo(function MessageBubble({
           2000,
         );
       })
+      .catch(() => undefined)
       .finally(() => setAssistantActionBusy(null));
   }, [assistantActionBusy, copyMarkdown, copyPlainText, onExtractAssistantTask]);
 
