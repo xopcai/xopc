@@ -1,9 +1,10 @@
-import { Cable, CheckCircle2, PackagePlus } from 'lucide-react';
+import { CheckCircle2, PackagePlus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import type { ConnectorsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
-import type { ConnectorDefinition, ConnectorInstance } from '../connectors-api';
+import type { ConnectorCategory, ConnectorDefinition, ConnectorInstance } from '../connectors-api';
 
 const connectorSkeletonBar = 'animate-pulse motion-reduce:animate-none rounded-md bg-surface-hover dark:bg-surface-active/50';
 
@@ -13,14 +14,21 @@ export function connectorIsInstalled(connector: ConnectorDefinition, instances: 
   return instances.some((instance) => instance.connectorId === connector.id);
 }
 
+function connectorCategoryLabel(category: ConnectorCategory, labels: ConnectorsSettingsMessages['connectorCategoryLabels']): string {
+  return labels[category] ?? category;
+}
+
+function formatConnectorCategory(category: ConnectorCategory, t: ConnectorsSettingsMessages): string {
+  return t.connectorCategoryTemplate.replace('{{category}}', connectorCategoryLabel(category, t.connectorCategoryLabels));
+}
+
 export function ConnectorCardSkeleton() {
   return (
     <div
-      className="flex h-full min-h-[11rem] flex-col rounded-xl border border-edge-subtle bg-surface-base p-4 dark:border-edge-subtle"
+      className="flex h-full min-h-[9.5rem] flex-col rounded-xl border border-edge-subtle bg-surface-base p-4 dark:border-edge-subtle"
       aria-hidden
     >
       <div className="flex min-h-0 flex-1 items-start gap-3">
-        <div className={cn('size-11 shrink-0 rounded-xl', connectorSkeletonBar)} />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="flex items-start justify-between gap-2">
             <div className={cn('h-4 min-w-0 flex-1', connectorSkeletonBar)} />
@@ -28,11 +36,6 @@ export function ConnectorCardSkeleton() {
           </div>
           <div className={cn('h-3 w-full', connectorSkeletonBar)} />
           <div className={cn('h-3 w-[88%]', connectorSkeletonBar)} />
-          <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
-            <div className={cn('h-5 w-16 rounded-full', connectorSkeletonBar)} />
-            <div className={cn('h-5 w-20 rounded-full', connectorSkeletonBar)} />
-            <div className={cn('h-5 w-14 rounded-full', connectorSkeletonBar)} />
-          </div>
         </div>
       </div>
     </div>
@@ -66,77 +69,81 @@ export function ConnectorCard({
   connector,
   installed,
   onInstall,
+  t,
 }: {
   connector: ConnectorDefinition;
   installed: boolean;
   onInstall: (connector: ConnectorDefinition) => void;
+  t: ConnectorsSettingsMessages;
 }) {
+  const categoryLabel = formatConnectorCategory(connector.category, t);
   const visibleCapabilities = connector.capabilities.slice(0, 4);
   const hiddenCapabilityCount = Math.max(0, connector.capabilities.length - visibleCapabilities.length);
+  const renderInstallButton = (className?: string) => (
+    <Button
+      type="button"
+      variant="primary"
+      className={cn('h-8 justify-center px-2.5 text-xs font-medium', className)}
+      onClick={() => onInstall(connector)}
+    >
+      <PackagePlus className="size-4" />
+      {t.install}
+    </Button>
+  );
 
   return (
-    <div className="flex min-h-60 flex-col rounded-lg border border-edge bg-surface-panel p-4 shadow-surface transition-colors hover:border-accent/50">
+    <div className="group flex min-h-[9.5rem] flex-col rounded-lg border border-edge bg-surface-panel p-4 shadow-surface transition-colors hover:border-accent/50 focus-within:border-accent/50">
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accent-soft text-accent-fg">
-              <Cable className="size-5" aria-hidden />
-            </div>
             <div className="min-w-0">
               <h3 className="truncate text-sm font-semibold text-fg">{connector.displayName}</h3>
-              <p className="mt-1 text-xs uppercase tracking-wide text-fg-subtle">{connector.category}</p>
+              <p className="mt-1 truncate text-xs text-fg-subtle">{categoryLabel}</p>
             </div>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
+          <div className="flex shrink-0 items-start gap-2">
+            {!installed ? (
+              <div className="hidden shrink-0 items-center gap-1 transition-opacity sm:pointer-events-none sm:flex sm:opacity-0 sm:group-hover:pointer-events-auto sm:group-hover:opacity-100 sm:group-focus-within:pointer-events-auto sm:group-focus-within:opacity-100">
+                {renderInstallButton()}
+              </div>
+            ) : null}
             {installed ? (
               <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
                 <CheckCircle2 className="size-3" aria-hidden />
-                Installed
+                {t.installedBadge}
               </span>
             ) : null}
-            <span className="rounded-full border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-subtle">
-              {connector.source === 'registry' ? 'Registry' : connector.source}
-            </span>
           </div>
         </div>
 
-        <p className="mt-4 line-clamp-3 text-sm leading-6 text-fg-muted">{connector.description}</p>
+        <p className="mt-4 line-clamp-2 text-sm leading-6 text-fg-muted" title={connector.description}>
+          {connector.description}
+        </p>
 
-        <div className="mt-4 flex flex-wrap gap-1.5">
-          {visibleCapabilities.map((capability) => (
-            <span key={capability} className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted">
-              {capability}
-            </span>
-          ))}
-          {hiddenCapabilityCount > 0 ? (
-            <span className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-subtle">
-              +{hiddenCapabilityCount}
-            </span>
-          ) : null}
-        </div>
+        {visibleCapabilities.length > 0 ? (
+          <div className="mt-4 flex flex-wrap gap-1.5">
+            {visibleCapabilities.map((capability) => (
+              <span
+                key={capability}
+                className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted"
+              >
+                {capability}
+              </span>
+            ))}
+            {hiddenCapabilityCount > 0 ? (
+              <span className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-subtle">
+                +{hiddenCapabilityCount}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
-      {connector.tags?.length ? (
-        <div className="mt-4 flex flex-wrap gap-1.5 border-t border-edge pt-3">
-          {connector.tags.slice(0, 4).map((tag) => (
-            <span key={tag} className="rounded-full border border-edge px-2 py-0.5 text-[11px] text-fg-subtle">
-              {tag}
-            </span>
-          ))}
+      {!installed ? (
+        <div className="mt-4 flex items-center justify-end border-t border-edge pt-3 sm:hidden">
+          {renderInstallButton('w-full')}
         </div>
       ) : null}
-
-      <div className="mt-4 flex items-center justify-end">
-        <Button
-          variant="secondary"
-          disabled={installed}
-          className="w-full justify-center"
-          onClick={() => onInstall(connector)}
-        >
-          {installed ? <CheckCircle2 className="size-4" /> : <PackagePlus className="size-4" />}
-          {installed ? 'Installed' : 'Install'}
-        </Button>
-      </div>
     </div>
   );
 }

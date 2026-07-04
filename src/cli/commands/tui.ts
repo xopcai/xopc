@@ -2,6 +2,7 @@ import { Command } from 'commander';
 
 import { setTuiDefaultAgentConfig } from '../../commands/agents.config.js';
 import { loadConfig, saveConfig } from '../../config/loader.js';
+import { detectMigrations, runBootstrapMigrationsSync } from '../../migrations/runner.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 
 function createTuiCommand(ctx: CLIContext): Command {
@@ -33,6 +34,13 @@ function createTuiCommand(ctx: CLIContext): Command {
     .option('--theme <name>', 'Theme: auto, dark, light, or custom name from ~/.xopc/themes/')
     .option('--thinking <level>', 'Thinking level override')
     .action(async (options: Record<string, string | boolean | undefined>) => {
+      runBootstrapMigrationsSync(ctx.configPath);
+      const pendingMigrations = detectMigrations(ctx.configPath);
+      if (pendingMigrations.length > 0) {
+        console.warn(
+          `xopc has ${pendingMigrations.length} pending migration(s). Run \`xopc doctor --fix\` or open Settings → App management.`,
+        );
+      }
       if (typeof options.setDefaultAgent === 'string') {
         const cfg = loadConfig(ctx.configPath);
         const result = setTuiDefaultAgentConfig(cfg, options.setDefaultAgent);

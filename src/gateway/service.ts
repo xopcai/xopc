@@ -38,6 +38,7 @@ import { assertGatewayRuntimeConfig } from './runtime-config.js';
 import { resolveEffectiveGatewayPort } from './host.js';
 import { buckets, isGatewayStrictSecurityEnabled } from './rate-limit/index.js';
 import { prewarmModelRegistry } from '../providers/index.js';
+import { runBootstrapMigrationsSync } from '../migrations/runner.js';
 import { createLogger, getLogDir, getRuntimeLogStats } from '../utils/logger.js';
 import {
   resolveConfigPath,
@@ -160,6 +161,7 @@ export class GatewayService {
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
+    runBootstrapMigrationsSync(this.configPath);
     this.config = loadConfig(this.configPath);
     const starterResult = ensureStarterAgentsInitialized(this.config);
     if (starterResult.changed) {

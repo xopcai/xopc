@@ -417,7 +417,7 @@ export function ConnectorsPage() {
           ) : (
             <div className="grid gap-3">
               {visibleInstances.map((instance) => (
-                <InstalledConnectorRow key={instance.instanceId} instance={instance} onChanged={load} />
+                <InstalledConnectorRow key={instance.instanceId} instance={instance} onChanged={load} t={cs} mcp={mcp} />
               ))}
               {visibleCustomServers.map((row) => (
                 <CustomMcpServerRow
@@ -498,6 +498,7 @@ export function ConnectorsPage() {
                       connector={connector}
                       installed={installedIds.has(connector.id) || connectorIsInstalled(connector, state.instances)}
                       onInstall={(selected) => setInstallDraft(buildInitialDraft(selected))}
+                      t={cs}
                     />
                   ))}
                 </div>
@@ -521,7 +522,6 @@ export function ConnectorsPage() {
 
         {tab === 'builtin' && hasToken ? (
           <div className="flex flex-col gap-4">
-            <p className="text-sm text-fg-muted">{cs.catalogHint}</p>
             {state.loading ? (
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label={cs.loading}>
                 {CONNECTOR_SKELETON_KEYS.map((key) => (
@@ -540,6 +540,7 @@ export function ConnectorsPage() {
                     connector={connector}
                     installed={installedIds.has(connector.id) || connectorIsInstalled(connector, state.instances)}
                     onInstall={(selected) => setInstallDraft(buildInitialDraft(selected))}
+                    t={cs}
                   />
                 ))}
               </div>
@@ -553,6 +554,7 @@ export function ConnectorsPage() {
           draft={installDraft}
           onChange={setInstallDraft}
           onClose={() => setInstallDraft(null)}
+          t={cs}
           onInstalled={async () => {
             await load();
             await mutateConfig();

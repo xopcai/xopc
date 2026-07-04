@@ -18,6 +18,7 @@ import type { SessionMetadata } from '../../session/types.js';
 import type { FlagConfig, FlagValue, ShortcutConfig } from './registration.js';
 import type { ProviderPlugin } from './providers.js';
 import type { TuiExtensionRegistrar } from './tui.js';
+import type { Migration } from '../../migrations/types.js';
 
 // ============================================================================
 // Extension Definition
@@ -171,6 +172,9 @@ export interface ExtensionApi {
    * Register a reload handler when config paths matching this extension change during hot reload.
    */
   registerReload(handler: ExtensionReloadHandler): void;
+
+  /** Register a migration contributed by this extension. */
+  registerMigration(migration: Migration): void;
   
   // Service Registration
   registerService(service: ExtensionService): void;
@@ -308,6 +312,11 @@ export interface ExtensionReloadRegistration {
   configPrefixes: string[];
 }
 
+export interface ExtensionMigrationRegistration {
+  extensionId: string;
+  migration: Migration;
+}
+
 // ============================================================================
 // Commands
 // ============================================================================
@@ -366,4 +375,6 @@ export interface ExtensionRegistry {
   getCommand(name: string): ExtensionCommand | undefined;
   addCliRegistration(reg: ExtensionCliRegistration): void;
   getCliRegistrations(): readonly ExtensionCliRegistration[];
+  addMigrationRegistration?(reg: ExtensionMigrationRegistration): void;
+  getMigrationRegistrations?(): readonly ExtensionMigrationRegistration[];
 }

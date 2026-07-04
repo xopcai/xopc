@@ -95,10 +95,16 @@ export const AUTHENTICATED_LAZY_ROUTE_BUNDLES: readonly AuthenticatedLazyRouteBu
   },
   {
     id: 'doctor',
-    match: (path) => startsWithAny(path, ['/api/doctor']),
+    match: (path) => startsWithAny(path, ['/api/doctor', '/api/migrations']),
     load: async () => {
       const { registerDoctorRoutes } = await import('./doctor.js');
-      return { register: registerDoctorRoutes };
+      const { registerMigrationRoutes } = await import('./migrations.js');
+      return {
+        register: (authenticated, deps) => {
+          registerDoctorRoutes(authenticated, deps);
+          registerMigrationRoutes(authenticated, deps);
+        },
+      };
     },
   },
   {

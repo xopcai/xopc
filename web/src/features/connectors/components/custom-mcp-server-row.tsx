@@ -6,6 +6,7 @@ import { messages } from '@/i18n/messages';
 
 import { testMcpServer, type McpServerRow } from '../mcp/mcp-config-api';
 import { mcpServerEndpointSummary } from '../mcp/mcp-server-endpoint-summary';
+import { formatConnectorMessage } from '../utils/connector-i18n';
 
 export function CustomMcpServerRow({
   row,
@@ -95,11 +96,13 @@ export function CustomMcpServerRow({
       {error ? <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
       {capabilityCounts ? (
         <p className="mt-3 text-sm text-fg-muted">
-          {capabilityCounts.toolCount} tools, {capabilityCounts.resourceCount} resources,{' '}
-          {capabilityCounts.promptCount} prompts discovered.
+          {formatConnectorMessage(cs.customCapabilitySummary, {
+            tools: String(capabilityCounts.toolCount),
+            resources: String(capabilityCounts.resourceCount),
+            prompts: String(capabilityCounts.promptCount),
+          })}
         </p>
       ) : null}
     </div>
   );
 }
-

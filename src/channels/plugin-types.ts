@@ -7,6 +7,7 @@
 // the barrel here creates a config ↔ channels circular cascade.
 import type { Config } from '../config/schema.js';
 import type { MessageBus } from '../infra/bus/index.js';
+import type { Migration } from '../migrations/types.js';
 
 import type { ChannelId, ChannelMeta, ChannelCapabilities } from './plugins/types.core.js';
 import type {
@@ -216,6 +217,9 @@ export interface ChannelPlugin<ResolvedAccount = any> {
   agentPrompt?: ChannelAgentPromptAdapter;
 
   agentTools?: ChannelAgentTool[];
+
+  /** Optional safe/manual migrations contributed by this channel plugin. */
+  migrations?: readonly Migration[];
 
   /** Optional doctor health-check contributed by this channel plugin. */
   doctor?: ChannelDoctorAdapter;

@@ -15,6 +15,7 @@ import type { ServerType } from '@hono/node-server';
 
 import type { ChannelPlugin } from '../../channels/plugin-types.js';
 import type { Config } from '../../config/config-surface.js';
+import type { Migration } from '../../migrations/types.js';
 import type {
   ExtensionApi,
   ExtensionCommand,
@@ -66,6 +67,7 @@ export interface MockExtensionApi extends ExtensionApi {
   getRegisteredGatewayMethods(): Array<{ method: string; handler: GatewayMethodHandler }>;
   getRegisteredChannelPlugins(): ChannelPlugin[];
   getRegisteredReloadHandlers(): ExtensionReloadHandler[];
+  getRegisteredMigrations(): Migration[];
   getEmittedEvents(): Array<{ event: string; data: unknown }>;
 }
 
@@ -92,6 +94,7 @@ class MockExtensionApiImpl implements MockExtensionApi {
   private readonly _gw: Array<{ method: string; handler: GatewayMethodHandler }> = [];
   private readonly _channels: ChannelPlugin[] = [];
   private readonly _reload: ExtensionReloadHandler[] = [];
+  private readonly _migrations: Migration[] = [];
   private readonly _emitted: Array<{ event: string; data: unknown }> = [];
   private readonly _bus = new EventEmitter();
   private readonly _manifestCommands = new Map<string, CommandContribution>();
@@ -143,6 +146,9 @@ class MockExtensionApiImpl implements MockExtensionApi {
   }
   getRegisteredReloadHandlers(): ExtensionReloadHandler[] {
     return [...this._reload];
+  }
+  getRegisteredMigrations(): Migration[] {
+    return [...this._migrations];
   }
   getEmittedEvents(): Array<{ event: string; data: unknown }> {
     return [...this._emitted];
@@ -201,6 +207,10 @@ class MockExtensionApiImpl implements MockExtensionApi {
 
   registerReload(handler: ExtensionReloadHandler): void {
     this._reload.push(handler);
+  }
+
+  registerMigration(migration: Migration): void {
+    this._migrations.push(migration);
   }
 
   registerService(service: ExtensionService): void {
