@@ -14,12 +14,15 @@ import {
   type GoalsConfigState,
 } from '@/features/settings/goals-config-api';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
-import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
+import {
+  SettingsTabPanel,
+  SettingsTabs,
+  type SettingsTabItem,
+} from '@/features/settings/settings-page-layout';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -281,45 +284,20 @@ function GoalsSettingsTabs({
   activeTab: GoalsSettingsTabId;
   onChange: (tab: GoalsSettingsTabId) => void;
 }) {
+  const items: SettingsTabItem<GoalsSettingsTabId>[] = GOALS_SETTINGS_TABS.map((tab) => ({
+    id: tab,
+    label: goalsSettingsTabLabel(t, tab),
+    icon: GOALS_SETTINGS_TAB_ICONS[tab],
+  }));
   return (
-    <nav
-      aria-label={t.tabsAriaLabel}
-      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
-      role="tablist"
-      onKeyDown={(event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        const currentIndex = GOALS_SETTINGS_TABS.indexOf(activeTab);
-        const delta = event.key === 'ArrowRight' ? 1 : -1;
-        const nextIndex = (currentIndex + delta + GOALS_SETTINGS_TABS.length) % GOALS_SETTINGS_TABS.length;
-        onChange(GOALS_SETTINGS_TABS[nextIndex]);
-      }}
-    >
-      {GOALS_SETTINGS_TABS.map((tab) => {
-        const Icon = GOALS_SETTINGS_TAB_ICONS[tab];
-        const selected = tab === activeTab;
-        return (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            id={`goals-settings-tab-${tab}`}
-            aria-controls={`goals-settings-panel-${tab}`}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              interaction.press,
-              selected ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-            )}
-            onClick={() => onChange(tab)}
-          >
-            <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-            <span>{goalsSettingsTabLabel(t, tab)}</span>
-          </button>
-        );
-      })}
-    </nav>
+    <SettingsTabs
+      items={items}
+      activeTab={activeTab}
+      onChange={onChange}
+      ariaLabel={t.tabsAriaLabel}
+      tabIdPrefix="goals-settings-tab"
+      panelIdPrefix="goals-settings-panel"
+    />
   );
 }
 
@@ -334,20 +312,17 @@ function GoalsTabPanel({
   activeTab: GoalsSettingsTabId;
   children: ReactNode;
 }) {
-  if (activeTab !== id) return null;
   return (
-    <section
-      id={`goals-settings-panel-${id}`}
-      role="tabpanel"
-      aria-labelledby={`goals-settings-tab-${id}`}
-      className="rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5"
+    <SettingsTabPanel
+      id={id}
+      activeTab={activeTab}
+      tabIdPrefix="goals-settings-tab"
+      panelIdPrefix="goals-settings-panel"
+      title={goalsSettingsTabLabel(t, id)}
+      hint={goalsSettingsTabHint(t, id)}
     >
-      <div className="mb-5">
-        <div className="text-sm font-semibold text-fg">{goalsSettingsTabLabel(t, id)}</div>
-        <p className="mt-1 text-xs text-fg-subtle">{goalsSettingsTabHint(t, id)}</p>
-      </div>
       <div className="space-y-4">{children}</div>
-    </section>
+    </SettingsTabPanel>
   );
 }
 
@@ -492,15 +467,14 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
 
   if (!hasToken || !form) {
     return isLoading ? (
-      <SettingsFormSection>
+      <div className="rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5">
         <Loader2 className="size-4 animate-spin text-fg-muted" />
-      </SettingsFormSection>
+      </div>
     ) : null;
   }
 
   return (
-    <SettingsFormSection>
-      <SettingsFormSectionHeader icon={Target} title={t.title} subtitle={t.hint} />
+    <>
       {error ? <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       <GoalsSettingsTabs t={t} activeTab={activeTab} onChange={setActiveTab} />
 
@@ -714,6 +688,6 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
           </div>
         </div>
       </GoalsTabPanel>
-    </SettingsFormSection>
+    </>
   );
 }

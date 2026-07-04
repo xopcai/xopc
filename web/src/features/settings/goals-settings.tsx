@@ -1,5 +1,6 @@
 import { GoalsConfigSection } from '@/features/settings/goals-config-section';
 import { SaveBarControls } from '@/features/settings/save-bar/save-bar-controls';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -11,13 +12,10 @@ export function GoalsSettingsPanel() {
   const hasToken = Boolean(token);
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-8">
-      <header className="flex flex-col gap-2">
-        <h1 className="text-xl font-semibold tracking-tight text-fg">{t.title}</h1>
-        <p className="max-w-2xl text-sm text-fg-muted">{t.subtitle}</p>
-      </header>
+    <SettingsPageFrame gap="gap-4">
+      <SettingsPageHeader title={t.title} subtitle={t.subtitle} />
       <SaveBarControls />
       <GoalsConfigSection hasToken={hasToken} />
-    </div>
+    </SettingsPageFrame>
   );
 }

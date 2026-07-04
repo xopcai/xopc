@@ -1,4 +1,4 @@
-import { Clock, ExternalLink, FileText, Heart, Loader2, MessageSquare, Play, RefreshCw, type LucideIcon } from 'lucide-react';
+import { Clock, FileText, Heart, Loader2, MessageSquare, Play, RefreshCw, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
@@ -20,9 +20,15 @@ import { fetchHeartbeatMdSwr, heartbeatMdSwrKey } from '@/features/settings/hear
 import type { HeartbeatSettingsState } from '@/features/settings/heartbeat-settings.types';
 import { SaveBarControls } from '@/features/settings/save-bar/save-bar-controls';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
+import {
+  SettingsPageFrame,
+  SettingsPageHeader,
+  SettingsTabPanel,
+  SettingsTabs,
+  type SettingsTabItem,
+} from '@/features/settings/settings-page-layout';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
 import { messages, type HeartbeatSettingsMessages } from '@/i18n/messages';
 import { ScheduleField } from '@/features/scheduling/schedule-field';
 import { docsGuidePageUrl } from '@/navigation';
@@ -353,27 +359,27 @@ export function HeartbeatSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <h1 className="text-lg font-semibold text-fg">{m.settingsSections.heartbeat}</h1>
+      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+        <SettingsPageHeader title={m.settingsSections.heartbeat} />
         <p className="text-sm text-fg-muted">{h.needToken}</p>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
         <div className="flex items-center gap-2 text-sm text-fg-muted">
           <Loader2 className="size-4 animate-spin" />
           {h.loading}
         </div>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
   if (!form) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
         <p className="text-sm text-fg-muted">{error ?? fetchError ?? h.loadError}</p>
         <Button
           type="button"
@@ -385,31 +391,22 @@ export function HeartbeatSettingsPanel() {
         >
           {h.retry}
         </Button>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
   return (
-    <div
-      className="mx-auto flex w-full max-w-app-main flex-col gap-4 px-4 py-6"
+    <SettingsPageFrame
       aria-busy={saving}
       data-has-baseline={baseline ? '1' : '0'}
     >
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.heartbeat}</h1>
-          <p className="mt-1 text-sm text-fg-muted">{h.subtitle}</p>
-          <a
-            href={docsGuidePageUrl(language, 'heartbeat')}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            {h.docsLink}
-            <ExternalLink className="size-3.5" />
-          </a>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+      <SettingsPageHeader
+        title={m.settingsSections.heartbeat}
+        subtitle={h.subtitle}
+        docsLink={docsGuidePageUrl(language, 'heartbeat')}
+        docsLabel={h.docsLink}
+        actions={
+          <>
           <Button
             type="button"
             variant="secondary"
@@ -425,8 +422,9 @@ export function HeartbeatSettingsPanel() {
             {triggerLoading ? h.triggering : h.triggerNow}
           </Button>
           {triggerOk ? <span className="text-sm text-fg-muted">{h.triggered}</span> : null}
-        </div>
-      </header>
+          </>
+        }
+      />
 
       <SaveBarControls />
 
@@ -477,7 +475,7 @@ export function HeartbeatSettingsPanel() {
           data-doc-in-sync={doc === docBaseline ? 'true' : 'false'}
         />
       </HeartbeatTabPanel>
-    </div>
+    </SettingsPageFrame>
   );
 }
 
@@ -490,45 +488,20 @@ function HeartbeatSettingsTabs({
   activeTab: HeartbeatSettingsTabId;
   onChange: (tab: HeartbeatSettingsTabId) => void;
 }) {
+  const items: SettingsTabItem<HeartbeatSettingsTabId>[] = HEARTBEAT_SETTINGS_TABS.map((tab) => ({
+    id: tab,
+    label: heartbeatSettingsTabLabel(h, tab),
+    icon: HEARTBEAT_SETTINGS_TAB_ICONS[tab],
+  }));
   return (
-    <nav
-      aria-label={h.tabsAriaLabel}
-      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
-      role="tablist"
-      onKeyDown={(event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        const currentIndex = HEARTBEAT_SETTINGS_TABS.indexOf(activeTab);
-        const delta = event.key === 'ArrowRight' ? 1 : -1;
-        const nextIndex = (currentIndex + delta + HEARTBEAT_SETTINGS_TABS.length) % HEARTBEAT_SETTINGS_TABS.length;
-        onChange(HEARTBEAT_SETTINGS_TABS[nextIndex]);
-      }}
-    >
-      {HEARTBEAT_SETTINGS_TABS.map((tab) => {
-        const Icon = HEARTBEAT_SETTINGS_TAB_ICONS[tab];
-        const selected = tab === activeTab;
-        return (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            id={`heartbeat-settings-tab-${tab}`}
-            aria-controls={`heartbeat-settings-panel-${tab}`}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              interaction.press,
-              selected ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-            )}
-            onClick={() => onChange(tab)}
-          >
-            <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-            <span>{heartbeatSettingsTabLabel(h, tab)}</span>
-          </button>
-        );
-      })}
-    </nav>
+    <SettingsTabs
+      items={items}
+      activeTab={activeTab}
+      onChange={onChange}
+      ariaLabel={h.tabsAriaLabel}
+      tabIdPrefix="heartbeat-settings-tab"
+      panelIdPrefix="heartbeat-settings-panel"
+    />
   );
 }
 
@@ -543,21 +516,17 @@ function HeartbeatTabPanel({
   activeTab: HeartbeatSettingsTabId;
   children: ReactNode;
 }) {
-  if (activeTab !== id) return null;
-
   return (
-    <section
-      id={`heartbeat-settings-panel-${id}`}
-      role="tabpanel"
-      aria-labelledby={`heartbeat-settings-tab-${id}`}
-      className="rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5"
+    <SettingsTabPanel
+      id={id}
+      activeTab={activeTab}
+      tabIdPrefix="heartbeat-settings-tab"
+      panelIdPrefix="heartbeat-settings-panel"
+      title={heartbeatSettingsTabLabel(h, id)}
+      hint={heartbeatSettingsTabHint(h, id)}
     >
-      <div className="mb-5">
-        <div className="text-sm font-semibold text-fg">{heartbeatSettingsTabLabel(h, id)}</div>
-        <p className="mt-1 text-xs text-fg-subtle">{heartbeatSettingsTabHint(h, id)}</p>
-      </div>
       <div className="space-y-4">{children}</div>
-    </section>
+    </SettingsTabPanel>
   );
 }
 

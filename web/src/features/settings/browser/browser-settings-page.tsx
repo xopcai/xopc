@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import {
+  SettingsTabPanel,
+  SettingsTabs,
+  type SettingsTabItem,
+} from '@/features/settings/settings-page-layout';
 import { useBrowserSettingsTabGuard } from '@/features/settings/use-settings-tab-guard';
 import { messages } from '@/i18n/messages';
 import { visibleBrowserSettingsTabs } from '@/navigation/settings-field-visibility';
-import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSettingsModeStore } from '@/stores/settings-mode-store';
 
@@ -99,56 +102,29 @@ export function AgentBrowserSettingsPage() {
     }, 80);
     return () => window.clearTimeout(timer);
   }, [focus, searchParams, setSearchParams]);
+  const tabItems: SettingsTabItem<BrowserTabId>[] = visibleTabs.map((tab) => ({
+    id: tab,
+    label: browserTabLabel(agentSettings, tab),
+  }));
 
   return (
     <AgentDefaultsRouteLayout sectionId="agent-browser" intro="" vm={viewModel} tabbed>
-      <div
-        className="flex flex-col gap-5"
-        role="tablist"
-        aria-label={agentSettings.browserTabsAria}
-        onKeyDown={(e) => {
-          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-          e.preventDefault();
-          const idx = visibleTabs.indexOf(activeTab);
-          if (idx < 0) return;
-          const delta = e.key === 'ArrowRight' ? 1 : -1;
-          const next = visibleTabs[(idx + delta + visibleTabs.length) % visibleTabs.length];
-          setActiveTab(next);
-        }}
+      <SettingsTabs
+        items={tabItems}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        ariaLabel={agentSettings.browserTabsAria}
+        tabIdPrefix="agent-browser-tab"
+        panelIdPrefix="agent-browser-panel"
+      />
+      <SettingsTabPanel
+        id={activeTab}
+        activeTab={activeTab}
+        tabIdPrefix="agent-browser-tab"
+        panelIdPrefix="agent-browser-panel"
+        showHeading={false}
+        framed={false}
       >
-        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
-          {visibleTabs.map((tab) => {
-            const selected = tab === activeTab;
-            return (
-              <button
-                key={tab}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                id={`agent-browser-tab-${tab}`}
-                aria-controls={`agent-browser-panel-${tab}`}
-                className={cn(
-                  'shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                  interaction.press,
-                  selected
-                    ? 'bg-accent-soft text-accent-fg'
-                    : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-                )}
-                onClick={() => setActiveTab(tab)}
-              >
-                {browserTabLabel(agentSettings, tab)}
-              </button>
-            );
-          })}
-        </div>
-
-        <div
-          role="tabpanel"
-          id={`agent-browser-panel-${activeTab}`}
-          aria-labelledby={`agent-browser-tab-${activeTab}`}
-          className="min-w-0"
-        >
           {panelProps ? (
             <AgentDefaultsBrowserPanel
               {...panelProps}
@@ -156,8 +132,7 @@ export function AgentBrowserSettingsPage() {
               setActiveTab={setActiveTab}
             />
           ) : null}
-        </div>
-      </div>
+      </SettingsTabPanel>
     </AgentDefaultsRouteLayout>
   );
 }

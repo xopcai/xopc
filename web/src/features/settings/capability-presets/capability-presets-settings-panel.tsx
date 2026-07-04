@@ -37,6 +37,7 @@ import {
 } from '@/features/settings/capability-presets/preset-skills-policy-editor';
 import { PresetToolsPolicyEditor } from '@/features/settings/capability-presets/preset-tools-policy-editor';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ghostIconButton } from '@/lib/interaction';
@@ -388,25 +389,25 @@ export function CapabilityPresetsSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <h1 className="text-lg font-semibold text-fg">{cp.title}</h1>
+      <SettingsPageFrame gap="gap-3">
+        <SettingsPageHeader title={cp.title} />
         <p className="text-sm text-fg-muted">{cp.needToken}</p>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-5 px-4 py-8 pb-24">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-lg font-semibold text-fg">{cp.title}</h1>
-          <p className="mt-1 max-w-3xl text-sm text-fg-muted">{cp.subtitle}</p>
-        </div>
+    <SettingsPageFrame gap="gap-5" className="pb-24">
+      <SettingsPageHeader
+        title={cp.title}
+        subtitle={cp.subtitle}
+        actions={
         <Button type="button" onClick={() => startNew('blank')} disabled={busy}>
           <Plus className="size-4" aria-hidden />
           {cp.newPreset}
         </Button>
-      </div>
+        }
+      />
 
       {displayError ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
@@ -776,7 +777,7 @@ export function CapabilityPresetsSettingsPanel() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </div>
+    </SettingsPageFrame>
   );
 }
 

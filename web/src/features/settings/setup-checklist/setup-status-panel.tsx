@@ -17,6 +17,7 @@ import {
   SettingsFormSection,
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -293,12 +294,11 @@ export function SetupStatusPanel() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{s.title}</h1>
-          <p className="text-sm text-fg-muted">{s.subtitle}</p>
-        </div>
+    <SettingsPageFrame gap="gap-6">
+      <SettingsPageHeader
+        title={s.title}
+        subtitle={s.subtitle}
+        actions={
         <button
           type="button"
           className={cn(
@@ -313,7 +313,8 @@ export function SetupStatusPanel() {
           <RefreshCw className={cn('size-4', (!ready || doctorRunning) && 'animate-spin')} aria-hidden />
           {doctorRunning ? s.health.runDoctorRunning : s.refresh}
         </button>
-      </header>
+        }
+      />
 
       {error ? (
         <p className="rounded-xl border border-red-300/40 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300">
@@ -378,6 +379,6 @@ export function SetupStatusPanel() {
           </SettingsFormSection>
         </>
       )}
-    </div>
+    </SettingsPageFrame>
   );
 }

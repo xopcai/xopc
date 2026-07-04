@@ -66,6 +66,8 @@ export function PhaseConfigPanel({
   onCronChange,
   scheduleLabels,
   disabled,
+  showEnabledControl = true,
+  actions,
   onLabel,
   offLabel,
   cronLabel,
@@ -80,6 +82,8 @@ export function PhaseConfigPanel({
   onCronChange: (cron: string) => void;
   scheduleLabels: CronSchedulePickerLabels;
   disabled?: boolean;
+  showEnabledControl?: boolean;
+  actions?: ReactNode;
   onLabel: string;
   offLabel: string;
   cronLabel: string;
@@ -95,16 +99,23 @@ export function PhaseConfigPanel({
             <p className="mt-0.5 text-xs leading-snug text-fg-muted">{hint}</p>
           </div>
         </div>
-        <label className="inline-flex shrink-0 items-center gap-2 text-xs text-fg">
-          <input
-            type="checkbox"
-            className="ui-checkbox"
-            checked={enabled}
-            disabled={disabled}
-            onChange={(e) => onEnabledChange(e.target.checked)}
-          />
-          <span>{enabled ? onLabel : offLabel}</span>
-        </label>
+        {actions || showEnabledControl ? (
+          <div className="flex shrink-0 items-center gap-2">
+            {actions}
+            {showEnabledControl ? (
+              <label className="inline-flex shrink-0 items-center gap-2 text-xs text-fg">
+                <input
+                  type="checkbox"
+                  className="ui-checkbox"
+                  checked={enabled}
+                  disabled={disabled}
+                  onChange={(e) => onEnabledChange(e.target.checked)}
+                />
+                <span>{enabled ? onLabel : offLabel}</span>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       <ScheduleField
         kind="cron"

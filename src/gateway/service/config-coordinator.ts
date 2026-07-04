@@ -54,6 +54,8 @@ export interface GatewayConfigCoordinatorOptions {
   getExtensionLoader: () => ExtensionLoader | null;
   /** Re-evaluate browser-extension server attachment after agent defaults change. */
   reconcileBrowserExtensionServer: () => Promise<void>;
+  /** Sync built-in dreaming automations after memory.dreaming changes. */
+  reconcileDreamingAutomations: () => Promise<void>;
   /** Latest channel status snapshot for the `channels.status` SSE event. */
   getChannelsStatus: () => unknown;
   /** SSE emit (used for `config.reload` + `channels.status`). */
@@ -264,6 +266,10 @@ export class GatewayConfigCoordinator {
     this.opts.setConfig(newConfig);
     this.opts.getAgentService().applyAgentDefaultsFromConfig(newConfig);
     void this.opts.reconcileBrowserExtensionServer();
+    void this.opts.reconcileDreamingAutomations().catch((err) => {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage: em }, `Dreaming automation refresh failed: ${em}`);
+    });
     this.opts.emit('config.reload', { section: 'agents' });
     log.debug('Agent defaults reloaded');
   }
@@ -411,10 +417,10 @@ export class GatewayConfigCoordinator {
     }
     this.opts.getAgentService().applyAgentDefaultsFromConfig(reloaded);
     await this.opts.reconcileBrowserExtensionServer();
-    // Keep dreaming runtime config fresh after persistence.
-    await this.opts.getAgentService().reconcileDreamingNow().catch((err) => {
+    // Keep built-in dreaming automations aligned with memory.dreaming.
+    await this.opts.reconcileDreamingAutomations().catch((err) => {
       const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, errorMessage: em }, `Dreaming config refresh after save failed: ${em}`);
+      log.warn({ err, errorMessage: em }, `Dreaming automation refresh after save failed: ${em}`);
     });
     // Align watcher baseline before channel hooks run so fs `change` does not
     // re-apply the same diff concurrently.

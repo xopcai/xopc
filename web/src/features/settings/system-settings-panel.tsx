@@ -4,6 +4,7 @@ import { useCallback, useEffect, useReducer } from 'react';
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { settingsFormSectionClassName } from '@/features/settings/settings-form-section.utils';
 import {
   dispatchShellPrefsChanged,
@@ -311,13 +312,13 @@ export function SystemSettingsPanel() {
 
   if (!isElectron() || !api) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <h1 className="text-lg font-semibold text-fg">{t.title}</h1>
+      <SettingsPageFrame gap="gap-3">
+        <SettingsPageHeader title={t.title} />
         <div className={settingsFormSectionClassName()}>
           <p className="text-sm font-medium text-fg">{t.desktopOnlyTitle}</p>
           <p className="mt-1 text-sm text-fg-muted">{t.desktopOnlyBody}</p>
         </div>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
@@ -469,10 +470,8 @@ export function SystemSettingsPanel() {
   })();
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <div>
-        <h1 className="text-lg font-semibold text-fg">{t.title}</h1>
-      </div>
+    <SettingsPageFrame gap="gap-6">
+      <SettingsPageHeader title={t.title} />
 
       {loadError ? (
         <p className="text-sm text-amber-600 dark:text-amber-400" role="alert">
@@ -699,6 +698,6 @@ export function SystemSettingsPanel() {
           </ul>
         </section>
       ) : null}
-    </div>
+    </SettingsPageFrame>
   );
 }

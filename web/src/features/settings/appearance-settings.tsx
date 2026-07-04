@@ -1,5 +1,6 @@
 import { PreferenceSelectFields } from '@/components/shell/preference-select-fields';
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -221,11 +222,8 @@ export function AppearanceSettingsPanel() {
   const a = m.appearanceSettings;
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight text-fg">{a.pageTitle}</h1>
-        <p className="text-sm text-fg-muted">{a.subtitle}</p>
-      </header>
+    <SettingsPageFrame gap="gap-6">
+      <SettingsPageHeader title={a.pageTitle} subtitle={a.subtitle} />
 
       <section className={preferenceCardClassName()} aria-labelledby="pref-language-heading">
         <h2 id="pref-language-heading" className="sr-only">
@@ -250,6 +248,6 @@ export function AppearanceSettingsPanel() {
           <DeveloperOptionsSection />
         </section>
       </SettingsAdvancedGate>
-    </div>
+    </SettingsPageFrame>
   );
 }

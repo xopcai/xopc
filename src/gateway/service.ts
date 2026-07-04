@@ -60,6 +60,7 @@ import { GatewayMarketplaceService } from './service/marketplace-service.js';
 import { GatewayConfigCoordinator } from './service/config-coordinator.js';
 import { GatewayAgentRunner } from './service/agent-runner.js';
 import { GatewaySseHub } from './service/sse-hub.js';
+import { reconcileDreamingAutomations as reconcileDreamingAutomationRecords } from './dreaming-automation-reconciler.js';
 import type {
   GatewayChannelStartupPhase1Metrics,
   GatewayChannelStartupPhase2Metrics,
@@ -276,6 +277,7 @@ export class GatewayService {
       getHeartbeatService: () => this.heartbeatService,
       getExtensionLoader: () => this.extensionLoader,
       reconcileBrowserExtensionServer: () => this.reconcileBrowserExtensionServer(),
+      reconcileDreamingAutomations: () => this.reconcileDreamingAutomations(),
       getChannelsStatus: () => this.getChannelsStatus(),
       emit: (type, payload) => this.emit(type, payload),
     });
@@ -761,6 +763,7 @@ export class GatewayService {
     });
 
     await trace.measure('automations.initialize', () => this.automationService.initialize());
+    await trace.measure('dreaming.reconcile', () => this.reconcileDreamingAutomations());
 
     await this.notesService.initialize();
 
@@ -1374,6 +1377,13 @@ export class GatewayService {
 
   get automationServiceInstance(): AutomationService {
     return this.automationService;
+  }
+
+  private async reconcileDreamingAutomations(): Promise<void> {
+    await reconcileDreamingAutomationRecords({
+      config: this.config,
+      automationService: this.automationService,
+    });
   }
 
   get notesServiceInstance(): NotesService {

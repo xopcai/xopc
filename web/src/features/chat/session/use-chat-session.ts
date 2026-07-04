@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import {
@@ -22,7 +22,7 @@ import { updateToolDetails } from '@/features/chat/messages/streaming';
 import { userMessageFromSsePayload } from '@/features/chat/messages/user-message-from-sse';
 import { WORKFLOW_TOOL_NAME } from '@/features/chat/workflow/workflow.utils';
 import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-up.types';
-import { SessionManager } from '@/features/chat/session/session-manager';
+import { SessionManager, type SessionTimelineItem } from '@/features/chat/session/session-manager';
 import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
 import { resetChatViewState } from '@/features/chat/session/reset-chat-view-state';
 import { useChatFollowUpClarify } from '@/features/chat/session/use-chat-follow-up-clarify';
@@ -52,6 +52,7 @@ export function useChatSession() {
   const streamingRef = useRef(false);
   const thinkingSupportGenRef = useRef(0);
   const streamBusyRef = useRef(false);
+  const [timelineItems, setTimelineItems] = useState<SessionTimelineItem[]>([]);
 
   const sendMessageRef = useRef<
     (
@@ -257,6 +258,29 @@ export function useChatSession() {
     if (patch.error !== undefined) store.setShellError(patch.error);
   }, []);
 
+  const loadTimelineById = useCallback(
+    async (key: string) => {
+      try {
+        const items = await sessionMgrRef.current.loadTimeline(key);
+        if (routeSessionKeyRef.current !== key) return;
+        setTimelineItems(items);
+      } catch {
+        if (routeSessionKeyRef.current === key) {
+          setTimelineItems([]);
+        }
+      }
+    },
+    [routeSessionKeyRef],
+  );
+
+  useEffect(() => {
+    if (isNewRoute || !focusedSessionKey) {
+      setTimelineItems([]);
+      return;
+    }
+    void loadTimelineById(focusedSessionKey);
+  }, [focusedSessionKey, isNewRoute, loadTimelineById]);
+
   useChatSessionWindowEvents({
     sessionKey: focusedSessionKey,
     sessionKeyRef: focusedSessionKeyRef,
@@ -264,6 +288,7 @@ export function useChatSession() {
     streamingRef,
     sessionMgrRef,
     loadSessionById,
+    loadTimelineById,
     applyAgentConfig,
   });
 
@@ -373,6 +398,10 @@ export function useChatSession() {
     },
     messages: {
       items: displayMessages,
+    },
+    timeline: {
+      items: timelineItems,
+      refresh: loadTimelineById,
     },
     stream: {
       error: shellError,

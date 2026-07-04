@@ -294,6 +294,20 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json(result);
   });
 
+  // GET /api/sessions/:key/timeline — row-backed conversation outline for Web / TUI navigation.
+  authenticated.get('/api/sessions/:key/timeline', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.history');
+    if (blocked) {
+      return blocked;
+    }
+    const key = c.req.param('key');
+    const items = await service.sessions.getTimeline(key);
+    if (!items) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    return c.json({ ok: true, items });
+  });
+
   // POST /api/sessions/:key/transcript/context — append persisted-only `kind: 'context'` row (not in LLM context)
   authenticated.post('/api/sessions/:key/transcript/context', async (c) => {
     const key = c.req.param('key');

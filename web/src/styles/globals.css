@@ -461,7 +461,7 @@ html.dark {
 @keyframes toast-enter {
   from {
     opacity: 0;
-    transform: translateY(-6px) translateZ(0);
+    transform: translate(6px, 6px) translateZ(0);
   }
   to {
     opacity: 1;

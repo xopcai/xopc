@@ -1,6 +1,5 @@
 import {
   AlertCircle,
-  ExternalLink,
   KeyRound,
   Loader2,
   Network,
@@ -30,6 +29,13 @@ import {
 import { GatewaySecurityAuditCard } from '@/features/settings/gateway-security-audit-card';
 import { MAX_CHANNEL_DEFER_LIST_SIZE } from '@/features/settings/gateway-settings.types';
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
+import {
+  SettingsPageFrame,
+  SettingsPageHeader,
+  SettingsTabPanel,
+  SettingsTabs,
+  type SettingsTabItem,
+} from '@/features/settings/settings-page-layout';
 import { useGatewaySettingsTabGuard } from '@/features/settings/use-settings-tab-guard';
 import { restartGatewayAfterConfigChange } from '@/features/tunnel/gateway-restart';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
@@ -399,60 +405,53 @@ export function GatewaySettingsPanel() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <h1 className="text-lg font-semibold text-fg">{m.settingsSections.gateway}</h1>
+      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+        <SettingsPageHeader title={m.settingsSections.gateway} />
         <p className="text-sm text-fg-muted">{g.needToken}</p>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
   if (loading) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
         <div className="flex items-center gap-2 text-sm text-fg-muted">
           <Loader2 className="size-4 animate-spin" />
           {g.loading}
         </div>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
   if (!form) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
         <p className="text-sm text-fg-muted">{error ?? fetchError ?? g.loadError}</p>
         <Button type="button" variant="secondary" onClick={() => void mutate()}>
           {g.retry}
         </Button>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.gateway}</h1>
-          <p className="mt-1 text-sm text-fg-muted">{g.subtitle}</p>
-          <a
-            href={docsGuidePageUrl(language, 'gateway')}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            {g.docsLink}
-            <ExternalLink className="size-3.5" />
-          </a>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+    <SettingsPageFrame gap="gap-6">
+      <SettingsPageHeader
+        title={m.settingsSections.gateway}
+        subtitle={g.subtitle}
+        docsLink={docsGuidePageUrl(language, 'gateway')}
+        docsLabel={g.docsLink}
+        actions={
+          <>
           <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
             {g.discard}
           </Button>
           <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
             {saving ? g.saving : g.save}
           </Button>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {tokenExpired ? (
         <div
@@ -800,7 +799,7 @@ export function GatewaySettingsPanel() {
           onSkipIdsChange={updateChannelConnectDeferSkipIds}
         />
       </GatewayTabPanel>
-    </div>
+    </SettingsPageFrame>
   );
 }
 
@@ -815,46 +814,20 @@ function GatewaySettingsTabs({
   visibleTabs: readonly GatewaySettingsTabId[];
   onChange: (tab: GatewaySettingsTabId) => void;
 }) {
+  const items: SettingsTabItem<GatewaySettingsTabId>[] = visibleTabs.map((tab) => ({
+    id: tab,
+    label: gatewaySettingsTabLabel(g, tab),
+    icon: GATEWAY_SETTINGS_TAB_ICONS[tab],
+  }));
   return (
-    <nav
-      aria-label={g.tabsAriaLabel}
-      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
-      role="tablist"
-      onKeyDown={(event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        const currentIndex = visibleTabs.indexOf(activeTab);
-        if (currentIndex < 0) return;
-        const delta = event.key === 'ArrowRight' ? 1 : -1;
-        const nextIndex = (currentIndex + delta + visibleTabs.length) % visibleTabs.length;
-        onChange(visibleTabs[nextIndex]);
-      }}
-    >
-      {visibleTabs.map((tab) => {
-        const Icon = GATEWAY_SETTINGS_TAB_ICONS[tab];
-        const selected = tab === activeTab;
-        return (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            aria-controls={`gateway-settings-panel-${tab}`}
-            id={`gateway-settings-tab-${tab}`}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              interaction.press,
-              selected ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-            )}
-            onClick={() => onChange(tab)}
-          >
-            <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-            <span>{gatewaySettingsTabLabel(g, tab)}</span>
-          </button>
-        );
-      })}
-    </nav>
+    <SettingsTabs
+      items={items}
+      activeTab={activeTab}
+      onChange={onChange}
+      ariaLabel={g.tabsAriaLabel}
+      tabIdPrefix="gateway-settings-tab"
+      panelIdPrefix="gateway-settings-panel"
+    />
   );
 }
 
@@ -869,21 +842,17 @@ function GatewayTabPanel({
   activeTab: GatewaySettingsTabId;
   children: ReactNode;
 }) {
-  if (activeTab !== id) return null;
-
   return (
-    <section
-      id={`gateway-settings-panel-${id}`}
-      role="tabpanel"
-      aria-labelledby={`gateway-settings-tab-${id}`}
-      className="rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5"
+    <SettingsTabPanel
+      id={id}
+      activeTab={activeTab}
+      tabIdPrefix="gateway-settings-tab"
+      panelIdPrefix="gateway-settings-panel"
+      title={gatewaySettingsTabLabel(g, id)}
+      hint={gatewaySettingsTabHint(g, id)}
     >
-      <div className="mb-5">
-        <div className="text-sm font-semibold text-fg">{gatewaySettingsTabLabel(g, id)}</div>
-        <p className="mt-1 text-xs text-fg-subtle">{gatewaySettingsTabHint(g, id)}</p>
-      </div>
       <div className="space-y-4">{children}</div>
-    </section>
+    </SettingsTabPanel>
   );
 }
 

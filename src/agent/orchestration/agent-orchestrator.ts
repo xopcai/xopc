@@ -108,11 +108,17 @@ export class AgentOrchestrator {
 
     await this.sessionHydrator.workspace(sessionKey);
 
-    // Dreaming: short-circuit cron-triggered sweep tokens into maintenance runs.
+    // Dreaming: short-circuit scheduled maintenance tokens into local runs.
     // This avoids spending LLM tokens for scheduled memory consolidation.
     if (
       typeof msg.content === 'string' &&
-      (sessionKey.startsWith('cron:') || context.channel === 'cron')
+      (
+        sessionKey.startsWith('cron:') ||
+        sessionKey.includes(':cron:') ||
+        sessionKey.includes(':automation:') ||
+        context.channel === 'cron' ||
+        context.channel === 'automation'
+      )
     ) {
       const content = msg.content;
       const isDreamingSweep =

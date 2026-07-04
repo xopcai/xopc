@@ -9,13 +9,19 @@ import { RemoteAccessGuideTab } from '@/features/remote-access/remote-access-gui
 import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import { ReverseProxySection } from '@/features/remote-access/reverse-proxy-section';
 import {
+  SettingsPageFrame,
+  SettingsPageHeader,
+  SettingsTabPanel,
+  SettingsTabs,
+  type SettingsTabItem,
+} from '@/features/settings/settings-page-layout';
+import {
   REMOTE_ACCESS_TABS,
   parseRemoteAccessTab,
   type RemoteAccessTabId,
 } from '@/features/remote-access/remote-access-tabs';
 import type { RemoteAccessDocsSection } from '@/navigation';
 import { messages } from '@/i18n/messages';
-import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -91,77 +97,51 @@ export function RemoteAccessHub() {
   );
 
   const intro = tabIntro(ra, activeTab);
+  const tabItems: SettingsTabItem<RemoteAccessTabId>[] = REMOTE_ACCESS_TABS.map((tab) => ({
+    id: tab,
+    label: tabLabel(ra, tab),
+  }));
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-5 px-4 py-8">
-      <div>
-        <h1 className="text-lg font-semibold text-fg">{ra.pageTitle}</h1>
-        <p className="mt-1 text-sm text-fg-muted">{ra.pageSubtitle}</p>
-        <RemoteAccessDocsLink
-          language={language}
-          label={ra.docsLink}
-          section={tabDocsSection(activeTab)}
-          className="mt-1"
-        />
-      </div>
+    <SettingsPageFrame>
+      <SettingsPageHeader
+        title={ra.pageTitle}
+        subtitle={ra.pageSubtitle}
+        meta={
+          <RemoteAccessDocsLink
+            language={language}
+            label={ra.docsLink}
+            section={tabDocsSection(activeTab)}
+            className="mt-1"
+          />
+        }
+      />
 
       {!hasToken ? (
         <p className="text-sm text-fg-muted">{ra.guide.needToken}</p>
       ) : (
-        <div
-          className="flex flex-col gap-5"
-          role="tablist"
-          aria-label={ra.tabsAria}
-          onKeyDown={(e) => {
-            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-            e.preventDefault();
-            const idx = REMOTE_ACCESS_TABS.indexOf(activeTab);
-            const delta = e.key === 'ArrowRight' ? 1 : -1;
-            const next =
-              REMOTE_ACCESS_TABS[(idx + delta + REMOTE_ACCESS_TABS.length) % REMOTE_ACCESS_TABS.length];
-            setActiveTab(next);
-          }}
-        >
-          <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
-            {REMOTE_ACCESS_TABS.map((tab) => {
-              const selected = tab === activeTab;
-              return (
-                <button
-                  key={tab}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  id={`remote-access-tab-${tab}`}
-                  aria-controls={`remote-access-panel-${tab}`}
-                  className={cn(
-                    'shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                    selected
-                      ? 'bg-accent-soft text-accent-fg'
-                      : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-                  )}
-                  onClick={() => setActiveTab(tab)}
-                >
-                  {tabLabel(ra, tab)}
-                </button>
-              );
-            })}
-          </div>
+        <>
+          <SettingsTabs
+            items={tabItems}
+            activeTab={activeTab}
+            onChange={setActiveTab}
+            ariaLabel={ra.tabsAria}
+            tabIdPrefix="remote-access-tab"
+            panelIdPrefix="remote-access-panel"
+          />
 
-          {activeTab !== 'public' ? (
-            <p className="text-sm leading-relaxed text-fg-muted">{intro}</p>
-          ) : null}
-
-          <div
-            role="tabpanel"
-            id={`remote-access-panel-${activeTab}`}
-            aria-labelledby={`remote-access-tab-${activeTab}`}
-            className="min-w-0"
+          <SettingsTabPanel
+            id={activeTab}
+            activeTab={activeTab}
+            tabIdPrefix="remote-access-tab"
+            panelIdPrefix="remote-access-panel"
+            title={tabLabel(ra, activeTab)}
+            hint={activeTab !== 'public' ? intro : undefined}
           >
             <RemoteAccessTabPanel tab={activeTab} onOpenTab={setActiveTab} />
-          </div>
-        </div>
+          </SettingsTabPanel>
+        </>
       )}
-    </div>
+    </SettingsPageFrame>
   );
 }

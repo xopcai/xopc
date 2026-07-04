@@ -19,6 +19,7 @@ export function useChatSessionWindowEvents(opts: {
   streamingRef: MutableRefObject<boolean>;
   sessionMgrRef: MutableRefObject<SessionManager>;
   loadSessionById: (key: string, offset: number) => Promise<unknown>;
+  loadTimelineById: (key: string) => Promise<unknown>;
   applyAgentConfig: (
     sessionKey: string,
     cfg: {
@@ -33,6 +34,7 @@ export function useChatSessionWindowEvents(opts: {
     sessionKeyRef,
     sessionMgrRef,
     loadSessionById,
+    loadTimelineById,
     applyAgentConfig,
   } = opts;
 
@@ -51,10 +53,11 @@ export function useChatSessionWindowEvents(opts: {
       const d = (e as CustomEvent<{ key?: string }>).detail;
       if (!d?.key || d.key !== sessionKey) return;
       void loadSessionById(sessionKey, 0);
+      void loadTimelineById(sessionKey);
     };
     window.addEventListener('session-transcript-updated', handler);
     return () => window.removeEventListener('session-transcript-updated', handler);
-  }, [sessionKey, loadSessionById]);
+  }, [sessionKey, loadSessionById, loadTimelineById]);
 
   useEffect(() => {
     const onConfigReload = (event: Event) => {

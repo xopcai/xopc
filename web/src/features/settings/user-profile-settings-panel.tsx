@@ -5,10 +5,12 @@ import {
   fetchUserProfileContent,
   saveUserProfileContent,
 } from '@/features/settings/agents-admin-api';
+import { Button } from '@/components/ui/button';
 import {
   SettingsFormSection,
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import {
   detectBrowserTimezone,
   parseUserMarkdown,
@@ -135,31 +137,28 @@ export function UserProfileSettingsPanel() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight text-fg">{t.title}</h1>
-        <p className="text-sm text-fg-muted">{t.subtitle}</p>
-      </header>
+    <SettingsPageFrame gap="gap-6">
+      <SettingsPageHeader
+        title={t.title}
+        subtitle={t.subtitle}
+        actions={
+          <Button
+            type="button"
+            variant="primary"
+            disabled={loading || saving || !dirty}
+            onClick={() => void save()}
+          >
+            <Save className="size-4" aria-hidden />
+            {saving ? t.saving : saved ? t.saved : t.save}
+          </Button>
+        }
+      />
 
       <SettingsFormSection>
         <SettingsFormSectionHeader
           icon={UserCircle}
           title={t.sectionTitle}
           subtitle={t.sectionSubtitle}
-          trailing={
-            <button
-              type="button"
-              className={cn(
-                'inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:cursor-not-allowed disabled:bg-surface-hover disabled:text-fg-disabled',
-                interaction.press,
-              )}
-              disabled={loading || saving || !dirty}
-              onClick={() => void save()}
-            >
-              <Save className="size-4" aria-hidden />
-              {saving ? t.saving : saved ? t.saved : t.save}
-            </button>
-          }
         />
 
         {loading ? (
@@ -273,6 +272,6 @@ export function UserProfileSettingsPanel() {
 
         {error ? <p className="mt-3 text-sm text-danger">{error}</p> : null}
       </SettingsFormSection>
-    </div>
+    </SettingsPageFrame>
   );
 }

@@ -83,15 +83,17 @@ export async function postDreamingAction(action: 'reset_store' | 'clear_lock'): 
   await fetchJson(apiUrl('/api/dreaming/action'), { method: 'POST', body: JSON.stringify({ action }) });
 }
 
-export async function postDreamingRunNow(phase: DreamingPhaseId = 'deep'): Promise<{ triggered: boolean; jobId: string; phase: DreamingPhaseId }> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { triggered?: boolean; jobId?: string; phase?: string } }>(
+export async function postDreamingRunNow(phase: DreamingPhaseId = 'deep'): Promise<{ phase: DreamingPhaseId; result: unknown }> {
+  const res = await fetchJson<{ ok?: boolean; payload?: { phase?: string; result?: unknown } }>(
     apiUrl('/api/dreaming/run'),
     { method: 'POST', body: JSON.stringify({ phase }) },
   );
-  const triggered = Boolean(res.payload?.triggered);
-  const jobId = typeof res.payload?.jobId === 'string' ? res.payload.jobId : '';
-  if (!triggered || !jobId) throw new Error('Failed to trigger');
-  return { triggered, jobId, phase };
+  if (res.ok === false || !res.payload) throw new Error('Failed to run dreaming phase');
+  const returnedPhase = res.payload.phase;
+  return {
+    phase: returnedPhase === 'light' || returnedPhase === 'deep' || returnedPhase === 'rem' ? returnedPhase : phase,
+    result: res.payload.result,
+  };
 }
 
 export type DreamingPreviewItem = {

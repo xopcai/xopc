@@ -1,15 +1,32 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Activity, GitBranch, Pause, Play, Plus, RefreshCw, Sparkles, Trash2, X, Zap } from 'lucide-react';
-import { useSearchParams } from 'react-router-dom';
+import {
+  Activity,
+  CheckCircle2,
+  ExternalLink,
+  GitBranch,
+  Pause,
+  Play,
+  Plus,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+  X,
+  Zap,
+} from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { RefreshButton } from '@/components/ui/refresh-button';
 import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
+import { formatCronExpressionLabel } from '@/features/scheduling/cron/format-cron-label';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import type { StoredLanguage } from '@/lib/storage';
+import { showToast } from '@/lib/toast';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/workflows/workflow-api';
@@ -31,7 +48,8 @@ import {
   type AutomationTrigger,
 } from './automation-api';
 
-type Tab = 'automations' | 'runs' | 'templates';
+type CreateMode = 'blank' | 'draft' | 'template';
+type ViewTab = 'activity' | 'automations';
 type TriggerMode =
   | 'manual'
   | 'daily'
@@ -45,6 +63,7 @@ type TriggerMode =
   | 'sessionUpdated';
 type ActionMode = 'agent' | 'workflow';
 type AutomationsMessages = MessageBundle['automations'];
+type CronMessages = MessageBundle['cron'];
 
 interface FormState {
   name: string;
@@ -92,9 +111,13 @@ const initialForm: FormState = {
   disableAfterFailures: '3',
 };
 
-function formatDate(ms: number | undefined, labels: AutomationsMessages): string {
+function automationLocale(language: StoredLanguage): string {
+  return language === 'zh' ? 'zh-CN' : 'en-US';
+}
+
+function formatDate(ms: number | undefined, labels: AutomationsMessages, language: StoredLanguage): string {
   if (!ms) return labels.never;
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(automationLocale(language), {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -102,14 +125,16 @@ function formatDate(ms: number | undefined, labels: AutomationsMessages): string
   }).format(new Date(ms));
 }
 
-function triggerLabel(trigger: AutomationTrigger, labels: AutomationsMessages): string {
+function triggerLabel(trigger: AutomationTrigger, labels: AutomationsMessages, cronLabels: CronMessages, language: StoredLanguage): string {
   if (trigger.kind === 'manual') return labels.trigger.manual;
   if (trigger.kind === 'webhook') return labels.trigger.webhook;
   if (trigger.kind === 'event') return labels.trigger.eventWithType.replace('{type}', trigger.eventType);
   const schedule = trigger.schedule;
-  if (schedule.kind === 'once') return labels.trigger.onceAt.replace('{time}', formatDate(Date.parse(schedule.at), labels));
+  if (schedule.kind === 'once') return labels.trigger.onceAt.replace('{time}', formatDate(Date.parse(schedule.at), labels, language));
   if (schedule.kind === 'interval') return labels.trigger.everyMinutes.replace('{minutes}', String(Math.round(schedule.everyMs / 60000)));
-  return schedule.expr;
+  return formatCronExpressionLabel(schedule.expr, automationLocale(language), cronLabels.scheduleBadge, {
+    timezone: schedule.tz,
+  });
 }
 
 function actionLabel(action: AutomationAction, labels: AutomationsMessages): string {
@@ -119,18 +144,6 @@ function actionLabel(action: AutomationAction, labels: AutomationsMessages): str
 
 function safetyMode(automation: Automation): AutomationSafetyMode {
   return automation.safety?.mode ?? 'auto_apply';
-}
-
-function nextSafetyMode(mode: AutomationSafetyMode): AutomationSafetyMode | null {
-  if (mode === 'suggest_only') return 'ask_before_apply';
-  if (mode === 'ask_before_apply') return 'auto_apply';
-  return null;
-}
-
-function previousSafetyMode(mode: AutomationSafetyMode): AutomationSafetyMode | null {
-  if (mode === 'auto_apply') return 'ask_before_apply';
-  if (mode === 'ask_before_apply') return 'suggest_only';
-  return null;
 }
 
 function statusClass(status?: AutomationRun['status']) {
@@ -147,6 +160,46 @@ function formatDuration(ms: number | undefined, labels: AutomationsMessages): st
   if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
   return `${minutes}m ${seconds % 60}s`;
+}
+
+function isActiveRun(run: AutomationRun): boolean {
+  return run.status === 'running' || run.status === 'queued';
+}
+
+function needsAttention(run: AutomationRun): boolean {
+  return run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled';
+}
+
+function runSortWeight(run: AutomationRun): number {
+  if (isActiveRun(run)) return 0;
+  if (needsAttention(run)) return 1;
+  if (run.status === 'succeeded') return 2;
+  return 3;
+}
+
+function sortRunsForOperations(runs: AutomationRun[]): AutomationRun[] {
+  return [...runs].sort((a, b) => {
+    const weight = runSortWeight(a) - runSortWeight(b);
+    if (weight !== 0) return weight;
+    return b.createdAtMs - a.createdAtMs;
+  });
+}
+
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(() => (
+    typeof window === 'undefined' ? false : window.matchMedia(query).matches
+  ));
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const mediaQuery = window.matchMedia(query);
+    const update = () => setMatches(mediaQuery.matches);
+    update();
+    mediaQuery.addEventListener('change', update);
+    return () => mediaQuery.removeEventListener('change', update);
+  }, [query]);
+
+  return matches;
 }
 
 export function buildInput(form: FormState, selectedWorkflow: WorkflowDefinition | null): AutomationInput {
@@ -237,19 +290,26 @@ export function buildInput(form: FormState, selectedWorkflow: WorkflowDefinition
 
 export function AutomationsPage() {
   const language = useLocaleStore((s) => s.language);
-  const labels = messages(language).automations;
+  const messageBundle = messages(language);
+  const labels = messageBundle.automations;
+  const cronLabels = messageBundle.cron;
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const [searchParams, setSearchParams] = useSearchParams();
   const runParam = searchParams.get('run')?.trim() ?? '';
   const draftParam = searchParams.get('draft')?.trim() ?? '';
+  const actionParam = searchParams.get('action')?.trim() ?? '';
   const autogenerateDraft = searchParams.get('autogenerate') === '1';
   const draftSeedRef = useRef('');
-  const [tab, setTab] = useState<Tab>('automations');
-  const [formOpen, setFormOpen] = useState(false);
+  const wideActivityLayout = useMediaQuery('(min-width: 1280px)');
+  const [viewTab, setViewTab] = useState<ViewTab>('activity');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<CreateMode>('blank');
   const [form, setForm] = useState<FormState>(initialForm);
   const [error, setError] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [runDetailOpen, setRunDetailOpen] = useState(false);
+  const [selectedAutomationId, setSelectedAutomationId] = useState<string | null>(null);
   const [draftPrompt, setDraftPrompt] = useState('');
   const [draft, setDraft] = useState<AutomationDraft | null>(null);
   const [draftLoading, setDraftLoading] = useState(false);
@@ -257,6 +317,8 @@ export function AutomationsPage() {
   const [repairDraft, setRepairDraft] = useState<AutomationRepairDraft | null>(null);
   const [repairLoading, setRepairLoading] = useState(false);
   const [repairApproved, setRepairApproved] = useState(false);
+  const [refreshBusy, setRefreshBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
 
   const automationsSwr = useSWR('automations', () => automationApi.list(), { refreshInterval: 15_000 });
   const runsSwr = useSWR('automation-runs', () => automationApi.runs(50), { refreshInterval: 10_000 });
@@ -270,13 +332,23 @@ export function AutomationsPage() {
   const chatAgentsSwr = useSWR('automation-chat-agents', fetchChatAgents);
 
   const automations = automationsSwr.data?.automations ?? [];
-  const runs = runsSwr.data?.runs ?? [];
+  const runs = useMemo(() => sortRunsForOperations(runsSwr.data?.runs ?? []), [runsSwr.data?.runs]);
   const selectedRun = useMemo(
     () => runs.find((run) => run.id === selectedRunId) ?? null,
     [runs, selectedRunId],
   );
+  const selectedAutomation = useMemo(
+    () => automations.find((automation) => automation.id === selectedAutomationId) ?? null,
+    [automations, selectedAutomationId],
+  );
+  const selectedAutomationRuns = useMemo(
+    () => runs.filter((run) => run.automationId === selectedAutomationId),
+    [runs, selectedAutomationId],
+  );
   const runEvents = runEventsSwr.data?.events ?? [];
   const metrics = metricsSwr.data;
+  const attentionRuns = useMemo(() => runs.filter(needsAttention), [runs]);
+  const latestRun = runs[0] ?? null;
   const workflowDefinitions = useMemo(() => workflowDefinitionsSwr.data ?? [], [workflowDefinitionsSwr.data]);
   const agentOptions = chatAgentsSwr.data?.items ?? [];
   const selectedWorkflow = useMemo(
@@ -347,11 +419,46 @@ export function AutomationsPage() {
     await Promise.all([automationsSwr.mutate(), runsSwr.mutate(), metricsSwr.mutate(), runEventsSwr.mutate()]);
   }, [automationsSwr.mutate, metricsSwr.mutate, runEventsSwr.mutate, runsSwr.mutate]);
 
+  const openCreate = useCallback((mode: CreateMode) => {
+    setCreateMode(mode);
+    setCreateOpen(true);
+    if (mode === 'blank') setForm(initialForm);
+  }, []);
+
+  const refreshNow = useCallback(async () => {
+    setRefreshBusy(true);
+    setError(null);
+    try {
+      await reload();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      showToast({ type: 'error', title: labels.feedback.actionFailed, message });
+    } finally {
+      setRefreshBusy(false);
+    }
+  }, [labels.feedback.actionFailed, reload]);
+
   useEffect(() => {
     if (!runParam) return;
+    setViewTab('activity');
     setSelectedRunId(runParam);
-    setTab('runs');
-  }, [runParam]);
+    if (!wideActivityLayout) setRunDetailOpen(true);
+  }, [runParam, wideActivityLayout]);
+
+  useEffect(() => {
+    if (wideActivityLayout) setRunDetailOpen(false);
+  }, [wideActivityLayout]);
+
+  useEffect(() => {
+    if (actionParam !== 'create') return;
+    openCreate('blank');
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('action');
+      return next;
+    }, { replace: true });
+  }, [actionParam, openCreate, setSearchParams]);
 
   useEffect(() => {
     if (!draftParam) return;
@@ -361,7 +468,8 @@ export function AutomationsPage() {
     setDraftPrompt(draftParam);
     setDraft(null);
     setDraftApproved(false);
-    setTab('automations');
+    setCreateMode('draft');
+    setCreateOpen(true);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete('draft');
@@ -386,13 +494,13 @@ export function AutomationsPage() {
 
   const selectRun = useCallback((runId: string) => {
     setSelectedRunId(runId);
-    setTab('runs');
+    if (!wideActivityLayout) setRunDetailOpen(true);
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set('run', runId);
       return next;
     }, { replace: true });
-  }, [setSearchParams]);
+  }, [setSearchParams, wideActivityLayout]);
 
   useEffect(() => {
     setRepairDraft(null);
@@ -405,20 +513,31 @@ export function AutomationsPage() {
     try {
       await automationApi.create(buildInput(form, selectedWorkflow));
       setForm(initialForm);
-      setFormOpen(false);
+      setCreateOpen(false);
       await reload();
+      showToast({ type: 'success', title: labels.dashboard.created });
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      showToast({ type: 'error', title: labels.feedback.actionFailed, message });
     }
   }
 
-  async function mutateAutomation(action: () => Promise<unknown>) {
+  async function mutateAutomation(actionKey: string, action: () => Promise<unknown>, successTitle?: string): Promise<boolean> {
     setError(null);
+    setBusyAction(actionKey);
     try {
       await action();
       await reload();
+      if (successTitle) showToast({ type: 'success', title: successTitle });
+      return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message);
+      showToast({ type: 'error', title: labels.feedback.actionFailed, message });
+      return false;
+    } finally {
+      setBusyAction(null);
     }
   }
 
@@ -440,12 +559,13 @@ export function AutomationsPage() {
 
   async function publishDraft() {
     if (!draft) return;
-    await mutateAutomation(async () => {
+    await mutateAutomation('draft:publish', async () => {
       await automationApi.create(draft.automation);
       setDraft(null);
       setDraftPrompt('');
       setDraftApproved(false);
-    });
+      setCreateOpen(false);
+    }, labels.dashboard.created);
   }
 
   async function generateRepairDraft(run: AutomationRun) {
@@ -465,26 +585,53 @@ export function AutomationsPage() {
 
   async function applyRepairDraft(run: AutomationRun) {
     if (!repairDraft) return;
-    await mutateAutomation(async () => {
+    await mutateAutomation(`run:${run.id}:repair`, async () => {
       await automationApi.update(run.automationId, repairDraft.patch);
       setRepairDraft(null);
       setRepairApproved(false);
-    });
+    }, labels.feedback.repairApplied);
   }
 
   const headerEnd = useMemo(
     () => (
       <div className="flex items-center gap-2">
-        <Button variant="ghost" onClick={reload} aria-label={labels.refresh}>
-          <RefreshCw className="size-4" />
-        </Button>
-        <Button variant="primary" onClick={() => setFormOpen(true)}>
-          <Plus className="size-4" />
-          {labels.new}
-        </Button>
+        <RefreshButton className="size-9 shrink-0 p-0" loading={refreshBusy} label={labels.refresh} onClick={refreshNow} />
+        <DropdownMenu.Root>
+          <DropdownMenu.Trigger asChild>
+            <Button variant="primary">
+              <Plus className="size-4" />
+              {labels.new}
+            </Button>
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              align="end"
+              className="z-70 min-w-52 rounded-lg border border-edge bg-surface-panel p-1 shadow-popover"
+            >
+              <DropdownMenu.Item
+                className="cursor-pointer rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover"
+                onSelect={() => openCreate('draft')}
+              >
+                {labels.createMenu.draft}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="cursor-pointer rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover"
+                onSelect={() => openCreate('template')}
+              >
+                {labels.createMenu.template}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                className="cursor-pointer rounded-md px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover"
+                onSelect={() => openCreate('blank')}
+              >
+                {labels.createMenu.blank}
+              </DropdownMenu.Item>
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
       </div>
     ),
-    [labels.new, labels.refresh, reload],
+    [labels.createMenu.blank, labels.createMenu.draft, labels.createMenu.template, labels.new, labels.refresh, openCreate, refreshBusy, refreshNow],
   );
 
   useLayoutEffect(() => {
@@ -504,40 +651,41 @@ export function AutomationsPage() {
   return (
     <div className="min-h-0 flex-1 overflow-y-auto bg-surface-base">
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-5 px-4 py-6">
-        <DraftPanel
-          labels={labels}
-          prompt={draftPrompt}
-          draft={draft}
-          loading={draftLoading}
-          approved={draftApproved}
-          onPromptChange={setDraftPrompt}
-          onGenerate={generateDraft}
-          onPublish={publishDraft}
-          onApprovedChange={setDraftApproved}
-          onDiscard={() => {
-            setDraft(null);
-            setDraftApproved(false);
-          }}
-        />
-
         <section className="grid gap-3 sm:grid-cols-4">
-          <Metric label={labels.metrics.total} value={metrics?.totalAutomations ?? automations.length} />
-          <Metric label={labels.metrics.enabled} value={metrics?.enabledAutomations ?? automations.filter((a) => a.enabled).length} />
+          <Metric
+            label={labels.dashboard.needsAttention}
+            value={metrics?.failedLastHour ?? attentionRuns.length}
+            tone={attentionRuns.length > 0 ? 'danger' : 'neutral'}
+          />
           <Metric label={labels.metrics.running} value={metrics?.runningRuns ?? runs.filter((r) => r.status === 'running').length} />
-          <Metric label={labels.metrics.next} value={metrics?.nextRun ? formatDate(metrics.nextRun.runAtMs, labels) : labels.none} />
+          <Metric
+            label={labels.dashboard.latestResult}
+            value={latestRun ? labels.status[latestRun.status] : labels.none}
+            tone={latestRun && needsAttention(latestRun) ? 'danger' : 'neutral'}
+          />
+          <Metric label={labels.metrics.next} value={metrics?.nextRun ? formatDate(metrics.nextRun.runAtMs, labels, language) : labels.none} />
         </section>
 
         <nav className="inline-flex w-fit rounded-lg border border-edge bg-surface-panel p-1">
-          {(['automations', 'runs', 'templates'] as const).map((item) => (
+          {([
+            { id: 'activity' as const, label: labels.dashboard.activity, count: runs.length },
+            { id: 'automations' as const, label: labels.dashboard.manage, count: automations.length },
+          ]).map((item) => (
             <button
-              key={item}
+              key={item.id}
               className={cn(
-                'rounded-md px-3 py-1.5 text-sm font-medium capitalize text-fg-muted',
-                tab === item && 'bg-surface-hover text-fg',
+                'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium text-fg-muted',
+                viewTab === item.id && 'bg-surface-hover text-fg',
               )}
-              onClick={() => setTab(item)}
+              onClick={() => {
+                setViewTab(item.id);
+                if (item.id !== 'activity') setRunDetailOpen(false);
+              }}
             >
-              {labels.tabs[item]}
+              <span>{item.label}</span>
+              <span className="rounded-full border border-edge/70 px-1.5 py-0.5 text-[0.6875rem] leading-none text-fg-muted">
+                {item.count}
+              </span>
             </button>
           ))}
         </nav>
@@ -548,79 +696,180 @@ export function AutomationsPage() {
           </div>
         ) : null}
 
-        {tab === 'automations' ? (
-          <AutomationList automations={automations} labels={labels} onAction={mutateAutomation} />
-        ) : tab === 'runs' ? (
-          <div className="grid min-h-[28rem] gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
+        {viewTab === 'activity' ? (
+          <section className="grid h-[min(42rem,calc(100vh-17rem))] min-h-[28rem] items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
+            <div className="min-h-0 min-w-0">
               <RunsList
-                runs={runs}
+                runs={runs.slice(0, 12)}
                 labels={labels}
+                cronLabels={cronLabels}
+                language={language}
                 selectedRunId={selectedRunId}
+                busyAction={busyAction}
+                className="h-full overflow-y-auto"
                 onSelectRun={selectRun}
                 onAction={mutateAutomation}
               />
+            </div>
             <RunDetailPanel
+              className="hidden h-full xl:block"
               run={selectedRun}
               events={runEvents}
               labels={labels}
+              cronLabels={cronLabels}
+              language={language}
               loading={runEventsSwr.isLoading}
               repairDraft={repairDraft}
               repairLoading={repairLoading}
               repairApproved={repairApproved}
+              busyAction={busyAction}
               onRepairApprovedChange={setRepairApproved}
               onSuggestRepair={generateRepairDraft}
               onApplyRepair={applyRepairDraft}
             />
-          </div>
+          </section>
         ) : (
-          <div className="grid gap-3 md:grid-cols-3">
-            {templates.map((template) => (
-              <button
-                key={template.name}
-                className="rounded-lg border border-edge bg-surface-panel p-4 text-left hover:bg-surface-hover"
-                onClick={() => {
-                  setForm(template.form);
-                  setFormOpen(true);
-                }}
-              >
-                <div className="font-medium text-fg">{template.name}</div>
-                <div className="mt-2 text-sm text-fg-muted">{template.description}</div>
-              </button>
-            ))}
-          </div>
+          <section>
+            <AutomationList
+              automations={automations}
+              runs={runs}
+              labels={labels}
+              cronLabels={cronLabels}
+              language={language}
+              busyAction={busyAction}
+              onOpenDetails={setSelectedAutomationId}
+              onAction={mutateAutomation}
+            />
+          </section>
         )}
       </div>
 
-      <Dialog.Root open={formOpen} onOpenChange={(next) => !next && setFormOpen(false)}>
+      <Dialog.Root open={createOpen} onOpenChange={setCreateOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(720px,calc(100vh-2rem))] w-[min(100%-2rem,42rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(760px,calc(100vh-2rem))] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
             <div className="flex items-center justify-between gap-3 border-b border-edge px-5 py-4">
-              <Dialog.Title className="text-base font-semibold text-fg">{labels.createTitle}</Dialog.Title>
+              <Dialog.Title className="text-base font-semibold text-fg">
+                {createMode === 'draft'
+                  ? labels.draft.title
+                  : createMode === 'template'
+                    ? labels.createMenu.templatesTitle
+                    : labels.createTitle}
+              </Dialog.Title>
               <Dialog.Close asChild>
                 <Button variant="ghost" aria-label={labels.close}>
-                <X className="size-4" />
+                  <X className="size-4" />
                 </Button>
               </Dialog.Close>
             </div>
-            <AutomationForm
-              form={form}
-              labels={labels}
-              setForm={setForm}
-              workflowDefinitions={workflowDefinitions}
-              selectedWorkflow={selectedWorkflow}
-              workflowsLoading={workflowDefinitionsSwr.isLoading}
-              agentOptions={agentOptions}
-              agentsLoading={chatAgentsSwr.isLoading}
-              language={language}
-            />
-            <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
+            {createMode === 'draft' ? (
+              <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                <DraftPanel
+                  labels={labels}
+                  prompt={draftPrompt}
+                  draft={draft}
+                  loading={draftLoading}
+                  approved={draftApproved}
+                  publishBusy={busyAction === 'draft:publish'}
+                  onPromptChange={setDraftPrompt}
+                  onGenerate={generateDraft}
+                  onPublish={publishDraft}
+                  onApprovedChange={setDraftApproved}
+                  onDiscard={() => {
+                    setDraft(null);
+                    setDraftApproved(false);
+                  }}
+                />
+              </div>
+            ) : createMode === 'template' ? (
+              <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {templates.map((template) => (
+                    <button
+                      key={template.name}
+                      className="rounded-lg border border-edge bg-surface-base p-4 text-left hover:bg-surface-hover"
+                      onClick={() => {
+                        setForm(template.form);
+                        setCreateMode('blank');
+                      }}
+                    >
+                      <div className="font-medium text-fg">{template.name}</div>
+                      <div className="mt-2 text-sm text-fg-muted">{template.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <>
+                <AutomationForm
+                  form={form}
+                  labels={labels}
+                  setForm={setForm}
+                  workflowDefinitions={workflowDefinitions}
+                  selectedWorkflow={selectedWorkflow}
+                  workflowsLoading={workflowDefinitionsSwr.isLoading}
+                  agentOptions={agentOptions}
+                  agentsLoading={chatAgentsSwr.isLoading}
+                  language={language}
+                />
+                <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
+                  <Dialog.Close asChild>
+                    <Button variant="ghost">{labels.cancel}</Button>
+                  </Dialog.Close>
+                  <Button variant="primary" onClick={submitForm} disabled={!formCanSubmit}>
+                    {labels.create}
+                  </Button>
+                </div>
+              </>
+            )}
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+      <AutomationDetailDialog
+        automation={selectedAutomation}
+        runs={selectedAutomationRuns}
+        labels={labels}
+        cronLabels={cronLabels}
+        language={language}
+        busyAction={busyAction}
+        onClose={() => setSelectedAutomationId(null)}
+        onSelectRun={(runId) => {
+          selectRun(runId);
+          setSelectedAutomationId(null);
+        }}
+        onAction={mutateAutomation}
+      />
+      <Dialog.Root open={!wideActivityLayout && runDetailOpen && Boolean(selectedRun)} onOpenChange={setRunDetailOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(85vh,40rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+            <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
+              <Dialog.Title className="truncate text-base font-semibold text-fg">
+                {selectedRun?.automationName ?? labels.dashboard.result}
+              </Dialog.Title>
               <Dialog.Close asChild>
-                <Button variant="ghost">{labels.cancel}</Button>
+                <Button variant="ghost" aria-label={labels.close}>
+                  <X className="size-4" />
+                </Button>
               </Dialog.Close>
-              <Button variant="primary" onClick={submitForm} disabled={!formCanSubmit}>
-                {labels.create}
-              </Button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <RunDetailPanel
+                className="h-full rounded-none border-0"
+                run={selectedRun}
+                events={runEvents}
+                labels={labels}
+                cronLabels={cronLabels}
+                language={language}
+                loading={runEventsSwr.isLoading}
+                repairDraft={repairDraft}
+                repairLoading={repairLoading}
+                repairApproved={repairApproved}
+                busyAction={busyAction}
+                onRepairApprovedChange={setRepairApproved}
+                onSuggestRepair={generateRepairDraft}
+                onApplyRepair={applyRepairDraft}
+              />
             </div>
           </Dialog.Content>
         </Dialog.Portal>
@@ -629,11 +878,16 @@ export function AutomationsPage() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string | number }) {
+function Metric({ label, value, tone = 'neutral' }: { label: string; value: string | number; tone?: 'neutral' | 'danger' }) {
   return (
-    <div className="rounded-lg border border-edge bg-surface-panel px-4 py-3">
+    <div className={cn(
+      'rounded-lg border bg-surface-panel px-4 py-3',
+      tone === 'danger' ? 'border-red-500/30' : 'border-edge',
+    )}>
       <div className="text-xs font-medium uppercase text-fg-muted">{label}</div>
-      <div className="mt-1 truncate text-lg font-semibold text-fg">{value}</div>
+      <div className={cn('mt-1 truncate text-lg font-semibold', tone === 'danger' ? 'text-red-700 dark:text-red-300' : 'text-fg')}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -644,6 +898,7 @@ function DraftPanel({
   draft,
   loading,
   approved,
+  publishBusy = false,
   onPromptChange,
   onGenerate,
   onPublish,
@@ -655,6 +910,7 @@ function DraftPanel({
   draft: AutomationDraft | null;
   loading: boolean;
   approved: boolean;
+  publishBusy?: boolean;
   onPromptChange: (value: string) => void;
   onGenerate: () => void;
   onPublish: () => void;
@@ -717,7 +973,9 @@ function DraftPanel({
             ) : null}
             <div className="mt-4 flex justify-end gap-2">
               <Button variant="ghost" onClick={onDiscard}>{labels.draft.discard}</Button>
-              <Button variant="primary" onClick={onPublish} disabled={requiresApproval && !approved}>{labels.draft.publish}</Button>
+              <Button variant="primary" onClick={onPublish} disabled={publishBusy || (requiresApproval && !approved)}>
+                {publishBusy ? labels.feedback.working : labels.draft.publish}
+              </Button>
             </div>
           </div>
         </div>
@@ -739,75 +997,145 @@ function ReviewList({ title, items, empty }: { title: string; items: string[]; e
 
 function AutomationList({
   automations,
+  runs,
   labels,
+  cronLabels,
+  language,
+  busyAction,
+  onOpenDetails,
   onAction,
 }: {
   automations: Automation[];
+  runs: AutomationRun[];
   labels: AutomationsMessages;
-  onAction: (action: () => Promise<unknown>) => Promise<void>;
+  cronLabels: CronMessages;
+  language: StoredLanguage;
+  busyAction: string | null;
+  onOpenDetails: (automationId: string) => void;
+  onAction: (actionKey: string, action: () => Promise<unknown>, successTitle?: string) => Promise<boolean>;
 }) {
   if (automations.length === 0) {
     return <EmptyState icon={<Zap className="size-5" />} title={labels.empty.automations} />;
   }
   return (
-    <div className="overflow-hidden rounded-lg border border-edge bg-surface-panel">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {automations.map((automation) => {
-        const mode = safetyMode(automation);
-        const upgradeMode = nextSafetyMode(mode);
-        const downgradeMode = previousSafetyMode(mode);
+        const recentRuns = runs.filter((run) => run.automationId === automation.id);
+        const activeRun = recentRuns.find(isActiveRun);
+        const latestRunForAutomation = recentRuns[0];
+        const runBusy = busyAction === `automation:${automation.id}:run`;
+        const toggleBusy = busyAction === `automation:${automation.id}:toggle`;
+        const deleteBusy = busyAction === `automation:${automation.id}:delete`;
         return (
-        <div key={automation.id} className="grid gap-3 border-b border-edge p-4 last:border-b-0 lg:grid-cols-[1.2fr_1fr_1fr_auto]">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="truncate font-medium text-fg">{automation.name}</span>
-              <span className={cn('rounded-full px-2 py-0.5 text-xs', automation.enabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-surface-hover text-fg-muted')}>
+          <article
+            key={automation.id}
+            className="flex min-h-44 cursor-pointer flex-col rounded-lg border border-edge bg-surface-panel p-3.5 outline-none hover:bg-surface-hover"
+            role="button"
+            tabIndex={0}
+            onClick={() => onOpenDetails(automation.id)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') onOpenDetails(automation.id);
+            }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="truncate font-medium text-fg">{automation.name}</span>
+                  {activeRun ? <span className="size-2 shrink-0 rounded-full bg-blue-500" /> : null}
+                </div>
+                {automation.description ? (
+                  <div className="mt-1 line-clamp-2 text-sm text-fg-muted">{automation.description}</div>
+                ) : null}
+              </div>
+              <span className={cn(
+                'shrink-0 rounded-full px-2 py-0.5 text-xs',
+                automation.enabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-surface-hover text-fg-muted',
+              )}>
                 {automation.enabled ? labels.enabled : labels.paused}
               </span>
-              <span className="rounded-full border border-edge bg-surface-muted px-2 py-0.5 text-xs text-fg-muted">
-                {labels.safety[mode]}
-              </span>
             </div>
-            {automation.description ? <div className="mt-1 truncate text-sm text-fg-muted">{automation.description}</div> : null}
-          </div>
-          <Info label={labels.info.when} value={triggerLabel(automation.trigger, labels)} />
-          <Info label={labels.info.run} value={actionLabel(automation.action, labels)} />
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            {downgradeMode ? (
-              <Button
-                variant="ghost"
-                className="h-8 rounded-md px-2 text-xs"
-                onClick={() => onAction(() => automationApi.update(automation.id, { safety: { mode: downgradeMode } }))}
-              >
-                {labels.safety.downgrade}
-              </Button>
-            ) : null}
-            {upgradeMode ? (
-              <Button
-                variant="secondary"
-                className="h-8 rounded-md px-2 text-xs"
-                onClick={() => onAction(() => automationApi.update(automation.id, { safety: { mode: upgradeMode } }))}
-              >
-                {labels.safety.upgrade}
-              </Button>
-            ) : null}
-            <Button variant="ghost" onClick={() => onAction(() => automationApi.runNow(automation.id))}>
-              <Play className="size-4" />
-            </Button>
-            <Button variant="ghost" onClick={() => onAction(() => automation.enabled ? automationApi.pause(automation.id) : automationApi.resume(automation.id))}>
-              {automation.enabled ? <Pause className="size-4" /> : <Play className="size-4" />}
-            </Button>
-            <Button variant="ghost" onClick={() => onAction(() => automationApi.remove(automation.id))}>
-              <Trash2 className="size-4" />
-            </Button>
-          </div>
-          <div className="lg:col-span-4 grid gap-2 text-xs text-fg-muted sm:grid-cols-3">
-            <span>{labels.last}: {formatDate(automation.state.lastRunAtMs, labels)}</span>
-            <span>{labels.next}: {formatDate(automation.state.nextRunAtMs, labels)}</span>
-            <span className={cn('w-fit rounded-full px-2 py-0.5', statusClass(automation.state.lastRunStatus))}>
-              {automation.state.lastRunStatus ? labels.status[automation.state.lastRunStatus] : labels.status.notRun}
-            </span>
-          </div>
-        </div>
+
+            <div className="mt-3 space-y-2 text-sm">
+              <div className="flex min-w-0 items-center gap-2 text-fg">
+                <span className="shrink-0 text-xs font-medium uppercase text-fg-muted">{labels.info.when}</span>
+                <span className="truncate">{triggerLabel(automation.trigger, labels, cronLabels, language)}</span>
+              </div>
+              <div className="flex min-w-0 items-center gap-2 text-fg-muted">
+                <span className="shrink-0 text-xs font-medium uppercase">{labels.info.run}</span>
+                <span className="truncate">{actionLabel(automation.action, labels)}</span>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
+              <span>{labels.last}: {formatDate(automation.state.lastRunAtMs, labels, language)}</span>
+              <span>{labels.next}: {formatDate(automation.state.nextRunAtMs, labels, language)}</span>
+              <span className={cn('rounded-full px-2 py-0.5', statusClass(automation.state.lastRunStatus))}>
+                {automation.state.lastRunStatus ? labels.status[automation.state.lastRunStatus] : labels.status.notRun}
+              </span>
+              {latestRunForAutomation?.error ? (
+                <p className="basis-full line-clamp-1 text-red-700 dark:text-red-300">{latestRunForAutomation.error}</p>
+              ) : null}
+            </div>
+
+            <div className="mt-auto flex justify-end pt-3">
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  className="size-8 rounded-md p-0"
+                  aria-label={labels.dashboard.runNow}
+                  disabled={busyAction !== null}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void onAction(
+                      `automation:${automation.id}:run`,
+                      () => automationApi.runNow(automation.id),
+                      labels.feedback.rerunQueued,
+                    );
+                  }}
+                >
+                  <Play className={cn('size-4', runBusy && 'animate-pulse')} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="size-8 rounded-md p-0"
+                  aria-label={automation.enabled ? labels.dashboard.pause : labels.dashboard.resume}
+                  disabled={busyAction !== null}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void onAction(
+                      `automation:${automation.id}:toggle`,
+                      () => automation.enabled ? automationApi.pause(automation.id) : automationApi.resume(automation.id),
+                      automation.enabled ? labels.feedback.paused : labels.dashboard.resumed,
+                    );
+                  }}
+                >
+                  {toggleBusy ? (
+                    <RefreshCw className="size-4 animate-spin" />
+                  ) : automation.enabled ? (
+                    <Pause className="size-4" />
+                  ) : (
+                    <Play className="size-4" />
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="size-8 rounded-md p-0"
+                  aria-label={labels.dashboard.delete}
+                  disabled={busyAction !== null}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void onAction(
+                      `automation:${automation.id}:delete`,
+                      () => automationApi.remove(automation.id),
+                      labels.dashboard.deleted,
+                    );
+                  }}
+                >
+                  {deleteBusy ? <RefreshCw className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                </Button>
+              </div>
+            </div>
+          </article>
         );
       })}
     </div>
@@ -817,19 +1145,27 @@ function AutomationList({
 function RunsList({
   runs,
   labels,
+  cronLabels,
+  language,
   selectedRunId,
+  busyAction,
+  className,
   onSelectRun,
   onAction,
 }: {
   runs: AutomationRun[];
   labels: AutomationsMessages;
+  cronLabels: CronMessages;
+  language: StoredLanguage;
   selectedRunId: string | null;
+  busyAction: string | null;
+  className?: string;
   onSelectRun: (runId: string) => void;
-  onAction: (action: () => Promise<unknown>) => Promise<void>;
+  onAction: (actionKey: string, action: () => Promise<unknown>, successTitle?: string) => Promise<boolean>;
 }) {
   if (runs.length === 0) return <EmptyState icon={<Activity className="size-5" />} title={labels.empty.runs} />;
   return (
-    <div className="overflow-hidden rounded-lg border border-edge bg-surface-panel">
+    <div className={cn('rounded-lg border border-edge bg-surface-panel', className)}>
       {runs.map((run) => (
         <div
           key={run.id}
@@ -852,18 +1188,19 @@ function RunsList({
             </div>
             <div className="mt-1 text-sm text-fg-muted">{run.error || run.summary || actionLabel(run.actionSnapshot, labels)}</div>
             <div className="mt-2 text-xs text-fg-muted">
-              {formatDate(run.createdAtMs, labels)} · {run.manual ? labels.trigger.manual : triggerLabel(run.triggerSnapshot, labels)}
+              {formatDate(run.createdAtMs, labels, language)} · {run.manual ? labels.trigger.manual : triggerLabel(run.triggerSnapshot, labels, cronLabels, language)}
             </div>
           </div>
           {run.status === 'running' || run.status === 'queued' ? (
             <Button
               variant="ghost"
+              disabled={busyAction !== null}
               onClick={(event) => {
                 event.stopPropagation();
-                void onAction(() => automationApi.cancelRun(run.id));
+                void onAction(`run:${run.id}:cancel`, () => automationApi.cancelRun(run.id), labels.dashboard.cancelled);
               }}
             >
-              {labels.cancel}
+              {busyAction === `run:${run.id}:cancel` ? labels.feedback.working : labels.cancel}
             </Button>
           ) : null}
         </div>
@@ -873,31 +1210,39 @@ function RunsList({
 }
 
 function RunDetailPanel({
+  className,
   run,
   events,
   labels,
+  cronLabels,
+  language,
   loading,
   repairDraft,
   repairLoading,
   repairApproved,
+  busyAction,
   onRepairApprovedChange,
   onSuggestRepair,
   onApplyRepair,
 }: {
+  className?: string;
   run: AutomationRun | null;
   events: AutomationRunEvent[];
   labels: AutomationsMessages;
+  cronLabels: CronMessages;
+  language: StoredLanguage;
   loading: boolean;
   repairDraft: AutomationRepairDraft | null;
   repairLoading: boolean;
   repairApproved: boolean;
+  busyAction: string | null;
   onRepairApprovedChange: (value: boolean) => void;
   onSuggestRepair: (run: AutomationRun) => void;
   onApplyRepair: (run: AutomationRun) => void;
 }) {
   if (!run) {
     return (
-      <aside className="flex min-h-64 flex-col justify-center rounded-lg border border-edge bg-surface-panel px-4 text-center text-sm text-fg-muted">
+      <aside className={cn('flex min-h-64 flex-col justify-center rounded-lg border border-edge bg-surface-panel px-4 text-center text-sm text-fg-muted', className)}>
         <Activity className="mx-auto size-5" />
         <div className="mt-2">{labels.selectRun}</div>
       </aside>
@@ -905,7 +1250,7 @@ function RunDetailPanel({
   }
 
   return (
-    <aside className="rounded-lg border border-edge bg-surface-panel">
+    <aside className={cn('min-h-0 overflow-y-auto rounded-lg border border-edge bg-surface-panel', className)}>
       <div className="border-b border-edge px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -917,12 +1262,35 @@ function RunDetailPanel({
           </span>
         </div>
         <div className="mt-3 grid gap-2 text-xs text-fg-muted">
-          <DetailLine label={labels.details.created} value={formatDate(run.createdAtMs, labels)} />
-          <DetailLine label={labels.details.started} value={formatDate(run.startedAtMs, labels)} />
+          <DetailLine label={labels.details.created} value={formatDate(run.createdAtMs, labels, language)} />
+          <DetailLine label={labels.details.started} value={formatDate(run.startedAtMs, labels, language)} />
           <DetailLine label={labels.details.duration} value={formatDuration(run.durationMs, labels)} />
           {run.model ? <DetailLine label={labels.details.model} value={run.model} /> : null}
-          {run.sessionKey ? <DetailLine label={labels.details.session} value={run.sessionKey} /> : null}
-          {run.workflowRunId ? <DetailLine label={labels.workflowPrefix} value={run.workflowRunId} /> : null}
+        </div>
+        <div className="mt-3 rounded-md border border-edge/70 bg-surface-base/50 p-3">
+          <div className="text-xs font-semibold uppercase text-fg-muted">{labels.dashboard.result}</div>
+          <p className={cn('mt-1 break-words text-sm', needsAttention(run) ? 'text-red-700 dark:text-red-300' : 'text-fg')}>
+            {run.error || run.summary || actionLabel(run.actionSnapshot, labels)}
+          </p>
+          <div className="mt-3 grid gap-2 text-xs text-fg-muted">
+            <DetailLine label={labels.explain.whyRan} value={run.manual ? labels.trigger.manual : triggerLabel(run.triggerSnapshot, labels, cronLabels, language)} />
+            {run.sessionKey ? (
+              <Button asChild variant="secondary" className="h-8 justify-start rounded-md px-2 text-xs">
+                <Link to={`/chat/${encodeURIComponent(run.sessionKey)}`}>
+                  <ExternalLink className="size-3.5" />
+                  {labels.dashboard.openSession}
+                </Link>
+              </Button>
+            ) : null}
+            {run.workflowRunId ? (
+              <Button asChild variant="secondary" className="h-8 justify-start rounded-md px-2 text-xs">
+                <Link to={`/workflows?run=${encodeURIComponent(run.workflowRunId)}`}>
+                  <GitBranch className="size-3.5" />
+                  {labels.feedback.workflow}
+                </Link>
+              </Button>
+            ) : null}
+          </div>
         </div>
         {run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled' ? (
           <div className="mt-3 flex justify-end">
@@ -960,9 +1328,9 @@ function RunDetailPanel({
             <Button
               variant="primary"
               onClick={() => onApplyRepair(run)}
-              disabled={repairDraft.requiresApproval && !repairApproved}
+              disabled={busyAction === `run:${run.id}:repair` || (repairDraft.requiresApproval && !repairApproved)}
             >
-              {labels.repair.apply}
+              {busyAction === `run:${run.id}:repair` ? labels.feedback.working : labels.repair.apply}
             </Button>
           </div>
         </div>
@@ -982,7 +1350,7 @@ function RunDetailPanel({
                 <div className="min-w-0">
                   <div className="text-sm text-fg">{event.message}</div>
                   <div className="mt-1 text-xs text-fg-muted">
-                    {formatDate(event.createdAtMs, labels)} · {event.type}
+                    {formatDate(event.createdAtMs, labels, language)} · {event.type}
                   </div>
                   {event.data && typeof event.data === 'object' ? (
                     <pre className="mt-2 max-h-28 overflow-auto rounded-md bg-surface-base p-2 text-xs text-fg-muted">
@@ -996,6 +1364,190 @@ function RunDetailPanel({
         )}
       </div>
     </aside>
+  );
+}
+
+function AutomationDetailDialog({
+  automation,
+  runs,
+  labels,
+  cronLabels,
+  language,
+  busyAction,
+  onClose,
+  onSelectRun,
+  onAction,
+}: {
+  automation: Automation | null;
+  runs: AutomationRun[];
+  labels: AutomationsMessages;
+  cronLabels: CronMessages;
+  language: StoredLanguage;
+  busyAction: string | null;
+  onClose: () => void;
+  onSelectRun: (runId: string) => void;
+  onAction: (actionKey: string, action: () => Promise<unknown>, successTitle?: string) => Promise<boolean>;
+}) {
+  const mode = automation ? safetyMode(automation) : 'suggest_only';
+  const runBusy = automation ? busyAction === `automation:${automation.id}:run` : false;
+  const toggleBusy = automation ? busyAction === `automation:${automation.id}:toggle` : false;
+  const deleteBusy = automation ? busyAction === `automation:${automation.id}:delete` : false;
+
+  return (
+    <Dialog.Root open={Boolean(automation)} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(760px,calc(100vh-2rem))] w-[min(100%-2rem,56rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
+          {automation ? (
+            <>
+              <div className="flex items-start justify-between gap-3 border-b border-edge px-5 py-4">
+                <div className="min-w-0">
+                  <Dialog.Title className="truncate text-base font-semibold text-fg">{automation.name}</Dialog.Title>
+                  {automation.description ? (
+                    <p className="mt-1 line-clamp-2 text-sm text-fg-muted">{automation.description}</p>
+                  ) : null}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className={cn(
+                    'rounded-full px-2 py-0.5 text-xs',
+                    automation.enabled ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-surface-hover text-fg-muted',
+                  )}>
+                    {automation.enabled ? labels.enabled : labels.paused}
+                  </span>
+                  <Dialog.Close asChild>
+                    <Button variant="ghost" aria-label={labels.close}>
+                      <X className="size-4" />
+                    </Button>
+                  </Dialog.Close>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+                <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
+                  <aside className="grid h-fit gap-3 rounded-lg border border-edge bg-surface-base p-4">
+                    <Info label={labels.info.when} value={triggerLabel(automation.trigger, labels, cronLabels, language)} />
+                    <Info label={labels.info.run} value={actionLabel(automation.action, labels)} />
+                    <Info label={labels.info.safety} value={labels.safety[mode]} />
+                    <DetailLine label={labels.last} value={formatDate(automation.state.lastRunAtMs, labels, language)} />
+                    <DetailLine label={labels.next} value={formatDate(automation.state.nextRunAtMs, labels, language)} />
+                    {automation.state.consecutiveFailures ? (
+                      <DetailLine label={labels.dashboard.failures} value={String(automation.state.consecutiveFailures)} />
+                    ) : null}
+                    {automation.state.lastError ? (
+                      <p className="break-words text-sm text-red-700 dark:text-red-300">{automation.state.lastError}</p>
+                    ) : null}
+                  </aside>
+
+                  <section className="min-w-0">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-fg">{labels.dashboard.runHistory}</h3>
+                        <p className="mt-1 text-sm text-fg-muted">{labels.dashboard.runHistoryDescription}</p>
+                      </div>
+                      <span className="rounded-full border border-edge bg-surface-base px-2.5 py-1 text-xs text-fg-muted">
+                        {runs.length}
+                      </span>
+                    </div>
+                    {runs.length === 0 ? (
+                      <EmptyState icon={<Activity className="size-5" />} title={labels.empty.runs} />
+                    ) : (
+                      <div className="grid gap-2">
+                        {runs.map((run) => (
+                          <div key={run.id} className="rounded-lg border border-edge bg-surface-base p-3">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <button
+                                className="min-w-0 text-left outline-none"
+                                onClick={() => onSelectRun(run.id)}
+                              >
+                                <div className="flex min-w-0 items-center gap-2">
+                                  {run.status === 'succeeded' ? (
+                                    <CheckCircle2 className="size-4 shrink-0 text-emerald-600 dark:text-emerald-300" />
+                                  ) : (
+                                    <Activity className="size-4 shrink-0 text-fg-muted" />
+                                  )}
+                                  <span className="truncate text-sm font-medium text-fg">{formatDate(run.createdAtMs, labels, language)}</span>
+                                  <span className={cn('rounded-full px-2 py-0.5 text-xs', statusClass(run.status))}>
+                                    {labels.status[run.status]}
+                                  </span>
+                                </div>
+                                <p className="mt-1 line-clamp-2 text-sm text-fg-muted">
+                                  {run.error || run.summary || actionLabel(run.actionSnapshot, labels)}
+                                </p>
+                              </button>
+                              <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                                {run.sessionKey ? (
+                                  <Button asChild variant="ghost" className="h-8 rounded-md px-2 text-xs">
+                                    <Link to={`/chat/${encodeURIComponent(run.sessionKey)}`}>
+                                      <ExternalLink className="size-3.5" />
+                                      {labels.dashboard.openSession}
+                                    </Link>
+                                  </Button>
+                                ) : null}
+                                {run.workflowRunId ? (
+                                  <Button asChild variant="ghost" className="h-8 rounded-md px-2 text-xs">
+                                    <Link to={`/workflows?run=${encodeURIComponent(run.workflowRunId)}`}>
+                                      <GitBranch className="size-3.5" />
+                                      {labels.feedback.workflow}
+                                    </Link>
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap justify-between gap-2 border-t border-edge px-5 py-4">
+                <Button
+                  variant="ghost"
+                  disabled={busyAction !== null}
+                  onClick={() => void onAction(
+                    `automation:${automation.id}:delete`,
+                    () => automationApi.remove(automation.id),
+                    labels.dashboard.deleted,
+                  ).then((ok) => {
+                    if (ok) onClose();
+                  })}
+                >
+                  {deleteBusy ? <RefreshCw className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                  {labels.dashboard.delete}
+                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="secondary"
+                    disabled={busyAction !== null}
+                    onClick={() => void onAction(
+                      `automation:${automation.id}:toggle`,
+                      () => automation.enabled ? automationApi.pause(automation.id) : automationApi.resume(automation.id),
+                      automation.enabled ? labels.feedback.paused : labels.dashboard.resumed,
+                    )}
+                  >
+                    {toggleBusy ? <RefreshCw className="size-4 animate-spin" /> : automation.enabled ? <Pause className="size-4" /> : <Play className="size-4" />}
+                    {automation.enabled ? labels.dashboard.pause : labels.dashboard.resume}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    disabled={busyAction !== null}
+                    onClick={() => void onAction(
+                      `automation:${automation.id}:run`,
+                      () => automationApi.runNow(automation.id),
+                      labels.feedback.rerunQueued,
+                    )}
+                  >
+                    {runBusy ? <RefreshCw className="size-4 animate-spin" /> : <Play className="size-4" />}
+                    {labels.dashboard.runNow}
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

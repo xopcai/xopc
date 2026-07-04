@@ -13,6 +13,11 @@
     "agentNoMatches": "No matching agents",
     "thinkingLevel": "Thinking",
     "newSession": "New chat",
+    "timelineTitle": "Timeline",
+    "timelineTurn": "Turn {{count}}",
+    "timelineMessageFallback": "Message",
+    "timelineToolCount_one": "{{count}} step",
+    "timelineToolCount_other": "{{count}} steps",
     "welcomeTitle": "Welcome to xopc",
     "welcomeDescription": "Send a message to get started",
     "welcomeSpotlight": {

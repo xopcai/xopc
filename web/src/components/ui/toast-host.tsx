@@ -1,7 +1,6 @@
 import { AlertCircle, CheckCircle2, Info, TriangleAlert, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { TOAST_TOP_FALLBACK } from '@/components/shell/top-banner-stack';
 import { cn } from '@/lib/cn';
 import {
   TOAST_DEFAULT_DURATION_MS,
@@ -91,8 +90,8 @@ function ToastItem({
 }
 
 /**
- * Global toast surface: listens on `extension-notification`, stacks up to
- * {@link TOAST_MAX_VISIBLE} toasts below top banners (via `--toast-top-inset`).
+ * Global toast surface: listens on `extension-notification` and stacks up to
+ * {@link TOAST_MAX_VISIBLE} toasts in the lower-right corner.
  */
 export function ToastHost() {
   const language = useLocaleStore((s) => s.language);
@@ -166,13 +165,8 @@ export function ToastHost() {
   if (toasts.length === 0) return null;
 
   return (
-    <div
-      className="pointer-events-none fixed inset-x-0 z-[100] flex justify-center px-4"
-      style={{
-        top: `max(var(--toast-top-inset, ${TOAST_TOP_FALLBACK}), env(safe-area-inset-top, 0px))`,
-      }}
-    >
-      <div className="flex w-full max-w-md flex-col gap-2">
+    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[100] flex justify-center px-4 sm:inset-x-auto sm:right-4 sm:justify-end">
+      <div className="flex w-full max-w-md flex-col-reverse gap-2">
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} dismissLabel={dismissLabel} onDismiss={dismiss} />
         ))}
