@@ -18,6 +18,7 @@ import type {
   ExtensionHookHandler,
   ExtensionRecord,
   ExtensionRegistry,
+  ExtensionMigrationRegistration,
   ExtensionReloadRegistration,
   ExtensionService,
   GatewayMethodHandler,
@@ -39,6 +40,7 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
   channelPlugins: ChannelPlugin[] = [];
   private cliRegistrations: ExtensionCliRegistration[] = [];
   private reloadRegistrations: ExtensionReloadRegistration[] = [];
+  private migrationRegistrations: ExtensionMigrationRegistration[] = [];
   private tuiRegistrations: TuiExtensionRegistration[] = [];
 
   addExtension(record: ExtensionRecord): void {
@@ -173,6 +175,17 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
 
   getReloadRegistrations(): readonly ExtensionReloadRegistration[] {
     return this.reloadRegistrations;
+  }
+
+  addMigrationRegistration(reg: ExtensionMigrationRegistration): void {
+    this.migrationRegistrations = this.migrationRegistrations.filter(
+      (r) => !(r.extensionId === reg.extensionId && r.migration.id === reg.migration.id),
+    );
+    this.migrationRegistrations.push(reg);
+  }
+
+  getMigrationRegistrations(): readonly ExtensionMigrationRegistration[] {
+    return this.migrationRegistrations;
   }
 
   getMatchingReloadRegistrations(changedPaths: string[]): ExtensionReloadRegistration[] {

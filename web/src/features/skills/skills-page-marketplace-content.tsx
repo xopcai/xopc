@@ -1,7 +1,6 @@
 import { ChevronLeft, ChevronRight, Loader2, Star } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import { MarketplaceSkillCardSkeleton } from '@/features/skills/skills-page-primitives';
 import { SKILL_LIST_SKELETON_KEYS } from '@/features/skills/skills-page.constants';
 import {
@@ -250,7 +249,6 @@ export function SkillsPageMarketplaceContent(p: Props) {
                       }}
                     >
                       <div className="flex items-start gap-3">
-                        <SkillCardIcon name={row.id} />
                         <div className="flex min-w-0 flex-1 flex-col gap-2">
                           <div className="flex items-start justify-between gap-2">
                             <h3
@@ -308,38 +306,6 @@ export function SkillsPageMarketplaceContent(p: Props) {
                               </Button>
                             </div>
                           </div>
-                          {(() => {
-                            const pills: { id: string; label: string }[] = [];
-                            const pushPill = (id: string | undefined, label: string | undefined) => {
-                              if (!id) return;
-                              if (pills.some((p) => p.id === id)) return;
-                              const display =
-                                registeredProviders.find((rp) => rp.id === id)?.displayName ??
-                                label ??
-                                id;
-                              pills.push({ id, label: display });
-                            };
-                            pushPill(row.providerId, row.sourceLabel);
-                            for (const s of row.additionalSources ?? []) {
-                              pushPill(s.providerId, s.sourceLabel);
-                            }
-                            if (pills.length === 0 && row.sourceLabel) {
-                              pills.push({ id: row.sourceLabel, label: row.sourceLabel });
-                            }
-                            if (pills.length === 0) return null;
-                            return (
-                              <div className="flex flex-wrap gap-1">
-                                {pills.map((pill) => (
-                                  <span
-                                    key={pill.id}
-                                    className="inline-flex items-center rounded-full border border-edge-subtle bg-surface-panel px-2 py-0.5 text-[10px] font-medium leading-none text-fg-muted dark:bg-surface-hover/40"
-                                  >
-                                    {pill.label}
-                                  </span>
-                                ))}
-                              </div>
-                            );
-                          })()}
                           <p
                             className="line-clamp-2 text-sm leading-relaxed text-fg-muted"
                             title={row.description ? row.description : undefined}

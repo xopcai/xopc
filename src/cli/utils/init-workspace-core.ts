@@ -6,6 +6,7 @@ import type { Config } from '../../config/schema.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { saveConfig } from '../../config/loader.js';
 import { ensureStarterAgentsInitialized } from '../../agent/starter-agents.js';
+import { runBootstrapMigrationsSync } from '../../migrations/runner.js';
 
 export interface InitWorkspaceCoreOptions {
   configPath: string;
@@ -70,6 +71,9 @@ export async function initWorkspaceCore(options: InitWorkspaceCoreOptions): Prom
   mkdirSync(dirname(configPath), { recursive: true });
 
   const configExisted = existsSync(configPath);
+  if (configExisted) {
+    runBootstrapMigrationsSync(configPath, { stateDir: dirname(configPath) });
+  }
   const workspaceExisted = existsSync(workspacePath);
 
   let config: Config;

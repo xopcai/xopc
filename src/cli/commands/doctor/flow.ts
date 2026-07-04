@@ -14,10 +14,12 @@ import { checkSecurityAudit } from './checks/security-audit.js';
 import { checkWorkspaceStatus } from './checks/workspace-status.js';
 import { checkVersionUpdate } from './checks/version-check.js';
 import { checkChannelPlugins } from './checks/channel-plugins.js';
+import { checkMigrations } from './checks/migrations.js';
 
 const DOCTOR_CHECKS: DoctorCheck[] = [
   checkVersionUpdate,
   checkNodeVersion,
+  checkMigrations,
   checkConfigHealth,
   checkStateIntegrity,
   checkDatabaseSchema,

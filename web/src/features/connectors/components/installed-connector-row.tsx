@@ -2,20 +2,38 @@ import { Database, FileText, KeyRound, Loader2, PlugZap, ShieldCheck, Trash2, Wr
 import { useCallback, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import type { ConnectorsSettingsMessages, McpSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
 import {
   removeConnector,
   testConnector,
   type ConnectorHealthResult,
+  type ConnectorHealthStatus,
   type ConnectorInstance,
 } from '../connectors-api';
 import { McpToolsListDialog } from '../mcp/mcp-tools-list-dialog';
+import { formatConnectorMessage } from '../utils/connector-i18n';
 import { ComposioConnectorPanel } from './composio-connector-panel';
 
 type ConnectorDetailTab = 'health' | 'tools' | 'resources' | 'prompts' | 'permissions';
 
-export function InstalledConnectorRow({ instance, onChanged }: { instance: ConnectorInstance; onChanged: () => Promise<void> }) {
+function healthStatusLabel(status: ConnectorHealthStatus | undefined, t: ConnectorsSettingsMessages): string {
+  if (!status) return t.healthNotTested;
+  return t.healthStatusLabels[status] ?? status;
+}
+
+export function InstalledConnectorRow({
+  instance,
+  onChanged,
+  t,
+  mcp,
+}: {
+  instance: ConnectorInstance;
+  onChanged: () => Promise<void>;
+  t: ConnectorsSettingsMessages;
+  mcp: McpSettingsMessages;
+}) {
   const [testing, setTesting] = useState(false);
   const [removing, setRemoving] = useState(false);
   const [health, setHealth] = useState<ConnectorHealthResult | null>(null);
@@ -62,34 +80,36 @@ export function InstalledConnectorRow({ instance, onChanged }: { instance: Conne
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-semibold text-fg">{instance.displayName}</h3>
             <span className="rounded-full border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted">
-              catalog
+              {t.catalogBadge}
             </span>
           </div>
           <p className="mt-1 text-sm text-fg-muted">
-            {instance.materialized.type === 'mcp' ? `MCP server: ${instance.materialized.serverId}` : `Runtime: ${instance.materialized.type}`}
+            {instance.materialized.type === 'mcp'
+              ? formatConnectorMessage(t.mcpServerRuntime, { serverId: instance.materialized.serverId })
+              : formatConnectorMessage(t.runtimeLabel, { runtime: instance.materialized.type })}
           </p>
         </div>
         <div className="flex gap-2">
           {instance.materialized.type === 'mcp' ? (
             <Button variant="secondary" disabled={testing} onClick={() => void runTest()}>
               {testing ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
-              Test
+              {t.test}
             </Button>
           ) : null}
           <Button variant="ghost" disabled={removing} onClick={() => void remove()}>
             {removing ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-            Remove
+            {t.remove}
           </Button>
         </div>
       </div>
       {error ? <p className="mt-3 rounded-xl bg-red-500/10 px-3 py-2 text-sm text-red-600">{error}</p> : null}
       <div className="mt-4 flex flex-wrap gap-2">
         {([
-          ['health', ShieldCheck, 'Health'],
-          ['tools', Wrench, `Tools ${health ? health.toolCount : instance.usage.lastToolCount ?? ''}`],
-          ['resources', Database, `Resources ${health ? health.resourceCount : instance.usage.lastResourceCount ?? ''}`],
-          ['prompts', FileText, `Prompts ${health ? health.promptCount : instance.usage.lastPromptCount ?? ''}`],
-          ['permissions', KeyRound, 'Permissions'],
+          ['health', ShieldCheck, t.detailHealth],
+          ['tools', Wrench, `${t.detailTools} ${health ? health.toolCount : instance.usage.lastToolCount ?? ''}`],
+          ['resources', Database, `${t.detailResources} ${health ? health.resourceCount : instance.usage.lastResourceCount ?? ''}`],
+          ['prompts', FileText, `${t.detailPrompts} ${health ? health.promptCount : instance.usage.lastPromptCount ?? ''}`],
+          ['permissions', KeyRound, t.detailPermissions],
         ] as const).map(([id, Icon, label]) => (
           <button
             key={id}
@@ -111,14 +131,14 @@ export function InstalledConnectorRow({ instance, onChanged }: { instance: Conne
         {detailTab === 'health' ? (
           <div className="space-y-1 text-fg-muted">
             <p>
-              Status:{' '}
+              {t.statusLabel}{' '}
               <span className={health?.ok ? 'font-medium text-emerald-700 dark:text-emerald-300' : 'font-medium text-fg'}>
-                {health?.status ?? instance.usage.lastHealthStatus ?? 'not tested'}
+                {healthStatusLabel(health?.status ?? instance.usage.lastHealthStatus, t)}
               </span>
             </p>
             <p>
-              Last check:{' '}
-              {instance.usage.lastHealthCheckAt ? new Date(instance.usage.lastHealthCheckAt).toLocaleString() : 'never'}
+              {t.lastCheckLabel}{' '}
+              {instance.usage.lastHealthCheckAt ? new Date(instance.usage.lastHealthCheckAt).toLocaleString() : t.never}
             </p>
             {health?.action ? <p>{health.action}</p> : null}
           </div>
@@ -128,7 +148,7 @@ export function InstalledConnectorRow({ instance, onChanged }: { instance: Conne
             <div className="grid gap-2">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-xs text-fg-muted">
-                  {health.tools.length} tools available for this connector.
+                  {formatConnectorMessage(t.toolsAvailable, { count: String(health.tools.length) })}
                 </p>
                 <Button
                   type="button"
@@ -136,7 +156,7 @@ export function InstalledConnectorRow({ instance, onChanged }: { instance: Conne
                   className="h-7 text-xs"
                   onClick={() => setToolsDialogOpen(true)}
                 >
-                  View all
+                  {mcp.viewAllTools}
                 </Button>
               </div>
               {health.tools.slice(0, 8).map((tool) => (
@@ -150,12 +170,12 @@ export function InstalledConnectorRow({ instance, onChanged }: { instance: Conne
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-fg-muted">
                 {lastToolCount
-                  ? `${lastToolCount} tools were found in the last health check. Run Test again to load tool details.`
-                  : 'Run Test to list tools.'}
+                  ? formatConnectorMessage(t.toolsLastCheckSummary, { count: String(lastToolCount) })
+                  : t.toolsRunTestHint}
               </p>
               <Button type="button" variant="secondary" disabled={testing} onClick={() => void runTest()}>
                 {testing ? <Loader2 className="size-4 animate-spin" /> : <PlugZap className="size-4" />}
-                Test
+                {t.test}
               </Button>
             </div>
           )
@@ -171,7 +191,7 @@ export function InstalledConnectorRow({ instance, onChanged }: { instance: Conne
               ))}
             </div>
           ) : (
-            <p className="text-fg-muted">Run Test to list resources exposed by this MCP server.</p>
+            <p className="text-fg-muted">{t.resourcesRunTestHint}</p>
           )
         ) : null}
         {detailTab === 'prompts' ? (
@@ -185,33 +205,39 @@ export function InstalledConnectorRow({ instance, onChanged }: { instance: Conne
               ))}
             </div>
           ) : (
-            <p className="text-fg-muted">Run Test to list prompts exposed by this MCP server.</p>
+            <p className="text-fg-muted">{t.promptsRunTestHint}</p>
           )
         ) : null}
         {detailTab === 'permissions' ? (
           <div className="space-y-1 text-fg-muted">
-            <p>Secrets configured: {Object.values(instance.secretStatus).filter(Boolean).length}</p>
-            <p>Runtime: {instance.materialized.type.toUpperCase()}{instance.materialized.type === 'mcp' ? ` server \`${instance.materialized.serverId}\`` : ''}</p>
-            <p>{instance.materialized.type === 'mcp' ? 'Tool calls run through MCP and follow the agent tool policy/approval gates.' : 'Tool calls follow connector scope and curated allowlist gates.'}</p>
+            <p>{formatConnectorMessage(t.secretsConfigured, { count: String(Object.values(instance.secretStatus).filter(Boolean).length) })}</p>
+            <p>
+              {instance.materialized.type === 'mcp'
+                ? formatConnectorMessage(t.runtimeServerLabel, {
+                    runtime: instance.materialized.type.toUpperCase(),
+                    serverId: instance.materialized.serverId,
+                  })
+                : formatConnectorMessage(t.runtimeLabel, { runtime: instance.materialized.type.toUpperCase() })}
+            </p>
+            <p>{instance.materialized.type === 'mcp' ? t.mcpPolicyHint : t.connectorPolicyHint}</p>
           </div>
         ) : null}
       </div>
-      {instance.materialized.type === 'composio' ? <ComposioConnectorPanel instance={instance} /> : null}
+      {instance.materialized.type === 'composio' ? <ComposioConnectorPanel instance={instance} t={t} /> : null}
     </div>
     {instance.materialized.type === 'mcp' ? <McpToolsListDialog
       open={toolsDialogOpen}
       onOpenChange={setToolsDialogOpen}
       serverId={instance.materialized.serverId}
-      title={`${instance.displayName} tools`}
-      subtitle="{{serverId}} exposes {{count}} MCP tools."
-      searchPlaceholder="Search tools"
-      searchEmptyLabel="No tools match your search."
-      emptyLabel="Run Test to list tools."
-      closeLabel="Close"
+      title={formatConnectorMessage(t.installedToolsDialogTitle, { name: instance.displayName })}
+      subtitle={t.installedToolsDialogSubtitle}
+      searchPlaceholder={mcp.toolsDialogSearchPlaceholder}
+      searchEmptyLabel={mcp.toolsDialogSearchEmpty}
+      emptyLabel={t.toolsRunTestHint}
+      closeLabel={mcp.toolsDialogClose}
       tools={health?.tools ?? []}
       stripPrefix={`${instance.materialized.serverId}__`}
     /> : null}
     </>
   );
 }
-

@@ -60,13 +60,15 @@ export async function runGatewayFromCliOptions(
     process.env.XOPC_GATEWAY_TAILSCALE_RESET_ON_EXIT = '1';
   }
 
-  const [{ loadConfig }, { resolveConfigPath }, { runGatewayLoop }, gatewayPorts] = await Promise.all([
+  const [{ loadConfig }, { resolveConfigPath }, { runGatewayLoop }, gatewayPorts, migrations] = await Promise.all([
     import('../../../config/index.js'),
     import('../../../config/paths.js'),
     import('../../../gateway/run-loop.js'),
     import('../../../gateway/ports.js'),
+    import('../../../migrations/runner.js'),
   ]);
   const { checkPortAvailable, forceFreePortAndWait } = gatewayPorts;
+  migrations.runBootstrapMigrationsSync(ctx.configPath);
   const config = loadConfig(ctx.configPath);
 
   const bindFromFlagRaw =

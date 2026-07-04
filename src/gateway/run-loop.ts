@@ -4,6 +4,7 @@
 
 import { isRestartEnabled } from '../config/commands.flags.js';
 import { loadConfig } from '../config/index.js';
+import { runBootstrapMigrationsSync } from '../migrations/runner.js';
 import type { GatewayServer } from './server.js';
 import { acquireGatewayLock } from './lock.js';
 import { restartGatewayProcessWithFreshPid } from './respawn.js';
@@ -25,6 +26,7 @@ export type RunGatewayLoopOptions = {
 };
 
 export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void> {
+  runBootstrapMigrationsSync(opts.configPath);
   const config = loadConfig(opts.configPath);
   setGatewaySigusr1RestartPolicy({ allowExternal: isRestartEnabled(config) });
 

@@ -50,6 +50,8 @@ import { registerSpeechProvider as registerSpeechProviderInRegistry } from '../v
 import type { SpeechProviderPlugin } from '../voice/tts/speech-provider-types.js';
 import { registerMediaUnderstandingProvider as registerMediaUnderstandingProviderInRegistry } from '../media-understanding/registry.js';
 import type { MediaUnderstandingProvider } from '../media-understanding/types.js';
+import { registerMigration as registerRuntimeMigration } from '../migrations/registry.js';
+import type { Migration } from '../migrations/types.js';
 
 export class ExtensionApiImpl implements ExtensionApi {
   private _tools: Map<string, AgentTool> = new Map();
@@ -194,6 +196,9 @@ export class ExtensionApiImpl implements ExtensionApi {
     const plugin = registration.plugin;
     this._assertContract('channels', plugin.id);
     this._registry.addChannelPlugin(plugin);
+    for (const migration of plugin.migrations ?? []) {
+      this.registerMigration(migration);
+    }
     this._eventBus.emit('channel:register', plugin);
     this._logger.info(`Registered channel plugin: ${plugin.id}`);
   }
@@ -277,6 +282,12 @@ export class ExtensionApiImpl implements ExtensionApi {
       handler,
     });
     this._logger.info(`Bound manifest command "${commandId}" as /${name}`);
+  }
+
+  registerMigration(migration: Migration): void {
+    this._registry.addMigrationRegistration({ extensionId: this.id, migration });
+    registerRuntimeMigration(`extension:${this.id}`, migration);
+    this._logger.info(`Registered migration: ${migration.id}`);
   }
 
   registerReload(handler: ExtensionReloadHandler): void {

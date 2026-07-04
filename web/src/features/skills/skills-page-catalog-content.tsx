@@ -1,5 +1,4 @@
 import { Button } from '@/components/ui/button';
-import { SkillCardIcon } from '@/features/skills/skill-card-icon';
 import { SkillCatalogCardSkeleton } from '@/features/skills/skills-page-primitives';
 import { SKILL_LIST_SKELETON_KEYS } from '@/features/skills/skills-page.constants';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
@@ -166,7 +165,6 @@ export function SkillsPageCatalogContent(p: Props) {
                 }}
               >
                 <div className="flex items-start gap-3">
-                  <SkillCardIcon name={row.name} />
                   <div className="flex min-w-0 flex-1 flex-col gap-2">
                     <div className="flex items-start justify-between gap-2">
                       <h3

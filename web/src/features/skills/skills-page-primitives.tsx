@@ -11,7 +11,6 @@ export function MarketplaceSkillCardSkeleton() {
       aria-hidden
     >
       <div className="flex min-h-0 flex-1 items-start gap-3">
-        <div className={cn('size-11 shrink-0 rounded-xl', skelBar)} />
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <div className="flex items-start justify-between gap-2">
             <div className={cn('h-4 min-w-0 flex-1', skelBar)} />
