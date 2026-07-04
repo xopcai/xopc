@@ -78,28 +78,35 @@ export const MessageList = memo(function MessageList({
       {list.map((msg, index) => {
         const isLast = index === list.length - 1;
         const isStreamRow = Boolean(streaming && isLast && msg.role === 'assistant');
+        const key = messageRowKey(msg, index);
         return (
-          <MessageBubble
-            key={messageRowKey(msg, index)}
-            message={msg}
-            authToken={authToken}
-            sessionKey={sessionKey}
-            isStreaming={isStreamRow}
-            progress={isStreamRow ? progress : null}
-            reasoningLevel={reasoningLevel}
-            messageIndex={index}
-            onDeleteRound={onDeleteRound}
-            onRetryUserMessageRound={onRetryUserMessageRound}
-            userMessageCanRetry={
-              Boolean(onRetryUserMessageRound) && isLastUserMessageInThread(list, index)
-            }
-            deleteRoundDisabled={deleteRoundDisabled}
-            onAbortCurrentTurn={onAbortCurrentTurn}
-            onSendUserMessage={onSendUserMessage}
-            onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
-            onExtractAssistantTask={onExtractAssistantTask}
-            suppressAssistantActions={streaming}
-          />
+          <div
+            key={key}
+            id={`chat-message-${index}`}
+            className="scroll-mt-4"
+            data-chat-message-index={index}
+          >
+            <MessageBubble
+              message={msg}
+              authToken={authToken}
+              sessionKey={sessionKey}
+              isStreaming={isStreamRow}
+              progress={isStreamRow ? progress : null}
+              reasoningLevel={reasoningLevel}
+              messageIndex={index}
+              onDeleteRound={onDeleteRound}
+              onRetryUserMessageRound={onRetryUserMessageRound}
+              userMessageCanRetry={
+                Boolean(onRetryUserMessageRound) && isLastUserMessageInThread(list, index)
+              }
+              deleteRoundDisabled={deleteRoundDisabled}
+              onAbortCurrentTurn={onAbortCurrentTurn}
+              onSendUserMessage={onSendUserMessage}
+              onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
+              onExtractAssistantTask={onExtractAssistantTask}
+              suppressAssistantActions={streaming}
+            />
+          </div>
         );
       })}
     </div>

@@ -19,6 +19,13 @@ import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import {
+  SettingsPageFrame,
+  SettingsPageHeader,
+  SettingsTabPanel,
+  SettingsTabs,
+  type SettingsTabItem,
+} from '@/features/settings/settings-page-layout';
+import {
   cleanExpiredShares,
   createShare,
   extendShare,
@@ -37,7 +44,6 @@ import { SharePolicySection } from '@/features/shares/share-policy-section';
 import { WorkspacePathPickerDialog } from '@/features/shares/workspace-path-picker';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
-import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -117,9 +123,9 @@ export function SharesSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto w-full max-w-app-main px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
         <p className="text-sm text-fg-muted">{t.needToken}</p>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
@@ -127,68 +133,38 @@ export function SharesSettingsPanel() {
     shares: t.tabShares,
     policy: t.tabPolicy,
   };
+  const tabItems: SettingsTabItem<SharesTabId>[] = SHARES_TABS.map((tab) => ({
+    id: tab,
+    label: tabLabels[tab],
+  }));
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <div>
-        <h1 className="text-lg font-semibold text-fg">{t.title}</h1>
-        <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
-      </div>
+    <SettingsPageFrame>
+      <SettingsPageHeader title={t.title} subtitle={t.subtitle} />
 
-      <div
-        className="flex flex-col gap-5"
-        role="tablist"
-        aria-label={t.tabsAria}
-        onKeyDown={(e) => {
-          if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-          e.preventDefault();
-          const idx = SHARES_TABS.indexOf(activeTab);
-          const delta = e.key === 'ArrowRight' ? 1 : -1;
-          const next = SHARES_TABS[(idx + delta + SHARES_TABS.length) % SHARES_TABS.length];
-          setActiveTab(next);
-        }}
+      <SettingsTabs
+        items={tabItems}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        ariaLabel={t.tabsAria}
+        tabIdPrefix="shares-tab"
+        panelIdPrefix="shares-panel"
+      />
+
+      <SettingsTabPanel
+        id={activeTab}
+        activeTab={activeTab}
+        tabIdPrefix="shares-tab"
+        panelIdPrefix="shares-panel"
+        showHeading={false}
       >
-        <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
-          {SHARES_TABS.map((tab) => {
-            const selected = tab === activeTab;
-            return (
-              <button
-                key={tab}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                id={`shares-tab-${tab}`}
-                aria-controls={`shares-panel-${tab}`}
-                className={cn(
-                  'shrink-0 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                  interaction.press,
-                  selected
-                    ? 'bg-accent-soft text-accent-fg'
-                    : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-                )}
-                onClick={() => setActiveTab(tab)}
-              >
-                {tabLabels[tab]}
-              </button>
-            );
-          })}
-        </div>
-
-        <div
-          role="tabpanel"
-          id={`shares-panel-${activeTab}`}
-          aria-labelledby={`shares-tab-${activeTab}`}
-          className="min-w-0"
-        >
           {activeTab === 'shares' ? (
             <SharesManageTab t={t} language={language} />
           ) : (
             <SharePolicySection hasToken={hasToken} />
           )}
-        </div>
-      </div>
-    </div>
+      </SettingsTabPanel>
+    </SettingsPageFrame>
   );
 }
 

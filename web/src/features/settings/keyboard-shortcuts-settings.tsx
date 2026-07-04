@@ -1,4 +1,5 @@
 import { cn } from '@/lib/cn';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { isElectron } from '@/lib/electron-env';
@@ -110,15 +111,12 @@ export function KeyboardShortcutsSettingsPanel() {
   });
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight text-fg">{k.pageTitle}</h1>
-        <p className="text-sm text-fg-muted">{k.subtitle}</p>
-      </header>
+    <SettingsPageFrame gap="gap-6">
+      <SettingsPageHeader title={k.pageTitle} subtitle={k.subtitle} />
 
       {categories.map((cat) => (
         <ShortcutSection key={cat.title} {...cat} />
       ))}
-    </div>
+    </SettingsPageFrame>
   );
 }

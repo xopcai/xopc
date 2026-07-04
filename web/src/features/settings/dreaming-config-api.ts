@@ -108,7 +108,13 @@ export function normalizeDreamingFromConfig(config: unknown): DreamingConfigStat
   const c = isRecord(config) ? config : {};
   const memory = isRecord(c.memory) ? c.memory : {};
   const rootDreaming = isRecord(c.dreaming) ? c.dreaming : {};
-  const dreaming = isRecord(memory.dreaming) ? memory.dreaming : rootDreaming;
+  const directDreaming =
+    typeof c.enabled === 'boolean' || typeof c.frequency === 'string' || isRecord(c.phases) ? c : {};
+  const dreaming = isRecord(memory.dreaming)
+    ? memory.dreaming
+    : Object.keys(rootDreaming).length > 0
+      ? rootDreaming
+      : directDreaming;
   const phases = isRecord(dreaming.phases) ? dreaming.phases : {};
   const lightRaw = isRecord(phases.light) ? phases.light : {};
   const deepRaw = isRecord(phases.deep) ? phases.deep : {};

@@ -16,6 +16,7 @@ import type { CompactionResult } from '../../agent/memory/compaction.js';
 import { retireSessionMcpRuntimeForSessionKey } from '../../agent/mcp/bundle-mcp-tools.js';
 import { SessionIndex } from '../../session/index.js';
 import type { ExportFormat, SessionListQuery } from '../../session/types.js';
+import { buildSessionTimeline } from '../../session/transcript-outline.js';
 import type { SessionPatchBody } from '../../session/patch-metadata.js';
 import { collectMediaUrisFromMessages, deleteMediaUris } from '../../media/session-references.js';
 import { getDistinctSessionChatIds } from './session-chat-ids.js';
@@ -102,6 +103,13 @@ export class GatewaySessionsApi {
     },
   ) {
     return this.opts.sessionIndex.getSessionMessagePage(key, options);
+  }
+
+  async getTimeline(key: string) {
+    const metadata = await this.opts.sessionIndex.getSessionMetadata(key);
+    if (!metadata) return null;
+    const rows = await this.opts.sessionIndex.getStore().loadTranscriptRows(key);
+    return buildSessionTimeline(rows);
   }
 
   // ── Metadata patches ──────────────────────────────────────────────────

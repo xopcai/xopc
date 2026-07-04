@@ -30,6 +30,23 @@ type SessionLoadResult = {
 
 const _sessionLoadInflight = new Map<string, Promise<SessionLoadResult>>();
 
+export type SessionTimelineItem = {
+  id: string;
+  kind: 'turn' | 'tool' | 'file' | 'command' | 'context' | 'branch' | 'compaction';
+  role?: 'user' | 'assistant' | 'system';
+  title: string;
+  preview?: string;
+  timestamp?: number;
+  depth: number;
+  turn: number;
+  displayIndex?: number;
+  rowNumber?: number;
+  status?: 'running' | 'done' | 'error';
+  meta?: { toolName?: string; files?: string[] };
+};
+
+const _timelineInflight = new Map<string, Promise<SessionTimelineItem[]>>();
+
 export function parseWebchatSessionKeyForCreate(
   sessionKey: string,
 ): { agentId: string; channel: string; chatId: string } | null {
@@ -188,6 +205,27 @@ export class SessionManager {
     });
 
     _sessionLoadInflight.set(dedupeKey, pending);
+    return pending;
+  }
+
+  async loadTimeline(sessionKey: string): Promise<SessionTimelineItem[]> {
+    const existing = _timelineInflight.get(sessionKey);
+    if (existing) return existing;
+
+    const pending = (async () => {
+      const res = await apiFetchWithStartupRetry(
+        apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/timeline`),
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+      const data = (await res.json()) as {
+        items?: SessionTimelineItem[];
+      };
+      return Array.isArray(data.items) ? data.items : [];
+    })().finally(() => {
+      _timelineInflight.delete(sessionKey);
+    });
+
+    _timelineInflight.set(sessionKey, pending);
     return pending;
   }
 

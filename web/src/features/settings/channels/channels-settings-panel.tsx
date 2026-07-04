@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { ExtensionIframeHost } from '@/features/extensions/extension-iframe-host';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
@@ -622,14 +623,15 @@ export function ChannelsSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+        <SettingsPageHeader title={m.settingsSections.channels} />
         <p className="text-sm text-fg-muted">{ch.tokenRequired}</p>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-app-main px-4 py-6">
+    <SettingsPageFrame gap="gap-4">
       {catalog.isLoading ? (
         <p className="text-sm text-fg-muted">{ch.loadingChannels}</p>
       ) : catalog.error ? (
@@ -800,6 +802,6 @@ export function ChannelsSettingsPanel() {
           </div>
         ) : null}
       </ChannelSettingsShell>
-    </div>
+    </SettingsPageFrame>
   );
 }

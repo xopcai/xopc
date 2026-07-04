@@ -1,4 +1,5 @@
 import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-defaults';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 
 import { AgentDeleteConfirmDialog } from './agent-delete-confirm-dialog';
 import { agentsAppDetailPath } from './agents-app-path';
@@ -13,16 +14,15 @@ export function AgentsSettingsPanel() {
 
   if (!vm.hasToken) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <h1 className="text-lg font-semibold text-fg">{vm.a.title}</h1>
+      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+        <SettingsPageHeader title={vm.a.title} />
         <p className="text-sm text-fg-muted">{vm.a.needToken}</p>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
-
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
+    <SettingsPageFrame gap="gap-6" padding="px-4 py-8">
       {vm.displayError ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
           {vm.displayError}
@@ -130,6 +130,6 @@ export function AgentsSettingsPanel() {
         onCancel={() => vm.setDeleteDialogOpen(false)}
         a={vm.a}
       />
-    </div>
+    </SettingsPageFrame>
   );
 }

@@ -10,6 +10,7 @@ import { MessageList } from '@/features/chat/messages/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
 import { useChatSession } from '@/features/chat/session/use-chat-session';
+import { ChatTimelineRail } from '@/features/chat/timeline/chat-timeline-rail';
 import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -43,7 +44,7 @@ export function ChatPage() {
   const welcomeDraftSeq = useRef(0);
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
 
-  const { auth, session, messages: msgSlice, stream, followUp, clarify, agents } = useChatSession();
+  const { auth, session, messages: msgSlice, timeline, stream, followUp, clarify, agents } = useChatSession();
 
   const skillQuery = searchParams.get('skill')?.trim() ?? '';
   const slashQuery = searchParams.get('slash')?.trim() ?? '';
@@ -165,7 +166,13 @@ export function ChatPage() {
     pathname,
   ]);
 
-  const { scrollRef, atBottom, registerListContentRef, scrollToBottom, onScroll } = useChatScrollViewport({
+  const {
+    scrollRef,
+    atBottom,
+    registerListContentRef,
+    scrollToBottom,
+    onScroll: onChatViewportScroll,
+  } = useChatScrollViewport({
     hasToken: auth.hasToken,
     showSessionLoading: session.showSessionLoading,
     sessionKey: session.sessionKey,
@@ -175,6 +182,137 @@ export function ChatPage() {
     loadingMore: session.loadingMore,
     loadMoreMessages: session.loadMoreMessages,
   });
+
+  const [activeMessageIndex, setActiveMessageIndex] = useState(0);
+  const timelineRafRef = useRef<number | null>(null);
+  const pendingTimelineDisplayIndexRef = useRef<number | null>(null);
+  const timelineDisplayOffset = useMemo(() => {
+    let maxDisplayIndex = -1;
+    for (const item of timeline.items) {
+      if (typeof item.displayIndex === 'number' && Number.isFinite(item.displayIndex)) {
+        maxDisplayIndex = Math.max(maxDisplayIndex, item.displayIndex);
+      }
+    }
+    if (maxDisplayIndex < 0) return 0;
+    return Math.max(0, maxDisplayIndex + 1 - msgSlice.items.length);
+  }, [msgSlice.items.length, timeline.items]);
+
+  const scrollToLocalMessageIndex = useCallback(
+    (localMessageIndex: number) => {
+      const root = scrollRef.current;
+      if (!root) return false;
+      const target = root.querySelector<HTMLElement>(
+        `[data-chat-message-index="${localMessageIndex}"]`,
+      );
+      if (!target) return false;
+      setActiveMessageIndex(localMessageIndex);
+      target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      return true;
+    },
+    [scrollRef],
+  );
+
+  const updateActiveMessageIndex = useCallback(() => {
+    const root = scrollRef.current;
+    if (!root) return;
+    const rows = Array.from(root.querySelectorAll<HTMLElement>('[data-chat-message-index]'));
+    if (rows.length === 0) {
+      setActiveMessageIndex(0);
+      return;
+    }
+
+    const rootRect = root.getBoundingClientRect();
+    const anchorY = rootRect.top + Math.min(180, rootRect.height * 0.35);
+    let best = rows[0];
+    for (const row of rows) {
+      const rect = row.getBoundingClientRect();
+      if (rect.top <= anchorY) {
+        best = row;
+        continue;
+      }
+      break;
+    }
+    const raw = best.dataset.chatMessageIndex;
+    const next = raw ? Number.parseInt(raw, 10) : 0;
+    if (Number.isFinite(next)) {
+      setActiveMessageIndex((prev) => (prev === next ? prev : next));
+    }
+  }, [scrollRef]);
+
+  const scheduleTimelineActiveUpdate = useCallback(() => {
+    if (timelineRafRef.current != null) {
+      cancelAnimationFrame(timelineRafRef.current);
+    }
+    timelineRafRef.current = requestAnimationFrame(() => {
+      timelineRafRef.current = null;
+      updateActiveMessageIndex();
+    });
+  }, [updateActiveMessageIndex]);
+
+  const handleChatScroll = useCallback(() => {
+    onChatViewportScroll();
+    scheduleTimelineActiveUpdate();
+  }, [onChatViewportScroll, scheduleTimelineActiveUpdate]);
+
+  const handleTimelineSelect = useCallback(
+    (messageIndex: number) => {
+      const localMessageIndex = messageIndex - timelineDisplayOffset;
+      if (localMessageIndex < 0 || localMessageIndex >= msgSlice.items.length) {
+        if (localMessageIndex < 0 && session.hasMore && !session.loadingMore) {
+          pendingTimelineDisplayIndexRef.current = messageIndex;
+          void session.loadMoreMessages();
+        }
+        return;
+      }
+      pendingTimelineDisplayIndexRef.current = null;
+      scrollToLocalMessageIndex(localMessageIndex);
+    },
+    [
+      msgSlice.items.length,
+      scrollToLocalMessageIndex,
+      session.hasMore,
+      session.loadMoreMessages,
+      session.loadingMore,
+      timelineDisplayOffset,
+    ],
+  );
+
+  useEffect(() => {
+    const pending = pendingTimelineDisplayIndexRef.current;
+    if (pending == null) return;
+    const localMessageIndex = pending - timelineDisplayOffset;
+    if (localMessageIndex >= 0 && localMessageIndex < msgSlice.items.length) {
+      pendingTimelineDisplayIndexRef.current = null;
+      requestAnimationFrame(() => scrollToLocalMessageIndex(localMessageIndex));
+      return;
+    }
+    if (localMessageIndex < 0 && session.hasMore && !session.loadingMore) {
+      void session.loadMoreMessages();
+      return;
+    }
+    if (localMessageIndex >= msgSlice.items.length || !session.hasMore) {
+      pendingTimelineDisplayIndexRef.current = null;
+    }
+  }, [
+    msgSlice.items.length,
+    scrollToLocalMessageIndex,
+    session.hasMore,
+    session.loadMoreMessages,
+    session.loadingMore,
+    timelineDisplayOffset,
+  ]);
+
+  useEffect(() => {
+    scheduleTimelineActiveUpdate();
+  }, [msgSlice.items.length, scheduleTimelineActiveUpdate, session.sessionKey, timelineDisplayOffset]);
+
+  useEffect(() => {
+    return () => {
+      if (timelineRafRef.current != null) {
+        cancelAnimationFrame(timelineRafRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     setWelcomeDraftSeed(null);
@@ -221,6 +359,40 @@ export function ChatPage() {
 
   const sourceNoteId = workflowMeta?.sourceNoteId ?? null;
   const sourceNoteTitle = workflowMeta?.sourceNoteTitle || m.chat.sourceNoteFallbackTitle;
+  const timelineLabels = useMemo(
+    () => ({
+      title: m.chat.timelineTitle,
+      turn: m.chat.timelineTurn,
+      messageFallback: m.chat.timelineMessageFallback,
+      toolCount_one: m.chat.timelineToolCount_one,
+      toolCount_other: m.chat.timelineToolCount_other,
+      searchedWeb: m.chat.stepSearchedWeb,
+      readFile: m.chat.stepReadFile,
+      runCommand: m.chat.stepRunCommand,
+      listDirectory: m.chat.stepListDirectory,
+      writeFile: m.chat.stepWriteFile,
+      editFile: m.chat.stepEditFile,
+      openUrl: m.chat.stepOpenUrl,
+      fetchUrl: m.chat.stepFetchUrl,
+      unknownTool: m.chat.stepUnknownTool,
+    }),
+    [
+      m.chat.timelineTitle,
+      m.chat.timelineTurn,
+      m.chat.timelineMessageFallback,
+      m.chat.timelineToolCount_one,
+      m.chat.timelineToolCount_other,
+      m.chat.stepSearchedWeb,
+      m.chat.stepReadFile,
+      m.chat.stepRunCommand,
+      m.chat.stepListDirectory,
+      m.chat.stepWriteFile,
+      m.chat.stepEditFile,
+      m.chat.stepOpenUrl,
+      m.chat.stepFetchUrl,
+      m.chat.stepUnknownTool,
+    ],
+  );
 
   const handleSaveAssistantToSourceNote = useCallback(
     async (content: string) => {
@@ -263,7 +435,7 @@ export function ChatPage() {
         chatAgentDisabled={session.showSessionLoading || session.sessionRoutePending}
       />
 
-      <div className="relative mx-auto flex min-h-0 w-full max-w-[var(--max-width-chat)] flex-1 flex-col">
+      <div className="relative mx-auto flex min-h-0 w-full max-w-[calc(var(--max-width-chat)+8rem)] flex-1 flex-col">
         {(location.state as { fromAgentEditor?: boolean } | null)?.fromAgentEditor &&
         agents.displayAgentId ? (
           <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/80 px-3 py-1.5 sm:px-5 xl:px-6">
@@ -298,15 +470,23 @@ export function ChatPage() {
             sending={stream.sending}
           />
         ) : null}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col px-3 sm:px-5 xl:px-6">
-          <div className="flex min-h-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 min-w-0 flex-1 px-3 sm:px-5 xl:px-6">
+          <div className="absolute inset-y-0 right-0 hidden xl:block">
+            <ChatTimelineRail
+              items={timeline.items}
+              activeMessageIndex={activeMessageIndex + timelineDisplayOffset}
+              labels={timelineLabels}
+              onSelectMessage={handleTimelineSelect}
+            />
+          </div>
+          <div className="mx-auto flex min-h-0 min-w-0 flex-1 flex-col xl:max-w-[58rem]">
             <div
               ref={scrollRef}
               className={cn(
                 'chat-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden [overflow-anchor:none] [scrollbar-gutter:stable_both-edges]',
                 compactWelcomeLayout ? 'chat-messages--compact-welcome pt-5 pb-2' : 'py-4',
               )}
-              onScroll={onScroll}
+              onScroll={handleChatScroll}
             >
               {session.showSessionLoading ? (
                 <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">

@@ -31,6 +31,34 @@
       "running": "Running",
       "next": "Next"
     },
+    "createMenu": {
+      "draft": "Draft with AI",
+      "template": "From template",
+      "blank": "Blank automation",
+      "templatesTitle": "Choose a template"
+    },
+    "dashboard": {
+      "activity": "Activity",
+      "activityDescription": "Current and recent runs, ordered by what needs attention first.",
+      "manage": "Automations",
+      "manageDescription": "Open an automation to inspect configuration and run history.",
+      "needsAttention": "Needs attention",
+      "latestResult": "Latest result",
+      "result": "Result",
+      "runHistory": "Run history",
+      "runHistoryDescription": "Review previous runs and open the session or workflow behind each result.",
+      "openSession": "Open session",
+      "runNow": "Run now",
+      "pause": "Pause",
+      "resume": "Resume",
+      "delete": "Delete",
+      "resumed": "Automation resumed",
+      "deleted": "Automation deleted",
+      "cancelled": "Run cancelled",
+      "refreshed": "Automations refreshed",
+      "created": "Automation created",
+      "failures": "Failures"
+    },
     "draft": {
       "title": "Draft with AI",
       "subtitle": "Describe the outcome. xopc drafts the trigger, action, and safety review before anything is published.",

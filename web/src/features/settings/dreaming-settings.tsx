@@ -27,8 +27,13 @@ import { DreamingHeader } from '@/features/settings/dreaming-settings-header';
 import { DreamingMaintenanceSection } from '@/features/settings/dreaming-settings-maintenance-section';
 import { DreamingPreviewSection } from '@/features/settings/dreaming-settings-preview-section';
 import { DreamingRuntimeSection } from '@/features/settings/dreaming-settings-runtime-section';
-import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
+import {
+  SettingsPageFrame,
+  SettingsTabPanel,
+  SettingsTabs,
+  type SettingsTabItem,
+} from '@/features/settings/settings-page-layout';
+import { showToast } from '@/lib/toast';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -161,14 +166,11 @@ export function DreamingSettingsPanel() {
   const {
     actionBusy,
     actionError,
-    actionOk,
     runBusy,
-    runOk,
     runError,
     runPhase,
     cfgSaving,
     enableSaving,
-    cfgOk,
     cfgError,
     previewLoading,
     previewError,
@@ -196,14 +198,6 @@ export function DreamingSettingsPanel() {
     if (cfgError) list.push(cfgError);
     return list;
   }, [error, actionError, runError, previewError, eventsError, cfgError]);
-
-  const successMessages = useMemo(() => {
-    const list: string[] = [];
-    if (cfgOk) list.push(t.configSaved);
-    if (runOk) list.push(t.runQueued);
-    if (actionOk) list.push(t.actionOk);
-    return list;
-  }, [cfgOk, runOk, actionOk, t]);
 
   const doRefresh = useCallback(async () => {
     dispatchUi({
@@ -257,6 +251,7 @@ export function DreamingSettingsPanel() {
       try {
         await postDreamingRunNow(phase);
         dispatchUi({ type: 'patch', patch: { runOk: true } });
+        showToast({ type: 'success', title: t.runQueued });
         await mutate();
       } catch (e) {
         dispatchUi({
@@ -267,7 +262,7 @@ export function DreamingSettingsPanel() {
         dispatchUi({ type: 'patch', patch: { runBusy: false } });
       }
     },
-    [mutate],
+    [mutate, t.runQueued],
   );
 
   const doAction = useCallback(
@@ -276,6 +271,7 @@ export function DreamingSettingsPanel() {
       try {
         await postDreamingAction(action);
         dispatchUi({ type: 'patch', patch: { actionOk: true } });
+        showToast({ type: 'success', title: t.actionOk });
         await mutate();
       } catch (e) {
         dispatchUi({
@@ -286,7 +282,7 @@ export function DreamingSettingsPanel() {
         dispatchUi({ type: 'patch', patch: { actionBusy: null } });
       }
     },
-    [mutate],
+    [mutate, t.actionOk],
   );
 
   const disabled = !hasToken || isLoading || Boolean(actionBusy);
@@ -322,6 +318,7 @@ export function DreamingSettingsPanel() {
       dispatchCfg({ type: 'saved', value: cfgForm });
       cfgDirtyRef.current = false;
       dispatchUi({ type: 'patch', patch: { cfgOk: true } });
+      showToast({ type: 'success', title: t.configSaved });
       await mutate();
     } catch (e) {
       dispatchUi({
@@ -331,7 +328,7 @@ export function DreamingSettingsPanel() {
     } finally {
       dispatchUi({ type: 'patch', patch: { cfgSaving: false } });
     }
-  }, [cfgAgentId, cfgBaseMemory, cfgForm, mutate]);
+  }, [cfgAgentId, cfgBaseMemory, cfgForm, mutate, t.configSaved]);
 
   const setDreamingEnabled = useCallback(
     async (enabled: boolean) => {
@@ -346,6 +343,7 @@ export function DreamingSettingsPanel() {
         dispatchCfg({ type: 'saved', value: next });
         cfgDirtyRef.current = false;
         dispatchUi({ type: 'patch', patch: { cfgOk: true } });
+        showToast({ type: 'success', title: t.configSaved });
         await mutate();
       } catch (e) {
         dispatchCfg({ type: 'set', value: prev });
@@ -357,26 +355,19 @@ export function DreamingSettingsPanel() {
         dispatchUi({ type: 'patch', patch: { enableSaving: false } });
       }
     },
-    [cfgAgentId, cfgBaseMemory, cfgForm, hasToken, mutate],
+    [cfgAgentId, cfgBaseMemory, cfgForm, hasToken, mutate, t.configSaved],
   );
 
-  const dreamingEnabled = cfgForm?.enabled ?? cfgFromGateway.enabled;
-
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-4 px-4 py-6">
+    <SettingsPageFrame>
       <DreamingHeader
         t={t}
-        cfgForm={cfgForm}
-        dreamingEnabled={dreamingEnabled}
         hasToken={hasToken}
+        cfgForm={cfgForm}
         cfgSaving={cfgSaving}
-        enableSaving={enableSaving}
-        runPhase={runPhase}
-        setRunPhase={(phase) => dispatchUi({ type: 'patch', patch: { runPhase: phase } })}
-        runBusy={runBusy}
-        doRunNow={doRunNow}
+        cfgDirty={cfgDirty}
+        saveConfig={saveConfig}
         doRefresh={doRefresh}
-        setDreamingEnabled={setDreamingEnabled}
       />
 
       {errorMessages.length > 0 ? (
@@ -391,19 +382,6 @@ export function DreamingSettingsPanel() {
           ))}
         </div>
       ) : null}
-      {successMessages.length > 0 ? (
-        <div
-          className="space-y-1.5 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3"
-          role="status"
-        >
-          {successMessages.map((line) => (
-            <p key={line} className="text-sm text-emerald-800 dark:text-emerald-200/90">
-              {line}
-            </p>
-          ))}
-        </div>
-      ) : null}
-
       <DreamingSettingsTabs t={t} activeTab={activeTab} onChange={setActiveTab} />
 
       <DreamingTabPanel t={t} id="config" activeTab={activeTab}>
@@ -412,9 +390,11 @@ export function DreamingSettingsPanel() {
           schedulePickerLabels={schedulePickerLabels}
           hasToken={hasToken}
           cfgForm={cfgForm}
-          cfgBaseline={cfgBaseline}
           cfgSaving={cfgSaving}
-          cfgDirty={cfgDirty}
+          enableSaving={enableSaving}
+          runPhase={runPhase}
+          setRunPhase={(phase) => dispatchUi({ type: 'patch', patch: { runPhase: phase } })}
+          runBusy={runBusy}
           setCfgForm={(next) => {
             cfgDirtyRef.current = true;
             const resolved =
@@ -423,9 +403,8 @@ export function DreamingSettingsPanel() {
               dispatchCfg({ type: 'set', value: resolved });
             }
           }}
-          setCfgOk={(ok) => dispatchUi({ type: 'patch', patch: { cfgOk: ok } })}
-          setCfgError={(err) => dispatchUi({ type: 'patch', patch: { cfgError: err } })}
-          saveConfig={saveConfig}
+          setDreamingEnabled={setDreamingEnabled}
+          doRunNow={doRunNow}
         />
       </DreamingTabPanel>
 
@@ -461,7 +440,7 @@ export function DreamingSettingsPanel() {
       <DreamingTabPanel t={t} id="maintenance" activeTab={activeTab}>
         <DreamingMaintenanceSection t={t} disabled={disabled} actionBusy={actionBusy} doAction={doAction} />
       </DreamingTabPanel>
-    </div>
+    </SettingsPageFrame>
   );
 }
 
@@ -474,45 +453,20 @@ function DreamingSettingsTabs({
   activeTab: DreamingSettingsTabId;
   onChange: (tab: DreamingSettingsTabId) => void;
 }) {
+  const items: SettingsTabItem<DreamingSettingsTabId>[] = DREAMING_SETTINGS_TABS.map((tab) => ({
+    id: tab,
+    label: dreamingSettingsTabLabel(t, tab),
+    icon: DREAMING_SETTINGS_TAB_ICONS[tab],
+  }));
   return (
-    <nav
-      aria-label={t.tabsAriaLabel}
-      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
-      role="tablist"
-      onKeyDown={(event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        const currentIndex = DREAMING_SETTINGS_TABS.indexOf(activeTab);
-        const delta = event.key === 'ArrowRight' ? 1 : -1;
-        const nextIndex = (currentIndex + delta + DREAMING_SETTINGS_TABS.length) % DREAMING_SETTINGS_TABS.length;
-        onChange(DREAMING_SETTINGS_TABS[nextIndex]);
-      }}
-    >
-      {DREAMING_SETTINGS_TABS.map((tab) => {
-        const Icon = DREAMING_SETTINGS_TAB_ICONS[tab];
-        const selected = tab === activeTab;
-        return (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            id={`dreaming-settings-tab-${tab}`}
-            aria-controls={`dreaming-settings-panel-${tab}`}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              interaction.press,
-              selected ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-            )}
-            onClick={() => onChange(tab)}
-          >
-            <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-            <span>{dreamingSettingsTabLabel(t, tab)}</span>
-          </button>
-        );
-      })}
-    </nav>
+    <SettingsTabs
+      items={items}
+      activeTab={activeTab}
+      onChange={onChange}
+      ariaLabel={t.tabsAriaLabel}
+      tabIdPrefix="dreaming-settings-tab"
+      panelIdPrefix="dreaming-settings-panel"
+    />
   );
 }
 
@@ -527,20 +481,19 @@ function DreamingTabPanel({
   activeTab: DreamingSettingsTabId;
   children: ReactNode;
 }) {
-  if (activeTab !== id) return null;
+  const showHeading = id !== 'config';
 
   return (
-    <section
-      id={`dreaming-settings-panel-${id}`}
-      role="tabpanel"
-      aria-labelledby={`dreaming-settings-tab-${id}`}
-      className="rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5"
+    <SettingsTabPanel
+      id={id}
+      activeTab={activeTab}
+      tabIdPrefix="dreaming-settings-tab"
+      panelIdPrefix="dreaming-settings-panel"
+      title={dreamingSettingsTabLabel(t, id)}
+      hint={dreamingSettingsTabHint(t, id)}
+      showHeading={showHeading}
     >
-      <div className="mb-5">
-        <div className="text-sm font-semibold text-fg">{dreamingSettingsTabLabel(t, id)}</div>
-        <p className="mt-1 text-xs text-fg-subtle">{dreamingSettingsTabHint(t, id)}</p>
-      </div>
       {children}
-    </section>
+    </SettingsTabPanel>
   );
 }

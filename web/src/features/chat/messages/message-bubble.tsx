@@ -26,6 +26,7 @@ import {
   getAssistantCopyPlainText,
 } from '@/features/chat/messages/assistant-copy-utils';
 import { renderChunkedContent } from '@/features/chat/messages/message-content-renderer';
+import { formatChatMessageTime } from '@/features/chat/messages/message-time';
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/cn';
@@ -33,15 +34,6 @@ import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
-
-function formatTime(ts?: number): string {
-  if (!ts) return '';
-  return new Date(ts).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
 
 const messageActionIconButton = cn(
   'inline-flex size-9 shrink-0 items-center justify-center rounded-lg',
@@ -381,7 +373,7 @@ export const MessageBubble = memo(function MessageBubble({
                 className="shrink-0 tabular-nums text-fg-disabled"
                 dateTime={new Date(message.timestamp).toISOString()}
               >
-                {formatTime(message.timestamp)}
+                {formatChatMessageTime(message.timestamp)}
               </time>
             ) : null}
             {progressForMeta?.message ? (
@@ -403,7 +395,7 @@ export const MessageBubble = memo(function MessageBubble({
                 className="tabular-nums"
                 dateTime={new Date(message.timestamp).toISOString()}
               >
-                {formatTime(message.timestamp)}
+                {formatChatMessageTime(message.timestamp)}
               </time>
             ) : null}
             {progressForMeta?.message ? (

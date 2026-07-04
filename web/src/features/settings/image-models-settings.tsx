@@ -1,10 +1,9 @@
-import { Loader2, Save, Server } from 'lucide-react';
+import { Loader2, Server } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import useSWR from 'swr';
 
-import { Button } from '@/components/ui/button';
 import { useExtensions } from '@/features/extensions/extension-provider';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { SettingsCollapsibleSection } from '@/features/settings/settings-collapsible-section';
@@ -86,8 +85,7 @@ const initialImageModelsUi: ImageModelsUi = {
   error: undefined,
 };
 
-/** See `WebSearchSettingsPanel` for the embedded-mode contract. */
-export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
+export function ImageModelsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const t = m.imageModelsSettings;
@@ -166,19 +164,9 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
     [m.providersSettings],
   );
 
-  const outerClass = embedded
-    ? 'flex flex-col gap-4'
-    : 'mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8';
-  const stubClass = embedded
-    ? 'w-full text-sm text-fg-muted'
-    : 'mx-auto w-full max-w-app-main px-4 py-8 text-sm text-fg-muted';
-  const stubFlexClass = embedded
-    ? 'flex w-full items-center gap-2 text-sm text-fg-muted'
-    : 'mx-auto flex w-full max-w-app-main items-center gap-2 px-4 py-8 text-sm text-fg-muted';
-
   if (!hasToken) {
     return (
-      <div className={stubClass}>
+      <div className="w-full text-sm text-fg-muted">
         {language === 'zh' ? '请先登录网关。' : 'Connect to a gateway to continue.'}
       </div>
     );
@@ -186,32 +174,14 @@ export function ImageModelsSettingsPanel({ embedded = false }: { embedded?: bool
 
   if (providersLoading) {
     return (
-      <div className={stubFlexClass}>
+      <div className="flex w-full items-center gap-2 text-sm text-fg-muted">
         <Loader2 className="size-4 animate-spin" /> Loading…
       </div>
     );
   }
 
   return (
-    <div className={outerClass}>
-      {embedded ? null : (
-        <header className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-lg font-semibold tracking-tight text-fg">{t.title}</h1>
-            <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <Button type="button" variant="secondary" onClick={onDiscard} disabled={!anyDirty || saving}>
-              {t.discard}
-            </Button>
-            <Button type="button" variant="primary" onClick={() => void onSave()} disabled={!anyDirty || saving}>
-              {saving ? <Loader2 className="size-3.5 animate-spin" /> : <Save className="size-3.5" />}
-              <span className="ml-1.5">{saving ? t.saving : t.save}</span>
-            </Button>
-          </div>
-        </header>
-      )}
-
+    <div className="flex flex-col gap-4">
       {error ? (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
           {error}

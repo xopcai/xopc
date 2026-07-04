@@ -1,4 +1,5 @@
 import { AppManagementSection } from '@/features/settings/app-management-section';
+import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { settingsFormSectionClassName } from '@/features/settings/settings-form-section.utils';
 import { isElectron } from '@/lib/electron-env';
 import { messages } from '@/i18n/messages';
@@ -14,22 +15,20 @@ export function AppManagementSettingsPanel() {
 
   if (!isElectron() || !api) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <h1 className="text-lg font-semibold text-fg">{app.title}</h1>
+      <SettingsPageFrame gap="gap-3">
+        <SettingsPageHeader title={app.title} />
         <div className={settingsFormSectionClassName()}>
           <p className="text-sm font-medium text-fg">{t.desktopOnlyTitle}</p>
           <p className="mt-1 text-sm text-fg-muted">{t.desktopOnlyBody}</p>
         </div>
-      </div>
+      </SettingsPageFrame>
     );
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <div>
-        <h1 className="text-lg font-semibold text-fg">{app.title}</h1>
-      </div>
+    <SettingsPageFrame gap="gap-6">
+      <SettingsPageHeader title={app.title} />
       <AppManagementSection api={api} messages={app} embedded={false} />
-    </div>
+    </SettingsPageFrame>
   );
 }
