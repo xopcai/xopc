@@ -649,7 +649,7 @@ export function AutomationsPage() {
   }, [clearPageHeader, headerEnd, labels.subtitle, labels.title, setPageHeader]);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto bg-surface-base">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-5 px-4 py-6">
         <section className="grid gap-3 sm:grid-cols-4">
           <Metric

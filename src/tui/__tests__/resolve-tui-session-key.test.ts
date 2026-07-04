@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { Config } from '../../config/schema.js';
 import {
+  resolveDefaultTuiAgentId,
   resolveInitialTuiAgentId,
   resolveTuiSessionKey,
   resolveTuiStartupSessionKey,
@@ -81,7 +82,14 @@ describe('resolveTuiSessionKey', () => {
 
 describe('resolveTuiStartupSessionKey', () => {
   const cfg = {
-    agents: { default: 'main', list: [{ id: 'main', workspace: '/tmp/xopc' }] },
+    agents: {
+      default: 'main',
+      list: [
+        { id: 'main', workspace: '/tmp/xopc' },
+        { id: 'coder', workspace: '/tmp/xopc-coder' },
+      ],
+    },
+    tui: { defaultAgent: 'coder' },
     session: { scope: 'per-sender', mainKey: 'main' },
   } as Config;
 
@@ -125,6 +133,47 @@ describe('resolveTuiStartupSessionKey', () => {
       agentId: 'main',
     });
   });
+
+  it('uses tui.defaultAgent when cwd does not match an agent workspace', () => {
+    expect(
+      resolveTuiStartupSessionKey({
+        cfg,
+        cwd: '/var/tmp/unrelated',
+        createSessionKeySuffix: () => 'tui-test-id',
+      }),
+    ).toMatchObject({
+      sessionKey: 'agent:coder:tui-test-id',
+      agentId: 'coder',
+    });
+  });
+
+  it('lets --agent override cwd inference for fresh sessions', () => {
+    expect(
+      resolveTuiStartupSessionKey({
+        cfg,
+        agentOption: 'coder',
+        cwd: '/tmp/xopc',
+        createSessionKeySuffix: () => 'tui-test-id',
+      }),
+    ).toMatchObject({
+      sessionKey: 'agent:coder:tui-test-id',
+      agentId: 'coder',
+    });
+  });
+});
+
+describe('resolveDefaultTuiAgentId', () => {
+  it('falls back to agents.default when tui.defaultAgent is missing from agents.list', () => {
+    expect(
+      resolveDefaultTuiAgentId({
+        agents: {
+          default: 'main',
+          list: [{ id: 'main', workspace: '/tmp/xopc' }],
+        },
+        tui: { defaultAgent: 'coder' },
+      } as Config),
+    ).toBe('main');
+  });
 });
 
 describe('resolveInitialTuiAgentId', () => {
@@ -153,6 +202,7 @@ describe('resolveInitialTuiAgentId', () => {
       resolveInitialTuiAgentId({
         cfg,
         fallbackAgentId: 'main',
+        explicitAgentId: 'ops',
         initialSessionInput: 'agent:main:incident',
         cwd: '/tmp/xopc/projects/ops/src',
       }),

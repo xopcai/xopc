@@ -244,6 +244,31 @@ describe('agents-admin', () => {
     expect(prepareDeleteAgent(minimalConfig(), 'main').ok).toBe(false);
   });
 
+  it('prepareDeleteAgent returns a 400 for configured default agents', () => {
+    const cfg = minimalConfig({
+      agents: {
+        default: 'helper',
+        capabilityPresets: {},
+        list: [manifest('main'), manifest('helper'), manifest('coder')],
+      },
+      tui: { defaultAgent: 'coder' },
+    } as Partial<Config>);
+
+    const globalDefault = prepareDeleteAgent(cfg, 'helper');
+    expect(globalDefault.ok).toBe(false);
+    if (!globalDefault.ok) {
+      expect(globalDefault.status).toBe(400);
+      expect(globalDefault.error).toContain('global default agent');
+    }
+
+    const tuiDefault = prepareDeleteAgent(cfg, 'coder');
+    expect(tuiDefault.ok).toBe(false);
+    if (!tuiDefault.ok) {
+      expect(tuiDefault.status).toBe(400);
+      expect(tuiDefault.error).toContain('TUI default agent');
+    }
+  });
+
   it('readAgentProfileFile rejects unsupported filename', async () => {
     const r = await readAgentProfileFile(minimalConfig(), 'main', '../../../etc/passwd');
     expect(r.ok).toBe(false);

@@ -44,6 +44,20 @@ xopc
 xopc tui
 ```
 
+未显式指定 agent 时，新 TUI 会话使用 `tui.defaultAgent`。内置 starter agent 可用时默认值是 `coder`。它与 `agents.default` 分离；后者仍用于全局路由和非 TUI 会话创建。
+
+可以在 Web 控制台的智能体页面修改，也可以用 CLI 或 TUI 内命令修改：
+
+```bash
+xopc tui --set-default-agent coder
+```
+
+TUI 内：
+
+```text
+/tui-default-agent coder
+```
+
 **嵌入式模式下的限制：**
 
 - 嵌入式模式现在使用与 agent/gateway 路径相同的 SQLite-backed session store，支持历史、会话列表、模型列表、会话配置 patch、压缩、导入/导出、fork、transcript tree label 和 share helpers。
@@ -59,15 +73,20 @@ xopc tui
 | `--url <url>` | 网关根 URL（不要带路径后缀）。 |
 | `--token <token>` | 网关 `Authorization: Bearer` 令牌。 |
 | `-s, --session <key>` | 要恢复的会话键；省略时新建 `agent:{currentAgent}:tui-<uuid>` 会话，并在退出后打印恢复命令。 |
+| `--agent <id>` | 为本次新 TUI 会话指定 agent，仅覆盖本次启动的 `tui.defaultAgent`。 |
+| `--set-default-agent <id>` | 持久化 `tui.defaultAgent` 后退出；目标 agent 必须存在且已启用。 |
 | `-m, --message <text>` | 连接成功后自动发送一条消息，界面保持打开。 |
 | `--local` | 显式使用嵌入式模式（与默认行为相同）。 |
 | `--gateway` | 强制使用网关模式。 |
+| `--theme <name>` | 主题：`auto`、`dark`、`light`，或 `~/.xopc/themes/` 下的自定义主题。 |
 | `--thinking <level>` | 思考等级覆盖，语义与网关 / `agent` 一致。 |
 
 示例：
 
 ```bash
-xopc tui -s telegram:dm:123456
+xopc tui -s agent:main:telegram:default:direct:123456
+xopc tui --agent coder
+xopc tui --set-default-agent coder
 xopc tui -m "帮我总结收件箱"
 xopc tui --url http://192.168.1.10:18790 --token "$TOKEN"
 ```
@@ -106,6 +125,7 @@ To resume this session: xopc tui --session agent:main:tui-019eddd8-d108-7554-b97
 | `/agent` | 显示当前 agent id 和 session key。 |
 | `/agent <id>` | 切换到另一个已启用 agent，session key 会改写为 `agent:<id>:<current-session-suffix>`。它**不会**迁移已有 transcript，且助手正在回复时不能切换。 |
 | `/agents` | 有 overlay 时打开 agent 选择器；否则列出已配置 agents。 |
+| `/tui-default-agent <id>` | 持久化新 TUI 会话默认 agent；当前会话不变。 |
 | `/model [搜索词]` | 打开模型选择器，可用搜索词过滤。 |
 | `/models` | 列出可用模型。 |
 | `/switch <provider/model>` | 切换当前会话模型；可先用 `/models` 复制合法 model ref。 |

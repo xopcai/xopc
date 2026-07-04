@@ -285,6 +285,7 @@ Treat inbound IM messages as **untrusted**. Prefer **pairing** or **allowlist** 
 
 ```bash
 pnpm install && pnpm run dev    # CLI via tsx
+pnpm run dev:gateway            # dev gateway uses ~/.xopc-dev + info logs
 pnpm run build && pnpm test && pnpm run lint
 ```
 

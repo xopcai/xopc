@@ -97,11 +97,59 @@ export function applyAgentConfig(
   };
 }
 
+export function getAgentDeleteBlocker(cfg: Config, agentId: string): string | null {
+  const id = normalizeAgentId(agentId);
+  if (id === DEFAULT_AGENT_ID) {
+    return `Agent id "${DEFAULT_AGENT_ID}" is reserved for the primary agent.`;
+  }
+  if (id === normalizeAgentId(resolveDefaultAgentId(cfg))) {
+    return `Agent "${id}" is the global default agent. Change agents.default first.`;
+  }
+  const tuiDefault = cfg.tui?.defaultAgent?.trim();
+  if (tuiDefault && id === normalizeAgentId(tuiDefault)) {
+    return `Agent "${id}" is the TUI default agent. Change tui.defaultAgent first.`;
+  }
+  return null;
+}
+
+export function setTuiDefaultAgentConfig(
+  cfg: Config,
+  agentIdRaw: string,
+): { ok: true; config: Config; agentId: string } | { ok: false; message: string } {
+  const raw = agentIdRaw.trim();
+  if (!raw) {
+    return { ok: false, message: 'Agent id is required.' };
+  }
+  const agentId = normalizeAgentId(raw);
+  if (agentId !== raw.toLowerCase()) {
+    return { ok: false, message: `Invalid agent id: ${raw}` };
+  }
+  const entry = listAgentEntries(cfg).find((agent) => normalizeAgentId(agent.id) === agentId);
+  if (!entry || entry.enabled === false) {
+    return { ok: false, message: `Agent "${agentId}" not found or disabled.` };
+  }
+  return {
+    ok: true,
+    agentId,
+    config: {
+      ...cfg,
+      tui: {
+        ...cfg.tui,
+        defaultAgent: agentId,
+      },
+    },
+  };
+}
+
 export function pruneAgentConfig(
   cfg: Config,
   agentId: string,
 ): { config: Config; removedBindings: number } {
   const id = normalizeAgentId(agentId);
+  const blocker = getAgentDeleteBlocker(cfg, id);
+  if (blocker) {
+    throw new Error(blocker);
+  }
   const agents = listAgentEntries(cfg);
   const nextAgentsList = agents.filter((e) => normalizeAgentId(e.id) !== id);
   const nextAgents = nextAgentsList.length > 0 ? nextAgentsList : [];

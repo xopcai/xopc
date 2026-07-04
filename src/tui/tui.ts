@@ -26,6 +26,7 @@ import type {
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { loadConfig } from '../config/index.js';
 import { resolveStateDir, resolveXopcDatabasePath } from '../config/paths.js';
+import { ensureStarterAgentsInitialized } from '../agent/starter-agents.js';
 import {
   MAX_CHAT_ATTACHMENTS,
   MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,
@@ -329,10 +330,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const restoreStdio = () => stdioFilter.restore();
 
   const isLocalMode = opts.local === true;
-  const config = loadConfig();
+  const loadedConfig = loadConfig();
+  const config = isLocalMode ? ensureStarterAgentsInitialized(loadedConfig).config : loadedConfig;
   const startup = resolveTuiStartupSessionKey({
     cfg: config,
     sessionOption: opts.session,
+    agentOption: opts.agentId,
     cwd: process.cwd(),
   });
   let currentAgentId = startup.agentId;
@@ -397,6 +400,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const client: TuiBackend = isLocalMode
     ? new EmbeddedBackend({
+        config,
         extensionRegistry,
         implicitTrustedWorkspace,
         isWorkspaceTrusted: () => projectTrustSessionDecision,
@@ -2071,6 +2075,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     switchModel: switchCurrentModel,
     listSessions: () => client.listSessions(),
     listAgents: () => client.listAgents(),
+    setTuiDefaultAgent: (agentId) => client.setTuiDefaultAgent?.(agentId) ?? Promise.reject(new Error('Not available')),
     switchAgentSession,
     getSessionStats: () => client.getSessionStats(state.currentSessionKey),
     getStartupResources: () => startupResources,

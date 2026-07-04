@@ -97,6 +97,7 @@ export function getSlashCommands(
     { name: 'session', description: 'Show current session info' },
     { name: 'agent', description: 'Show or switch agent for this TUI session' },
     { name: 'agents', description: 'List available agents' },
+    { name: 'tui-default-agent', description: 'Set default agent for new TUI sessions' },
     { name: 'new', description: 'Start a new isolated TUI session (tui-{uuid})' },
     { name: 'fork', description: 'Fork current session transcript into a new session' },
     { name: 'clone', description: 'Duplicate current session transcript into a new session' },
@@ -285,6 +286,7 @@ export type CommandHandlerDeps = {
   switchModel?: (modelRef: string) => void | Promise<void>;
   listSessions?: () => TuiSessionItem[] | Promise<TuiSessionItem[]>;
   listAgents?: () => TuiAgentInfo[] | Promise<TuiAgentInfo[]>;
+  setTuiDefaultAgent?: (agentId: string) => { agentId: string } | Promise<{ agentId: string }>;
   switchAgentSession?: (sessionKey: string, agentId: string) => void | Promise<void>;
   getSessionStats?: () => TuiSessionStats | Promise<TuiSessionStats>;
   getStartupResources?: () => TuiStartupResources | undefined;
@@ -526,6 +528,49 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
         })().catch((err: unknown) => {
           const errorMessage = err instanceof Error ? err.message : String(err);
           chatLog.addSystem(`Agent switch failed: ${errorMessage}`);
+          tui.requestRender();
+        });
+        return;
+      }
+      case 'tui-default-agent': {
+        const targetRaw = commandArgs.trim();
+        if (!targetRaw) {
+          void Promise.resolve(deps.listAgents?.() ?? [])
+            .then((agents) => {
+              chatLog.addSystem([
+                'Usage: /tui-default-agent <agent-id>',
+                'This changes new TUI sessions only; the current session is unchanged.',
+                '',
+                formatAgentsList(agents, parseAgentSessionKey(state.currentSessionKey)?.agentId),
+              ].join('\n'));
+              tui.requestRender();
+            })
+            .catch((err: unknown) => {
+              const errorMessage = err instanceof Error ? err.message : String(err);
+              chatLog.addSystem(`TUI default agent help failed: ${errorMessage}`);
+              tui.requestRender();
+            });
+          return;
+        }
+        void (async () => {
+          if (!isValidAgentId(targetRaw)) {
+            chatLog.addSystem(`Invalid agent id: ${targetRaw}`);
+            tui.requestRender();
+            return;
+          }
+          if (!deps.setTuiDefaultAgent) {
+            chatLog.addSystem('TUI default agent updates are not available in this mode.');
+            tui.requestRender();
+            return;
+          }
+          const result = await deps.setTuiDefaultAgent(normalizeAgentId(targetRaw));
+          chatLog.addSystem(
+            `TUI default agent set to ${result.agentId}. New TUI sessions will use it.`,
+          );
+          tui.requestRender();
+        })().catch((err: unknown) => {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          chatLog.addSystem(`TUI default agent update failed: ${errorMessage}`);
           tui.requestRender();
         });
         return;

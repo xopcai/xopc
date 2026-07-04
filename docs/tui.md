@@ -44,6 +44,20 @@ xopc
 xopc tui
 ```
 
+Fresh TUI sessions use `tui.defaultAgent` when no agent is specified. The default value is `coder` when that built-in starter agent exists. This is separate from `agents.default`, which still controls global routing and non-TUI session creation.
+
+You can change it from the Web console on the Agents page, from the CLI, or from inside the TUI:
+
+```bash
+xopc tui --set-default-agent coder
+```
+
+Inside the TUI:
+
+```text
+/tui-default-agent coder
+```
+
 **Limitations in embedded mode:**
 
 - Embedded mode now uses the same SQLite-backed session store as the agent/gateway path for history, session list, model list, session config patching, compaction, import/export, fork, transcript tree labels, and share helpers.
@@ -59,6 +73,8 @@ xopc tui
 | `--url <url>` | Gateway base URL (no trailing path). |
 | `--token <token>` | `Authorization: Bearer` token for the gateway. |
 | `-s, --session <key>` | Session key to resume. Omitted: start a fresh `agent:{currentAgent}:tui-<uuid>` session and print a resume command on exit. Shorthand `mytopic` → `agent:{currentAgent}:mytopic`. |
+| `--agent <id>` | Agent id for a fresh TUI session. Overrides `tui.defaultAgent` for this launch only. |
+| `--set-default-agent <id>` | Persist `tui.defaultAgent` and exit. The target agent must exist and be enabled. |
 | `-m, --message <text>` | After connect, send this message once and keep the UI open. |
 | `--local` | Explicit embedded mode (same as the default). |
 | `--gateway` | Force gateway mode. |
@@ -72,6 +88,8 @@ Examples:
 ```bash
 xopc tui -s agent:main:telegram:default:direct:123456
 xopc tui -s mytopic
+xopc tui --agent coder
+xopc tui --set-default-agent coder
 xopc tui -m "Summarize my inbox"
 xopc tui --url http://192.168.1.10:18790 --token "$TOKEN"
 ```
@@ -136,6 +154,7 @@ Lines starting with **`/`** are treated as **slash commands** (not sent to the m
 | `/agent` | Show the current agent id and session key. |
 | `/agent <id>` | Switch this TUI session to another enabled agent by rewriting the key to `agent:<id>:<current-session-suffix>`. It does **not** migrate transcript rows and cannot run while an assistant response is active. |
 | `/agents` | Open the agent picker when overlays are available; otherwise list configured agents. |
+| `/tui-default-agent <id>` | Persist the default agent for new TUI sessions. The current session is unchanged. |
 | `/model [search]` | Open the model picker, optionally filtered by search text. |
 | `/models` | List available models. |
 | `/switch <provider/model>` | Switch the current session model. Use `/models` to copy a valid model ref. |

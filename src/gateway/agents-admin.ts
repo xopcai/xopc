@@ -6,7 +6,6 @@ import { cp, mkdir, readdir, readFile, realpath, stat, unlink, writeFile } from 
 import { dirname, join, resolve as pathResolve } from 'node:path';
 
 import {
-  DEFAULT_AGENT_ID,
   listAgentEntries,
   normalizeAgentId,
   resolveAgentDir,
@@ -28,6 +27,7 @@ import {
 import {
   applyAgentConfig,
   findAgentEntryIndex,
+  getAgentDeleteBlocker,
   pruneAgentConfig,
   removeAgentDirsFromDisk,
 } from '../commands/agents.config.js';
@@ -248,13 +248,6 @@ export type AgentAdminHttpStatus = 400 | 404 | 409;
 export type AgentAdminResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; status?: AgentAdminHttpStatus };
-
-function requireNonMain(id: string): AgentAdminResult<never> | null {
-  if (normalizeAgentId(id) === DEFAULT_AGENT_ID) {
-    return { ok: false, error: `"${DEFAULT_AGENT_ID}" is reserved`, status: 400 };
-  }
-  return null;
-}
 
 export function prepareCreateAgent(
   cfg: Config,
@@ -557,9 +550,9 @@ export function prepareDeleteAgent(
   agentIdRaw: string,
 ): AgentAdminResult<{ nextConfig: Config; agentId: string }> {
   const agentId = normalizeAgentId(agentIdRaw);
-  const reserved = requireNonMain(agentId);
-  if (reserved) {
-    return reserved;
+  const blocker = getAgentDeleteBlocker(cfg, agentId);
+  if (blocker) {
+    return { ok: false, error: blocker, status: 400 };
   }
   if (findAgentEntryIndex(listAgentEntries(cfg), agentId) < 0) {
     return { ok: false, error: `agent "${agentId}" not found`, status: 404 };

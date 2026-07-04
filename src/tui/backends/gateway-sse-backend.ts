@@ -502,6 +502,28 @@ export class GatewaySseBackend implements TuiBackend {
     return [...agents.values()].sort((a, b) => a.id.localeCompare(b.id));
   }
 
+  async setTuiDefaultAgent(agentId: string): Promise<{ agentId: string }> {
+    const target = agentId.trim().toLowerCase();
+    const res = await gatewayFetch(this.baseUrl, '/api/config', this.token, {
+      method: 'PATCH',
+      body: JSON.stringify({ tui: { defaultAgent: target } }),
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: { message?: string } | string;
+      payload?: { config?: { tui?: { defaultAgent?: unknown } } };
+    };
+    if (!res.ok || json.ok === false) {
+      const error =
+        typeof json.error === 'string'
+          ? json.error
+          : json.error?.message;
+      throw new Error(error ?? `TUI default agent update failed (${res.status})`);
+    }
+    const saved = json.payload?.config?.tui?.defaultAgent;
+    return { agentId: typeof saved === 'string' && saved.trim() ? saved.trim().toLowerCase() : target };
+  }
+
   async getSessionInfo(sessionKey: string): Promise<SessionInfo> {
     const out: SessionInfo = {};
     try {

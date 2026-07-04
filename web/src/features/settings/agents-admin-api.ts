@@ -183,6 +183,15 @@ export async function deleteGatewayAgent(id: string, purge: boolean): Promise<Ga
   };
 }
 
+export async function patchTuiDefaultAgent(agentId: string): Promise<void> {
+  await fetchJson(apiUrl('/api/config'), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ tui: { defaultAgent: agentId } }),
+  });
+  void revalidateGatewayConfig();
+}
+
 export function parseGatewayBindingsFromConfig(config: unknown): GatewayConfigBinding[] {
   if (!config || typeof config !== 'object' || !('bindings' in config)) {
     return [];

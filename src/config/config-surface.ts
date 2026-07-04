@@ -31,6 +31,9 @@ export interface Config {
     host?: string;
     port?: number;
   };
+  tui?: {
+    defaultAgent?: string;
+  };
   tools?: {
     web?: {
       region?: 'cn' | 'global';
