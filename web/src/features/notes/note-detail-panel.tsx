@@ -146,6 +146,18 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
   );
 
   useEffect(() => {
+    if (!noteId) return undefined;
+    const onNoteUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ noteId?: string }>).detail;
+      if (detail?.noteId === noteId) {
+        void mutate();
+      }
+    };
+    window.addEventListener('note-updated', onNoteUpdated);
+    return () => window.removeEventListener('note-updated', onNoteUpdated);
+  }, [mutate, noteId]);
+
+  useEffect(() => {
     titleInitRef.current = false;
     setTitle('');
     setPreviewSnapshot(null);
