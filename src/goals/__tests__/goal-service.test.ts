@@ -8,6 +8,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
+import { onAutomationProductEvent } from '../../automations/product-events.js';
 import { GoalService } from '../goal-service.js';
 
 const SESSION_KEY = 'agent:main:webchat:default:direct:test-goal';
@@ -44,6 +45,29 @@ describe('GoalService', () => {
     expect(current?.id).toBe(goal.id);
     expect(current?.title).toBe('Ship the goal workspace');
     expect(current?.checklist).toEqual([]);
+  });
+
+  it('publishes product events when goals are created and blocked', () => {
+    const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    const unsubscribe = onAutomationProductEvent((event) => {
+      events.push({ type: event.type, payload: event.payload });
+    });
+    try {
+      const goal = goals.create({
+        title: 'Investigate blocked workflow',
+        sessionKey: SESSION_KEY,
+      });
+      goals.setStatus(goal.id, 'blocked', { reason: 'Missing credentials' });
+    } finally {
+      unsubscribe();
+    }
+
+    expect(events.map((event) => event.type)).toEqual(['goal.created', 'goal.status_changed']);
+    expect(events[1]?.payload).toMatchObject({
+      status: 'blocked',
+      previousStatus: 'active',
+      reason: 'Missing credentials',
+    });
   });
 
   it('updates checklist and records a completed run', () => {

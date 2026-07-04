@@ -24,6 +24,10 @@ import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useSt
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { AutomationSuggestionCard } from '@/features/automations/automation-suggestion-card';
+import type { AutomationRun } from '@/features/automations/automation-api';
+import { formatAutomationMessage } from '@/features/automations/automation-explanations';
+import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import { messages } from '@/i18n/messages';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -302,6 +306,7 @@ export function GoalDetailPage() {
   const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).goalDetailPage;
+  const automationSuggestions = messages(language).automations.suggestions;
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -623,8 +628,46 @@ export function GoalDetailPage() {
     }
   };
 
+  const saveAutomationInsight = async (run: AutomationRun) => {
+    if (!goal || !run.summary) return;
+    setError(null);
+    const automationLabels = messages(language).automations;
+    const res = await fetchJson<{ ok: true; evidence: GoalEvidence }>(
+      apiUrl(`/api/goals/${encodeURIComponent(goal.id)}/evidence`),
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          kind: 'message',
+          title: formatAutomationMessage(automationLabels.feedback.insightEvidenceTitle, {
+            name: run.automationName,
+          }),
+          summary: run.summary,
+          data: {
+            source: 'automation',
+            automationRunId: run.id,
+            automationId: run.automationId,
+            automationName: run.automationName,
+            sessionKey: run.sessionKey,
+            workflowRunId: run.workflowRunId,
+          },
+        }),
+      },
+    );
+    setEvidence((items) => [res.evidence, ...items]);
+    await reloadTimeline(goal.id);
+  };
+
   const done = goal?.checklist.filter((it) => it.status === 'completed' || it.status === 'impossible').length ?? 0;
   const total = goal?.checklist.length ?? 0;
+  const savedAutomationInsightRunIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const item of evidence) {
+      const data = evidenceData(item);
+      const automationRunId = stringField(data, 'automationRunId');
+      if (automationRunId) ids.add(automationRunId);
+    }
+    return ids;
+  }, [evidence]);
   const failedWorkflowRuns = workflowRuns.filter((run) => run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled');
   const latestRun = runs[0];
   const timelineFilter = isTimelineFilter(searchParams.get('timeline')) ? searchParams.get('timeline') : 'all';
@@ -1010,6 +1053,34 @@ export function GoalDetailPage() {
               </div>
 
               <aside className="grid h-fit gap-4">
+                <ProductAutomationFeedback
+                  eventType="goal.status_changed"
+                  source="goals"
+                  payloadKey="goalId"
+                  payloadValue={goal.id}
+                  onSaveInsight={saveAutomationInsight}
+                  isInsightSaved={(run) => savedAutomationInsightRunIds.has(run.id)}
+                />
+                <ProductAutomationFeedback
+                  eventType="goal.created"
+                  source="goals"
+                  payloadKey="goalId"
+                  payloadValue={goal.id}
+                  onSaveInsight={saveAutomationInsight}
+                  isInsightSaved={(run) => savedAutomationInsightRunIds.has(run.id)}
+                />
+                {goal.status === 'blocked' || goal.blockedReason ? (
+                  <AutomationSuggestionCard
+                    title={automationSuggestions.goalBlockedTitle}
+                    description={automationSuggestions.goalBlockedDescription}
+                    prompt={formatMessage(automationSuggestions.goalBlockedPrompt, { title: goal.title })}
+                    coverage={{
+                      eventType: 'goal.status_changed',
+                      source: 'goals',
+                      eventPayload: { goalId: goal.id, status: 'blocked' },
+                    }}
+                  />
+                ) : null}
                 <section className="rounded-lg border border-edge bg-surface-panel p-4">
                   <h2 className="text-sm font-semibold text-fg">{t.goalSettings}</h2>
                   <dl className="mt-3 grid gap-2 text-sm">

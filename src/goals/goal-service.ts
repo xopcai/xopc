@@ -1,5 +1,6 @@
 import type { Config } from '../config/schema.js';
 import { defaultMaxTurns } from '../agent/goals/state.js';
+import { publishAutomationProductEvent } from '../automations/product-events.js';
 import { GoalStore } from './goal-store.js';
 import type {
   CreateGoalInput,
@@ -28,6 +29,39 @@ function toTerminalStatus(verdict: GoalJudgeDecision['verdict']): GoalStatus {
   return 'active';
 }
 
+function publishGoalEvent(
+  type: 'goal.created' | 'goal.status_changed',
+  goal: Goal,
+  extra?: Record<string, unknown>,
+): void {
+  publishAutomationProductEvent({
+    type,
+    source: 'goals',
+    payload: {
+      goalId: goal.id,
+      title: goal.title,
+      status: goal.status,
+      priority: goal.priority,
+      sessionKey: goal.activeSessionKey,
+      agentId: goal.agentId,
+      source: goal.source,
+      ...extra,
+    },
+  });
+}
+
+function publishGoalStatusEvent(
+  goal: Goal,
+  previousStatus?: GoalStatus,
+  reason?: string,
+): void {
+  if (previousStatus === goal.status) return;
+  publishGoalEvent('goal.status_changed', goal, {
+    previousStatus,
+    reason,
+  });
+}
+
 export class GoalService {
   private readonly store: GoalStore;
 
@@ -42,7 +76,7 @@ export class GoalService {
   }): Goal {
     const sessionKey = input.sessionKey;
     const cfg = input.config?.goals;
-    return this.store.create({
+    const goal = this.store.create({
       title: normalizeTitle(input.title),
       description: input.description,
       agentId: input.agentId ?? 'main',
@@ -54,6 +88,8 @@ export class GoalService {
       uiLocale: input.uiLocale,
       source: input.source,
     });
+    publishGoalEvent('goal.created', goal);
+    return goal;
   }
 
   get(goalId: string): GoalWithDetails | null {
@@ -128,6 +164,7 @@ export class GoalService {
   }
 
   setStatus(goalId: string, status: GoalStatus, opts?: { reason?: string }): GoalWithDetails | null {
+    const previous = this.store.get(goalId);
     const now = Date.now();
     const goal = this.store.update(goalId, {
       status,
@@ -135,20 +172,24 @@ export class GoalService {
       archivedAt: status === 'archived' ? now : undefined,
       blockedReason: status === 'blocked' || status === 'needs_input' ? opts?.reason : undefined,
     });
+    if (goal) publishGoalStatusEvent(goal, previous?.status, opts?.reason);
     return goal ? this.get(goal.id) : null;
   }
 
   pause(goalId: string, reason = 'user-paused'): GoalWithDetails | null {
+    const previous = this.store.get(goalId);
     const goal = this.store.update(goalId, {
       status: 'paused',
       blockedReason: reason,
       completedAt: undefined,
       archivedAt: undefined,
     });
+    if (goal) publishGoalStatusEvent(goal, previous?.status, reason);
     return goal ? this.get(goal.id) : null;
   }
 
   resume(goalId: string): GoalWithDetails | null {
+    const previous = this.store.get(goalId);
     const goal = this.store.update(goalId, {
       status: 'active',
       blockedReason: undefined,
@@ -156,10 +197,12 @@ export class GoalService {
       archivedAt: undefined,
       turnsUsed: 0,
     });
+    if (goal) publishGoalStatusEvent(goal, previous?.status);
     return goal ? this.get(goal.id) : null;
   }
 
   reopen(goalId: string): GoalWithDetails | null {
+    const previous = this.store.get(goalId);
     const goal = this.store.update(goalId, {
       status: 'active',
       blockedReason: undefined,
@@ -167,6 +210,7 @@ export class GoalService {
       archivedAt: undefined,
       turnsUsed: 0,
     });
+    if (goal) publishGoalStatusEvent(goal, previous?.status);
     return goal ? this.get(goal.id) : null;
   }
 
@@ -179,12 +223,14 @@ export class GoalService {
   }
 
   unarchive(goalId: string): GoalWithDetails | null {
+    const previous = this.store.get(goalId);
     const goal = this.store.update(goalId, {
       status: 'paused',
       archivedAt: undefined,
       completedAt: undefined,
       blockedReason: undefined,
     });
+    if (goal) publishGoalStatusEvent(goal, previous?.status);
     return goal ? this.get(goal.id) : null;
   }
 
@@ -233,6 +279,7 @@ export class GoalService {
   }): GoalWithDetails | null {
     const goal = this.store.get(input.goalId);
     if (!goal) return null;
+    const previousStatus = goal.status;
     const nextStatus = toTerminalStatus(input.decision.verdict);
     const turnsUsed = goal.turnsUsed + 1;
     const status = turnsUsed >= goal.maxTurns && nextStatus === 'active' ? 'paused' : nextStatus;
@@ -258,7 +305,7 @@ export class GoalService {
       completedChecklistItemIds: input.decision.completedChecklistItemIds,
     });
 
-    this.store.update(input.goalId, {
+    const updated = this.store.update(input.goalId, {
       status,
       turnsUsed,
       currentRunId: run.id,
@@ -266,6 +313,7 @@ export class GoalService {
       blockedReason: status === 'blocked' || status === 'needs_input' || status === 'paused' ? reason : undefined,
       completedAt: status === 'done' ? Date.now() : undefined,
     });
+    if (updated) publishGoalStatusEvent(updated, previousStatus, reason);
 
     return this.get(input.goalId);
   }
@@ -296,6 +344,7 @@ export class GoalService {
   }): GoalWithDetails | null {
     const goal = this.store.get(input.goalId);
     if (!goal) return null;
+    const previousStatus = goal.status;
     if (input.checklist) {
       this.store.replaceChecklist(input.goalId, input.checklist);
     }
@@ -349,7 +398,7 @@ export class GoalService {
         summary: input.userQuestion.trim(),
       });
     }
-    this.store.update(input.goalId, {
+    const updated = this.store.update(input.goalId, {
       status: input.status,
       turnsUsed: input.turnsUsed,
       maxTurns: input.maxTurns,
@@ -361,6 +410,7 @@ export class GoalService {
           : undefined,
       completedAt: input.status === 'done' ? Date.now() : undefined,
     });
+    if (updated) publishGoalStatusEvent(updated, previousStatus, input.reason);
     return this.get(input.goalId);
   }
 

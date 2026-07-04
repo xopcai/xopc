@@ -18,6 +18,8 @@ import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-label
 import { WorkflowAgentDetailModal } from '@/features/chat/workflow/workflow-agent-detail-modal';
 import { ProgressTree, RunningProgressPanel } from '@/features/chat/workflow/workflow-progress-display';
 import { WorkflowResultSummary } from '@/features/chat/workflow/workflow-result-summary';
+import { AutomationSuggestionCard } from '@/features/automations/automation-suggestion-card';
+import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import type { WorkflowAgentSnapshot, WorkflowSnapshot } from '@/features/chat/workflow/workflow.types';
 import { rollupPhases, type PhaseRollup } from '@/features/chat/workflow/workflow.utils';
 import { Button } from '@/components/ui/button';
@@ -133,6 +135,7 @@ export function WorkflowRunPanel({
   onClose: () => void;
 }) {
   const labels = messages(language).workflows;
+  const automationSuggestions = messages(language).automations.suggestions;
   const cardLabels = workflowCardLabels(language);
   const navigate = useNavigate();
 
@@ -241,6 +244,7 @@ export function WorkflowRunPanel({
     setDrawerAgentId(Number.isFinite(parsed) ? parsed : index + 1);
   }, [view]);
   const workflowSessionKey = view ? resolveWorkflowSessionKeyFromView(view) : null;
+  const shouldSuggestWorkflowFailureAutomation = runStatus === 'failed';
 
   if (loading) {
     return (
@@ -326,6 +330,30 @@ export function WorkflowRunPanel({
                   <Metric label={labels.metrics.artifacts} value={String(run.metrics.artifactCount)} />
                 </dl>
               </header>
+
+              <ProductAutomationFeedback
+                eventType="workflow.run.completed"
+                source="workflows"
+                payloadKey="runId"
+                payloadValue={run.id}
+                className="mt-4"
+              />
+              {shouldSuggestWorkflowFailureAutomation ? (
+                <AutomationSuggestionCard
+                  title={automationSuggestions.workflowFailedTitle}
+                  description={automationSuggestions.workflowFailedDescription}
+                  prompt={interpolate(automationSuggestions.workflowFailedPrompt, {
+                    runId: run.id,
+                    definitionId: run.definitionId,
+                  })}
+                  coverage={{
+                    eventType: 'workflow.run.completed',
+                    source: 'workflows',
+                    eventPayload: { runId: run.id, status: 'failed' },
+                  }}
+                  className="mt-4"
+                />
+              ) : null}
 
               <WorkflowRunTabs
                 activeTab={activeTab}

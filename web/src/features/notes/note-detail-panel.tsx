@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { AutomationSuggestionCard } from '@/features/automations/automation-suggestion-card';
+import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import { messages } from '@/i18n/messages';
 import { showToast } from '@/lib/toast';
 import { cn } from '@/lib/cn';
@@ -110,6 +112,7 @@ export function NoteDetailPanel({ noteId, onBack, onSaved }: NoteDetailPanelProp
 function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const n = messages(language).notes;
+  const automationSuggestions = messages(language).automations.suggestions;
   const navigate = useNavigate();
   const isDark = useThemeStore((s) => s.resolved) === 'dark';
   const { openImage } = useNoteImageLightbox();
@@ -433,11 +436,37 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
   const isPreviewingSnapshot = previewSnapshot !== null;
   const displayTitle = isPreviewingSnapshot ? (previewSnapshot.title ?? '') : title;
   const displayText = isPreviewingSnapshot ? (previewSnapshot.markdown ?? '') : (note.markdown ?? '');
+  const noteCreatedAtMs = new Date(note.createdAt).getTime();
+  const shouldSuggestNoteAutomation =
+    Number.isFinite(noteCreatedAtMs) && Date.now() - noteCreatedAtMs < 60 * 60 * 1000;
 
   return (
     <div className="flex h-full min-h-0 gap-3 p-4 sm:px-5">
       {/* Editor */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <ProductAutomationFeedback
+          eventType="note.created"
+          source="notes"
+          payloadKey="noteId"
+          payloadValue={noteId}
+          className="mb-3 shrink-0"
+        />
+        <ProductAutomationFeedback
+          eventType="note.updated"
+          source="notes"
+          payloadKey="noteId"
+          payloadValue={noteId}
+          className="mb-3 shrink-0"
+        />
+        {shouldSuggestNoteAutomation ? (
+          <AutomationSuggestionCard
+            title={automationSuggestions.noteCreatedTitle}
+            description={automationSuggestions.noteCreatedDescription}
+            prompt={automationSuggestions.noteCreatedPrompt}
+            coverage={{ eventType: 'note.created', source: 'notes', eventPayload: { noteId } }}
+            className="mb-3 shrink-0"
+          />
+        ) : null}
         <div
           ref={editorContainerRef}
           className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base"

@@ -12,6 +12,7 @@ import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/workspace-path-helpers.js';
 import { AutomationService } from '../automations/index.js';
+import { onAutomationProductEvent, publishAutomationProductEvent } from '../automations/product-events.js';
 import { buildNoteAgentContext, NotesService, NotesStore } from '../notes/index.js';
 import { buildWorkflowChildTools } from '../agent/workflow/workflow-child-tools.js';
 import { WorkflowRunService } from '../workflows/service/workflow-run-service.js';
@@ -21,6 +22,7 @@ import type { ManifestRegistryEntry } from '../extensions/manifest-registry.js';
 import type { ResolvedExtensionConfig } from '../extensions/types/index.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { SessionIndex } from '../session/index.js';
+import { onSessionTranscriptUpdate } from '../session/transcript-events.js';
 import type { Config } from '../config/schema.js';
 import { getAgentDefaultModelRef } from '../config/schema.js';
 import { wireTunnelEventsToGateway } from '../tunnel/gateway-lifecycle.js';
@@ -128,6 +130,8 @@ export class GatewayService {
   private goalRunner: GoalRunner | null = null;
   private goalNotifications: GoalNotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
+  private stopAutomationProductEventBridge: (() => void) | null = null;
+  private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
 
   /**
    * Webchat agent invocation surface (`runAgent`, `abortAgentRun`, `steer*`,
@@ -748,6 +752,7 @@ export class GatewayService {
       getDefaultAgentId: () => getDefaultAgentId(this.config),
       workflowRunService: this.createWorkflowRunService(),
     });
+    this.startAutomationProductEventBridge();
 
     await trace.measure('workflows.reconcile', () => this.reconcileInterruptedWorkflowRuns());
 
@@ -977,6 +982,10 @@ export class GatewayService {
     await this.channelManager.stop();
 
     await this.automationService.stop();
+    this.stopAutomationProductEventBridge?.();
+    this.stopAutomationProductEventBridge = null;
+    this.stopSessionTranscriptAutomationEvents?.();
+    this.stopSessionTranscriptAutomationEvents = null;
 
     // Flush notes to disk
     await this.notesService.flush();
@@ -1435,6 +1444,29 @@ export class GatewayService {
   emit(type: string, payload: unknown): void {
     this.sse.emit(type, payload);
     this.createGoalNotificationService().handleGatewayEvent(type, payload);
+  }
+
+  private startAutomationProductEventBridge(): void {
+    this.stopAutomationProductEventBridge?.();
+    this.stopSessionTranscriptAutomationEvents?.();
+    this.stopAutomationProductEventBridge = onAutomationProductEvent((event) => {
+      void this.automationService.triggerEvent(event).catch((err) => {
+        const em = err instanceof Error ? err.message : String(err);
+        log.warn({ err, eventType: event.type, source: event.source }, `Automation product event failed: ${em}`);
+      });
+    });
+    this.stopSessionTranscriptAutomationEvents = onSessionTranscriptUpdate((update) => {
+      if (!update.sessionKey || update.sessionKey.includes(':automation:')) return;
+      publishAutomationProductEvent({
+        type: 'session.transcript.updated',
+        source: 'sessions',
+        payload: {
+          sessionKey: update.sessionKey,
+          messageId: update.messageId,
+          hasMessage: update.message !== undefined,
+        },
+      });
+    });
   }
 
   /** Replay events since `lastEventId` for SSE reconnection. */

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import type { BuildChildToolsOptions } from '../../agent/child-agent-factory.js';
+import { publishAutomationProductEvent } from '../../automations/product-events.js';
 import { extractProfileAgentId } from '../../config/agent-profile.js';
 import { resolveModelRef } from '../../config/agent-typed-models.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
@@ -58,6 +59,7 @@ export class WorkflowRunService {
   private readonly activeRuns = new Map<string, AbortController>();
   private readonly timeoutHandles = new Map<string, ReturnType<typeof setTimeout>>();
   private readonly definitionRegistry: WorkflowDefinitionRegistry;
+  private readonly emittedTerminalAutomationEvents = new Set<string>();
 
   constructor(private readonly options: WorkflowRunServiceOptions) {
     this.definitionRegistry = options.definitionRegistry ?? new CatalogWorkflowDefinitionRegistry();
@@ -430,8 +432,28 @@ export class WorkflowRunService {
       },
       onRunViewUpdated: (view) => {
         gatewayService.emit('workflow.run.updated', { runId: view.run.id, view });
+        this.publishTerminalWorkflowAutomationEvent(view);
         void this.options.sessionBridge.handleRunViewUpdated(view);
       },
+    });
+  }
+
+  private publishTerminalWorkflowAutomationEvent(view: WorkflowRunView): void {
+    if (!isTerminalWorkflowRunStatus(view.run.status)) return;
+    if (this.emittedTerminalAutomationEvents.has(view.run.id)) return;
+    this.emittedTerminalAutomationEvents.add(view.run.id);
+    publishAutomationProductEvent({
+      type: 'workflow.run.completed',
+      source: 'workflows',
+      payload: {
+        runId: view.run.id,
+        status: view.run.status,
+        definitionId: view.run.definitionId,
+        title: view.run.title,
+        sessionKey: view.run.metadata?.sessionKey,
+        sourceKind: view.run.source.kind,
+      },
+      occurredAtMs: view.run.completedAtMs ?? Date.now(),
     });
   }
 }

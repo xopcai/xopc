@@ -51,6 +51,7 @@ describe('automation buildInput', () => {
         maxSubagents: '5',
       },
       workflowInputValid: true,
+      safetyMode: 'suggest_only',
       timeoutSeconds: '300',
       afterRunMode: 'none',
       webhookUrl: '',
@@ -66,5 +67,34 @@ describe('automation buildInput', () => {
       concurrency: 3,
       maxSubagents: 5,
     });
+    expect(input.safety).toEqual({ mode: 'suggest_only' });
+  });
+
+  it('suppresses after-run webhooks outside auto-apply mode', () => {
+    const input = buildInput({
+      name: 'Safe report',
+      description: '',
+      triggerMode: 'manual',
+      time: '09:30',
+      weekday: '1',
+      intervalMinutes: '60',
+      cronExpr: '30 9 * * *',
+      webhookSecretId: '',
+      actionMode: 'agent',
+      agentId: '',
+      instruction: 'Prepare a recommendation.',
+      workflowId: '',
+      workflowGoal: '',
+      workflowInput: { goal: '', argValues: {}, schemaInput: {}, concurrency: '', maxSubagents: '' },
+      workflowInputValid: true,
+      safetyMode: 'ask_before_apply',
+      timeoutSeconds: '300',
+      afterRunMode: 'webhook',
+      webhookUrl: 'https://example.com/hook',
+      disableAfterFailures: '3',
+    }, null);
+
+    expect(input.safety).toEqual({ mode: 'ask_before_apply' });
+    expect(input.afterRun).toEqual({ kind: 'none' });
   });
 });

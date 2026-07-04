@@ -47,6 +47,15 @@ export const AutomationTriggerSchema = z.discriminatedUnion('kind', [
     kind: z.literal('webhook'),
     secretId: optionalTrimmedString(200),
   }).strict(),
+  z.object({
+    kind: z.literal('event'),
+    eventType: nonEmptyString.max(200),
+    source: optionalTrimmedString(200),
+    payloadMatch: z.record(
+      z.string(),
+      z.union([z.string(), z.number(), z.boolean(), z.null()]),
+    ).optional(),
+  }).strict(),
 ]);
 
 const WorkflowRunInputEnvelopeSchema = z.object({
@@ -94,6 +103,10 @@ export const AutomationReliabilitySchema = z.object({
   disableAfterConsecutiveFailures: z.number().int().min(1).max(100).optional(),
 }).strict();
 
+export const AutomationSafetyPolicySchema = z.object({
+  mode: z.enum(['suggest_only', 'ask_before_apply', 'auto_apply']),
+}).strict();
+
 export const AutomationStateSchema = z.object({
   nextRunAtMs: z.number().int().nonnegative().optional(),
   runningRunId: optionalTrimmedString(100),
@@ -110,6 +123,7 @@ export const AutomationSchema = z.object({
   enabled: z.boolean(),
   trigger: AutomationTriggerSchema,
   action: AutomationActionSchema,
+  safety: AutomationSafetyPolicySchema.optional(),
   afterRun: AutomationAfterRunSchema.optional(),
   reliability: AutomationReliabilitySchema.optional(),
   state: AutomationStateSchema.default({}),

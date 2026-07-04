@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { complete, type UserMessage } from '@earendil-works/pi-ai';
 
+import { publishAutomationProductEvent } from '../automations/product-events.js';
 import type { Config } from '../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../providers/index.js';
 import { createLogger } from '../utils/logger.js';
@@ -53,6 +54,27 @@ function splitMeaningfulLines(markdown?: string): string[] {
 function summarizeIdea(markdown?: string): string {
   const lines = splitMeaningfulLines(markdown);
   return lines.slice(0, 3).join('；').slice(0, 140);
+}
+
+function publishNoteEvent(
+  type: 'note.created' | 'note.updated',
+  note: Note,
+  extra?: Record<string, unknown>,
+): void {
+  publishAutomationProductEvent({
+    type,
+    source: 'notes',
+    payload: {
+      noteId: note.id,
+      kind: note.kind,
+      status: note.status,
+      title: note.title,
+      capturedVia: note.capturedVia,
+      tagCount: note.tags?.length ?? 0,
+      hasAttachments: Boolean(note.attachments?.length),
+      ...extra,
+    },
+  });
 }
 
 function inferCatalysisStage(note: Note): NonNullable<NoteCatalysisMeta['stage']> {
@@ -188,6 +210,7 @@ export class NotesService {
       localVersion: 1,
     };
     await this.store.addNote(note);
+    publishNoteEvent('note.created', note);
     log.debug({ id: note.id, kind: note.kind }, 'Note created');
     return note;
   }
@@ -212,7 +235,14 @@ export class NotesService {
     }
 
     const updatedRaw = await this.store.updateNote(id, normalizedPatch);
-    return updatedRaw ? this.reconcileAttachments(updatedRaw) : null;
+    const updated = updatedRaw ? await this.reconcileAttachments(updatedRaw) : null;
+    if (updated) {
+      publishNoteEvent('note.updated', updated, {
+        contentTouched,
+        trigger,
+      });
+    }
+    return updated;
   }
 
   private async reconcileAttachments(note: Note): Promise<Note> {

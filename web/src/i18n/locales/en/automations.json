@@ -15,11 +15,106 @@
     "last": "Last",
     "next": "Next",
     "workflowPrefix": "workflow",
+    "loading": "Loading...",
+    "selectRun": "Select a run to inspect its timeline.",
+    "timeline": "Timeline",
+    "details": {
+      "created": "Created",
+      "started": "Started",
+      "duration": "Duration",
+      "model": "Model",
+      "session": "Session"
+    },
     "metrics": {
       "total": "Total",
       "enabled": "Enabled",
       "running": "Running",
       "next": "Next"
+    },
+    "draft": {
+      "title": "Draft with AI",
+      "subtitle": "Describe the outcome. xopc drafts the trigger, action, and safety review before anything is published.",
+      "placeholder": "Example: When a goal becomes blocked, ask the agent to diagnose why and suggest next steps.",
+      "generate": "Generate draft",
+      "generating": "Generating...",
+      "review": "Review before publishing",
+      "safety": "Safety",
+      "assumptions": "Assumptions",
+      "risks": "Risks",
+      "discard": "Discard",
+      "publish": "Publish",
+      "approval": "I reviewed the required confirmations and want to publish this automation."
+    },
+    "repair": {
+      "title": "Repair suggestion",
+      "suggest": "Suggest repair",
+      "generating": "Generating...",
+      "risks": "Risks",
+      "approval": "I reviewed this repair patch and want to apply it.",
+      "apply": "Apply patch"
+    },
+    "suggestions": {
+      "create": "Draft automation",
+      "manage": "Manage",
+      "coveredTitle": "Already automated",
+      "coveredDescription": "Covered by {name}. xopc will handle future matching events.",
+      "noteCreatedTitle": "Automate note follow-up",
+      "noteCreatedDescription": "Have xopc classify new notes and suggest next actions automatically.",
+      "noteCreatedPrompt": "When a note is created, run an agent to classify the note, identify useful follow-up actions, and summarize any tasks. Trigger on note.created from notes. Keep it safe: only write a short recommendation unless the user later approves edits.",
+      "goalBlockedTitle": "Automate blocker diagnosis",
+      "goalBlockedDescription": "When this goal gets blocked, ask an agent to diagnose why and propose the next concrete step.",
+      "goalBlockedPrompt": "When a goal becomes blocked, run an agent to diagnose the blocker reason and suggest the next concrete step. Trigger on goal.status_changed from goals with payloadMatch status=blocked. Use the goal title: {{title}}. Do not change the goal automatically unless the user configures that explicitly.",
+      "workflowFailedTitle": "Automate failed-run recovery",
+      "workflowFailedDescription": "When this workflow fails, let xopc inspect the run and draft a repair or retry plan.",
+      "workflowFailedPrompt": "When a workflow run completes with status failed, run an agent to inspect the workflow run, summarize the failure, and propose a recovery plan. Trigger on workflow.run.completed from workflows with payloadMatch status=failed. Use the run id: {{runId}} and definition id: {{definitionId}}. Do not retry automatically unless the user explicitly configures it."
+    },
+    "explain": {
+      "whyRan": "Why it ran",
+      "whyCovered": "Why this is covered",
+      "event": "Event {eventType}",
+      "eventFrom": "Event {eventType} from {source}",
+      "payloadMatched": "Matched {pairs}",
+      "noPayloadFilter": "No payload filter",
+      "actionAgent": "Runs agent action",
+      "actionWorkflow": "Runs workflow {workflowId}",
+      "safetyMode": "Safety: {mode}",
+      "manual": "Manual trigger",
+      "schedule": "Scheduled trigger",
+      "webhook": "Webhook trigger",
+      "triggerMatched": "Trigger matched"
+    },
+    "feedback": {
+      "title": "Triggered automations",
+      "open": "Open",
+      "chat": "Chat",
+      "workflow": "Workflow",
+      "rerun": "Run again",
+      "pause": "Pause rule",
+      "working": "Working...",
+      "rerunQueued": "Automation queued",
+      "paused": "Automation paused",
+      "repairApplied": "Repair applied",
+      "repairAppliedAndQueued": "Repair applied and automation queued",
+      "applyAndRerun": "Apply and run again",
+      "actionFailed": "Automation action failed",
+      "saveInsight": "Save insight",
+      "savingInsight": "Saving...",
+      "insightSaved": "Insight saved",
+      "savedInsight": "Saved",
+      "insightEvidenceTitle": "Automation: {name}",
+      "summaryHealthy": "{total} automations ran here. {succeeded} succeeded.",
+      "summaryRunning": "{total} automations ran here. {active} still in progress.",
+      "summaryNeedsAttention": "{total} automations ran here. {attention} need attention. Start with {name}.",
+      "summaryRecovered": "{total} automations ran here. {recovered} recovered after a fix, {succeeded} succeeded.",
+      "succeededCount": "{count} succeeded",
+      "activeCount": "{count} running",
+      "attentionCount": "{count} need attention",
+      "recoveredCount": "{count} recovered",
+      "primaryRepair": "Generate repair",
+      "primaryRepairing": "Generating...",
+      "historical": "Historical",
+      "recovered": "Recovered",
+      "thisAutomation": "this automation"
     },
     "tabs": {
       "automations": "Automations",
@@ -41,15 +136,39 @@
         "name": "Webhook to agent",
         "description": "Trigger an agent from an external request.",
         "formName": "Webhook agent task"
+      },
+      "blockedGoal": {
+        "name": "Blocked goal helper",
+        "description": "When a goal becomes blocked, ask an agent to diagnose it.",
+        "formName": "Blocked goal helper",
+        "instruction": "A goal became blocked. Diagnose the likely blocker and suggest the next concrete step."
+      },
+      "noteCreated": {
+        "name": "New note organizer",
+        "description": "When a note is created, ask an agent to classify and suggest follow-ups.",
+        "formName": "New note organizer",
+        "instruction": "A new note was created. Classify it and suggest useful follow-up actions."
       }
     },
     "empty": {
       "automations": "No automations",
-      "runs": "No runs yet"
+      "runs": "No runs yet",
+      "events": "No timeline events yet"
     },
     "info": {
       "when": "When",
-      "run": "Run"
+      "run": "Run",
+      "safety": "Safety"
+    },
+    "safety": {
+      "suggest_only": "Suggest only",
+      "ask_before_apply": "Ask before applying",
+      "auto_apply": "Auto apply",
+      "suggestOnlyDescription": "Safest. Produces recommendations without applying changes.",
+      "askBeforeApplyDescription": "Drafts actions and asks for confirmation before applying.",
+      "autoApplyDescription": "Runs automatically when conditions match.",
+      "upgrade": "Upgrade safety",
+      "downgrade": "Downgrade safety"
     },
     "trigger": {
       "manual": "Manual",
@@ -58,6 +177,11 @@
       "interval": "Interval",
       "customCron": "Custom cron",
       "webhook": "Webhook",
+      "goalBlocked": "Goal blocked",
+      "noteCreated": "Note created",
+      "workflowFailed": "Workflow failed",
+      "sessionUpdated": "Session updated",
+      "eventWithType": "Event: {type}",
       "onceAt": "Once at {time}",
       "everyMinutes": "Every {minutes} min"
     },
@@ -97,6 +221,7 @@
       "triggeredRun": "Runs on trigger",
       "goal": "Goal",
       "afterRun": "After run",
+      "safety": "Safety mode",
       "webhookUrl": "Webhook URL",
       "reliability": "Reliability",
       "timeoutSeconds": "Timeout seconds",

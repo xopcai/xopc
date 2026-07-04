@@ -12,7 +12,13 @@ export type AutomationSchedule =
 export type AutomationTrigger =
   | { kind: 'manual' }
   | { kind: 'schedule'; schedule: AutomationSchedule }
-  | { kind: 'webhook'; secretId?: string };
+  | { kind: 'webhook'; secretId?: string }
+  | {
+      kind: 'event';
+      eventType: string;
+      source?: string;
+      payloadMatch?: Record<string, string | number | boolean | null>;
+    };
 
 export type AutomationAction =
   | {
@@ -47,6 +53,12 @@ export interface AutomationReliability {
   disableAfterConsecutiveFailures?: number;
 }
 
+export type AutomationSafetyMode = 'suggest_only' | 'ask_before_apply' | 'auto_apply';
+
+export interface AutomationSafetyPolicy {
+  mode: AutomationSafetyMode;
+}
+
 export interface AutomationState {
   nextRunAtMs?: number;
   runningRunId?: string;
@@ -63,6 +75,7 @@ export interface Automation {
   enabled: boolean;
   trigger: AutomationTrigger;
   action: AutomationAction;
+  safety?: AutomationSafetyPolicy;
   afterRun?: AutomationAfterRun;
   reliability?: AutomationReliability;
   state: AutomationState;
@@ -95,6 +108,39 @@ export interface AutomationRun {
   sessionKey?: string;
   workflowRunId?: string;
   model?: string;
+}
+
+export type AutomationRunEventType =
+  | 'run.queued'
+  | 'run.started'
+  | 'action.started'
+  | 'action.completed'
+  | 'action.failed'
+  | 'after_run.started'
+  | 'after_run.completed'
+  | 'after_run.failed'
+  | 'run.completed';
+
+export interface AutomationRunEvent {
+  id: string;
+  runId: string;
+  automationId: string;
+  type: AutomationRunEventType;
+  message: string;
+  data?: unknown;
+  createdAtMs: number;
+}
+
+export interface AutomationProductEventRun {
+  run: AutomationRun;
+  triggerEvent: AutomationRunEvent;
+}
+
+export interface AutomationEvent {
+  type: string;
+  source?: string;
+  payload?: Record<string, unknown>;
+  occurredAtMs?: number;
 }
 
 export interface AutomationMetrics {
