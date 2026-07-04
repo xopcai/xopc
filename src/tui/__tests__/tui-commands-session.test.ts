@@ -187,6 +187,42 @@ describe('TUI session slash commands', () => {
     expect(systems.at(-1)).toContain('Switch with: /agent <id>');
   });
 
+  it('/tui-default-agent persists the TUI default agent without forwarding to agent', async () => {
+    const systems: string[] = [];
+    const setTuiDefaultAgent = vi.fn(async (agentId: string) => ({ agentId }));
+    const { handler, sendMessage } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+      setTuiDefaultAgent,
+    });
+
+    handler('/tui-default-agent coder');
+
+    await vi.waitFor(() => expect(setTuiDefaultAgent).toHaveBeenCalledWith('coder'));
+    expect(systems.at(-1)).toContain('TUI default agent set to coder');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('/tui-default-agent shows usage when no agent id is provided', async () => {
+    const systems: string[] = [];
+    const listAgents = vi.fn(async () => [{ id: 'coder', enabled: true }]);
+    const { handler, sendMessage } = makeHandler({
+      chatLog: {
+        addSystem: (text: string) => systems.push(text),
+        setToolsExpanded: () => {},
+      } as never,
+      listAgents,
+    });
+
+    handler('/tui-default-agent');
+
+    await vi.waitFor(() => expect(systems.at(-1)).toContain('Usage: /tui-default-agent <agent-id>'));
+    expect(systems.at(-1)).toContain('coder');
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
   it('/share parses and handles workspace share requests locally', async () => {
     const createShare = vi.fn(async () => {});
     const { handler, sendMessage } = makeHandler({ createShare });

@@ -287,6 +287,7 @@ PC 桌面端是大多数用户最省心的开始方式：它会启动内置本�
 
 ```bash
 pnpm install && pnpm run dev
+pnpm run dev:gateway            # 开发 gateway 使用 ~/.xopc-dev + info 日志
 pnpm run build && pnpm test && pnpm run lint
 ```
 

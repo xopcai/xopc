@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import type { Config } from '../config/schema.js';
 import {
+  listAgentEntries,
   resolveAgentIdByWorkspacePath,
   resolveDefaultAgentId,
 } from '../agent/agent-scope.js';
@@ -14,6 +15,21 @@ import {
 import { normalizeLowercaseStringOrEmpty } from '../utils/string-coerce.js';
 
 export type SessionScope = 'per-sender' | 'global';
+
+function agentExists(cfg: Config, agentId: string): boolean {
+  const id = normalizeAgentId(agentId);
+  return listAgentEntries(cfg).some(
+    (entry) => entry.enabled !== false && normalizeAgentId(entry.id) === id,
+  );
+}
+
+export function resolveDefaultTuiAgentId(cfg: Config): string {
+  const configured = cfg.tui?.defaultAgent?.trim();
+  if (configured && agentExists(cfg, configured)) {
+    return normalizeAgentId(configured);
+  }
+  return resolveDefaultAgentId(cfg);
+}
 
 export function resolveTuiSessionKey(params: {
   raw?: string;
@@ -43,12 +59,17 @@ export function resolveTuiSessionKey(params: {
 export function resolveInitialTuiAgentId(params: {
   cfg: Config;
   fallbackAgentId: string;
+  explicitAgentId?: string;
   initialSessionInput?: string;
   cwd?: string;
 }): string {
   const parsed = parseAgentSessionKey((params.initialSessionInput ?? '').trim());
   if (parsed?.agentId) {
     return normalizeAgentId(parsed.agentId);
+  }
+
+  if (params.explicitAgentId?.trim()) {
+    return normalizeAgentId(params.explicitAgentId);
   }
 
   const inferredFromWorkspace = resolveAgentIdByWorkspacePath(
@@ -70,6 +91,7 @@ export function createDefaultTuiSessionKeySuffix(): string {
 export function resolveTuiStartupSessionKey(params: {
   cfg: Config;
   sessionOption?: string;
+  agentOption?: string;
   cwd?: string;
   createSessionKeySuffix?: () => string;
 }): { sessionKey: string; agentId: string; sessionScope: SessionScope; sessionMainKey: string } {
@@ -78,7 +100,8 @@ export function resolveTuiStartupSessionKey(params: {
   const sessionOption = (params.sessionOption ?? '').trim();
   const agentId = resolveInitialTuiAgentId({
     cfg: params.cfg,
-    fallbackAgentId: resolveDefaultAgentId(params.cfg),
+    fallbackAgentId: resolveDefaultTuiAgentId(params.cfg),
+    explicitAgentId: params.agentOption,
     initialSessionInput: sessionOption,
     cwd: params.cwd ?? process.cwd(),
   });

@@ -81,8 +81,12 @@ git clone https://github.com/xopcai/xopc.git
 cd xopc
 pnpm install
 pnpm run dev -- --help
+pnpm run dev:init        # 可选：创建隔离的 ~/.xopc-dev 状态目录
+pnpm run dev:gateway     # 从源码启动 gateway，使用 ~/.xopc-dev 和 info 日志
 pnpm run build
 ```
+
+如果默认端口已被正式 gateway 占用，可以把参数放到 `--` 后面，例如 `pnpm run dev:gateway -- --port 18791`。
 
 常用检查：
 

@@ -305,6 +305,9 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
     browser: buildSafeBrowserConfigForWeb(config.browser),
     goals: resolveGoalsConfigForWeb(config),
     session: resolveSessionConfigForWeb(config),
+    tui: {
+      defaultAgent: config.tui?.defaultAgent ?? 'coder',
+    },
     tunnel: {
       enabled: config.tunnel?.enabled === true,
       autoStart: config.tunnel?.autoStart === true,

@@ -227,6 +227,9 @@ export interface TuiBackend {
   /** List agents available for TUI agent switching. */
   listAgents(): Promise<TuiAgentInfo[]>;
 
+  /** Persist the default agent for fresh TUI sessions. */
+  setTuiDefaultAgent?(agentId: string): Promise<{ agentId: string }>;
+
   /** Fetch session info (model, tokens, thinking). */
   getSessionInfo(sessionKey: string): Promise<SessionInfo>;
 

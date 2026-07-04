@@ -19,6 +19,7 @@ import { isMaskedSecretPatchValue } from '../../lib/mask-secret-length.js';
 import { applyToolsWebPatch } from '../../../config-tools-web.js';
 import { mergeTunnelConfigPatch } from '../../../../tunnel/tunnel-config.js';
 import { canonicalizeConfiguredMcpServer } from '../../../../config/mcp-config-normalize.js';
+import { setTuiDefaultAgentConfig } from '../../../../commands/agents.config.js';
 import {
   mergeGatewaySkillsMarketplacePatch,
   mergeGoalsConfigPatch,
@@ -55,6 +56,23 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
     const sessionResult = mergeSessionConfigPatch(config, body.session as Record<string, unknown>);
     if (sessionResult.ok === false) {
       return patchError(sessionResult.message);
+    }
+  }
+
+  if (body.tui !== undefined) {
+    if (typeof body.tui !== 'object' || body.tui === null || Array.isArray(body.tui)) {
+      return patchError('tui must be an object');
+    }
+    const tuiPatch = body.tui as Record<string, unknown>;
+    if (tuiPatch.defaultAgent !== undefined) {
+      if (typeof tuiPatch.defaultAgent !== 'string' || !tuiPatch.defaultAgent.trim()) {
+        return patchError('tui.defaultAgent must be a non-empty string');
+      }
+      const result = setTuiDefaultAgentConfig(config, tuiPatch.defaultAgent);
+      if (result.ok === false) {
+        return patchError(result.message);
+      }
+      config.tui = result.config.tui;
     }
   }
 

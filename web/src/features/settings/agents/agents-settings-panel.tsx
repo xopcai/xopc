@@ -7,6 +7,7 @@ import { AgentsEditorModal } from './agents-editor-modal';
 import { AgentsEditorPanelContent } from './agents-editor-panel-content';
 import { AgentsListGrid } from './agents-list-grid';
 import { CreateAgentDialog } from './create-agent-dialog';
+import { TuiDefaultAgentSetting } from './tui-default-agent-setting';
 import { useAgentsSettingsPanel } from './use-agents-settings-panel';
 
 export function AgentsSettingsPanel() {
@@ -32,22 +33,34 @@ export function AgentsSettingsPanel() {
       {vm.loading ? (
         <p className="text-sm text-fg-muted">{vm.a.loading}</p>
       ) : vm.data ? (
-        <AgentsListGrid
-          a={vm.a}
-          agents={vm.data.agents}
-          searchQuery={vm.listSearchQuery}
-          onOpenAgent={(id) => vm.navigate(agentsAppDetailPath(id))}
-          onChatWithAgent={(id) => {
-            const agentId = id.trim().toLowerCase();
-            try {
-              globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, agentId);
-            } catch {
-              /* noop */
-            }
-            vm.navigate('/chat/new', { state: { agentId } });
-          }}
-          busy={vm.busy}
-        />
+        <div className="flex flex-col gap-4">
+          <TuiDefaultAgentSetting
+            a={vm.a}
+            agents={vm.data.agents}
+            savedAgentId={vm.savedTuiDefaultAgentId}
+            draftAgentId={vm.tuiDefaultAgentDraft}
+            unavailable={vm.tuiDefaultAgentUnavailable}
+            busy={vm.busy}
+            onDraftChange={vm.setTuiDefaultAgentDraft}
+            onSave={() => void vm.onSaveTuiDefaultAgent()}
+          />
+          <AgentsListGrid
+            a={vm.a}
+            agents={vm.data.agents}
+            searchQuery={vm.listSearchQuery}
+            onOpenAgent={(id) => vm.navigate(agentsAppDetailPath(id))}
+            onChatWithAgent={(id) => {
+              const agentId = id.trim().toLowerCase();
+              try {
+                globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, agentId);
+              } catch {
+                /* noop */
+              }
+              vm.navigate('/chat/new', { state: { agentId } });
+            }}
+            busy={vm.busy}
+          />
+        </div>
       ) : null}
 
       {vm.routeAgentId && vm.hasToken ? (

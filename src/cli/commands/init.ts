@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'fs/promises';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import {
@@ -14,6 +14,7 @@ import {
 } from '../../config/paths.js';
 import { loadConfig, saveConfig } from '../../config/loader.js';
 import type { Config } from '../../config/schema.js';
+import { ensureStarterAgentsInitialized } from '../../agent/starter-agents.js';
 
 const log = createLogger('InitCommand');
 
@@ -40,15 +41,17 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   if (existsSync(stateDir) && !options.force) {
     const configPath = resolveConfigPath();
     if (existsSync(configPath)) {
-      log.info('xopc is already initialized. Use --force to reinitialize.');
-      return;
+      log.info('xopc is already initialized. Refreshing starter agents and defaults.');
     }
   }
 
   await mkdir(stateDir, { recursive: true });
 
   const configPath = resolveConfigPath();
-  const cfg = loadConfig(configPath);
+  const configExists = existsSync(configPath);
+  const diskTui = readDiskTuiDefaultState(configPath);
+  const starterResult = ensureStarterAgentsInitialized(loadConfig(configPath));
+  const cfg = starterResult.config;
 
   // Agent directory structure
   await mkdir(resolveAgentHomeDir(cfg, agentId), { recursive: true });
@@ -58,9 +61,13 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   await mkdir(wsRoot, { recursive: true });
 
   // Config file
-  if (!existsSync(configPath) || options.force) {
+  if (
+    !configExists ||
+    options.force ||
+    (diskTui.readable && (starterResult.changed || !diskTui.hasDefaultAgent))
+  ) {
     await saveConfig(cfg, configPath);
-    log.info({ configPath }, 'Created initial configuration');
+    log.info({ configPath }, 'Saved configuration');
   }
 
   // ============================================
@@ -71,6 +78,23 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   }
 
   log.info({ stateDir, agentId }, 'xopc Agent OS initialized successfully');
+}
+
+function readDiskTuiDefaultState(configPath: string): { readable: boolean; hasDefaultAgent: boolean } {
+  if (!existsSync(configPath)) {
+    return { readable: true, hasDefaultAgent: false };
+  }
+  try {
+    const parsed = JSON.parse(readFileSync(configPath, 'utf-8')) as {
+      tui?: { defaultAgent?: unknown };
+    };
+    return {
+      readable: true,
+      hasDefaultAgent: typeof parsed.tui?.defaultAgent === 'string',
+    };
+  } catch {
+    return { readable: false, hasDefaultAgent: false };
+  }
 }
 
 /**

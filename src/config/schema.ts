@@ -1060,6 +1060,18 @@ export const CommandsConfigSchema = z
 
 export type CommandsConfig = z.infer<typeof CommandsConfigSchema>;
 
+export const TuiConfigSchema = z
+  .object({
+    /** Default agent id for fresh TUI sessions. Leaves global routing (`agents.default`) untouched. */
+    defaultAgent: z.string().min(1).default('coder'),
+  })
+  .strict()
+  .default({
+    defaultAgent: 'coder',
+  });
+
+export type TuiConfig = z.infer<typeof TuiConfigSchema>;
+
 // ============================================
 // MCP (Model Context Protocol)
 // ============================================
@@ -1154,6 +1166,7 @@ export const ConfigSchema = z.object({
   messages: MessagesConfigSchema,
   update: UpdateConfigSchema,
   commands: CommandsConfigSchema,
+  tui: TuiConfigSchema,
 }).default({
   agents: {
     default: 'main',
@@ -1281,6 +1294,9 @@ export const ConfigSchema = z.object({
   },
   modelsDev: {
     enabled: true,
+  },
+  tui: {
+    defaultAgent: 'coder',
   },
   // messages.tts / tools.media.audio start undefined; the factory layer fills
   // in provider-level defaults (model/voice) on demand. Fresh configs don't

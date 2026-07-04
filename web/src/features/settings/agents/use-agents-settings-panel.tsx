@@ -16,6 +16,7 @@ import {
   deleteGatewayAgent,
   fetchGatewayAgents,
   parseGatewayBindingsFromConfig,
+  patchTuiDefaultAgent,
   updateGatewayAgent,
   type GatewayAgentRow,
   type GatewayAgentsPayload,
@@ -108,7 +109,8 @@ export function useAgentsSettingsPanel() {
     revalidateOnFocus: false,
   });
 
-  const { data: gatewayCfgData } = useGatewayConfigSwr(hasToken);
+  const gatewayConfigSwr = useGatewayConfigSwr(hasToken);
+  const { data: gatewayCfgData } = gatewayConfigSwr;
 
   const bindingsFromConfig = useMemo(
     () => parseGatewayBindingsFromConfig(gatewayCfgData?.payload?.config ?? {}),
@@ -140,6 +142,7 @@ export function useAgentsSettingsPanel() {
   const [duplicateSourceId, setDuplicateSourceId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [listSearchQuery, setListSearchQuery] = useState('');
+  const [tuiDefaultAgentDraft, setTuiDefaultAgentDraft] = useState('');
 
   const [editWorkspace, setEditWorkspace] = useState('');
   const [editModel, setEditModel] = useState('');
@@ -228,6 +231,36 @@ export function useAgentsSettingsPanel() {
     () => data?.agents.find((x) => x.id === selectedId) ?? null,
     [data, selectedId],
   );
+
+  const savedTuiDefaultAgentId = useMemo(() => {
+    const config = gatewayCfgData?.payload?.config;
+    if (!config || typeof config !== 'object' || Array.isArray(config)) return '';
+    const tui = (config as { tui?: unknown }).tui;
+    if (!tui || typeof tui !== 'object' || Array.isArray(tui)) return '';
+    const id = (tui as { defaultAgent?: unknown }).defaultAgent;
+    return typeof id === 'string' ? id.trim().toLowerCase() : '';
+  }, [gatewayCfgData]);
+
+  const effectiveTuiDefaultAgentId = useMemo(() => {
+    if (!data) return savedTuiDefaultAgentId || 'coder';
+    if (savedTuiDefaultAgentId && data.agents.some((agent) => agent.id === savedTuiDefaultAgentId)) {
+      return savedTuiDefaultAgentId;
+    }
+    return data.defaultId || data.agents[0]?.id || savedTuiDefaultAgentId || 'coder';
+  }, [data, savedTuiDefaultAgentId]);
+
+  const tuiDefaultAgentUnavailable = Boolean(
+    data &&
+    savedTuiDefaultAgentId &&
+    !data.agents.some((agent) => agent.id === savedTuiDefaultAgentId),
+  );
+  const committedTuiDefaultAgentId = tuiDefaultAgentUnavailable
+    ? savedTuiDefaultAgentId
+    : effectiveTuiDefaultAgentId;
+
+  useEffect(() => {
+    setTuiDefaultAgentDraft(effectiveTuiDefaultAgentId);
+  }, [effectiveTuiDefaultAgentId]);
 
   const trackedSelectedIdRef = useRef<string | null>(null);
   const selectedTrackingKey = selected ? selected.id : null;
@@ -467,6 +500,24 @@ export function useAgentsSettingsPanel() {
       const next = await updateGatewayAgent(agent.id, { setDefault: true });
       void mutateAgents(next, { revalidate: false });
       setSelectedId(agent.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : a.saveError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSaveTuiDefaultAgent() {
+    const agentId = tuiDefaultAgentDraft.trim().toLowerCase();
+    if (!agentId || !data?.agents.some((agent) => agent.id === agentId)) {
+      setError(a.tuiDefaultAgentInvalid);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await patchTuiDefaultAgent(agentId);
+      await gatewayConfigSwr.mutate();
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
     } finally {
@@ -801,6 +852,11 @@ export function useAgentsSettingsPanel() {
     chat,
     language,
     data,
+    savedTuiDefaultAgentId: committedTuiDefaultAgentId,
+    tuiDefaultAgentDraft,
+    setTuiDefaultAgentDraft,
+    tuiDefaultAgentUnavailable,
+    onSaveTuiDefaultAgent,
     loading,
     displayError,
     navigate,

@@ -26,7 +26,11 @@ pnpm install
 # 使用 pnpm run dev -- 前缀
 pnpm run dev --          # 打开本地 TUI
 pnpm run dev -- <command>
+pnpm run dev:init        # 初始化隔离开发状态到 ~/.xopc-dev
+pnpm run dev:gateway     # 使用 ~/.xopc-dev 启动 gateway，日志级别为 info
 ```
+
+`dev:init` / `dev:gateway` 会设置 `XOPC_STATE_DIR`、`XOPC_CONFIG(_PATH)`、`XOPC_LOG_DIR` 和 `XOPC_LOG_LEVEL=info`，避免源码开发时的 gateway 读写正式 `~/.xopc`。gateway 参数放在 `--` 后面，例如 `pnpm run dev:gateway -- --port 18791`。
 
 **本文档中的命令示例默认使用 `xopc` 命令。** 如果你从源码运行，请将 `xopc` 替换为 `pnpm run dev --`。
 
@@ -324,6 +328,8 @@ xopc                                  # 等同于 xopc tui；嵌入式模式
 xopc tui                              # 嵌入式 AgentService，无需网关
 xopc tui --gateway                    # 强制网关模式
 xopc tui --url http://localhost:18790 --token <令牌>
+xopc tui --agent coder                # 用 coder 开启新的 TUI 会话
+xopc tui --set-default-agent coder    # 持久化 TUI 默认 agent
 xopc tui -s <sessionKey> -m "你好"     # 指定会话 + 可选首条消息
 ```
 
@@ -332,7 +338,9 @@ xopc tui -s <sessionKey> -m "你好"     # 指定会话 + 可选首条消息
 | `--url <url>` | 网关根 URL |
 | `--token <token>` | 网关 Bearer 令牌 |
 | `--gateway` | 强制网关模式 |
-| `-s, --session <key>` | 要恢复的会话键；省略时新建 `tui-<uuid>` 会话 |
+| `-s, --session <key>` | 要恢复的会话键；省略时新建 `agent:{currentAgent}:tui-<uuid>` 会话 |
+| `--agent <id>` | 为本次新 TUI 会话指定 agent；仅覆盖本次启动的 `tui.defaultAgent` |
+| `--set-default-agent <id>` | 持久化 `tui.defaultAgent` 后退出 |
 | `-m, --message <text>` | 连接成功后自动发送一条 |
 | `--local` | 嵌入式模式（不连网关） |
 | `--thinking <level>` | 思考等级覆盖 |

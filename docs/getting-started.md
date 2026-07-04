@@ -81,8 +81,12 @@ git clone https://github.com/xopcai/xopc.git
 cd xopc
 pnpm install
 pnpm run dev -- --help
+pnpm run dev:init        # optional: create isolated ~/.xopc-dev state
+pnpm run dev:gateway     # gateway from source using ~/.xopc-dev and info logs
 pnpm run build
 ```
+
+Use `pnpm run dev:gateway -- --port 18791` (or another option after `--`) if your normal gateway is already using the default port.
 
 Common checks:
 

@@ -6,6 +6,8 @@ export interface TuiOptions {
   token?: string;
   /** Session key to resume. */
   session?: string;
+  /** Agent id for a fresh TUI session. */
+  agentId?: string;
   /** Thinking level override. */
   thinking?: string;
   /** Single message to send on start, then stay open. */

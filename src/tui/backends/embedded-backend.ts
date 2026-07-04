@@ -7,8 +7,9 @@ import { parseModelRef } from '../../agent/models/selection.js';
 import { createCreateShareTool, isShareToolAvailable } from '../../agent/tools/create-share-tool.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
-import { loadConfig, getWorkspacePath } from '../../config/index.js';
-import { getAgentDefaultModelRef } from '../../config/schema.js';
+import { loadConfig, getWorkspacePath, saveConfig } from '../../config/index.js';
+import { getAgentDefaultModelRef, type Config } from '../../config/schema.js';
+import { setTuiDefaultAgentConfig } from '../../commands/agents.config.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
 import type { ExportFormat } from '../../session/types.js';
@@ -47,6 +48,7 @@ import { fuzzySearchWorkspaceFiles } from '../../gateway/workspace-file-search.j
 const log = createLogger('TUI:Embedded');
 
 interface EmbeddedBackendOptions {
+  config?: Config;
   extensionRegistry?: ExtensionRegistryImpl;
   implicitTrustedWorkspace?: string;
   isWorkspaceTrusted?: (workspaceDir: string) => boolean | null | undefined;
@@ -67,7 +69,7 @@ export class EmbeddedBackend implements TuiBackend {
   private bus: MessageBus;
   private agent: AgentService | null = null;
   private agentLoading: Promise<AgentService> | null = null;
-  private config: ReturnType<typeof loadConfig> | null = null;
+  private config: Config | null = null;
   private workspace = '';
   private sessionIndex: SessionIndex | null = null;
   private sessionIndexReady: Promise<void> | null = null;
@@ -91,7 +93,7 @@ export class EmbeddedBackend implements TuiBackend {
     if (this.running) return;
     this.running = true;
 
-    const config = loadConfig();
+    const config = this.opts?.config ?? loadConfig();
     this.config = config;
     const workspace = getWorkspacePath(config);
     this.workspace = workspace;
@@ -135,7 +137,7 @@ export class EmbeddedBackend implements TuiBackend {
     }
   }
 
-  private async createAgent(config: ReturnType<typeof loadConfig>, sessionIndex: SessionIndex): Promise<AgentService> {
+  private async createAgent(config: Config, sessionIndex: SessionIndex): Promise<AgentService> {
     const { AgentService } = await import('../../agent/service.js');
     const workspace = this.workspace || getWorkspacePath(config);
     const modelId = getAgentDefaultModelRef(config);
@@ -208,8 +210,12 @@ export class EmbeddedBackend implements TuiBackend {
     return this.workflowRunService;
   }
 
+  private activeConfig(): Config {
+    return this.config ?? this.opts?.config ?? loadConfig();
+  }
+
   async getStartupResources(sessionKey: string) {
-    return collectTuiStartupResources(loadConfig(), sessionKey);
+    return collectTuiStartupResources(this.activeConfig(), sessionKey);
   }
 
   async startWorkflowRun(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult> {
@@ -382,7 +388,7 @@ export class EmbeddedBackend implements TuiBackend {
   }
 
   async listAgents(): Promise<TuiAgentInfo[]> {
-    const config = loadConfig();
+    const config = this.activeConfig();
     const agents = new Map<string, TuiAgentInfo>();
     for (const entry of listAgentEntries(config)) {
       if (entry.enabled === false) continue;
@@ -393,6 +399,16 @@ export class EmbeddedBackend implements TuiBackend {
       });
     }
     return [...agents.values()].sort((a, b) => a.id.localeCompare(b.id));
+  }
+
+  async setTuiDefaultAgent(agentId: string): Promise<{ agentId: string }> {
+    const result = setTuiDefaultAgentConfig(this.activeConfig(), agentId);
+    if (result.ok === false) {
+      throw new Error(result.message);
+    }
+    await saveConfig(result.config);
+    this.config = result.config;
+    return { agentId: result.agentId };
   }
 
   async renameSession(sessionKey: string, name: string): Promise<{ ok: boolean }> {
@@ -421,7 +437,7 @@ export class EmbeddedBackend implements TuiBackend {
 
   async getSessionInfo(sessionKey: string): Promise<SessionInfo> {
     if (!this.agent) {
-      const config = loadConfig();
+      const config = this.activeConfig();
       const model = getAgentDefaultModelRef(config);
       return { model: model ?? undefined };
     }
@@ -444,7 +460,7 @@ export class EmbeddedBackend implements TuiBackend {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       log.warn({ err, sessionKey, errorMessage }, `getSessionInfo failed: ${errorMessage}`);
-      const config = loadConfig();
+      const config = this.activeConfig();
       const model = getAgentDefaultModelRef(config);
       return { model: model ?? undefined };
     }
@@ -532,7 +548,7 @@ export class EmbeddedBackend implements TuiBackend {
     if (!this.agent) {
       throw new Error('Agent not started');
     }
-    const config = loadConfig();
+    const config = this.activeConfig();
     if (!isShareToolAvailable(config)) {
       throw new Error('Sharing is disabled in gateway config');
     }

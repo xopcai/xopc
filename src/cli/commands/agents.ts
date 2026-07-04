@@ -12,24 +12,18 @@ import {
   resolveAgentProfileDir,
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
-  DEFAULT_AGENT_ID,
   validateAgentIdForNewAgent,
 } from '../../agent/agent-scope.js';
 import {
   applyAgentConfig,
   findAgentEntryIndex,
+  getAgentDeleteBlocker,
   listAgentEntries,
   pruneAgentConfig,
   removeAgentDirsFromDisk,
 } from '../../commands/agents.config.js';
 import { seedAgentProfileMarkdownFiles } from '../../agent/context/workspace-seed.js';
 import { colors } from '../utils/colors.js';
-
-function requireNonMain(id: string): void {
-  if (normalizeAgentId(id) === DEFAULT_AGENT_ID) {
-    throw new Error(`Agent id "${DEFAULT_AGENT_ID}" is reserved for the primary agent.`);
-  }
-}
 
 export function registerAgentsCli(program: Command): void {
   const agents = program
@@ -121,7 +115,11 @@ export function registerAgentsCli(program: Command): void {
     .option('--json', 'Output JSON summary')
     .action(async (id: string, opts: { purge?: boolean; json?: boolean }) => {
       const cfg = loadConfig();
-      requireNonMain(id);
+      const blocker = getAgentDeleteBlocker(cfg, id);
+      if (blocker) {
+        console.error(colors.red('Error:'), blocker);
+        process.exit(1);
+      }
       const idx = findAgentEntryIndex(listAgentEntries(cfg), id);
       if (idx < 0) {
         console.error(colors.red('Error:'), `Agent "${id}" not found in agents.list`);

@@ -21,7 +21,11 @@ pnpm install
 
 pnpm run dev --          # opens the local TUI
 pnpm run dev -- <command>
+pnpm run dev:init        # initialize isolated dev state in ~/.xopc-dev
+pnpm run dev:gateway     # start gateway with ~/.xopc-dev and info logs
 ```
+
+`dev:init` / `dev:gateway` set `XOPC_STATE_DIR`, `XOPC_CONFIG(_PATH)`, `XOPC_LOG_DIR`, and `XOPC_LOG_LEVEL=info` so source-run gateway work does not touch the normal `~/.xopc` state. Pass gateway options after `--`, for example `pnpm run dev:gateway -- --port 18791`.
 
 > **Note:** Examples in this document use `xopc`. If running from source, replace with `pnpm run dev --`.
 
@@ -308,6 +312,8 @@ xopc                                  # same as xopc tui; embedded mode
 xopc tui                              # embedded AgentService, no gateway
 xopc tui --gateway                    # force gateway mode
 xopc tui --url http://localhost:18790 --token <token>
+xopc tui --agent coder                # start a fresh TUI session with coder
+xopc tui --set-default-agent coder    # persist the TUI default agent
 xopc tui -s <sessionKey> -m "Hello"   # resume session + optional first message
 ```
 
@@ -318,7 +324,9 @@ Note: if both `--local` and any gateway flag (`--gateway`, `--url`, `--token`) a
 | `--url <url>` | Gateway base URL |
 | `--token <token>` | Gateway bearer token |
 | `--gateway` | Force gateway mode |
-| `-s, --session <key>` | Session key to resume (omitted: start a fresh `tui-<uuid>` session) |
+| `-s, --session <key>` | Session key to resume (omitted: start a fresh `agent:{currentAgent}:tui-<uuid>` session) |
+| `--agent <id>` | Agent id for a fresh TUI session; overrides `tui.defaultAgent` for this launch |
+| `--set-default-agent <id>` | Persist `tui.defaultAgent` and exit |
 | `-m, --message <text>` | Send once after connect |
 | `--local` | Embedded mode (no gateway) |
 | `--thinking <level>` | Thinking level override |
