@@ -52,7 +52,7 @@ export function createAutomationTool(deps: AutomationToolDeps): AgentTool<typeof
     name: 'automation',
     label: 'Automation',
     description:
-      'Manage product automations. Automations can be manual, scheduled, or webhook-triggered and can run an agent instruction or workflow.',
+      'Manage product automations. Automations can be manual, scheduled, webhook-triggered, or product-event-triggered and can run an agent instruction or workflow.',
     parameters: AutomationToolSchema,
     async execute(_toolCallId, params: AutomationToolInput) {
       const service = deps.getAutomationService();

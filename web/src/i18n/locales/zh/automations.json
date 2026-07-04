@@ -15,11 +15,106 @@
     "last": "上次",
     "next": "下次",
     "workflowPrefix": "工作流",
+    "loading": "正在加载...",
+    "selectRun": "选择一条运行记录查看时间线。",
+    "timeline": "时间线",
+    "details": {
+      "created": "创建",
+      "started": "开始",
+      "duration": "耗时",
+      "model": "模型",
+      "session": "会话"
+    },
     "metrics": {
       "total": "总数",
       "enabled": "已启用",
       "running": "运行中",
       "next": "下次"
+    },
+    "draft": {
+      "title": "用 AI 起草",
+      "subtitle": "描述你想要的结果。xopc 会先起草触发、动作和安全审查，确认前不会发布。",
+      "placeholder": "例如：当目标变成阻塞状态时，让智能体诊断原因并建议下一步。",
+      "generate": "生成草案",
+      "generating": "生成中...",
+      "review": "发布前检查",
+      "safety": "安全",
+      "assumptions": "假设",
+      "risks": "风险",
+      "discard": "丢弃",
+      "publish": "发布",
+      "approval": "我已检查需要确认的风险，并确认发布这个自动化。"
+    },
+    "repair": {
+      "title": "修复建议",
+      "suggest": "建议修复",
+      "generating": "生成中...",
+      "risks": "风险",
+      "approval": "我已检查这个修复补丁，并确认应用。",
+      "apply": "应用补丁"
+    },
+    "suggestions": {
+      "create": "生成自动化草案",
+      "manage": "管理",
+      "coveredTitle": "已自动化",
+      "coveredDescription": "已由「{name}」接管。后续匹配事件会自动处理。",
+      "noteCreatedTitle": "自动跟进笔记",
+      "noteCreatedDescription": "创建新笔记后，让 xopc 自动分类并建议下一步行动。",
+      "noteCreatedPrompt": "当创建新笔记时，运行智能体对笔记分类、识别有用的后续行动，并总结可能的任务。触发条件使用 notes 来源的 note.created 事件。保持安全：默认只输出简短建议，除非用户后续确认，否则不要自动改写笔记。",
+      "goalBlockedTitle": "自动诊断阻塞",
+      "goalBlockedDescription": "当这个目标被阻塞时，让智能体诊断原因并给出下一步具体行动。",
+      "goalBlockedPrompt": "当目标变为阻塞状态时，运行智能体诊断阻塞原因并给出下一步具体行动。触发条件使用 goals 来源的 goal.status_changed 事件，payloadMatch status=blocked。参考目标标题：{{title}}。除非用户明确配置，否则不要自动修改目标。",
+      "workflowFailedTitle": "自动处理失败运行",
+      "workflowFailedDescription": "当这个工作流失败时，让 xopc 检查运行记录并起草修复或重试计划。",
+      "workflowFailedPrompt": "当工作流运行以 failed 状态结束时，运行智能体检查工作流运行、总结失败原因，并提出恢复计划。触发条件使用 workflows 来源的 workflow.run.completed 事件，payloadMatch status=failed。参考运行 ID：{{runId}}，工作流定义 ID：{{definitionId}}。除非用户明确配置，否则不要自动重试。"
+    },
+    "explain": {
+      "whyRan": "为什么触发",
+      "whyCovered": "为什么已覆盖",
+      "event": "事件 {eventType}",
+      "eventFrom": "来自 {source} 的事件 {eventType}",
+      "payloadMatched": "匹配 {pairs}",
+      "noPayloadFilter": "无 payload 过滤",
+      "actionAgent": "运行智能体动作",
+      "actionWorkflow": "运行工作流 {workflowId}",
+      "safetyMode": "安全档：{mode}",
+      "manual": "手动触发",
+      "schedule": "定时触发",
+      "webhook": "Webhook 触发",
+      "triggerMatched": "触发条件已匹配"
+    },
+    "feedback": {
+      "title": "已触发的自动化",
+      "open": "打开",
+      "chat": "会话",
+      "workflow": "工作流",
+      "rerun": "重跑",
+      "pause": "暂停规则",
+      "working": "处理中...",
+      "rerunQueued": "自动化已排队",
+      "paused": "自动化已暂停",
+      "repairApplied": "修复已应用",
+      "repairAppliedAndQueued": "修复已应用，自动化已排队",
+      "applyAndRerun": "应用并重跑",
+      "actionFailed": "自动化操作失败",
+      "saveInsight": "保存洞察",
+      "savingInsight": "保存中...",
+      "insightSaved": "洞察已保存",
+      "savedInsight": "已保存",
+      "insightEvidenceTitle": "自动化：{name}",
+      "summaryHealthy": "这里触发了 {total} 条自动化，{succeeded} 条已成功。",
+      "summaryRunning": "这里触发了 {total} 条自动化，{active} 条仍在运行。",
+      "summaryNeedsAttention": "这里触发了 {total} 条自动化，{attention} 条需要处理。建议先看 {name}。",
+      "summaryRecovered": "这里触发了 {total} 条自动化，{recovered} 条修复后已恢复，{succeeded} 条成功。",
+      "succeededCount": "{count} 条成功",
+      "activeCount": "{count} 条运行中",
+      "attentionCount": "{count} 条需处理",
+      "recoveredCount": "{count} 条已恢复",
+      "primaryRepair": "生成修复建议",
+      "primaryRepairing": "生成中...",
+      "historical": "历史问题",
+      "recovered": "已恢复",
+      "thisAutomation": "这条自动化"
     },
     "tabs": {
       "automations": "自动化",
@@ -41,15 +136,39 @@
         "name": "Webhook 触发智能体",
         "description": "从外部请求触发智能体。",
         "formName": "Webhook 智能体任务"
+      },
+      "blockedGoal": {
+        "name": "阻塞目标助手",
+        "description": "当目标变成阻塞状态时，让智能体诊断原因。",
+        "formName": "阻塞目标助手",
+        "instruction": "有一个目标变成阻塞状态。请诊断可能的阻塞原因，并建议下一步具体行动。"
+      },
+      "noteCreated": {
+        "name": "新笔记整理",
+        "description": "当创建新笔记时，让智能体分类并建议后续行动。",
+        "formName": "新笔记整理",
+        "instruction": "有一条新笔记被创建。请判断它的类型，并建议有用的后续行动。"
       }
     },
     "empty": {
       "automations": "暂无自动化",
-      "runs": "暂无运行记录"
+      "runs": "暂无运行记录",
+      "events": "暂无时间线事件"
     },
     "info": {
       "when": "触发",
-      "run": "执行"
+      "run": "执行",
+      "safety": "安全"
+    },
+    "safety": {
+      "suggest_only": "只建议",
+      "ask_before_apply": "执行前确认",
+      "auto_apply": "自动执行",
+      "suggestOnlyDescription": "最安全。只产出建议，不自动应用修改。",
+      "askBeforeApplyDescription": "先起草动作，应用前需要用户确认。",
+      "autoApplyDescription": "条件匹配时自动运行。",
+      "upgrade": "升级安全档",
+      "downgrade": "降级安全档"
     },
     "trigger": {
       "manual": "手动",
@@ -58,6 +177,11 @@
       "interval": "间隔",
       "customCron": "自定义 cron",
       "webhook": "Webhook",
+      "goalBlocked": "目标阻塞",
+      "noteCreated": "笔记创建",
+      "workflowFailed": "工作流失败",
+      "sessionUpdated": "会话更新",
+      "eventWithType": "事件：{type}",
       "onceAt": "一次，于 {time}",
       "everyMinutes": "每 {minutes} 分钟"
     },
@@ -97,6 +221,7 @@
       "triggeredRun": "触发时运行",
       "goal": "目标",
       "afterRun": "运行后",
+      "safety": "安全模式",
       "webhookUrl": "Webhook URL",
       "reliability": "可靠性",
       "timeoutSeconds": "超时秒数",

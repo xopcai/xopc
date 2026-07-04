@@ -19,6 +19,7 @@ import { isValidSkillWireId } from '@/features/chat/palette/skill-wire-pattern';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
 import { WorkflowRunLinkCard } from '@/features/chat/workflow/workflow-run-link-card';
 import { WorkflowSessionBanner } from '@/features/chat/workflow/workflow-session-banner';
+import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constants';
 import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
 import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
@@ -338,6 +339,15 @@ export function ChatPage() {
                           void stream.sendMessage(text);
                         }
                       }}
+                    />
+                  ) : null}
+                  {chatSessionKey ? (
+                    <ProductAutomationFeedback
+                      eventType="session.transcript.updated"
+                      source="sessions"
+                      payloadKey="sessionKey"
+                      payloadValue={chatSessionKey}
+                      className="mb-6"
                     />
                   ) : null}
                   <MessageList

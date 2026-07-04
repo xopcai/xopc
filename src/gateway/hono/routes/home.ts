@@ -58,6 +58,7 @@ function triggerLabel(automation: Automation): string {
   const trigger = automation.trigger;
   if (trigger.kind === 'manual') return 'manual';
   if (trigger.kind === 'webhook') return 'webhook';
+  if (trigger.kind === 'event') return `event:${trigger.eventType}`;
   const schedule = trigger.schedule;
   if (schedule.kind === 'once') return schedule.at;
   if (schedule.kind === 'interval') return `every ${Math.round(schedule.everyMs / 60000)} minutes`;

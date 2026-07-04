@@ -9,6 +9,7 @@ vi.mock('@earendil-works/pi-ai', async (importOriginal) => {
 import { NotesService } from '../service.js';
 import type { Note, NoteSnapshot, NoteSnapshotEntry, SnapshotTrigger } from '../types.js';
 import type { Config } from '../../config/schema.js';
+import { onAutomationProductEvent } from '../../automations/product-events.js';
 
 function configWithGlobalModel(model = 'anthropic/claude-sonnet-4-5'): Config {
   return {
@@ -114,6 +115,23 @@ describe('NotesService markdown sync and AI edit', () => {
     const note = await service.createNote({ markdown: '第一段\n\n第二段', capturedVia: { channel: 'web' } });
     expect(note.markdown).toBe('第一段\n\n第二段');
     expect(note.remoteVersion).toBe(1);
+  });
+
+  it('publishes product events when notes are created and updated', async () => {
+    const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
+    const unsubscribe = onAutomationProductEvent((event) => {
+      events.push({ type: event.type, payload: event.payload });
+    });
+    try {
+      const note = await service.createNote({ markdown: 'Product event note', capturedVia: { channel: 'web' } });
+      await service.updateNote(note.id, { markdown: 'Updated product event note' });
+    } finally {
+      unsubscribe();
+    }
+
+    expect(events.map((event) => event.type)).toEqual(['note.created', 'note.updated']);
+    expect(events[0]?.payload).toMatchObject({ kind: 'thought', status: 'inbox' });
+    expect(events[1]?.payload).toMatchObject({ contentTouched: true, trigger: 'edit' });
   });
 
   it('syncs markdown when base remote version is current', async () => {

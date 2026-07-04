@@ -8,8 +8,12 @@ import {
 import type {
   Automation,
   AutomationDeps,
+  AutomationEvent,
   AutomationMetrics,
+  AutomationProductEventRun,
   AutomationRun,
+  AutomationRunEvent,
+  AutomationRunEventType,
   AutomationRunStatus,
 } from '../domain/types.js';
 import {
@@ -20,10 +24,13 @@ import {
   AutomationSchema,
 } from '../domain/validation.js';
 import {
+  appendAutomationRunEvent,
   deleteAutomation,
   getAutomation,
   getAutomationRun,
+  listAutomationRunEvents,
   listAutomationRuns,
+  listAutomationRunsForProductEvent,
   listAutomations,
   saveAutomation,
   saveAutomationRun,
@@ -86,6 +93,7 @@ export class AutomationService {
       ...parsed,
       id: parsed.id?.trim() || randomUUID().slice(0, 12),
       enabled: parsed.enabled ?? true,
+      safety: parsed.safety ?? { mode: 'auto_apply' },
       afterRun: parsed.afterRun ?? { kind: 'none' },
       state: parsed.state ?? {},
       createdAtMs: now,
@@ -158,12 +166,60 @@ export class AutomationService {
     return this.startRun(automation, { manual: true });
   }
 
+  async rerunFromRun(runId: string): Promise<AutomationRun> {
+    const previous = getAutomationRun(runId);
+    if (!previous) throw new Error(`Automation run not found: ${runId}`);
+    const automation = getAutomation(previous.automationId);
+    if (!automation) throw new Error(`Automation not found: ${previous.automationId}`);
+    if (automation.state.runningRunId) {
+      throw new AutomationAlreadyRunningError(automation.id, automation.state.runningRunId);
+    }
+    const triggerEvent = listAutomationRunEvents(runId)
+      .map((event) => readAutomationEventFromRunEvent(event))
+      .find((event): event is AutomationEvent => event !== null);
+    return this.startRun(automation, triggerEvent ? { manual: false, event: triggerEvent } : { manual: true });
+  }
+
+  async triggerEvent(event: AutomationEvent): Promise<AutomationRun[]> {
+    const normalized: AutomationEvent = {
+      ...event,
+      occurredAtMs: event.occurredAtMs ?? Date.now(),
+    };
+    const automations = listAutomations().filter(
+      (automation) =>
+        automation.enabled &&
+        automation.trigger.kind === 'event' &&
+        !automation.state.runningRunId &&
+        matchesAutomationEvent(automation.trigger, normalized),
+    );
+    const availableSlots = Math.max(0, this.maxConcurrentRuns - this.activeRuns.size);
+    const started: AutomationRun[] = [];
+    for (const automation of automations.slice(0, availableSlots)) {
+      started.push(await this.startRun(automation, { manual: false, event: normalized }));
+    }
+    return started;
+  }
+
   async listRuns(options?: { automationId?: string; limit?: number }): Promise<AutomationRun[]> {
     return listAutomationRuns(options);
   }
 
+  async listRunsForProductEvent(options: {
+    eventType: string;
+    source?: string;
+    payloadKey?: string;
+    payloadValue?: string;
+    limit?: number;
+  }): Promise<AutomationProductEventRun[]> {
+    return listAutomationRunsForProductEvent(options);
+  }
+
   async getRun(runId: string): Promise<AutomationRun | null> {
     return getAutomationRun(runId);
+  }
+
+  async listRunEvents(runId: string): Promise<AutomationRunEvent[]> {
+    return listAutomationRunEvents(runId);
   }
 
   async cancelRun(runId: string): Promise<boolean> {
@@ -264,7 +320,10 @@ export class AutomationService {
     }
   }
 
-  private async startRun(automation: Automation, opts: { manual: boolean }): Promise<AutomationRun> {
+  private async startRun(
+    automation: Automation,
+    opts: { manual: boolean; event?: AutomationEvent },
+  ): Promise<AutomationRun> {
     const now = Date.now();
     const run: AutomationRun = {
       id: randomUUID(),
@@ -277,6 +336,21 @@ export class AutomationService {
       createdAtMs: now,
     };
     saveAutomationRun(run);
+    this.appendRunEvent(
+      run,
+      'run.queued',
+      opts.event
+        ? `Event ${opts.event.type} queued automation`
+        : opts.manual
+          ? 'Manual run queued'
+          : 'Scheduled run queued',
+      {
+        trigger: automation.trigger,
+        actionKind: automation.action.kind,
+        safety: automation.safety ?? { mode: 'auto_apply' },
+        event: opts.event,
+      },
+    );
     const nextAutomation: Automation = {
       ...automation,
       state: {
@@ -306,13 +380,33 @@ export class AutomationService {
       startedAtMs,
     };
     saveAutomationRun(run);
+    this.appendRunEvent(run, 'run.started', 'Automation run started');
 
     let status: AutomationRunStatus = 'failed';
     let error: string | undefined;
+    let activePhase: 'action' | 'after_run' = 'action';
     try {
+      this.appendRunEvent(run, 'action.started', `Running ${automation.action.kind} action`, {
+        actionKind: automation.action.kind,
+        safety: automation.safety ?? { mode: 'auto_apply' },
+      });
       const outcome = await this.executor.execute(automation, run, controller.signal);
       status = outcome.status;
       error = outcome.error;
+      this.appendRunEvent(
+        run,
+        status === 'succeeded' ? 'action.completed' : 'action.failed',
+        status === 'succeeded'
+          ? `${automation.action.kind} action completed`
+          : `${automation.action.kind} action ${status}`,
+        {
+          summary: outcome.summary,
+          error: outcome.error,
+          sessionKey: outcome.sessionKey,
+          workflowRunId: outcome.workflowRunId,
+          model: outcome.model,
+        },
+      );
       run = {
         ...run,
         status,
@@ -322,12 +416,24 @@ export class AutomationService {
         workflowRunId: outcome.workflowRunId,
         model: outcome.model,
       };
-      if (automation.afterRun?.kind === 'webhook') {
+      if ((automation.safety?.mode ?? 'auto_apply') !== 'auto_apply' && automation.afterRun?.kind === 'webhook') {
+        this.appendRunEvent(run, 'after_run.completed', 'After-run webhook skipped by safety mode', {
+          safety: automation.safety ?? { mode: 'auto_apply' },
+        });
+      } else if (automation.afterRun?.kind === 'webhook') {
+        activePhase = 'after_run';
+        this.appendRunEvent(run, 'after_run.started', 'Calling after-run webhook', {
+          url: automation.afterRun.url,
+        });
         await this.postAfterRunWebhook(automation.afterRun.url, run);
+        this.appendRunEvent(run, 'after_run.completed', 'After-run webhook completed');
       }
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);
       status = controller.signal.aborted ? 'cancelled' : 'failed';
+      this.appendRunEvent(run, activePhase === 'after_run' ? 'after_run.failed' : 'action.failed', `Automation run ${status}`, {
+        error,
+      });
       run = { ...run, status, error };
     } finally {
       const endedAtMs = Date.now();
@@ -338,9 +444,31 @@ export class AutomationService {
         durationMs: endedAtMs - startedAtMs,
       };
       saveAutomationRun(run);
+      this.appendRunEvent(run, 'run.completed', `Automation run ${status}`, {
+        status,
+        durationMs: run.durationMs,
+        error,
+      });
       this.activeRuns.delete(initialRun.id);
       this.finishAutomationRun(automation.id, status, error, endedAtMs);
     }
+  }
+
+  private appendRunEvent(
+    run: Pick<AutomationRun, 'id' | 'automationId'>,
+    type: AutomationRunEventType,
+    message: string,
+    data?: unknown,
+  ): void {
+    appendAutomationRunEvent({
+      id: randomUUID(),
+      runId: run.id,
+      automationId: run.automationId,
+      type,
+      message,
+      data,
+      createdAtMs: Date.now(),
+    });
   }
 
   private finishAutomationRun(
@@ -384,4 +512,32 @@ export class AutomationService {
       throw new Error(`Automation webhook failed: HTTP ${response.status}${text ? ` ${text.slice(0, 200)}` : ''}`);
     }
   }
+}
+
+function matchesAutomationEvent(
+  trigger: Extract<Automation['trigger'], { kind: 'event' }>,
+  event: AutomationEvent,
+): boolean {
+  if (trigger.eventType !== event.type) return false;
+  if (trigger.source && trigger.source !== event.source) return false;
+  const payloadMatch = trigger.payloadMatch;
+  if (!payloadMatch) return true;
+  const payload = event.payload ?? {};
+  return Object.entries(payloadMatch).every(([key, expected]) => Object.is(payload[key], expected));
+}
+
+function readAutomationEventFromRunEvent(event: AutomationRunEvent): AutomationEvent | null {
+  if (!event.data || typeof event.data !== 'object' || Array.isArray(event.data)) return null;
+  const raw = (event.data as { event?: unknown }).event;
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const candidate = raw as Partial<AutomationEvent>;
+  if (typeof candidate.type !== 'string' || !candidate.type.trim()) return null;
+  return {
+    type: candidate.type,
+    source: typeof candidate.source === 'string' ? candidate.source : undefined,
+    payload: candidate.payload && typeof candidate.payload === 'object' && !Array.isArray(candidate.payload)
+      ? candidate.payload as Record<string, unknown>
+      : undefined,
+    occurredAtMs: typeof candidate.occurredAtMs === 'number' ? candidate.occurredAtMs : undefined,
+  };
 }

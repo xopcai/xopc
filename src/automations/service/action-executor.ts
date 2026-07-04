@@ -120,7 +120,7 @@ export class AutomationActionExecutor {
     }
 
     const response = await agentService.turnDispatcher.processDirect(
-      action.instruction,
+      buildSafetyInstruction(automation, action.instruction),
       sessionKey,
     );
     const model = agentService.getModelForSession?.(sessionKey);
@@ -137,6 +137,19 @@ export class AutomationActionExecutor {
     action: Extract<AutomationAction, { kind: 'workflow' }>,
     run: AutomationRun,
   ): Promise<AutomationActionOutcome> {
+    const safetyMode = automation.safety?.mode ?? 'auto_apply';
+    if (safetyMode === 'suggest_only') {
+      return {
+        status: 'succeeded',
+        summary: `Suggest only: workflow ${action.workflowId} was not started. Review the automation and upgrade safety mode to run it automatically.`,
+      };
+    }
+    if (safetyMode === 'ask_before_apply') {
+      return {
+        status: 'succeeded',
+        summary: `Ask before applying: workflow ${action.workflowId} is ready, but was not started automatically. Upgrade to Auto apply when you trust this automation.`,
+      };
+    }
     const workflowRunService = this.deps.workflowRunService;
     if (!workflowRunService) {
       return { status: 'failed', error: 'Workflow service is not available' };
@@ -166,4 +179,28 @@ export class AutomationActionExecutor {
       workflowRunId: result.runId,
     };
   }
+}
+
+function buildSafetyInstruction(automation: Automation, instruction: string): string {
+  const mode = automation.safety?.mode ?? 'auto_apply';
+  if (mode === 'suggest_only') {
+    return [
+      'Automation safety mode: Suggest only.',
+      'Only analyze the situation and produce a concise recommendation.',
+      'Do not modify files, notes, goals, workflows, external systems, or persistent state.',
+      'If a change seems useful, describe the exact change for the user to review.',
+      '',
+      instruction,
+    ].join('\n');
+  }
+  if (mode === 'ask_before_apply') {
+    return [
+      'Automation safety mode: Ask before applying.',
+      'Draft the proposed change or action and clearly ask for user confirmation before applying anything.',
+      'Do not perform irreversible or external side effects unless the user has explicitly approved them in this run.',
+      '',
+      instruction,
+    ].join('\n');
+  }
+  return instruction;
 }

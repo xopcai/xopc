@@ -9,7 +9,13 @@ export type AutomationSchedule =
 export type AutomationTrigger =
   | { kind: 'manual' }
   | { kind: 'schedule'; schedule: AutomationSchedule }
-  | { kind: 'webhook'; secretId?: string };
+  | { kind: 'webhook'; secretId?: string }
+  | {
+      kind: 'event';
+      eventType: string;
+      source?: string;
+      payloadMatch?: Record<string, string | number | boolean | null>;
+    };
 
 export type AutomationAction =
   | {
@@ -25,6 +31,7 @@ export type AutomationAction =
       workflowId: string;
       agentId?: string;
       input?: unknown;
+      inputEnvelope?: unknown;
       goal?: string;
       concurrency?: number;
       maxSubagents?: number;
@@ -43,6 +50,12 @@ export interface AutomationReliability {
   disableAfterConsecutiveFailures?: number;
 }
 
+export type AutomationSafetyMode = 'suggest_only' | 'ask_before_apply' | 'auto_apply';
+
+export interface AutomationSafetyPolicy {
+  mode: AutomationSafetyMode;
+}
+
 export interface Automation {
   id: string;
   name: string;
@@ -50,6 +63,7 @@ export interface Automation {
   enabled: boolean;
   trigger: AutomationTrigger;
   action: AutomationAction;
+  safety?: AutomationSafetyPolicy;
   afterRun?: AutomationAfterRun;
   reliability?: AutomationReliability;
   state: {
@@ -83,6 +97,30 @@ export interface AutomationRun {
   model?: string;
 }
 
+export interface AutomationRunEvent {
+  id: string;
+  runId: string;
+  automationId: string;
+  type:
+    | 'run.queued'
+    | 'run.started'
+    | 'action.started'
+    | 'action.completed'
+    | 'action.failed'
+    | 'after_run.started'
+    | 'after_run.completed'
+    | 'after_run.failed'
+    | 'run.completed';
+  message: string;
+  data?: unknown;
+  createdAtMs: number;
+}
+
+export interface AutomationProductEventRun {
+  run: AutomationRun;
+  triggerEvent: AutomationRunEvent;
+}
+
 export interface AutomationMetrics {
   totalAutomations: number;
   enabledAutomations: number;
@@ -95,19 +133,59 @@ export interface AutomationMetrics {
   };
 }
 
+export interface AutomationSimulation {
+  triggerSummary: string;
+  actionSummary: string;
+  safetyNotes: string[];
+  requiredConfirmations: string[];
+  canRunNow: boolean;
+  runNowBlockedReason?: string;
+}
+
 export interface AutomationInput {
   name: string;
   description?: string;
   enabled?: boolean;
   trigger: AutomationTrigger;
   action: AutomationAction;
+  safety?: AutomationSafetyPolicy;
   afterRun?: AutomationAfterRun;
   reliability?: AutomationReliability;
+}
+
+export interface AutomationDraft {
+  draftId: string;
+  automation: AutomationInput;
+  explanation: string;
+  assumptions: string[];
+  risks: string[];
+  simulation: AutomationSimulation;
+  repairAttempts: number;
+}
+
+export interface AutomationRepairDraft {
+  draftId: string;
+  patch: Partial<AutomationInput> & { enabled?: boolean };
+  explanation: string;
+  expectedEffect: string;
+  risks: string[];
+  requiresApproval: boolean;
+  repairAttempts: number;
 }
 
 export const automationApi = {
   list: () => fetchJson<{ automations: Automation[] }>(apiUrl('/api/automations')),
   metrics: () => fetchJson<AutomationMetrics>(apiUrl('/api/automations/metrics')),
+  draft: (input: { prompt: string; agentId?: string; language?: 'en' | 'zh' }) =>
+    fetchJson<{ draft: AutomationDraft }>(apiUrl('/api/automations/draft'), {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  simulate: (input: AutomationInput) =>
+    fetchJson<{ simulation: AutomationSimulation }>(apiUrl('/api/automations/simulate'), {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
   create: (input: AutomationInput) =>
     fetchJson<{ automation: Automation }>(apiUrl('/api/automations'), {
       method: 'POST',
@@ -139,6 +217,35 @@ export const automationApi = {
     if (automationId) params.set('automationId', automationId);
     return fetchJson<{ runs: AutomationRun[] }>(apiUrl(`/api/automation-runs?${params.toString()}`));
   },
+  productEventRuns: (input: {
+    eventType: string;
+    source?: string;
+    payloadKey?: string;
+    payloadValue?: string;
+    limit?: number;
+  }) => {
+    const params = new URLSearchParams({
+      eventType: input.eventType,
+      limit: String(input.limit ?? 5),
+    });
+    if (input.source) params.set('source', input.source);
+    if (input.payloadKey) params.set('payloadKey', input.payloadKey);
+    if (input.payloadValue !== undefined) params.set('payloadValue', input.payloadValue);
+    return fetchJson<{ items: AutomationProductEventRun[] }>(
+      apiUrl(`/api/automation-runs/product-events?${params.toString()}`),
+    );
+  },
+  runEvents: (runId: string) =>
+    fetchJson<{ events: AutomationRunEvent[] }>(apiUrl(`/api/automation-runs/${encodeURIComponent(runId)}/events`)),
+  rerun: (runId: string) =>
+    fetchJson<{ run: AutomationRun }>(apiUrl(`/api/automation-runs/${encodeURIComponent(runId)}/rerun`), {
+      method: 'POST',
+    }),
+  repairDraft: (runId: string, input: { agentId?: string; language?: 'en' | 'zh' }) =>
+    fetchJson<{ repair: AutomationRepairDraft }>(apiUrl(`/api/automation-runs/${encodeURIComponent(runId)}/repair-draft`), {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
   cancelRun: (runId: string) =>
     fetchJson<{ cancelled: boolean }>(apiUrl(`/api/automation-runs/${encodeURIComponent(runId)}/cancel`), {
       method: 'POST',
