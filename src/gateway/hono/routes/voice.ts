@@ -11,7 +11,7 @@
  */
 
 import type { Hono } from 'hono';
-import { complete, type UserMessage } from '@earendil-works/pi-ai';
+import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import type { Config } from '../../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';

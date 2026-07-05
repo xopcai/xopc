@@ -123,13 +123,13 @@
   },
   "homepage": "https://xopc.ai",
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.19.0"
   },
   "dependencies": {
-    "@earendil-works/pi-agent-core": "^0.79.7",
-    "@earendil-works/pi-ai": "^0.79.7",
-    "@earendil-works/pi-coding-agent": "^0.79.7",
-    "@earendil-works/pi-tui": "^0.79.7",
+    "@earendil-works/pi-agent-core": "^0.80.3",
+    "@earendil-works/pi-ai": "^0.80.3",
+    "@earendil-works/pi-coding-agent": "^0.80.3",
+    "@earendil-works/pi-tui": "^0.80.3",
     "@grammyjs/runner": "^2.0.3",
     "@hono/node-server": "^2.0.4",
     "@inquirer/prompts": "^8.5.0",

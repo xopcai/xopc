@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { complete, type UserMessage } from '@earendil-works/pi-ai';
+import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import { publishAutomationProductEvent } from '../automations/product-events.js';
 import type { Config } from '../config/schema.js';

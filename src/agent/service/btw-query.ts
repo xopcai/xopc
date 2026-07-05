@@ -1,5 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { complete, type UserMessage } from '@earendil-works/pi-ai';
+import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import type { SessionStore } from '../../session/index.js';

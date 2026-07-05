@@ -6,7 +6,7 @@ import {
 	type Api,
 	type Context,
 	type SimpleStreamOptions,
-} from '@earendil-works/pi-ai';
+} from '@earendil-works/pi-ai/compat';
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { ProviderStreamParams } from '../extensions/types/providers.js';
 import { getProviderRegistry } from './plugin-registry.js';

@@ -1,6 +1,6 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { complete, type UserMessage } from '@earendil-works/pi-ai';
+import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import type { Config } from '../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../providers/index.js';

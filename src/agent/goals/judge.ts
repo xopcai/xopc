@@ -1,5 +1,5 @@
 import type { UserMessage } from '@earendil-works/pi-ai';
-import { complete } from '@earendil-works/pi-ai';
+import { complete } from '@earendil-works/pi-ai/compat';
 
 import { getApiKey, resolveModel } from '../../providers/index.js';
 
