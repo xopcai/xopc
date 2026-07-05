@@ -8,11 +8,6 @@ import { app } from 'electron';
 
 import type { GatewayBindMode } from '../src/config/schema.js';
 
-import { parseGatewayListenPortFromOutput } from './gateway-output.js';
-
-/** Default listen port for the gateway subprocess when started by Electron (not CLI). Kept separate from CLI default (18790) so desktop + `xopc gateway` can run side by side. */
-const DEFAULT_PORT = 28790;
-
 let gatewayChild: ChildProcess | null = null;
 let gatewayExitHandler: ((code: number | null, signal: string | null) => void) | null = null;
 
@@ -49,29 +44,6 @@ function gatewayLogSnippetForError(): string {
   return s.length > cap ? `…\n${s.slice(-cap)}` : s;
 }
 
-export function getDefaultGatewayPort(): number {
-  return DEFAULT_PORT;
-}
-
-/**
- * Find the first TCP port on `hostname` starting at `startPort` that can be bound.
- * Used before spawning the gateway so we do not collide with another process on the default port.
- */
-export async function pickAvailablePort(
-  hostname: string,
-  startPort: number,
-  maxAttempts: number,
-): Promise<number> {
-  for (let offset = 0; offset < maxAttempts; offset++) {
-    const port = startPort + offset;
-    const free = await tryListenOnce(hostname, port);
-    if (free) return port;
-  }
-  throw new Error(
-    `No free TCP port on ${hostname} in range ${startPort}–${startPort + maxAttempts - 1} (try closing other xopc gateway instances)`,
-  );
-}
-
 function tryListenOnce(hostname: string, port: number): Promise<boolean> {
   return new Promise((resolve, reject) => {
     const server = createServer();
@@ -89,6 +61,37 @@ function tryListenOnce(hostname: string, port: number): Promise<boolean> {
       });
     });
   });
+}
+
+async function acceptsConfiguredGatewayToken(port: number, token: string): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/config`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(1500),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function resolveGatewayStartupMode(params: {
+  port: number;
+  token: string;
+  bindHost: string;
+}): Promise<'reuse' | 'spawn'> {
+  if (await acceptsConfiguredGatewayToken(params.port, params.token)) {
+    return 'reuse';
+  }
+
+  const available = await tryListenOnce(params.bindHost, params.port);
+  if (available) {
+    return 'spawn';
+  }
+
+  throw new Error(
+    `Gateway port ${params.port} is already in use, but the process on that port does not accept the configured xopc gateway token. Stop the other process or change gateway.port in ~/.xopc/xopc.json.`,
+  );
 }
 
 function resolvePackagedAppPath(...segments: string[]): string {
@@ -255,24 +258,14 @@ export async function waitForGatewayReady(
   timeoutMs = 120_000,
 ): Promise<number> {
   const deadline = Date.now() + timeoutMs;
-  let readyPort = port;
-  let url = `http://127.0.0.1:${readyPort}/api/config`;
+  const url = `http://127.0.0.1:${port}/api/config`;
   while (Date.now() < deadline) {
-    const observedPort = parseGatewayListenPortFromOutput(gatewayLogBuffer);
-    if (observedPort !== null && observedPort !== readyPort) {
-      console.warn(
-        `[gateway] detected listen port ${observedPort} from child output; probing that port instead of ${readyPort}`,
-      );
-      readyPort = observedPort;
-      url = `http://127.0.0.1:${readyPort}/api/config`;
-    }
-
     if (child.exitCode !== null || child.signalCode !== null) {
       const logHint = gatewayLogSnippetForError();
       throw new Error(
         `Gateway process exited before becoming ready (code=${child.exitCode}, signal=${child.signalCode}). ` +
           (logHint ? `Output:\n${logHint}\n\n` : '') +
-          `Port ${readyPort} may be in use by another program, or the gateway failed to start.`,
+          `Port ${port} may be in use by another program, or the gateway failed to start.`,
       );
     }
     try {
@@ -280,7 +273,7 @@ export async function waitForGatewayReady(
         headers: { Authorization: `Bearer ${token}` },
         signal: AbortSignal.timeout(2000),
       });
-      if (res.ok) return readyPort;
+      if (res.ok) return port;
     } catch {
       /* retry */
     }
@@ -296,13 +289,19 @@ export async function waitForGatewayReady(
 export async function restartEmbeddedGatewayFromSavedConfig(params: {
   configPath: string;
   workspacePath: string;
-  resolveCredentials: () => Promise<{ port: number; token: string; bind: GatewayBindMode }>;
+  resolveCredentials: () => Promise<{
+    port: number;
+    token: string;
+    bind: GatewayBindMode;
+    bindHost: string;
+  }>;
 }): Promise<{ port: number; token: string }> {
   if (!embeddedGatewayRuntime) {
     throw new Error('Embedded gateway is not registered');
   }
-  stopGatewayProcess();
+  await stopGatewayProcessAndWait();
   const { port, token, bind } = await params.resolveCredentials();
+
   const opts: GatewayProcessOptions = {
     configPath: params.configPath,
     workspacePath: params.workspacePath,
@@ -314,6 +313,21 @@ export async function restartEmbeddedGatewayFromSavedConfig(params: {
   const readyPort = await waitForGatewayReady(port, token, child);
   embeddedGatewayRuntime = { ...opts, port: readyPort, authToken: token };
   return { port: readyPort, token };
+}
+
+async function stopGatewayProcessAndWait(timeoutMs = 7000): Promise<void> {
+  const child = gatewayChild;
+  if (!child) return;
+  stopGatewayProcess();
+  if (child.exitCode !== null || child.signalCode !== null) return;
+
+  await new Promise<void>((resolve) => {
+    const timeout = setTimeout(resolve, timeoutMs);
+    child.once('exit', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
 }
 
 export function stopGatewayProcess(): void {

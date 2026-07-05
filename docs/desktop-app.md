@@ -25,9 +25,9 @@ Start with one working model provider before enabling channels, browser tools, m
 ## What You Get
 
 - **No terminal loop after install** - open the app, finish model setup, and start chatting.
-- **Embedded gateway** - the app starts a local gateway subprocess on a loopback port, normally starting from `28790` when available.
+- **Shared local gateway** - the app connects to the configured local gateway when it is already running, otherwise it starts the same gateway against `~/.xopc`.
 - **Visible settings** - manage models, agents, channels, memory, logs, and updates in the console UI.
-- **Local-first state** - desktop config and workspace data are stored under the Electron app data directory, not in a hosted xopc cloud.
+- **Local-first state** - config, sessions, agents, credentials, and workspaces are stored under `~/.xopc`, not in a hosted xopc cloud.
 - **Same product surface** - the desktop window loads the same gateway console used by `xopc gateway`.
 
 ## First Run
@@ -85,34 +85,28 @@ After that works, move on to agents, memory, channels, mobile pairing, or workfl
 
 The desktop app is meant to be the primary local control surface. You can still use `xopc` for the TUI, `xopc agent -m` for scripts, and `xopc gateway` when you explicitly want a browser-hosted console.
 
-## Desktop Gateway vs CLI Gateway
+## Desktop Gateway and CLI Gateway
 
-The desktop app and CLI gateway are intentionally separate.
+The desktop app, `xopc gateway`, and `xopc tui` use the same xopc home by default: `~/.xopc`.
 
 | Surface | Default behavior |
 | --- | --- |
-| Desktop app | Starts an embedded gateway on a local loopback port, normally from `28790` |
-| `xopc gateway` | Starts the CLI-managed gateway, normally from the CLI gateway default |
-| `xopc` / `xopc tui` | Starts the local terminal UI path |
+| Desktop app | Reuses the configured gateway on `gateway.port`, or starts it if the port is free |
+| `xopc gateway` | Starts the same gateway against `~/.xopc/xopc.json` |
+| `xopc` / `xopc tui` | Uses the same config, database, agents, and workspace defaults |
 
-This separation lets the desktop app and a manual gateway run side by side. If both are running, confirm which URL, token, and config you are editing before debugging channels or mobile pairing.
+If the configured gateway port is already occupied by a process that does not accept the token from `~/.xopc/xopc.json`, the desktop app fails instead of choosing another port. Stop the other process or change `gateway.port`.
 
 ## Data and Configuration
 
-The desktop app creates an Electron-managed config and workspace under the operating system's app data directory. Internally it writes:
+The desktop app uses the same xopc state directory as the CLI. Internally it writes and reads:
 
-- `xopc.json` - desktop-managed xopc config
-- `workspace/main/` - default desktop workspace
+- `~/.xopc/xopc.json` - shared xopc config
+- `~/.xopc/xopc.db` - shared sessions and runtime state
+- `~/.xopc/agents/` - shared agent profile and runtime data
+- `~/.xopc/workspace/main/` - default workspace created on first desktop launch when needed
 
-The app also sets runtime environment variables for the embedded gateway, including `XOPC_CONFIG_PATH`, `XOPC_WORKSPACE`, and `XOPC_STATE_DIR`.
-
-If you want the classic CLI state under `~/.xopc/`, use the terminal path:
-
-```bash
-curl -fsSL https://xopc.ai/install.sh | bash
-xopc onboard --quick
-xopc
-```
+Electron-specific shell data, such as window preferences, crash logs, updater metadata, and tray/system integration state, remains in the operating system's Electron app data directory. The app also sets runtime environment variables for the embedded gateway, including `XOPC_CONFIG_PATH`, `XOPC_WORKSPACE`, and `XOPC_STATE_DIR`.
 
 ## Build From Source
 
@@ -155,8 +149,8 @@ After adding files, embed them with paths such as:
 
 ## Troubleshooting
 
-- **Gateway startup error** - close old xopc desktop windows and relaunch. The app picks a free port starting at `28790` when possible.
-- **Port conflict** - if you also run `xopc gateway`, confirm which gateway you are using. The desktop gateway and CLI gateway usually use different ports.
+- **Gateway startup error** - check whether `gateway.port` in `~/.xopc/xopc.json` is occupied by a non-xopc process or by a gateway using a different token.
+- **Port conflict** - stop the other process or change `gateway.port`; the desktop app will not silently choose another port.
 - **Model setup fails** - verify the provider key or OAuth session, then check [Models](./models.md).
 - **App opens but the console stays blank** - restart the app. On locked-down Windows machines, update GPU drivers and try again.
-- **Channels or mobile pairing do not work** - confirm the desktop gateway is the gateway exposed to the phone or messenger integration.
+- **Channels or mobile pairing do not work** - confirm the shared local gateway is the one exposed to the phone or messenger integration.

@@ -3,57 +3,65 @@ import { join } from 'node:path';
 
 import { app } from 'electron';
 
-import { initWorkspaceCore } from '../src/cli/utils/init-workspace-core.js';
 import {
-  resolveGatewayBindMode,
-  resolveGatewayEffectiveHost,
-} from '../src/config/gateway-bind.js';
-import type { GatewayBindMode } from '../src/config/schema.js';
+  resolveAgentProfileDir,
+  resolveAgentWorkspaceDir,
+  resolveDefaultAgentId,
+} from '../src/agent/agent-scope.js';
+import { initWorkspaceCore } from '../src/cli/utils/init-workspace-core.js';
+import { resolveGatewayBindMode, resolveGatewayEffectiveHost } from '../src/config/gateway-bind.js';
+import { resolveConfigPath, resolveStateDir } from '../src/config/paths.js';
+import type { Config, GatewayBindMode } from '../src/config/schema.js';
 import { ConfigSchema } from '../src/config/schema.js';
+import { DEFAULT_GATEWAY_PORT } from '../src/daemon/constants.js';
 import { ensureGatewayCorsOriginsForNetworkBind } from '../src/gateway/ensure-network-cors.js';
 
-import { getDefaultGatewayPort, pickAvailablePort } from './gateway-process.js';
-
 export type ElectronUserPaths = {
-  userData: string;
+  stateDir: string;
+  electronUserData: string;
   configPath: string;
   workspacePath: string;
 };
 
 export function getElectronUserPaths(): ElectronUserPaths {
-  const userData = app.getPath('userData');
-  const configPath = join(userData, 'xopc.json');
-  const workspacePath = join(userData, 'workspace', 'main');
-  return { userData, configPath, workspacePath };
+  const stateDir = resolveStateDir();
+  const electronUserData = app.getPath('userData');
+  const configPath = resolveConfigPath();
+  const workspacePath = join(stateDir, 'workspace', 'main');
+  return { stateDir, electronUserData, configPath, workspacePath };
+}
+
+export function resolveElectronFileIpcRoots(config: Config, paths: ElectronUserPaths): string[] {
+  const defaultAgentId = resolveDefaultAgentId(config);
+  return [
+    paths.electronUserData,
+    resolveAgentWorkspaceDir(config, defaultAgentId),
+    resolveAgentProfileDir(config, defaultAgentId),
+  ];
 }
 
 /**
- * Ensure config exists under userData with a persisted gateway token and workspace path.
+ * Ensure shared xopc config exists with a persisted gateway token and workspace path.
  * Returns the gateway auth token for the UI (?token= / localStorage initial cache).
  */
 export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): Promise<{
   port: number;
   token: string;
   bind: GatewayBindMode;
+  bindHost: string;
+  fileIpcRoots: string[];
 }> {
-  mkdirSync(paths.userData, { recursive: true });
+  mkdirSync(paths.stateDir, { recursive: true });
 
   const initResult = await initWorkspaceCore({
     configPath: paths.configPath,
     workspacePath: paths.workspacePath,
-    gatewayPort: getDefaultGatewayPort(),
+    gatewayPort: DEFAULT_GATEWAY_PORT,
     persistWorkspacePath: true,
   });
 
   const configuredPort = initResult.config.gateway?.port;
-  // Early Electron builds reused the CLI default port. Move those desktop-owned configs
-  // onto the desktop range so the app and `xopc gateway` can run side by side.
-  const preferredPort = configuredPort === 18790
-    ? getDefaultGatewayPort()
-    : (configuredPort ?? getDefaultGatewayPort());
-  const listenHost = resolveGatewayEffectiveHost(initResult.config);
-  const bindHost = listenHost === '::' ? '::' : listenHost;
-  const resolvedPort = await pickAvailablePort(bindHost, preferredPort, 40);
+  const resolvedPort = configuredPort ?? DEFAULT_GATEWAY_PORT;
 
   let finalConfig = ConfigSchema.parse({
     ...initResult.config,
@@ -69,6 +77,8 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
   }
 
   const bind = resolveGatewayBindMode(finalConfig);
+  const listenHost = resolveGatewayEffectiveHost(finalConfig);
+  const bindHost = listenHost === '::' ? '::' : listenHost;
 
   const token =
     finalConfig.gateway?.auth?.mode === 'token' &&
@@ -76,5 +86,11 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
       ? finalConfig.gateway.auth.token
       : initResult.token;
 
-  return { port: resolvedPort, token, bind };
+  return {
+    port: resolvedPort,
+    token,
+    bind,
+    bindHost,
+    fileIpcRoots: resolveElectronFileIpcRoots(finalConfig, paths),
+  };
 }

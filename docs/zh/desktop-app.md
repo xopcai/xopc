@@ -25,9 +25,9 @@ PC 桌面端是大多数用户最省心的开始方式。它会自动启动本�
 ## 你会得到什么
 
 - **安装后不必一直操作终端**：打开应用，完成模型设置，就能开始聊天。
-- **内置 gateway**：应用会在本机 loopback 端口启动 gateway 子进程；可用时通常从 `28790` 开始。
+- **共享本地 gateway**：如果配置里的本地 gateway 已经运行，桌面端会直接连接；否则会基于 `~/.xopc` 启动同一个 gateway。
 - **配置更可见**：模型、Agent、频道、记忆、日志、更新都在控制台 UI 里。
-- **仍然本地优先**：桌面端配置和工作区数据保存在系统应用数据目录中，不依赖 xopc 云服务。
+- **仍然本地优先**：配置、会话、Agent、凭据和工作区都保存在 `~/.xopc` 下，不依赖 xopc 云服务。
 - **同一套产品界面**：桌面窗口加载的是 `xopc gateway` 使用的同一个网关控制台。
 
 ## 首次使用
@@ -87,32 +87,26 @@ PC 桌面端是大多数用户最省心的开始方式。它会自动启动本�
 
 ## 桌面端 gateway 和 CLI gateway 的关系
 
-桌面端内置 gateway 与命令行 gateway 是刻意分开的。
+桌面端、`xopc gateway` 和 `xopc tui` 默认使用同一个 xopc home：`~/.xopc`。
 
 | 入口 | 默认行为 |
 | --- | --- |
-| 桌面端 | 启动内嵌 gateway，监听本机 loopback 端口，通常从 `28790` 开始 |
-| `xopc gateway` | 启动 CLI 管理的 gateway，使用 CLI gateway 默认端口 |
-| `xopc` / `xopc tui` | 进入本地终端界面 |
+| 桌面端 | 复用 `gateway.port` 上已运行且 token 匹配的 gateway；端口空闲时再启动 |
+| `xopc gateway` | 基于 `~/.xopc/xopc.json` 启动同一个 gateway |
+| `xopc` / `xopc tui` | 使用同一份配置、数据库、Agent 和默认工作区 |
 
-这样桌面端和手动启动的 gateway 可以并行运行。调试频道或手机端配对时，请先确认你正在使用哪个 URL、token 和配置文件。
+如果配置端口已被占用，但该进程不接受 `~/.xopc/xopc.json` 里的 token，桌面端会直接失败，不会自动换端口。请停止占用端口的进程，或修改 `gateway.port`。
 
 ## 数据与配置
 
-桌面端会在操作系统的应用数据目录下创建 Electron 管理的配置和工作区。内部主要包含：
+桌面端使用和 CLI 相同的 xopc 状态目录。主要读写：
 
-- `xopc.json`：桌面端管理的 xopc 配置。
-- `workspace/main/`：桌面端默认工作区。
+- `~/.xopc/xopc.json`：共享 xopc 配置。
+- `~/.xopc/xopc.db`：共享会话和运行时状态。
+- `~/.xopc/agents/`：共享 Agent profile 和运行时数据。
+- `~/.xopc/workspace/main/`：首次需要时创建的默认工作区。
 
-应用启动内嵌 gateway 时，还会设置 `XOPC_CONFIG_PATH`、`XOPC_WORKSPACE`、`XOPC_STATE_DIR` 等运行时环境变量。
-
-如果你想使用经典 CLI 状态目录 `~/.xopc/`，请走终端路径：
-
-```bash
-curl -fsSL https://xopc.ai/install.sh | bash
-xopc onboard --quick
-xopc
-```
+Electron 自己的 shell 数据，例如窗口偏好、崩溃日志、更新器元数据、托盘和系统集成状态，仍然保存在操作系统的 Electron 应用数据目录。应用启动内嵌 gateway 时，还会设置 `XOPC_CONFIG_PATH`、`XOPC_WORKSPACE`、`XOPC_STATE_DIR` 等运行时环境变量。
 
 ## 从源码打包
 
@@ -155,8 +149,8 @@ pnpm run electron:dev
 
 ## 排障
 
-- **gateway 启动失败**：关闭旧的 xopc 桌面窗口后重启。应用会尽量从 `28790` 开始选择可用端口。
-- **端口冲突**：如果同时运行 `xopc gateway`，先确认你正在使用的是桌面端 gateway 还是 CLI gateway。
+- **gateway 启动失败**：检查 `~/.xopc/xopc.json` 里的 `gateway.port` 是否被非 xopc 进程占用，或被使用不同 token 的 gateway 占用。
+- **端口冲突**：停止占用端口的进程，或修改 `gateway.port`；桌面端不会静默选择另一个端口。
 - **模型设置失败**：检查服务商密钥或 OAuth 登录状态，再参考 [模型支持](./models.md)。
 - **应用打开但控制台空白**：重启应用；受限 Windows 机器可先更新显卡驱动后再试。
-- **频道或手机端配对不可用**：确认暴露给手机或消息通道的是桌面端正在使用的 gateway。
+- **频道或手机端配对不可用**：确认暴露给手机或消息通道的是这一个共享本地 gateway。

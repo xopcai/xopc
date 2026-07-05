@@ -8,15 +8,15 @@ describe('ensureGatewayCorsOriginsForNetworkBind', () => {
     const config = ConfigSchema.parse({
       gateway: {
         bind: 'lan',
-        port: 28790,
+        port: 18790,
         auth: { mode: 'token', token: 'a'.repeat(32) },
         corsOrigins: [],
       },
     });
-    const next = ensureGatewayCorsOriginsForNetworkBind(config, 28790);
+    const next = ensureGatewayCorsOriginsForNetworkBind(config, 18790);
     expect(next.gateway?.corsOrigins).toEqual([
-      'http://localhost:28790',
-      'http://127.0.0.1:28790',
+      'http://localhost:18790',
+      'http://127.0.0.1:18790',
       'http://localhost:3000',
       'http://127.0.0.1:3000',
       'http://localhost:8081',
@@ -28,12 +28,12 @@ describe('ensureGatewayCorsOriginsForNetworkBind', () => {
     const config = ConfigSchema.parse({
       gateway: {
         bind: 'loopback',
-        port: 28790,
+        port: 18790,
         auth: { mode: 'token', token: 'a'.repeat(32) },
         corsOrigins: [],
       },
     });
-    const next = ensureGatewayCorsOriginsForNetworkBind(config, 28790);
+    const next = ensureGatewayCorsOriginsForNetworkBind(config, 18790);
     expect(next.gateway?.corsOrigins).toEqual([]);
   });
 });
