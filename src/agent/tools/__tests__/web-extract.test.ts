@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { complete } from '@earendil-works/pi-ai';
+import { complete } from '@earendil-works/pi-ai/compat';
 
 import {
   createWebExtractTool,
@@ -8,8 +8,8 @@ import {
   DEFAULT_WEB_EXTRACT_MAX_LENGTH,
 } from '../web-extract.js';
 
-vi.mock('@earendil-works/pi-ai', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@earendil-works/pi-ai')>();
+vi.mock('@earendil-works/pi-ai/compat', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@earendil-works/pi-ai/compat')>();
   return { ...mod, complete: vi.fn() };
 });
 

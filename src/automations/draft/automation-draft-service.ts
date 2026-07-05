@@ -1,4 +1,4 @@
-import { complete, type UserMessage } from '@earendil-works/pi-ai';
+import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import type { Config } from '../../config/schema.js';
 import { resolveModel } from '../../providers/index.js';

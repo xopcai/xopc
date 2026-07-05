@@ -3,7 +3,7 @@
  */
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { complete, type UserMessage } from '@earendil-works/pi-ai';
+import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import { stripSessionStartupContextFromUserText } from '../agent/reply/startup-context.js';
 import { stripEnvelopeTimestampPrefix } from '../channels/envelope-timestamp.js';

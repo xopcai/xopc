@@ -1,4 +1,4 @@
-import { complete, type UserMessage } from '@earendil-works/pi-ai';
+import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import { resolveModelRef } from '../../config/agent-typed-models.js';
 import { getAgentDefaultModelRef } from '../../config/schema.js';

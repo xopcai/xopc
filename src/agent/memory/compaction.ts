@@ -1,5 +1,5 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { complete, type Model, type Api, type UserMessage } from '@earendil-works/pi-ai';
+import { complete, type Model, type Api, type UserMessage } from '@earendil-works/pi-ai/compat';
 import { readAgentMessageContent } from './agent-message-access.js';
 import { generateStructuredSummary, formatSummaryAsText, type ConversationSummary } from './summary-generator.js';
 

@@ -1,4 +1,4 @@
-import { complete, type Api, type Context, type Model } from '@earendil-works/pi-ai';
+import { complete, type Api, type Context, type Model } from '@earendil-works/pi-ai/compat';
 import { resolveModel, getApiKey, getModelsByProvider } from '../../../providers/index.js';
 import { coerceImageAssistantText } from '../image-helpers.js';
 import {

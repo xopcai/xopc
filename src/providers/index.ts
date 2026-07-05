@@ -8,7 +8,7 @@ import {
 	getProviders as getPiAiProviders,
 	type Model,
 	type Api,
-} from '@earendil-works/pi-ai';
+} from '@earendil-works/pi-ai/compat';
 import { getAgentDefaultModelRef, type Config } from '../config/schema.js';
 import { getModelRegistry } from './model-registry.js';
 import { CredentialResolver, resolveApiKey, hasCredentials } from '../auth/credentials.js';

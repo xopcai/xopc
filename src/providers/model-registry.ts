@@ -16,7 +16,7 @@ import {
 	getProviders as getPiAiProviders,
 	type Model,
 	type KnownProvider,
-} from '@earendil-works/pi-ai';
+} from '@earendil-works/pi-ai/compat';
 import { existsSync, readFileSync } from 'fs';
 import { resolveConfigValue, resolveHeaders } from '../config/resolve-config-value.js';
 import { getModelsJsonPath } from '../config/models-json.js';

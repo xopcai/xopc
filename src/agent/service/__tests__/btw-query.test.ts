@@ -1,11 +1,11 @@
-import { complete } from '@earendil-works/pi-ai';
+import { complete } from '@earendil-works/pi-ai/compat';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveModel } from '../../../providers/index.js';
 import { runBtwQuery } from '../btw-query.js';
 
-vi.mock('@earendil-works/pi-ai', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@earendil-works/pi-ai')>();
+vi.mock('@earendil-works/pi-ai/compat', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@earendil-works/pi-ai/compat')>();
   return { ...actual, complete: vi.fn() };
 });
 
