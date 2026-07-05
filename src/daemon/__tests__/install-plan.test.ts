@@ -18,7 +18,7 @@ describe('buildGatewayInstallPlan', () => {
     expect(plan.programArguments).toContain('--foreground');
     expect(plan.programArguments).toContain('--port');
     expect(plan.programArguments).toContain('18790');
-    expect(plan.programArguments.some((arg) => arg.endsWith('/src/cli/bin.ts'))).toBe(true);
+    expect(plan.programArguments.some((arg) => arg.replace(/\\/g, '/').endsWith('/src/cli/bin.ts'))).toBe(true);
   });
 
   it('does not persist transient eval arguments into the service command', () => {

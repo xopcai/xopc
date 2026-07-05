@@ -8,6 +8,7 @@
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { createLogger } from '../utils/logger.js';
 import { SERVICE_VERSION_ENV_KEY, formatGatewayServiceDescription } from './constants.js';
 import { PACKAGE_VERSION } from '../package-version.js';
@@ -55,7 +56,7 @@ function resolveEntryPoint(): string {
   }
   // Must match package.json "bin" in built packages, while source/dev runs use bin.ts.
   // index.js only exports runCli and exits immediately when executed directly.
-  const thisDir = path.dirname(new URL(import.meta.url).pathname);
+  const thisDir = path.dirname(fileURLToPath(import.meta.url));
   const sourceEntryPoint = path.join(thisDir, '..', 'cli', 'bin.ts');
   if (existsSync(sourceEntryPoint)) {
     return sourceEntryPoint;

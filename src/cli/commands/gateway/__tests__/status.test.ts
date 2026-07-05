@@ -106,7 +106,7 @@ describe('Gateway Status Command', () => {
       const cmd = createStatusCommand();
       await cmd.parseAsync(['node', 'test']);
 
-      expect(acquireGatewayLock).toHaveBeenCalledWith('/root/.xopc/xopc.json', {
+      expect(acquireGatewayLock).toHaveBeenCalledWith(expect.stringMatching(/[\\/]root[\\/]\.xopc[\\/]xopc\.json$/), {
         timeoutMs: 100,
         port: 18790,
       });

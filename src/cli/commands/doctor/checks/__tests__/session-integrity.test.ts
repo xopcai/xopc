@@ -5,6 +5,7 @@ import { join } from 'node:path';
 
 import { ConfigSchema } from '../../../../../config/schema.js';
 import { SessionStore } from '../../../../../session/store.js';
+import { closeXopcDatabase, resetXopcDatabaseSingletonForTest } from '../../../../../storage/sqlite/connection.js';
 import { checkSessionIntegrity } from '../session-integrity.js';
 
 const testConfig = ConfigSchema.parse({});
@@ -45,6 +46,8 @@ describe('checkSessionIntegrity', () => {
       } else {
         process.env.XOPC_STATE_DIR = previousStateDir;
       }
+      closeXopcDatabase();
+      resetXopcDatabaseSingletonForTest();
       await rm(tempDir, { recursive: true, force: true });
     }
   });

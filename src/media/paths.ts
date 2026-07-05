@@ -1,4 +1,4 @@
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
 import { resolveStateDir } from '../config/paths-state.js';
 
@@ -16,8 +16,6 @@ export function getMediaBucketDir(bucket: MediaBucket): string {
 export function isPathInside(root: string, candidate: string): boolean {
   const rootResolved = resolve(root);
   const candidateResolved = resolve(candidate);
-  return (
-    candidateResolved === rootResolved ||
-    candidateResolved.startsWith(rootResolved + '/')
-  );
+  const rel = relative(rootResolved, candidateResolved);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 }
