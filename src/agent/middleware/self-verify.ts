@@ -46,6 +46,7 @@ export class SelfVerifyMiddleware {
   private config: SelfVerifyConfig;
   private turnCount = 0;
   private verificationRequested = false;
+  private hasUnverifiedEdits = false;
 
   constructor(config: Partial<SelfVerifyConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -73,7 +74,25 @@ export class SelfVerifyMiddleware {
       });
     }
 
+    this.hasUnverifiedEdits = true;
     log.debug({ filePath, editCount: this.getEditCount(filePath), operation }, 'File edit recorded');
+  }
+
+  recordVerification(toolName: string, args?: unknown): void {
+    const name = toolName.toLowerCase();
+    if (name === 'shell') {
+      const command =
+        args && typeof args === 'object' && typeof (args as { command?: unknown }).command === 'string'
+          ? (args as { command: string }).command.toLowerCase()
+          : '';
+      if (/\b(test|vitest|jest|mocha|ava|playwright|typecheck|tsc|build|lint)\b/.test(command)) {
+        this.hasUnverifiedEdits = false;
+      }
+      return;
+    }
+    if (name.includes('test') || name.includes('verify') || name.includes('lint')) {
+      this.hasUnverifiedEdits = false;
+    }
   }
 
   /**
@@ -110,7 +129,21 @@ export class SelfVerifyMiddleware {
     this.fileEdits.clear();
     this.turnCount = 0;
     this.verificationRequested = false;
+    this.hasUnverifiedEdits = false;
     log.debug('Self-verify middleware reset');
+  }
+
+  consumePostEditReminder(): string {
+    if (!this.config.enablePreCompletionCheck || !this.hasUnverifiedEdits) {
+      return '';
+    }
+    if (this.verificationRequested) {
+      return '';
+    }
+    this.verificationRequested = true;
+    return [
+      'Coder check: source files changed. Before final response, inspect the diff and run the smallest meaningful verification; if you cannot, explain why and state the remaining risk.',
+    ].join('\n');
   }
 
   /**

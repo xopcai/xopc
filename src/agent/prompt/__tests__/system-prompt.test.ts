@@ -79,6 +79,7 @@ describe('buildSystemPrompt tooling', () => {
     expect(prompt).toContain('- delegate_task:');
     expect(prompt).not.toContain('- shell:');
     expect(prompt).toContain('delegate_task');
+    expect(prompt).toContain('Use `read_file` for targeted file inspection before editing');
   });
 
   it('includes mandatory skills guidance when skill tools are registered', () => {
@@ -87,6 +88,25 @@ describe('buildSystemPrompt tooling', () => {
     });
     expect(prompt).toContain('## Skills (mandatory)');
     expect(prompt).toContain('skill_view(name)');
+  });
+});
+
+describe('buildSystemPrompt coder harness', () => {
+  it('includes coder harness section for coder agent only', () => {
+    const prompt = buildSystemPrompt('/ws', {
+      toolNames: ['read_file', 'edit_file', 'shell'],
+      agentId: 'coder',
+    });
+    expect(prompt).toContain('## Coder Harness');
+    expect(prompt).toContain('inspect the diff and run the smallest meaningful verification');
+  });
+
+  it('does not include coder harness for other agents', () => {
+    const prompt = buildSystemPrompt('/ws', {
+      toolNames: ['read_file', 'edit_file', 'shell'],
+      agentId: 'main',
+    });
+    expect(prompt).not.toContain('## Coder Harness');
   });
 });
 

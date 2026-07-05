@@ -123,6 +123,7 @@ export class SystemPromptBuilder {
       includeMemorySection: resolved.includeMemorySection,
       userTimezone: resolved.userTimezone,
       runtime: resolved.runtimeInfo,
+      agentId: options.agentId,
       channels: resolved.channels,
       externalMemoryInstructions: resolved.externalMemoryInstructions,
       ttsSystemHint: resolved.ttsSystemHint,
