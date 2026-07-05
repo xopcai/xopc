@@ -34,13 +34,13 @@ const CORE_TOOL_ORDER = [
 ] as const;
 
 const CORE_TOOL_SUMMARIES: Record<string, string> = {
-  read_file: 'Read file contents',
-  write_file: 'Create or overwrite files',
-  edit_file: 'Make precise edits to files',
-  grep: 'Search file contents for patterns',
+  read_file: 'Read targeted file contents; prefer this over shell cat/sed for inspection',
+  write_file: 'Create new files or intentional complete rewrites',
+  edit_file: 'Make precise, minimal edits to existing files',
+  grep: 'Search file contents for literals, errors, config values, and docs',
   find: 'Find files by glob pattern',
   list_dir: 'List directory contents',
-  shell: 'Run shell commands (supports background via yieldMs/background)',
+  shell: 'Run tests, type checks, builds, package scripts, and safe inspection commands',
   web_search: 'Search the web',
   web_fetch: 'Fetch and extract readable content from a URL',
   web_extract: 'Extract structured content from a URL',
@@ -111,9 +111,20 @@ export function buildToolingSection(params: {
   }
 
   const shellToolName = resolveToolName('shell');
+  const readToolName = resolveToolName('read_file');
+  const editToolName = resolveToolName('edit_file');
+  const writeToolName = resolveToolName('write_file');
+  const grepToolName = resolveToolName('grep');
+  const findToolName = resolveToolName('find');
   const hasDelegate = availableTools.has('delegate_task');
   const hasWorkflow = availableTools.has('workflow');
   const hasToolManual = availableTools.has('tool_manual');
+  const hasRead = availableTools.has('read_file');
+  const hasEdit = availableTools.has('edit_file');
+  const hasWrite = availableTools.has('write_file');
+  const hasGrep = availableTools.has('grep');
+  const hasFind = availableTools.has('find');
+  const hasShell = availableTools.has('shell');
 
   const orchestrationLines: string[] = [];
   if (hasDelegate) {
@@ -135,6 +146,24 @@ export function buildToolingSection(params: {
       ? toolLines.join('\n')
       : '- No tools are registered for this session.',
     `For long waits, avoid rapid poll loops: use \`${shellToolName}\` with enough yieldMs or poll in reasonable intervals.`,
+    hasRead
+      ? `Use \`${readToolName}\` for targeted file inspection before editing; do not rely on filenames alone.`
+      : '',
+    hasEdit
+      ? `Use \`${editToolName}\` for small source changes; keep patches focused.`
+      : '',
+    hasWrite
+      ? `Use \`${writeToolName}\` only for new files or intentional complete rewrites.`
+      : '',
+    hasGrep || hasFind
+      ? `Use ${[
+          hasGrep ? `\`${grepToolName}\`` : '',
+          hasFind ? `\`${findToolName}\`` : '',
+        ].filter(Boolean).join(' and ')} for text/file discovery; use code graph or symbol tools when available for definitions and call relationships.`
+      : '',
+    hasShell
+      ? `Use \`${shellToolName}\` for verification and safe inspection, not routine file editing.`
+      : '',
     hasToolManual
       ? 'Some complex tools have built-in manuals. Use `tool_manual(tool)` before non-trivial use.'
       : '',

@@ -38,6 +38,21 @@ describe('SelfVerifyMiddleware', () => {
       const summary = middleware.getEditSummary();
       expect(summary.topFiles[0].count).toBe(2);
     });
+
+    it('emits a single lightweight post-edit verification reminder', () => {
+      middleware.recordEdit('/path/to/file.ts', 'edit');
+      const first = middleware.consumePostEditReminder();
+      const second = middleware.consumePostEditReminder();
+      expect(first).toContain('source files changed');
+      expect(first).toContain('inspect the diff');
+      expect(second).toBe('');
+    });
+
+    it('clears pending verification after a test command', () => {
+      middleware.recordEdit('/path/to/file.ts', 'edit');
+      middleware.recordVerification('shell', { command: 'pnpm test' });
+      expect(middleware.consumePostEditReminder()).toBe('');
+    });
   });
 
   describe('hasExcessiveEdits', () => {

@@ -243,8 +243,29 @@ function installSystemReminderListener(bus: SessionEventBus, systemReminder: Sys
   // original) and BEFORE tool-chain + error-tracking.
   bus.on('tool_execution_end', (event) => {
     const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }> & { result: unknown };
-    e.result = systemReminder.appendToResult(e.result);
+    e.result = systemReminder.appendToResult(e.result, e.toolName);
   });
+}
+
+function appendTextToToolResult(result: unknown, text: string): unknown {
+  if (!text.trim()) {
+    return result;
+  }
+  if (result && typeof result === 'object') {
+    const res = result as Record<string, unknown>;
+    if (Array.isArray(res.content)) {
+      res.content = [
+        ...res.content,
+        { type: 'text', text: `\n${text}` },
+      ];
+      return res;
+    }
+    if (typeof res.content === 'string') {
+      res.content = `${res.content}\n${text}`;
+      return res;
+    }
+  }
+  return result;
 }
 
 function installToolChainListener(bus: SessionEventBus, toolChainTracker: ToolChainTracker): void {
@@ -331,9 +352,19 @@ function installSelfVerifyListener(bus: SessionEventBus, selfVerifyMiddleware: S
       selfVerifyMiddleware.recordEdit(String(args.path), 'write');
     } else if (name.includes('edit') && args.path) {
       selfVerifyMiddleware.recordEdit(String(args.path), 'edit');
+    } else {
+      selfVerifyMiddleware.recordVerification(toolName, args);
     }
   });
-  bus.on('turn_end', () => {
+  bus.on('tool_execution_end', (event) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }> & { result: unknown };
+    const name = e.toolName?.toLowerCase() ?? '';
+    if (!name.includes('write') && !name.includes('edit')) {
+      return;
+    }
+    e.result = appendTextToToolResult(e.result, selfVerifyMiddleware.consumePostEditReminder());
+  });
+  bus.on('turn_start', () => {
     selfVerifyMiddleware.onTurnStart();
   });
 }
@@ -375,13 +406,13 @@ export class AgentEventHandler {
     });
     installLifecycleHookListener(this.bus, config.lifecycleManager);
     installSystemReminderListener(this.bus, config.systemReminder);
+    installSelfVerifyListener(this.bus, config.selfVerifyMiddleware);
     installToolUsageListener(this.bus, config.toolUsageAnalyzer);
     installToolChainListener(this.bus, config.toolChainTracker);
     installErrorTrackingListener(this.bus, {
       errorTracker: config.errorTracker,
       errorPatternMatcher: config.errorPatternMatcher,
     });
-    installSelfVerifyListener(this.bus, config.selfVerifyMiddleware);
   }
 
   /** Dispatch a pi-agent event to all registered listeners. */
