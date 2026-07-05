@@ -32,6 +32,7 @@ function connectorFromSmitheryServer(server: Record<string, unknown>, apiKey?: s
   const serverId = slugFrom(qualifiedName);
   const encodedPath = qualifiedName.split('/').map((part) => encodeURIComponent(part)).join('/');
   const url = `https://server.smithery.ai/${encodedPath}/mcp`;
+  const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : undefined;
   return {
     id: `smithery-${serverId}`,
     version: readString(server.version) ?? 'registry',
@@ -40,30 +41,19 @@ function connectorFromSmitheryServer(server: Record<string, unknown>, apiKey?: s
     category: 'custom',
     kind: 'mcp',
     source: 'registry',
-    capabilities: ['tools', 'resources', 'prompts', 'auth.apiKey', 'runtime.mcp.streamableHttp'],
+    capabilities: apiKey
+      ? ['tools', 'resources', 'prompts', 'auth.apiKey', 'runtime.mcp.streamableHttp']
+      : ['tools', 'resources', 'prompts', 'runtime.mcp.streamableHttp'],
     tags: ['smithery', 'registry', 'mcp'],
-    auth: { mode: 'apiKey' },
-    setup: apiKey
-      ? {}
-      : {
-          secrets: [
-            {
-              key: 'SMITHERY_AUTHORIZATION_HEADER',
-              label: 'Smithery Authorization header',
-              description: 'Full Authorization header used when launching hosted Smithery MCP servers, for example "Bearer ...".',
-              required: true,
-            },
-          ],
-        },
+    auth: { mode: apiKey ? 'apiKey' : 'none' },
+    setup: {},
     runtime: {
       type: 'mcp',
       serverId,
       serverTemplate: {
         url,
         transport: 'streamable-http',
-        headers: {
-          Authorization: apiKey ? `Bearer ${apiKey}` : '{{secrets.SMITHERY_AUTHORIZATION_HEADER}}',
-        },
+        ...(headers ? { headers } : {}),
       },
     },
   };

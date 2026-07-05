@@ -82,7 +82,7 @@ describe('connector registry search', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('searches Smithery without requiring an API key for discovery', async () => {
+  it('searches Smithery without requiring authorization for install', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -104,17 +104,54 @@ describe('connector registry search', () => {
         headers: { Accept: 'application/json' },
       }),
     );
-    expect(results[0]?.connectors[0]).toMatchObject({
+    const connector = results[0]?.connectors[0];
+    expect(connector).toMatchObject({
       id: 'smithery-weather-example',
       displayName: 'Weather Example',
-      setup: {
-        secrets: [expect.objectContaining({ key: 'SMITHERY_AUTHORIZATION_HEADER' })],
-      },
+      auth: { mode: 'none' },
+      capabilities: ['tools', 'resources', 'prompts', 'runtime.mcp.streamableHttp'],
+      setup: {},
       runtime: {
         type: 'mcp',
         serverTemplate: {
           url: 'https://server.smithery.ai/weather/example/mcp',
-          headers: { Authorization: '{{secrets.SMITHERY_AUTHORIZATION_HEADER}}' },
+        },
+      },
+    });
+    expect(connector?.setup.secrets).toBeUndefined();
+    expect(connector?.runtime.type === 'mcp' ? connector.runtime.serverTemplate.headers : undefined).toBeUndefined();
+  });
+
+  it('uses configured Smithery API key without prompting for connector secrets', async () => {
+    process.env.XOPC_SMITHERY_API_KEY = 'smithery-token';
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        servers: [
+          {
+            qualifiedName: 'weather/example',
+            displayName: 'Weather Example',
+          },
+        ],
+      }),
+    } as Response);
+
+    const results = await searchConnectorRegistries({ source: 'smithery', query: 'forecast', pageSize: 5 });
+
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        headers: { Accept: 'application/json', Authorization: 'Bearer smithery-token' },
+      }),
+    );
+    expect(results[0]?.connectors[0]).toMatchObject({
+      auth: { mode: 'apiKey' },
+      setup: {},
+      runtime: {
+        type: 'mcp',
+        serverTemplate: {
+          url: 'https://server.smithery.ai/weather/example/mcp',
+          headers: { Authorization: 'Bearer smithery-token' },
         },
       },
     });
