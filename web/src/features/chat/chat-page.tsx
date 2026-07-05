@@ -225,7 +225,10 @@ export function ChatPage() {
       );
       if (!target) return false;
       setActiveMessageIndex(localMessageIndex);
-      target.scrollIntoView({ block: 'start', behavior: 'smooth' });
+      const rootRect = root.getBoundingClientRect();
+      const targetRect = target.getBoundingClientRect();
+      const scrollTop = root.scrollTop + targetRect.top - rootRect.top - 16;
+      root.scrollTo({ top: Math.max(0, scrollTop), behavior: 'smooth' });
       return true;
     },
     [scrollRef],

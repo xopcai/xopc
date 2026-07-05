@@ -29,6 +29,8 @@ type SessionLoadResult = {
 };
 
 const _sessionLoadInflight = new Map<string, Promise<SessionLoadResult>>();
+const INITIAL_HISTORY_PAGE_LIMIT = 50;
+const INITIAL_HISTORY_MAX_RAW_ROWS = 500;
 
 export type SessionTimelineItem = {
   id: string;
@@ -174,31 +176,58 @@ export class SessionManager {
     if (existing) return existing;
 
     const pending = (async () => {
-      const params = new URLSearchParams({ limit: '50' });
-      if (beforeCursor) {
-        params.set('before', beforeCursor);
-      } else {
-        params.set('offset', String(offset));
-      }
-      const res = await apiFetchWithStartupRetry(
-        apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/history?${params.toString()}`),
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-      const data = (await res.json()) as {
-        session?: { messages?: unknown[]; name?: string };
-        pagination?: { hasMore?: boolean; nextBeforeCursor?: string };
+      const loadPage = async (pageOffset: number, pageBeforeCursor?: string | null) => {
+        const params = new URLSearchParams({ limit: String(INITIAL_HISTORY_PAGE_LIMIT) });
+        if (pageBeforeCursor) {
+          params.set('before', pageBeforeCursor);
+        } else {
+          params.set('offset', String(pageOffset));
+        }
+        const res = await apiFetchWithStartupRetry(
+          apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/history?${params.toString()}`),
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        return (await res.json()) as {
+          session?: { messages?: unknown[]; name?: string };
+          pagination?: { hasMore?: boolean; nextBeforeCursor?: string };
+        };
       };
-      const raw = data.session?.messages || [];
-      const messages = sessionWireToUiMessages(raw);
-      const name =
+
+      let data = await loadPage(offset, beforeCursor);
+      let raw = data.session?.messages || [];
+      let messages = sessionWireToUiMessages(raw);
+      let hasMore = data.pagination?.hasMore ?? raw.length >= INITIAL_HISTORY_PAGE_LIMIT;
+      let nextBeforeCursor = data.pagination?.nextBeforeCursor;
+      const loadedName =
         typeof data.session?.name === 'string' && data.session.name.trim()
           ? data.session.name.trim()
           : undefined;
+      // The history endpoint pages raw transcript rows, while the UI merges many assistant/tool
+      // rows into one visible turn. A long tool-heavy tail can make the first page start with an
+      // orphan assistant bubble. For the initial tail load, pull older raw pages until the visible
+      // slice starts at a user row or history is exhausted.
+      while (
+        offset === 0 &&
+        !beforeCursor &&
+        hasMore &&
+        nextBeforeCursor &&
+        raw.length < INITIAL_HISTORY_MAX_RAW_ROWS &&
+        messages[0]?.role === 'assistant'
+      ) {
+        data = await loadPage(0, nextBeforeCursor);
+        const olderRaw = data.session?.messages || [];
+        if (olderRaw.length === 0) break;
+        raw = [...olderRaw, ...raw];
+        messages = sessionWireToUiMessages(raw);
+        hasMore = data.pagination?.hasMore ?? olderRaw.length >= INITIAL_HISTORY_PAGE_LIMIT;
+        nextBeforeCursor = data.pagination?.nextBeforeCursor;
+      }
+
       return {
         messages,
-        hasMore: data.pagination?.hasMore ?? raw.length >= 50,
-        name,
-        nextBeforeCursor: data.pagination?.nextBeforeCursor,
+        hasMore,
+        name: loadedName,
+        nextBeforeCursor,
       };
     })().finally(() => {
       _sessionLoadInflight.delete(dedupeKey);
