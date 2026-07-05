@@ -123,6 +123,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
   const hoverPreview = layout.hoverPreview;
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previewAbortRef = useRef(0);
+  const listboxRef = useRef<HTMLDivElement | null>(null);
 
   const clearPreviewTimer = () => {
     if (previewTimerRef.current) {
@@ -194,6 +195,12 @@ export const AtMentionPicker = memo(function AtMentionPicker({
     };
   }, [open, anchorRef]);
 
+  useLayoutEffect(() => {
+    if (!open || selectedIndex < 0 || selectedIndex >= items.length) return;
+    const activeOption = listboxRef.current?.querySelector<HTMLElement>(`#at-mention-${selectedIndex}`);
+    activeOption?.scrollIntoView({ block: 'nearest' });
+  }, [open, selectedIndex, items.length]);
+
   if (!open || typeof document === 'undefined' || box === null) {
     return null;
   }
@@ -215,6 +222,7 @@ export const AtMentionPicker = memo(function AtMentionPicker({
       role="presentation"
     >
       <div
+        ref={listboxRef}
         className="max-h-[min(26rem,54vh)] overflow-y-auto"
         role="listbox"
         aria-label={ariaLabel}
