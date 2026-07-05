@@ -205,7 +205,7 @@ import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.
 | MCP servers / channel bridge | Config: `mcp.servers` in `xopc.json`; outbound runtime `src/agent/mcp/`; inbound `src/mcp/` + `xopc mcp serve`; UI `#/settings/agent-mcp`. See [docs/cli/mcp.md](./docs/cli/mcp.md). |
 | Dependencies | **`pnpm` only** — never commit `package-lock.json` (use `pnpm-lock.yaml`). |
 | GitHub issues / PRs | Templates under `.github/ISSUE_TEMPLATE/`; process in **[CONTRIBUTING.md](./CONTRIBUTING.md)**; sync labels with `./scripts/sync-github-labels.sh` |
-| Electron desktop | Packaged app: `pnpm run build && pnpm run electron:build`. The **main process** runs minimal shell code; first-time `userData` config init uses **Zod (`ConfigSchema`) only** via `initWorkspace({ skipChannelPluginValidation: true })` so it does not load bundled channel plugins. **Channel plugin `configSchema.validate`** still runs when the **gateway subprocess** (`out/server/index.js`) starts. |
+| Electron desktop | Packaged app: `pnpm run build && pnpm run electron:build`. The **main process** keeps Electron shell data in `userData`, but xopc config/state/workspace use the shared `~/.xopc` root (`XOPC_STATE_DIR`, `XOPC_CONFIG_PATH`, `XOPC_WORKSPACE`). First-time shared config init uses **Zod (`ConfigSchema`) only** via `initWorkspace({ skipChannelPluginValidation: true })` so it does not load bundled channel plugins. **Channel plugin `configSchema.validate`** still runs when the **gateway subprocess** (`out/server/index.js`) starts. |
 
 ---
 

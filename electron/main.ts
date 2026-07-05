@@ -22,6 +22,7 @@ import { ensureGatewayConfigForElectron, getElectronUserPaths } from './ensure-g
 import {
   isCliBundlePresent,
   resolveCliEntry,
+  resolveGatewayStartupMode,
   spawnGatewayProcess,
   stopGatewayProcess,
   registerEmbeddedGatewayRuntime,
@@ -345,7 +346,7 @@ function shouldEmbedGateway(): boolean {
 function buildStartupFailureMessage(detail: string): string {
   return (
     `Failed to start the local gateway.\n\n${detail}\n\n` +
-    'The app picks a free port starting at 28790 when possible (CLI default is 18790). If startup still fails, quit other xopc or gateway processes, then restart.\n\n' +
+    'Electron uses the shared xopc gateway configured in ~/.xopc/xopc.json. If the configured port is occupied by another process, stop it or change gateway.port, then restart.\n\n' +
     '(Developers: pnpm run build && pnpm run electron:vite:build && pnpm run electron:server:build && pnpm run electron:extensions:build)'
   );
 }
@@ -359,11 +360,8 @@ async function resolveWindowLoad(): Promise<
   }
 
   if (shouldEmbedGateway()) {
-    if (!isCliBundlePresent()) {
-      throw new Error(`Embedded gateway bundle is missing: ${resolveCliEntry()}`);
-    }
     const paths = getElectronUserPaths();
-    const { port, token, bind } = await ensureGatewayConfigForElectron(paths);
+    const { port, token, bind, bindHost } = await ensureGatewayConfigForElectron(paths);
     // Browser-extension artifact install runs inside the gateway subprocess (see
     // gateway/service.ts → ensureBrowserExtensionOnStartup). Main does not import src/.
     try {
@@ -387,14 +385,19 @@ async function resolveWindowLoad(): Promise<
           }
         },
       };
-      const child = spawnGatewayProcess(spawnOpts);
-      const readyPort = await waitForGatewayReady(port, token, child);
-      const readySpawnOpts = { ...spawnOpts, port: readyPort };
-      registerEmbeddedGatewayRuntime({ ...readySpawnOpts, authToken: token });
-      setEmbeddedGatewayCredentials(readyPort, token);
+      const startupMode = await resolveGatewayStartupMode({ port, token, bindHost });
+      if (startupMode === 'spawn') {
+        if (!isCliBundlePresent()) {
+          throw new Error(`Embedded gateway bundle is missing: ${resolveCliEntry()}`);
+        }
+        const child = spawnGatewayProcess(spawnOpts);
+        const readyPort = await waitForGatewayReady(port, token, child);
+        registerEmbeddedGatewayRuntime({ ...spawnOpts, port: readyPort, authToken: token });
+      }
+      setEmbeddedGatewayCredentials(port, token);
       void maybeAutoStartTunnel();
       startTunnelStatusPolling();
-      const u = new URL(`http://127.0.0.1:${readyPort}/`);
+      const u = new URL(`http://127.0.0.1:${port}/`);
       u.searchParams.set('token', token);
       u.hash = '#/chat';
       return { kind: 'url', href: u.toString(), openDevTools: false };
@@ -719,9 +722,9 @@ app.whenReady().then(async () => {
 
   await initElectronShellPreferences();
   const electronUserPaths = getElectronUserPaths();
-  const electronManagedRoots = [electronUserPaths.userData, electronUserPaths.workspacePath];
-  registerFileIpc(ipcMain, { allowedRoots: electronManagedRoots });
-  registerSearchIpc(ipcMain, { allowedRoots: electronManagedRoots });
+  const { fileIpcRoots } = await ensureGatewayConfigForElectron(electronUserPaths);
+  registerFileIpc(ipcMain, { allowedRoots: fileIpcRoots });
+  registerSearchIpc(ipcMain, { allowedRoots: fileIpcRoots });
   registerAgentIpc(ipcMain);
   registerSystemSettingsIpc(ipcMain, {
     onLanguageChanged: (language) => {
