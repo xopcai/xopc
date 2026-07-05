@@ -1,4 +1,4 @@
-import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
+import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 
 export function inputClassName(): string {
@@ -11,7 +11,7 @@ export function inputClassName(): string {
 }
 
 export function selectClassName(): string {
-  return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
+  return cn(selectTriggerClass, selectFieldMaxWidthClass);
 }
 
 /** Compact secondary actions (e.g. agent defaults: skills allowlist mode, tools disable presets). */

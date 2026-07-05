@@ -4,6 +4,13 @@ import { apiUrl } from '@/lib/url';
 export type GlobalDefaultModels = {
   defaultRole: string;
   roles: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
+  imageModel?: { primary: string; fallbacks?: string[] };
+  imageGenerationModel?: {
+    primary: string;
+    fallbacks?: string[];
+    timeoutMs?: number;
+    autoProviderFallback?: boolean;
+  };
 };
 
 export type GlobalDefaultsProvider = {

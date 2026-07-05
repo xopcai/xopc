@@ -10,6 +10,7 @@ import {
 import type { McpSettingsMessages } from '@/i18n/messages';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 const TRANSPORTS: McpTransportKind[] = ['stdio', 'sse', 'streamable-http'];
 
@@ -55,17 +56,17 @@ export function McpServerFormFields({ row, t, onUpdate, idConflictMessage }: Pro
   return (
     <div className="grid gap-4 md:grid-cols-2">
       <Field label={t.transportLabel} required>
-        <select
+        <Select
           className={inputClassName()}
           value={row.transport}
           onChange={(e) => onUpdate({ transport: e.target.value as McpTransportKind })}
         >
           {TRANSPORTS.map((kind) => (
-            <option key={kind} value={kind}>
+            <SelectOption key={kind} value={kind}>
               {t.transportLabels[kind]}
-            </option>
+            </SelectOption>
           ))}
-        </select>
+        </Select>
       </Field>
 
       <Field label={t.serverIdLabel} required>

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import type { Config } from '../../config/schema.js';
+import { getAgentDefaultImageGenerationModelConfig } from '../../config/schema.js';
 import { isFailoverError } from '../failover-error.js';
 import {
   imageAssetFromDataUrl,
@@ -186,6 +187,16 @@ async function loadInputImages(params: {
 export { parseImageDataUrl };
 
 export function resolveImageGenerationModelConfigForTool(params: { cfg?: Config }): ToolModelConfig | null {
+  const explicit = params.cfg ? getAgentDefaultImageGenerationModelConfig(params.cfg) : undefined;
+  if (explicit?.primary?.trim()) {
+    return {
+      primary: explicit.primary.trim(),
+      ...(explicit.fallbacks?.length ? { fallbacks: explicit.fallbacks } : {}),
+      ...(explicit.timeoutMs ? { timeoutMs: explicit.timeoutMs } : {}),
+      ...(explicit.autoProviderFallback ? { autoProviderFallback: true } : {}),
+    };
+  }
+
   // Step 2: tool default = enumerate every provider whose isConfigured() is true,
   // ordered as registered. No more hard-coded openai/dashscope fallback.
   const providers = listImageGenerationProvidersSummary(params.cfg);
@@ -334,6 +345,10 @@ export function createImageGenerateTool(options: {
           ...(background ? { background } : {}),
           ...(inputImages.length > 0 ? { inputImages } : {}),
           ...(providerOptions ? { providerOptions } : {}),
+          ...(imageGenerationModelConfig.timeoutMs ? { timeoutMs: imageGenerationModelConfig.timeoutMs } : {}),
+          ...(imageGenerationModelConfig.autoProviderFallback
+            ? { autoProviderFallback: true }
+            : {}),
         });
 
         const paths = await saveGeneratedImages({

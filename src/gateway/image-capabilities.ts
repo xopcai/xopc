@@ -1,6 +1,13 @@
 import type { Config } from '../config/schema.js';
-import { listImageGenerationProvidersSummary } from '../agent/image/generation/runtime.js';
-import { isProviderConfigured } from '../providers/index.js';
+import {
+  getAgentDefaultImageGenerationModelConfig,
+  getAgentDefaultImageModelConfig,
+} from '../config/schema.js';
+import {
+  getImageGenerationProvider,
+  listImageGenerationProvidersSummary,
+} from '../agent/image/generation/runtime.js';
+import { getAllProviders, getModelsByProvider, isProviderConfigured } from '../providers/index.js';
 
 export type ImageProviderCapability = {
   provider: string;
@@ -12,32 +19,45 @@ export type ImageProviderCapability = {
   }>;
 };
 
-const VISION_MODELS: Record<string, Array<{ id: string; name: string }>> = {
-  openai: [
-    { id: 'gpt-4o', name: 'GPT-4o' },
-    { id: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-    { id: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-  ],
-  anthropic: [
-    { id: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5' },
-    { id: 'claude-haiku-3-5', name: 'Claude Haiku 3.5' },
-  ],
-  google: [
-    { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-    { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-  ],
-  dashscope: [
-    { id: 'qwen-vl-max', name: 'Qwen VL Max' },
-    { id: 'qwen2.5-vl-72b-instruct', name: 'Qwen 2.5 VL 72B' },
-  ],
+export type CurrentImageModelCapabilities = {
+  imageModel: string | null;
+  imageModelFallbacks: string[];
+  imageGenerationModel: string | null;
+  imageGenerationModelFallbacks: string[];
+  imageGenerationModelTimeoutMs: number | null;
+  imageGenerationModelAutoProviderFallback: boolean;
+  mediaMaxMb: number | null;
 };
 
-export async function resolveImageGenerationCapabilities(_config: Config): Promise<ImageProviderCapability[]> {
+export function resolveCurrentImageModelCapabilities(config: Config): CurrentImageModelCapabilities {
+  const imageModel = getAgentDefaultImageModelConfig(config);
+  const imageGenerationModel = getAgentDefaultImageGenerationModelConfig(config);
+  return {
+    imageModel: imageModel?.primary?.trim() || null,
+    imageModelFallbacks: imageModel?.fallbacks ?? [],
+    imageGenerationModel: imageGenerationModel?.primary?.trim() || null,
+    imageGenerationModelFallbacks: imageGenerationModel?.fallbacks ?? [],
+    imageGenerationModelTimeoutMs: imageGenerationModel?.timeoutMs ?? null,
+    imageGenerationModelAutoProviderFallback: imageGenerationModel?.autoProviderFallback === true,
+    mediaMaxMb: null,
+  };
+}
+
+export async function resolveImageGenerationCapabilities(config: Config): Promise<ImageProviderCapability[]> {
   const results: ImageProviderCapability[] = [];
   const summaries = listImageGenerationProvidersSummary();
 
   for (const s of summaries) {
-    const configured = await isProviderConfigured(s.id);
+    const provider = getImageGenerationProvider(s.id, config);
+    let configured = false;
+    try {
+      configured = provider?.isConfigured?.({ cfg: config }) === true;
+    } catch {
+      configured = false;
+    }
+    if (!configured) {
+      continue;
+    }
     results.push({
       provider: s.id,
       configured,
@@ -55,14 +75,21 @@ export async function resolveImageGenerationCapabilities(_config: Config): Promi
 export async function resolveImageUnderstandingCapabilities(_config: Config): Promise<ImageProviderCapability[]> {
   const results: ImageProviderCapability[] = [];
 
-  for (const [providerId, models] of Object.entries(VISION_MODELS)) {
+  for (const providerId of getAllProviders()) {
+    const models = getModelsByProvider(providerId).filter((model) => model.input?.includes('image'));
+    if (models.length === 0) {
+      continue;
+    }
     const configured = await isProviderConfigured(providerId);
+    if (!configured) {
+      continue;
+    }
     results.push({
       provider: providerId,
       configured,
       models: models.map((m) => ({
         id: m.id,
-        name: m.name,
+        name: m.name ?? m.id,
         ref: `${providerId}/${m.id}`,
       })),
     });

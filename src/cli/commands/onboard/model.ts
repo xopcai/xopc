@@ -24,6 +24,18 @@ import {
   providerSupportsOAuth,
 } from '../../../providers/index.js';
 import {
+  getDomesticProviderBaseUrl,
+  getDomesticProviderPreset,
+  getDomesticProviderPresetIds,
+  providerConfigFromDomesticPreset,
+  type DomesticProviderPreset,
+} from '../../../providers/domestic-presets.js';
+import {
+  discoverProviderModels,
+  isProviderApiDiscoverable,
+  type DiscoveredProviderModel,
+} from '../../../providers/model-discovery.js';
+import {
   getProviderHint,
   getRecommendedModelsForProvider,
   sortModelsForPicker,
@@ -69,10 +81,10 @@ function formatRecommended(provider: string): string | undefined {
 }
 
 function providerChoices(): Array<{ value: string; name: string; description?: string }> {
-  const providers = sortProvidersForPicker(getAllProviders());
+  const providers = sortProvidersForPicker([...new Set([...getAllProviders(), ...getDomesticProviderPresetIds()])]);
   const choices = providers.map((provider) => ({
     value: provider,
-    name: getProviderDisplayName(provider),
+    name: getDomesticProviderPreset(provider)?.displayName ?? getProviderDisplayName(provider),
     description: formatRecommended(provider),
   }));
   choices.push({
@@ -88,7 +100,7 @@ function modelChoiceName(choice: ModelChoice): string {
 }
 
 function getModelsForProvider(provider: string): ModelChoice[] {
-  return sortModelsForPicker(getModelsByProvider(provider)).map((m) => {
+  const catalogModels = sortModelsForPicker(getModelsByProvider(provider)).map((m) => {
     const badges = [m.reasoning ? 'reasoning' : '', m.input?.includes('image') ? 'vision' : '']
       .filter(Boolean)
       .join(', ');
@@ -98,6 +110,58 @@ function getModelsForProvider(provider: string): ModelChoice[] {
       description: badges || undefined,
     };
   });
+  if (catalogModels.length > 0) return catalogModels;
+
+  const preset = getDomesticProviderPreset(provider);
+  if (!preset) return [];
+  return preset.models.map((m) => {
+    const badges = [m.reasoning ? 'reasoning' : '', m.input?.includes('image') ? 'vision' : '']
+      .filter(Boolean)
+      .join(', ');
+    return {
+      value: `${preset.id}/${m.id}`,
+      name: m.name || m.id,
+      description: badges || undefined,
+    };
+  });
+}
+
+function discoveredModelsToChoices(provider: string, models: DiscoveredProviderModel[]): ModelChoice[] {
+  return models
+    .filter((model) => !model.id.includes('/'))
+    .map((model) => ({
+      value: `${provider}/${model.id}`,
+      name: model.name || model.id,
+      description: 'discovered',
+    }));
+}
+
+async function discoverModelsForOnboard(params: {
+  providerId: string;
+  baseUrl: string;
+  apiKey: string;
+  api: CustomApiKind;
+  headers?: Record<string, string>;
+}): Promise<ModelChoice[]> {
+  if (!isProviderApiDiscoverable(params.api)) return [];
+  try {
+    console.log('\n→ Discovering models from /models...');
+    const models = await discoverProviderModels({
+      providerId: params.providerId,
+      baseUrl: params.baseUrl,
+      apiKey: params.apiKey,
+      api: params.api,
+      headers: params.headers,
+    });
+    const choices = discoveredModelsToChoices(params.providerId, models);
+    if (choices.length > 0) {
+      console.log(colors.green(`✓ Discovered ${choices.length} models`));
+      return choices;
+    }
+  } catch (error) {
+    console.log(colors.gray(`Model discovery unavailable: ${error instanceof Error ? error.message : String(error)}`));
+  }
+  return [];
 }
 
 async function doOAuthLogin(provider: string): Promise<boolean> {
@@ -210,10 +274,23 @@ async function setupCustomApi(config: Config, ctx: CLIContext): Promise<Config> 
     ],
   });
 
-  const modelId = (await input({
-    message: 'Model ID:',
-    validate: (value) => value.trim().length > 0 || 'Required',
-  })).trim();
+  const discoveredChoices = await discoverModelsForOnboard({
+    providerId: defaultProviderIdFromBaseUrl(baseUrl),
+    baseUrl,
+    apiKey,
+    api,
+  });
+  const modelRef =
+    discoveredChoices.length > 0
+      ? await select({
+          message: 'Model:',
+          choices: discoveredChoices.map((choice) => ({ ...choice, name: modelChoiceName(choice) })),
+        })
+      : (await input({
+          message: 'Model ID:',
+          validate: (value) => value.trim().length > 0 || 'Required',
+        })).trim();
+  const modelId = modelRef.includes('/') ? modelRef.split('/').slice(1).join('/') : modelRef;
 
   console.log('\n→ Probing endpoint...');
   await probeCustomProvider({ baseUrl, apiKey, modelId, api });
@@ -240,7 +317,12 @@ async function setupCustomApi(config: Config, ctx: CLIContext): Promise<Config> 
         baseUrl,
         apiKey,
         api,
-        models: [{ id: modelId, name: modelId, api, contextWindow: 128000, input: ['text'] }],
+        models: (discoveredChoices.length > 0 ? discoveredChoices : [{ value: `${providerId}/${modelId}`, name: modelId }]).map(
+          (choice) => {
+            const id = choice.value.split('/').slice(1).join('/');
+            return { id, name: choice.name, api, contextWindow: 128000, input: ['text'] };
+          },
+        ),
       },
     },
   };
@@ -253,6 +335,114 @@ async function setupCustomApi(config: Config, ctx: CLIContext): Promise<Config> 
   const ref = `${providerId}/${modelId}`;
   console.log('\n✅ Custom model configured:', ref);
   return setPrimaryModel(config, ctx.workspacePath, ref);
+}
+
+function resolvePresetEnvCredential(preset: DomesticProviderPreset): { envVar: string; value: string } | undefined {
+  for (const envVar of preset.envVars) {
+    const value = process.env[envVar]?.trim();
+    if (value) return { envVar, value };
+  }
+  return undefined;
+}
+
+async function setupDomesticPreset(
+  config: Config,
+  ctx: CLIContext,
+  preset: DomesticProviderPreset,
+): Promise<Config> {
+  console.log(`\n🇨🇳 ${preset.displayName}\n`);
+  console.log(preset.description);
+  if (preset.quirks?.length) {
+    for (const quirk of preset.quirks) {
+      console.log(colors.gray(`Note: ${quirk}`));
+    }
+  }
+
+  const baseUrlChoice = await select({
+    message: 'Endpoint:',
+    choices: [
+      ...preset.baseUrlPresets.map((entry) => ({
+        value: entry.baseUrl,
+        name: entry.label,
+        description: entry.description ?? entry.baseUrl,
+      })),
+      { value: 'custom', name: 'Custom URL' },
+    ],
+    default: getDomesticProviderBaseUrl(preset),
+  });
+  const baseUrl =
+    baseUrlChoice === 'custom'
+      ? (await input({
+          message: 'API base URL:',
+          default: getDomesticProviderBaseUrl(preset),
+          validate: (value) => URL.canParse(value) || 'Enter a valid URL',
+        })).trim()
+      : baseUrlChoice;
+
+  const envCredential = resolvePresetEnvCredential(preset);
+  if (envCredential) {
+    console.log(`\n${colors.green('✓')} Found ${envCredential.envVar} in environment`);
+  }
+  const apiKeyConfig = envCredential
+    ? envCredential.envVar
+    : (await input({
+        message: `API key for ${preset.displayName}:`,
+        validate: (value) => value.trim().length > 0 || 'Required',
+      })).trim();
+  const probeApiKey = envCredential?.value ?? apiKeyConfig;
+
+  const discoveredChoices = await discoverModelsForOnboard({
+    providerId: preset.id,
+    baseUrl,
+    apiKey: probeApiKey,
+    api: preset.api as CustomApiKind,
+    headers: preset.headers,
+  });
+  const modelChoices = discoveredChoices.length > 0 ? discoveredChoices : getModelsForProvider(preset.id);
+  const modelRef = await select({
+    message: 'Model:',
+    choices: modelChoices.map((choice) => ({ ...choice, name: modelChoiceName(choice) })),
+    default: `${preset.id}/${preset.defaultModel}`,
+  });
+  const modelId = modelRef.split('/').slice(1).join('/');
+
+  const shouldProbe = await confirm({
+    message: 'Probe endpoint now?',
+    default: !modelId.includes('your-endpoint-id'),
+  });
+  if (shouldProbe) {
+    try {
+      console.log('\n→ Probing endpoint...');
+      await probeCustomProvider({ baseUrl, apiKey: probeApiKey, modelId, api: preset.api as CustomApiKind });
+      console.log(colors.green('✓ Probe succeeded'));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      const continueAnyway = await confirm({ message: 'Save this provider anyway?', default: false });
+      if (!continueAnyway) return config;
+    }
+  }
+
+  const path = getModelsJsonPath();
+  const { config: modelsConfig } = loadModelsJson(path);
+  const nextModelsConfig: ModelsJsonConfig = {
+    providers: {
+      ...(modelsConfig.providers ?? {}),
+      [preset.id]: providerConfigFromDomesticPreset(preset, {
+        baseUrl,
+        apiKey: apiKeyConfig,
+        modelIds: modelChoices.map((choice) => choice.value.split('/').slice(1).join('/')),
+      }),
+    },
+  };
+  const saved = saveModelsJson(path, nextModelsConfig);
+  if (!saved.success) {
+    throw new Error(saved.error || 'Failed to save models.json');
+  }
+  getModelRegistry().refresh();
+
+  console.log('\n✅ Provider configured:', preset.displayName);
+  console.log('✅ Model configured:', modelRef);
+  return setPrimaryModel(config, ctx.workspacePath, modelRef);
 }
 
 async function ensureProviderCredential(provider: string, providerName: string): Promise<boolean> {
@@ -325,6 +515,11 @@ export async function setupModel(existingConfig: Config | null, ctx: CLIContext)
 
   if (provider === 'custom-api') {
     return await setupCustomApi(config, ctx);
+  }
+
+  const domesticPreset = getDomesticProviderPreset(provider);
+  if (domesticPreset) {
+    return await setupDomesticPreset(config, ctx, domesticPreset);
   }
 
   const providerName = getProviderDisplayName(provider);

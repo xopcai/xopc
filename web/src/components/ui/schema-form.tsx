@@ -3,6 +3,7 @@ import { useCallback, useMemo } from 'react';
 import { SecretInput } from '@/components/ui/secret-input';
 import { cn } from '@/lib/cn';
 import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export type JsonSchema = Record<string, unknown>;
 
@@ -98,7 +99,7 @@ function StringField({
     return (
       <div className="flex flex-col gap-1.5">
         {desc ? <label className="text-xs text-fg-muted">{desc}</label> : null}
-        <select
+        <Select
           name={name}
           className="ui-input h-9 rounded-md border border-edge bg-surface-base px-2 text-sm text-fg"
           value={value}
@@ -106,11 +107,11 @@ function StringField({
           onChange={(e) => onChange(e.target.value)}
         >
           {(s.enum).map((op) => (
-            <option key={op} value={op}>
+            <SelectOption key={op} value={op}>
               {op}
-            </option>
+            </SelectOption>
           ))}
-        </select>
+        </Select>
       </div>
     );
   }

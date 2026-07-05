@@ -45,6 +45,7 @@ import {
   type WorkflowRunSummary,
   type WorkflowRunStatus,
 } from '@/features/workflows/workflow-api';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type GoalStatus = 'active' | 'paused' | 'blocked' | 'needs_input' | 'done' | 'archived';
 type ChecklistStatus = 'pending' | 'completed' | 'impossible';
@@ -909,18 +910,18 @@ export function GoalDetailPage() {
                       <div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
                         <label className="grid gap-1 text-xs font-medium text-fg-muted">
                           {t.kind}
-                          <select
+                          <Select
                             value={evidenceKind}
                             onChange={(e) => setEvidenceKind(e.target.value as EvidenceKind)}
                             className={fieldClass}
                             name="evidenceKind"
                           >
                             {evidenceKinds.map((kind) => (
-                              <option key={kind} value={kind}>
+                              <SelectOption key={kind} value={kind}>
                                 {evidenceKindLabel(kind, t)}
-                              </option>
+                              </SelectOption>
                             ))}
-                          </select>
+                          </Select>
                         </label>
                         <label className="grid gap-1 text-xs font-medium text-fg-muted">
                           {t.title}
@@ -1130,16 +1131,16 @@ export function GoalDetailPage() {
                       <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-1">
                         <label className="grid gap-1 text-xs font-medium text-fg-muted">
                           {t.priority}
-                          <select
+                          <Select
                             value={priorityDraft}
                             onChange={(e) => setPriorityDraft(e.target.value as GoalDetail['priority'])}
                             name="goalPriority"
                             className={fieldClass}
                           >
-                            <option value="low">{t.priorities.low}</option>
-                            <option value="normal">{t.priorities.normal}</option>
-                            <option value="high">{t.priorities.high}</option>
-                          </select>
+                            <SelectOption value="low">{t.priorities.low}</SelectOption>
+                            <SelectOption value="normal">{t.priorities.normal}</SelectOption>
+                            <SelectOption value="high">{t.priorities.high}</SelectOption>
+                          </Select>
                         </label>
                         <label className="grid gap-1 text-xs font-medium text-fg-muted">
                           {t.deadline}
@@ -1251,20 +1252,20 @@ export function GoalDetailPage() {
                   <div className="mt-3 grid gap-2">
                     <label className="grid gap-1 text-xs font-medium text-fg-muted">
                       {t.definition}
-                      <select
+                      <Select
                         value={workflowDefinitionDraft}
                         onChange={(e) => setWorkflowDefinitionDraft(e.target.value)}
                         className={fieldClass}
                         name="workflowDefinition"
                         disabled={workflowDefinitions.length === 0}
                       >
-                        {workflowDefinitions.length === 0 ? <option value="">{t.noWorkflows}</option> : null}
+                        {workflowDefinitions.length === 0 ? <SelectOption value="">{t.noWorkflows}</SelectOption> : null}
                         {workflowDefinitions.map((definition) => (
-                          <option key={definition.id} value={definition.id}>
+                          <SelectOption key={definition.id} value={definition.id}>
                             {definition.title || definition.name}
-                          </option>
+                          </SelectOption>
                         ))}
-                      </select>
+                      </Select>
                     </label>
                     <label className="grid gap-1 text-xs font-medium text-fg-muted">
                       {t.workflowGoal}

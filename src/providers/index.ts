@@ -312,7 +312,7 @@ export async function getAvailableModels(): Promise<readonly Model<Api>[]> {
 
 export type { Model, Api } from '@earendil-works/pi-ai';
 
-export type ProviderCategory = 'common' | 'specialty' | 'oauth' | 'enterprise' | 'extension';
+export type ProviderCategory = 'common' | 'domestic' | 'specialty' | 'oauth' | 'enterprise' | 'extension';
 
 export interface ProviderMeta {
   name: string;
@@ -324,33 +324,48 @@ export interface ProviderMeta {
 export const PROVIDER_META: Record<string, ProviderMeta> = {
   'openai': { name: 'OpenAI', category: 'common', supportsApiKey: true },
   'anthropic': { name: 'Anthropic', category: 'common', supportsApiKey: true, supportsOAuth: true },
-  'deepseek': { name: 'DeepSeek', category: 'common', supportsApiKey: true },
+  'deepseek': { name: 'DeepSeek', category: 'domestic', supportsApiKey: true },
   'google': { name: 'Google AI', category: 'common', supportsApiKey: true },
   'groq': { name: 'Groq', category: 'common', supportsApiKey: true },
-  'minimax': { name: 'MiniMax', category: 'common', supportsApiKey: true, supportsOAuth: true },
-  'minimax-cn': { name: 'MiniMax CN', category: 'common', supportsApiKey: true, supportsOAuth: true },
-  'kimi-coding': { name: 'Kimi For Coding', category: 'common', supportsApiKey: true, supportsOAuth: true },
+  'minimax': { name: 'MiniMax', category: 'domestic', supportsApiKey: true, supportsOAuth: true },
+  'minimax-cn': { name: 'MiniMax CN', category: 'domestic', supportsApiKey: true, supportsOAuth: true },
+  'kimi-coding': { name: 'Kimi For Coding', category: 'domestic', supportsApiKey: true, supportsOAuth: true },
   'xai': { name: 'xAI', category: 'specialty', supportsApiKey: true },
   'mistral': { name: 'Mistral AI', category: 'specialty', supportsApiKey: true },
   'cerebras': { name: 'Cerebras', category: 'specialty', supportsApiKey: true },
   'openrouter': { name: 'OpenRouter', category: 'specialty', supportsApiKey: true },
   'huggingface': { name: 'Hugging Face', category: 'specialty', supportsApiKey: true },
-  moonshotai: { name: 'Moonshot AI (Kimi · International)', category: 'common', supportsApiKey: true },
-  'moonshotai-cn': { name: 'Moonshot AI (Kimi · China)', category: 'common', supportsApiKey: true },
+  moonshotai: { name: 'Moonshot AI (Kimi · International)', category: 'domestic', supportsApiKey: true },
+  'moonshotai-cn': { name: 'Moonshot AI (Kimi · China)', category: 'domestic', supportsApiKey: true },
   fireworks: { name: 'Fireworks AI', category: 'specialty', supportsApiKey: true },
   together: { name: 'Together AI', category: 'specialty', supportsApiKey: true },
   'cloudflare-workers-ai': { name: 'Cloudflare Workers AI', category: 'enterprise', supportsApiKey: true },
   'cloudflare-ai-gateway': { name: 'Cloudflare AI Gateway', category: 'enterprise', supportsApiKey: true },
-  xiaomi: { name: 'Xiaomi Mimo', category: 'specialty', supportsApiKey: true },
-  'xiaomi-token-plan-cn': { name: 'Xiaomi Token Plan (CN)', category: 'specialty', supportsApiKey: true },
-  'xiaomi-token-plan-ams': { name: 'Xiaomi Token Plan (AMS)', category: 'specialty', supportsApiKey: true },
-  'xiaomi-token-plan-sgp': { name: 'Xiaomi Token Plan (SGP)', category: 'specialty', supportsApiKey: true },
+  xiaomi: { name: 'Xiaomi Mimo', category: 'domestic', supportsApiKey: true },
+  'xiaomi-token-plan-cn': { name: 'Xiaomi Token Plan (CN)', category: 'domestic', supportsApiKey: true },
+  'xiaomi-token-plan-ams': { name: 'Xiaomi Token Plan (AMS)', category: 'domestic', supportsApiKey: true },
+  'xiaomi-token-plan-sgp': { name: 'Xiaomi Token Plan (SGP)', category: 'domestic', supportsApiKey: true },
   'opencode': { name: 'OpenCode', category: 'specialty', supportsApiKey: true },
   'opencode-go': { name: 'OpenCode Go', category: 'specialty', supportsApiKey: true },
-  /** DashScope (Alibaba) — image, speech, STT; not an LLM KnownProvider. */
-  'dashscope': { name: 'DashScope (Alibaba)', category: 'specialty', supportsApiKey: true },
+  'dashscope': { name: 'DashScope (Alibaba)', category: 'domestic', supportsApiKey: true },
+  'dashscope-cn': { name: 'Alibaba Bailian / DashScope China', category: 'domestic', supportsApiKey: true },
+  'dashscope-intl': { name: 'Alibaba Bailian / DashScope International', category: 'domestic', supportsApiKey: true },
+  'volcengine-ark': { name: 'Volcengine Ark', category: 'domestic', supportsApiKey: true },
+  'volcengine-plan': { name: 'Volcengine Doubao Coding Plan', category: 'domestic', supportsApiKey: true },
+  'byteplus-plan': { name: 'BytePlus Doubao Coding Plan', category: 'domestic', supportsApiKey: true },
+  'stepfun': { name: 'StepFun', category: 'domestic', supportsApiKey: true },
+  'stepfun-cn': { name: 'StepFun China', category: 'domestic', supportsApiKey: true },
+  'stepfun-intl': { name: 'StepFun International', category: 'domestic', supportsApiKey: true },
+  'stepfun-plan': { name: 'StepFun Step Plan', category: 'domestic', supportsApiKey: true },
+  'stepfun-plan-cn': { name: 'StepFun Step Plan China', category: 'domestic', supportsApiKey: true },
+  'stepfun-plan-intl': { name: 'StepFun Step Plan International', category: 'domestic', supportsApiKey: true },
+  'ant-ling': { name: 'Ant Ling', category: 'domestic', supportsApiKey: true },
+  'zhipu-cn': { name: 'Zhipu GLM (China)', category: 'domestic', supportsApiKey: true },
+  'zai-coding-cn': { name: 'Zhipu GLM Coding Plan (China)', category: 'domestic', supportsApiKey: true },
+  'zai-coding-global': { name: 'Zhipu GLM Coding Plan (International)', category: 'domestic', supportsApiKey: true },
+  'zhipu-coding-cn': { name: 'Zhipu GLM Coding Plan (China)', category: 'domestic', supportsApiKey: true },
   /** International GLM (api.z.ai). Auth: API key (ZAI_API_KEY); no published OAuth for this HTTP API. */
-  'zai': { name: 'Zhipu GLM (International · z.ai)', category: 'common', supportsApiKey: true },
+  'zai': { name: 'Zhipu GLM (International · z.ai)', category: 'domestic', supportsApiKey: true },
   'amazon-bedrock': { name: 'Amazon Bedrock', category: 'enterprise', supportsApiKey: true },
   'azure-openai-responses': { name: 'Azure OpenAI', category: 'enterprise', supportsApiKey: true },
   'google-vertex': { name: 'Google Vertex AI', category: 'enterprise', supportsApiKey: true },
@@ -363,7 +378,14 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
 
 export function getSortedProviders(): string[] {
   const all = getAllProviders();
-  const catOrder: Record<ProviderCategory, number> = { common: 0, specialty: 1, enterprise: 2, oauth: 3, extension: 4 };
+  const catOrder: Record<ProviderCategory, number> = {
+    common: 0,
+    domestic: 1,
+    specialty: 2,
+    enterprise: 3,
+    oauth: 4,
+    extension: 5,
+  };
   const pluginRegistry = getProviderRegistry();
 
   return [...all].sort((a, b) => {
@@ -398,7 +420,7 @@ export function providerSupportsApiKey(provider: string): boolean {
  * Get a default model reference.
  * Priority:
  * 1. Effective model inherited from the global default preset / agent presets / agent override
- * 2. Empty string when onboarding still needs to choose a global default model
+ * 2. Empty string only when no default model is present in the loaded config
  */
 export async function getDefaultModel(config?: Config | null | undefined): Promise<string> {
   const modelRef = config ? getAgentDefaultModelRef(config) : undefined;
@@ -421,8 +443,8 @@ export async function getDefaultModel(config?: Config | null | undefined): Promi
  * Synchronous default model resolution for constructors and sync code paths.
  * Uses catalog/registry only (no async credential checks).
  *
- * When no model is explicitly configured, returns an empty string so setup
- * flows can prompt for the global default model.
+ * When no model is present in the loaded config, returns an empty string so
+ * setup flows can prompt for the global default model.
  */
 export function getDefaultModelSync(config?: Config | null | undefined): string {
   const modelRef = config ? getAgentDefaultModelRef(config) : undefined;

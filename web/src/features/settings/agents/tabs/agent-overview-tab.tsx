@@ -28,6 +28,7 @@ import {
   SOUL_TEMPLATES,
   type SoulTemplateId,
 } from '../agent-profile-markdown';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export function AgentOverviewTab(props: {
   a: AgentsSettingsMessages;
@@ -253,7 +254,7 @@ export function AgentOverviewTab(props: {
 
           <div className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium text-fg">{a.personaCreature}</span>
-            <select
+            <Select
               className={inputClass}
               value={CREATURE_PRESETS.some((p) => p.value === identity.creature) ? identity.creature : '__custom__'}
               onChange={(e) => {
@@ -265,12 +266,12 @@ export function AgentOverviewTab(props: {
               }}
             >
               {CREATURE_PRESETS.map((preset) => (
-                <option key={preset.value} value={preset.value}>
+                <SelectOption key={preset.value} value={preset.value}>
                   {locLabel(preset.labelEn, preset.labelZh)}
-                </option>
+                </SelectOption>
               ))}
-              <option value="__custom__">{locLabel('Custom…', '自定义…')}</option>
-            </select>
+              <SelectOption value="__custom__">{locLabel('Custom…', '自定义…')}</SelectOption>
+            </Select>
             {!CREATURE_PRESETS.some((p) => p.value === identity.creature) ? (
               <input
                 className={cn(inputClass, 'mt-1 text-xs')}

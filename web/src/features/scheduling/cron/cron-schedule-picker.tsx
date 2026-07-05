@@ -8,7 +8,8 @@ import {
   type SchedulePickerMode,
 } from '@/features/scheduling/cron/cron-expression';
 import { cn } from '@/lib/cn';
-import { formControlBorderFocusClass, selectControlBaseClass } from '@/lib/form-field-width';
+import { formControlBorderFocusClass, selectTriggerClass } from '@/lib/form-field-width';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 const MINUTE_VALUES: readonly number[] = Array.from({ length: 60 }, (_, idx) => idx);
 
@@ -34,7 +35,7 @@ export type CronSchedulePickerLabels = {
 };
 
 const pickerSelectClass = cn(
-  selectControlBaseClass,
+  selectTriggerClass,
   'min-w-0 shrink text-xs sm:min-w-[7rem] sm:max-w-[11rem]',
 );
 
@@ -154,7 +155,7 @@ export function CronSchedulePicker({
 
   const modeRow = (
     <div className="flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto pb-0.5">
-      <select
+      <Select
         className={pickerSelectClass}
         disabled={disabled}
         value={mode}
@@ -164,14 +165,14 @@ export function CronSchedulePicker({
         }}
         aria-label={labels.scheduleTimeLabel}
       >
-        <option value="no_repeat">{labels.modeNoRepeat}</option>
-        <option value="interval">{labels.modeInterval}</option>
-        <option value="hourly">{labels.modeHourly}</option>
-        <option value="daily">{labels.modeDaily}</option>
-        <option value="weekly">{labels.modeWeekly}</option>
-        <option value="monthly">{labels.modeMonthly}</option>
-        <option value="custom">{labels.modeCustom}</option>
-      </select>
+        <SelectOption value="no_repeat">{labels.modeNoRepeat}</SelectOption>
+        <SelectOption value="interval">{labels.modeInterval}</SelectOption>
+        <SelectOption value="hourly">{labels.modeHourly}</SelectOption>
+        <SelectOption value="daily">{labels.modeDaily}</SelectOption>
+        <SelectOption value="weekly">{labels.modeWeekly}</SelectOption>
+        <SelectOption value="monthly">{labels.modeMonthly}</SelectOption>
+        <SelectOption value="custom">{labels.modeCustom}</SelectOption>
+      </Select>
 
       {mode === 'no_repeat' && (
         <>
@@ -199,7 +200,7 @@ export function CronSchedulePicker({
 
       {mode === 'interval' && (
         <>
-          <select
+          <Select
             className={cn(pickerSelectClass, 'w-auto min-w-[5rem]')}
             disabled={disabled}
             value={intervalKind}
@@ -209,9 +210,9 @@ export function CronSchedulePicker({
             }}
             aria-label={labels.modeInterval}
           >
-            <option value="minutes">{labels.intervalKindMinutes}</option>
-            <option value="hours">{labels.intervalKindHours}</option>
-          </select>
+            <SelectOption value="minutes">{labels.intervalKindMinutes}</SelectOption>
+            <SelectOption value="hours">{labels.intervalKindHours}</SelectOption>
+          </Select>
           {intervalKind === 'minutes' ? (
             <>
               <input
@@ -273,7 +274,7 @@ export function CronSchedulePicker({
                 aria-label={labels.intervalHours}
               />
               <span className="shrink-0 text-sm text-fg-muted">{labels.hourUnit}</span>
-              <select
+              <Select
                 className={cn(pickerSelectClass, 'w-auto min-w-[4rem]')}
                 disabled={disabled}
                 value={minute}
@@ -284,11 +285,11 @@ export function CronSchedulePicker({
                 aria-label={labels.minuteAtHour}
               >
                 {MINUTE_VALUES.map((m) => (
-                  <option key={m} value={m}>
+                  <SelectOption key={m} value={m}>
                     {String(m).padStart(2, '0')}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </Select>
               <span className="shrink-0 text-sm text-fg-muted">{labels.minuteUnit}</span>
             </>
           )}
@@ -321,7 +322,7 @@ export function CronSchedulePicker({
 
       {mode === 'monthly' && (
         <>
-          <select
+          <Select
             className={cn(pickerSelectClass, 'w-auto min-w-[4.5rem]')}
             disabled={disabled}
             value={dayOfMonth}
@@ -332,11 +333,11 @@ export function CronSchedulePicker({
             aria-label={labels.dayOfMonth}
           >
             {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
-              <option key={d} value={d}>
+              <SelectOption key={d} value={d}>
                 {d}
-              </option>
+              </SelectOption>
             ))}
-          </select>
+          </Select>
           <input
             type="time"
             step={60}
@@ -351,7 +352,7 @@ export function CronSchedulePicker({
 
       {mode === 'hourly' && (
         <>
-          <select
+          <Select
             className={cn(pickerSelectClass, 'w-auto min-w-[4rem]')}
             disabled={disabled}
             value={minute}
@@ -362,11 +363,11 @@ export function CronSchedulePicker({
             aria-label={labels.minuteAtHour}
           >
             {MINUTE_VALUES.map((m) => (
-              <option key={m} value={m}>
+              <SelectOption key={m} value={m}>
                 {String(m).padStart(2, '0')}
-              </option>
+              </SelectOption>
             ))}
-          </select>
+          </Select>
           <span className="shrink-0 text-sm text-fg-muted">{labels.minuteUnit}</span>
         </>
       )}

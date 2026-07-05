@@ -47,6 +47,7 @@ import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 // ── Tab plumbing ──────────────────────────────────────────────────────────────
 
@@ -413,7 +414,7 @@ function CreateShareSection({
         {isDirectory ? (
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-fg">{t.directoryModeLabel}</span>
-            <select
+            <Select
               className="rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent"
               value={directoryMode}
               onChange={(e) =>
@@ -423,31 +424,31 @@ function CreateShareSection({
                 })
               }
             >
-              <option value="browse">{t.directoryModeBrowse}</option>
-              <option value="zip-only">{t.directoryModeZipOnly}</option>
-            </select>
+              <SelectOption value="browse">{t.directoryModeBrowse}</SelectOption>
+              <SelectOption value="zip-only">{t.directoryModeZipOnly}</SelectOption>
+            </Select>
           </label>
         ) : null}
 
         <div className="flex flex-wrap gap-3">
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-fg">{t.ttlLabel}</span>
-            <select
+            <Select
               className="rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent"
               value={ttlMs}
               onChange={(e) => dispatch({ type: 'patch', patch: { ttlMs: Number(e.target.value) } })}
             >
               {TTL_OPTIONS.map((opt) => (
-                <option key={opt.key} value={opt.value}>
+                <SelectOption key={opt.key} value={opt.value}>
                   {t.ttlOptions[opt.key]}
-                </option>
+                </SelectOption>
               ))}
-            </select>
+            </Select>
           </label>
 
           <label className="flex flex-col gap-1">
             <span className="text-xs font-medium text-fg">{t.maxViewsLabel}</span>
-            <select
+            <Select
               className="rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent"
               value={maxViews ?? 'unlimited'}
               onChange={(e) =>
@@ -459,13 +460,13 @@ function CreateShareSection({
                 })
               }
             >
-              <option value="unlimited">{t.maxViewsUnlimited}</option>
-              <option value="1">1</option>
-              <option value="5">5</option>
-              <option value="10">10</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
-            </select>
+              <SelectOption value="unlimited">{t.maxViewsUnlimited}</SelectOption>
+              <SelectOption value="1">1</SelectOption>
+              <SelectOption value="5">5</SelectOption>
+              <SelectOption value="10">10</SelectOption>
+              <SelectOption value="50">50</SelectOption>
+              <SelectOption value="100">100</SelectOption>
+            </Select>
           </label>
         </div>
 

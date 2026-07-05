@@ -15,6 +15,7 @@ import {
   type WorkflowDraftConstraints,
   type WorkflowDraftResponse,
 } from './workflow-api';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type WorkflowsMessages = ReturnType<typeof messages>['workflows'];
 type CreateMode = 'ai' | 'manual';
@@ -272,15 +273,15 @@ function AiCreatePane({
             </label>
             <label className="block">
               <span className="text-xs font-medium text-fg">{labels.nlBuilderFilesystem}</span>
-              <select
+              <Select
                 value={constraints.fileSystem ?? 'read'}
                 onChange={(event) => setConstraints((value) => ({ ...value, fileSystem: event.target.value as WorkflowDraftConstraints['fileSystem'] }))}
                 className="mt-1.5 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
               >
-                <option value="none">none</option>
-                <option value="read">read</option>
-                <option value="write">write</option>
-              </select>
+                <SelectOption value="none">none</SelectOption>
+                <SelectOption value="read">read</SelectOption>
+                <SelectOption value="write">write</SelectOption>
+              </Select>
             </label>
           </div>
 

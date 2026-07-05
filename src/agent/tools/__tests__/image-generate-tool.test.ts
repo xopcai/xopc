@@ -44,13 +44,56 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function makeTool() {
-  const tool = createImageGenerateTool({ workspace, config: {} as any });
+function makeTool(config: any = {}) {
+  const tool = createImageGenerateTool({ workspace, config });
   expect(tool).not.toBeNull();
   return tool!;
 }
 
 describe('image_generate tool — Step 2 input wiring', () => {
+  it('uses explicitly configured image-generation model settings before auto provider defaults', async () => {
+    generateImageMock.mockResolvedValueOnce({
+      images: [{ buffer: PNG_HEADER, mimeType: 'image/png' }],
+      provider: 'openai',
+      model: 'gpt-image-1',
+      attempts: [],
+      ignoredOverrides: [],
+    });
+    const tool = makeTool({
+      agents: {
+        default: 'main',
+        defaultPreset: 'default',
+        capabilityPresets: {
+          default: {
+            models: {
+              imageGenerationModel: {
+                primary: 'openai/gpt-image-1',
+                fallbacks: ['google/gemini-2.5-flash-image-preview'],
+                timeoutMs: 120_000,
+                autoProviderFallback: true,
+              },
+            },
+          },
+        },
+        list: [{ id: 'main', enabled: true }],
+      },
+    });
+
+    await tool.execute('tc-explicit', { prompt: 'sunset' } as any, {} as any, () => {});
+
+    expect(generateImageMock).toHaveBeenCalledTimes(1);
+    expect(generateImageMock.mock.calls[0]?.[0]).toMatchObject({
+      modelConfig: {
+        primary: 'openai/gpt-image-1',
+        fallbacks: ['google/gemini-2.5-flash-image-preview'],
+        timeoutMs: 120_000,
+        autoProviderFallback: true,
+      },
+      timeoutMs: 120_000,
+      autoProviderFallback: true,
+    });
+  });
+
   it('forwards new optional fields (aspectRatio/resolution/quality/outputFormat/background/providerOptions) to generateImage', async () => {
     generateImageMock.mockResolvedValueOnce({
       images: [{ buffer: PNG_HEADER, mimeType: 'image/png' }],

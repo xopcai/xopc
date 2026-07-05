@@ -9,6 +9,7 @@ import type { AgentsSettingsMessages } from '@/i18n/messages';
 
 import { AgentConfigInheritanceSummary } from '../agent-config-inheritance-summary';
 import { AgentEffectiveCapabilityTab } from './agent-effective-capability-tab';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type AgentConfigSubtab = 'sources' | 'shared' | 'effective';
 
@@ -283,17 +284,17 @@ export function AgentSharedSettingsTab({
         </div>
         {availablePresetIds.length > 0 ? (
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
+            <Select
               className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg focus:border-edge-strong focus:outline-none"
               disabled={busy}
               defaultValue={selectedPresetId}
             >
               {availablePresetIds.map((presetId) => (
-                <option key={presetId} value={presetId}>
+                <SelectOption key={presetId} value={presetId}>
                   {presetById.get(presetId)?.name ?? presetId}
-                </option>
+                </SelectOption>
               ))}
-            </select>
+            </Select>
             <Button
               type="button"
               variant="secondary"

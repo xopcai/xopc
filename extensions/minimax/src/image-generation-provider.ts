@@ -20,7 +20,6 @@ import type {
   ImageGenerationProviderCapabilities,
   ImageGenerationRequest,
   ImageGenerationResult,
-  ImageProviderUiMetadata,
 } from '@xopcai/xopc/agent/image/generation/types.js';
 
 const log = createLogger('ImageGen:MiniMax');
@@ -33,18 +32,10 @@ const log = createLogger('ImageGen:MiniMax');
 export const MINIMAX_IMAGE_MODELS: readonly string[] = ['image-01', 'image-01-live'];
 export const MINIMAX_DEFAULT_IMAGE_MODEL = MINIMAX_IMAGE_MODELS[0]!;
 
-/** CN region (default for `minimax` ids registered in mainland China). */
+/** CN region. */
 const MINIMAX_CN_BASE_URL = 'https://api.minimaxi.com';
-/** International region (used when the configured key matches `*_INTL_*`). */
+/** International region. */
 const MINIMAX_INTL_BASE_URL = 'https://api.minimax.io';
-
-const MINIMAX_IMAGE_UI: ImageProviderUiMetadata = {
-  baseUrlPresets: [
-    { value: MINIMAX_CN_BASE_URL, label: 'China (api.minimaxi.com)' },
-    { value: MINIMAX_INTL_BASE_URL, label: 'International (api.minimax.io)' },
-  ],
-  baseUrlPresetKind: 'minimax',
-};
 
 const DEFAULT_TIMEOUT_MS = 120_000;
 
@@ -57,36 +48,38 @@ const MINIMAX_CAPABILITIES: ImageGenerationProviderCapabilities = {
 
 function readMinimaxCfgString(
   cfg: ImageGenerationRequest['cfg'],
+  providerId: string,
   key: string,
 ): string | undefined {
   const providers = (cfg as unknown as { providers?: Record<string, unknown> } | undefined)?.providers;
   if (!providers || typeof providers !== 'object') return undefined;
-  const entry = (providers as Record<string, unknown>)['minimax'];
+  const entry = (providers as Record<string, unknown>)[providerId];
   if (!entry || typeof entry !== 'object') return undefined;
   const v = (entry as Record<string, unknown>)[key];
   return typeof v === 'string' && v.trim() ? v.trim() : undefined;
 }
 
 /**
- * Resolve MiniMax base URL with CN/Intl auto-detection:
- * 1. cfg.providers.minimax.baseUrl
+ * Resolve MiniMax base URL:
+ * 1. cfg.providers[providerId].baseUrl
  * 2. MINIMAX_BASE_URL env
- * 3. Auto: when MINIMAX_INTL_API_KEY env is the only key present, default to Intl;
- *    otherwise CN.
+ * 3. Provider default base URL
  */
-export function resolveMinimaxBaseUrl(req: ImageGenerationRequest): string {
-  const fromCfg = readMinimaxCfgString(req.cfg, 'baseUrl');
+export function resolveMinimaxBaseUrl(
+  req: ImageGenerationRequest,
+  defaultBaseUrl?: string,
+): string {
+  const providerId = req.provider?.trim() || 'minimax';
+  const fromCfg = readMinimaxCfgString(req.cfg, providerId, 'baseUrl');
   if (fromCfg) return fromCfg.replace(/\/+$/, '');
   const fromEnv = process.env.MINIMAX_BASE_URL?.trim();
   if (fromEnv) return fromEnv.replace(/\/+$/, '');
-  if (process.env.MINIMAX_INTL_API_KEY && !process.env.MINIMAX_API_KEY) {
-    return MINIMAX_INTL_BASE_URL;
-  }
-  return MINIMAX_CN_BASE_URL;
+  if (defaultBaseUrl) return defaultBaseUrl;
+  return providerId === 'minimax' ? MINIMAX_INTL_BASE_URL : MINIMAX_CN_BASE_URL;
 }
 
-function resolveMinimaxImageUrl(req: ImageGenerationRequest): string {
-  return `${resolveMinimaxBaseUrl(req)}/v1/image_generation`;
+function resolveMinimaxImageUrl(req: ImageGenerationRequest, defaultBaseUrl?: string): string {
+  return `${resolveMinimaxBaseUrl(req, defaultBaseUrl)}/v1/image_generation`;
 }
 
 export type MinimaxAspectRatio = '1:1' | '16:9' | '9:16' | '4:3' | '3:4';
@@ -133,8 +126,11 @@ type MiniMaxImageResponse = {
 export async function generateMinimaxImages(params: {
   req: ImageGenerationRequest;
   apiKey: string;
+  providerId?: string;
+  defaultBaseUrl?: string;
 }): Promise<ImageGenerationResult> {
   const { req, apiKey } = params;
+  const providerId = params.providerId ?? req.provider ?? 'minimax-cn';
   if (req.inputImages && req.inputImages.length > 0) {
     throw new Error('Image-to-image is not supported for MiniMax in this build');
   }
@@ -143,21 +139,21 @@ export async function generateMinimaxImages(params: {
   // Honour explicit aspectRatio first; fall back to size-derived mapping.
   const aspectRatio = req.aspectRatio?.trim() || mapSizeToMinimaxAspectRatio(req.size);
 
-  const url = resolveMinimaxImageUrl(req);
+  const url = resolveMinimaxImageUrl(req, params.defaultBaseUrl);
   const httpDefaults = resolveProviderHttpRequestConfig({
-    providerId: 'minimax',
+    providerId,
     cfg: req.cfg,
     fallbackTimeoutMs: DEFAULT_TIMEOUT_MS,
   });
 
   log.debug(
-    { providerId: 'minimax', model, url, aspectRatio, phase: 'request' },
+    { providerId, model, url, aspectRatio, phase: 'request' },
     'MiniMax image generation request',
   );
 
   const timeoutMs = pickTimeoutMsOrFallback(req.timeoutMs, httpDefaults.timeoutMs, DEFAULT_TIMEOUT_MS);
   const res = await postJsonRequest(url, {
-    label: 'minimax',
+    label: providerId,
     timeoutMs,
     signal: req.signal,
     body: {
@@ -202,21 +198,47 @@ export async function generateMinimaxImages(params: {
   return { images, model };
 }
 
-export function buildMinimaxImageGenerationProvider(): ImageGenerationProvider {
+function createMinimaxImageGenerationProvider(options: {
+  id: string;
+  label: string;
+  defaultBaseUrl?: string;
+}): ImageGenerationProvider {
   return {
-    id: 'minimax',
-    label: 'MiniMax',
+    id: options.id,
+    label: options.label,
     defaultModel: MINIMAX_DEFAULT_IMAGE_MODEL,
     models: [...MINIMAX_IMAGE_MODELS],
     capabilities: MINIMAX_CAPABILITIES,
-    ui: MINIMAX_IMAGE_UI,
-    isConfigured: (ctx) => isProviderApiKeyConfigured({ providerId: 'minimax', cfg: ctx.cfg }),
+    isConfigured: (ctx) => isProviderApiKeyConfigured({ providerId: options.id, cfg: ctx.cfg }),
     async generateImage(req) {
-      const apiKey = resolveApiKeyForProvider({ providerId: 'minimax', cfg: req.cfg });
+      const apiKey = resolveApiKeyForProvider({ providerId: options.id, cfg: req.cfg });
       if (!apiKey) {
-        throw new Error('MiniMax API key missing (MINIMAX_API_KEY or providers.minimax.apiKey)');
+        throw new Error(
+          `MiniMax API key missing (MINIMAX_API_KEY or providers.${options.id}.apiKey)`,
+        );
       }
-      return generateMinimaxImages({ req, apiKey });
+      return generateMinimaxImages({
+        req,
+        apiKey,
+        providerId: options.id,
+        defaultBaseUrl: options.defaultBaseUrl,
+      });
     },
   };
+}
+
+export function buildMinimaxCnImageGenerationProvider(): ImageGenerationProvider {
+  return createMinimaxImageGenerationProvider({
+    id: 'minimax-cn',
+    label: 'MiniMax CN',
+    defaultBaseUrl: MINIMAX_CN_BASE_URL,
+  });
+}
+
+export function buildMinimaxImageGenerationProvider(): ImageGenerationProvider {
+  return createMinimaxImageGenerationProvider({
+    id: 'minimax',
+    label: 'MiniMax International',
+    defaultBaseUrl: MINIMAX_INTL_BASE_URL,
+  });
 }

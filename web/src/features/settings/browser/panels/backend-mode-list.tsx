@@ -7,6 +7,7 @@ import { selectClassName } from '../../agents/defaults-field-styles';
 
 import type { BrowserMessages } from './types';
 import type { ModeStatusKind } from './backend-mode-card';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export type BackendMode = 'local' | 'cloakbrowser' | 'cdp' | 'cloud' | 'extension';
 
@@ -59,7 +60,7 @@ export function BackendModeList({
       </div>
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-2">
-        <select
+        <Select
           id="browser-backend-select"
           className={cn(selectClassName(), 'min-w-0 flex-1 sm:max-w-md')}
           value={value}
@@ -67,11 +68,11 @@ export function BackendModeList({
           aria-label={m.browserPickerTitle}
         >
           {options.map((opt) => (
-            <option key={opt.value} value={opt.value}>
+            <SelectOption key={opt.value} value={opt.value}>
               {opt.name}
-            </option>
+            </SelectOption>
           ))}
-        </select>
+        </Select>
 
         {onOpenConfig ? (
           <button

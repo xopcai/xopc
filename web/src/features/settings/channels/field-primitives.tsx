@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export function FieldLabel({ children }: { children: ReactNode }) {
   return <div className="text-sm font-medium text-fg">{children}</div>;
@@ -19,17 +20,17 @@ export function SelectField<T extends string>({ label, value, onChange, options 
   return (
     <div className="flex flex-col gap-1.5">
       <FieldLabel>{label}</FieldLabel>
-      <select
+      <Select
         className="ui-input h-9 rounded-md border border-edge bg-surface-base px-2 text-sm text-fg"
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
       >
         {options.map((o) => (
-          <option key={o.value} value={o.value}>
+          <SelectOption key={o.value} value={o.value}>
             {o.label}
-          </option>
+          </SelectOption>
         ))}
-      </select>
+      </Select>
     </div>
   );
 }

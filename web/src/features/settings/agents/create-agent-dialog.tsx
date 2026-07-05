@@ -15,6 +15,7 @@ import {
 import { SettingsShellLayerProvider } from '@/lib/settings-shell-layer-context';
 import { agentListDisplayName } from './agent-display-names';
 import { agentsSettingsInputClass } from './utils';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export function CreateAgentDialog(props: {
   open: boolean;
@@ -100,18 +101,18 @@ export function CreateAgentDialog(props: {
             {agents.length > 0 ? (
               <label className="flex flex-col gap-1 text-sm">
                 <span className="text-fg-muted">{a.copyFromExistingAgent}</span>
-                <select
+                <Select
                   className={cn(agentsSettingsInputClass(), 'bg-surface-panel')}
                   value={duplicateSourceId ?? ''}
                   onChange={(event) => onSelectDuplicateSource(event.target.value || null)}
                 >
-                  <option value="">{a.copyFromExistingAgentNone}</option>
+                  <SelectOption value="">{a.copyFromExistingAgentNone}</SelectOption>
                   {agents.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
+                    <SelectOption key={agent.id} value={agent.id}>
                       {agentListDisplayName(agent, a)} · {agent.id}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </Select>
                 <span className="text-xs text-fg-muted">{a.duplicateAgentHint}</span>
               </label>
             ) : null}

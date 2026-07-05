@@ -17,6 +17,7 @@ import {
   parseInputSelect,
   selectClassName,
 } from './models-settings-lib';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type ModelDialogProps = {
   open: boolean;
@@ -147,17 +148,17 @@ function ModelEditForm({
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-fg-muted">{m.inputTypes}</label>
-                <select
+                <Select
                   className={selectClassName()}
                   value={inputSel}
                   onChange={(e) => update('input', inputFromSelect(e.target.value))}
                 >
                   {INPUT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
+                    <SelectOption key={opt.value} value={opt.value}>
                       {m[opt.labelKey]}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </Select>
               </div>
               <label className="mt-6 flex cursor-pointer items-center gap-2 text-sm text-fg">
                 <input

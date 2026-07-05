@@ -190,25 +190,11 @@ html.dark {
     outline: none;
   }
 
-  /**
-   * Native `<input>` / `<textarea>` — strip global focus ring; pages use border/ring utilities.
-   * (Same rationale as `<select>` below.)
-   */
+  /** Native `<input>` / `<textarea>` — strip global focus ring; pages use border/ring utilities. */
   input:focus,
   input:focus-visible,
   textarea:focus,
   textarea:focus-visible {
-    outline: none;
-    outline-offset: 0;
-    box-shadow: none;
-  }
-
-  /**
-   * Native `<select>` — UA + global :focus-visible both draw an outer ring; strip it.
-   * Focus styling comes from `.ui-select` (border only) or page-specific classes.
-   */
-  select:focus,
-  select:focus-visible {
     outline: none;
     outline-offset: 0;
     box-shadow: none;
@@ -270,30 +256,6 @@ html.dark {
   }
 
   .ui-checkbox:disabled {
-    @apply cursor-not-allowed opacity-50;
-  }
-
-  /**
-   * Native `<select>` — soft border, light hover; focus uses border only (no ring / outer shadow).
-   */
-  .ui-select {
-    @apply rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-sm font-normal leading-snug text-fg;
-    @apply cursor-pointer transition-[border-color,background-color] duration-150 ease-out;
-    @apply hover:border-edge hover:bg-surface-hover/45;
-    @apply focus:outline-none focus-visible:outline-none;
-    @apply focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-none;
-    @apply focus-visible:border-edge;
-  }
-
-  html.dark .ui-select {
-    @apply border-edge-subtle bg-surface-panel;
-  }
-
-  html.dark .ui-select:hover {
-    @apply border-edge bg-surface-hover/55;
-  }
-
-  .ui-select:disabled {
     @apply cursor-not-allowed opacity-50;
   }
 

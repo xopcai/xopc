@@ -20,6 +20,7 @@ import {
   type ConnectorInstance,
 } from '../connectors-api';
 import { formatConnectorMessage } from '../utils/connector-i18n';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 const inputClass = cn(
   'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
@@ -111,15 +112,15 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
           <p className="text-xs text-fg-subtle">{t.composioScopeHint}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <select
+          <Select
             className={cn(inputClass, 'h-9 w-28 py-1')}
             value={scope}
             onChange={(event) => void updateScope(event.currentTarget.value as ComposioScope)}
           >
-            <option value="read">{t.composioScopeRead}</option>
-            <option value="write">{t.composioScopeWrite}</option>
-            <option value="admin">{t.composioScopeAdmin}</option>
-          </select>
+            <SelectOption value="read">{t.composioScopeRead}</SelectOption>
+            <SelectOption value="write">{t.composioScopeWrite}</SelectOption>
+            <SelectOption value="admin">{t.composioScopeAdmin}</SelectOption>
+          </Select>
           <Button variant="secondary" disabled={loading} onClick={() => void authorize()}>
             {loading ? <Loader2 className="size-4 animate-spin" /> : <KeyRound className="size-4" />}
             {t.connectOAuth}

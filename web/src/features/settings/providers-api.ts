@@ -10,7 +10,7 @@ export function isMaskedKey(value: string): boolean {
   return isMaskedSecret(value);
 }
 
-export type ProviderCategory = 'common' | 'specialty' | 'enterprise' | 'oauth' | 'extension';
+export type ProviderCategory = 'common' | 'domestic' | 'specialty' | 'enterprise' | 'oauth' | 'extension';
 
 export type ProviderActiveKeySource =
   | 'none'

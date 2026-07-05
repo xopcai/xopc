@@ -5,20 +5,13 @@ import {
   mapSizeToDashScopeFormat,
   mapSizeToWan27Format,
   resolveDashScopeImageGenerationUrl,
-  resolveDashScopeImageRegion,
 } from '../../../../../extensions/dashscope/src/image-generation-provider.js';
 
 let savedBase: string | undefined;
-let savedRegion: string | undefined;
-let savedImageRegion: string | undefined;
 
 beforeEach(() => {
   savedBase = process.env.DASHSCOPE_IMAGE_BASE_URL;
-  savedRegion = process.env.DASHSCOPE_REGION;
-  savedImageRegion = process.env.DASHSCOPE_IMAGE_REGION;
   delete process.env.DASHSCOPE_IMAGE_BASE_URL;
-  delete process.env.DASHSCOPE_REGION;
-  delete process.env.DASHSCOPE_IMAGE_REGION;
 });
 
 afterEach(() => {
@@ -27,22 +20,11 @@ afterEach(() => {
   } else {
     delete process.env.DASHSCOPE_IMAGE_BASE_URL;
   }
-  if (savedRegion !== undefined) {
-    process.env.DASHSCOPE_REGION = savedRegion;
-  } else {
-    delete process.env.DASHSCOPE_REGION;
-  }
-  if (savedImageRegion !== undefined) {
-    process.env.DASHSCOPE_IMAGE_REGION = savedImageRegion;
-  } else {
-    delete process.env.DASHSCOPE_IMAGE_REGION;
-  }
 });
 
 describe('resolveDashScopeImageGenerationUrl', () => {
   it('defaults to Beijing', () => {
     expect(resolveDashScopeImageGenerationUrl()).toBe(DASHSCOPE_IMAGE_ENDPOINTS.beijing);
-    expect(resolveDashScopeImageRegion()).toBe('beijing');
   });
 
   it('uses DASHSCOPE_IMAGE_BASE_URL when set', () => {
@@ -50,38 +32,38 @@ describe('resolveDashScopeImageGenerationUrl', () => {
     expect(resolveDashScopeImageGenerationUrl()).toBe('https://example.com/api');
   });
 
-  it('maps international aliases to Singapore', () => {
-    process.env.DASHSCOPE_REGION = 'intl';
-    expect(resolveDashScopeImageRegion()).toBe('singapore');
-    expect(resolveDashScopeImageGenerationUrl()).toBe(DASHSCOPE_IMAGE_ENDPOINTS.singapore);
-  });
-
-  it('maps us to Virginia endpoint', () => {
-    process.env.DASHSCOPE_IMAGE_REGION = 'us-east-1';
-    expect(resolveDashScopeImageRegion()).toBe('us');
-    expect(resolveDashScopeImageGenerationUrl()).toBe(DASHSCOPE_IMAGE_ENDPOINTS.us);
-  });
-
-  it('honours cfg.providers.dashscope.imageBaseUrl over env', () => {
+  it('honours cfg.providers.dashscope-cn.imageBaseUrl over env', () => {
     process.env.DASHSCOPE_IMAGE_BASE_URL = 'https://env.example.com/api';
     const req = {
-      provider: 'dashscope',
+      provider: 'dashscope-cn',
       model: 'wan2.6-t2i',
       prompt: 'p',
-      cfg: { providers: { dashscope: { imageBaseUrl: 'https://cfg.example.com/api/' } } } as any,
+      cfg: { providers: { 'dashscope-cn': { imageBaseUrl: 'https://cfg.example.com/api/' } } } as any,
     } as any;
     expect(resolveDashScopeImageGenerationUrl(req)).toBe('https://cfg.example.com/api');
   });
 
-  it('honours cfg.providers.dashscope.region for endpoint mapping', () => {
+  it('defaults split China and international provider ids to their own regions', () => {
+    const cnReq = { provider: 'dashscope-cn', model: 'wan2.7-image-pro', prompt: 'p' } as any;
+    const intlReq = { provider: 'dashscope-intl', model: 'wan2.7-image-pro', prompt: 'p' } as any;
+
+    expect(resolveDashScopeImageGenerationUrl(cnReq, 'beijing')).toBe(DASHSCOPE_IMAGE_ENDPOINTS.beijing);
+    expect(resolveDashScopeImageGenerationUrl(intlReq, 'singapore')).toBe(DASHSCOPE_IMAGE_ENDPOINTS.singapore);
+  });
+
+  it('does not read config from a different provider id', () => {
     const req = {
-      provider: 'dashscope',
-      model: 'wan2.6-t2i',
+      provider: 'dashscope-intl',
+      model: 'wan2.7-image-pro',
       prompt: 'p',
-      cfg: { providers: { dashscope: { region: 'singapore' } } } as any,
+      cfg: {
+        providers: {
+          'dashscope-cn': { imageBaseUrl: 'https://cn.example.com/api' },
+        },
+      } as any,
     } as any;
-    expect(resolveDashScopeImageRegion(req)).toBe('singapore');
-    expect(resolveDashScopeImageGenerationUrl(req)).toBe(DASHSCOPE_IMAGE_ENDPOINTS.singapore);
+
+    expect(resolveDashScopeImageGenerationUrl(req, 'singapore')).toBe(DASHSCOPE_IMAGE_ENDPOINTS.singapore);
   });
 });
 

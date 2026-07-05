@@ -5,13 +5,14 @@ import type { GatewayConfigBinding } from '@/features/settings/agents-admin-api'
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import type { ChannelStatus, SessionChatId } from '@/features/settings/channel-recipient-api';
 import { formatRecipientOptionLabel } from '@/features/settings/channel-recipient-api';
-import { selectControlBaseClass } from '@/lib/form-field-width';
+import { selectTriggerClass } from '@/lib/form-field-width';
 import { agentsSettingsInputClass, matchSummary } from '../utils';
 import type { AgentsSettingsMessages, MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 const channelsPeerIdSelectClass = cn(
-  selectControlBaseClass,
+  selectTriggerClass,
   'w-full text-xs sm:w-auto sm:min-w-[11rem] sm:max-w-[17rem] sm:shrink-0',
 );
 
@@ -110,7 +111,7 @@ export function AgentChannelsTab(props: {
         ) : (
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-fg-muted">{a.channelLabel}</span>
-            <select
+            <Select
               className={cn(agentsSettingsInputClass(), 'py-2')}
               value={newBindChannel}
               onChange={(e) => {
@@ -120,11 +121,11 @@ export function AgentChannelsTab(props: {
               }}
             >
               {channelStatuses.map((ch) => (
-                <option key={ch.name} value={ch.name} disabled={!ch.enabled}>
+                <SelectOption key={ch.name} value={ch.name} disabled={!ch.enabled}>
                   {ch.name} {!ch.enabled ? a.channelsDisabledSuffix : ''}
-                </option>
+                </SelectOption>
               ))}
-            </select>
+            </Select>
           </label>
         )}
 
@@ -149,7 +150,7 @@ export function AgentChannelsTab(props: {
             ) : null}
             <label className="flex flex-col gap-1">
               <span className="text-fg-muted">{a.channelsPeerFromSessions}</span>
-              <select
+              <Select
                 className={cn(agentsSettingsInputClass(), 'py-2')}
                 value={newBindSessionIdx == null ? '' : String(newBindSessionIdx)}
                 disabled={busy || !newBindChannel.trim() || Boolean(newBindCustomPeer.trim())}
@@ -158,13 +159,13 @@ export function AgentChannelsTab(props: {
                   setNewBindSessionIdx(v === '' ? null : Number(v));
                 }}
               >
-                <option value="">{a.channelsPeerAny}</option>
+                <SelectOption value="">{a.channelsPeerAny}</SelectOption>
                 {bindSessionChats.map((item, idx) => (
-                  <option key={`${item.channel}-${item.chatId}`} value={String(idx)}>
+                  <SelectOption key={`${item.channel}-${item.chatId}`} value={String(idx)}>
                     {formatRecipientOptionLabel(item, lastActiveLabels)}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </Select>
             </label>
             {bindSessionChats.length === 0 && newBindChannel.trim() && !sessionsLoading ? (
               <p className="text-xs text-fg-muted">{a.channelsNoSessionsHint}</p>
@@ -185,7 +186,7 @@ export function AgentChannelsTab(props: {
                   placeholder={a.channelsCustomPeerPlaceholder}
                   autoComplete="off"
                 />
-                <select
+                <Select
                   className={channelsPeerIdSelectClass}
                   value={newBindCustomPeer}
                   onChange={(e) => {
@@ -198,13 +199,13 @@ export function AgentChannelsTab(props: {
                     setNewBindSessionIdx(null);
                   }}
                 >
-                  <option value="">{selectRecipient}</option>
+                  <SelectOption value="">{selectRecipient}</SelectOption>
                   {bindSessionChats.map((item) => (
-                    <option key={`${item.channel}-${item.chatId}`} value={item.chatId}>
+                    <SelectOption key={`${item.channel}-${item.chatId}`} value={item.chatId}>
                       {formatRecipientOptionLabel(item, lastActiveLabels)}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </Select>
               </div>
               <p className="text-xs text-fg-muted">{a.channelsCustomPeerHint}</p>
             </div>

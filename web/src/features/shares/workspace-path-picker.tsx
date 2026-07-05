@@ -14,6 +14,7 @@ import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-st
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 /**
  * Modal that browses the workspace file tree and returns the picked path.
@@ -164,7 +165,7 @@ export function WorkspacePathPickerDialog({
               <label className="text-xs text-fg-muted" htmlFor="picker-agent-select">
                 {sharesT.pickerAgentLabel}
               </label>
-              <select
+              <Select
                 id="picker-agent-select"
                 className="min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-2 py-1 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-accent"
                 value={pickedAgentId}
@@ -174,12 +175,12 @@ export function WorkspacePathPickerDialog({
                 }}
               >
                 {agentOptions.map((a) => (
-                  <option key={a.id} value={a.id}>
+                  <SelectOption key={a.id} value={a.id}>
                     {a.name || a.id}
                     {a.id === agentsPayload?.defaultId ? ' ★' : ''}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </Select>
             </div>
           ) : null}
 

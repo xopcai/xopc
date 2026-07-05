@@ -3,6 +3,7 @@ import {
   DEFAULT_CAPABILITY_PRESET_ID,
   type CapabilityPreset,
 } from '../agent-manifest/schema.js';
+import { DEFAULT_AGENT_MODELS } from '../config/default-model.js';
 import type { Config } from '../config/schema.js';
 import {
   getAllProviders,
@@ -52,10 +53,7 @@ function emptyGlobalDefaultsPreset(id: string): CapabilityPreset {
     name: 'Global defaults',
     description: 'Default capabilities inherited by every agent.',
     version: 1,
-    models: {
-      defaultRole: 'deep',
-      roles: {},
-    },
+    models: DEFAULT_AGENT_MODELS,
   };
 }
 
@@ -68,7 +66,7 @@ export function ensureGlobalDefaultsConfig(cfg: Config): Config {
         id: presetId,
         name: current.name || 'Global defaults',
         version: current.version || 1,
-        models: current.models ?? { defaultRole: 'deep', roles: {} },
+        models: current.models ?? DEFAULT_AGENT_MODELS,
       }
     : emptyGlobalDefaultsPreset(presetId);
 
@@ -131,7 +129,7 @@ export async function listGlobalDefaults(cfg: Config): Promise<GlobalDefaultsPay
 
   return {
     presetId,
-    models: preset.models ?? { defaultRole: 'deep', roles: {} },
+    models: preset.models ?? DEFAULT_AGENT_MODELS,
     providers,
     recommendations,
   };
@@ -151,7 +149,7 @@ export function prepareUpdateGlobalDefaults(
     if (!parsed.success) {
       return { ok: false, error: `models ${parsed.error.issues[0]?.message ?? 'is invalid'}`, status: 400 };
     }
-    const models = parsed.data.models ?? { defaultRole: 'deep', roles: {} };
+    const models = parsed.data.models ?? DEFAULT_AGENT_MODELS;
     const roles = models.roles ?? {};
     const defaultRole = models.defaultRole ?? Object.keys(roles)[0] ?? 'deep';
     if (Object.keys(roles).length > 0 && !roles[defaultRole]) {

@@ -6,6 +6,7 @@ import {
   DEFAULT_CAPABILITY_PRESET_ID,
 } from '../agent-manifest/schema.js';
 import { checkCacheDir } from '../browser/cache-dir-policy.js';
+import { DEFAULT_AGENT_MODELS } from './default-model.js';
 import { validatePublicUrl } from './public-url.js';
 
 // ============================================
@@ -25,6 +26,26 @@ export const AgentModelRefSchema = z
   .strict();
 
 export type AgentModelConfig = z.infer<typeof AgentModelRefSchema>;
+
+/**
+ * Image-generation model ref. {@link AgentModelRefSchema} plus runtime knobs
+ * (`timeoutMs`, `autoProviderFallback`) used by the image-generation runtime.
+ */
+export const AgentImageGenerationModelSchema = z
+  .object({
+    primary: z.string().min(1),
+    fallbacks: z.array(z.string()).optional(),
+    /** Hard cap for the whole generation attempt (ms). */
+    timeoutMs: z.number().int().positive().optional(),
+    /**
+     * When all `primary + fallbacks` candidates fail, sweep every other
+     * configured provider before giving up.
+     */
+    autoProviderFallback: z.boolean().optional(),
+  })
+  .strict();
+
+export type AgentImageGenerationModelConfig = z.infer<typeof AgentImageGenerationModelSchema>;
 
 export const AgentTypedModelRoleSchema = z
   .object({
@@ -67,31 +88,13 @@ export const AgentModelsSchema = z
   .object({
     defaultRole: z.string().regex(/^[a-z][a-z0-9_-]{0,63}$/).optional(),
     roles: AgentTypedModelRolesSchema,
+    imageModel: AgentModelRefSchema.optional(),
+    imageGenerationModel: AgentImageGenerationModelSchema.optional(),
   })
   .strict()
   .optional();
 
 export type AgentModelsConfig = z.infer<typeof AgentModelsSchema>;
-
-/**
- * Image-generation model ref. {@link AgentModelRefSchema} plus runtime knobs
- * (`timeoutMs`, `autoProviderFallback`) used by the image-generation runtime.
- */
-export const AgentImageGenerationModelSchema = z
-  .object({
-    primary: z.string().min(1),
-    fallbacks: z.array(z.string()).optional(),
-    /** Hard cap for the whole generation attempt (ms). */
-    timeoutMs: z.number().int().positive().optional(),
-    /**
-     * When all `primary + fallbacks` candidates fail, sweep every other
-     * configured provider before giving up.
-     */
-    autoProviderFallback: z.boolean().optional(),
-  })
-  .strict();
-
-export type AgentImageGenerationModelConfig = z.infer<typeof AgentImageGenerationModelSchema>;
 
 export type AgentTypedModel = AgentTypedModelRole & { id: string };
 
@@ -111,10 +114,7 @@ export const AgentsConfigSchema = z.object({
       name: 'Global defaults',
       description: 'Default capabilities inherited by every agent.',
       version: 1,
-      models: {
-        defaultRole: 'deep',
-        roles: {},
-      },
+      models: DEFAULT_AGENT_MODELS,
     },
   },
   list: [
@@ -1175,10 +1175,7 @@ export const ConfigSchema = z.object({
         name: 'Global defaults',
         description: 'Default capabilities inherited by every agent.',
         version: 1,
-        models: {
-          defaultRole: 'deep',
-          roles: {},
-        },
+        models: DEFAULT_AGENT_MODELS,
       },
     },
     list: [
@@ -1356,6 +1353,59 @@ export function getAgentDefaultModelRef(config: Config): string | undefined {
   }
   applyModels(agent.models);
   return modelRef;
+}
+
+function getAgentDefaultModelsConfig(config: Config): AgentModelsConfig | undefined {
+  const list = Array.isArray(config.agents?.list) ? config.agents.list : [];
+  const defaultId =
+    config.agents?.default?.trim() ||
+    list.find((entry) => (entry as { default?: boolean }).default === true)?.id?.trim() ||
+    list[0]?.id;
+  const agent = list.find((entry) => entry.enabled !== false && entry.id === defaultId) ?? list[0];
+  if (!agent) return undefined;
+
+  let modelConfig: AgentModelsConfig | undefined;
+  const visited = new Set<string>();
+  const applyModels = (models: AgentModelsConfig | undefined): void => {
+    if (!models) return;
+    modelConfig = {
+      ...modelConfig,
+      ...models,
+      roles: {
+        ...(modelConfig?.roles ?? {}),
+        ...(models.roles ?? {}),
+      },
+    };
+  };
+  const applyPreset = (presetId: string): void => {
+    if (visited.has(presetId)) return;
+    visited.add(presetId);
+    const preset = config.agents.capabilityPresets[presetId];
+    if (!preset) return;
+    for (const parent of preset.extends ?? []) {
+      applyPreset(parent);
+    }
+    applyModels(preset.models);
+  };
+
+  applyPreset(config.agents.defaultPreset);
+  for (const presetId of agent.extends ?? []) {
+    if (presetId !== config.agents.defaultPreset) {
+      applyPreset(presetId);
+    }
+  }
+  applyModels(agent.models);
+  return modelConfig;
+}
+
+export function getAgentDefaultImageModelConfig(config: Config): AgentModelConfig | undefined {
+  return getAgentDefaultModelsConfig(config)?.imageModel;
+}
+
+export function getAgentDefaultImageGenerationModelConfig(
+  config: Config,
+): AgentImageGenerationModelConfig | undefined {
+  return getAgentDefaultModelsConfig(config)?.imageGenerationModel;
 }
 
 /** `provider/model` or null when invalid. */

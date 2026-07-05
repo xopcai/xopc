@@ -12,6 +12,7 @@ import { BrowserInstallProgressPanel } from './browser-install-progress';
 import { ActionResultBox, BackendModeCard, type ModeStatusKind } from './backend-mode-card';
 import type { BrowserMessages, CloakDoctor, CloakLaunchResult, CloakRuntimeStatus, DoctorState } from './types';
 import type { BrowserInstallStream } from './use-browser-install-stream';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type InstallStatus = 'idle' | 'installing' | 'installed' | 'failed';
 type OpenStatus = 'idle' | 'pending' | 'ok' | 'error';
@@ -317,14 +318,14 @@ export function CloakCard({
             </label>
           </AgentDefaultsField>
           <AgentDefaultsField label={m.label.browserHumanPreset} description={m.desc.browserHumanPreset}>
-            <select
+            <Select
               className={selectClassName()}
               value={form.humanPreset}
               onChange={(e) => onChange({ humanPreset: e.target.value as 'default' | 'careful' })}
             >
-              <option value="careful">{m.browserHumanPresetCareful}</option>
-              <option value="default">{m.browserHumanPresetDefault}</option>
-            </select>
+              <SelectOption value="careful">{m.browserHumanPresetCareful}</SelectOption>
+              <SelectOption value="default">{m.browserHumanPresetDefault}</SelectOption>
+            </Select>
           </AgentDefaultsField>
         </div>
       </BackendModeCard>

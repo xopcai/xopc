@@ -8,6 +8,8 @@ import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
 import { OnboardingModelSelect } from '@/features/onboarding/onboarding-model-select';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
+import { fetchModelsJson, saveModelsJson } from '@/features/settings/models-json-api';
+import { buildProviderConfigFromPresetProviderId } from '@/features/settings/models/models-settings-lib';
 import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
 import { patchProviderApiKeys } from '@/features/settings/providers-api';
 import {
@@ -27,6 +29,7 @@ import { SecretInput } from '@/components/ui/secret-input';
 import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 interface OnboardingCardProps {
   onComplete: () => void | Promise<void>;
@@ -148,7 +151,23 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
     if (!selectedProvider || !apiKey.trim()) return;
     dispatch({ type: 'patch', patch: { busy: true, error: null } });
     try {
-      await patchProviderApiKeys({ [selectedProvider]: apiKey.trim() });
+      const presetProvider = buildProviderConfigFromPresetProviderId(selectedProvider, apiKey.trim());
+      if (presetProvider) {
+        const status = await fetchModelsJson();
+        const existingProvider = status.config.providers[presetProvider.providerId] ?? {};
+        await saveModelsJson({
+          ...status.config,
+          providers: {
+            ...status.config.providers,
+            [presetProvider.providerId]: {
+              ...existingProvider,
+              ...presetProvider.config,
+            },
+          },
+        });
+      } else {
+        await patchProviderApiKeys({ [selectedProvider]: apiKey.trim() });
+      }
       await loadModels(selectedProvider);
       dispatch({ type: 'patch', patch: { step: 'model' } });
     } catch (e) {
@@ -283,7 +302,6 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
             {selectedProvider && (() => {
               const enrichment = PROVIDER_ENRICHMENT[selectedProvider];
               const apiKeyUrl = enrichment?.apiKeyUrl;
-              const apiKeyUrlCn = enrichment?.apiKeyUrlCn;
               if (!apiKeyUrl) return null;
               return (
                 <div className="flex flex-wrap items-center gap-3 rounded-xl border border-edge-subtle bg-surface-base px-3.5 py-2.5">
@@ -296,22 +314,9 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
                   >
-                    {apiKeyUrlCn
-                      ? (language === 'zh' ? '国际版' : 'International')
-                      : (language === 'zh' ? '前往获取' : 'Get API Key')}
+                    {language === 'zh' ? '前往获取' : 'Get API Key'}
                     <ExternalLink className="size-3" />
                   </a>
-                  {apiKeyUrlCn && (
-                    <a
-                      href={apiKeyUrlCn}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs font-medium text-accent-fg hover:underline"
-                    >
-                      {language === 'zh' ? '中国版' : 'China'}
-                      <ExternalLink className="size-3" />
-                    </a>
-                  )}
                 </div>
               );
             })()}
@@ -404,18 +409,18 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
             </label>
             <label className="block text-sm font-medium text-fg">
               {o.profileTimezoneLabel}
-              <select
+              <Select
                 value={profile.timezone}
                 onChange={(event) => patchProfile({ timezone: event.target.value })}
                 className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
               >
-                <option value="">{o.profileTimezonePlaceholder}</option>
+                <SelectOption value="">{o.profileTimezonePlaceholder}</SelectOption>
                 {TIMEZONE_OPTIONS.map((tz) => (
-                  <option key={tz.value} value={tz.value}>
+                  <SelectOption key={tz.value} value={tz.value}>
                     {language === 'zh' ? tz.labelZh : tz.labelEn}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="block text-sm font-medium text-fg">
               {o.profileNotesLabel}

@@ -7,6 +7,7 @@ import { inputClassName, selectClassName } from '../../agents/defaults-field-sty
 import type { AgentDefaultsPanelProps } from '.././browser-settings-panel-props';
 
 import { browserFocusElementId } from './browser-focus';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export function BrowserBehaviorSections({
   a,
@@ -31,7 +32,7 @@ export function BrowserBehaviorSections({
             </label>
           </AgentDefaultsField>
           <AgentDefaultsField label={a.label.browserDialogPolicy} description={a.desc.browserDialogPolicy}>
-            <select
+            <Select
               className={selectClassName()}
               value={form.browserDialogPolicy}
               onChange={(e) =>
@@ -40,10 +41,10 @@ export function BrowserBehaviorSections({
                 })
               }
             >
-              <option value="must_respond">{a.browserDialogPolicyMustRespond}</option>
-              <option value="auto_dismiss">{a.browserDialogPolicyAutoDismiss}</option>
-              <option value="auto_accept">{a.browserDialogPolicyAutoAccept}</option>
-            </select>
+              <SelectOption value="must_respond">{a.browserDialogPolicyMustRespond}</SelectOption>
+              <SelectOption value="auto_dismiss">{a.browserDialogPolicyAutoDismiss}</SelectOption>
+              <SelectOption value="auto_accept">{a.browserDialogPolicyAutoAccept}</SelectOption>
+            </Select>
           </AgentDefaultsField>
           <AgentDefaultsField label={a.label.browserDialogTimeout} description={a.desc.browserDialogTimeout}>
             <input

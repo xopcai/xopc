@@ -14,7 +14,7 @@ import {
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
-import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
+import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { cn } from '@/lib/cn';
 import { messages, type WebSearchSettingsMessages } from '@/i18n/messages';
@@ -22,6 +22,7 @@ import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-
 import { showToast } from '@/lib/toast';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 function Field({
   label,
@@ -51,7 +52,7 @@ function inputClassName(): string {
 }
 
 function selectClassName(): string {
-  return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
+  return cn(selectTriggerClass, selectFieldMaxWidthClass);
 }
 
 const PROVIDER_TYPES: SearchProviderRow['type'][] = ['brave', 'tavily', 'bing', 'searxng'];
@@ -174,7 +175,7 @@ export function WebSearchSettingsPanel() {
         <SettingsFormSectionHeader icon={Search} title={w.sectionRegion} subtitle={w.sectionRegionHint} />
         <div className="flex max-w-md flex-col gap-4">
           <Field label={w.regionLabel} description={w.regionDesc}>
-            <select
+            <Select
               className={selectClassName()}
               value={form.regionMode}
               onChange={(e) =>
@@ -183,10 +184,10 @@ export function WebSearchSettingsPanel() {
                 })
               }
             >
-              <option value="auto">{w.regionAuto}</option>
-              <option value="cn">{w.regionCn}</option>
-              <option value="global">{w.regionGlobal}</option>
-            </select>
+              <SelectOption value="auto">{w.regionAuto}</SelectOption>
+              <SelectOption value="cn">{w.regionCn}</SelectOption>
+              <SelectOption value="global">{w.regionGlobal}</SelectOption>
+            </Select>
           </Field>
         </div>
       </SettingsFormSection>
@@ -300,7 +301,7 @@ function ProviderRowEditor({
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-panel/60 p-4 dark:border-edge-subtle">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <select
+        <Select
           className={cn(selectClassName(), 'min-w-[8rem]')}
           value={row.type}
           onChange={(e) =>
@@ -312,11 +313,11 @@ function ProviderRowEditor({
           }
         >
           {PROVIDER_TYPES.map((t) => (
-            <option key={t} value={t}>
+            <SelectOption key={t} value={t}>
               {labels.providerTypes[t]}
-            </option>
+            </SelectOption>
           ))}
-        </select>
+        </Select>
         <div className="flex items-center gap-2">
           <label className="flex cursor-pointer items-center gap-1.5 text-xs text-fg-muted">
             <input

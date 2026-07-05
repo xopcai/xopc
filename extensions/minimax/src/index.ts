@@ -2,6 +2,7 @@
  * Bundled MiniMax image-generation extension entry.
  */
 export {
+  buildMinimaxCnImageGenerationProvider,
   buildMinimaxImageGenerationProvider,
   generateMinimaxImages,
   resolveMinimaxBaseUrl,

@@ -16,6 +16,7 @@ import {
 } from '@/features/workflows/workflow-api';
 import { cn } from '@/lib/cn';
 import { showToast } from '@/lib/toast';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 const inputClass =
   'min-w-0 rounded-md border border-edge bg-surface-muted px-2.5 py-1.5 text-xs text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent';
@@ -202,19 +203,19 @@ export function ChatGoalComposerMenu({
       <div className="grid gap-1.5 rounded-md border border-edge/70 bg-surface-muted/30 p-2">
         <div className="font-medium text-fg-muted">{current ? 'Switch goal' : 'Attach goal'}</div>
         <div className="flex gap-1.5">
-          <select
+          <Select
             value={selectedGoalId}
             onChange={(e) => setSelectedGoalId(e.target.value)}
             className={cn(inputClass, 'flex-1')}
             disabled={inactive || switchableGoals.length === 0}
           >
-            {switchableGoals.length === 0 ? <option value="">No open goals</option> : null}
+            {switchableGoals.length === 0 ? <SelectOption value="">No open goals</SelectOption> : null}
             {switchableGoals.map((goal) => (
-              <option key={goal.id} value={goal.id}>
+              <SelectOption key={goal.id} value={goal.id}>
                 {goalLabel(goal)}
-              </option>
+              </SelectOption>
             ))}
-          </select>
+          </Select>
           <button
             type="button"
             className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-edge text-fg hover:bg-surface-hover disabled:opacity-50"
@@ -240,19 +241,19 @@ export function ChatGoalComposerMenu({
       <div className="grid gap-1.5 rounded-md border border-edge/70 bg-surface-muted/30 p-2">
         <div className="font-medium text-fg-muted">Run workflow</div>
         <div className="flex gap-1.5">
-          <select
+          <Select
             value={selectedWorkflowId}
             onChange={(e) => setSelectedWorkflowId(e.target.value)}
             className={cn(inputClass, 'flex-1')}
             disabled={inactive || !current || workflows.length === 0}
           >
-            {workflows.length === 0 ? <option value="">No workflows</option> : null}
+            {workflows.length === 0 ? <SelectOption value="">No workflows</SelectOption> : null}
             {workflows.map((workflow) => (
-              <option key={workflow.id} value={workflow.id}>
+              <SelectOption key={workflow.id} value={workflow.id}>
                 {workflow.title || workflow.name}
-              </option>
+              </SelectOption>
             ))}
-          </select>
+          </Select>
           <button
             type="button"
             className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-edge text-fg hover:bg-surface-hover disabled:opacity-50"

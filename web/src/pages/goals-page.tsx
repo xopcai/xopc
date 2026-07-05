@@ -40,6 +40,7 @@ import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { Select, SelectGroup, SelectOption } from '@/components/ui/popover-select';
 
 type GoalStatus = 'active' | 'paused' | 'blocked' | 'needs_input' | 'done' | 'archived';
 type GoalBoardLaneId = 'active' | 'paused' | 'attention' | 'done' | 'archived';
@@ -832,17 +833,17 @@ function GoalCreateDialog({
                   <div className="grid gap-3 border-t border-edge-subtle p-4 sm:grid-cols-2">
                     <label className="grid gap-1.5 sm:col-span-2">
                       <span className="text-sm font-medium text-fg">{t.createDialog.agentId}</span>
-                      <select
+                      <Select
                         value={selectedAgentId}
                         onChange={(e) => patch({ agentId: e.target.value })}
                         className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
                       >
                         {agents.map((agent) => (
-                          <option key={agent.id} value={agent.id}>
+                          <SelectOption key={agent.id} value={agent.id}>
                             {(agent.name?.trim() || agent.id) + (agent.isDefault ? ` · ${t.createDialog.defaultAgent}` : ` · ${agent.id}`)}
-                          </option>
+                          </SelectOption>
                         ))}
-                      </select>
+                      </Select>
                       {selectedAgent?.description ? (
                         <span className="line-clamp-2 text-xs text-fg-muted">{selectedAgent.description}</span>
                       ) : selectedAgent?.model?.primary ? (
@@ -851,29 +852,29 @@ function GoalCreateDialog({
                     </label>
                     <label className="grid gap-1.5">
                       <span className="text-sm font-medium text-fg">{t.createDialog.priority}</span>
-                      <select
+                      <Select
                         value={draft.priority}
                         onChange={(e) => patch({ priority: e.target.value as GoalItem['priority'] })}
                         className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
                       >
-                        <option value="normal">{t.priorities.normal}</option>
-                        <option value="high">{t.priorities.high}</option>
-                        <option value="low">{t.priorities.low}</option>
-                      </select>
+                        <SelectOption value="normal">{t.priorities.normal}</SelectOption>
+                        <SelectOption value="high">{t.priorities.high}</SelectOption>
+                        <SelectOption value="low">{t.priorities.low}</SelectOption>
+                      </Select>
                     </label>
                     <label className="grid gap-1.5">
                       <span className="text-sm font-medium text-fg">{t.createDialog.deadline}</span>
-                      <select
+                      <Select
                         value={draft.deadlineMode}
                         onChange={(e) => patchDeadlineMode(e.target.value as CreateGoalDraft['deadlineMode'])}
                         className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
                       >
-                        <option value="none">{t.createDialog.deadlineNone}</option>
-                        <option value="today">{t.createDialog.deadlineToday}</option>
-                        <option value="tomorrow">{t.createDialog.deadlineTomorrow}</option>
-                        <option value="friday">{t.createDialog.deadlineFriday}</option>
-                        <option value="custom">{t.createDialog.deadlineCustom}</option>
-                      </select>
+                        <SelectOption value="none">{t.createDialog.deadlineNone}</SelectOption>
+                        <SelectOption value="today">{t.createDialog.deadlineToday}</SelectOption>
+                        <SelectOption value="tomorrow">{t.createDialog.deadlineTomorrow}</SelectOption>
+                        <SelectOption value="friday">{t.createDialog.deadlineFriday}</SelectOption>
+                        <SelectOption value="custom">{t.createDialog.deadlineCustom}</SelectOption>
+                      </Select>
                     </label>
                     {draft.deadlineMode !== 'none' ? (
                       <label className="grid gap-1.5">
@@ -899,29 +900,29 @@ function GoalCreateDialog({
                     </label>
                     <label className="grid gap-1.5 sm:col-span-2">
                       <span className="text-sm font-medium text-fg">{t.createDialog.judgeModel}</span>
-                      <select
+                      <Select
                         value={draft.judgeModelRef}
                         onChange={(e) => patch({ judgeModelRef: e.target.value })}
                         className="rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
                       >
-                        <option value="">{t.createDialog.judgeModelPlaceholder}</option>
+                        <SelectOption value="">{t.createDialog.judgeModelPlaceholder}</SelectOption>
                         {agentModelRoles.length ? (
-                          <optgroup label={t.createDialog.agentModelRoles}>
+                          <SelectGroup label={t.createDialog.agentModelRoles}>
                             {agentModelRoles.map((role) => (
-                              <option key={`${role.id}:${role.model}`} value={role.model}>
+                              <SelectOption key={`${role.id}:${role.model}`} value={role.model}>
                                 {role.id === 'judge' ? t.createDialog.judgeRole : role.id} · {role.model}
-                              </option>
+                              </SelectOption>
                             ))}
-                          </optgroup>
+                          </SelectGroup>
                         ) : null}
-                        <optgroup label={t.createDialog.configuredModels}>
+                        <SelectGroup label={t.createDialog.configuredModels}>
                           {modelOptions.map((model) => (
-                            <option key={model.id} value={model.id}>
+                            <SelectOption key={model.id} value={model.id}>
                               {model.name} · {model.id}
-                            </option>
+                            </SelectOption>
                           ))}
-                        </optgroup>
-                      </select>
+                        </SelectGroup>
+                      </Select>
                     </label>
                   </div>
                 ) : null}

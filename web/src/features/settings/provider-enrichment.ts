@@ -5,14 +5,9 @@ export interface ProviderEnrichment {
   /**
    * API key console for **this** provider id’s region.
    * When the codebase uses separate ids for intl vs China (e.g. `minimax` / `minimax-cn`),
-   * only set this field — do not add {@link apiKeyUrlCn} on those rows.
+   * this URL must match that provider id's runtime endpoint.
    */
   apiKeyUrl?: string;
-  /**
-   * Extra China console only for a **single** provider id that spans regions (e.g. Qwen/DashScope).
-   * Omit when regions are already split into separate provider ids.
-   */
-  apiKeyUrlCn?: string;
   /** URL to the provider's pricing page. */
   pricingUrl?: string;
   /** URL to the provider's API documentation. */
@@ -146,6 +141,36 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     aliases: ['deepseek', 'deep seek', 'deepseek v4', 'deepseek-v4', 'r1'],
     envVars: ['DEEPSEEK_API_KEY'],
   },
+  'volcengine-ark': {
+    apiKeyUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
+    pricingUrl: 'https://www.volcengine.com/docs/82379/1099320',
+    docsUrl: 'https://www.volcengine.com/docs/82379/1302008',
+    description: 'Volcengine Ark — OpenAI-compatible access to Doubao and custom Ark endpoints.',
+    descriptionZh: '火山方舟，通过 OpenAI 兼容接口访问豆包与自定义方舟 endpoint。',
+    bestFor: ['chinese', 'general', 'enterprise'],
+    aliases: ['volcengine', 'ark', 'doubao', 'volces', '火山方舟', '豆包'],
+    envVars: ['ARK_API_KEY', 'VOLCENGINE_API_KEY'],
+  },
+  'volcengine-plan': {
+    apiKeyUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
+    pricingUrl: 'https://www.volcengine.com/docs/82379/1099320',
+    docsUrl: 'https://www.volcengine.com/docs/82379/1302008',
+    description: 'Volcengine Doubao Coding Plan — Ark coding endpoint.',
+    descriptionZh: '火山方舟豆包 Coding Plan，使用 Ark coding endpoint。',
+    bestFor: ['coding', 'chinese'],
+    aliases: ['volcengine plan', 'ark coding', 'doubao coding', '火山方舟 coding'],
+    envVars: ['ARK_API_KEY', 'VOLCENGINE_API_KEY'],
+  },
+  'byteplus-plan': {
+    apiKeyUrl: 'https://console.byteplus.com/ark/region:ark+ap-southeast-1/apiKey',
+    pricingUrl: 'https://docs.byteplus.com/en/docs/ModelArk',
+    docsUrl: 'https://docs.byteplus.com/en/docs/ModelArk/OpenAI',
+    description: 'BytePlus Doubao Coding Plan — international Ark coding endpoint.',
+    descriptionZh: 'BytePlus 豆包 Coding Plan，国际区 Ark coding endpoint。',
+    bestFor: ['coding', 'chinese'],
+    aliases: ['byteplus', 'byteplus plan', 'doubao coding international'],
+    envVars: ['BYTEPLUS_API_KEY', 'ARK_API_KEY'],
+  },
   xai: {
     apiKeyUrl: 'https://console.x.ai/',
     pricingUrl: 'https://x.ai/api',
@@ -238,13 +263,73 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     aliases: ['minimax cn', 'minimax china', 'abab'],
     envVars: ['MINIMAX_CN_API_KEY', 'MINIMAX_API_KEY'],
   },
+  stepfun: {
+    apiKeyUrl: 'https://platform.stepfun.com/interface-key',
+    pricingUrl: 'https://platform.stepfun.com/docs/pricing',
+    docsUrl: 'https://platform.stepfun.com/docs',
+    description: 'StepFun OpenAI-compatible endpoint.',
+    descriptionZh: '阶跃星辰 StepFun OpenAI 兼容端点。',
+    bestFor: ['chinese', 'reasoning', 'general'],
+    aliases: ['stepfun', 'step', '阶跃星辰'],
+    envVars: ['STEPFUN_API_KEY'],
+  },
+  'stepfun-cn': {
+    apiKeyUrl: 'https://platform.stepfun.com/interface-key',
+    pricingUrl: 'https://platform.stepfun.com/docs/pricing',
+    docsUrl: 'https://platform.stepfun.com/docs',
+    description: 'StepFun China — OpenAI-compatible chat endpoint.',
+    descriptionZh: '阶跃星辰 StepFun 中国区 OpenAI 兼容对话端点。',
+    bestFor: ['chinese', 'reasoning', 'general'],
+    aliases: ['stepfun cn', 'step cn', '阶跃星辰'],
+    envVars: ['STEPFUN_API_KEY'],
+  },
+  'stepfun-intl': {
+    apiKeyUrl: 'https://platform.stepfun.com/interface-key',
+    pricingUrl: 'https://platform.stepfun.com/docs/pricing',
+    docsUrl: 'https://platform.stepfun.com/docs',
+    description: 'StepFun International — OpenAI-compatible chat endpoint.',
+    descriptionZh: '阶跃星辰 StepFun 国际区 OpenAI 兼容对话端点。',
+    bestFor: ['chinese', 'reasoning', 'general'],
+    aliases: ['stepfun intl', 'step international'],
+    envVars: ['STEPFUN_API_KEY'],
+  },
+  'stepfun-plan': {
+    apiKeyUrl: 'https://platform.stepfun.com/interface-key',
+    pricingUrl: 'https://platform.stepfun.com/docs/pricing',
+    docsUrl: 'https://platform.stepfun.com/docs',
+    description: 'StepFun Step Plan coding/planning endpoint.',
+    descriptionZh: '阶跃星辰 Step Plan coding/planning 专用端点。',
+    bestFor: ['coding', 'reasoning', 'chinese'],
+    aliases: ['stepfun plan', 'step plan', '阶跃 plan'],
+    envVars: ['STEPFUN_API_KEY'],
+  },
+  'stepfun-plan-cn': {
+    apiKeyUrl: 'https://platform.stepfun.com/interface-key',
+    pricingUrl: 'https://platform.stepfun.com/docs/pricing',
+    docsUrl: 'https://platform.stepfun.com/docs',
+    description: 'StepFun Step Plan China — coding/planning endpoint.',
+    descriptionZh: '阶跃星辰 Step Plan 中国区 coding/planning 专用端点。',
+    bestFor: ['coding', 'reasoning', 'chinese'],
+    aliases: ['stepfun plan cn', 'step plan cn', '阶跃 plan'],
+    envVars: ['STEPFUN_API_KEY'],
+  },
+  'stepfun-plan-intl': {
+    apiKeyUrl: 'https://platform.stepfun.com/interface-key',
+    pricingUrl: 'https://platform.stepfun.com/docs/pricing',
+    docsUrl: 'https://platform.stepfun.com/docs',
+    description: 'StepFun Step Plan International — coding/planning endpoint.',
+    descriptionZh: '阶跃星辰 Step Plan 国际区 coding/planning 专用端点。',
+    bestFor: ['coding', 'reasoning', 'chinese'],
+    aliases: ['stepfun plan intl', 'step plan international'],
+    envVars: ['STEPFUN_API_KEY'],
+  },
   'kimi-coding': {
     apiKeyUrl: 'https://platform.kimi.com/console/api-keys',
     pricingUrl: 'https://platform.kimi.com/docs/pricing/chat',
     docsUrl: 'https://platform.kimi.com/docs',
-    description: 'Kimi Coding — Moonshot model optimized for code generation tasks.',
-    descriptionZh: 'Kimi Coding，Moonshot 专为代码生成优化的模型。',
-    bestFor: ['coding', 'chinese'],
+    description: 'Kimi Coding — dedicated Anthropic-compatible coding endpoint.',
+    descriptionZh: 'Kimi Coding，Anthropic 兼容的专用 coding 端点。',
+    bestFor: ['coding', 'chinese', 'vision'],
     freeTier: true,
     freeTierNote: '注册赠送免费额度。',
     aliases: ['kimi coding', 'moonshot coding', 'kimi code'],
@@ -332,8 +417,8 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     pricingUrl: 'https://mimo.mi.com/',
     docsUrl: 'https://platform.xiaomimimo.com/',
     description:
-      'Xiaomi MiMo — API billing (Anthropic-compatible). Keys from the MiMo open platform; endpoint api.xiaomimimo.com.',
-    descriptionZh: '小米 MiMo 按量计费线路（Anthropic 兼容），在开放平台创建密钥；接口域名为 api.xiaomimimo.com。',
+      'Xiaomi MiMo — API billing through the MiMo open platform; endpoint api.xiaomimimo.com.',
+    descriptionZh: '小米 MiMo 按量计费线路，在开放平台创建密钥；接口域名为 api.xiaomimimo.com。',
     bestFor: ['general', 'coding'],
     freeTier: false,
     aliases: ['xiaomi', 'mimo', '小米', 'xiaomimimo'],
@@ -348,7 +433,7 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     bestFor: ['general', 'coding'],
     freeTier: false,
     aliases: ['xiaomi token cn', 'mimo token cn'],
-    envVars: ['XIAOMI_TOKEN_PLAN_CN_API_KEY'],
+    envVars: ['XIAOMI_TOKEN_PLAN_CN_API_KEY', 'XIAOMI_TOKEN_PLAN_API_KEY'],
   },
   'xiaomi-token-plan-ams': {
     apiKeyUrl: 'https://platform.xiaomimimo.com/#/console/api-keys',
@@ -359,7 +444,7 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     bestFor: ['general', 'coding'],
     freeTier: false,
     aliases: ['xiaomi token ams', 'mimo token ams'],
-    envVars: ['XIAOMI_TOKEN_PLAN_AMS_API_KEY'],
+    envVars: ['XIAOMI_TOKEN_PLAN_AMS_API_KEY', 'XIAOMI_TOKEN_PLAN_API_KEY'],
   },
   'xiaomi-token-plan-sgp': {
     apiKeyUrl: 'https://platform.xiaomimimo.com/#/console/api-keys',
@@ -370,7 +455,57 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     bestFor: ['general', 'coding'],
     freeTier: false,
     aliases: ['xiaomi token sgp', 'mimo token sgp'],
-    envVars: ['XIAOMI_TOKEN_PLAN_SGP_API_KEY'],
+    envVars: ['XIAOMI_TOKEN_PLAN_SGP_API_KEY', 'XIAOMI_TOKEN_PLAN_API_KEY'],
+  },
+  'ant-ling': {
+    apiKeyUrl: 'https://ling.tbox.cn/',
+    docsUrl: 'https://ling.tbox.cn/',
+    description: 'Ant Ling — domestic OpenAI-compatible access to Ling and Ring models.',
+    descriptionZh: '蚂蚁 Ling，国内 OpenAI 兼容服务，提供 Ling 与 Ring 系列模型。',
+    bestFor: ['chinese', 'reasoning', 'coding'],
+    aliases: ['ant ling', 'ling', 'ring', '蚂蚁 ling', '蚂蚁灵'],
+    envVars: ['ANT_LING_API_KEY', 'LING_API_KEY'],
+  },
+  'zai-coding-global': {
+    apiKeyUrl: 'https://z.ai/manage-apikey/apikey-list',
+    pricingUrl: 'https://z.ai/manage-apikey/billing',
+    docsUrl: 'https://docs.z.ai/guides/overview/quick-start',
+    description: 'Zhipu GLM Coding Plan — international z.ai endpoint.',
+    descriptionZh: '智谱 GLM Coding Plan 国际区 z.ai 端点。',
+    bestFor: ['coding', 'reasoning', 'chinese'],
+    aliases: ['zai coding', 'zhipu coding global', 'glm coding global'],
+    envVars: ['ZAI_API_KEY', 'Z_AI_API_KEY'],
+  },
+  'zai-coding-cn': {
+    apiKeyUrl: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys',
+    pricingUrl: 'https://bigmodel.cn/pricing',
+    docsUrl: 'https://docs.bigmodel.cn/cn/guide/start/model-overview',
+    description: 'Zhipu GLM Coding Plan — China endpoint from the pi-ai provider catalog.',
+    descriptionZh: '智谱 GLM Coding Plan 中国区，来自 pi-ai 内置 provider 目录。',
+    bestFor: ['coding', 'reasoning', 'chinese'],
+    aliases: ['zai coding cn', 'zhipu coding cn', 'glm coding cn', '智谱 coding'],
+    envVars: ['ZHIPU_API_KEY', 'BIGMODEL_API_KEY', 'ZAI_API_KEY'],
+  },
+  'zhipu-coding-cn': {
+    apiKeyUrl: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys',
+    pricingUrl: 'https://bigmodel.cn/pricing',
+    docsUrl: 'https://docs.bigmodel.cn/cn/guide/start/model-overview',
+    description: 'Zhipu GLM Coding Plan — China BigModel endpoint.',
+    descriptionZh: '智谱 GLM Coding Plan 中国区 BigModel 端点。',
+    bestFor: ['coding', 'reasoning', 'chinese'],
+    aliases: ['zhipu coding', 'glm coding cn', '智谱 coding'],
+    envVars: ['ZHIPU_API_KEY', 'BIGMODEL_API_KEY', 'ZAI_API_KEY'],
+  },
+  'zhipu-cn': {
+    apiKeyUrl: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys',
+    pricingUrl: 'https://bigmodel.cn/pricing',
+    docsUrl: 'https://docs.bigmodel.cn/cn/guide/start/model-overview',
+    description: 'Zhipu GLM China — BigModel OpenAI-compatible endpoint.',
+    descriptionZh: '智谱 GLM 中国区，通过 BigModel OpenAI 兼容接口访问。',
+    bestFor: ['chinese', 'reasoning', 'general'],
+    freeTier: true,
+    aliases: ['zhipu', 'glm', 'bigmodel', '智谱', 'z.ai cn'],
+    envVars: ['ZHIPU_API_KEY', 'BIGMODEL_API_KEY'],
   },
   huggingface: {
     apiKeyUrl: 'https://huggingface.co/settings/tokens',
@@ -410,25 +545,45 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     apiKeyUrl: 'https://z.ai/manage-apikey/apikey-list',
     pricingUrl: 'https://z.ai/manage-apikey/billing',
     docsUrl: 'https://docs.z.ai/guides/overview/quick-start',
-    description: '01.AI Yi models — strong multilingual capabilities.',
-    descriptionZh: '零一万物 Yi 系列模型，多语言能力强。',
-    bestFor: ['general', 'chinese'],
+    description: 'Zhipu GLM International — z.ai OpenAI-compatible endpoint.',
+    descriptionZh: '智谱 GLM 国际区，通过 z.ai OpenAI 兼容接口访问。',
+    bestFor: ['general', 'reasoning', 'chinese'],
     freeTier: false,
-    aliases: ['yi', '01.ai', 'zero one', '零一万物'],
-    envVars: ['ZAI_API_KEY'],
+    aliases: ['zai', 'z.ai', 'zhipu global', 'glm global', '智谱'],
+    envVars: ['ZAI_API_KEY', 'Z_AI_API_KEY'],
   },
   dashscope: {
-    apiKeyUrl: 'https://modelstudio.console.alibabacloud.com/',
-    apiKeyUrlCn: 'https://dashscope.console.aliyun.com/apiKey',
+    apiKeyUrl: 'https://dashscope.console.aliyun.com/apiKey',
     pricingUrl: 'https://help.aliyun.com/zh/dashscope/developer-reference/tongyi-thousand-questions-metering-and-billing',
-    docsUrl: 'https://help.aliyun.com/zh/dashscope/',
-    description:
-      'Alibaba DashScope — image generation, speech, and STT HTTP APIs (service id `dashscope`, not a pi-ai LLM provider).',
-    descriptionZh: '阿里 DashScope：文生图、语音等 HTTP API（服务 id 为 dashscope，非 pi-ai 内置 LLM）。',
-    bestFor: ['image', 'speech', 'chinese'],
+    docsUrl: 'https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope',
+    description: 'Alibaba Bailian / DashScope service provider.',
+    descriptionZh: '阿里百炼 / DashScope 服务 provider。',
+    bestFor: ['chinese', 'coding', 'image', 'speech'],
     freeTier: true,
-    aliases: ['dash scope', 'alibaba dashscope'],
-    envVars: ['DASHSCOPE_API_KEY'],
+    aliases: ['dash scope', 'alibaba dashscope', 'qwen', 'tongyi', '阿里百炼', '通义千问'],
+    envVars: ['DASHSCOPE_API_KEY', 'QWEN_API_KEY'],
+  },
+  'dashscope-cn': {
+    apiKeyUrl: 'https://dashscope.console.aliyun.com/apiKey',
+    pricingUrl: 'https://help.aliyun.com/zh/dashscope/developer-reference/tongyi-thousand-questions-metering-and-billing',
+    docsUrl: 'https://help.aliyun.com/zh/model-studio/developer-reference/compatibility-of-openai-with-dashscope',
+    description: 'Alibaba Bailian / DashScope China — Qwen LLMs through the China endpoint.',
+    descriptionZh: '阿里百炼 / DashScope 中国区：通过国内端点访问通义千问 LLM。',
+    bestFor: ['chinese', 'coding', 'image'],
+    freeTier: true,
+    aliases: ['dash scope cn', 'alibaba dashscope cn', 'qwen cn', 'tongyi cn', '阿里百炼', '通义千问'],
+    envVars: ['DASHSCOPE_API_KEY', 'QWEN_API_KEY'],
+  },
+  'dashscope-intl': {
+    apiKeyUrl: 'https://modelstudio.console.alibabacloud.com/',
+    pricingUrl: 'https://www.alibabacloud.com/help/en/model-studio/billing-for-tongyi-qianwen',
+    docsUrl: 'https://www.alibabacloud.com/help/en/model-studio/compatibility-of-openai-with-dashscope',
+    description: 'Alibaba Bailian / DashScope International — Qwen LLMs through the international endpoint.',
+    descriptionZh: '阿里百炼 / DashScope 国际区：通过国际端点访问通义千问 LLM。',
+    bestFor: ['chinese', 'coding', 'image'],
+    freeTier: true,
+    aliases: ['dash scope intl', 'alibaba cloud dashscope', 'qwen intl', 'tongyi intl'],
+    envVars: ['DASHSCOPE_API_KEY', 'QWEN_API_KEY'],
   },
   'vercel-ai-gateway': {
     apiKeyUrl: 'https://vercel.com/account/tokens',
@@ -456,31 +611,15 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
 };
 
 /**
- * Ordered API key console links for UI. {@link ProviderEnrichment.apiKeyUrlCn} is only set when one
- * provider id covers both regions; otherwise each id uses {@link ProviderEnrichment.apiKeyUrl} alone
- * (e.g. `minimax` vs `minimax-cn`). When both exist, order follows UI language (domestic first in zh).
+ * Ordered API key console links for UI. A provider id should map to a single endpoint/region/plan,
+ * so each row exposes one API key console that matches that provider's runtime base URL.
  */
 export function getOrderedApiKeyLinks(
   providerId: string,
-  language: StoredLanguage,
+  _language: StoredLanguage,
 ): { href: string; kind: ApiKeyLinkKind }[] {
   const e = PROVIDER_ENRICHMENT[providerId];
   if (!e) return [];
-  const intl = e.apiKeyUrl;
-  const cn = e.apiKeyUrlCn;
-  if (intl && cn) {
-    if (language === 'zh') {
-      return [
-        { href: cn, kind: 'cn' },
-        { href: intl, kind: 'intl' },
-      ];
-    }
-    return [
-      { href: intl, kind: 'intl' },
-      { href: cn, kind: 'cn' },
-    ];
-  }
-  if (intl) return [{ href: intl, kind: 'single' }];
-  if (cn) return [{ href: cn, kind: 'single' }];
+  if (e.apiKeyUrl) return [{ href: e.apiKeyUrl, kind: 'single' }];
   return [];
 }

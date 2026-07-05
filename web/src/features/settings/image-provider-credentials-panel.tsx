@@ -14,6 +14,7 @@ import type { ProvidersSettingsMessages } from '@/i18n/messages';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import type { StoredLanguage } from '@/lib/storage';
 import { cn } from '@/lib/cn';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 function inputClass(): string {
   return cn(
@@ -384,7 +385,7 @@ export function ImageProviderCredentialsPanel({
                         <label className="text-xs font-medium text-fg-muted" htmlFor={`img-cred-region-preset-${p.id}`}>
                           {t.regionLabel}
                         </label>
-                        <select
+                        <Select
                           id={`img-cred-region-preset-${p.id}`}
                           className={selectClass()}
                           value={dashscopeSelectValue(row, ui.regions)}
@@ -404,14 +405,14 @@ export function ImageProviderCredentialsPanel({
                             }
                           }}
                         >
-                          <option value="">{t.regionPresetDefault}</option>
+                          <SelectOption value="">{t.regionPresetDefault}</SelectOption>
                           {ui.regions.map((r) => (
-                            <option key={r.value} value={r.value}>
+                            <SelectOption key={r.value} value={r.value}>
                               {translateDashscopeRegion(t, r.value, r.label)}
-                            </option>
+                            </SelectOption>
                           ))}
-                          <option value={CUSTOM_SENTINEL}>{t.regionPresetCustom}</option>
-                        </select>
+                          <SelectOption value={CUSTOM_SENTINEL}>{t.regionPresetCustom}</SelectOption>
+                        </Select>
                         {dashscopeSelectValue(row, ui.regions) === CUSTOM_SENTINEL ? (
                           <div className="mt-2 grid gap-2 sm:grid-cols-2">
                             <input
@@ -441,7 +442,7 @@ export function ImageProviderCredentialsPanel({
                         {baseUrlPresetBlockHint(t, ui.baseUrlPresetKind) ? (
                           <p className="text-[11px] text-fg-subtle">{baseUrlPresetBlockHint(t, ui.baseUrlPresetKind)}</p>
                         ) : null}
-                        <select
+                        <Select
                           id={`img-cred-base-preset-${p.id}`}
                           className={selectClass()}
                           value={baseUrlSelectValue(row, ui.baseUrlPresets)}
@@ -458,14 +459,14 @@ export function ImageProviderCredentialsPanel({
                             updateCredRow(p.id, { baseUrl: v.replace(/\/+$/, '') });
                           }}
                         >
-                          <option value="">{t.baseUrlPresetDefault}</option>
+                          <SelectOption value="">{t.baseUrlPresetDefault}</SelectOption>
                           {ui.baseUrlPresets.map((b) => (
-                            <option key={b.value} value={b.value}>
+                            <SelectOption key={b.value} value={b.value}>
                               {b.label}
-                            </option>
+                            </SelectOption>
                           ))}
-                          <option value={CUSTOM_SENTINEL}>{t.baseUrlPresetCustom}</option>
-                        </select>
+                          <SelectOption value={CUSTOM_SENTINEL}>{t.baseUrlPresetCustom}</SelectOption>
+                        </Select>
                         {baseUrlSelectValue(row, ui.baseUrlPresets) === CUSTOM_SENTINEL ? (
                           <input
                             type="url"

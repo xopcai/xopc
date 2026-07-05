@@ -3,6 +3,7 @@ import type { ProvidersSettingsMessages } from '@/i18n/messages';
 
 export const CATEGORY_ORDER: ProviderCategory[] = [
   'common',
+  'domestic',
   'specialty',
   'enterprise',
   'oauth',
