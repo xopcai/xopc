@@ -34,14 +34,22 @@ export function clearToken(): void {
 }
 
 export function getLanguage(): StoredLanguage {
+  const stored = getStoredLanguage();
+  if (stored) {
+    return stored;
+  }
+  return inferDefaultLanguageFromEnvironment();
+}
+
+export function getStoredLanguage(): StoredLanguage | null {
   try {
     const lang = localStorage.getItem(LANGUAGE_KEY) as StoredLanguage;
     if (lang === 'en' || lang === 'zh') {
       return lang;
     }
-    return inferDefaultLanguageFromEnvironment();
+    return null;
   } catch {
-    return inferDefaultLanguageFromEnvironment();
+    return null;
   }
 }
 

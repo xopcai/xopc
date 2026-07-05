@@ -32,7 +32,6 @@ const SECTIONS: SettingsSectionId[] = [
   'capability-presets',
   'gateway',
   'heartbeat',
-  'tunnel',
   'remote-access',
   'shares',
   'goals',
@@ -93,16 +92,8 @@ export function SettingsPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
 
-  if (section === 'agent' || section === 'agents') {
-    return <Navigate to="/agents" replace />;
-  }
-
   if (!section || !SECTIONS.includes(section as SettingsSectionId)) {
     return <Navigate to="/settings/overview" replace />;
-  }
-
-  if (section === 'tunnel') {
-    return <Navigate to="/settings/remote-access" replace />;
   }
 
   const id = section as SettingsSectionId;
@@ -149,7 +140,7 @@ export function SettingsPage() {
     return renderLazySection(HeartbeatSettingsPanel);
   }
 
-  if (id === 'tunnel' || id === 'remote-access') {
+  if (id === 'remote-access') {
     return renderLazySection(RemoteAccessHub);
   }
 

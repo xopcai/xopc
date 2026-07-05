@@ -15,6 +15,7 @@ import type { PrivacyPaneKind, ShellPermissionSnapshot, SystemSettingsBehavior, 
 import { rawMediaAccessStatus, tccToTriState } from './shell-permission-gates.js';
 import { openMacosPrivacyPane, openWinPrivacyPane } from './privacy-deep-links.js';
 import { assertTrustedRenderer } from './trusted-renderer.js';
+import { normalizeElectronUiLanguage, type ElectronUiLanguage } from '../i18n.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -26,6 +27,7 @@ type ElectronShellPreferences = {
   keepAwakePreferred: boolean;
   notifyEnabled: boolean;
   notifySoundEnabled: boolean;
+  language?: ElectronUiLanguage;
   /** Best-effort macOS UNUserNotificationCenter status after probe / request. */
   notificationAuthStatus?: TccTriState;
 };
@@ -58,6 +60,7 @@ async function readPrefsFile(): Promise<ElectronShellPreferences> {
       keepAwakePreferred: typeof j.keepAwakePreferred === 'boolean' ? j.keepAwakePreferred : defaultPrefs.keepAwakePreferred,
       notifyEnabled: typeof j.notifyEnabled === 'boolean' ? j.notifyEnabled : defaultPrefs.notifyEnabled,
       notifySoundEnabled: typeof j.notifySoundEnabled === 'boolean' ? j.notifySoundEnabled : defaultPrefs.notifySoundEnabled,
+      language: j.language === 'en' || j.language === 'zh' ? j.language : undefined,
       notificationAuthStatus:
         j.notificationAuthStatus === 'granted' || j.notificationAuthStatus === 'denied' || j.notificationAuthStatus === 'unknown'
           ? j.notificationAuthStatus
@@ -82,6 +85,20 @@ export async function initElectronShellPreferences(): Promise<void> {
   loaded = true;
   prefs = await readPrefsFile();
   applyKeepAwakeFromPref();
+}
+
+export function getElectronShellLanguage(): ElectronUiLanguage {
+  return normalizeElectronUiLanguage(prefs.language, app.getLocale());
+}
+
+async function setElectronShellLanguage(language: unknown): Promise<ElectronUiLanguage> {
+  const next = normalizeElectronUiLanguage(language, app.getLocale());
+  if (prefs.language === next) {
+    return next;
+  }
+  prefs = { ...prefs, language: next };
+  await writePrefsFile(prefs);
+  return next;
 }
 
 function applyKeepAwakeFromPref(): void {
@@ -503,11 +520,32 @@ function getBehaviorState(): SystemSettingsBehavior {
   };
 }
 
-export function registerSystemSettingsIpc(ipcMain: IpcMain): void {
+export function registerSystemSettingsIpc(
+  ipcMain: IpcMain,
+  options?: { onLanguageChanged?: (language: ElectronUiLanguage) => void },
+): void {
   ipcMain.handle('system-settings:get-behavior', (event): SystemSettingsBehavior => {
     assertTrustedRenderer(event);
     return getBehaviorState();
   });
+
+  ipcMain.handle('electron-locale:get', (event): ElectronUiLanguage => {
+    assertTrustedRenderer(event);
+    return getElectronShellLanguage();
+  });
+
+  ipcMain.handle(
+    'electron-locale:set',
+    async (event: IpcMainInvokeEvent, language: unknown): Promise<{ ok: true; language: ElectronUiLanguage }> => {
+      assertTrustedRenderer(event);
+      const before = getElectronShellLanguage();
+      const next = await setElectronShellLanguage(language);
+      if (next !== before) {
+        options?.onLanguageChanged?.(next);
+      }
+      return { ok: true, language: next };
+    },
+  );
 
   ipcMain.handle(
     'system-settings:set-behavior',

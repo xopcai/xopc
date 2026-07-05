@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { createHashRouter, Navigate, RouterProvider, useParams } from 'react-router-dom';
+import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { AppShell } from '@/components/shell/app-shell';
 import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
@@ -30,6 +30,7 @@ import {
 } from '@/lib/route-preload';
 import { SwrProvider } from '@/providers/swr-provider';
 import { syncFontScaleAfterHydration, useFontScaleStore } from '@/stores/font-scale-store';
+import { syncElectronLocaleAfterHydration } from '@/stores/locale-store';
 import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/stores/theme-store';
 
 const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.SessionsPage })));
@@ -72,18 +73,6 @@ function SecondaryRouteFallback() {
 }
 
 
-function RedirectLegacySettingsAgentsDetail() {
-  const { agentId } = useParams();
-  const raw = typeof agentId === 'string' ? agentId.trim() : '';
-  return <Navigate to={raw ? `/agents/${encodeURIComponent(raw)}` : '/agents'} replace />;
-}
-
-function RedirectLegacyNoteDetail() {
-  const { noteId } = useParams();
-  const raw = typeof noteId === 'string' ? noteId.trim() : '';
-  return <Navigate to={raw ? `/notes/${encodeURIComponent(raw)}` : '/notes'} replace />;
-}
-
 function SettingsRouteFallback() {
   return (
     <div className="flex min-h-0 flex-1 flex-col" aria-busy>
@@ -123,14 +112,6 @@ const router = createHashRouter([
         ],
       },
       {
-        path: 'sessions',
-        element: <Navigate to="/settings/sessions" replace />,
-      },
-      {
-        path: 'logs',
-        element: <Navigate to="/settings/logs" replace />,
-      },
-      {
         path: 'automations',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
@@ -158,10 +139,6 @@ const router = createHashRouter([
             ),
           },
         ],
-      },
-      {
-        path: 'note/:noteId',
-        element: <RedirectLegacyNoteDetail />,
       },
       {
         path: 'notes',
@@ -279,18 +256,6 @@ const router = createHashRouter([
         children: [
           { index: true, element: <Navigate to="overview" replace /> },
           {
-            path: 'skills',
-            element: <Navigate to="/skills" replace />,
-          },
-          {
-            path: 'channels',
-            element: <Navigate to="/channels" replace />,
-          },
-          {
-            path: 'memory',
-            element: <Navigate to="/agents" replace />,
-          },
-          {
             path: 'sessions',
             element: (
               <Suspense fallback={<SecondaryRouteFallback />}>
@@ -313,14 +278,6 @@ const router = createHashRouter([
                 <AppsPage />
               </Suspense>
             ),
-          },
-          {
-            path: 'agents',
-            element: <Navigate to="/agents" replace />,
-          },
-          {
-            path: 'agents/:agentId',
-            element: <RedirectLegacySettingsAgentsDetail />,
           },
           {
             path: 'agent-browser',
@@ -376,10 +333,12 @@ function ThemeEffects() {
     const offFont = useFontScaleStore.persist.onFinishHydration(() => {
       syncFontScaleAfterHydration();
     });
+    const offLocale = syncElectronLocaleAfterHydration();
     const offSystem = subscribeSystemTheme();
     return () => {
       offTheme?.();
       offFont?.();
+      offLocale();
       offSystem();
     };
   }, []);

@@ -9,19 +9,27 @@
 # reach `update-downloaded`, and the UI looks like the update "vanished".
 #
 # This script merges all `release-assets/**/latest.yml` documents that share
-# the same `version` and rewrites every copy with a single manifest whose
-# `files` array lists every unique installer entry (deduped by sha512).
+# the same `version` into `release-assets/latest.yml`. It then removes the
+# nested copies so GitHub Release upload only sees one Windows update manifest.
 #
 # Usage: ruby scripts/merge-windows-electron-latest-yml.rb release-assets
 
 require 'yaml'
 
 root = ARGV[0] || 'release-assets'
+canonical_path = File.join(root, 'latest.yml')
 pattern = File.join(root, '**', 'latest.yml')
 paths = Dir.glob(pattern).sort
 paths.reject! { |p| p.include?('node_modules') }
+paths.reject! { |p| File.expand_path(p) == File.expand_path(canonical_path) }
+
+exe_paths = Dir.glob(File.join(root, '**', 'xopc-*.exe')).reject { |p| p.include?('win-unpacked') }
 
 if paths.length < 2
+  if exe_paths.length > 1
+    warn "merge-windows-electron-latest-yml: found #{exe_paths.length} Windows installers but only #{paths.length} latest.yml"
+    exit 1
+  end
   warn "merge-windows-electron-latest-yml: #{paths.length} latest.yml (skip merge)"
   exit 0
 end
@@ -58,6 +66,12 @@ end
 base['files'] = merged_files
 
 yaml_out = YAML.dump(base)
-docs.each_key { |path| File.write(path, yaml_out) }
+File.write(canonical_path, yaml_out)
 
-warn "merge-windows-electron-latest-yml: merged #{merged_files.length} installer entr(y|ies) into #{paths.length} latest.yml"
+paths.each do |path|
+  next if File.expand_path(path) == File.expand_path(canonical_path)
+
+  File.delete(path)
+end
+
+warn "merge-windows-electron-latest-yml: merged #{merged_files.length} installer entr(y|ies) into #{canonical_path}"

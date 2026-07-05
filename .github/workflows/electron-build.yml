@@ -17,8 +17,8 @@
 # Private repos: arm64 Linux/Windows runners require available quota on your plan
 # (see GitHub docs: “Standard GitHub-hosted runners for private repositories”).
 #
-# Optional secrets (generic signing / macOS notarization):
-#   - CSC_LINK: base64/file URL certificate for electron-builder (used as Windows fallback)
+# Optional secrets (macOS signing / notarization):
+#   - CSC_LINK: base64/file URL certificate for electron-builder (macOS only)
 #   - CSC_KEY_PASSWORD: password for that certificate
 #   - APPLE_ID: Apple ID email for notarytool
 #   - APPLE_APP_SPECIFIC_PASSWORD: app-specific password (appleid.apple.com), not your Apple ID password
@@ -26,7 +26,7 @@
 # Alternative notarization auth: APPLE_API_KEY (base64 .p8), APPLE_API_KEY_ID, APPLE_API_ISSUER
 # Enable notarization in scripts/electron-builder.pack.yml: mac.notarize: true
 #
-# Optional secrets (Windows signing; preferred for tag releases):
+# Optional secrets (Windows signing; enables signed Windows releases):
 #   - WIN_CSC_LINK: base64/file URL for Windows Authenticode certificate
 #   - WIN_CSC_KEY_PASSWORD: password for that certificate
 #
@@ -120,6 +120,8 @@ jobs:
           # Signing: only export CSC_* when BOTH secrets are set. Partial config (e.g. CSC_LINK
           # without CSC_KEY_PASSWORD) makes electron-builder attempt import and fail with
           # "empty password" and ".../xopc not a file" on the workspace path.
+          # Windows must never fall back to generic CSC_* because macOS Developer ID
+          # certificates can be Authenticode-applied to .exe files but fail updater trust checks.
           _EB_CSC_LINK: ${{ secrets.CSC_LINK }}
           _EB_CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           _EB_WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
@@ -133,12 +135,10 @@ jobs:
             if [[ -n "${_EB_WIN_CSC_LINK:-}" && -n "${_EB_WIN_CSC_KEY_PASSWORD:-}" ]]; then
               export CSC_LINK="$_EB_WIN_CSC_LINK"
               export CSC_KEY_PASSWORD="$_EB_WIN_CSC_KEY_PASSWORD"
-            elif [[ -n "${_EB_CSC_LINK:-}" && -n "${_EB_CSC_KEY_PASSWORD:-}" ]]; then
-              export CSC_LINK="$_EB_CSC_LINK"
-              export CSC_KEY_PASSWORD="$_EB_CSC_KEY_PASSWORD"
-            elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-              echo "❌ Windows tag releases require WIN_CSC_LINK/WIN_CSC_KEY_PASSWORD or CSC_LINK/CSC_KEY_PASSWORD for updater signature verification"
-              exit 1
+            else
+              echo "⚠️ WIN_CSC_LINK/WIN_CSC_KEY_PASSWORD not set; building unsigned Windows installer"
+              unset CSC_LINK CSC_KEY_PASSWORD
+              export CSC_IDENTITY_AUTO_DISCOVERY=false
             fi
           elif [[ -n "${_EB_CSC_LINK:-}" && -n "${_EB_CSC_KEY_PASSWORD:-}" ]]; then
             export CSC_LINK="$_EB_CSC_LINK"
@@ -214,9 +214,25 @@ jobs:
             XOPC_SIGN_VERIFY_EXE="$exe_path" powershell -NoProfile -Command '
               $s = Get-AuthenticodeSignature -LiteralPath $env:XOPC_SIGN_VERIFY_EXE
               $s | Format-List Status, StatusMessage, SignatureType, SignerCertificate
-              if ($null -eq $s.SignerCertificate) { Write-Error "Windows installer is not Authenticode signed"; exit 1 }
-              if ($s.Status -eq "NotSigned" -or $s.Status -eq "HashMismatch") { Write-Error "Invalid signature: $($s.Status)"; exit 1 }
-              if ($s.Status -ne "Valid") { Write-Warning "Signature is present but Windows runner could not fully validate trust chain: $($s.Status)" }
+              if ($null -eq $s.SignerCertificate) {
+                Write-Warning "Windows installer is not Authenticode signed; release will not support trusted Windows auto-update"
+              } else {
+                if ($s.Status -ne "Valid") { Write-Error "Invalid Windows installer signature: $($s.Status) - $($s.StatusMessage)"; exit 1 }
+                $subject = [string] $s.SignerCertificate.Subject
+                $issuer = [string] $s.SignerCertificate.Issuer
+                if ($subject -match "Developer ID Application" -or $issuer -match "Apple") {
+                  Write-Error "Windows installer was signed with a macOS Developer ID certificate: $subject / $issuer"
+                  exit 1
+                }
+              }
+              $updateConfigPath = "dist/release/win-unpacked/resources/app-update.yml"
+              if (Test-Path -LiteralPath $updateConfigPath) {
+                $updateConfig = Get-Content -LiteralPath $updateConfigPath -Raw
+                if ($updateConfig -match "Developer ID Application" -or $updateConfig -match "Apple") {
+                  Write-Error "Windows app-update.yml contains macOS publisher metadata"
+                  exit 1
+                }
+              }
             '
           fi
 
@@ -246,7 +262,7 @@ jobs:
         with:
           pattern: xopc-electron-*
           path: release-assets
-          merge-multiple: true
+          merge-multiple: false
 
       # Windows x64 and arm64 each emit `latest.yml`; upload basename collision would leave
       # only one manifest on the release and break electron-updater for the other arch.
