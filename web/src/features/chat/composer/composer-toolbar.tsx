@@ -13,6 +13,7 @@ import { interpolate } from '@/features/chat/composer/composer.types';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { MessageBundle } from '@/i18n/messages';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 function thinkingIcon(level: ThinkingLevel) {
   return level === 'off' ? Ban : Sparkles;
@@ -172,18 +173,18 @@ export const ComposerToolbar = memo(function ComposerToolbar({
                 >
                   <ThinkingIcon className="size-4 shrink-0 text-accent-fg" aria-hidden />
                   <span className="shrink-0 text-fg-muted">{m.thinkingLevelLabel}</span>
-                  <select
+                  <Select
                     className="min-w-0 flex-1 cursor-pointer appearance-none rounded-md bg-surface-hover/80 px-2 py-0.5 text-sm font-medium text-fg focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     value={thinkingLevel}
                     disabled={disabled || (sending && !streaming)}
                     onChange={(e) => onThinkingChange(e.target.value)}
                   >
                     {(Object.keys(m.thinkingLevels) as ThinkingLevel[]).map((lvl) => (
-                      <option key={lvl} value={lvl}>
+                      <SelectOption key={lvl} value={lvl}>
                         {m.thinkingLevels[lvl]}
-                      </option>
+                      </SelectOption>
                     ))}
-                  </select>
+                  </Select>
                 </label>
               ) : null}
             </div>

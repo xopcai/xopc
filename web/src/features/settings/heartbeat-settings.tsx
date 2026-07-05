@@ -27,7 +27,7 @@ import {
   SettingsTabs,
   type SettingsTabItem,
 } from '@/features/settings/settings-page-layout';
-import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
+import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages, type HeartbeatSettingsMessages } from '@/i18n/messages';
 import { ScheduleField } from '@/features/scheduling/schedule-field';
@@ -35,6 +35,7 @@ import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useAsyncResource } from '@/lib/use-async-resource';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 function inputClassName(): string {
   return cn(
@@ -46,7 +47,7 @@ function inputClassName(): string {
 }
 
 function selectClassName(): string {
-  return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
+  return cn(selectTriggerClass, selectFieldMaxWidthClass);
 }
 
 type CronMessages = ReturnType<typeof messages>['cron'];
@@ -609,7 +610,7 @@ function HeartbeatDeliveryFields({
 
       <label className="flex flex-col gap-1">
         <span className="text-xs font-medium text-fg-muted">{c.channel}</span>
-        <select
+        <Select
           className={selectCn()}
           value={targetTrim}
           onChange={(event) => {
@@ -617,18 +618,18 @@ function HeartbeatDeliveryFields({
             update({ target: value, targetChatId: '' });
           }}
         >
-          <option value="">{h.channelNone}</option>
+          <SelectOption value="">{h.channelNone}</SelectOption>
           {showCustomChannel ? (
-            <option value={targetTrim}>
+            <SelectOption value={targetTrim}>
               {targetTrim} ({h.customChannelSuffix})
-            </option>
+            </SelectOption>
           ) : null}
           {channels.map((channel) => (
-            <option key={channel.name} value={channel.name} disabled={!channel.enabled}>
+            <SelectOption key={channel.name} value={channel.name} disabled={!channel.enabled}>
               {channel.name} {!channel.enabled ? '(disabled)' : ''}
-            </option>
+            </SelectOption>
           ))}
-        </select>
+        </Select>
       </label>
 
       {targetTrim ? (
@@ -655,7 +656,7 @@ function HeartbeatDeliveryFields({
               placeholder={c.recipientPlaceholder}
               autoComplete="off"
             />
-            <select
+            <Select
               className={cn(selectCn(), 'max-w-40 shrink-0 text-xs')}
               value={form.targetChatId}
               onChange={(event) => {
@@ -663,19 +664,19 @@ function HeartbeatDeliveryFields({
                 if (value) update({ targetChatId: value });
               }}
             >
-              <option value="">{c.selectRecipient}</option>
+              <SelectOption value="">{c.selectRecipient}</SelectOption>
               {sessionChatIds.length > 0 ? (
                 sessionChatIds.map((item) => (
-                  <option key={`${item.channel}-${item.chatId}`} value={item.chatId}>
+                  <SelectOption key={`${item.channel}-${item.chatId}`} value={item.chatId}>
                     {formatRecipientOptionLabel(item, c.lastActiveLabels)}
-                  </option>
+                  </SelectOption>
                 ))
               ) : (
-                <option value="" disabled>
+                <SelectOption value="" disabled>
                   {c.noRecentChatsOption}
-                </option>
+                </SelectOption>
               )}
-            </select>
+            </Select>
           </div>
           <p className="text-xs text-fg-muted">
             {sessionChatIds.length > 0 ? c.enterManuallyOrSelect : c.noRecentChats}

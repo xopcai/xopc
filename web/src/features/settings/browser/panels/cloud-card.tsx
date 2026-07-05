@@ -12,6 +12,7 @@ import { inputClassName, selectClassName } from '../../agents/defaults-field-sty
 
 import { ActionResultBox, BackendModeCard } from './backend-mode-card';
 import type { BrowserMessages } from './types';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type ActionStatus = 'idle' | 'pending' | 'ok' | 'error';
 
@@ -90,14 +91,14 @@ export function CloudCard({
     >
       <div className="grid gap-5 sm:grid-cols-2">
         <AgentDefaultsField label={m.label.browserCloudProvider} description={m.desc.browserCloudProvider}>
-          <select
+          <Select
             className={selectClassName()}
             value={provider}
             onChange={(e) => onChange({ provider: e.target.value as CloudCardForm['provider'] })}
           >
-            <option value="browserbase">{m.browserCloudProviderBrowserbase}</option>
-            <option value="browser-use">{m.browserCloudProviderBrowserUse}</option>
-          </select>
+            <SelectOption value="browserbase">{m.browserCloudProviderBrowserbase}</SelectOption>
+            <SelectOption value="browser-use">{m.browserCloudProviderBrowserUse}</SelectOption>
+          </Select>
         </AgentDefaultsField>
         <AgentDefaultsField label={m.label.browserCloudApiKey} description={m.desc.browserCloudApiKey}>
           <SecretInput

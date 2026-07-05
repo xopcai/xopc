@@ -6,6 +6,7 @@ import { messages } from '@/i18n/messages';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type MemoryProvider = {
   id: string;
@@ -277,27 +278,27 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
         <div className="grid gap-3 p-4 md:grid-cols-2">
           <label className="text-xs font-medium text-fg-muted">
             {t.searchStrategy}
-            <select
+            <Select
               className="mt-1 min-h-10 w-full rounded-md border border-edge bg-surface-panel px-3 text-sm text-fg"
               value={routingDraft.searchStrategy}
               onChange={(event) => setRoutingDraft((prev) => ({ ...prev, searchStrategy: event.target.value as never }))}
             >
               {['fanout', 'local-first', 'external-first', 'local-only', 'external-only'].map((value) => (
-                <option key={value} value={value}>{value}</option>
+                <SelectOption key={value} value={value}>{value}</SelectOption>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="text-xs font-medium text-fg-muted">
             {t.writeStrategy}
-            <select
+            <Select
               className="mt-1 min-h-10 w-full rounded-md border border-edge bg-surface-panel px-3 text-sm text-fg"
               value={routingDraft.writeStrategy}
               onChange={(event) => setRoutingDraft((prev) => ({ ...prev, writeStrategy: event.target.value as never }))}
             >
               {['local-first', 'write-through', 'external-first', 'local-only', 'external-only'].map((value) => (
-                <option key={value} value={value}>{value}</option>
+                <SelectOption key={value} value={value}>{value}</SelectOption>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="flex items-center gap-2 text-sm text-fg md:col-span-2">
             <input

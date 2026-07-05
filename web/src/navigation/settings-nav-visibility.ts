@@ -5,7 +5,6 @@ import type { SettingsMode } from '@/stores/settings-mode-store';
 export const SIMPLE_MODE_HIDDEN_SETTINGS_TABS = new Set<Tab>([
   'settingsTunnel',
   'settingsShares',
-  'settingsCapabilityPresets',
   'settingsHeartbeat',
   'settingsGoals',
   'settingsDreams',
@@ -16,7 +15,6 @@ const SIMPLE_MODE_HIDDEN_SETTINGS_PATH_PREFIXES = [
   '/settings/remote-access',
   '/settings/tunnel',
   '/settings/shares',
-  '/settings/capability-presets',
   '/settings/heartbeat',
   '/settings/goals',
   '/settings/dreams',

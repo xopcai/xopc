@@ -27,6 +27,11 @@ describe('xopc providers helpers', () => {
       expect(ids).toContain('anthropic');
     });
 
+    it('classifies China-region coding providers as domestic', () => {
+      expect(PROVIDER_META['ant-ling']?.category).toBe('domestic');
+      expect(PROVIDER_META['zai-coding-cn']?.category).toBe('domestic');
+    });
+
     it('marks every entry with a status from the closed set', () => {
       const valid = new Set(['configured', 'env-only', 'oauth', 'not-configured']);
       for (const entry of listProviders()) {

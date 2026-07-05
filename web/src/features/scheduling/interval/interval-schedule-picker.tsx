@@ -3,7 +3,8 @@ import { useMemo, useRef, useState } from 'react';
 import { HEARTBEAT_INTERVAL_PRESET_MS_ORDER } from '@/features/scheduling/interval/interval-presets';
 import type { IntervalPresetLabels } from '@/features/scheduling/interval/format-interval-label';
 import { cn } from '@/lib/cn';
-import { formControlBorderFocusClass, selectControlBaseClass } from '@/lib/form-field-width';
+import { formControlBorderFocusClass, selectTriggerClass } from '@/lib/form-field-width';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export type IntervalSchedulePickerLabels = {
   secondsLabel: string;
@@ -16,7 +17,7 @@ const numberInputClass = cn(
 );
 
 const presetSelectClass = cn(
-  selectControlBaseClass,
+  selectTriggerClass,
   'h-9 max-w-[11rem] shrink-0 text-xs sm:max-w-[12rem]',
 );
 
@@ -106,7 +107,7 @@ export function IntervalSchedulePicker({
             setSecondsDraft(null);
           }}
         />
-        <select
+        <Select
           className={presetSelectClass}
           disabled={disabled}
           value={intervalPresetSelectValue}
@@ -118,13 +119,13 @@ export function IntervalSchedulePicker({
             }
           }}
         >
-          <option value="">{labels.presets.custom}</option>
+          <SelectOption value="">{labels.presets.custom}</SelectOption>
           {presets.map((ms) => (
-            <option key={ms} value={String(ms)}>
+            <SelectOption key={ms} value={String(ms)}>
               {presetOptionLabel(ms, labels.presets)}
-            </option>
+            </SelectOption>
           ))}
-        </select>
+        </Select>
       </div>
     </div>
   );

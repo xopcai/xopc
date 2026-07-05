@@ -1,12 +1,21 @@
 import type { AgentModelConfig, Config } from '../../config/schema.js';
-import { getAgentDefaultModelRef, parseModelRef } from '../../config/schema.js';
+import {
+  getAgentDefaultImageModelConfig,
+  getAgentDefaultModelRef,
+  parseModelRef,
+} from '../../config/schema.js';
 import {
   resolveAgentModelFallbackValues,
   resolveAgentModelPrimaryValue,
 } from '../../config/model-input.js';
 import { getDefaultModelSync, getModelsByProvider, isProviderConfiguredSync } from '../../providers/index.js';
 
-export type ToolModelConfig = { primary?: string; fallbacks?: string[] };
+export type ToolModelConfig = {
+  primary?: string;
+  fallbacks?: string[];
+  timeoutMs?: number;
+  autoProviderFallback?: boolean;
+};
 
 export function hasToolModelConfig(model: ToolModelConfig | undefined): boolean {
   return Boolean(
@@ -81,7 +90,9 @@ function firstVisionModelRef(provider: string): string | undefined {
  * Effective image understanding model inferred from configured providers.
  */
 export function resolveImageModelConfigForTool(params: { cfg?: Config }): ToolModelConfig | null {
-  const explicit = coerceToolModelConfig(undefined);
+  const explicit = coerceToolModelConfig(
+    params.cfg ? getAgentDefaultImageModelConfig(params.cfg) : undefined,
+  );
   if (hasToolModelConfig(explicit)) {
     return explicit;
   }

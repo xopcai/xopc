@@ -1,12 +1,8 @@
 import type { Hono } from 'hono';
 
-import { AgentModelsSchema, type Config, parseModelRef } from '../../../config/schema.js';
+import { AgentModelsSchema, type Config } from '../../../config/schema.js';
 import { MemoryPolicySchema, ToolPolicySetSchema } from '../../../agent-manifest/schema.js';
 import { getVoiceModelsConfig } from '../../../config/voice.js';
-import {
-  isProviderConfigured,
-  resolveModel,
-} from '../../../providers/index.js';
 import { normalizeAgentId } from '../../../agent/agent-scope.js';
 import {
   deleteAgentAvatarFile,
@@ -26,10 +22,6 @@ import {
   writeUserProfileFile,
   type CreateAgentBody,
 } from '../../agents-admin.js';
-import {
-  resolveImageGenerationCapabilities,
-  resolveImageUnderstandingCapabilities,
-} from '../../image-capabilities.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 function parseProfileFiles(raw: unknown): Record<string, string> | undefined | { error: string } {
@@ -438,88 +430,6 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
   authenticated.get('/api/voice/models', (c) => {
     const models = getVoiceModelsConfig();
     return c.json({ ok: true, payload: { models } });
-  });
-
-  authenticated.get('/api/image/capabilities', async (c) => {
-    const config = service.currentConfig as Config;
-    const imageGenerationProviders = await resolveImageGenerationCapabilities(config);
-    const imageUnderstandingProviders = await resolveImageUnderstandingCapabilities(config);
-    return c.json({
-      ok: true,
-      payload: {
-        current: {
-          imageModel: null,
-          imageModelFallbacks: [],
-          imageGenerationModel: null,
-          imageGenerationModelFallbacks: [],
-          mediaMaxMb: null,
-        },
-        imageGeneration: { providers: imageGenerationProviders },
-        imageUnderstanding: { providers: imageUnderstandingProviders },
-      },
-    });
-  });
-
-  authenticated.post('/api/image/validate-model', strictRateLimitMiddleware, async (c) => {
-    let body: { modelRef?: unknown };
-    try {
-      body = (await c.req.json()) as { modelRef?: unknown };
-    } catch {
-      return c.json({ ok: false, error: 'Invalid JSON' }, 400);
-    }
-    const modelRef = body.modelRef;
-    if (!modelRef || typeof modelRef !== 'string') {
-      return c.json({ ok: false, error: 'modelRef is required' }, 400);
-    }
-
-    const parsed = parseModelRef(modelRef);
-    if (!parsed) {
-      return c.json({
-        ok: true,
-        payload: {
-          valid: false,
-          reason: 'invalid_format',
-          message: 'Model reference must be in "provider/model" format',
-        },
-      });
-    }
-
-    const configured = await isProviderConfigured(parsed.provider);
-    if (!configured) {
-      return c.json({
-        ok: true,
-        payload: {
-          valid: false,
-          reason: 'provider_not_configured',
-          message: `Provider "${parsed.provider}" is not configured. Set the API key first.`,
-          provider: parsed.provider,
-        },
-      });
-    }
-
-    try {
-      resolveModel(modelRef);
-    } catch {
-      return c.json({
-        ok: true,
-        payload: {
-          valid: false,
-          reason: 'model_not_found',
-          message: `Model not found in registry: ${modelRef}`,
-          provider: parsed.provider,
-          model: parsed.model,
-        },
-      });
-    }
-
-    return c.json({
-      ok: true,
-      payload: {
-        valid: true,
-        provider: parsed.provider,
-        model: parsed.model,
-      },
-    });
   });
 
 }

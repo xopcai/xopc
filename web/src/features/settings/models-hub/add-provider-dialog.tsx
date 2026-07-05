@@ -33,13 +33,16 @@ import {
 import { CATEGORY_ORDER, groupByCategory } from '@/features/settings/providers/providers-settings-lib';
 import {
   API_TYPE_OPTIONS,
+  discoverModels,
   saveModelsJson,
   type ApiType,
   type ModelsJsonConfig,
   type ProviderConfig,
 } from '@/features/settings/models-json-api';
 import {
+  PROVIDER_PRESET_OPTIONS,
   PROVIDER_PRESETS,
+  modelsJsonPresetKeyForProviderId,
   providerIdForPreset,
   selectClassName,
 } from '@/features/settings/models/models-settings-lib';
@@ -49,6 +52,7 @@ import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export interface AddProviderDialogMessages {
   title: string;
@@ -78,6 +82,9 @@ export interface AddProviderDialogMessages {
   addModel: string;
   modelIdLabel: string;
   modelIdPlaceholder: string;
+  discoverModels: string;
+  discoveringModels: string;
+  discoverModelsHint: string;
   noResults: string;
   step1Title: string;
   step2BuiltinTitle: string;
@@ -98,7 +105,7 @@ export interface AddProviderDialogMessages {
 type DialogStep =
   | { type: 'pick' }
   | { type: 'builtin'; providerId: string }
-  | { type: 'custom' };
+  | { type: 'custom'; presetKey?: string };
 
 interface AddProviderDialogProps {
   open: boolean;
@@ -161,7 +168,10 @@ export function AddProviderDialog({
               searchQuery={searchQuery}
               onSearchChange={setSearchQuery}
               labels={labels}
-              onPickBuiltin={(id) => setStep({ type: 'builtin', providerId: id })}
+              onPickBuiltin={(id) => {
+                const presetKey = modelsJsonPresetKeyForProviderId(id);
+                setStep(presetKey ? { type: 'custom', presetKey } : { type: 'builtin', providerId: id });
+              }}
               onPickCustom={() => setStep({ type: 'custom' })}
             />
           ) : step.type === 'builtin' ? (
@@ -175,6 +185,7 @@ export function AddProviderDialog({
             />
           ) : (
             <ConfigureCustomStep
+              initialPresetKey={step.presetKey}
               customConfig={customConfig}
               labels={labels}
               language={language}
@@ -632,14 +643,14 @@ type CustomProviderFormState = {
 
 function customFormFromPreset(presetKey = 'custom'): CustomProviderFormState {
   if (presetKey !== 'custom' && PROVIDER_PRESETS[presetKey]) {
-    const p = PROVIDER_PRESETS[presetKey];
+    const p = PROVIDER_PRESETS[presetKey].config;
     return {
       preset: presetKey,
       providerId: providerIdForPreset(presetKey),
       baseUrl: p.baseUrl ?? '',
       api: (p.api as ApiType) ?? 'openai-completions',
       apiKey: p.apiKey ?? '',
-      modelIds: [''],
+      modelIds: p.models?.map((model) => model.id) ?? [''],
       error: null,
     };
   }
@@ -662,6 +673,7 @@ type CustomFormAction =
   | { type: 'setApiKey'; value: string }
   | { type: 'addModelSlot' }
   | { type: 'updateModelId'; index: number; value: string }
+  | { type: 'setModelIds'; values: string[] }
   | { type: 'removeModelSlot'; index: number }
   | { type: 'setError'; value: string | null };
 
@@ -672,7 +684,7 @@ function customFormReducer(state: CustomProviderFormState, action: CustomFormAct
         return { ...state, preset: 'custom', error: null };
       }
       if (!PROVIDER_PRESETS[action.key]) return state;
-      return { ...customFormFromPreset(action.key), modelIds: state.modelIds };
+      return customFormFromPreset(action.key);
     case 'setProviderId':
       return { ...state, providerId: action.value };
     case 'setBaseUrl':
@@ -688,6 +700,8 @@ function customFormReducer(state: CustomProviderFormState, action: CustomFormAct
         ...state,
         modelIds: state.modelIds.map((m, i) => (i === action.index ? action.value : m)),
       };
+    case 'setModelIds':
+      return { ...state, modelIds: action.values.length > 0 ? action.values : [''] };
     case 'removeModelSlot':
       return { ...state, modelIds: state.modelIds.filter((_, i) => i !== action.index) };
     case 'setError':
@@ -696,20 +710,25 @@ function customFormReducer(state: CustomProviderFormState, action: CustomFormAct
 }
 
 function ConfigureCustomStep({
+  initialPresetKey,
   customConfig,
   labels,
   language,
   onBack,
   onSaved,
 }: {
+  initialPresetKey?: string;
   customConfig: ModelsJsonConfig | null;
   labels: AddProviderDialogMessages;
   language: StoredLanguage;
   onBack: () => void;
   onSaved: () => void;
 }) {
-  const [form, dispatch] = useReducer(customFormReducer, undefined as never, () => customFormFromPreset());
+  const [form, dispatch] = useReducer(customFormReducer, undefined as never, () =>
+    customFormFromPreset(initialPresetKey),
+  );
   const [saving, setSaving] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
   const secretLabels = secretInputLabelsFromChannels(messages(language).providersSettings);
 
   const { preset, providerId, baseUrl, api, apiKey, modelIds, error } = form;
@@ -732,11 +751,13 @@ function ConfigureCustomStep({
     dispatch({ type: 'setError', value: null });
     try {
       const existingProviders = customConfig?.providers ?? {};
+      const presetConfig = preset === 'custom' ? undefined : PROVIDER_PRESETS[preset]?.config;
       const newProvider: ProviderConfig = {
+        ...(presetConfig ?? {}),
         baseUrl: trimmedUrl,
         api,
         apiKey: apiKey.trim() || undefined,
-        models: validModels.map((id) => ({ id })),
+        models: validModels.map((id) => presetConfig?.models?.find((model) => model.id === id) ?? { id }),
       };
 
       const updatedConfig: ModelsJsonConfig = {
@@ -755,7 +776,38 @@ function ConfigureCustomStep({
     }
   };
 
+  const handleDiscoverModels = async () => {
+    const trimmedId = providerId.trim() || providerIdForPreset(preset) || 'custom';
+    const trimmedUrl = baseUrl.trim();
+    if (!trimmedUrl) {
+      dispatch({ type: 'setError', value: labels.baseUrlRequired });
+      return;
+    }
+    setDiscovering(true);
+    dispatch({ type: 'setError', value: null });
+    try {
+      const presetConfig = preset === 'custom' ? undefined : PROVIDER_PRESETS[preset]?.config;
+      const models = await discoverModels({
+        providerId: trimmedId,
+        baseUrl: trimmedUrl,
+        apiKey: apiKey.trim() || undefined,
+        api,
+        headers: presetConfig?.headers,
+      });
+      const ids = models.map((model) => model.id).filter((id) => id && !id.includes('/'));
+      dispatch({ type: 'setModelIds', values: ids });
+      if (ids.length === 0) {
+        dispatch({ type: 'setError', value: labels.discoverModelsHint });
+      }
+    } catch (e) {
+      dispatch({ type: 'setError', value: e instanceof Error ? e.message : labels.discoverModelsHint });
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
   const canSave = providerId.trim() && baseUrl.trim();
+  const canDiscover = (api === 'openai-completions' || api === 'openai-responses') && baseUrl.trim();
 
   return (
     <>
@@ -782,19 +834,19 @@ function ConfigureCustomStep({
           <label htmlFor="custom-preset" className="text-sm font-medium text-fg">
             {labels.presetLabel}
           </label>
-          <select
+          <Select
             id="custom-preset"
             value={preset}
             onChange={(e) => dispatch({ type: 'applyPreset', key: e.target.value })}
             className={selectClassName()}
           >
-            <option value="custom">{labels.presetCustom}</option>
-            <option value="ollama">{labels.presetOllama}</option>
-            <option value="lmstudio">{labels.presetLmStudio}</option>
-            <option value="openrouter">{labels.presetOpenRouter}</option>
-            <option value="zhipuCn">{labels.presetZhipuCn}</option>
-            <option value="zaiGeneral">{labels.presetZaiGeneral}</option>
-          </select>
+            <SelectOption value="custom">{labels.presetCustom}</SelectOption>
+            {PROVIDER_PRESET_OPTIONS.map((option) => (
+              <SelectOption key={option.key} value={option.key}>
+                {option.label}
+              </SelectOption>
+            ))}
+          </Select>
         </div>
 
         {/* Provider ID */}
@@ -840,18 +892,18 @@ function ConfigureCustomStep({
             <label htmlFor="custom-api-type" className="text-sm font-medium text-fg">
               {labels.apiTypeLabel}
             </label>
-            <select
+            <Select
               id="custom-api-type"
               value={api}
               onChange={(e) => dispatch({ type: 'setApi', value: e.target.value as ApiType })}
               className={selectClassName()}
             >
               {API_TYPE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
+                <SelectOption key={opt.value} value={opt.value}>
                   {opt.label}
-                </option>
+                </SelectOption>
               ))}
-            </select>
+            </Select>
           </div>
         </div>
 
@@ -871,7 +923,19 @@ function ConfigureCustomStep({
 
         {/* Model IDs */}
         <div className="flex flex-col gap-2">
-          <span className="text-sm font-medium text-fg">{labels.modelIdLabel}</span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium text-fg">{labels.modelIdLabel}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              className="gap-1.5"
+              disabled={!canDiscover || discovering}
+              onClick={() => void handleDiscoverModels()}
+            >
+              {discovering ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Search className="size-3.5" aria-hidden />}
+              {discovering ? labels.discoveringModels : labels.discoverModels}
+            </Button>
+          </div>
           {modelIds.map((modelId, index) => (
             <div key={modelId || `model-slot-${index}`} className="flex items-center gap-2">
               <input

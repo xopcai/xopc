@@ -2,10 +2,11 @@ import { ListFilter, Search, X } from 'lucide-react';
 
 import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { Button } from '@/components/ui/button';
-import { bareInputFocusClass, selectControlBaseClass } from '@/lib/form-field-width';
+import { bareInputFocusClass, selectTriggerClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import type { LevelSegmentValue } from '@/features/logs/logs-page-lib';
 import type { LogsMessages } from '@/i18n/messages';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type Props = {
   L: LogsMessages;
@@ -81,24 +82,24 @@ export function LogsFiltersSection({
           />
         </label>
 
-        <select
+        <Select
           id="log-module"
           value={moduleFilter}
           onChange={(e) => onModuleFilterChange(e.target.value)}
           aria-label={L.module}
           title={L.module}
           className={cn(
-            selectControlBaseClass,
+            selectTriggerClass,
             'h-10 w-full min-w-0 rounded-md py-0 sm:w-[min(100%,14rem)] sm:shrink-0',
           )}
         >
-          <option value="">{L.allModules}</option>
+          <SelectOption value="">{L.allModules}</SelectOption>
           {modules.map((mod) => (
-            <option key={mod} value={mod}>
+            <SelectOption key={mod} value={mod}>
               {mod}
-            </option>
+            </SelectOption>
           ))}
-        </select>
+        </Select>
 
         <div className="flex min-w-0 shrink-0 items-center gap-2">
           <Button

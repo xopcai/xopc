@@ -25,6 +25,7 @@ import { apiUrl } from '@/lib/url';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 function inputClassName(): string {
   return cn(
@@ -194,7 +195,7 @@ function GoalNotificationTargetRow({
   return (
     <div className="grid gap-2 rounded-md border border-edge/70 bg-surface-panel p-2">
       <div className="grid gap-2 sm:grid-cols-[10rem_10rem_minmax(0,1fr)_2rem]">
-        <select
+        <Select
           className={inputClass}
           value={channelId}
           onChange={(e) => {
@@ -209,22 +210,22 @@ function GoalNotificationTargetRow({
           }}
         >
           {channelOptions.map((channel) => (
-            <option key={channel.id} value={channel.id}>
+            <SelectOption key={channel.id} value={channel.id}>
               {channel.label} ({channel.id})
-            </option>
+            </SelectOption>
           ))}
-        </select>
-        <select
+        </Select>
+        <Select
           className={inputClass}
           value={accountId}
           onChange={(e) => onChange(index, { ...target, accountId: e.target.value, chatId: '' })}
         >
           {accountOptions.map((account) => (
-            <option key={account} value={account}>
+            <SelectOption key={account} value={account}>
               {account}
-            </option>
+            </SelectOption>
           ))}
-        </select>
+        </Select>
         {useCustomChat ? (
           <input
             className={inputClass}
@@ -233,7 +234,7 @@ function GoalNotificationTargetRow({
             onChange={(e) => onChange(index, { ...target, chatId: e.target.value })}
           />
         ) : (
-          <select
+          <Select
             className={inputClass}
             value={target.chatId || chatOptions[0]?.id || ''}
             onChange={(e) =>
@@ -243,14 +244,14 @@ function GoalNotificationTargetRow({
               })
             }
           >
-            {target.chatId ? null : <option value="">{labels.notificationsChooseChat}</option>}
+            {target.chatId ? null : <SelectOption value="">{labels.notificationsChooseChat}</SelectOption>}
             {chatOptions.map((option) => (
-              <option key={option.id} value={option.id}>
+              <SelectOption key={option.id} value={option.id}>
                 {option.label}
-              </option>
+              </SelectOption>
             ))}
-            <option value={CUSTOM_CHAT_ID_SENTINEL}>{labels.notificationsCustomChat}</option>
-          </select>
+            <SelectOption value={CUSTOM_CHAT_ID_SENTINEL}>{labels.notificationsCustomChat}</SelectOption>
+          </Select>
         )}
         <Button
           type="button"
@@ -512,7 +513,7 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
           </label>
           <div className="sm:col-span-2">
             <label className="mb-1 block text-sm font-medium text-fg">{t.checklistDecomposePolicy}</label>
-            <select
+            <Select
               className={inputClassName()}
               value={form.checklistDecomposePolicy}
               disabled={!form.checklistMode}
@@ -524,9 +525,9 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
                 })
               }
             >
-              <option value="empty_only">{t.checklistDecomposePolicyEmptyOnly}</option>
-              <option value="supplement_existing">{t.checklistDecomposePolicySupplementExisting}</option>
-            </select>
+              <SelectOption value="empty_only">{t.checklistDecomposePolicyEmptyOnly}</SelectOption>
+              <SelectOption value="supplement_existing">{t.checklistDecomposePolicySupplementExisting}</SelectOption>
+            </Select>
             <p className="mt-1 text-xs text-fg-subtle">{t.checklistDecomposePolicyHint}</p>
           </div>
           <div>

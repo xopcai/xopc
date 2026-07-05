@@ -24,11 +24,18 @@
     "@xopcai/xopc": "workspace:*"
   },
   "xopc": {
-    "bundledImageGenerationProvider": {
-      "module": "src/image-generation-provider.js",
-      "export": "buildDashScopeImageGenerationProvider",
-      "order": 20
-    }
+    "bundledImageGenerationProviders": [
+      {
+        "module": "src/image-generation-provider.js",
+        "export": "buildDashScopeCnImageGenerationProvider",
+        "order": 20
+      },
+      {
+        "module": "src/image-generation-provider.js",
+        "export": "buildDashScopeIntlImageGenerationProvider",
+        "order": 21
+      }
+    ]
   },
   "keywords": [
     "xopc",

@@ -15,6 +15,7 @@ import { createFormDraftReducer, syncFormDraftFromParsed } from '@/lib/settings-
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 function inputClassName(): string {
   return cn(
@@ -100,12 +101,12 @@ export function SessionConfigSection({ hasToken }: { hasToken: boolean }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="sm:col-span-2">
           <label className="mb-1 block text-sm font-medium text-fg">{t.dmScope}</label>
-          <select className={inputClassName()} value={form.dmScope} onChange={(e) => update({ dmScope: e.target.value as SessionDmScope })}>
-            <option value="main">{t.dmScopeMain}</option>
-            <option value="per-peer">{t.dmScopePerPeer}</option>
-            <option value="per-channel-peer">{t.dmScopePerChannelPeer}</option>
-            <option value="per-account-channel-peer">{t.dmScopePerAccountChannelPeer}</option>
-          </select>
+          <Select className={inputClassName()} value={form.dmScope} onChange={(e) => update({ dmScope: e.target.value as SessionDmScope })}>
+            <SelectOption value="main">{t.dmScopeMain}</SelectOption>
+            <SelectOption value="per-peer">{t.dmScopePerPeer}</SelectOption>
+            <SelectOption value="per-channel-peer">{t.dmScopePerChannelPeer}</SelectOption>
+            <SelectOption value="per-account-channel-peer">{t.dmScopePerAccountChannelPeer}</SelectOption>
+          </Select>
           <p className="mt-1 text-xs text-fg-subtle">{t.dmScopeHint}</p>
         </div>
         <div>

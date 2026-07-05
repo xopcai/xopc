@@ -45,7 +45,8 @@
     "expandRowDetails": "展开密钥与操作",
     "categories": {
       "common": "常用服务商",
-      "specialty": "专业 / 特色",
+      "domestic": "国内模型",
+      "specialty": "其他服务商",
       "enterprise": "企业 / 云端",
       "oauth": "仅 OAuth",
       "extension": "扩展"

@@ -5,6 +5,7 @@ import type { TextAssistScenario } from '@/features/ai-assist/ai-text-assist-api
 import { cn } from '@/lib/cn';
 
 import type { JsonSchema } from './workflow-api';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export type SchemaInputValue = Record<string, unknown>;
 
@@ -179,22 +180,22 @@ function SchemaFieldInput({
       </span>
       {description ? <p className="mt-0.5 text-xs leading-5 text-fg-subtle">{description}</p> : null}
       {enumValues.length > 0 ? (
-        <select value={value == null ? '' : String(value)} onChange={(event) => onChange(event.target.value)} className={inputClass}>
-          <option value="" />
+        <Select value={value == null ? '' : String(value)} onChange={(event) => onChange(event.target.value)} className={inputClass}>
+          <SelectOption value="" />
           {enumValues.map((item) => (
-            <option key={String(item)} value={String(item)}>{String(item)}</option>
+            <SelectOption key={String(item)} value={String(item)}>{String(item)}</SelectOption>
           ))}
-        </select>
+        </Select>
       ) : type === 'boolean' ? (
-        <select
+        <Select
           value={typeof value === 'boolean' ? String(value) : ''}
           onChange={(event) => onChange(event.target.value === '' ? undefined : event.target.value === 'true')}
           className={inputClass}
         >
-          <option value="" />
-          <option value="true">{labels.booleanTrue}</option>
-          <option value="false">{labels.booleanFalse}</option>
-        </select>
+          <SelectOption value="" />
+          <SelectOption value="true">{labels.booleanTrue}</SelectOption>
+          <SelectOption value="false">{labels.booleanFalse}</SelectOption>
+        </Select>
       ) : type === 'number' || type === 'integer' ? (
         <input
           type="number"

@@ -47,6 +47,7 @@ import {
   type AutomationSafetyMode,
   type AutomationTrigger,
 } from './automation-api';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type CreateMode = 'blank' | 'draft' | 'template';
 type ViewTab = 'activity' | 'automations';
@@ -1632,32 +1633,32 @@ function AutomationForm({
           <input className={inputClass} value={form.description} onChange={(e) => update({ description: e.target.value })} />
         </Field>
         <Section title={labels.form.trigger} />
-        <select className={inputClass} value={form.triggerMode} onChange={(e) => update({ triggerMode: e.target.value as TriggerMode })}>
-          <option value="manual">{labels.trigger.manual}</option>
-          <option value="daily">{labels.trigger.daily}</option>
-          <option value="weekly">{labels.trigger.weekly}</option>
-          <option value="interval">{labels.trigger.interval}</option>
-          <option value="cron">{labels.trigger.customCron}</option>
-          <option value="webhook">{labels.trigger.webhook}</option>
-          <option value="goalBlocked">{labels.trigger.goalBlocked}</option>
-          <option value="noteCreated">{labels.trigger.noteCreated}</option>
-          <option value="workflowFailed">{labels.trigger.workflowFailed}</option>
-          <option value="sessionUpdated">{labels.trigger.sessionUpdated}</option>
-        </select>
+        <Select className={inputClass} value={form.triggerMode} onChange={(e) => update({ triggerMode: e.target.value as TriggerMode })}>
+          <SelectOption value="manual">{labels.trigger.manual}</SelectOption>
+          <SelectOption value="daily">{labels.trigger.daily}</SelectOption>
+          <SelectOption value="weekly">{labels.trigger.weekly}</SelectOption>
+          <SelectOption value="interval">{labels.trigger.interval}</SelectOption>
+          <SelectOption value="cron">{labels.trigger.customCron}</SelectOption>
+          <SelectOption value="webhook">{labels.trigger.webhook}</SelectOption>
+          <SelectOption value="goalBlocked">{labels.trigger.goalBlocked}</SelectOption>
+          <SelectOption value="noteCreated">{labels.trigger.noteCreated}</SelectOption>
+          <SelectOption value="workflowFailed">{labels.trigger.workflowFailed}</SelectOption>
+          <SelectOption value="sessionUpdated">{labels.trigger.sessionUpdated}</SelectOption>
+        </Select>
         {form.triggerMode === 'daily' || form.triggerMode === 'weekly' ? (
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label={labels.form.time}><input className={inputClass} type="time" value={form.time} onChange={(e) => update({ time: e.target.value })} /></Field>
             {form.triggerMode === 'weekly' ? (
               <Field label={labels.form.day}>
-                <select className={inputClass} value={form.weekday} onChange={(e) => update({ weekday: e.target.value })}>
-                  <option value="1">{labels.weekdays.monday}</option>
-                  <option value="2">{labels.weekdays.tuesday}</option>
-                  <option value="3">{labels.weekdays.wednesday}</option>
-                  <option value="4">{labels.weekdays.thursday}</option>
-                  <option value="5">{labels.weekdays.friday}</option>
-                  <option value="6">{labels.weekdays.saturday}</option>
-                  <option value="0">{labels.weekdays.sunday}</option>
-                </select>
+                <Select className={inputClass} value={form.weekday} onChange={(e) => update({ weekday: e.target.value })}>
+                  <SelectOption value="1">{labels.weekdays.monday}</SelectOption>
+                  <SelectOption value="2">{labels.weekdays.tuesday}</SelectOption>
+                  <SelectOption value="3">{labels.weekdays.wednesday}</SelectOption>
+                  <SelectOption value="4">{labels.weekdays.thursday}</SelectOption>
+                  <SelectOption value="5">{labels.weekdays.friday}</SelectOption>
+                  <SelectOption value="6">{labels.weekdays.saturday}</SelectOption>
+                  <SelectOption value="0">{labels.weekdays.sunday}</SelectOption>
+                </Select>
               </Field>
             ) : null}
           </div>
@@ -1679,7 +1680,7 @@ function AutomationForm({
         ) : null}
 
         <Section title={labels.form.action} />
-        <select
+        <Select
           className={inputClass}
           value={form.actionMode}
           onChange={(e) => {
@@ -1697,22 +1698,22 @@ function AutomationForm({
             });
           }}
         >
-          <option value="agent">{labels.action.runAgent}</option>
-          <option value="workflow">{labels.action.runWorkflow}</option>
-        </select>
+          <SelectOption value="agent">{labels.action.runAgent}</SelectOption>
+          <SelectOption value="workflow">{labels.action.runWorkflow}</SelectOption>
+        </Select>
         <Field label={labels.form.agent}>
-          <select
+          <Select
             className={inputClass}
             value={form.agentId}
             onChange={(e) => update({ agentId: e.target.value })}
           >
-            <option value="">{agentsLoading ? labels.form.loadingAgents : labels.form.defaultAgent}</option>
+            <SelectOption value="">{agentsLoading ? labels.form.loadingAgents : labels.form.defaultAgent}</SelectOption>
             {agentOptions.map((agent) => (
-              <option key={agent.id} value={agent.id}>
+              <SelectOption key={agent.id} value={agent.id}>
                 {agent.name || agent.id}
-              </option>
+              </SelectOption>
             ))}
-          </select>
+          </Select>
         </Field>
         {form.actionMode === 'agent' ? (
           <Field label={labels.form.instruction}>
@@ -1738,7 +1739,7 @@ function AutomationForm({
         ) : (
           <>
             <Field label={labels.form.workflow}>
-              <select
+              <Select
                 className={inputClass}
                 value={form.workflowId}
                 onChange={(e) => update({
@@ -1749,14 +1750,14 @@ function AutomationForm({
                 })}
                 disabled={workflowsLoading || workflowDefinitions.length === 0}
               >
-                {workflowsLoading ? <option value="">{labels.form.loadingWorkflows}</option> : null}
-                {!workflowsLoading && workflowDefinitions.length === 0 ? <option value="">{labels.form.noWorkflows}</option> : null}
+                {workflowsLoading ? <SelectOption value="">{labels.form.loadingWorkflows}</SelectOption> : null}
+                {!workflowsLoading && workflowDefinitions.length === 0 ? <SelectOption value="">{labels.form.noWorkflows}</SelectOption> : null}
                 {workflowDefinitions.map((workflow) => (
-                  <option key={workflow.id} value={workflow.id}>
+                  <SelectOption key={workflow.id} value={workflow.id}>
                     {workflow.title || workflow.name}
-                  </option>
+                  </SelectOption>
                 ))}
-              </select>
+              </Select>
             </Field>
             {selectedWorkflow ? (
               <WorkflowRunSetupPanel
@@ -1791,7 +1792,7 @@ function AutomationForm({
 
         <Section title={labels.form.safety} />
         <Field label={labels.form.safety}>
-          <select
+          <Select
             className={inputClass}
             value={form.safetyMode}
             onChange={(e) => {
@@ -1804,10 +1805,10 @@ function AutomationForm({
               });
             }}
           >
-            <option value="suggest_only">{labels.safety.suggest_only}</option>
-            <option value="ask_before_apply">{labels.safety.ask_before_apply}</option>
-            <option value="auto_apply">{labels.safety.auto_apply}</option>
-          </select>
+            <SelectOption value="suggest_only">{labels.safety.suggest_only}</SelectOption>
+            <SelectOption value="ask_before_apply">{labels.safety.ask_before_apply}</SelectOption>
+            <SelectOption value="auto_apply">{labels.safety.auto_apply}</SelectOption>
+          </Select>
           <p className="mt-1 text-xs leading-5 text-fg-muted">
             {form.safetyMode === 'suggest_only'
               ? labels.safety.suggestOnlyDescription
@@ -1818,11 +1819,11 @@ function AutomationForm({
         </Field>
 
         <Section title={labels.form.afterRun} />
-        <select className={inputClass} value={form.afterRunMode} onChange={(e) => update({ afterRunMode: e.target.value as FormState['afterRunMode'] })}>
-          <option value="none">{labels.afterRun.none}</option>
-          <option value="saveToSession">{labels.afterRun.saveToSession}</option>
-          <option value="webhook" disabled={form.safetyMode !== 'auto_apply'}>{labels.afterRun.webhook}</option>
-        </select>
+        <Select className={inputClass} value={form.afterRunMode} onChange={(e) => update({ afterRunMode: e.target.value as FormState['afterRunMode'] })}>
+          <SelectOption value="none">{labels.afterRun.none}</SelectOption>
+          <SelectOption value="saveToSession">{labels.afterRun.saveToSession}</SelectOption>
+          <SelectOption value="webhook" disabled={form.safetyMode !== 'auto_apply'}>{labels.afterRun.webhook}</SelectOption>
+        </Select>
         {form.afterRunMode === 'webhook' ? (
           <Field label={labels.form.webhookUrl}>
             <input className={inputClass} value={form.webhookUrl} onChange={(e) => update({ webhookUrl: e.target.value })} />

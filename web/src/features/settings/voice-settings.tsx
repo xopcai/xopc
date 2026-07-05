@@ -24,15 +24,16 @@ import {
   type VoiceApiKeyFieldLabels,
 } from '@/features/settings/voice-api-key-field';
 import { apiUrl } from '@/lib/url';
-import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
+import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { DEFAULT_SECRET_INPUT_LABELS } from '@/lib/secret-input-labels';
 import { showToast } from '@/lib/toast';
 import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
-const credentialFieldWidthClass = nativeSelectMaxWidthClass;
+const credentialFieldWidthClass = selectFieldMaxWidthClass;
 
 function sttEnvHint(provider: string): string {
   switch (provider) {
@@ -70,7 +71,7 @@ function inputClassName(): string {
 }
 
 function selectClassName(): string {
-  return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
+  return cn(selectTriggerClass, selectFieldMaxWidthClass);
 }
 
 function audioBytesLabel(bytes: number | undefined): string {
@@ -763,58 +764,58 @@ function SttSection({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.stt.provider}</FieldLabel>
-                <select
+                <Select
                   className={selectClassName()}
                   value={stt.provider}
                   onChange={(e) => updateStt({ provider: e.target.value })}
                 >
                   {providerOptions.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
+                    <SelectOption key={entry.id} value={entry.id}>
                       {sttProviderLabel(entry.id, v)}
                       {entry.configured ? '' : ' *'}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.stt.model}</FieldLabel>
                 {stt.provider === 'alibaba' ? (
-                  <select
+                  <Select
                     className={selectClassName()}
                     value={stt.alibaba?.model ?? ''}
                     onChange={(e) => updateSttAlibaba({ model: e.target.value })}
                   >
                     {alibabaModels.map((m) => (
-                      <option key={m.id} value={m.id}>
+                      <SelectOption key={m.id} value={m.id}>
                         {m.name}
-                      </option>
+                      </SelectOption>
                     ))}
-                  </select>
+                  </Select>
                 ) : stt.provider === 'openai' ? (
-                  <select
+                  <Select
                     className={selectClassName()}
                     value={stt.openai?.model ?? ''}
                     onChange={(e) => updateSttOpenai({ model: e.target.value })}
                   >
                     {openaiModels.map((m) => (
-                      <option key={m.id} value={m.id}>
+                      <SelectOption key={m.id} value={m.id}>
                         {m.name}
-                      </option>
+                      </SelectOption>
                     ))}
-                  </select>
+                  </Select>
                 ) : stt.provider === 'groq' ? (
-                  <select
+                  <Select
                     className={selectClassName()}
                     value={extensionModel || STT_GROQ_MODELS_FALLBACK[0].id}
                     onChange={(e) => updateExtensionProvider({ model: e.target.value })}
                   >
                     {STT_GROQ_MODELS_FALLBACK.map((m) => (
-                      <option key={m.id} value={m.id}>
+                      <SelectOption key={m.id} value={m.id}>
                         {m.name}
-                      </option>
+                      </SelectOption>
                     ))}
-                  </select>
+                  </Select>
                 ) : (
                   <input
                     className={inputClassName()}
@@ -1112,32 +1113,32 @@ function TtsSection({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.tts.trigger}</FieldLabel>
-                <select
+                <Select
                   className={selectClassName()}
                   value={tts.trigger}
                   onChange={(e) => updateTts({ trigger: e.target.value as VoiceSettingsState['tts']['trigger'] })}
                 >
-                  <option value="off">{v.tts.triggerOff}</option>
-                  <option value="inbound">{v.tts.triggerInbound}</option>
-                  <option value="tagged">{v.tts.triggerTagged}</option>
-                  <option value="always">{v.tts.triggerAlways}</option>
-                </select>
+                  <SelectOption value="off">{v.tts.triggerOff}</SelectOption>
+                  <SelectOption value="inbound">{v.tts.triggerInbound}</SelectOption>
+                  <SelectOption value="tagged">{v.tts.triggerTagged}</SelectOption>
+                  <SelectOption value="always">{v.tts.triggerAlways}</SelectOption>
+                </Select>
                 <p className="text-xs text-fg-subtle">{v.tts.triggerHelp}</p>
               </div>
 
               <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.tts.provider}</FieldLabel>
-                <select
+                <Select
                   className={selectClassName()}
                   value={tts.provider}
                   onChange={(e) => handleProviderSelect(e.target.value)}
                 >
                   {providerOptions.map((entry) => (
-                    <option key={entry.id} value={entry.id}>
+                    <SelectOption key={entry.id} value={entry.id}>
                       {ttsProviderLabel(entry.id, v)}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </Select>
                 <p className="text-xs text-fg-subtle">
                   {activeProvider?.configured
                     ? v.tts.configured
@@ -1192,7 +1193,7 @@ function TtsSection({
 
                 <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                   <FieldLabel>{v.stt.model}</FieldLabel>
-                  <select
+                  <Select
                     className={selectClassName()}
                     value={
                       tts.provider === 'openai'
@@ -1213,16 +1214,16 @@ function TtsSection({
                         ? ttsAlibaba
                         : ttsMinimax
                     ).map((m) => (
-                      <option key={m.id} value={m.id}>
+                      <SelectOption key={m.id} value={m.id}>
                         {m.name}
-                      </option>
+                      </SelectOption>
                     ))}
-                  </select>
+                  </Select>
                 </div>
 
                 <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                   <FieldLabel>{v.tts.voice}</FieldLabel>
-                  <select
+                  <Select
                     className={selectClassName()}
                     value={
                       tts.provider === 'openai'
@@ -1243,11 +1244,11 @@ function TtsSection({
                         ? ttsVoicesAlibaba
                         : ttsVoicesMinimax
                     ).map((m) => (
-                      <option key={m.id} value={m.id}>
+                      <SelectOption key={m.id} value={m.id}>
                         {m.name}
-                      </option>
+                      </SelectOption>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </div>
             ) : null}
@@ -1255,17 +1256,17 @@ function TtsSection({
             {tts.provider === 'edge' ? (
               <div className={cn('flex flex-col gap-1.5', credentialFieldWidthClass)}>
                 <FieldLabel>{v.tts.voice}</FieldLabel>
-                <select
+                <Select
                   className={selectClassName()}
                   value={tts.edge?.voice ?? ''}
                   onChange={(e) => updateTtsEdge({ voice: e.target.value })}
                 >
                   {ttsVoicesEdge.map((m) => (
-                    <option key={m.id} value={m.id}>
+                    <SelectOption key={m.id} value={m.id}>
                       {m.name}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </Select>
                 <p className="text-xs text-fg-subtle">{v.tts.edgeHint}</p>
               </div>
             ) : null}
@@ -1274,7 +1275,7 @@ function TtsSection({
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5 sm:col-span-2">
                   <FieldLabel>{v.tts.localCli.preset}</FieldLabel>
-                  <select
+                  <Select
                     className={selectClassName()}
                     value=""
                     onChange={(e) => {
@@ -1283,13 +1284,13 @@ function TtsSection({
                       updateTtsLocalCli({ command: preset.command, outputFormat: preset.outputFormat });
                     }}
                   >
-                    <option value="">{v.tts.localCli.presetPlaceholder}</option>
+                    <SelectOption value="">{v.tts.localCli.presetPlaceholder}</SelectOption>
                     {TTS_LOCAL_CLI_PRESETS.map((preset) => (
-                      <option key={preset.id} value={preset.id}>
+                      <SelectOption key={preset.id} value={preset.id}>
                         {preset.id}
-                      </option>
+                      </SelectOption>
                     ))}
-                  </select>
+                  </Select>
                   <p className="text-xs text-fg-subtle">{v.tts.localCli.presetDesc}</p>
                 </div>
                 <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -1320,7 +1321,7 @@ function TtsSection({
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <FieldLabel>{v.tts.localCli.outputFormat}</FieldLabel>
-                  <select
+                  <Select
                     className={selectClassName()}
                     value={tts['tts-local-cli']?.outputFormat ?? 'wav'}
                     onChange={(e) =>
@@ -1329,10 +1330,10 @@ function TtsSection({
                       })
                     }
                   >
-                    <option value="wav">wav</option>
-                    <option value="mp3">mp3</option>
-                    <option value="opus">opus</option>
-                  </select>
+                    <SelectOption value="wav">wav</SelectOption>
+                    <SelectOption value="mp3">mp3</SelectOption>
+                    <SelectOption value="opus">opus</SelectOption>
+                  </Select>
                   <p className="text-xs text-fg-subtle">{v.tts.localCli.outputFormatDesc}</p>
                 </div>
                 <div className="flex flex-col gap-1.5 sm:col-span-2">
@@ -1537,7 +1538,7 @@ function SchemaConfigField({
     <div className={cn('flex flex-col gap-1.5', className)}>
       <FieldLabel>{field.label}</FieldLabel>
       {field.type === 'select' ? (
-        <select
+        <Select
           id={id}
           className={selectClassName()}
           value={fieldValue}
@@ -1545,11 +1546,11 @@ function SchemaConfigField({
           onChange={(event) => onChange(parseSchemaFieldValue(field, event.target.value))}
         >
           {(field.options ?? []).map((option) => (
-            <option key={option.id} value={option.id}>
+            <SelectOption key={option.id} value={option.id}>
               {option.name}
-            </option>
+            </SelectOption>
           ))}
-        </select>
+        </Select>
       ) : field.type === 'textarea' ? (
         <textarea
           id={id}

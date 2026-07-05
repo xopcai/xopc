@@ -19,6 +19,7 @@ import type { WorkflowsPageVm } from './use-workflows-page';
 import type { WorkflowRunSummary } from './workflow-api';
 import { filterRunsForBoard } from './workflow-board.utils';
 import { WorkflowsPageHeaderActions } from './workflows-page-header-actions';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type WorkflowsViewMode = 'operations' | 'board';
 type RunSectionId = 'attention' | 'running' | 'queued' | 'recent';
@@ -176,7 +177,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
             />
           </div>
           {agentOptions.length > 1 ? (
-            <select
+            <Select
               value={ownerAgentId ?? ''}
               aria-label="Agent"
               onChange={(event) => setOwnerAgentId(event.target.value)}
@@ -186,13 +187,13 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               )}
             >
               {agentOptions.map((agent) => (
-                <option key={agent.id} value={agent.id}>
+                <SelectOption key={agent.id} value={agent.id}>
                   {agentListDisplayName(agent, messages(language).agentsSettings)}
-                </option>
+                </SelectOption>
               ))}
-            </select>
+            </Select>
           ) : null}
-          <select
+          <Select
             value={triggerFilter}
             aria-label={labels.boardTriggerFilterAria}
             onChange={(event) => setTriggerFilter(event.target.value)}
@@ -201,13 +202,13 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               interaction.focusRingPanel,
             )}
           >
-            <option value="all">{labels.boardTriggerFilterAll}</option>
-            <option value="automation">{labels.boardTriggerFilterAutomation}</option>
-            <option value="webui">{labels.boardTriggerFilterWebui}</option>
-            <option value="chat">{labels.boardTriggerFilterChat}</option>
-            <option value="api">{labels.boardTriggerFilterApi}</option>
-          </select>
-          <select
+            <SelectOption value="all">{labels.boardTriggerFilterAll}</SelectOption>
+            <SelectOption value="automation">{labels.boardTriggerFilterAutomation}</SelectOption>
+            <SelectOption value="webui">{labels.boardTriggerFilterWebui}</SelectOption>
+            <SelectOption value="chat">{labels.boardTriggerFilterChat}</SelectOption>
+            <SelectOption value="api">{labels.boardTriggerFilterApi}</SelectOption>
+          </Select>
+          <Select
             value={workflowFilterId}
             aria-label={labels.boardWorkflowFilterAria}
             onChange={(event) => setWorkflowFilterId(event.target.value)}
@@ -216,13 +217,13 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               interaction.focusRingPanel,
             )}
           >
-            <option value="">{labels.boardWorkflowFilterAll}</option>
+            <SelectOption value="">{labels.boardWorkflowFilterAll}</SelectOption>
             {definitions.map((definition) => (
-              <option key={definition.id} value={definition.id}>
+              <SelectOption key={definition.id} value={definition.id}>
                 {definition.title}
-              </option>
+              </SelectOption>
             ))}
-          </select>
+          </Select>
           <div className="flex rounded-lg border border-edge bg-surface-muted p-0.5">
             <button
               type="button"

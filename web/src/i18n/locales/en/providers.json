@@ -45,7 +45,8 @@
     "expandRowDetails": "Show credential fields",
     "categories": {
       "common": "Common providers",
-      "specialty": "Specialty providers",
+      "domestic": "Domestic China models",
+      "specialty": "Other providers",
       "enterprise": "Enterprise / cloud",
       "oauth": "OAuth only",
       "extension": "Extensions"

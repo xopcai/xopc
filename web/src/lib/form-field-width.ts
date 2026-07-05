@@ -1,22 +1,14 @@
-/**
- * Native `<select>` and combobox triggers should not stretch full viewport width on large screens.
- * Still `w-full` within narrow columns so mobile layouts don’t overflow.
- */
-export const nativeSelectMaxWidthClass = 'w-full max-w-md sm:max-w-lg';
+/** Select triggers should not stretch full viewport width on large screens. */
+export const selectFieldMaxWidthClass = 'w-full max-w-md sm:max-w-lg';
 
-/**
- * Shared calm appearance for native `<select>` (see `.ui-select` in `globals.css`).
- * Combine with {@link nativeSelectMaxWidthClass} in settings/forms.
- */
-export const selectControlBaseClass = 'ui-select';
+/** Shared select trigger layout hook; visual styling lives in the shared Select component. */
+export const selectTriggerClass = 'w-full';
 
-/** Popover combobox triggers (model picker, etc.): match `.ui-select` focus — border only, no focus ring. */
+/** Popover combobox triggers (model picker, etc.): border-only focus, no focus ring. */
 export const selectComboboxTriggerFocusClass =
   'focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-none focus-visible:border-edge data-[state=open]:border-edge';
 
-/**
- * Bordered text/date/time/number/textarea — same quiet focus as `.ui-select` (no ring shadow).
- */
+/** Bordered text/date/time/number/textarea — quiet border-only focus. */
 export const formControlBorderFocusClass =
   'focus:outline-none focus-visible:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-none focus-visible:border-edge';
 

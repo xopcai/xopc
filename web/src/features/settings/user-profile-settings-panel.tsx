@@ -24,6 +24,7 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 const emptyUser: UserFields = {
   callName: '',
@@ -178,7 +179,7 @@ export function UserProfileSettingsPanel() {
 
             <div className="flex flex-col gap-1.5 text-sm">
               <span className="font-medium text-fg">{t.pronouns}</span>
-              <select
+              <Select
                 className={inputClass}
                 value={PRONOUNS_PRESETS.some((p) => p.value === user.pronouns) ? user.pronouns : '__custom__'}
                 onChange={(e) => {
@@ -190,16 +191,16 @@ export function UserProfileSettingsPanel() {
                   updateUser({ pronouns: e.target.value });
                 }}
               >
-                <option value="" disabled>
+                <SelectOption value="" disabled>
                   {t.pronounsPlaceholder}
-                </option>
+                </SelectOption>
                 {PRONOUNS_PRESETS.map((preset) => (
-                  <option key={preset.value} value={preset.value}>
+                  <SelectOption key={preset.value} value={preset.value}>
                     {locLabel(preset.labelEn, preset.labelZh)}
-                  </option>
+                  </SelectOption>
                 ))}
-                <option value="__custom__">{t.custom}</option>
-              </select>
+                <SelectOption value="__custom__">{t.custom}</SelectOption>
+              </Select>
               {showCustomPronouns ? (
                 <input
                   className={cn(inputClass, 'mt-1 text-xs')}
@@ -214,18 +215,18 @@ export function UserProfileSettingsPanel() {
             <div className="flex flex-col gap-1.5 text-sm sm:col-span-2">
               <span className="font-medium text-fg">{t.timezone}</span>
               <div className="flex flex-wrap items-stretch gap-2">
-                <select
+                <Select
                   className={cn(inputClass, 'min-w-0 flex-1')}
                   value={timezoneSelectValue}
                   onChange={(e) => handleTimezoneChange(e.target.value)}
                 >
                   {TIMEZONE_OPTIONS.map((tz) => (
-                    <option key={tz.value} value={tz.value}>
+                    <SelectOption key={tz.value} value={tz.value}>
                       {locLabel(tz.labelEn, tz.labelZh)}
-                    </option>
+                    </SelectOption>
                   ))}
-                  <option value="__custom__">{t.timezoneCustom}</option>
-                </select>
+                  <SelectOption value="__custom__">{t.timezoneCustom}</SelectOption>
+                </Select>
                 <button
                   type="button"
                   className={cn(

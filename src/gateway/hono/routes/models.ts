@@ -5,8 +5,10 @@ import {
   loadModelsJson,
   saveModelsJson,
   validateModelsConfig,
+  type ProviderConfig,
 } from '../../../config/models-json.js';
 import type { Config } from '../../../config/schema.js';
+import { parseModelRef } from '../../../config/schema.js';
 import { testApiKeyResolution } from '../../../config/resolve-config-value.js';
 import {
   getImageGenerationProvider,
@@ -21,18 +23,30 @@ import {
   getProviderAuthState,
   isProviderConfigured,
   PROVIDER_META,
+  resolveModel,
 } from '../../../providers/index.js';
 import {
   getProviderHint,
+  getOnboardingFeaturedProviders,
   getRecommendedModelsForProvider,
   isRecommendedModel,
   sortModelsForPicker,
   sortProvidersForPicker,
 } from '../../../providers/presentation.js';
+import {
+  getDomesticProviderPreset,
+  getDomesticProviderPresetIds,
+} from '../../../providers/domestic-presets.js';
+import { discoverProviderModels, isProviderApiDiscoverable } from '../../../providers/model-discovery.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
 import { getProviderRegistry } from '../../../providers/plugin-registry.js';
 import type { ProviderModelDefinition } from '../../../extensions/types/providers.js';
 import type { GatewayService } from '../../service.js';
+import {
+  resolveCurrentImageModelCapabilities,
+  resolveImageGenerationCapabilities,
+  resolveImageUnderstandingCapabilities,
+} from '../../image-capabilities.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { respondStartupUnavailable } from '../lib/startup-unavailable.js';
 
@@ -41,6 +55,14 @@ function readModelsJsonProviderApiKey(providerId: string): string | undefined {
   const entry = config.providers?.[providerId.trim()];
   const key = entry?.apiKey;
   return typeof key === 'string' && key.trim() ? key.trim() : undefined;
+}
+
+function readStringRecord(value: unknown): Record<string, string> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value as Record<string, unknown>).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string',
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined;
 }
 
 /** Plaintext key only when persisted under `cfg.providers.<id>.apiKey` (not env / credential store). */
@@ -180,6 +202,53 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
   });
 
+  // POST /api/models-json/discover-models - Best-effort /models discovery for OpenAI-compatible providers
+  authenticated.post('/api/models-json/discover-models', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const rawProviderId = typeof body.providerId === 'string' ? body.providerId.trim() : '';
+    const rawBaseUrl = typeof body.baseUrl === 'string' ? body.baseUrl.trim() : '';
+    const rawApiKey = typeof body.apiKey === 'string' ? body.apiKey.trim() : undefined;
+    const api = typeof body.api === 'string' ? body.api : undefined;
+    const headers = readStringRecord(body.headers);
+
+    if (!rawProviderId) {
+      return c.json({ ok: false, error: { message: 'Missing providerId' } }, 400);
+    }
+    if (!rawBaseUrl || !URL.canParse(rawBaseUrl)) {
+      return c.json({ ok: false, error: { message: 'Missing or invalid baseUrl' } }, 400);
+    }
+    const providerApi = api as ProviderConfig['api'];
+    if (!isProviderApiDiscoverable(providerApi)) {
+      return c.json({ ok: false, error: { message: 'Model discovery requires an OpenAI-compatible API type' } }, 400);
+    }
+
+    try {
+      const models = await discoverProviderModels({
+        providerId: rawProviderId,
+        baseUrl: rawBaseUrl,
+        apiKey: rawApiKey,
+        api: providerApi,
+        headers,
+      });
+      return c.json({
+        ok: true,
+        payload: {
+          models: models.map((model) => ({
+            id: model.id,
+            name: model.name ?? model.id,
+            input: model.input ?? ['text'],
+            source: model.source,
+          })),
+        },
+      });
+    } catch (error) {
+      return c.json(
+        { ok: false, error: { message: error instanceof Error ? error.message : String(error) } },
+        502,
+      );
+    }
+  });
+
   // GET /api/models - Get available models (only configured providers)
   authenticated.get('/api/models', async (c) => {
     if (!service.isGatewayReady()) {
@@ -220,6 +289,82 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
 
     return c.json({ ok: true, payload: { models } });
+  });
+
+  authenticated.get('/api/image/capabilities', async (c) => {
+    const config = service.currentConfig as Config;
+    const imageGenerationProviders = await resolveImageGenerationCapabilities(config);
+    const imageUnderstandingProviders = await resolveImageUnderstandingCapabilities(config);
+    return c.json({
+      ok: true,
+      payload: {
+        current: resolveCurrentImageModelCapabilities(config),
+        imageGeneration: { providers: imageGenerationProviders },
+        imageUnderstanding: { providers: imageUnderstandingProviders },
+      },
+    });
+  });
+
+  authenticated.post('/api/image/validate-model', strictRateLimitMiddleware, async (c) => {
+    let body: { modelRef?: unknown };
+    try {
+      body = (await c.req.json()) as { modelRef?: unknown };
+    } catch {
+      return c.json({ ok: false, error: 'Invalid JSON' }, 400);
+    }
+    const modelRef = body.modelRef;
+    if (!modelRef || typeof modelRef !== 'string') {
+      return c.json({ ok: false, error: 'modelRef is required' }, 400);
+    }
+
+    const parsed = parseModelRef(modelRef);
+    if (!parsed) {
+      return c.json({
+        ok: true,
+        payload: {
+          valid: false,
+          reason: 'invalid_format',
+          message: 'Model reference must be in "provider/model" format',
+        },
+      });
+    }
+
+    const configured = await isProviderConfigured(parsed.provider);
+    if (!configured) {
+      return c.json({
+        ok: true,
+        payload: {
+          valid: false,
+          reason: 'provider_not_configured',
+          message: `Provider "${parsed.provider}" is not configured. Set the API key first.`,
+          provider: parsed.provider,
+        },
+      });
+    }
+
+    try {
+      resolveModel(modelRef);
+    } catch {
+      return c.json({
+        ok: true,
+        payload: {
+          valid: false,
+          reason: 'model_not_found',
+          message: `Model not found in registry: ${modelRef}`,
+          provider: parsed.provider,
+          model: parsed.model,
+        },
+      });
+    }
+
+    return c.json({
+      ok: true,
+      payload: {
+        valid: true,
+        provider: parsed.provider,
+        model: parsed.model,
+      },
+    });
   });
 
   // GET /api/image/providers — registered image generation providers and models (not in LLM model registry)
@@ -345,27 +490,29 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   // GET /api/providers/meta - Get provider metadata (categories, display names)
   authenticated.get('/api/providers/meta', async (c) => {
-    const providers = sortProvidersForPicker(getAllProviders());
+    const providers = sortProvidersForPicker([...new Set([...getAllProviders(), ...getDomesticProviderPresetIds()])]);
     const pluginRegistry = getProviderRegistry();
 
     const meta = await Promise.all(
       providers.map(async (provider) => {
         const plugin = pluginRegistry.get(provider);
+        const domesticPreset = getDomesticProviderPreset(provider);
         const extensionId = plugin
           ? resolveExtensionIdForProvider(service, provider)
           : undefined;
         const authState = await getProviderAuthState(provider);
         const configured = authState.authMode !== 'none' || (await isProviderConfigured(provider));
+        const registryModelCount = getAllModels().filter((m) => m.provider === provider).length;
         return {
           id: provider,
-          name: plugin?.name ?? PROVIDER_META[provider]?.name ?? provider,
-          category: plugin ? ('extension' as const) : PROVIDER_META[provider]?.category || 'specialty',
+          name: plugin?.name ?? domesticPreset?.displayName ?? PROVIDER_META[provider]?.name ?? provider,
+          category: plugin ? ('extension' as const) : PROVIDER_META[provider]?.category || (domesticPreset ? 'domestic' : 'specialty'),
           supportsOAuth: plugin ? false : (PROVIDER_META[provider]?.supportsOAuth ?? false),
           supportsApiKey: plugin ? false : (PROVIDER_META[provider]?.supportsApiKey ?? true),
           configured,
-          onboardingFeatured: ['openai', 'anthropic', 'xai', 'google', 'openrouter', 'deepseek'].includes(provider),
+          onboardingFeatured: getOnboardingFeaturedProviders().includes(provider),
           recommendedModels: getRecommendedModelsForProvider(provider),
-          modelCount: getAllModels().filter((m) => m.provider === provider).length,
+          modelCount: registryModelCount || domesticPreset?.models.length || 0,
           ...(getProviderHint(provider) ? { hint: getProviderHint(provider) } : {}),
           activeKeySource: authState.authMode,
           authMode: authState.authMode,

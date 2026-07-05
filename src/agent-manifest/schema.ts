@@ -35,10 +35,44 @@ export const ManifestModelRoleSchema = z
     }
   });
 
+export const AgentToolModelSchema = z
+  .object({
+    primary: z.string().min(1),
+    fallbacks: z.array(z.string().min(1)).optional(),
+    timeoutMs: z.number().int().positive().optional(),
+    autoProviderFallback: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine((entry, ctx) => {
+    const validateRef = (ref: string) => {
+      const trimmed = ref.trim();
+      const idx = trimmed.indexOf('/');
+      return idx > 0 && idx < trimmed.length - 1;
+    };
+    if (!validateRef(entry.primary)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: `primary must be provider/model format (got '${entry.primary}')`,
+        path: ['primary'],
+      });
+    }
+    for (const [index, fallback] of (entry.fallbacks ?? []).entries()) {
+      if (!validateRef(fallback)) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `fallback must be provider/model format (got '${fallback}')`,
+          path: ['fallbacks', index],
+        });
+      }
+    }
+  });
+
 export const ModelPolicySchema = z
   .object({
     defaultRole: IdSchema,
     roles: z.record(IdSchema, ManifestModelRoleSchema).default({}),
+    imageModel: AgentToolModelSchema.optional(),
+    imageGenerationModel: AgentToolModelSchema.optional(),
     policy: z
       .object({
         allowFallbacks: z.boolean().optional(),
@@ -53,6 +87,8 @@ export const ModelPolicyPatchSchema = z
   .object({
     defaultRole: IdSchema.optional(),
     roles: z.record(IdSchema, ManifestModelRoleSchema).optional(),
+    imageModel: AgentToolModelSchema.optional(),
+    imageGenerationModel: AgentToolModelSchema.optional(),
     policy: z
       .object({
         allowFallbacks: z.boolean().optional(),

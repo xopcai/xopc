@@ -5,6 +5,7 @@ import type { AgentsSettingsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 
 import { agentsSettingsInputClass } from './utils';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export function TuiDefaultAgentSetting({
   a,
@@ -60,25 +61,25 @@ export function TuiDefaultAgentSetting({
           ) : null}
         </div>
         <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center">
-          <select
+          <Select
             value={draftAgentId}
             disabled={busy}
             onChange={(event) => onDraftChange(event.target.value)}
             aria-label={a.tuiDefaultAgentTitle}
             className={cn(agentsSettingsInputClass(), 'min-w-48 bg-surface-base py-2')}
           >
-            <option value="">
+            <SelectOption value="">
               {a.tuiDefaultAgentInheritOption.replace('{{agent}}', globalDefaultLabel)}
-            </option>
+            </SelectOption>
             {agents.map((agent) => {
               const label = agentListDisplayName(agent, a);
               return (
-                <option key={agent.id} value={agent.id}>
+                <SelectOption key={agent.id} value={agent.id}>
                   {`${label} · ${agent.id}`}
-                </option>
+                </SelectOption>
               );
             })}
-          </select>
+          </Select>
           <Button
             type="button"
             variant="secondary"

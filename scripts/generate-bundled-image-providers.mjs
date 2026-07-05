@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
  * Scans each extensions/<name>/package.json for `xopc.bundledImageGenerationProvider`
+ * or `xopc.bundledImageGenerationProviders`
  * and writes src/generated/bundled-image-generation-providers.ts (a single
  * module exporting `bundledImageGenerationProviderBuilders` so the runtime
  * can register every provider in one pass).
@@ -60,26 +61,32 @@ function readBundledEntries() {
       console.warn('Skipping invalid JSON:', pkgPath);
       continue;
     }
-    const bp = pkg.xopc?.bundledImageGenerationProvider;
-    if (!bp || typeof bp.export !== 'string' || !bp.export.trim()) {
+    const bundled = pkg.xopc?.bundledImageGenerationProviders ?? pkg.xopc?.bundledImageGenerationProvider;
+    const providers = Array.isArray(bundled) ? bundled : bundled ? [bundled] : [];
+    if (providers.length === 0) {
       continue;
     }
-    const moduleRel = typeof bp.module === 'string' && bp.module.trim() ? bp.module.trim() : 'src/index.js';
-    const moduleRelNorm = moduleRel.replace(/^\.\//, '');
-    if (!bundledModuleExists(dirent.name, moduleRelNorm)) {
-      console.warn(
-        `Skipping extensions/${dirent.name}: bundled image-generation provider entry file missing (${moduleRel}). ` +
-          'Restore extension sources or remove xopc.bundledImageGenerationProvider from package.json.',
-      );
-      continue;
+    for (const bp of providers) {
+      if (!bp || typeof bp.export !== 'string' || !bp.export.trim()) {
+        continue;
+      }
+      const moduleRel = typeof bp.module === 'string' && bp.module.trim() ? bp.module.trim() : 'src/index.js';
+      const moduleRelNorm = moduleRel.replace(/^\.\//, '');
+      if (!bundledModuleExists(dirent.name, moduleRelNorm)) {
+        console.warn(
+          `Skipping extensions/${dirent.name}: bundled image-generation provider entry file missing (${moduleRel}). ` +
+            'Restore extension sources or remove xopc bundled image provider metadata from package.json.',
+        );
+        continue;
+      }
+      const order = typeof bp.order === 'number' && Number.isFinite(bp.order) ? bp.order : 0;
+      entries.push({
+        dir: dirent.name,
+        exportName: bp.export.trim(),
+        moduleRel: moduleRelNorm,
+        order,
+      });
     }
-    const order = typeof bp.order === 'number' && Number.isFinite(bp.order) ? bp.order : 0;
-    entries.push({
-      dir: dirent.name,
-      exportName: bp.export.trim(),
-      moduleRel: moduleRelNorm,
-      order,
-    });
   }
   entries.sort((a, b) => {
     if (a.order !== b.order) {

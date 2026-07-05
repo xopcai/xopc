@@ -52,6 +52,7 @@ import {
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSettingsModeStore } from '@/stores/settings-mode-store';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 function inputClassName(): string {
   return cn(
@@ -512,22 +513,22 @@ export function GatewaySettingsPanel() {
             <label className="mb-1 block text-sm font-medium text-fg" htmlFor="gateway-bind-mode">
               {g.bindMode}
             </label>
-            <select
+            <Select
               id="gateway-bind-mode"
               className={inputClassName()}
               value={form.bind}
               onChange={(event) => updateBind(event.target.value as GatewaySettingsState['bind'])}
             >
-              <option value="loopback">{g.bindLoopback}</option>
+              <SelectOption value="loopback">{g.bindLoopback}</SelectOption>
               {showAdvanced ? (
                 <>
-                  <option value="lan">{g.bindLan}</option>
-                  <option value="auto">{g.bindAuto}</option>
-                  <option value="custom">{g.bindCustom}</option>
-                  <option value="tailnet">{g.bindTailnet}</option>
+                  <SelectOption value="lan">{g.bindLan}</SelectOption>
+                  <SelectOption value="auto">{g.bindAuto}</SelectOption>
+                  <SelectOption value="custom">{g.bindCustom}</SelectOption>
+                  <SelectOption value="tailnet">{g.bindTailnet}</SelectOption>
                 </>
               ) : null}
-            </select>
+            </Select>
           </div>
           {form.bind === 'custom' ? (
             <div>
@@ -584,21 +585,21 @@ export function GatewaySettingsPanel() {
           <label className="text-sm font-medium text-fg" htmlFor="gateway-auth-mode">
             {g.authMode}
           </label>
-          <select
+          <Select
             id="gateway-auth-mode"
             value={form.auth.mode}
             onChange={(event) => updateAuth({ mode: event.target.value as GatewaySettingsState['auth']['mode'] })}
             className={inputClassName()}
           >
-            <option value="token">{g.authModeToken}</option>
-            <option value="password">{g.authModePassword}</option>
+            <SelectOption value="token">{g.authModeToken}</SelectOption>
+            <SelectOption value="password">{g.authModePassword}</SelectOption>
             {showAdvanced ? (
               <>
-                <option value="trusted-proxy">{g.authModeTrustedProxy}</option>
-                <option value="none">{g.authModeNoneLabel}</option>
+                <SelectOption value="trusted-proxy">{g.authModeTrustedProxy}</SelectOption>
+                <SelectOption value="none">{g.authModeNoneLabel}</SelectOption>
               </>
             ) : null}
-          </select>
+          </Select>
         </div>
 
         <SettingsAdvancedGate>
@@ -658,16 +659,16 @@ export function GatewaySettingsPanel() {
           <label className="text-sm font-medium text-fg" htmlFor="gateway-update-channel">
             {g.updateChannel}
           </label>
-          <select
+          <Select
             id="gateway-update-channel"
             value={form.updateChannel}
             onChange={(event) => updateChannel(event.target.value as GatewaySettingsState['updateChannel'])}
             className={inputClassName()}
           >
-            <option value="stable">{g.channelStable}</option>
-            <option value="beta">{g.channelBeta}</option>
-            <option value="dev">{g.channelDev}</option>
-          </select>
+            <SelectOption value="stable">{g.channelStable}</SelectOption>
+            <SelectOption value="beta">{g.channelBeta}</SelectOption>
+            <SelectOption value="dev">{g.channelDev}</SelectOption>
+          </Select>
           <p className="text-xs text-fg-subtle">{g.updateChannelHint}</p>
         </div>
 
@@ -1039,7 +1040,7 @@ function GatewayAdvancedFields({
         <label className="text-sm font-medium text-fg" htmlFor="gateway-channel-defer-mode">
           {g.channelConnectDeferMode}
         </label>
-        <select
+        <Select
           id="gateway-channel-defer-mode"
           value={form.channelConnectDeferMode}
           onChange={(e) =>
@@ -1047,10 +1048,10 @@ function GatewayAdvancedFields({
           }
           className={inputClassName()}
         >
-          <option value="auto">{g.channelConnectDeferModeAuto}</option>
-          <option value="off">{g.channelConnectDeferModeOff}</option>
-          <option value="explicit">{g.channelConnectDeferModeExplicit}</option>
-        </select>
+          <SelectOption value="auto">{g.channelConnectDeferModeAuto}</SelectOption>
+          <SelectOption value="off">{g.channelConnectDeferModeOff}</SelectOption>
+          <SelectOption value="explicit">{g.channelConnectDeferModeExplicit}</SelectOption>
+        </Select>
         <p className="text-xs text-fg-subtle">{g.channelConnectDeferModeHint}</p>
       </div>
 

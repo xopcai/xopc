@@ -14,7 +14,7 @@ import {
   patchVoiceSettings,
   type VoiceSettingsState,
 } from '@/features/settings/voice-config-api';
-import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
+import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -22,6 +22,7 @@ import { showToast } from '@/lib/toast';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 
 const GROQ_MODELS = [
   { id: 'whisper-large-v3-turbo', name: 'Whisper Large v3 Turbo' },
@@ -48,7 +49,7 @@ function resolveMediaProviderId(detail: ExtensionDetailResponse | undefined): st
 }
 
 function selectClassName(): string {
-  return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
+  return cn(selectTriggerClass, selectFieldMaxWidthClass);
 }
 
 function inputClassName(): string {
@@ -199,7 +200,7 @@ function ExtensionSttProviderSettingsBody({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className={cn('flex flex-col gap-1.5', nativeSelectMaxWidthClass)}>
+        <div className={cn('flex flex-col gap-1.5', selectFieldMaxWidthClass)}>
           <FieldLabel>{v.stt.apiKey}</FieldLabel>
           <VoiceApiKeyField
             kind="stt"
@@ -222,10 +223,10 @@ function ExtensionSttProviderSettingsBody({
             {providerId === 'groq' ? ' (GROQ_API_KEY)' : ''}
           </p>
         </div>
-        <div className={cn('flex flex-col gap-1.5', nativeSelectMaxWidthClass)}>
+        <div className={cn('flex flex-col gap-1.5', selectFieldMaxWidthClass)}>
           <FieldLabel>{v.stt.model}</FieldLabel>
           {providerId === 'groq' ? (
-            <select
+            <Select
               className={selectClassName()}
               value={credDraft.model}
               onChange={(e) => {
@@ -238,11 +239,11 @@ function ExtensionSttProviderSettingsBody({
               }}
             >
               {modelOptions.map((entry) => (
-                <option key={entry.id} value={entry.id}>
+                <SelectOption key={entry.id} value={entry.id}>
                   {entry.name}
-                </option>
+                </SelectOption>
               ))}
-            </select>
+            </Select>
           ) : (
             <input
               className={inputClassName()}

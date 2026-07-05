@@ -31,6 +31,13 @@ export interface ApiKeyTestResult {
   error?: string;
 }
 
+export interface DiscoveredModelResult {
+  id: string;
+  name?: string;
+  input?: string[];
+  source: 'live';
+}
+
 export const API_TYPE_OPTIONS: { value: ApiType; label: string }[] = [
   { value: 'openai-completions', label: 'OpenAI Completions' },
   { value: 'openai-responses', label: 'OpenAI Responses' },
@@ -146,6 +153,28 @@ export async function testApiKey(value: string): Promise<ApiKeyTestResult> {
     throw new Error(gatewayErrorMessage(data) || `HTTP ${res.status}`);
   }
   return data.payload;
+}
+
+export async function discoverModels(params: {
+  providerId: string;
+  baseUrl: string;
+  apiKey?: string;
+  api?: ApiType;
+  headers?: Record<string, string>;
+}): Promise<DiscoveredModelResult[]> {
+  const res = await apiFetch(apiUrl('/api/models-json/discover-models'), {
+    method: 'POST',
+    body: JSON.stringify(params),
+  });
+  const data = await res.json().catch(() => ({})) as {
+    ok?: boolean;
+    payload?: { models: DiscoveredModelResult[] };
+    error?: unknown;
+  };
+  if (!res.ok || !data.ok || !data.payload) {
+    throw new Error(gatewayErrorMessage(data) || `HTTP ${res.status}`);
+  }
+  return data.payload.models;
 }
 
 export function createCustomModel(id: string, name?: string, overrides?: Partial<CustomModel>): CustomModel {

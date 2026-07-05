@@ -2,9 +2,9 @@
  * Bundled DashScope (Alibaba) image-generation extension entry.
  */
 export {
-  buildDashScopeImageGenerationProvider,
+  buildDashScopeCnImageGenerationProvider,
+  buildDashScopeIntlImageGenerationProvider,
   generateDashScopeImages,
-  resolveDashScopeImageRegion,
   resolveDashScopeImageGenerationUrl,
   mapSizeToDashScopeFormat,
   mapSizeToWan27Format,
