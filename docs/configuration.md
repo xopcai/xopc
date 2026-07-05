@@ -192,7 +192,7 @@ Each entry must include **`id`**, **`identity`**, **`responsibilities`**, **`wor
 | `enabled` | boolean | Default `true`. When `false`, the id is ignored for routing and runtime resolution. |
 | `identity` | object | Structured display/model identity: `name`, `role`, optional `description`, `language`, `tone`, `avatar`. |
 | `responsibilities` | object | `primary`, optional `secondary`, and optional `outOfScope` lists. |
-| `workspace.root` | string | Per-agent Markdown workspace root (`~` expanded). Tool `cwd`, daily `memory/`, and user files. |
+| `workspace.root` | string | Per-agent Markdown workspace root (`~` expanded). Tool `cwd`, generated artifacts, and user files. |
 | `models.defaultRole` | string | Role id used when a workflow/session does not request a named role. |
 | `models.roles` | object | Named model roles. Each role uses `{ "model": "provider/model", "description": "..." }`. |
 | `tools.builtin` | object | Built-in tool policy by tool name: `{ "mode": "allow" | "confirm" | "deny", "scope"?: "readonly" | "workspace" | "unrestricted" }`. |

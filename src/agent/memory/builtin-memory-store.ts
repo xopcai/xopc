@@ -37,7 +37,7 @@ export class BuiltinMemoryStore {
     return this.config.userMemoryPath;
   }
 
-  /** Workspace whose MEMORY.md and daily notes participate in local memory search. */
+  /** Workspace whose profile and curated files participate in local memory search. */
   get workspaceDir(): string {
     return this.config.workspaceDir;
   }

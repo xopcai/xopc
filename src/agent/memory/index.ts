@@ -18,5 +18,3 @@ export type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
 export { StubMemoryProvider } from './stub-memory-provider.js';
 export type { MemorySnapshot, MemoryStoreConfig } from './types.js';
 export { extractAgentUserPlainText } from './user-message-text.js';
-export { MemoryFlushService } from './memory-flush.js';
-export type { MemoryFlushConfig, MemoryFlushOptions, MemoryFlushResult } from './memory-flush.js';

@@ -14,7 +14,7 @@ const log = createLogger('Dreaming:Store');
 
 export type DreamingStoreEntry = {
   key: string;
-  path: string; // workspace-relative: memory/YYYY-MM-DD.md
+  path: string;
   startLine: number;
   endLine: number;
   snippet: string;
@@ -22,8 +22,8 @@ export type DreamingStoreEntry = {
   // ── Signal dimensions ────────────────────────────────────────────────
   /** Number of times this snippet was returned by a memory recall query. */
   recallCount: number;
-  /** Number of times recorded from daily log scanning (light sweep). */
-  dailyCount: number;
+  /** Number of times recorded from source-side sweep phases. */
+  sourceCount: number;
   /** Number of times replayed from grounded context (agent-initiated). */
   groundedCount: number;
   /** Number of times the light phase touched this entry. */
@@ -55,9 +55,9 @@ export type DreamingStore = {
 
 type MemoryMatch = Awaited<ReturnType<typeof import('../../prompt/memory/index.js').memorySearch>>[number];
 
-function isDailyWorkspaceMemoryPath(rel: string): boolean {
+function isRecordableMemoryPath(rel: string): boolean {
   const p = normalizeMemoryPath(rel);
-  return /^memory\/\d{4}-\d{2}-\d{2}\.md$/i.test(p);
+  return p.length > 0 && !p.startsWith('../') && !path.isAbsolute(p);
 }
 
 function hashQuery(query: string): string {
@@ -145,7 +145,7 @@ export async function recordDreamingRecalls(params: {
   let skipped = 0;
   for (const match of params.matches) {
     const file = typeof match?.file === "string" ? match.file : "";
-    if (!file || !isDailyWorkspaceMemoryPath(file)) {
+    if (!file || !isRecordableMemoryPath(file)) {
       skipped += 1;
       continue;
     }
@@ -167,7 +167,7 @@ export async function recordDreamingRecalls(params: {
           ...existing,
           snippet,
           recallCount: Math.max(0, Math.floor(existing.recallCount + 1)),
-          dailyCount: existing.dailyCount ?? 0,
+          sourceCount: existing.sourceCount ?? 0,
           groundedCount: existing.groundedCount ?? 0,
           lightHits: existing.lightHits ?? 0,
           remHits: existing.remHits ?? 0,
@@ -186,7 +186,7 @@ export async function recordDreamingRecalls(params: {
           endLine,
           snippet,
           recallCount: 1,
-          dailyCount: 0,
+          sourceCount: 0,
           groundedCount: 0,
           lightHits: 0,
           remHits: 0,
@@ -267,7 +267,7 @@ export async function saveDreamingStore(params: {
 
 // ── Phase-level signal helpers ─────────────────────────────────────────
 
-type PhaseSignalField = 'dailyCount' | 'groundedCount' | 'lightHits' | 'remHits';
+type PhaseSignalField = 'sourceCount' | 'groundedCount' | 'lightHits' | 'remHits';
 
 /**
  * Increment a phase-specific signal counter on an existing store entry.
@@ -283,4 +283,3 @@ export function bumpEntryPhaseSignal(
   entry.phaseHitCount = (entry.phaseHitCount ?? 0) + increment;
   entry.totalSignalCount = (entry.totalSignalCount ?? 0) + increment;
 }
-

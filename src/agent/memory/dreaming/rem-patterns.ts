@@ -48,7 +48,7 @@ function resolveConfig(overrides?: Partial<DreamingRemConfig>): DreamingRemConfi
  * REM phase: cross-session pattern discovery.
  *
  * Scans the short-term store for entries that share query hashes or
- * appear across multiple daily files, then clusters them to identify
+ * appear across multiple indexed memory sources, then clusters them to identify
  * recurring themes/patterns. Bumps `remHits` on touched entries and
  * optionally writes a pattern summary to DREAMS.md.
  *

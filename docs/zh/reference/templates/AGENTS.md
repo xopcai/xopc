@@ -21,8 +21,9 @@ Do not manually reread startup files unless:
 
 ## Memory
 
-- Use `memory/YYYY-MM-DD.md` for daily notes when the user asks you to remember operational context.
-- Use profile `MEMORY.md` only for durable, curated memory.
+- Use runtime memory tools for recall.
+- Use curated memory for durable facts and preferences when available.
+- Cite only memory sources that a tool actually returns.
 - Keep memory concise, factual, and useful.
 - Do not store secrets unless the user explicitly asks and the storage location is appropriate.
 

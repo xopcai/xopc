@@ -27,7 +27,7 @@ export function buildMemorySection(params: {
 
   const toolLines: string[] = [];
   if (params.availableTools.has('memory_search')) {
-    toolLines.push('1. Run `memory_search` on profile MEMORY.md and workspace `memory/*.md`');
+    toolLines.push('1. Run `memory_search` to search indexed profile and curated memory sources');
   }
   if (params.availableTools.has('session_search')) {
     toolLines.push(
@@ -35,11 +35,11 @@ export function buildMemorySection(params: {
     );
   }
   if (params.availableTools.has('memory_get')) {
-    toolLines.push(`${toolLines.length + 1}. Use \`memory_get\` to pull only the needed lines from files`);
+    toolLines.push(`${toolLines.length + 1}. Use \`memory_get\` only for paths returned by \`memory_search\``);
   }
   if (params.availableTools.has('curated_memory')) {
     toolLines.push(
-      `${toolLines.length + 1}. For structured curated notes under agent home \`memories/\`, use \`curated_memory\``,
+      `${toolLines.length + 1}. For durable facts, preferences, and user-approved notes, use \`curated_memory\``,
     );
   }
   toolLines.push(`${toolLines.length + 1}. If low confidence after search, say you checked`);
@@ -54,17 +54,18 @@ export function buildMemorySection(params: {
     'Before answering anything about prior work, decisions, dates, people, preferences, or todos:',
     ...toolLines,
     '',
-    '### Memory Files',
+    '### Memory Sources',
     '',
-    '- **Daily notes:** `memory/YYYY-MM-DD.md` — raw logs (runtime may preload recent days on /new or reset)',
-    '- **Long-term:** profile `MEMORY.md` — curated memories in Project Context when present',
-    '- **Curated store:** agent home `memories/MEMORY.md` and global `user/MEMORY.md` — use `curated_memory` for live read/write',
+    '- **Session history:** use `session_search` when available for other chats and prior turns.',
+    '- **Profile memory:** injected `MEMORY.md` content may appear in Project Context when present.',
+    '- **Indexed memory:** cite only paths and line numbers returned by `memory_search` / `memory_get`.',
+    '- **Curated memory:** use `curated_memory` for live read/write of durable facts and preferences.',
     '',
     '### Writing to Memory',
     '',
-    '- **Declarative vs procedural:** Save facts and preferences via workspace memory files and/or `curated_memory`. Save reusable task playbooks with `skill_manage` as skills.',
-    '- **Memory is limited** — if you want to remember something, WRITE IT TO A FILE',
-    '- When someone says "remember this" → update `memory/YYYY-MM-DD.md` or relevant file',
+    '- **Declarative vs procedural:** Save facts and preferences with `curated_memory`. Save reusable task playbooks with `skill_manage` as skills.',
+    '- When someone says "remember this" → use `curated_memory` when available; otherwise explain that durable memory is not writable from this turn.',
+    '- Do not invent, cite, or promise memory file paths that were not returned by a memory tool.',
     '- **Text > Brain**',
   ].join('\n');
 }

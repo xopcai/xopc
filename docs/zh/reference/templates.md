@@ -33,7 +33,7 @@ xopc 使用 **profile Markdown** 模板定义智能体行为与知识。执行 `
 记忆文件支持动态更新：
 
 - **MEMORY.md** - 永久记忆的索引
-- **memory/*.md** - 按日期或主题组织的记忆片段
+- 记忆通过运行时工具和 curated store 管理；profile 模板不会创建按日期命名的记忆文件
 
 智能体可以通过 `memory_search` 和 `memory_get` 工具搜索和读取记忆。
 

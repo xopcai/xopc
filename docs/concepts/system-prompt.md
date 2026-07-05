@@ -35,7 +35,7 @@ Implementation: `src/agent/bootstrap/`, assembled in `src/agent/prompt/system-pr
 
 ## Startup context (`/new`, `/reset`)
 
-When a session is cleared or a new webchat session starts, the first user turn may prepend recent daily memory from `memory/YYYY-MM-DD.md` with a `[Startup context loaded by runtime]` marker when the selected manifest/workflow enables that behavior.
+When a session is cleared or a new webchat session starts, runtime-provided profile context may be injected with a `[Startup context loaded by runtime]` marker when the selected manifest/workflow enables that behavior.
 
 Agents must not claim they manually read files when startup context was injected by runtime.
 
@@ -49,7 +49,7 @@ After transcript compaction, xopc may append a context row with excerpts from AG
 |----------|------------|--------|
 | `agents/<id>/profile/MEMORY.md` | Yes (main session bootstrap) | Project Context + memory tools |
 | `agents/<id>/memories/` | No | `curated_memory` tool only |
-| `memory/YYYY-MM-DD.md` | On demand; preloaded on /new/reset | startup context + memory tools |
+| Session history | No | `session_search` when available |
 
 ## Related
 
