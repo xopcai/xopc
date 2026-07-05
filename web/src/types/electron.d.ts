@@ -168,6 +168,14 @@ export interface ElectronMenuAPI {
   onTogglePalette(callback: () => void): () => void;
 }
 
+export type ElectronUiLanguage = 'en' | 'zh';
+
+export interface ElectronLocaleAPI {
+  getLanguage(): Promise<ElectronUiLanguage>;
+  setLanguage(language: ElectronUiLanguage): Promise<{ ok: true; language: ElectronUiLanguage }>;
+  onChanged(callback: (language: ElectronUiLanguage) => void): () => void;
+}
+
 export interface ElectronCronDisplayWakeAPI {
   setDisplaySleepPrevented(enabled: boolean): Promise<void>;
 }
@@ -212,6 +220,7 @@ export interface ElectronAPI {
   gateway?: ElectronGatewayShellAPI;
   platform: 'darwin' | 'win32' | 'linux';
   menu?: ElectronMenuAPI;
+  locale?: ElectronLocaleAPI;
   cron?: ElectronCronDisplayWakeAPI;
   fullscreen?: ElectronFullscreenAPI;
   system?: ElectronSystemSettingsAPI;

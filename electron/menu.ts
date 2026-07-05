@@ -1,8 +1,13 @@
-import { Menu, shell, type BrowserWindow, type MenuItemConstructorOptions } from 'electron';
+import { Menu, app, shell, type BrowserWindow, type MenuItemConstructorOptions } from 'electron';
 
+import { checkForUpdates } from './auto-updater.js';
 import { toggleMainWindowDevTools } from './devtools.js';
+import type { ElectronMenuMessages } from './i18n.js';
 
-export function buildAppMenu(mainWindow: BrowserWindow): Menu {
+const showDeveloperMenuItems =
+  !app.isPackaged || process.env['XOPC_ELECTRON_SHOW_DEV_MENU'] === '1';
+
+export function buildAppMenu(mainWindow: BrowserWindow, t: ElectronMenuMessages): Menu {
   const isMac = process.platform === 'darwin';
 
   const template: MenuItemConstructorOptions[] = [
@@ -14,7 +19,7 @@ export function buildAppMenu(mainWindow: BrowserWindow): Menu {
               { role: 'about' as const },
               { type: 'separator' as const },
               {
-                label: 'Settings…',
+                label: t.app.settings,
                 accelerator: 'CmdOrCtrl+,',
                 click: () => {
                   mainWindow.webContents.send('menu:navigate', '/settings/appearance');
@@ -34,10 +39,10 @@ export function buildAppMenu(mainWindow: BrowserWindow): Menu {
       : []),
 
     {
-      label: 'File',
+      label: t.file.label,
       submenu: [
         {
-          label: 'New Chat',
+          label: t.file.newChat,
           accelerator: 'CmdOrCtrl+N',
           click: () => {
             mainWindow.webContents.send('menu:navigate', '/chat/new');
@@ -45,7 +50,7 @@ export function buildAppMenu(mainWindow: BrowserWindow): Menu {
         },
         { type: 'separator' },
         {
-          label: 'Search',
+          label: t.file.search,
           accelerator: 'CmdOrCtrl+K',
           click: () => {
             mainWindow.webContents.send('menu:toggle-palette');
@@ -56,7 +61,7 @@ export function buildAppMenu(mainWindow: BrowserWindow): Menu {
           ? []
           : [
               {
-                label: 'Settings…',
+                label: t.file.settings,
                 accelerator: 'CmdOrCtrl+,',
                 click: () => {
                   mainWindow.webContents.send('menu:navigate', '/settings/appearance');
@@ -69,120 +74,148 @@ export function buildAppMenu(mainWindow: BrowserWindow): Menu {
     },
 
     {
-      label: 'Edit',
+      label: t.edit.label,
       submenu: [
-        { role: 'undo' },
-        { role: 'redo' },
+        { role: 'undo', label: t.edit.undo },
+        { role: 'redo', label: t.edit.redo },
         { type: 'separator' },
-        { role: 'cut' },
-        { role: 'copy' },
-        { role: 'paste' },
+        { role: 'cut', label: t.edit.cut },
+        { role: 'copy', label: t.edit.copy },
+        { role: 'paste', label: t.edit.paste },
         ...(isMac
           ? [
-              { role: 'pasteAndMatchStyle' as const },
-              { role: 'delete' as const },
-              { role: 'selectAll' as const },
+              { role: 'pasteAndMatchStyle' as const, label: t.edit.pasteAndMatchStyle },
+              { role: 'delete' as const, label: t.edit.delete },
+              { role: 'selectAll' as const, label: t.edit.selectAll },
             ]
           : [
-              { role: 'delete' as const },
+              { role: 'delete' as const, label: t.edit.delete },
               { type: 'separator' as const },
-              { role: 'selectAll' as const },
+              { role: 'selectAll' as const, label: t.edit.selectAll },
             ]),
       ],
     },
 
     {
-      label: 'View',
+      label: t.view.label,
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
+        { role: 'reload', label: t.view.reload },
+        ...(showDeveloperMenuItems
+          ? [
+              { role: 'forceReload' as const, label: t.view.forceReload },
+              { role: 'toggleDevTools' as const, label: t.view.toggleDevTools },
+              { type: 'separator' as const },
+            ]
+          : []),
+        { role: 'resetZoom', label: t.view.resetZoom },
+        { role: 'zoomIn', label: t.view.zoomIn },
+        { role: 'zoomOut', label: t.view.zoomOut },
         { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
-        { role: 'togglefullscreen' },
+        { role: 'togglefullscreen', label: t.view.toggleFullscreen },
       ],
     },
 
     {
-      label: 'Agent',
+      label: t.agent.label,
       submenu: [
         {
-          label: 'Agents…',
+          label: t.agent.agents,
           click: () => {
             mainWindow.webContents.send('menu:navigate', '/agents');
           },
         },
         { type: 'separator' },
         {
-          label: 'Skills…',
+          label: t.agent.skills,
           click: () => {
-            mainWindow.webContents.send('menu:navigate', '/settings/skills');
+            mainWindow.webContents.send('menu:navigate', '/skills');
           },
         },
         {
-          label: 'Scheduled Tasks…',
+          label: t.agent.automations,
           click: () => {
-            mainWindow.webContents.send('menu:navigate', '/settings/cron');
+            mainWindow.webContents.send('menu:navigate', '/automations');
           },
         },
         { type: 'separator' },
         {
-          label: 'Providers…',
+          label: t.agent.providers,
           click: () => {
-            mainWindow.webContents.send('menu:navigate', '/settings/providers');
+            mainWindow.webContents.send('menu:navigate', '/settings/credentials?tab=providers');
           },
         },
         {
-          label: 'Models…',
+          label: t.agent.models,
           click: () => {
-            mainWindow.webContents.send('menu:navigate', '/settings/models');
+            mainWindow.webContents.send('menu:navigate', '/settings/credentials?tab=catalog');
           },
         },
       ],
     },
 
     {
-      label: 'Window',
+      label: t.window.label,
       submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
+        { role: 'minimize', label: t.window.minimize },
+        { role: 'zoom', label: t.window.zoom },
         ...(isMac
           ? [
               { type: 'separator' as const },
-              { role: 'front' as const },
+              { role: 'front' as const, label: t.window.front },
               { type: 'separator' as const },
-              { role: 'window' as const },
+              { role: 'window' as const, label: t.window.window },
             ]
-          : [{ role: 'close' as const }]),
+          : [{ role: 'close' as const, label: t.window.close }]),
       ],
     },
 
     {
-      label: 'Help',
+      label: t.help.label,
       submenu: [
         {
-          label: 'Documentation',
+          label: t.help.documentation,
           click: () => {
             void shell.openExternal('https://xopcai.github.io/xopc/');
           },
         },
         {
-          label: 'Release Notes',
+          label: t.help.releaseNotes,
           click: () => {
             void shell.openExternal('https://github.com/xopcai/xopc/releases');
           },
         },
         { type: 'separator' },
         {
-          label: 'Developer Tools',
-          accelerator: process.platform === 'darwin' ? 'Cmd+Shift+Alt+I' : 'Ctrl+Shift+Alt+I',
+          label: t.help.reportIssue,
           click: () => {
-            toggleMainWindowDevTools(mainWindow);
+            void shell.openExternal('https://github.com/xopcai/xopc/issues/new/choose');
           },
         },
+        {
+          label: t.help.checkForUpdates,
+          click: () => {
+            checkForUpdates(true);
+            mainWindow.webContents.send('menu:navigate', '/settings/app-management');
+          },
+        },
+        {
+          label: t.help.openLogs,
+          click: () => {
+            mainWindow.webContents.send('menu:navigate', '/settings/logs');
+          },
+        },
+        ...(showDeveloperMenuItems
+          ? [
+              { type: 'separator' as const },
+              {
+                label: t.help.developerTools,
+                accelerator: process.platform === 'darwin' ? 'Cmd+Shift+Alt+I' : 'Ctrl+Shift+Alt+I',
+                click: () => {
+                  toggleMainWindowDevTools(mainWindow);
+                },
+              },
+            ]
+          : []),
       ],
     },
   ];

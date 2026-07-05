@@ -32,7 +32,13 @@ import {
 import { registerAgentIpc } from './ipc/agent-ipc.js';
 import { registerFileIpc } from './ipc/file-ipc.js';
 import { registerSearchIpc } from './ipc/search-ipc.js';
-import { initElectronShellPreferences, isShellNotificationGranted, registerSystemSettingsIpc, stopAllPowerSaveBlockers } from './ipc/system-settings-ipc.js';
+import {
+  getElectronShellLanguage,
+  initElectronShellPreferences,
+  isShellNotificationGranted,
+  registerSystemSettingsIpc,
+  stopAllPowerSaveBlockers,
+} from './ipc/system-settings-ipc.js';
 import { isShellChromiumPermissionGranted } from './ipc/shell-permission-gates.js';
 import { registerCronDisplayWakeIpc, stopCronDisplayWakeBlocker } from './ipc/cron-display-wake-ipc.js';
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
@@ -40,6 +46,7 @@ import { assertTrustedRenderer } from './ipc/trusted-renderer.js';
 import { getLoadingPageDataUrl, getRendererCrashPageDataUrl } from './loading-page.js';
 import { isEmbeddedGatewayLoopbackUrl } from './loopback-url.js';
 import { hasPendingInstall, initAutoUpdater, stopAutoUpdater } from './auto-updater.js';
+import { getElectronMenuMessages, type ElectronUiLanguage } from './i18n.js';
 import { buildAppMenu } from './menu.js';
 import {
   maybeAutoStartTunnel,
@@ -48,7 +55,7 @@ import {
   startTunnelStatusPolling,
   stopTunnelStatusPolling,
 } from './tunnel-main.js';
-import { createTray, destroyTray } from './tray.js';
+import { createTray, destroyTray, updateTrayLanguage } from './tray.js';
 import {
   appendElectronStartupLog,
   devToolsGlobalShortcutAccelerator,
@@ -67,6 +74,19 @@ let rendererCrashExternalOpened = false;
 
 const debugWindowLifecycle = process.env['XOPC_ELECTRON_DEBUG_LIFECYCLE'] === '1';
 const openBrowserOnRendererCrash = process.env['XOPC_ELECTRON_OPEN_BROWSER_ON_CRASH'] === '1';
+
+function currentMenuMessages() {
+  return getElectronMenuMessages(getElectronShellLanguage());
+}
+
+function refreshElectronMenus(language?: ElectronUiLanguage): void {
+  const messages = getElectronMenuMessages(language ?? getElectronShellLanguage());
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    Menu.setApplicationMenu(buildAppMenu(mainWindow, messages));
+    mainWindow.webContents.send('electron-locale:changed', language ?? getElectronShellLanguage());
+  }
+  updateTrayLanguage(messages);
+}
 
 function redactUrlForLog(href: string): string {
   if (href.startsWith('data:')) {
@@ -476,26 +496,31 @@ function createWindow(): void {
     }
   });
 
-  Menu.setApplicationMenu(buildAppMenu(win));
+  const menuMessages = currentMenuMessages();
+  Menu.setApplicationMenu(buildAppMenu(win, menuMessages));
 
   const trayIconDir = app.isPackaged
     ? join(process.resourcesPath, 'resources')
     : join(import.meta.dirname, '../../electron/resources');
-  createTray(trayIconDir, {
-    showWindow: () => {
-      focusOrCreateMainWindow();
+  createTray(
+    trayIconDir,
+    {
+      showWindow: () => {
+        focusOrCreateMainWindow();
+      },
+      navigate: (hashPath) => {
+        navigateMainWindow(hashPath);
+      },
+      openDevTools: () => {
+        focusOrCreateMainWindow();
+        toggleMainWindowDevTools(mainWindow);
+      },
+      quit: () => {
+        app.quit();
+      },
     },
-    navigate: (hashPath) => {
-      navigateMainWindow(hashPath);
-    },
-    openDevTools: () => {
-      focusOrCreateMainWindow();
-      toggleMainWindowDevTools(mainWindow);
-    },
-    quit: () => {
-      app.quit();
-    },
-  });
+    menuMessages,
+  );
 
   initAutoUpdater(win);
 
@@ -698,7 +723,11 @@ app.whenReady().then(async () => {
   registerFileIpc(ipcMain, { allowedRoots: electronManagedRoots });
   registerSearchIpc(ipcMain, { allowedRoots: electronManagedRoots });
   registerAgentIpc(ipcMain);
-  registerSystemSettingsIpc(ipcMain);
+  registerSystemSettingsIpc(ipcMain, {
+    onLanguageChanged: (language) => {
+      refreshElectronMenus(language);
+    },
+  });
   registerCronDisplayWakeIpc(ipcMain);
   registerUpdaterIpc(ipcMain);
 

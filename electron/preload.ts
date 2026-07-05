@@ -142,6 +142,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('menu:toggle-palette', handler);
     },
   },
+  locale: {
+    getLanguage: () => ipcRenderer.invoke('electron-locale:get') as Promise<'en' | 'zh'>,
+    setLanguage: (language: 'en' | 'zh') =>
+      ipcRenderer.invoke('electron-locale:set', language) as Promise<{ ok: true; language: 'en' | 'zh' }>,
+    onChanged: (callback: (language: 'en' | 'zh') => void) => {
+      const handler = (_: unknown, language: 'en' | 'zh') => callback(language);
+      ipcRenderer.on('electron-locale:changed', handler);
+      return () => ipcRenderer.removeListener('electron-locale:changed', handler);
+    },
+  },
   cron: {
     setDisplaySleepPrevented: (enabled: boolean) =>
       ipcRenderer.invoke('cron:set-prevent-display-sleep', enabled) as Promise<void>,
