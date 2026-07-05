@@ -117,8 +117,9 @@ Do not manually reread startup files unless the user asks or the provided contex
 
 ## Memory
 
-- **Daily notes:** \`memory/YYYY-MM-DD.md\`
-- **Long-term:** profile \`MEMORY.md\`
+- Use runtime memory tools for recall.
+- Use curated memory for durable facts and preferences when available.
+- Cite only memory sources that a tool actually returns.
 
 Write what matters. Text > Brain.
 `,

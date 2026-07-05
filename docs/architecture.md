@@ -80,7 +80,7 @@ Runtime data (config, credentials, per-agent sessions, the Markdown **workspace*
 | `shell` | Run shell commands (time-limited) |
 | `web_search`, `web_fetch` | Web search and fetch (when configured) |
 | `send_message` | Send outbound chat on the current channel |
-| `memory_search`, `memory_get` | Search/read `memory/*.md` in the workspace |
+| `memory_search`, `memory_get` | Search/read indexed memory sources |
 | `curated_memory` | Edit bounded entries in the agent home `memories/` tree when enabled |
 | `session_search` | Search other sessions when the session store is available |
 

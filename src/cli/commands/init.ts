@@ -284,7 +284,7 @@ _This is your curated memory — the distilled essence of what you've learned._
 
 ---
 
-_Review and update this periodically from daily memory files._
+_Review and update this periodically from curated memory signals._
 `;
     await writeFile(memoryPath, memoryContent, 'utf-8');
     log.info({ path: memoryPath }, 'Created MEMORY.md');

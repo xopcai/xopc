@@ -2,7 +2,7 @@
 
 For a concise map of **profile Markdown**, **agent home**, and the **Markdown workspace**, see [On-disk layout](disk-layout.md).
 
-xopc keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for inbox, inbound/TTS blobs, curated memory, and runtime files. **Session transcripts** live in **`xopc.db`** (SQLite) at the state root. Separately, the **agent workspace** is the Markdown root the runtime uses as tool `cwd`, for daily `memory/` notes, user files, and extensions under that tree.
+xopc keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for inbox, inbound/TTS blobs, curated memory, and runtime files. **Session transcripts** live in **`xopc.db`** (SQLite) at the state root. Separately, the **agent workspace** is the Markdown root the runtime uses as tool `cwd`, for user files, generated artifacts, and extensions under that tree.
 
 Paths come from your **main config file** (default `<stateDir>/xopc.json`) and optional env overrides. **`xopc init`** and **`xopc agents add`** create directories and seed templates. The **Markdown workspace** (tool `cwd` and project files) is **not** the same folder as `agents/<id>/` state: each manifest owns `agents.list[].workspace.root`; when unavailable during fallback resolution xopc uses `<stateDir>/workspace/<agentId>/`.
 
@@ -64,7 +64,7 @@ These files are injected into the system prompt as **Project Context** (OpenClaw
 | `HEARTBEAT.md` | Heartbeat / proactive check configuration (dynamic Project Context when enabled). |
 | `MEMORY.md` | Curated long-term memory index (main session only; omitted for subagent/automation runs). |
 
-On `/new` and `/reset`, workspace memory snippets may be injected only when the selected manifest/workflow enables that runtime behavior. **`agents/<id>/memories/`** is controlled by manifest `memory` policy; use the `curated_memory` tool for live read/write.
+On `/new` and `/reset`, profile memory snippets may be injected only when the selected manifest/workflow enables that runtime behavior. **`agents/<id>/memories/`** is controlled by manifest `memory` policy; use the `curated_memory` tool for live read/write.
 
 Other root Markdown files (for example `CONTEXT.md` or `SKILLS.md`) are optional and are **not** loaded into the default system prompt unless you wire them in yourself (e.g. read via tools or custom workflow).
 
@@ -80,7 +80,7 @@ Per-session overrides (SQLite `session_config`), **inbound** blobs (`inbound/`),
 
 ### Curated memory (`agents/<agentId>/memories/`) {#curated-memory}
 
-Separate from **`agents/<agentId>/profile/MEMORY.md`** (system-prompt profile index) and from workspace `memory/*.md` (searchable snippets), **`agents/<agentId>/memories/`** holds bounded agent notes in `MEMORY.md`. Global user memory lives in **`user/MEMORY.md`**. A frozen snapshot is injected only when manifest `memory` policy allows it; the agent can update live files via the **`curated_memory`** tool.
+Separate from **`agents/<agentId>/profile/MEMORY.md`** (system-prompt profile index), **`agents/<agentId>/memories/`** holds bounded agent notes in `MEMORY.md`. Global user memory lives in **`user/MEMORY.md`**. A frozen snapshot is injected only when manifest `memory` policy allows it; the agent can update live files via the **`curated_memory`** tool.
 
 ## Which path is “the” workspace at runtime?
 

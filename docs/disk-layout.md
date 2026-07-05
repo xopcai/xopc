@@ -11,7 +11,7 @@ For narrative setup (init, templates, env vars), see [State directory & workspac
 | **State directory** | Global config, credentials, logs, global skills/extensions cache, managed tooling. |
 | **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: curated memory, **`profile/`** Markdown (`SOUL.md`, …), inbound/TTS blobs. Session transcripts live in **`xopc.db`**, not under `sessions/`. |
 | **Agent dir** `…/agents/<agentId>/agent/` | Process state: `agent.json`, per-agent credentials, IPC inbox, pid/socket, small machine state, extension installs, outbound crash-recovery queue. |
-| **Markdown workspace** | User project tree: tool `cwd`, daily `memory/*.md`, `media/generated`, project `.xopc/skills/`, arbitrary files. |
+| **Markdown workspace** | User project tree: tool `cwd`, generated media, project `.xopc/skills/`, arbitrary files. |
 
 Paths below use `~/.xopc` as the default state root; override with `XOPC_STATE_DIR`, `XOPC_PROFILE`, or `XOPC_HOME` (see [workspace.md](workspace.md#environment-variables-quick-reference)).
 

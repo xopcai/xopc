@@ -248,7 +248,7 @@ Present when TTS is enabled. Sends synthesized voice suitable for read-aloud; pr
 
 ### `memory_search`
 
-Searches content under workspace `memory/`. Use it when answers should use stored notes or prior decisions in those files.
+Searches indexed memory sources. Use it when answers should use stored notes, prior decisions, preferences, or todos.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|

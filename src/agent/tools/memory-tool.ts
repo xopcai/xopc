@@ -26,7 +26,7 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
     name: 'memory_search',
     label: '🔍 Memory Search',
     description:
-      'Mandatory recall step: semantically search profile MEMORY.md, agent-home `memories/*.md`, and workspace `memory/*.md` before answering questions about prior work, decisions, dates, people, preferences, or todos; returns top snippets with path + lines.',
+      'Mandatory recall step: search indexed profile, curated, and session memory sources before answering questions about prior work, decisions, dates, people, preferences, or todos; returns top snippets with source path + lines.',
     parameters: MemorySearchSchema,
 
     async execute(
@@ -53,7 +53,6 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
           });
         }
         // Dreaming: record short-term recall evidence from memory_search.
-        // Only records workspace daily notes (`memory/YYYY-MM-DD.md`) and ignores curated/long-term files.
         void recordDreamingRecalls({
           workspaceDir,
           query,
@@ -112,7 +111,7 @@ export function createMemoryGetTool(options: MemoryToolOptions): AgentTool {
   return {
     name: 'memory_get',
     label: '📄 Memory Get',
-    description: 'Safe snippet read from MEMORY.md or memory/*.md with optional from/lines; use after memory_search to pull only the needed lines and keep context small.',
+    description: 'Safe snippet read from a source path returned by memory_search, with optional from/lines; pull only the needed lines and keep context small.',
     parameters: MemoryGetSchema,
 
     async execute(

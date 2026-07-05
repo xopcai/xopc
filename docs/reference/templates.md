@@ -33,7 +33,7 @@ These files are read from the agent profile root and assembled into the agent sy
 Memory files support dynamic updates:
 
 - **MEMORY.md** - Index of permanent memories
-- **memory/*.md** - Memory snippets organized by date or topic
+- Memory uses runtime tools and curated stores; profile templates do not create dated memory files
 
 The agent can search and read memories via `memory_search` and `memory_get` tools.
 

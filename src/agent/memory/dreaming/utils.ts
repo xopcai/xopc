@@ -21,7 +21,7 @@ type DreamingStoreEntryScoringView = {
   totalScore: number;
   lastRecalledAt?: string;
   queryHashes?: readonly string[];
-  dailyCount: number;
+  sourceCount: number;
   groundedCount: number;
   lightHits: number;
   remHits: number;
@@ -50,7 +50,7 @@ export function buildEntryKey(parts: { path: string; startLine: number; endLine:
   return `${p}#${a}-${b}`;
 }
 
-/** YYYY-MM-DD in local time (for daily `memory/YYYY-MM-DD.md` names). */
+/** YYYY-MM-DD in local time. */
 export function isoDay(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -129,7 +129,7 @@ export function computeCandidateScore(
   const qCount = entry.queryHashes?.length ?? 0;
   const uniqueQueryTerm = Math.min(1, qCount / 6) * DIVERSITY_WEIGHT;
 
-  const dims = [entry.dailyCount, entry.groundedCount, entry.lightHits, entry.remHits].filter(
+  const dims = [entry.sourceCount, entry.groundedCount, entry.lightHits, entry.remHits].filter(
     (n) => n > 0,
   ).length;
   const signalDiversity = ((dims / DIVERSITY_DIMENSION_COUNT) * DIVERSITY_WEIGHT) / 2;

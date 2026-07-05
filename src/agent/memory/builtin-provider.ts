@@ -24,8 +24,8 @@ import type {
 } from './types.js';
 
 /**
- * Builtin local memory provider backed by agent-home curated files, workspace MEMORY.md,
- * daily notes, and the local SQLite FTS index.
+ * Builtin local memory provider backed by profile memory, agent-home curated files,
+ * and the local SQLite FTS index.
  */
 export class BuiltinMemoryProvider implements MemoryProvider {
   readonly id = 'local';

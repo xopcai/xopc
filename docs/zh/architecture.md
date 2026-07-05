@@ -80,7 +80,7 @@
 | `shell` | 执行 Shell（有时长限制） |
 | `web_search`、`web_fetch` | 联网搜索与抓取（需配置） |
 | `send_message` | 在当前通道发送出站消息 |
-| `memory_search`、`memory_get` | 搜索/读取工作区内 `memory/*.md` |
+| `memory_search`、`memory_get` | 搜索/读取已索引的记忆来源 |
 | `curated_memory` | 在启用时编辑智能体主目录 `memories/` 中的受控条目 |
 | `session_search` | 在会话存储可用时检索其它会话 |
 
