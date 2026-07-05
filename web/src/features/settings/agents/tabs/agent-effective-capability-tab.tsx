@@ -72,9 +72,8 @@ export function AgentEffectiveCapabilityTab(props: {
   const boundaries = manifest?.boundaries;
 
   return (
-    <SettingsFormSection className="flex min-h-0 flex-1 flex-col">
+    <SettingsFormSection>
       <SettingsFormSectionHeader
-        className="shrink-0"
         icon={ListChecks}
         title={a.effectiveTitle}
         subtitle={a.effectiveHint}
@@ -88,7 +87,7 @@ export function AgentEffectiveCapabilityTab(props: {
       ) : !manifest ? (
         <p className="text-sm text-fg-muted">{a.effectiveEmpty}</p>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
+        <div>
           <div className="flex flex-col gap-5">
             <div>
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">

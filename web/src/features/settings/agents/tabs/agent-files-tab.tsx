@@ -55,7 +55,7 @@ export function AgentFilesTab(props: {
           <nav
             className="-mx-1 flex shrink-0 flex-wrap gap-1 px-1 pb-1"
             role="tablist"
-            aria-label={a.navCoreFiles}
+            aria-label={a.filesNavAria}
           >
             {files.files.map((f) => {
               const selected = activeFile === f.name;

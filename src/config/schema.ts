@@ -1063,12 +1063,10 @@ export type CommandsConfig = z.infer<typeof CommandsConfigSchema>;
 export const TuiConfigSchema = z
   .object({
     /** Default agent id for fresh TUI sessions. Leaves global routing (`agents.default`) untouched. */
-    defaultAgent: z.string().min(1).default('coder'),
+    defaultAgent: z.string().min(1).optional(),
   })
   .strict()
-  .default({
-    defaultAgent: 'coder',
-  });
+  .default({});
 
 export type TuiConfig = z.infer<typeof TuiConfigSchema>;
 
@@ -1295,9 +1293,7 @@ export const ConfigSchema = z.object({
   modelsDev: {
     enabled: true,
   },
-  tui: {
-    defaultAgent: 'coder',
-  },
+  tui: {},
   // messages.tts / tools.media.audio start undefined; the factory layer fills
   // in provider-level defaults (model/voice) on demand. Fresh configs don't
   // ship with enabled providers so they never make surprise STT/TTS calls.

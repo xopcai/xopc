@@ -242,11 +242,11 @@ export function useAgentsSettingsPanel() {
   }, [gatewayCfgData]);
 
   const effectiveTuiDefaultAgentId = useMemo(() => {
-    if (!data) return savedTuiDefaultAgentId || 'coder';
+    if (!data) return savedTuiDefaultAgentId;
     if (savedTuiDefaultAgentId && data.agents.some((agent) => agent.id === savedTuiDefaultAgentId)) {
       return savedTuiDefaultAgentId;
     }
-    return data.defaultId || data.agents[0]?.id || savedTuiDefaultAgentId || 'coder';
+    return data.defaultId || data.agents[0]?.id || savedTuiDefaultAgentId;
   }, [data, savedTuiDefaultAgentId]);
 
   const tuiDefaultAgentUnavailable = Boolean(
@@ -254,13 +254,9 @@ export function useAgentsSettingsPanel() {
     savedTuiDefaultAgentId &&
     !data.agents.some((agent) => agent.id === savedTuiDefaultAgentId),
   );
-  const committedTuiDefaultAgentId = tuiDefaultAgentUnavailable
-    ? savedTuiDefaultAgentId
-    : effectiveTuiDefaultAgentId;
-
   useEffect(() => {
-    setTuiDefaultAgentDraft(effectiveTuiDefaultAgentId);
-  }, [effectiveTuiDefaultAgentId]);
+    setTuiDefaultAgentDraft(tuiDefaultAgentUnavailable ? '' : savedTuiDefaultAgentId);
+  }, [savedTuiDefaultAgentId, tuiDefaultAgentUnavailable]);
 
   const trackedSelectedIdRef = useRef<string | null>(null);
   const selectedTrackingKey = selected ? selected.id : null;
@@ -280,7 +276,7 @@ export function useAgentsSettingsPanel() {
 
   const overviewProfile = useAgentOverviewProfileMarkdown({
     agentId: selected?.id ?? null,
-    enabled: panel === 'overview' && Boolean(selected),
+    enabled: panel === 'behavior' && Boolean(selected),
     saveRef: overviewSaveProfileMarkdownRef,
   });
 
@@ -509,14 +505,42 @@ export function useAgentsSettingsPanel() {
 
   async function onSaveTuiDefaultAgent() {
     const agentId = tuiDefaultAgentDraft.trim().toLowerCase();
-    if (!agentId || !data?.agents.some((agent) => agent.id === agentId)) {
+    if (agentId && !data?.agents.some((agent) => agent.id === agentId)) {
       setError(a.tuiDefaultAgentInvalid);
       return;
     }
     setBusy(true);
     setError(null);
     try {
-      await patchTuiDefaultAgent(agentId);
+      await patchTuiDefaultAgent(agentId || null);
+      await gatewayConfigSwr.mutate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : a.saveError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onSetTuiDefaultAgent(agent: GatewayAgentRow) {
+    setBusy(true);
+    setError(null);
+    try {
+      await patchTuiDefaultAgent(agent.id);
+      setTuiDefaultAgentDraft(agent.id);
+      await gatewayConfigSwr.mutate();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : a.saveError);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onClearTuiDefaultAgent() {
+    setBusy(true);
+    setError(null);
+    try {
+      await patchTuiDefaultAgent(null);
+      setTuiDefaultAgentDraft('');
       await gatewayConfigSwr.mutate();
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
@@ -679,10 +703,10 @@ export function useAgentsSettingsPanel() {
       setBusy(false);
     }
   }
-  const footerSaveNotApplicable = panel === 'channels' || panel === 'effective' || panel === 'memory';
+  const footerSaveNotApplicable = panel !== 'behavior';
 
   const overviewRestDirty = (() => {
-    if (!selected || panel !== 'overview') return false;
+    if (!selected || panel !== 'behavior') return false;
     const origWorkspace = selected.workspace;
     const origModel = selected.model?.primary ?? '';
     return (
@@ -695,7 +719,7 @@ export function useAgentsSettingsPanel() {
     if (footerSaveNotApplicable) return false;
     if (!selected) return false;
     switch (panel) {
-      case 'overview':
+      case 'behavior':
         return overviewRestDirty || overviewProfile.dirty;
       default:
         return true;
@@ -711,27 +735,11 @@ export function useAgentsSettingsPanel() {
 
   async function handleModalFooterSave() {
     switch (panel) {
-      case 'overview':
+      case 'behavior':
         await Promise.all([
           onSaveAgentEdits(),
           overviewSaveProfileMarkdownRef.current?.() ?? Promise.resolve(),
         ]);
-        showSavedFlash();
-        break;
-      case 'tools':
-        await onSaveTools();
-        showSavedFlash();
-        break;
-      case 'models':
-        await onSaveModels();
-        showSavedFlash();
-        break;
-      case 'skills':
-        await onSaveSkills();
-        showSavedFlash();
-        break;
-      case 'files':
-        profileFiles.saveProfileMarkdownDebounced.flush();
         showSavedFlash();
         break;
       default:
@@ -752,6 +760,7 @@ export function useAgentsSettingsPanel() {
     if (!selected) return;
     // Save current panel state before navigating
     await handleModalFooterSave();
+    profileFiles.saveProfileMarkdownDebounced.flush();
     // Set agent in localStorage and navigate to a new chat
     try {
       globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, selected.id);
@@ -759,7 +768,7 @@ export function useAgentsSettingsPanel() {
       /* noop */
     }
     navigate('/chat/new', { state: { agentId: selected.id, fromAgentEditor: true } });
-  }, [selected, handleModalFooterSave, navigate]);
+  }, [selected, handleModalFooterSave, profileFiles.saveProfileMarkdownDebounced, navigate]);
 
   const editorPanelProps: AgentsEditorPanelContentProps = {
     a,
@@ -783,6 +792,16 @@ export function useAgentsSettingsPanel() {
       if (!selected) return;
       void onSetDefault(selected);
     },
+    onSetTuiDefault: () => {
+      if (!selected) return;
+      void onSetTuiDefaultAgent(selected);
+    },
+    isTuiDefault: Boolean(selected && selected.id === effectiveTuiDefaultAgentId),
+    isTuiDefaultInherited: Boolean(
+      selected &&
+      selected.id === effectiveTuiDefaultAgentId &&
+      (!savedTuiDefaultAgentId || tuiDefaultAgentUnavailable),
+    ),
     onSaveAgentEdits: () => void onSaveAgentEdits(),
     onDelete: (purge: boolean) => {
       if (!selected) return;
@@ -843,7 +862,6 @@ export function useAgentsSettingsPanel() {
     refreshBindSessions: channels.refreshBindSessions,
     onRemoveBinding: (rule) => void channels.onRemoveBinding(rule),
     onAddBinding: channels.onAddBinding,
-    onPanelChange: setPanel,
   };
 
   return {
@@ -852,11 +870,15 @@ export function useAgentsSettingsPanel() {
     chat,
     language,
     data,
-    savedTuiDefaultAgentId: committedTuiDefaultAgentId,
+    savedTuiDefaultAgentId,
+    effectiveTuiDefaultAgentId,
     tuiDefaultAgentDraft,
     setTuiDefaultAgentDraft,
     tuiDefaultAgentUnavailable,
     onSaveTuiDefaultAgent,
+    onSetTuiDefaultAgent,
+    onClearTuiDefaultAgent,
+    onSetDefaultAgent: onSetDefault,
     loading,
     displayError,
     navigate,

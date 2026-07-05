@@ -12,11 +12,15 @@ import type { CapabilityPresetRow } from '@/features/settings/capability-presets
 import type { AgentsSettingsMessages, ChatMessages, MessageBundle } from '@/i18n/messages';
 import { MemoryPage } from '@/pages/memory-page';
 
+import {
+  AgentConfigTab,
+  AgentDangerZoneTab,
+} from './tabs/agent-advanced-tab';
 import { AgentChannelsTab } from './tabs/agent-channels-tab';
-import { AgentEffectiveCapabilityTab } from './tabs/agent-effective-capability-tab';
 import { AgentFilesTab } from './tabs/agent-files-tab';
 import { AgentModelsTab } from './tabs/agent-models-tab';
 import { AgentOverviewTab } from './tabs/agent-overview-tab';
+import { AgentOverviewSummaryTab } from './tabs/agent-overview-summary-tab';
 import { AgentSkillsTab } from './tabs/agent-skills-tab';
 import { AgentToolsTab } from './tabs/agent-tools-tab';
 import type { OverviewProfileDraft } from './hooks/use-agent-overview-profile-markdown';
@@ -45,6 +49,9 @@ export type AgentsEditorPanelContentProps = {
   defaultModel: string;
   defaultWorkspace: string;
   onSetDefault: () => void;
+  onSetTuiDefault: () => void;
+  isTuiDefault: boolean;
+  isTuiDefaultInherited: boolean;
   onSaveAgentEdits: () => void;
   onDelete: (purge: boolean) => void;
   capabilityPresets: CapabilityPresetRow[];
@@ -104,7 +111,6 @@ export type AgentsEditorPanelContentProps = {
   onRemoveBinding: (rule: GatewayConfigBinding) => void;
   onAddBinding: (e: FormEvent) => void;
   onTryInChat?: () => void;
-  onPanelChange?: (panel: AgentPanel) => void;
 };
 
 export function AgentsEditorPanelContent({
@@ -126,6 +132,9 @@ export function AgentsEditorPanelContent({
   defaultModel,
   defaultWorkspace,
   onSetDefault,
+  onSetTuiDefault,
+  isTuiDefault,
+  isTuiDefaultInherited,
   onSaveAgentEdits,
   onDelete,
   capabilityPresets,
@@ -177,7 +186,6 @@ export function AgentsEditorPanelContent({
   onRemoveBinding,
   onAddBinding,
   onTryInChat,
-  onPanelChange,
 }: AgentsEditorPanelContentProps) {
   if (!selected) {
     return <p className="text-sm text-fg-muted">{a.selectAgentHint}</p>;
@@ -185,59 +193,82 @@ export function AgentsEditorPanelContent({
 
   if (panel === 'overview') {
     return (
-      <AgentOverviewTab
+      <AgentOverviewSummaryTab
         a={a}
-        chat={chat}
         selected={selected}
-        busy={busy}
-        editName={editName}
-        setEditName={setEditName}
-        editDescription={editDescription}
-        setEditDescription={setEditDescription}
-        editWorkspace={editWorkspace}
-        setEditWorkspace={setEditWorkspace}
-        editModel={editModel}
-        setEditModel={setEditModel}
-        onSetDefault={onSetDefault}
-        onSaveAgentEdits={onSaveAgentEdits}
-        onDelete={onDelete}
-        capabilityPresets={capabilityPresets}
-        defaultPresetId={defaultPresetId}
-        onUpdateAgentExtends={onUpdateAgentExtends}
-        onOpenCapabilityPreset={onOpenCapabilityPreset}
-        hideInlineSave
-        profileMarkdownLoading={overviewProfile.profileMarkdownLoading}
-        profileDraft={overviewProfile.draft}
-        updateIdentity={overviewProfile.updateIdentity}
-        handleSoulTemplateChange={overviewProfile.handleSoulTemplateChange}
-        handleSoulContentChange={overviewProfile.handleSoulContentChange}
-        setAvatarDialogOpen={overviewProfile.setAvatarDialogOpen}
-        toggleSoulPreviewMode={overviewProfile.toggleSoulPreviewMode}
         defaultModel={defaultModel}
         defaultWorkspace={defaultWorkspace}
+        isTuiDefault={isTuiDefault}
+        isTuiDefaultInherited={isTuiDefaultInherited}
+        busy={busy}
+        onSetDefault={onSetDefault}
+        onSetTuiDefault={onSetTuiDefault}
         onTryInChat={onTryInChat}
-        onEditModelStrategy={() => onPanelChange?.('models')}
       />
     );
   }
 
-  if (panel === 'files') {
+  if (panel === 'behavior') {
     return (
-      <AgentFilesTab
-        a={a}
-        filesLoading={filesLoading}
-        files={files}
-        activeFile={activeFile}
-        setActiveFile={setActiveFile}
-        filesViewMode={filesViewMode}
-        setFilesViewMode={setFilesViewMode}
-        fileDraft={fileDraft}
-        setFileDraft={setFileDraft}
-        fileSaving={fileSaving}
-        profileFileLoading={profileFileLoading}
-        profileEditorNonce={profileEditorNonce}
-        onTryInChat={onTryInChat}
-      />
+      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto">
+        <AgentOverviewTab
+          a={a}
+          chat={chat}
+          selected={selected}
+          busy={busy}
+          editName={editName}
+          setEditName={setEditName}
+          editDescription={editDescription}
+          setEditDescription={setEditDescription}
+          editWorkspace={editWorkspace}
+          setEditWorkspace={setEditWorkspace}
+          editModel={editModel}
+          setEditModel={setEditModel}
+          onSetDefault={onSetDefault}
+          onSetTuiDefault={onSetTuiDefault}
+          isTuiDefault={isTuiDefault}
+          isTuiDefaultInherited={isTuiDefaultInherited}
+          onSaveAgentEdits={onSaveAgentEdits}
+          hideInlineSave
+          profileMarkdownLoading={overviewProfile.profileMarkdownLoading}
+          profileDraft={overviewProfile.draft}
+          updateIdentity={overviewProfile.updateIdentity}
+          handleSoulTemplateChange={overviewProfile.handleSoulTemplateChange}
+          handleSoulContentChange={overviewProfile.handleSoulContentChange}
+          setAvatarDialogOpen={overviewProfile.setAvatarDialogOpen}
+          toggleSoulPreviewMode={overviewProfile.toggleSoulPreviewMode}
+          onTryInChat={onTryInChat}
+        />
+        <section className="min-h-[34rem]">
+          <AgentModelsTab
+            a={a}
+            chat={chat}
+            selected={selected}
+            busy={busy}
+            modelRows={modelRows}
+            setModelRows={setModelRows}
+            onSaveModels={onSaveModels}
+            onClearModelsEntry={onClearModelsEntry}
+          />
+        </section>
+        <section className="min-h-[34rem]">
+          <AgentFilesTab
+            a={a}
+            filesLoading={filesLoading}
+            files={files}
+            activeFile={activeFile}
+            setActiveFile={setActiveFile}
+            filesViewMode={filesViewMode}
+            setFilesViewMode={setFilesViewMode}
+            fileDraft={fileDraft}
+            setFileDraft={setFileDraft}
+            fileSaving={fileSaving}
+            profileFileLoading={profileFileLoading}
+            profileEditorNonce={profileEditorNonce}
+            onTryInChat={onTryInChat}
+          />
+        </section>
+      </div>
     );
   }
 
@@ -252,23 +283,6 @@ export function AgentsEditorPanelContent({
         setToolEntryDisable={setToolEntryDisable}
         onSaveTools={onSaveTools}
         onClearToolsEntry={onClearToolsEntry}
-        hideInlineSave
-      />
-    );
-  }
-
-  if (panel === 'models') {
-    return (
-      <AgentModelsTab
-        a={a}
-        chat={chat}
-        selected={selected}
-        busy={busy}
-        modelRows={modelRows}
-        setModelRows={setModelRows}
-        onSaveModels={onSaveModels}
-        onClearModelsEntry={onClearModelsEntry}
-        hideInlineSave
       />
     );
   }
@@ -286,7 +300,6 @@ export function AgentsEditorPanelContent({
         skillsPick={skillsPick}
         setSkillsPick={setSkillsPick}
         onSaveSkills={onSaveSkills}
-        hideInlineSave
       />
     );
   }
@@ -295,11 +308,7 @@ export function AgentsEditorPanelContent({
     return <MemoryPage embedded agentId={selected.id} />;
   }
 
-  if (panel === 'effective') {
-    return <AgentEffectiveCapabilityTab a={a} selected={selected} />;
-  }
-
-  if (panel === 'channels') {
+  if (panel === 'connections') {
     return (
       <AgentChannelsTab
         a={a}
@@ -322,6 +331,35 @@ export function AgentsEditorPanelContent({
         selectRecipient={cCron.selectRecipient}
         onRemoveBinding={onRemoveBinding}
         onAddBinding={onAddBinding}
+      />
+    );
+  }
+
+  if (panel === 'config') {
+    return (
+      <AgentConfigTab
+        a={a}
+        selected={selected}
+        busy={busy}
+        defaultModel={defaultModel}
+        defaultWorkspace={defaultWorkspace}
+        agentModel={editModel}
+        agentWorkspace={editWorkspace}
+        capabilityPresets={capabilityPresets}
+        defaultPresetId={defaultPresetId}
+        onUpdateAgentExtends={onUpdateAgentExtends}
+        onOpenCapabilityPreset={onOpenCapabilityPreset}
+      />
+    );
+  }
+
+  if (panel === 'dangerZone') {
+    return (
+      <AgentDangerZoneTab
+        a={a}
+        selected={selected}
+        busy={busy}
+        onDelete={onDelete}
       />
     );
   }

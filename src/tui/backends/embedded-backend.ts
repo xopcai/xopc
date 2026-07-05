@@ -486,8 +486,8 @@ export class EmbeddedBackend implements TuiBackend {
     sessionKey: string,
     patch: Record<string, unknown>,
   ): Promise<void> {
-    if (!this.agent) return;
-    const result = await this.agent.sessionConfig.patch(sessionKey, {
+    const agent = await this.ensureAgent();
+    const result = await agent.sessionConfig.patch(sessionKey, {
       model: typeof patch.model === 'string' ? patch.model : undefined,
       thinkingLevel: typeof patch.thinkingLevel === 'string' ? patch.thinkingLevel : undefined,
       reasoningLevel: typeof patch.reasoningLevel === 'string' ? patch.reasoningLevel : undefined,

@@ -26,6 +26,7 @@ export function SettingsFormSectionHeader({
   title,
   subtitle,
   trailing,
+  titleAccessory,
   className,
   iconInteractive,
   iconLeading,
@@ -35,6 +36,8 @@ export function SettingsFormSectionHeader({
   subtitle?: string;
   /** Optional content rendered at the trailing (right) edge of the header. */
   trailing?: ReactNode;
+  /** Optional compact content rendered beside the section title. */
+  titleAccessory?: ReactNode;
   className?: string;
   /** When set, the leading icon is a button (e.g. open a related settings dialog). */
   iconInteractive?: { onClick: () => void; ariaLabel: string; id?: string };
@@ -104,7 +107,10 @@ export function SettingsFormSectionHeader({
         </div>
       )}
       <div className="min-w-0 flex-1">
-        <h2 className="text-sm font-semibold text-fg">{title}</h2>
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <h2 className="text-sm font-semibold text-fg">{title}</h2>
+          {titleAccessory}
+        </div>
         {subtitle ? <p className="mt-0.5 text-xs text-fg-muted">{subtitle}</p> : null}
       </div>
       {trailing ? <div className="shrink-0">{trailing}</div> : null}

@@ -43,7 +43,7 @@ export function useAgentsChannelBindings(options: {
 
   const trackedBindingsRef = useRef(bindingsFromConfig);
   if (
-    panel === 'channels' &&
+    panel === 'connections' &&
     hasToken &&
     !bindingsDirtyRef.current &&
     trackedBindingsRef.current !== bindingsFromConfig
@@ -54,7 +54,7 @@ export function useAgentsChannelBindings(options: {
 
   const allBindings = localBindings ?? bindingsFromConfig;
 
-  const channelsEnabled = panel === 'channels' && hasToken;
+  const channelsEnabled = panel === 'connections' && hasToken;
   const channelsResource = useAsyncResource(
     () => getChannels(),
     [panel, hasToken],
@@ -71,7 +71,7 @@ export function useAgentsChannelBindings(options: {
   const [newBindChannel, setNewBindChannel] = useState('');
   const trackedDefaultChannelRef = useRef(defaultBindChannel);
   if (
-    panel === 'channels' &&
+    panel === 'connections' &&
     !bindChannelsLoading &&
     defaultBindChannel &&
     trackedDefaultChannelRef.current !== defaultBindChannel &&
@@ -126,7 +126,7 @@ export function useAgentsChannelBindings(options: {
   }, [newBindChannel, setBindSessionChats]);
 
   const useManualChannel = !bindChannelsLoading && bindChannelStatuses.length === 0;
-  const bindingsLoading = panel === 'channels' && hasToken && gatewayCfgLoading;
+  const bindingsLoading = panel === 'connections' && hasToken && gatewayCfgLoading;
 
   const onRemoveBinding = useCallback(
     async (rule: GatewayConfigBinding) => {

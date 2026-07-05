@@ -33,7 +33,6 @@ import {
   SettingsTabs,
   type SettingsTabItem,
 } from '@/features/settings/settings-page-layout';
-import { showToast } from '@/lib/toast';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -104,7 +103,6 @@ type DreamingUi = {
   runError: string | null;
   runPhase: DreamingPhaseId;
   cfgSaving: boolean;
-  enableSaving: boolean;
   cfgOk: boolean;
   cfgError: string | null;
   previewLoading: boolean;
@@ -124,7 +122,6 @@ const initialDreamingUi: DreamingUi = {
   runError: null,
   runPhase: 'deep',
   cfgSaving: false,
-  enableSaving: false,
   cfgOk: false,
   cfgError: null,
   previewLoading: false,
@@ -170,7 +167,6 @@ export function DreamingSettingsPanel() {
     runError,
     runPhase,
     cfgSaving,
-    enableSaving,
     cfgError,
     previewLoading,
     previewError,
@@ -251,7 +247,6 @@ export function DreamingSettingsPanel() {
       try {
         await postDreamingRunNow(phase);
         dispatchUi({ type: 'patch', patch: { runOk: true } });
-        showToast({ type: 'success', title: t.runQueued });
         await mutate();
       } catch (e) {
         dispatchUi({
@@ -262,7 +257,7 @@ export function DreamingSettingsPanel() {
         dispatchUi({ type: 'patch', patch: { runBusy: false } });
       }
     },
-    [mutate, t.runQueued],
+    [mutate],
   );
 
   const doAction = useCallback(
@@ -271,7 +266,6 @@ export function DreamingSettingsPanel() {
       try {
         await postDreamingAction(action);
         dispatchUi({ type: 'patch', patch: { actionOk: true } });
-        showToast({ type: 'success', title: t.actionOk });
         await mutate();
       } catch (e) {
         dispatchUi({
@@ -282,7 +276,7 @@ export function DreamingSettingsPanel() {
         dispatchUi({ type: 'patch', patch: { actionBusy: null } });
       }
     },
-    [mutate, t.actionOk],
+    [mutate],
   );
 
   const disabled = !hasToken || isLoading || Boolean(actionBusy);
@@ -318,7 +312,6 @@ export function DreamingSettingsPanel() {
       dispatchCfg({ type: 'saved', value: cfgForm });
       cfgDirtyRef.current = false;
       dispatchUi({ type: 'patch', patch: { cfgOk: true } });
-      showToast({ type: 'success', title: t.configSaved });
       await mutate();
     } catch (e) {
       dispatchUi({
@@ -328,35 +321,7 @@ export function DreamingSettingsPanel() {
     } finally {
       dispatchUi({ type: 'patch', patch: { cfgSaving: false } });
     }
-  }, [cfgAgentId, cfgBaseMemory, cfgForm, mutate, t.configSaved]);
-
-  const setDreamingEnabled = useCallback(
-    async (enabled: boolean) => {
-      if (!cfgForm || !hasToken) return;
-      const next = { ...cfgForm, enabled };
-      const prev = cfgForm;
-      cfgDirtyRef.current = true;
-      dispatchCfg({ type: 'set', value: next });
-      dispatchUi({ type: 'patch', patch: { enableSaving: true, cfgOk: false, cfgError: null } });
-      try {
-        await patchDreamingConfig(cfgAgentId, next, cfgBaseMemory);
-        dispatchCfg({ type: 'saved', value: next });
-        cfgDirtyRef.current = false;
-        dispatchUi({ type: 'patch', patch: { cfgOk: true } });
-        showToast({ type: 'success', title: t.configSaved });
-        await mutate();
-      } catch (e) {
-        dispatchCfg({ type: 'set', value: prev });
-        dispatchUi({
-          type: 'patch',
-          patch: { cfgError: e instanceof Error ? e.message : String(e) },
-        });
-      } finally {
-        dispatchUi({ type: 'patch', patch: { enableSaving: false } });
-      }
-    },
-    [cfgAgentId, cfgBaseMemory, cfgForm, hasToken, mutate, t.configSaved],
-  );
+  }, [cfgAgentId, cfgBaseMemory, cfgForm, mutate]);
 
   return (
     <SettingsPageFrame>
@@ -390,8 +355,9 @@ export function DreamingSettingsPanel() {
           schedulePickerLabels={schedulePickerLabels}
           hasToken={hasToken}
           cfgForm={cfgForm}
+          cfgBaseline={cfgBaseline}
+          cfgDirty={cfgDirty}
           cfgSaving={cfgSaving}
-          enableSaving={enableSaving}
           runPhase={runPhase}
           setRunPhase={(phase) => dispatchUi({ type: 'patch', patch: { runPhase: phase } })}
           runBusy={runBusy}
@@ -403,7 +369,6 @@ export function DreamingSettingsPanel() {
               dispatchCfg({ type: 'set', value: resolved });
             }
           }}
-          setDreamingEnabled={setDreamingEnabled}
           doRunNow={doRunNow}
         />
       </DreamingTabPanel>
