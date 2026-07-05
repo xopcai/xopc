@@ -71,7 +71,9 @@ describe('openXopcDatabase', () => {
     closeXopcDatabase();
 
     expect(existsSync(dbPath)).toBe(true);
-    expect(statSync(dbPath).mode & 0o777).toBe(0o600);
+    if (process.platform !== 'win32') {
+      expect(statSync(dbPath).mode & 0o777).toBe(0o600);
+    }
   });
 
   it('returns the same singleton for repeated open calls', () => {

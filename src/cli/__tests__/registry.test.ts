@@ -413,10 +413,12 @@ describe('createDefaultContext', () => {
 
   it('should create context with defaults', () => {
     const ctx = createDefaultContext();
+    const configPath = ctx.configPath.replace(/\\/g, '/');
+    const workspacePath = ctx.workspacePath.replace(/\\/g, '/');
 
-    expect(ctx.configPath).toContain('.xopc/xopc.json');
-    expect(ctx.workspacePath).toContain('workspace');
-    expect(ctx.workspacePath).toMatch(/\.xopc\/workspace$/);
+    expect(configPath).toContain('.xopc/xopc.json');
+    expect(workspacePath).toContain('workspace');
+    expect(workspacePath).toMatch(/\.xopc\/workspace$/);
     expect(ctx.isVerbose).toBe(false);
     expect(ctx.argv).toEqual(process.argv);
   });

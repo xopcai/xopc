@@ -23,7 +23,9 @@ describe('ProjectTrustStore', () => {
       store.set(project, true);
 
       expect(store.get(child)).toBe(true);
-      expect(store.getEntry(child)).toMatchObject({ path: realpathSync(project), decision: true });
+      const entry = store.getEntry(child);
+      expect(entry?.decision).toBe(true);
+      expect(realpathSync.native(entry!.path)).toBe(realpathSync.native(project));
 
       store.set(project, null);
       expect(store.get(child)).toBeNull();

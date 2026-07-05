@@ -84,7 +84,7 @@ describe('agents-admin', () => {
     const { defaultId, agents, builtinToolIds } = await listGatewayAgents(cfg);
     const coder = agents.find((a) => a.id === 'coder');
     expect(defaultId).toBe('main');
-    expect(coder?.workspace).toBe('/tmp/coder');
+    expect(coder?.workspace.replace(/\\/g, '/')).toMatch(/\/tmp\/coder$/);
     expect(coder?.model?.primary).toBe('anthropic/claude-sonnet-4-5');
     expect(coder?.skills.entry).toEqual(['diagnose']);
     expect(coder?.tools.effectiveDisable).toEqual(['shell']);
@@ -191,7 +191,7 @@ describe('agents-admin', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const e = r.data.nextConfig.agents?.list?.find((x) => x.id === 'custom-researcher');
-    expect(e?.workspace).toEqual({ root: '/tmp/researcher' });
+    expect((e?.workspace as { root?: string } | undefined)?.root?.replace(/\\/g, '/')).toMatch(/\/tmp\/researcher$/);
     expect(e?.skills).toEqual({ mode: 'allowlist', allow: ['research'] });
     expect(e?.models.roles.deep.model).toBe('anthropic/claude-sonnet-4');
     expect(e?.tools.builtin.shell?.mode).toBe('deny');

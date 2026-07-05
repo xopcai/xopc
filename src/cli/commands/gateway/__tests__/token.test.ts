@@ -95,7 +95,7 @@ describe('Gateway Token Command', () => {
       const cmd = createTokenCommand();
       await cmd.parseAsync(['node', 'test']);
 
-      expect(loadConfig).toHaveBeenCalledWith('/root/.xopc/xopc.json');
+      expect(loadConfig).toHaveBeenCalledWith(expect.stringMatching(/[\\/]root[\\/]\.xopc[\\/]xopc\.json$/));
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Current gateway token'));
       expect(processExitSpy).toHaveBeenCalledWith(0);
     });

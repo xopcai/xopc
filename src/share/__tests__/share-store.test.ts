@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 import { ShareStore, resetShareStoreForTests, resolveMimeType, shareResponseContentType } from '../share-store.js';
@@ -19,7 +19,7 @@ vi.mock('../../tunnel/tunnel-state.js', () => ({
 
 function createTestFile(name: string, content = 'test content'): string {
   const filePath = join(TEST_WORKSPACE, name);
-  const dir = filePath.substring(0, filePath.lastIndexOf('/'));
+  const dir = dirname(filePath);
   mkdirSync(dir, { recursive: true });
   writeFileSync(filePath, content);
   return filePath;

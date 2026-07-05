@@ -6,7 +6,7 @@
  */
 
 import { realpathSync } from 'node:fs';
-import { isAbsolute, normalize, resolve, sep } from 'node:path';
+import { isAbsolute, normalize, posix, resolve, sep } from 'node:path';
 import { homedir } from 'node:os';
 
 import type { PathValidationResult } from './types.js';
@@ -50,16 +50,32 @@ const BLOCKED_HOME_SUBPATHS: readonly string[] = [
 // ---------------------------------------------------------------------------
 
 function normalizePosixPath(raw: string): string {
+  const slashPath = raw.replace(/\\/g, '/');
+  if (slashPath.startsWith('/')) {
+    return posix.normalize(slashPath);
+  }
   return normalize(raw).replace(/\\/g, '/');
+}
+
+function resolvePolicyPath(raw: string): string {
+  const slashPath = raw.replace(/\\/g, '/');
+  if (slashPath.startsWith('/')) {
+    return posix.normalize(slashPath);
+  }
+  return resolve(raw);
 }
 
 function getBlockedPaths(): string[] {
   const blocked = new Set(BLOCKED_ABSOLUTE_PATHS.map(normalizePosixPath));
 
-  const home = homedir();
-  if (home && home !== '/') {
+  const homes = new Set([
+    homedir(),
+    process.env.HOME,
+    process.env.USERPROFILE,
+  ].filter((home): home is string => Boolean(home && home !== '/')));
+  for (const home of homes) {
     for (const sub of BLOCKED_HOME_SUBPATHS) {
-      blocked.add(normalizePosixPath(resolve(home, sub)));
+      blocked.add(normalizePosixPath(resolvePolicyPath(`${home}/${sub}`)));
     }
   }
 
@@ -75,6 +91,17 @@ function isPathInsideOrEqual(root: string, target: string): boolean {
   if (normalizedTarget === normalizedRoot) return true;
   const prefix = normalizedRoot.endsWith('/') ? normalizedRoot : `${normalizedRoot}/`;
   return normalizedTarget.startsWith(prefix);
+}
+
+function containsBlockedCredentialSegment(target: string): string | null {
+  const normalized = normalizePosixPath(target);
+  for (const sub of BLOCKED_HOME_SUBPATHS) {
+    const prefix = `/${sub.replace(/\\/g, '/')}`;
+    if (normalized.endsWith(prefix) || normalized.includes(`${prefix}/`)) {
+      return sub;
+    }
+  }
+  return null;
 }
 
 /**
@@ -130,7 +157,11 @@ export function validatePath(
     return { allowed: false, reason: 'Empty path' };
   }
 
-  const target = normalizePosixPath(resolve(rawPath));
+  const target = normalizePosixPath(resolvePolicyPath(rawPath));
+  const blockedCredentialSegment = containsBlockedCredentialSegment(target);
+  if (blockedCredentialSegment) {
+    return { allowed: false, reason: `Path targets blocked directory: ${blockedCredentialSegment}` };
+  }
 
   // Reject root mount
   if (target === '/' || target === '\\') {
@@ -175,7 +206,7 @@ export function validatePath(
   if (options?.allowedRoots && options.allowedRoots.length > 0) {
     // Resolve roots the same way as the target so symlink prefixes (e.g. /home on macOS) match.
     const normalizedRoots = options.allowedRoots.map((r) =>
-      normalizePosixPath(resolveCanonicalPath(resolve(r))),
+      normalizePosixPath(resolveCanonicalPath(resolvePolicyPath(r))),
     );
     const insideAllowedRoot = normalizedRoots.some((root) =>
       isPathInsideOrEqual(root, canonicalNormalized),
@@ -201,7 +232,9 @@ export function validateWritePath(
   options?: { allowedRoots?: string[]; extraBlockedPaths?: string[] },
 ): PathValidationResult {
   // Resolve relative paths under workspace
-  const resolvedPath = isAbsolute(rawPath) ? rawPath : resolve(workspaceRoot, rawPath);
+  const resolvedPath = isAbsolute(rawPath) || rawPath.replace(/\\/g, '/').startsWith('/')
+    ? rawPath
+    : resolve(workspaceRoot, rawPath);
 
   // Config file protection
   const configProtectedPatterns = [

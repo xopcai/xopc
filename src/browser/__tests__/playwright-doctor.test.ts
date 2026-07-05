@@ -17,14 +17,14 @@ describe('playwrightChromiumDoctor', () => {
 
   it('resolves bundled playwright-core cli.js', () => {
     const cliPath = resolvePlaywrightCoreCliPath();
-    expect(cliPath.endsWith('playwright-core/cli.js')).toBe(true);
+    expect(cliPath.replace(/\\/g, '/').endsWith('playwright-core/cli.js')).toBe(true);
     expect(existsSync(cliPath)).toBe(true);
   });
 
   it('honors XOPC_PLAYWRIGHT_CORE_ROOT for packaged Electron layout', () => {
     process.env.XOPC_PLAYWRIGHT_CORE_ROOT = resolvePlaywrightCoreRoot();
     const cliPath = resolvePlaywrightCoreCliPath();
-    expect(cliPath.endsWith('playwright-core/cli.js')).toBe(true);
+    expect(cliPath.replace(/\\/g, '/').endsWith('playwright-core/cli.js')).toBe(true);
     expect(existsSync(cliPath)).toBe(true);
   });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const TEST_DIR = join(tmpdir(), `xopc-create-share-tool-${Date.now()}`);
@@ -45,7 +45,7 @@ afterEach(() => {
 
 function write(rel: string, body = 'x'): void {
   const p = join(TEST_WORKSPACE, rel);
-  const dir = p.substring(0, p.lastIndexOf('/'));
+  const dir = dirname(p);
   mkdirSync(dir, { recursive: true });
   writeFileSync(p, body);
 }

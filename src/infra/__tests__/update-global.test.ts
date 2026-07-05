@@ -17,7 +17,7 @@ import {
 } from '../update-global.js';
 
 function resolveTestNpmCommand(): string {
-  const npmCandidate = path.join(path.dirname(process.execPath), 'npm');
+  const npmCandidate = path.join(path.dirname(process.execPath), process.platform === 'win32' ? 'npm.cmd' : 'npm');
   return fsSync.existsSync(npmCandidate) ? npmCandidate : 'npm';
 }
 
@@ -69,7 +69,7 @@ describe('update-global', () => {
   });
 
   it('globalInstallArgs resolves npm from process.execPath when pkgRoot is absent', () => {
-    const npmCandidate = path.join(path.dirname(process.execPath), 'npm');
+    const npmCandidate = resolveTestNpmCommand();
     if (!fsSync.existsSync(npmCandidate)) return;
 
     const argv = globalInstallArgs('npm', `${XOPC_PACKAGE_NAME}@1.0.0`, null);

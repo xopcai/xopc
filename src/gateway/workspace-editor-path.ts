@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path, { relative, resolve } from 'node:path';
 
 /** Resolve a workspace-relative POSIX path safely (no `..`, stays under root). */
@@ -16,8 +17,18 @@ export function toWorkspaceRelativePosix(workspaceRoot: string, absPath: string)
 }
 
 export function isPathUnderWorkspace(workspaceRoot: string, absPath: string): boolean {
-  const root = resolve(workspaceRoot);
-  const candidate = resolve(absPath);
+  const root = normalizeComparablePath(workspaceRoot);
+  const candidate = normalizeComparablePath(absPath);
   const relToRoot = relative(root, candidate);
   return relToRoot === '' || (!relToRoot.startsWith('..') && !path.isAbsolute(relToRoot));
+}
+
+function normalizeComparablePath(input: string): string {
+  let resolved = resolve(input);
+  try {
+    resolved = fs.realpathSync.native(resolved);
+  } catch {
+    /* keep lexical path for paths that do not exist yet */
+  }
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
 }

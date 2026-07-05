@@ -32,7 +32,7 @@ describe('formatCwdForFooter', () => {
   });
 
   it('replaces paths inside home with a tilde prefix', () => {
-    expect(formatCwdForFooter('/Users/alice/work/project', '/Users/alice')).toBe(
+    expect(formatCwdForFooter('/Users/alice/work/project', '/Users/alice').replace(/\\/g, '/')).toBe(
       '~/work/project',
     );
   });
