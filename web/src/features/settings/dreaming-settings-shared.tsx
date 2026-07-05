@@ -68,6 +68,8 @@ export function PhaseConfigPanel({
   disabled,
   showEnabledControl = true,
   actions,
+  status,
+  enabledLabel,
   onLabel,
   offLabel,
   cronLabel,
@@ -84,6 +86,8 @@ export function PhaseConfigPanel({
   disabled?: boolean;
   showEnabledControl?: boolean;
   actions?: ReactNode;
+  status?: ReactNode;
+  enabledLabel?: string;
   onLabel: string;
   offLabel: string;
   cronLabel: string;
@@ -95,7 +99,10 @@ export function PhaseConfigPanel({
         <div className="flex min-w-0 items-start gap-2">
           <span className="mt-0.5 shrink-0">{icon}</span>
           <div className="min-w-0">
-            <div className="text-sm font-semibold text-fg">{title}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-sm font-semibold text-fg">{title}</div>
+              {status}
+            </div>
             <p className="mt-0.5 text-xs leading-snug text-fg-muted">{hint}</p>
           </div>
         </div>
@@ -111,7 +118,7 @@ export function PhaseConfigPanel({
                   disabled={disabled}
                   onChange={(e) => onEnabledChange(e.target.checked)}
                 />
-                <span>{enabled ? onLabel : offLabel}</span>
+                <span>{enabledLabel ?? (enabled ? onLabel : offLabel)}</span>
               </label>
             ) : null}
           </div>

@@ -7,7 +7,6 @@ import { AgentsEditorModal } from './agents-editor-modal';
 import { AgentsEditorPanelContent } from './agents-editor-panel-content';
 import { AgentsListGrid } from './agents-list-grid';
 import { CreateAgentDialog } from './create-agent-dialog';
-import { TuiDefaultAgentSetting } from './tui-default-agent-setting';
 import { useAgentsSettingsPanel } from './use-agents-settings-panel';
 
 export function AgentsSettingsPanel() {
@@ -34,19 +33,12 @@ export function AgentsSettingsPanel() {
         <p className="text-sm text-fg-muted">{vm.a.loading}</p>
       ) : vm.data ? (
         <div className="flex flex-col gap-4">
-          <TuiDefaultAgentSetting
-            a={vm.a}
-            agents={vm.data.agents}
-            savedAgentId={vm.savedTuiDefaultAgentId}
-            draftAgentId={vm.tuiDefaultAgentDraft}
-            unavailable={vm.tuiDefaultAgentUnavailable}
-            busy={vm.busy}
-            onDraftChange={vm.setTuiDefaultAgentDraft}
-            onSave={() => void vm.onSaveTuiDefaultAgent()}
-          />
           <AgentsListGrid
             a={vm.a}
             agents={vm.data.agents}
+            defaultAgentId={vm.data.defaultId}
+            tuiDefaultAgentId={vm.effectiveTuiDefaultAgentId}
+            tuiDefaultInherited={!vm.savedTuiDefaultAgentId || vm.tuiDefaultAgentUnavailable}
             searchQuery={vm.listSearchQuery}
             onOpenAgent={(id) => vm.navigate(agentsAppDetailPath(id))}
             onChatWithAgent={(id) => {
@@ -75,6 +67,7 @@ export function AgentsSettingsPanel() {
           onFooterSave={() => void vm.handleModalFooterSave()}
           footerSaveDisabled={vm.footerSaveDisabled}
           footerSavedFlash={vm.savedFlash}
+          showFooter={vm.panel === 'behavior'}
           busy={vm.busy}
         >
           {vm.loading || !vm.data ? (

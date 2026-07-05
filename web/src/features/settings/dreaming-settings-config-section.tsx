@@ -1,4 +1,4 @@
-import { Loader2, Moon, Play, Sparkles, Sun } from 'lucide-react';
+import { Info, Loader2, Moon, Play, Sparkles, Sun } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { DreamingConfigState } from '@/features/settings/dreaming-config-api';
@@ -22,13 +22,13 @@ type Props = {
   schedulePickerLabels: CronSchedulePickerLabels;
   hasToken: boolean;
   cfgForm: DreamingConfigState | null;
+  cfgBaseline: DreamingConfigState | null;
+  cfgDirty: boolean;
   cfgSaving: boolean;
-  enableSaving: boolean;
   runPhase: DreamingPhaseId;
   setRunPhase: (phase: DreamingPhaseId) => void;
   runBusy: boolean;
   setCfgForm: (next: DreamingConfigState | null | ((prev: DreamingConfigState | null) => DreamingConfigState | null)) => void;
-  setDreamingEnabled: (enabled: boolean) => void | Promise<void>;
   doRunNow: (phase: DreamingPhaseId) => void | Promise<void>;
 };
 
@@ -37,13 +37,13 @@ export function DreamingConfigSection({
   schedulePickerLabels,
   hasToken,
   cfgForm,
+  cfgBaseline,
+  cfgDirty,
   cfgSaving,
-  enableSaving,
   runPhase,
   setRunPhase,
   runBusy,
   setCfgForm,
-  setDreamingEnabled,
   doRunNow,
 }: Props) {
   const phaseRunAction = (phase: DreamingPhaseId, phaseEnabled: boolean) =>
@@ -51,13 +51,25 @@ export function DreamingConfigSection({
       <PhaseRunButton
         t={t}
         busy={runBusy && runPhase === phase}
-        disabled={!hasToken || cfgSaving || runBusy || !phaseEnabled}
+        disabled={!hasToken || cfgSaving || runBusy || !phaseEnabled || cfgDirty}
+        title={cfgDirty ? t.runNowSaveFirstHint : t.runNowHint}
         onClick={() => {
           setRunPhase(phase);
           void doRunNow(phase);
         }}
       />
     ) : null;
+
+  const phaseDraftState = (phase: DreamingPhaseId) => {
+    if (!cfgForm || !cfgBaseline) return null;
+    const current = cfgForm[phase];
+    const saved = cfgBaseline[phase];
+    if (JSON.stringify(current) === JSON.stringify(saved)) return null;
+    if (current.enabled !== saved.enabled) {
+      return current.enabled ? t.phaseWillEnable : t.phaseWillDisable;
+    }
+    return t.phasePendingSave;
+  };
 
   return (
     <SettingsFormSection className="min-w-0 !p-0">
@@ -80,18 +92,24 @@ export function DreamingConfigSection({
                 type="checkbox"
                 className="ui-checkbox"
                 checked={cfgForm.enabled}
-                disabled={!hasToken || cfgSaving || enableSaving}
-                onChange={(e) => void setDreamingEnabled(e.target.checked)}
+                disabled={!hasToken || cfgSaving}
+                onChange={(e) => setCfgForm((prev) => (prev ? { ...prev, enabled: e.target.checked } : prev))}
               />
-              {enableSaving ? (
-                <Loader2 className="size-3.5 animate-spin text-fg-muted" aria-hidden />
-              ) : (
-                <span className={cn('text-xs font-semibold', cfgForm.enabled ? 'text-emerald-600 dark:text-emerald-400' : '')}>
-                  {cfgForm.enabled ? t.masterOn : t.masterOff}
-                </span>
-              )}
+              <span className={cn('text-xs font-semibold', cfgForm.enabled ? 'text-emerald-600 dark:text-emerald-400' : '')}>
+                {cfgForm.enabled ? t.masterOn : t.masterOff}
+              </span>
             </label>
           </div>
+
+          {cfgDirty ? (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-900 dark:text-amber-100">
+              <Info className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+              <div className="min-w-0">
+                <div className="font-semibold">{t.unsavedConfigTitle}</div>
+                <p className="mt-0.5 leading-snug text-amber-800/90 dark:text-amber-100/80">{t.unsavedConfigHint}</p>
+              </div>
+            </div>
+          ) : null}
 
           <div className="space-y-2">
             <SectionHeading title={t.scheduleTitle} />
@@ -137,6 +155,8 @@ export function DreamingConfigSection({
               disabled={!hasToken || cfgSaving}
               showEnabledControl={cfgForm.enabled}
               actions={phaseRunAction('light', cfgForm.light.enabled)}
+              status={phaseDraftState('light') ? <PhasePendingBadge label={phaseDraftState('light') ?? ''} /> : null}
+              enabledLabel={phaseDraftState('light') ?? undefined}
               onLabel={t.on}
               offLabel={t.off}
               cronLabel={t.configPhaseCron}
@@ -203,6 +223,8 @@ export function DreamingConfigSection({
             disabled={!hasToken || cfgSaving}
             showEnabledControl={cfgForm.enabled}
             actions={phaseRunAction('deep', cfgForm.deep.enabled)}
+            status={phaseDraftState('deep') ? <PhasePendingBadge label={phaseDraftState('deep') ?? ''} /> : null}
+            enabledLabel={phaseDraftState('deep') ?? undefined}
             onLabel={t.on}
             offLabel={t.off}
             cronLabel={t.configPhaseCron}
@@ -301,6 +323,8 @@ export function DreamingConfigSection({
             disabled={!hasToken || cfgSaving}
             showEnabledControl={cfgForm.enabled}
             actions={phaseRunAction('rem', cfgForm.rem.enabled)}
+            status={phaseDraftState('rem') ? <PhasePendingBadge label={phaseDraftState('rem') ?? ''} /> : null}
+            enabledLabel={phaseDraftState('rem') ?? undefined}
             onLabel={t.on}
             offLabel={t.off}
             cronLabel={t.configPhaseCron}
@@ -367,15 +391,25 @@ function SectionHeading({ title }: { title: string }) {
   return <div className="px-0.5 text-xs font-semibold uppercase tracking-wide text-fg-muted">{title}</div>;
 }
 
+function PhasePendingBadge({ label }: { label: string }) {
+  return (
+    <span className="inline-flex shrink-0 rounded-md border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[0.65rem] font-semibold text-amber-800 dark:text-amber-200">
+      {label}
+    </span>
+  );
+}
+
 function PhaseRunButton({
   t,
   busy,
   disabled,
+  title,
   onClick,
 }: {
   t: DreamingSettingsI18n;
   busy: boolean;
   disabled: boolean;
+  title: string;
   onClick: () => void;
 }) {
   return (
@@ -384,7 +418,7 @@ function PhaseRunButton({
       variant="secondary"
       className="h-7 gap-1.5 rounded-lg px-2 text-xs"
       disabled={disabled}
-      title={t.runNowHint}
+      title={title}
       onClick={onClick}
     >
       {busy ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : <Play className="size-3.5" aria-hidden />}

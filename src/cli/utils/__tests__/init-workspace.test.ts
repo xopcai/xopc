@@ -45,7 +45,7 @@ describe('initWorkspace', () => {
       expect(result.token.length).toBeGreaterThan(10);
       expect(result.configCreated).toBe(true);
       expect(readFileSync(configPath, 'utf8')).toContain(result.token);
-      expect(result.config.tui.defaultAgent).toBe('coder');
+      expect(result.config.tui.defaultAgent).toBeUndefined();
       expect(result.config.agents.list.some((agent) => agent.id === 'coder')).toBe(true);
     } finally {
       rmSync(root, { recursive: true, force: true });

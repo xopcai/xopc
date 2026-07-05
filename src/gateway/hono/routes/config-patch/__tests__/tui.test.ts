@@ -29,6 +29,14 @@ describe('applyMiscPatch tui', () => {
     expect(cfg.tui?.defaultAgent).toBe('main');
   });
 
+  it('clears tui.defaultAgent to inherit the global default', async () => {
+    const cfg = config();
+    const result = await applyMiscPatch(cfg, { tui: { defaultAgent: null } });
+
+    expect(result.ok).toBe(true);
+    expect(cfg.tui?.defaultAgent).toBeUndefined();
+  });
+
   it('rejects unavailable tui.defaultAgent targets', async () => {
     await expect(applyMiscPatch(config(), { tui: { defaultAgent: 'missing' } })).resolves.toMatchObject({
       ok: false,

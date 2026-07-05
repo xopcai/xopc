@@ -147,6 +147,22 @@ describe('resolveTuiStartupSessionKey', () => {
     });
   });
 
+  it('uses agents.default when tui.defaultAgent is not configured', () => {
+    expect(
+      resolveTuiStartupSessionKey({
+        cfg: {
+          ...cfg,
+          tui: {},
+        },
+        cwd: '/var/tmp/unrelated',
+        createSessionKeySuffix: () => 'tui-test-id',
+      }),
+    ).toMatchObject({
+      sessionKey: 'agent:main:tui-test-id',
+      agentId: 'main',
+    });
+  });
+
   it('lets --agent override cwd inference for fresh sessions', () => {
     expect(
       resolveTuiStartupSessionKey({

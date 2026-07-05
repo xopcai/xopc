@@ -183,7 +183,7 @@ export async function deleteGatewayAgent(id: string, purge: boolean): Promise<Ga
   };
 }
 
-export async function patchTuiDefaultAgent(agentId: string): Promise<void> {
+export async function patchTuiDefaultAgent(agentId: string | null): Promise<void> {
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },

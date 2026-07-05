@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useCallback, useRef } from 'react';
-import { AlertTriangle, ArrowDown, ArrowUp, Cog, ExternalLink, Eye, MessageSquarePlus, Pencil, Plus, Sparkles, Trash2, User, X } from 'lucide-react';
+import { useCallback } from 'react';
+import { Cog, Eye, MessageSquarePlus, Pencil, Sparkles, User, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
@@ -8,7 +8,6 @@ import { MarkdownView } from '@/components/markdown/markdown-view';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
-import type { CapabilityPresetRow } from '@/features/settings/capability-presets/capability-presets-api';
 import type { OverviewProfileDraft } from '@/features/settings/agents/hooks/use-agent-overview-profile-markdown';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
@@ -21,7 +20,6 @@ import {
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
 
-import { AgentConfigInheritanceSummary } from '../agent-config-inheritance-summary';
 import { AgentAvatarDisplay } from '../agent-avatar-display';
 import { AgentAvatarPicker } from '../agent-avatar-picker';
 import { agentsSettingsInputClass } from '../utils';
@@ -45,12 +43,10 @@ export function AgentOverviewTab(props: {
   editModel: string;
   setEditModel: (v: string) => void;
   onSetDefault: () => void;
+  onSetTuiDefault: () => void;
+  isTuiDefault: boolean;
+  isTuiDefaultInherited: boolean;
   onSaveAgentEdits: () => void;
-  onDelete: (purge: boolean) => void;
-  capabilityPresets: CapabilityPresetRow[];
-  defaultPresetId?: string;
-  onUpdateAgentExtends: (nextExtends: string[]) => void;
-  onOpenCapabilityPreset: (presetId: string) => void;
   hideInlineSave?: boolean;
   profileMarkdownLoading: boolean;
   profileDraft: OverviewProfileDraft | null;
@@ -62,7 +58,6 @@ export function AgentOverviewTab(props: {
   defaultModel?: string;
   defaultWorkspace?: string;
   onTryInChat?: () => void;
-  onEditModelStrategy?: () => void;
 }) {
   const {
     a,
@@ -78,11 +73,10 @@ export function AgentOverviewTab(props: {
     editModel,
     setEditModel,
     onSetDefault,
+    onSetTuiDefault,
+    isTuiDefault,
+    isTuiDefaultInherited,
     onSaveAgentEdits,
-    onDelete,
-    capabilityPresets,
-    onUpdateAgentExtends,
-    onOpenCapabilityPreset,
     hideInlineSave,
     profileMarkdownLoading,
     profileDraft,
@@ -91,17 +85,11 @@ export function AgentOverviewTab(props: {
     handleSoulContentChange,
     setAvatarDialogOpen,
     toggleSoulPreviewMode,
-    defaultModel = '',
-    defaultWorkspace = '',
-    defaultPresetId = 'default',
     onTryInChat,
-    onEditModelStrategy,
   } = props;
 
   const language = useLocaleStore((s) => s.language);
   const isDark = useThemeStore((s) => s.resolved === 'dark');
-  const workspaceFieldRef = useRef<HTMLDivElement | null>(null);
-
   const identity = profileDraft?.identity ?? { name: '', description: '', language: '', creature: '', emoji: '', avatar: '' };
   const soulTemplate = profileDraft?.soulTemplate ?? 'professional';
   const soulCustomContent = profileDraft?.soulCustomContent ?? '';
@@ -109,196 +97,18 @@ export function AgentOverviewTab(props: {
   const soulPreviewMode = profileDraft?.soulPreviewMode ?? false;
   const avatarDialogOpen = profileDraft?.avatarDialogOpen ?? false;
 
+  const inputClass = agentsSettingsInputClass();
   const locLabel = useCallback(
     (en: string, zh: string) => (language === 'zh' ? zh : en),
     [language],
   );
-
-  const inputClass = agentsSettingsInputClass();
-  const presetById = new Map(capabilityPresets.map((preset) => [preset.id, preset]));
-  const globalDefaultsPreset =
-    presetById.get(defaultPresetId) ?? {
-      id: defaultPresetId,
-      name: a.capabilityPresetsGlobalDefault,
-      description: a.capabilityPresetsGlobalDefaultHint,
-    };
-  const explicitPresetIds = selected?.extends.filter((id) => id !== defaultPresetId) ?? [];
-  const availablePresetIds = capabilityPresets
-    .map((preset) => preset.id)
-    .filter((id) => id !== defaultPresetId && !explicitPresetIds.includes(id));
-  const selectedPresetId = availablePresetIds[0] ?? '';
-  const focusWorkspaceField = useCallback(() => {
-    const field = workspaceFieldRef.current;
-    field?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    window.setTimeout(() => {
-      field?.querySelector('input')?.focus();
-    }, 180);
-  }, []);
 
   if (!selected) {
     return <p className="text-sm text-fg-muted">{a.selectAgentHint}</p>;
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto">
-      <AgentConfigInheritanceSummary
-        a={a}
-        defaultModel={defaultModel}
-        defaultWorkspace={defaultWorkspace}
-        agentModel={editModel}
-        agentWorkspace={editWorkspace}
-        onEditModelStrategy={onEditModelStrategy}
-        onEditWorkspace={focusWorkspaceField}
-      />
-
-      <SettingsFormSection>
-        <SettingsFormSectionHeader
-          icon={Sparkles}
-          title={a.capabilityPresetsTitle}
-          subtitle={a.capabilityPresetsHint}
-          trailing={
-            <Button
-              type="button"
-              variant="secondary"
-              className="text-xs"
-              disabled={busy}
-              onClick={() => onOpenCapabilityPreset('')}
-            >
-              <ExternalLink className="size-3.5" aria-hidden />
-              {a.capabilityPresetsManage}
-            </Button>
-          }
-        />
-        <div className="flex flex-col gap-2">
-          {globalDefaultsPreset ? (
-            <div className="flex flex-col gap-2 rounded-lg border border-accent/25 bg-accent-soft/20 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                type="button"
-                className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                onClick={() => onOpenCapabilityPreset(globalDefaultsPreset.id)}
-              >
-                <div className="flex min-w-0 items-center gap-2">
-                  <div className="truncate text-sm font-medium text-fg">
-                    {globalDefaultsPreset.name || a.capabilityPresetsGlobalDefault}
-                  </div>
-                  <span className="shrink-0 rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
-                    {a.capabilityPresetsGlobalDefault}
-                  </span>
-                </div>
-                <div className="mt-0.5 truncate font-mono text-[11px] text-fg-muted">
-                  {globalDefaultsPreset.id}
-                </div>
-                <div className="mt-1 line-clamp-2 text-xs text-fg-muted">
-                  {globalDefaultsPreset.description || a.capabilityPresetsGlobalDefaultHint}
-                </div>
-              </button>
-            </div>
-          ) : null}
-          {explicitPresetIds.length > 0 ? (
-            explicitPresetIds.map((presetId, index) => {
-              const preset = presetById.get(presetId);
-              return (
-                <div
-                  key={presetId}
-                  className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <button
-                    type="button"
-                    className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                    onClick={() => onOpenCapabilityPreset(presetId)}
-                  >
-                    <div className="truncate text-sm font-medium text-fg">{preset?.name ?? presetId}</div>
-                    <div className="mt-0.5 truncate font-mono text-[11px] text-fg-muted">{presetId}</div>
-                    {preset?.description ? (
-                      <div className="mt-1 line-clamp-2 text-xs text-fg-muted">{preset.description}</div>
-                    ) : null}
-                  </button>
-                  <div className="flex shrink-0 flex-wrap gap-1.5">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="size-8 rounded-lg p-0"
-                      disabled={busy || index === 0}
-                      aria-label={a.capabilityPresetMoveUp}
-                      onClick={() => {
-                        const next = [...explicitPresetIds];
-                        [next[index - 1], next[index]] = [next[index], next[index - 1]];
-                        onUpdateAgentExtends(next);
-                      }}
-                    >
-                      <ArrowUp className="size-3.5" aria-hidden />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="size-8 rounded-lg p-0"
-                      disabled={busy || index === explicitPresetIds.length - 1}
-                      aria-label={a.capabilityPresetMoveDown}
-                      onClick={() => {
-                        const next = [...explicitPresetIds];
-                        [next[index], next[index + 1]] = [next[index + 1], next[index]];
-                        onUpdateAgentExtends(next);
-                      }}
-                    >
-                      <ArrowDown className="size-3.5" aria-hidden />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="size-8 rounded-lg p-0"
-                      disabled={busy}
-                      aria-label={a.capabilityPresetRemove}
-                      onClick={() => onUpdateAgentExtends(explicitPresetIds.filter((id) => id !== presetId))}
-                    >
-                      <Trash2 className="size-3.5" aria-hidden />
-                    </Button>
-                  </div>
-                </div>
-              );
-            })
-          ) : globalDefaultsPreset ? (
-            <div className="rounded-lg border border-dashed border-edge-subtle px-3 py-3 text-sm text-fg-muted">
-              {a.capabilityPresetsEmptyAdditional}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-dashed border-edge-subtle px-3 py-3 text-sm text-fg-muted">
-              {a.capabilityPresetsEmpty}
-            </div>
-          )}
-        </div>
-        {availablePresetIds.length > 0 ? (
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg focus:border-edge-strong focus:outline-none"
-              disabled={busy}
-              defaultValue={selectedPresetId}
-              onChange={(e) => {
-                e.currentTarget.dataset.value = e.target.value;
-              }}
-            >
-              {availablePresetIds.map((presetId) => (
-                <option key={presetId} value={presetId}>
-                  {presetById.get(presetId)?.name ?? presetId}
-                </option>
-              ))}
-            </select>
-            <Button
-              type="button"
-              variant="secondary"
-              disabled={busy || !selectedPresetId}
-              onClick={(e) => {
-                const select = e.currentTarget.parentElement?.querySelector('select');
-                const presetId = select?.value || selectedPresetId;
-                if (presetId) onUpdateAgentExtends([...explicitPresetIds, presetId]);
-              }}
-            >
-              <Plus className="size-4" aria-hidden />
-              {a.capabilityPresetAdd}
-            </Button>
-          </div>
-        ) : null}
-      </SettingsFormSection>
-
+    <div className="flex flex-col gap-8">
       {/* ===== Section 1: Basic Identity ===== */}
       <SettingsFormSection>
         <SettingsFormSectionHeader
@@ -318,17 +128,48 @@ export function AgentOverviewTab(props: {
             ariaLabel: a.avatarOpenSettingsAria,
             id: 'agent-avatar-settings',
           }}
+          titleAccessory={
+            selected.isDefault || isTuiDefault ? (
+              <div className="flex flex-wrap items-center gap-1.5">
+                {selected.isDefault ? (
+                  <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">
+                    {a.globalDefaultBadge}
+                  </span>
+                ) : null}
+                {isTuiDefault ? (
+                  <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg">
+                    {isTuiDefaultInherited ? a.tuiDefaultInheritedBadge : a.tuiDefaultBadge}
+                  </span>
+                ) : null}
+              </div>
+            ) : null
+          }
           trailing={
-            !selected.isDefault ? (
-              <Button
-                type="button"
-                variant="secondary"
-                className="text-xs"
-                disabled={busy}
-                onClick={() => void onSetDefault()}
-              >
-                {a.setDefault}
-              </Button>
+            !selected.isDefault || !isTuiDefault ? (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {!selected.isDefault ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="text-xs"
+                    disabled={busy}
+                    onClick={() => void onSetDefault()}
+                  >
+                    {a.setDefault}
+                  </Button>
+                ) : null}
+                {!isTuiDefault ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="text-xs"
+                    disabled={busy}
+                    onClick={() => void onSetTuiDefault()}
+                  >
+                    {a.setTuiDefault}
+                  </Button>
+                ) : null}
+              </div>
             ) : null
           }
         />
@@ -466,7 +307,7 @@ export function AgentOverviewTab(props: {
               ) : null}
             </div>
           </div>
-          <div ref={workspaceFieldRef} className="flex flex-col gap-1.5 text-sm sm:col-span-2">
+          <div className="flex flex-col gap-1.5 text-sm sm:col-span-2">
             <span className="font-medium text-fg">{a.workspacePath}</span>
             <DirectoryPickerPathField
               value={editWorkspace}
@@ -558,34 +399,6 @@ export function AgentOverviewTab(props: {
         </SettingsFormSection>
       )}
 
-      {/* ===== Section 4: Danger Zone ===== */}
-      {selected.id !== 'main' ? (
-        <SettingsFormSection>
-          <SettingsFormSectionHeader
-            icon={AlertTriangle}
-            title={locLabel('Danger Zone', '危险操作')}
-            subtitle={locLabel(
-              'Actions that cannot be undone. Be careful.',
-              '以下操作不可撤销，请谨慎操作。',
-            )}
-          />
-          <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="secondary" disabled={busy} onClick={() => void onDelete(false)}>
-              <Trash2 className="mr-1 size-4" aria-hidden />
-              {a.removeFromConfig}
-            </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              className="border-red-200 text-red-700 hover:bg-red-50 dark:border-red-900/60 dark:text-red-300 dark:hover:bg-red-950/40"
-              disabled={busy}
-              onClick={() => void onDelete(true)}
-            >
-              {a.purgeDisk}
-            </Button>
-          </div>
-        </SettingsFormSection>
-      ) : null}
     </div>
   );
 }

@@ -101,12 +101,25 @@ function TextTooltip({
 export function AgentsListGrid(props: {
   a: AgentsSettingsMessages;
   agents: GatewayAgentRow[];
+  defaultAgentId: string;
+  tuiDefaultAgentId: string;
+  tuiDefaultInherited: boolean;
   searchQuery: string;
   onOpenAgent: (id: string) => void;
   onChatWithAgent: (id: string) => void;
   busy: boolean;
 }) {
-  const { a, agents, searchQuery, onOpenAgent, onChatWithAgent, busy } = props;
+  const {
+    a,
+    agents,
+    defaultAgentId,
+    tuiDefaultAgentId,
+    tuiDefaultInherited,
+    searchQuery,
+    onOpenAgent,
+    onChatWithAgent,
+    busy,
+  } = props;
   const filtered = filterAgents(agents, searchQuery, a);
   const searchMiss = agents.length > 0 && filtered.length === 0 && searchQuery.trim().length > 0;
 
@@ -125,6 +138,10 @@ export function AgentsListGrid(props: {
           const descTrim = agentListDisplayDescription(ag, a);
           const capabilityMeta = agentCapabilityMeta(ag, a);
           const capabilityLabels = agentCapabilityLabels(ag, a);
+          const isGlobalDefault = ag.id === defaultAgentId || ag.isDefault;
+          const isTuiDefault = ag.id === tuiDefaultAgentId;
+          const showInheritedTuiBadge = isTuiDefault && tuiDefaultInherited;
+          const showExplicitTuiBadge = isTuiDefault && !tuiDefaultInherited;
           const openAgent = () => {
             if (busy) return;
             onOpenAgent(ag.id);
@@ -167,15 +184,28 @@ export function AgentsListGrid(props: {
                       </p>
                     </div>
                   </div>
-                  {ag.isDefault ? (
-                    <span className="shrink-0 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">
-                      {a.defaultBadge}
-                    </span>
-                  ) : (
-                    <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg-muted">
-                      {a.listCustomBadge}
-                    </span>
-                  )}
+                  <div className="flex max-w-[9rem] shrink-0 flex-wrap justify-end gap-1.5">
+                    {isGlobalDefault ? (
+                      <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">
+                        {a.globalDefaultBadge}
+                      </span>
+                    ) : null}
+                    {showExplicitTuiBadge ? (
+                      <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg">
+                        {a.tuiDefaultBadge}
+                      </span>
+                    ) : null}
+                    {showInheritedTuiBadge ? (
+                      <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg">
+                        {a.tuiDefaultInheritedBadge}
+                      </span>
+                    ) : null}
+                    {!isGlobalDefault && !isTuiDefault ? (
+                      <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg-muted">
+                        {a.listCustomBadge}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
 
                 <div className="mt-5 min-h-[6.25rem] text-left">

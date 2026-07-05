@@ -65,14 +65,19 @@ export async function applyMiscPatch(config: Config, body: any): Promise<PatchRe
     }
     const tuiPatch = body.tui as Record<string, unknown>;
     if (tuiPatch.defaultAgent !== undefined) {
-      if (typeof tuiPatch.defaultAgent !== 'string' || !tuiPatch.defaultAgent.trim()) {
-        return patchError('tui.defaultAgent must be a non-empty string');
+      if (tuiPatch.defaultAgent === null) {
+        config.tui = { ...config.tui };
+        delete config.tui.defaultAgent;
+      } else {
+        if (typeof tuiPatch.defaultAgent !== 'string' || !tuiPatch.defaultAgent.trim()) {
+          return patchError('tui.defaultAgent must be a non-empty string');
+        }
+        const result = setTuiDefaultAgentConfig(config, tuiPatch.defaultAgent);
+        if (result.ok === false) {
+          return patchError(result.message);
+        }
+        config.tui = result.config.tui;
       }
-      const result = setTuiDefaultAgentConfig(config, tuiPatch.defaultAgent);
-      if (result.ok === false) {
-        return patchError(result.message);
-      }
-      config.tui = result.config.tui;
     }
   }
 

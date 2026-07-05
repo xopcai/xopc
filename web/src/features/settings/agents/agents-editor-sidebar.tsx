@@ -1,4 +1,4 @@
-import { Brain, FileText, Layers, ListChecks, Plug, Puzzle, User, Wrench } from 'lucide-react';
+import { AlertTriangle, Brain, Cable, Gauge, SlidersHorizontal, Sparkles, Wrench, Zap } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -6,18 +6,15 @@ import type { AgentsSettingsMessages } from '@/i18n/messages';
 
 import type { AgentPanel } from './utils';
 
-const mainNav: { id: AgentPanel; labelKey: keyof AgentsSettingsMessages; icon: typeof User }[] = [
-  { id: 'overview', labelKey: 'navIdentity', icon: User },
-  { id: 'models', labelKey: 'navModels', icon: Layers },
+const navItems: { id: AgentPanel; labelKey: keyof AgentsSettingsMessages; icon: typeof Gauge }[] = [
+  { id: 'overview', labelKey: 'navOverview', icon: Gauge },
+  { id: 'behavior', labelKey: 'navBehavior', icon: Sparkles },
   { id: 'tools', labelKey: 'navTools', icon: Wrench },
-  { id: 'skills', labelKey: 'navSkills', icon: Puzzle },
-  { id: 'memory', labelKey: 'tabMemory', icon: Brain },
-  { id: 'effective', labelKey: 'navEffective', icon: ListChecks },
-  { id: 'files', labelKey: 'navCoreFiles', icon: FileText },
-];
-
-const advancedNav: { id: AgentPanel; labelKey: keyof AgentsSettingsMessages; icon: typeof Plug }[] = [
-  { id: 'channels', labelKey: 'tabChannels', icon: Plug },
+  { id: 'skills', labelKey: 'navSkills', icon: Zap },
+  { id: 'memory', labelKey: 'navMemory', icon: Brain },
+  { id: 'connections', labelKey: 'navConnections', icon: Cable },
+  { id: 'config', labelKey: 'navConfig', icon: SlidersHorizontal },
+  { id: 'dangerZone', labelKey: 'navDangerZone', icon: AlertTriangle },
 ];
 
 export function AgentsEditorSidebar(props: {
@@ -27,7 +24,7 @@ export function AgentsEditorSidebar(props: {
 }) {
   const { a, panel, onPanelChange } = props;
 
-  const item = (id: AgentPanel, label: string, Icon: typeof User) => (
+  const item = (id: AgentPanel, label: string, Icon: typeof Gauge) => (
     <button
       key={id}
       type="button"
@@ -48,13 +45,7 @@ export function AgentsEditorSidebar(props: {
   return (
     <nav className="flex w-full flex-col gap-1" aria-label={a.editorNavAria}>
       <div className="flex flex-col gap-0.5">
-        {mainNav.map(({ id, labelKey, icon }) => item(id, a[labelKey] as string, icon))}
-      </div>
-      <p className="mt-4 px-3 text-[10px] font-semibold uppercase tracking-wide text-fg-subtle">
-        {a.navAdvanced}
-      </p>
-      <div className="flex flex-col gap-0.5">
-        {advancedNav.map(({ id, labelKey, icon }) => item(id, a[labelKey] as string, icon))}
+        {navItems.map(({ id, labelKey, icon }) => item(id, a[labelKey] as string, icon))}
       </div>
     </nav>
   );

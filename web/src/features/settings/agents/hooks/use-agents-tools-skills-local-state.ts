@@ -39,7 +39,7 @@ export function useAgentsToolsSkillsLocalState(options: {
       setSkillsInherit(next.inherit);
       setSkillsPick(next.pick);
     }
-    if (selected && panel === 'models') {
+    if (selected && panel === 'behavior') {
       setModelRows(typedModelsRowsFromList(selected.typedModels.effective));
     }
   }

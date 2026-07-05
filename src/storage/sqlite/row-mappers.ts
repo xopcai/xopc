@@ -7,6 +7,7 @@ import {
   type XopcTranscriptContextEntry,
 } from '../../session/session-context-for-llm.js';
 import { SessionStatus, type GlobalSessionStats, type SessionMetadata } from '../../session/types.js';
+import { resolveAgentIdFromSessionKey } from '../../routing/agent-session-key.js';
 import { buildDefaultSessionMetadata } from './session-metadata.js';
 
 export type SessionRow = {
@@ -169,7 +170,8 @@ export function metadataToSessionInsert(
   verboseLevel: string | null;
 } {
   const now = Date.now();
-  const agentId = metadata.routing?.agentId?.trim().toLowerCase() || 'main';
+  const agentId = metadata.routing?.agentId?.trim().toLowerCase()
+    || resolveAgentIdFromSessionKey(sessionKey);
   return {
     sessionKey,
     agentId,

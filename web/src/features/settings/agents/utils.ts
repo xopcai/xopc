@@ -5,13 +5,13 @@ import { settingsInputFocusClass } from '@/lib/form-field-width';
 
 export type AgentPanel =
   | 'overview'
-  | 'files'
-  | 'models'
+  | 'behavior'
   | 'tools'
   | 'skills'
   | 'memory'
-  | 'effective'
-  | 'channels';
+  | 'connections'
+  | 'config'
+  | 'dangerZone';
 
 export function agentsSettingsInputClass(): string {
   return cn(
