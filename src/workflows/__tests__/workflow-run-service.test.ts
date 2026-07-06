@@ -64,7 +64,7 @@ describe('WorkflowRunService helpers', () => {
     } else {
       process.env.XOPC_STATE_DIR = originalStateDir;
     }
-    await rm(stateDir, { recursive: true, force: true });
+    await rm(stateDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   });
 
   it('wraps raw input into a stable input envelope', () => {
