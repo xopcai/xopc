@@ -1,0 +1,63 @@
+name: Mobile Expo CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - "apps/mobile-expo/**"
+      - "packages/gateway-sse-client/**"
+      - "scripts/apps/mobile-expo/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/mobile-expo-ci.yml"
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "apps/mobile-expo/**"
+      - "packages/gateway-sse-client/**"
+      - "scripts/apps/mobile-expo/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/mobile-expo-ci.yml"
+
+concurrency:
+  group: mobile-expo-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint-typecheck-test:
+    name: Lint, typecheck & tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint mobile Expo app
+        run: pnpm run mobile:lint
+
+      - name: Typecheck mobile Expo app
+        run: pnpm run mobile:typecheck
+
+      - name: Test mobile Expo app
+        run: pnpm run mobile:test
+
+      - name: Test gateway SSE client
+        run: pnpm run mobile:test:sse

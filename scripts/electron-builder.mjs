@@ -21,6 +21,7 @@
 
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -58,10 +59,16 @@ const publishArgs =
   process.env['ELECTRON_PUBLISH'] === '1' || hasPublishFlag ? [] : ['--publish', 'never'];
 
 const packDir = prepareElectronPackDir(root);
+const entitlementsPath = join(packDir, '_pack-resources/entitlements.mac.plist').replace(/\\/g, '/');
+const effectivePackConfig = join(packDir, 'electron-builder.effective.yml');
+writeFileSync(
+  effectivePackConfig,
+  readFileSync(packConfig, 'utf8').replaceAll('__XOPC_ELECTRON_ENTITLEMENTS__', entitlementsPath),
+);
 
 const r = spawnSync(
   process.execPath,
-  [cli, '--project', packDir, '--config', packConfig, ...publishArgs, ...extra],
+  [cli, '--project', packDir, '--config', effectivePackConfig, ...publishArgs, ...extra],
   { stdio: 'inherit', env, cwd: packDir },
 );
 const exitCode = r.status ?? 1;

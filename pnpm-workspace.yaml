@@ -2,6 +2,7 @@ packages:
   - '.'
   - 'extensions/*'
   - 'packages/*'
+  - 'apps/*'
   - 'web'
 
 overrides:

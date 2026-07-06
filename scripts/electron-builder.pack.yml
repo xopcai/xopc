@@ -92,8 +92,8 @@ electronLanguages:
 mac:
   category: public.app-category.productivity
   hardenedRuntime: true
-  entitlements: _pack-resources/entitlements.mac.plist
-  entitlementsInherit: _pack-resources/entitlements.mac.plist
+  entitlements: '__XOPC_ELECTRON_ENTITLEMENTS__'
+  entitlementsInherit: '__XOPC_ELECTRON_ENTITLEMENTS__'
   extendInfo:
     NSMicrophoneUsageDescription: 'xopc needs microphone access to record voice messages in chat.'
     NSScreenCaptureUsageDescription: 'xopc needs screen recording access for screen capture and vision features.'

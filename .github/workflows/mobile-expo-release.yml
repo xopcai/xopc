@@ -1,0 +1,177 @@
+name: Mobile Expo Release
+
+on:
+  push:
+    tags:
+      - "mobile-expo-v*"
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        required: true
+        default: android
+        type: choice
+        options:
+          - android
+          - ios
+          - all
+      profile:
+        description: EAS build profile
+        required: true
+        default: preview
+        type: choice
+        options:
+          - preview
+          - production
+
+concurrency:
+  group: mobile-expo-release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  quality:
+    name: Lint, typecheck & tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint mobile Expo app
+        run: pnpm run mobile:lint
+
+      - name: Typecheck mobile Expo app
+        run: pnpm run mobile:typecheck
+
+      - name: Test mobile Expo app
+        run: pnpm run mobile:test
+
+      - name: Test gateway SSE client
+        run: pnpm run mobile:test:sse
+
+  build:
+    name: EAS build
+    needs: quality
+    runs-on: ubuntu-latest
+    outputs:
+      artifact_url: ${{ steps.eas.outputs.artifact_url }}
+      build_page: ${{ steps.eas.outputs.build_page }}
+      platform: ${{ steps.target.outputs.platform }}
+      profile: ${{ steps.target.outputs.profile }}
+    steps:
+      - name: Resolve build target
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "platform=${{ inputs.platform }}" >> "$GITHUB_OUTPUT"
+            echo "profile=${{ inputs.profile }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "platform=android" >> "$GITHUB_OUTPUT"
+            echo "profile=preview" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: EAS build
+        id: eas
+        working-directory: apps/mobile-expo
+        run: |
+          eas build \
+            --platform "${{ steps.target.outputs.platform }}" \
+            --profile "${{ steps.target.outputs.profile }}" \
+            --non-interactive \
+            --wait \
+            --json > build-output.json
+
+          jq -r '
+            if type == "array" then .[0] else . end
+            | {
+                artifact: (.artifacts.applicationArchiveUrl // empty),
+                page: (.buildUrl // empty)
+              }
+          ' build-output.json > build-meta.json
+
+          echo "artifact_url=$(jq -r '.artifact' build-meta.json)" >> "$GITHUB_OUTPUT"
+          echo "build_page=$(jq -r '.page' build-meta.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Download Android APK for GitHub Release
+        if: github.event_name == 'push' && steps.target.outputs.platform == 'android' && steps.eas.outputs.artifact_url != ''
+        run: |
+          curl -fsSL \
+            -o "xopc-mobile-expo-${{ github.ref_name }}.apk" \
+            "${{ steps.eas.outputs.artifact_url }}"
+
+      - name: Upload Android APK artifact
+        if: github.event_name == 'push' && steps.target.outputs.platform == 'android'
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-expo-android-apk
+          path: xopc-mobile-expo-*.apk
+          if-no-files-found: ignore
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Android APK
+        uses: actions/download-artifact@v4
+        with:
+          name: mobile-expo-android-apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: xopc-mobile-expo-*.apk
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          body: |
+            ## Install (Android)
+
+            Download `xopc-mobile-expo-*.apk` below and install on your device.
+
+            ## Build details
+
+            - EAS profile: `${{ needs.build.outputs.profile }}`
+            - Tag: `${{ github.ref_name }}`
+            - Commit: `${{ github.sha }}`
+            - EAS build: ${{ needs.build.outputs.build_page }}
+
+            iOS builds and store submissions are available from the EAS dashboard.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

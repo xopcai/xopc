@@ -9,6 +9,7 @@ export default [
       "node_modules/**",
       "ui/**",
       "web/**",
+      "apps/**",
       "**/*.js",
       "**/*.js.map",
       "**/*.d.ts",
