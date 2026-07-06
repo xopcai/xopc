@@ -1,0 +1,36 @@
+node_modules/
+
+# Expo
+.expo/
+scripts/.asset-gen-tmp/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+/ios
+/android
+
+# Metro
+.metro-health-check*
+
+# debug / env
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+.env*.local
+
+# macOS
+.DS_Store
+*.pem
+
+# typescript
+*.tsbuildinfo
+node_modules
