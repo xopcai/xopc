@@ -1,0 +1,101 @@
+{
+  "expo": {
+    "name": "xopc",
+    "slug": "xopc",
+    "scheme": [
+      "xopc-mobile",
+      "xopc"
+    ],
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Allow xopc to connect to your gateway on the local network when available.",
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "bundleIdentifier": "ai.xopc.xopc"
+    },
+    "android": {
+      "softwareKeyboardLayoutMode": "resize",
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#000000"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.CAMERA"
+      ],
+      "package": "ai.xopc.xopc"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "./plugins/with-android-maven-mirrors",
+      "./plugins/with-android-share-intake",
+      "./plugins/with-ios-cocoapods-mirror",
+      "./plugins/with-ios-share-intake",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true,
+            "buildArchs": [
+              "arm64-v8a"
+            ],
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#ffffff"
+        }
+      ],
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow $(PRODUCT_NAME) to access your microphone for voice input."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to scan gateway QR codes and take photos in chat.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos to attach images in chat.",
+          "cameraPermission": "Allow $(PRODUCT_NAME) to use the camera to take photos in chat."
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "3e0f47ca-2bbe-447d-81aa-c7dc8e65431e"
+      }
+    },
+    "owner": "xopcai"
+  }
+}
