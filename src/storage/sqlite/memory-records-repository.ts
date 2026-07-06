@@ -18,6 +18,7 @@ type MemoryRecordRow = {
   agent_id: string;
   workspace_id: string | null;
   session_key: string | null;
+  project_id: string | null;
   content: string;
   source_json: string;
   confidence: number | null;
@@ -42,6 +43,7 @@ export interface UpsertMemoryRecordInput {
   agentId: string;
   workspaceId?: string;
   sessionKey?: string;
+  projectId?: string;
   content: string;
   source?: MemoryRecord['source'];
   confidence?: number;
@@ -58,6 +60,7 @@ export interface ListMemoryRecordsOptions {
   providerId?: string;
   agentId?: string;
   workspaceId?: string;
+  projectId?: string;
   kind?: MemoryKind;
   status?: MemoryStatus;
   limit?: number;
@@ -68,6 +71,7 @@ export interface SearchMemoryRecordsOptions {
   query: string;
   agentId?: string;
   workspaceId?: string;
+  projectId?: string;
   providerId?: string;
   kinds?: MemoryKind[];
   statuses?: MemoryStatus[];
@@ -309,6 +313,7 @@ function rowToRecord(row: MemoryRecordRow): MemoryRecord {
       agentId: row.agent_id,
       ...(row.workspace_id ? { workspaceId: row.workspace_id } : {}),
       ...(row.session_key ? { sessionKey: row.session_key } : {}),
+      ...(row.project_id ? { projectId: row.project_id } : {}),
     },
     content: row.content,
     source: parseSource(row.source_json),
@@ -355,16 +360,17 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
   runSqliteWriteTransaction((db) => {
     db.prepare(
       `INSERT INTO memory_records (
-        record_id, provider_id, kind, agent_id, workspace_id, session_key,
+        record_id, provider_id, kind, agent_id, workspace_id, session_key, project_id,
         content, source_json, confidence, tags_json, status, sensitivity,
         evidence_json, review_after, expires_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         provider_id = excluded.provider_id,
         kind = excluded.kind,
         agent_id = excluded.agent_id,
         workspace_id = excluded.workspace_id,
         session_key = excluded.session_key,
+        project_id = excluded.project_id,
         content = excluded.content,
         source_json = excluded.source_json,
         confidence = excluded.confidence,
@@ -382,6 +388,7 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
       input.agentId,
       input.workspaceId ?? null,
       input.sessionKey ?? null,
+      input.projectId ?? null,
       input.content,
       JSON.stringify(source),
       input.confidence ?? null,
@@ -405,6 +412,7 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
       agentId: input.agentId,
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
       ...(input.sessionKey ? { sessionKey: input.sessionKey } : {}),
+      ...(input.projectId ? { projectId: input.projectId } : {}),
     },
     content: input.content,
     source,
@@ -441,6 +449,10 @@ export function listMemoryRecords(options: ListMemoryRecordsOptions = {}): Memor
     where.push('workspace_id = ?');
     params.push(options.workspaceId);
   }
+  if (options.projectId) {
+    where.push('project_id = ?');
+    params.push(options.projectId);
+  }
   if (options.kind) {
     where.push('kind = ?');
     params.push(options.kind);
@@ -475,6 +487,10 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
   if (options.workspaceId) {
     filters.push('f.workspace_id = ?');
     params.push(options.workspaceId);
+  }
+  if (options.projectId) {
+    filters.push('r.project_id = ?');
+    params.push(options.projectId);
   }
   if (options.providerId) {
     filters.push('f.provider_id = ?');

@@ -14,6 +14,7 @@ export type { SessionAgentConfig } from './config-types.js';
 export {
   normalizeWorkingDirectoryInput,
   effectiveWorkspacePathForSession,
+  projectWorkspacePath,
 } from './session-workspace.js';
 
 export {

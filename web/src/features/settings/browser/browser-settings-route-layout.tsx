@@ -26,7 +26,7 @@ export function AgentDefaultsRouteLayout(props: {
 
   if (!vm.hasToken) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-4 py-10">
+      <SettingsPageFrame gap="gap-3" padding="px-3 py-10 sm:px-5 xl:px-6">
         <div className="flex items-start gap-3 rounded-2xl bg-surface-base p-6">
           <Cpu className="mt-0.5 size-5 shrink-0 text-fg-subtle" strokeWidth={1.75} />
           <div>
@@ -40,7 +40,7 @@ export function AgentDefaultsRouteLayout(props: {
 
   if (vm.loading) {
     return (
-      <SettingsPageFrame gap="gap-0" padding="px-4 py-8">
+      <SettingsPageFrame gap="gap-0" padding="px-3 py-8 sm:px-5 xl:px-6">
         <div className="h-8 w-48 animate-pulse rounded bg-surface-hover" />
         <div className="mt-6 h-32 animate-pulse rounded-xl bg-surface-hover" />
         <p className="mt-4 text-sm text-fg-muted">{m.logs.loading}</p>
@@ -50,7 +50,7 @@ export function AgentDefaultsRouteLayout(props: {
 
   if (!vm.form) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-4 py-10">
+      <SettingsPageFrame gap="gap-3" padding="px-3 py-10 sm:px-5 xl:px-6">
         <p className="text-sm text-fg-muted">{vm.error ?? vm.fetchError ?? a.loadError}</p>
         <Button type="button" variant="secondary" onClick={() => void vm.mutate()}>
           {m.logs.refresh}

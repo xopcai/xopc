@@ -25,6 +25,7 @@ export type ChatSessionSlice = {
   thinkingLevel: string;
   reasoningLevel: ReasoningLevel;
   modelSupportsThinking: boolean;
+  workingDirectoryLocked: boolean;
   messages: Message[];
   hasMore: boolean;
   streamingMsg: Message | null;
@@ -51,7 +52,12 @@ type ChatSessionStoreActions = {
     partial: Partial<
       Pick<
         ChatSessionSlice,
-        'name' | 'model' | 'thinkingLevel' | 'reasoningLevel' | 'modelSupportsThinking'
+        | 'name'
+        | 'model'
+        | 'thinkingLevel'
+        | 'reasoningLevel'
+        | 'modelSupportsThinking'
+        | 'workingDirectoryLocked'
       >
     >,
   ) => void;
@@ -141,6 +147,7 @@ function cloneSlice(slice: ChatSessionSlice): ChatSessionSlice {
     thinkingLevel: slice.thinkingLevel,
     reasoningLevel: slice.reasoningLevel,
     modelSupportsThinking: slice.modelSupportsThinking,
+    workingDirectoryLocked: slice.workingDirectoryLocked,
     messages: cloneMessages(slice.messages),
     hasMore: slice.hasMore,
     streamingMsg: slice.streamingMsg ? cloneMessageForRender(slice.streamingMsg) : null,
@@ -156,7 +163,12 @@ function normalizeKey(sessionKey: string): string {
 
 function metaFrom(current: ChatSessionSlice | undefined): Pick<
   ChatSessionSlice,
-  'name' | 'model' | 'thinkingLevel' | 'reasoningLevel' | 'modelSupportsThinking'
+  | 'name'
+  | 'model'
+  | 'thinkingLevel'
+  | 'reasoningLevel'
+  | 'modelSupportsThinking'
+  | 'workingDirectoryLocked'
 > {
   if (!current) return defaultSessionMeta();
   return {
@@ -165,6 +177,7 @@ function metaFrom(current: ChatSessionSlice | undefined): Pick<
     thinkingLevel: current.thinkingLevel,
     reasoningLevel: current.reasoningLevel,
     modelSupportsThinking: current.modelSupportsThinking,
+    workingDirectoryLocked: current.workingDirectoryLocked,
   };
 }
 

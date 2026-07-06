@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { PageTabs } from '@/components/ui/page-tabs';
 import { SkillCatalogCardSkeleton } from '@/features/skills/skills-page-primitives';
 import { SKILL_LIST_SKELETON_KEYS } from '@/features/skills/skills-page.constants';
 import type { SkillsPageVm } from '@/features/skills/use-skills-page';
@@ -80,49 +81,20 @@ export function SkillsPageCatalogContent(p: Props) {
   return (
     <>
       {builtinCategories.length > 1 ? (
-        <div
-          role="tablist"
-          aria-label={sk.marketplaceCategoriesAria}
-          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 pt-0.5 [scrollbar-width:thin]"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={builtinCategoryFilter === ''}
-            className={cn(
-              'shrink-0 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-              interaction.focusRingPanel,
-              builtinCategoryFilter === ''
-                ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
-                : 'border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40',
-            )}
-            onClick={() => setBuiltinCategoryFilter('')}
-          >
-            {sk.marketplaceCategoryAll}
-          </button>
-          {builtinCategories.map((cat) => {
-            const selected = builtinCategoryFilter === cat;
-            return (
-              <button
-                key={cat}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                className={cn(
-                  'max-w-[14rem] shrink-0 truncate rounded-full border px-3 py-1.5 text-xs font-medium transition-colors',
-                  interaction.focusRingPanel,
-                  selected
-                    ? 'border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base'
-                    : 'border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40',
-                )}
-                title={categoryLabel(cat)}
-                onClick={() => setBuiltinCategoryFilter(cat)}
-              >
-                {categoryLabel(cat)}
-              </button>
-            );
-          })}
-        </div>
+        <PageTabs
+          items={[
+            { id: '', label: sk.marketplaceCategoryAll },
+            ...builtinCategories.map((cat) => ({ id: cat, label: categoryLabel(cat), title: categoryLabel(cat) })),
+          ]}
+          activeTab={builtinCategoryFilter}
+          onChange={setBuiltinCategoryFilter}
+          ariaLabel={sk.marketplaceCategoriesAria}
+          tabIdPrefix="skills-builtin-category-tab"
+          className="gap-2 pt-0.5 [scrollbar-width:thin]"
+          buttonClassName="max-w-[14rem] truncate rounded-full border px-3 py-1.5 text-xs"
+          selectedClassName="border-fg bg-fg text-surface-panel dark:border-fg dark:bg-fg dark:text-surface-base"
+          unselectedClassName="border-edge bg-surface-panel text-fg-muted hover:border-edge-strong hover:text-fg dark:border-edge dark:bg-surface-hover/40"
+        />
       ) : null}
       {catalogDisplayRows.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">

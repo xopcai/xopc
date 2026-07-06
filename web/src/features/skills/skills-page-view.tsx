@@ -2,6 +2,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { ChevronDown, Funnel } from 'lucide-react';
 import { useLayoutEffect, useMemo } from 'react';
 
+import { PageTabs } from '@/components/ui/page-tabs';
 import { SkillsPageHeaderEnd } from '@/features/skills/skills-page-header-end';
 import { SkillsPageCatalogContent } from '@/features/skills/skills-page-catalog-content';
 import { SkillsPageConfirmDialog } from '@/features/skills/skills-page-confirm-dialog';
@@ -47,18 +48,41 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
     return (
       <>
         <SkillsPageHeaderRegistration vm={vm} />
-        <div className="mx-auto w-full max-w-app-main px-4 py-16 text-center text-sm text-fg-muted sm:px-8">
+        <div className="w-full px-3 py-16 text-center text-sm text-fg-muted sm:px-5 xl:px-6">
           {sk.needToken}
         </div>
       </>
     );
   }
 
+  const mainTabItems = [
+    { id: 'marketplace' as const, label: sk.tabMarketplace },
+    { id: 'builtin' as const, label: sk.tabBuiltin, count: `${builtinTabStats.enabled}/${builtinTabStats.total}` },
+    { id: 'user' as const, label: sk.tabUser, count: `${userTabStats.enabled}/${userTabStats.total}` },
+  ];
+  const resultTabItems = (['all', ...registeredProviders.map((rp) => rp.id)] as string[]).map((id) => {
+    const label = id === 'all' ? sk.marketplaceResultsTabAll : registeredProviders.find((rp) => rp.id === id)?.displayName ?? id;
+    const count = aggregatedTabCounts[id] ?? 0;
+    const status = id === 'all' ? null : aggregatedProviderStatus[id];
+    return {
+      id,
+      label,
+      title: status === 'error' ? `${label} · ${sk.marketplaceLoadFailed}` : undefined,
+      suffix: status === 'loading' ? (
+        <span className="inline-block size-1.5 animate-pulse rounded-full bg-fg-muted/60 motion-reduce:animate-none" aria-hidden />
+      ) : status === 'error' ? (
+        <span className="inline-block size-1.5 rounded-full bg-red-500" aria-hidden />
+      ) : (
+        <span className="tabular-nums opacity-70">{count}</span>
+      ),
+    };
+  });
+
   return (
     <>
       <SkillsPageHeaderRegistration vm={vm} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-8">
+      <div className="flex w-full flex-col gap-6 px-3 py-6 sm:px-5 xl:px-6">
         {actionFeedback ? (
           <div
             role="status"
@@ -112,56 +136,15 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
 
         <section className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">
-            <div className="flex flex-wrap gap-x-1 gap-y-1" role="tablist" aria-label={sk.skillsNavAria}>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mainTab === 'marketplace'}
-                className={cn(
-                  'relative max-w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors sm:text-center',
-                  mainTab === 'marketplace' ? 'text-fg' : 'text-fg-muted hover:text-fg',
-                  mainTab === 'marketplace' &&
-                    'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
-                )}
-                onClick={() => setMainTab('marketplace')}
-              >
-                {sk.tabMarketplace}
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mainTab === 'builtin'}
-                className={cn(
-                  'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  mainTab === 'builtin' ? 'text-fg' : 'text-fg-muted hover:text-fg',
-                  mainTab === 'builtin' &&
-                    'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
-                )}
-                onClick={() => setMainTab('builtin')}
-              >
-                {sk.tabBuiltin}
-                <span className="ml-1 tabular-nums text-fg-muted">
-                  ({builtinTabStats.enabled}/{builtinTabStats.total})
-                </span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={mainTab === 'user'}
-                className={cn(
-                  'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                  mainTab === 'user' ? 'text-fg' : 'text-fg-muted hover:text-fg',
-                  mainTab === 'user' &&
-                    'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
-                )}
-                onClick={() => setMainTab('user')}
-              >
-                {sk.tabUser}
-                <span className="ml-1 tabular-nums text-fg-muted">
-                  ({userTabStats.enabled}/{userTabStats.total})
-                </span>
-              </button>
-            </div>
+            <PageTabs
+              items={mainTabItems}
+              activeTab={mainTab}
+              onChange={setMainTab}
+              ariaLabel={sk.skillsNavAria}
+              tabIdPrefix="skills-tab"
+              panelIdPrefix="skills-panel"
+              className="flex-wrap"
+            />
             <div
               className={cn(
                 'flex min-h-9 min-w-0 items-center gap-2',
@@ -216,60 +199,18 @@ export function SkillsPageView({ vm }: { vm: SkillsPageVm }) {
               ) : null}
               {mainTab === 'marketplace' ? (
                 searchInputActive ? (
-                  <div
+                  <PageTabs
+                    items={resultTabItems}
+                    activeTab={resultTab}
+                    onChange={setResultTab}
+                    ariaLabel={sk.marketplaceResultsTabsAria}
+                    tabIdPrefix="skills-marketplace-results-tab"
+                    panelIdPrefix="skills-marketplace-results-panel"
                     className="inline-flex h-9 shrink-0 rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface"
-                    role="tablist"
-                    aria-label={sk.marketplaceResultsTabsAria}
-                  >
-                    {(['all', ...registeredProviders.map((rp) => rp.id)] as string[]).map((id) => {
-                      const selected = resultTab === id;
-                      const label =
-                        id === 'all'
-                          ? sk.marketplaceResultsTabAll
-                          : registeredProviders.find((rp) => rp.id === id)?.displayName ?? id;
-                      const count = aggregatedTabCounts[id] ?? 0;
-                      const status = id === 'all' ? null : aggregatedProviderStatus[id];
-                      return (
-                        <button
-                          key={id}
-                          type="button"
-                          role="tab"
-                          aria-selected={selected}
-                          className={cn(
-                            'inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
-                            interaction.focusRingPanel,
-                            selected
-                              ? 'bg-fg text-surface-panel dark:bg-fg dark:text-surface-base'
-                              : 'text-fg-muted hover:text-fg',
-                          )}
-                          onClick={() => setResultTab(id)}
-                          title={
-                            status === 'error'
-                              ? `${label} · ${sk.marketplaceLoadFailed}`
-                              : undefined
-                          }
-                        >
-                          <span>{label}</span>
-                          {status === 'loading' ? (
-                            <span
-                              className={cn(
-                                'inline-block size-1.5 animate-pulse rounded-full motion-reduce:animate-none',
-                                selected ? 'bg-surface-panel/70' : 'bg-fg-muted/60',
-                              )}
-                              aria-hidden
-                            />
-                          ) : status === 'error' ? (
-                            <span
-                              className="inline-block size-1.5 rounded-full bg-red-500"
-                              aria-hidden
-                            />
-                          ) : (
-                            <span className="tabular-nums opacity-70">{count}</span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
+                    buttonClassName="rounded-md px-2.5 py-1.5 text-xs"
+                    selectedClassName="bg-fg text-surface-panel dark:bg-fg dark:text-surface-base"
+                    unselectedClassName="text-fg-muted hover:text-fg"
+                  />
                 ) : (
                   <>
                     <div

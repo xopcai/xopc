@@ -312,7 +312,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
 
   if (!hasToken) {
     return (
-      <div className={embedded ? undefined : 'mx-auto w-full max-w-app-main px-4 py-8'}>
+      <div className={embedded ? undefined : 'w-full px-3 py-8 sm:px-5 xl:px-6'}>
         <p className="text-sm text-fg-muted">{t.needToken}</p>
       </div>
     );
@@ -485,7 +485,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
       className={
         embedded
           ? 'flex w-full flex-col gap-6'
-          : 'mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8'
+          : 'flex w-full flex-col gap-6 px-3 py-8 sm:px-5 xl:px-6'
       }
     >
       {!embedded ? (

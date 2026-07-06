@@ -41,6 +41,7 @@ type GoalRow = {
   turns_used: number;
   ui_locale: string | null;
   source: string;
+  project_id: string | null;
 };
 
 type ChecklistRow = {
@@ -127,6 +128,7 @@ function goalFromRow(row: GoalRow): Goal {
     turnsUsed: row.turns_used,
     uiLocale: row.ui_locale === 'en' || row.ui_locale === 'zh' ? row.ui_locale : undefined,
     source: row.source as GoalSource,
+    projectId: row.project_id ?? undefined,
   };
 }
 
@@ -294,6 +296,7 @@ export class GoalStore {
       turnsUsed: 0,
       uiLocale: input.uiLocale,
       source: input.source ?? 'chat',
+      projectId: input.projectId?.trim() || undefined,
     };
 
     runSqliteWriteTransaction((db) => {
@@ -301,8 +304,8 @@ export class GoalStore {
         `INSERT INTO goals (
           goal_id, title, description, status, agent_id, priority, deadline_at,
           created_at, updated_at, active_session_key, judge_model_ref,
-          max_turns, turns_used, ui_locale, source
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          max_turns, turns_used, ui_locale, source, project_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         goal.id,
         goal.title,
@@ -319,6 +322,7 @@ export class GoalStore {
         goal.turnsUsed,
         goal.uiLocale ?? null,
         goal.source,
+        goal.projectId ?? null,
       );
       if (goal.activeSessionKey) {
         db.prepare(
@@ -413,6 +417,10 @@ export class GoalStore {
       conditions.push(`goal_id IN (SELECT goal_id FROM goal_session_links WHERE session_key = ?)`);
       params.push(query.sessionKey);
     }
+    if (query.projectId) {
+      conditions.push(`project_id = ?`);
+      params.push(query.projectId);
+    }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const limit = clampLimit(query.limit, 50);
     const offset = Math.max(0, Math.floor(query.offset ?? 0));
@@ -439,6 +447,7 @@ export class GoalStore {
     | 'maxTurns'
     | 'turnsUsed'
     | 'uiLocale'
+    | 'projectId'
   >>): Goal | null {
     const before = this.get(goalId);
     if (!before) return null;
@@ -449,7 +458,7 @@ export class GoalStore {
           title = ?, description = ?, status = ?, priority = ?, deadline_at = ?,
           updated_at = ?, completed_at = ?, archived_at = ?, active_session_key = ?,
           current_run_id = ?, next_action = ?, blocked_reason = ?, judge_model_ref = ?,
-          max_turns = ?, turns_used = ?, ui_locale = ?
+          max_turns = ?, turns_used = ?, ui_locale = ?, project_id = ?
          WHERE goal_id = ?`,
       ).run(
         next.title,
@@ -468,6 +477,7 @@ export class GoalStore {
         next.maxTurns,
         next.turnsUsed,
         next.uiLocale ?? null,
+        next.projectId ?? null,
         goalId,
       );
       if (next.activeSessionKey) {

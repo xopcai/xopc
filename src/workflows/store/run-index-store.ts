@@ -7,6 +7,7 @@ type WorkflowRunIndexRow = {
   definition_id: string;
   definition_version: string;
   goal_id: string | null;
+  project_id: string | null;
   session_key: string;
   parent_session_key: string | null;
   status: WorkflowRunSummary['status'];
@@ -68,17 +69,18 @@ export class WorkflowRunIndexStore {
       db.prepare(
         `INSERT OR REPLACE INTO workflow_runs (
           run_id, agent_id, definition_id, definition_version, goal_id,
-          session_key, parent_session_key, status, source_kind, source_json,
+          project_id, session_key, parent_session_key, status, source_kind, source_json,
           metadata_json, title,
           created_at_ms, started_at_ms, completed_at_ms, metrics_json,
           result_preview, error_message
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         run.id,
         agentId,
         run.definitionId,
         run.definitionVersion,
         metadata?.goalId ?? null,
+        metadata?.projectId ?? null,
         sessionKey,
         parentSessionKey(view),
         run.status,
@@ -96,16 +98,22 @@ export class WorkflowRunIndexStore {
     });
   }
 
-  list(agentId: string, options: { limit?: number; goalId?: string } = {}): WorkflowRunSummary[] {
+  list(agentId: string, options: { limit?: number; goalId?: string; projectId?: string } = {}): WorkflowRunSummary[] {
     const safeLimit = Math.min(500, Math.max(1, Math.floor(options.limit ?? 50)));
     const db = getSqliteDatabase();
-    const rows = options.goalId
-      ? db
-          .prepare(`SELECT * FROM workflow_runs WHERE agent_id = ? AND goal_id = ? ORDER BY created_at_ms DESC LIMIT ?`)
-          .all(agentId, options.goalId, safeLimit)
-      : db
-          .prepare(`SELECT * FROM workflow_runs WHERE agent_id = ? ORDER BY created_at_ms DESC LIMIT ?`)
-          .all(agentId, safeLimit);
+    const conditions = ['agent_id = ?'];
+    const params: Array<string | number> = [agentId];
+    if (options.goalId) {
+      conditions.push('goal_id = ?');
+      params.push(options.goalId);
+    }
+    if (options.projectId) {
+      conditions.push('project_id = ?');
+      params.push(options.projectId);
+    }
+    const rows = db
+      .prepare(`SELECT * FROM workflow_runs WHERE ${conditions.join(' AND ')} ORDER BY created_at_ms DESC LIMIT ?`)
+      .all(...params, safeLimit);
     return (rows as WorkflowRunIndexRow[]).map(rowToSummary);
   }
 }

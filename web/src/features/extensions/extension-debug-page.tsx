@@ -22,7 +22,7 @@ export function ExtensionDebugPage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
+    <div className="flex w-full flex-col gap-6 px-3 py-8 sm:px-5 xl:px-6">
       <div>
         <h1 className="text-lg font-semibold text-fg">{t.title}</h1>
         <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>

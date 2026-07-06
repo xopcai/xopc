@@ -21,6 +21,7 @@ export interface PrepareWorkflowRunSessionParams {
   definitionTitle: string;
   goal: string;
   parentSessionKey?: string;
+  projectId?: string;
 }
 
 export interface PrepareWorkflowRunSessionResult {
@@ -38,9 +39,15 @@ export class WorkflowSessionBridge {
     const sessionName = truncateSessionName(params.goal.trim() || params.definitionTitle || params.definitionId);
 
     const store = this.gateway.sessionIndexInstance.getStore();
+    const projectId =
+      params.projectId?.trim() ||
+      (params.parentSessionKey?.trim()
+        ? (await store.getMetadata(params.parentSessionKey.trim()))?.projectId
+        : undefined);
     await store.resolveTranscriptPath(sessionKey, {
       metadata: {
         sessionType: WORKFLOW_SESSION_TYPE,
+        projectId,
         hiddenFromSessionList: true,
         sourceChannel: 'workflow',
         sourceChatId: params.runId,
@@ -58,6 +65,7 @@ export class WorkflowSessionBridge {
       hiddenFromSessionList: true,
       workflowRunId: params.runId,
       workflowDefinitionId: params.definitionId,
+      projectId,
       name: sessionName,
       tags: ['workflow', params.definitionId],
       customData: {

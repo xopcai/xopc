@@ -161,6 +161,28 @@ export async function quickCapture(text: string, channel = 'web'): Promise<Note>
   return result.note;
 }
 
+export async function createNote(input: {
+  markdown: string;
+  title?: string;
+  kind?: NoteKind;
+  tags?: string[];
+  pinned?: boolean;
+  channel?: string;
+}): Promise<Note> {
+  const result = await fetchJson<{ note: Note }>(apiUrl('/api/notes'), {
+    method: 'POST',
+    body: JSON.stringify({
+      markdown: input.markdown,
+      title: input.title,
+      kind: input.kind,
+      tags: input.tags,
+      pinned: input.pinned,
+      channel: input.channel ?? 'web',
+    }),
+  });
+  return result.note;
+}
+
 export async function getNote(id: string): Promise<Note | null> {
   const res = await apiFetch(apiUrl(`/api/notes/${encodeURIComponent(id)}`));
   if (res.status === 404) return null;

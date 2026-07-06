@@ -7,10 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   closeXopcDatabase,
+  ensureSessionRecord,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
 import { GoalService } from '../../../../goals/index.js';
+import { ProjectService } from '../../../../projects/index.js';
 import type { GatewayService } from '../../../service.js';
 import { registerGoalsRoutes } from '../goals.js';
 
@@ -36,6 +38,7 @@ describe('goal routes', () => {
     const service = {
       currentConfig: {},
       createWorkflowRunService: () => ({}),
+      projects: new ProjectService(),
       getGoalQueueSnapshot: () => [],
       emit: vi.fn(),
       enqueueGoalRun: vi.fn(),
@@ -106,6 +109,38 @@ describe('goal routes', () => {
     expect(enqueueGoalRun).not.toHaveBeenCalled();
   });
 
+  it('creates project goals with the project default agent when no agent is explicit', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Default Agent Goal Project', defaultAgentId: 'coder' });
+    const app = createApp({
+      currentConfig: {
+        agents: {
+          default: 'main',
+          list: [{ id: 'main', enabled: true }, { id: 'coder', enabled: true }],
+        },
+      },
+      projects,
+    });
+
+    const res = await app.request('/api/goals', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Use project agent',
+        projectId: project.id,
+        source: 'api',
+      }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: true;
+      goal: NonNullable<ReturnType<GoalService['get']>>;
+    };
+    expect(body.goal.agentId).toBe('coder');
+    expect(body.goal.projectId).toBe(project.id);
+  });
+
   it('archives a goal and aborts the active linked webchat run', async () => {
     const goals = new GoalService();
     const goal = goals.create({ title: 'Stop this goal loop', sessionKey: SESSION_KEY });
@@ -140,5 +175,54 @@ describe('goal routes', () => {
     expect(body.aborted).toBeUndefined();
     expect(body.abortedRunId).toBeUndefined();
     expect(abortAgentRun).not.toHaveBeenCalled();
+  });
+
+  it('attaches a generated continuation session to the goal project', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Goal Project', workspaceRoot: join(stateDir, 'project-root') });
+    const goals = new GoalService();
+    const goal = goals.create({ title: 'Continue in project workspace', projectId: project.id });
+    const enqueueGoalRun = vi.fn(() => ({ id: 'queue-1' }));
+    const app = createApp({
+      projects,
+      sessionIndexInstance: {
+        saveMessages: vi.fn(async (sessionKey: string) => {
+          ensureSessionRecord(sessionKey, process.cwd());
+        }),
+      } as unknown as GatewayService['sessionIndexInstance'],
+      enqueueGoalRun,
+    });
+
+    const res = await app.request(`/api/goals/${encodeURIComponent(goal.id)}/continue`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ userTurn: { text: 'continue' } }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: true; sessionKey: string };
+    expect(new GoalService().get(goal.id)?.activeSessionKey).toBe(body.sessionKey);
+    expect(projects.listSessionKeys(project.id)).toEqual([body.sessionKey]);
+    expect(enqueueGoalRun).toHaveBeenCalled();
+  });
+
+  it('attaches existing goal sessions to the goal project', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Existing Session Project', workspaceRoot: join(stateDir, 'project-root') });
+    const goals = new GoalService();
+    const goal = goals.create({ title: 'Attach existing session', projectId: project.id });
+    const sessionKey = 'agent:main:webchat:default:direct:goal-existing-session';
+    ensureSessionRecord(sessionKey, process.cwd());
+    const app = createApp({ projects });
+
+    const res = await app.request(`/api/goals/${encodeURIComponent(goal.id)}/attach`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ sessionKey }),
+    });
+
+    expect(res.status).toBe(200);
+    expect(new GoalService().get(goal.id)?.activeSessionKey).toBe(sessionKey);
+    expect(projects.listSessionKeys(project.id)).toEqual([sessionKey]);
   });
 });

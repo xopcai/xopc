@@ -1,7 +1,7 @@
 import type { Hono } from 'hono';
 
 import { buildSessionKey } from '../../../routing/session-key.js';
-import { agentExists, getDefaultAgentId } from '../../../routing/resolve-route.js';
+import { resolveProjectAgentId } from '../../../projects/index.js';
 import type { SessionMetadataSeed } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { createGatewayRouteLogger, logRouteError } from '../lib/route-logger.js';
@@ -63,14 +63,17 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.post('/api/sessions', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const channel = body.channel || 'webchat';
+    const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
     const routingCfg = service.currentConfig;
-    let agentId =
-      typeof body.agentId === 'string' && body.agentId.trim()
-        ? body.agentId.trim().toLowerCase()
-        : getDefaultAgentId(routingCfg);
-    if (!agentExists(agentId, routingCfg)) {
-      agentId = getDefaultAgentId(routingCfg);
+    if (projectId && !service.projects.get(projectId)) {
+      return c.json({ ok: false, error: 'Project not found' }, 404);
     }
+    const agentId = resolveProjectAgentId({
+      config: routingCfg,
+      projects: service.projects,
+      explicitAgentId: typeof body.agentId === 'string' ? body.agentId : undefined,
+      projectId,
+    });
 
     // If a specific chat_id is provided, use it (for advanced use cases)
     // Otherwise, try to find and reuse an existing empty session
@@ -91,6 +94,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
           peerId: body.chat_id,
         }),
       });
+      if (projectId) {
+        service.projects.attachSession(sessionKey, projectId);
+      }
       const session = await service.sessions.getSession(sessionKey);
       return c.json({ session }, 201);
     }
@@ -106,7 +112,8 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     // Reuse an empty session only when it matches the requested agent (session key embeds agent id).
     const emptySession = existingSessions.items.find((s) => {
       if (s.messageCount !== 0) return false;
-      return s.routing?.agentId === agentId;
+      if (s.routing?.agentId !== agentId) return false;
+      return projectId ? s.projectId === projectId : !s.projectId;
     });
     
     if (emptySession) {
@@ -134,6 +141,9 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       }),
     });
 
+    if (projectId) {
+      service.projects.attachSession(sessionKey, projectId);
+    }
     const session = await service.sessions.getSession(sessionKey);
     return c.json({ session }, 201);
   });
@@ -155,6 +165,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       channel: query.channel,
       sessionTypes: sessionTypes?.length ? sessionTypes : undefined,
       includeHidden: query.includeHidden === 'true',
+      projectId: query.projectId,
       limit: query.limit ? parseInt(query.limit) : undefined,
       offset: query.offset ? parseInt(query.offset) : undefined,
     });
@@ -538,9 +549,27 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (body.customData !== undefined && typeof body.customData === 'object' && body.customData !== null) {
       patch.customData = body.customData as Record<string, unknown>;
     }
+    let requestedProjectId: string | null | undefined;
+    if ('projectId' in body) {
+      requestedProjectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : null;
+      if (requestedProjectId && !service.projects.get(requestedProjectId)) {
+        return c.json({ ok: false, error: 'Project not found' }, 404);
+      }
+    }
     const result = await service.sessions.patch(key, patch);
     if (result.ok === false) {
       return c.json({ ok: false, error: result.error }, 404);
+    }
+    if (requestedProjectId !== undefined) {
+      try {
+        if (requestedProjectId) {
+          service.projects.attachSession(key, requestedProjectId);
+        } else {
+          service.projects.detachSession(key);
+        }
+      } catch (error) {
+        return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
+      }
     }
 
     const session = await service.sessions.getSession(key);

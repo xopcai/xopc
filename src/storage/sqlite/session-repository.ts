@@ -17,7 +17,7 @@ const SESSION_COLUMNS = `
   s.created_at, s.updated_at, s.last_accessed_at, s.session_started_at, s.last_interaction_at,
   s.source_channel, s.source_chat_id, s.session_type, s.hidden_from_session_list,
   s.parent_session_key, s.workflow_run_id, s.workflow_definition_id, s.workflow_agent_id, s.workflow_agent_label,
-  s.routing_json, s.custom_data_json,
+  s.project_id, s.routing_json, s.custom_data_json,
   s.abort_cutoff_timestamp, s.message_count, s.estimated_tokens, s.compacted_count,
   s.last_flushed_at, s.flush_count,
   s.thinking_level, s.verbose_level,
@@ -51,7 +51,7 @@ function insertSessionAndTranscript(
       created_at, updated_at, last_accessed_at, session_started_at, last_interaction_at,
       source_channel, source_chat_id, session_type, hidden_from_session_list,
       parent_session_key, workflow_run_id, workflow_definition_id, workflow_agent_id, workflow_agent_label,
-      routing_json, custom_data_json,
+      project_id, routing_json, custom_data_json,
       abort_cutoff_timestamp, message_count, estimated_tokens, compacted_count,
       last_flushed_at, flush_count,
       thinking_level, verbose_level
@@ -60,7 +60,7 @@ function insertSessionAndTranscript(
       ?, ?, ?, ?, ?,
       ?, ?, ?, ?,
       ?, ?, ?, ?, ?,
-      ?, ?,
+      ?, ?, ?,
       ?, ?, ?, ?, ?, ?,
       ?, ?
     )`,
@@ -85,6 +85,7 @@ function insertSessionAndTranscript(
     row.workflowDefinitionId,
     row.workflowAgentId,
     row.workflowAgentLabel,
+    row.projectId,
     row.routingJson,
     row.customDataJson,
     row.abortCutoffTimestamp,
@@ -175,6 +176,11 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
     const statuses = Array.isArray(query.status) ? query.status : [query.status];
     conditions.push(`s.status IN (${statuses.map(() => '?').join(', ')})`);
     params.push(...statuses);
+  }
+
+  if (query.projectId) {
+    conditions.push(`s.project_id = ?`);
+    params.push(query.projectId);
   }
 
   if (query.channel) {
@@ -303,6 +309,7 @@ export function patchSessionMetadata(
         workflow_definition_id = ?,
         workflow_agent_id = ?,
         workflow_agent_label = ?,
+        project_id = ?,
         routing_json = ?,
         custom_data_json = ?,
         abort_cutoff_timestamp = ?,
@@ -331,6 +338,7 @@ export function patchSessionMetadata(
       merged.workflowDefinitionId ?? null,
       merged.workflowAgentId ?? null,
       merged.workflowAgentLabel ?? null,
+      merged.projectId ?? null,
       merged.routing ? JSON.stringify(merged.routing) : null,
       merged.customData ? JSON.stringify(merged.customData) : null,
       merged.abortCutoffTimestamp ?? null,

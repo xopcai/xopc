@@ -63,7 +63,7 @@ export function LogsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
+    <div className="flex w-full flex-col gap-6 px-3 py-6 sm:px-5 xl:px-6">
       <LogsPageHeader
         L={L}
         autoRefresh={autoRefresh}

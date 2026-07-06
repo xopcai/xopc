@@ -80,6 +80,27 @@ function noteSearchContent(note: Note): string {
   return [note.title, plain, attachmentText, attachmentNames, ...(note.tags ?? [])].filter(Boolean).join('\n');
 }
 
+function rowMatchesPlainSearch(row: NoteRow, search: string): boolean {
+  const needle = search.trim().toLocaleLowerCase();
+  if (!needle) {
+    return true;
+  }
+
+  const chunks: string[] = [];
+  if (row.title) chunks.push(row.title);
+  if (row.snippet) chunks.push(row.snippet);
+  if (row.tags_json) chunks.push(row.tags_json);
+  if (row.attachment_names_json) chunks.push(row.attachment_names_json);
+
+  try {
+    chunks.push(noteSearchContent(JSON.parse(row.payload_json) as Note));
+  } catch {
+    // Keep search usable even if a legacy row has malformed payload JSON.
+  }
+
+  return chunks.join('\n').toLocaleLowerCase().includes(needle);
+}
+
 function noteToRow(note: Note): Omit<NoteRow, 'payload_json'> & { payload_json: string } {
   const meta = buildNoteIndexMeta(note);
   return {
@@ -255,7 +276,8 @@ export function listNoteRecords(
   }
 
   if (query.search) {
-    const ftsQuery = escapeFts5Query(query.search);
+    const search = query.search.trim();
+    const ftsQuery = escapeFts5Query(search);
     const ftsIds = new Set<string>();
     if (ftsQuery) {
       const ftsRows = db
@@ -267,7 +289,12 @@ export function listNoteRecords(
         ftsIds.add(row.note_id);
       }
     }
-    entries = entries.filter((entry) => ftsIds.has(entry.id));
+    const plainIds = new Set(
+      rows
+        .filter((row) => rowMatchesPlainSearch(row, search))
+        .map((row) => row.note_id),
+    );
+    entries = entries.filter((entry) => ftsIds.has(entry.id) || plainIds.has(entry.id));
   }
 
   const sortField = query.sortBy || 'createdAt';

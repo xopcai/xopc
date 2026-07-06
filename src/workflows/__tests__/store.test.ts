@@ -11,7 +11,7 @@ import { WorkflowEventStore } from '../store/event-store.js';
 import { resolveWorkflowRunEventsPath } from '../store/paths.js';
 import { WorkflowRunStore } from '../store/run-store.js';
 
-function createRun(runId: string, createdAtMs: number): WorkflowRun {
+function createRun(runId: string, createdAtMs: number, projectId?: string): WorkflowRun {
   return {
     id: runId,
     definitionId: 'research',
@@ -25,6 +25,7 @@ function createRun(runId: string, createdAtMs: number): WorkflowRun {
       sessionKey: `agent:main:webchat:default:direct:wf_${runId}`,
       triggerSource: 'webui',
       agentId: 'main',
+      ...(projectId ? { projectId } : {}),
       definition: {
         id: 'research',
         name: 'research',
@@ -122,5 +123,31 @@ describe('WorkflowEventStore and WorkflowRunStore', () => {
     expect(view?.run.status).toBe('succeeded');
     expect(summaries.map((summary) => summary.id)).toEqual(['run-newer', 'run-older']);
     expect(summaries[0]?.status).toBe('succeeded');
+  });
+
+  it('filters projected run summaries by project', async () => {
+    const eventStore = new WorkflowEventStore(config, agentId);
+    const runStore = new WorkflowRunStore(config, agentId, eventStore);
+
+    await eventStore.append({
+      runId: 'run-project-a',
+      type: 'run_queued',
+      payload: { run: createRun('run-project-a', 1_000, 'project-a') },
+      createdAtMs: 1_000,
+    });
+    await eventStore.append({
+      runId: 'run-project-b',
+      type: 'run_queued',
+      payload: { run: createRun('run-project-b', 2_000, 'project-b') },
+      createdAtMs: 2_000,
+    });
+
+    await runStore.rebuildRunView('run-project-a');
+    await runStore.rebuildRunView('run-project-b');
+
+    const summaries = await runStore.listRunSummaries(10, { projectId: 'project-a' });
+
+    expect(summaries.map((summary) => summary.id)).toEqual(['run-project-a']);
+    expect(summaries[0]?.metadata?.projectId).toBe('project-a');
   });
 });

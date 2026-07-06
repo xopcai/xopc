@@ -16,6 +16,7 @@ import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
+import { PageTabs } from '@/components/ui/page-tabs';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { SessionCard, type SessionCardAction } from '@/features/sessions/session-card';
 import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
@@ -83,47 +84,12 @@ function SessionsTabs({
   activeTab: SessionsTabId;
   onChange: (tab: SessionsTabId) => void;
 }) {
-  return (
-    <nav
-      aria-label={s.tabsAriaLabel}
-      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
-      role="tablist"
-      onKeyDown={(event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        const currentIndex = SESSIONS_TABS.indexOf(activeTab);
-        if (currentIndex < 0) return;
-        const delta = event.key === 'ArrowRight' ? 1 : -1;
-        const nextIndex = (currentIndex + delta + SESSIONS_TABS.length) % SESSIONS_TABS.length;
-        onChange(SESSIONS_TABS[nextIndex]);
-      }}
-    >
-      {SESSIONS_TABS.map((tab) => {
-        const Icon = tab === 'sessions' ? Layers : Settings;
-        const selected = tab === activeTab;
-        return (
-          <button
-            key={tab}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            aria-controls={`sessions-panel-${tab}`}
-            id={`sessions-tab-${tab}`}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              interaction.press,
-              selected ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-            )}
-            onClick={() => onChange(tab)}
-          >
-            <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-            <span>{sessionsTabLabel(s, tab)}</span>
-          </button>
-        );
-      })}
-    </nav>
-  );
+  const items = SESSIONS_TABS.map((tab) => ({
+    id: tab,
+    label: sessionsTabLabel(s, tab),
+    icon: tab === 'sessions' ? Layers : Settings,
+  }));
+  return <PageTabs items={items} activeTab={activeTab} onChange={onChange} ariaLabel={s.tabsAriaLabel} tabIdPrefix="sessions-tab" panelIdPrefix="sessions-panel" />;
 }
 
 function SessionsTabPanel({
@@ -562,7 +528,7 @@ export function SessionsPage() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto w-full max-w-2xl px-4 py-16 text-center text-sm text-fg-muted sm:px-8 lg:max-w-app-main">
+      <div className="w-full px-3 py-16 text-center text-sm text-fg-muted sm:px-5 xl:px-6">
         {s.needToken}
       </div>
     );
@@ -570,7 +536,7 @@ export function SessionsPage() {
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-surface-panel">
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
+      <div className="flex w-full flex-col gap-6 px-3 py-6 sm:px-5 xl:px-6">
         <header className="flex flex-col gap-2">
           <h1 className="text-lg font-semibold tracking-tight text-fg">{s.title}</h1>
         </header>

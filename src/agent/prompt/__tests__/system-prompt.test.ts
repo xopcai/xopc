@@ -209,4 +209,16 @@ describe('buildSystemPrompt extra context', () => {
     expect(split!.dynamicSuffix).toContain('## Subagent Context');
     expect(split!.dynamicSuffix).toContain('Do the task.');
   });
+
+  it('places active project context below cache boundary', () => {
+    const prompt = buildSystemPrompt('/ws', {
+      promptMode: 'full',
+      toolNames: ['read_file'],
+      activeProjectContext: '# Active Project\n\nProject: xopc',
+    });
+    const split = splitBuiltSystemPrompt(prompt);
+    expect(split!.stablePrefix).not.toContain('# Active Project');
+    expect(split!.dynamicSuffix).toContain('# Active Project');
+    expect(split!.dynamicSuffix).toContain('Project: xopc');
+  });
 });

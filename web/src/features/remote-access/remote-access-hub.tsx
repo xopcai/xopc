@@ -8,12 +8,11 @@ import { RemoteAccessSshTab } from '@/features/remote-access/remote-access-ssh-t
 import { RemoteAccessGuideTab } from '@/features/remote-access/remote-access-guide-tab';
 import { RemoteAccessDocsLink } from '@/features/remote-access/remote-access-docs-link';
 import { ReverseProxySection } from '@/features/remote-access/reverse-proxy-section';
+import { PageTabs, type PageTabItem } from '@/components/ui/page-tabs';
 import {
   SettingsPageFrame,
   SettingsPageHeader,
   SettingsTabPanel,
-  SettingsTabs,
-  type SettingsTabItem,
 } from '@/features/settings/settings-page-layout';
 import {
   REMOTE_ACCESS_TABS,
@@ -97,7 +96,7 @@ export function RemoteAccessHub() {
   );
 
   const intro = tabIntro(ra, activeTab);
-  const tabItems: SettingsTabItem<RemoteAccessTabId>[] = REMOTE_ACCESS_TABS.map((tab) => ({
+  const tabItems: PageTabItem<RemoteAccessTabId>[] = REMOTE_ACCESS_TABS.map((tab) => ({
     id: tab,
     label: tabLabel(ra, tab),
   }));
@@ -121,7 +120,7 @@ export function RemoteAccessHub() {
         <p className="text-sm text-fg-muted">{ra.guide.needToken}</p>
       ) : (
         <>
-          <SettingsTabs
+          <PageTabs
             items={tabItems}
             activeTab={activeTab}
             onChange={setActiveTab}

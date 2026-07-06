@@ -6,7 +6,7 @@ type Props = { L: LogsMessages };
 
 export function LogsNoToken({ L }: Props) {
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
+    <div className="flex w-full flex-col gap-3 px-3 py-10 sm:px-5 xl:px-6">
       <div className="flex items-start gap-3 rounded-2xl border border-edge-subtle bg-surface-base p-6 dark:border-edge">
         <Terminal className="mt-0.5 size-5 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden />
         <div>

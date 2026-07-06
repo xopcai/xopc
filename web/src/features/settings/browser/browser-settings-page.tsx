@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { PageTabs, type PageTabItem } from '@/components/ui/page-tabs';
 import {
   SettingsTabPanel,
-  SettingsTabs,
-  type SettingsTabItem,
 } from '@/features/settings/settings-page-layout';
 import { useBrowserSettingsTabGuard } from '@/features/settings/use-settings-tab-guard';
 import { messages } from '@/i18n/messages';
@@ -102,14 +101,14 @@ export function AgentBrowserSettingsPage() {
     }, 80);
     return () => window.clearTimeout(timer);
   }, [focus, searchParams, setSearchParams]);
-  const tabItems: SettingsTabItem<BrowserTabId>[] = visibleTabs.map((tab) => ({
+  const tabItems: PageTabItem<BrowserTabId>[] = visibleTabs.map((tab) => ({
     id: tab,
     label: browserTabLabel(agentSettings, tab),
   }));
 
   return (
     <AgentDefaultsRouteLayout sectionId="agent-browser" intro="" vm={viewModel} tabbed>
-      <SettingsTabs
+      <PageTabs
         items={tabItems}
         activeTab={activeTab}
         onChange={setActiveTab}

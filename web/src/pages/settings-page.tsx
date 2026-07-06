@@ -71,7 +71,7 @@ const CapabilityPresetsSettingsPanel = lazy(() =>
 
 function SettingsSectionFallback() {
   return (
-    <div className="mx-auto w-full max-w-app-main flex-1 px-4 py-8" aria-busy>
+    <div className="w-full flex-1 px-3 py-8 sm:px-5 xl:px-6" aria-busy>
       <div className="h-8 w-48 max-w-full animate-pulse rounded-md bg-surface-hover" />
       <div className="mt-6 h-36 animate-pulse rounded-xl bg-surface-hover" />
       <div className="mt-4 h-24 animate-pulse rounded-xl bg-surface-hover" />
@@ -157,7 +157,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+    <div className="flex w-full flex-col gap-3 px-3 py-8 sm:px-5 xl:px-6">
       <h1 className="text-lg font-semibold text-fg">{title}</h1>
       <p className="text-sm text-fg-muted">{m.settingsPage.comingSoon.replace('{{title}}', title)}</p>
     </div>

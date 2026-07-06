@@ -21,9 +21,10 @@ type Props = {
   prompt: string;
   coverage?: AutomationCoverageEvent;
   className?: string;
+  variant?: 'card' | 'titleAction';
 };
 
-export function AutomationSuggestionCard({ title, description, prompt, coverage, className }: Props) {
+export function AutomationSuggestionCard({ title, description, prompt, coverage, className, variant = 'card' }: Props) {
   const language = useLocaleStore((s) => s.language);
   const labels = messages(language).automations.suggestions;
   const automationLabels = messages(language).automations;
@@ -38,6 +39,42 @@ export function AutomationSuggestionCard({ title, description, prompt, coverage,
   const coverageExplanation = coveredAutomation
     ? buildCoverageExplanation(coveredAutomation, automationLabels)
     : [];
+
+  if (variant === 'titleAction') {
+    if (coveredAutomation) {
+      return (
+        <section className={cn('flex min-w-0 items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1.5', className)}>
+          <CheckCircle2 className="size-3.5 shrink-0 text-emerald-700 dark:text-emerald-300" aria-hidden />
+          <span className="min-w-0 truncate text-xs font-medium text-fg">{labels.coveredTitle}</span>
+          <Button
+            variant="ghost"
+            className="h-7 shrink-0 rounded-md px-2 text-xs"
+            onClick={() => navigate('/automations')}
+          >
+            {labels.manage}
+          </Button>
+        </section>
+      );
+    }
+
+    return (
+      <section className={cn('flex min-w-0 items-center gap-2 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5', className)}>
+        <Lightbulb className="size-3.5 shrink-0 text-accent" aria-hidden />
+        <span className="min-w-0 truncate text-xs font-medium text-fg" title={description}>{title}</span>
+        <Button
+          variant="secondary"
+          className="h-7 shrink-0 rounded-md px-2 text-xs"
+          onClick={() => {
+            const params = new URLSearchParams({ draft: prompt, autogenerate: '1' });
+            navigate(`/automations?${params.toString()}`);
+          }}
+        >
+          <Sparkles className="size-3.5" aria-hidden />
+          {labels.create}
+        </Button>
+      </section>
+    );
+  }
 
   if (coveredAutomation) {
     return (

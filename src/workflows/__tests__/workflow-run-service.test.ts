@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/connection.js';
+import { getSqliteDatabase } from '../../storage/sqlite/transaction.js';
+import { GoalService } from '../../goals/goal-service.js';
+import { ProjectService } from '../../projects/project-service.js';
 import type { WorkflowDefinition } from '../domain/index.js';
 import { WorkflowEventStore } from '../store/event-store.js';
 import { WorkflowRunStore } from '../store/run-store.js';
@@ -107,6 +110,7 @@ describe('WorkflowRunService helpers', () => {
       sessionKey: 'agent:main:webchat:default:direct:wf_run-abc',
       source: { kind: 'automation', automationId: 'nightly', runId: 'run-1', scheduledAtMs: 123 },
       input,
+      projectId: 'project-1',
       retryOfRunId: 'run-previous',
       idempotencyKey: 'idem-1',
     });
@@ -115,6 +119,7 @@ describe('WorkflowRunService helpers', () => {
       sessionKey: 'agent:main:webchat:default:direct:wf_run-abc',
       triggerSource: 'automation',
       agentId: 'main',
+      projectId: 'project-1',
       retryOfRunId: 'run-previous',
       input,
       correlation: { idempotencyKey: 'idem-1' },
@@ -179,6 +184,7 @@ describe('WorkflowRunService helpers', () => {
           metadata: buildWorkflowRunMetadata({
             definition,
             agentId: 'main',
+            projectId: 'project-index',
             sessionKey: 'agent:main:webchat:default:direct:wf_run-existing',
             source: { kind: 'api', idempotencyKey: 'idem-1' },
             input: buildWorkflowRunInputEnvelope({}, 'Check release'),
@@ -197,6 +203,11 @@ describe('WorkflowRunService helpers', () => {
       createdAtMs: 1_000,
     });
     await runStore.rebuildRunView('existing-run');
+    expect(
+      getSqliteDatabase()
+        .prepare(`SELECT project_id FROM workflow_runs WHERE run_id = ?`)
+        .get('existing-run'),
+    ).toEqual({ project_id: 'project-index' });
 
     const prepareRunSession = vi.fn();
     const service = new WorkflowRunService({
@@ -227,6 +238,114 @@ describe('WorkflowRunService helpers', () => {
       sessionKey: 'agent:main:webchat:default:direct:wf_run-existing',
     });
     expect(prepareRunSession).not.toHaveBeenCalled();
+  });
+
+  it('passes the goal project to the workflow session bridge', async () => {
+    const definition = createDefinition();
+    const project = new ProjectService().create({ name: 'Workflow Goal Project' });
+    const goal = new GoalService().create({ title: 'Run workflow in project', projectId: project.id });
+    const prepareRunSession = vi.fn(async () => ({
+      sessionKey: 'agent:main:workflow:default:run:project-workflow',
+    }));
+    const service = new WorkflowRunService({
+      service: createGatewayHostStub(),
+      sessionBridge: { prepareRunSession } as never,
+      buildChildTools: () => [],
+      definitionRegistry: {
+        async list() {
+          return [];
+        },
+        async get() {
+          return definition;
+        },
+      },
+    });
+
+    const result = await service.startWorkflowRun({
+      agentId: 'main',
+      definitionId: definition.id,
+      goalId: goal.id,
+      input: {},
+      source: { kind: 'webui' },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(prepareRunSession).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: project.id,
+      goal: '',
+    }));
+  });
+
+  it('preserves project metadata when retrying a workflow run', async () => {
+    const definition = createDefinition();
+    const config = {} as import('../../config/schema.js').Config;
+    const eventStore = new WorkflowEventStore(config, 'main');
+    const runStore = new WorkflowRunStore(config, 'main', eventStore);
+    await eventStore.append({
+      runId: 'project-run',
+      type: 'run_queued',
+      payload: {
+        run: {
+          id: 'project-run',
+          definitionId: definition.id,
+          definitionVersion: definition.version,
+          title: definition.title,
+          goal: 'Check project release',
+          input: { branch: 'main' },
+          status: 'failed',
+          source: { kind: 'webui', sessionKey: 'agent:main:webchat:default:direct:project-run' },
+          metadata: buildWorkflowRunMetadata({
+            definition,
+            agentId: 'main',
+            projectId: 'project-retry',
+            sessionKey: 'agent:main:webchat:default:direct:project-run',
+            source: { kind: 'webui', sessionKey: 'agent:main:webchat:default:direct:project-run' },
+            input: {
+              payload: { branch: 'main' },
+              goal: 'Check project release',
+              variables: { project: 'retry' },
+            },
+          }),
+          metrics: {
+            agentCount: 0,
+            doneAgentCount: 0,
+            errorAgentCount: 1,
+            skippedAgentCount: 0,
+            artifactCount: 0,
+          },
+          createdAtMs: 1_000,
+        },
+      },
+      createdAtMs: 1_000,
+    });
+    await runStore.rebuildRunView('project-run');
+
+    const prepareRunSession = vi.fn(async () => ({
+      sessionKey: 'agent:main:workflow:default:run:project-retry-2',
+    }));
+    const service = new WorkflowRunService({
+      service: createGatewayHostStub(config),
+      sessionBridge: { prepareRunSession } as never,
+      buildChildTools: () => [],
+      definitionRegistry: {
+        async list() {
+          return [];
+        },
+        async get() {
+          return definition;
+        },
+      },
+    });
+
+    const result = await service.retryWorkflowRun({
+      agentId: 'main',
+      runId: 'project-run',
+    });
+
+    expect(result.ok).toBe(true);
+    expect(prepareRunSession).toHaveBeenCalledWith(expect.objectContaining({
+      projectId: 'project-retry',
+    }));
   });
 
   it('resolves failed-agent replay targets from a run view', () => {

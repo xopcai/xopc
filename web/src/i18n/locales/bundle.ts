@@ -9,6 +9,7 @@ import enGoals from './en/goals.json' with { type: 'json' };
 import enNotes from './en/notes.json' with { type: 'json' };
 import enOnboarding from './en/onboarding.json' with { type: 'json' };
 import enProviders from './en/providers.json' with { type: 'json' };
+import enProjects from './en/projects.json' with { type: 'json' };
 import enRemoteAccess from './en/remote-access.json' with { type: 'json' };
 import enSessions from './en/sessions.json' with { type: 'json' };
 import enSettings from './en/settings.json' with { type: 'json' };
@@ -30,6 +31,7 @@ import zhGoals from './zh/goals.json' with { type: 'json' };
 import zhNotes from './zh/notes.json' with { type: 'json' };
 import zhOnboarding from './zh/onboarding.json' with { type: 'json' };
 import zhProviders from './zh/providers.json' with { type: 'json' };
+import zhProjects from './zh/projects.json' with { type: 'json' };
 import zhRemoteAccess from './zh/remote-access.json' with { type: 'json' };
 import zhSessions from './zh/sessions.json' with { type: 'json' };
 import zhSettings from './zh/settings.json' with { type: 'json' };
@@ -53,6 +55,7 @@ export const en = {
   ...enNotes,
   ...enOnboarding,
   ...enProviders,
+  ...enProjects,
   ...enRemoteAccess,
   ...enSessions,
   ...enSettings,
@@ -77,6 +80,7 @@ export const zh = {
   ...zhNotes,
   ...zhOnboarding,
   ...zhProviders,
+  ...zhProjects,
   ...zhRemoteAccess,
   ...zhSessions,
   ...zhSettings,

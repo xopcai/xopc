@@ -32,6 +32,7 @@ export interface SystemPromptBuildOptions {
   agentId?: string;
   thinkingLevel?: string;
   extraSystemPrompt?: string;
+  activeProjectContext?: string;
   silentReplyPromptMode?: SilentReplyPromptMode;
   promptContribution?: ProviderSystemPromptContribution;
 }
@@ -104,6 +105,7 @@ export class SystemPromptBuilder {
       heartbeatEnabled,
       ttsSystemHint,
       extraSystemPrompt: options.extraSystemPrompt,
+      activeProjectContext: options.activeProjectContext,
       modelRef: options.modelRef,
       agentId: options.agentId,
       thinkingLevel: options.thinkingLevel,
@@ -128,6 +130,7 @@ export class SystemPromptBuilder {
       externalMemoryInstructions: resolved.externalMemoryInstructions,
       ttsSystemHint: resolved.ttsSystemHint,
       extraSystemPrompt: resolved.extraSystemPrompt,
+      activeProjectContext: resolved.activeProjectContext,
       silentReplyPromptMode: resolved.silentReplyPromptMode,
       promptContribution: resolved.promptContribution,
       includeProblemSolving: resolved.includeProblemSolving,

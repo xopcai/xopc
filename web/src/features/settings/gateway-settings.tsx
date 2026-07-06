@@ -16,6 +16,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { PageTabs, type PageTabItem } from '@/components/ui/page-tabs';
 import { SecretInput } from '@/components/ui/secret-input';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
@@ -33,8 +34,6 @@ import {
   SettingsPageFrame,
   SettingsPageHeader,
   SettingsTabPanel,
-  SettingsTabs,
-  type SettingsTabItem,
 } from '@/features/settings/settings-page-layout';
 import { useGatewaySettingsTabGuard } from '@/features/settings/use-settings-tab-guard';
 import { restartGatewayAfterConfigChange } from '@/features/tunnel/gateway-restart';
@@ -406,7 +405,7 @@ export function GatewaySettingsPanel() {
 
   if (!hasToken) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
         <SettingsPageHeader title={m.settingsSections.gateway} />
         <p className="text-sm text-fg-muted">{g.needToken}</p>
       </SettingsPageFrame>
@@ -415,7 +414,7 @@ export function GatewaySettingsPanel() {
 
   if (loading) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
         <div className="flex items-center gap-2 text-sm text-fg-muted">
           <Loader2 className="size-4 animate-spin" />
           {g.loading}
@@ -426,7 +425,7 @@ export function GatewaySettingsPanel() {
 
   if (!form) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
         <p className="text-sm text-fg-muted">{error ?? fetchError ?? g.loadError}</p>
         <Button type="button" variant="secondary" onClick={() => void mutate()}>
           {g.retry}
@@ -505,7 +504,7 @@ export function GatewaySettingsPanel() {
         onCancel={() => dispatchUi({ type: 'patch', patch: { restartConfirmOpen: false } })}
       />
 
-      <GatewaySettingsTabs g={g} activeTab={activeTab} visibleTabs={visibleTabs} onChange={setActiveTab} />
+      <GatewaySettingsTabNav g={g} activeTab={activeTab} visibleTabs={visibleTabs} onChange={setActiveTab} />
 
       <GatewayTabPanel g={g} id="network" activeTab={activeTab}>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -804,7 +803,7 @@ export function GatewaySettingsPanel() {
   );
 }
 
-function GatewaySettingsTabs({
+function GatewaySettingsTabNav({
   g,
   activeTab,
   visibleTabs,
@@ -815,13 +814,13 @@ function GatewaySettingsTabs({
   visibleTabs: readonly GatewaySettingsTabId[];
   onChange: (tab: GatewaySettingsTabId) => void;
 }) {
-  const items: SettingsTabItem<GatewaySettingsTabId>[] = visibleTabs.map((tab) => ({
+  const items: PageTabItem<GatewaySettingsTabId>[] = visibleTabs.map((tab) => ({
     id: tab,
     label: gatewaySettingsTabLabel(g, tab),
     icon: GATEWAY_SETTINGS_TAB_ICONS[tab],
   }));
   return (
-    <SettingsTabs
+    <PageTabs
       items={items}
       activeTab={activeTab}
       onChange={onChange}

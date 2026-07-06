@@ -102,6 +102,8 @@ export interface SessionMetadata {
   sourceChannel: string;
   sourceChatId: string;
   customData?: Record<string, unknown>;
+  /** Optional project grouping for sessions, goals, workflows, and related context. */
+  projectId?: string;
   /** Routing metadata */
   routing?: SessionRoutingMeta;
   /** Session statistics */
@@ -159,6 +161,7 @@ export interface SessionListQuery {
   search?: string;
   sessionTypes?: SessionType[];
   includeHidden?: boolean;
+  projectId?: string;
   sortBy?: 'updatedAt' | 'createdAt' | 'messageCount' | 'lastAccessedAt';
   sortOrder?: 'asc' | 'desc';
   limit?: number;

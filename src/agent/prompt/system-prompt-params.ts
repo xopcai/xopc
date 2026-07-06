@@ -81,6 +81,7 @@ export interface SystemPromptBuildParams {
   externalMemoryInstructions?: string;
   ttsSystemHint?: string;
   extraSystemPrompt?: string;
+  activeProjectContext?: string;
   silentReplyPromptMode?: SilentReplyPromptMode;
   promptContribution?: ProviderSystemPromptContribution;
   includeProblemSolving?: boolean;
@@ -100,6 +101,7 @@ export function resolveSystemPromptBuildParams(
     heartbeatPrompt?: string;
     ttsSystemHint?: string;
     extraSystemPrompt?: string;
+    activeProjectContext?: string;
     modelRef?: string;
     agentId?: string;
     thinkingLevel?: string;
@@ -134,6 +136,7 @@ export function resolveSystemPromptBuildParams(
     externalMemoryInstructions: params.externalMemoryInstructions,
     ttsSystemHint: params.ttsSystemHint,
     extraSystemPrompt: params.extraSystemPrompt,
+    activeProjectContext: params.activeProjectContext,
     silentReplyPromptMode: params.silentReplyPromptMode,
     promptContribution: params.promptContribution,
     includeProblemSolving: true,

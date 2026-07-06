@@ -119,6 +119,7 @@ export interface WorkflowRunMetadata {
   sessionKey: string;
   triggerSource: string;
   agentId?: string;
+  projectId?: string;
   goalId?: string;
   retryOfRunId?: string;
   replay?: WorkflowRunReplayMetadata;
@@ -358,6 +359,7 @@ export interface WorkflowStats {
 export interface StartWorkflowRunOptions {
   definitionId: string;
   goalId?: string;
+  projectId?: string;
   goal?: string;
   input?: unknown;
   agentId?: string;
@@ -501,6 +503,7 @@ export async function deleteWorkflowDefinition(id: string): Promise<void> {
 export interface WorkflowOwnerAgentOptions {
   ownerAgentId?: string;
   goalId?: string;
+  projectId?: string;
 }
 
 function appendOwnerAgentParam(params: URLSearchParams, options?: WorkflowOwnerAgentOptions): void {
@@ -523,6 +526,8 @@ export async function listWorkflowRuns(limit = 50, options?: WorkflowOwnerAgentO
   appendOwnerAgentParam(searchParams, options);
   const goalId = options?.goalId?.trim();
   if (goalId) searchParams.set('goalId', goalId);
+  const projectId = options?.projectId?.trim();
+  if (projectId) searchParams.set('projectId', projectId);
   const data = await fetchJson<{ runs: WorkflowRunSummary[] }>(apiUrl(`/api/workflows/runs?${searchParams.toString()}`));
   return data.runs ?? [];
 }
@@ -651,9 +656,13 @@ export async function retryWorkflowRun(runId: string, options?: WorkflowOwnerAge
   const searchParams = new URLSearchParams();
   appendOwnerAgentParam(searchParams, options);
   const suffix = searchParams.size > 0 ? `?${searchParams.toString()}` : '';
+  const projectId = options?.projectId?.trim();
   return fetchJson<StartWorkflowRunResult>(
     apiUrl(`/api/workflows/runs/${encodeURIComponent(runId)}/retry${suffix}`),
-    { method: 'POST' },
+    {
+      method: 'POST',
+      body: JSON.stringify(projectId ? { projectId } : {}),
+    },
   );
 }
 

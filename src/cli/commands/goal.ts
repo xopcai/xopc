@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { loadConfig } from '../../config/loader.js';
 import { closeXopcDatabase, openXopcDatabase } from '../../storage/sqlite/index.js';
 import { GoalService, type GoalEvidence, type GoalWithDetails } from '../../goals/index.js';
+import { ProjectService, resolveProjectAgentId } from '../../projects/index.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 
 type EvidenceKind = GoalEvidence['kind'];
@@ -51,6 +52,18 @@ function printGoal(goal: GoalWithDetails): void {
   }
 }
 
+function resolveProjectId(raw: string | undefined): string | undefined {
+  const ref = raw?.trim();
+  if (!ref) return undefined;
+  const projects = new ProjectService();
+  const project = projects.get(ref) ?? projects.getBySlug(ref);
+  if (!project) {
+    console.error(`Project not found: ${ref}`);
+    process.exit(1);
+  }
+  return project.id;
+}
+
 function createGoalCommand(ctx: CLIContext): Command {
   const cmd = new Command('goal')
     .description('Manage durable goals')
@@ -74,6 +87,7 @@ function createGoalCommand(ctx: CLIContext): Command {
       .option('--status <status>', 'Filter status (comma-separated)')
       .option('--agent-id <id>', 'Filter by agent id')
       .option('--session-key <key>', 'Filter by linked session')
+      .option('--project <id-or-slug>', 'Filter by project')
       .option('--limit <n>', 'Maximum rows', '20')
       .action(async (options) => {
         await withGoals(ctx, async (goals) => {
@@ -81,6 +95,7 @@ function createGoalCommand(ctx: CLIContext): Command {
             status: options.status?.split(',').map((s: string) => s.trim()).filter(Boolean),
             agentId: options.agentId,
             sessionKey: options.sessionKey,
+            projectId: resolveProjectId(options.project),
             limit: Number(options.limit) || 20,
           });
           if (!rows.length) {
@@ -101,17 +116,28 @@ function createGoalCommand(ctx: CLIContext): Command {
       .option('--agent-id <id>', 'Agent id')
       .option('--max-turns <n>', 'Turn budget')
       .option('--priority <level>', 'low, normal, or high', 'normal')
+      .option('--project <id-or-slug>', 'Attach the goal to a project')
       .action(async (title, options) => {
         const cfg = loadConfig(ctx.configPath);
         await withGoals(ctx, async (goals) => {
+          const projectId = resolveProjectId(options.project);
+          const agentId = options.sessionKey && !options.agentId
+            ? undefined
+            : resolveProjectAgentId({
+              config: cfg,
+              projects: new ProjectService(),
+              explicitAgentId: options.agentId,
+              projectId,
+            });
           const goal = goals.create({
             title,
             sessionKey: options.sessionKey,
-            agentId: options.agentId,
+            agentId,
             priority: options.priority === 'low' || options.priority === 'high' ? options.priority : 'normal',
             maxTurns: options.maxTurns ? Number(options.maxTurns) : undefined,
             config: cfg,
             source: 'cli',
+            projectId,
           });
           console.log(`Created goal ${goal.id}`);
           console.log(`  ${goal.title}`);

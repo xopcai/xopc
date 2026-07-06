@@ -76,6 +76,7 @@ export function useChatSessionLoad(deps: {
           model: cfg.model,
           thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
           reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
+          workingDirectoryLocked: cfg.workingDirectoryLocked,
         });
         void refreshModelThinkingSupport(cfg.model);
       } catch {
@@ -188,6 +189,7 @@ export function useChatSessionLoad(deps: {
                 model: cfg.model,
                 thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
                 reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
+                workingDirectoryLocked: cfg.workingDirectoryLocked,
               });
               void refreshModelThinkingSupport(cfg.model);
             } catch {

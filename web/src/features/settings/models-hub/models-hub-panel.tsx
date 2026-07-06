@@ -2,6 +2,7 @@ import { ImageIcon, Mic, Plug, Search, type LucideIcon } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { PageTabs } from '@/components/ui/page-tabs';
 import { ImageModelsSettingsPanel } from '@/features/settings/image-models-settings';
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
@@ -9,7 +10,6 @@ import { SaveBarControls } from '@/features/settings/save-bar/save-bar-controls'
 import {
   SettingsPageFrame,
   SettingsPageHeader,
-  SettingsTabs,
 } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -84,7 +84,7 @@ export function ModelsHubPanel() {
 
       <SaveBarControls />
 
-      <SettingsTabs
+      <PageTabs
         items={tabDefs}
         activeTab={activeTab}
         onChange={setActiveTab}

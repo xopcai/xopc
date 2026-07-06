@@ -147,12 +147,14 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
 
     // JSON body
     const body = await c.req.json().catch(() => ({}));
+    const title = typeof body.title === 'string' ? body.title.trim() : undefined;
     const markdown = typeof body.markdown === 'string' ? body.markdown.trim() : undefined;
     const kindRaw = typeof body.kind === 'string' ? body.kind : undefined;
     const tagsRaw = Array.isArray(body.tags) ? body.tags.filter((t: unknown) => typeof t === 'string') : undefined;
     const source = parseCaptureSource(body);
 
     const note = await service.notesServiceInstance.createNote({
+      title,
       markdown,
       kind: kindRaw && VALID_KINDS.has(kindRaw as NoteKind) ? (kindRaw as NoteKind) : undefined,
       tags: tagsRaw,

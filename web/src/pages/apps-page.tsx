@@ -5,6 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { PageTabs } from '@/components/ui/page-tabs';
 import { parseAppsMainTab, type AppsMainTab } from '@/features/apps/apps-page.constants';
 import {
   useExtensions,
@@ -128,61 +129,25 @@ export function AppsPage() {
   }
 
   const showSearch = mainTab !== 'marketplace' && listForTab.length > 0;
+  const tabItems = [
+    { id: 'marketplace' as const, label: m.appsPage.tabMarketplace },
+    { id: 'builtin' as const, label: m.appsPage.tabBuiltin, count: bundledExtensions.length },
+    { id: 'user' as const, label: m.appsPage.tabUser, count: userExtensions.length },
+  ];
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="mx-auto w-full max-w-app-main px-4 py-8">
+      <div className="w-full px-3 py-8 sm:px-5 xl:px-6">
         <div className="mb-5 flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">
-          <div
-            className="flex flex-wrap gap-x-1 gap-y-1"
-            role="tablist"
-            aria-label={m.appsPage.appsNavAria}
-          >
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mainTab === 'marketplace'}
-              className={cn(
-                'relative max-w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors sm:text-center',
-                mainTab === 'marketplace' ? 'text-fg' : 'text-fg-muted hover:text-fg',
-                mainTab === 'marketplace' &&
-                  'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
-              )}
-              onClick={() => setMainTab('marketplace')}
-            >
-              {m.appsPage.tabMarketplace}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mainTab === 'builtin'}
-              className={cn(
-                'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                mainTab === 'builtin' ? 'text-fg' : 'text-fg-muted hover:text-fg',
-                mainTab === 'builtin' &&
-                  'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
-              )}
-              onClick={() => setMainTab('builtin')}
-            >
-              {m.appsPage.tabBuiltin}
-              <span className="ml-1 tabular-nums text-fg-muted">({bundledExtensions.length})</span>
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={mainTab === 'user'}
-              className={cn(
-                'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                mainTab === 'user' ? 'text-fg' : 'text-fg-muted hover:text-fg',
-                mainTab === 'user' &&
-                  'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
-              )}
-              onClick={() => setMainTab('user')}
-            >
-              {m.appsPage.tabUser}
-              <span className="ml-1 tabular-nums text-fg-muted">({userExtensions.length})</span>
-            </button>
-          </div>
+          <PageTabs
+            items={tabItems}
+            activeTab={mainTab}
+            onChange={setMainTab}
+            ariaLabel={m.appsPage.appsNavAria}
+            tabIdPrefix="apps-tab"
+            panelIdPrefix="apps-panel"
+            className="flex-wrap"
+          />
           {showSearch ? (
             <div className="relative w-full min-w-0 sm:max-w-xs">
               <Search
@@ -208,7 +173,7 @@ export function AppsPage() {
         ) : mainTab === 'user' && userExtensions.length === 0 ? (
           <EmptyAppsState message={m.appsPage.emptyUser} />
         ) : filtered.length === 0 ? (
-          <p className="rounded-xl border border-dashed border-edge-subtle bg-surface-hover/30 px-4 py-8 text-center text-sm text-fg-muted dark:bg-surface-hover/15">
+          <p className="rounded-xl border border-dashed border-edge-subtle bg-surface-hover/30 px-3 py-8 sm:px-5 xl:px-6 text-center text-sm text-fg-muted dark:bg-surface-hover/15">
             {m.appsPage.noSearchResults}
           </p>
         ) : (
@@ -584,7 +549,7 @@ function ContributionBadge({
 function AppsPageSkeleton() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="mx-auto w-full max-w-app-main px-4 py-8">
+      <div className="w-full px-3 py-8 sm:px-5 xl:px-6">
         <div className="mb-6 h-8 w-40 max-w-full animate-pulse rounded-md bg-surface-hover" />
         <div className="mb-2 h-4 w-full max-w-md animate-pulse rounded bg-surface-hover" />
         <div className="mb-5 h-9 w-full max-w-lg animate-pulse rounded-full bg-surface-hover" />

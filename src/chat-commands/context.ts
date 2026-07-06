@@ -32,6 +32,7 @@ import { wrapMarkdownExportAsHtml } from '../session/chat-export.js';
 import type { CompactionResult } from '../agent/memory/compaction.js';
 import type { PersistentGoalApis } from '../agent/goals/persistent-goal-apis.js';
 import type { WorkflowRunServiceLike } from '../workflows/service/workflow-run-service.types.js';
+import { getProjectForSession } from '../projects/workspace.js';
 
 const log = createLogger('CommandContext');
 
@@ -412,7 +413,12 @@ export class CommandContextImpl implements CommandContext {
     const sc = this.deps.sessionConfigStore
       ? await this.deps.sessionConfigStore.get(this.sessionKey)
       : null;
-    const root = effectiveWorkspacePathForSession(this.config, this.sessionKey, sc);
+    const root = effectiveWorkspacePathForSession(
+      this.config,
+      this.sessionKey,
+      sc,
+      getProjectForSession(this.sessionKey),
+    );
     const dir = join(root, 'exports');
     await mkdir(dir, { recursive: true });
     const safe = this.sessionKey.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 96);

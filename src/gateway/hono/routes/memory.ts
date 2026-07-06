@@ -160,6 +160,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       providerId: c.req.query('providerId') || undefined,
       agentId: c.req.query('agentId') || undefined,
       workspaceId: c.req.query('workspaceId') || undefined,
+      projectId: c.req.query('projectId') || undefined,
       kind: parseKind(c.req.query('kind')),
       status: parseStatus(c.req.query('status')),
       limit: parseLimit(c.req.query('limit')),
@@ -179,6 +180,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       providerId: typeof body.providerId === 'string' ? body.providerId : undefined,
       agentId: typeof body.agentId === 'string' ? body.agentId : undefined,
       workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
+      projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
       kinds: Array.isArray(body.kinds)
         ? body.kinds.map(parseKind).filter((v): v is MemoryKind => Boolean(v))
         : undefined,
@@ -206,6 +208,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       agentId,
       workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : deps.service.currentWorkspacePath,
       sessionKey: typeof body.sessionKey === 'string' ? body.sessionKey : undefined,
+      projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
       content,
       source: body.source && typeof body.source === 'object' ? body.source : undefined,
       confidence: typeof body.confidence === 'number' ? body.confidence : undefined,
@@ -234,6 +237,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       agentId: existing.scope.agentId,
       workspaceId: existing.scope.workspaceId,
       sessionKey: existing.scope.sessionKey,
+      projectId: typeof body.projectId === 'string' ? body.projectId : existing.scope.projectId,
       content: typeof body.content === 'string' ? body.content : existing.content,
       source: body.source && typeof body.source === 'object' ? body.source : existing.source,
       confidence: typeof body.confidence === 'number' ? body.confidence : existing.confidence,

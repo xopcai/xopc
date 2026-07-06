@@ -1,21 +1,13 @@
-import { ExternalLink, type LucideIcon } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import type { ComponentPropsWithoutRef, ReactNode } from 'react';
 
 import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
-
-export type SettingsTabItem<T extends string> = {
-  id: T;
-  label: string;
-  hint?: string;
-  icon?: LucideIcon;
-};
 
 export function SettingsPageFrame({
   children,
   className,
   gap = 'gap-4',
-  padding = 'px-4 py-6',
+  padding = 'px-3 py-6 sm:px-5 xl:px-6',
   ...props
 }: {
   children: ReactNode;
@@ -24,7 +16,7 @@ export function SettingsPageFrame({
   padding?: string;
 } & ComponentPropsWithoutRef<'div'>) {
   return (
-    <div className={cn('mx-auto flex w-full max-w-app-main flex-col', gap, padding, className)} {...props}>
+    <div className={cn('flex w-full flex-col', gap, padding, className)} {...props}>
       {children}
     </div>
   );
@@ -69,63 +61,6 @@ export function SettingsPageHeader({
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div>
       ) : null}
     </header>
-  );
-}
-
-export function SettingsTabs<T extends string>({
-  items,
-  activeTab,
-  onChange,
-  ariaLabel,
-  tabIdPrefix,
-  panelIdPrefix,
-}: {
-  items: readonly SettingsTabItem<T>[];
-  activeTab: T;
-  onChange: (tab: T) => void;
-  ariaLabel: string;
-  tabIdPrefix: string;
-  panelIdPrefix: string;
-}) {
-  return (
-    <nav
-      aria-label={ariaLabel}
-      className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1"
-      role="tablist"
-      onKeyDown={(event) => {
-        if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-        event.preventDefault();
-        const currentIndex = items.findIndex((item) => item.id === activeTab);
-        if (currentIndex < 0) return;
-        const delta = event.key === 'ArrowRight' ? 1 : -1;
-        const nextIndex = (currentIndex + delta + items.length) % items.length;
-        onChange(items[nextIndex].id);
-      }}
-    >
-      {items.map(({ id, icon: Icon, label }) => {
-        const selected = id === activeTab;
-        return (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={selected}
-            id={`${tabIdPrefix}-${id}`}
-            aria-controls={`${panelIdPrefix}-${id}`}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-              interaction.press,
-              selected ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-            )}
-            onClick={() => onChange(id)}
-          >
-            {Icon ? <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden /> : null}
-            <span>{label}</span>
-          </button>
-        );
-      })}
-    </nav>
   );
 }
 

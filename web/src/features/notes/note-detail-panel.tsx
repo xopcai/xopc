@@ -1,4 +1,4 @@
-import { ArrowLeft, Eye, Code2, FileText, History, MessageCircle, Sparkles } from 'lucide-react';
+import { ArrowLeft, Eye, Code2, FileText, History, MessageCircle, Search, Sparkles } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
@@ -96,20 +96,48 @@ export type NoteDetailPanelProps = {
   noteId: string;
   onBack: () => void;
   onSaved?: () => void;
+  showBackButton?: boolean;
+  backButtonClassName?: string;
+  clearHeaderOnCleanup?: boolean;
+  onOpenSearch?: () => void;
 };
 
-export function NoteDetailPanel({ noteId, onBack, onSaved }: NoteDetailPanelProps) {
+export function NoteDetailPanel({
+  noteId,
+  onBack,
+  onSaved,
+  showBackButton = true,
+  backButtonClassName,
+  clearHeaderOnCleanup = true,
+  onOpenSearch,
+}: NoteDetailPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const closeLabel = messages(language).notes.lightboxClose;
 
   return (
     <NoteImageLightboxProvider closeLabel={closeLabel}>
-      <NoteDetailPanelInner noteId={noteId} onBack={onBack} onSaved={onSaved} />
+      <NoteDetailPanelInner
+        noteId={noteId}
+        onBack={onBack}
+        onSaved={onSaved}
+        showBackButton={showBackButton}
+        backButtonClassName={backButtonClassName}
+        clearHeaderOnCleanup={clearHeaderOnCleanup}
+        onOpenSearch={onOpenSearch}
+      />
     </NoteImageLightboxProvider>
   );
 }
 
-function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps) {
+function NoteDetailPanelInner({
+  noteId,
+  onBack,
+  onSaved,
+  showBackButton = true,
+  backButtonClassName,
+  clearHeaderOnCleanup = true,
+  onOpenSearch,
+}: NoteDetailPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const n = messages(language).notes;
   const automationSuggestions = messages(language).automations.suggestions;
@@ -182,7 +210,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     : '';
 
   const headerStart = useMemo(
-    () => (
+    () => showBackButton ? (
       <button
         type="button"
         onClick={onBack}
@@ -190,12 +218,13 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
         className={cn(
           'rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
           APP_CHROME_NO_DRAG_CLASS,
+          backButtonClassName,
         )}
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
       </button>
-    ),
-    [n.back, onBack],
+    ) : null,
+    [backButtonClassName, n.back, onBack, showBackButton],
   );
 
   const handleTitleChange = useCallback(
@@ -227,7 +256,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
     () => (
       <div
         className={cn(
-          'flex min-w-0 items-center gap-2 px-3 sm:px-5 xl:px-6',
+          'flex min-w-0 items-center gap-2',
           APP_CHROME_NO_DRAG_CLASS,
         )}
       >
@@ -285,6 +314,16 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
   const headerEnd = useMemo(
     () => (
       <div className={cn('flex items-center gap-2', APP_CHROME_NO_DRAG_CLASS)}>
+        {onOpenSearch ? (
+          <button
+            type="button"
+            onClick={onOpenSearch}
+            aria-label={n.searchDialogTitle}
+            className="rounded-lg p-1.5 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <Search className="h-4 w-4" aria-hidden />
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={handleBreakdownClick}
@@ -343,6 +382,8 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
       n.modeSource,
       openingChat,
       activeSidePanel,
+      onOpenSearch,
+      n.searchDialogTitle,
     ],
   );
 
@@ -352,8 +393,10 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
       main: note ? headerMain : null,
       end: note ? headerEnd : null,
     });
-    return () => clearPageHeader();
-  }, [clearPageHeader, headerEnd, headerMain, headerStart, note, setPageHeader]);
+    return () => {
+      if (clearHeaderOnCleanup) clearPageHeader();
+    };
+  }, [clearHeaderOnCleanup, clearPageHeader, headerEnd, headerMain, headerStart, note, setPageHeader]);
 
   const handleSave = useCallback(
     (content: string) => {
@@ -451,6 +494,16 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
   const noteCreatedAtMs = new Date(note.createdAt).getTime();
   const shouldSuggestNoteAutomation =
     Number.isFinite(noteCreatedAtMs) && Date.now() - noteCreatedAtMs < 60 * 60 * 1000;
+  const titleAutomationSuggestion = shouldSuggestNoteAutomation ? (
+    <AutomationSuggestionCard
+      title={automationSuggestions.noteCreatedTitle}
+      description={automationSuggestions.noteCreatedDescription}
+      prompt={automationSuggestions.noteCreatedPrompt}
+      coverage={{ eventType: 'note.created', source: 'notes', eventPayload: { noteId } }}
+      variant="titleAction"
+      className="ml-3 hidden max-w-[18rem] shrink-0 md:flex"
+    />
+  ) : null;
 
   return (
     <div className="flex h-full min-h-0 gap-3 p-4 sm:px-5">
@@ -470,15 +523,6 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
           payloadValue={noteId}
           className="mb-3 shrink-0"
         />
-        {shouldSuggestNoteAutomation ? (
-          <AutomationSuggestionCard
-            title={automationSuggestions.noteCreatedTitle}
-            description={automationSuggestions.noteCreatedDescription}
-            prompt={automationSuggestions.noteCreatedPrompt}
-            coverage={{ eventType: 'note.created', source: 'notes', eventPayload: { noteId } }}
-            className="mb-3 shrink-0"
-          />
-        ) : null}
         <div
           ref={editorContainerRef}
           className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-edge-subtle bg-surface-base"
@@ -502,7 +546,7 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
             <>
               {mode === 'wysiwyg' && (
                 <div className="flex h-full flex-col">
-                  <div className="shrink-0 px-6 pt-4">
+                  <div className="flex shrink-0 items-start px-6 pt-4">
                     <input
                       type="text"
                       value={title}
@@ -522,8 +566,9 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
                         }
                       }}
                       placeholder={n.titlePlaceholder}
-                      className="w-full border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
+                      className="min-w-0 flex-1 border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
                     />
+                    {titleAutomationSuggestion}
                   </div>
                   <div className="min-h-0 flex-1">
                     <Suspense fallback={<EditorFallback />}>
@@ -539,14 +584,15 @@ function NoteDetailPanelInner({ noteId, onBack, onSaved }: NoteDetailPanelProps)
               )}
               {mode === 'source' && (
                 <div className="flex h-full flex-col">
-                  <div className="shrink-0 px-6 pt-4">
+                  <div className="flex shrink-0 items-start px-6 pt-4">
                     <input
                       type="text"
                       value={title}
                       onChange={(e) => handleTitleChange(e.target.value)}
                       placeholder={n.titlePlaceholder}
-                      className="w-full border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
+                      className="min-w-0 flex-1 border-none bg-transparent text-2xl font-bold text-fg placeholder:text-fg-muted/40 focus:outline-none"
                     />
+                    {titleAutomationSuggestion}
                   </div>
                   <div className="min-h-0 flex-1">
                     <Suspense fallback={<EditorFallback />}>

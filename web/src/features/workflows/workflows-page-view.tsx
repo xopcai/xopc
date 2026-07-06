@@ -150,7 +150,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
   if (!hasToken) {
     return (
       <main className="min-h-0 flex-1 overflow-auto bg-surface-base">
-        <div className="mx-auto flex w-full max-w-app-main flex-col items-center px-4 py-16 text-center sm:px-8">
+        <div className="flex w-full flex-col items-center px-3 py-16 text-center sm:px-5 xl:px-6">
           <GitBranch className="size-10 text-accent-fg" aria-hidden />
           <h1 className="mt-4 text-xl font-semibold text-fg">{labels.title}</h1>
           <p className="mt-2 max-w-md text-sm leading-6 text-fg-muted">{labels.needToken}</p>
@@ -161,8 +161,8 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
 
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-base">
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-4 py-5 sm:px-6 2xl:px-8">
-        <section className="mx-auto flex w-full max-w-app-main flex-wrap items-center gap-2 rounded-lg border border-edge bg-surface-panel/70 px-3 py-2">
+      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-3 py-5 sm:px-5 xl:px-6">
+        <section className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-edge bg-surface-panel/70 px-3 py-2">
           <div className="relative min-w-48 flex-1 sm:max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
             <input
@@ -251,30 +251,30 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
         </section>
 
         {actionFeedback ? (
-          <div className="mx-auto w-full max-w-app-main rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-200">
+          <div className="w-full rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-200">
             {actionFeedback}
           </div>
         ) : null}
 
         {(actionError ?? error) ? (
-          <div className="mx-auto w-full max-w-app-main rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+          <div className="w-full rounded-xl border border-red-500/25 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
             {actionError ?? error}
           </div>
         ) : null}
 
-        <div className="mx-auto w-full max-w-app-main">
+        <div className="w-full">
           <WorkflowStatsBar stats={stats} language={language} />
         </div>
 
         {selectedRunError ? (
-          <div className="mx-auto w-full max-w-app-main rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+          <div className="w-full rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
             {selectedRunError}
           </div>
         ) : null}
 
         {viewMode === 'operations' ? (
           <div className="min-h-0 flex-1 overflow-y-auto pb-3">
-            <div className="mx-auto grid w-full max-w-app-main gap-4">
+            <div className="grid w-full gap-4">
               {RUN_SECTIONS.map((section) => {
                 const sectionRuns = operationGroups.get(section) ?? [];
                 return (
@@ -316,7 +316,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
             </div>
           </div>
         ) : (
-          <div className="mx-auto min-h-0 w-full max-w-app-main flex-1">
+          <div className="min-h-0 w-full flex-1">
             <WorkflowBoard
               runs={runs}
               language={language}

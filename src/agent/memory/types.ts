@@ -56,6 +56,7 @@ export interface MemoryScope {
   agentId: string;
   workspaceId?: string;
   sessionKey?: string;
+  projectId?: string;
 }
 
 export interface MemoryCitation {

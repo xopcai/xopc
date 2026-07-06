@@ -1,0 +1,67 @@
+import type { PaginatedResult } from '../session/types.js';
+
+export type ProjectStatus = 'active' | 'paused' | 'archived';
+
+export interface Project {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string;
+  status: ProjectStatus;
+  defaultAgentId?: string;
+  workspaceRoot?: string;
+  brief?: string;
+  instructions?: string;
+  createdAt: number;
+  updatedAt: number;
+  lastActiveAt?: number;
+}
+
+export interface ProjectWithDetails extends Project {
+  sessionCount: number;
+  goalCount: number;
+  activeGoalCount: number;
+  recentSessions: Array<{
+    key: string;
+    name?: string;
+    updatedAt: string;
+    agentId: string;
+  }>;
+  recentWorkflowRuns: Array<{
+    runId: string;
+    definitionId: string;
+    status: string;
+    createdAt: number;
+  }>;
+}
+
+export interface ProjectListQuery {
+  status?: ProjectStatus | ProjectStatus[];
+  search?: string;
+  sortBy?: 'updatedAt' | 'createdAt' | 'name';
+  sortOrder?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
+
+export interface CreateProjectInput {
+  name: string;
+  slug?: string;
+  description?: string;
+  defaultAgentId?: string;
+  workspaceRoot?: string;
+  brief?: string;
+  instructions?: string;
+}
+
+export interface UpdateProjectInput {
+  name?: string;
+  description?: string | null;
+  defaultAgentId?: string | null;
+  status?: ProjectStatus;
+  workspaceRoot?: string | null;
+  brief?: string | null;
+  instructions?: string | null;
+}
+
+export type ProjectListResult = PaginatedResult<Project>;
