@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   closeXopcDatabase,
@@ -126,6 +126,62 @@ describe('AutomationService', () => {
       concurrency: 3,
       maxSubagents: 5,
     });
+  });
+
+  it('uses the project workspace for project-bound automation actions', async () => {
+    const applyAutomationWorkingDirectory = vi.fn(async () => undefined);
+    const workflowCalls: unknown[] = [];
+    service.setDeps({
+      getProjectWorkspaceRoot: (projectId) => (projectId === 'project-a' ? '/workspace/project-a' : undefined),
+      agentService: {
+        sessionConfig: {
+          applyAutomationWorkingDirectory,
+        },
+        turnDispatcher: {
+          processDirect: async (message) => `done: ${message}`,
+        },
+      },
+      workflowRunService: {
+        startWorkflowRun: async (params) => {
+          workflowCalls.push(params);
+          return { ok: true, runId: 'workflow-run-1', sessionKey: 'agent:main:webchat:workflow-run-1' };
+        },
+      },
+    });
+
+    const agentAutomation = await service.create({
+      name: 'Project agent',
+      projectId: 'project-a',
+      trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'check workspace' },
+    });
+    const agentRun = await service.runNow(agentAutomation.id);
+    await waitFor(
+      () => service.listRuns({ automationId: agentAutomation.id, limit: 5 }),
+      (items) => items.some((item) => item.id === agentRun.id && item.status === 'succeeded'),
+    );
+    expect(applyAutomationWorkingDirectory).toHaveBeenCalledWith(expect.any(String), '/workspace/project-a');
+
+    const workflowAutomation = await service.create({
+      name: 'Project workflow',
+      projectId: 'project-a',
+      safety: { mode: 'auto_apply' },
+      trigger: { kind: 'manual' },
+      action: { kind: 'workflow', workflowId: 'review' },
+    });
+    const workflowRun = await service.runNow(workflowAutomation.id);
+    await waitFor(
+      () => service.listRuns({ automationId: workflowAutomation.id, limit: 5 }),
+      (items) => items.some((item) => item.id === workflowRun.id && item.status === 'succeeded'),
+    );
+    expect(workflowCalls[0]).toMatchObject({ projectId: 'project-a' });
+
+    const projectAutomations = await service.list({ projectId: 'project-a' });
+    expect(projectAutomations.map((automation) => automation.id).sort()).toEqual([
+      agentAutomation.id,
+      workflowAutomation.id,
+    ].sort());
+    expect(await service.listRuns({ projectId: 'project-a', limit: 10 })).toHaveLength(2);
   });
 
   it('injects suggest-only guardrails into agent automations', async () => {

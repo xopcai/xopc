@@ -20,9 +20,11 @@ import type { Config } from '../../config/schema.js';
 import {
   effectiveWorkspacePathForSession,
   normalizeWorkingDirectoryInput,
+  projectWorkspacePath,
   resolveEffectiveThinkingLevel,
   type SessionConfigStore,
 } from '../../session/index.js';
+import { getProjectForSession } from '../../projects/workspace.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
 import { createLogger } from '../../utils/logger.js';
@@ -54,7 +56,11 @@ export class SessionHydrator {
       return;
     }
     const loaded = await this.opts.sessionConfigStore.get(sessionKey);
-    if (loaded?.workingDirectoryOverride?.trim()) {
+    const project = getProjectForSession(sessionKey);
+    const projectWorkspace = projectWorkspacePath(project);
+    if (projectWorkspace) {
+      this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, projectWorkspace);
+    } else if (loaded?.workingDirectoryOverride?.trim()) {
       const wdStored = normalizeWorkingDirectoryInput(loaded.workingDirectoryOverride);
       if (wdStored.ok) {
         this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, wdStored.path);
@@ -65,7 +71,7 @@ export class SessionHydrator {
     } else {
       this.opts.agentManager.setSessionWorkspaceOverride(sessionKey, null);
     }
-    const effective = effectiveWorkspacePathForSession(cfg, sessionKey, loaded);
+    const effective = effectiveWorkspacePathForSession(cfg, sessionKey, loaded, project);
     await mkdir(effective, { recursive: true });
   }
 

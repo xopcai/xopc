@@ -120,6 +120,7 @@ export const AutomationSchema = z.object({
   id: nonEmptyString.max(100),
   name: nonEmptyString.max(200),
   description: z.string().max(2000).optional(),
+  projectId: optionalTrimmedString(100),
   enabled: z.boolean(),
   trigger: AutomationTriggerSchema,
   action: AutomationActionSchema,

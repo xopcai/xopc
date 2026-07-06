@@ -11,6 +11,7 @@ import {
   type GoalRun,
   type GoalStatus,
 } from '../../../goals/index.js';
+import { resolveProjectAgentId } from '../../../projects/index.js';
 import { buildSessionKey, sanitizeSegment } from '../../../routing/session-key.js';
 import { getDefaultAgentId } from '../../../routing/resolve-route.js';
 import type { WorkflowRunSummary } from '../../../workflows/domain/index.js';
@@ -341,7 +342,8 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     const limit = parseLimit(c.req.query('limit'));
     const offsetRaw = c.req.query('offset')?.trim();
     const offset = offsetRaw ? Math.max(0, Number.parseInt(offsetRaw, 10) || 0) : 0;
-    return c.json({ ok: true, goals: goals.list({ status, agentId, sessionKey, limit, offset }) });
+    const projectId = c.req.query('projectId')?.trim() || undefined;
+    return c.json({ ok: true, goals: goals.list({ status, agentId, sessionKey, projectId, limit, offset }) });
   });
 
   authenticated.get('/api/goals/queue', async (c) => {
@@ -360,12 +362,18 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     const preparedContextAttachments = contextMessage.attachments?.length
       ? await deps.service.agentService.prepareInboundAttachments(sessionKey ?? `goal:${Date.now()}`, contextMessage.attachments)
       : undefined;
-    const agentId =
-      typeof body.agentId === 'string' && body.agentId.trim()
-        ? body.agentId.trim()
-        : sessionKey
-          ? undefined
-          : getDefaultAgentId(cfg());
+    const projectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
+    if (projectId && !deps.service.projects.get(projectId)) {
+      return c.json({ ok: false, error: 'Project not found' }, 404);
+    }
+    const agentId = sessionKey
+      ? (typeof body.agentId === 'string' && body.agentId.trim() ? body.agentId.trim() : undefined)
+      : resolveProjectAgentId({
+        config: cfg(),
+        projects: deps.service.projects,
+        explicitAgentId: typeof body.agentId === 'string' ? body.agentId : undefined,
+        projectId,
+      });
     const maxTurns =
       typeof body.maxTurns === 'number' && Number.isFinite(body.maxTurns)
         ? Math.max(1, Math.min(500, Math.floor(body.maxTurns)))
@@ -383,6 +391,7 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
       source: body.source === 'cli' || body.source === 'cron' || body.source === 'workflow' || body.source === 'channel' || body.source === 'api'
         ? body.source
         : 'chat',
+      projectId,
       config: cfg(),
     });
 
@@ -505,6 +514,13 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     if ('judgeModelRef' in body) patch.judgeModelRef = typeof body.judgeModelRef === 'string' ? body.judgeModelRef : undefined;
     if ('nextAction' in body) patch.nextAction = typeof body.nextAction === 'string' ? body.nextAction : undefined;
     if ('blockedReason' in body) patch.blockedReason = typeof body.blockedReason === 'string' ? body.blockedReason : undefined;
+    if ('projectId' in body) {
+      const nextProjectId = typeof body.projectId === 'string' && body.projectId.trim() ? body.projectId.trim() : undefined;
+      if (nextProjectId && !deps.service.projects.get(nextProjectId)) {
+        return c.json({ ok: false, error: 'Project not found' }, 404);
+      }
+      patch.projectId = nextProjectId;
+    }
     const locale = normalizeGoalUiLocale(body.uiLocale);
     if (locale) patch.uiLocale = locale;
     if (Object.keys(patch).length > 0) {
@@ -563,7 +579,20 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
           },
         },
       });
+      if (goal.projectId) {
+        try {
+          deps.service.projects.attachSession(sessionKey, goal.projectId);
+        } catch {
+          return c.json({ ok: false, error: 'Session not found' }, 404);
+        }
+      }
       goals.attachSession(goalId, sessionKey);
+    } else if (goal.projectId) {
+      try {
+        deps.service.projects.attachSession(sessionKey, goal.projectId);
+      } catch {
+        return c.json({ ok: false, error: 'Session not found' }, 404);
+      }
     }
 
     const queued = deps.service.enqueueGoalRun(goalId, {
@@ -687,8 +716,16 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : '';
     if (!sessionKey) return c.json({ ok: false, error: 'Missing sessionKey' }, 400);
+    const currentGoal = goals.get(goalId);
+    if (!currentGoal) return c.json({ ok: false, error: 'Goal not found' }, 404);
+    if (currentGoal.projectId) {
+      try {
+        deps.service.projects.attachSession(sessionKey, currentGoal.projectId);
+      } catch {
+        return c.json({ ok: false, error: 'Session not found' }, 404);
+      }
+    }
     const goal = goals.attachSession(goalId, sessionKey);
-    if (!goal) return c.json({ ok: false, error: 'Goal not found' }, 404);
     return c.json({ ok: true, goal });
   });
 

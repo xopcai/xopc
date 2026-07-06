@@ -26,6 +26,7 @@ export function useChatSessionWindowEvents(opts: {
       model: string;
       thinkingLevel?: string | null;
       reasoningLevel?: string | null;
+      workingDirectoryLocked?: boolean;
     },
   ) => void;
 }): void {

@@ -15,17 +15,29 @@ function parseLimit(raw: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function parseProjectId(raw: string | undefined): string | undefined {
+  const trimmed = raw?.trim();
+  return trimmed || undefined;
+}
+
 export function registerAutomationRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
 
   authenticated.get('/api/automations', async (c) => {
-    const automations = await service.automationServiceInstance.list();
+    const projectId = parseProjectId(c.req.query('projectId'));
+    if (projectId && !service.projects.get(projectId)) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
+    const automations = await service.automationServiceInstance.list({ projectId });
     return c.json({ automations });
   });
 
   authenticated.post('/api/automations', async (c) => {
     try {
-      const body = await c.req.json();
+      const body = await c.req.json() as CreateAutomationInput;
+      if (body.projectId && !service.projects.get(body.projectId)) {
+        return c.json({ error: 'Project not found' }, 404);
+      }
       const automation = await service.automationServiceInstance.create(body);
       return c.json({ automation }, 201);
     } catch (err) {
@@ -76,8 +88,13 @@ export function registerAutomationRoutes(authenticated: Hono, deps: Authenticate
 
   authenticated.get('/api/automation-runs', async (c) => {
     const automationId = c.req.query('automationId')?.trim();
+    const projectId = parseProjectId(c.req.query('projectId'));
+    if (projectId && !service.projects.get(projectId)) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
     const runs = await service.automationServiceInstance.listRuns({
       automationId: automationId || undefined,
+      projectId: automationId ? undefined : projectId,
       limit: parseLimit(c.req.query('limit'), 50),
     });
     return c.json({ runs });
@@ -173,7 +190,11 @@ export function registerAutomationRoutes(authenticated: Hono, deps: Authenticate
 
   authenticated.patch('/api/automations/:id', async (c) => {
     try {
-      const automation = await service.automationServiceInstance.update(c.req.param('id'), await c.req.json());
+      const patch = await c.req.json() as Partial<CreateAutomationInput> & { enabled?: boolean };
+      if (patch.projectId && !service.projects.get(patch.projectId)) {
+        return c.json({ error: 'Project not found' }, 404);
+      }
+      const automation = await service.automationServiceInstance.update(c.req.param('id'), patch);
       if (!automation) return c.json({ error: 'Automation not found' }, 404);
       return c.json({ automation });
     } catch (err) {

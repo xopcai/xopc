@@ -42,6 +42,7 @@ export interface WorkflowRunMetadata {
   sessionKey: string;
   triggerSource: WorkflowRunSource['kind'];
   agentId?: string;
+  projectId?: string;
   retryOfRunId?: string;
   replay?: WorkflowRunReplayMetadata;
   definition: WorkflowRunDefinitionSnapshot;

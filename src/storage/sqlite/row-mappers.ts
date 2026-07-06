@@ -31,6 +31,7 @@ export type SessionRow = {
   workflow_definition_id: string | null;
   workflow_agent_id: string | null;
   workflow_agent_label: string | null;
+  project_id: string | null;
   routing_json: string | null;
   custom_data_json: string | null;
   abort_cutoff_timestamp: number | null;
@@ -113,6 +114,7 @@ export function sessionRowToMetadata(sessionKey: string, row: SessionRow): Sessi
     workflowDefinitionId: row.workflow_definition_id ?? undefined,
     workflowAgentId: row.workflow_agent_id ?? undefined,
     workflowAgentLabel: row.workflow_agent_label ?? undefined,
+    projectId: row.project_id ?? undefined,
     ...(routing ? { routing } : {}),
     ...(customData ? { customData } : {}),
     abortCutoffTimestamp: row.abort_cutoff_timestamp ?? undefined,
@@ -158,6 +160,7 @@ export function metadataToSessionInsert(
   workflowDefinitionId: string | null;
   workflowAgentId: string | null;
   workflowAgentLabel: string | null;
+  projectId: string | null;
   routingJson: string | null;
   customDataJson: string | null;
   abortCutoffTimestamp: number | null;
@@ -193,6 +196,7 @@ export function metadataToSessionInsert(
     workflowDefinitionId: metadata.workflowDefinitionId ?? null,
     workflowAgentId: metadata.workflowAgentId ?? null,
     workflowAgentLabel: metadata.workflowAgentLabel ?? null,
+    projectId: metadata.projectId ?? null,
     routingJson: metadata.routing ? JSON.stringify(metadata.routing) : null,
     customDataJson: metadata.customData ? JSON.stringify(metadata.customData) : null,
     abortCutoffTimestamp: metadata.abortCutoffTimestamp ?? null,

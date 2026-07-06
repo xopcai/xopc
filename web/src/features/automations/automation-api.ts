@@ -60,6 +60,7 @@ export interface Automation {
   id: string;
   name: string;
   description?: string;
+  projectId?: string;
   enabled: boolean;
   trigger: AutomationTrigger;
   action: AutomationAction;
@@ -145,6 +146,7 @@ export interface AutomationSimulation {
 export interface AutomationInput {
   name: string;
   description?: string;
+  projectId?: string;
   enabled?: boolean;
   trigger: AutomationTrigger;
   action: AutomationAction;
@@ -174,7 +176,12 @@ export interface AutomationRepairDraft {
 }
 
 export const automationApi = {
-  list: () => fetchJson<{ automations: Automation[] }>(apiUrl('/api/automations')),
+  list: (input?: { projectId?: string }) => {
+    const params = new URLSearchParams();
+    if (input?.projectId) params.set('projectId', input.projectId);
+    const suffix = params.toString();
+    return fetchJson<{ automations: Automation[] }>(apiUrl(`/api/automations${suffix ? `?${suffix}` : ''}`));
+  },
   metrics: () => fetchJson<AutomationMetrics>(apiUrl('/api/automations/metrics')),
   draft: (input: { prompt: string; agentId?: string; language?: 'en' | 'zh' }) =>
     fetchJson<{ draft: AutomationDraft }>(apiUrl('/api/automations/draft'), {
@@ -212,9 +219,10 @@ export const automationApi = {
     fetchJson<{ automation: Automation }>(apiUrl(`/api/automations/${encodeURIComponent(id)}/resume`), {
       method: 'POST',
     }),
-  runs: (limit = 50, automationId?: string) => {
+  runs: (limit = 50, automationId?: string, options?: { projectId?: string }) => {
     const params = new URLSearchParams({ limit: String(limit) });
     if (automationId) params.set('automationId', automationId);
+    if (!automationId && options?.projectId) params.set('projectId', options.projectId);
     return fetchJson<{ runs: AutomationRun[] }>(apiUrl(`/api/automation-runs?${params.toString()}`));
   },
   productEventRuns: (input: {

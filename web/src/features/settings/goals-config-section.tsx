@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { PageTabs, type PageTabItem } from '@/components/ui/page-tabs';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { useChannelCatalog } from '@/features/settings/channels/use-channel-catalog';
@@ -16,8 +17,6 @@ import {
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import {
   SettingsTabPanel,
-  SettingsTabs,
-  type SettingsTabItem,
 } from '@/features/settings/settings-page-layout';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { fetchJson } from '@/lib/fetch';
@@ -276,7 +275,7 @@ function GoalNotificationTargetRow({
   );
 }
 
-function GoalsSettingsTabs({
+function GoalsSettingsTabNav({
   t,
   activeTab,
   onChange,
@@ -285,13 +284,13 @@ function GoalsSettingsTabs({
   activeTab: GoalsSettingsTabId;
   onChange: (tab: GoalsSettingsTabId) => void;
 }) {
-  const items: SettingsTabItem<GoalsSettingsTabId>[] = GOALS_SETTINGS_TABS.map((tab) => ({
+  const items: PageTabItem<GoalsSettingsTabId>[] = GOALS_SETTINGS_TABS.map((tab) => ({
     id: tab,
     label: goalsSettingsTabLabel(t, tab),
     icon: GOALS_SETTINGS_TAB_ICONS[tab],
   }));
   return (
-    <SettingsTabs
+    <PageTabs
       items={items}
       activeTab={activeTab}
       onChange={onChange}
@@ -477,7 +476,7 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
   return (
     <>
       {error ? <p className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-      <GoalsSettingsTabs t={t} activeTab={activeTab} onChange={setActiveTab} />
+      <GoalsSettingsTabNav t={t} activeTab={activeTab} onChange={setActiveTab} />
 
       <GoalsTabPanel t={t} id="judge" activeTab={activeTab}>
         <div className="grid gap-4 sm:grid-cols-2">

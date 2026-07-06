@@ -1,26 +1,17 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { Archive, Bookmark, CheckSquare, Lightbulb, Mic, MoreVertical, Image, Pin, PinOff, Trash2 } from 'lucide-react';
+import { Archive, MoreVertical, Pin, PinOff, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { cn } from '@/lib/cn';
 
 import { NoteCoverThumbnail } from './note-cover-thumbnail';
 import { formatRelativeTime, type NoteTimeLabels } from './note-time';
-import type { NoteIndexEntry, NoteKind } from './notes-api';
+import type { NoteIndexEntry } from './notes-api';
 import { VoiceMiniPlayer } from './voice-mini-player';
-
-const KIND_ICON: Record<NoteKind, typeof Lightbulb> = {
-  thought: Lightbulb,
-  todo: CheckSquare,
-  voice: Mic,
-  media: Image,
-  bookmark: Bookmark,
-  mixed: Lightbulb,
-  task: CheckSquare,
-};
 
 export type NoteCardProps = {
   note: NoteIndexEntry;
+  selected?: boolean;
   onPress: (id: string) => void;
   onPin: (id: string, pinned: boolean) => void;
   onArchive: (id: string) => void;
@@ -42,8 +33,7 @@ function noteCardPreviewText(note: NoteIndexEntry, labels: NoteCardProps['labels
   return labels.noText;
 }
 
-export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels, timeLabels }: NoteCardProps) {
-  const Icon = KIND_ICON[note.kind] || Lightbulb;
+export function NoteCard({ note, selected = false, onPress, onPin, onArchive, onDelete, labels, timeLabels }: NoteCardProps) {
   const previewText = noteCardPreviewText(note, labels);
   const isFallbackText = !note.snippet?.trim();
   const [nowMs] = useState(() => Date.now());
@@ -56,10 +46,12 @@ export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels, ti
       onClick={() => onPress(note.id)}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onPress(note.id); }}
       className={cn(
-        'group relative flex cursor-pointer flex-col gap-2 rounded-xl border border-edge-subtle bg-surface-base p-4',
-        'transition-colors duration-150 ease-out hover:bg-surface-hover',
+        'group relative flex cursor-pointer flex-col gap-2 rounded-lg px-3 py-2.5',
+        'border border-transparent transition-colors duration-150 ease-out hover:bg-surface-hover',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+        selected && 'border-edge bg-surface-active hover:bg-surface-active',
       )}
+      aria-current={selected ? 'true' : undefined}
     >
       <div className="flex items-start gap-3">
         {note.coverAttachmentId ? (
@@ -69,18 +61,16 @@ export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels, ti
             noteId={note.id}
             attachmentId={note.voiceAttachmentId}
             durationSec={note.voiceDurationSec}
-            className="mt-0.5 w-32 shrink-0"
+            className="mt-0.5 w-28 shrink-0"
           />
-        ) : (
-          <Icon className="mt-0.5 h-4 w-4 shrink-0 text-fg-muted" />
-        )}
+        ) : null}
         <div className="min-w-0 flex-1">
           {note.title && (
             <h3 className="mb-0.5 truncate text-sm font-semibold text-fg">{note.title}</h3>
           )}
           <p
             className={cn(
-              'text-sm line-clamp-3',
+              'truncate text-sm leading-5',
               note.title ? 'text-fg-muted' : isFallbackText ? 'italic text-fg-muted' : 'text-fg',
             )}
           >
@@ -92,7 +82,7 @@ export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels, ti
             <button
               type="button"
               onClick={(e) => e.stopPropagation()}
-              className="shrink-0 rounded-md p-1 text-fg-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface-hover focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="shrink-0 rounded-md p-1 text-fg-muted opacity-0 transition-opacity group-hover:opacity-100 hover:bg-surface-panel focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               aria-label="Actions"
             >
               <MoreVertical className="h-4 w-4" />
@@ -132,16 +122,16 @@ export function NoteCard({ note, onPress, onPin, onArchive, onDelete, labels, ti
         </DropdownMenu.Root>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         {note.pinned && (
           <span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-1.5 py-0.5 text-xs font-medium text-accent">
             <Pin className="h-3 w-3" />
           </span>
         )}
-        {note.tags?.map((tag) => (
+        {note.tags?.slice(0, 2).map((tag) => (
           <span
             key={tag}
-            className="rounded-md bg-surface-hover px-1.5 py-0.5 text-xs text-fg-muted"
+            className="max-w-24 truncate rounded-md bg-surface-hover px-1.5 py-0.5 text-xs text-fg-muted"
           >
             {tag}
           </span>

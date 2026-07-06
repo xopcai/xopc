@@ -17,13 +17,12 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { PageTabs, type PageTabItem } from '@/components/ui/page-tabs';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import {
   SettingsPageFrame,
   SettingsPageHeader,
   SettingsTabPanel,
-  SettingsTabs,
-  type SettingsTabItem,
 } from '@/features/settings/settings-page-layout';
 import {
   cleanExpiredShares,
@@ -124,7 +123,7 @@ export function SharesSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
         <p className="text-sm text-fg-muted">{t.needToken}</p>
       </SettingsPageFrame>
     );
@@ -134,7 +133,7 @@ export function SharesSettingsPanel() {
     shares: t.tabShares,
     policy: t.tabPolicy,
   };
-  const tabItems: SettingsTabItem<SharesTabId>[] = SHARES_TABS.map((tab) => ({
+  const tabItems: PageTabItem<SharesTabId>[] = SHARES_TABS.map((tab) => ({
     id: tab,
     label: tabLabels[tab],
   }));
@@ -143,7 +142,7 @@ export function SharesSettingsPanel() {
     <SettingsPageFrame>
       <SettingsPageHeader title={t.title} subtitle={t.subtitle} />
 
-      <SettingsTabs
+      <PageTabs
         items={tabItems}
         activeTab={activeTab}
         onChange={setActiveTab}

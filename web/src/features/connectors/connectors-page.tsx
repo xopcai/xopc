@@ -4,6 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { PageTabs } from '@/components/ui/page-tabs';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { ConnectorCard, ConnectorCardSkeleton, connectorIsInstalled, CONNECTOR_SKELETON_KEYS, InstalledConnectorRowSkeleton } from '@/features/connectors/components/connector-card';
 import { ConnectorsPageHeaderEnd } from '@/features/connectors/components/connectors-page-header-end';
@@ -299,39 +300,33 @@ export function ConnectorsPage() {
     [customServers, searchQuery],
   );
   const visibleInstalledCount = visibleInstances.length + visibleCustomServers.length;
+  const tabItems = [
+    { id: 'marketplace' as const, label: cs.tabMarketplace },
+    { id: 'builtin' as const, label: cs.tabBuiltin, count: builtinCatalog.length },
+    { id: 'user' as const, label: cs.tabUser, count: installedCount },
+    { id: 'config' as const, label: cs.tabConfig },
+  ];
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-8">
-      {!hasToken ? (
-        <p className="rounded-xl border border-edge bg-surface-panel px-4 py-3 text-sm text-fg-muted">
-          {cs.tokenHint}
-        </p>
-      ) : null}
+      <div className="flex w-full flex-col gap-6 px-3 py-6 sm:px-5 xl:px-6">
+        {!hasToken ? (
+          <p className="rounded-xl border border-edge bg-surface-panel px-4 py-3 text-sm text-fg-muted">
+            {cs.tokenHint}
+          </p>
+        ) : null}
 
-      <section className="flex flex-col gap-4">
-        <div className="flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">
-          <div className="flex flex-wrap gap-x-1 gap-y-1" role="tablist" aria-label={cs.navAria}>
-            {(['marketplace', 'builtin', 'user', 'config'] as const).map((item) => (
-              <button
-                key={item}
-                type="button"
-                role="tab"
-                aria-selected={tab === item}
-                className={cn(
-                  'relative max-w-full rounded-md px-3 py-2 text-left text-sm font-medium transition-colors sm:text-center',
-                  tab === item
-                    ? 'text-fg after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent'
-                    : 'text-fg-muted hover:text-fg',
-                )}
-                onClick={() => setTab(item)}
-              >
-                {item === 'marketplace' ? cs.tabMarketplace : item === 'builtin' ? cs.tabBuiltin : item === 'user' ? cs.tabUser : cs.tabConfig}
-                {item === 'builtin' ? <span className="ml-1 tabular-nums text-fg-muted">({builtinCatalog.length})</span> : null}
-                {item === 'user' ? <span className="ml-1 tabular-nums text-fg-muted">({installedCount})</span> : null}
-              </button>
-            ))}
-          </div>
+        <section className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">
+            <PageTabs
+              items={tabItems}
+              activeTab={tab}
+              onChange={setTab}
+              ariaLabel={cs.navAria}
+            tabIdPrefix="connectors-tab"
+            panelIdPrefix="connectors-panel"
+            className="flex-wrap"
+          />
           <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-2 sm:justify-end">
             {tab === 'marketplace' ? (
               <div className="inline-flex h-9 max-w-full shrink-0 overflow-x-auto rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface" role="group" aria-label={cs.registrySourceAria}>

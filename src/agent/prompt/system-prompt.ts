@@ -70,6 +70,7 @@ export interface SystemPromptOptions {
   externalMemoryInstructions?: string;
   ttsSystemHint?: string;
   extraSystemPrompt?: string;
+  activeProjectContext?: string;
   silentReplyPromptMode?: SilentReplyPromptMode;
   promptContribution?: ProviderSystemPromptContribution;
   includeProblemSolving?: boolean;
@@ -101,6 +102,7 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
     externalMemoryInstructions,
     ttsSystemHint,
     extraSystemPrompt,
+    activeProjectContext,
     silentReplyPromptMode = 'generic',
     promptContribution,
     includeProblemSolving = true,
@@ -233,6 +235,10 @@ export function buildSystemPrompt(workspaceDir: string, options: SystemPromptOpt
   if (extraSystemPrompt?.trim()) {
     const contextHeader = isMinimal ? '## Subagent Context' : '## Group Chat Context';
     dynamicSections.push(`${contextHeader}\n\n${extraSystemPrompt.trim()}`);
+  }
+
+  if (activeProjectContext?.trim()) {
+    dynamicSections.push(activeProjectContext.trim());
   }
 
   const providerDynamicSuffix = buildOverridablePromptSection({

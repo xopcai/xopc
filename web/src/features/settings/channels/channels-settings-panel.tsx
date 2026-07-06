@@ -623,7 +623,7 @@ export function ChannelsSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
         <SettingsPageHeader title={m.settingsSections.channels} />
         <p className="text-sm text-fg-muted">{ch.tokenRequired}</p>
       </SettingsPageFrame>

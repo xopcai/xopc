@@ -105,8 +105,8 @@ export class AutomationService {
     return automation;
   }
 
-  async list(): Promise<Automation[]> {
-    return listAutomations();
+  async list(options?: { projectId?: string }): Promise<Automation[]> {
+    return listAutomations(options);
   }
 
   async get(id: string): Promise<Automation | null> {
@@ -200,7 +200,7 @@ export class AutomationService {
     return started;
   }
 
-  async listRuns(options?: { automationId?: string; limit?: number }): Promise<AutomationRun[]> {
+  async listRuns(options?: { automationId?: string; projectId?: string; limit?: number }): Promise<AutomationRun[]> {
     return listAutomationRuns(options);
   }
 

@@ -222,6 +222,7 @@ describe('sqlite repositories', () => {
       kind: 'task_lesson',
       agentId: 'main',
       workspaceId: CWD,
+      projectId: 'project-memory',
       content: 'Use the zeta migration checklist before memory schema changes.',
       status: 'candidate',
       sensitivity: 'normal',
@@ -230,7 +231,9 @@ describe('sqlite repositories', () => {
       tags: ['migration'],
     });
 
-    expect(listMemoryRecords({ status: 'candidate' }).map((record) => record.id)).toContain(candidate.id);
+    expect(candidate.scope.projectId).toBe('project-memory');
+    expect(listMemoryRecords({ status: 'candidate', projectId: 'project-memory' }).map((record) => record.id)).toContain(candidate.id);
+    expect(listMemoryRecords({ status: 'candidate', projectId: 'other-project' }).map((record) => record.id)).not.toContain(candidate.id);
     expect(searchMemoryRecords({ query: 'zeta migration checklist', agentId: 'main', workspaceId: CWD })).toHaveLength(0);
 
     upsertMemoryRecord({
@@ -239,10 +242,12 @@ describe('sqlite repositories', () => {
       agentId: candidate.scope.agentId,
       workspaceId: candidate.scope.workspaceId,
       sessionKey: candidate.scope.sessionKey,
+      projectId: candidate.scope.projectId,
       status: 'active',
     });
 
-    const results = searchMemoryRecords({ query: 'zeta migration checklist', agentId: 'main', workspaceId: CWD });
+    expect(searchMemoryRecords({ query: 'zeta migration checklist', agentId: 'main', projectId: 'other-project' })).toHaveLength(0);
+    const results = searchMemoryRecords({ query: 'zeta migration checklist', agentId: 'main', workspaceId: CWD, projectId: 'project-memory' });
     expect(results[0]?.record.id).toBe(candidate.id);
     expect(results[0]?.record.status).toBe('active');
   });

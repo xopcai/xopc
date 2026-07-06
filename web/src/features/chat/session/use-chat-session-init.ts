@@ -36,6 +36,7 @@ export function useChatSessionInit(opts: {
       model: string;
       thinkingLevel?: string | null;
       reasoningLevel?: string | null;
+      workingDirectoryLocked?: boolean;
     },
   ) => void;
   patchInitUi: (patch: { loading?: boolean; error?: string | null }) => void;

@@ -187,7 +187,7 @@ export function SharePreviewPage() {
         ) : null}
       </header>
 
-      <main className="mx-auto flex min-h-0 w-full max-w-app-main flex-1 flex-col px-4 py-6">
+      <main className="flex min-h-0 w-full flex-1 flex-col px-3 py-6 sm:px-5 xl:px-6">
         {loading ? (
           <div className="flex min-h-[50vh] items-center justify-center text-sm text-fg-muted">
             <Loader2 className="mr-2 size-4 animate-spin" />

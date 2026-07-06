@@ -17,6 +17,7 @@ import type {
 import { buildWorkflowDefinition, validateWorkflowDefinitionInput } from '../../../workflows/domain/index.js';
 import { WorkflowDraftService, type CreateWorkflowDraftRequest } from '../../../workflows/draft/index.js';
 import { resolveWorkflowRunArtifactsDir } from '../../../workflows/store/paths.js';
+import { resolveProjectAgentId } from '../../../projects/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 interface StartWorkflowRunRequestBody {
@@ -25,6 +26,7 @@ interface StartWorkflowRunRequestBody {
   inputEnvelope?: WorkflowRunInputEnvelope;
   goal?: string;
   goalId?: string;
+  projectId?: string;
   agentId?: string;
   parentSessionKey?: string;
   source?: WorkflowRunSource;
@@ -36,6 +38,10 @@ interface StartWorkflowRunRequestBody {
 
 interface ReplayWorkflowRunRequestBody {
   scope?: 'failed_agents' | 'failed_phases';
+}
+
+interface RetryWorkflowRunRequestBody {
+  projectId?: string;
 }
 
 interface WorkflowRunComparison {
@@ -186,13 +192,26 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ error: 'definitionId is required' }, 400);
     }
 
-    const agentId = getAgentId(body.agentId ?? c.req.query('agentId'), service.currentConfig);
     const parentSessionKey = body.parentSessionKey?.trim() || undefined;
     const goalId = body.goalId?.trim();
+    const projectId = body.projectId?.trim();
+    if (projectId && !service.projects.get(projectId)) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
+    const explicitAgentId = body.agentId ?? c.req.query('agentId');
+    const agentId = projectId
+      ? resolveProjectAgentId({
+        config: service.currentConfig,
+        projects: service.projects,
+        explicitAgentId,
+        projectId,
+      })
+      : getAgentId(explicitAgentId, service.currentConfig);
     const result = await workflowRunService.startWorkflowRun({
       agentId,
       definitionId,
       goalId,
+      projectId,
       input: body.inputEnvelope ? undefined : body.input,
       inputEnvelope: body.inputEnvelope,
       goal: body.goal,
@@ -212,14 +231,26 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
   });
 
   authenticated.get('/api/workflows/runs', async (c) => {
-    const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
     const rawLimit = c.req.query('limit');
     const limit = rawLimit ? Number.parseInt(rawLimit, 10) : 50;
     const goalId = c.req.query('goalId')?.trim();
+    const projectId = c.req.query('projectId')?.trim();
+    if (projectId && !service.projects.get(projectId)) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
+    const explicitAgentId = c.req.query('agentId');
+    const agentId = projectId
+      ? resolveProjectAgentId({
+        config: service.currentConfig,
+        projects: service.projects,
+        explicitAgentId,
+        projectId,
+      })
+      : getAgentId(explicitAgentId, service.currentConfig);
     const runStore = workflowRunService.createRunStore(agentId);
     const runs = goalId
       ? await runStore.listRunSummariesForGoal(goalId, Number.isFinite(limit) ? limit : 50)
-      : await runStore.listRunSummaries(Number.isFinite(limit) ? limit : 50);
+      : await runStore.listRunSummaries(Number.isFinite(limit) ? limit : 50, { projectId });
     return c.json({ runs });
   });
 
@@ -353,9 +384,14 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
   });
 
   authenticated.post('/api/workflows/runs/:runId/retry', async (c) => {
+    const body = await readJsonBody<RetryWorkflowRunRequestBody>(c.req.raw);
     const agentId = getAgentId(c.req.query('agentId'), service.currentConfig);
     const runId = c.req.param('runId');
-    const result = await workflowRunService.retryWorkflowRun({ agentId, runId });
+    const projectId = body.projectId?.trim();
+    if (projectId && !service.projects.get(projectId)) {
+      return c.json({ error: 'Project not found' }, 404);
+    }
+    const result = await workflowRunService.retryWorkflowRun({ agentId, runId, projectId });
     if (result.ok === false) {
       return c.json({ error: result.message, code: result.code }, result.httpStatus);
     }

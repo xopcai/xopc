@@ -23,9 +23,9 @@ import { ProductAutomationFeedback } from '@/features/automations/product-automa
 import type { WorkflowAgentSnapshot, WorkflowSnapshot } from '@/features/chat/workflow/workflow.types';
 import { rollupPhases, type PhaseRollup } from '@/features/chat/workflow/workflow.utils';
 import { Button } from '@/components/ui/button';
+import { PageTabs } from '@/components/ui/page-tabs';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
-import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 
@@ -598,32 +598,7 @@ function WorkflowRunTabs({
 
   return (
     <div className="mt-5 flex overflow-x-auto border-b border-edge pb-2">
-      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          role="tab"
-          aria-selected={activeTab === tab.id}
-          onClick={() => onChange(tab.id)}
-          className={cn(
-            'inline-flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium',
-            interaction.focusRingPanel,
-            interaction.press,
-            activeTab === tab.id
-              ? 'bg-accent-soft text-accent-fg'
-              : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-          )}
-        >
-          {tab.label}
-          {tab.count ? (
-            <span className="rounded-full bg-surface-hover px-1.5 py-0.5 text-[10px] tabular-nums text-fg-subtle">
-              {tab.count}
-            </span>
-          ) : null}
-        </button>
-      ))}
-      </div>
+      <PageTabs items={tabs} activeTab={activeTab} onChange={onChange} ariaLabel={labels.taskActionsAria} />
     </div>
   );
 }

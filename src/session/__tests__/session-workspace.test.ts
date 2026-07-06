@@ -68,4 +68,16 @@ describe('effectiveWorkspacePathForSession', () => {
     });
     expect(p).toBe(tmp);
   });
+
+  it('uses project workspace before session override', () => {
+    const override = resolve('/tmp/session-override-test');
+    const projectRoot = resolve('/tmp/project-workspace-test');
+    const p = effectiveWorkspacePathForSession(
+      minimalCfg,
+      'agent:main:webchat:default:direct:x',
+      { workingDirectoryOverride: override },
+      { workspaceRoot: projectRoot },
+    );
+    expect(p).toBe(projectRoot);
+  });
 });

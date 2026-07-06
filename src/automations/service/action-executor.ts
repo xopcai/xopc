@@ -104,10 +104,12 @@ export class AutomationActionExecutor {
       peerKind: 'dm',
       peerId: `${automation.id}-${crypto.randomUUID().slice(0, 8)}`,
     });
+    const effectiveWorkingDirectory = action.workingDirectory
+      ?? (automation.projectId ? this.deps.getProjectWorkspaceRoot?.(automation.projectId) : undefined);
 
     await agentService.sessionConfig?.applyAutomationWorkingDirectory?.(
       sessionKey,
-      action.workingDirectory,
+      effectiveWorkingDirectory,
     );
     if (agentService.sessionConfig?.applyAutomationModelOverride) {
       const ok = await agentService.sessionConfig.applyAutomationModelOverride(sessionKey, action.model);
@@ -164,6 +166,7 @@ export class AutomationActionExecutor {
       input: action.input,
       inputEnvelope: action.inputEnvelope,
       goal: action.goal,
+      projectId: automation.projectId,
       concurrency: action.concurrency,
       maxSubagents: action.maxSubagents,
       source: { kind: 'automation', automationId: automation.id, runId: run.id },

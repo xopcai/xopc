@@ -58,7 +58,7 @@ export function ExtensionSettingsPage() {
   const title = panel?.title ?? `${extension.name} Settings`;
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+    <div className="flex w-full flex-col gap-3 px-3 py-8 sm:px-5 xl:px-6">
       <h1 className="text-lg font-semibold text-fg">{title}</h1>
       {isImageGeneration ? (
         <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-base px-4 py-3 text-sm">
@@ -103,7 +103,7 @@ export function ExtensionSettingsPage() {
 
 function SettingsPanelNotFound({ message }: { message: string }) {
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+    <div className="flex w-full flex-col gap-3 px-3 py-8 sm:px-5 xl:px-6">
       <p className="text-sm text-fg-muted">{message}</p>
     </div>
   );

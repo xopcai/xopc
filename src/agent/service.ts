@@ -78,6 +78,7 @@ import {
   extractProfileAgentId,
 } from '../config/agent-profile.js';
 import { resolveUserProfilePath } from '../config/paths.js';
+import { getProjectForSession } from '../projects/workspace.js';
 import {
   persistInboundAttachments,
   type InboundAttachmentInput,
@@ -895,7 +896,7 @@ export class AgentService {
     await this.sessionHydrator.workspace(sessionKey);
     const cfg = this.config.config!;
     const sc = await this.sessionConfigStore.get(sessionKey);
-    return effectiveWorkspacePathForSession(cfg, sessionKey, sc);
+    return effectiveWorkspacePathForSession(cfg, sessionKey, sc, getProjectForSession(sessionKey));
   }
 
    /**

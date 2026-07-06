@@ -30,6 +30,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'tunnel', description: 'Manage FRP remote access tunnel' },
   { name: 'gateway [options]', description: 'Start the xopc gateway server' },
   { name: 'session', description: 'Session management commands' },
+  { name: 'project', description: 'Manage long-running projects' },
   { name: 'doctor [options]', description: 'Check xopc installation health and diagnose common issues' },
   { name: 'update [options]', description: 'Check for and install xopc updates' },
   { name: 'logs', description: 'Manage and query logs' },

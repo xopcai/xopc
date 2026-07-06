@@ -28,6 +28,7 @@ import {
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
 import type { ModelManager } from '../models/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { getProjectWorkspacePathForSession } from '../../projects/workspace.js';
 
 const log = createLogger('SessionConfigService');
 
@@ -112,6 +113,12 @@ export class SessionConfigService {
       const cfg = this.opts.getConfig();
       if (!cfg) {
         return { ok: false, error: 'Config not loaded' };
+      }
+      if (getProjectWorkspacePathForSession(sessionKey)) {
+        return {
+          ok: false,
+          error: 'Project sessions use the project workspace and cannot change working directory',
+        };
       }
       const result = await this.patchWorkingDirectory(sessionKey, partial.workingDirectory);
       if (!result.ok) return result;

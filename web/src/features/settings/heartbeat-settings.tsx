@@ -6,6 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { PageTabs, type PageTabItem } from '@/components/ui/page-tabs';
 import { getSessionChatIds, type ChannelStatus, type SessionChatId } from '@/features/settings/channel-recipient-api';
 import { formatRecipientOptionLabel } from '@/features/settings/channel-recipient-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
@@ -24,8 +25,6 @@ import {
   SettingsPageFrame,
   SettingsPageHeader,
   SettingsTabPanel,
-  SettingsTabs,
-  type SettingsTabItem,
 } from '@/features/settings/settings-page-layout';
 import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
@@ -360,7 +359,7 @@ export function HeartbeatSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
         <SettingsPageHeader title={m.settingsSections.heartbeat} />
         <p className="text-sm text-fg-muted">{h.needToken}</p>
       </SettingsPageFrame>
@@ -369,7 +368,7 @@ export function HeartbeatSettingsPanel() {
 
   if (loading) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
         <div className="flex items-center gap-2 text-sm text-fg-muted">
           <Loader2 className="size-4 animate-spin" />
           {h.loading}
@@ -380,7 +379,7 @@ export function HeartbeatSettingsPanel() {
 
   if (!form) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-4 py-8">
+      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
         <p className="text-sm text-fg-muted">{error ?? fetchError ?? h.loadError}</p>
         <Button
           type="button"
@@ -438,7 +437,7 @@ export function HeartbeatSettingsPanel() {
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       {triggerError ? <p className="text-sm text-red-600 dark:text-red-400">{triggerError}</p> : null}
 
-      <HeartbeatSettingsTabs h={h} activeTab={activeTab} onChange={setActiveTab} />
+      <HeartbeatSettingsTabNav h={h} activeTab={activeTab} onChange={setActiveTab} />
 
       <HeartbeatTabPanel h={h} id="schedule" activeTab={activeTab}>
         <HeartbeatScheduleFields h={h} form={form} update={update} />
@@ -480,7 +479,7 @@ export function HeartbeatSettingsPanel() {
   );
 }
 
-function HeartbeatSettingsTabs({
+function HeartbeatSettingsTabNav({
   h,
   activeTab,
   onChange,
@@ -489,13 +488,13 @@ function HeartbeatSettingsTabs({
   activeTab: HeartbeatSettingsTabId;
   onChange: (tab: HeartbeatSettingsTabId) => void;
 }) {
-  const items: SettingsTabItem<HeartbeatSettingsTabId>[] = HEARTBEAT_SETTINGS_TABS.map((tab) => ({
+  const items: PageTabItem<HeartbeatSettingsTabId>[] = HEARTBEAT_SETTINGS_TABS.map((tab) => ({
     id: tab,
     label: heartbeatSettingsTabLabel(h, tab),
     icon: HEARTBEAT_SETTINGS_TAB_ICONS[tab],
   }));
   return (
-    <SettingsTabs
+    <PageTabs
       items={items}
       activeTab={activeTab}
       onChange={onChange}

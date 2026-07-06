@@ -9,6 +9,7 @@ export interface StartWorkflowRunServiceParams {
   definitionId: string;
   goalId?: string;
   parentSessionKey?: string;
+  projectId?: string;
   input?: unknown;
   inputEnvelope?: WorkflowRunInputEnvelope;
   goal?: string;
@@ -44,6 +45,7 @@ export type WorkflowRunServiceResult = StartWorkflowRunServiceResult | WorkflowR
 export interface RetryWorkflowRunServiceParams {
   agentId: string;
   runId: string;
+  projectId?: string;
 }
 
 export interface ReplayWorkflowRunServiceParams {

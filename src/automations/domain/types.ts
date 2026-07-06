@@ -72,6 +72,7 @@ export interface Automation {
   id: string;
   name: string;
   description?: string;
+  projectId?: string;
   enabled: boolean;
   trigger: AutomationTrigger;
   action: AutomationAction;
@@ -167,6 +168,7 @@ export interface AutomationDeps {
     getModelForSession?: (sessionKey: string) => string | undefined;
   };
   getDefaultAgentId?: () => string;
+  getProjectWorkspaceRoot?: (projectId: string) => string | undefined;
   workflowRunService?: {
     startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult>;
   };

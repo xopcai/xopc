@@ -84,6 +84,7 @@ export function useChatSession() {
   const thinkingLevel = sessionSlice?.thinkingLevel ?? DEFAULT_THINKING;
   const reasoningLevel = sessionSlice?.reasoningLevel ?? 'stream';
   const modelSupportsThinking = sessionSlice?.modelSupportsThinking ?? false;
+  const workingDirectoryLocked = sessionSlice?.workingDirectoryLocked ?? false;
 
   useEffect(() => {
     messagesLenRef.current = sessionSlice?.messages.length ?? 0;
@@ -244,7 +245,12 @@ export function useChatSession() {
   const applyAgentConfig = useCallback(
     (
       sessionKey: string,
-      cfg: { model: string; thinkingLevel?: string | null; reasoningLevel?: string | null },
+      cfg: {
+        model: string;
+        thinkingLevel?: string | null;
+        reasoningLevel?: string | null;
+        workingDirectoryLocked?: boolean;
+      },
     ) => {
       patchSessionAgentConfigView(sessionKey, cfg);
       void refreshModelThinkingSupport(cfg.model);
@@ -389,6 +395,7 @@ export function useChatSession() {
       onSessionThinkingLevelChange,
       reasoningLevel,
       modelSupportsThinking,
+      workingDirectoryLocked,
       hasMore,
       loadingMore,
       loadMoreMessages,

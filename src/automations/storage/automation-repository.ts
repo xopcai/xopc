@@ -6,6 +6,7 @@ type AutomationRow = {
   automation_id: string;
   name: string;
   description: string | null;
+  project_id: string | null;
   enabled: number;
   trigger_json: string;
   action_json: string;
@@ -31,6 +32,7 @@ function rowToAutomation(row: AutomationRow): Automation {
     id: row.automation_id,
     name: row.name,
     description: row.description ?? undefined,
+    projectId: row.project_id ?? undefined,
     enabled: row.enabled !== 0,
     trigger: parseJson(row.trigger_json),
     action: parseJson(row.action_json),
@@ -46,13 +48,14 @@ function rowToAutomation(row: AutomationRow): Automation {
 function upsertAutomation(db: ReturnType<typeof getSqliteDatabase>, automation: Automation): void {
   db.prepare(
     `INSERT OR REPLACE INTO automations (
-      automation_id, name, description, enabled, trigger_json, action_json,
+      automation_id, name, description, project_id, enabled, trigger_json, action_json,
       safety_json, after_run_json, reliability_json, state_json, created_at_ms, updated_at_ms
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     automation.id,
     automation.name,
     automation.description ?? null,
+    automation.projectId ?? null,
     automation.enabled ? 1 : 0,
     JSON.stringify(automation.trigger),
     JSON.stringify(automation.action),
@@ -66,16 +69,17 @@ function upsertAutomation(db: ReturnType<typeof getSqliteDatabase>, automation: 
 }
 
 const AUTOMATION_SELECT = `
-  SELECT automation_id, name, description, enabled, trigger_json, action_json,
+  SELECT automation_id, name, description, project_id, enabled, trigger_json, action_json,
          safety_json, after_run_json, reliability_json, state_json, created_at_ms, updated_at_ms
   FROM automations
 `;
 
-export function listAutomations(): Automation[] {
-  const rows = getSqliteDatabase()
-    .prepare(`${AUTOMATION_SELECT} ORDER BY created_at_ms DESC`)
-    .all() as AutomationRow[];
-  return rows.map(rowToAutomation);
+export function listAutomations(options?: { projectId?: string }): Automation[] {
+  const db = getSqliteDatabase();
+  const rows = options?.projectId
+    ? db.prepare(`${AUTOMATION_SELECT} WHERE project_id = ? ORDER BY created_at_ms DESC`).all(options.projectId)
+    : db.prepare(`${AUTOMATION_SELECT} ORDER BY created_at_ms DESC`).all();
+  return (rows as AutomationRow[]).map(rowToAutomation);
 }
 
 export function getAutomation(automationId: string): Automation | null {

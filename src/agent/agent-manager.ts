@@ -30,6 +30,7 @@ import { createExtensionAwareStreamFn } from '../providers/extension-stream-brid
 import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir, resolveUserProfilePath } from '../config/paths.js';
 import { extractTextContent } from './context/workspace.js';
+import { buildActiveProjectContextForPrompt } from './context/project-context.js';
 import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap/bootstrap-files.js';
 import { loadProjectAgentsContextFile } from './bootstrap/project-agents-context.js';
 import type { EmbeddedContextFile } from './bootstrap/types.js';
@@ -156,6 +157,7 @@ export interface AgentInstance {
   resolvedWorkspacePath: string;
   /** Tool names registered on this agent (for skill indexing / tool gating). */
   registeredToolNames: string[];
+  activeProjectContext?: string;
   /** Declared env var names from skill_view; shell reads values from process.env at spawn time. */
   skillEnvPassthroughKeys: Set<string>;
 }
@@ -611,6 +613,7 @@ export class AgentManager implements AgentInstanceGateway {
         instance.sessionKey,
         instance.effectiveProfile,
       );
+      instance.activeProjectContext = buildActiveProjectContextForPrompt(instance.sessionKey);
       const newPrompt = rt.systemPromptBuilder.build(contextFiles, {
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
         workspaceOverride: resolvedWorkspacePath,
@@ -625,6 +628,7 @@ export class AgentManager implements AgentInstanceGateway {
           (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
           this.config.thinkingLevel ??
           'medium',
+        activeProjectContext: instance.activeProjectContext,
       });
       instance.agent.state.systemPrompt = newPrompt;
     }
@@ -698,6 +702,7 @@ export class AgentManager implements AgentInstanceGateway {
         instance.sessionKey,
         instance.effectiveProfile,
       );
+      instance.activeProjectContext = buildActiveProjectContextForPrompt(instance.sessionKey);
       const newPrompt = rt.systemPromptBuilder.rebuild(contextFiles, {
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
         workspaceOverride: resolvedWorkspacePath,
@@ -712,6 +717,7 @@ export class AgentManager implements AgentInstanceGateway {
           (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
           this.config.thinkingLevel ??
           'medium',
+        activeProjectContext: instance.activeProjectContext,
       });
       instance.agent.state.systemPrompt = newPrompt;
     }
@@ -729,6 +735,7 @@ export class AgentManager implements AgentInstanceGateway {
       if (existing.resolvedWorkspacePath !== targetPath) {
         this.removeAgent(sessionKey);
       } else {
+        this.refreshActiveProjectContextIfChanged(existing);
         existing.lastUsedAt = Date.now();
         log.debug({ sessionKey }, 'Reusing existing agent instance');
         return existing.agent;
@@ -749,11 +756,13 @@ export class AgentManager implements AgentInstanceGateway {
       rt.builtinMemoryStore.loadFromDiskSync();
     }
 
+    const activeProjectContext = buildActiveProjectContextForPrompt(sessionKey);
     const { agent, registeredToolNames } = this.createAgentForProfile(
       sessionKey,
       profile,
       resolvedPath,
       rt,
+      activeProjectContext,
     );
 
     this.agents.set(sessionKey, {
@@ -764,6 +773,7 @@ export class AgentManager implements AgentInstanceGateway {
       effectiveProfile: profile,
       resolvedWorkspacePath: resolvedPath,
       registeredToolNames,
+      activeProjectContext,
       skillEnvPassthroughKeys: new Set<string>(),
     });
 
@@ -845,6 +855,7 @@ export class AgentManager implements AgentInstanceGateway {
       this.config.thinkingLevel ??
       'medium';
 
+    const activeProjectContext = buildActiveProjectContextForPrompt(sessionKey);
     instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
       externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
       workspaceOverride: resolvedWorkspacePath,
@@ -857,7 +868,9 @@ export class AgentManager implements AgentInstanceGateway {
       agentId: instance.effectiveProfile.agentId,
       thinkingLevel,
       extraSystemPrompt: trimmed,
+      activeProjectContext,
     });
+    instance.activeProjectContext = activeProjectContext;
   }
 
   /**
@@ -935,6 +948,7 @@ export class AgentManager implements AgentInstanceGateway {
     profile: EffectiveAgentProfile,
     resolvedWorkspacePath: string,
     rt: WorkspaceRuntime,
+    activeProjectContext?: string,
   ): { agent: Agent; registeredToolNames: string[] } {
     const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     const model = this.resolveModelStringToModel(modelRef);
@@ -966,6 +980,7 @@ export class AgentManager implements AgentInstanceGateway {
           modelRef,
           agentId: profile.agentId,
           thinkingLevel,
+          activeProjectContext,
         }),
         model,
         thinkingLevel,
@@ -1030,6 +1045,38 @@ export class AgentManager implements AgentInstanceGateway {
     return { agent, registeredToolNames };
   }
 
+  private refreshActiveProjectContextIfChanged(instance: AgentInstance): void {
+    const nextProjectContext = buildActiveProjectContextForPrompt(instance.sessionKey);
+    if (nextProjectContext === instance.activeProjectContext) {
+      return;
+    }
+    const cfg = this.config.config!;
+    const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
+    const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
+    const contextFiles = this.resolveContextFilesForSession(instance.sessionKey, instance.effectiveProfile);
+    const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
+    const thinkingLevel =
+      (instance.agent.state.thinkingLevel as ThinkingLevel | undefined) ??
+      (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
+      this.config.thinkingLevel ??
+      'medium';
+    instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
+      externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+      workspaceOverride: resolvedWorkspacePath,
+      profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
+      systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
+      skillAllowlist: instance.effectiveProfile.skillsAllowlist,
+      registeredToolNames: instance.registeredToolNames,
+      sessionKey: instance.sessionKey,
+      modelRef,
+      agentId: instance.effectiveProfile.agentId,
+      thinkingLevel,
+      activeProjectContext: nextProjectContext,
+    });
+    instance.activeProjectContext = nextProjectContext;
+    log.debug({ sessionKey: instance.sessionKey }, 'Active project context changed; system prompt refreshed');
+  }
+
   /**
    * Set model for a specific session
    */
@@ -1060,6 +1107,7 @@ export class AgentManager implements AgentInstanceGateway {
         this.config.thinkingLevel ??
         'medium';
 
+      const activeProjectContext = buildActiveProjectContextForPrompt(sessionKey);
       instance.agent.state.systemPrompt = rt.systemPromptBuilder.build(contextFiles, {
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
         workspaceOverride: resolvedWorkspacePath,
@@ -1071,7 +1119,9 @@ export class AgentManager implements AgentInstanceGateway {
         modelRef: modelId,
         agentId: instance.effectiveProfile.agentId,
         thinkingLevel,
+        activeProjectContext,
       });
+      instance.activeProjectContext = activeProjectContext;
 
       log.info({ sessionKey, modelId }, 'Model set for session');
       return true;

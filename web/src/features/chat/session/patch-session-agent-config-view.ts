@@ -6,6 +6,7 @@ export type SessionAgentConfigView = {
   model: string;
   thinkingLevel?: string | null;
   reasoningLevel?: string | null;
+  workingDirectoryLocked?: boolean;
 };
 
 /** Apply resolved session agent settings to the chat session store slice. */
@@ -16,5 +17,6 @@ export function patchSessionAgentConfigView(sessionKey: string, cfg: SessionAgen
     model: cfg.model,
     thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
     reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel ?? undefined),
+    workingDirectoryLocked: Boolean(cfg.workingDirectoryLocked),
   });
 }

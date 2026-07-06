@@ -46,6 +46,20 @@ import type { TuiSlashCommandContext, TuiSlashCommandHandler } from '../extensio
 import { provenanceTracker } from '../extensions/security.js';
 import type { ProjectTrustStoreEntry } from '../project-trust/trust-store.js';
 import { providerSupportsOAuth } from '../providers/index.js';
+import { GoalService } from '../goals/index.js';
+import {
+  isValidProjectAgentId,
+  normalizeProjectAgentId,
+  ProjectService,
+  type Project,
+  type ProjectStatus,
+} from '../projects/index.js';
+import {
+  closeXopcDatabase,
+  getSessionMetadata,
+  isXopcDatabaseOpen,
+  openXopcDatabase,
+} from '../storage/sqlite/index.js';
 
 import { rewriteUnknownSlashAsWorkflow } from './tui-workflow-slash.js';
 import { formatTuiStartupText } from './tui-startup-text.js';
@@ -95,6 +109,7 @@ export function getSlashCommands(
     { name: 'logout', description: 'Remove stored provider auth profiles' },
     { name: 'usage', description: 'Show token usage statistics' },
     { name: 'session', description: 'Show current session info' },
+    { name: 'project', description: 'Manage current project context' },
     { name: 'agent', description: 'Show or switch agent for this TUI session' },
     { name: 'agents', description: 'List available agents' },
     { name: 'tui-default-agent', description: 'Set default agent for new TUI sessions' },
@@ -380,6 +395,142 @@ function formatCurrentAgent(state: TuiState): string {
   return lines.join('\n');
 }
 
+function withTuiProjects<T>(fn: (projects: ProjectService) => T): T {
+  const wasOpen = isXopcDatabaseOpen();
+  if (!wasOpen) openXopcDatabase();
+  try {
+    return fn(new ProjectService());
+  } finally {
+    if (!wasOpen) closeXopcDatabase();
+  }
+}
+
+function resolveTuiProject(projects: ProjectService, ref: string): Project | null {
+  return projects.get(ref) ?? projects.getBySlug(ref);
+}
+
+function parseTuiProjectStatus(raw: string | undefined): ProjectStatus | undefined {
+  return raw === 'active' || raw === 'paused' || raw === 'archived' ? raw : undefined;
+}
+
+function formatTuiProject(project: Project & { sessionCount?: number; goalCount?: number; activeGoalCount?: number }): string {
+  const lines = [
+    `${project.name} [${project.status}]`,
+    `ID: ${project.id}`,
+    `Slug: ${project.slug}`,
+    `Default agent: ${project.defaultAgentId ?? 'global default'}`,
+    project.workspaceRoot ? `Workspace: ${project.workspaceRoot}` : undefined,
+    project.sessionCount != null ? `Sessions: ${project.sessionCount}` : undefined,
+    project.goalCount != null ? `Goals: ${project.goalCount} (${project.activeGoalCount ?? 0} active)` : undefined,
+    project.brief ? `Brief: ${project.brief}` : undefined,
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
+function runTuiProjectCommand(state: TuiState, args: string): string {
+  const parts = args.trim().split(/\s+/).filter(Boolean);
+  const subcommand = parts[0]?.toLowerCase();
+  return withTuiProjects((projects) => {
+    if (!subcommand || subcommand === 'status') {
+      const projectId = getSessionMetadata(state.currentSessionKey)?.projectId;
+      if (!projectId) return `No project selected.\nSession: ${state.currentSessionKey}`;
+      const project = projects.getWithDetails(projectId);
+      return project ? formatTuiProject(project) : `Current project not found: ${projectId}`;
+    }
+
+    if (subcommand === 'list') {
+      const status = parseTuiProjectStatus(parts[1]);
+      const result = projects.list({ ...(status ? { status } : {}), limit: 20 });
+      if (!result.items.length) return 'No projects.';
+      return ['Projects:', ...result.items.map((project) => `- ${project.slug} [${project.status}] ${project.name}`)].join('\n');
+    }
+
+    if (subcommand === 'new') {
+      const name = parts.slice(1).join(' ').trim();
+      if (!name) return 'Usage: /project new <name>';
+      const project = projects.create({ name });
+      projects.attachSession(state.currentSessionKey, project.id);
+      return `Created and attached project:\n${formatTuiProject(project)}`;
+    }
+
+    if (subcommand === 'switch' || subcommand === 'attach') {
+      const ref = parts[1];
+      if (!ref) return `Usage: /project ${subcommand} <id-or-slug>`;
+      const project = resolveTuiProject(projects, ref);
+      if (!project) return `Project not found: ${ref}`;
+      projects.attachSession(state.currentSessionKey, project.id);
+      return `Attached current session to project: ${project.name}`;
+    }
+
+    if (subcommand === 'detach') {
+      projects.detachSession(state.currentSessionKey);
+      return 'Detached current session from project.';
+    }
+
+    if (subcommand === 'archive') {
+      const ref = parts[1];
+      if (!ref) return 'Usage: /project archive <id-or-slug>';
+      const project = resolveTuiProject(projects, ref);
+      if (!project) return `Project not found: ${ref}`;
+      projects.update(project.id, { status: 'archived' });
+      return `Archived project: ${project.name}`;
+    }
+
+    if (subcommand === 'set-agent') {
+      const agentId = normalizeProjectAgentId(parts[1]);
+      if (!agentId) return 'Usage: /project set-agent <agent-id>';
+      const currentProjectId = getSessionMetadata(state.currentSessionKey)?.projectId;
+      if (!currentProjectId) return 'No current project.';
+      const cfg = loadConfig(resolveConfigPath());
+      if (!isValidProjectAgentId(cfg, agentId)) return `Agent not found: ${parts[1]}`;
+      const project = projects.update(currentProjectId, { defaultAgentId: agentId });
+      return `Project default agent set to ${project.defaultAgentId}.`;
+    }
+
+    if (subcommand === 'clear-agent') {
+      const currentProjectId = getSessionMetadata(state.currentSessionKey)?.projectId;
+      if (!currentProjectId) return 'No current project.';
+      projects.update(currentProjectId, { defaultAgentId: null });
+      return 'Project default agent cleared.';
+    }
+
+    if (subcommand === 'sessions') {
+      const ref = parts[1];
+      const currentProjectId = getSessionMetadata(state.currentSessionKey)?.projectId;
+      const project = ref ? resolveTuiProject(projects, ref) : currentProjectId ? projects.get(currentProjectId) : null;
+      if (!project) return ref ? `Project not found: ${ref}` : 'No current project.';
+      const keys = projects.listSessionKeys(project.id, 20);
+      if (!keys.length) return `No sessions in ${project.name}.`;
+      return [`Sessions in ${project.name}:`, ...keys.map((key) => `- ${key}`)].join('\n');
+    }
+
+    if (subcommand === 'goals') {
+      const ref = parts[1];
+      const currentProjectId = getSessionMetadata(state.currentSessionKey)?.projectId;
+      const project = ref ? resolveTuiProject(projects, ref) : currentProjectId ? projects.get(currentProjectId) : null;
+      if (!project) return ref ? `Project not found: ${ref}` : 'No current project.';
+      const goals = new GoalService().list({ projectId: project.id, limit: 20 });
+      if (!goals.length) return `No goals in ${project.name}.`;
+      return [`Goals in ${project.name}:`, ...goals.map((goal) => `- ${goal.id} [${goal.status}] ${goal.title}`)].join('\n');
+    }
+
+    return [
+      'Usage:',
+      '  /project',
+      '  /project list [active|paused|archived]',
+      '  /project new <name>',
+      '  /project switch <id-or-slug>',
+      '  /project attach <id-or-slug>',
+      '  /project detach',
+      '  /project set-agent <agent-id>',
+      '  /project clear-agent',
+      '  /project sessions [id-or-slug]',
+      '  /project goals [id-or-slug]',
+      '  /project archive <id-or-slug>',
+    ].join('\n');
+  });
+}
+
 export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: string) => void {
   const {
     state,
@@ -462,6 +613,15 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
             chatLog.addSystem(formatTuiSessionInfo(state, stats));
             tui.requestRender();
           });
+        return;
+      case 'project':
+        try {
+          chatLog.addSystem(runTuiProjectCommand(state, commandArgs));
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          chatLog.addSystem(`Project command failed: ${errorMessage}`);
+        }
+        tui.requestRender();
         return;
       case 'agents':
         if (uiOverlays?.openAgentPicker) {

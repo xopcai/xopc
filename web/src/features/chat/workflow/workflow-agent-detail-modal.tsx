@@ -8,6 +8,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
+import { PageTabs } from '@/components/ui/page-tabs';
 import type { Message } from '@/features/chat/messages/messages.types';
 import { ReadonlyMessageThread } from '@/features/chat/messages/readonly-message-thread';
 import { getWorkflowAgentSession } from '@/features/workflows/workflow-api';
@@ -312,27 +313,7 @@ function AgentDetailTabs({
 
   return (
     <div className="flex shrink-0 overflow-x-auto border-b border-edge px-5 py-2">
-      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" role="tablist">
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          type="button"
-          role="tab"
-          aria-selected={activeTab === tab.id}
-          onClick={() => onChange(tab.id)}
-          className={cn(
-            'shrink-0 rounded-lg px-3 py-2 text-sm font-medium',
-            interaction.focusRingPanel,
-            interaction.press,
-            activeTab === tab.id
-              ? 'bg-accent-soft text-accent-fg'
-              : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-          )}
-        >
-          {tab.label}
-        </button>
-      ))}
-      </div>
+      <PageTabs items={tabs} activeTab={activeTab} onChange={onChange} ariaLabel={labels.executionHeading} />
     </div>
   );
 }

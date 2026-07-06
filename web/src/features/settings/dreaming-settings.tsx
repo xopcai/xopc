@@ -5,6 +5,7 @@ import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
+import { PageTabs, type PageTabItem } from '@/components/ui/page-tabs';
 import {
   dreamingSwrKey,
   fetchDreamingEvents,
@@ -30,8 +31,6 @@ import { DreamingRuntimeSection } from '@/features/settings/dreaming-settings-ru
 import {
   SettingsPageFrame,
   SettingsTabPanel,
-  SettingsTabs,
-  type SettingsTabItem,
 } from '@/features/settings/settings-page-layout';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -347,7 +346,7 @@ export function DreamingSettingsPanel() {
           ))}
         </div>
       ) : null}
-      <DreamingSettingsTabs t={t} activeTab={activeTab} onChange={setActiveTab} />
+      <DreamingSettingsTabNav t={t} activeTab={activeTab} onChange={setActiveTab} />
 
       <DreamingTabPanel t={t} id="config" activeTab={activeTab}>
         <DreamingConfigSection
@@ -409,7 +408,7 @@ export function DreamingSettingsPanel() {
   );
 }
 
-function DreamingSettingsTabs({
+function DreamingSettingsTabNav({
   t,
   activeTab,
   onChange,
@@ -418,13 +417,13 @@ function DreamingSettingsTabs({
   activeTab: DreamingSettingsTabId;
   onChange: (tab: DreamingSettingsTabId) => void;
 }) {
-  const items: SettingsTabItem<DreamingSettingsTabId>[] = DREAMING_SETTINGS_TABS.map((tab) => ({
+  const items: PageTabItem<DreamingSettingsTabId>[] = DREAMING_SETTINGS_TABS.map((tab) => ({
     id: tab,
     label: dreamingSettingsTabLabel(t, tab),
     icon: DREAMING_SETTINGS_TAB_ICONS[tab],
   }));
   return (
-    <SettingsTabs
+    <PageTabs
       items={items}
       activeTab={activeTab}
       onChange={onChange}

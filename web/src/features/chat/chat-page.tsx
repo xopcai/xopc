@@ -350,8 +350,15 @@ export function ChatPage() {
       Boolean(session.sessionKey) &&
       !session.showSessionLoading &&
       !session.sessionRoutePending &&
+      !session.workingDirectoryLocked &&
       msgSlice.items.length === 0,
-    [session.sessionKey, session.showSessionLoading, session.sessionRoutePending, msgSlice.items.length],
+    [
+      session.sessionKey,
+      session.showSessionLoading,
+      session.sessionRoutePending,
+      session.workingDirectoryLocked,
+      msgSlice.items.length,
+    ],
   );
 
   const setWorkspaceEditorAgentId = useWorkspaceEditorAgentStore((s) => s.setAgentId);

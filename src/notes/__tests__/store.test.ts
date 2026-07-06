@@ -232,6 +232,23 @@ describe('NotesStore deleteNote', () => {
     const match = await store.listNotes({ search: 'deep-body-keyword' });
     expect(match.items.map((item) => item.id)).toEqual(['note-search-body']);
   });
+
+  it('searches notes by substring when FTS token matching is too narrow', async () => {
+    await store.addNote({
+      id: 'note-search-number',
+      kind: 'thought',
+      status: 'inbox',
+      title: '123123',
+      markdown: '123123',
+      createdAt: 5,
+      updatedAt: 5,
+      capturedVia: { channel: 'web' },
+    });
+    await store.flush();
+
+    const match = await store.listNotes({ search: '2' });
+    expect(match.items.map((item) => item.id)).toEqual(['note-search-number']);
+  });
 });
 
 describe('NotesStore snapshots', () => {

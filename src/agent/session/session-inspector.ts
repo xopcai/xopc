@@ -20,11 +20,13 @@ import type { Config } from '../../config/schema.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import {
   effectiveWorkspacePathForSession,
+  projectWorkspacePath,
   resolveEffectiveReasoningLevel,
   resolveEffectiveThinkingLevel,
   resolveVerboseLevel,
   type SessionConfigStore,
 } from '../../session/index.js';
+import { getProjectForSession } from '../../projects/workspace.js';
 import type { SessionStore } from '../../session/store.js';
 import type { CompactionResult } from '../memory/compaction.js';
 import type { ModelManager } from '../models/index.js';
@@ -144,7 +146,8 @@ export class SessionInspector {
     const computed = this.stats(sessionKey, messages);
     const model = this.opts.modelManager.getModelForSession(sessionKey);
     const sc = await this.opts.sessionConfigStore.get(sessionKey);
-    const workspace = effectiveWorkspacePathForSession(cfg, sessionKey, sc);
+    const project = getProjectForSession(sessionKey);
+    const workspace = effectiveWorkspacePathForSession(cfg, sessionKey, sc, project);
     const estTokens = await this.opts.sessionStore.estimateTokenUsage(sessionKey, messages);
     const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
     const deniedTools = [...profile.tools.denied].sort((a, b) => a.localeCompare(b));
@@ -193,13 +196,15 @@ export class SessionInspector {
     const defVerbose = 'full' as VerboseLevel;
     const verboseLevel = await resolveVerboseLevel(this.opts.sessionConfigStore, sessionKey, defVerbose);
     const model = this.opts.modelManager.getModelForSession(sessionKey);
+    const project = getProjectForSession(sessionKey);
+    const projectWorkspace = projectWorkspacePath(project);
     return {
       thinkingLevel: level,
       model,
       reasoningLevel,
       verboseLevel,
-      effectiveWorkspacePath: effectiveWorkspacePathForSession(cfg, sessionKey, sc),
-      workingDirectoryLocked: Boolean(sc?.workingDirectoryOverride?.trim()),
+      effectiveWorkspacePath: effectiveWorkspacePathForSession(cfg, sessionKey, sc, project),
+      workingDirectoryLocked: Boolean(projectWorkspace || sc?.workingDirectoryOverride?.trim()),
     };
   }
 }

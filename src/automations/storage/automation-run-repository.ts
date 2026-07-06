@@ -158,6 +158,7 @@ export function getAutomationRun(runId: string): AutomationRun | null {
 
 export function listAutomationRuns(options?: {
   automationId?: string;
+  projectId?: string;
   limit?: number;
 }): AutomationRun[] {
   const limit = Math.min(Math.max(options?.limit ?? 50, 1), 500);
@@ -166,9 +167,23 @@ export function listAutomationRuns(options?: {
                        action_snapshot_json, manual, created_at_ms, started_at_ms, ended_at_ms,
                        duration_ms, summary, error, session_key, workflow_run_id, model
                 FROM automation_runs`;
-  const rows = options?.automationId
-    ? db.prepare(`${base} WHERE automation_id = ? ORDER BY created_at_ms DESC LIMIT ?`).all(options.automationId, limit)
-    : db.prepare(`${base} ORDER BY created_at_ms DESC LIMIT ?`).all(limit);
+  let rows: unknown[];
+  if (options?.automationId) {
+    rows = db.prepare(`${base} WHERE automation_id = ? ORDER BY created_at_ms DESC LIMIT ?`).all(options.automationId, limit);
+  } else if (options?.projectId) {
+    rows = db.prepare(
+      `SELECT r.run_id, r.automation_id, r.automation_name, r.status, r.trigger_snapshot_json,
+              r.action_snapshot_json, r.manual, r.created_at_ms, r.started_at_ms, r.ended_at_ms,
+              r.duration_ms, r.summary, r.error, r.session_key, r.workflow_run_id, r.model
+       FROM automation_runs r
+       JOIN automations a ON a.automation_id = r.automation_id
+       WHERE a.project_id = ?
+       ORDER BY r.created_at_ms DESC
+       LIMIT ?`,
+    ).all(options.projectId, limit);
+  } else {
+    rows = db.prepare(`${base} ORDER BY created_at_ms DESC LIMIT ?`).all(limit);
+  }
   return (rows as AutomationRunRow[]).map(rowToRun);
 }
 

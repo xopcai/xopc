@@ -7,6 +7,7 @@ import { publishAutomationProductEvent } from '../../automations/product-events.
 import { extractProfileAgentId } from '../../config/agent-profile.js';
 import { resolveModelRef } from '../../config/agent-typed-models.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
+import { GoalService } from '../../goals/index.js';
 import { resolveModel as resolveModelById } from '../../providers/index.js';
 import { DelegateSubagentRunner } from '../../agent/workflow/subagent-runner.js';
 import { CatalogWorkflowDefinitionRegistry } from '../registry/catalog-workflow-definition-registry.js';
@@ -100,6 +101,9 @@ export class WorkflowRunService {
 
     const runId = randomUUID();
     const goal = params.goal ?? '';
+    const projectId =
+      params.projectId?.trim() ||
+      (params.goalId ? new GoalService().get(params.goalId)?.projectId : undefined);
     const { sessionKey } = await this.options.sessionBridge.prepareRunSession({
       runId,
       agentId: params.agentId,
@@ -107,6 +111,7 @@ export class WorkflowRunService {
       definitionTitle: definition.title,
       goal,
       parentSessionKey: params.parentSessionKey,
+      projectId,
     });
     const source = normalizeWorkflowRunSourceForSession(params.source, sessionKey, params.parentSessionKey);
     const abortController = new AbortController();
@@ -138,6 +143,7 @@ export class WorkflowRunService {
         definition,
         agentId: params.agentId,
         goalId: params.goalId,
+        projectId,
         sessionKey,
         source,
         input: inputEnvelope,
@@ -178,11 +184,15 @@ export class WorkflowRunService {
 
     const parentSessionKey =
       existing.run.source.kind === 'chat' ? existing.run.source.sessionKey : undefined;
+    const projectId = params.projectId?.trim() || existing.run.metadata?.projectId;
 
     return this.startWorkflowRun({
       agentId: params.agentId,
       definitionId: existing.run.definitionId,
-      input: existing.run.input,
+      goalId: existing.run.metadata?.goalId,
+      projectId,
+      input: existing.run.metadata?.input ? undefined : existing.run.input,
+      inputEnvelope: existing.run.metadata?.input,
       goal: existing.run.goal,
       source: existing.run.source,
       parentSessionKey,
@@ -228,6 +238,7 @@ export class WorkflowRunService {
     const goal = buildReplayGoal(existing, params.scope, targets.targets.length);
     const parentSessionKey =
       existing.run.source.kind === 'chat' ? existing.run.source.sessionKey : undefined;
+    const projectId = existing.run.metadata?.projectId;
     const { sessionKey } = await this.options.sessionBridge.prepareRunSession({
       runId: replayRunId,
       agentId: params.agentId,
@@ -235,6 +246,7 @@ export class WorkflowRunService {
       definitionTitle: `${definition.title} replay`,
       goal,
       parentSessionKey,
+      projectId,
     });
     const source = normalizeWorkflowRunSourceForSession(existing.run.source, sessionKey, parentSessionKey);
     const abortController = new AbortController();
@@ -265,6 +277,7 @@ export class WorkflowRunService {
         definition,
         agentId: params.agentId,
         goalId: existing.run.metadata?.goalId,
+        projectId,
         sessionKey,
         source,
         input: inputEnvelope,
@@ -489,6 +502,7 @@ export function buildWorkflowRunMetadata(params: {
   definition: WorkflowDefinition;
   agentId: string;
   goalId?: string;
+  projectId?: string;
   sessionKey: string;
   source: WorkflowRunSource;
   input: WorkflowRunInputEnvelope;
@@ -497,10 +511,12 @@ export function buildWorkflowRunMetadata(params: {
   replay?: WorkflowRunReplayMetadata;
 }): WorkflowRunMetadata {
   const goalId = params.goalId?.trim() || undefined;
+  const projectId = params.projectId?.trim() || undefined;
   return {
     sessionKey: params.sessionKey,
     triggerSource: params.source.kind,
     agentId: params.agentId,
+    projectId,
     retryOfRunId: params.retryOfRunId,
     replay: params.replay,
     definition: buildWorkflowRunDefinitionSnapshot(params.definition),

@@ -87,6 +87,7 @@ export class GoalService {
       maxTurns: input.maxTurns ?? defaultMaxTurns(cfg),
       uiLocale: input.uiLocale,
       source: input.source,
+      projectId: input.projectId,
     });
     publishGoalEvent('goal.created', goal);
     return goal;
@@ -139,6 +140,7 @@ export class GoalService {
     | 'blockedReason'
     | 'activeSessionKey'
     | 'uiLocale'
+    | 'projectId'
   >>): GoalWithDetails | null {
     const normalized: typeof patch = { ...patch };
     if (typeof normalized.title === 'string') {

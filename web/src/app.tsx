@@ -16,11 +16,12 @@ import {
   loadConnectorsPage,
   loadGoalDetailPage,
   loadGoalsPage,
+  loadProjectDetailPage,
+  loadProjectsPage,
   loadExtensionDebugPage,
   loadExtensionPage,
   loadExtensionSettingsPage,
   loadLogsPage,
-  loadNoteDetailPage,
   loadNotesPage,
   loadSettingsPage,
   loadSharePreviewPage,
@@ -35,10 +36,11 @@ import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/
 
 const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.SessionsPage })));
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
+const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
+const ProjectDetailPage = lazy(() => loadProjectDetailPage().then((m) => ({ default: m.ProjectDetailPage })));
 const GoalsPage = lazy(() => loadGoalsPage().then((m) => ({ default: m.GoalsPage })));
 const GoalDetailPage = lazy(() => loadGoalDetailPage().then((m) => ({ default: m.GoalDetailPage })));
 const NotesPage = lazy(() => loadNotesPage().then((m) => ({ default: m.NotesPage })));
-const NoteDetailPage = lazy(() => loadNoteDetailPage().then((m) => ({ default: m.NoteDetailPage })));
 const WorkflowsPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowsPage })));
 const SkillsPage = lazy(() => loadSkillsPage().then((m) => ({ default: m.SkillsPage })));
 const ConnectorsPage = lazy(() => loadConnectorsPage().then((m) => ({ default: m.ConnectorsPage })));
@@ -76,7 +78,7 @@ function SecondaryRouteFallback() {
 function SettingsRouteFallback() {
   return (
     <div className="flex min-h-0 flex-1 flex-col" aria-busy>
-      <div className="mx-auto w-full max-w-app-main flex-1 px-4 py-8">
+      <div className="w-full flex-1 px-3 py-8 sm:px-5 xl:px-6">
         <div className="h-8 w-48 max-w-full animate-pulse rounded-md bg-surface-hover" />
         <div className="mt-6 h-36 animate-pulse rounded-xl bg-surface-hover" />
         <div className="mt-4 h-24 animate-pulse rounded-xl bg-surface-hover" />
@@ -120,6 +122,43 @@ const router = createHashRouter([
         ),
       },
       {
+        path: 'projects',
+        children: [
+          {
+            index: true,
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <ProjectsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: ':projectId',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <ProjectDetailPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: ':projectId/:tabId',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <ProjectDetailPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: ':projectId/notes/:noteId',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <ProjectDetailPage />
+              </Suspense>
+            ),
+          },
+        ],
+      },
+      {
         path: 'goals',
         children: [
           {
@@ -155,7 +194,7 @@ const router = createHashRouter([
             path: ':noteId',
             element: (
               <Suspense fallback={<SecondaryRouteFallback />}>
-                <NoteDetailPage />
+                <NotesPage />
               </Suspense>
             ),
           },

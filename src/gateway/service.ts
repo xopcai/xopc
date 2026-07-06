@@ -49,6 +49,7 @@ import { AgentRunRelay, type RelayEvent } from './agent-run-relay.js';
 import { registerClarifyBridge } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { GoalNotificationService, GoalRunner, type EnqueueGoalRunOptions } from '../goals/index.js';
+import { ProjectService } from '../projects/index.js';
 
 import { disposeAllSessionMcpRuntimes } from '../agent/mcp/bundle-mcp-tools.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
@@ -158,6 +159,9 @@ export class GatewayService {
    */
   readonly marketplace: GatewayMarketplaceService;
 
+  /** First-class project grouping surface. */
+  readonly projects: ProjectService;
+
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
@@ -243,6 +247,8 @@ export class GatewayService {
     this.automationService = new AutomationService();
 
     this.notesService = new NotesService(new NotesStore());
+
+    this.projects = new ProjectService();
 
     this.agentRunner = new GatewayAgentRunner({
       bus: this.bus,
@@ -350,6 +356,7 @@ export class GatewayService {
     this.automationService.setDeps({
       agentService: this._agentService,
       getDefaultAgentId: () => getDefaultAgentId(this.config),
+      getProjectWorkspaceRoot: (projectId) => this.projects.get(projectId)?.workspaceRoot,
       workflowRunService: this.createWorkflowRunService(),
     });
 
@@ -417,6 +424,9 @@ export class GatewayService {
               },
             },
           });
+          if (goal.projectId) {
+            this.projects.attachSession(sessionKey, goal.projectId);
+          }
           const { GoalService } = await import('../goals/index.js');
           new GoalService().attachSession(goal.id, sessionKey);
           return sessionKey;

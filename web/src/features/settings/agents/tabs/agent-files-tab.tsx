@@ -1,6 +1,7 @@
 import { Eye, MessageSquarePlus, SquarePen } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { PageTabs } from '@/components/ui/page-tabs';
 
 import { MarkdownEditor } from '@/components/markdown/markdown-editor';
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -44,6 +45,11 @@ export function AgentFilesTab(props: {
   } = props;
 
   const isDark = useThemeStore((s) => s.resolved === 'dark');
+  const fileTabItems = files?.files.map((f) => ({
+    id: f.name,
+    label: f.missing ? `${f.name} (${a.missing})` : f.name,
+    title: f.name,
+  })) ?? [];
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
@@ -52,36 +58,16 @@ export function AgentFilesTab(props: {
         <p className="shrink-0 text-sm text-fg-muted">{a.filesLoading}</p>
       ) : files ? (
         <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-          <nav
-            className="-mx-1 flex shrink-0 flex-wrap gap-1 px-1 pb-1"
-            role="tablist"
-            aria-label={a.filesNavAria}
-          >
-            {files.files.map((f) => {
-              const selected = activeFile === f.name;
-              return (
-                <button
-                  key={f.name}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  className={cn(
-                    'inline-flex shrink-0 items-center rounded-lg px-3 py-2 font-mono text-xs font-medium whitespace-nowrap transition-colors',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                    interaction.press,
-                    selected
-                      ? 'bg-accent-soft text-accent-fg'
-                      : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-                    f.missing && 'opacity-60',
-                  )}
-                  onClick={() => setActiveFile(f.name)}
-                >
-                  {f.name}
-                  {f.missing ? ` (${a.missing})` : ''}
-                </button>
-              );
-            })}
-          </nav>
+          <PageTabs
+            items={fileTabItems}
+            activeTab={activeFile ?? ''}
+            onChange={setActiveFile}
+            ariaLabel={a.filesNavAria}
+            tabIdPrefix="agent-files-tab"
+            panelIdPrefix="agent-files-panel"
+            className="shrink-0 flex-wrap"
+            buttonClassName="font-mono text-xs whitespace-nowrap"
+          />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
             {activeFile ? (
               <>

@@ -32,6 +32,7 @@ export interface Goal {
   turnsUsed: number;
   uiLocale?: GoalUiLocale;
   source: GoalSource;
+  projectId?: string;
 }
 
 export interface GoalChecklistItem {
@@ -107,6 +108,7 @@ export interface GoalListQuery {
   status?: GoalStatus | GoalStatus[];
   agentId?: string;
   sessionKey?: string;
+  projectId?: string;
   limit?: number;
   offset?: number;
 }
@@ -122,6 +124,7 @@ export interface CreateGoalInput {
   maxTurns: number;
   uiLocale?: GoalUiLocale;
   source?: GoalSource;
+  projectId?: string;
 }
 
 export interface GoalJudgeDecision {

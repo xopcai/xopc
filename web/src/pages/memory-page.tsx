@@ -254,7 +254,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
       className={
         embedded
           ? 'flex min-h-0 w-full flex-1 flex-col gap-5 overflow-y-auto overscroll-contain pr-1'
-          : 'mx-auto flex w-full max-w-app-main flex-1 flex-col gap-5 px-4 py-6'
+          : 'flex w-full flex-1 flex-col gap-5 px-3 py-6 sm:px-5 xl:px-6'
       }
     >
       {embedded ? null : (
