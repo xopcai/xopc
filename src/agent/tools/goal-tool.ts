@@ -2,6 +2,7 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 import { GoalService, type GoalPriority, type GoalStatus } from '../../goals/index.js';
+import { getSessionMetadata } from '../../storage/sqlite/index.js';
 
 const GoalToolSchema = Type.Object({
   action: Type.Union([
@@ -32,6 +33,7 @@ const GoalToolSchema = Type.Object({
   judgeModelRef: Type.Optional(Type.String()),
   agentId: Type.Optional(Type.String()),
   sessionKey: Type.Optional(Type.String()),
+  projectId: Type.Optional(Type.String()),
   limit: Type.Optional(Type.Number({ minimum: 1, maximum: 100 })),
 });
 
@@ -49,14 +51,19 @@ type GoalToolParams = {
   judgeModelRef?: string;
   agentId?: string;
   sessionKey?: string;
+  projectId?: string;
   limit?: number;
 };
+
+export interface GoalToolOptions {
+  getCurrentSessionKey?: () => string | undefined;
+}
 
 function textResult(text: string) {
   return { content: [{ type: 'text' as const, text }], details: {} };
 }
 
-export function createGoalTool(): AgentTool<typeof GoalToolSchema, {}> {
+export function createGoalTool(options: GoalToolOptions = {}): AgentTool<typeof GoalToolSchema, {}> {
   return {
     name: 'goal',
     label: 'Goal',
@@ -74,11 +81,14 @@ export function createGoalTool(): AgentTool<typeof GoalToolSchema, {}> {
       if (params.action === 'create') {
         const title = params.title?.trim();
         if (!title) return textResult('Error: title is required.');
+        const sessionKey = params.sessionKey?.trim() || options.getCurrentSessionKey?.()?.trim();
+        const projectId = params.projectId?.trim() || (sessionKey ? getSessionMetadata(sessionKey)?.projectId : undefined);
         const goal = goals.create({
           title,
           description: params.description,
           agentId: params.agentId,
-          sessionKey: params.sessionKey,
+          sessionKey,
+          projectId,
           priority: params.priority,
           deadlineAt: params.deadlineAt,
           judgeModelRef: params.judgeModelRef,

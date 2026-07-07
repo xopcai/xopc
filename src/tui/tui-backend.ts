@@ -140,6 +140,16 @@ export interface TuiWorkflowRunStartResult {
   definitionId: string;
 }
 
+export interface TuiStartupProjectResult {
+  project: {
+    id: string;
+    name: string;
+    workspaceRoot?: string;
+  } | null;
+  created?: boolean;
+  reason?: 'exact' | 'contained' | 'auto_created';
+}
+
 /** Read-only transcript tree row for current-session navigation/inspection. */
 export interface TuiTranscriptTreeEntry {
   id: string;
@@ -198,6 +208,14 @@ export interface TuiBackend {
 
   /** Start a workflow run directly, without routing through the LLM. */
   startWorkflowRun?(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult>;
+
+  /** Resolve or create the project implied by the TUI launch workspace. */
+  resolveStartupProject?(opts: {
+    workspacePath: string;
+    sessionKey: string;
+    agentId: string;
+    autoCreate?: boolean;
+  }): Promise<TuiStartupProjectResult>;
 
   /** Load startup resources shown in `/start` and initial help. */
   getStartupResources?(sessionKey: string): Promise<TuiStartupResources>;

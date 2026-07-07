@@ -76,7 +76,7 @@ export {
 } from './execute-code-tool.js';
 
 export { createAutomationTool, type AutomationToolDeps } from './automation-tool.js';
-export { createGoalTool } from './goal-tool.js';
+export { createGoalTool, type GoalToolOptions } from './goal-tool.js';
 
 export { createSkillsListTool, createSkillViewTool, type SkillsToolsDeps } from './skills-tools.js';
 export { createSkillManageTool, type SkillManageToolDeps } from './skill-manage-tool.js';

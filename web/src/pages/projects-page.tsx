@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { FolderKanban, Plus, Search } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
@@ -26,6 +26,15 @@ function statusTone(status: ProjectStatus): string {
 
 function interpolate(template: string, values: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => String(values[key] ?? ''));
+}
+
+function directoryName(value: string): string {
+  return value.trim().replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean).pop() ?? '';
+}
+
+function getWorkspaceConflictProject(err: unknown): Project | null {
+  const body = (err as { body?: { code?: string; project?: Project } } | null)?.body;
+  return body?.code === 'workspace_already_bound' && body.project ? body.project : null;
 }
 
 function formatDate(value: string | undefined, fallback: string): string {
@@ -63,6 +72,7 @@ function ProjectCard({ project, t }: { project: Project; t: ReturnType<typeof me
 }
 
 export function ProjectsPage() {
+  const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const msg = messages(language);
   const wd = msg.chat.workingDirectory;
@@ -112,24 +122,33 @@ export function ProjectsPage() {
   const onCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmedName = name.trim();
-    if (!trimmedName) return;
+    const trimmedWorkspace = workspaceRoot.trim();
+    if (!trimmedName && !trimmedWorkspace) return;
     setCreating(true);
     setError(null);
     try {
       const project = await createProject({
-        name: trimmedName,
-        ...(workspaceRoot.trim() ? { workspaceRoot: workspaceRoot.trim() } : {}),
+        ...(trimmedName ? { name: trimmedName } : {}),
+        ...(trimmedWorkspace ? { workspaceRoot: trimmedWorkspace } : {}),
       });
       setProjects((items) => [project, ...items]);
       setName('');
       setWorkspaceRoot('');
       setCreateOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const conflictProject = getWorkspaceConflictProject(err);
+      if (conflictProject) {
+        setProjects((items) => [conflictProject, ...items.filter((item) => item.id !== conflictProject.id)]);
+        setError(`Workspace is already bound to project “${conflictProject.name}”. Open that project to continue.`);
+        setCreateOpen(false);
+        navigate(`/projects/${encodeURIComponent(conflictProject.id)}`);
+      } else {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       setCreating(false);
     }
-  }, [name, workspaceRoot]);
+  }, [name, navigate, workspaceRoot]);
 
   const headerEnd = useMemo(
     () => (
@@ -192,7 +211,7 @@ export function ProjectsPage() {
                     className="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
                     value={name}
                     onChange={(event) => setName(event.target.value)}
-                    placeholder="xopc"
+                    placeholder={workspaceRoot.trim() ? directoryName(workspaceRoot) || 'xopc' : 'xopc'}
                     autoFocus
                   />
                 </label>
@@ -217,7 +236,7 @@ export function ProjectsPage() {
                     {t.cancel}
                   </Button>
                 </Dialog.Close>
-                <Button type="submit" variant="primary" className="rounded-lg" disabled={creating || !name.trim()}>
+                <Button type="submit" variant="primary" className="rounded-lg" disabled={creating || !(name.trim() || workspaceRoot.trim())}>
                   <Plus className="size-4" aria-hidden />
                   {t.create}
                 </Button>

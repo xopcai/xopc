@@ -22,6 +22,7 @@ import type {
   TuiWorkspaceFileSearchEntry,
   TuiWorkflowRunStartRequest,
   TuiWorkflowRunStartResult,
+  TuiStartupProjectResult,
 } from '../tui-backend.js';
 import type { SessionInfo } from '../tui-types.js';
 import { computeTuiSessionStats } from '../tui-session-stats.js';
@@ -252,6 +253,23 @@ export class GatewaySseBackend implements TuiBackend {
       sessionKey: json.sessionKey,
       definitionId: opts.definitionId,
     };
+  }
+
+  async resolveStartupProject(opts: {
+    workspacePath: string;
+    sessionKey: string;
+    agentId: string;
+    autoCreate?: boolean;
+  }): Promise<TuiStartupProjectResult> {
+    const res = await gatewayFetch(this.baseUrl, '/api/projects/resolve-workspace', this.token, {
+      method: 'POST',
+      body: JSON.stringify(opts),
+    });
+    const json = (await res.json().catch(() => ({}))) as TuiStartupProjectResult & { ok?: boolean; error?: string };
+    if (!res.ok || json.ok === false) {
+      throw new Error(json.error ?? `Project workspace resolve failed (${res.status})`);
+    }
+    return { project: json.project ?? null, created: json.created, reason: json.reason };
   }
 
   async resumeChat(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean; reason?: string }> {
@@ -947,6 +965,19 @@ export class GatewaySseBackend implements TuiBackend {
     const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
     if (!res.ok || json.ok === false) {
       throw new Error(json.error ?? `Session config patch failed (${res.status})`);
+    }
+    const projectId = typeof patch.projectId === 'string' ? patch.projectId.trim() : '';
+    if (projectId) {
+      const metaRes = await gatewayFetch(
+        this.baseUrl,
+        `/api/sessions/${encodeURIComponent(sessionKey)}`,
+        this.token,
+        { method: 'PATCH', body: JSON.stringify({ projectId }) },
+      );
+      const metaJson = (await metaRes.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!metaRes.ok || metaJson.ok === false) {
+        throw new Error(metaJson.error ?? `Session project patch failed (${metaRes.status})`);
+      }
     }
   }
 
