@@ -50,6 +50,7 @@ export interface CreateProjectInput {
   description?: string;
   defaultAgentId?: string;
   workspaceRoot?: string;
+  createWorkspaceRoot?: boolean;
   brief?: string;
   instructions?: string;
 }
@@ -60,6 +61,7 @@ export interface UpdateProjectInput {
   defaultAgentId?: string | null;
   status?: ProjectStatus;
   workspaceRoot?: string | null;
+  createWorkspaceRoot?: boolean;
   brief?: string | null;
   instructions?: string | null;
 }

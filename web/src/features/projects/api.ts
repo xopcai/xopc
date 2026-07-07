@@ -184,6 +184,7 @@ export async function createProject(input: {
   description?: string;
   defaultAgentId?: string;
   workspaceRoot?: string;
+  createWorkspaceRoot?: boolean;
   brief?: string;
   instructions?: string;
 }): Promise<Project> {
@@ -194,7 +195,12 @@ export async function createProject(input: {
   return res.project;
 }
 
-export async function updateProject(id: string, input: Partial<Pick<Project, 'name' | 'description' | 'status' | 'defaultAgentId' | 'workspaceRoot' | 'brief' | 'instructions'>>): Promise<Project> {
+export async function updateProject(
+  id: string,
+  input: Partial<Pick<Project, 'name' | 'description' | 'status' | 'defaultAgentId' | 'workspaceRoot' | 'brief' | 'instructions'>> & {
+    createWorkspaceRoot?: boolean;
+  },
+): Promise<Project> {
   const res = await fetchJson<{ ok: true; project: Project }>(apiUrl(`/api/projects/${encodeURIComponent(id)}`), {
     method: 'PATCH',
     body: JSON.stringify(input),

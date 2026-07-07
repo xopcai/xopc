@@ -45,6 +45,26 @@ describe('project association routes', () => {
     rmSync(stateDir, { recursive: true, force: true });
   });
 
+  it('returns a structured conflict when creating with a missing workspace root', async () => {
+    const projects = new ProjectService();
+    const workspaceRoot = join(stateDir, 'missing-workspace');
+    const app = registerProjectRouteApp({ projects });
+
+    const res = await app.request('/api/projects', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ workspaceRoot }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      ok: false,
+      code: 'workspace_root_missing',
+      error: `Workspace root does not exist: ${workspaceRoot}`,
+      workspaceRoot,
+    });
+  });
+
   it('validates projectId before patching session metadata', async () => {
     const patch = vi.fn(async () => ({ ok: true as const }));
     const attachSession = vi.fn();

@@ -1,6 +1,6 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
+import { isAbsolute, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -50,6 +50,49 @@ describe('ProjectService', () => {
 
     expect(project.name).toBe('folder-name-project');
     expect(project.slug).toBe('folder-name-project');
+  });
+
+  it('requires confirmation before storing a missing workspace root', () => {
+    const workspaceRoot = `~/.xopc-test-missing-workspace-root-${process.pid}-${Date.now()}`;
+    expect(() => projects.create({ workspaceRoot })).toThrow('Workspace root does not exist');
+  });
+
+  it('creates and stores a user-relative workspace root as an absolute path when confirmed', () => {
+    const workspaceName = `.xopc-test-created-workspace-root-${process.pid}-${Date.now()}`;
+    const workspaceRoot = `~/${workspaceName}`;
+    const absoluteRoot = join(homedir(), workspaceName);
+    rmSync(absoluteRoot, { recursive: true, force: true });
+
+    const project = projects.create({ workspaceRoot, createWorkspaceRoot: true });
+
+    expect(project.workspaceRoot).toBe(absoluteRoot);
+    expect(project.workspaceRoot).not.toContain('~');
+    expect(isAbsolute(project.workspaceRoot ?? '')).toBe(true);
+    expect(existsSync(absoluteRoot)).toBe(true);
+
+    rmSync(absoluteRoot, { recursive: true, force: true });
+  });
+
+  it('stores a user-relative workspace root as an absolute path on update', () => {
+    const workspaceName = `.xopc-test-updated-workspace-root-${process.pid}-${Date.now()}`;
+    const workspaceRoot = join(homedir(), workspaceName);
+    mkdirSync(workspaceRoot, { recursive: true });
+    const project = projects.create({ name: 'Update Workspace Root' });
+
+    const updated = projects.update(project.id, { workspaceRoot: `~/${workspaceName}` });
+
+    expect(updated.workspaceRoot).toBe(workspaceRoot);
+    expect(updated.workspaceRoot).not.toContain('~');
+    expect(isAbsolute(updated.workspaceRoot ?? '')).toBe(true);
+
+    rmSync(workspaceRoot, { recursive: true, force: true });
+  });
+
+  it('requires confirmation before updating to a missing workspace root', () => {
+    const project = projects.create({ name: 'Missing Update Workspace Root' });
+    const workspaceRoot = join(stateDir, 'missing-update-root');
+
+    expect(() => projects.update(project.id, { workspaceRoot })).toThrow('Workspace root does not exist');
   });
 
   it('prevents binding the same workspace root to multiple projects', () => {
