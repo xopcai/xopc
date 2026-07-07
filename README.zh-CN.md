@@ -141,7 +141,7 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 
 - 🏠 **你的机器** — 配置与数据在 **`~/.xopc/`**，无强制云端、无意外账单。
 - 🔑 **使用自己的密钥** — OpenAI、Anthropic、Google、DeepSeek、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端和本地模型可混用，一行配置即可切换模型。详见 **[模型](https://xopcai.github.io/xopc/zh/models)**。
-- 📱 **多个入口，同一个助手** — 终端、浏览器、桌面、[移动端 App](https://github.com/xopcai/xopc-app)、即时通讯共用同一套上下文，无需额外同步。
+- 📱 **多个入口，同一个助手** — 终端、浏览器、桌面、[移动端 App](./apps/mobile-expo)、即时通讯共用同一套上下文，无需额外同步。
 - 🧩 **可按需扩展** — 通过 **`xopc skills install`** 和 **`xopc extensions install`** 扩展工具、频道与 UI；多 Agent 可按场景隔离。
 - ⏰ **支持主动任务** — 用 **自动化** 做定时摘要、提醒与工作流运行；用 **工作流**扇出多子 Agent 任务；用 **多 Agent** 管理不同工作区、工具与系统提示词。
 
@@ -155,7 +155,7 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 | **TUI** | `xopc` 或 `xopc tui`（远程：`xopc tui --url …`） | 全键盘、流式输出，最快终端路径 |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | 脚本、最小终端环境 |
 | **网页** | `xopc gateway` → 打开控制台地址 | 聊天、设置、日志 |
-| **手机** | [xopc-app](https://github.com/xopcai/xopc-app) + 网关配对（[移动端 App](https://xopcai.github.io/xopc/zh/mobile-app)、[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在 iOS/Android 上继续推进循环 |
+| **手机** | [移动端 App](./apps/mobile-expo) + 网关配对（[移动端 App](https://xopcai.github.io/xopc/zh/mobile-app)、[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在 iOS/Android 上继续推进循环 |
 | **即时通讯** | 配置 `channels.*` 并启动网关 | Telegram、微信、飞书/Lark |
 
 ---
@@ -256,7 +256,7 @@ xopc extensions dev ./my-extension
 xopc 围绕目标循环组织：方向、下一步、反馈、重新校准，并且同一个助手可以跨多个入口继续工作。
 
 **能在手机或即时通讯里用吗？**
-可以。建议先用本地 TUI 试用；确认方向后，再启动 gateway，用 [xopc-app](https://github.com/xopcai/xopc-app) 连接 iOS/Android，或配置 Telegram、微信、飞书/Lark。
+可以。建议先用本地 TUI 试用；确认方向后，再启动 gateway，用 [移动端 App](./apps/mobile-expo) 连接 iOS/Android，或配置 Telegram、微信、飞书/Lark。
 
 ---
 

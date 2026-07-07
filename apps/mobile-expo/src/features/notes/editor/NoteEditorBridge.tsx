@@ -47,7 +47,7 @@ type PendingFlush = {
 
 type NativeRichEditorHandle = {
   getMarkdown: () => string;
-  focus: () => void;
+  focus: (position?: 'start' | 'end' | number) => void;
   blur: () => void;
   insertTodo: () => void;
   insertAttachment: (attachment: NonNullable<EditorAttachmentPickResult>) => void;
@@ -131,7 +131,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   const [linkUrl, setLinkUrl] = useState('');
   const sheetVisible = activeSheet !== null;
   const canUseDomEditor = useMemo(() => isExpoDomWebViewAvailable(), []);
-  const keyboardOverlayInset = Platform.OS === 'android' ? 0 : keyboardBottomInset;
+  const keyboardOverlayInset = keyboardBottomInset;
   const toolbarBottomPadding = keyboardBottomInset > 0 ? floatingBottomPadding(0) : floatingBottomPadding(insets.bottom);
   const editorBottomInset = keyboardOverlayInset
     + FLOATING_BOTTOM_OFFSET
@@ -228,7 +228,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     if (!native) return;
     switch (next.type) {
       case 'focus':
-        native.focus();
+        native.focus(next.position);
         return;
       case 'toggleTaskList':
         native.insertTodo();
@@ -300,7 +300,8 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
 
   useImperativeHandle(ref, () => ({
     flushMarkdown,
-  }), [flushMarkdown]);
+    focus: (position) => dispatch({ type: 'focus', position }),
+  }), [dispatch, flushMarkdown]);
 
   const openEditorSheet = useCallback((sheet: EditorSheet) => {
     onFocusChange?.(true);
@@ -845,6 +846,36 @@ function nativeEditorHtml({
         selection.removeAllRanges();
         selection.addRange(savedRange);
       }
+      function placeCaret(position) {
+        var selection = window.getSelection();
+        if (!selection) return;
+        var range = document.createRange();
+        if (position === 'start') {
+          range.setStart(editor, 0);
+          range.collapse(true);
+        } else if (typeof position === 'number') {
+          var remaining = Math.max(0, position);
+          var walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT);
+          var node = walker.nextNode();
+          while (node && remaining > (node.nodeValue || '').length) {
+            remaining -= (node.nodeValue || '').length;
+            node = walker.nextNode();
+          }
+          if (node) {
+            range.setStart(node, Math.min(remaining, (node.nodeValue || '').length));
+            range.collapse(true);
+          } else {
+            range.selectNodeContents(editor);
+            range.collapse(false);
+          }
+        } else {
+          range.selectNodeContents(editor);
+          range.collapse(false);
+        }
+        selection.removeAllRanges();
+        selection.addRange(range);
+        savedRange = range.cloneRange();
+      }
       function insertHtml(html) {
         editor.focus();
         restoreSelection();
@@ -877,7 +908,11 @@ function nativeEditorHtml({
         }
       }
       window.xopcEditor = {
-        focus: function () { editor.focus(); },
+        focus: function (position) {
+          editor.focus();
+          placeCaret(position || 'end');
+          postState();
+        },
         blur: function () { editor.blur(); },
         command: command,
         setAttachmentMap: function (nextMap) {
@@ -946,7 +981,7 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
 
   useImperativeHandle(ref, () => ({
     getMarkdown: () => latestMarkdownRef.current,
-    focus: () => inject('window.xopcEditor && window.xopcEditor.focus();'),
+    focus: (position) => inject(`window.xopcEditor && window.xopcEditor.focus(${JSON.stringify(position ?? 'end')});`),
     blur: () => inject('window.xopcEditor && window.xopcEditor.blur();'),
     insertTodo: () => inject('window.xopcEditor && window.xopcEditor.command("insertTodo");'),
     insertAttachment: (attachment) => {

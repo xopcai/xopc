@@ -141,7 +141,7 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 
 - 🏠 **Your machine** — Data and config under **`~/.xopc/`**. No mandatory cloud or surprise bills.
 - 🔑 **Bring your own keys** — OpenAI, Anthropic, Google, DeepSeek, Ollama, LM Studio, vLLM, and **20+** providers. Mix cloud and local; switch catalog models in one config line. See **[Models](https://xopcai.github.io/xopc/models)**.
-- 📱 **One brain, every screen** — Same assistant in terminal, browser, desktop, [mobile app](https://github.com/xopcai/xopc-app), and IM. No sync layer — one system.
+- 📱 **One brain, every screen** — Same assistant in terminal, browser, desktop, [mobile app](./apps/mobile-expo), and IM. No sync layer — one system.
 - 🧩 **Grows with you** — **`xopc skills install`** · **`xopc extensions install`** for tools, channels, and UI panels; multi-agent routing per context.
 - ⏰ **Proactive** — **Automations** for scheduled summaries, reminders, and workflow runs; **workflows** for fan-out subagent tasks; **multi-agent** routing with isolated workspaces, tools, and prompts.
 
@@ -155,7 +155,7 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 | **TUI** | `xopc` or `xopc tui` (remote: `xopc tui --url …`) | Full keyboard, streaming, fastest terminal path |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | Scripts and minimal TTY |
 | **Web** | `xopc gateway` → open console URL | Chat, settings, logs in the browser |
-| **Mobile** | [xopc-app](https://github.com/xopcai/xopc-app) + gateway pairing ([mobile app](https://xopcai.github.io/xopc/mobile-app), [remote access](https://xopcai.github.io/xopc/remote-access)) | Continue your loop on iOS/Android |
+| **Mobile** | [mobile app](./apps/mobile-expo) + gateway pairing ([mobile app](https://xopcai.github.io/xopc/mobile-app), [remote access](https://xopcai.github.io/xopc/remote-access)) | Continue your loop on iOS/Android |
 | **Messengers** | `channels.*` + gateway | Telegram, WeChat, Feishu/Lark |
 
 ---
@@ -256,7 +256,7 @@ For most users, install the **PC desktop app** from GitHub Releases and complete
 xopc is organized around goal loops: direction, next action, feedback, and recalibration across multiple surfaces.
 
 **Can I use it from my phone or messengers?**  
-Yes. Start with local TUI first; when ready, run the gateway and use [xopc-app](https://github.com/xopcai/xopc-app) on iOS/Android, or configure Telegram, WeChat, or Feishu/Lark.
+Yes. Start with local TUI first; when ready, run the gateway and use the [mobile app](./apps/mobile-expo) on iOS/Android, or configure Telegram, WeChat, or Feishu/Lark.
 
 <a id="desktop-app"></a>
 <a id="electron-desktop"></a>

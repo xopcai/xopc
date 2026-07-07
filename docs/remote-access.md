@@ -4,7 +4,7 @@ Connect to your gateway from another device — phone, laptop, or a remote serve
 
 **Settings UI:** Gateway console → **Settings → Remote access** (`#/settings/remote-access`).
 
-For iOS/Android, use **[xopc-app](https://github.com/xopcai/xopc-app)** with a running gateway. See [Mobile app](./mobile-app.md) for the app-specific setup path.
+For iOS/Android, use the **[xopc mobile app](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo)** with a running gateway. See [Mobile app](./mobile-app.md) for the app-specific setup path.
 
 Only **one public exposure mode** should be active at a time (Tailscale Serve **or** the public FRP tunnel). The Overview tab shows conflicts when both are enabled.
 
@@ -83,7 +83,7 @@ More detail: [Tailscale Serve / Funnel](./gateway/tailscale.md).
 
 ## Public internet (FRP tunnel) {#public-tunnel}
 
-Use when you need a **public HTTPS URL** — for example [xopc-app](https://github.com/xopcai/xopc-app) pairing or reaching the gateway from outside your tailnet.
+Use when you need a **public HTTPS URL** — for example mobile app pairing or reaching the gateway from outside your tailnet.
 
 Traffic is proxied through **frp.xopc.ai**. Treat this as **high risk**: anyone with the URL or pairing QR may reach your gateway if they obtain your Bearer token.
 
@@ -92,7 +92,7 @@ Traffic is proxied through **frp.xopc.ai**. Treat this as **high risk**: anyone 
 1. Open **Remote access → Public internet**.
 2. Read the security notice and click **Start remote access** (consent required on first start).
 3. Wait for the public URL (first start can take 1–3 minutes while HTTPS is provisioned).
-4. Open **Mobile app pairing** below the control card and scan the QR with [xopc-app](./mobile-app.md) (or copy the pairing link).
+4. Open **Mobile app pairing** below the control card and scan the QR with the [mobile app](./mobile-app.md) (or copy the pairing link).
 5. Stop the tunnel when you no longer need remote access.
 
 ### Broker registration secret
@@ -165,7 +165,7 @@ More: [Remote access (SSH + CLI)](./gateway/remote.md).
 
 ## Reverse proxy (self-hosted HTTPS) {#reverse-proxy}
 
-Front the gateway with **your own HTTPS reverse proxy** (Caddy, nginx, Cloudflare Tunnel, etc.) at a custom domain such as `https://gateway.example.com`. The proxy terminates TLS and forwards to the loopback gateway; [xopc-app](./mobile-app.md) pairs over the public URL.
+Front the gateway with **your own HTTPS reverse proxy** (Caddy, nginx, Cloudflare Tunnel, etc.) at a custom domain such as `https://gateway.example.com`. The proxy terminates TLS and forwards to the loopback gateway; the [mobile app](./mobile-app.md) pairs over the public URL.
 
 This is **distinct from** trusted-proxy auth (see [Advanced](#advanced)): here the proxy is just a TLS / domain shim — the gateway still authenticates clients with its own Bearer token. No SSO required.
 
@@ -182,7 +182,7 @@ This is **distinct from** trusted-proxy auth (see [Advanced](#advanced)): here t
 2. If you already accessed the console through the proxy (the URL bar shows `https://gateway.example.com`), the tab **auto-detects** the URL and shows a pairing QR immediately — no save required.
 3. Click **Test** to round-trip `/api/tunnel/pair/ping` and verify TLS + DNS + reachability.
 4. Click **Save as default** to persist as `gateway.publicUrl`. Then other clients (and restarts) see the same URL.
-5. Scan the QR from [xopc-app](https://github.com/xopcai/xopc-app).
+5. Scan the QR from the [mobile app](./mobile-app.md).
 
 The mobile app stores the URL as the primary `baseUrl` and falls back to LAN / FRP if reachable.
 
