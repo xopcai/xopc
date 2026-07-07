@@ -32,7 +32,7 @@ import {
   MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,
 } from '../gateway/chat-limits.js';
 import { resolveTuiSessionKey, resolveTuiStartupSessionKey } from '../routing/resolve-tui-session-key.js';
-import { parseAgentSessionKey } from '../routing/agent-session-key.js';
+import { normalizeAgentId, parseAgentSessionKey } from '../routing/agent-session-key.js';
 import type {
   TuiBackend,
   TuiCompactionResult,
@@ -1352,7 +1352,23 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       autoCreate: true,
     });
     if (!result?.project) return;
-    await client.patchSession(state.currentSessionKey, { projectId: result.project.id });
+    const projectAgentId = result.project.defaultAgentId?.trim()
+      ? normalizeAgentId(result.project.defaultAgentId)
+      : undefined;
+    const currentParsed = parseAgentSessionKey(state.currentSessionKey);
+    if (!opts.agentId?.trim() && currentParsed?.rest && projectAgentId && projectAgentId !== currentAgentId) {
+      const targetSessionKey = `agent:${projectAgentId}:${currentParsed.rest}`;
+      await setSession(targetSessionKey);
+      currentAgentId = projectAgentId;
+      await client.patchSession(state.currentSessionKey, {
+        projectId: result.project.id,
+        workingDirectory: startupWorkingDirectory,
+      });
+      state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
+      state.sessionInfo.workingDirectoryLocked = true;
+    } else {
+      await client.patchSession(state.currentSessionKey, { projectId: result.project.id });
+    }
     const verb = result.created ? 'Created project' : 'Using project';
     chatLog.addStatus(theme.dim(`${verb}: ${result.project.name}`));
   };

@@ -104,6 +104,7 @@ export class ProjectService {
   resolveOrCreateForWorkspacePath(input: {
     workspacePath: string;
     agentId?: string;
+    defaultAgentId?: string;
     autoCreate?: boolean;
   }): WorkspaceProjectMatch | null {
     const existing = this.resolveForWorkspacePath(input.workspacePath);
@@ -116,7 +117,7 @@ export class ProjectService {
     const project = this.create({
       name: inferProjectNameFromWorkspaceRoot(workspaceRoot) ?? undefined,
       workspaceRoot,
-      defaultAgentId: input.agentId,
+      defaultAgentId: Object.hasOwn(input, 'defaultAgentId') ? input.defaultAgentId : input.agentId,
     });
     return { project, reason: 'auto_created', created: true };
   }

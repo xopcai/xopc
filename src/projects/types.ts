@@ -51,6 +51,7 @@ export interface CreateProjectInput {
   defaultAgentId?: string;
   workspaceRoot?: string;
   createWorkspaceRoot?: boolean;
+  projectKind?: string;
   brief?: string;
   instructions?: string;
 }

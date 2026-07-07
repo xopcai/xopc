@@ -10,6 +10,8 @@ import {
   resetXopcDatabaseSingletonForTest,
 } from '../../storage/sqlite/index.js';
 import { GoalService } from '../../goals/index.js';
+import { inferSuggestedProjectDefaultAgentId } from '../project-agent-suggestion.js';
+import { inferProjectKind } from '../project-kind.js';
 import { ProjectService } from '../project-service.js';
 import { canonicalWorkspacePath, ProjectWorkspaceConflictError } from '../workspace-project.js';
 
@@ -130,6 +132,63 @@ describe('ProjectService', () => {
     expect(created?.created).toBe(true);
     expect(created?.project.name).toBe('repo-root');
     expect(created?.project.workspaceRoot).toBe(canonicalWorkspacePath(workspaceRoot));
+  });
+
+  it('infers coding project kind from workspace markers', () => {
+    const workspaceRoot = join(stateDir, 'coding-root');
+    mkdirSync(workspaceRoot, { recursive: true });
+    writeFileSync(join(workspaceRoot, 'tsconfig.json'), '{}');
+
+    const inference = inferProjectKind({ workspaceRoot });
+
+    expect(inference.kind).toBe('coding');
+    expect(inference.confidence).toBeGreaterThan(0.7);
+  });
+
+  it('suggests coder for coding projects when the agent exists', () => {
+    const config = {
+      agents: {
+        default: 'main',
+        list: [
+          { id: 'main', enabled: true },
+          { id: 'coder', enabled: true },
+        ],
+      },
+    };
+
+    expect(inferSuggestedProjectDefaultAgentId({ config: config as never, projectKind: 'coding' })).toBe('coder');
+    expect(inferSuggestedProjectDefaultAgentId({ config: config as never, projectKind: 'general' })).toBeUndefined();
+  });
+
+  it('auto-created coding workspace projects can default to coder without using the current session agent', () => {
+    const workspaceRoot = join(stateDir, 'auto-coder-project');
+    mkdirSync(workspaceRoot, { recursive: true });
+    writeFileSync(join(workspaceRoot, 'package.json'), '{"name":"auto-coder-project"}');
+
+    const created = projects.resolveOrCreateForWorkspacePath({
+      workspacePath: workspaceRoot,
+      agentId: 'main',
+      defaultAgentId: 'coder',
+      autoCreate: true,
+    });
+
+    expect(created?.created).toBe(true);
+    expect(created?.project.defaultAgentId).toBe('coder');
+  });
+
+  it('auto-created general workspace projects can keep the global default dynamic', () => {
+    const workspaceRoot = join(stateDir, 'auto-general-project');
+    mkdirSync(workspaceRoot, { recursive: true });
+
+    const created = projects.resolveOrCreateForWorkspacePath({
+      workspacePath: workspaceRoot,
+      agentId: 'main',
+      defaultAgentId: undefined,
+      autoCreate: true,
+    });
+
+    expect(created?.created).toBe(true);
+    expect(created?.project.defaultAgentId).toBeUndefined();
   });
 
   it('checks duplicate workspace roots beyond the first project page', () => {
