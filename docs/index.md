@@ -52,3 +52,13 @@ features:
     details: STT/TTS where configured (Telegram, gateway). Images — vision plus generation when wired up.
     link: /voice
 ---
+
+## Start by what you want
+
+| Goal | Start here |
+| --- | --- |
+| I want a private AI assistant on my computer | [First 5 Minutes](./first-5-minutes.md) |
+| I want the same assistant in Telegram, WeChat, or Feishu/Lark | [Channels](./channels/index.md) |
+| I want scheduled reviews, reminders, and summaries | [Automations](./automations.md) |
+| I want multiple agents for work, code, and personal contexts | [Routing system](./routing-system.md) |
+| I want to extend xopc with tools, channels, or reusable skills | [Skills](./skills.md) and [Extensions](./extensions.md) |
