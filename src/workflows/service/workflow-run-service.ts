@@ -103,7 +103,10 @@ export class WorkflowRunService {
     const goal = params.goal ?? '';
     const projectId =
       params.projectId?.trim() ||
-      (params.goalId ? new GoalService().get(params.goalId)?.projectId : undefined);
+      (params.goalId ? new GoalService().get(params.goalId)?.projectId : undefined) ||
+      (params.parentSessionKey?.trim()
+        ? (await this.options.service.sessionIndexInstance.getStore().getMetadata(params.parentSessionKey.trim()))?.projectId
+        : undefined);
     const { sessionKey } = await this.options.sessionBridge.prepareRunSession({
       runId,
       agentId: params.agentId,

@@ -3,6 +3,15 @@ import { ProjectStore } from './project-store.js';
 import { bindGoalToProject, listProjectGoalIds, unbindGoalFromProject } from './goal-bind.js';
 import { bindSessionToProject, listProjectSessionKeys, unbindSessionFromProject } from './session-bind.js';
 import type { CreateProjectInput, Project, ProjectListQuery, ProjectListResult, ProjectWithDetails, UpdateProjectInput } from './types.js';
+import {
+  canonicalWorkspacePath,
+  inferProjectNameFromWorkspaceRoot,
+  isPathSameOrInsideWorkspace,
+  isSafeAutoCreateWorkspaceRoot,
+  ProjectWorkspaceConflictError,
+  resolveWorkspaceProjectRoot,
+  type WorkspaceProjectMatch,
+} from './workspace-project.js';
 
 export type ProjectSuggestion = {
   projectId: string;
@@ -14,9 +23,28 @@ export type ProjectSuggestion = {
 export class ProjectService {
   constructor(private readonly store = new ProjectStore()) {}
 
+  private listAllProjects(): Project[] {
+    const items: Project[] = [];
+    let offset = 0;
+    const limit = 500;
+    while (true) {
+      const page = this.list({ limit, offset });
+      items.push(...page.items);
+      if (!page.hasMore || page.items.length === 0) break;
+      offset += page.items.length;
+    }
+    return items;
+  }
+
   create(input: CreateProjectInput): Project {
-    const slug = input.slug?.trim() || this.store.generateSlug(input.name);
-    return this.store.create({ ...input, slug });
+    const workspaceRoot = input.workspaceRoot?.trim();
+    if (workspaceRoot) {
+      const existing = this.findByWorkspaceRoot(workspaceRoot);
+      if (existing) throw new ProjectWorkspaceConflictError(existing);
+    }
+    const name = input.name?.trim() || inferProjectNameFromWorkspaceRoot(workspaceRoot) || '';
+    const slug = input.slug?.trim() || this.store.generateSlug(name);
+    return this.store.create({ ...input, name, slug });
   }
 
   get(id: string): Project | null {
@@ -31,7 +59,59 @@ export class ProjectService {
     return this.store.list(query);
   }
 
+  findByWorkspaceRoot(workspaceRoot: string, options: { excludeProjectId?: string } = {}): Project | null {
+    const target = canonicalWorkspacePath(workspaceRoot);
+    if (!target) return null;
+    for (const project of this.listAllProjects()) {
+      if (options.excludeProjectId && project.id === options.excludeProjectId) continue;
+      const projectRoot = canonicalWorkspacePath(project.workspaceRoot);
+      if (projectRoot && isPathSameOrInsideWorkspace(projectRoot, target) && isPathSameOrInsideWorkspace(target, projectRoot)) {
+        return project;
+      }
+    }
+    return null;
+  }
+
+  resolveForWorkspacePath(workspacePath: string): { project: Project; reason: 'exact' | 'contained' } | null {
+    const target = canonicalWorkspacePath(workspacePath);
+    if (!target) return null;
+    let best: { project: Project; root: string; reason: 'exact' | 'contained' } | null = null;
+    for (const project of this.listAllProjects()) {
+      const root = canonicalWorkspacePath(project.workspaceRoot);
+      if (!root || !isPathSameOrInsideWorkspace(root, target)) continue;
+      const reason = isPathSameOrInsideWorkspace(root, target) && isPathSameOrInsideWorkspace(target, root) ? 'exact' : 'contained';
+      if (!best || root.length > best.root.length) {
+        best = { project, root, reason };
+      }
+    }
+    return best ? { project: best.project, reason: best.reason } : null;
+  }
+
+  resolveOrCreateForWorkspacePath(input: {
+    workspacePath: string;
+    agentId?: string;
+    autoCreate?: boolean;
+  }): WorkspaceProjectMatch | null {
+    const existing = this.resolveForWorkspacePath(input.workspacePath);
+    if (existing) return { project: existing.project, reason: existing.reason, created: false };
+    if (!input.autoCreate) return null;
+    const workspaceRoot = resolveWorkspaceProjectRoot(input.workspacePath) ?? canonicalWorkspacePath(input.workspacePath);
+    if (!workspaceRoot || !isSafeAutoCreateWorkspaceRoot(workspaceRoot)) return null;
+    const rootExisting = this.resolveForWorkspacePath(workspaceRoot);
+    if (rootExisting) return { project: rootExisting.project, reason: rootExisting.reason, created: false };
+    const project = this.create({
+      name: inferProjectNameFromWorkspaceRoot(workspaceRoot) ?? undefined,
+      workspaceRoot,
+      defaultAgentId: input.agentId,
+    });
+    return { project, reason: 'auto_created', created: true };
+  }
+
   update(id: string, input: UpdateProjectInput): Project {
+    if (input.workspaceRoot !== undefined && input.workspaceRoot !== null && input.workspaceRoot.trim()) {
+      const existing = this.findByWorkspaceRoot(input.workspaceRoot, { excludeProjectId: id });
+      if (existing) throw new ProjectWorkspaceConflictError(existing);
+    }
     return this.store.update(id, input);
   }
 

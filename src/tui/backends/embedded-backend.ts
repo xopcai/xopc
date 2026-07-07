@@ -14,7 +14,7 @@ import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
 import type { ExportFormat } from '../../session/types.js';
 import { SessionIndex } from '../../session/index.js';
-import { openXopcDatabase } from '../../storage/sqlite/index.js';
+import { getSessionMetadata, openXopcDatabase } from '../../storage/sqlite/index.js';
 import { buildWorkflowChildTools } from '../../agent/workflow/workflow-child-tools.js';
 import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.types.js';
 import { WorkflowRunService } from '../../workflows/service/workflow-run-service.js';
@@ -36,6 +36,7 @@ import type {
   TuiWorkspaceFileSearchEntry,
   TuiWorkflowRunStartRequest,
   TuiWorkflowRunStartResult,
+  TuiStartupProjectResult,
 } from '../tui-backend.js';
 import type { SessionInfo } from '../tui-types.js';
 import { sessionMetadataToTuiItem } from '../tui-session-format.js';
@@ -44,6 +45,7 @@ import { buildTuiTranscriptTree, transcriptTreeEntryIdToRowNumber } from '../tui
 import { ChatStreamMapper } from '../../gateway/chat-stream/mapper.js';
 import { collectTuiStartupResources } from '../tui-startup-resources.js';
 import { fuzzySearchWorkspaceFiles } from '../../gateway/workspace-file-search.js';
+import { ProjectService } from '../../projects/project-service.js';
 
 const log = createLogger('TUI:Embedded');
 
@@ -237,6 +239,42 @@ export class EmbeddedBackend implements TuiBackend {
       sessionKey: result.sessionKey,
       definitionId: opts.definitionId,
     };
+  }
+
+  async resolveStartupProject(opts: {
+    workspacePath: string;
+    sessionKey: string;
+    agentId: string;
+    autoCreate?: boolean;
+  }): Promise<TuiStartupProjectResult> {
+    await this.sessionIndexReady;
+    if (!this.sessionIndex) return { project: null };
+    const projects = new ProjectService();
+    const match = projects.resolveOrCreateForWorkspacePath({
+      workspacePath: opts.workspacePath,
+      agentId: opts.agentId,
+      autoCreate: opts.autoCreate !== false,
+    });
+    if (!match) return { project: null };
+    if (!getSessionMetadata(opts.sessionKey)) {
+      await this.sessionIndex.getStore().resolveTranscriptPath(opts.sessionKey, {
+        metadata: {
+          sourceChannel: 'tui',
+          sourceChatId: `default:direct:${opts.sessionKey}`,
+          sessionType: 'chat',
+          projectId: match.project.id,
+          routing: {
+            agentId: opts.agentId,
+            source: 'tui',
+            accountId: 'default',
+            peerKind: 'direct',
+            peerId: opts.sessionKey,
+          },
+        },
+      });
+    }
+    projects.attachSession(opts.sessionKey, match.project.id);
+    return { project: match.project, created: match.created, reason: match.reason };
   }
 
   async searchWorkspaceFiles(
@@ -487,6 +525,12 @@ export class EmbeddedBackend implements TuiBackend {
     patch: Record<string, unknown>,
   ): Promise<void> {
     const agent = await this.ensureAgent();
+    const projectId = typeof patch.projectId === 'string' ? patch.projectId.trim() : '';
+    if (projectId) {
+      await this.sessionIndexReady;
+      await this.sessionIndex?.getStore().resolveTranscriptPath(sessionKey);
+      new ProjectService().attachSession(sessionKey, projectId);
+    }
     const result = await agent.sessionConfig.patch(sessionKey, {
       model: typeof patch.model === 'string' ? patch.model : undefined,
       thinkingLevel: typeof patch.thinkingLevel === 'string' ? patch.thinkingLevel : undefined,

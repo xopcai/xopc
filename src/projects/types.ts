@@ -45,7 +45,7 @@ export interface ProjectListQuery {
 }
 
 export interface CreateProjectInput {
-  name: string;
+  name?: string;
   slug?: string;
   description?: string;
   defaultAgentId?: string;

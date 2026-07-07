@@ -276,6 +276,46 @@ describe('WorkflowRunService helpers', () => {
     }));
   });
 
+  it('inherits project id from the parent session when starting a workflow run', async () => {
+    const definition = createDefinition();
+    const project = new ProjectService().create({ name: 'Parent Session Project' });
+    const parentSessionKey = 'agent:main:tui:parent-session-project';
+    const getMetadata = vi.fn(async (key: string) => (key === parentSessionKey ? { projectId: project.id } : null));
+    const prepareRunSession = vi.fn(async () => ({
+      sessionKey: 'agent:main:workflow:default:run:parent-session-project',
+    }));
+    const service = new WorkflowRunService({
+      service: {
+        ...createGatewayHostStub(),
+        sessionIndexInstance: { getStore: () => ({ getMetadata }) },
+      } as never,
+      sessionBridge: { prepareRunSession } as never,
+      buildChildTools: () => [],
+      definitionRegistry: {
+        async list() {
+          return [];
+        },
+        async get() {
+          return definition;
+        },
+      },
+    });
+
+    const result = await service.startWorkflowRun({
+      agentId: 'main',
+      definitionId: definition.id,
+      input: {},
+      parentSessionKey,
+      source: { kind: 'chat', sessionKey: parentSessionKey },
+    });
+
+    expect(result.ok).toBe(true);
+    expect(prepareRunSession).toHaveBeenCalledWith(expect.objectContaining({
+      parentSessionKey,
+      projectId: project.id,
+    }));
+  });
+
   it('preserves project metadata when retrying a workflow run', async () => {
     const definition = createDefinition();
     const config = {} as import('../../config/schema.js').Config;

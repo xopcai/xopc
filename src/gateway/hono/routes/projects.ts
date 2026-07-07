@@ -8,6 +8,7 @@ import {
   buildProjectLoopOverview,
   isValidProjectAgentId,
   normalizeProjectAgentId,
+  ProjectWorkspaceConflictError,
   resolveProjectAgentId,
   type ProjectStatus,
   type ProjectWorkflowRunBrief,
@@ -153,20 +154,28 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.post('/api/projects', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const name = textField(body, 'name')?.trim();
-    if (!name) return c.json({ ok: false, error: 'Missing name' }, 400);
+    const workspaceRoot = textField(body, 'workspaceRoot')?.trim();
+    if (!name && !workspaceRoot) return c.json({ ok: false, error: 'Missing name' }, 400);
     const defaultAgentId = normalizeProjectAgentId(textField(body, 'defaultAgentId'));
     if (!isValidProjectAgentId(service.currentConfig, defaultAgentId)) {
       return c.json({ ok: false, error: 'Default agent not found' }, 400);
     }
-    const project = service.projects.create({
-      name,
-      description: textField(body, 'description'),
-      defaultAgentId,
-      workspaceRoot: textField(body, 'workspaceRoot'),
-      brief: textField(body, 'brief'),
-      instructions: textField(body, 'instructions'),
-    });
-    return c.json({ ok: true, project }, 201);
+    try {
+      const project = service.projects.create({
+        name,
+        description: textField(body, 'description'),
+        defaultAgentId,
+        workspaceRoot,
+        brief: textField(body, 'brief'),
+        instructions: textField(body, 'instructions'),
+      });
+      return c.json({ ok: true, project }, 201);
+    } catch (error) {
+      if (error instanceof ProjectWorkspaceConflictError) {
+        return c.json({ ok: false, code: 'workspace_already_bound', error: error.message, project: error.project }, 409);
+      }
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
+    }
   });
 
   authenticated.get('/api/projects', async (c) => {
@@ -185,6 +194,53 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.get('/api/projects/suggestions', async (c) => {
     const sessionKey = c.req.query('sessionKey')?.trim();
     return c.json({ ok: true, suggestions: sessionKey ? service.projects.suggestProjectsForSession(sessionKey) : [] });
+  });
+
+  authenticated.post('/api/projects/resolve-workspace', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const workspacePath = textField(body, 'workspacePath')?.trim();
+    if (!workspacePath) return c.json({ ok: false, error: 'Missing workspacePath' }, 400);
+    const agentId = textField(body, 'agentId')?.trim() || 'main';
+    let match;
+    try {
+      match = service.projects.resolveOrCreateForWorkspacePath({
+        workspacePath,
+        agentId,
+        autoCreate: body.autoCreate !== false,
+      });
+    } catch (error) {
+      if (error instanceof ProjectWorkspaceConflictError) {
+        match = { project: error.project, reason: 'exact' as const, created: false };
+      } else {
+        throw error;
+      }
+    }
+    if (!match) return c.json({ ok: true, project: null });
+
+    const sessionKey = textField(body, 'sessionKey')?.trim();
+    if (sessionKey) {
+      const existingSession = getSessionMetadata(sessionKey);
+      if (!existingSession) {
+        await service.sessionIndexInstance.saveMessages(sessionKey, [], {
+          metadata: {
+            sourceChannel: 'tui',
+            sourceChatId: `default:direct:${sessionKey}`,
+            sessionType: 'chat',
+            projectId: match.project.id,
+            routing: {
+              agentId,
+              source: 'tui',
+              accountId: 'default',
+              peerKind: 'direct',
+              peerId: sessionKey,
+            },
+          },
+        });
+      }
+      service.projects.attachSession(sessionKey, match.project.id);
+    }
+
+    return c.json({ ok: true, ...match });
   });
 
   authenticated.get('/api/projects/:id/overview', async (c) => {
@@ -318,6 +374,9 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       });
       return c.json({ ok: true, project });
     } catch (error) {
+      if (error instanceof ProjectWorkspaceConflictError) {
+        return c.json({ ok: false, code: 'workspace_already_bound', error: error.message, project: error.project }, 409);
+      }
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
     }
   });

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -11,6 +11,7 @@ import {
 } from '../../storage/sqlite/index.js';
 import { GoalService } from '../../goals/index.js';
 import { ProjectService } from '../project-service.js';
+import { canonicalWorkspacePath, ProjectWorkspaceConflictError } from '../workspace-project.js';
 
 const SESSION_KEY = 'agent:main:webchat:default:direct:project-test';
 
@@ -39,6 +40,77 @@ describe('ProjectService', () => {
     expect(second.slug).toBe('xopc-project-2');
     expect(projects.getBySlug('xopc-project')?.id).toBe(first.id);
     expect(projects.list({ search: 'xopc' }).total).toBe(2);
+  });
+
+  it('uses the workspace folder name when project name is omitted', () => {
+    const workspaceRoot = join(stateDir, 'folder-name-project');
+    mkdirSync(workspaceRoot, { recursive: true });
+
+    const project = projects.create({ workspaceRoot });
+
+    expect(project.name).toBe('folder-name-project');
+    expect(project.slug).toBe('folder-name-project');
+  });
+
+  it('prevents binding the same workspace root to multiple projects', () => {
+    const workspaceRoot = join(stateDir, 'duplicate-root');
+    mkdirSync(workspaceRoot, { recursive: true });
+    const first = projects.create({ name: 'First', workspaceRoot });
+
+    expect(() => projects.create({ name: 'Second', workspaceRoot })).toThrow(ProjectWorkspaceConflictError);
+    expect(projects.findByWorkspaceRoot(workspaceRoot)?.id).toBe(first.id);
+  });
+
+  it('resolves or auto-creates a project for a TUI workspace path', () => {
+    const workspaceRoot = join(stateDir, 'auto-project');
+    const child = join(workspaceRoot, 'src');
+    mkdirSync(child, { recursive: true });
+
+    const created = projects.resolveOrCreateForWorkspacePath({ workspacePath: workspaceRoot, agentId: 'main', autoCreate: true });
+    expect(created?.created).toBe(true);
+    expect(created?.project.name).toBe('auto-project');
+
+    const matched = projects.resolveOrCreateForWorkspacePath({ workspacePath: child, agentId: 'main', autoCreate: true });
+    expect(matched?.created).toBe(false);
+    expect(matched?.reason).toBe('contained');
+    expect(matched?.project.id).toBe(created?.project.id);
+  });
+
+  it('auto-creates a project at the detected project root instead of the launch subdirectory', () => {
+    const workspaceRoot = join(stateDir, 'repo-root');
+    const child = join(workspaceRoot, 'src', 'feature');
+    mkdirSync(child, { recursive: true });
+    writeFileSync(join(workspaceRoot, 'package.json'), '{"name":"repo-root"}');
+
+    const created = projects.resolveOrCreateForWorkspacePath({ workspacePath: child, agentId: 'main', autoCreate: true });
+
+    expect(created?.created).toBe(true);
+    expect(created?.project.name).toBe('repo-root');
+    expect(created?.project.workspaceRoot).toBe(canonicalWorkspacePath(workspaceRoot));
+  });
+
+  it('checks duplicate workspace roots beyond the first project page', () => {
+    const workspaceRoot = join(stateDir, 'paged-duplicate-root');
+    mkdirSync(workspaceRoot, { recursive: true });
+    const first = projects.create({ name: 'Paged Duplicate', workspaceRoot });
+    for (let index = 0; index < 501; index += 1) {
+      projects.create({ name: `Filler ${index}` });
+    }
+
+    expect(() => projects.create({ name: 'Paged Duplicate Again', workspaceRoot })).toThrow(ProjectWorkspaceConflictError);
+    expect(projects.findByWorkspaceRoot(workspaceRoot)?.id).toBe(first.id);
+  });
+
+  it('returns an existing archived project for an occupied workspace instead of auto-creating a duplicate', () => {
+    const workspaceRoot = join(stateDir, 'archived-root');
+    mkdirSync(workspaceRoot, { recursive: true });
+    const archived = projects.create({ name: 'Archived Workspace', workspaceRoot });
+    projects.update(archived.id, { status: 'archived' });
+
+    const match = projects.resolveOrCreateForWorkspacePath({ workspacePath: workspaceRoot, agentId: 'main', autoCreate: true });
+
+    expect(match?.created).toBe(false);
+    expect(match?.project.id).toBe(archived.id);
   });
 
   it('stores and clears the project default agent id', () => {
