@@ -9,6 +9,7 @@ import {
   isValidProjectAgentId,
   normalizeProjectAgentId,
   ProjectWorkspaceConflictError,
+  ProjectWorkspaceMissingError,
   resolveProjectAgentId,
   type ProjectStatus,
   type ProjectWorkflowRunBrief,
@@ -166,6 +167,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         description: textField(body, 'description'),
         defaultAgentId,
         workspaceRoot,
+        createWorkspaceRoot: body.createWorkspaceRoot === true,
         brief: textField(body, 'brief'),
         instructions: textField(body, 'instructions'),
       });
@@ -173,6 +175,9 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     } catch (error) {
       if (error instanceof ProjectWorkspaceConflictError) {
         return c.json({ ok: false, code: 'workspace_already_bound', error: error.message, project: error.project }, 409);
+      }
+      if (error instanceof ProjectWorkspaceMissingError) {
+        return c.json({ ok: false, code: 'workspace_root_missing', error: error.message, workspaceRoot: error.workspaceRoot }, 409);
       }
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 400);
     }
@@ -369,6 +374,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         ...(status ? { status } : {}),
         ...(defaultAgentPatch !== undefined ? { defaultAgentId: defaultAgentId ?? null } : {}),
         ...(optionalTextField(body, 'workspaceRoot') !== undefined ? { workspaceRoot: optionalTextField(body, 'workspaceRoot') } : {}),
+        createWorkspaceRoot: body.createWorkspaceRoot === true,
         ...(optionalTextField(body, 'brief') !== undefined ? { brief: optionalTextField(body, 'brief') } : {}),
         ...(optionalTextField(body, 'instructions') !== undefined ? { instructions: optionalTextField(body, 'instructions') } : {}),
       });
@@ -376,6 +382,9 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     } catch (error) {
       if (error instanceof ProjectWorkspaceConflictError) {
         return c.json({ ok: false, code: 'workspace_already_bound', error: error.message, project: error.project }, 409);
+      }
+      if (error instanceof ProjectWorkspaceMissingError) {
+        return c.json({ ok: false, code: 'workspace_root_missing', error: error.message, workspaceRoot: error.workspaceRoot }, 409);
       }
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
     }

@@ -1,4 +1,4 @@
-import { existsSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, statSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, isAbsolute, join, parse, relative, resolve } from 'node:path';
@@ -20,6 +20,13 @@ export class ProjectWorkspaceConflictError extends Error {
   constructor(readonly project: Project, message = `Workspace is already bound to project: ${project.name}`) {
     super(message);
     this.name = 'ProjectWorkspaceConflictError';
+  }
+}
+
+export class ProjectWorkspaceMissingError extends Error {
+  constructor(readonly workspaceRoot: string, message = `Workspace root does not exist: ${workspaceRoot}`) {
+    super(message);
+    this.name = 'ProjectWorkspaceMissingError';
   }
 }
 
@@ -53,6 +60,20 @@ export function canonicalWorkspacePath(raw: string | null | undefined): string |
   } catch {
     return normalized;
   }
+}
+
+export function workspaceDirectoryExists(workspaceRoot: string | null | undefined): boolean {
+  const canonical = canonicalWorkspacePath(workspaceRoot);
+  if (!canonical) return false;
+  try {
+    return statSync(canonical).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+export function ensureWorkspaceDirectory(workspaceRoot: string): void {
+  mkdirSync(workspaceRoot, { recursive: true });
 }
 
 function directoryForWorkspaceProbe(pathValue: string): string {

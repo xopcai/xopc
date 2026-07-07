@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { Activity, AlertCircle, ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, File, Folder, LayoutDashboard, MessageSquarePlus, Pause, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, Zap, type LucideIcon } from 'lucide-react';
+import { Activity, AlertCircle, ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, File, Folder, FolderPlus, LayoutDashboard, MessageSquarePlus, Pause, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, Zap, type LucideIcon } from 'lucide-react';
 import { type FormEvent, type MouseEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -180,6 +180,11 @@ function directoryName(path: string): string {
   return path.trim().replace(/[\\/]+$/, '').split(/[\\/]/).filter(Boolean).pop() ?? '';
 }
 
+function getMissingWorkspaceRoot(err: unknown): string | null {
+  const body = (err as { body?: { code?: string; workspaceRoot?: string } } | null)?.body;
+  return body?.code === 'workspace_root_missing' && body.workspaceRoot ? body.workspaceRoot : null;
+}
+
 function ProjectSwitcher({
   currentProject,
   pm,
@@ -203,6 +208,7 @@ function ProjectSwitcher({
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [missingWorkspaceRoot, setMissingWorkspaceRoot] = useState<string | null>(null);
 
   const loadProjects = useCallback(async () => {
     setLoading(true);
@@ -260,17 +266,18 @@ function ProjectSwitcher({
     setOpen(false);
   };
 
-  const onCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitCreate = useCallback(async (options: { createWorkspaceRoot?: boolean } = {}) => {
     const trimmedWorkspace = workspaceRoot.trim();
     const trimmedName = name.trim() || (createMode === 'directory' ? directoryName(trimmedWorkspace) : '');
     if (!trimmedName) return;
     setCreating(true);
     setCreateError(null);
+    setMissingWorkspaceRoot(null);
     try {
       const project = await createProject({
         name: trimmedName,
         ...(trimmedWorkspace ? { workspaceRoot: trimmedWorkspace } : {}),
+        ...(options.createWorkspaceRoot ? { createWorkspaceRoot: true } : {}),
       });
       setCreateOpen(false);
       setName('');
@@ -278,11 +285,31 @@ function ProjectSwitcher({
       setProjects((items) => [project, ...items.filter((item) => item.id !== project.id)]);
       navigate(`/projects/${encodeURIComponent(project.id)}`);
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : String(err));
+      const missingRoot = getMissingWorkspaceRoot(err);
+      if (missingRoot) {
+        setMissingWorkspaceRoot(missingRoot);
+        setCreateOpen(false);
+      } else {
+        setCreateError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       setCreating(false);
     }
   }, [createMode, name, navigate, workspaceRoot]);
+
+  const onCreate = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void submitCreate();
+  }, [submitCreate]);
+
+  const createMissingWorkspaceAndProject = useCallback(() => {
+    void submitCreate({ createWorkspaceRoot: true });
+  }, [submitCreate]);
+
+  const returnToCreateFromMissingWorkspace = useCallback(() => {
+    setMissingWorkspaceRoot(null);
+    setCreateOpen(true);
+  }, []);
 
   const onWorkspaceChange = (next: string) => {
     setWorkspaceRoot(next);
@@ -473,6 +500,41 @@ function ProjectSwitcher({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+
+      <Dialog.Root open={Boolean(missingWorkspaceRoot)} onOpenChange={(next) => {
+        if (!next) setMissingWorkspaceRoot(null);
+      }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[110] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+            <div className="border-b border-edge px-5 py-4">
+              <Dialog.Title className="text-base font-semibold text-fg">{projectsText.workspaceMissingTitle}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
+                {missingWorkspaceRoot
+                  ? interpolate(projectsText.workspaceMissingDescription, { workspace: missingWorkspaceRoot })
+                  : null}
+              </Dialog.Description>
+            </div>
+            {missingWorkspaceRoot ? (
+              <div className="px-5 py-4">
+                <div className="flex items-center gap-2 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg-muted">
+                  <Folder className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+                  <span className="min-w-0 truncate">{missingWorkspaceRoot}</span>
+                </div>
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
+              <Button type="button" variant="ghost" className="rounded-lg" onClick={returnToCreateFromMissingWorkspace} disabled={creating}>
+                {projectsText.workspaceMissingBack}
+              </Button>
+              <Button type="button" variant="primary" className="rounded-lg" onClick={createMissingWorkspaceAndProject} disabled={creating}>
+                <FolderPlus className="size-4" aria-hidden />
+                {projectsText.workspaceMissingCreate}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </>
   );
 }
@@ -508,6 +570,7 @@ export function ProjectDetailPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [missingWorkspaceRoot, setMissingWorkspaceRoot] = useState<string | null>(null);
   const [deletingProject, setDeletingProject] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
   const [workflowsLoading, setWorkflowsLoading] = useState(false);
@@ -970,11 +1033,11 @@ export function ProjectDetailPage() {
     return () => clearPageHeader();
   }, [clearPageHeader, headerEnd, headerStart, pm, project, projectsText, setPageHeader, wd]);
 
-  async function saveProject(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitProjectSave(options: { createWorkspaceRoot?: boolean } = {}) {
     if (!project || !draft.name.trim()) return;
     setSaving(true);
     setError(null);
+    setMissingWorkspaceRoot(null);
     try {
       const updated = await updateProject(project.id, {
         name: draft.name.trim(),
@@ -982,6 +1045,7 @@ export function ProjectDetailPage() {
         description: draft.description,
         defaultAgentId: draft.defaultAgentId,
         workspaceRoot: draft.workspaceRoot,
+        ...(options.createWorkspaceRoot ? { createWorkspaceRoot: true } : {}),
         brief: draft.brief,
         instructions: draft.instructions,
       });
@@ -989,10 +1053,20 @@ export function ProjectDetailPage() {
       setOverview((current) => current ? { ...current, project: { ...current.project, ...updated } } : null);
       setSelectedAgentId(updated.defaultAgentId ?? '');
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      const missingRoot = getMissingWorkspaceRoot(err);
+      if (missingRoot) {
+        setMissingWorkspaceRoot(missingRoot);
+      } else {
+        setError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
       setSaving(false);
     }
+  }
+
+  function saveProject(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void submitProjectSave();
   }
 
   async function removeProject() {
@@ -1881,6 +1955,41 @@ export function ProjectDetailPage() {
               >
                 <Trash2 className="size-4" aria-hidden />
                 {pm.settings.deleteConfirmAction}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={Boolean(missingWorkspaceRoot)} onOpenChange={(open) => {
+        if (!open) setMissingWorkspaceRoot(null);
+      }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+            <div className="border-b border-edge px-5 py-4">
+              <Dialog.Title className="text-base font-semibold text-fg">{pm.settings.workspaceMissingTitle}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
+                {missingWorkspaceRoot
+                  ? interpolate(pm.settings.workspaceMissingDescription, { workspace: missingWorkspaceRoot })
+                  : null}
+              </Dialog.Description>
+            </div>
+            {missingWorkspaceRoot ? (
+              <div className="px-5 py-4">
+                <div className="flex items-center gap-2 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg-muted">
+                  <Folder className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+                  <span className="min-w-0 truncate">{missingWorkspaceRoot}</span>
+                </div>
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
+              <Button type="button" variant="ghost" className="rounded-lg" onClick={() => setMissingWorkspaceRoot(null)} disabled={saving}>
+                {pm.settings.workspaceMissingBack}
+              </Button>
+              <Button type="button" variant="primary" className="rounded-lg" onClick={() => void submitProjectSave({ createWorkspaceRoot: true })} disabled={saving}>
+                <FolderPlus className="size-4" aria-hidden />
+                {pm.settings.workspaceMissingCreate}
               </Button>
             </div>
           </Dialog.Content>

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -54,6 +54,7 @@ describe('SessionConfigService project workspace', () => {
   it('rejects manual working directory changes for project sessions with a workspace root', async () => {
     ensureSessionRecord(SESSION_KEY, process.cwd());
     const projects = new ProjectService();
+    mkdirSync(join(stateDir, 'project-root'), { recursive: true });
     const project = projects.create({
       name: 'Workspace Locked Project',
       workspaceRoot: join(stateDir, 'project-root'),

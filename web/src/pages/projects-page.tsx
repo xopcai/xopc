@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { FolderKanban, Plus, Search } from 'lucide-react';
+import { ArrowRight, FolderKanban, FolderPlus, Plus, Search } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -35,6 +35,11 @@ function directoryName(value: string): string {
 function getWorkspaceConflictProject(err: unknown): Project | null {
   const body = (err as { body?: { code?: string; project?: Project } } | null)?.body;
   return body?.code === 'workspace_already_bound' && body.project ? body.project : null;
+}
+
+function getMissingWorkspaceRoot(err: unknown): string | null {
+  const body = (err as { body?: { code?: string; workspaceRoot?: string } } | null)?.body;
+  return body?.code === 'workspace_root_missing' && body.workspaceRoot ? body.workspaceRoot : null;
 }
 
 function formatDate(value: string | undefined, fallback: string): string {
@@ -88,6 +93,8 @@ export function ProjectsPage() {
   const [workspaceRoot, setWorkspaceRoot] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [workspaceConflict, setWorkspaceConflict] = useState<Project | null>(null);
+  const [missingWorkspaceRoot, setMissingWorkspaceRoot] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,17 +126,18 @@ export function ProjectsPage() {
     return { active, paused, archived };
   }, [projects]);
 
-  const onCreate = useCallback(async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const submitProjectCreate = useCallback(async (options: { createWorkspaceRoot?: boolean } = {}) => {
     const trimmedName = name.trim();
     const trimmedWorkspace = workspaceRoot.trim();
     if (!trimmedName && !trimmedWorkspace) return;
     setCreating(true);
     setError(null);
+    setMissingWorkspaceRoot(null);
     try {
       const project = await createProject({
         ...(trimmedName ? { name: trimmedName } : {}),
         ...(trimmedWorkspace ? { workspaceRoot: trimmedWorkspace } : {}),
+        ...(options.createWorkspaceRoot ? { createWorkspaceRoot: true } : {}),
       });
       setProjects((items) => [project, ...items]);
       setName('');
@@ -139,16 +147,47 @@ export function ProjectsPage() {
       const conflictProject = getWorkspaceConflictProject(err);
       if (conflictProject) {
         setProjects((items) => [conflictProject, ...items.filter((item) => item.id !== conflictProject.id)]);
-        setError(`Workspace is already bound to project “${conflictProject.name}”. Open that project to continue.`);
+        setWorkspaceConflict(conflictProject);
         setCreateOpen(false);
-        navigate(`/projects/${encodeURIComponent(conflictProject.id)}`);
       } else {
-        setError(err instanceof Error ? err.message : String(err));
+        const missingRoot = getMissingWorkspaceRoot(err);
+        if (missingRoot) {
+          setMissingWorkspaceRoot(missingRoot);
+          setCreateOpen(false);
+        } else {
+          setError(err instanceof Error ? err.message : String(err));
+        }
       }
     } finally {
       setCreating(false);
     }
-  }, [name, navigate, workspaceRoot]);
+  }, [name, workspaceRoot]);
+
+  const onCreate = useCallback((event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void submitProjectCreate();
+  }, [submitProjectCreate]);
+
+  const openConflictProject = useCallback(() => {
+    if (!workspaceConflict) return;
+    const projectId = workspaceConflict.id;
+    setWorkspaceConflict(null);
+    navigate(`/projects/${encodeURIComponent(projectId)}`);
+  }, [navigate, workspaceConflict]);
+
+  const returnToCreateFromConflict = useCallback(() => {
+    setWorkspaceConflict(null);
+    setCreateOpen(true);
+  }, []);
+
+  const createMissingWorkspaceAndProject = useCallback(() => {
+    void submitProjectCreate({ createWorkspaceRoot: true });
+  }, [submitProjectCreate]);
+
+  const returnToCreateFromMissingWorkspace = useCallback(() => {
+    setMissingWorkspaceRoot(null);
+    setCreateOpen(true);
+  }, []);
 
   const headerEnd = useMemo(
     () => (
@@ -242,6 +281,78 @@ export function ProjectsPage() {
                 </Button>
               </div>
             </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={Boolean(workspaceConflict)} onOpenChange={(open) => {
+        if (!open) setWorkspaceConflict(null);
+      }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[110] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+            <div className="border-b border-edge px-5 py-4">
+              <Dialog.Title className="text-base font-semibold text-fg">{t.workspaceConflictTitle}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
+                {workspaceConflict
+                  ? interpolate(t.workspaceConflictDescription, { projectName: workspaceConflict.name })
+                  : null}
+              </Dialog.Description>
+            </div>
+            {workspaceConflict ? (
+              <div className="space-y-3 px-5 py-4">
+                <div className="flex items-center gap-2 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg-muted">
+                  <FolderKanban className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+                  <span className="min-w-0 truncate">
+                    {interpolate(t.workspaceConflictPath, { workspace: workspaceConflict.workspaceRoot || t.agentDefault })}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
+              <Button type="button" variant="ghost" className="rounded-lg" onClick={returnToCreateFromConflict}>
+                {t.workspaceConflictBack}
+              </Button>
+              <Button type="button" variant="primary" className="rounded-lg" onClick={openConflictProject}>
+                <ArrowRight className="size-4" aria-hidden />
+                {t.workspaceConflictOpen}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={Boolean(missingWorkspaceRoot)} onOpenChange={(open) => {
+        if (!open) setMissingWorkspaceRoot(null);
+      }}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[100] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[110] flex w-[min(30rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+            <div className="border-b border-edge px-5 py-4">
+              <Dialog.Title className="text-base font-semibold text-fg">{t.workspaceMissingTitle}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
+                {missingWorkspaceRoot
+                  ? interpolate(t.workspaceMissingDescription, { workspace: missingWorkspaceRoot })
+                  : null}
+              </Dialog.Description>
+            </div>
+            {missingWorkspaceRoot ? (
+              <div className="px-5 py-4">
+                <div className="flex items-center gap-2 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg-muted">
+                  <FolderKanban className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+                  <span className="min-w-0 truncate">{missingWorkspaceRoot}</span>
+                </div>
+              </div>
+            ) : null}
+            <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
+              <Button type="button" variant="ghost" className="rounded-lg" onClick={returnToCreateFromMissingWorkspace} disabled={creating}>
+                {t.workspaceMissingBack}
+              </Button>
+              <Button type="button" variant="primary" className="rounded-lg" onClick={createMissingWorkspaceAndProject} disabled={creating}>
+                <FolderPlus className="size-4" aria-hidden />
+                {t.workspaceMissingCreate}
+              </Button>
+            </div>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
