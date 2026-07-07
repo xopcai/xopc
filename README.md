@@ -152,6 +152,19 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 - 🧩 **Grows with you** — **`xopc skills install`** · **`xopc extensions install`** for tools, channels, and UI panels; multi-agent routing per context.
 - ⏰ **Proactive** — **Automations** for scheduled summaries, reminders, and workflow runs; **workflows** for fan-out subagent tasks; **multi-agent** routing with isolated workspaces, tools, and prompts.
 
+## How xopc compares
+
+xopc is not trying to replace every coding agent or office agent. It is the local-first system layer for people who want one assistant to remember goals, keep state, run automations, and stay reachable across surfaces.
+
+| Product | Best at | Why use xopc too |
+| --- | --- | --- |
+| **Codex** | Software development in terminal, IDE, and cloud tasks | xopc is broader than repo work: long-running goals, BYOK/local models, scheduled loops, gateway APIs, desktop/web/mobile, and messengers share one local state. |
+| **Claude Code** | Project-level coding: codebase navigation, edits, tests, git workflows | xopc is a personal Agent OS for coding plus life/work loops; it can coordinate models, channels, skills, workflows, and automations outside one codebase. |
+| **Qoder / QoderWork** | Agentic coding platform plus local-first office work companion | xopc is open-source and hackable, with explicit local state under **`~/.xopc/`**, configurable providers, self-hosted gateway, and extension points. |
+| **WorkBuddy** | Office deliverables such as reports, decks, spreadsheets, research, and data analysis | xopc is for users who want to own the runtime: bring your own keys, mix local/cloud models, wire channels, and keep long-term project context locally. |
+
+Choose xopc when you want a **self-hosted, long-term AI assistant** that is not locked to one vendor, one IDE, one chat surface, or one task type. See the full comparison in **[Comparison](https://xopcai.github.io/xopc/comparison)**.
+
 ---
 
 ## Where to chat

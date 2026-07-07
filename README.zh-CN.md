@@ -152,6 +152,19 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 - 🧩 **可按需扩展** — 通过 **`xopc skills install`** 和 **`xopc extensions install`** 扩展工具、频道与 UI；多 Agent 可按场景隔离。
 - ⏰ **支持主动任务** — 用 **自动化** 做定时摘要、提醒与工作流运行；用 **工作流**扇出多子 Agent 任务；用 **多 Agent** 管理不同工作区、工具与系统提示词。
 
+## 和 Codex / Claude Code / QoderWork / WorkBuddy 的区别
+
+xopc 不是要替代所有编程 Agent 或办公 Agent。它更像一个本地优先的系统层：让同一个助手记住长期目标、保留状态、运行自动化，并在多个入口中持续可用。
+
+| 产品 | 更擅长 | 为什么还需要 xopc |
+| --- | --- | --- |
+| **Codex** | 终端、IDE 和云端的软件开发任务 | xopc 不只服务一个代码仓库：长期目标、BYOK/本地模型、定时循环、Gateway API、桌面/网页/手机和 IM 都共享同一套本地状态。 |
+| **Claude Code** | 项目级编码：读代码、改文件、跑测试、处理 git 工作流 | xopc 是面向个人长期工作的 Agent OS：既能服务 coding，也能协调模型、频道、技能、工作流和自动化。 |
+| **Qoder / QoderWork** | Agentic coding 平台与本地优先办公助手 | xopc 开源、可自托管、可改造，状态明确放在 **`~/.xopc/`**，支持自选 provider、自托管 gateway 和扩展机制。 |
+| **WorkBuddy** | 办公交付物：报告、PPT、表格、调研、数据分析 | xopc 更适合想掌控运行环境的人：使用自己的 key，混用本地/云端模型，接入 IM，并把长期项目上下文留在本地。 |
+
+如果你想要的是一个**自托管、长期运行、不绑定单一厂商/IDE/聊天入口/任务类型**的 AI 助手，xopc 更适合。完整对比见 **[产品对比](https://xopcai.github.io/xopc/zh/comparison)**。
+
 ---
 
 ## 在哪里聊
