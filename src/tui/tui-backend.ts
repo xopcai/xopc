@@ -144,6 +144,7 @@ export interface TuiStartupProjectResult {
   project: {
     id: string;
     name: string;
+    defaultAgentId?: string;
     workspaceRoot?: string;
   } | null;
   created?: boolean;

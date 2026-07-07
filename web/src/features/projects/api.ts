@@ -3,6 +3,8 @@ import { apiUrl } from '@/lib/url';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 
 export type ProjectStatus = 'active' | 'paused' | 'archived';
+export type ProjectKind = 'coding' | 'general' | 'unknown';
+export type ProjectKindSelection = 'auto' | 'coding' | 'general';
 
 export type Project = {
   id: string;
@@ -185,6 +187,7 @@ export async function createProject(input: {
   defaultAgentId?: string;
   workspaceRoot?: string;
   createWorkspaceRoot?: boolean;
+  projectKind?: ProjectKindSelection;
   brief?: string;
   instructions?: string;
 }): Promise<Project> {
@@ -193,6 +196,34 @@ export async function createProject(input: {
     body: JSON.stringify(input),
   });
   return res.project;
+}
+
+export async function inferProjectDefaults(input: {
+  name?: string;
+  description?: string;
+  workspaceRoot?: string;
+  projectKind?: ProjectKindSelection;
+}): Promise<{
+  inference: {
+    kind: ProjectKind;
+    confidence: number;
+    reasons: string[];
+  };
+  defaultAgentId?: string;
+}> {
+  const res = await fetchJson<{
+    ok: true;
+    inference: {
+      kind: ProjectKind;
+      confidence: number;
+      reasons: string[];
+    };
+    defaultAgentId?: string;
+  }>(apiUrl('/api/projects/infer-defaults'), {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return { inference: res.inference, defaultAgentId: res.defaultAgentId };
 }
 
 export async function updateProject(
