@@ -43,15 +43,162 @@ describe('SelfVerifyMiddleware', () => {
       middleware.recordEdit('/path/to/file.ts', 'edit');
       const first = middleware.consumePostEditReminder();
       const second = middleware.consumePostEditReminder();
-      expect(first).toContain('source files changed');
-      expect(first).toContain('inspect the diff');
+      expect(first).toContain('Workspace Verification State');
+      expect(first).toContain('files changed');
+      expect(first).toContain('inspect the changed files');
       expect(second).toBe('');
     });
 
-    it('clears pending verification after a test command', () => {
+    it('clears pending verification after a successful test command', () => {
       middleware.recordEdit('/path/to/file.ts', 'edit');
-      middleware.recordVerification('shell', { command: 'pnpm test' });
+      middleware.recordVerification('exec_command', { cmd: 'pnpm test' }, {
+        isError: false,
+        result: {
+          details: {
+            command: 'pnpm test',
+            status: 'success',
+            exitCode: 0,
+            timedOut: false,
+          },
+        },
+      });
       expect(middleware.consumePostEditReminder()).toBe('');
+    });
+
+    it('keeps pending verification after a failed test command', () => {
+      middleware.recordEdit('/path/to/file.ts', 'edit');
+      middleware.recordVerification('exec_command', { cmd: 'pnpm test' }, {
+        isError: false,
+        result: {
+          details: {
+            command: 'pnpm test',
+            status: 'failed',
+            exitCode: 1,
+            timedOut: false,
+          },
+        },
+      });
+      expect(middleware.consumePostEditReminder()).toContain('files changed');
+    });
+
+    it('keeps pending verification after a timed out test command', () => {
+      middleware.recordEdit('/path/to/file.ts', 'edit');
+      middleware.recordVerification('exec_command', { cmd: 'pnpm test' }, {
+        isError: false,
+        result: {
+          details: {
+            command: 'pnpm test',
+            status: 'timed_out',
+            exitCode: null,
+            timedOut: true,
+          },
+        },
+      });
+      expect(middleware.consumePostEditReminder()).toContain('files changed');
+    });
+
+    it('can read the verification command from exec_command result details', () => {
+      middleware.recordEdit('/path/to/file.ts', 'edit');
+      middleware.recordVerification('exec_command', undefined, {
+        isError: false,
+        result: {
+          details: {
+            command: 'pnpm run typecheck',
+            status: 'success',
+            exitCode: 0,
+            timedOut: false,
+          },
+        },
+      });
+      expect(middleware.consumePostEditReminder()).toBe('');
+    });
+
+    it('marks git diff as review without clearing pending verification', () => {
+      middleware.recordEdit('/path/to/file.ts', 'edit');
+      middleware.recordVerification('exec_command', { cmd: 'git diff -- src/file.ts' }, {
+        isError: false,
+        result: {
+          details: {
+            command: 'git diff -- src/file.ts',
+            status: 'success',
+            exitCode: 0,
+            timedOut: false,
+          },
+        },
+      });
+
+      const state = middleware.getVerificationState();
+      expect(state.diffReviewed).toBe(true);
+      expect(state.hasUnverifiedEdits).toBe(true);
+      expect(middleware.consumePostEditReminder()).toContain('Diff review: completed');
+    });
+
+    it('reports structured pending verification state', () => {
+      middleware.recordEdit('/path/to/file.ts', 'edit');
+      middleware.recordVerification('exec_command', { cmd: 'pnpm test' }, {
+        isError: false,
+        result: {
+          details: {
+            command: 'pnpm test',
+            status: 'failed',
+            exitCode: 1,
+            timedOut: false,
+          },
+        },
+      });
+
+      const state = middleware.getVerificationState();
+      expect(state).toMatchObject({
+        hasUnverifiedEdits: true,
+        changedFiles: ['/path/to/file.ts'],
+        diffReviewed: false,
+        verificationAttempted: true,
+        lastVerificationFailed: true,
+      });
+      expect(state.lastVerification).toMatchObject({
+        command: 'pnpm test',
+        success: false,
+        exitCode: 1,
+      });
+      expect(middleware.getPendingVerificationContext()).toContain('Last verification: failed');
+    });
+
+    it('keeps verification state isolated by session key', () => {
+      middleware.recordEdit('/path/a.ts', 'edit', 'session-a');
+
+      expect(middleware.getPendingVerificationContext('session-a')).toContain('/path/a.ts');
+      expect(middleware.getPendingVerificationContext('session-b')).toBe('');
+      expect(middleware.getVerificationState('session-b').hasUnverifiedEdits).toBe(false);
+    });
+
+    it('uses coder-specific verification context for coder agents', () => {
+      middleware.recordEdit('/path/to/file.ts', 'edit', 'coder-session');
+
+      const context = middleware.getPendingVerificationContext('coder-session', 'coder');
+      expect(context).toContain('Coder Verification State');
+      expect(context).toContain('Changed source files');
+      expect(context).toContain('targeted test, typecheck, lint, or build');
+    });
+
+    it('uses data-specific verification context for data agents', () => {
+      middleware.recordEdit('/path/analysis.py', 'edit', 'data-session');
+
+      const context = middleware.getPendingVerificationContext('data-session', 'data-analyst');
+      expect(context).toContain('Data Verification State');
+      expect(context).toContain('row counts');
+      expect(context).toContain('schemas');
+    });
+
+    it('uses writing/research review context for non-coder artifact agents', () => {
+      middleware.recordEdit('/path/report.md', 'edit', 'writer-session');
+      middleware.recordEdit('/path/sources.md', 'edit', 'research-session');
+
+      const writer = middleware.getPendingVerificationContext('writer-session', 'writer');
+      const researcher = middleware.getPendingVerificationContext('research-session', 'researcher');
+      expect(writer).toContain('Writing Review State');
+      expect(writer).toContain('formatting');
+      expect(researcher).toContain('Research Review State');
+      expect(researcher).toContain('citations');
     });
   });
 

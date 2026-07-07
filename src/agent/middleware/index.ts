@@ -7,6 +7,10 @@ export {
   SelfVerifyMiddleware,
   type FileEditRecord,
   type SelfVerifyConfig,
+  type SelfVerifyAgentKind,
+  type SelfVerifyState,
+  type VerificationOutcome,
+  type VerificationRecord,
 } from './self-verify.js';
 
 export { ContextMiddleware, type RequestContext } from './context.js';

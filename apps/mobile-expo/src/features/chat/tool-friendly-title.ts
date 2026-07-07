@@ -8,6 +8,7 @@ export type FriendlyToolTitleLabels = {
   searchedWeb: string;
   readFile: string;
   runCommand: string;
+  updatePlan?: string;
   listDirectory: string;
   writeFile: string;
   editFile: string;
@@ -18,10 +19,11 @@ export type FriendlyToolTitleLabels = {
 
 export function getFriendlyToolTitle(name: string, labels: FriendlyToolTitleLabels): string {
   const n = toolNameKey(name);
-  if (n === 'shell') return labels.runCommand;
+  if (n === 'exec_command') return labels.runCommand;
+  if (n === 'update_plan') return labels.updatePlan ?? 'Update plan';
   if (n === 'list_dir' || n === 'ls') return labels.listDirectory;
   if (n === 'write_file') return labels.writeFile;
-  if (n === 'edit_file') return labels.editFile;
+  if (n === 'apply_patch') return labels.editFile;
   if (n === 'web_fetch') return labels.fetchUrl;
   if (n === 'open_url') return labels.openUrl;
   if (n === 'web_search' || n === 'brave_search' || n.includes('search')) return labels.searchedWeb;

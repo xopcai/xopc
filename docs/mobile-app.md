@@ -2,7 +2,9 @@
 
 Use the **[xopc mobile app](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo)** when you want to continue the same xopc assistant from iOS or Android.
 
-The mobile app is an Expo / React Native client for the xopc gateway, now maintained in this repository under `apps/mobile-expo`. It does not replace the gateway: it connects to a running gateway over LAN, FRP, or your own HTTPS reverse proxy, then uses the same gateway Bearer token / pairing flow.
+The mobile app is an Expo / React Native client for the xopc gateway, now maintained in this repository under `apps/mobile-expo`. It does not replace the gateway or create a separate hosted account: it connects to a running gateway over LAN, FRP, Tailscale, or your own HTTPS reverse proxy, then uses the same gateway Bearer token / pairing flow.
+
+Think of it as a private remote control for your own agent. xopc keeps running on your computer or self-managed host, while the phone gives you a quick way to chat, capture notes, record ideas, and send project updates when you are away from the keyboard. Your long-term context stays in your xopc runtime.
 
 ## Quick path
 

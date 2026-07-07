@@ -11,10 +11,11 @@ export function workflowStepLabel(
 ): { label: string; detail?: string } {
   const n = toolName.toLowerCase().replace(/-/g, '_').trim();
   let label = toolName.trim() || 'tool';
-  if (n === 'shell') label = 'Run command';
+  if (n === 'exec_command') label = 'Run command';
+  else if (n === 'update_plan') label = 'Update plan';
   else if (n === 'list_dir' || n === 'ls') label = 'List directory';
   else if (n === 'write_file') label = 'Write file';
-  else if (n === 'edit_file') label = 'Edit file';
+  else if (n === 'apply_patch') label = 'Edit file';
   else if (n === 'web_fetch') label = 'Fetch URL';
   else if (n === 'open_url') label = 'Open URL';
   else if (n === 'grep' || n === 'rg' || n === 'file_grep') label = 'Search files';
@@ -32,8 +33,9 @@ function extractStepDetail(toolKey: string, args: Record<string, unknown>): stri
     const v = args[key];
     if (typeof v === 'string' && v.trim()) return truncate(v.trim());
   }
-  if (toolKey === 'shell' && typeof args.command === 'string' && args.command.trim()) {
-    return truncate(args.command.trim());
+  if (toolKey === 'exec_command') {
+    const command = typeof args.cmd === 'string' ? args.cmd : typeof args.command === 'string' ? args.command : '';
+    if (command.trim()) return truncate(command.trim());
   }
   if (
     (toolKey.includes('search') || toolKey === 'grep' || toolKey === 'rg' || toolKey === 'file_grep') &&

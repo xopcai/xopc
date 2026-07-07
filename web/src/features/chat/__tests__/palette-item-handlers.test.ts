@@ -23,6 +23,7 @@ function makeCtx(opts: {
   onChatAgentChange?: (agentId: string) => void;
   onAddPendingFollowUp?: (text: string) => void;
   onAbort?: () => void;
+  onReviewLauncher?: () => void;
 }): PaletteApplyContext & {
   resetEditor: ReturnType<typeof vi.fn>;
   clearAttachments: ReturnType<typeof vi.fn>;
@@ -31,6 +32,7 @@ function makeCtx(opts: {
   onChatAgentChange: ReturnType<typeof vi.fn>;
   onAddPendingFollowUp: ReturnType<typeof vi.fn>;
   onAbort: ReturnType<typeof vi.fn>;
+  onReviewLauncher: ReturnType<typeof vi.fn>;
 } {
   const ref = valueRef(opts.initialText);
   const resetEditor: PaletteApplyContext['editor']['resetEditor'] = (nextOpts) => {
@@ -47,6 +49,7 @@ function makeCtx(opts: {
   const onChatAgentChange = vi.fn(opts.onChatAgentChange);
   const onAddPendingFollowUp = vi.fn(opts.onAddPendingFollowUp);
   const onAbort = vi.fn(opts.onAbort);
+  const onReviewLauncher = vi.fn(opts.onReviewLauncher);
 
   return {
     slashRange: opts.slashRange,
@@ -62,6 +65,7 @@ function makeCtx(opts: {
       onChatAgentChange,
       onAddPendingFollowUp,
       onAbort,
+      onReviewLauncher,
     },
     resetEditor: resetEditorSpy,
     clearAttachments,
@@ -70,6 +74,7 @@ function makeCtx(opts: {
     onChatAgentChange,
     onAddPendingFollowUp,
     onAbort,
+    onReviewLauncher,
   };
 }
 
@@ -112,6 +117,14 @@ const cmdStopAlias: PaletteItem = {
   description: '',
   aliases: ['stop'],
   acceptsArgs: false,
+};
+
+const cmdReview: PaletteItem = {
+  kind: 'command',
+  id: 'cmd:review',
+  name: 'review',
+  description: '',
+  acceptsArgs: true,
 };
 
 const agentItem: PaletteItem = {
@@ -170,6 +183,36 @@ describe('palette-item-handlers / command (acceptsArgs=false, idle)', () => {
     applyPaletteItem(cmdNoArgs, ctx);
     expect(ctx.onSend).not.toHaveBeenCalled();
     expect(ctx.resetEditor).not.toHaveBeenCalled();
+  });
+});
+
+describe('palette-item-handlers / command (review launcher)', () => {
+  it('opens the structured review launcher instead of inserting /review args', () => {
+    const ctx = makeCtx({
+      initialText: '/rev',
+      slashRange: { start: 0, end: 4, query: 'rev' },
+    });
+    applyPaletteItem(cmdReview, ctx);
+
+    expect(ctx.onReviewLauncher).toHaveBeenCalledOnce();
+    expect(ctx.onSend).not.toHaveBeenCalled();
+    expect(ctx.resetEditor).toHaveBeenCalledWith({ nextText: '', caretOffset: 0, focus: true });
+  });
+
+  it('keeps busy review selection on the normal accepts-args insertion path', () => {
+    const ctx = makeCtx({
+      initialText: '/rev',
+      slashRange: { start: 0, end: 4, query: 'rev' },
+      runBusy: true,
+    });
+    applyPaletteItem(cmdReview, ctx);
+
+    expect(ctx.onReviewLauncher).not.toHaveBeenCalled();
+    expect(ctx.resetEditor).toHaveBeenCalledWith({
+      nextText: '/review ',
+      caretOffset: '/review '.length,
+      focus: true,
+    });
   });
 });
 

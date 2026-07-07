@@ -35,6 +35,52 @@ export type ToolEndEvent = ChatStreamEnvelope<
     errorMessage?: string;
   }
 >;
+export type CommandStartedEvent = ChatStreamEnvelope<
+  'command_started',
+  { messageId: string; toolCallId: string; command: string; cwd?: string }
+>;
+export type CommandOutputDeltaEvent = ChatStreamEnvelope<
+  'command_output_delta',
+  { messageId: string; toolCallId: string; stream: 'stdout' | 'stderr'; delta: string }
+>;
+export type CommandCompletedEvent = ChatStreamEnvelope<
+  'command_completed',
+  {
+    messageId: string;
+    toolCallId: string;
+    command: string;
+    cwd?: string;
+    exitCode: number | null;
+    durationMs?: number;
+    timedOut?: boolean;
+    truncated?: boolean;
+  }
+>;
+export type PatchAppliedEvent = ChatStreamEnvelope<
+  'patch_applied',
+  {
+    messageId: string;
+    toolCallId: string;
+    changes: unknown[];
+    diff: string;
+    added: number;
+    removed: number;
+  }
+>;
+export type TurnPlanStatus = 'pending' | 'in_progress' | 'completed';
+export type TurnPlanUpdatedEvent = ChatStreamEnvelope<
+  'turn_plan',
+  {
+    messageId: string;
+    explanation?: string;
+    plan: { step: string; status: TurnPlanStatus }[];
+  }
+>;
+export type TurnDiffEvent = ChatStreamEnvelope<
+  'turn_diff',
+  { messageId: string; files: string[]; diff: string; added: number; removed: number }
+>;
+export type ReviewEvent = ChatStreamEnvelope<'review', { messageId: string; review: unknown }>;
 export type AssistantMessageEndEvent = ChatStreamEnvelope<
   'assistant_message_end',
   { messageId: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; cost?: number } }
@@ -66,6 +112,13 @@ export type ChatStreamEvent =
   | ToolStartEvent
   | ToolUpdateEvent
   | ToolEndEvent
+  | CommandStartedEvent
+  | CommandOutputDeltaEvent
+  | CommandCompletedEvent
+  | PatchAppliedEvent
+  | TurnPlanUpdatedEvent
+  | TurnDiffEvent
+  | ReviewEvent
   | AssistantMessageEndEvent
   | ProgressEvent
   | CompactionEvent

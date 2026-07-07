@@ -20,9 +20,9 @@ const DEFAULT_REMINDERS: string[] = [];
 
 // Contextual reminders based on tool type
 const CONTEXTUAL_REMINDERS: Record<string, string[]> = {
-  'file.write': ['💡 Tip: edit > write for small changes'],
+  'file.write': ['Tip: apply_patch > write_file for small changes'],
   'file.delete': ['⚠️ Confirming: file deletion'],
-  'shell.exec': ['🐚 Shell: use pty=true for interactive commands'],
+  exec_command: ['Command: use non-interactive commands with clear timeouts'],
   'web.fetch': ['🌐 Web: check for rate limits on repeated calls'],
 };
 

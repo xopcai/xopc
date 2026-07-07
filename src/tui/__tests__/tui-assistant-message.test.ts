@@ -70,6 +70,34 @@ describe('assistant message rendering', () => {
     expect(rendered).toContain('[image]');
   });
 
+  it('renders review blocks', () => {
+    const component = new AssistantMessageComponent(
+      assistantMessage([
+        {
+          type: 'review',
+          target: 'working tree changes',
+          summary: '1 finding',
+          findings: [
+            {
+              title: 'Prefer persisted details',
+              body: 'The renderer should read structured details.',
+              priority: 2,
+              filePath: 'src/session.ts',
+              lineStart: 10,
+              lineEnd: 12,
+            },
+          ],
+          overallCorrectness: 'patch is incorrect',
+          overallExplanation: 'A persisted field is ignored.',
+        },
+      ]),
+    );
+    const rendered = stripAnsi(component.render(100).join('\n'));
+    expect(rendered).toContain('Code review');
+    expect(rendered).toContain('[P2] Prefer persisted details - src/session.ts:10-12');
+    expect(rendered).toContain('Overall correctness: patch is incorrect');
+  });
+
   it('can hide structured assistant thinking behind a label and toggle it back', () => {
     const component = new AssistantMessageComponent(
       assistantMessage([

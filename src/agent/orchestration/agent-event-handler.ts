@@ -268,6 +268,50 @@ function appendTextToToolResult(result: unknown, text: string): unknown {
   return result;
 }
 
+function readRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function readToolResultDetails(result: unknown): Record<string, unknown> | null {
+  const rec = readRecord(result);
+  if (!rec) return null;
+  return readRecord(rec.details);
+}
+
+function readStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function readChangedPathsFromToolEnd(toolName: string, args: unknown, result: unknown): string[] {
+  const name = toolName.toLowerCase();
+  const details = readToolResultDetails(result);
+
+  if (name === 'apply_patch') {
+    const files = readStringArray(details?.files);
+    if (files.length > 0) return files;
+
+    const changes = Array.isArray(details?.changes) ? details.changes : [];
+    return changes.flatMap((change) => {
+      const rec = readRecord(change);
+      if (!rec) return [];
+      return readStringArray([rec.moveTo, rec.path]);
+    });
+  }
+
+  if (name === 'write_file') {
+    if (typeof details?.size !== 'number') return [];
+    const rec = readRecord(args);
+    return typeof rec?.path === 'string' ? [rec.path] : [];
+  }
+
+  if (name.includes('write') || name.includes('edit')) {
+    const rec = readRecord(args);
+    return typeof rec?.path === 'string' ? [rec.path] : [];
+  }
+
+  return [];
+}
+
 function installToolChainListener(bus: SessionEventBus, toolChainTracker: ToolChainTracker): void {
   bus.on('turn_start', (_event, context) => {
     // One chain per LLM turn (pi-agent emits turn_start each round; turn_end clears the chain).
@@ -342,30 +386,43 @@ function installErrorTrackingListener(
 }
 
 function installSelfVerifyListener(bus: SessionEventBus, selfVerifyMiddleware: SelfVerifyMiddleware): void {
-  bus.on('tool_execution_start', (event) => {
-    const e = event as Extract<AgentEvent, { type: 'tool_execution_start' }>;
-    const args = e.args;
-    const toolName = e.toolName;
-    if (!toolName || !args) return;
-    const name = toolName.toLowerCase();
-    if (name.includes('write') && args.path) {
-      selfVerifyMiddleware.recordEdit(String(args.path), 'write');
-    } else if (name.includes('edit') && args.path) {
-      selfVerifyMiddleware.recordEdit(String(args.path), 'edit');
-    } else {
-      selfVerifyMiddleware.recordVerification(toolName, args);
-    }
-  });
-  bus.on('tool_execution_end', (event) => {
+  bus.on('tool_execution_end', (event, context) => {
     const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }> & { result: unknown };
     const name = e.toolName?.toLowerCase() ?? '';
-    if (!name.includes('write') && !name.includes('edit')) {
+    const args = (e as { args?: unknown }).args;
+
+    if (name === 'exec_command') {
+      selfVerifyMiddleware.recordVerification(e.toolName, args, {
+        isError: e.isError,
+        result: e.result,
+      }, context.sessionKey);
       return;
     }
-    e.result = appendTextToToolResult(e.result, selfVerifyMiddleware.consumePostEditReminder());
+
+    if (!e.isError) {
+      const changedPaths = readChangedPathsFromToolEnd(e.toolName, args, e.result);
+      for (const path of changedPaths) {
+        selfVerifyMiddleware.recordEdit(
+          path,
+          name.includes('write') ? 'write' : 'edit',
+          context.sessionKey,
+        );
+      }
+      if (changedPaths.length > 0) {
+        e.result = appendTextToToolResult(
+          e.result,
+          selfVerifyMiddleware.consumePostEditReminder(context.sessionKey),
+        );
+        return;
+      }
+      selfVerifyMiddleware.recordVerification(e.toolName, args, {
+        isError: e.isError,
+        result: e.result,
+      }, context.sessionKey);
+    }
   });
-  bus.on('turn_start', () => {
-    selfVerifyMiddleware.onTurnStart();
+  bus.on('turn_start', (_event, context) => {
+    selfVerifyMiddleware.onTurnStart(context.sessionKey);
   });
 }
 

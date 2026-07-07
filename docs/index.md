@@ -4,7 +4,7 @@ layout: home
 hero:
   name: xopc
   text: Turn goals into loops.
-  tagline: "Keep what matters moving. XOPC is a local-first AI system that remembers context, coordinates AI, and sustains long-term progress."
+  tagline: "Start with chat. Keep projects alive. Capture notes from your phone. Let automations turn repeated follow-up into a private, local-first data flywheel."
   image:
     light: /logo.svg
     dark: /logo-dark.svg
@@ -19,8 +19,8 @@ hero:
 
 features:
   - title: 🔁 Goal loops, not one-shot chats
-    details: "XOPC keeps context, next actions, feedback, and recalibration in motion so long-term goals do not disappear between conversations."
-    link: /automations
+    details: "Start with a normal conversation, then grow into projects, notes, connectors, and automations as the work gets more valuable."
+    link: /concepts/loops
   - title: 🏠 Local-first by default
     details: "xopc runs on your hardware. Config, workspace files, credentials, and local state live under ~/.xopc/. No mandatory cloud."
     link: /configuration
@@ -53,11 +53,26 @@ features:
     link: /voice
 ---
 
+## How xopc grows with you
+
+You do not need to build a workflow system on day one. xopc starts useful as a local chat assistant, then becomes more valuable as you keep giving it project context.
+
+| Stage | Start with | Add when it helps |
+| --- | --- | --- |
+| Chat | Ask questions, think through work, make decisions | Your own model keys and local state |
+| Project | Ask xopc to follow one goal over time | Goal state, blockers, decisions, next actions |
+| Notes | Drop updates, links, ideas, and feedback | Reusable context for future turns |
+| Connectors | Pair the mobile app by QR code, or use desktop, terminal, browser, messengers, gateway APIs | Signals from where your work already happens, while the agent and data stay in your xopc runtime |
+| Automations | Schedule reviews, reminders, summaries, workflows | A loop that keeps work visible without manual restarts |
+
+Read the concept guide: [From Chat to Loops](./concepts/loops.md).
+
 ## Start by what you want
 
 | Goal | Start here |
 | --- | --- |
 | I want a private AI assistant on my computer | [First 5 Minutes](./first-5-minutes.md) |
+| I want to understand how chat becomes a data flywheel | [From Chat to Loops](./concepts/loops.md) |
 | I want to know how xopc differs from Codex, Claude Code, Qoder, and WorkBuddy | [Comparison](./comparison.md) |
 | I want the same assistant in Telegram, WeChat, or Feishu/Lark | [Channels](./channels/index.md) |
 | I want scheduled reviews, reminders, and summaries | [Automations](./automations.md) |

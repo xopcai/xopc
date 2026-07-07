@@ -49,7 +49,7 @@ export interface ToolTimeoutConfig {
 function getTimeoutForTool(toolName: string, config: TimeoutConfig): number {
   const toolLower = toolName.toLowerCase();
 
-  if (toolLower.includes('shell') || toolLower.includes('exec')) {
+  if (toolLower.includes('exec') || toolLower.includes('command')) {
     return config.shellTimeoutMs;
   }
   if (toolLower.includes('read') || toolLower.includes('view')) {
@@ -71,8 +71,8 @@ function getTimeoutForTool(toolName: string, config: TimeoutConfig): number {
  * @example
  * ```typescript
  * const result = await executeWithTimeout(
- *   () => shell.exec('long-running-command'),
- *   { toolName: 'shell', timeoutMs: 60000 }
+ *   () => execCommand('long-running-command'),
+ *   { toolName: 'exec_command', timeoutMs: 60000 }
  * );
  * ```
  */
@@ -217,7 +217,7 @@ export class TimeoutError extends Error {
   getUserMessage(): string {
     const suggestions: string[] = [];
 
-    if (this.toolName.toLowerCase().includes('shell')) {
+    if (this.toolName.toLowerCase().includes('exec') || this.toolName.toLowerCase().includes('command')) {
       suggestions.push('Break the command into smaller steps');
       suggestions.push('Add timeouts to individual commands');
       suggestions.push('Check for infinite loops or waiting for input');

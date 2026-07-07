@@ -54,7 +54,7 @@ function previewDetailForFirstToolHeader(block: ToolUseContent): string {
     const q = extractSearchQuery(input);
     if (q.trim()) return q.trim();
   }
-  if (n === 'shell') {
+  if (n === 'exec_command') {
     const c = extractCommandPreview(input);
     if (c.trim()) return c.trim();
   }

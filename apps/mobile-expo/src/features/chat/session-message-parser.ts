@@ -53,6 +53,7 @@ export type WireMessage = {
   timestamp?: string | number;
   attachments?: unknown;
   media?: unknown;
+  metadata?: unknown;
   usage?: unknown;
   tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
   toolCalls?: Array<{ id?: string; name: string; args?: Record<string, unknown> }>;
@@ -212,6 +213,7 @@ export function parseContentBlock(b: Record<string, unknown>): MessageContent | 
   const t = block.type;
   if (t === 'text') return { type: 'text', text: String(block.text ?? '') };
   if (t === 'thinking') return { type: 'thinking', text: String(block.text ?? block.thinking ?? ''), streaming: false };
+  if (t === 'review') return normalizeReviewBlock(block);
   const mimeType = firstString(block.mimeType, block.mime_type);
   if (t === 'audio' || t === 'tts_audio' || mimeType?.startsWith('audio/')) {
     const parsed = parseTtsAudioBlock(block);
@@ -241,6 +243,50 @@ export function parseContentBlock(b: Record<string, unknown>): MessageContent | 
   return { type: 'text', text: String(block.text ?? '') };
 }
 
+function normalizeReviewBlock(raw: unknown): Extract<MessageContent, { type: 'review' }> | null {
+  const rec = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : null;
+  if (!rec || rec.type !== 'review') return null;
+  const findings = Array.isArray(rec.findings) ? rec.findings : [];
+  const review: Extract<MessageContent, { type: 'review' }> = {
+    type: 'review',
+    target: typeof rec.target === 'string' ? rec.target : 'working tree changes',
+    summary: typeof rec.summary === 'string' ? rec.summary : '',
+    findings: findings
+      .map((item): Extract<MessageContent, { type: 'review' }>['findings'][number] | null => {
+        const f = item && typeof item === 'object' && !Array.isArray(item)
+          ? item as Record<string, unknown>
+          : null;
+        if (!f) return null;
+        const priority = f.priority === 0 || f.priority === 1 || f.priority === 2 || f.priority === 3 ? f.priority : 2;
+        const title = typeof f.title === 'string' ? f.title : '';
+        const body = typeof f.body === 'string' ? f.body : '';
+        if (!title && !body) return null;
+        const finding: Extract<MessageContent, { type: 'review' }>['findings'][number] = {
+          title,
+          body,
+          priority,
+        };
+        if (typeof f.confidenceScore === 'number') finding.confidenceScore = f.confidenceScore;
+        if (typeof f.filePath === 'string') finding.filePath = f.filePath;
+        if (typeof f.lineStart === 'number') finding.lineStart = f.lineStart;
+        if (typeof f.lineEnd === 'number') finding.lineEnd = f.lineEnd;
+        return finding;
+      })
+      .filter((item): item is Extract<MessageContent, { type: 'review' }>['findings'][number] => item != null),
+    overallCorrectness:
+      rec.overallCorrectness === 'patch is correct' || rec.overallCorrectness === 'patch is incorrect'
+        ? rec.overallCorrectness
+        : 'unknown',
+    overallExplanation: typeof rec.overallExplanation === 'string' ? rec.overallExplanation : '',
+  };
+  if (typeof rec.overallConfidenceScore === 'number') review.overallConfidenceScore = rec.overallConfidenceScore;
+  if (typeof rec.generatedAt === 'number') review.generatedAt = rec.generatedAt;
+  if (rec.source === 'model' || rec.source === 'local') review.source = rec.source;
+  return review;
+}
+
 /** Normalize raw content to MessageContent[]. */
 function normalizeContentBlocks(raw: unknown): MessageContent[] {
   if (raw == null) return [];
@@ -257,6 +303,7 @@ function normalizeContentBlocks(raw: unknown): MessageContent[] {
 /** Build assistant content, including top-level tool_calls / toolCalls fields. */
 function buildAssistantContent(m: WireMessage): MessageContent[] {
   const blocks = normalizeContentBlocks(m.content);
+  appendReviewFromMetadata(blocks, m.metadata);
 
   // OpenAI format: top-level tool_calls array
   if (Array.isArray(m.tool_calls)) {
@@ -280,6 +327,16 @@ function buildAssistantContent(m: WireMessage): MessageContent[] {
   appendTopLevelTtsAudio(blocks, m);
 
   return blocks;
+}
+
+function appendReviewFromMetadata(content: MessageContent[], metadata: unknown): void {
+  const rec = metadata && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? metadata as Record<string, unknown>
+    : null;
+  const review = normalizeReviewBlock(rec?.review);
+  if (!review) return;
+  if (content.some((b) => b.type === 'review' && b.target === review.target)) return;
+  content.push(review);
 }
 
 function firstString(...values: unknown[]): string | undefined {

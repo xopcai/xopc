@@ -42,7 +42,35 @@ export type AudioContent = {
   durationSeconds?: number;
 };
 
-export type MessageContent = TextContent | ImageContent | ToolUseContent | ThinkingContent | AudioContent;
+export type ReviewFindingContent = {
+  title: string;
+  body: string;
+  priority: 0 | 1 | 2 | 3;
+  confidenceScore?: number;
+  filePath?: string;
+  lineStart?: number;
+  lineEnd?: number;
+};
+
+export type ReviewContent = {
+  type: 'review';
+  target: string;
+  summary: string;
+  findings: ReviewFindingContent[];
+  overallCorrectness: 'patch is correct' | 'patch is incorrect' | 'unknown';
+  overallExplanation: string;
+  overallConfidenceScore?: number;
+  generatedAt?: number;
+  source?: 'model' | 'local';
+};
+
+export type MessageContent =
+  | TextContent
+  | ImageContent
+  | ToolUseContent
+  | ThinkingContent
+  | AudioContent
+  | ReviewContent;
 
 export type MessageAttachment = {
   id?: string;

@@ -35,9 +35,9 @@ export type SandboxConfig = {
   mode: SandboxMode;
   /** Directories where file operations and command execution are allowed. */
   allowedRoots: string[];
-  /** Maximum execution time for shell commands (ms). */
+  /** Maximum execution time for commands (ms). */
   maxExecutionTimeMs: number;
-  /** Maximum output size from shell commands (bytes). */
+  /** Maximum output size from commands (bytes). */
   maxOutputBytes: number;
   /** Paths that are always blocked regardless of allowedRoots. */
   blockedPaths?: string[];

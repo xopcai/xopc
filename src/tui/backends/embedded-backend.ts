@@ -12,6 +12,8 @@ import { getAgentDefaultModelRef, type Config } from '../../config/schema.js';
 import { setTuiDefaultAgentConfig } from '../../commands/agents.config.js';
 import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { evictEmbeddedSessionRunner } from '../../agent/embedded/session-runner.js';
+import { buildReviewContext, resolveGitRoot } from '../../review/review-git.js';
+import { effectiveWorkspacePathForSession } from '../../session/session-workspace.js';
 import type { ExportFormat } from '../../session/types.js';
 import { SessionIndex } from '../../session/index.js';
 import { getSessionMetadata, openXopcDatabase } from '../../storage/sqlite/index.js';
@@ -302,6 +304,15 @@ export class EmbeddedBackend implements TuiBackend {
       log.warn({ err: error, sessionKey, errorMessage }, `Embedded workspace file search failed: ${errorMessage}`);
       return [];
     }
+  }
+
+  async getReviewContext(sessionKey: string) {
+    const config = this.activeConfig();
+    const metadata = getSessionMetadata(sessionKey);
+    const project = metadata?.projectId ? new ProjectService().get(metadata.projectId) : null;
+    const workspace = effectiveWorkspacePathForSession(config, sessionKey, null, project);
+    const cwd = await resolveGitRoot(workspace);
+    return buildReviewContext(cwd);
   }
 
   async sendChat(opts: ChatSendOptions): Promise<{ runId: string }> {

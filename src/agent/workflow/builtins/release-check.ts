@@ -36,7 +36,7 @@ export const RELEASE_CHECK_SCRIPT = `export const meta = {
   ],
 }
 
-const READ_ONLY_TOOLS = ['read_file', 'grep', 'find', 'list_dir', 'shell']
+const READ_ONLY_TOOLS = ['read_file', 'grep', 'find', 'list_dir', 'exec_command']
 
 const target = args && typeof args === 'object' && args.target
   ? String(args.target)

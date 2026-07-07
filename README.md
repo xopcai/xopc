@@ -8,7 +8,7 @@
 <p align="center">
   <strong>Turn goals into loops.</strong><br />
   Keep what matters moving.<br />
-  XOPC is a local-first AI system that remembers context, coordinates AI, and sustains long-term progress.
+  Start with a chat. Keep a project alive. Capture notes from your phone. Let automations turn repeated follow-up into a private, local-first data flywheel.
 </p>
 
 <p align="center">
@@ -35,16 +35,32 @@
 
 ## Built for
 
-- **Long-running projects** — turn goals into durable loops: context, next actions, feedback, and recalibration stay connected across chats.
-- **One-person companies and solo builders** — use the same assistant from CLI, TUI, Web, Desktop, Telegram, WeChat, and Feishu/Lark.
+- **People who start simple** — open a local chat first, then grow into projects, notes, channels, connectors, and automations when the work needs them.
+- **Long-running projects** — keep goals, decisions, blockers, next actions, feedback, and recalibration connected across chats.
+- **Private agents you can reach anywhere** — run xopc on your computer, pair the mobile app by QR code, and keep chatting or capturing notes while your data stays in your own runtime.
+- **One-person companies and solo builders** — use the same assistant from CLI, TUI, Web, Desktop, mobile, Telegram, WeChat, and Feishu/Lark.
 - **Local-first AI workflows** — bring your own keys, mix cloud/local models, add skills/extensions, and keep data under **`~/.xopc/`**.
+
+## From chat to loops
+
+You do not need a perfect system on day one. xopc is designed to become more useful as you keep using it.
+
+| Stage | What you do | What xopc starts to do |
+| --- | --- | --- |
+| **Chat** | Ask questions, think through work, make decisions. | Gives you a local AI assistant that uses your model keys and local state. |
+| **Project** | Ask it to keep track of one active goal. | Carries the goal, current state, blockers, and next actions across sessions. |
+| **Notes & ideas** | Drop rough notes, progress updates, links, and feedback as they happen. | Turns scattered inputs into context the assistant can reuse. |
+| **Connectors** | Pair the mobile app by QR code, or bring the same assistant to desktop, terminal, messengers, and gateway APIs. | Lets you chat and capture notes from anywhere while the agent and data stay in your xopc runtime. |
+| **Automations** | Schedule reviews, reminders, summaries, and workflow runs. | Keeps important work resurfacing and closes the loop without you starting every turn manually. |
+
+That is the loop: context comes in, xopc helps decide the next move, you act, feedback comes back, and the system gets better at keeping the project moving.
 
 ## What you can do after install
 
-- Keep a side project moving with remembered goals, blockers, next actions, and feedback.
-- Use the same assistant from terminal, desktop, browser, mobile, Telegram, WeChat, or Feishu/Lark.
-- Bring your own API keys or local models while keeping config and state under **`~/.xopc/`**.
-- Schedule reviews, reminders, summaries, and workflow runs so important work keeps resurfacing.
+- **Day 1:** chat locally, configure one model, and ask xopc to track a real project.
+- **This week:** feed it notes, blockers, decisions, links, and progress updates.
+- **When it sticks:** add the surfaces you actually use: desktop, terminal, browser, mobile QR pairing, Telegram, WeChat, or Feishu/Lark.
+- **As work repeats:** add automations for reviews, reminders, summaries, and workflow runs.
 
 ---
 
@@ -144,11 +160,11 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 
 ## Why xopc
 
-- 🔁 **Goal loops, not one-shot chats** — XOPC remembers context, coordinates AI, and keeps what matters moving.
+- 🔁 **A path from chat to momentum** — Start with a normal conversation, then let projects, notes, connectors, and automations compound into durable loops.
 
 - 🏠 **Your machine** — Data and config under **`~/.xopc/`**. No mandatory cloud or surprise bills.
 - 🔑 **Bring your own keys** — OpenAI, Anthropic, Google, DeepSeek, Ollama, LM Studio, vLLM, and **20+** providers. Mix cloud and local; switch catalog models in one config line. See **[Models](https://xopcai.github.io/xopc/models)**.
-- 📱 **One brain, every screen** — Same assistant in terminal, browser, desktop, [mobile app](./apps/mobile-expo), and IM. No sync layer — one system.
+- 📱 **Your agent, reachable anywhere** — Run xopc on your computer, pair the [mobile app](./apps/mobile-expo) by QR code, and keep talking or capturing notes on the go without moving your project data into a hosted chat account.
 - 🧩 **Grows with you** — **`xopc skills install`** · **`xopc extensions install`** for tools, channels, and UI panels; multi-agent routing per context.
 - ⏰ **Proactive** — **Automations** for scheduled summaries, reminders, and workflow runs; **workflows** for fan-out subagent tasks; **multi-agent** routing with isolated workspaces, tools, and prompts.
 
@@ -175,7 +191,7 @@ Choose xopc when you want a **self-hosted, long-term AI assistant** that is not 
 | **TUI** | `xopc` or `xopc tui` (remote: `xopc tui --url …`) | Full keyboard, streaming, fastest terminal path |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | Scripts and minimal TTY |
 | **Web** | `xopc gateway` → open console URL | Chat, settings, logs in the browser |
-| **Mobile** | [mobile app](./apps/mobile-expo) + gateway pairing ([mobile app](https://xopcai.github.io/xopc/mobile-app), [remote access](https://xopcai.github.io/xopc/remote-access)) | Continue your loop on iOS/Android |
+| **Mobile** | [mobile app](./apps/mobile-expo) + QR gateway pairing ([mobile app](https://xopcai.github.io/xopc/mobile-app), [remote access](https://xopcai.github.io/xopc/remote-access)) | Chat, record notes, and capture ideas from iOS/Android while the agent keeps running on your computer |
 | **Messengers** | `channels.*` + gateway | Telegram, WeChat, Feishu/Lark |
 
 ---
@@ -251,6 +267,7 @@ Optional tools (e.g. browser) stay **off until enabled**; use Playwright Chromiu
 | Guide | Description |
 | --- | --- |
 | [Getting started](https://xopcai.github.io/xopc/getting-started) | Install, onboard, first chat |
+| [From Chat to Loops](https://xopcai.github.io/xopc/concepts/loops) | How xopc grows from simple chat into project context, connectors, and automations |
 | [Configuration](https://xopcai.github.io/xopc/configuration) | `xopc.json` reference |
 | [CLI](https://xopcai.github.io/xopc/cli) | Commands and flags |
 | [Channels](https://xopcai.github.io/xopc/channels) | Telegram, WeChat, Feishu |
@@ -273,7 +290,7 @@ No. Bring your own keys for cloud providers, or use local/model-server options s
 For most users, install the **PC desktop app** from GitHub Releases and complete model setup in the UI. For terminal users, use **`xopc onboard --quick`** and then run **`xopc`**.
 
 **How is this different from another chat UI?**  
-xopc is organized around goal loops: direction, next action, feedback, and recalibration across multiple surfaces.
+xopc can start as a chat UI, but it is organized to grow into goal loops: project context, notes, outside signals, next actions, feedback, and automations across multiple surfaces.
 
 **Can I use it from my phone or messengers?**  
 Yes. Start with local TUI first; when ready, run the gateway and use the [mobile app](./apps/mobile-expo) on iOS/Android, or configure Telegram, WeChat, or Feishu/Lark.

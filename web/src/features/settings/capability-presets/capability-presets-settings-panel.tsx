@@ -182,14 +182,14 @@ function starterDraft(id: StarterId): Draft {
     return {
       id: 'safe-coder',
       name: 'Safe Coder',
-      description: 'Shared settings for coding agents: code-oriented model roles, careful shell usage, and focused engineering skills.',
+      description: 'Shared settings for coding agents: code-oriented model roles, careful command execution, and focused engineering skills.',
       version: '1',
         modelRows: [
         { id: 'deep', model: '', fallbacks: [], description: 'Complex implementation and planning' },
         { id: 'code', model: '', fallbacks: [], description: 'Code edits and tests' },
         { id: 'review', model: '', fallbacks: [], description: 'Review and risk checks' },
       ],
-      toolModes: { shell: 'deny', send_message: 'deny', send_media: 'deny' },
+      toolModes: { exec_command: 'deny', send_message: 'deny', send_media: 'deny' },
       skillMode: 'allowlist',
       skillPick: new Set(['diagnose', 'tdd']),
     };
@@ -198,13 +198,13 @@ function starterDraft(id: StarterId): Draft {
     return {
       id: 'read-only-research',
       name: 'Read-only Research',
-      description: 'Shared settings for reading, searching, and summarizing without modifying files or running shell commands.',
+      description: 'Shared settings for reading, searching, and summarizing without modifying files or running commands.',
       version: '1',
         modelRows: [
         { id: 'deep', model: '', fallbacks: [], description: 'Synthesis and long-context reading' },
         { id: 'fast', model: '', fallbacks: [], description: 'Quick summaries' },
       ],
-      toolModes: { write_file: 'deny', edit_file: 'deny', shell: 'deny', send_message: 'deny', send_media: 'deny' },
+      toolModes: { write_file: 'deny', apply_patch: 'deny', exec_command: 'deny', send_message: 'deny', send_media: 'deny' },
       skillMode: 'all',
       skillPick: new Set(),
     };

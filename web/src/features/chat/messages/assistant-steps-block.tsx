@@ -25,7 +25,7 @@ import {
   EditFileCard,
   FetchUrlCard,
   ReadFileCard,
-  ShellCard,
+  CommandCard,
   WriteFileCard,
   type ToolCardLabels,
 } from '@/features/chat/tool-results/tool-result-cards';
@@ -495,7 +495,7 @@ function StepRow({
         : kind === 'writeFile'
           ? <WriteFileCard block={block} labels={cardLabels} />
           : kind === 'runCommand'
-            ? <ShellCard block={block} labels={cardLabels} />
+            ? <CommandCard block={block} labels={cardLabels} />
             : kind === 'fetchUrl'
               ? <FetchUrlCard block={block} labels={cardLabels} />
               : null

@@ -37,7 +37,7 @@ export interface SkillsToolsDeps {
   getSkillIndexingContext?: () =>
     | { registeredToolNames: string[]; skillAllowlist?: string[] }
     | undefined;
-  /** Register declared env var names for shell / tool passthrough (values never exposed). */
+  /** Register declared env var names for command/tool passthrough (values never exposed). */
   registerSkillEnvPassthrough?: (names: string[]) => void;
 }
 

@@ -29,6 +29,38 @@ function blockText(block: ContentBlock, key: 'text' | 'thinking'): string {
   return typeof value === 'string' ? value : '';
 }
 
+function reviewMarkdown(block: ContentBlock): string {
+  const findings = Array.isArray(block.findings) ? block.findings : [];
+  const lines: string[] = ['Code review', ''];
+  if (findings.length === 0) {
+    lines.push('No findings.');
+  } else {
+    lines.push('Findings:');
+    for (const item of findings) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      const rec = item as Record<string, unknown>;
+      const title = typeof rec.title === 'string' ? rec.title : '';
+      const body = typeof rec.body === 'string' ? rec.body : '';
+      const priority = typeof rec.priority === 'number' ? rec.priority : 2;
+      const filePath = typeof rec.filePath === 'string' ? rec.filePath : '';
+      const lineStart = typeof rec.lineStart === 'number' ? rec.lineStart : undefined;
+      const lineEnd = typeof rec.lineEnd === 'number' ? rec.lineEnd : undefined;
+      const loc = filePath
+        ? `${filePath}${lineStart ? `:${lineStart}${lineEnd && lineEnd !== lineStart ? `-${lineEnd}` : ''}` : ''}`
+        : '';
+      const suffix = loc ? ` - ${loc}` : '';
+      lines.push(`- [P${priority}] ${title || body.slice(0, 80)}${suffix}`);
+      if (body) lines.push(`  ${body.replace(/\n+/g, '\n  ')}`);
+    }
+  }
+  const correctness = typeof block.overallCorrectness === 'string' ? block.overallCorrectness : 'unknown';
+  const explanation = typeof block.overallExplanation === 'string' ? block.overallExplanation : '';
+  lines.push('');
+  lines.push(`Overall correctness: ${correctness}`);
+  if (explanation) lines.push(explanation);
+  return lines.join('\n');
+}
+
 function hasToolCalls(message: AgentMessage | undefined): boolean {
   return contentBlocks(message).some((block) => block.type === 'toolCall' || block.type === 'tool_use');
 }
@@ -108,6 +140,7 @@ export class AssistantMessageComponent extends Container {
       if (block.type === 'text') return blockText(block, 'text').trim().length > 0;
       if (block.type === 'thinking') return blockText(block, 'thinking').trim().length > 0;
       if (block.type === 'image' || block.type === 'image_url') return true;
+      if (block.type === 'review') return true;
       return false;
     });
     const reason = stopReason(this.message);
@@ -153,6 +186,21 @@ export class AssistantMessageComponent extends Container {
       } else if (block.type === 'image' || block.type === 'image_url') {
         if (renderedVisible > 0) this.contentContainer.addChild(new Spacer(1));
         this.contentContainer.addChild(new Text(theme.dim('[image]'), 1, 0));
+        renderedVisible++;
+      } else if (block.type === 'review') {
+        const text = reviewMarkdown(block).trim();
+        if (!text) continue;
+        if (renderedVisible > 0) this.contentContainer.addChild(new Spacer(1));
+        this.contentContainer.addChild(
+          new Markdown(
+            text,
+            1,
+            0,
+            markdownTheme,
+            { color: (line) => theme.assistantText(line) },
+            { preserveOrderedListMarkers: true },
+          ),
+        );
         renderedVisible++;
       }
     }

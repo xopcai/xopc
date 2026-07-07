@@ -6,17 +6,21 @@ const TOOL_PROMPT_HINTS: Record<string, { promptSnippet?: string; promptGuidelin
     promptSnippet: 'Read targeted file contents',
     promptGuidelines: ['Use read_file to inspect source files before editing.'],
   },
-  edit_file: {
-    promptSnippet: 'Make precise, minimal edits to existing files',
-    promptGuidelines: ['Use edit_file for small source changes instead of rewriting whole files.'],
-  },
   write_file: {
     promptSnippet: 'Create new files or intentional complete rewrites',
-    promptGuidelines: ['Use write_file only for new files or deliberate full-file rewrites.'],
+    promptGuidelines: ['Prefer apply_patch for code changes. Use write_file only for non-code artifacts or deliberate full-file rewrites.'],
   },
-  shell: {
+  apply_patch: {
+    promptSnippet: 'Apply strict multi-file patches for code edits',
+    promptGuidelines: ['Use apply_patch for all source edits. Keep patches small and verify with exec_command.'],
+  },
+  exec_command: {
     promptSnippet: 'Run tests, type checks, builds, package scripts, and safe inspection commands',
-    promptGuidelines: ['Use shell for verification and safe inspection, not routine file editing.'],
+    promptGuidelines: ['Use exec_command for verification and safe inspection, not routine file editing.'],
+  },
+  update_plan: {
+    promptSnippet: 'Update the visible multi-step coding plan',
+    promptGuidelines: ['Use update_plan for multi-step coding work and keep the active step current.'],
   },
   grep: {
     promptSnippet: 'Search file contents for literals, errors, config values, and docs',

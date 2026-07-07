@@ -1,9 +1,17 @@
 // Export all agent tools
 export { createReadFileTool, type CreateReadFileToolOptions } from './read.js';
 export { createWriteFileTool, writeFileTool } from './write.js';
-export { createEditFileTool, editFileTool, type EditToolDetails } from './edit.js';
 export { createListDirTool, listDirTool } from './list-dir.js';
-export { createShellTool } from './shell.js';
+export {
+  createExecCommandTool,
+  type ExecCommandDetails,
+  type ExecCommandUpdateDetails,
+} from './exec-command.js';
+export {
+  createApplyPatchTool,
+  type AppliedPatchChange,
+  type ApplyPatchDetails,
+} from './apply-patch.js';
 
 // Memory tools
 export {
@@ -50,6 +58,12 @@ export {
 } from './create-share-tool.js';
 
 export { createTodoTool, TodoStore, type TodoItem, type TodoStatus } from './todo-tool.js';
+export {
+  createUpdatePlanTool,
+  type TurnPlanDetails,
+  type TurnPlanStatus,
+  type TurnPlanStep,
+} from './update-plan-tool.js';
 export { createSessionStatusTool } from './session-status-tool.js';
 export { createDreamingTool, type DreamingToolDeps } from './dreaming-tool.js';
 export {

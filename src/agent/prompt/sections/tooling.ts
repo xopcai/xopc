@@ -1,11 +1,12 @@
 const CORE_TOOL_ORDER = [
   'read_file',
   'write_file',
-  'edit_file',
+  'apply_patch',
   'grep',
   'find',
   'list_dir',
-  'shell',
+  'exec_command',
+  'update_plan',
   'web_search',
   'web_fetch',
   'web_extract',
@@ -34,13 +35,14 @@ const CORE_TOOL_ORDER = [
 ] as const;
 
 const CORE_TOOL_SUMMARIES: Record<string, string> = {
-  read_file: 'Read targeted file contents; prefer this over shell cat/sed for inspection',
-  write_file: 'Create new files or intentional complete rewrites',
-  edit_file: 'Make precise, minimal edits to existing files',
+  read_file: 'Read targeted file contents before editing',
+  write_file: 'Create new files or intentional complete rewrites; prefer apply_patch for code changes',
+  apply_patch: 'Apply strict patches for source edits',
   grep: 'Search file contents for literals, errors, config values, and docs',
   find: 'Find files by glob pattern',
   list_dir: 'List directory contents',
-  shell: 'Run tests, type checks, builds, package scripts, and safe inspection commands',
+  exec_command: 'Run tests, type checks, builds, package scripts, and safe inspection commands',
+  update_plan: 'Keep the current multi-step coding plan visible and accurate',
   web_search: 'Search the web',
   web_fetch: 'Fetch and extract readable content from a URL',
   web_extract: 'Extract structured content from a URL',
@@ -110,9 +112,10 @@ export function buildToolingSection(params: {
     toolLines.push(summary ? `- ${name}: ${summary}` : `- ${name}`);
   }
 
-  const shellToolName = resolveToolName('shell');
+  const execToolName = resolveToolName('exec_command');
+  const planToolName = resolveToolName('update_plan');
   const readToolName = resolveToolName('read_file');
-  const editToolName = resolveToolName('edit_file');
+  const patchToolName = resolveToolName('apply_patch');
   const writeToolName = resolveToolName('write_file');
   const grepToolName = resolveToolName('grep');
   const findToolName = resolveToolName('find');
@@ -120,11 +123,12 @@ export function buildToolingSection(params: {
   const hasWorkflow = availableTools.has('workflow');
   const hasToolManual = availableTools.has('tool_manual');
   const hasRead = availableTools.has('read_file');
-  const hasEdit = availableTools.has('edit_file');
+  const hasPatch = availableTools.has('apply_patch');
   const hasWrite = availableTools.has('write_file');
   const hasGrep = availableTools.has('grep');
   const hasFind = availableTools.has('find');
-  const hasShell = availableTools.has('shell');
+  const hasExec = availableTools.has('exec_command');
+  const hasPlan = availableTools.has('update_plan');
 
   const orchestrationLines: string[] = [];
   if (hasDelegate) {
@@ -145,12 +149,12 @@ export function buildToolingSection(params: {
     toolLines.length > 0
       ? toolLines.join('\n')
       : '- No tools are registered for this session.',
-    `For long waits, avoid rapid poll loops: use \`${shellToolName}\` with enough yieldMs or poll in reasonable intervals.`,
+    `For long waits, avoid rapid poll loops: use \`${execToolName}\` with a sufficient timeout or poll in reasonable intervals.`,
     hasRead
       ? `Use \`${readToolName}\` for targeted file inspection before editing; do not rely on filenames alone.`
       : '',
-    hasEdit
-      ? `Use \`${editToolName}\` for small source changes; keep patches focused.`
+    hasPatch
+      ? `Use \`${patchToolName}\` for source changes; keep patches focused and inspect failures carefully.`
       : '',
     hasWrite
       ? `Use \`${writeToolName}\` only for new files or intentional complete rewrites.`
@@ -161,8 +165,11 @@ export function buildToolingSection(params: {
           hasFind ? `\`${findToolName}\`` : '',
         ].filter(Boolean).join(' and ')} for text/file discovery; use code graph or symbol tools when available for definitions and call relationships.`
       : '',
-    hasShell
-      ? `Use \`${shellToolName}\` for verification and safe inspection, not routine file editing.`
+    hasExec
+      ? `Use \`${execToolName}\` for verification and safe inspection, not routine file editing.`
+      : '',
+    hasPlan
+      ? `Use \`${planToolName}\` for multi-step coding work: keep exactly one active step when work is in progress, and update it after meaningful progress or review.`
       : '',
     hasToolManual
       ? 'Some complex tools have built-in manuals. Use `tool_manual(tool)` before non-trivial use.'

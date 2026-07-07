@@ -109,6 +109,7 @@ export function getSlashCommands(
     { name: 'login', description: 'Login to an OAuth provider' },
     { name: 'logout', description: 'Remove stored provider auth profiles' },
     { name: 'usage', description: 'Show token usage statistics' },
+    { name: 'review', description: 'Review current workspace changes for correctness issues' },
     { name: 'session', description: 'Show current session info' },
     { name: 'project', description: 'Manage current project context' },
     { name: 'agent', description: 'Show or switch agent for this TUI session' },
@@ -282,6 +283,7 @@ export type CommandHandlerDeps = {
   uiOverlays?: {
     openModelPicker: (initialSearch?: string) => void;
     openAgentPicker?: () => void;
+    openReviewLauncher?: () => void;
     openSessionPicker: () => void;
     openSessionTree: () => void;
     openTranscriptTree: () => void;
@@ -1260,6 +1262,18 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           return;
         }
         void deps.runCompaction?.(commandArgs.trim() || undefined);
+        return;
+      case 'review':
+        if (!commandArgs.trim()) {
+          if (uiOverlays?.openReviewLauncher) {
+            uiOverlays.openReviewLauncher();
+          } else {
+            chatLog.addSystem('Usage: /review --uncommitted | /review --base <branch> | /review --commit <sha> | /review --custom <instructions>');
+            tui.requestRender();
+          }
+          return;
+        }
+        sendMessage(input);
         return;
       default:
         break;

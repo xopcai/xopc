@@ -10,10 +10,10 @@ import {
 const DEFAULT_MAX_ITERATIONS = 30;
 
 export const DEFAULT_DELEGATE_TOOLS = [
-  'shell',
+  'exec_command',
   'read_file',
   'write_file',
-  'edit_file',
+  'apply_patch',
   'grep',
   'find',
   'list_dir',
@@ -51,7 +51,7 @@ const DelegateTaskSchema = Type.Object({
   toolset: Type.Optional(
     Type.Array(Type.String(), {
       description:
-        'Tool names the sub-agent may use. Defaults to shell, read_file, write_file, edit_file, grep, find, list_dir, web_search, web_fetch. ' +
+        'Tool names the sub-agent may use. Defaults to exec_command, read_file, write_file, apply_patch, grep, find, list_dir, web_search, web_fetch. ' +
         'Dangerous or interactive tools are always removed.',
     }),
   ),

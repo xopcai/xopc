@@ -15,11 +15,11 @@ import type { MessageBus } from '../../infra/bus/index.js';
 import {
   createReadFileTool,
   createWriteFileTool,
-  createEditFileTool,
+  createApplyPatchTool,
   createListDirTool,
   createGrepTool,
   createFindTool,
-  createShellTool,
+  createExecCommandTool,
   createWebSearchTool,
   createWebFetchTool,
   createWebExtractTool,
@@ -32,6 +32,7 @@ import {
   createMemorySearchTool,
   createMemoryGetTool,
   createTodoTool,
+  createUpdatePlanTool,
   createSessionStatusTool,
   createDreamingTool,
   createClarifyTool,
@@ -102,18 +103,18 @@ export interface ToolFactoryDeps {
     | undefined;
   /** After skill_manage mutates disk, reload skills + refresh agent prompts (optional). */
   onSkillsFilesystemMutate?: () => void;
-  /** Names registered via skill_view for shell env passthrough. */
+  /** Names registered via skill_view for command env passthrough. */
   getSkillPassthroughEnvVarNames?: () => string[];
   /** Add declared env names for the current session (no values stored). */
   registerSkillEnvPassthrough?: (names: string[]) => void;
 }
 
 export interface CreateCoreToolsOptions {
-  /** Workspace root for file/shell tools (defaults to factory workspace). */
+  /** Workspace root for file/command tools (defaults to factory workspace). */
   workspace?: string;
   /** Canonical `agents/<id>/profile/`: bare SOUL.md / IDENTITY.md resolve here after the workspace. */
   profileMarkdownRoot?: string;
-  /** Tool `name` values to omit (e.g. `shell`, `extensions` for extension tools). */
+  /** Tool `name` values to omit (e.g. `exec_command`, `extensions` for extension tools). */
   disabledTools?: Set<string>;
   /** Optional primary model for image tool heuristics. */
   getPrimaryModel?: () => Model<Api>;
@@ -258,10 +259,7 @@ export class AgentToolsFactory {
       profileMarkdownRoot: options?.profileMarkdownRoot,
       recordGoalEvidence,
     });
-    const editTool = createEditFileTool(workspace, {
-      profileMarkdownRoot: options?.profileMarkdownRoot,
-      recordGoalEvidence,
-    });
+    const applyPatchTool = createApplyPatchTool(workspace, { recordGoalEvidence });
     const listDir = createListDirTool(workspace);
     const grep = createGrepTool(workspace);
     const find = createFindTool(workspace);
@@ -286,6 +284,7 @@ export class AgentToolsFactory {
       createTodoTool({
         getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
       }),
+      createUpdatePlanTool(),
       ...(getSkillMgr
         ? [
             createSkillsListTool({
@@ -306,11 +305,11 @@ export class AgentToolsFactory {
         : []),
       readTool,
       writeTool,
-      editTool,
+      applyPatchTool,
       listDir,
       grep,
       find,
-      createShellTool(workspace, {
+      createExecCommandTool(workspace, {
         getSkillPassthroughEnvVarNames: this.deps.getSkillPassthroughEnvVarNames,
         recordGoalEvidence,
       }),

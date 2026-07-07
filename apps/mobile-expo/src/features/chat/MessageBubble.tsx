@@ -20,7 +20,15 @@ import {
 } from './assistant-message-artifacts';
 import { extractMarkdownCodeBlocks } from './extract-markdown-code';
 import { MessageActionsBar, type MessageAction } from './MessageActionsBar';
-import type { ImageContent, Message, MessageContent, ProgressState, ThinkingContent, ToolUseContent } from './messages.types';
+import type {
+  ImageContent,
+  Message,
+  MessageContent,
+  ProgressState,
+  ReviewContent,
+  ThinkingContent,
+  ToolUseContent,
+} from './messages.types';
 import { useMessages } from '../../i18n/messages';
 import { colors as tokenColors, typography, useTheme } from '../../theme';
 import { extractUserMessageText } from './composer-send-helpers';
@@ -86,6 +94,73 @@ function userContentText(content: MessageContent[]): string {
 
 function userAudioBlocks(content: MessageContent[]): Extract<MessageContent, { type: 'audio' }>[] {
   return content.filter((b): b is Extract<MessageContent, { type: 'audio' }> => b.type === 'audio');
+}
+
+function reviewLocation(finding: ReviewContent['findings'][number]): string {
+  if (!finding.filePath) return '';
+  if (!finding.lineStart) return finding.filePath;
+  const end = finding.lineEnd && finding.lineEnd !== finding.lineStart ? `-${finding.lineEnd}` : '';
+  return `${finding.filePath}:${finding.lineStart}${end}`;
+}
+
+function ReviewBlock({ review }: { review: ReviewContent }) {
+  const { colors, isDark } = useTheme();
+  const correctnessColor =
+    review.overallCorrectness === 'patch is incorrect'
+      ? '#b91c1c'
+      : review.overallCorrectness === 'patch is correct'
+        ? '#047857'
+        : colors.text.secondary;
+  return (
+    <View style={[styles.reviewCard, { borderColor: colors.border.default }]}>
+      <View style={styles.reviewHeader}>
+        <Text style={[styles.reviewTitle, { color: colors.text.primary }]}>Code review</Text>
+        <Text
+          style={[
+            styles.reviewBadge,
+            {
+              color: correctnessColor,
+              borderColor: isDark ? colors.border.default : '#d1d5db',
+            },
+          ]}
+        >
+          {review.overallCorrectness}
+        </Text>
+      </View>
+      {review.summary ? (
+        <Text style={[styles.reviewSummary, { color: colors.text.secondary }]}>{review.summary}</Text>
+      ) : null}
+      <View style={styles.reviewFindings}>
+        {review.findings.length === 0 ? (
+          <Text style={[styles.reviewBody, { color: colors.text.secondary }]}>No findings.</Text>
+        ) : (
+          review.findings.map((finding, index) => {
+            const loc = reviewLocation(finding);
+            return (
+              <View
+                key={`${finding.title}-${index}`}
+                style={[styles.reviewFinding, { borderColor: colors.border.default }]}
+              >
+                <View style={styles.reviewFindingHeader}>
+                  <Text style={[styles.reviewPriority, { color: colors.text.secondary, borderColor: colors.border.default }]}>
+                    P{finding.priority}
+                  </Text>
+                  <Text style={[styles.reviewFindingTitle, { color: colors.text.primary }]}>
+                    {finding.title}
+                  </Text>
+                </View>
+                {loc ? <Text style={[styles.reviewLocation, { color: colors.text.secondary }]}>{loc}</Text> : null}
+                {finding.body ? <Text style={[styles.reviewBody, { color: colors.text.secondary }]}>{finding.body}</Text> : null}
+              </View>
+            );
+          })
+        )}
+      </View>
+      {review.overallExplanation ? (
+        <Text style={[styles.reviewBody, { color: colors.text.secondary }]}>{review.overallExplanation}</Text>
+      ) : null}
+    </View>
+  );
 }
 
 /**
@@ -164,6 +239,9 @@ function renderAssistantContent(
       if (!isStreaming) {
         nodes.push(<AudioMessageBlock key={`audio-${i}`} audio={block} sessionKey={sessionKey} />);
       }
+      i++;
+    } else if (block.type === 'review') {
+      nodes.push(<ReviewBlock key={`review-${i}`} review={block} />);
       i++;
     } else {
       i++;
@@ -546,5 +624,66 @@ const styles = StyleSheet.create({
     ...typography.micro,
     marginTop: 4,
     paddingHorizontal: 2,
+  },
+  reviewCard: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    padding: 12,
+    gap: 8,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  reviewTitle: {
+    ...typography.body,
+    fontWeight: '700',
+  },
+  reviewBadge: {
+    ...typography.micro,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    fontWeight: '700',
+  },
+  reviewSummary: {
+    ...typography.caption,
+  },
+  reviewFindings: {
+    gap: 8,
+  },
+  reviewFinding: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    padding: 8,
+    gap: 4,
+  },
+  reviewFindingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  reviewPriority: {
+    ...typography.micro,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    fontWeight: '700',
+  },
+  reviewFindingTitle: {
+    ...typography.body,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  reviewLocation: {
+    ...typography.micro,
+  },
+  reviewBody: {
+    ...typography.caption,
   },
 });

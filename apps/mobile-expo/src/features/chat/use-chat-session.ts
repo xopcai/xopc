@@ -36,8 +36,12 @@ import type { ClarifyPromptState } from './ClarifyPrompt';
 import {
   appendTextDelta,
   appendThinkingDelta,
+  appendCommandOutputDelta,
+  appendReview,
   appendToolStart,
   cloneMessageForRender,
+  completeCommand,
+  completePatchApplied,
   completeTool,
   ensureAssistantMessage,
   finalizeRunningTools,
@@ -417,6 +421,59 @@ export function useChatSession(options: UseChatSessionOptions): UseChatSessionRe
         updateStreamingMessage((message) => {
           completeTool(message.content, toolName, isErr, result, toolCallId);
         }, true);
+      },
+      onCommandStarted: (payload) => {
+        if (!isCurrentSession()) return;
+        touchStreamActivity();
+        updateStreamingMessage((message) => {
+          appendToolStart(
+            message.content,
+            'exec_command',
+            { cmd: payload.command, ...(payload.cwd ? { cwd: payload.cwd } : {}) },
+            payload.toolCallId,
+          );
+        }, true);
+        if (!streamingRef.current) {
+          setStreaming(true);
+          streamingRef.current = true;
+        }
+      },
+      onCommandOutputDelta: (payload) => {
+        if (!isCurrentSession()) return;
+        touchStreamActivity();
+        updateStreamingMessage((message) => {
+          appendCommandOutputDelta(message.content, payload.toolCallId, payload.stream, payload.delta);
+        }, true);
+      },
+      onCommandCompleted: (payload) => {
+        if (!isCurrentSession()) return;
+        touchStreamActivity();
+        updateStreamingMessage((message) => {
+          completeCommand(message.content, payload);
+        }, true);
+      },
+      onPatchApplied: (payload) => {
+        if (!isCurrentSession()) return;
+        touchStreamActivity();
+        updateStreamingMessage((message) => {
+          completePatchApplied(message.content, payload);
+        }, true);
+      },
+      onTurnDiff: (payload) => {
+        if (!isCurrentSession()) return;
+        if (!payload.diff && payload.files.length === 0) return;
+        touchStreamActivity();
+      },
+      onReview: ({ review }) => {
+        if (!isCurrentSession()) return;
+        touchStreamActivity();
+        updateStreamingMessage((message) => {
+          appendReview(message.content, review);
+        }, true);
+        if (!streamingRef.current) {
+          setStreaming(true);
+          streamingRef.current = true;
+        }
       },
       onProgress: (p) => {
         if (!isCurrentSession()) return;

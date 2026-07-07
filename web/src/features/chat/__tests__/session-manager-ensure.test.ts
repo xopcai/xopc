@@ -126,8 +126,8 @@ describe('SessionManager.loadSession', () => {
                   {
                     type: 'toolCall',
                     id: 'call_1',
-                    name: 'shell',
-                    arguments: { command: 'pnpm test' },
+                    name: 'exec_command',
+                    arguments: { cmd: 'pnpm test' },
                   },
                 ],
                 timestamp: '2026-07-05T09:10:01.000Z',

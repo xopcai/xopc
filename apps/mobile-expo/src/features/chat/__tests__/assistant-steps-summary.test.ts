@@ -74,7 +74,7 @@ describe('getFriendlyToolTitle', () => {
   it('maps known tool names to friendly labels', () => {
     expect(getFriendlyToolTitle('web_search', labels)).toBe('搜索网页');
     expect(getFriendlyToolTitle('read_file', labels)).toBe('读取文件');
-    expect(getFriendlyToolTitle('shell', labels)).toBe('运行命令');
+    expect(getFriendlyToolTitle('exec_command', labels)).toBe('运行命令');
   });
 
   it('falls back to unknownTool template', () => {

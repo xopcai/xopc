@@ -10,8 +10,8 @@ describe('delegate_task allowlist', () => {
   });
 
   it('strips blocked names from a requested toolset', () => {
-    const requested = ['read_file', 'delegate_task', 'clarify', 'shell'];
+    const requested = ['read_file', 'delegate_task', 'clarify', 'exec_command'];
     const allowed = requested.filter((t) => !DELEGATE_BLOCKED_TOOLS.has(t));
-    expect(allowed).toEqual(['read_file', 'shell']);
+    expect(allowed).toEqual(['read_file', 'exec_command']);
   });
 });

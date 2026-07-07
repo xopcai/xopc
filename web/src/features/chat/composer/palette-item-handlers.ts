@@ -49,6 +49,8 @@ export interface PaletteApplyContext {
     /** Used when runBusy and command is abort-class: stop the current generation. */
     onAbort?: () => void;
     onUnavailableSkill?: (item: PaletteItem) => void;
+    /** Opens the structured review launcher for the built-in `/review` command. */
+    onReviewLauncher?: () => void;
   };
 }
 
@@ -76,6 +78,19 @@ const applyCommandItem: PaletteItemHandler = (item, ctx) => {
   if (!range) return;
   // Slash commands only run at position 0 (parent filtered already; guard for safety).
   if (range.start !== 0) return;
+
+  if (
+    item.name.toLowerCase() === 'review' &&
+    ctx.callbacks.onReviewLauncher &&
+    !ctx.runBusy &&
+    ctx.pendingFollowUpsCount === 0
+  ) {
+    const v = ctx.editor.valueRef.current;
+    const next = v.slice(0, range.start) + v.slice(range.end);
+    ctx.editor.resetEditor({ nextText: next, caretOffset: range.start, focus: true });
+    ctx.callbacks.onReviewLauncher();
+    return;
+  }
 
   const accepts = item.acceptsArgs === true;
 

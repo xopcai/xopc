@@ -11,7 +11,7 @@ export const DEFAULT_GATEWAY_HTTP_TOOL_DENY: readonly string[] = [
   // Arbitrary child process creation
   'spawn',
   // Shell command execution
-  'shell',
+  'exec_command',
   // Arbitrary file mutation on the host
   'fs_write',
   // Arbitrary file deletion on the host

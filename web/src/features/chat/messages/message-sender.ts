@@ -55,6 +55,11 @@ export type CompactionState = {
   summary?: string;
 };
 
+export type TurnPlanState = {
+  explanation?: string;
+  plan: { step: string; status: 'pending' | 'in_progress' | 'completed' }[];
+};
+
 export type MessagingCallbacks = {
   onStreamStart: () => void;
   onToken: (delta: string) => void;
@@ -71,6 +76,10 @@ export type MessagingCallbacks = {
   onProgress: (progress: ProgressState) => void;
   /** Context compaction in progress (pre-turn automatic or manual). */
   onCompaction?: (state: CompactionState) => void;
+  /** Current agent turn plan, emitted by the `update_plan` tool. */
+  onTurnPlanUpdated?: (state: TurnPlanState) => void;
+  /** Structured code review output emitted by `/review`. */
+  onReview?: (payload: { review: unknown }) => void;
   /** Assistant TTS audio persisted under agent home `tts/` (before `run_end`). */
   onTtsAudio?: (payload: {
     uri: string;
@@ -433,6 +442,18 @@ export class MessageSender {
           summary: typeof payload.summary === 'string' ? payload.summary : undefined,
         });
         break;
+      case 'turn_plan': {
+        const plan = normalizeTurnPlan(payload.plan);
+        if (plan.length > 0) {
+          cb?.onTurnPlanUpdated?.({
+            explanation: typeof payload.explanation === 'string' && payload.explanation.trim()
+              ? payload.explanation.trim()
+              : undefined,
+            plan,
+          });
+        }
+        break;
+      }
       case 'tts_audio':
         cb?.onTtsAudio?.({
           uri: String(payload.uri || ''),
@@ -484,4 +505,21 @@ function serializeProtocolPayload(result: unknown): unknown {
   } catch {
     return String(result);
   }
+}
+
+function normalizeTurnPlan(raw: unknown): TurnPlanState['plan'] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      const rec = item && typeof item === 'object' && !Array.isArray(item)
+        ? item as Record<string, unknown>
+        : undefined;
+      const step = typeof rec?.step === 'string' ? rec.step.trim() : '';
+      const status = rec?.status;
+      if (!step || (status !== 'pending' && status !== 'in_progress' && status !== 'completed')) {
+        return undefined;
+      }
+      return { step, status };
+    })
+    .filter((item): item is TurnPlanState['plan'][number] => Boolean(item));
 }

@@ -73,7 +73,7 @@ describe('buildStepsRoundCompleteSummary', () => {
     const blocks: Array<ThinkingContent | ToolUseContent> = [
       { type: 'tool_use', id: '1', name: 'read_file', status: 'done', input: { path: 'a.ts' } },
       { type: 'tool_use', id: '2', name: 'read_file', status: 'done', input: { path: 'b.ts' } },
-      { type: 'tool_use', id: '3', name: 'edit_file', status: 'done', input: { path: 'c.ts' } },
+      { type: 'tool_use', id: '3', name: 'apply_patch', status: 'done', input: { path: 'c.ts' } },
     ];
     const s = buildStepsRoundCompleteSummary(blocks, doneZh, joinZh, 'zh', '查看 3 步');
     expect(s).toBe('读了 2 个文件和改了 1 个文件');

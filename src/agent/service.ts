@@ -269,6 +269,8 @@ export class AgentService {
       getWorkflowRunService: config.getWorkflowRunService,
       onSkillsUpdated: config.onSkillsUpdated,
       isWorkspaceTrusted: config.isWorkspaceTrusted,
+      getSelfVerifyPromptContext: (sessionKey, agentId) =>
+        this.selfVerifyMiddleware.getPendingVerificationContext(sessionKey, agentId),
     });
 
     this.agentEventHandler = new AgentEventHandler({

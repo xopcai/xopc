@@ -23,7 +23,7 @@ const ExecuteCodeSchema = Type.Object({
       '  await tools.write_file(path, content)\n' +
       '  await tools.grep(pattern, { path?, glob?, ignoreCase?, literal?, context?, limit? })\n' +
       '  await tools.find(pattern, { path?, limit? })\n' +
-      '  await tools.shell(command)\n\n' +
+      '  await tools.exec_command(cmd, cwd?)\n\n' +
       'Use console.log() for output; combined stdout/stderr is returned.',
   }),
   timeout: Type.Optional(
@@ -41,7 +41,7 @@ export const SANDBOX_ALLOWED_TOOLS = new Set([
   'write_file',
   'grep',
   'find',
-  'shell',
+  'exec_command',
   'skills_list',
   'skill_view',
 ]);
@@ -154,7 +154,11 @@ function createToolsApi(
       });
     },
 
-    shell: async (command: unknown) => run('shell', { command: String(command ?? '') }),
+    exec_command: async (cmd: unknown, cwd?: unknown) =>
+      run('exec_command', {
+        cmd: String(cmd ?? ''),
+        ...(typeof cwd === 'string' && cwd.trim() ? { cwd } : {}),
+      }),
   };
 }
 
@@ -218,7 +222,7 @@ export function createExecuteCodeTool(deps: ExecuteCodeToolDeps): AgentTool {
       'WHEN TO USE: loops over files/URLs, simple branching between tool calls.\n' +
       'WHEN NOT TO USE: single tool calls; tasks needing full tool schemas or disallowed tools.\n\n' +
       'API: `await tools.web_search(q, count?)`, `web_fetch(url, maxChars?)`, `read_file(path, limit?)`, ' +
-      '`write_file(path, content)`, `grep(pattern, opts?)`, `find(glob, opts?)`, `shell(command)`. ' +
+      '`write_file(path, content)`, `grep(pattern, opts?)`, `find(glob, opts?)`, `exec_command(cmd, cwd?)`. ' +
       'Use `console.log` for output.',
     parameters: ExecuteCodeSchema,
 

@@ -1,6 +1,7 @@
 import type {
   Message,
   MessageContent,
+  ReviewContent,
   ThinkingContent,
   ToolUseContent,
 } from '@/features/chat/messages/messages.types';
@@ -164,13 +165,21 @@ function assistantToolsFingerprint(content: readonly MessageContent[]): string {
     .join('\n');
 }
 
+function assistantReviewFingerprint(content: readonly MessageContent[]): string {
+  return content
+    .filter((b): b is ReviewContent => b.type === 'review')
+    .map((b) => JSON.stringify(b))
+    .join('\n');
+}
+
 /** True when two assistant rows would render the same in the chat column (ignoring timestamp / usage). */
 export function assistantTurnVisuallyEquivalent(a: Message, b: Message): boolean {
   if (a.role !== 'assistant' || b.role !== 'assistant') return false;
   return (
     assistantTextFingerprint(a.content) === assistantTextFingerprint(b.content) &&
     assistantThinkingFingerprint(a.content) === assistantThinkingFingerprint(b.content) &&
-    assistantToolsFingerprint(a.content) === assistantToolsFingerprint(b.content)
+    assistantToolsFingerprint(a.content) === assistantToolsFingerprint(b.content) &&
+    assistantReviewFingerprint(a.content) === assistantReviewFingerprint(b.content)
   );
 }
 
@@ -303,6 +312,7 @@ function buildUserMessage(m: WireMessage): Message {
 
 function buildAssistantMessage(m: WireMessage): Message {
   const content = mergeAssistantContent(m);
+  appendReviewFromMetadata(content, m.metadata);
   return {
     role: 'assistant',
     content,
@@ -310,6 +320,59 @@ function buildAssistantMessage(m: WireMessage): Message {
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     usage: m.usage as Message['usage'],
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function normalizeReviewBlock(raw: unknown): ReviewContent | null {
+  const rec = asRecord(raw);
+  if (!rec || rec.type !== 'review') return null;
+  const findings = Array.isArray(rec.findings) ? rec.findings : [];
+  const review: ReviewContent = {
+    type: 'review',
+    target: typeof rec.target === 'string' ? rec.target : 'working tree changes',
+    summary: typeof rec.summary === 'string' ? rec.summary : '',
+    findings: findings
+      .map((item): ReviewContent['findings'][number] | null => {
+        const f = asRecord(item);
+        if (!f) return null;
+        const priority = f.priority === 0 || f.priority === 1 || f.priority === 2 || f.priority === 3 ? f.priority : 2;
+        const title = typeof f.title === 'string' ? f.title : '';
+        const body = typeof f.body === 'string' ? f.body : '';
+        if (!title && !body) return null;
+        const finding: ReviewContent['findings'][number] = {
+          title,
+          body,
+          priority,
+        };
+        if (typeof f.confidenceScore === 'number') finding.confidenceScore = f.confidenceScore;
+        if (typeof f.filePath === 'string') finding.filePath = f.filePath;
+        if (typeof f.lineStart === 'number') finding.lineStart = f.lineStart;
+        if (typeof f.lineEnd === 'number') finding.lineEnd = f.lineEnd;
+        return finding;
+      })
+      .filter((item): item is ReviewContent['findings'][number] => item != null),
+    overallCorrectness:
+      rec.overallCorrectness === 'patch is correct' || rec.overallCorrectness === 'patch is incorrect'
+        ? rec.overallCorrectness
+        : 'unknown',
+    overallExplanation: typeof rec.overallExplanation === 'string' ? rec.overallExplanation : '',
+  };
+  if (typeof rec.overallConfidenceScore === 'number') review.overallConfidenceScore = rec.overallConfidenceScore;
+  if (typeof rec.generatedAt === 'number') review.generatedAt = rec.generatedAt;
+  if (rec.source === 'model' || rec.source === 'local') review.source = rec.source;
+  return review;
+}
+
+function appendReviewFromMetadata(content: MessageContent[], metadata: unknown): void {
+  const review = normalizeReviewBlock(asRecord(metadata)?.review);
+  if (!review) return;
+  if (content.some((b) => b.type === 'review' && b.target === review.target)) return;
+  content.push(review);
 }
 
 function mergeAssistantContent(m: WireMessage): MessageContent[] {
@@ -464,6 +527,9 @@ function normalizeContentBlocks(raw: unknown): MessageContent[] {
       if (img) {
         out.push(img);
       }
+    } else if (t === 'review') {
+      const review = normalizeReviewBlock(item);
+      if (review) out.push(review);
     } else if (t === 'tool_use' || t === 'tool_call') {
       if (!isToolCallBlock(item)) continue;
       const id = extractToolBlockId(item);

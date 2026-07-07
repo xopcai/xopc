@@ -29,6 +29,7 @@ const STREAM_TOUCH_EVENTS = new Set([
   'assistant_delta',
   'thinking_delta',
   'thinking_end',
+  'review',
   'tool_start',
   'tool_update',
   'tool_end',
@@ -111,6 +112,22 @@ function appendThinkingText(message: AgentMessage, delta: string): void {
     return;
   }
   content.push({ type: 'thinking', text: delta, streaming: true });
+}
+
+function appendReviewBlock(message: AgentMessage, review: unknown): void {
+  if (!review || typeof review !== 'object' || Array.isArray(review)) return;
+  const rec = review as { type?: unknown; target?: unknown };
+  if (rec.type !== 'review') return;
+  const msg = message as { content?: unknown };
+  if (!Array.isArray(msg.content)) msg.content = [];
+  const content = msg.content as Array<Record<string, unknown>>;
+  const target = typeof rec.target === 'string' ? rec.target : 'working tree changes';
+  const existing = content.findIndex((block) => block.type === 'review' && block.target === target);
+  if (existing >= 0) {
+    content[existing] = review as Record<string, unknown>;
+    return;
+  }
+  content.push(review as Record<string, unknown>);
 }
 
 function finalizeThinking(message: AgentMessage): void {
@@ -203,6 +220,15 @@ export function dispatchAgentEvent(
       const message = assistantForRun(runId);
       finalizeThinking(message);
       chatLog.updateAssistant(message, runId);
+      tui.requestRender();
+      break;
+    }
+    case 'review': {
+      const message = assistantForRun(runId);
+      appendReviewBlock(message, p.review);
+      chatLog.updateAssistant(message, runId);
+      markRunEvent(state, 'streaming', runId, event, source);
+      setActivityStatus('streaming');
       tui.requestRender();
       break;
     }

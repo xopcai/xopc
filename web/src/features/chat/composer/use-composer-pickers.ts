@@ -40,6 +40,7 @@ export interface UseComposerPickersOptions {
   /** Active session agent id; used to resolve skill availability in `/` palette. */
   currentAgentId?: string;
   onUnavailableSkill?: (item: PaletteItem) => void;
+  onReviewLauncher?: () => void;
   /** When runBusy and command is `acceptsArgs=false` non-abort: queue the command. */
   onAddPendingFollowUp?: (text: string, atts?: WireAttachment[]) => void | Promise<void>;
   /** When runBusy and command is abort-class: stop the current generation. */
@@ -87,6 +88,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
     onChatAgentChange,
     currentAgentId,
     onUnavailableSkill,
+    onReviewLauncher,
     onAddPendingFollowUp,
     onAbort,
     pendingFollowUpsCount,
@@ -130,6 +132,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
         onAddPendingFollowUp,
         onAbort,
         onUnavailableSkill,
+        onReviewLauncher,
       },
     }),
     [
@@ -147,6 +150,7 @@ export function useComposerPickers(opts: UseComposerPickersOptions): UseComposer
       onAddPendingFollowUp,
       onAbort,
       onUnavailableSkill,
+      onReviewLauncher,
     ],
   );
 

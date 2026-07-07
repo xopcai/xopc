@@ -13,10 +13,12 @@ import {
 import {
   formatScopedModelsOpenedHint,
   formatScopedModelsSavedHint,
+  formatReviewPickerOpenedHint,
   formatSettingsOpenedHint,
   formatSessionTreeOpenedHint,
   formatThinkingLevelSavedHint,
   formatThinkingSelectorHint,
+  openReviewLauncherOverlay,
 } from '../tui-picker-overlay.js';
 import {
   formatTranscriptTreeHelpLines,
@@ -341,6 +343,94 @@ it('prefilters searchable picker rows from an initial query', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
+  it('opens review presets and sends a selected commit review command', async () => {
+    let overlay: Component | undefined;
+    const sendMessage = vi.fn();
+    const svc = {
+      client: {
+        getReviewContext: vi.fn(async () => ({
+          cwd: '/repo',
+          defaultBaseBranch: 'main',
+          status: { changedFiles: 1, untrackedFiles: 1, isClean: false },
+          branches: [
+            { name: 'feature', current: true },
+            { name: 'main' },
+          ],
+          commits: [
+            {
+              sha: 'abc123def456',
+              shortSha: 'abc123d',
+              subject: 'feat: review picker',
+              date: '2026-07-08T00:00:00.000Z',
+            },
+          ],
+        })),
+      },
+      state: { currentSessionKey: 'agent:main:main', sessionInfo: {} },
+      openOverlay: (component: Component) => {
+        overlay = component;
+      },
+      closeOverlay: vi.fn(),
+      tui: { requestRender: vi.fn(), setFocus: vi.fn() },
+      editor: { handleInput: vi.fn() },
+      chatLog: { addSystem: vi.fn(), addBranchSummary: vi.fn() },
+      sendMessage,
+      setEditorText: vi.fn(),
+      keybindings: new XopcKeybindingsManager(),
+    } as never;
+
+    await openReviewLauncherOverlay(svc);
+    overlay?.handleInput?.('\x1b[B');
+    overlay?.handleInput?.('\x1b[B');
+    overlay?.handleInput?.('\r');
+    overlay?.handleInput?.('\r');
+
+    expect(sendMessage).toHaveBeenCalledWith('/review --commit abc123def456');
+  });
+
+  it('returns from a review commit selector to review presets on cancel', async () => {
+    let overlay: Component | undefined;
+    const closeOverlay = vi.fn();
+    const svc = {
+      client: {
+        getReviewContext: vi.fn(async () => ({
+          cwd: '/repo',
+          defaultBaseBranch: 'main',
+          status: { changedFiles: 1, untrackedFiles: 0, isClean: false },
+          branches: [{ name: 'main' }],
+          commits: [
+            {
+              sha: 'abc123def456',
+              shortSha: 'abc123d',
+              subject: 'feat: review picker',
+              date: '2026-07-08T00:00:00.000Z',
+            },
+          ],
+        })),
+      },
+      state: { currentSessionKey: 'agent:main:main', sessionInfo: {} },
+      openOverlay: (component: Component) => {
+        overlay = component;
+      },
+      closeOverlay,
+      tui: { requestRender: vi.fn(), setFocus: vi.fn() },
+      editor: { handleInput: vi.fn() },
+      chatLog: { addSystem: vi.fn(), addBranchSummary: vi.fn() },
+      sendMessage: vi.fn(),
+      setEditorText: vi.fn(),
+      keybindings: new XopcKeybindingsManager(),
+    } as never;
+
+    await openReviewLauncherOverlay(svc);
+    overlay?.handleInput?.('\x1b[B');
+    overlay?.handleInput?.('\x1b[B');
+    overlay?.handleInput?.('\r');
+    overlay?.handleInput?.('escape');
+
+    expect(closeOverlay).not.toHaveBeenCalled();
+    expect(overlay?.render?.(100).join('\n')).toContain('Review against a base branch');
+  });
+
   it('uses resolved keybindings in picker system hints', () => {
     const keybindings = new XopcKeybindingsManager({
       'app.model.cycleForward': 'm',
@@ -387,6 +477,8 @@ it('prefilters searchable picker rows from an initial query', () => {
     expect(formatThinkingSelectorHint(keybindings)).toContain('Z close');
     expect(formatThinkingSelectorHint(keybindings)).toContain('U/D');
     expect(formatThinkingLevelSavedHint('high')).toBe('Thinking level: high');
+    expect(formatReviewPickerOpenedHint(keybindings)).toContain('X select');
+    expect(formatReviewPickerOpenedHint(keybindings)).toContain('Z close');
   });
 
   it('compacts default transcript tree help keys with arrow labels', () => {

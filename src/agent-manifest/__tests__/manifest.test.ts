@@ -32,7 +32,7 @@ const baseAgent: AgentManifest = {
   },
   tools: {
     builtin: {
-      shell: { mode: 'confirm', scope: 'workspace' },
+      exec_command: { mode: 'confirm', scope: 'workspace' },
     },
   },
   skills: {
@@ -67,7 +67,7 @@ const presets: Record<string, CapabilityPreset> = {
     tools: {
       builtin: {
         send_message: { mode: 'confirm' },
-        shell: { mode: 'deny' },
+        exec_command: { mode: 'deny' },
       },
     },
     memory: {
@@ -87,7 +87,7 @@ const presets: Record<string, CapabilityPreset> = {
     tools: {
       builtin: {
         read_file: { mode: 'allow', scope: 'workspace' },
-        edit_file: { mode: 'confirm', scope: 'workspace' },
+        apply_patch: { mode: 'confirm', scope: 'workspace' },
       },
     },
   },
@@ -100,10 +100,10 @@ describe('agent manifest resolver', () => {
     expect(result.presetChain).toEqual(['base-safe', 'code-tools']);
     expect(result.manifest.tools.builtin.read_file).toEqual({ mode: 'allow', scope: 'workspace' });
     expect(result.manifest.tools.builtin.send_message).toEqual({ mode: 'confirm' });
-    expect(result.manifest.tools.builtin.shell).toEqual({ mode: 'confirm', scope: 'workspace' });
+    expect(result.manifest.tools.builtin.exec_command).toEqual({ mode: 'confirm', scope: 'workspace' });
     expect(result.manifest.memory.mode).toBe('confirmWrite');
     expect(result.sources['tools.builtin.read_file.mode']).toBe('preset:code-tools@2');
-    expect(result.sources['tools.builtin.shell.mode']).toBe('agent:coder');
+    expect(result.sources['tools.builtin.exec_command.mode']).toBe('agent:coder');
   });
 
   it('prepends the configured default preset when present', () => {
@@ -132,16 +132,16 @@ describe('agent manifest resolver', () => {
         id: 'locked',
         name: 'Locked',
         version: 1,
-        tools: { builtin: { shell: { mode: 'deny' } } },
-        locks: ['tools.builtin.shell.mode'],
+        tools: { builtin: { exec_command: { mode: 'deny' } } },
+        locks: ['tools.builtin.exec_command.mode'],
       },
     };
     const agent: AgentManifest = { ...baseAgent, extends: ['locked'] };
 
     const result = resolveEffectiveAgentManifest({ agent, presets: lockedPresets });
 
-    expect(result.manifest.tools.builtin.shell.mode).toBe('deny');
-    expect(result.sources['tools.builtin.shell.mode']).toBe('preset:locked@1');
+    expect(result.manifest.tools.builtin.exec_command.mode).toBe('deny');
+    expect(result.sources['tools.builtin.exec_command.mode']).toBe('preset:locked@1');
   });
 
   it('rejects missing presets and cycles', () => {
@@ -166,7 +166,7 @@ describe('agent manifest validator', () => {
       agent: baseAgent,
       presets,
       catalogs: {
-        tools: ['read_file', 'edit_file', 'shell', 'send_message'],
+        tools: ['read_file', 'apply_patch', 'exec_command', 'send_message'],
         skills: ['diagnose'],
         workflows: ['implement-change', 'review-code'],
       },
@@ -193,7 +193,7 @@ describe('agent manifest validator', () => {
 
     expect(result.ok).toBe(false);
     expect(result.issues.map((issue) => issue.path)).toEqual(
-      expect.arrayContaining(['models.defaultRole', 'tools.builtin.shell', 'skills.allow', 'workflows.default']),
+      expect.arrayContaining(['models.defaultRole', 'tools.builtin.exec_command', 'skills.allow', 'workflows.default']),
     );
   });
 });
@@ -205,7 +205,7 @@ describe('agent manifest prompt', () => {
 
     expect(prompt).toContain('<agent_identity>');
     expect(prompt).toContain('Role: Software engineering agent');
-    expect(prompt).toContain('shell: confirm, scope=workspace');
+    expect(prompt).toContain('exec_command: confirm, scope=workspace');
     expect(prompt).toContain('<memory_policy>');
     expect(prompt).toContain('Default: implement-change');
   });

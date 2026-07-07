@@ -103,7 +103,7 @@ describe('capability-presets-admin', () => {
             name: 'Safe Coder',
             version: 1,
             description: 'old',
-            tools: { builtin: { shell: { mode: 'confirm', scope: 'workspace' } } },
+            tools: { builtin: { exec_command: { mode: 'confirm', scope: 'workspace' } } },
           },
         },
         list: [manifest('main')],
@@ -119,7 +119,7 @@ describe('capability-presets-admin', () => {
     const preset = updated.data.nextConfig.agents.capabilityPresets['safe-coder'];
     expect(preset?.description).toBeUndefined();
     expect(preset?.skills).toEqual({ mode: 'allowlist', allow: ['diagnose'] });
-    expect(preset?.tools?.builtin.shell?.mode).toBe('confirm');
+    expect(preset?.tools?.builtin.exec_command?.mode).toBe('confirm');
   });
 
   it('rejects preset cycles', () => {

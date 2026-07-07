@@ -71,7 +71,7 @@ export async function runBtwQuery(opts: {
     'You are answering an ephemeral /btw side question about the current conversation.',
     'Use the conversation only as background context.',
     'Answer only the side question. Do not continue or complete any unfinished task from the conversation.',
-    'Do not use tools, shell, or file writes unless the question explicitly requires a tiny code snippet.',
+    'Do not use tools, commands, or file writes unless the question explicitly requires a tiny code snippet.',
     'If the question can be answered briefly, answer briefly.',
   ].join('\n');
 

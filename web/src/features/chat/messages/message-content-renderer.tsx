@@ -11,6 +11,7 @@ import { AssistantStepsBlock } from '@/features/chat/messages/assistant-steps-bl
 import type {
   ImageContent,
   MessageContent,
+  ReviewContent,
   ThinkingContent,
   ToolUseContent,
 } from '@/features/chat/messages/messages.types';
@@ -49,6 +50,59 @@ type MarkdownFileResolution =
   | { status: 'loading'; target: WorkspaceFileLinkTarget }
   | { status: 'ready'; target: WorkspaceFileLinkTarget; ref: WorkspaceFileReference }
   | { status: 'error'; target: WorkspaceFileLinkTarget; message: string };
+
+function reviewLocation(finding: ReviewContent['findings'][number]): string {
+  if (!finding.filePath) return '';
+  if (!finding.lineStart) return finding.filePath;
+  const end = finding.lineEnd && finding.lineEnd !== finding.lineStart ? `-${finding.lineEnd}` : '';
+  return `${finding.filePath}:${finding.lineStart}${end}`;
+}
+
+function ReviewBlock({ review }: { review: ReviewContent }) {
+  const correctnessTone =
+    review.overallCorrectness === 'patch is incorrect'
+      ? 'border-red-500/30 bg-red-500/5 text-red-700 dark:text-red-300'
+      : review.overallCorrectness === 'patch is correct'
+        ? 'border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300'
+        : 'border-edge bg-surface-muted text-fg-secondary';
+  return (
+    <div className="min-w-0 rounded-lg border border-edge bg-surface-subtle p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="text-sm font-semibold text-fg-primary">Code review</div>
+        <div className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-medium', correctnessTone)}>
+          {review.overallCorrectness}
+        </div>
+      </div>
+      {review.summary ? (
+        <div className="mt-1 text-sm text-fg-secondary">{review.summary}</div>
+      ) : null}
+      <div className="mt-3 space-y-2">
+        {review.findings.length === 0 ? (
+          <div className="text-sm text-fg-secondary">No findings.</div>
+        ) : (
+          review.findings.map((finding, index) => {
+            const loc = reviewLocation(finding);
+            return (
+              <div key={`${finding.title}-${index}`} className="rounded-md border border-edge bg-surface p-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded border border-edge bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold text-fg-secondary">
+                    P{finding.priority}
+                  </span>
+                  <span className="min-w-0 text-sm font-medium text-fg-primary">{finding.title}</span>
+                </div>
+                {loc ? <div className="mt-1 break-all text-xs text-fg-tertiary">{loc}</div> : null}
+                {finding.body ? <div className="mt-1 text-sm text-fg-secondary">{finding.body}</div> : null}
+              </div>
+            );
+          })
+        )}
+      </div>
+      {review.overallExplanation ? (
+        <div className="mt-3 text-sm text-fg-secondary">{review.overallExplanation}</div>
+      ) : null}
+    </div>
+  );
+}
 
 function ChatMarkdownFileActionCard({
   resolution,
@@ -307,6 +361,9 @@ function renderTextOrImageBlock(
         alt=""
       />
     );
+  }
+  if (block.type === 'review') {
+    return <ReviewBlock key={key} review={block} />;
   }
   return null;
 }

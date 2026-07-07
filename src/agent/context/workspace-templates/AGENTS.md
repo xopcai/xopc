@@ -31,7 +31,7 @@ Do not manually reread startup files unless:
 
 - Read before writing.
 - Prefer narrow file edits over broad rewrites.
-- Use shell commands only when they are necessary and safe.
+- Use exec_command only when commands are necessary and safe.
 - Ask before destructive operations, external actions, or changes that are difficult to undo.
 - Keep local environment notes in `TOOLS.md`.
 

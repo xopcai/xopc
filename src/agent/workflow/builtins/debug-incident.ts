@@ -38,7 +38,7 @@ export const DEBUG_INCIDENT_SCRIPT = `export const meta = {
   ],
 }
 
-const READ_TOOLS = ['read_file', 'grep', 'find', 'list_dir', 'shell']
+const READ_TOOLS = ['read_file', 'grep', 'find', 'list_dir', 'exec_command']
 
 const error = args && typeof args === 'object' && args.error
   ? String(args.error)

@@ -2,7 +2,9 @@
 
 如果你想在 iOS 或 Android 上继续使用同一个 xopc 助手，可以使用 **[xopc 移动端 App](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo)**。
 
-移动端 App 是 Expo / React Native 网关客户端，现在维护在当前仓库的 `apps/mobile-expo` 目录。它不会替代网关：它连接到已经运行的 xopc 网关，可通过局域网、FRP 或你自己的 HTTPS 反向代理访问，并使用同一套网关 Bearer token / 配对流程。
+移动端 App 是 Expo / React Native 网关客户端，现在维护在当前仓库的 `apps/mobile-expo` 目录。它不会替代网关，也不会变成另一个云端账号：它连接到已经运行的 xopc 网关，可通过局域网、FRP、Tailscale 或你自己的 HTTPS 反向代理访问，并使用同一套网关 Bearer token / 配对流程。
+
+可以把它理解成你自己的 Agent 的私有远程入口。xopc 仍然运行在你的电脑或自托管环境里；手机负责让你不在键盘前时也能继续对话、记录 note/idea、发送项目进展。长期上下文仍然留在你的 xopc 运行环境里。
 
 ## 最短路径
 

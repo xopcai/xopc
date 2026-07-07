@@ -18,7 +18,12 @@ export class ChatStreamMapper {
   private currentAssistantMessageId: string | undefined;
   private lastAssistantMessageId: string | undefined;
   private currentAssistantText = '';
+  private currentAssistantReviewEmitted = false;
   private toolCallToMessageId = new Map<string, string>();
+  private turnDiffs: string[] = [];
+  private turnDiffFiles = new Set<string>();
+  private turnDiffAdded = 0;
+  private turnDiffRemoved = 0;
   private started = false;
   private ended = false;
 
@@ -106,6 +111,7 @@ export class ChatStreamMapper {
     const messageId = this.nextAssistantMessageId();
     this.currentAssistantMessageId = messageId;
     this.currentAssistantText = '';
+    this.currentAssistantReviewEmitted = false;
     return [this.make('assistant_message_start', { messageId })];
   }
 
@@ -113,6 +119,11 @@ export class ChatStreamMapper {
     const message = event.message as AgentMessage | undefined;
     if (message?.role !== 'assistant') return [];
     const messageId = this.ensureAssistantMessageId();
+    const review = extractReview(message);
+    if (review && !this.currentAssistantReviewEmitted) {
+      this.currentAssistantReviewEmitted = true;
+      return [this.make('review', { messageId, review })];
+    }
     const delta = event.assistantMessageEvent as { type?: unknown; delta?: unknown } | undefined;
     if (delta?.type === 'text_delta' && typeof delta.delta === 'string' && delta.delta) {
       const text = extractTextFromMessage(message);
@@ -140,15 +151,36 @@ export class ChatStreamMapper {
     if (message?.role !== 'assistant') return [];
     const messageId = this.ensureAssistantMessageId();
     const events: ChatStreamEvent[] = [];
+    const review = extractReview(message);
+    if (review && !this.currentAssistantReviewEmitted) {
+      this.currentAssistantReviewEmitted = true;
+      events.push(this.make('review', { messageId, review }));
+    }
     const text = extractTextFromMessage(message);
     const suffix = appendSuffix(this.currentAssistantText, text);
     if (suffix) events.push(this.make('assistant_delta', { messageId, delta: suffix }));
     this.currentAssistantText = text || this.currentAssistantText;
     events.push(this.make('thinking_end', { messageId }));
+    if (this.turnDiffs.length > 0) {
+      events.push(
+        this.make('turn_diff', {
+          messageId,
+          files: [...this.turnDiffFiles],
+          diff: this.turnDiffs.join('\n'),
+          added: this.turnDiffAdded,
+          removed: this.turnDiffRemoved,
+        }),
+      );
+      this.turnDiffs = [];
+      this.turnDiffFiles.clear();
+      this.turnDiffAdded = 0;
+      this.turnDiffRemoved = 0;
+    }
     events.push(this.make('assistant_message_end', { messageId, usage: extractUsage(message) }));
     this.lastAssistantMessageId = messageId;
     this.currentAssistantMessageId = undefined;
     this.currentAssistantText = '';
+    this.currentAssistantReviewEmitted = false;
     return events;
   }
 
@@ -156,15 +188,28 @@ export class ChatStreamMapper {
     const toolCallId = String(event.toolCallId ?? '');
     if (!toolCallId) return [];
     const messageId = this.ensureAssistantMessageId();
+    const toolName = String(event.toolName ?? 'unknown');
     this.toolCallToMessageId.set(toolCallId, messageId);
-    return [
+    const events: ChatStreamEvent[] = [
       this.make('tool_start', {
         messageId,
         toolCallId,
-        toolName: String(event.toolName ?? 'unknown'),
+        toolName,
         args: event.args,
       }),
     ];
+    if (toolName === 'exec_command') {
+      const args = asRecord(event.args);
+      events.push(
+        this.make('command_started', {
+          messageId,
+          toolCallId,
+          command: String(args?.cmd ?? args?.command ?? ''),
+          cwd: typeof args?.cwd === 'string' ? args.cwd : undefined,
+        }),
+      );
+    }
+    return events;
   }
 
   private mapToolUpdate(event: { [key: string]: unknown }): ChatStreamEvent[] {
@@ -174,15 +219,27 @@ export class ChatStreamMapper {
     const partial = event.partialResult;
     const details = extractDetails(partial);
     const textDelta = extractText(partial);
-    return [
+    const toolName = String(event.toolName ?? 'unknown');
+    const events: ChatStreamEvent[] = [
       this.make('tool_update', {
         messageId,
         toolCallId,
-        toolName: String(event.toolName ?? 'unknown'),
+        toolName,
         details,
         textDelta,
       }),
     ];
+    if (toolName === 'exec_command') {
+      const rec = asRecord(details);
+      if (rec?.kind === 'command_output_delta') {
+        const stream = rec.stream === 'stderr' ? 'stderr' : 'stdout';
+        const delta = typeof rec.delta === 'string' ? rec.delta : '';
+        if (delta) {
+          events.push(this.make('command_output_delta', { messageId, toolCallId, stream, delta }));
+        }
+      }
+    }
+    return events;
   }
 
   private mapToolEnd(event: { [key: string]: unknown }): ChatStreamEvent[] {
@@ -190,16 +247,49 @@ export class ChatStreamMapper {
     if (!toolCallId) return [];
     const messageId = this.toolCallToMessageId.get(toolCallId) ?? this.ensureAssistantMessageId();
     const result = normalizeToolResult(event.result);
-    return [
+    const toolName = String(event.toolName ?? 'unknown');
+    const events: ChatStreamEvent[] = [
       this.make('tool_end', {
         messageId,
         toolCallId,
-        toolName: String(event.toolName ?? 'unknown'),
+        toolName,
         status: event.isError ? 'error' : 'success',
         result,
         errorMessage: event.isError ? result?.text : undefined,
       }),
     ];
+    const details = asRecord(result?.details);
+    if (toolName === 'exec_command' && details) {
+      events.push(
+        this.make('command_completed', {
+          messageId,
+          toolCallId,
+          command: typeof details.command === 'string' ? details.command : '',
+          cwd: typeof details.cwd === 'string' ? details.cwd : undefined,
+          exitCode: typeof details.exitCode === 'number' ? details.exitCode : null,
+          durationMs: typeof details.durationMs === 'number' ? details.durationMs : undefined,
+          timedOut: details.timedOut === true,
+          truncated: details.truncated === true,
+        }),
+      );
+    }
+    if (toolName === 'apply_patch' && details) {
+      const changes = Array.isArray(details.changes) ? details.changes : [];
+      const diff = typeof details.diff === 'string' ? details.diff : '';
+      const added = typeof details.added === 'number' ? details.added : 0;
+      const removed = typeof details.removed === 'number' ? details.removed : 0;
+      if (diff || changes.length > 0) {
+        this.recordPatchDiff(details);
+        events.push(this.make('patch_applied', { messageId, toolCallId, changes, diff, added, removed }));
+      }
+    }
+    if (toolName === 'update_plan' && details) {
+      const plan = extractTurnPlan(details);
+      if (plan) {
+        events.push(this.make('turn_plan', { messageId, ...plan }));
+      }
+    }
+    return events;
   }
 
   private ensureAssistantMessageId(): string {
@@ -226,6 +316,23 @@ export class ChatStreamMapper {
       payload,
     } as Extract<ChatStreamEvent, { type: T }>;
   }
+
+  private recordPatchDiff(details: Record<string, unknown>): void {
+    const diff = typeof details.diff === 'string' ? details.diff : '';
+    if (diff) this.turnDiffs.push(diff);
+    if (typeof details.added === 'number') this.turnDiffAdded += details.added;
+    if (typeof details.removed === 'number') this.turnDiffRemoved += details.removed;
+    const changes = Array.isArray(details.changes) ? details.changes : [];
+    for (const change of changes) {
+      const rec = asRecord(change);
+      const path = typeof rec?.moveTo === 'string'
+        ? rec.moveTo
+        : typeof rec?.path === 'string'
+          ? rec.path
+          : undefined;
+      if (path) this.turnDiffFiles.add(path);
+    }
+  }
 }
 
 function userMessageFromLegacyEvent(event: { [key: string]: unknown }): unknown {
@@ -239,6 +346,24 @@ function userMessageFromLegacyEvent(event: { [key: string]: unknown }): unknown 
 
 function extractTextFromMessage(message: AgentMessage): string {
   return extractText((message as { content?: unknown }).content);
+}
+
+function extractReview(message: AgentMessage): unknown {
+  const metadata = (message as { metadata?: unknown }).metadata;
+  const metadataReview = asRecord(metadata)?.review;
+  if (isReviewBlock(metadataReview)) return metadataReview;
+  const content = (message as { content?: unknown }).content;
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      if (isReviewBlock(block)) return block;
+    }
+  }
+  return undefined;
+}
+
+function isReviewBlock(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+    && (value as { type?: unknown }).type === 'review';
 }
 
 function extractText(value: unknown): string | undefined {
@@ -285,6 +410,12 @@ function extractDetails(value: unknown): unknown {
   return (value as Record<string, unknown>).details;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
 function normalizeToolResult(value: unknown): ToolResultEnvelope | undefined {
   if (value == null) return undefined;
   if (typeof value === 'string') return { text: value };
@@ -295,4 +426,24 @@ function normalizeToolResult(value: unknown): ToolResultEnvelope | undefined {
     details: rec.details,
     text: extractText(rec.content) ?? (typeof rec.text === 'string' ? rec.text : undefined),
   };
+}
+
+function extractTurnPlan(details: Record<string, unknown>): { explanation?: string; plan: { step: string; status: 'pending' | 'in_progress' | 'completed' }[] } | undefined {
+  const rawPlan = Array.isArray(details.plan) ? details.plan : [];
+  const plan = rawPlan
+    .map((item) => {
+      const rec = asRecord(item);
+      const step = typeof rec?.step === 'string' ? rec.step.trim() : '';
+      const status = rec?.status;
+      if (!step || (status !== 'pending' && status !== 'in_progress' && status !== 'completed')) {
+        return undefined;
+      }
+      return { step, status };
+    })
+    .filter((item): item is { step: string; status: 'pending' | 'in_progress' | 'completed' } => Boolean(item));
+  if (plan.length === 0) return undefined;
+  const explanation = typeof details.explanation === 'string' && details.explanation.trim()
+    ? details.explanation.trim()
+    : undefined;
+  return { explanation, plan };
 }
