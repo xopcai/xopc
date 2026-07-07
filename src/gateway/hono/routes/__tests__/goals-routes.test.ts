@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -179,7 +179,9 @@ describe('goal routes', () => {
 
   it('attaches a generated continuation session to the goal project', async () => {
     const projects = new ProjectService();
-    const project = projects.create({ name: 'Goal Project', workspaceRoot: join(stateDir, 'project-root') });
+    const workspaceRoot = join(stateDir, 'project-root');
+    mkdirSync(workspaceRoot, { recursive: true });
+    const project = projects.create({ name: 'Goal Project', workspaceRoot });
     const goals = new GoalService();
     const goal = goals.create({ title: 'Continue in project workspace', projectId: project.id });
     const enqueueGoalRun = vi.fn(() => ({ id: 'queue-1' }));
@@ -208,7 +210,9 @@ describe('goal routes', () => {
 
   it('attaches existing goal sessions to the goal project', async () => {
     const projects = new ProjectService();
-    const project = projects.create({ name: 'Existing Session Project', workspaceRoot: join(stateDir, 'project-root') });
+    const workspaceRoot = join(stateDir, 'project-root');
+    mkdirSync(workspaceRoot, { recursive: true });
+    const project = projects.create({ name: 'Existing Session Project', workspaceRoot });
     const goals = new GoalService();
     const goal = goals.create({ title: 'Attach existing session', projectId: project.id });
     const sessionKey = 'agent:main:webchat:default:direct:goal-existing-session';

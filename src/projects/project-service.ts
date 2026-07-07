@@ -5,11 +5,14 @@ import { bindSessionToProject, listProjectSessionKeys, unbindSessionFromProject 
 import type { CreateProjectInput, Project, ProjectListQuery, ProjectListResult, ProjectWithDetails, UpdateProjectInput } from './types.js';
 import {
   canonicalWorkspacePath,
+  ensureWorkspaceDirectory,
   inferProjectNameFromWorkspaceRoot,
   isPathSameOrInsideWorkspace,
   isSafeAutoCreateWorkspaceRoot,
   ProjectWorkspaceConflictError,
+  ProjectWorkspaceMissingError,
   resolveWorkspaceProjectRoot,
+  workspaceDirectoryExists,
   type WorkspaceProjectMatch,
 } from './workspace-project.js';
 
@@ -37,14 +40,25 @@ export class ProjectService {
   }
 
   create(input: CreateProjectInput): Project {
-    const workspaceRoot = input.workspaceRoot?.trim();
+    const rawWorkspaceRoot = input.workspaceRoot?.trim();
+    const workspaceRoot = rawWorkspaceRoot ? canonicalWorkspacePath(rawWorkspaceRoot) : undefined;
+    if (rawWorkspaceRoot && !workspaceRoot) {
+      throw new Error('Invalid workspace root');
+    }
     if (workspaceRoot) {
       const existing = this.findByWorkspaceRoot(workspaceRoot);
       if (existing) throw new ProjectWorkspaceConflictError(existing);
+      if (!workspaceDirectoryExists(workspaceRoot)) {
+        if (input.createWorkspaceRoot === true) {
+          ensureWorkspaceDirectory(workspaceRoot);
+        } else {
+          throw new ProjectWorkspaceMissingError(workspaceRoot);
+        }
+      }
     }
     const name = input.name?.trim() || inferProjectNameFromWorkspaceRoot(workspaceRoot) || '';
     const slug = input.slug?.trim() || this.store.generateSlug(name);
-    return this.store.create({ ...input, name, slug });
+    return this.store.create({ ...input, name, slug, workspaceRoot });
   }
 
   get(id: string): Project | null {
@@ -108,11 +122,24 @@ export class ProjectService {
   }
 
   update(id: string, input: UpdateProjectInput): Project {
+    const patch = { ...input };
     if (input.workspaceRoot !== undefined && input.workspaceRoot !== null && input.workspaceRoot.trim()) {
-      const existing = this.findByWorkspaceRoot(input.workspaceRoot, { excludeProjectId: id });
+      const workspaceRoot = canonicalWorkspacePath(input.workspaceRoot);
+      if (!workspaceRoot) {
+        throw new Error('Invalid workspace root');
+      }
+      const existing = this.findByWorkspaceRoot(workspaceRoot, { excludeProjectId: id });
       if (existing) throw new ProjectWorkspaceConflictError(existing);
+      if (!workspaceDirectoryExists(workspaceRoot)) {
+        if (input.createWorkspaceRoot === true) {
+          ensureWorkspaceDirectory(workspaceRoot);
+        } else {
+          throw new ProjectWorkspaceMissingError(workspaceRoot);
+        }
+      }
+      patch.workspaceRoot = workspaceRoot;
     }
-    return this.store.update(id, input);
+    return this.store.update(id, patch);
   }
 
   delete(id: string): void {
