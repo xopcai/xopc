@@ -1,8 +1,8 @@
 # 手机端 App
 
-如果你想在 iOS 或 Android 上继续使用同一个 xopc 助手，可以使用 **[xopc-app](https://github.com/xopcai/xopc-app)**。
+如果你想在 iOS 或 Android 上继续使用同一个 xopc 助手，可以使用 **[xopc 移动端 App](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo)**。
 
-xopc-app 是独立的 Expo / React Native 网关客户端。它不会替代网关：它连接到已经运行的 xopc 网关，可通过局域网、FRP 或你自己的 HTTPS 反向代理访问，并使用同一套网关 Bearer token / 配对流程。
+移动端 App 是 Expo / React Native 网关客户端，现在维护在当前仓库的 `apps/mobile-expo` 目录。它不会替代网关：它连接到已经运行的 xopc 网关，可通过局域网、FRP 或你自己的 HTTPS 反向代理访问，并使用同一套网关 Bearer token / 配对流程。
 
 ## 最短路径
 
@@ -23,7 +23,7 @@ xopc gateway
 
 3. 打开 **Gateway 控制台 → 设置 → 远程访问**。
 4. 使用 **手机端配对（Mobile app pairing）** 扫码，或复制配对链接。
-5. 打开 xopc-app，在设置里确认网关地址和 token。
+5. 打开移动端 App，在设置里确认网关地址和 token。
 
 ## Gateway 访问方式
 
@@ -33,7 +33,7 @@ xopc gateway
 
 - Gateway 可能需要绑定到局域网 IP 或 `0.0.0.0`。
 - 使用 token 认证和本地防火墙。
-- Android 独立构建需要允许 HTTP 明文访问；xopc-app 已在原生构建配置里启用。
+- Android 独立构建需要允许 HTTP 明文访问；移动端 App 已在原生构建配置里启用。
 - iOS 独立构建需要本地网络权限；首次访问时请允许 iOS 弹出的 xopc 本地网络权限。
 
 ### FRP 公网隧道
@@ -55,32 +55,31 @@ xopc gateway
 - Gateway 仍然使用自己的 Bearer token 鉴权。
 - 移动端需要系统信任的 TLS 证书；app 路径不支持自签证书。
 
-## 构建 xopc-app
+## 构建移动端 App
 
-手机端 App 在独立仓库：
+手机端 App 位于当前仓库的 `apps/mobile-expo` 目录：
 
 ```bash
-git clone https://github.com/xopcai/xopc-app.git
-cd xopc-app
+git clone https://github.com/xopcai/xopc.git
+cd xopc
 pnpm install
-pnpm start
+pnpm run dev:mobile
 ```
 
-xopc-app 仓库里的常用命令：
+仓库根目录里的常用命令：
 
 | 命令 | 用途 |
 | --- | --- |
-| `pnpm start` | Expo dev server |
-| `pnpm run android` / `pnpm run ios` | 开发构建 |
-| `pnpm run android:release` | Android release APK |
-| `pnpm run typecheck` | TypeScript 检查 |
-| `pnpm run test:gateway-sse-client` | SSE client 测试 |
+| `pnpm run dev:mobile` | Expo dev server |
+| `pnpm run android:mobile` / `pnpm run ios:mobile` | 开发构建 |
+| `pnpm -C apps/mobile-expo run android:release` | Android release APK |
+| `pnpm run mobile:typecheck` | TypeScript 检查 |
+| `pnpm run mobile:test:sse` | SSE client 测试 |
 
 `react-native-mmkv` 使用原生代码。Expo Go 可用内存存储兜底运行，但持久化设置需要 development build 或 standalone build。
 
 ## 更多
 
-- [xopc-app 仓库](https://github.com/xopcai/xopc-app)
+- [移动端 App 源码](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo)
 - [远程访问](./remote-access.md)
 - [FRP 隧道安全](../tunnel-security.md)（英文）
-

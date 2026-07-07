@@ -77,4 +77,5 @@ export type EditorRuntimeState = {
 
 export type NoteEditorHandle = {
   flushMarkdown: () => Promise<string>;
+  focus: (position?: 'start' | 'end' | number) => void;
 };

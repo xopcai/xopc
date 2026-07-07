@@ -27,7 +27,7 @@ features:
     details: "DeepSeek、OpenAI、Anthropic、Google、Ollama、LM Studio、vLLM、Bedrock、Azure——内置 20+ 模型服务商。云端模型、本地模型或自部署服务都能接入，一行配置即可切换。"
     link: /zh/models
   - title: 📡 同一个助手，多个入口
-    details: "同一个助手覆盖 TUI、CLI、浏览器、桌面应用、iOS/Android 上的 xopc-app 和即时通讯。无需额外同步，因为它们连接的是同一个系统。"
+    details: "同一个助手覆盖 TUI、CLI、浏览器、桌面应用、iOS/Android 上的移动端 App 和即时通讯。无需额外同步，因为它们连接的是同一个系统。"
     link: /zh/desktop-app
   - title: 🧩 能力可扩展，长期可维护
     details: "通过 xopc skills install 和 xopc extensions install 安装可复用模块，按需添加工具、通道和 UI 面板，通常不需要改核心代码。"
