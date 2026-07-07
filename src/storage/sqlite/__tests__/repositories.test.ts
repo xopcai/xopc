@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
 
+import { ProjectStore } from '../../../projects/project-store.js';
 import { SessionStatus } from '../../../session/types.js';
 import {
   closeXopcDatabase,
@@ -110,6 +111,36 @@ describe('sqlite repositories', () => {
     expect(page.items[0]?.status).toBe(SessionStatus.PINNED);
   });
 
+  it('hides empty shells from default session lists until a user message is written', () => {
+    ensureSessionRecord(SESSION_KEY, CWD, {
+      ...METADATA,
+      hiddenFromSessionList: true,
+      customData: { genericNewChatShell: true },
+    });
+
+    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).not.toContain(SESSION_KEY);
+    expect(listSessionMetadata({ includeHidden: true, limit: 10 }).items.map((item) => item.key)).toContain(SESSION_KEY);
+
+    appendTranscriptEntry(SESSION_KEY, userMessage('hello'));
+
+    const meta = getSessionMetadata(SESSION_KEY);
+    expect(meta?.hiddenFromSessionList).toBe(false);
+    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).toContain(SESSION_KEY);
+  });
+
+  it('unhides shells when transcript rows are replaced with user messages', () => {
+    ensureSessionRecord(SESSION_KEY, CWD, {
+      ...METADATA,
+      hiddenFromSessionList: true,
+      customData: { genericNewChatShell: true },
+    });
+
+    replaceTranscriptRows(SESSION_KEY, [userMessage('restored user turn')]);
+
+    expect(getSessionMetadata(SESSION_KEY)?.hiddenFromSessionList).toBe(false);
+    expect(listSessionMetadata({ limit: 10 }).items.map((item) => item.key)).toContain(SESSION_KEY);
+  });
+
   it('appends transcript rows and paginates messages', () => {
     ensureSessionRecord(SESSION_KEY, CWD);
     appendTranscriptEntry(SESSION_KEY, userMessage('hello'));
@@ -127,6 +158,43 @@ describe('sqlite repositories', () => {
 
     const meta = getSessionMetadata(SESSION_KEY);
     expect(meta?.messageCount).toBe(2);
+  });
+
+  it('excludes hidden empty project sessions from project counts and recent sessions', () => {
+    const projects = new ProjectStore();
+    const project = projects.create({ name: 'Session Visibility' });
+    const hiddenKey = 'agent:main:webchat:default:direct:chat_hidden';
+    const visibleKey = 'agent:main:webchat:default:direct:chat_visible';
+
+    ensureSessionRecord(hiddenKey, CWD, {
+      sourceChannel: 'webchat',
+      sourceChatId: 'default:direct:chat_hidden',
+      routing: {
+        agentId: 'main',
+        source: 'webchat',
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: 'chat_hidden',
+      },
+      projectId: project.id,
+      hiddenFromSessionList: true,
+    });
+    ensureSessionRecord(visibleKey, CWD, {
+      sourceChannel: 'webchat',
+      sourceChatId: 'default:direct:chat_visible',
+      routing: {
+        agentId: 'main',
+        source: 'webchat',
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: 'chat_visible',
+      },
+      projectId: project.id,
+    });
+    appendTranscriptEntry(visibleKey, userMessage('visible'));
+
+    expect(projects.getSessionCount(project.id)).toBe(1);
+    expect(projects.getRecentSessions(project.id).map((session) => session.key)).toEqual([visibleKey]);
   });
 
   it('replaces transcript rows and records compaction entry', () => {

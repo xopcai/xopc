@@ -221,7 +221,10 @@
         "paused": "已暂停",
         "archived": "已归档"
       },
-      "deleteConfirm": "确定删除项目「{{name}}」？会话和目标会保留，但不再归属该项目。"
+      "deleteConfirm": "确定删除项目「{{name}}」？会话和目标会保留，但不再归属该项目。",
+      "deleteConfirmTitle": "删除项目？",
+      "deleteConfirmFallback": "确定删除这个项目？会话和目标会保留，但不再归属该项目。",
+      "deleteConfirmAction": "删除项目"
     },
     "goalDialog": {
       "title": "新建项目目标",

@@ -1,6 +1,6 @@
 import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { GestureResponderHandlers } from 'react-native';
-import { Keyboard, NativeModules, Platform, Pressable, ScrollView, StyleSheet, TextInput, UIManager, View, useWindowDimensions } from 'react-native';
+import { InteractionManager, Keyboard, NativeModules, Platform, Pressable, ScrollView, StyleSheet, TextInput, UIManager, View, useWindowDimensions } from 'react-native';
 import type { ReactNode } from 'react';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Icon, Text } from 'react-native-paper';
@@ -13,6 +13,11 @@ import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, radii, spacing, useTheme
 import NoteEditorDomAdapter, { type NoteEditorAdapterCommand } from '../web-editor/NoteEditorDomAdapter';
 import { DEFAULT_EDITOR_RUNTIME_STATE } from './editor-contract';
 import { canUseDomEditor } from './editor-platform';
+import {
+  isNativeMarkdownFlushResponse,
+  NATIVE_JOIN_MARKDOWN_BLOCKS_SCRIPT,
+  shouldForwardNativeMarkdownMessage,
+} from './native-editor-markdown';
 import type {
   EditorAttachmentPickSource,
   EditorCommand,
@@ -39,6 +44,7 @@ export type NoteEditorBridgeHandle = NoteEditorHandle;
 
 const TOOL_BUTTON_SIZE = 44;
 const EDITOR_FLUSH_TIMEOUT_MS = 1500;
+const NATIVE_MARKDOWN_SYNC_DELAY_MS = 1000;
 
 type PendingFlush = {
   resolve: (markdown: string) => void;
@@ -47,9 +53,17 @@ type PendingFlush = {
 
 type NativeRichEditorHandle = {
   getMarkdown: () => string;
+  flushMarkdown: () => Promise<string>;
   focus: (position?: 'start' | 'end' | number) => void;
   blur: () => void;
+  setHeading: (level: 1 | 2 | 3 | 4 | 0) => void;
+  toggleBold: () => void;
+  toggleItalic: () => void;
+  toggleBulletList: () => void;
   insertTodo: () => void;
+  toggleBlockquote: () => void;
+  toggleCodeBlock: () => void;
+  insertDivider: () => void;
   insertAttachment: (attachment: NonNullable<EditorAttachmentPickResult>) => void;
   setLink: (title: string, url: string) => void;
   removeLink: () => void;
@@ -57,16 +71,33 @@ type NativeRichEditorHandle = {
   redo: () => void;
 };
 
-type EditorSheet = 'image' | 'link';
+type EditorSheet = 'image' | 'link' | 'heading' | 'ai';
+
+function afterNativeInteractions(): Promise<void> {
+  return new Promise((resolve) => {
+    InteractionManager.runAfterInteractions(() => resolve());
+  });
+}
+
+function waitForNativePresentation(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
 
 function sameEditorState(a: EditorRuntimeState, b: EditorRuntimeState): boolean {
   return a.ready === b.ready
     && a.focused === b.focused
-    && a.selection.from === b.selection.from
-    && a.selection.to === b.selection.to
+    && a.emptySelection === b.emptySelection
     && a.canUndo === b.canUndo
     && a.canRedo === b.canRedo
-    && a.todo === b.todo
+    && a.bold === b.bold
+    && a.italic === b.italic
+    && a.headingLevel === b.headingLevel
+    && a.bulletList === b.bulletList
+    && a.taskList === b.taskList
+    && a.blockquote === b.blockquote
+    && a.codeBlock === b.codeBlock
     && a.link === b.link
     && a.image === b.image;
 }
@@ -87,12 +118,14 @@ export interface NoteEditorBridgeProps {
   topCommand?: EditorCommand | null;
   labels: NoteEditorLabels;
   onChangeMarkdown: (markdown: string) => void;
-  onSelectionChange: (context: EditorSelectionContext) => void;
+  onSelectionChange?: (context: EditorSelectionContext) => void;
   onRequestAttachment: (source: EditorAttachmentPickSource) => Promise<EditorAttachmentPickResult>;
   onFocusChange?: (focused: boolean) => void;
+  onNativeModalChange?: (open: boolean) => void;
   onRuntimeStateChange?: (state: EditorRuntimeState) => void;
   voiceFeedback?: ReactNode;
   voicePanHandlers?: GestureResponderHandlers;
+  voicePressHandler?: () => void;
   voiceActive?: boolean;
   voiceDisabled?: boolean;
 }
@@ -107,9 +140,11 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   onSelectionChange,
   onRequestAttachment,
   onFocusChange,
+  onNativeModalChange,
   onRuntimeStateChange,
   voiceFeedback,
   voicePanHandlers,
+  voicePressHandler,
   voiceActive,
   voiceDisabled,
 }, ref) {
@@ -129,7 +164,9 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   const [activeSheet, setActiveSheet] = useState<EditorSheet | null>(null);
   const [linkTitle, setLinkTitle] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
+  const [nativeActionActive, setNativeActionActive] = useState(false);
   const sheetVisible = activeSheet !== null;
+  const nativeModalVisible = sheetVisible || nativeActionActive;
   const canUseDomEditor = useMemo(() => isExpoDomWebViewAvailable(), []);
   const keyboardOverlayInset = keyboardBottomInset;
   const toolbarBottomPadding = keyboardBottomInset > 0 ? floatingBottomPadding(0) : floatingBottomPadding(insets.bottom);
@@ -162,9 +199,9 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     onChangeMarkdown(nextMarkdown);
   }, [onChangeMarkdown]);
 
-  const handleSelectionChange = useCallback(async (context: EditorSelectionContext) => {
+  const handleSelectionChange = useMemo(() => onSelectionChange ? async (context: EditorSelectionContext) => {
     onSelectionChange(context);
-  }, [onSelectionChange]);
+  } : undefined, [onSelectionChange]);
 
   const handleStateChange = useCallback((state: EditorRuntimeState) => {
     if (
@@ -203,8 +240,12 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   }, [markdown]);
 
   useEffect(() => {
-    onFocusChange?.(editorState.focused || sheetVisible);
-  }, [editorState.focused, onFocusChange, sheetVisible]);
+    onFocusChange?.(editorState.focused || nativeModalVisible);
+  }, [editorState.focused, nativeModalVisible, onFocusChange]);
+
+  useEffect(() => {
+    onNativeModalChange?.(nativeModalVisible);
+  }, [nativeModalVisible, onNativeModalChange]);
 
   useEffect(() => {
     if (canUseDomEditor) return;
@@ -230,8 +271,32 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
       case 'focus':
         native.focus(next.position);
         return;
+      case 'blur':
+        native.blur();
+        return;
+      case 'setHeading':
+        native.setHeading(next.level);
+        return;
+      case 'toggleBold':
+        native.toggleBold();
+        return;
+      case 'toggleItalic':
+        native.toggleItalic();
+        return;
+      case 'toggleBulletList':
+        native.toggleBulletList();
+        return;
       case 'toggleTaskList':
         native.insertTodo();
+        return;
+      case 'toggleBlockquote':
+        native.toggleBlockquote();
+        return;
+      case 'toggleCodeBlock':
+        native.toggleCodeBlock();
+        return;
+      case 'insertDivider':
+        native.insertDivider();
         return;
       case 'insertPreparedAttachment':
         native.insertAttachment(next.attachment);
@@ -274,7 +339,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
 
   const flushMarkdown = useCallback(() => new Promise<string>((resolve) => {
     if (!canUseDomEditor) {
-      resolve(richEditorRef.current?.getMarkdown() ?? latestMarkdownRef.current);
+      void (richEditorRef.current?.flushMarkdown() ?? Promise.resolve(latestMarkdownRef.current)).then(resolve);
       return;
     }
     if (!editorStateRef.current.ready) {
@@ -304,16 +369,14 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   }), [dispatch, flushMarkdown]);
 
   const openEditorSheet = useCallback((sheet: EditorSheet) => {
-    onFocusChange?.(true);
     Keyboard.dismiss();
     richEditorRef.current?.blur();
     setActiveSheet(sheet);
-  }, [onFocusChange]);
+  }, []);
 
   const closeEditorSheet = useCallback(() => {
     setActiveSheet(null);
-    onFocusChange?.(editorStateRef.current.focused);
-  }, [onFocusChange]);
+  }, []);
 
   const openLinkSheet = useCallback(() => {
     setLinkTitle('');
@@ -341,69 +404,43 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     dispatch({ type: 'removeLink' });
   }, [canUseDomEditor, closeEditorSheet, dispatch]);
 
-  const handleInsertImageFromLibrary = useCallback(() => {
-    closeEditorSheet();
-    if (!canUseDomEditor) {
-      void onRequestAttachment('photos').then((attachment) => {
-        if (attachment) richEditorRef.current?.insertAttachment(attachment);
-      });
+  const insertPickedAttachment = useCallback((attachment: NonNullable<EditorAttachmentPickResult>) => {
+    if (canUseDomEditor) {
+      dispatch({ type: 'insertPreparedAttachment', attachment });
       return;
     }
-    dispatch({ type: 'insertAttachment', source: 'photos' });
-  }, [canUseDomEditor, closeEditorSheet, dispatch, onRequestAttachment]);
+    richEditorRef.current?.insertAttachment(attachment);
+  }, [canUseDomEditor, dispatch]);
+
+  const pickAndInsertAttachment = useCallback((source: EditorAttachmentPickSource) => {
+    setNativeActionActive(true);
+    closeEditorSheet();
+    void (async () => {
+      try {
+        await afterNativeInteractions();
+        await waitForNativePresentation(120);
+        await afterNativeInteractions();
+        const attachment = await onRequestAttachment(source);
+        if (attachment) insertPickedAttachment(attachment);
+      } finally {
+        setNativeActionActive(false);
+      }
+    })();
+  }, [closeEditorSheet, insertPickedAttachment, onRequestAttachment]);
+
+  const handleInsertImageFromLibrary = useCallback(() => {
+    pickAndInsertAttachment('photos');
+  }, [pickAndInsertAttachment]);
 
   const handleInsertImageFromCamera = useCallback(() => {
-    closeEditorSheet();
-    if (!canUseDomEditor) {
-      void onRequestAttachment('camera').then((attachment) => {
-        if (attachment) richEditorRef.current?.insertAttachment(attachment);
-      });
-      return;
-    }
-    dispatch({ type: 'insertAttachment', source: 'camera' });
-  }, [canUseDomEditor, closeEditorSheet, dispatch, onRequestAttachment]);
+    pickAndInsertAttachment('camera');
+  }, [pickAndInsertAttachment]);
 
   const handleInsertDocument = useCallback(() => {
-    if (!canUseDomEditor) {
-      void onRequestAttachment('document').then((attachment) => {
-        if (attachment) richEditorRef.current?.insertAttachment(attachment);
-      });
-      return;
-    }
-    dispatch({ type: 'insertAttachment', source: 'document' });
-  }, [canUseDomEditor, dispatch, onRequestAttachment]);
+    pickAndInsertAttachment('document');
+  }, [pickAndInsertAttachment]);
 
   const actions = useMemo<ToolbarAction[]>(() => [
-    {
-      key: 'todo',
-      label: labels.todo,
-      icon: 'checkbox-marked-outline',
-      active: editorState.todo,
-      onPress: () => {
-        if (canUseDomEditor) dispatch({ type: 'toggleTaskList' });
-        else richEditorRef.current?.insertTodo();
-      },
-    },
-    {
-      key: 'image',
-      label: labels.image,
-      icon: 'image-outline',
-      active: editorState.image,
-      onPress: () => openEditorSheet('image'),
-    },
-    {
-      key: 'file',
-      label: labels.imageDocument,
-      icon: 'file-document-outline',
-      onPress: handleInsertDocument,
-    },
-    {
-      key: 'link',
-      label: labels.link,
-      icon: 'link-variant',
-      active: editorState.link,
-      onPress: openLinkSheet,
-    },
     {
       key: 'undo',
       label: labels.undo,
@@ -425,28 +462,104 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
       },
     },
     {
+      key: 'format',
+      label: labels.textStyle,
+      icon: 'format-letter-case',
+      active: editorState.headingLevel > 0 || editorState.blockquote || editorState.codeBlock,
+      onPress: () => openEditorSheet('heading'),
+    },
+    {
+      key: 'bold',
+      label: labels.bold,
+      icon: 'format-bold',
+      active: editorState.bold,
+      onPress: () => {
+        if (canUseDomEditor) dispatch({ type: 'toggleBold' });
+        else richEditorRef.current?.toggleBold();
+      },
+    },
+    {
+      key: 'italic',
+      label: labels.italic,
+      icon: 'format-italic',
+      active: editorState.italic,
+      onPress: () => {
+        if (canUseDomEditor) dispatch({ type: 'toggleItalic' });
+        else richEditorRef.current?.toggleItalic();
+      },
+    },
+    {
+      key: 'bullet',
+      label: labels.bulletList,
+      icon: 'format-list-bulleted',
+      active: editorState.bulletList,
+      onPress: () => {
+        if (canUseDomEditor) dispatch({ type: 'toggleBulletList' });
+        else richEditorRef.current?.toggleBulletList();
+      },
+    },
+    {
+      key: 'todo',
+      label: labels.todo,
+      icon: 'checkbox-marked-outline',
+      active: editorState.taskList,
+      onPress: () => {
+        if (canUseDomEditor) dispatch({ type: 'toggleTaskList' });
+        else richEditorRef.current?.insertTodo();
+      },
+    },
+    {
+      key: 'image',
+      label: labels.image,
+      icon: 'image-outline',
+      active: editorState.image,
+      onPress: () => openEditorSheet('image'),
+    },
+    {
+      key: 'link',
+      label: labels.link,
+      icon: 'link-variant',
+      active: editorState.link,
+      onPress: openLinkSheet,
+    },
+    {
+      key: 'ai',
+      label: labels.ai,
+      icon: 'creation-outline',
+      onPress: () => openEditorSheet('ai'),
+    },
+    {
       key: 'audio',
       label: labels.audio,
       icon: 'microphone-outline',
       active: voiceActive,
       disabled: voiceDisabled,
-      panHandlers: voicePanHandlers,
-      onPress: () => undefined,
+      panHandlers: voiceActive ? voicePanHandlers : undefined,
+      onPress: voicePressHandler ?? (() => undefined),
     },
   ], [
     canUseDomEditor,
     dispatch,
+    editorState.blockquote,
+    editorState.bold,
+    editorState.bulletList,
     editorState.canRedo,
     editorState.canUndo,
+    editorState.codeBlock,
+    editorState.headingLevel,
     editorState.image,
+    editorState.italic,
     editorState.link,
-    editorState.todo,
-    handleInsertDocument,
+    editorState.taskList,
+    labels.ai,
+    labels.bold,
+    labels.redo,
+    labels.bulletList,
+    labels.italic,
     labels.audio,
     labels.image,
-    labels.imageDocument,
     labels.link,
-    labels.redo,
+    labels.textStyle,
     labels.todo,
     labels.undo,
     openLinkSheet,
@@ -454,8 +567,9 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     voiceActive,
     voiceDisabled,
     voicePanHandlers,
+    voicePressHandler,
   ]);
-  const showEditorToolbar = (editorState.focused && !sheetVisible) || Boolean(voiceActive);
+  const showEditorToolbar = (editorState.focused && !nativeModalVisible) || Boolean(voiceActive);
 
   return (
     <View style={styles.container}>
@@ -521,6 +635,79 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
             onPress={handleInsertImageFromLibrary}
           />
           <ImageSourceRow label={labels.imageCamera} icon="camera-outline" onPress={handleInsertImageFromCamera} />
+          <ImageSourceRow label={labels.imageDocument} icon="file-document-outline" onPress={handleInsertDocument} />
+        </View>
+      </BottomSheetModal>
+      <BottomSheetModal
+        visible={activeSheet === 'heading'}
+        onDismiss={closeEditorSheet}
+        title={labels.textStyle}
+        maxHeight="52%"
+        scroll
+      >
+        <View style={styles.imageMenu}>
+          {([
+            { level: 1, label: 'H1' },
+            { level: 2, label: 'H2' },
+            { level: 3, label: 'H3' },
+            { level: 4, label: 'H4' },
+            { level: 0, label: labels.textStyle },
+          ] as const).map((item) => (
+            <ImageSourceRow
+              key={item.level}
+              label={item.label}
+              icon={item.level === 0 ? 'format-paragraph' : `format-header-${item.level}`}
+              onPress={() => {
+                closeEditorSheet();
+                if (canUseDomEditor) dispatch({ type: 'setHeading', level: item.level });
+                else richEditorRef.current?.setHeading(item.level);
+              }}
+            />
+          ))}
+          <ImageSourceRow
+            label={labels.quote}
+            icon="format-quote-close"
+            onPress={() => {
+              closeEditorSheet();
+              if (canUseDomEditor) dispatch({ type: 'toggleBlockquote' });
+              else richEditorRef.current?.toggleBlockquote();
+            }}
+          />
+          <ImageSourceRow
+            label={labels.code}
+            icon="code-tags"
+            onPress={() => {
+              closeEditorSheet();
+              if (canUseDomEditor) dispatch({ type: 'toggleCodeBlock' });
+              else richEditorRef.current?.toggleCodeBlock();
+            }}
+          />
+          <ImageSourceRow
+            label={labels.divider}
+            icon="minus"
+            onPress={() => {
+              closeEditorSheet();
+              if (canUseDomEditor) dispatch({ type: 'insertDivider' });
+              else richEditorRef.current?.insertDivider();
+            }}
+          />
+        </View>
+      </BottomSheetModal>
+      <BottomSheetModal
+        visible={activeSheet === 'ai'}
+        onDismiss={closeEditorSheet}
+        title={labels.ai}
+        maxHeight="52%"
+      >
+        <View style={styles.imageMenu}>
+          {['Continue Writing', 'Rewrite', 'Translate', 'Summarize', 'Fix Grammar', 'Expand', 'Compress', 'Improve', 'Ask AI'].map((label) => (
+            <ImageSourceRow
+              key={label}
+              label={label}
+              icon="sparkles"
+              onPress={closeEditorSheet}
+            />
+          ))}
         </View>
       </BottomSheetModal>
       <BottomSheetModal
@@ -612,15 +799,15 @@ type NativeRichTextEditorProps = {
   labels: NoteEditorLabels;
   bottomInset: number;
   onChangeMarkdown: (markdown: string) => Promise<void>;
-  onSelectionChange: (context: EditorSelectionContext) => Promise<void>;
+  onSelectionChange?: (context: EditorSelectionContext) => Promise<void>;
   onStateChange?: (state: EditorRuntimeState) => Promise<void> | void;
 };
 
 type NativeRichEditorMessage =
   | { type: 'ready'; markdown?: string; state?: EditorRuntimeState }
-  | { type: 'change'; markdown: string; state?: EditorRuntimeState }
+  | { type: 'content'; markdown: string; reason: 'typing' | 'command' | 'flush'; flushRequestId?: number | null; state?: EditorRuntimeState }
   | { type: 'selection'; context: EditorSelectionContext; state?: EditorRuntimeState }
-  | { type: 'state'; state: EditorRuntimeState };
+  | { type: 'focus'; focused: boolean; state: EditorRuntimeState };
 
 function nativeEditorHtml({
   markdown,
@@ -628,12 +815,14 @@ function nativeEditorHtml({
   theme,
   labels,
   bottomInset,
+  selectionEnabled,
 }: {
   markdown: string;
   attachmentSrcMap: Record<string, string>;
   theme: NoteEditorTheme;
   labels: NoteEditorLabels;
   bottomInset: number;
+  selectionEnabled: boolean;
 }): string {
   const resolvedBottomInset = Math.max(96, Math.round(bottomInset));
   return `<!doctype html>
@@ -641,20 +830,23 @@ function nativeEditorHtml({
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>
-    html, body { margin: 0; padding: 0; min-height: 100%; background: ${theme.background}; color: ${theme.text}; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    html, body { margin: 0; padding: 0; min-height: 100%; background: ${theme.background}; color: ${theme.text}; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; scroll-padding-bottom: var(--xopc-editor-bottom-inset); }
     :root { --xopc-editor-bottom-inset: ${resolvedBottomInset}px; }
-    #editor { box-sizing: border-box; min-height: 100vh; padding: 16px 20px var(--xopc-editor-bottom-inset); outline: none; font-size: 16px; line-height: 1.55; word-break: break-word; -webkit-user-select: text; user-select: text; }
+    #editor { box-sizing: border-box; min-height: 100vh; padding: 16px 20px var(--xopc-editor-bottom-inset); outline: none; font-size: 16px; line-height: 1.42; word-break: break-word; -webkit-user-select: text; user-select: text; scroll-margin-bottom: var(--xopc-editor-bottom-inset); }
     #editor:empty:before { content: ${JSON.stringify(labels.placeholder)}; color: ${theme.textTertiary}; }
-    h1, h2, h3, p, ul, ol, blockquote { margin: 0 0 12px; }
-    h1 { font-size: 28px; line-height: 34px; font-weight: 700; }
+    h1, h2, h3, h4, p, ul, ol, blockquote, pre { margin: 0 0 14px; }
+    h1 { font-size: 32px; line-height: 38px; font-weight: 760; }
     h2 { font-size: 23px; line-height: 29px; font-weight: 700; }
     h3 { font-size: 19px; line-height: 25px; font-weight: 650; }
+    h4 { font-size: 17px; line-height: 24px; font-weight: 650; }
     ul, ol { padding-left: 24px; }
     li { margin: 4px 0; }
-    blockquote { border-left: 3px solid ${theme.border}; padding-left: 12px; color: ${theme.textSecondary}; }
+    blockquote { border-left: 0; border-radius: 14px; padding: 14px 16px; color: ${theme.text}; background: ${theme.accentSoft}; }
+    blockquote:before { content: "✦"; color: ${theme.accent}; margin-right: 10px; }
     a { color: ${theme.accent}; text-decoration: underline; }
     code { background: ${theme.input}; border-radius: 5px; padding: 1px 4px; }
-    pre { background: ${theme.input}; border-radius: 8px; padding: 12px; overflow-x: auto; }
+    pre { background: ${theme.input}; border-radius: 14px; padding: 14px; overflow-x: auto; }
+    hr { border: 0; height: 1px; background: ${theme.border}; margin: 18px 0; }
     img { display: block; max-width: 100%; height: auto; border-radius: 8px; margin: 8px 0 12px; background: ${theme.input}; }
     input[type="checkbox"] { transform: translateY(1px); margin-right: 8px; }
   </style>
@@ -699,23 +891,49 @@ function nativeEditorHtml({
           state.list = '';
         }
       }
+      function closeParagraph(out, state) {
+        if (state.paragraphLines && state.paragraphLines.length) {
+          out.push('<p data-xopc-paragraph="true">' + state.paragraphLines.map(inlineToHtml).join('\\n') + '</p>');
+          state.paragraphLines = [];
+        }
+      }
       function markdownToHtml(markdown) {
         if (!String(markdown || '').trim()) return '';
         var lines = String(markdown || '').split(/\\r?\\n/);
         var out = [];
-        var state = { list: '' };
+        var state = { list: '', code: false, codeLines: [], paragraphLines: [] };
         lines.forEach(function (line) {
           var m;
-          if (!line.trim()) {
+          if (state.code) {
+            if (line.indexOf(tick + tick + tick) === 0) {
+              out.push('<pre><code>' + escapeHtml(state.codeLines.join('\\n')) + '</code></pre>');
+              state.code = false;
+              state.codeLines = [];
+            } else {
+              state.codeLines.push(line);
+            }
+          } else if (line.indexOf(tick + tick + tick) === 0) {
             closeList(out, state);
-            out.push('<p><br /></p>');
-          } else if ((m = /^(#{1,3})\\s+(.+)$/.exec(line))) {
+            closeParagraph(out, state);
+            state.code = true;
+            state.codeLines = [];
+          } else if (!line.trim()) {
             closeList(out, state);
+            closeParagraph(out, state);
+          } else if ((m = /^(#{1,4})\\s+(.+)$/.exec(line))) {
+            closeList(out, state);
+            closeParagraph(out, state);
             out.push('<h' + m[1].length + '>' + inlineToHtml(m[2]) + '</h' + m[1].length + '>');
+          } else if (/^(-{3,}|\\*{3,}|_{3,})$/.test(line.trim())) {
+            closeList(out, state);
+            closeParagraph(out, state);
+            out.push('<hr />');
           } else if ((m = /^>\\s?(.+)$/.exec(line))) {
             closeList(out, state);
+            closeParagraph(out, state);
             out.push('<blockquote>' + inlineToHtml(m[1]) + '</blockquote>');
           } else if ((m = /^- \\[([ xX])\\]\\s*(.*)$/.exec(line))) {
+            closeParagraph(out, state);
             if (state.list !== 'ul') {
               closeList(out, state);
               out.push('<ul data-task-list="true">');
@@ -723,6 +941,7 @@ function nativeEditorHtml({
             }
             out.push('<li data-task-item="true"><input type="checkbox" ' + (m[1].toLowerCase() === 'x' ? 'checked ' : '') + '/>' + inlineToHtml(m[2]) + '</li>');
           } else if ((m = /^[-*]\\s+(.+)$/.exec(line))) {
+            closeParagraph(out, state);
             if (state.list !== 'ul') {
               closeList(out, state);
               out.push('<ul>');
@@ -730,6 +949,7 @@ function nativeEditorHtml({
             }
             out.push('<li>' + inlineToHtml(m[1]) + '</li>');
           } else if ((m = /^\\d+\\.\\s+(.+)$/.exec(line))) {
+            closeParagraph(out, state);
             if (state.list !== 'ol') {
               closeList(out, state);
               out.push('<ol>');
@@ -738,9 +958,13 @@ function nativeEditorHtml({
             out.push('<li>' + inlineToHtml(m[1]) + '</li>');
           } else {
             closeList(out, state);
-            out.push('<p>' + inlineToHtml(line) + '</p>');
+            state.paragraphLines.push(line);
           }
         });
+        if (state.code) {
+          out.push('<pre><code>' + escapeHtml(state.codeLines.join('\\n')) + '</code></pre>');
+        }
+        closeParagraph(out, state);
         closeList(out, state);
         return out.join('');
       }
@@ -760,57 +984,83 @@ function nativeEditorHtml({
       function childrenToMarkdown(node) {
         return Array.prototype.map.call(node.childNodes, inlineToMarkdown).join('');
       }
+      ${NATIVE_JOIN_MARKDOWN_BLOCKS_SCRIPT}
+      function markdownBlock(text, paragraph) {
+        return { text: text, paragraph: !!paragraph };
+      }
       function blockToMarkdown(node) {
-        if (node.nodeType === Node.TEXT_NODE) return (node.nodeValue || '').trim();
-        if (node.nodeType !== Node.ELEMENT_NODE) return '';
+        if (node.nodeType === Node.TEXT_NODE) return markdownBlock((node.nodeValue || '').trim(), false);
+        if (node.nodeType !== Node.ELEMENT_NODE) return markdownBlock('', false);
         var tag = node.tagName.toLowerCase();
         var text = childrenToMarkdown(node).trim();
-        if (tag === 'h1') return '# ' + text;
-        if (tag === 'h2') return '## ' + text;
-        if (tag === 'h3') return '### ' + text;
-        if (tag === 'blockquote') return '> ' + text;
+        if (tag === 'h1') return markdownBlock('# ' + text, false);
+        if (tag === 'h2') return markdownBlock('## ' + text, false);
+        if (tag === 'h3') return markdownBlock('### ' + text, false);
+        if (tag === 'h4') return markdownBlock('#### ' + text, false);
+        if (tag === 'blockquote') return markdownBlock('> ' + text, false);
+        if (tag === 'pre') return markdownBlock(tick + tick + tick + '\\n' + (node.textContent || '').trim() + '\\n' + tick + tick + tick, false);
+        if (tag === 'hr') return markdownBlock('---', false);
         if (tag === 'ul') {
-          return Array.prototype.map.call(node.children, function (li) {
+          return markdownBlock(Array.prototype.map.call(node.children, function (li) {
             var checked = li.querySelector('input[type="checkbox"]') && li.querySelector('input[type="checkbox"]').checked;
             var task = li.getAttribute('data-task-item') === 'true' || node.getAttribute('data-task-list') === 'true';
             return (task ? '- [' + (checked ? 'x' : ' ') + '] ' : '- ') + childrenToMarkdown(li).trim();
-          }).join('\\n');
+          }).join('\\n'), false);
         }
         if (tag === 'ol') {
-          return Array.prototype.map.call(node.children, function (li, index) {
+          return markdownBlock(Array.prototype.map.call(node.children, function (li, index) {
             return (index + 1) + '. ' + childrenToMarkdown(li).trim();
-          }).join('\\n');
+          }).join('\\n'), false);
         }
-        return text;
+        return markdownBlock(text, tag === 'p' && node.getAttribute('data-xopc-paragraph') === 'true');
       }
       function htmlToMarkdown() {
-        return Array.prototype.map.call(editor.childNodes, blockToMarkdown).filter(function (part) {
-          return part.trim().length > 0;
-        }).join('\\n\\n');
+        return joinNativeMarkdownBlocks(Array.prototype.map.call(editor.childNodes, blockToMarkdown));
       }
       function state() {
         var selection = window.getSelection();
         var from = 0;
         var to = 0;
+        var parent = null;
         if (selection && selection.rangeCount) {
-          from = selection.getRangeAt(0).startOffset || 0;
-          to = selection.getRangeAt(0).endOffset || from;
+          var range = selection.getRangeAt(0);
+          from = range.startOffset || 0;
+          to = range.endOffset || from;
+          parent = range.commonAncestorContainer;
+          if (parent && parent.nodeType !== Node.ELEMENT_NODE) parent = parent.parentElement;
         }
+        var active = function (selector) {
+          return !!(parent && parent.closest && parent.closest(selector));
+        };
+        var heading = 0;
+        if (active('h1')) heading = 1;
+        else if (active('h2')) heading = 2;
+        else if (active('h3')) heading = 3;
+        else if (active('h4')) heading = 4;
         return {
           ready: true,
           focused: document.activeElement === editor,
           selection: { from: from, to: to },
+          emptySelection: from === to,
           canUndo: document.queryCommandEnabled('undo'),
           canRedo: document.queryCommandEnabled('redo'),
-          todo: false,
+          bold: document.queryCommandState('bold'),
+          italic: document.queryCommandState('italic'),
+          headingLevel: heading,
+          bulletList: active('ul:not([data-task-list="true"])'),
+          taskList: active('ul[data-task-list="true"], li[data-task-item="true"]'),
+          blockquote: active('blockquote'),
+          codeBlock: active('pre'),
           link: false,
           image: false
         };
       }
       function postState() {
-        post({ type: 'state', state: state() });
+        var nextState = state();
+        post({ type: 'focus', focused: nextState.focused, state: nextState });
       }
       function postSelection() {
+        if (!${selectionEnabled ? 'true' : 'false'}) return;
         var markdown = htmlToMarkdown();
         post({
           type: 'selection',
@@ -825,16 +1075,20 @@ function nativeEditorHtml({
           state: state()
         });
       }
-      function emitChange() {
+      function emitChange(reason, flushRequestId) {
+        if (emitTimer) {
+          clearTimeout(emitTimer);
+          emitTimer = null;
+        }
         var markdown = htmlToMarkdown();
-        post({ type: 'change', markdown: markdown, state: state() });
+        post({ type: 'content', reason: reason || 'typing', markdown: markdown, flushRequestId: flushRequestId || null, state: state() });
       }
       function scheduleEmit() {
         if (emitTimer) clearTimeout(emitTimer);
         emitTimer = setTimeout(function () {
           emitTimer = null;
-          emitChange();
-        }, 150);
+          emitChange('typing');
+        }, ${NATIVE_MARKDOWN_SYNC_DELAY_MS});
       }
       function saveSelection() {
         var selection = window.getSelection();
@@ -881,10 +1135,36 @@ function nativeEditorHtml({
         restoreSelection();
         document.execCommand('insertHTML', false, html);
         saveSelection();
-        emitChange();
+        emitChange('command');
+      }
+      function formatBlock(tagName) {
+        editor.focus();
+        restoreSelection();
+        document.execCommand('formatBlock', false, tagName);
+        saveSelection();
+        emitChange('command');
       }
       function command(name, payload) {
-        if (name === 'insertTodo') insertHtml('<ul data-task-list="true"><li data-task-item="true"><input type="checkbox" /> </li></ul>');
+        if (name === 'setHeading') {
+          var level = payload && Number(payload.level);
+          formatBlock(level >= 1 && level <= 4 ? 'h' + level : 'p');
+        } else if (name === 'toggleBold') {
+          editor.focus();
+          restoreSelection();
+          document.execCommand('bold', false);
+          saveSelection();
+          emitChange('command');
+        } else if (name === 'toggleItalic') {
+          editor.focus();
+          restoreSelection();
+          document.execCommand('italic', false);
+          saveSelection();
+          emitChange('command');
+        } else if (name === 'toggleBulletList') insertHtml('<ul><li> </li></ul>');
+        else if (name === 'insertTodo') insertHtml('<ul data-task-list="true"><li data-task-item="true"><input type="checkbox" /> </li></ul>');
+        else if (name === 'toggleBlockquote') formatBlock('blockquote');
+        else if (name === 'toggleCodeBlock') formatBlock('pre');
+        else if (name === 'insertDivider') insertHtml('<hr /><p><br /></p>');
         else if (name === 'insertAttachment') {
           var label = (payload && payload.alt) || (payload && payload.kind === 'image' ? 'image' : 'attachment');
           if (payload && payload.kind === 'image') {
@@ -900,11 +1180,11 @@ function nativeEditorHtml({
           editor.focus();
           restoreSelection();
           document.execCommand('unlink', false);
-          emitChange();
+          emitChange('command');
         } else if (name === 'undo' || name === 'redo') {
           editor.focus();
           document.execCommand(name, false);
-          emitChange();
+          emitChange('command');
         }
       }
       window.xopcEditor = {
@@ -924,7 +1204,10 @@ function nativeEditorHtml({
         },
         setMarkdown: function (nextMarkdown) {
           editor.innerHTML = markdownToHtml(nextMarkdown || '');
-          emitChange();
+          emitChange('flush');
+        },
+        flushMarkdown: function (requestId) {
+          emitChange('flush', requestId);
         },
         setBottomInset: function (nextBottomInset) {
           var inset = Math.max(96, Math.round(Number(nextBottomInset) || 0));
@@ -934,7 +1217,7 @@ function nativeEditorHtml({
       editor.addEventListener('input', scheduleEmit);
       editor.addEventListener('change', scheduleEmit);
       editor.addEventListener('focus', postState);
-      editor.addEventListener('blur', function () { emitChange(); postState(); });
+      editor.addEventListener('blur', function () { emitChange('flush'); postState(); });
       document.addEventListener('selectionchange', function () {
         if (document.activeElement !== editor) return;
         saveSelection();
@@ -963,6 +1246,8 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
   const latestMarkdownRef = useRef(markdown);
   const lastWebMarkdownRef = useRef(markdown);
   const readyRef = useRef(false);
+  const flushRequestIdRef = useRef(0);
+  const pendingFlushesRef = useRef(new Map<number, PendingFlush>());
   const html = useMemo(
     () => nativeEditorHtml({
       markdown,
@@ -970,20 +1255,54 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
       theme,
       labels,
       bottomInset,
+      selectionEnabled: Boolean(onSelectionChange),
     }),
     // The WebView is keyed by noteId. Later markdown changes are pushed with injected JS.
-    [noteId, theme, labels],
+    [noteId, theme, labels, onSelectionChange],
   );
 
   const inject = useCallback((script: string) => {
     webViewRef.current?.injectJavaScript(`${script}\ntrue;`);
   }, []);
 
+  const flushMarkdown = useCallback(() => new Promise<string>((resolve) => {
+    if (!readyRef.current) {
+      resolve(latestMarkdownRef.current);
+      return;
+    }
+    flushRequestIdRef.current += 1;
+    const requestId = flushRequestIdRef.current;
+    const timeout = setTimeout(() => {
+      const pending = pendingFlushesRef.current.get(requestId);
+      if (!pending) return;
+      pendingFlushesRef.current.delete(requestId);
+      pending.resolve(latestMarkdownRef.current);
+    }, EDITOR_FLUSH_TIMEOUT_MS);
+    pendingFlushesRef.current.set(requestId, { resolve, timeout });
+    inject(`window.xopcEditor && window.xopcEditor.flushMarkdown(${requestId});`);
+  }), [inject]);
+
+  useEffect(() => () => {
+    pendingFlushesRef.current.forEach(({ resolve, timeout }) => {
+      clearTimeout(timeout);
+      resolve(latestMarkdownRef.current);
+    });
+    pendingFlushesRef.current.clear();
+  }, []);
+
   useImperativeHandle(ref, () => ({
     getMarkdown: () => latestMarkdownRef.current,
+    flushMarkdown,
     focus: (position) => inject(`window.xopcEditor && window.xopcEditor.focus(${JSON.stringify(position ?? 'end')});`),
     blur: () => inject('window.xopcEditor && window.xopcEditor.blur();'),
+    setHeading: (level) => inject(`window.xopcEditor && window.xopcEditor.command("setHeading", ${JSON.stringify({ level })});`),
+    toggleBold: () => inject('window.xopcEditor && window.xopcEditor.command("toggleBold");'),
+    toggleItalic: () => inject('window.xopcEditor && window.xopcEditor.command("toggleItalic");'),
+    toggleBulletList: () => inject('window.xopcEditor && window.xopcEditor.command("toggleBulletList");'),
     insertTodo: () => inject('window.xopcEditor && window.xopcEditor.command("insertTodo");'),
+    toggleBlockquote: () => inject('window.xopcEditor && window.xopcEditor.command("toggleBlockquote");'),
+    toggleCodeBlock: () => inject('window.xopcEditor && window.xopcEditor.command("toggleCodeBlock");'),
+    insertDivider: () => inject('window.xopcEditor && window.xopcEditor.command("insertDivider");'),
     insertAttachment: (attachment) => {
       inject(`window.xopcEditor && window.xopcEditor.command("insertAttachment", ${JSON.stringify(attachment)});`);
     },
@@ -993,7 +1312,7 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
     removeLink: () => inject('window.xopcEditor && window.xopcEditor.command("removeLink");'),
     undo: () => inject('window.xopcEditor && window.xopcEditor.command("undo");'),
     redo: () => inject('window.xopcEditor && window.xopcEditor.command("redo");'),
-  }), [inject]);
+  }), [flushMarkdown, inject]);
 
   useEffect(() => {
     latestMarkdownRef.current = markdown;
@@ -1020,14 +1339,28 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
     }
     if (message.type === 'ready') {
       readyRef.current = true;
+      if (typeof message.markdown === 'string') {
+        lastWebMarkdownRef.current = message.markdown;
+      }
     }
     if ('markdown' in message && typeof message.markdown === 'string') {
+      const shouldForward = shouldForwardNativeMarkdownMessage(message, latestMarkdownRef.current);
       latestMarkdownRef.current = message.markdown;
       lastWebMarkdownRef.current = message.markdown;
-      void onChangeMarkdown(message.markdown);
+      if (message.type === 'content' && typeof message.flushRequestId === 'number' && isNativeMarkdownFlushResponse(message, message.flushRequestId)) {
+        const pending = pendingFlushesRef.current.get(message.flushRequestId);
+        if (pending) {
+          pendingFlushesRef.current.delete(message.flushRequestId);
+          clearTimeout(pending.timeout);
+          pending.resolve(message.markdown);
+        }
+      }
+      if (shouldForward) {
+        void onChangeMarkdown(message.markdown);
+      }
     }
     if (message.type === 'selection') {
-      void onSelectionChange(message.context);
+      void onSelectionChange?.(message.context);
     }
     if (message.state) {
       void onStateChange?.(message.state);
@@ -1044,6 +1377,9 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
       scrollEnabled
       hideKeyboardAccessoryView
       keyboardDisplayRequiresUserAction={false}
+      automaticallyAdjustContentInsets={false}
+      contentInset={{ top: 0, left: 0, bottom: Math.max(0, Math.round(bottomInset)), right: 0 }}
+      contentInsetAdjustmentBehavior="never"
       onMessage={handleMessage}
       style={styles.richWebView}
       containerStyle={styles.richWebViewContainer}

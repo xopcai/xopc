@@ -68,6 +68,11 @@ function insertEntry(
   };
 }
 
+function isUserMessageRow(row: TranscriptStoredRow): boolean {
+  const classified = classifyStoredRow(row);
+  return classified.entryKind === 'message' && classified.role === 'user';
+}
+
 export function appendTranscriptEntry(
   sessionKey: string,
   row: TranscriptStoredRow,
@@ -82,10 +87,12 @@ export function appendTranscriptEntry(
     if (classifyStoredRow(row).entryKind === 'message') {
       const tokenDelta = opts?.tokenDelta ?? 0;
       const now = Date.now();
+      const hiddenUpdate = isUserMessageRow(row) ? `hidden_from_session_list = 0,` : '';
       db.prepare(
         `UPDATE sessions SET
           message_count = message_count + 1,
           estimated_tokens = estimated_tokens + ?,
+          ${hiddenUpdate}
           updated_at = ?,
           last_accessed_at = ?,
           last_interaction_at = ?
@@ -150,10 +157,13 @@ export function replaceTranscriptRows(
 
     const llm = buildSessionContextForLlm(toWrite);
     const now = Date.now();
+    const hasUserMessage = llm.some((message) => message.role === 'user');
+    const hiddenUpdate = hasUserMessage ? `hidden_from_session_list = 0,` : '';
     db.prepare(
       `UPDATE sessions SET
         message_count = ?,
         estimated_tokens = ?,
+        ${hiddenUpdate}
         updated_at = ?,
         last_accessed_at = ?,
         last_interaction_at = ?

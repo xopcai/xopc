@@ -12,7 +12,7 @@ import { cn } from '@/lib/cn';
 import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-window-chrome';
 import { useAppShellStore } from '@/stores/app-shell-store';
 import { useLocaleStore } from '@/stores/locale-store';
-import { useSidebarStore } from '@/stores/sidebar-store';
+import { clampExpandedWidthPx, useSidebarStore } from '@/stores/sidebar-store';
 
 const MD_MIN = '(min-width: 768px)';
 
@@ -39,21 +39,38 @@ export const SidebarColumn = memo(function SidebarColumn() {
       if (sidebarCollapsed) return;
       e.preventDefault();
       const el = e.currentTarget;
+      const sidebarEl = el.parentElement;
       el.setPointerCapture(e.pointerId);
       setWidthResizing(true);
       const startX = e.clientX;
       const startW = useSidebarStore.getState().expandedWidthPx;
       const pid = e.pointerId;
+      let rafId = 0;
+      let nextWidth = startW;
+      let committedWidth = startW;
+      const applyWidth = () => {
+        rafId = 0;
+        committedWidth = nextWidth;
+        sidebarEl?.style.setProperty('--sidebar-expanded-px', `${committedWidth}px`);
+      };
       const onMove = (ev: PointerEvent) => {
-        setExpandedWidthPx(startW + (ev.clientX - startX));
+        nextWidth = clampExpandedWidthPx(startW + (ev.clientX - startX));
+        if (rafId === 0) {
+          rafId = window.requestAnimationFrame(applyWidth);
+        }
       };
       const onDone = () => {
+        if (rafId !== 0) {
+          window.cancelAnimationFrame(rafId);
+          applyWidth();
+        }
         try {
           el.releasePointerCapture(pid);
         } catch {
           /* ignore */
         }
         setWidthResizing(false);
+        setExpandedWidthPx(committedWidth);
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onDone);
         window.removeEventListener('pointercancel', onDone);

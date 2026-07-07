@@ -240,6 +240,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
         await service.sessionIndexInstance.updateSessionMetadata(existingKey, {
           customData: {
             ...(meta?.customData ?? {}),
+            genericNewChatShell: false,
             sourceBinding,
           },
         });
@@ -261,6 +262,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
         sourceChannel: 'webchat',
         sourceChatId: `default:direct:${peerId}`,
         sessionType: 'chat',
+        hiddenFromSessionList: true,
         routing: {
           agentId,
           source: 'webchat',
@@ -277,6 +279,7 @@ export function registerNotesRoutes(authenticated: Hono, deps: AuthenticatedRout
       tags: Array.from(new Set([...(meta?.tags ?? []), 'note'])),
       customData: {
         ...(meta?.customData ?? {}),
+        genericNewChatShell: false,
         sourceBinding,
       },
     });

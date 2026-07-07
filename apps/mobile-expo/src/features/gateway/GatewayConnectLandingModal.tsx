@@ -36,7 +36,7 @@ import {
 } from './GatewayQrScannerModal';
 import type { ParsedGatewayQr } from './parse-gateway-qr';
 import { resolveGatewayCredentialsFromQr } from './pair-gateway';
-import { openDefaultSessionAfterConnect } from './navigate-after-gateway-connect';
+import { navigateHomeAfterGatewayConnect } from './navigate-after-gateway-connect';
 import { GatewayTokenInput } from './GatewayTokenInput';
 import { upsertGatewayFromCredentials } from './upsert-gateway-from-credentials';
 import { isGatewayConnectivityError } from '../../api/gateway-error';
@@ -216,7 +216,7 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
         throw err;
       }
 
-      const nav = await openDefaultSessionAfterConnect(router.replace);
+      const nav = await navigateHomeAfterGatewayConnect(router.replace);
       if (!nav.ok) {
         useGatewayStore.setState({
           profiles: before.profiles,

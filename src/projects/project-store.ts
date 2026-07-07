@@ -220,7 +220,9 @@ export class ProjectStore {
   }
 
   getSessionCount(id: string): number {
-    return (getSqliteDatabase().prepare(`SELECT COUNT(*) AS total FROM sessions WHERE project_id = ?`).get(id) as { total: number }).total;
+    return (getSqliteDatabase()
+      .prepare(`SELECT COUNT(*) AS total FROM sessions WHERE project_id = ? AND hidden_from_session_list = 0`)
+      .get(id) as { total: number }).total;
   }
 
   getGoalCount(id: string): number {
@@ -237,7 +239,7 @@ export class ProjectStore {
     const rows = getSqliteDatabase()
       .prepare(
         `SELECT session_key, name, updated_at, agent_id FROM sessions
-         WHERE project_id = ? ORDER BY updated_at DESC LIMIT ?`,
+         WHERE project_id = ? AND hidden_from_session_list = 0 ORDER BY updated_at DESC LIMIT ?`,
       )
       .all(id, clampLimit(limit, 5)) as Array<{ session_key: string; name: string | null; updated_at: number; agent_id: string }>;
     return rows.map((row) => ({

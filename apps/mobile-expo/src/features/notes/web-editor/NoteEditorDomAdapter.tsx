@@ -44,7 +44,7 @@ export interface NoteEditorDomAdapterProps {
   bottomInset?: number;
   dom?: DomProps;
   onChangeMarkdown: (markdown: string) => Promise<void>;
-  onSelectionChange: (context: EditorSelectionContext) => Promise<void>;
+  onSelectionChange?: (context: EditorSelectionContext) => Promise<void>;
   onStateChange?: (state: EditorRuntimeState) => Promise<void> | void;
   onRequestAttachment: (source: EditorAttachmentPickSource) => Promise<EditorAttachmentPickResult>;
   onFlushMarkdown?: (requestId: number, markdown: string) => Promise<void> | void;
@@ -84,19 +84,44 @@ function selectionContextFromEditor(editor: NonNullable<ReturnType<typeof useEdi
 function editorRuntimeState(editor: NonNullable<ReturnType<typeof useEditor>>): EditorRuntimeState {
   try {
     const { from, to } = editor.state.selection;
+    const headingLevel = ([1, 2, 3, 4] as const).find((level) => editor.isActive('heading', { level })) ?? 0;
     return {
       ready: !editor.isDestroyed,
       focused: editor.isFocused,
       selection: { from, to },
+      emptySelection: from === to,
       canUndo: canEditorRun(editor, (can) => can.undo()),
       canRedo: canEditorRun(editor, (can) => can.redo()),
-      todo: editor.isActive('taskList'),
+      bold: editor.isActive('bold'),
+      italic: editor.isActive('italic'),
+      headingLevel,
+      bulletList: editor.isActive('bulletList'),
+      taskList: editor.isActive('taskList'),
+      blockquote: editor.isActive('blockquote'),
+      codeBlock: editor.isActive('codeBlock'),
       link: editor.isActive('link'),
       image: editor.isActive('image'),
     };
   } catch {
     return DEFAULT_EDITOR_RUNTIME_STATE;
   }
+}
+
+function sameRuntimeUiState(a: EditorRuntimeState, b: EditorRuntimeState): boolean {
+  return a.ready === b.ready
+    && a.focused === b.focused
+    && a.emptySelection === b.emptySelection
+    && a.canUndo === b.canUndo
+    && a.canRedo === b.canRedo
+    && a.bold === b.bold
+    && a.italic === b.italic
+    && a.headingLevel === b.headingLevel
+    && a.bulletList === b.bulletList
+    && a.taskList === b.taskList
+    && a.blockquote === b.blockquote
+    && a.codeBlock === b.codeBlock
+    && a.link === b.link
+    && a.image === b.image;
 }
 
 function canEditorRun(
@@ -181,6 +206,8 @@ export default function NoteEditorDomAdapter({
   const onStateChangeRef = useRef(onStateChange);
   const onFlushMarkdownRef = useRef(onFlushMarkdown);
   const handledCommandIdRef = useRef<number | null>(null);
+  const initialBottomInsetRef = useRef(bottomInset);
+  const lastRuntimeStateRef = useRef<EditorRuntimeState | null>(null);
 
   attachmentSrcMapRef.current = attachmentSrcMap ?? {};
   onChangeMarkdownRef.current = onChangeMarkdown;
@@ -189,6 +216,17 @@ export default function NoteEditorDomAdapter({
   onFlushMarkdownRef.current = onFlushMarkdown;
 
   const XopcImage = useMemo(() => createXopcImage((canonicalSrc) => attachmentSrcMapRef.current[canonicalSrc]), []);
+
+  const emitRuntimeState = useCallback((nextEditor: NonNullable<ReturnType<typeof useEditor>>) => {
+    const nextState = editorRuntimeState(nextEditor);
+    const previous = lastRuntimeStateRef.current;
+    if (previous && sameRuntimeUiState(previous, nextState)) {
+      lastRuntimeStateRef.current = nextState;
+      return;
+    }
+    lastRuntimeStateRef.current = nextState;
+    void onStateChangeRef.current?.(nextState);
+  }, []);
 
   const emitMarkdown = useCallback(async (nextEditor: NonNullable<ReturnType<typeof useEditor>>) => {
     const markdown = markdownFromEditor(nextEditor);
@@ -216,7 +254,7 @@ export default function NoteEditorDomAdapter({
     editable,
     extensions: [
       StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
+        heading: { levels: [1, 2, 3, 4] },
         link: false,
         underline: false,
       }),
@@ -243,6 +281,13 @@ export default function NoteEditorDomAdapter({
     ],
     content: '',
     editorProps: {
+      scrollThreshold: 28,
+      scrollMargin: {
+        top: 16,
+        right: 0,
+        bottom: Math.max(96, Math.round(initialBottomInsetRef.current)),
+        left: 0,
+      },
       attributes: {
         class: 'xopc-editor-content',
         autocapitalize: 'sentences',
@@ -251,15 +296,17 @@ export default function NoteEditorDomAdapter({
       },
     },
     onUpdate: ({ editor: nextEditor }) => {
-      void onStateChangeRef.current?.(editorRuntimeState(nextEditor));
+      emitRuntimeState(nextEditor);
       scheduleMarkdownEmit(nextEditor);
     },
     onSelectionUpdate: ({ editor: nextEditor }) => {
-      void onStateChangeRef.current?.(editorRuntimeState(nextEditor));
-      void onSelectionChangeRef.current(selectionContextFromEditor(nextEditor));
+      emitRuntimeState(nextEditor);
+      if (onSelectionChangeRef.current) {
+        void onSelectionChangeRef.current(selectionContextFromEditor(nextEditor));
+      }
     },
     onFocus: ({ editor: nextEditor }) => {
-      void onStateChangeRef.current?.(editorRuntimeState(nextEditor));
+      emitRuntimeState(nextEditor);
     },
     onBlur: ({ editor: nextEditor }) => {
       if (changeTimerRef.current) {
@@ -267,18 +314,34 @@ export default function NoteEditorDomAdapter({
         changeTimerRef.current = null;
       }
       if (editorDirtyRef.current) void emitMarkdown(nextEditor);
-      void onStateChangeRef.current?.(editorRuntimeState(nextEditor));
+      emitRuntimeState(nextEditor);
     },
     onCreate: ({ editor: nextEditor }) => {
-      void onStateChangeRef.current?.(editorRuntimeState(nextEditor));
+      emitRuntimeState(nextEditor);
     },
-  }, [XopcImage, emitMarkdown, labels.placeholder, scheduleMarkdownEmit]);
+  }, [XopcImage, emitMarkdown, emitRuntimeState, labels.placeholder, scheduleMarkdownEmit]);
+
+  useEffect(() => {
+    if (!editor) return;
+    editor.setOptions({
+      editorProps: {
+        ...editor.options.editorProps,
+        scrollThreshold: 28,
+        scrollMargin: {
+          top: 16,
+          right: 0,
+          bottom: Math.max(96, Math.round(bottomInset)),
+          left: 0,
+        },
+      },
+    });
+  }, [bottomInset, editor]);
 
   useEffect(() => {
     if (!editor) return;
     editor.setEditable(editable);
-    void onStateChangeRef.current?.(editorRuntimeState(editor));
-  }, [editable, editor]);
+    emitRuntimeState(editor);
+  }, [editable, editor, emitRuntimeState]);
 
   useEffect(() => {
     if (!editor) return;
@@ -307,8 +370,9 @@ export default function NoteEditorDomAdapter({
     lastSentMarkdownRef.current = initialMarkdown;
     editorDirtyRef.current = false;
     setEditorMarkdown(editor, initialMarkdown);
-    void onStateChangeRef.current?.(editorRuntimeState(editor));
-  }, [editor, initialMarkdown, noteId]);
+    lastRuntimeStateRef.current = null;
+    emitRuntimeState(editor);
+  }, [editor, emitRuntimeState, initialMarkdown, noteId]);
 
   useEffect(() => () => {
     if (changeTimerRef.current) {
@@ -417,8 +481,36 @@ export default function NoteEditorDomAdapter({
       case 'focus':
         editor.commands.focus(command.position ?? undefined);
         break;
+      case 'blur':
+        editor.commands.blur();
+        break;
+      case 'setHeading':
+        if (command.level === 0) {
+          editor.chain().focus().setParagraph().run();
+        } else {
+          editor.chain().focus().toggleHeading({ level: command.level }).run();
+        }
+        break;
+      case 'toggleBold':
+        editor.chain().focus().toggleBold().run();
+        break;
+      case 'toggleItalic':
+        editor.chain().focus().toggleItalic().run();
+        break;
+      case 'toggleBulletList':
+        editor.chain().focus().toggleBulletList().run();
+        break;
       case 'toggleTaskList':
         editor.chain().focus().toggleTaskList().run();
+        break;
+      case 'toggleBlockquote':
+        editor.chain().focus().toggleBlockquote().run();
+        break;
+      case 'toggleCodeBlock':
+        editor.chain().focus().toggleCodeBlock().run();
+        break;
+      case 'insertDivider':
+        editor.chain().focus().setHorizontalRule().run();
         break;
       case 'insertAttachment':
         void insertAttachment(command.source);
@@ -443,8 +535,8 @@ export default function NoteEditorDomAdapter({
         break;
     }
 
-    void onStateChangeRef.current?.(editorRuntimeState(editor));
-  }, [applyLink, command, editable, editor, emitMarkdown, insertAttachment, insertPreparedAttachment, removeLink]);
+    emitRuntimeState(editor);
+  }, [applyLink, command, editable, editor, emitMarkdown, emitRuntimeState, insertAttachment, insertPreparedAttachment, removeLink]);
 
   return (
     <main
@@ -508,17 +600,19 @@ button, input {
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-y: contain;
   touch-action: pan-y;
+  scroll-padding-bottom: var(--xopc-editor-bottom-inset);
   padding: 14px 20px var(--xopc-editor-bottom-inset);
 }
 .xopc-editor-content {
   display: block;
   min-height: calc(100% - 40px);
   outline: none;
-  font-size: 17px;
-  line-height: 1.58;
+  font-size: 16px;
+  line-height: 1.42;
   letter-spacing: 0;
   color: var(--xopc-text);
   padding-bottom: 24px;
+  scroll-margin-bottom: var(--xopc-editor-bottom-inset);
 }
 .xopc-editor-scroll[data-editable="false"] .xopc-editor-content {
   cursor: default;
@@ -529,19 +623,24 @@ button, input {
 }
 .xopc-editor-content h1,
 .xopc-editor-content h2,
-.xopc-editor-content h3 {
+.xopc-editor-content h3,
+.xopc-editor-content h4 {
   line-height: 1.18;
   margin: 1.05em 0 0.4em;
   font-weight: 650;
 }
 .xopc-editor-content h1 {
-  font-size: 28px;
+  font-size: 32px;
+  font-weight: 760;
 }
 .xopc-editor-content h2 {
   font-size: 23px;
 }
 .xopc-editor-content h3 {
   font-size: 19px;
+}
+.xopc-editor-content h4 {
+  font-size: 17px;
 }
 .xopc-editor-content ul,
 .xopc-editor-content ol {
@@ -580,14 +679,21 @@ button, input {
 }
 .xopc-editor-content blockquote {
   margin: 0.8em 0;
-  padding-left: 0.9em;
-  border-left: 3px solid var(--xopc-border);
-  color: var(--xopc-text-secondary);
+  padding: 14px 16px;
+  border-left: 0;
+  border-radius: 14px;
+  color: var(--xopc-text);
+  background: var(--xopc-accent-soft);
+}
+.xopc-editor-content blockquote:before {
+  content: "✦";
+  color: var(--xopc-accent);
+  margin-right: 10px;
 }
 .xopc-editor-content pre {
   overflow-x: auto;
-  border-radius: 8px;
-  padding: 12px;
+  border-radius: 14px;
+  padding: 14px;
   background: var(--xopc-input);
   font-size: 14px;
 }
@@ -595,6 +701,12 @@ button, input {
   border-radius: 5px;
   padding: 1px 4px;
   background: var(--xopc-input);
+}
+.xopc-editor-content hr {
+  border: 0;
+  height: 1px;
+  margin: 20px 0;
+  background: var(--xopc-border);
 }
 .xopc-editor-link {
   color: var(--xopc-accent);

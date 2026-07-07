@@ -109,6 +109,64 @@ describe('project association routes', () => {
     expect(projects.listSessionKeys(project.id)).toEqual([body.session.key]);
   });
 
+  it('does not reuse note-scoped empty sessions when creating a generic webchat session', async () => {
+    const noteKey = 'agent:main:webchat:default:direct:note_abc_1783324340003';
+    const saveMessages = vi.fn(async (sessionKey: string) => {
+      ensureSessionRecord(sessionKey, process.cwd());
+    });
+    const app = registerSessionRouteApp({
+      currentConfig: {
+        agents: {
+          default: 'main',
+          list: [{ id: 'main', enabled: true }],
+        },
+      },
+      projects: {
+        get: vi.fn(() => null),
+      } as unknown as GatewayService['projects'],
+      sessions: {
+        listSessions: vi.fn(async () => ({
+          items: [{
+            key: noteKey,
+            messageCount: 0,
+            sourceChannel: 'webchat',
+            sourceChatId: 'default:direct:note_abc_1783324340003',
+            routing: {
+              agentId: 'main',
+              source: 'webchat',
+              accountId: 'default',
+              peerKind: 'direct',
+              peerId: 'note_abc_1783324340003',
+            },
+            customData: {
+              sourceBinding: { kind: 'note', sourceId: 'abc', version: '1', attachedAt: 1 },
+            },
+          }],
+        })),
+        getSession: vi.fn(async (key: string) => ({ key, routing: { agentId: key.split(':')[1] } })),
+      } as unknown as GatewayService['sessions'],
+      sessionIndexInstance: {
+        saveMessages,
+      } as unknown as GatewayService['sessionIndexInstance'],
+    });
+
+    const res = await app.request('/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { session: { key: string } };
+    expect(body.session.key).not.toBe(noteKey);
+    expect(body.session.key).toContain(':direct:chat_');
+    expect(saveMessages).toHaveBeenCalledWith(
+      expect.stringContaining(':direct:chat_'),
+      [],
+      expect.any(Object),
+    );
+  });
+
   it('does not detach a session that is no longer attached to the route project', async () => {
     const detachSession = vi.fn();
     const app = registerProjectRouteApp({

@@ -205,7 +205,7 @@ describe('saved content route', () => {
     expect(savedContentRoute({ status: 'saved', noteId: 'folder/note 1' })).toBe('/items/folder%2Fnote%201');
   });
 
-  it('falls back home for queued saves', () => {
-    expect(savedContentRoute({ status: 'queued' })).toBe('/');
+  it('falls back home when no note id is available', () => {
+    expect(savedContentRoute({ status: 'ignored' })).toBe('/');
   });
 });

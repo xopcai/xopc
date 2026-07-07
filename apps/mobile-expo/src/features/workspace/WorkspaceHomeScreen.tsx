@@ -27,10 +27,9 @@ import {
   type HomeGateway,
   type HomeWorkflowRun,
 } from '../../query/home';
-import { fetchNotes, type NoteIndexEntry } from '../../query/notes';
+import { createBlankNote, fetchNotes, type NoteIndexEntry } from '../../query/notes';
 import { invalidateSessionLists } from '../../query/workspace-sync';
 import { resolveNoteListTitle } from '../notes/note-title';
-import { createLocalDraftNote, readLocalNote } from '../notes/notes-local';
 import { noteKindLabel } from '../notes/note-list-display';
 import { createSession, useGatewayConfigured } from '../../query/sessions';
 import { fetchChatAgents, type ChatAgentOption, useEffectiveDefaultAgentId } from '../../query/agents';
@@ -266,10 +265,21 @@ export function WorkspaceHomeScreen() {
     },
   });
 
+  const createNoteMutation = useMutation({
+    mutationFn: createBlankNote,
+    onSuccess: async (result) => {
+      await refreshHomeContent();
+      openNoteDetail(router, result.note.id);
+    },
+    onError: (err) => {
+      setToastMessage(err instanceof Error ? err.message : hm.noAgentChatFailed);
+    },
+  });
+
   const handleCreateNote = useCallback(() => {
-    const draft = createLocalDraftNote();
-    openNoteDetail(router, draft.id);
-  }, [router]);
+    if (createNoteMutation.isPending) return;
+    createNoteMutation.mutate();
+  }, [createNoteMutation]);
 
   const continueItems = useMemo<ContinueItem[]>(() => {
     const activeWorkflows = (home?.workflowRuns.active ?? []).slice(0, 2).map((run) => ({
@@ -294,7 +304,7 @@ export function WorkspaceHomeScreen() {
     const notes = homeNotes.slice(0, 3).map((note) => ({
       id: `note:${note.id}`,
       kind: 'note' as const,
-      title: resolveNoteListTitle(note, hm.untitled, readLocalNote(note.id)),
+      title: resolveNoteListTitle(note, hm.untitled),
       meta: `${hm.noteItemMeta} · ${timeLabel(note.lastOpenedAt ?? note.updatedAt, hm)}`,
       icon: iconForNoteKind(note.kind),
       onPress: () => handleNotePress(note),
@@ -321,7 +331,7 @@ export function WorkspaceHomeScreen() {
         <CenterNewNoteButton
           active={false}
           accessibilityLabel={hm.quickNewNote}
-          disabled={false}
+          disabled={createNoteMutation.isPending}
           onPress={handleCreateNote}
         />
         <WorkspaceSearchOverlay visible={searchOpen} onClose={() => setSearchOpen(false)} />
@@ -413,7 +423,7 @@ export function WorkspaceHomeScreen() {
       <CenterNewNoteButton
         active={false}
         accessibilityLabel={hm.quickNewNote}
-        disabled={false}
+        disabled={createNoteMutation.isPending}
         onPress={handleCreateNote}
       />
       <WorkspaceSearchOverlay visible={searchOpen} onClose={() => setSearchOpen(false)} />
@@ -581,7 +591,7 @@ function AttentionSection({
 }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
-  const nextTaskTitle = nextTask ? resolveNoteListTitle(nextTask, hm.untitled, readLocalNote(nextTask.id)) : null;
+  const nextTaskTitle = nextTask ? resolveNoteListTitle(nextTask, hm.untitled) : null;
   const workflowItems = [...attentionWorkflows]
     .sort((a, b) => {
       const rank = workflowAttentionRank(a) - workflowAttentionRank(b);
@@ -742,7 +752,7 @@ function InboxPreviewPanel({
 function InboxPreviewItem({ item, showDivider }: { item: NoteIndexEntry; showDivider: boolean }) {
   const { colors } = useTheme();
   const { homePage: hm, notesPage: pm } = useMessages();
-  const title = resolveNoteListTitle(item, hm.untitled, readLocalNote(item.id));
+  const title = resolveNoteListTitle(item, hm.untitled);
   const kind = noteKindLabel(item.kind, pm);
   const meta = `${kind} · ${timeLabel(item.createdAt, hm)}`;
 

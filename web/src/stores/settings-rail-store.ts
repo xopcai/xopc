@@ -7,7 +7,7 @@ export const SETTINGS_RAIL_WIDTH_MIN = 192;
 export const SETTINGS_RAIL_WIDTH_MAX = 360;
 export const SETTINGS_RAIL_WIDTH_DEFAULT = 228;
 
-function clampSettingsRailWidthPx(px: number): number {
+export function clampSettingsRailWidthPx(px: number): number {
   return Math.min(
     SETTINGS_RAIL_WIDTH_MAX,
     Math.max(SETTINGS_RAIL_WIDTH_MIN, Math.round(px)),
@@ -39,10 +39,11 @@ type SettingsRailState = {
   setWidthPx: (px: number) => void;
 };
 
-export const useSettingsRailStore = create<SettingsRailState>((set) => ({
+export const useSettingsRailStore = create<SettingsRailState>((set, get) => ({
   widthPx: readSettingsRailWidthPx(),
   setWidthPx: (px) => {
     const widthPx = clampSettingsRailWidthPx(px);
+    if (get().widthPx === widthPx) return;
     set({ widthPx });
     queueMicrotask(() => writeSettingsRailWidthPx(widthPx));
   },

@@ -28,4 +28,71 @@ describe('notes routes', () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it('marks note chat sessions as non-generic new-chat shells', async () => {
+    const app = new Hono();
+    const updateSessionMetadata = vi.fn(async () => undefined);
+    const linkNoteThread = vi.fn(async () => undefined);
+    const saveMessages = vi.fn(async () => undefined);
+    registerNotesRoutes(app, {
+      service: {
+        currentConfig: {
+          agents: {
+            default: 'main',
+            list: [{ id: 'main', enabled: true }],
+          },
+        },
+        notesServiceInstance: {
+          getNote: vi.fn().mockResolvedValue({
+            id: 'note-1',
+            kind: 'thought',
+            status: 'inbox',
+            markdown: 'hello note',
+            createdAt: 1,
+            updatedAt: 2,
+            capturedVia: { channel: 'web' },
+          }),
+          linkNoteThread,
+        },
+        sessionIndexInstance: {
+          saveMessages,
+          getSessionMetadata: vi.fn(async () => ({ customData: { existing: true }, tags: [] })),
+          updateSessionMetadata,
+        },
+        sessions: {
+          getSession: vi.fn(async (key: string) => ({ key })),
+        },
+      },
+      strictRateLimitMiddleware: async (_c, next) => next(),
+      sseConfig: {},
+    } as never);
+
+    const res = await app.request('/api/notes/note-1/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ forceNew: true }),
+    });
+
+    expect(res.status).toBe(201);
+    expect(saveMessages).toHaveBeenCalledWith(
+      expect.stringContaining(':direct:note_note-1_'),
+      [],
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          hiddenFromSessionList: true,
+        }),
+      }),
+    );
+    expect(updateSessionMetadata).toHaveBeenCalledWith(
+      expect.stringContaining(':direct:note_note-1_'),
+      expect.objectContaining({
+        customData: expect.objectContaining({
+          existing: true,
+          genericNewChatShell: false,
+          sourceBinding: expect.objectContaining({ kind: 'note', sourceId: 'note-1', version: '2' }),
+        }),
+      }),
+    );
+    expect(linkNoteThread).toHaveBeenCalledWith('note-1', expect.stringContaining(':direct:note_note-1_'));
+  });
 });

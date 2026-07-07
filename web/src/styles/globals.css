@@ -78,31 +78,31 @@
   --max-width-chat: var(--max-width-app-main);
 }
 
-/* Dark — spacecraft-black base, restrained rim light, Loop Blue signals */
+/* Dark — lifted workstation gray, restrained rim light, Loop Blue signals */
 html.dark {
-  --color-surface-base: #0a0a0a;
-  --color-surface-panel: #121212;
-  --color-surface-hover: #1a1a1a;
-  --color-surface-active: #202020;
+  --color-surface-base: #15171b;
+  --color-surface-panel: #1c1f25;
+  --color-surface-hover: #252932;
+  --color-surface-active: #2e3440;
 
-  --color-fg: #f5f5f5;
-  --color-fg-muted: #a1a1a1;
-  --color-fg-subtle: #666666;
-  --color-fg-disabled: #4d4d4d;
+  --color-fg: #f4f6f8;
+  --color-fg-muted: #b8bec8;
+  --color-fg-subtle: #87909d;
+  --color-fg-disabled: #626b78;
 
-  --color-edge-subtle: #1a1a1a;
-  --color-edge: #222222;
-  --color-edge-strong: #333333;
+  --color-edge-subtle: #252932;
+  --color-edge: #323844;
+  --color-edge-strong: #465061;
 
   --color-accent: #3a6bff;
   --color-accent-hover: #6f91ff;
-  --color-accent-soft: rgb(58 107 255 / 0.18);
-  --color-accent-fg: #92a8ff;
+  --color-accent-soft: rgb(58 107 255 / 0.2);
+  --color-accent-fg: #adc0ff;
   --color-loop-indigo: #7b78ff;
   --color-momentum-cyan: #64e3ff;
 
   /* Dark: mid neutral (not near-white) so a white tick stays legible without another blue hotspot. */
-  --color-checkbox-accent: #6a6a72;
+  --color-checkbox-accent: #788292;
 
   --color-success: #2ccb7f;
   --color-success-soft: rgb(44 203 127 / 0.16);
@@ -111,12 +111,12 @@ html.dark {
   --color-warning: #ffb84d;
   --color-warning-soft: rgb(255 184 77 / 0.16);
 
-  --color-scrim: rgb(0 0 0 / 0.58);
+  --color-scrim: rgb(8 10 14 / 0.5);
 
-  --shadow-surface: 0 0 0 1px rgb(255 255 255 / 0.05);
-  --shadow-elevated: 0 10px 34px rgb(0 0 0 / 0.48), 0 0 0 1px rgb(58 107 255 / 0.04);
-  --shadow-float: 0 16px 56px rgb(0 0 0 / 0.58), 0 0 0 1px rgb(58 107 255 / 0.06);
-  --shadow-popover: 0 18px 58px rgb(0 0 0 / 0.56), 0 0 0 1px rgb(58 107 255 / 0.08);
+  --shadow-surface: 0 0 0 1px rgb(255 255 255 / 0.045);
+  --shadow-elevated: 0 10px 30px rgb(0 0 0 / 0.32), 0 0 0 1px rgb(58 107 255 / 0.035);
+  --shadow-float: 0 16px 48px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(58 107 255 / 0.05);
+  --shadow-popover: 0 18px 54px rgb(0 0 0 / 0.38), 0 0 0 1px rgb(58 107 255 / 0.07);
 }
 
 @layer base {

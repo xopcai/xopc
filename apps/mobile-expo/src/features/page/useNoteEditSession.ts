@@ -7,20 +7,11 @@ import { invalidateNoteLists } from '../../query/workspace-sync';
 import {
   fetchNote,
   recordNoteOpen,
+  updateNote,
   type ApiError,
   type Note,
   type NoteAttachment,
 } from '../../query/notes';
-import {
-  discardLocalNoteState,
-  flushPendingNoteOperations,
-  isDraftNoteId,
-  markLocalDraftCreateFailed,
-  promoteLocalDraftNote,
-  readLocalNote,
-  retryLocalDraftCreate,
-  saveLocalMarkdownNoteEdit,
-} from '../notes/notes-local';
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -54,18 +45,6 @@ function tagsEqual(a: string[] | undefined, b: string[] | undefined): boolean {
   return left.every((tag, index) => tag === right[index]);
 }
 
-function hasDraftContent(
-  draft: Note,
-  input: { markdown: string; title?: string; tags?: string[]; status?: Note['status'] },
-): boolean {
-  return Boolean(
-    input.markdown.trim()
-    || input.title?.trim()
-    || (input.tags?.length ?? draft.tags?.length ?? 0) > 0
-    || (input.status ?? draft.status) !== draft.status,
-  );
-}
-
 export function useNoteEditSession({
   id,
   queryClient,
@@ -73,7 +52,6 @@ export function useNoteEditSession({
   setSnackMsg,
   messages,
   onMissingNote,
-  onDraftPromoted,
 }: UseNoteEditSessionArgs) {
   const [markdown, setMarkdown] = useState('');
   const [editorMarkdown, setEditorMarkdown] = useState('');
@@ -82,6 +60,7 @@ export function useNoteEditSession({
   const [noteStatus, setNoteStatus] = useState<Note['status']>('processed');
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [attachmentDisplaySeed, setAttachmentDisplaySeed] = useState<AttachmentDisplaySeed>(null);
+  const [editorReady, setEditorReady] = useState(false);
 
   const markdownRef = useRef(markdown);
   const titleRef = useRef(title);
@@ -97,8 +76,8 @@ export function useNoteEditSession({
   const handledMissingNoteIdRef = useRef<string | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attachmentDisplayVersionRef = useRef(0);
-  const draftPromotionRef = useRef<string | null>(null);
-  const isDraft = isDraftNoteId(id);
+  const saveInFlightRef = useRef<Promise<void> | null>(null);
+  const saveAgainRef = useRef(false);
 
   markdownRef.current = markdown;
   titleRef.current = title;
@@ -108,57 +87,45 @@ export function useNoteEditSession({
   const noteQuery = useQuery({
     queryKey: id ? queryKeys.note(id) : ['note', 'missing'],
     queryFn: () => fetchNote(id!),
-    enabled: Boolean(id && !isDraft),
+    enabled: Boolean(id),
     retry: 1,
   });
-  const [draftNote, setDraftNote] = useState(() => (isDraft && id ? readLocalNote(id) : null));
-  const note = (isDraft ? draftNote : noteQuery.data) ?? undefined;
+  const note = noteQuery.data ?? undefined;
 
   useEffect(() => {
-    draftPromotionRef.current = null;
-    if (!id || !isDraftNoteId(id)) {
-      setDraftNote(null);
-      return;
-    }
-    const draft = readLocalNote(id);
-    setDraftNote(draft);
-    if (!draft) {
-      setSnackMsg(messages.missing);
-      onMissingNote();
-    }
-  }, [id, messages.missing, onMissingNote, setSnackMsg]);
+    setEditorReady(false);
+  }, [id]);
 
   useEffect(() => {
-    if (!id || isDraft || !noteQuery.isError || handledMissingNoteIdRef.current === id) return;
+    if (!id || !noteQuery.isError || handledMissingNoteIdRef.current === id) return;
     const error = noteQuery.error as Partial<ApiError>;
     if (error.status !== 404) return;
     handledMissingNoteIdRef.current = id;
-    discardLocalNoteState(id);
     queryClient.removeQueries({ queryKey: queryKeys.note(id) });
     void invalidateNoteLists(queryClient);
     setSnackMsg(messages.missing);
     onMissingNote();
-  }, [id, isDraft, messages.missing, noteQuery.error, noteQuery.isError, onMissingNote, queryClient, setSnackMsg]);
+  }, [id, messages.missing, noteQuery.error, noteQuery.isError, onMissingNote, queryClient, setSnackMsg]);
 
   useEffect(() => {
     if (!note) return;
-    const localNote = readLocalNote(note.id);
-    const shouldUseLocal = localNote?.syncState === 'pending'
-      || localNote?.syncState === 'failed'
-      || (localNote?.localVersion ?? 0) > (note.localVersion ?? 0);
-    const displayNote = shouldUseLocal && localNote ? localNote : note;
-    const nextMarkdown = displayNote.markdown ?? '';
-    const nextTitle = displayNote.title;
-    const nextTags = displayNote.tags;
-    const nextStatus = displayNote.status;
-
-    serverMarkdownRef.current = nextMarkdown;
-    serverTitleRef.current = nextTitle;
-    serverTagsRef.current = nextTags;
-    serverStatusRef.current = nextStatus;
+    const previousServerMarkdown = serverMarkdownRef.current;
+    const previousServerTitle = serverTitleRef.current;
+    const previousServerTags = serverTagsRef.current;
+    const previousServerStatus = serverStatusRef.current;
+    const nextMarkdown = note.markdown ?? '';
+    const nextTitle = note.title;
+    const nextTags = note.tags;
+    const nextStatus = note.status;
 
     const isNewNote = seededNoteIdRef.current !== note.id;
-    if (isNewNote || !dirtyRef.current) {
+    const localStillMatchesPreviousServer = markdownRef.current === previousServerMarkdown
+      && (titleRef.current.trim() || undefined) === previousServerTitle
+      && tagsEqual(tagsRef.current, previousServerTags)
+      && statusRef.current === previousServerStatus;
+    const shouldHydrateFromServer = isNewNote || !dirtyRef.current || localStillMatchesPreviousServer;
+
+    if (shouldHydrateFromServer) {
       seededNoteIdRef.current = note.id;
       dirtyRef.current = false;
       setMarkdown(nextMarkdown);
@@ -167,25 +134,29 @@ export function useNoteEditSession({
       setTags(nextTags);
       ensureNoteTags(nextTags ?? []);
       setNoteStatus(nextStatus);
-      setSaveState(shouldUseLocal && localNote?.syncState === 'failed' ? 'failed' : shouldUseLocal && localNote?.syncState === 'pending' ? 'pending' : 'saved');
+      setSaveState('saved');
       attachmentDisplayVersionRef.current += 1;
       setAttachmentDisplaySeed({
         version: attachmentDisplayVersionRef.current,
         noteId: note.id,
         markdown: nextMarkdown,
-        attachments: displayNote.attachments,
+        attachments: note.attachments,
       });
+      setEditorReady(true);
+    } else {
+      setEditorReady(true);
     }
 
-    if (!isDraft) {
-      upsertNoteInListCaches(queryClient, noteToIndexEntry(note));
-    }
+    serverMarkdownRef.current = nextMarkdown;
+    serverTitleRef.current = nextTitle;
+    serverTagsRef.current = nextTags;
+    serverStatusRef.current = nextStatus;
+
+    upsertNoteInListCaches(queryClient, noteToIndexEntry(note));
   }, [
     ensureNoteTags,
-    isDraft,
     note,
     note?.id,
-    note?.localVersion,
     note?.markdown,
     note?.status,
     note?.tags,
@@ -194,91 +165,28 @@ export function useNoteEditSession({
   ]);
 
   useEffect(() => {
-    if (!id || isDraft || openedNoteIdRef.current === id) return;
+    if (!id || openedNoteIdRef.current === id) return;
     openedNoteIdRef.current = id;
     void recordNoteOpen(id).catch(() => undefined);
-  }, [id, isDraft]);
-
-  useEffect(() => {
-    if (
-      !id
-      || !isDraft
-      || !draftNote
-      || draftNote.remoteId
-      || draftNote.syncState !== 'creating'
-      || draftPromotionRef.current === id
-    ) return;
-    const promotionInput = {
-      markdown: markdownRef.current,
-      title: titleRef.current.trim() || undefined,
-      tags: tagsRef.current,
-      status: statusRef.current,
-    };
-    if (!hasDraftContent(draftNote, promotionInput)) return;
-    draftPromotionRef.current = id;
-    void (async () => {
-      try {
-        const remoteId = await promoteLocalDraftNote(id, {
-          markdown: promotionInput.markdown,
-          title: promotionInput.title,
-          tags: promotionInput.tags,
-          status: promotionInput.status,
-        });
-        onDraftPromoted?.(remoteId);
-      } catch {
-        markLocalDraftCreateFailed(id);
-        setDraftNote(readLocalNote(id));
-        setSaveState('failed');
-        setSnackMsg(messages.savedOffline);
-        draftPromotionRef.current = null;
-      }
-    })();
-  }, [draftNote, id, isDraft, messages.savedOffline, onDraftPromoted, setSnackMsg]);
-
-  const applySyncedLocalSnapshot = useCallback((snapshot: ReturnType<typeof readLocalNote>) => {
-    if (!id || !snapshot || snapshot.syncState !== 'synced') return;
-    serverMarkdownRef.current = snapshot.markdown ?? '';
-    serverTitleRef.current = snapshot.title;
-    serverTagsRef.current = snapshot.tags;
-    serverStatusRef.current = snapshot.status;
-    queryClient.setQueryData(queryKeys.note(id), snapshot);
-    upsertNoteInListCaches(queryClient, noteToIndexEntry(snapshot));
-    if (!dirtyRef.current) {
-      setMarkdown(snapshot.markdown ?? '');
-      setEditorMarkdown(snapshot.markdown ?? '');
-      setTitle(snapshot.title ?? '');
-      setTags(snapshot.tags);
-      setNoteStatus(snapshot.status);
-      attachmentDisplayVersionRef.current += 1;
-      setAttachmentDisplaySeed({
-        version: attachmentDisplayVersionRef.current,
-        noteId: snapshot.id,
-        markdown: snapshot.markdown ?? '',
-        attachments: snapshot.attachments,
-      });
-    }
-  }, [id, queryClient]);
-
-  const flushQueuedNoteOperations = useCallback(async () => {
-    const flushed = await flushPendingNoteOperations();
-    if (id) applySyncedLocalSnapshot(readLocalNote(id));
-    return flushed;
-  }, [applySyncedLocalSnapshot, id]);
-
-  const saveStateAfterFlush = useCallback((): SaveState => {
-    if (!id) return 'saved';
-    const localSnapshot = readLocalNote(id);
-    if (localSnapshot?.syncState === 'failed') return 'failed';
-    if (localSnapshot?.syncState === 'pending') return 'pending';
-    return 'saved';
   }, [id]);
 
-  const flushSave = useCallback(async () => {
+  const flushSave = useCallback(async (): Promise<void> => {
     if (!id || !note) return;
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
+
+    if (saveInFlightRef.current) {
+      saveAgainRef.current = true;
+      await saveInFlightRef.current.catch(() => undefined);
+      if (saveAgainRef.current) {
+        saveAgainRef.current = false;
+        await flushSave();
+      }
+      return;
+    }
+
     const nextMarkdown = markdownRef.current;
     const nextTitle = titleRef.current.trim() || undefined;
     const nextTags = tagsRef.current;
@@ -291,99 +199,62 @@ export function useNoteEditSession({
       && nextStatus === serverStatusRef.current
     ) {
       dirtyRef.current = false;
-      const localSnapshot = readLocalNote(id);
-      if (isDraft && localSnapshot?.syncState === 'create_failed') {
-        const retrySnapshot = retryLocalDraftCreate(id);
-        if (retrySnapshot) {
-          setDraftNote(retrySnapshot);
-          setSaveState('pending');
-        }
-        return;
-      }
-      if (isDraft && localSnapshot?.syncState === 'creating') {
-        setSaveState('pending');
-        return;
-      }
-      if (localSnapshot?.syncState === 'failed') {
-        setSaveState('pending');
-        try {
-          await flushQueuedNoteOperations();
-          setSaveState(saveStateAfterFlush());
-        } catch {
-          setSaveState('failed');
-          setSnackMsg(messages.savedOffline);
-        }
-        return;
-      }
-      if (localSnapshot?.syncState === 'pending') {
-        setSaveState('pending');
-        try {
-          await flushQueuedNoteOperations();
-          setSaveState(saveStateAfterFlush());
-        } catch {
-          setSaveState('failed');
-          setSnackMsg(messages.savedOffline);
-        }
-        return;
-      }
       setSaveState('saved');
       return;
     }
 
+    const sentMarkdown = nextMarkdown;
+    const sentTitle = nextTitle;
+    const sentTags = nextTags;
+    const sentStatus = nextStatus;
+
     setSaveState('saving');
-    const snapshot = saveLocalMarkdownNoteEdit(note, {
-      markdown: nextMarkdown,
-      title: nextTitle,
-      tags: nextTags,
-      status: nextStatus,
-    });
-    serverMarkdownRef.current = nextMarkdown;
-    serverTitleRef.current = snapshot.title;
-    serverTagsRef.current = snapshot.tags;
-    serverStatusRef.current = snapshot.status;
-    dirtyRef.current = false;
-    const nextSaveState = isDraft && snapshot.syncState === 'create_failed' ? 'failed' : 'pending';
-    setSaveState(nextSaveState);
-    if (isDraft) {
-      setDraftNote(snapshot);
-      const promotionInput = {
-        markdown: nextMarkdown,
-        title: nextTitle,
-        tags: nextTags,
-        status: nextStatus,
-      };
-      if (
-        snapshot.syncState === 'creating'
-        && draftPromotionRef.current !== id
-        && hasDraftContent(snapshot, promotionInput)
-      ) {
-        draftPromotionRef.current = id;
-        try {
-          const remoteId = await promoteLocalDraftNote(id, promotionInput);
-          setSaveState('pending');
-          onDraftPromoted?.(remoteId);
-        } catch {
-          markLocalDraftCreateFailed(id);
-          setDraftNote(readLocalNote(id));
-          setSaveState('failed');
-          setSnackMsg(messages.savedOffline);
-          draftPromotionRef.current = null;
-        }
+    const savePromise = (async () => {
+      try {
+        const updated = await updateNote(id, {
+          markdown: sentMarkdown,
+          title: sentTitle ?? null,
+          tags: sentTags,
+          status: sentStatus,
+        });
+        queryClient.setQueryData(queryKeys.note(id), updated);
+        upsertNoteInListCaches(queryClient, noteToIndexEntry(updated));
+        void invalidateNoteLists(queryClient);
+
+        serverMarkdownRef.current = updated.markdown ?? sentMarkdown;
+        serverTitleRef.current = updated.title ?? undefined;
+        serverTagsRef.current = updated.tags;
+        serverStatusRef.current = updated.status;
+        attachmentDisplayVersionRef.current += 1;
+        setAttachmentDisplaySeed({
+          version: attachmentDisplayVersionRef.current,
+          noteId: updated.id,
+          markdown: updated.markdown ?? sentMarkdown,
+          attachments: updated.attachments,
+        });
+
+        const changedWhileSaving = markdownRef.current !== sentMarkdown
+          || (titleRef.current.trim() || undefined) !== sentTitle
+          || !tagsEqual(tagsRef.current, sentTags)
+          || statusRef.current !== sentStatus;
+        dirtyRef.current = changedWhileSaving;
+        setSaveState(changedWhileSaving ? 'dirty' : 'saved');
+        if (changedWhileSaving) saveAgainRef.current = true;
+      } catch {
+        setSaveState('failed');
+        setSnackMsg(messages.savedOffline);
       }
-    } else {
-      queryClient.setQueryData(queryKeys.note(id), snapshot);
-      upsertNoteInListCaches(queryClient, noteToIndexEntry(snapshot));
-      void invalidateNoteLists(queryClient);
+    })();
+
+    saveInFlightRef.current = savePromise;
+    await savePromise;
+    saveInFlightRef.current = null;
+
+    if (saveAgainRef.current) {
+      saveAgainRef.current = false;
+      await flushSave();
     }
-    if (isDraft) return;
-    try {
-      await flushQueuedNoteOperations();
-      setSaveState(saveStateAfterFlush());
-    } catch {
-      setSaveState('failed');
-      setSnackMsg(messages.savedOffline);
-    }
-  }, [flushQueuedNoteOperations, id, isDraft, messages.savedOffline, note, onDraftPromoted, queryClient, saveStateAfterFlush, setSnackMsg]);
+  }, [id, messages.savedOffline, note, queryClient, setSnackMsg]);
 
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -430,6 +301,7 @@ export function useNoteEditSession({
     tags,
     noteStatus,
     saveState,
+    editorReady,
     markdownRef,
     titleRef,
     flushSave,

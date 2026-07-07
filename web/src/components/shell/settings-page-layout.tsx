@@ -25,7 +25,7 @@ import type { StoredLanguage } from '@/lib/storage';
 import { resolveSettingsBackTarget } from '@/features/settings/settings-nav-state';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSettingsModeStore } from '@/stores/settings-mode-store';
-import { useSettingsRailStore } from '@/stores/settings-rail-store';
+import { clampSettingsRailWidthPx, useSettingsRailStore } from '@/stores/settings-rail-store';
 
 /** Aligned with `SidebarNav` secondary links (§4.3 — same rail rhythm as main app sidebar). */
 function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
@@ -132,21 +132,38 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.preventDefault();
       const el = e.currentTarget;
+      const railEl = el.parentElement;
       el.setPointerCapture(e.pointerId);
       setWidthResizing(true);
       const startX = e.clientX;
       const startW = useSettingsRailStore.getState().widthPx;
       const pid = e.pointerId;
+      let rafId = 0;
+      let nextWidth = startW;
+      let committedWidth = startW;
+      const applyWidth = () => {
+        rafId = 0;
+        committedWidth = nextWidth;
+        railEl?.style.setProperty('--settings-rail-px', `${committedWidth}px`);
+      };
       const onMove = (ev: PointerEvent) => {
-        setSettingsRailWidthPx(startW + (ev.clientX - startX));
+        nextWidth = clampSettingsRailWidthPx(startW + (ev.clientX - startX));
+        if (rafId === 0) {
+          rafId = window.requestAnimationFrame(applyWidth);
+        }
       };
       const onDone = () => {
+        if (rafId !== 0) {
+          window.cancelAnimationFrame(rafId);
+          applyWidth();
+        }
         try {
           el.releasePointerCapture(pid);
         } catch {
           /* ignore */
         }
         setWidthResizing(false);
+        setSettingsRailWidthPx(committedWidth);
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onDone);
         window.removeEventListener('pointercancel', onDone);

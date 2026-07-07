@@ -44,6 +44,7 @@ function buildDirectSessionMetadata(params: {
     sourceChannel: params.source,
     sourceChatId: [params.accountId, 'direct', params.peerId].join(':'),
     sessionType: 'chat',
+    hiddenFromSessionList: true,
     routing: {
       agentId: params.agentId,
       source: params.source,
@@ -51,7 +52,29 @@ function buildDirectSessionMetadata(params: {
       peerKind: 'direct',
       peerId: params.peerId,
     },
+    customData: {
+      genericNewChatShell: params.source === 'webchat' && params.peerId.startsWith('chat_'),
+    },
   };
+}
+
+function isGenericNewChatShell(session: {
+  messageCount?: number;
+  routing?: { agentId?: string; peerId?: string };
+  projectId?: string;
+  customData?: Record<string, unknown>;
+  parentSessionKey?: string;
+  workflowRunId?: string;
+  workflowDefinitionId?: string;
+}, agentId: string, projectId: string | undefined): boolean {
+  if (session.messageCount !== 0) return false;
+  if (session.routing?.agentId !== agentId) return false;
+  if (projectId ? session.projectId !== projectId : Boolean(session.projectId)) return false;
+  if (session.parentSessionKey || session.workflowRunId || session.workflowDefinitionId) return false;
+  if (session.customData?.genericNewChatShell === false) return false;
+  const sourceBinding = session.customData?.sourceBinding;
+  if (sourceBinding && typeof sourceBinding === 'object') return false;
+  return Boolean(session.routing?.peerId?.startsWith('chat_'));
 }
 
 export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -111,9 +134,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     
     // Reuse an empty session only when it matches the requested agent (session key embeds agent id).
     const emptySession = existingSessions.items.find((s) => {
-      if (s.messageCount !== 0) return false;
-      if (s.routing?.agentId !== agentId) return false;
-      return projectId ? s.projectId === projectId : !s.projectId;
+      return isGenericNewChatShell(s, agentId, projectId);
     });
     
     if (emptySession) {

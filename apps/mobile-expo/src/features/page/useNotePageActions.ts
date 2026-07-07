@@ -12,7 +12,6 @@ import { updateNote, type Note } from '../../query/notes';
 import { createSession } from '../../query/sessions';
 import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
 import { writeNoteChatPrefill } from '../chat/note-chat-prefill-storage';
-import { flushPendingNoteOperations } from '../notes/notes-local';
 import {
   buildNoteChatContextText,
   collectNoteAttachmentsForChat,
@@ -126,10 +125,9 @@ export function useNotePageActions({
     try {
       await flushEditorToDraft();
       await flushSave();
-      const flushed = await flushPendingNoteOperations();
       if (id) await queryClient.invalidateQueries({ queryKey: queryKeys.note(id) });
       await invalidateNoteLists(queryClient);
-      setSnackMsg(flushed > 0 ? messages.updated : messages.saved);
+      setSnackMsg(messages.saved);
     } catch (error) {
       setSnackMsg(error instanceof Error ? error.message : messages.actionFailed);
     }

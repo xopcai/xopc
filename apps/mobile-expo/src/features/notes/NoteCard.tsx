@@ -9,9 +9,8 @@ import { useMessages } from '../../i18n/messages';
 import type { NoteIndexEntry, NoteStatus } from '../../query/notes';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
-import { NOTE_KIND_ICONS, noteKindLabel } from './note-list-display';
+import { noteKindLabel } from './note-list-display';
 import { resolveNoteListPreview } from './note-title';
-import { readLocalNote } from './notes-local';
 
 function statusLabel(
   status: NoteStatus,
@@ -50,11 +49,9 @@ export function NoteCard({
   const m = useMessages();
   const pm = m.notesPage;
 
-  const iconName = NOTE_KIND_ICONS[note.kind] || 'lightbulb-outline';
-  const cachedNote = useMemo(() => readLocalNote(note.id), [note.id]);
   const preview = useMemo(
-    () => resolveNoteListPreview(note, { untitled: pm.untitledNote, cachedNote }),
-    [cachedNote, note, pm.untitledNote],
+    () => resolveNoteListPreview(note, { untitled: pm.untitledNote }),
+    [note, pm.untitledNote],
   );
 
   const displayTitle = useMemo(() => {
@@ -65,6 +62,8 @@ export function NoteCard({
   const kindLabel = noteKindLabel(note.kind, pm);
   const statusText = statusLabel(note.status, pm);
   const taskStateText = note.taskDone ? pm.done : pm.kindTodo;
+  const visibleTags = note.tags?.slice(0, 2) ?? [];
+  const hiddenTagCount = Math.max(0, (note.tags?.length ?? 0) - visibleTags.length);
   const updatedAt = note.updatedAt ?? note.createdAt;
   const time = new Date(updatedAt).toLocaleString(undefined, {
     month: 'short',
@@ -110,30 +109,18 @@ export function NoteCard({
       <View style={styles.topRow}>
         {selectionMode ? (
           <ListSelectionCheckbox selected={selected} size={28} />
-        ) : (
-          <View
-            style={[
-              styles.kindBadge,
-              {
-                backgroundColor: selected ? colors.surface.panel : colors.accent.soft,
-                borderColor: selected ? colors.accent.primary : colors.border.subtle,
-              },
-            ]}
-          >
-            <Icon source={iconName} size={16} color={colors.accent.primary} />
-          </View>
-        )}
+        ) : null}
         <View style={styles.copy}>
           <Text
             style={[styles.title, { color: colors.text.primary }]}
-            numberOfLines={2}
+            numberOfLines={1}
           >
             {displayTitle}
           </Text>
           {!!preview.subtitle && (
             <Text
               style={[styles.subtitle, { color: colors.text.secondary }]}
-              numberOfLines={2}
+              numberOfLines={1}
             >
               {preview.subtitle}
             </Text>
@@ -203,7 +190,7 @@ export function NoteCard({
             <Icon source="pin" size={11} color={colors.accent.primary} />
           </View>
         )}
-        {note.tags?.map((tag) => (
+        {visibleTags.map((tag) => (
           <View
             key={tag}
             style={[
@@ -217,6 +204,9 @@ export function NoteCard({
             <Text style={[styles.chipText, { color: colors.text.secondary }]}>{tag}</Text>
           </View>
         ))}
+        {hiddenTagCount > 0 ? (
+          <Text style={[styles.time, { color: colors.text.tertiary }]}>+{hiddenTagCount}</Text>
+        ) : null}
         <Text style={[styles.time, { color: colors.text.tertiary }]}>{time}</Text>
       </View>
     </Pressable>
@@ -236,16 +226,18 @@ export function NoteCard({
 const styles = StyleSheet.create({
   card: {
     width: '100%',
-    borderRadius: radii.xl,
+    borderRadius: radii.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    padding: spacing.md,
-    gap: spacing.sm,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 84,
+    gap: 8,
   },
   cardRaisedNative: {
     shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 1,
   },
   cardRaisedWeb: {
@@ -261,44 +253,37 @@ const styles = StyleSheet.create({
   },
   topRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
-  kindBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: radii.md,
-    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: spacing.sm,
   },
   copy: {
     flex: 1,
-    gap: spacing.xs,
+    gap: 2,
     minWidth: 0,
   },
   title: {
-    ...typography.body,
-    fontWeight: '600',
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '700',
   },
   subtitle: {
-    ...typography.label,
+    fontSize: 13,
+    lineHeight: 18,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: spacing.xs,
-    paddingLeft: 44,
+    gap: 4,
   },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 3,
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     borderRadius: radii.full,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 0,
   },
   pinChip: {
     paddingHorizontal: 7,

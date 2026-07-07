@@ -1,7 +1,6 @@
 import type { ComposerAttachment } from '../chat/composer.types';
 import { capAttachments, MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../chat/chat-limits';
 import type { NoteAttachment } from '../../query/notes';
-import { composerAttachmentFromLocalNoteAttachmentRef } from './notes-local-attachments';
 
 export type NoteEditorAttachment = ComposerAttachment;
 
@@ -92,7 +91,7 @@ function collectMarkdownAttachmentLinks(markdown: string): MarkdownLinkRef[] {
   while ((match = linkPattern.exec(markdown)) != null) {
     if (match.index > 0 && markdown[match.index - 1] === '!') continue;
     const src = match[2]?.trim() ?? '';
-    if (!src.startsWith('xopc-local-attachment://') && !src.startsWith('xopc-attachment://')) continue;
+    if (!src.startsWith('xopc-attachment://')) continue;
     refs.push({ label: match[1]?.trim() || undefined, src });
   }
   return refs;
@@ -137,9 +136,6 @@ async function attachmentFromImageRef(
   image: MarkdownImageRef,
   syncedAttachments?: NoteAttachment[],
 ): Promise<ComposerAttachment | null> {
-  const localAttachment = composerAttachmentFromLocalNoteAttachmentRef(image.src, image.alt);
-  if (localAttachment) return localAttachment;
-
   const attachmentId = attachmentIdFromMarkdownSrc(image.src);
   if (!attachmentId) return null;
   const synced = syncedAttachments?.find((item) => item.id === attachmentId);
@@ -162,9 +158,6 @@ function attachmentFromLinkRef(
   link: MarkdownLinkRef,
   syncedAttachments?: NoteAttachment[],
 ): ComposerAttachment | null {
-  const localAttachment = composerAttachmentFromLocalNoteAttachmentRef(link.src, link.label);
-  if (localAttachment) return localAttachment;
-
   const attachmentId = attachmentIdFromMarkdownSrc(link.src);
   if (!attachmentId) return null;
   const synced = syncedAttachments?.find((item) => item.id === attachmentId);

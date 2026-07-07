@@ -271,6 +271,15 @@ html.dark .markdown-code-copy-btn:hover {
   margin: 0 0 0.75em;
 }
 
+.markdown-body.markdown-note {
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+
+.markdown-body.markdown-note p {
+  margin-bottom: 0.65em;
+}
+
 .markdown-body strong {
   font-weight: 600;
 }
@@ -341,7 +350,7 @@ html.dark .markdown-code-copy-btn:hover {
 }
 
 html.dark .markdown-mermaid {
-  background: #0d1117;
+  background: var(--color-surface-panel);
 }
 
 /* GitHub Dark hljs when app shell is dark (`html.dark`), scoped to markdown preview */
@@ -357,7 +366,7 @@ html.dark .markdown-body code.hljs {
 
 html.dark .markdown-body .hljs {
   color: #c9d1d9;
-  background: #0d1117;
+  background: var(--color-surface-panel);
 }
 
 html.dark .markdown-body .hljs-doctag,

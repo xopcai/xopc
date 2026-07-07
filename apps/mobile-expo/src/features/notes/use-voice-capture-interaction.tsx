@@ -62,6 +62,7 @@ export function useVoiceCaptureInteraction({
 }): {
   feedback: ReactNode;
   panHandlers: ReturnType<typeof PanResponder.create>['panHandlers'];
+  onPress: () => void;
   active: boolean;
   transcribing: boolean;
 } {
@@ -82,6 +83,7 @@ export function useVoiceCaptureInteraction({
   const grantInFlightRef = useRef(false);
   const interactionStartedRef = useRef(false);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const justFinalizedAtRef = useRef(0);
   const valueRef = useRef(value);
   valueRef.current = value;
 
@@ -104,6 +106,7 @@ export function useVoiceCaptureInteraction({
     const shouldDiscard = cancelZoneRef.current;
     const releaseZone = releaseZoneRef.current;
 
+    justFinalizedAtRef.current = Date.now();
     resetInteractionState();
 
     if (!rec) return;
@@ -216,6 +219,26 @@ export function useVoiceCaptureInteraction({
 
   const canCaptureVoice = enabled && !disabled && !submitting && !transcribing;
 
+  const handlePress = useCallback(() => {
+    if (Date.now() - justFinalizedAtRef.current < 250) return;
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    if (readyRef.current && recordingRef.current) {
+      cancelZoneRef.current = false;
+      releaseZoneRef.current = 'center';
+      void finalizeRecordingInteraction();
+      return;
+    }
+    if (interactionStartedRef.current || grantInFlightRef.current || starting) return;
+    if (!canCaptureVoice) {
+      onTap?.();
+      return;
+    }
+    startGrantFlow();
+  }, [canCaptureVoice, finalizeRecordingInteraction, onTap, starting, startGrantFlow]);
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -302,6 +325,7 @@ export function useVoiceCaptureInteraction({
       </>
     ),
     panHandlers: panResponder.panHandlers,
+    onPress: handlePress,
     active: starting || hudOpen || transcribing,
     transcribing,
   };

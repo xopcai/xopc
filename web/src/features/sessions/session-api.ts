@@ -16,6 +16,8 @@ function buildListQuery(query?: SessionListQuery): string {
   if (query.status) params.set('status', query.status);
   if (query.search) params.set('search', query.search);
   if (query.channel) params.set('channel', query.channel);
+  if (query.projectId) params.set('projectId', query.projectId);
+  if (query.sessionTypes?.length) params.set('types', query.sessionTypes.join(','));
   if (query.limit != null) params.set('limit', String(query.limit));
   if (query.offset != null) params.set('offset', String(query.offset));
   const qs = params.toString();
@@ -28,6 +30,8 @@ function listSessionsDedupeKey(query?: SessionListQuery): string {
     status: query.status,
     search: query.search,
     channel: query.channel,
+    projectId: query.projectId,
+    sessionTypes: query.sessionTypes,
     limit: query.limit,
     offset: query.offset,
   });

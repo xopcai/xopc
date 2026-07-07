@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import { Activity, AlertCircle, ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, File, Folder, LayoutDashboard, MessageSquarePlus, Pause, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, Zap, type LucideIcon } from 'lucide-react';
-import { type FormEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { type FormEvent, type MouseEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -507,6 +507,8 @@ export function ProjectDetailPage() {
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deletingProject, setDeletingProject] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
   const [workflowsLoading, setWorkflowsLoading] = useState(false);
   const [startingWorkflow, setStartingWorkflow] = useState(false);
@@ -540,6 +542,35 @@ export function ProjectDetailPage() {
     if (!projectId) return;
     navigate(`/projects/${encodeURIComponent(projectId)}/${nextTab}`);
   }, [navigate, projectId]);
+
+  const projectTabHref = useCallback((nextTab: TabId) => {
+    if (!projectId) return '/projects';
+    return `/projects/${encodeURIComponent(projectId)}/${nextTab}`;
+  }, [projectId]);
+
+  const replaceProjectHistoryTab = useCallback((nextTab: TabId) => {
+    if (!projectId) return;
+    navigate(projectTabHref(nextTab), { replace: true });
+  }, [navigate, projectId, projectTabHref]);
+
+  const navigateFromProjectTab = useCallback((nextTab: TabId, target: string) => {
+    replaceProjectHistoryTab(nextTab);
+    navigate(target);
+  }, [navigate, replaceProjectHistoryTab]);
+
+  const onProjectTabLinkClick = useCallback((nextTab: TabId) => (event: MouseEvent<HTMLAnchorElement>) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
+    replaceProjectHistoryTab(nextTab);
+  }, [replaceProjectHistoryTab]);
+
+  const projectTabForHref = useCallback((href: string): TabId => {
+    if (href.startsWith('/goals/')) return 'goals';
+    if (href.startsWith('/chat/')) return 'sessions';
+    if (href.startsWith('/workflows')) return 'workflows';
+    if (href.startsWith('/automations')) return 'automations';
+    if (href.startsWith('/notes')) return 'notes';
+    return tab;
+  }, [tab]);
 
   useEffect(() => {
     if (!projectId || !tabId || isProjectTabId(tabId)) return;
@@ -763,13 +794,13 @@ export function ProjectDetailPage() {
     setError(null);
     try {
       const session = await createProjectSession(project.id, selectedAgentId || undefined);
-      navigate(`/chat/${encodeURIComponent(session.key)}`);
+      navigateFromProjectTab('sessions', `/chat/${encodeURIComponent(session.key)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setStartingChat(false);
     }
-  }, [navigate, project, selectedAgentId]);
+  }, [navigateFromProjectTab, project, selectedAgentId]);
 
   const refreshProjectGoals = useCallback(async () => {
     if (!project) return;
@@ -848,13 +879,13 @@ export function ProjectDetailPage() {
       });
       setWorkflowStartDefinition(null);
       await refreshProjectWorkflows();
-      navigate(workflowBoardHref(result.runId));
+      navigateFromProjectTab('workflows', workflowBoardHref(result.runId));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setStartingWorkflow(false);
     }
-  }, [navigate, project, refreshProjectWorkflows, selectedAgentId, workflowStartDefinition]);
+  }, [navigateFromProjectTab, project, refreshProjectWorkflows, selectedAgentId, workflowStartDefinition]);
 
   const retryRun = useCallback(async (run: WorkflowRunSummary) => {
     if (!project) return;
@@ -866,13 +897,13 @@ export function ProjectDetailPage() {
         projectId: run.metadata?.projectId || project.id,
       });
       await refreshProjectWorkflows();
-      navigate(workflowBoardHref(result.runId));
+      navigateFromProjectTab('workflows', workflowBoardHref(result.runId));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setWorkflowActionBusy(null);
     }
-  }, [navigate, project, refreshProjectWorkflows, selectedAgentId]);
+  }, [navigateFromProjectTab, project, refreshProjectWorkflows, selectedAgentId]);
 
   const cancelRun = useCallback(async (run: WorkflowRunSummary) => {
     setWorkflowActionBusy(`cancel:${run.id}`);
@@ -966,14 +997,16 @@ export function ProjectDetailPage() {
 
   async function removeProject() {
     if (!project) return;
-    const ok = window.confirm(interpolate(pm.settings.deleteConfirm, { name: project.name }));
-    if (!ok) return;
+    setDeletingProject(true);
     setError(null);
     try {
       await deleteProject(project.id);
+      setDeleteConfirmOpen(false);
       navigate('/projects');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setDeletingProject(false);
     }
   }
 
@@ -1117,6 +1150,7 @@ export function ProjectDetailPage() {
                     <Link
                       key={item.goalId}
                       to={`/goals/${encodeURIComponent(item.goalId)}`}
+                      onClick={onProjectTabLinkClick('goals')}
                       className="block px-4 py-3 hover:bg-surface-hover"
                     >
                       <div className="flex min-w-0 items-center justify-between gap-3">
@@ -1142,7 +1176,7 @@ export function ProjectDetailPage() {
                 </div>
                 <div className="divide-y divide-edge">
                   {overview?.activeGoals.length ? overview.activeGoals.map((goal) => (
-                    <Link key={goal.id} to={`/goals/${encodeURIComponent(goal.id)}`} className="block px-4 py-3 hover:bg-surface-hover">
+                    <Link key={goal.id} to={`/goals/${encodeURIComponent(goal.id)}`} onClick={onProjectTabLinkClick('goals')} className="block px-4 py-3 hover:bg-surface-hover">
                       <div className="flex min-w-0 items-center justify-between gap-3">
                         <span className="min-w-0 truncate text-sm font-medium text-fg">{goal.title}</span>
                         <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(goal.status))}>{statusLabel(goal.status)}</span>
@@ -1164,7 +1198,7 @@ export function ProjectDetailPage() {
                 </div>
                 <div className="divide-y divide-edge">
                   {overviewSessions.length ? overviewSessions.map((session) => (
-                    <Link key={session.key} to={`/chat/${encodeURIComponent(session.key)}`} className="block px-4 py-3 hover:bg-surface-hover">
+                    <Link key={session.key} to={`/chat/${encodeURIComponent(session.key)}`} onClick={onProjectTabLinkClick('sessions')} className="block px-4 py-3 hover:bg-surface-hover">
                       <div className="flex min-w-0 items-center justify-between gap-3">
                         <span className="min-w-0 truncate text-sm font-medium text-fg">{session.name || session.key}</span>
                         <span className="shrink-0 text-xs text-fg-subtle">{formatDate(session.updatedAt)}</span>
@@ -1218,7 +1252,7 @@ export function ProjectDetailPage() {
                     </>
                   );
                   return item.href ? (
-                    <Link key={item.id} to={item.href} className="block px-4 py-3 hover:bg-surface-hover">
+                    <Link key={item.id} to={item.href} onClick={onProjectTabLinkClick(projectTabForHref(item.href))} className="block px-4 py-3 hover:bg-surface-hover">
                       {content}
                     </Link>
                   ) : (
@@ -1259,7 +1293,7 @@ export function ProjectDetailPage() {
                       </>
                     );
                     return item.href ? (
-                      <Link key={item.id} to={item.href} className="min-w-0 rounded-md border border-edge bg-surface-base p-3 hover:bg-surface-hover">
+                      <Link key={item.id} to={item.href} onClick={onProjectTabLinkClick(projectTabForHref(item.href))} className="min-w-0 rounded-md border border-edge bg-surface-base p-3 hover:bg-surface-hover">
                         {content}
                       </Link>
                     ) : (
@@ -1321,7 +1355,7 @@ export function ProjectDetailPage() {
                         <button
                           type="button"
                           className="min-w-0 truncate text-left text-sm font-medium text-fg hover:text-accent-fg"
-                          onClick={() => navigate(workflowBoardHref(run.id))}
+                          onClick={() => navigateFromProjectTab('workflows', workflowBoardHref(run.id))}
                         >
                           {run.title || run.definitionId}
                         </button>
@@ -1343,7 +1377,7 @@ export function ProjectDetailPage() {
                             type="button"
                             variant="ghost"
                             className="h-8 rounded-lg px-2 py-1 text-xs"
-                            onClick={() => navigate(workflowBoardHref(run.id))}
+                            onClick={() => navigateFromProjectTab('workflows', workflowBoardHref(run.id))}
                           >
                             {pm.common.open}
                           </Button>
@@ -1430,7 +1464,7 @@ export function ProjectDetailPage() {
                   <RotateCcw className="size-4" aria-hidden />
                   {pm.common.refresh}
                 </Button>
-                <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => navigate(`/automations?projectId=${encodeURIComponent(project.id)}&action=create`)}>
+                <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => navigateFromProjectTab('automations', `/automations?projectId=${encodeURIComponent(project.id)}&action=create`)}>
                   <Plus className="size-4" aria-hidden />
                   {pm.common.new}
                 </Button>
@@ -1448,7 +1482,7 @@ export function ProjectDetailPage() {
                       <button
                         type="button"
                         className="min-w-0 truncate text-left text-sm font-medium text-fg hover:text-accent-fg"
-                        onClick={() => navigate(`/automations?automation=${encodeURIComponent(automation.id)}`)}
+                        onClick={() => navigateFromProjectTab('automations', `/automations?automation=${encodeURIComponent(automation.id)}`)}
                       >
                         {automation.name}
                       </button>
@@ -1494,7 +1528,7 @@ export function ProjectDetailPage() {
                 <div className="grid gap-3 px-4 py-6 text-sm text-fg-muted">
                   <p>{pm.automations.empty}</p>
                   <div>
-                    <Button type="button" variant="secondary" className="rounded-lg" onClick={() => navigate(`/automations?projectId=${encodeURIComponent(project.id)}&action=create`)}>
+                    <Button type="button" variant="secondary" className="rounded-lg" onClick={() => navigateFromProjectTab('automations', `/automations?projectId=${encodeURIComponent(project.id)}&action=create`)}>
                       <Zap className="size-4" aria-hidden />
                       {pm.automations.create}
                     </Button>
@@ -1692,6 +1726,7 @@ export function ProjectDetailPage() {
                 >
                   <Link
                     to={`/chat/${encodeURIComponent(session.key)}`}
+                    onClick={onProjectTabLinkClick('sessions')}
                     className="min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 sm:col-span-2"
                   >
                     <div className="flex min-w-0 items-center justify-between gap-3">
@@ -1736,6 +1771,7 @@ export function ProjectDetailPage() {
               <Link
                 key={goal.id}
                 to={`/goals/${encodeURIComponent(goal.id)}`}
+                onClick={onProjectTabLinkClick('goals')}
                 className="grid gap-1 border-b border-edge px-4 py-3 last:border-b-0 hover:bg-surface-hover"
               >
                 <div className="flex items-center justify-between gap-3">
@@ -1795,7 +1831,7 @@ export function ProjectDetailPage() {
             <textarea className={inputClass(true)} value={draft.instructions} onChange={(event) => setDraft((d) => ({ ...d, instructions: event.target.value }))} />
           </Field>
           <div className="flex flex-wrap justify-between gap-2 border-t border-edge pt-4">
-            <Button type="button" variant="ghost" onClick={() => void removeProject()}>
+            <Button type="button" variant="ghost" onClick={() => setDeleteConfirmOpen(true)}>
               <Trash2 className="size-4" aria-hidden />
               {pm.common.delete}
             </Button>
@@ -1807,6 +1843,49 @@ export function ProjectDetailPage() {
         </form>
       ) : null}
       </div>
+
+      <Dialog.Root
+        open={deleteConfirmOpen}
+        onOpenChange={(open) => {
+          if (!deletingProject) setDeleteConfirmOpen(open);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] w-[min(28rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-5 shadow-float focus:outline-none">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600 dark:text-red-400">
+                <AlertCircle className="size-5" strokeWidth={1.75} aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <Dialog.Title className="text-base font-semibold text-fg">
+                  {pm.settings.deleteConfirmTitle}
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
+                  {project ? interpolate(pm.settings.deleteConfirm, { name: project.name }) : pm.settings.deleteConfirmFallback}
+                </Dialog.Description>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Dialog.Close asChild>
+                <Button type="button" variant="ghost" className="rounded-lg" disabled={deletingProject}>
+                  {pm.common.cancel}
+                </Button>
+              </Dialog.Close>
+              <Button
+                type="button"
+                variant="ghost"
+                className="rounded-lg text-red-600 hover:bg-red-500/10 hover:text-red-700 focus-visible:ring-red-500 dark:text-red-400 dark:hover:text-red-300"
+                disabled={deletingProject || !project}
+                onClick={() => void removeProject()}
+              >
+                <Trash2 className="size-4" aria-hidden />
+                {pm.settings.deleteConfirmAction}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       <GoalCreateDialog
         open={createGoalOpen}

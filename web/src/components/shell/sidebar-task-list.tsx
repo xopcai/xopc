@@ -1,14 +1,17 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import {
-  CheckSquare,
+  ChevronDown,
   ClipboardCopy,
+  ExternalLink,
+  FolderKanban,
   Loader2,
-  MessageCircle,
+  MessageSquareText,
   MoreHorizontal,
   Pencil,
   Pin,
   PinOff,
+  Plus,
   Trash2,
 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
@@ -18,10 +21,9 @@ import useSWRInfinite from 'swr/infinite';
 
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { Button } from '@/components/ui/button';
-import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
-import { WEB_UI_SESSION_SOURCE_CHANNELS } from '@/features/chat/session/session-manager';
 import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
+import { createProjectSession, fetchProjects, type Project } from '@/features/projects/api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import {
@@ -42,42 +44,18 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const PAGE_SIZE = 20;
+const PROJECT_LIMIT = 12;
+const PROJECT_PREVIEW_LIMIT = 5;
 
-type SessionSidebarFilter = 'web' | 'channels';
+type ProjectSidebarGroup = {
+  project: Project;
+  sessions: SessionMetadata[];
+  latestAt: number;
+};
 
 type SidebarTaskPage = {
   items: SessionMetadata[];
   hasMore: boolean;
-};
-
-type TimelineGroup = 'pinned' | 'today' | 'yesterday' | 'last7days' | 'thisMonth' | 'older';
-
-const TIMELINE_GROUP_ORDER: TimelineGroup[] = ['pinned', 'today', 'yesterday', 'last7days', 'thisMonth', 'older'];
-
-function getTimelineGroup(session: SessionMetadata): TimelineGroup {
-  if (session.status === 'pinned') return 'pinned';
-  const updated = new Date(session.updatedAt);
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const startOfYesterday = new Date(startOfToday.getTime() - 86400000);
-  const startOf7DaysAgo = new Date(startOfToday.getTime() - 6 * 86400000);
-
-  if (updated >= startOfToday) return 'today';
-  if (updated >= startOfYesterday) return 'yesterday';
-  if (updated >= startOf7DaysAgo) return 'last7days';
-  if (updated.getMonth() === now.getMonth() && updated.getFullYear() === now.getFullYear()) return 'thisMonth';
-  return 'older';
-}
-
-type TimelineGroupLabelKey = 'timelinePinned' | 'timelineToday' | 'timelineYesterday' | 'timelineLast7Days' | 'timelineThisMonth' | 'timelineOlder';
-
-const TIMELINE_LABEL_KEY: Record<TimelineGroup, TimelineGroupLabelKey> = {
-  pinned: 'timelinePinned',
-  today: 'timelineToday',
-  yesterday: 'timelineYesterday',
-  last7days: 'timelineLast7Days',
-  thisMonth: 'timelineThisMonth',
-  older: 'timelineOlder',
 };
 
 function sessionTitle(s: SessionMetadata, unnamedLabel: string): string {
@@ -95,6 +73,44 @@ function chatSessionKeyFromPath(pathname: string): string | undefined {
 
 function interpolate(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
+}
+
+function timeAgoLabel(value: string | undefined, language: string): string {
+  if (!value) return '';
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return '';
+  const diffMs = Date.now() - timestamp;
+  const minute = 60_000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diffMs < hour) {
+    const n = Math.max(1, Math.floor(diffMs / minute));
+    return language === 'zh' ? `${n} 分` : `${n}m`;
+  }
+  if (diffMs < day) {
+    const n = Math.max(1, Math.floor(diffMs / hour));
+    return language === 'zh' ? `${n} 小时` : `${n}h`;
+  }
+  if (diffMs < 7 * day) {
+    const n = Math.max(1, Math.floor(diffMs / day));
+    return language === 'zh' ? `${n} 天` : `${n}d`;
+  }
+  const n = Math.max(1, Math.floor(diffMs / (7 * day)));
+  return language === 'zh' ? `${n} 周` : `${n}w`;
+}
+
+function sessionUpdatedAtMs(session: SessionMetadata): number {
+  const timestamp = new Date(session.updatedAt).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function projectUpdatedAtMs(project: Project): number {
+  const timestamp = new Date(project.lastActiveAt ?? project.updatedAt).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function isWebSession(session: SessionMetadata): boolean {
+  return session.sourceChannel === 'webchat' || session.sourceChannel === 'web';
 }
 
 function rowShellClass(isActive: boolean): string {
@@ -120,6 +136,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   defaultUnnamedTitle,
   sessionAgentId,
   sessionAgentAvatar,
+  timeLabel,
 }: {
   session: SessionMetadata;
   isActive: boolean;
@@ -135,6 +152,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   defaultUnnamedTitle: string;
   sessionAgentId: string;
   sessionAgentAvatar?: string;
+  timeLabel?: string;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const agentRunActive = useSidebarSessionAgentRun(session.key);
@@ -208,11 +226,22 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
             >
               <SessionChannelIcon sourceChannel={session.sourceChannel} className="size-3.5" />
             </span>
-            <span className="min-w-0 flex-1 truncate">{title}</span>
+            <span className="min-w-0 max-w-[8.5rem] truncate">{title}</span>
           </>
         ) : (
-          <span className="min-w-0 flex-1 truncate">{title}</span>
+          <span className="min-w-0 max-w-[10rem] truncate">{title}</span>
         )}
+        {timeLabel ? (
+          <span
+            className={cn(
+              'ml-auto shrink-0 tabular-nums',
+              isActive ? 'text-fg-muted' : 'text-fg-subtle',
+            )}
+            aria-hidden
+          >
+            {timeLabel}
+          </span>
+        ) : null}
       </Link>
       <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
         <Popover.Trigger asChild>
@@ -290,6 +319,244 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   );
 });
 
+function SidebarProjectSection({
+  group,
+  isExpanded,
+  isCollapsed,
+  activeSessionKey,
+  onToggleCollapsed,
+  onToggleExpanded,
+  onCreateProjectChat,
+  onNavigate,
+  mutate,
+  onRequestRename,
+  onRequestDelete,
+  sb,
+  sess,
+  clipboard,
+  defaultUnnamedTitle,
+  defaultAgentId,
+  agentItems,
+  language,
+}: {
+  group: ProjectSidebarGroup;
+  isExpanded: boolean;
+  isCollapsed: boolean;
+  activeSessionKey?: string;
+  onToggleCollapsed: (projectId: string) => void;
+  onToggleExpanded: (projectId: string) => void;
+  onCreateProjectChat: (project: Project) => void;
+  onNavigate?: () => void;
+  mutate: () => void;
+  onRequestRename: (key: string) => void;
+  onRequestDelete: (key: string) => void;
+  sb: ReturnType<typeof messages>['sidebar'];
+  sess: ReturnType<typeof messages>['sessions'];
+  clipboard: ReturnType<typeof messages>['clipboard'];
+  defaultUnnamedTitle: string;
+  defaultAgentId: string;
+  agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
+  language: string;
+}) {
+  const visibleSessions = isCollapsed
+    ? []
+    : isExpanded
+    ? group.sessions
+    : group.sessions.slice(0, PROJECT_PREVIEW_LIMIT);
+  const canToggleSessionLimit = group.sessions.length > PROJECT_PREVIEW_LIMIT;
+  const hasActiveSession = group.sessions.some((session) => session.key === activeSessionKey);
+
+  return (
+    <section className="flex flex-col gap-0.5" aria-label={group.project.name}>
+      <div
+        className={cn(
+          'group flex min-w-0 items-center gap-2 rounded-xl px-2 text-sm font-medium leading-5',
+          hasActiveSession ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted',
+        )}
+      >
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+          onClick={() => onToggleCollapsed(group.project.id)}
+          title={group.project.name}
+          aria-expanded={!isCollapsed}
+        >
+          <FolderKanban className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
+          <span className="min-w-0 max-w-[9rem] truncate">{group.project.name}</span>
+          <ChevronDown
+            className={cn(
+              'size-3.5 shrink-0 text-fg-subtle transition-transform duration-150 ease-out',
+              isCollapsed && '-rotate-90',
+            )}
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        </button>
+        <Link
+          to={`/projects/${encodeURIComponent(group.project.id)}`}
+          className={cn(
+            'flex size-7 shrink-0 items-center justify-center rounded-lg text-fg-subtle transition-opacity hover:bg-surface-hover hover:text-fg-muted',
+            'opacity-0 group-hover:opacity-100 focus:opacity-100',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+          )}
+          onClick={() => onNavigate?.()}
+          title={sb.projectOpen}
+          aria-label={sb.projectOpen}
+        >
+          <ExternalLink className="size-3.5" strokeWidth={1.75} aria-hidden />
+        </Link>
+        <button
+          type="button"
+          className={cn(
+            'flex size-7 shrink-0 items-center justify-center rounded-lg text-fg-subtle transition-opacity hover:bg-surface-hover hover:text-fg-muted',
+            'opacity-0 group-hover:opacity-100 focus:opacity-100',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+          )}
+          onClick={() => onCreateProjectChat(group.project)}
+          title={sb.projectNewChat}
+          aria-label={sb.projectNewChat}
+        >
+          <Plus className="size-3.5" strokeWidth={1.75} aria-hidden />
+        </button>
+      </div>
+
+      <div className={cn('ml-6 flex flex-col gap-0.5', isCollapsed && 'hidden')}>
+        {visibleSessions.map((session) => {
+          const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
+          return (
+            <SidebarTaskRow
+              key={session.key}
+              session={session}
+              isActive={activeSessionKey === session.key}
+              showSourceChannelIcon={!isWebSession(session)}
+              onNavigate={onNavigate}
+              mutate={mutate}
+              onRequestRename={onRequestRename}
+              onRequestDelete={onRequestDelete}
+              sb={sb}
+              sess={sess}
+              clipboard={clipboard}
+              defaultUnnamedTitle={defaultUnnamedTitle}
+              sessionAgentId={sessionAgentId}
+              sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
+              timeLabel={timeAgoLabel(session.updatedAt, language)}
+            />
+          );
+        })}
+        {canToggleSessionLimit ? (
+          <button
+            type="button"
+            className="ml-1 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+            onClick={() => onToggleExpanded(group.project.id)}
+          >
+            <ChevronDown
+              className={cn(
+                'size-3.5 transition-transform duration-150 ease-out',
+                isExpanded && 'rotate-180',
+              )}
+              strokeWidth={1.75}
+              aria-hidden
+            />
+            {isExpanded ? sb.projectShowLess : sb.projectShowMore}
+          </button>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
+function SidebarInboxSection({
+  sessions,
+  isCollapsed,
+  onToggleCollapsed,
+  activeSessionKey,
+  onNavigate,
+  mutate,
+  onRequestRename,
+  onRequestDelete,
+  sb,
+  sess,
+  clipboard,
+  defaultUnnamedTitle,
+  defaultAgentId,
+  agentItems,
+  language,
+}: {
+  sessions: SessionMetadata[];
+  isCollapsed: boolean;
+  onToggleCollapsed: () => void;
+  activeSessionKey?: string;
+  onNavigate?: () => void;
+  mutate: () => void;
+  onRequestRename: (key: string) => void;
+  onRequestDelete: (key: string) => void;
+  sb: ReturnType<typeof messages>['sidebar'];
+  sess: ReturnType<typeof messages>['sessions'];
+  clipboard: ReturnType<typeof messages>['clipboard'];
+  defaultUnnamedTitle: string;
+  defaultAgentId: string;
+  agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
+  language: string;
+}) {
+  if (sessions.length === 0) return null;
+
+  const hasActiveSession = sessions.some((session) => session.key === activeSessionKey);
+
+  return (
+    <section className="flex flex-col gap-0.5" aria-label={sb.inboxHeading}>
+      <div
+        className={cn(
+          'group flex min-w-0 items-center gap-2 rounded-xl px-2 text-sm font-medium leading-5',
+          hasActiveSession ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted',
+        )}
+      >
+        <button
+          type="button"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+          onClick={onToggleCollapsed}
+          title={sb.inboxHeading}
+          aria-expanded={!isCollapsed}
+        >
+          <MessageSquareText className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
+          <span className="min-w-0 max-w-[9rem] truncate">{sb.inboxHeading}</span>
+          <ChevronDown
+            className={cn(
+              'size-3.5 shrink-0 text-fg-subtle transition-transform duration-150 ease-out',
+              isCollapsed && '-rotate-90',
+            )}
+            strokeWidth={1.75}
+            aria-hidden
+          />
+        </button>
+      </div>
+      <div className={cn('ml-6 flex flex-col gap-0.5', isCollapsed && 'hidden')}>
+        {sessions.map((session) => {
+          const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
+          return (
+            <SidebarTaskRow
+              key={session.key}
+              session={session}
+              isActive={activeSessionKey === session.key}
+              showSourceChannelIcon={!isWebSession(session)}
+              onNavigate={onNavigate}
+              mutate={mutate}
+              onRequestRename={onRequestRename}
+              onRequestDelete={onRequestDelete}
+              sb={sb}
+              sess={sess}
+              clipboard={clipboard}
+              defaultUnnamedTitle={defaultUnnamedTitle}
+              sessionAgentId={sessionAgentId}
+              sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
+              timeLabel={timeAgoLabel(session.updatedAt, language)}
+            />
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -318,35 +585,34 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const [renameDraft, setRenameDraft] = useState('');
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
   const lastActiveSessionKeyRef = useRef<string | null>(null);
-  const [sessionFilter, setSessionFilter] = useState<SessionSidebarFilter>('web');
+  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
+  const [inboxCollapsed, setInboxCollapsed] = useState(false);
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
+
+  const { data: projectsData, mutate: mutateProjects } = useSWR(
+    token ? (['sidebar-projects', token] as const) : null,
+    () => fetchProjects({
+      status: 'active',
+      sortBy: 'updatedAt',
+      sortOrder: 'desc',
+      limit: PROJECT_LIMIT,
+    }),
+    { revalidateOnFocus: false },
+  );
 
   const { data, size, setSize, isValidating, mutate } = useSWRInfinite<SidebarTaskPage>(
     (pageIndex, previousPageData) => {
       if (!token) return null;
       if (previousPageData && !previousPageData.hasMore) return null;
-      return ['sidebar-tasks', token, sessionFilter, pageIndex] as const;
+      return ['sidebar-tasks', token, pageIndex] as const;
     },
-    async ([, , filter, pageIndex]: readonly [
+    async ([, , pageIndex]: readonly [
       'sidebar-tasks',
       string,
-      SessionSidebarFilter,
       number,
     ]) => {
       const offset = pageIndex * PAGE_SIZE;
-      if (filter === 'web') {
-        const result = await listSessions({
-          channel: WEB_UI_SESSION_SOURCE_CHANNELS,
-          limit: PAGE_SIZE,
-          offset,
-        });
-        return {
-          items: result.items,
-          hasMore: result.hasMore,
-        };
-      }
       const result = await listSessions({
-        // IM channel sessions: include Feishu/Lark alongside Telegram/WeChat.
-        channel: 'telegram,weixin,feishu,lark',
         limit: PAGE_SIZE,
         offset,
       });
@@ -357,10 +623,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     },
     { revalidateOnFocus: false },
   );
-
-  useEffect(() => {
-    void setSize(1);
-  }, [sessionFilter, setSize]);
 
   const items = useMemo(() => {
     const pages = data ?? [];
@@ -377,15 +639,41 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     return out;
   }, [data]);
 
-  const groupedItems = useMemo(() => {
-    const groups: Record<TimelineGroup, SessionMetadata[]> = {
-      pinned: [], today: [], yesterday: [], last7days: [], thisMonth: [], older: [],
-    };
-    for (const s of items) {
-      groups[getTimelineGroup(s)].push(s);
+  const projects = projectsData?.items ?? [];
+  const { projectGroups, inboxItems } = useMemo(() => {
+    const projectById = new Map(projects.map((project) => [project.id, project]));
+    const grouped = new Map<string, SessionMetadata[]>();
+    const inbox: SessionMetadata[] = [];
+
+    for (const session of items) {
+      if (session.projectId && projectById.has(session.projectId)) {
+        const bucket = grouped.get(session.projectId) ?? [];
+        bucket.push(session);
+        grouped.set(session.projectId, bucket);
+      } else {
+        inbox.push(session);
+      }
     }
-    return groups;
-  }, [items]);
+
+    const projectGroups: ProjectSidebarGroup[] = [];
+    for (const project of projects) {
+      const sessions = grouped.get(project.id) ?? [];
+      if (sessions.length === 0) continue;
+      const sortedSessions = [...sessions].sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a));
+      projectGroups.push({
+        project,
+        sessions: sortedSessions,
+        latestAt: Math.max(projectUpdatedAtMs(project), ...sortedSessions.map(sessionUpdatedAtMs)),
+      });
+    }
+
+    projectGroups.sort((a, b) => b.latestAt - a.latestAt);
+    inbox.sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a));
+
+    return { projectGroups, inboxItems: inbox };
+  }, [items, projects]);
+
+  const hasGroupedItems = projectGroups.length > 0 || inboxItems.length > 0;
 
   const loadingMore = Boolean(data && size > data.length);
   const lastPage = data?.[data.length - 1];
@@ -407,6 +695,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     if (!token) return;
     const onSessionListRefresh = () => {
       void mutate();
+      void mutateProjects();
     };
     const onSessionUpdated = (e: Event) => {
       const d = (e as CustomEvent<{ key?: string; name?: string }>).detail;
@@ -420,9 +709,11 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         } else {
           void mutate();
         }
+        void mutateProjects();
         return;
       }
       void mutate();
+      void mutateProjects();
     };
     window.addEventListener('session-updated', onSessionUpdated);
     window.addEventListener('session-created', onSessionListRefresh);
@@ -430,22 +721,13 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       window.removeEventListener('session-updated', onSessionUpdated);
       window.removeEventListener('session-created', onSessionListRefresh);
     };
-  }, [token, mutate, data?.length]);
-
-  // If a server page has no web UI sessions after filtering, fetch the next page until we have rows or run out.
-  useEffect(() => {
-    if (!token || !data?.length || loadingMore) return;
-    if (items.length > 0) return;
-    if (!lastPage?.hasMore) return;
-    if (sessionFilter !== 'web') return;
-    void setSize((s) => s + 1);
-  }, [token, data, items.length, loadingMore, lastPage?.hasMore, setSize, sessionFilter]);
+  }, [token, mutate, mutateProjects, data?.length]);
 
   const activeSessionKey = chatSessionKeyFromPath(pathname);
 
   // Refetch on session switch (skip initial mount) to refresh metadata (message count, etc).
   useEffect(() => {
-    if (!token || !activeSessionKey || sessionFilter !== 'web') return;
+    if (!token || !activeSessionKey) return;
     if (lastActiveSessionKeyRef.current === null) {
       lastActiveSessionKeyRef.current = activeSessionKey;
       return;
@@ -453,7 +735,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     if (lastActiveSessionKeyRef.current === activeSessionKey) return;
     lastActiveSessionKeyRef.current = activeSessionKey;
     void mutate();
-  }, [token, activeSessionKey, sessionFilter, mutate]);
+  }, [token, activeSessionKey, mutate]);
 
   const openRename = useCallback((key: string) => {
     const row = items.find((s) => s.key === key);
@@ -481,10 +763,47 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         navigate('/chat/new');
       }
       void mutate();
+      void mutateProjects();
     } catch {
       /* optional toast */
     }
   };
+
+  const toggleProjectCollapsed = useCallback((projectId: string) => {
+    setCollapsedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleProjectExpanded = useCallback((projectId: string) => {
+    setExpandedProjects((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  }, []);
+
+  const createProjectChat = useCallback(async (project: Project) => {
+    try {
+      const session = await createProjectSession(project.id, project.defaultAgentId ?? defaultAgentId);
+      void mutate();
+      void mutateProjects();
+      navigate(`/chat/${encodeURIComponent(session.key)}`);
+      onNavigate?.();
+    } catch {
+      /* optional toast */
+    }
+  }, [defaultAgentId, mutate, mutateProjects, navigate, onNavigate]);
 
   const renameTarget = renameKey ? items.find((s) => s.key === renameKey) : undefined;
 
@@ -520,60 +839,60 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         )}
         onScroll={onScroll}
       >
-        <div className="sticky top-0 z-[1] bg-surface-base px-4 pb-1 pt-2">
-          <div className="mt-2">
-            <SlidingSegmented
-              value={sessionFilter}
-              onChange={setSessionFilter}
-              aria-label={sb.sessionChannelFilterAria}
-              options={[
-                { value: 'web', label: sb.sessionTasksTab, icon: CheckSquare },
-                { value: 'channels', label: sb.sessionChannelsTab, icon: MessageCircle },
-              ]}
-            />
-          </div>
-        </div>
-
         {loadingFirst ? (
           <div className="flex justify-center py-6">
             <Loader2 className="size-5 animate-spin text-fg-subtle" strokeWidth={1.75} aria-hidden />
           </div>
-        ) : items.length > 0 ? (
-          <div className="flex flex-col gap-0.5 px-4">
-            {TIMELINE_GROUP_ORDER.map((group) => {
-              const groupSessions = groupedItems[group];
-              if (groupSessions.length === 0) return null;
-              return (
-                <div key={group} className="flex flex-col gap-0.5">
-                  <div className="sticky top-0 z-[1] bg-surface-base pb-0.5 pt-2.5">
-                    <span className="pl-2 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
-                      {sb[TIMELINE_LABEL_KEY[group]]}
-                    </span>
-                  </div>
-                  {groupSessions.map((session) => {
-                    const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
-                    return (
-                      <SidebarTaskRow
-                        key={session.key}
-                        session={session}
-                        isActive={activeSessionKey === session.key}
-                        showSourceChannelIcon={sessionFilter === 'channels'}
-                        onNavigate={onNavigate}
-                        mutate={mutate}
-                        onRequestRename={openRename}
-                        onRequestDelete={setDeleteKey}
-                        sb={sb}
-                        sess={sess}
-                        clipboard={m.clipboard}
-                        defaultUnnamedTitle={m.chat.newSession}
-                        sessionAgentId={sessionAgentId}
-                        sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
-                      />
-                    );
-                  })}
+        ) : hasGroupedItems ? (
+          <div className="flex flex-col px-4 pt-2">
+            {projectGroups.length > 0 ? (
+              <div className="pb-1">
+                <div className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
+                  {sb.projectsHeading}
                 </div>
-              );
-            })}
+                {projectGroups.map((group) => (
+                  <SidebarProjectSection
+                    key={group.project.id}
+                    group={group}
+                    isExpanded={expandedProjects.has(group.project.id)}
+                    isCollapsed={collapsedProjects.has(group.project.id)}
+                    activeSessionKey={activeSessionKey}
+                    onToggleCollapsed={toggleProjectCollapsed}
+                    onToggleExpanded={toggleProjectExpanded}
+                    onCreateProjectChat={(project) => void createProjectChat(project)}
+                    onNavigate={onNavigate}
+                    mutate={mutate}
+                    onRequestRename={openRename}
+                    onRequestDelete={setDeleteKey}
+                    sb={sb}
+                    sess={sess}
+                    clipboard={m.clipboard}
+                    defaultUnnamedTitle={m.chat.newSession}
+                    defaultAgentId={defaultAgentId}
+                    agentItems={agentItems}
+                    language={language}
+                  />
+                ))}
+              </div>
+            ) : null}
+
+            <SidebarInboxSection
+              sessions={inboxItems}
+              isCollapsed={inboxCollapsed}
+              onToggleCollapsed={() => setInboxCollapsed((value) => !value)}
+              activeSessionKey={activeSessionKey}
+              onNavigate={onNavigate}
+              mutate={mutate}
+              onRequestRename={openRename}
+              onRequestDelete={setDeleteKey}
+              sb={sb}
+              sess={sess}
+              clipboard={m.clipboard}
+              defaultUnnamedTitle={m.chat.newSession}
+              defaultAgentId={defaultAgentId}
+              agentItems={agentItems}
+              language={language}
+            />
           </div>
         ) : (
           <div className="px-4 pb-2">

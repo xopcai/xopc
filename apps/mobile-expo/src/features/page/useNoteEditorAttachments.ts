@@ -1,15 +1,10 @@
 import { useCallback, useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 
 import { apiFetch } from '../../api/client';
-import type { NoteAttachment } from '../../query/notes';
+import { uploadNoteMedia, type NoteAttachment } from '../../query/notes';
 import { AttachmentFileError, pickAttachmentFromSource, type AttachmentPickSource } from '../chat/attachment-file-io';
 import type { EditorAttachmentPickResult } from '../notes/editor/editor-protocol';
 import { prepareVoiceCapturePayload } from '../notes/capture-note-media';
-import {
-  createLocalNoteAttachment,
-  displaySrcForLocalNoteAttachmentRef,
-  parseLocalNoteAttachmentRef,
-} from '../notes/notes-local-attachments';
 import type { VoiceCapturePayload } from '../notes/use-voice-capture-interaction';
 import type { AttachmentDisplaySeed } from './useNoteEditSession';
 
@@ -62,7 +57,6 @@ export function useNoteEditorAttachments({
     nextAttachments: NoteAttachment[] | undefined,
   ): Promise<Record<string, string>> => {
     const refPattern = /xopc-attachment:\/\/notes\/([^/\s)]+)\/([^\s)]+)/g;
-    const localRefPattern = /xopc-local-attachment:\/\/notes\/([^/\s)]+)\/([^\s)]+)/g;
     const refs = new Map<string, { noteId: string; attachmentId: string }>();
     for (const match of nextMarkdown.matchAll(refPattern)) {
       const canonical = match[0];
@@ -72,13 +66,6 @@ export function useNoteEditorAttachments({
       });
     }
     const nextMap: Record<string, string> = {};
-    for (const match of nextMarkdown.matchAll(localRefPattern)) {
-      const localRef = match[0];
-      const parsed = parseLocalNoteAttachmentRef(localRef);
-      if (!parsed) continue;
-      const displaySrc = displaySrcForLocalNoteAttachmentRef(localRef);
-      if (displaySrc) nextMap[localRef] = displaySrc;
-    }
     for (const attachment of nextAttachments ?? []) {
       if (!isImageAttachment(attachment)) continue;
       refs.set(noteAttachmentRef(currentNoteId, attachment.id), {
@@ -122,14 +109,20 @@ export function useNoteEditorAttachments({
     try {
       const picked = await pickAttachmentFromSource(source);
       if (!picked) return null;
-      const local = createLocalNoteAttachment(id, picked);
-      if (local.displaySrc) {
-        setAttachmentSrcMap((current) => ({ ...current, [local.src]: local.displaySrc! }));
+      const attachment = await uploadNoteMedia(id, {
+        localUri: picked.localUri,
+        name: picked.name,
+        mimeType: picked.mimeType,
+        content: picked.content || undefined,
+      });
+      const src = noteAttachmentRef(id, attachment.id);
+      if (picked.type === 'image' || picked.mimeType.startsWith('image/')) {
+        setAttachmentSrcMap((current) => ({ ...current, [src]: picked.localUri ?? current[src] }));
       }
       setSnackMsg(messages.added);
       return {
-        src: local.src,
-        displaySrc: local.displaySrc,
+        src,
+        displaySrc: picked.localUri,
         alt: picked.name,
         kind: picked.type === 'image' || picked.mimeType.startsWith('image/') ? 'image' : 'document',
       };
@@ -147,19 +140,16 @@ export function useNoteEditorAttachments({
     if (!id) return null;
     try {
       const queued = await prepareVoiceCapturePayload(payload);
-      const local = createLocalNoteAttachment(id, {
-        type: 'audio',
+      const attachment = await uploadNoteMedia(id, {
+        localUri: queued.localUri,
         name: queued.name,
         mimeType: queued.mimeType,
-        size: queued.size,
         content: queued.content,
-        localUri: queued.localUri,
-        durationSeconds: Math.max(1, Math.round(queued.durationMillis / 1000)),
-        transcript: queued.transcript,
+        durationMillis: queued.durationMillis,
       });
       setSnackMsg(messages.added);
       return {
-        src: local.src,
+        src: noteAttachmentRef(id, attachment.id),
         alt: queued.name,
         kind: 'audio',
         transcript: queued.transcript,

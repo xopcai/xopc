@@ -8,7 +8,9 @@ import {
   Inbox,
   Layers3,
   Mic,
+  PanelLeft,
   Pin,
+  Plus,
   Search,
   StickyNote,
   X,
@@ -163,6 +165,9 @@ export function NotesWorkbench({
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [notesListWidth, setNotesListWidth] = useState(() => readStoredNotesListWidth(listWidthStorageKey));
   const [resizingList, setResizingList] = useState(false);
+  const [notesListCollapsed, setNotesListCollapsed] = useState(false);
+  const [creatingBlankNote, setCreatingBlankNote] = useState(false);
+  const [autoFocusNoteId, setAutoFocusNoteId] = useState<string | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const [nowMs] = useState(() => Date.now());
   const navigate = useNavigate();
@@ -407,6 +412,31 @@ export function NotesWorkbench({
     [basePath, captureTags, mutate, navigate],
   );
 
+  const handleCreateBlankNote = useCallback(async () => {
+    if (creatingBlankNote) return;
+    setCreatingBlankNote(true);
+    try {
+      const note = await createNote({
+        markdown: '',
+        kind: 'thought',
+        tags: captureTags,
+        channel: 'web',
+      });
+      dispatch({ type: 'patch', patch: initialUi });
+      await mutate();
+      setAutoFocusNoteId(note.id);
+      navigate(notePath(basePath, note.id));
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: n.createBlankFailed,
+        message: err instanceof Error ? err.message : n.createBlankFailedHint,
+      });
+    } finally {
+      setCreatingBlankNote(false);
+    }
+  }, [basePath, captureTags, creatingBlankNote, mutate, n.createBlankFailed, n.createBlankFailedHint, navigate]);
+
   const handleImagePick = useCallback(() => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -501,21 +531,35 @@ export function NotesWorkbench({
     const startX = event.clientX;
     const startWidth = notesListWidth;
     const pointerId = event.pointerId;
-    let latestWidth = notesListWidth;
+    let rafId = 0;
+    let nextWidth = notesListWidth;
+    let committedWidth = notesListWidth;
+    const applyWidth = () => {
+      rafId = 0;
+      committedWidth = nextWidth;
+      workspaceRef.current?.style.setProperty('--notes-list-width', `${committedWidth}px`);
+    };
 
     const onMove = (moveEvent: PointerEvent) => {
-      latestWidth = clampNotesListWidth(startWidth + moveEvent.clientX - startX);
-      setNotesListWidth(latestWidth);
+      nextWidth = clampNotesListWidth(startWidth + moveEvent.clientX - startX);
+      if (rafId === 0) {
+        rafId = window.requestAnimationFrame(applyWidth);
+      }
     };
 
     const onDone = () => {
+      if (rafId !== 0) {
+        window.cancelAnimationFrame(rafId);
+        applyWidth();
+      }
       try {
         el.releasePointerCapture(pointerId);
       } catch {
         // Pointer capture may already be released by the browser.
       }
       setResizingList(false);
-      writeStoredNotesListWidth(listWidthStorageKey, latestWidth);
+      setNotesListWidth(committedWidth);
+      writeStoredNotesListWidth(listWidthStorageKey, committedWidth);
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onDone);
       window.removeEventListener('pointercancel', onDone);
@@ -525,6 +569,19 @@ export function NotesWorkbench({
     window.addEventListener('pointerup', onDone);
     window.addEventListener('pointercancel', onDone);
   }, [clampNotesListWidth, listWidthStorageKey, notesListWidth]);
+
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented || event.repeat) return;
+      if (event.key.toLowerCase() !== 'n' || (!event.metaKey && !event.ctrlKey) || event.altKey || event.shiftKey) {
+        return;
+      }
+      event.preventDefault();
+      void handleCreateBlankNote();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [handleCreateBlankNote]);
 
   const handleListResizeKeyDown = useCallback((event: KeyboardEvent<HTMLDivElement>) => {
     if (event.key === 'ArrowLeft') {
@@ -557,53 +614,18 @@ export function NotesWorkbench({
       className="flex h-full min-h-0 w-full flex-1 overflow-hidden bg-surface-panel"
       style={{ '--notes-list-width': `${notesListWidth}px` } as CSSProperties}
     >
-      {showLibrary ? (
-        <aside className="hidden w-56 shrink-0 flex-col gap-4 border-r border-edge-subtle bg-surface-base px-3 py-4 2xl:flex">
-          <div className="px-2">
-            <div className="text-sm font-semibold text-fg">{n.libraryTitle}</div>
-            <div className="mt-0.5 text-xs leading-5 text-fg-muted">{n.libraryDescription}</div>
-          </div>
-          <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto" aria-label={n.libraryTitle}>
-            {libraryViews.map((view) => {
-              const Icon = view.icon;
-              const active = sameView(ui, view);
-              return (
-                <button
-                  key={view.id}
-                  type="button"
-                  onClick={() => dispatch({ type: 'patch', patch: view.patch })}
-                  className={cn(
-                    'group flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left transition-colors',
-                    active ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-                  )}
-                >
-                  <Icon className={cn('h-4 w-4 shrink-0', active && 'text-accent')} aria-hidden />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-medium">{view.label}</span>
-                    <span className="block truncate text-xs text-fg-muted">{view.description}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
-      ) : null}
-
       <section
         className={cn(
-          'relative flex min-h-0 w-full shrink-0 flex-col overflow-hidden bg-surface-panel lg:w-[var(--notes-list-width)]',
+          'relative flex min-h-0 w-full shrink-0 flex-col overflow-hidden bg-surface-panel',
+          'lg:transition-[width] lg:duration-[280ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:lg:transition-none',
+          notesListCollapsed ? 'lg:w-0 lg:min-w-0 lg:max-w-0 lg:pointer-events-none' : 'lg:w-[var(--notes-list-width)]',
           selectedNoteId && 'hidden lg:flex',
         )}
+        aria-hidden={notesListCollapsed ? true : undefined}
       >
         <div className="flex shrink-0 flex-col gap-3 border-b border-edge-subtle p-3">
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="truncate text-sm font-semibold text-fg">{effectiveListTitle}</h2>
-              <p className="truncate text-xs text-fg-muted">
-                {noteCountLabel ?? effectiveListDescription}
-              </p>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
               {showLibrary ? (
                 <select
                   value={activeLibraryView.id}
@@ -611,14 +633,40 @@ export function NotesWorkbench({
                     const next = libraryViews.find((view) => view.id === event.target.value);
                     if (next) dispatch({ type: 'patch', patch: next.patch });
                   }}
-                  className="block max-w-32 rounded-lg border border-edge bg-surface-base px-2 py-1.5 text-xs font-medium text-fg 2xl:hidden"
+                  className="-ml-1 block max-w-44 truncate rounded-lg border border-transparent bg-transparent px-1 py-0.5 text-sm font-semibold text-fg transition-colors hover:border-edge hover:bg-surface-base focus:border-accent focus:bg-surface-base focus:outline-none focus:ring-1 focus:ring-accent"
                   aria-label={n.libraryTitle}
                 >
                   {libraryViews.map((view) => (
                     <option key={view.id} value={view.id}>{view.label}</option>
                   ))}
                 </select>
-              ) : null}
+              ) : (
+                <h2 className="truncate text-sm font-semibold text-fg">{effectiveListTitle}</h2>
+              )}
+              <p className="truncate text-xs text-fg-muted">
+                {noteCountLabel ?? effectiveListDescription}
+              </p>
+            </div>
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setNotesListCollapsed(true)}
+                className="hidden size-8 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:inline-flex"
+                aria-label={n.collapseNotesList}
+                title={n.collapseNotesList}
+              >
+                <PanelLeft className="size-4" strokeWidth={1.5} aria-hidden />
+              </button>
+              <button
+                type="button"
+                onClick={handleCreateBlankNote}
+                disabled={creatingBlankNote}
+                className="inline-flex size-8 items-center justify-center rounded-lg text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={n.createBlankNote}
+                title={n.createBlankShortcut}
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+              </button>
               <button
                 type="button"
                 onClick={() => setSearchOpen(true)}
@@ -711,7 +759,9 @@ export function NotesWorkbench({
         onPointerDown={handleListResizePointerDown}
         onKeyDown={handleListResizeKeyDown}
         className={cn(
-          'relative hidden w-2 shrink-0 cursor-col-resize touch-none select-none items-stretch justify-center lg:flex',
+          'relative hidden shrink-0 cursor-col-resize touch-none select-none items-stretch justify-center lg:flex',
+          'lg:transition-[width,opacity] lg:duration-[280ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:lg:transition-none',
+          notesListCollapsed ? 'lg:w-0 lg:opacity-0 lg:pointer-events-none' : 'lg:w-2 lg:opacity-100',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-0',
           "before:pointer-events-none before:block before:h-full before:w-px before:bg-edge-subtle before:transition-colors before:duration-150",
           'hover:before:bg-edge-strong',
@@ -721,10 +771,21 @@ export function NotesWorkbench({
 
       <section
         className={cn(
-          'min-w-0 flex-1 bg-surface-base',
+          'relative min-w-0 flex-1 bg-surface-base',
           !selectedNoteId && 'hidden lg:flex',
         )}
       >
+        {notesListCollapsed ? (
+          <button
+            type="button"
+            onClick={() => setNotesListCollapsed(false)}
+            className="absolute left-3 top-3 z-10 hidden size-8 items-center justify-center rounded-lg border border-edge bg-surface-base text-fg-muted shadow-surface transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent lg:inline-flex"
+            aria-label={n.expandNotesList}
+            title={n.expandNotesList}
+          >
+            <PanelLeft className="size-4" strokeWidth={1.5} aria-hidden />
+          </button>
+        ) : null}
         {selectedNoteId ? (
           <NoteDetailPanel
             noteId={selectedNoteId}
@@ -733,6 +794,8 @@ export function NotesWorkbench({
             backButtonClassName="lg:hidden"
             clearHeaderOnCleanup={false}
             onOpenSearch={() => setSearchOpen(true)}
+            autoFocus={selectedNoteId === autoFocusNoteId}
+            onAutoFocusConsumed={() => setAutoFocusNoteId(null)}
           />
         ) : (
           <div className="flex h-full min-h-0 flex-1 items-center justify-center px-8 text-center">
@@ -740,6 +803,15 @@ export function NotesWorkbench({
               <StickyNote className="mx-auto h-9 w-9 text-fg-muted" aria-hidden />
               <h2 className="mt-4 text-base font-semibold text-fg">{n.emptyEditorTitle}</h2>
               <p className="mt-2 text-sm leading-6 text-fg-muted">{n.emptyEditorDescription}</p>
+              <button
+                type="button"
+                onClick={handleCreateBlankNote}
+                disabled={creatingBlankNote}
+                className="mt-5 inline-flex items-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Plus className="h-4 w-4" aria-hidden />
+                {creatingBlankNote ? n.creatingBlankNote : n.createBlankNote}
+              </button>
             </div>
           </div>
         )}

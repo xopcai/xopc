@@ -6,7 +6,6 @@ import { useMessages } from '../../i18n/messages';
 import type { NoteIndexEntry } from '../../query/notes';
 import { spacing, typography, useTheme } from '../../theme';
 import { resolveNoteListDisplay } from '../notes/note-list-display';
-import { readLocalNote } from '../notes/notes-local';
 
 export type InboxItemContentProps = {
   note: NoteIndexEntry;
@@ -21,7 +20,6 @@ export function InboxItemContent({ note }: InboxItemContentProps) {
   const display = useMemo(
     () => resolveNoteListDisplay(note, {
       untitled: pm.untitledNote,
-      cachedNote: readLocalNote(note.id),
       kindLabels: pm,
       emptyHints: im.itemHints,
       timeLabels: im.time,

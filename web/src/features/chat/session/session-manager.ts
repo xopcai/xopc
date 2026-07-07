@@ -96,6 +96,8 @@ export class SessionManager {
           messageCount: s.messageCount,
           sourceChannel: s.sourceChannel,
           sourceChatId: s.sourceChatId,
+          projectId: s.projectId,
+          customData: s.customData,
           routing: s.routing,
         });
       }
@@ -258,10 +260,12 @@ export class SessionManager {
     return pending;
   }
 
-  async createSession(options?: { agentId?: string }): Promise<SessionInfo> {
+  async createSession(options?: { agentId?: string; projectId?: string | null }): Promise<SessionInfo> {
     const body: Record<string, unknown> = { channel: 'webchat' };
     const raw = options?.agentId?.trim();
     if (raw) body.agentId = raw.toLowerCase();
+    const projectId = options?.projectId?.trim();
+    if (projectId) body.projectId = projectId;
     const res = await apiFetch(apiUrl('/api/sessions'), {
       method: 'POST',
       body: JSON.stringify(body),
