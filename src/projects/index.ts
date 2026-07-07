@@ -9,3 +9,4 @@ export * from './workflow-bind.js';
 export * from './automation-bind.js';
 export * from './memory-bind.js';
 export * from './workspace.js';
+export * from './workspace-project.js';

@@ -4,6 +4,7 @@
 
 import { getDefaultAgentId } from '../../routing/resolve-route.js';
 import { GoalService, type GoalWithDetails } from '../../goals/index.js';
+import { getSessionMetadata } from '../../storage/sqlite/index.js';
 import type { CommandContext, CommandDefinition } from '../types.js';
 import { commandRegistry } from '../registry.js';
 
@@ -90,6 +91,7 @@ const goalCommand: CommandDefinition = {
       agentId: getDefaultAgentId(ctx.config),
       config: ctx.config,
       source: ctx.source === 'cli' ? 'cli' : ctx.source === 'api' ? 'api' : 'channel',
+      projectId: getSessionMetadata(ctx.sessionKey)?.projectId,
     });
 
     ctx.persistentGoalApis?.scheduleContinuation(ctx.sessionKey, goal.title);

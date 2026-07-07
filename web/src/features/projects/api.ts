@@ -180,7 +180,7 @@ export async function fetchProjectOverview(id: string): Promise<ProjectOverview>
 }
 
 export async function createProject(input: {
-  name: string;
+  name?: string;
   description?: string;
   defaultAgentId?: string;
   workspaceRoot?: string;

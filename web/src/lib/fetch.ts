@@ -75,7 +75,7 @@ export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit)
     const serverMessage =
       typeof errorBody.error === 'string' ? errorBody.error : errorBody.error?.message;
     const msg = formatApiHttpError(res.status, res.statusText, serverMessage);
-    throw new Error(msg);
+    throw Object.assign(new Error(msg), { status: res.status, body: errorBody });
   }
   return res.json() as Promise<T>;
 }

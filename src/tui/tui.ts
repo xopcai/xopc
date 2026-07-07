@@ -410,6 +410,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
   }
   let startupWorkingDirectoryApplied = false;
+  let startupProjectApplied = false;
 
   const keybindings = createXopcTuiKeybindingsManager();
   setKeybindings(keybindings);
@@ -1339,6 +1340,21 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     });
     state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
     state.sessionInfo.workingDirectoryLocked = true;
+  };
+
+  const applyStartupProject = async () => {
+    if (startupProjectApplied || !startupWorkingDirectory || opts.useStartupCwd === false || opts.session?.trim()) return;
+    startupProjectApplied = true;
+    const result = await client.resolveStartupProject?.({
+      workspacePath: startupWorkingDirectory,
+      sessionKey: state.currentSessionKey,
+      agentId: currentAgentId,
+      autoCreate: true,
+    });
+    if (!result?.project) return;
+    await client.patchSession(state.currentSessionKey, { projectId: result.project.id });
+    const verb = result.created ? 'Created project' : 'Using project';
+    chatLog.addStatus(theme.dim(`${verb}: ${result.project.name}`));
   };
 
   let streamRecoveryPromise: Promise<void> | null = null;
@@ -2495,6 +2511,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : String(err);
         chatLog.addSystem(`Working directory not changed: ${errorMessage}`);
+      }
+      try {
+        await applyStartupProject();
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        chatLog.addSystem(`Project not selected: ${errorMessage}`);
       }
       await refreshSessionInfoWithBorder();
       await refreshModelChoices();

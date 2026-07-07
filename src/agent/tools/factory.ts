@@ -367,7 +367,9 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      createGoalTool(),
+      createGoalTool({
+        getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+      }),
       ...(browserEnabled
         ? [
             createBrowserUseTool({
