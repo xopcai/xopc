@@ -55,6 +55,7 @@ pnpm run dev:gateway     # 使用 ~/.xopc-dev 启动 gateway，日志级别为 i
 | `update` | 检查并安装 xopc 更新（含扩展同步与 gateway 重启）— 见 [更新](./update.md) |
 | `logs` | 管理和查询日志 |
 | `goal` | 管理长期目标 |
+| `project` | 管理长期项目 |
 | `config` | 查看和编辑配置（非交互式） |
 | `image` | 查看图像运行时行为和可用 provider |
 | `models` | 列出和管理模型及模型认证 |
@@ -90,6 +91,7 @@ MCP 配置见 [MCP](./mcp.md)。当前 `xopc --help` 不展示 `mcp` 作为顶�
 | `update` | 无子命令 |
 | `logs` | `list`、`query`、`stats`、`tail`、`clean`、`rotate` |
 | `goal` | `list`、`new`、`show`、`pause`、`resume`、`archive`、`runs`、`checklist`、`evidence` |
+| `project` | `list`、`new`、`show`、`update`、`archive`、`attach-session`、`detach-session`、`attach-goal`、`detach-goal`、`sessions`、`goals` |
 | `config` | `get`、`set`、`unset`、`show`、`validate`、`token`、`path` |
 | `image` | `status`、`providers` |
 | `models` | `list`、`status`、`set`、`auth`（`list`、`login`、`paste-api-key`、`logout`） |

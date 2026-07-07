@@ -51,3 +51,13 @@ features:
     details: 在已配置路径上提供 STT/TTS（Telegram、网关等）；图像支持识图与按需生图。
     link: /zh/voice
 ---
+
+## 按目标开始
+
+| 你想做什么 | 从这里开始 |
+| --- | --- |
+| 在自己电脑上运行一个私有 AI 助手 | [5 分钟快速入门](./first-5-minutes.md) |
+| 在 Telegram、微信或飞书/Lark 中使用同一个助手 | [消息通道](./channels/index.md) |
+| 设置定期复盘、提醒和摘要 | [自动化](./automations.md) |
+| 为工作、代码和个人场景配置不同 Agent | [Session 路由](./routing-system.md) |
+| 用工具、通道或可复用技能扩展 xopc | [技能系统](./skills.md) 和 [扩展](./extensions.md) |

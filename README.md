@@ -39,6 +39,13 @@
 - **One-person companies and solo builders** — use the same assistant from CLI, TUI, Web, Desktop, Telegram, WeChat, and Feishu/Lark.
 - **Local-first AI workflows** — bring your own keys, mix cloud/local models, add skills/extensions, and keep data under **`~/.xopc/`**.
 
+## What you can do after install
+
+- Keep a side project moving with remembered goals, blockers, next actions, and feedback.
+- Use the same assistant from terminal, desktop, browser, mobile, Telegram, WeChat, or Feishu/Lark.
+- Bring your own API keys or local models while keeping config and state under **`~/.xopc/`**.
+- Schedule reviews, reminders, summaries, and workflow runs so important work keeps resurfacing.
+
 ---
 
 <a id="get-started"></a>
