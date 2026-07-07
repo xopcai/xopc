@@ -20,6 +20,7 @@ import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
 import { dismissOrHome, openNoteDetail, useDismissOnHardwareBack } from '../../lib/navigation';
 import { refreshSessionsList } from '../../query/infinite-list-sync';
 import { queryKeys } from '../../query/keys';
+import { createBlankNote } from '../../query/notes';
 import {
   archiveSession,
   deleteSession,
@@ -32,7 +33,6 @@ import {
   useGatewayConfigured,
 } from '../../query/sessions';
 import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, spacing, useTheme } from '../../theme';
-import { createLocalDraftNote } from '../notes/notes-local';
 
 import { RenameDialog } from './RenameDialog';
 import { SessionCard } from './SessionCard';
@@ -90,10 +90,20 @@ export function SessionsScreen() {
     await refreshSessionsList(queryClient);
   }, [queryClient]);
 
+  const createNoteMutation = useMutation({
+    mutationFn: createBlankNote,
+    onSuccess: (result) => {
+      openNoteDetail(router, result.note.id);
+    },
+    onError: (err) => {
+      setSnackMsg(err instanceof Error ? err.message : m.notesPage.actionFailed);
+    },
+  });
+
   const handleCreateNote = useCallback(() => {
-    const draft = createLocalDraftNote();
-    openNoteDetail(router, draft.id);
-  }, [router]);
+    if (createNoteMutation.isPending) return;
+    createNoteMutation.mutate();
+  }, [createNoteMutation]);
 
   const runBatchArchive = useCallback(async () => {
     const keys = [...selectedIds];
@@ -352,12 +362,16 @@ export function SessionsScreen() {
               },
             ]}
             onPress={handleCreateNote}
-            disabled={false}
+            disabled={createNoteMutation.isPending}
             accessibilityRole="button"
             accessibilityLabel={m.homePage.quickNewNote}
-            accessibilityState={{ disabled: false }}
+            accessibilityState={{ disabled: createNoteMutation.isPending }}
           >
-            <Icon source="note-plus-outline" size={26} color={colors.text.secondary} />
+            {createNoteMutation.isPending ? (
+              <ActivityIndicator size={22} color={colors.text.secondary} />
+            ) : (
+              <Icon source="note-plus-outline" size={26} color={colors.text.secondary} />
+            )}
           </Pressable>
         </View>
       ) : null}

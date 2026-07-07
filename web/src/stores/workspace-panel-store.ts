@@ -23,7 +23,7 @@ function writeOpen(open: boolean) {
   }
 }
 
-function clampWidthPx(px: number): number {
+export function clampWorkspacePanelWidthPx(px: number): number {
   return Math.min(
     WORKSPACE_PANEL_WIDTH_MAX,
     Math.max(WORKSPACE_PANEL_WIDTH_MIN, Math.round(px)),
@@ -36,7 +36,7 @@ function readWidthPx(): number {
     if (raw == null) return WORKSPACE_PANEL_WIDTH_DEFAULT;
     const n = Number.parseInt(raw, 10);
     if (!Number.isFinite(n)) return WORKSPACE_PANEL_WIDTH_DEFAULT;
-    return clampWidthPx(n);
+    return clampWorkspacePanelWidthPx(n);
   } catch {
     return WORKSPACE_PANEL_WIDTH_DEFAULT;
   }
@@ -69,7 +69,8 @@ export const useWorkspacePanelStore = create<WorkspacePanelState>((set, get) => 
   },
   widthPx: readWidthPx(),
   setWidthPx: (px) => {
-    const widthPx = clampWidthPx(px);
+    const widthPx = clampWorkspacePanelWidthPx(px);
+    if (get().widthPx === widthPx) return;
     set({ widthPx });
     queueMicrotask(() => writeWidthPx(widthPx));
   },

@@ -221,7 +221,10 @@
         "paused": "Paused",
         "archived": "Archived"
       },
-      "deleteConfirm": "Delete project \"{{name}}\"? Sessions and goals will be left unassigned."
+      "deleteConfirm": "Delete project \"{{name}}\"? Sessions and goals will be left unassigned.",
+      "deleteConfirmTitle": "Delete project?",
+      "deleteConfirmFallback": "Delete this project? Sessions and goals will be left unassigned.",
+      "deleteConfirmAction": "Delete project"
     },
     "goalDialog": {
       "title": "New project goal",

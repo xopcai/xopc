@@ -1,17 +1,13 @@
 import type { ImperativeRouter } from 'expo-router';
 
-import { chatRoute } from '../../lib/navigation';
-import { createSession } from '../../query/sessions';
-
 /**
- * After gateway credentials are saved, open a fresh chat session.
+ * After gateway credentials are saved, return to the workspace home.
  */
-export async function openDefaultSessionAfterConnect(
+export async function navigateHomeAfterGatewayConnect(
   replace: ImperativeRouter['replace'],
 ): Promise<{ ok: true } | { ok: false; message: string }> {
   try {
-    const key = await createSession(undefined);
-    replace(chatRoute(key));
+    replace('/');
     return { ok: true };
   } catch (e) {
     return { ok: false, message: e instanceof Error ? e.message : String(e) };

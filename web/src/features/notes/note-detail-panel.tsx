@@ -100,6 +100,8 @@ export type NoteDetailPanelProps = {
   backButtonClassName?: string;
   clearHeaderOnCleanup?: boolean;
   onOpenSearch?: () => void;
+  autoFocus?: boolean;
+  onAutoFocusConsumed?: () => void;
 };
 
 export function NoteDetailPanel({
@@ -110,6 +112,8 @@ export function NoteDetailPanel({
   backButtonClassName,
   clearHeaderOnCleanup = true,
   onOpenSearch,
+  autoFocus = false,
+  onAutoFocusConsumed,
 }: NoteDetailPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const closeLabel = messages(language).notes.lightboxClose;
@@ -124,6 +128,8 @@ export function NoteDetailPanel({
         backButtonClassName={backButtonClassName}
         clearHeaderOnCleanup={clearHeaderOnCleanup}
         onOpenSearch={onOpenSearch}
+        autoFocus={autoFocus}
+        onAutoFocusConsumed={onAutoFocusConsumed}
       />
     </NoteImageLightboxProvider>
   );
@@ -137,6 +143,8 @@ function NoteDetailPanelInner({
   backButtonClassName,
   clearHeaderOnCleanup = true,
   onOpenSearch,
+  autoFocus = false,
+  onAutoFocusConsumed,
 }: NoteDetailPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const n = messages(language).notes;
@@ -160,6 +168,10 @@ function NoteDetailPanelInner({
   const pendingMarkdownRef = useRef<string | null>(null);
   const pendingTitleRef = useRef<string | null>(null);
   const editorContainerRef = useRef<HTMLDivElement>(null);
+  const sidePanelShellRef = useRef<HTMLDivElement>(null);
+  const sidePanelInnerRef = useRef<HTMLDivElement>(null);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const didAutoFocusRef = useRef<string | null>(null);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
 
@@ -172,6 +184,7 @@ function NoteDetailPanelInner({
     () => listNoteThreads(noteId),
     { revalidateOnFocus: false },
   );
+  const isPreviewingSnapshot = previewSnapshot !== null;
 
   useEffect(() => {
     if (!noteId) return undefined;
@@ -191,6 +204,7 @@ function NoteDetailPanelInner({
     setPreviewSnapshot(null);
     setActiveSidePanel(null);
     titleComposingRef.current = false;
+    didAutoFocusRef.current = null;
   }, [noteId]);
 
   useEffect(() => {
@@ -198,6 +212,16 @@ function NoteDetailPanelInner({
     setTitle(note.title ?? '');
     titleInitRef.current = true;
   }, [note]);
+
+  useEffect(() => {
+    if (!autoFocus || !note || isPreviewingSnapshot || didAutoFocusRef.current === noteId) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      onAutoFocusConsumed?.();
+    });
+    didAutoFocusRef.current = noteId;
+    return () => window.cancelAnimationFrame(frame);
+  }, [autoFocus, isPreviewingSnapshot, note, noteId, onAutoFocusConsumed]);
 
   const time = note
     ? new Date(note.createdAt).toLocaleString(undefined, {
@@ -488,7 +512,6 @@ function NoteDetailPanelInner({
     );
   }
 
-  const isPreviewingSnapshot = previewSnapshot !== null;
   const displayTitle = isPreviewingSnapshot ? (previewSnapshot.title ?? '') : title;
   const displayText = isPreviewingSnapshot ? (previewSnapshot.markdown ?? '') : (note.markdown ?? '');
   const noteCreatedAtMs = new Date(note.createdAt).getTime();
@@ -548,6 +571,7 @@ function NoteDetailPanelInner({
                 <div className="flex h-full flex-col">
                   <div className="flex shrink-0 items-start px-6 pt-4">
                     <input
+                      ref={titleInputRef}
                       type="text"
                       value={title}
                       onChange={(e) => handleTitleChange(e.target.value)}
@@ -586,6 +610,7 @@ function NoteDetailPanelInner({
                 <div className="flex h-full flex-col">
                   <div className="flex shrink-0 items-start px-6 pt-4">
                     <input
+                      ref={titleInputRef}
                       type="text"
                       value={title}
                       onChange={(e) => handleTitleChange(e.target.value)}
@@ -636,6 +661,7 @@ function NoteDetailPanelInner({
 
       {/* Shared side panel — animated width */}
       <div
+        ref={sidePanelShellRef}
         className={cn(
           'relative flex min-h-0 shrink-0 flex-col overflow-hidden',
           !historyResizing && 'transition-[width] duration-300 ease-in-out',
@@ -643,6 +669,7 @@ function NoteDetailPanelInner({
         style={{ width: activeSidePanel ? sidePanelWidth : 0 }}
       >
         <div
+          ref={sidePanelInnerRef}
           className="flex min-h-0 flex-1 flex-col"
           style={{ width: sidePanelWidth }}
         >
@@ -657,13 +684,32 @@ function NoteDetailPanelInner({
               const startX = e.clientX;
               const startW = sidePanelWidth;
               const pid = e.pointerId;
+              let rafId = 0;
+              let nextWidth = sidePanelWidth;
+              let committedWidth = sidePanelWidth;
+              const applyWidth = () => {
+                rafId = 0;
+                committedWidth = nextWidth;
+                if (activeSidePanel) {
+                  sidePanelShellRef.current?.style.setProperty('width', `${committedWidth}px`);
+                }
+                sidePanelInnerRef.current?.style.setProperty('width', `${committedWidth}px`);
+              };
               const onMove = (ev: PointerEvent) => {
                 const newW = startW - (ev.clientX - startX);
-                setSidePanelWidth(Math.max(280, Math.min(600, newW)));
+                nextWidth = Math.max(280, Math.min(600, Math.round(newW)));
+                if (rafId === 0) {
+                  rafId = window.requestAnimationFrame(applyWidth);
+                }
               };
               const onDone = () => {
+                if (rafId !== 0) {
+                  window.cancelAnimationFrame(rafId);
+                  applyWidth();
+                }
                 try { el.releasePointerCapture(pid); } catch { /* */ }
                 setHistoryResizing(false);
+                setSidePanelWidth(committedWidth);
                 window.removeEventListener('pointermove', onMove);
                 window.removeEventListener('pointerup', onDone);
                 window.removeEventListener('pointercancel', onDone);

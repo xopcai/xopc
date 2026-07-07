@@ -31,10 +31,8 @@ import { radii, spacing, typography, useTheme, FLOATING_BOTTOM_OFFSET, floatingB
 import {
   captureNoteWithComposerAttachment,
   captureNoteWithVoice,
-  prepareVoiceCapturePayload,
 } from '../notes/capture-note-media';
 import { parseCaptureIntent } from '../notes/capture-parser';
-import { flushPendingNotes, queueMediaCapture, queueNote } from '../notes/notes-sync';
 import { QuickCaptureComposer } from '../notes/QuickCaptureComposer';
 import { InboxItemContent } from './InboxItemContent';
 
@@ -116,21 +114,8 @@ export function InboxScreen() {
       setCaptureText('');
       await invalidateInbox();
     },
-    onError: async (err, payload) => {
-      try {
-        if (payload.type === 'text') {
-          queueNote(payload.text);
-        } else if (payload.type === 'attachment') {
-          queueMediaCapture({ type: 'attachment', attachment: payload.attachment, text: captureText });
-        } else {
-          const queued = await prepareVoiceCapturePayload(payload);
-          queueMediaCapture({ type: 'voice', ...queued });
-        }
-        setCaptureText('');
-        setSnackMsg(pm.savedOffline);
-      } catch {
-        setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
-      }
+    onError: (err) => {
+      setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
     },
   });
 
@@ -342,9 +327,8 @@ export function InboxScreen() {
           refreshControl={
             <RefreshControl
               refreshing={inboxQuery.isFetching && !inboxQuery.isLoading && !inboxQuery.isFetchingNextPage}
-              onRefresh={async () => {
-                await flushPendingNotes();
-                await inboxQuery.refetch();
+              onRefresh={() => {
+                void inboxQuery.refetch();
               }}
             />
           }

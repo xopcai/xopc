@@ -51,7 +51,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     displayName: 'Coder',
     description: 'Software development, debugging, refactoring, and tests.',
     emoji: '💻',
-    tools: denyTools(['image_generate', 'send_message', 'send_media', 'automation']),
+    tools: denyTools([]),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
         name: 'Coder',
@@ -68,7 +68,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     displayName: 'Writer',
     description: 'Drafting, editing, rewriting, and audience-aware content.',
     emoji: '✍️',
-    tools: denyTools(['shell', 'browser_use', 'send_message', 'send_media', 'automation', 'bundle-mcp']),
+    tools: denyTools([]),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
         name: 'Writer',
@@ -85,7 +85,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     displayName: 'Researcher',
     description: 'Deep research, source comparison, and fact synthesis.',
     emoji: '🔍',
-    tools: denyTools(['shell', 'send_message', 'send_media', 'automation']),
+    tools: denyTools([]),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
         name: 'Researcher',
@@ -102,7 +102,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     displayName: 'Data Analyst',
     description: 'Data cleaning, analysis, visualization, and reproducible reports.',
     emoji: '📊',
-    tools: denyTools(['browser_use', 'image_generate', 'send_message', 'send_media', 'automation']),
+    tools: denyTools([]),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
         name: 'Data Analyst',
@@ -119,7 +119,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     displayName: 'Creative',
     description: 'Visual direction, image prompts, design critique, and creative options.',
     emoji: '🎨',
-    tools: denyTools(['shell', 'send_message', 'send_media', 'automation', 'bundle-mcp']),
+    tools: denyTools([]),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
         name: 'Creative',

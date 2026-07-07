@@ -1,6 +1,6 @@
 import type { ImperativeRouter } from 'expo-router';
 
-import { openDefaultSessionAfterConnect } from './navigate-after-gateway-connect';
+import { navigateHomeAfterGatewayConnect } from './navigate-after-gateway-connect';
 import { hasPairableGatewayQr, parseGatewayQrPayload } from './parse-gateway-qr';
 import { resolveGatewayCredentialsFromQr } from './pair-gateway';
 import { upsertGatewayFromPairResult } from './upsert-gateway-from-credentials';
@@ -95,7 +95,7 @@ export async function tryConsumeGatewayDeeplink(
 
     await upsertGatewayFromPairResult(resolved);
 
-    await openDefaultSessionAfterConnect(router.replace);
+    await navigateHomeAfterGatewayConnect(router.replace);
     return true;
   })();
 

@@ -1,13 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { AppState, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Snackbar, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
 import { TOAST_DURATION_SHORT } from '../../constants/toast';
 import { t, useMessages } from '../../i18n/messages';
-import { dismissOrHome, noteDetailRoute, useDismissOnHardwareBack } from '../../lib/navigation';
+import { dismissOrHome, useDismissOnHardwareBack } from '../../lib/navigation';
 import { useTheme } from '../../theme';
 
 import { NoteDetailHeader } from '../notes/NoteDetailHeader';
@@ -22,11 +22,10 @@ import type {
   EditorCommand,
   EditorCommandInput,
   EditorRuntimeState,
-  EditorSelectionContext,
+  NoteEditorMode,
   NoteEditorLabels,
 } from '../notes/editor/editor-protocol';
 import { useNoteTagsStore } from '../../stores/note-tags-store';
-import { isDraftNoteId } from '../notes/notes-local';
 import { useNoteEditSession } from './useNoteEditSession';
 import { useNoteEditorAttachments } from './useNoteEditorAttachments';
 import { useNotePageActions } from './useNotePageActions';
@@ -39,6 +38,7 @@ export function PageScreen() {
   const { id: idParam } = useLocalSearchParams<{ id: string | string[] }>();
   const id = firstRouteParam(idParam);
   const router = useRouter();
+  const navigation = useNavigation();
   const queryClient = useQueryClient();
   const { colors } = useTheme();
   const m = useMessages();
@@ -52,27 +52,28 @@ export function PageScreen() {
   const [moreVisible, setMoreVisible] = useState(false);
   const [tagPickerVisible, setTagPickerVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [editorFocused, setEditorFocused] = useState(false);
+  const [noteEditorMode, setNoteEditorMode] = useState<NoteEditorMode>('viewing');
   const [editorRuntimeState, setEditorRuntimeState] = useState<EditorRuntimeState>(DEFAULT_EDITOR_RUNTIME_STATE);
   const [editorCommand, setEditorCommand] = useState<EditorCommand | null>(null);
-  const [, setSelection] = useState<EditorSelectionContext | null>(null);
 
   const editorCommandIdRef = useRef(0);
   const editorRef = useRef<NoteEditorBridgeHandle | null>(null);
+  const noteEditorModeRef = useRef<NoteEditorMode>('viewing');
   const autoFocusedNoteIdRef = useRef<string | null>(null);
-  const promotedFocusNoteIdRef = useRef<string | null>(null);
+  const allowNextRemoveRef = useRef(false);
+  const savingBeforeLeaveRef = useRef(false);
+  const skipNextFocusCleanupSaveRef = useRef(false);
 
   useEffect(() => {
     hydrateNoteTags();
   }, [hydrateNoteTags]);
 
+  useEffect(() => {
+    noteEditorModeRef.current = noteEditorMode;
+  }, [noteEditorMode]);
+
   const handleMissingNote = useCallback(() => {
     router.replace('/notes');
-  }, [router]);
-
-  const handleDraftPromoted = useCallback((remoteId: string) => {
-    promotedFocusNoteIdRef.current = remoteId;
-    router.replace(noteDetailRoute(remoteId));
   }, [router]);
 
   const {
@@ -83,6 +84,7 @@ export function PageScreen() {
     title,
     tags,
     saveState,
+    editorReady,
     markdownRef,
     titleRef,
     flushSave,
@@ -101,7 +103,6 @@ export function PageScreen() {
       untitledNote: pm.untitledNote,
     },
     onMissingNote: handleMissingNote,
-    onDraftPromoted: handleDraftPromoted,
   });
 
   const {
@@ -138,6 +139,19 @@ export function PageScreen() {
     setEditorCommand({ id: editorCommandIdRef.current, ...next } as EditorCommand);
   }, []);
 
+  const handleEditorFocusChange = useCallback((focused: boolean) => {
+    if (noteEditorModeRef.current === 'native_modal') return;
+    setNoteEditorMode(focused ? 'editing' : 'viewing');
+  }, []);
+
+  const handleNativeModalChange = useCallback((open: boolean) => {
+    if (open) {
+      setNoteEditorMode('native_modal');
+      return;
+    }
+    setNoteEditorMode(editorRuntimeState.focused ? 'editing' : 'viewing');
+  }, [editorRuntimeState.focused]);
+
   const voice = useVoiceCaptureInteraction({
     value: markdownRef.current,
     onChangeText: updateMarkdown,
@@ -159,23 +173,59 @@ export function PageScreen() {
     }
   }, [markdownRef, updateMarkdown]);
 
+  const saveEditorBeforeLeave = useCallback(async () => {
+    await flushEditorToDraft();
+    await flushSave();
+  }, [flushEditorToDraft, flushSave]);
+
   useFocusEffect(
     useCallback(() => () => {
+      if (skipNextFocusCleanupSaveRef.current) {
+        skipNextFocusCleanupSaveRef.current = false;
+        return;
+      }
       void (async () => {
-        await flushEditorToDraft();
-        await flushSave();
+        await saveEditorBeforeLeave();
       })();
-    }, [flushEditorToDraft, flushSave]),
+    }, [saveEditorBeforeLeave]),
   );
 
   useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') return;
+      void saveEditorBeforeLeave();
+    });
+    return () => sub.remove();
+  }, [saveEditorBeforeLeave]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+      if (allowNextRemoveRef.current) {
+        allowNextRemoveRef.current = false;
+        return;
+      }
+      if (!id || !note) return;
+      event.preventDefault();
+      if (savingBeforeLeaveRef.current) return;
+      savingBeforeLeaveRef.current = true;
+      Keyboard.dismiss();
+      void (async () => {
+        try {
+          await saveEditorBeforeLeave();
+          skipNextFocusCleanupSaveRef.current = true;
+          allowNextRemoveRef.current = true;
+          navigation.dispatch(event.data.action);
+        } finally {
+          savingBeforeLeaveRef.current = false;
+        }
+      })();
+    });
+    return unsubscribe;
+  }, [id, navigation, note, saveEditorBeforeLeave]);
+
+  useEffect(() => {
     if (!id || !note || !editorRuntimeState.ready || autoFocusedNoteIdRef.current === id) return;
-    const shouldFocus = isDraftNoteId(id) || promotedFocusNoteIdRef.current === id;
-    if (!shouldFocus) return;
     autoFocusedNoteIdRef.current = id;
-    if (promotedFocusNoteIdRef.current === id) {
-      promotedFocusNoteIdRef.current = null;
-    }
     const timer = setTimeout(() => {
       sendEditorCommand({ type: 'focus', position: 'end' });
     }, 80);
@@ -183,13 +233,20 @@ export function PageScreen() {
   }, [editorRuntimeState.ready, id, note, sendEditorCommand]);
 
   const handleBack = useCallback(() => {
+    if (savingBeforeLeaveRef.current) return;
+    savingBeforeLeaveRef.current = true;
     Keyboard.dismiss();
     void (async () => {
-      await flushEditorToDraft();
-      await flushSave();
-      dismissOrHome(router);
+      try {
+        await saveEditorBeforeLeave();
+        skipNextFocusCleanupSaveRef.current = true;
+        allowNextRemoveRef.current = true;
+        dismissOrHome(router);
+      } finally {
+        savingBeforeLeaveRef.current = false;
+      }
     })();
-  }, [flushEditorToDraft, flushSave, router]);
+  }, [router, saveEditorBeforeLeave]);
 
   useDismissOnHardwareBack(router, { onBack: handleBack });
 
@@ -236,8 +293,17 @@ export function PageScreen() {
   const labels = useMemo<NoteEditorLabels>(() => ({
     placeholder: pm.editorPlaceholderText,
     apply: m.common.apply,
+    textStyle: pm.editorTextStyle,
+    bold: pm.editorBold,
+    italic: pm.editorItalic,
+    heading: pm.editorHeading,
+    bulletList: pm.editorBulletList,
     image: pm.editorInsertImage,
     link: pm.editorInsertLink,
+    ai: pm.editorAI,
+    quote: pm.editorQuote,
+    code: pm.editorCode,
+    divider: pm.editorDivider,
     undo: pm.editorUndo,
     redo: pm.editorRedo,
     todo: pm.editorBlockTodo,
@@ -251,27 +317,10 @@ export function PageScreen() {
 
   const showLoading = noteQuery.isLoading && !note;
   const showError = noteQuery.isError && !note;
-  const showViewActions = Boolean(note && id && !keyboardVisible && !editorFocused);
+  const showViewActions = Boolean(note && id && !keyboardVisible && noteEditorMode === 'viewing');
   const primaryTag = useMemo(() => getNotePrimaryTag({ tags }), [tags]);
   const primaryTagPalette = useMemo(() => getTagColors(primaryTag, noteTags, colors), [colors, noteTags, primaryTag]);
   const wordCount = useMemo(() => countNoteCharacters(markdown), [markdown]);
-
-  const rightActions = useMemo(() => {
-    return [
-      {
-        icon: 'undo',
-        label: pm.editorUndo,
-        disabled: !editorRuntimeState.canUndo,
-        onPress: () => sendEditorCommand({ type: 'undo' }),
-      },
-      {
-        icon: 'redo',
-        label: pm.editorRedo,
-        disabled: !editorRuntimeState.canRedo,
-        onPress: () => sendEditorCommand({ type: 'redo' }),
-      },
-    ];
-  }, [editorRuntimeState.canRedo, editorRuntimeState.canUndo, pm.editorRedo, pm.editorUndo, sendEditorCommand]);
 
   const viewActionItems = useMemo<NoteViewActionBarItem[]>(() => [
     {
@@ -308,7 +357,6 @@ export function PageScreen() {
       <NoteDetailHeader
         onBack={handleBack}
         backLabel={m.common.back}
-        rightActions={note ? rightActions : undefined}
       />
 
       {showLoading ? (
@@ -326,13 +374,13 @@ export function PageScreen() {
         </View>
       ) : note && id ? (
         <View style={styles.editorWrap}>
-          <View style={[styles.titleWrap, styles.titleWrapCompact, { borderBottomColor: colors.border.subtle }]}>
+          <View style={styles.titleWrap}>
             <View style={styles.titleInputFrame}>
               <TextInput
                 value={title}
                 onChangeText={updateTitle}
                 onFocus={() => {
-                  setEditorFocused(false);
+                  setNoteEditorMode('viewing');
                 }}
                 editable
                 placeholder={pm.untitledNote}
@@ -361,23 +409,30 @@ export function PageScreen() {
               </Pressable>
             </View>
           </View>
-          <NoteEditorBridge
-            ref={editorRef}
-            noteId={id}
-            markdown={editorMarkdown}
-            attachmentSrcMap={attachmentSrcMap}
-            topCommand={editorCommand}
-            labels={labels}
-            onChangeMarkdown={updateMarkdown}
-            onSelectionChange={setSelection}
-            onRequestAttachment={handleRequestAttachment}
-            onFocusChange={setEditorFocused}
-            onRuntimeStateChange={setEditorRuntimeState}
-            voiceFeedback={voice.feedback}
-            voicePanHandlers={voice.panHandlers}
-            voiceActive={voice.active}
-            voiceDisabled={!id || !note || voice.transcribing}
-          />
+          {editorReady ? (
+            <NoteEditorBridge
+              ref={editorRef}
+              noteId={id}
+              markdown={editorMarkdown}
+              attachmentSrcMap={attachmentSrcMap}
+              topCommand={editorCommand}
+              labels={labels}
+              onChangeMarkdown={updateMarkdown}
+              onRequestAttachment={handleRequestAttachment}
+              onFocusChange={handleEditorFocusChange}
+              onNativeModalChange={handleNativeModalChange}
+              onRuntimeStateChange={setEditorRuntimeState}
+              voiceFeedback={voice.feedback}
+              voicePanHandlers={voice.panHandlers}
+              voicePressHandler={voice.onPress}
+              voiceActive={voice.active}
+              voiceDisabled={!id || !note || voice.transcribing}
+            />
+          ) : (
+            <View style={styles.center}>
+              <ActivityIndicator color={colors.accent.primary} />
+            </View>
+          )}
         </View>
       ) : null}
 
@@ -480,10 +535,9 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   titleWrap: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 22,
     paddingTop: 10,
     paddingBottom: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   titleWrapCompact: {
     paddingBottom: 4,
@@ -492,10 +546,10 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   titleInput: {
-    fontSize: 25,
-    lineHeight: 31,
-    fontWeight: '700',
-    paddingVertical: 4,
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '800',
+    paddingVertical: 2,
   },
   titleText: {
     fontSize: 25,

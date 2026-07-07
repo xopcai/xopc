@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 
 import { takeNewChatSessionKey } from '@/features/chat/session-prefetch';
-import { queueNote } from '@/features/notes/notes-sync';
 import { useMessages } from '@/i18n/messages';
 import { openChat } from '@/lib/navigation';
 import { useEffectiveDefaultAgentId } from '@/query/agents';
@@ -26,7 +25,6 @@ export type ContentIntakeActionOptions = {
 
 export type ContentIntakeSaveResult =
   | { status: 'saved'; noteId?: string }
-  | { status: 'queued' }
   | { status: 'ignored' };
 
 export function useContentIntakeActions(
@@ -58,15 +56,14 @@ export function useContentIntakeActions(
         invalidateNoteLists(queryClient);
         setToast(m.contentIntake.savedToNote);
         return { status: 'saved', noteId: created.note.id };
-      } catch {
-        queueNote(markdown, intent.noteKind, source);
-        setToast(m.notesPage.savedOffline);
-        return { status: 'queued' };
+      } catch (err) {
+        setToast(err instanceof Error ? err.message : m.notesPage.actionFailed);
+        return { status: 'ignored' };
       } finally {
         setSaving(false);
       }
     },
-    [m.contentIntake.savedToNote, m.notesPage.savedOffline, onHandled, queryClient, saving],
+    [m.contentIntake.savedToNote, m.notesPage.actionFailed, onHandled, queryClient, saving],
   );
 
   const exploreInChat = useCallback(

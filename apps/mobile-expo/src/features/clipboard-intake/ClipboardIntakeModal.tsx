@@ -19,6 +19,7 @@ export function ClipboardIntakeModal({ enabled }: ClipboardIntakeModalProps) {
   return (
     <ContentIntakeModal
       visible={Boolean(candidate)}
+      source="clipboard"
       intent={candidate?.intent ?? null}
       saving={saving}
       toast={toast}

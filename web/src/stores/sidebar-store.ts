@@ -24,7 +24,7 @@ function writeCollapsed(collapsed: boolean) {
   }
 }
 
-function clampExpandedWidthPx(px: number): number {
+export function clampExpandedWidthPx(px: number): number {
   return Math.min(
     SIDEBAR_EXPANDED_WIDTH_MAX,
     Math.max(SIDEBAR_EXPANDED_WIDTH_MIN, Math.round(px)),
@@ -71,6 +71,7 @@ export const useSidebarStore = create<SidebarState>((set, get) => ({
   expandedWidthPx: readExpandedWidthPx(),
   setExpandedWidthPx: (px) => {
     const expandedWidthPx = clampExpandedWidthPx(px);
+    if (get().expandedWidthPx === expandedWidthPx) return;
     set({ expandedWidthPx });
     queueMicrotask(() => writeExpandedWidthPx(expandedWidthPx));
   },

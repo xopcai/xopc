@@ -20,7 +20,7 @@ import { gatewayProfileNameFromUrl } from '@/stores/gateway-types';
 
 import { syncGatewayUrlsFromTunnelQr } from './apply-tunnel-qr-from-api';
 import { syncAfterGatewaySettingsSave } from './gateway-connection-sync';
-import { openDefaultSessionAfterConnect } from './navigate-after-gateway-connect';
+import { navigateHomeAfterGatewayConnect } from './navigate-after-gateway-connect';
 import {
   gatewayUrlValidationMessage,
   zodGatewayBaseUrlErrorMessage,
@@ -280,7 +280,7 @@ export function GatewayEditScreen() {
       await syncAfterGatewaySettingsSave();
 
       if (isNew || baseUrlChanged) {
-        await openDefaultSessionAfterConnect(router.replace);
+        await navigateHomeAfterGatewayConnect(router.replace);
       } else {
         router.back();
       }
