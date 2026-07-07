@@ -6,6 +6,8 @@ import type { GoalWithDetails } from '../../../goals/index.js';
 import { GoalService } from '../../../goals/index.js';
 import {
   buildProjectLoopOverview,
+  inferProjectKind,
+  inferSuggestedProjectDefaultAgentId,
   isValidProjectAgentId,
   normalizeProjectAgentId,
   ProjectWorkspaceConflictError,
@@ -157,7 +159,17 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const name = textField(body, 'name')?.trim();
     const workspaceRoot = textField(body, 'workspaceRoot')?.trim();
     if (!name && !workspaceRoot) return c.json({ ok: false, error: 'Missing name' }, 400);
-    const defaultAgentId = normalizeProjectAgentId(textField(body, 'defaultAgentId'));
+    const hasDefaultAgentPatch = Object.hasOwn(body, 'defaultAgentId');
+    const explicitDefaultAgentId = normalizeProjectAgentId(textField(body, 'defaultAgentId'));
+    const defaultAgentId = hasDefaultAgentPatch
+      ? explicitDefaultAgentId
+      : inferSuggestedProjectDefaultAgentId({
+        config: service.currentConfig,
+        name,
+        description: textField(body, 'description'),
+        workspaceRoot,
+        projectKind: textField(body, 'projectKind'),
+      });
     if (!isValidProjectAgentId(service.currentConfig, defaultAgentId)) {
       return c.json({ ok: false, error: 'Default agent not found' }, 400);
     }
@@ -168,6 +180,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         defaultAgentId,
         workspaceRoot,
         createWorkspaceRoot: body.createWorkspaceRoot === true,
+        projectKind: textField(body, 'projectKind'),
         brief: textField(body, 'brief'),
         instructions: textField(body, 'instructions'),
       });
@@ -201,16 +214,38 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, suggestions: sessionKey ? service.projects.suggestProjectsForSession(sessionKey) : [] });
   });
 
+  authenticated.post('/api/projects/infer-defaults', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const input = {
+      name: textField(body, 'name'),
+      description: textField(body, 'description'),
+      workspaceRoot: textField(body, 'workspaceRoot'),
+      projectKind: textField(body, 'projectKind'),
+    };
+    const inference = inferProjectKind(input);
+    const defaultAgentId = inferSuggestedProjectDefaultAgentId({
+      config: service.currentConfig,
+      ...input,
+    });
+    return c.json({ ok: true, inference, defaultAgentId });
+  });
+
   authenticated.post('/api/projects/resolve-workspace', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const workspacePath = textField(body, 'workspacePath')?.trim();
     if (!workspacePath) return c.json({ ok: false, error: 'Missing workspacePath' }, 400);
     const agentId = textField(body, 'agentId')?.trim() || 'main';
+    const suggestedDefaultAgentId = inferSuggestedProjectDefaultAgentId({
+      config: service.currentConfig,
+      workspaceRoot: workspacePath,
+      projectKind: textField(body, 'projectKind'),
+    });
     let match;
     try {
       match = service.projects.resolveOrCreateForWorkspacePath({
         workspacePath,
         agentId,
+        defaultAgentId: suggestedDefaultAgentId,
         autoCreate: body.autoCreate !== false,
       });
     } catch (error) {
@@ -223,7 +258,9 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (!match) return c.json({ ok: true, project: null });
 
     const sessionKey = textField(body, 'sessionKey')?.trim();
-    if (sessionKey) {
+    const projectDefaultAgentId = normalizeProjectAgentId(match.project.defaultAgentId);
+    const shouldBindRequestedSession = !projectDefaultAgentId || projectDefaultAgentId === normalizeProjectAgentId(agentId);
+    if (sessionKey && shouldBindRequestedSession) {
       const existingSession = getSessionMetadata(sessionKey);
       if (!existingSession) {
         await service.sessionIndexInstance.saveMessages(sessionKey, [], {

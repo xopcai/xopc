@@ -2,6 +2,8 @@ export * from './types.js';
 export * from './project-store.js';
 export * from './project-service.js';
 export * from './project-agent.js';
+export * from './project-agent-suggestion.js';
+export * from './project-kind.js';
 export * from './project-loop.js';
 export * from './session-bind.js';
 export * from './goal-bind.js';

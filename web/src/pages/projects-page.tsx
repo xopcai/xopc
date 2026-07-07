@@ -8,15 +8,21 @@ import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-fi
 import {
   createProject,
   fetchProjects,
+  inferProjectDefaults,
   type Project,
+  type ProjectKindSelection,
   type ProjectStatus,
 } from '@/features/projects/api';
+import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
 const STATUSES: Array<ProjectStatus | 'all'> = ['all', 'active', 'paused', 'archived'];
+const AUTO_AGENT_CHOICE = '__auto__';
+const GLOBAL_AGENT_CHOICE = '__global__';
+type AgentChoice = typeof AUTO_AGENT_CHOICE | typeof GLOBAL_AGENT_CHOICE | string;
 
 function statusTone(status: ProjectStatus): string {
   if (status === 'active') return 'bg-accent-soft text-accent-fg';
@@ -91,6 +97,11 @@ export function ProjectsPage() {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [workspaceRoot, setWorkspaceRoot] = useState('');
+  const [projectKind, setProjectKind] = useState<ProjectKindSelection>('auto');
+  const [agentChoice, setAgentChoice] = useState<AgentChoice>(AUTO_AGENT_CHOICE);
+  const [agents, setAgents] = useState<GatewayAgentRow[]>([]);
+  const [inferredDefaultAgentId, setInferredDefaultAgentId] = useState<string | undefined>();
+  const [inferredKind, setInferredKind] = useState<'coding' | 'general' | 'unknown'>('unknown');
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [workspaceConflict, setWorkspaceConflict] = useState<Project | null>(null);
@@ -119,6 +130,47 @@ export function ProjectsPage() {
     };
   }, [search, status]);
 
+  useEffect(() => {
+    if (!createOpen) return;
+    let cancelled = false;
+    void fetchGatewayAgents()
+      .then((payload) => {
+        if (!cancelled) setAgents(payload.agents);
+      })
+      .catch(() => {
+        if (!cancelled) setAgents([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [createOpen]);
+
+  useEffect(() => {
+    if (!createOpen) return;
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      void inferProjectDefaults({
+        ...(name.trim() ? { name: name.trim() } : {}),
+        ...(workspaceRoot.trim() ? { workspaceRoot: workspaceRoot.trim() } : {}),
+        projectKind,
+      })
+        .then((result) => {
+          if (cancelled) return;
+          setInferredDefaultAgentId(result.defaultAgentId);
+          setInferredKind(result.inference.kind);
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setInferredDefaultAgentId(undefined);
+          setInferredKind('unknown');
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [createOpen, name, projectKind, workspaceRoot]);
+
   const grouped = useMemo(() => {
     const active = projects.filter((p) => p.status === 'active');
     const paused = projects.filter((p) => p.status === 'paused');
@@ -137,11 +189,15 @@ export function ProjectsPage() {
       const project = await createProject({
         ...(trimmedName ? { name: trimmedName } : {}),
         ...(trimmedWorkspace ? { workspaceRoot: trimmedWorkspace } : {}),
+        projectKind,
+        ...(agentChoice === AUTO_AGENT_CHOICE ? {} : { defaultAgentId: agentChoice === GLOBAL_AGENT_CHOICE ? '' : agentChoice }),
         ...(options.createWorkspaceRoot ? { createWorkspaceRoot: true } : {}),
       });
       setProjects((items) => [project, ...items]);
       setName('');
       setWorkspaceRoot('');
+      setProjectKind('auto');
+      setAgentChoice(AUTO_AGENT_CHOICE);
       setCreateOpen(false);
     } catch (err) {
       const conflictProject = getWorkspaceConflictProject(err);
@@ -161,7 +217,7 @@ export function ProjectsPage() {
     } finally {
       setCreating(false);
     }
-  }, [name, workspaceRoot]);
+  }, [agentChoice, name, projectKind, workspaceRoot]);
 
   const onCreate = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -188,6 +244,23 @@ export function ProjectsPage() {
     setMissingWorkspaceRoot(null);
     setCreateOpen(true);
   }, []);
+
+  const inferredAgentName = useMemo(() => {
+    const agent = agents.find((item) => item.id === inferredDefaultAgentId);
+    return agent?.name || inferredDefaultAgentId || '';
+  }, [agents, inferredDefaultAgentId]);
+
+  const createAgentHint = useMemo(() => {
+    if (agentChoice === GLOBAL_AGENT_CHOICE) return t.agentHintGlobal;
+    if (agentChoice !== AUTO_AGENT_CHOICE) {
+      const agent = agents.find((item) => item.id === agentChoice);
+      return interpolate(t.agentHintSelected, { agent: agent?.name || agentChoice });
+    }
+    if (inferredDefaultAgentId) return interpolate(t.agentHintCoding, { agent: inferredAgentName });
+    if (inferredKind === 'coding') return t.agentHintCoderUnavailable;
+    if (projectKind === 'general' || inferredKind === 'general') return t.agentHintGeneral;
+    return t.agentHintAuto;
+  }, [agentChoice, agents, inferredAgentName, inferredDefaultAgentId, inferredKind, projectKind, t]);
 
   const headerEnd = useMemo(
     () => (
@@ -268,6 +341,37 @@ export function ProjectsPage() {
                     {t.workspaceHint}
                   </p>
                 </div>
+                <label className="grid gap-1.5 text-sm">
+                  <span className="font-medium text-fg-muted">{t.projectType}</span>
+                  <select
+                    className="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
+                    value={projectKind}
+                    onChange={(event) => setProjectKind(event.target.value as ProjectKindSelection)}
+                    disabled={creating}
+                  >
+                    <option value="auto">{t.projectTypes.auto}</option>
+                    <option value="coding">{t.projectTypes.coding}</option>
+                    <option value="general">{t.projectTypes.general}</option>
+                  </select>
+                </label>
+                <label className="grid gap-1.5 text-sm">
+                  <span className="font-medium text-fg-muted">{t.defaultAgent}</span>
+                  <select
+                    className="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
+                    value={agentChoice}
+                    onChange={(event) => setAgentChoice(event.target.value)}
+                    disabled={creating}
+                  >
+                    <option value={AUTO_AGENT_CHOICE}>{t.agentAuto}</option>
+                    <option value={GLOBAL_AGENT_CHOICE}>{t.agentGlobalDefault}</option>
+                    {agents.map((agent) => (
+                      <option key={agent.id} value={agent.id}>
+                        {agent.name || agent.id}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-fg-subtle">{createAgentHint}</p>
+                </label>
               </div>
               <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
                 <Dialog.Close asChild>

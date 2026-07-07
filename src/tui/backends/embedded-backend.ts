@@ -45,7 +45,7 @@ import { buildTuiTranscriptTree, transcriptTreeEntryIdToRowNumber } from '../tui
 import { ChatStreamMapper } from '../../gateway/chat-stream/mapper.js';
 import { collectTuiStartupResources } from '../tui-startup-resources.js';
 import { fuzzySearchWorkspaceFiles } from '../../gateway/workspace-file-search.js';
-import { ProjectService } from '../../projects/project-service.js';
+import { inferSuggestedProjectDefaultAgentId, ProjectService } from '../../projects/index.js';
 
 const log = createLogger('TUI:Embedded');
 
@@ -250,12 +250,23 @@ export class EmbeddedBackend implements TuiBackend {
     await this.sessionIndexReady;
     if (!this.sessionIndex) return { project: null };
     const projects = new ProjectService();
+    const defaultAgentId = inferSuggestedProjectDefaultAgentId({
+      config: this.activeConfig(),
+      workspaceRoot: opts.workspacePath,
+    });
     const match = projects.resolveOrCreateForWorkspacePath({
       workspacePath: opts.workspacePath,
       agentId: opts.agentId,
+      defaultAgentId,
       autoCreate: opts.autoCreate !== false,
     });
     if (!match) return { project: null };
+    const projectAgentId = match.project.defaultAgentId?.trim()
+      ? normalizeAgentId(match.project.defaultAgentId)
+      : undefined;
+    if (projectAgentId && projectAgentId !== normalizeAgentId(opts.agentId)) {
+      return { project: match.project, created: match.created, reason: match.reason };
+    }
     if (!getSessionMetadata(opts.sessionKey)) {
       await this.sessionIndex.getStore().resolveTranscriptPath(opts.sessionKey, {
         metadata: {

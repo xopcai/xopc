@@ -48,6 +48,7 @@ import type { ProjectTrustStoreEntry } from '../project-trust/trust-store.js';
 import { providerSupportsOAuth } from '../providers/index.js';
 import { GoalService } from '../goals/index.js';
 import {
+  inferSuggestedProjectDefaultAgentId,
   isValidProjectAgentId,
   normalizeProjectAgentId,
   ProjectService,
@@ -413,6 +414,57 @@ function parseTuiProjectStatus(raw: string | undefined): ProjectStatus | undefin
   return raw === 'active' || raw === 'paused' || raw === 'archived' ? raw : undefined;
 }
 
+function parseProjectNewArgs(parts: string[]): {
+  name: string;
+  workspaceRoot?: string;
+  projectKind?: string;
+  agentId?: string;
+  error?: string;
+} {
+  const nameParts: string[] = [];
+  let workspaceRoot: string | undefined;
+  let projectKind: string | undefined;
+  let agentId: string | undefined;
+  for (let index = 0; index < parts.length; index += 1) {
+    const part = parts[index];
+    if (part === '--path' || part === '-p') {
+      workspaceRoot = parts[index + 1]?.trim();
+      index += 1;
+      if (!workspaceRoot) return { name: '', error: 'Missing value for --path' };
+      continue;
+    }
+    if (part.startsWith('--path=') || part.startsWith('-p=')) {
+      workspaceRoot = part.slice(part.indexOf('=') + 1).trim();
+      if (!workspaceRoot) return { name: '', error: 'Missing value for --path' };
+      continue;
+    }
+    if (part === '--type' || part === '-t') {
+      projectKind = parts[index + 1]?.trim();
+      index += 1;
+      if (!['auto', 'coding', 'general'].includes(projectKind ?? '')) return { name: '', error: 'Project type must be auto, coding, or general' };
+      continue;
+    }
+    if (part.startsWith('--type=') || part.startsWith('-t=')) {
+      projectKind = part.slice(part.indexOf('=') + 1).trim();
+      if (!['auto', 'coding', 'general'].includes(projectKind)) return { name: '', error: 'Project type must be auto, coding, or general' };
+      continue;
+    }
+    if (part === '--agent' || part === '-a') {
+      agentId = parts[index + 1]?.trim();
+      index += 1;
+      if (!agentId) return { name: '', error: 'Missing value for --agent' };
+      continue;
+    }
+    if (part.startsWith('--agent=') || part.startsWith('-a=')) {
+      agentId = part.slice(part.indexOf('=') + 1).trim();
+      if (!agentId) return { name: '', error: 'Missing value for --agent' };
+      continue;
+    }
+    nameParts.push(part);
+  }
+  return { name: nameParts.join(' ').trim(), workspaceRoot, projectKind, agentId };
+}
+
 function formatTuiProject(project: Project & { sessionCount?: number; goalCount?: number; activeGoalCount?: number }): string {
   const lines = [
     `${project.name} [${project.status}]`,
@@ -446,9 +498,24 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
     }
 
     if (subcommand === 'new') {
-      const name = parts.slice(1).join(' ').trim();
-      if (!name) return 'Usage: /project new <name>';
-      const project = projects.create({ name });
+      const parsed = parseProjectNewArgs(parts.slice(1));
+      if (parsed.error) return parsed.error;
+      if (!parsed.name && !parsed.workspaceRoot) return 'Usage: /project new <name> [--path <workspace>] [--type auto|coding|general] [--agent <agent-id>]';
+      const cfg = loadConfig(resolveConfigPath());
+      const explicitAgentId = normalizeProjectAgentId(parsed.agentId);
+      if (parsed.agentId && !isValidProjectAgentId(cfg, explicitAgentId)) return `Agent not found: ${parsed.agentId}`;
+      const defaultAgentId = explicitAgentId ?? inferSuggestedProjectDefaultAgentId({
+        config: cfg,
+        name: parsed.name,
+        workspaceRoot: parsed.workspaceRoot,
+        projectKind: parsed.projectKind,
+      });
+      const project = projects.create({
+        ...(parsed.name ? { name: parsed.name } : {}),
+        ...(parsed.workspaceRoot ? { workspaceRoot: parsed.workspaceRoot } : {}),
+        ...(defaultAgentId ? { defaultAgentId } : {}),
+        ...(parsed.projectKind ? { projectKind: parsed.projectKind } : {}),
+      });
       projects.attachSession(state.currentSessionKey, project.id);
       return `Created and attached project:\n${formatTuiProject(project)}`;
     }
@@ -518,7 +585,7 @@ function runTuiProjectCommand(state: TuiState, args: string): string {
       'Usage:',
       '  /project',
       '  /project list [active|paused|archived]',
-      '  /project new <name>',
+      '  /project new <name> [--path <workspace>] [--type auto|coding|general] [--agent <agent-id>]',
       '  /project switch <id-or-slug>',
       '  /project attach <id-or-slug>',
       '  /project detach',
