@@ -26,6 +26,7 @@ import type {
   NoteEditorLabels,
 } from '../notes/editor/editor-protocol';
 import { useNoteTagsStore } from '../../stores/note-tags-store';
+import { isDraftNoteId } from '../notes/notes-local';
 import { useNoteEditSession } from './useNoteEditSession';
 import { useNoteEditorAttachments } from './useNoteEditorAttachments';
 import { useNotePageActions } from './useNotePageActions';
@@ -58,6 +59,8 @@ export function PageScreen() {
 
   const editorCommandIdRef = useRef(0);
   const editorRef = useRef<NoteEditorBridgeHandle | null>(null);
+  const autoFocusedNoteIdRef = useRef<string | null>(null);
+  const promotedFocusNoteIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     hydrateNoteTags();
@@ -68,6 +71,7 @@ export function PageScreen() {
   }, [router]);
 
   const handleDraftPromoted = useCallback((remoteId: string) => {
+    promotedFocusNoteIdRef.current = remoteId;
     router.replace(noteDetailRoute(remoteId));
   }, [router]);
 
@@ -129,12 +133,6 @@ export function PageScreen() {
     };
   }, []);
 
-  useFocusEffect(
-    useCallback(() => () => {
-      void flushSave();
-    }, [flushSave]),
-  );
-
   const sendEditorCommand = useCallback((next: EditorCommandInput) => {
     editorCommandIdRef.current += 1;
     setEditorCommand({ id: editorCommandIdRef.current, ...next } as EditorCommand);
@@ -155,8 +153,34 @@ export function PageScreen() {
   });
 
   const flushEditorToDraft = useCallback(async () => {
-    await editorRef.current?.flushMarkdown();
-  }, []);
+    const nextMarkdown = await editorRef.current?.flushMarkdown();
+    if (typeof nextMarkdown === 'string' && nextMarkdown !== markdownRef.current) {
+      updateMarkdown(nextMarkdown);
+    }
+  }, [markdownRef, updateMarkdown]);
+
+  useFocusEffect(
+    useCallback(() => () => {
+      void (async () => {
+        await flushEditorToDraft();
+        await flushSave();
+      })();
+    }, [flushEditorToDraft, flushSave]),
+  );
+
+  useEffect(() => {
+    if (!id || !note || !editorRuntimeState.ready || autoFocusedNoteIdRef.current === id) return;
+    const shouldFocus = isDraftNoteId(id) || promotedFocusNoteIdRef.current === id;
+    if (!shouldFocus) return;
+    autoFocusedNoteIdRef.current = id;
+    if (promotedFocusNoteIdRef.current === id) {
+      promotedFocusNoteIdRef.current = null;
+    }
+    const timer = setTimeout(() => {
+      sendEditorCommand({ type: 'focus', position: 'end' });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [editorRuntimeState.ready, id, note, sendEditorCommand]);
 
   const handleBack = useCallback(() => {
     Keyboard.dismiss();

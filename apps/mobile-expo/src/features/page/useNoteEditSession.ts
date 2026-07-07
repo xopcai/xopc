@@ -47,18 +47,23 @@ type UseNoteEditSessionArgs = {
   onDraftPromoted?: (remoteId: string) => void;
 };
 
-function deriveTitle(note: Note | undefined, fallback: string): string {
-  const explicit = note?.title?.trim();
-  if (explicit) return explicit;
-  const plain = note?.markdown?.replace(/[#*_`>\-[\]()]/g, ' ').replace(/\s+/g, ' ').trim();
-  return plain ? Array.from(plain).slice(0, 18).join('') : fallback;
-}
-
 function tagsEqual(a: string[] | undefined, b: string[] | undefined): boolean {
   const left = a ?? [];
   const right = b ?? [];
   if (left.length !== right.length) return false;
   return left.every((tag, index) => tag === right[index]);
+}
+
+function hasDraftContent(
+  draft: Note,
+  input: { markdown: string; title?: string; tags?: string[]; status?: Note['status'] },
+): boolean {
+  return Boolean(
+    input.markdown.trim()
+    || input.title?.trim()
+    || (input.tags?.length ?? draft.tags?.length ?? 0) > 0
+    || (input.status ?? draft.status) !== draft.status,
+  );
 }
 
 export function useNoteEditSession({
@@ -158,7 +163,7 @@ export function useNoteEditSession({
       dirtyRef.current = false;
       setMarkdown(nextMarkdown);
       setEditorMarkdown(nextMarkdown);
-      setTitle(nextTitle ?? deriveTitle(note, messages.untitledNote));
+      setTitle(nextTitle ?? '');
       setTags(nextTags);
       ensureNoteTags(nextTags ?? []);
       setNoteStatus(nextStatus);
@@ -178,7 +183,6 @@ export function useNoteEditSession({
   }, [
     ensureNoteTags,
     isDraft,
-    messages.untitledNote,
     note,
     note?.id,
     note?.localVersion,
@@ -204,14 +208,21 @@ export function useNoteEditSession({
       || draftNote.syncState !== 'creating'
       || draftPromotionRef.current === id
     ) return;
+    const promotionInput = {
+      markdown: markdownRef.current,
+      title: titleRef.current.trim() || undefined,
+      tags: tagsRef.current,
+      status: statusRef.current,
+    };
+    if (!hasDraftContent(draftNote, promotionInput)) return;
     draftPromotionRef.current = id;
     void (async () => {
       try {
         const remoteId = await promoteLocalDraftNote(id, {
-          markdown: markdownRef.current,
-          title: titleRef.current.trim() || undefined,
-          tags: tagsRef.current,
-          status: statusRef.current,
+          markdown: promotionInput.markdown,
+          title: promotionInput.title,
+          tags: promotionInput.tags,
+          status: promotionInput.status,
         });
         onDraftPromoted?.(remoteId);
       } catch {
@@ -235,7 +246,7 @@ export function useNoteEditSession({
     if (!dirtyRef.current) {
       setMarkdown(snapshot.markdown ?? '');
       setEditorMarkdown(snapshot.markdown ?? '');
-      setTitle(snapshot.title ?? deriveTitle(snapshot, messages.untitledNote));
+      setTitle(snapshot.title ?? '');
       setTags(snapshot.tags);
       setNoteStatus(snapshot.status);
       attachmentDisplayVersionRef.current += 1;
@@ -246,7 +257,7 @@ export function useNoteEditSession({
         attachments: snapshot.attachments,
       });
     }
-  }, [id, messages.untitledNote, queryClient]);
+  }, [id, queryClient]);
 
   const flushQueuedNoteOperations = useCallback(async () => {
     const flushed = await flushPendingNoteOperations();
@@ -335,6 +346,30 @@ export function useNoteEditSession({
     setSaveState(nextSaveState);
     if (isDraft) {
       setDraftNote(snapshot);
+      const promotionInput = {
+        markdown: nextMarkdown,
+        title: nextTitle,
+        tags: nextTags,
+        status: nextStatus,
+      };
+      if (
+        snapshot.syncState === 'creating'
+        && draftPromotionRef.current !== id
+        && hasDraftContent(snapshot, promotionInput)
+      ) {
+        draftPromotionRef.current = id;
+        try {
+          const remoteId = await promoteLocalDraftNote(id, promotionInput);
+          setSaveState('pending');
+          onDraftPromoted?.(remoteId);
+        } catch {
+          markLocalDraftCreateFailed(id);
+          setDraftNote(readLocalNote(id));
+          setSaveState('failed');
+          setSnackMsg(messages.savedOffline);
+          draftPromotionRef.current = null;
+        }
+      }
     } else {
       queryClient.setQueryData(queryKeys.note(id), snapshot);
       upsertNoteInListCaches(queryClient, noteToIndexEntry(snapshot));
@@ -348,7 +383,7 @@ export function useNoteEditSession({
       setSaveState('failed');
       setSnackMsg(messages.savedOffline);
     }
-  }, [flushQueuedNoteOperations, id, isDraft, messages.savedOffline, note, queryClient, saveStateAfterFlush, setSnackMsg]);
+  }, [flushQueuedNoteOperations, id, isDraft, messages.savedOffline, note, onDraftPromoted, queryClient, saveStateAfterFlush, setSnackMsg]);
 
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -363,6 +398,7 @@ export function useNoteEditSession({
 
   const updateMarkdown = useCallback((next: string) => {
     dirtyRef.current = true;
+    markdownRef.current = next;
     setSaveState('dirty');
     setEditorMarkdown(next);
     setMarkdown(next);
@@ -371,6 +407,7 @@ export function useNoteEditSession({
 
   const updateTitle = useCallback((next: string) => {
     dirtyRef.current = true;
+    titleRef.current = next;
     setSaveState('dirty');
     setTitle(next);
     scheduleSave();

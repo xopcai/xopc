@@ -67,7 +67,7 @@ When the local path works, choose the next surface:
 | PC Desktop | GitHub Releases | Easiest start; native app with embedded gateway |
 | CLI | `xopc agent -i` | Minimal terminal chat |
 | Web console | `xopc gateway` | Browser chat, settings, logs |
-| Mobile | [xopc-app](https://github.com/xopcai/xopc-app) + gateway pairing | iOS/Android client for your gateway; see [Mobile app](./mobile-app.md) |
+| Mobile | [mobile app](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo) + gateway pairing | iOS/Android client for your gateway; see [Mobile app](./mobile-app.md) |
 | Messengers | Open `Channels` after the gateway is running | Telegram, WeChat, Feishu/Lark |
 
 For the full guide, continue to [Getting Started](./getting-started.md).

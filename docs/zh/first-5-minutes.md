@@ -67,7 +67,7 @@ xopc
 | PC 桌面端 | GitHub Releases | 最省心的开始方式；原生应用 + 内嵌 gateway |
 | CLI | `xopc agent -i` | 最小终端聊天 |
 | 网页控制台 | `xopc gateway` | 在浏览器中聊天、改设置、看日志 |
-| 手机端 | [xopc-app](https://github.com/xopcai/xopc-app) + 网关配对 | iOS/Android 网关客户端；见 [手机端 App](./mobile-app.md) |
+| 手机端 | [移动端 App](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo) + 网关配对 | iOS/Android 网关客户端；见 [手机端 App](./mobile-app.md) |
 | 即时通讯 | 启动网关后打开 `频道` 页面 | Telegram、微信、飞书/Lark |
 
 完整说明见 [快速开始](./getting-started.md)。

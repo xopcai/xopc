@@ -30,7 +30,7 @@ Useful links:
 - Website: https://xopc.ai
 - GitHub: https://github.com/xopcai/xopc
 - First 5 Minutes: https://xopcai.github.io/xopc/first-5-minutes
-- Mobile app: https://github.com/xopcai/xopc-app
+- Mobile app: https://github.com/xopcai/xopc/tree/main/apps/mobile-expo
 
 If xopc is useful or the direction feels worth supporting, a GitHub star helps more developers find it.`,
   },
@@ -63,7 +63,7 @@ Links:
 - Website: https://xopc.ai
 - GitHub: https://github.com/xopcai/xopc
 - Docs: https://xopcai.github.io/xopc/
-- Mobile app: https://github.com/xopcai/xopc-app`,
+- Mobile app: https://github.com/xopcai/xopc/tree/main/apps/mobile-expo`,
   },
   {
     categoryCandidates: ['Q&A', 'Q and A', 'General'],
@@ -86,7 +86,7 @@ Common topics:
 - local gateway and Web console
 - remote access through Tailscale, FRP, SSH tunnel, or reverse proxy
 - Telegram / WeChat / Feishu/Lark channels
-- xopc-app mobile pairing
+- mobile app pairing
 
 Helpful links:
 
@@ -263,13 +263,13 @@ Record a short clip showing:
 - Docs: https://xopcai.github.io/xopc/`,
   },
   {
-    title: 'demo: record a 30-second xopc-app mobile pairing clip',
+    title: 'demo: record a 30-second mobile app pairing clip',
     labels: ['good first issue', 'help wanted', 'type:docs', 'area:gateway', 'priority:P3'],
     body: `## Context
 
-xopc has a standalone mobile client, xopc-app:
+xopc has a mobile client in the main repository:
 
-https://github.com/xopcai/xopc-app
+https://github.com/xopcai/xopc/tree/main/apps/mobile-expo
 
 A short pairing clip would make the mobile story easier to understand in launch posts.
 
@@ -279,21 +279,21 @@ Record a short clip showing:
 
 - desktop gateway running
 - the pairing QR or base URL/token flow
-- xopc-app connecting from a phone or simulator
+- the xopc mobile app connecting from a phone or simulator
 - sending one message from mobile
 
 ## Acceptance criteria
 
 - Clip is 20-40 seconds.
 - Tokens, local network secrets, and personal messages are hidden.
-- The final frame includes both \`github.com/xopcai/xopc\` and \`github.com/xopcai/xopc-app\`.
+- The final frame includes \`github.com/xopcai/xopc\` and the mobile app docs URL.
 - The clip can be linked from README, docs, or launch posts.
 
 ## Useful links
 
 - Mobile app docs: https://xopcai.github.io/xopc/mobile-app
 - Main repo: https://github.com/xopcai/xopc
-- Mobile repo: https://github.com/xopcai/xopc-app`,
+- Mobile app source: https://github.com/xopcai/xopc/tree/main/apps/mobile-expo`,
   },
 ];
 
@@ -489,4 +489,3 @@ main().catch((error) => {
   console.error(error.message);
   process.exitCode = 1;
 });
-
