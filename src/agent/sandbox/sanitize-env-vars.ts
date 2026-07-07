@@ -1,5 +1,5 @@
 /**
- * Filters process environment before passing it to child processes (e.g. shell tool)
+ * Filters process environment before passing it to child processes (e.g. exec_command)
  * to avoid leaking API keys and other credentials.
  */
 
@@ -86,7 +86,7 @@ export function sanitizeEnvVars(
 }
 
 /**
- * Environment for agent shell execution: strips secrets, keeps normal tooling vars.
+ * Environment for agent command execution: strips secrets, keeps normal tooling vars.
  */
 export function prepareSafeToolEnv(
   baseEnv: NodeJS.ProcessEnv | Record<string, string | undefined>,

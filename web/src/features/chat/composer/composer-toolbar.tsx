@@ -1,5 +1,5 @@
 import * as Popover from '@radix-ui/react-popover';
-import { Ban, File as FileIcon, Mic, Plus, Send, Sparkles, Square } from 'lucide-react';
+import { Ban, File as FileIcon, ListChecks, Mic, Plus, Send, Sparkles, Square } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import type { Message } from '@/features/chat/messages/messages.types';
@@ -37,6 +37,7 @@ export interface ComposerToolbarProps {
   attachmentCount: number;
   maxAttachments: number;
   onPickFiles: () => void;
+  onOpenReviewLauncher: () => void;
 
   thinkingLevel: string;
   showThinkingSelector: boolean;
@@ -72,6 +73,7 @@ export const ComposerToolbar = memo(function ComposerToolbar({
   attachmentCount,
   maxAttachments,
   onPickFiles,
+  onOpenReviewLauncher,
   thinkingLevel,
   showThinkingSelector,
   onThinkingChange,
@@ -141,6 +143,22 @@ export const ComposerToolbar = memo(function ComposerToolbar({
                 disabled={disabled || runBusy}
                 onDone={() => setMoreOpen(false)}
               />
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-fg',
+                  'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                )}
+                disabled={disabled || runBusy || !sessionKey}
+                onClick={() => {
+                  onOpenReviewLauncher();
+                  setMoreOpen(false);
+                }}
+              >
+                <ListChecks className="size-4 shrink-0 text-fg-subtle" aria-hidden />
+                <span className="min-w-0 flex-1 truncate">{m.reviewLauncher.actionLabel}</span>
+              </button>
               <div className="my-1 h-px bg-edge-subtle" />
               <button
                 type="button"

@@ -32,6 +32,7 @@ export interface WireMessage {
   /** Inline / legacy attachment payloads on user/assistant turns. */
   attachments?: unknown;
   usage?: unknown;
+  metadata?: unknown;
   timestamp?: string | number;
   tool_call_id?: string;
   toolCallId?: string;

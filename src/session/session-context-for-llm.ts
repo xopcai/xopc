@@ -174,6 +174,8 @@ export function isTranscriptMetadataEntry(
 }
 
 const LLM_ROLES = new Set(['user', 'assistant', 'system', 'tool', 'toolResult']);
+const CODING_CONTEXT_LOOKBACK = 80;
+const CODING_CONTEXT_MAX_LINES = 24;
 
 function isLikelyAgentMessage(x: unknown): x is AgentMessage {
   if (!x || typeof x !== 'object') return false;
@@ -244,6 +246,206 @@ function bashExecutionRowToLlmMessage(row: XopcTranscriptBashExecutionEntry): Ag
   } as AgentMessage;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function parseJsonRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    return asRecord(JSON.parse(value));
+  } catch {
+    return null;
+  }
+}
+
+function textFromContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((part) => {
+      if (typeof part === 'string') return part;
+      const rec = asRecord(part);
+      if (!rec) return '';
+      if (rec.type === 'text' && typeof rec.text === 'string') return rec.text;
+      return '';
+    })
+    .filter(Boolean)
+    .join('');
+}
+
+function toolNameFromBlock(block: Record<string, unknown>): string {
+  const fn = asRecord(block.function);
+  return stringValue(block.name) ?? stringValue(block.toolName) ?? stringValue(fn?.name) ?? 'tool';
+}
+
+function toolArgsFromBlock(block: Record<string, unknown>): Record<string, unknown> {
+  const fn = asRecord(block.function);
+  return (
+    asRecord(block.arguments) ??
+    asRecord(block.args) ??
+    asRecord(block.input) ??
+    asRecord(fn?.arguments) ??
+    parseJsonRecord(block.arguments) ??
+    parseJsonRecord(block.args) ??
+    parseJsonRecord(block.input) ??
+    parseJsonRecord(fn?.arguments) ??
+    {}
+  );
+}
+
+function toolCallIdFromBlock(block: Record<string, unknown>): string | undefined {
+  return (
+    stringValue(block.id) ??
+    stringValue(block.toolCallId) ??
+    stringValue(block.tool_call_id) ??
+    stringValue(block.tool_call_id$)
+  );
+}
+
+function toolResultId(row: AgentMessage): string | undefined {
+  const rec = row as unknown as Record<string, unknown>;
+  return (
+    stringValue(rec.toolCallId) ??
+    stringValue(rec.tool_call_id) ??
+    stringValue(rec.tool_call_id$)
+  );
+}
+
+function extractResultDetails(row: AgentMessage | undefined): Record<string, unknown> | null {
+  if (!row) return null;
+  const topLevelDetails = asRecord((row as unknown as { details?: unknown }).details);
+  if (topLevelDetails) return topLevelDetails;
+
+  const contentText = textFromContent((row as { content?: unknown }).content);
+  if (!contentText.trim()) return null;
+  try {
+    const parsed = JSON.parse(contentText) as unknown;
+    const rec = asRecord(parsed);
+    const details = asRecord(rec?.details);
+    return details ?? rec;
+  } catch {
+    return null;
+  }
+}
+
+function collectToolResults(messages: AgentMessage[]): Map<string, AgentMessage> {
+  const results = new Map<string, AgentMessage>();
+  for (const message of messages) {
+    const role = (message as { role?: unknown }).role;
+    if (role !== 'tool' && role !== 'toolResult') continue;
+    const id = toolResultId(message);
+    if (id) results.set(id, message);
+  }
+  return results;
+}
+
+function extractToolCalls(message: AgentMessage): Array<{ id?: string; name: string; args: Record<string, unknown> }> {
+  const content = (message as { content?: unknown }).content;
+  const calls: Array<{ id?: string; name: string; args: Record<string, unknown> }> = [];
+  if (Array.isArray(content)) {
+    for (const block of content) {
+      const rec = asRecord(block);
+      const type = rec ? stringValue(rec.type) : undefined;
+      if (!rec || (type !== 'toolCall' && type !== 'tool_use' && type !== 'tool_call')) continue;
+      calls.push({ id: toolCallIdFromBlock(rec), name: toolNameFromBlock(rec), args: toolArgsFromBlock(rec) });
+    }
+  }
+  const toolCalls = (message as { tool_calls?: unknown }).tool_calls;
+  if (Array.isArray(toolCalls)) {
+    for (const call of toolCalls) {
+      const rec = asRecord(call);
+      const fn = asRecord(rec?.function);
+      const name = stringValue(fn?.name) ?? stringValue(rec?.name);
+      if (!rec || !name) continue;
+      calls.push({
+        id: stringValue(rec.id),
+        name,
+        args: parseJsonRecord(fn?.arguments) ?? asRecord(fn?.arguments) ?? {},
+      });
+    }
+  }
+  return calls;
+}
+
+function summarizePlan(details: Record<string, unknown>): string | undefined {
+  const plan = Array.isArray(details.plan) ? details.plan : [];
+  const lines = plan
+    .map((item) => {
+      const rec = asRecord(item);
+      const step = stringValue(rec?.step)?.trim();
+      const status = stringValue(rec?.status)?.trim();
+      return step && status ? `${status}: ${step}` : '';
+    })
+    .filter(Boolean)
+    .slice(0, 8);
+  if (lines.length === 0) return undefined;
+  const explanation = stringValue(details.explanation)?.trim();
+  return `Plan${explanation ? ` (${explanation})` : ''}: ${lines.join(' | ')}`;
+}
+
+function summarizeCommand(args: Record<string, unknown>, details: Record<string, unknown> | null): string {
+  const command = stringValue(details?.command) ?? stringValue(args.cmd) ?? stringValue(args.command) ?? '';
+  const status = stringValue(details?.status) ?? (details?.exitCode === 0 ? 'success' : 'unknown');
+  const exitCode = typeof details?.exitCode === 'number' ? details.exitCode : undefined;
+  const hint = stringValue(details?.failureHint);
+  return [
+    `Command ${status}: ${command || '(unknown command)'}`,
+    exitCode !== undefined ? `exit=${exitCode}` : '',
+    hint ? `hint=${hint}` : '',
+  ].filter(Boolean).join(' ');
+}
+
+function summarizePatch(details: Record<string, unknown> | null): string | undefined {
+  if (!details) return undefined;
+  const files = Array.isArray(details.files)
+    ? details.files.filter((file): file is string => typeof file === 'string' && file.trim().length > 0)
+    : [];
+  const added = typeof details.added === 'number' ? details.added : 0;
+  const removed = typeof details.removed === 'number' ? details.removed : 0;
+  const summary = stringValue(details.summary)?.trim();
+  return `Patch applied: ${files.length ? files.join(', ') : summary || '(files unknown)'} (+${added}/-${removed})`;
+}
+
+function buildCodingContextMessage(messages: AgentMessage[]): AgentMessage | null {
+  const recent = messages.slice(-CODING_CONTEXT_LOOKBACK);
+  const results = collectToolResults(recent);
+  const lines: string[] = [];
+
+  for (const message of recent) {
+    if ((message as { role?: unknown }).role !== 'assistant') continue;
+    for (const call of extractToolCalls(message)) {
+      if (call.name !== 'update_plan' && call.name !== 'exec_command' && call.name !== 'apply_patch') {
+        continue;
+      }
+      const result = call.id ? results.get(call.id) : undefined;
+      const details = extractResultDetails(result);
+      const line = call.name === 'update_plan'
+        ? summarizePlan(details ?? call.args)
+        : call.name === 'exec_command'
+          ? summarizeCommand(call.args, details)
+          : summarizePatch(details);
+      if (line) lines.push(line);
+    }
+  }
+
+  const uniqueLines = [...new Set(lines)].slice(-CODING_CONTEXT_MAX_LINES);
+  if (uniqueLines.length === 0) return null;
+  return {
+    role: 'user',
+    content: [{
+      type: 'text',
+      text: ['<coding_context>', ...uniqueLines.map((line) => `- ${line}`), '</coding_context>'].join('\n'),
+    }],
+  } as AgentMessage;
+}
+
 /**
  * Normalize a JSON array from on-disk transcript into stored rows (drops unrecognized objects).
  */
@@ -308,6 +510,8 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
       out.push(r);
     }
   }
+  const codingContext = buildCodingContextMessage(out);
+  if (codingContext) out.push(codingContext);
   return out;
 }
 

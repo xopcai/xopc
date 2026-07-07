@@ -158,7 +158,7 @@ describe('ProgressFeedbackManager', () => {
       testTool('grep', 'searching');
       testTool('web_search', 'searching');
       testTool('bash', 'executing');
-      testTool('shell', 'executing');
+      testTool('exec_command', 'executing');
       testTool('write_file', 'writing');
       testTool('edit', 'writing');
     });

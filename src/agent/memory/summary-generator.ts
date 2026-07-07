@@ -19,7 +19,7 @@ const log = createLogger('SummaryGenerator');
 export interface ToolCallSummary {
   toolName: string;
   filePath?: string;
-  operation: 'read' | 'write' | 'search' | 'shell' | 'other';
+  operation: 'read' | 'write' | 'search' | 'command' | 'other';
   success: boolean;
   briefResult?: string;
   timestamp?: number;
@@ -52,7 +52,7 @@ const DEFAULT_OPTIONS: SummaryGenerationOptions = {
 /**
  * Categorize tool operation based on tool name
  */
-function categorizeToolOperation(toolName: string): 'read' | 'write' | 'search' | 'shell' | 'other' {
+function categorizeToolOperation(toolName: string): 'read' | 'write' | 'search' | 'command' | 'other' {
   const name = toolName.toLowerCase();
   
   if (['read', 'read_file', 'read_multiple', 'glob', 'list_dir', 'ls', 'memory_get'].some(n => name.includes(n))) {
@@ -67,8 +67,8 @@ function categorizeToolOperation(toolName: string): 'read' | 'write' | 'search' 
     return 'search';
   }
   
-  if (['bash', 'shell', 'exec', 'run', 'command'].some(n => name.includes(n))) {
-    return 'shell';
+  if (['bash', 'exec', 'run', 'command'].some(n => name.includes(n))) {
+    return 'command';
   }
   
   return 'other';

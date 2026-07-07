@@ -49,7 +49,7 @@ export function extractUrlPreview(input: unknown): string {
 
 export function extractCommandPreview(input: unknown): string {
   const obj = parseInputAsObject(input);
-  const c = obj?.command ?? obj?.cmd ?? obj?.shell ?? obj?.script;
+  const c = obj?.cmd ?? obj?.command ?? obj?.script;
   if (typeof c === 'string') return c;
   return '';
 }
@@ -66,7 +66,6 @@ export function getKeyDetailLine(input: unknown): string {
   const candidates = [
     obj.command,
     obj.cmd,
-    obj.shell,
     obj.script,
     obj.path,
     obj.file_path,

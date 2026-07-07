@@ -68,6 +68,23 @@ function formatToolResultText(result: unknown): string {
   }
 }
 
+function detailsAsRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function formatToolDisplayText(block: ToolUseContent): string {
+  const details = detailsAsRecord(block.details);
+  if (typeof details?.aggregatedOutput === 'string') {
+    return details.aggregatedOutput.trim();
+  }
+  if (typeof details?.diff === 'string') {
+    return details.diff.trim();
+  }
+  return formatToolResultText(block.result);
+}
+
 export const ToolUseBlock = memo(function ToolUseBlock({
   block,
   inline,
@@ -116,7 +133,7 @@ export const ToolUseBlock = memo(function ToolUseBlock({
   const title = getFriendlyToolTitle(block.name, friendlyLabels);
   const detailLine = getKeyDetailLine(block.input);
 
-  const resultText = useMemo(() => formatToolResultText(block.result), [block.result]);
+  const resultText = useMemo(() => formatToolDisplayText(block), [block]);
   const resultPreview = resultText.length > 200 ? resultText.slice(0, 200) + '…' : resultText;
 
   let outputPreview = resultText;

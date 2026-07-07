@@ -11,12 +11,12 @@ import {
 describe('bundle-mcp-policy', () => {
   it('detects MCP tool names by separator', () => {
     expect(isMcpToolName('fetch__get')).toBe(true);
-    expect(isMcpToolName('shell')).toBe(false);
+    expect(isMcpToolName('exec_command')).toBe(false);
   });
 
   it('parses server and tool ids', () => {
     expect(parseMcpToolName('fetch__get')).toEqual({ serverId: 'fetch', toolId: 'get' });
-    expect(parseMcpToolName('shell')).toBeNull();
+    expect(parseMcpToolName('exec_command')).toBeNull();
   });
 
   it('respects bundle-mcp disable sentinel and configured runtime creation', () => {

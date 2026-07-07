@@ -28,6 +28,9 @@ import {
   getProjectTrustOptions,
   hasTrustRequiringProjectResources,
 } from '../project-trust/trust-store.js';
+import type { ReviewContext } from '../review/review-git.js';
+
+type SearchableSelectItem = SelectItem & { searchText?: string };
 
 function formatSelectNavigationHint(keybindings: KeybindingsManager): string {
   const up = formatKeyIds(keybindings, 'tui.select.up', { capitalize: true });
@@ -78,6 +81,13 @@ export function formatProjectTrustOpenedHint(keybindings: KeybindingsManager): s
   const confirm = formatKeyIds(keybindings, 'tui.select.confirm', { capitalize: true });
   const cancel = formatKeyIds(keybindings, 'tui.select.cancel', { capitalize: true });
   return `Project trust (${nav} · ${confirm} select · ${cancel} close)`;
+}
+
+export function formatReviewPickerOpenedHint(keybindings: KeybindingsManager): string {
+  const nav = formatSelectNavigationHint(keybindings);
+  const confirm = formatKeyIds(keybindings, 'tui.select.confirm', { capitalize: true });
+  const cancel = formatKeyIds(keybindings, 'tui.select.cancel', { capitalize: true });
+  return `Review (${nav} · type to filter · ${confirm} select · ${cancel} close)`;
 }
 
 export function formatAgentPickerOpenedHint(keybindings: KeybindingsManager): string {
@@ -231,6 +241,180 @@ export async function openAgentPickerOverlay(svc: PickerServices): Promise<void>
   };
   list.onCancel = () => closeSelector();
   svc.tui.requestRender();
+}
+
+function quoteReviewArg(value: string): string {
+  return /^[A-Za-z0-9._/@:-]+$/.test(value) ? value : JSON.stringify(value);
+}
+
+function formatReviewStatus(status: ReviewContext['status']): string {
+  if (status.isClean) return 'working tree clean';
+  const parts: string[] = [];
+  if (status.changedFiles > 0) parts.push(`${status.changedFiles} changed`);
+  if (status.untrackedFiles > 0) parts.push(`${status.untrackedFiles} untracked`);
+  return parts.join(', ');
+}
+
+function reviewPresetItems(context: ReviewContext): SearchableSelectItem[] {
+  return [
+    {
+      value: 'base',
+      label: 'Review against a base branch',
+      description: context.defaultBaseBranch ? `PR Style · default ${context.defaultBaseBranch}` : 'PR Style',
+      searchText: 'pr pull request base branch merge base',
+    },
+    {
+      value: 'uncommitted',
+      label: 'Review uncommitted changes',
+      description: formatReviewStatus(context.status),
+      searchText: 'workspace working tree uncommitted diff status',
+    },
+    {
+      value: 'commit',
+      label: 'Review a commit',
+      description: context.commits.length > 0 ? `${context.commits.length} recent commits` : 'no commits found',
+      searchText: 'commit sha history log',
+    },
+    {
+      value: 'custom',
+      label: 'Custom review instructions',
+      description: 'edit prompt before sending',
+      searchText: 'custom instructions focus prompt',
+    },
+  ];
+}
+
+function branchSelectItems(context: ReviewContext): SelectItem[] {
+  return context.branches
+    .filter((branch) => !branch.current)
+    .map((branch) => ({
+      value: branch.name,
+      label: branch.name,
+      description: [
+        branch.name === context.defaultBaseBranch ? 'default' : '',
+        branch.remote ? 'remote' : 'local',
+      ].filter(Boolean).join(' · '),
+      searchText: branch.name,
+    }));
+}
+
+function commitSelectItems(context: ReviewContext): SelectItem[] {
+  return context.commits.map((commit) => ({
+    value: commit.sha,
+    label: commit.subject,
+    description: [commit.shortSha, commit.date?.slice(0, 10)].filter(Boolean).join(' · '),
+    searchText: `${commit.sha} ${commit.shortSha} ${commit.subject}`,
+  }));
+}
+
+function openReviewBranchSelector(svc: PickerServices, context: ReviewContext): void {
+  const items = branchSelectItems(context);
+  if (items.length === 0) {
+    svc.closeOverlay();
+    svc.tui.setFocus(svc.editor);
+    svc.chatLog.addSystem('No base branches available for review.');
+    svc.tui.requestRender();
+    return;
+  }
+  const list = new SearchableSelectList(items, Math.min(10, items.length), searchableSelectListTheme, {
+    searchPromptText: 'branch> ',
+  });
+  const defaultIndex = context.defaultBaseBranch
+    ? items.findIndex((item) => item.value === context.defaultBaseBranch)
+    : -1;
+  if (defaultIndex >= 0) list.setSelectedIndex(defaultIndex);
+  list.onSelect = (item) => {
+    svc.closeOverlay();
+    svc.tui.setFocus(svc.editor);
+    svc.sendMessage(`/review --base ${quoteReviewArg(item.value)}`);
+  };
+  list.onCancel = () => {
+    openReviewPresetSelector(svc, context);
+  };
+  svc.openOverlay(list);
+  svc.chatLog.addSystem(theme.dim('Select a base branch to review'));
+  svc.tui.requestRender();
+}
+
+function openReviewCommitSelector(svc: PickerServices, context: ReviewContext): void {
+  const items = commitSelectItems(context);
+  if (items.length === 0) {
+    svc.closeOverlay();
+    svc.tui.setFocus(svc.editor);
+    svc.chatLog.addSystem('No commits available for review.');
+    svc.tui.requestRender();
+    return;
+  }
+  const list = new SearchableSelectList(items, Math.min(12, items.length), searchableSelectListTheme, {
+    searchPromptText: 'commit> ',
+  });
+  list.onSelect = (item) => {
+    svc.closeOverlay();
+    svc.tui.setFocus(svc.editor);
+    svc.sendMessage(`/review --commit ${item.value}`);
+  };
+  list.onCancel = () => {
+    openReviewPresetSelector(svc, context);
+  };
+  svc.openOverlay(list);
+  svc.chatLog.addSystem(theme.dim('Select a commit to review'));
+  svc.tui.requestRender();
+}
+
+function openReviewPresetSelector(svc: PickerServices, context: ReviewContext): void {
+  const items = reviewPresetItems(context);
+  const list = new SearchableSelectList(items, Math.min(8, items.length), searchableSelectListTheme, {
+    searchPromptText: 'review> ',
+  });
+  list.onSelect = (item) => {
+    if (item.value === 'uncommitted') {
+      svc.closeOverlay();
+      svc.tui.setFocus(svc.editor);
+      svc.sendMessage('/review --uncommitted');
+      return;
+    }
+    if (item.value === 'custom') {
+      svc.closeOverlay();
+      svc.tui.setFocus(svc.editor);
+      svc.setEditorText('/review --custom ');
+      svc.tui.requestRender();
+      return;
+    }
+    if (item.value === 'base') {
+      openReviewBranchSelector(svc, context);
+      return;
+    }
+    if (item.value === 'commit') {
+      openReviewCommitSelector(svc, context);
+    }
+  };
+  list.onCancel = () => {
+    svc.closeOverlay();
+    svc.tui.setFocus(svc.editor);
+    svc.tui.requestRender();
+  };
+
+  svc.openOverlay(list);
+  svc.chatLog.addSystem(theme.dim(formatReviewPickerOpenedHint(svc.keybindings)));
+  svc.tui.requestRender();
+}
+
+export async function openReviewLauncherOverlay(svc: PickerServices): Promise<void> {
+  if (!svc.client.getReviewContext) {
+    svc.chatLog.addSystem('Review picker is not available in this mode. Use /review --uncommitted, /review --base <branch>, or /review --commit <sha>.');
+    svc.tui.requestRender();
+    return;
+  }
+  let context: ReviewContext;
+  try {
+    context = await svc.client.getReviewContext(svc.state.currentSessionKey);
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    svc.chatLog.addSystem(`Review picker failed: ${errorMessage}`);
+    svc.tui.requestRender();
+    return;
+  }
+  openReviewPresetSelector(svc, context);
 }
 
 /** Ctrl+Shift+P — session picker with rename/delete. */

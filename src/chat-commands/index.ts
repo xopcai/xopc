@@ -16,6 +16,7 @@ import { registerContextCommands } from './builtins/context.js';
 import { registerGoalCommand } from './builtins/goal.js';
 import { registerSubgoalCommand } from './builtins/subgoal.js';
 import { registerWorkflowCommands } from './builtins/workflow.js';
+import { registerReviewCommand } from './builtins/review.js';
 import { registerAgentEditCommand } from './agent-edit.js';
 
 // Types
@@ -71,6 +72,7 @@ export { registerContextCommands } from './builtins/context.js';
 export { registerGoalCommand } from './builtins/goal.js';
 export { registerSubgoalCommand } from './builtins/subgoal.js';
 export { registerWorkflowCommands } from './builtins/workflow.js';
+export { registerReviewCommand } from './builtins/review.js';
 export { registerAgentEditCommand } from './agent-edit.js';
 
 /**
@@ -87,5 +89,6 @@ export function initializeCommands(): void {
   registerGoalCommand();
   registerSubgoalCommand();
   registerWorkflowCommands();
+  registerReviewCommand();
   registerAgentEditCommand();
 }

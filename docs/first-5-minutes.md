@@ -44,30 +44,42 @@ This starts the embedded terminal UI. It is the same as `xopc tui` and does not 
 
 You should see a full-screen terminal chat. If it exits immediately, run `xopc doctor` and check the model status with `xopc models status`.
 
-## 4. Try a goal-loop prompt
+## 4. Start your first project loop
+
+xopc does not need a complex setup before it is useful. Start by giving it one real thing to follow.
 
 Paste this:
 
 ```text
-Help me keep my side project moving this week. Track the goal, next actions, blockers, and feedback after each step.
+Help me keep this project moving. Track the goal, current status, blockers, decisions, and next actions. When I send updates, summarize what changed and suggest the next step.
 ```
 
 What to look for:
 
-- xopc should treat the work as a continuing goal, not just a one-shot answer.
+- xopc should treat the work as something you will continue, not just a one-shot question.
 - Your local state and config live under `~/.xopc/` by default.
-- You can continue from terminal now and add Web/mobile/messenger surfaces later.
+- You can keep feeding short notes, links, blockers, and decisions in the same chat.
+- You can add Web, mobile QR pairing, messenger, connector, and automation paths later when they reduce friction.
 
-## 5. Add surfaces later
+## 5. Grow from chat to loops
 
-When the local path works, choose the next surface:
+Once the local chat works, grow only where the habit is useful:
+
+| Next step | Add this when | Where to go |
+| --- | --- | --- |
+| Keep one project warm | You want xopc to remember status and next actions | Continue in the TUI or use `xopc agent -i` |
+| Capture notes anywhere | Ideas and updates happen away from the terminal | Pair the mobile app by QR code, or add Web and messengers |
+| Bring in outside signals | Work already lives in another surface or system | Use channels, gateway APIs, extensions, or MCP |
+| Automate follow-up | Reviews, summaries, or reminders repeat | Use [Automations](./automations.md) and [Workflows](./workflows.md) |
+
+Common surfaces:
 
 | Surface | Command | Use it for |
 | --- | --- | --- |
 | PC Desktop | GitHub Releases | Easiest start; native app with embedded gateway |
 | CLI | `xopc agent -i` | Minimal terminal chat |
 | Web console | `xopc gateway` | Browser chat, settings, logs |
-| Mobile | [mobile app](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo) + gateway pairing | iOS/Android client for your gateway; see [Mobile app](./mobile-app.md) |
+| Mobile | [mobile app](https://github.com/xopcai/xopc/tree/main/apps/mobile-expo) + QR gateway pairing | Capture notes, ideas, and project updates away from your computer while the agent keeps running on your machine; see [Mobile app](./mobile-app.md) |
 | Messengers | Open `Channels` after the gateway is running | Telegram, WeChat, Feishu/Lark |
 
-For the full guide, continue to [Getting Started](./getting-started.md).
+For the full guide, continue to [Getting Started](./getting-started.md). For the product idea behind this flow, read [From Chat to Loops](./concepts/loops.md).

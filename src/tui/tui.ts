@@ -76,6 +76,7 @@ import {
 import {
   openAgentPickerOverlay,
   openProjectTrustOverlay,
+  openReviewLauncherOverlay,
   openScopedModelsOverlay,
   openSessionPickerOverlay,
   openSessionTreeOverlay,
@@ -2030,6 +2031,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const uiOverlays = {
     openModelPicker: (_initialSearch?: string) => {},
     openAgentPicker: () => {},
+    openReviewLauncher: () => {},
     openSessionPicker: () => {},
     openSessionTree: () => {},
     openTranscriptTree: () => {},
@@ -2342,6 +2344,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   uiOverlays.openModelPicker = (initialSearch?: string) =>
     void openModelPickerOverlay(pickerSvc, initialSearch);
   uiOverlays.openAgentPicker = () => void openAgentPickerOverlay(pickerSvc);
+  uiOverlays.openReviewLauncher = () => void openReviewLauncherOverlay(pickerSvc);
   uiOverlays.openSessionPicker = () => void openSessionPickerOverlay(pickerSvc);
   uiOverlays.openSessionTree = () => void openSessionTreeOverlay(pickerSvc);
   uiOverlays.openTranscriptTree = () => void openTranscriptTreeOverlay(pickerSvc);

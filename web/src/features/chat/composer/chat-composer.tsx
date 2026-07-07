@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachments/attachment-utils';
 import { ACCEPT } from '@/features/chat/composer/composer-clipboard';
@@ -23,6 +23,7 @@ import { useComposerPickers } from '@/features/chat/composer/use-composer-picker
 import { appendTranscriptToDraft } from '@/features/chat/composer/append-transcript-to-draft';
 import { ComposerVoiceInputBar } from '@/features/chat/composer/composer-voice-input-bar';
 import { useComposerVoiceInput } from '@/features/chat/composer/use-composer-voice-input';
+import { ReviewLauncherDialog } from '@/features/chat/review/review-launcher-dialog';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -110,6 +111,7 @@ export const ChatComposer = memo(function ChatComposer({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const lastLoadedEditFollowUpIdRef = useRef<string | null>(null);
   const busyRef = useRef(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const onSendRef = useRef(onSend);
   const thinkingLevelRef = useRef(thinkingLevel);
   onSendRef.current = onSend;
@@ -161,6 +163,19 @@ export const ChatComposer = memo(function ChatComposer({
   const runBusy = sending || streaming;
   busyRef.current = runBusy;
 
+  const openReviewLauncher = useCallback(() => {
+    if (busyRef.current) return;
+    setReviewOpen(true);
+  }, []);
+
+  const sendReviewCommand = useCallback(
+    (command: string) => {
+      onSendRef.current(command, undefined, thinkingLevelRef.current);
+      onUserTextCommitted?.(command);
+    },
+    [onUserTextCommitted],
+  );
+
   const pickers = useComposerPickers({
     sessionKey,
     editorValue: editor.value,
@@ -177,6 +192,7 @@ export const ChatComposer = memo(function ChatComposer({
     onChatAgentChange,
     currentAgentId,
     onUnavailableSkill,
+    onReviewLauncher: openReviewLauncher,
     onAddPendingFollowUp,
     onAbort,
     pendingFollowUpsCount: pendingFollowUps.length,
@@ -470,6 +486,7 @@ export const ChatComposer = memo(function ChatComposer({
           attachmentCount={att.attachments.length}
           maxAttachments={MAX_CHAT_ATTACHMENTS}
           onPickFiles={() => fileInputRef.current?.click()}
+          onOpenReviewLauncher={openReviewLauncher}
           thinkingLevel={thinkingLevel}
           showThinkingSelector={showThinkingSelector}
           onThinkingChange={onThinkingChange}
@@ -486,6 +503,14 @@ export const ChatComposer = memo(function ChatComposer({
           composerDraftChars={composerDraftChars}
         />
       </div>
+      <ReviewLauncherDialog
+        open={reviewOpen}
+        sessionKey={sessionKey}
+        disabled={disabled || runBusyState}
+        chat={m.chat}
+        onClose={() => setReviewOpen(false)}
+        onSendCommand={sendReviewCommand}
+      />
     </div>
   );
 });

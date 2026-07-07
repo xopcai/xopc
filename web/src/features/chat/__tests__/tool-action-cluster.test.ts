@@ -94,13 +94,13 @@ const thought = (text: string, streaming = false): ThinkingContent => ({
 
 describe('classifyTool', () => {
   it('maps known tool names to action kinds', () => {
-    expect(classifyTool('shell')).toBe('runCommand');
-    expect(classifyTool('Shell')).toBe('runCommand');
+    expect(classifyTool('exec_command')).toBe('runCommand');
+    expect(classifyTool('Exec_Command')).toBe('runCommand');
     expect(classifyTool('list_dir')).toBe('listDir');
     expect(classifyTool('ls')).toBe('listDir');
     expect(classifyTool('read_file')).toBe('readFile');
     expect(classifyTool('fs.read_file')).toBe('readFile');
-    expect(classifyTool('edit_file')).toBe('editFile');
+    expect(classifyTool('apply_patch')).toBe('editFile');
     expect(classifyTool('write_file')).toBe('writeFile');
     expect(classifyTool('web_fetch')).toBe('fetchUrl');
     expect(classifyTool('open_url')).toBe('openUrl');
@@ -115,7 +115,7 @@ describe('clusterToolUses', () => {
     const map = clusterToolUses([
       tool('1', 'read_file'),
       tool('2', 'read_file'),
-      tool('3', 'edit_file', undefined, 'running'),
+      tool('3', 'apply_patch', undefined, 'running'),
       thought('skip me'),
     ]);
     expect(map.get('readFile')).toEqual({ total: 2, running: 0 });
@@ -166,7 +166,7 @@ describe('summarizeClustersCompleted', () => {
       [
         tool('1', 'read_file', { path: 'a.ts' }),
         tool('2', 'read_file', { path: 'b.ts' }),
-        tool('3', 'edit_file', { path: 'c.ts' }),
+        tool('3', 'apply_patch', { path: 'c.ts' }),
       ],
       doneZh,
       joinZh,
@@ -179,7 +179,7 @@ describe('summarizeClustersCompleted', () => {
     const s = summarizeClustersCompleted(
       [
         tool('1', 'read_file', { path: 'a.ts' }),
-        tool('2', 'edit_file', { path: 'b.ts' }),
+        tool('2', 'apply_patch', { path: 'b.ts' }),
       ],
       doneEn,
       joinEn,
@@ -192,8 +192,8 @@ describe('summarizeClustersCompleted', () => {
     const s = summarizeClustersCompleted(
       [
         tool('1', 'read_file'),
-        tool('2', 'edit_file'),
-        tool('3', 'shell'),
+        tool('2', 'apply_patch'),
+        tool('3', 'exec_command'),
         tool('4', 'web_fetch'),
         tool('5', 'web_search'),
       ],
@@ -236,7 +236,7 @@ describe('summarizeClustersStreaming', () => {
     const s = summarizeClustersStreaming(
       [
         tool('1', 'read_file', undefined, 'running'),
-        tool('2', 'edit_file', undefined, 'running'),
+        tool('2', 'apply_patch', undefined, 'running'),
       ],
       ingZh,
     );

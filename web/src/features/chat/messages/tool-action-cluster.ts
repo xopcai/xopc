@@ -94,10 +94,10 @@ const KIND_ORDER: ActionKind[] = [
 
 export function classifyTool(name: string): ActionKind {
   const n = toolNameKey(name);
-  if (n === 'shell') return 'runCommand';
+  if (n === 'exec_command') return 'runCommand';
   if (n === 'list_dir' || n === 'ls') return 'listDir';
   if (n === 'write_file') return 'writeFile';
-  if (n === 'edit_file') return 'editFile';
+  if (n === 'apply_patch') return 'editFile';
   if (n === 'web_fetch') return 'fetchUrl';
   if (n === 'open_url') return 'openUrl';
   if (isWebSearchToolName(name) || n.includes('search')) return 'search';

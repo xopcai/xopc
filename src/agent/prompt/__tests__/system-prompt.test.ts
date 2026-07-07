@@ -4,7 +4,7 @@ import { PROMPT_CACHE_BOUNDARY } from '../cache-boundary.js';
 import { NO_REPLY } from '../../../heartbeat/tokens.js';
 import { buildSystemPrompt, splitBuiltSystemPrompt } from '../system-prompt.js';
 
-const BASE_TOOLS = ['read_file', 'write_file', 'shell', 'skills_list', 'skill_view'];
+const BASE_TOOLS = ['read_file', 'write_file', 'exec_command', 'skills_list', 'skill_view'];
 
 describe('buildSystemPrompt section order', () => {
   it('places Tooling before Safety and Project Context before cache boundary', () => {
@@ -77,7 +77,7 @@ describe('buildSystemPrompt tooling', () => {
     expect(prompt).toContain('- read_file:');
     expect(prompt).toContain('- grep:');
     expect(prompt).toContain('- delegate_task:');
-    expect(prompt).not.toContain('- shell:');
+    expect(prompt).not.toContain('- exec_command:');
     expect(prompt).toContain('delegate_task');
     expect(prompt).toContain('Use `read_file` for targeted file inspection before editing');
   });
@@ -94,7 +94,7 @@ describe('buildSystemPrompt tooling', () => {
 describe('buildSystemPrompt coder harness', () => {
   it('includes coder harness section for coder agent only', () => {
     const prompt = buildSystemPrompt('/ws', {
-      toolNames: ['read_file', 'edit_file', 'shell'],
+      toolNames: ['read_file', 'apply_patch', 'exec_command'],
       agentId: 'coder',
     });
     expect(prompt).toContain('## Coder Harness');
@@ -103,7 +103,7 @@ describe('buildSystemPrompt coder harness', () => {
 
   it('does not include coder harness for other agents', () => {
     const prompt = buildSystemPrompt('/ws', {
-      toolNames: ['read_file', 'edit_file', 'shell'],
+      toolNames: ['read_file', 'apply_patch', 'exec_command'],
       agentId: 'main',
     });
     expect(prompt).not.toContain('## Coder Harness');

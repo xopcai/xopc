@@ -3,6 +3,7 @@
   - [Configuration](configuration.md)
 
 - **Core Concepts**
+  - [From Chat to Loops](concepts/loops.md)
   - [Architecture](architecture.md)
   - [On-disk layout](disk-layout.md)
   - [State & workspace layout](workspace.md)

@@ -18,6 +18,52 @@ export type UserTranscriptAttachment = {
   durationSeconds?: number;
 };
 
+export type CommandStartedPayload = {
+  toolCallId: string;
+  command: string;
+  cwd?: string;
+};
+
+export type CommandOutputDeltaPayload = {
+  toolCallId: string;
+  stream: 'stdout' | 'stderr';
+  delta: string;
+};
+
+export type CommandCompletedPayload = {
+  toolCallId: string;
+  command: string;
+  cwd?: string;
+  exitCode: number | null;
+  durationMs?: number;
+  timedOut?: boolean;
+  truncated?: boolean;
+};
+
+export type PatchAppliedPayload = {
+  toolCallId: string;
+  changes: unknown[];
+  diff: string;
+  added: number;
+  removed: number;
+};
+
+export type TurnDiffPayload = {
+  files: string[];
+  diff: string;
+  added: number;
+  removed: number;
+};
+
+export type TurnPlanUpdatedPayload = {
+  explanation?: string;
+  plan: { step: string; status: 'pending' | 'in_progress' | 'completed' }[];
+};
+
+export type ReviewPayload = {
+  review: unknown;
+};
+
 export type AgentSseCallbacks = {
   onStreamStart: () => void;
   onUserTranscript?: (payload: { text: string; attachments?: UserTranscriptAttachment[] }) => void;
@@ -27,6 +73,13 @@ export type AgentSseCallbacks = {
   onToolStart: (toolName: string, args?: unknown, toolCallId?: string) => void;
   onToolUpdate?: (toolName: string, toolCallId: string | undefined, details: unknown) => void;
   onToolEnd: (toolName: string, isError: boolean, result?: unknown, toolCallId?: string) => void;
+  onCommandStarted?: (payload: CommandStartedPayload) => void;
+  onCommandOutputDelta?: (payload: CommandOutputDeltaPayload) => void;
+  onCommandCompleted?: (payload: CommandCompletedPayload) => void;
+  onPatchApplied?: (payload: PatchAppliedPayload) => void;
+  onTurnPlanUpdated?: (payload: TurnPlanUpdatedPayload) => void;
+  onTurnDiff?: (payload: TurnDiffPayload) => void;
+  onReview?: (payload: ReviewPayload) => void;
   onProgress: (progress: ProgressState) => void;
   onTtsAudio?: (payload: {
     uri: string;
@@ -138,6 +191,7 @@ export function dispatchAgentSseEvent(
     case 'tool_start': {
       const toolName = String(p.toolName || 'unknown');
       const toolCallId = typeof p.toolCallId === 'string' ? p.toolCallId : undefined;
+      if (toolName === 'exec_command') break;
       if (toolName === 'clarify') break;
       cb?.onToolStart(toolName, p.args, toolCallId);
       break;
@@ -145,19 +199,101 @@ export function dispatchAgentSseEvent(
     case 'tool_update': {
       const toolName = typeof p.toolName === 'string' && p.toolName ? p.toolName : 'unknown';
       const toolCallId = typeof p.toolCallId === 'string' ? p.toolCallId : undefined;
+      const details = p.details && typeof p.details === 'object'
+        ? p.details as Record<string, unknown>
+        : undefined;
+      if (toolName === 'exec_command' && details?.kind === 'command_output_delta') break;
       if (p.details !== undefined) cb?.onToolUpdate?.(toolName, toolCallId, p.details);
       if (typeof p.textDelta === 'string' && p.textDelta) {
         cb?.onToolUpdate?.(toolName, toolCallId, { textDelta: p.textDelta });
       }
       break;
     }
-    case 'tool_end':
+    case 'tool_end': {
+      const toolName = typeof p.toolName === 'string' && p.toolName ? p.toolName : 'unknown';
+      const isError = p.status === 'error' || p.status === 'cancelled';
+      if (toolName === 'exec_command') break;
+      if (toolName === 'apply_patch' && !isError) break;
       cb?.onToolEnd(
-        typeof p.toolName === 'string' && p.toolName ? p.toolName : 'unknown',
-        p.status === 'error' || p.status === 'cancelled',
+        toolName,
+        isError,
         serializePayload(p.result),
         typeof p.toolCallId === 'string' ? p.toolCallId : undefined,
       );
+      break;
+    }
+    case 'command_started': {
+      const toolCallId = typeof p.toolCallId === 'string' ? p.toolCallId : '';
+      const command = typeof p.command === 'string' ? p.command : '';
+      if (toolCallId && command) {
+        cb?.onCommandStarted?.({
+          toolCallId,
+          command,
+          cwd: typeof p.cwd === 'string' ? p.cwd : undefined,
+        });
+      }
+      break;
+    }
+    case 'command_output_delta': {
+      const toolCallId = typeof p.toolCallId === 'string' ? p.toolCallId : '';
+      const delta = typeof p.delta === 'string' ? p.delta : '';
+      if (toolCallId && delta) {
+        cb?.onCommandOutputDelta?.({
+          toolCallId,
+          stream: p.stream === 'stderr' ? 'stderr' : 'stdout',
+          delta,
+        });
+      }
+      break;
+    }
+    case 'command_completed': {
+      const toolCallId = typeof p.toolCallId === 'string' ? p.toolCallId : '';
+      if (toolCallId) {
+        cb?.onCommandCompleted?.({
+          toolCallId,
+          command: typeof p.command === 'string' ? p.command : '',
+          cwd: typeof p.cwd === 'string' ? p.cwd : undefined,
+          exitCode: typeof p.exitCode === 'number' ? p.exitCode : null,
+          durationMs: typeof p.durationMs === 'number' ? p.durationMs : undefined,
+          timedOut: p.timedOut === true,
+          truncated: p.truncated === true,
+        });
+      }
+      break;
+    }
+    case 'patch_applied': {
+      const toolCallId = typeof p.toolCallId === 'string' ? p.toolCallId : '';
+      if (toolCallId) {
+        cb?.onPatchApplied?.({
+          toolCallId,
+          changes: Array.isArray(p.changes) ? p.changes : [],
+          diff: typeof p.diff === 'string' ? p.diff : '',
+          added: typeof p.added === 'number' ? p.added : 0,
+          removed: typeof p.removed === 'number' ? p.removed : 0,
+        });
+      }
+      break;
+    }
+    case 'turn_diff':
+      cb?.onTurnDiff?.({
+        files: Array.isArray(p.files) ? p.files.filter((x): x is string => typeof x === 'string') : [],
+        diff: typeof p.diff === 'string' ? p.diff : '',
+        added: typeof p.added === 'number' ? p.added : 0,
+        removed: typeof p.removed === 'number' ? p.removed : 0,
+      });
+      break;
+    case 'turn_plan': {
+      const plan = normalizeTurnPlan(p.plan);
+      if (plan.length > 0) {
+        cb?.onTurnPlanUpdated?.({
+          explanation: typeof p.explanation === 'string' && p.explanation.trim() ? p.explanation.trim() : undefined,
+          plan,
+        });
+      }
+      break;
+    }
+    case 'review':
+      cb?.onReview?.({ review: p.review });
       break;
     case 'progress':
       cb?.onProgress({
@@ -209,6 +345,23 @@ export function dispatchAgentSseEvent(
       cb?.onError(String(p.message || 'Send failed'));
       break;
   }
+}
+
+function normalizeTurnPlan(raw: unknown): TurnPlanUpdatedPayload['plan'] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item) => {
+      const rec = item && typeof item === 'object' && !Array.isArray(item)
+        ? item as Record<string, unknown>
+        : undefined;
+      const step = typeof rec?.step === 'string' ? rec.step.trim() : '';
+      const status = rec?.status;
+      if (!step || (status !== 'pending' && status !== 'in_progress' && status !== 'completed')) {
+        return undefined;
+      }
+      return { step, status };
+    })
+    .filter((item): item is TurnPlanUpdatedPayload['plan'][number] => Boolean(item));
 }
 
 /** Incremental `text/event-stream` line parser (fetch stream, XHR progress, or buffered text). */
