@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { escapeFts5Query } from '../storage/sqlite/fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from '../storage/sqlite/transaction.js';
 import type {
   CreateProjectInput,
@@ -89,6 +90,36 @@ function projectSortColumn(sortBy: ProjectListQuery['sortBy']): string {
   }
 }
 
+function projectSortExpression(sortBy: ProjectListQuery['sortBy']): string {
+  const column = projectSortColumn(sortBy);
+  return column === 'LOWER(name)' ? 'LOWER(p.name)' : `p.${column}`;
+}
+
+function projectFtsContent(project: Project): string {
+  return [
+    project.name,
+    project.slug,
+    project.description,
+    project.workspaceRoot,
+    project.brief,
+    project.instructions,
+    project.defaultAgentId,
+  ]
+    .filter((value): value is string => Boolean(value?.trim()))
+    .join('\n');
+}
+
+function syncProjectFts(
+  db: ReturnType<typeof getSqliteDatabase>,
+  project: Project,
+): void {
+  db.prepare(`DELETE FROM projects_fts WHERE project_id = ?`).run(project.id);
+  db.prepare(`INSERT INTO projects_fts (content, project_id) VALUES (?, ?)`).run(
+    projectFtsContent(project),
+    project.id,
+  );
+}
+
 export class ProjectStore {
   create(input: CreateProjectInput): Project {
     const now = Date.now();
@@ -129,6 +160,7 @@ export class ProjectStore {
         project.updatedAt,
         project.lastActiveAt ?? null,
       );
+      syncProjectFts(db, project);
     });
     return project;
   }
@@ -150,25 +182,26 @@ export class ProjectStore {
   list(query: ProjectListQuery = {}): ProjectListResult {
     const conditions: string[] = [];
     const params: Array<string | number> = [];
+    const search = query.search?.trim();
+    const ftsQuery = search ? escapeFts5Query(search) : '';
     if (query.status) {
       const statuses = Array.isArray(query.status) ? query.status : [query.status];
-      conditions.push(`status IN (${statuses.map(() => '?').join(', ')})`);
+      conditions.push(`p.status IN (${statuses.map(() => '?').join(', ')})`);
       params.push(...statuses);
     }
-    if (query.search?.trim()) {
-      const like = `%${query.search.trim().toLowerCase()}%`;
-      conditions.push(`(LOWER(name) LIKE ? OR LOWER(slug) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ?)`);
-      params.push(like, like, like);
+    if (ftsQuery) {
+      conditions.push(`p.project_id IN (SELECT project_id FROM projects_fts WHERE projects_fts MATCH ?)`);
+      params.push(ftsQuery);
     }
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
     const limit = clampLimit(query.limit, 50);
     const offset = Math.max(0, Math.floor(query.offset ?? 0));
     const sortOrder = query.sortOrder === 'asc' ? 'ASC' : 'DESC';
-    const sortColumn = projectSortColumn(query.sortBy);
+    const sortColumn = projectSortExpression(query.sortBy);
     const db = getSqliteDatabase();
-    const total = (db.prepare(`SELECT COUNT(*) AS total FROM projects ${where}`).get(...params) as { total: number }).total;
+    const total = (db.prepare(`SELECT COUNT(*) AS total FROM projects p ${where}`).get(...params) as { total: number }).total;
     const rows = db
-      .prepare(`SELECT * FROM projects ${where} ORDER BY ${sortColumn} ${sortOrder} LIMIT ? OFFSET ?`)
+      .prepare(`SELECT p.* FROM projects p ${where} ORDER BY ${sortColumn} ${sortOrder} LIMIT ? OFFSET ?`)
       .all(...params, limit, offset) as ProjectRow[];
     return { items: rows.map(projectFromRow), total, limit, offset, hasMore: offset + limit < total };
   }
@@ -204,6 +237,7 @@ export class ProjectStore {
         next.updatedAt,
         id,
       );
+      syncProjectFts(db, next);
     });
     return this.get(id)!;
   }
@@ -215,6 +249,7 @@ export class ProjectStore {
       db.prepare(`UPDATE workflow_runs SET project_id = NULL WHERE project_id = ?`).run(id);
       db.prepare(`UPDATE automations SET project_id = NULL WHERE project_id = ?`).run(id);
       db.prepare(`UPDATE memory_records SET project_id = NULL WHERE project_id = ?`).run(id);
+      db.prepare(`DELETE FROM projects_fts WHERE project_id = ?`).run(id);
       db.prepare(`DELETE FROM projects WHERE project_id = ?`).run(id);
     });
   }

@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowLeft, GitBranch, GitCommit, ListChecks, RefreshCw, Search, X } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { ChatMessages } from '@/i18n/messages';
@@ -109,7 +109,7 @@ export function ReviewLauncherDialog({
   const [query, setQuery] = useState('');
   const [instructions, setInstructions] = useState('');
 
-  const load = () => {
+  const load = useCallback(() => {
     if (!sessionKey) {
       setContext(null);
       setError(m.noSession);
@@ -124,7 +124,7 @@ export function ReviewLauncherDialog({
         setError(err instanceof Error ? err.message : String(err));
       })
       .finally(() => setLoading(false));
-  };
+  }, [m.noSession, sessionKey]);
 
   useEffect(() => {
     if (!open) return;
@@ -132,8 +132,7 @@ export function ReviewLauncherDialog({
     setQuery('');
     setInstructions('');
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, sessionKey]);
+  }, [load, open]);
 
   const branches = useMemo(() => branchRows(context, query), [context, query]);
   const commits = useMemo(() => commitRows(context, query), [context, query]);

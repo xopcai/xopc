@@ -46,6 +46,8 @@ export function hitRank(hit: Omit<GlobalHit, 'rank'>, query: string): number | n
   const kindBias =
     hit.kind === 'route'
       ? -0.15
+      : hit.kind === 'project'
+        ? -0.12
       : hit.kind === 'file'
         ? -0.1
         : hit.kind === 'session'
@@ -64,4 +66,3 @@ export function sortHits(hits: GlobalHit[]): GlobalHit[] {
     return a.title.localeCompare(b.title);
   });
 }
-

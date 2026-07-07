@@ -177,6 +177,7 @@
   "commandPalette": {
     "groups": {
       "navigate": "导航",
+      "projects": "项目",
       "quickSettings": "快捷设置",
       "extensions": "扩展",
       "sessions": "会话",

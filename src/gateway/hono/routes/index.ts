@@ -5,6 +5,7 @@ import { registerSessionsRoutes } from './sessions.js';
 import { registerStatusRoutes } from './status.js';
 import { registerMemoryRoutes } from './memory.js';
 import { registerProjectsRoutes } from './projects.js';
+import { registerSearchRoutes } from './search.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import {
   mountAppLazyRoutePrefixes,
@@ -20,6 +21,7 @@ export function registerCoreAuthenticatedRoutes(
   registerSessionsRoutes(authenticated, deps);
   registerMemoryRoutes(authenticated, deps);
   registerProjectsRoutes(authenticated, deps);
+  registerSearchRoutes(authenticated, deps);
 }
 
 export function registerAuthenticatedRoutes(app: Hono, authenticated: Hono, deps: AuthenticatedRouteDeps): void {

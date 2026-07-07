@@ -16,6 +16,7 @@ import {
 } from '../../../../storage/sqlite/index.js';
 import type { GatewayService } from '../../../service.js';
 import { registerProjectsRoutes } from '../projects.js';
+import { registerSearchRoutes } from '../search.js';
 import { registerSessionsRoutes } from '../sessions.js';
 
 function registerProjectRouteApp(service: Partial<GatewayService>): Hono {
@@ -27,6 +28,12 @@ function registerProjectRouteApp(service: Partial<GatewayService>): Hono {
 function registerSessionRouteApp(service: Partial<GatewayService>): Hono {
   const app = new Hono();
   registerSessionsRoutes(app, { service: service as GatewayService });
+  return app;
+}
+
+function registerSearchRouteApp(service: Partial<GatewayService>): Hono {
+  const app = new Hono();
+  registerSearchRoutes(app, { service: service as GatewayService });
   return app;
 }
 
@@ -62,6 +69,30 @@ describe('project association routes', () => {
       code: 'workspace_root_missing',
       error: `Workspace root does not exist: ${workspaceRoot}`,
       workspaceRoot,
+    });
+  });
+
+  it('returns project hits from global search', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({
+      name: 'Searchable Project',
+      brief: 'Coordinate the basalt rollout',
+    });
+    projects.create({ name: 'Unrelated Project', brief: 'Keep daily notes tidy' });
+    const app = registerSearchRouteApp({ projects });
+
+    const res = await app.request('/api/search?q=basalt&types=project');
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.hits).toHaveLength(1);
+    expect(body.hits[0]).toMatchObject({
+      kind: 'project',
+      id: `project:${project.id}`,
+      title: 'Searchable Project',
+      href: `/projects/${encodeURIComponent(project.id)}`,
+      payload: { project: { id: project.id } },
     });
   });
 
