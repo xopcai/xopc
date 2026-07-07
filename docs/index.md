@@ -58,6 +58,7 @@ features:
 | Goal | Start here |
 | --- | --- |
 | I want a private AI assistant on my computer | [First 5 Minutes](./first-5-minutes.md) |
+| I want to know how xopc differs from Codex, Claude Code, Qoder, and WorkBuddy | [Comparison](./comparison.md) |
 | I want the same assistant in Telegram, WeChat, or Feishu/Lark | [Channels](./channels/index.md) |
 | I want scheduled reviews, reminders, and summaries | [Automations](./automations.md) |
 | I want multiple agents for work, code, and personal contexts | [Routing system](./routing-system.md) |

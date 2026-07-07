@@ -57,6 +57,7 @@ features:
 | 你想做什么 | 从这里开始 |
 | --- | --- |
 | 在自己电脑上运行一个私有 AI 助手 | [5 分钟快速入门](./first-5-minutes.md) |
+| 了解 xopc 和 Codex、Claude Code、Qoder、WorkBuddy 的区别 | [产品对比](./comparison.md) |
 | 在 Telegram、微信或飞书/Lark 中使用同一个助手 | [消息通道](./channels/index.md) |
 | 设置定期复盘、提醒和摘要 | [自动化](./automations.md) |
 | 为工作、代码和个人场景配置不同 Agent | [Session 路由](./routing-system.md) |
