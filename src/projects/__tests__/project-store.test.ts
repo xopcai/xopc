@@ -44,6 +44,26 @@ describe('ProjectService', () => {
     expect(projects.list({ search: 'xopc' }).total).toBe(2);
   });
 
+  it('searches projects through the project FTS index', () => {
+    const first = projects.create({
+      name: 'Compiler Renovation',
+      brief: 'Replace fragile parser orchestration',
+      instructions: 'Track symbol graph rebuild work',
+      defaultAgentId: 'coder',
+    });
+    const second = projects.create({ name: 'Inbox Cleanup', brief: 'Triage daily messages' });
+
+    expect(projects.list({ search: 'symbol graph' }).items.map((project) => project.id)).toEqual([first.id]);
+    expect(projects.list({ search: 'daily messages' }).items.map((project) => project.id)).toEqual([second.id]);
+
+    projects.update(first.id, { instructions: 'Archive the old parser plan' });
+    expect(projects.list({ search: 'symbol graph' }).total).toBe(0);
+    expect(projects.list({ search: 'old parser' }).items.map((project) => project.id)).toEqual([first.id]);
+
+    projects.delete(first.id);
+    expect(projects.list({ search: 'old parser' }).total).toBe(0);
+  });
+
   it('uses the workspace folder name when project name is omitted', () => {
     const workspaceRoot = join(stateDir, 'folder-name-project');
     mkdirSync(workspaceRoot, { recursive: true });

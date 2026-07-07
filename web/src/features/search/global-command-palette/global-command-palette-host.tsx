@@ -1,4 +1,4 @@
-import { File, FolderOpen, Puzzle, Settings, Sparkles, Terminal, Zap } from 'lucide-react';
+import { File, FolderKanban, FolderOpen, Puzzle, Settings, Sparkles, Terminal, Zap } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -20,6 +20,7 @@ import {
 import type { GlobalHit } from '@/features/search/global-command-palette/types';
 import { hitRank, sortHits } from '@/features/search/global-command-palette/rank';
 import { buildRouteSeeds } from '@/features/search/global-command-palette/routes-provider';
+import { searchGlobal } from '@/features/search/global-command-palette/search-api';
 import { buildQuickSettingHits } from '@/features/search/global-command-palette/settings-provider';
 import { buildSettingsFieldHits } from '@/features/search/global-command-palette/settings-fields-provider';
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/palette/command-palette-api';
@@ -70,6 +71,8 @@ function iconFor(hit: GlobalHit) {
       return <Puzzle className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />;
     case 'route':
       return <FolderOpen className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />;
+    case 'project':
+      return <FolderKanban className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />;
     case 'session':
       return <FolderOpen className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />;
     case 'file':
@@ -313,9 +316,10 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
         extensionsGroupLabel: groups.extensions,
       });
 
-      const [commands, skillsPayload, sessions, files] = await Promise.all([
+      const [commands, skillsPayload, globalSearchHits, sessions, files] = await Promise.all([
         fetchCommandsCached(),
         getSkillsCached(),
+        q ? searchGlobal(q, { types: ['project'], limit: 8 }).catch(() => []) : [],
         listSessions({ search: q || undefined, limit: 8, offset: 0 }).catch(() => ({ items: [] })),
         (async () => {
           const sk = chatSessionKey?.trim();
@@ -329,6 +333,24 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
           return items;
         })(),
       ]);
+
+      const projectHits: Array<Omit<GlobalHit, 'rank'>> = globalSearchHits.map((h) => ({
+        kind: 'project',
+        id: h.id,
+        title: h.title,
+        subtitle: h.subtitle,
+        groupLabel: groups.projects,
+        keywords: [
+          h.payload.project.slug,
+          h.payload.project.workspaceRoot ?? '',
+          h.payload.project.defaultAgentId ?? '',
+          h.payload.project.brief ?? '',
+        ],
+        run: () => {
+          close();
+          navigate(h.href);
+        },
+      }));
 
       const commandHits: Array<Omit<GlobalHit, 'rank'>> = commands.map((c) => ({
         kind: 'command',
@@ -406,6 +428,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
         ...actionHits,
         ...extensionHits,
         ...settingsFieldHits,
+        ...projectHits,
         ...sessionHits,
         ...fileHits,
         ...commandHits,
