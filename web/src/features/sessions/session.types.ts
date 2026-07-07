@@ -13,6 +13,8 @@ export interface SessionMetadata {
   compactedCount: number;
   sourceChannel: string;
   sourceChatId: string;
+  /** Optional project grouping for sessions, goals, workflows, and related context. */
+  projectId?: string;
   /** Gateway session index: which agent owns this session (when set). */
   routing?: {
     agentId?: string;
@@ -49,6 +51,10 @@ export interface SessionListQuery {
   search?: string;
   /** Filter by `SessionMetadata.sourceChannel`, or comma-separated IM channels (e.g. `telegram,weixin`). */
   channel?: string;
+  /** Filter by project id. */
+  projectId?: string;
+  /** Filter by session origin types, sent as the gateway `types` query parameter. */
+  sessionTypes?: string[];
   limit?: number;
   offset?: number;
 }

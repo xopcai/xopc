@@ -20,7 +20,7 @@ import { GatewayConnectionCard } from './GatewayConnectionCard';
 import { formatGatewayHost } from './gateway-connection-view';
 import { syncAfterGatewaySettingsSave } from './gateway-connection-sync';
 import { GatewayTunnelStatusCard } from './GatewayTunnelStatusCard';
-import { openDefaultSessionAfterConnect } from './navigate-after-gateway-connect';
+import { navigateHomeAfterGatewayConnect } from './navigate-after-gateway-connect';
 import {
   connectionKindLabel,
   useGatewayConnectionView,
@@ -72,7 +72,7 @@ export function GatewayListScreen() {
       try {
         switchGateway(id);
         await syncAfterGatewaySettingsSave();
-        await openDefaultSessionAfterConnect(router.replace);
+        await navigateHomeAfterGatewayConnect(router.replace);
       } finally {
         setSwitchingId(null);
       }

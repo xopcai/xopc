@@ -25,6 +25,17 @@ const emptyB: SessionInfo = {
   routing: { agentId: 'main' },
 };
 
+const noteEmpty: SessionInfo = {
+  key: 'agent:main:webchat:default:direct:note_abc_1783324340003',
+  updatedAt: '2026-06-14T13:00:00.000Z',
+  messageCount: 0,
+  sourceChannel: 'webchat',
+  routing: { agentId: 'main' },
+  customData: {
+    sourceBinding: { kind: 'note', sourceId: 'abc', version: '1', attachedAt: 1 },
+  },
+};
+
 function mockSessionMgr(sessions: SessionInfo[]): SessionManager {
   const created: SessionInfo = {
     key: 'agent:main:webchat:default:direct:chat_new',
@@ -89,6 +100,42 @@ describe('resolveNewChatTarget', () => {
     expect(mgr.createSession).toHaveBeenCalled();
   });
 
+  it('does not reuse note-scoped empty sessions for generic new chat', async () => {
+    const mgr = mockSessionMgr([noteEmpty]);
+    const result = await resolveNewChatTarget({
+      sessionMgr: mgr,
+      agentId: 'main',
+    });
+    expect(result.kind).toBe('create');
+    expect(mgr.createSession).toHaveBeenCalled();
+  });
+
+  it('does not reuse project-bound empty sessions for generic new chat', async () => {
+    const projectEmpty: SessionInfo = { ...emptyA, projectId: 'project-a' };
+    const mgr = mockSessionMgr([projectEmpty]);
+    const result = await resolveNewChatTarget({
+      sessionMgr: mgr,
+      agentId: 'main',
+    });
+    expect(result.kind).toBe('create');
+    expect(mgr.createSession).toHaveBeenCalledWith({ agentId: 'main', projectId: undefined });
+  });
+
+  it('reuses only the matching project empty session for project new chat', async () => {
+    const projectA: SessionInfo = { ...emptyA, projectId: 'project-a' };
+    const projectB: SessionInfo = { ...emptyB, projectId: 'project-b' };
+    const mgr = mockSessionMgr([projectB, projectA]);
+    const result = await resolveNewChatTarget({
+      sessionMgr: mgr,
+      agentId: 'main',
+      projectId: 'project-a',
+    });
+    expect(result.kind).toBe('reuse');
+    if (result.kind === 'reuse') {
+      expect(result.sessionKey).toBe(projectA.key);
+    }
+  });
+
   it('merges created empty shells from cache when server list lags', async () => {
     const created: SessionInfo = {
       key: 'agent:main:webchat:default:direct:chat_created',
@@ -107,5 +154,27 @@ describe('resolveNewChatTarget', () => {
     if (result.kind === 'reuse') {
       expect(result.sessionKey).toBe(created.key);
     }
+  });
+
+  it('does not reuse note-scoped empty sessions from cache', async () => {
+    addWebchatEmptyShellToCache(noteEmpty);
+    const mgr = mockSessionMgr([]);
+    const result = await resolveNewChatTarget({
+      sessionMgr: mgr,
+      agentId: 'main',
+    });
+    expect(result.kind).toBe('create');
+    expect(mgr.createSession).toHaveBeenCalled();
+  });
+
+  it('does not reuse project-bound empty sessions from cache for generic new chat', async () => {
+    addWebchatEmptyShellToCache({ ...emptyA, projectId: 'project-a' });
+    const mgr = mockSessionMgr([]);
+    const result = await resolveNewChatTarget({
+      sessionMgr: mgr,
+      agentId: 'main',
+    });
+    expect(result.kind).toBe('create');
+    expect(mgr.createSession).toHaveBeenCalledWith({ agentId: 'main', projectId: undefined });
   });
 });

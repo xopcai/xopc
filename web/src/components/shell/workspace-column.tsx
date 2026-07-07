@@ -31,7 +31,7 @@ import { isElectron } from '@/lib/electron-env';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
-import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
+import { clampWorkspacePanelWidthPx, useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 /** Right-hand workspace file browser (project files only). Preview uses `WorkspacePreviewDialog`. */
@@ -75,22 +75,39 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
       if (!open) return;
       e.preventDefault();
       const el = e.currentTarget;
+      const panelEl = el.closest<HTMLElement>('#app-workspace-panel');
       el.setPointerCapture(e.pointerId);
       setWidthResizing(true);
       const startX = e.clientX;
       const startW = useWorkspacePanelStore.getState().widthPx;
       const pid = e.pointerId;
+      let rafId = 0;
+      let nextWidth = startW;
+      let committedWidth = startW;
+      const applyWidth = () => {
+        rafId = 0;
+        committedWidth = nextWidth;
+        panelEl?.style.setProperty('--workspace-panel-px', `${committedWidth}px`);
+      };
       const onMove = (ev: PointerEvent) => {
         // Left edge: drag left widens, drag right narrows
-        setWidthPx(startW + (startX - ev.clientX));
+        nextWidth = clampWorkspacePanelWidthPx(startW + (startX - ev.clientX));
+        if (rafId === 0) {
+          rafId = window.requestAnimationFrame(applyWidth);
+        }
       };
       const onDone = () => {
+        if (rafId !== 0) {
+          window.cancelAnimationFrame(rafId);
+          applyWidth();
+        }
         try {
           el.releasePointerCapture(pid);
         } catch {
           /* ignore */
         }
         setWidthResizing(false);
+        setWidthPx(committedWidth);
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onDone);
         window.removeEventListener('pointercancel', onDone);

@@ -21,13 +21,14 @@ function mergeOptimisticEmptyShells(
   server: SessionInfo[],
   cached: SessionInfo[] | null,
   agentId: string,
+  projectId?: string | null,
 ): SessionInfo[] {
   if (!cached?.length) return server;
   const byKey = new Map(server.map((s) => [s.key.trim(), s]));
   for (const row of cached) {
     const key = row.key.trim();
     if (!key || byKey.has(key)) continue;
-    if (!isReusableEmptyShell(row, agentId)) continue;
+    if (!isReusableEmptyShell(row, { agentId, projectId })) continue;
     byKey.set(key, row);
   }
   return [...byKey.values()].toSorted(
@@ -38,44 +39,47 @@ function mergeOptimisticEmptyShells(
 async function loadAllWebchatSessions(
   sessionMgr: SessionManager,
   agentId: string,
+  projectId?: string | null,
 ): Promise<SessionInfo[]> {
   const cached = readWebchatEmptyShellCache();
   try {
     const server = await sessionMgr.loadSessions();
-    return mergeOptimisticEmptyShells(server, cached, agentId);
+    return mergeOptimisticEmptyShells(server, cached, agentId, projectId);
   } catch {
-    return cached ?? [];
+    return cached?.filter((row) => isReusableEmptyShell(row, { agentId, projectId })) ?? [];
   }
 }
 
 export async function resolveNewChatTarget(opts: {
   sessionMgr: SessionManager;
   agentId: string;
+  projectId?: string | null;
   currentSessionKey?: string | null;
   forceNew?: boolean;
 }): Promise<NewChatResolution> {
   const agentId = normalizeAgentId(opts.agentId);
+  const projectId = opts.projectId?.trim() || undefined;
   const current = opts.currentSessionKey?.trim() || null;
 
   if (opts.forceNew) {
-    const session = await opts.sessionMgr.createSession({ agentId });
+    const session = await opts.sessionMgr.createSession({ agentId, projectId });
     return { kind: 'create', sessionKey: session.key, session };
   }
 
-  const sessions = await loadAllWebchatSessions(opts.sessionMgr, agentId);
+  const sessions = await loadAllWebchatSessions(opts.sessionMgr, agentId, projectId);
 
   if (current) {
     const row = findSessionRow(sessions, current);
-    if (row && isReusableEmptyShell(row, agentId)) {
+    if (row && isReusableEmptyShell(row, { agentId, projectId })) {
       return { kind: 'noop', sessionKey: current };
     }
   }
 
-  const reusable = pickReusableEmptyShell(sessions, agentId);
+  const reusable = pickReusableEmptyShell(sessions, { agentId, projectId });
   if (reusable && reusable.key.trim() !== current) {
     return { kind: 'reuse', sessionKey: reusable.key, session: reusable };
   }
 
-  const session = await opts.sessionMgr.createSession({ agentId });
+  const session = await opts.sessionMgr.createSession({ agentId, projectId });
   return { kind: 'create', sessionKey: session.key, session };
 }

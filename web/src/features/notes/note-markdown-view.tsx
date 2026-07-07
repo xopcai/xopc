@@ -81,7 +81,11 @@ export function NoteMarkdownView({ content, noteId, ...rest }: NoteMarkdownViewP
 
   return (
     <div ref={hostRef}>
-      <MarkdownView content={noteMarkdownForRender(content)} {...rest} />
+      <MarkdownView
+        content={noteMarkdownForRender(content)}
+        {...rest}
+        className={['markdown-note', rest.className].filter(Boolean).join(' ')}
+      />
     </div>
   );
 }

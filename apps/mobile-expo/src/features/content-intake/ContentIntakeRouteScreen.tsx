@@ -48,6 +48,7 @@ export function ContentIntakeRouteScreen() {
     <View style={[styles.root, { backgroundColor: getColors(isDark).surface.base }]}>
       <ContentIntakeModal
         visible={Boolean(candidate) && !handled}
+        source={candidate?.source ?? null}
         intent={candidate?.intent ?? null}
         saving={saving}
         toast={toast}

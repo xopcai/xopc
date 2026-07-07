@@ -10,6 +10,8 @@ export interface SessionInfo {
   messageCount?: number;
   sourceChannel?: string;
   sourceChatId?: string;
+  projectId?: string;
+  customData?: Record<string, unknown>;
   routing?: {
     agentId?: string;
   };

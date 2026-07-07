@@ -13,6 +13,7 @@ export type NewChatHandoffNavigate = (
 export type NewChatHandoffOpts = {
   sessionMgr: SessionManager;
   agentId?: string | null;
+  projectId?: string | null;
   currentSessionKey?: string | null;
   /** Decoded route session key (`null` on `/chat/new`). Used to skip redundant noop navigation. */
   routeSessionKey?: string | null;
@@ -36,6 +37,7 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
     const resolution = await resolveNewChatTarget({
       sessionMgr: opts.sessionMgr,
       agentId: agentRaw?.trim() || 'main',
+      projectId: opts.projectId,
       currentSessionKey: opts.currentSessionKey,
       forceNew: opts.forceNew,
     });
@@ -66,6 +68,7 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
       updatedAt: session.updatedAt || new Date().toISOString(),
       sourceChannel: session.sourceChannel,
       sourceChatId: session.sourceChatId,
+      projectId: session.projectId,
       routing: session.routing,
     });
     markSkipInitialSessionLoad(sessionKey);

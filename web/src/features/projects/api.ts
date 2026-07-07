@@ -149,12 +149,16 @@ export type ProjectListResponse = {
 export async function fetchProjects(query?: {
   status?: ProjectStatus;
   search?: string;
+  sortBy?: 'updatedAt' | 'createdAt' | 'name';
+  sortOrder?: 'asc' | 'desc';
   limit?: number;
   offset?: number;
 }): Promise<ProjectListResponse> {
   const params = new URLSearchParams();
   if (query?.status) params.set('status', query.status);
   if (query?.search?.trim()) params.set('search', query.search.trim());
+  if (query?.sortBy) params.set('sortBy', query.sortBy);
+  if (query?.sortOrder) params.set('sortOrder', query.sortOrder);
   if (query?.limit) params.set('limit', String(query.limit));
   if (query?.offset) params.set('offset', String(query.offset));
   const suffix = params.toString();

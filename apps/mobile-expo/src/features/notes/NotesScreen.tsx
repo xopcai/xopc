@@ -1,18 +1,16 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Platform,
   Pressable,
   RefreshControl,
-  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from 'react-native';
-import { ActivityIndicator, Chip, Icon, Text } from 'react-native-paper';
-import { KeyboardStickyView } from 'react-native-keyboard-controller';
+import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppToast } from '../../components/AppToast';
@@ -26,21 +24,13 @@ import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_DEFAULT } from '../../const
 import { useDelayedDelete } from '../../hooks/use-delayed-delete';
 import { useListSelection } from '../../hooks/use-list-selection';
 
-import { AttachmentFileError, pickAttachmentFromSource } from '../chat/attachment-file-io';
-import {
-  beginRecording,
-  finishRecording,
-  inferRecordingMimeType,
-  requestMicPermission,
-  type ExpoRecording,
-} from '../chat/voiceRecording';
 import { useMessages, t } from '../../i18n/messages';
-import { dismissOrHome, useDismissOnHardwareBack } from '../../lib/navigation';
+import { dismissOrHome, noteDetailRoute, useDismissOnHardwareBack } from '../../lib/navigation';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
 import {
+  createBlankNote,
   deleteNote,
   fetchNotes,
-  captureNote,
   updateNote,
   type NoteIndexEntry,
   type NoteKind,
@@ -49,26 +39,12 @@ import {
 import { queryKeys } from '../../query/keys';
 import { refreshNotesList } from '../../query/infinite-list-sync';
 import { useGatewayConfigured } from '../../query/sessions';
-import { useTheme, FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
+import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, spacing, useTheme } from '../../theme';
 
 import { useNoteTagsStore } from '../../stores/note-tags-store';
 import { NoteTagPickerSheet } from './NoteTagPickerSheet';
-import { NoteTagTabs } from './NoteTagTabs';
 import { collectTagsFromNotes, noteMatchesTagFilter, type NoteTagFilter } from './note-tag-utils';
 import { NoteCard } from './NoteCard';
-import {
-  captureNoteWithComposerAttachment,
-  captureNoteWithVoice,
-  prepareVoiceCapturePayload,
-} from './capture-note-media';
-import { flushPendingNotes, queueMediaCapture, queueNote } from './notes-sync';
-import { captureIntentBadgeKey, parseCaptureIntent } from './capture-parser';
-import type { ComposerAttachment } from '../chat/composer.types';
-
-type CapturePayload =
-  | { type: 'text'; text: string }
-  | { type: 'attachment'; attachment: ComposerAttachment }
-  | { type: 'voice'; uri: string; durationMillis: number; mimeType: string };
 
 type StatusFilter = 'all' | NoteStatus;
 type KindFilter = 'all' | NoteKind;
@@ -83,11 +59,10 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   const params = useLocalSearchParams<{ kind?: string }>();
   useDismissOnHardwareBack(router, { enabled: !embedded });
   const queryClient = useQueryClient();
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const configured = useGatewayConfigured();
   const m = useMessages();
   const pm = m.notesPage;
-  const cm = m.chat;
   const li = m.listInteraction;
   const insets = useSafeAreaInsets();
   const {
@@ -116,22 +91,21 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   }, [onRequestHome, router]);
 
   const initialKind = (params.kind as KindFilter) || 'all';
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [kindFilter, setKindFilter] = useState<KindFilter>(initialKind);
+  const statusFilter: StatusFilter = 'all';
+  const kindFilter: KindFilter = initialKind;
   const [tagFilter, setTagFilter] = useState<NoteTagFilter>('all');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchText, setSearchText] = useState('');
   const [showTagPicker, setShowTagPicker] = useState(false);
   const [focusTagCreate, setFocusTagCreate] = useState(false);
-  const [captureText, setCaptureText] = useState('');
   const [snackMsg, setSnackMsg] = useState('');
-  const [recording, setRecording] = useState(false);
-  const recordingRef = useRef<ExpoRecording | null>(null);
   const noteTags = useNoteTagsStore((s) => s.tags);
   const addNoteTag = useNoteTagsStore((s) => s.addTag);
   const ensureNoteTags = useNoteTagsStore((s) => s.ensureTags);
 
   const notesListQueryKey = useMemo(
-    () => [...queryKeys.notesAll, statusFilter, kindFilter] as const,
-    [statusFilter, kindFilter],
+    () => [...queryKeys.notesAll, statusFilter, kindFilter, searchText.trim()] as const,
+    [statusFilter, kindFilter, searchText],
   );
 
   const notesQuery = useInfiniteQuery({
@@ -140,6 +114,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
       fetchNotes({
         status: statusFilter === 'all' ? undefined : statusFilter,
         kind: kindFilter === 'all' ? undefined : kindFilter,
+        search: searchText.trim() || undefined,
         limit: 20,
         offset: pageParam,
       }),
@@ -156,88 +131,6 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
     await refreshNotesList(queryClient, notesListQueryKey);
   }, [queryClient, notesListQueryKey]);
 
-  const captureMutation = useMutation({
-    mutationFn: async (payload: CapturePayload) => {
-      if (payload.type === 'text') {
-        const intent = parseCaptureIntent(payload.text);
-        return captureNote({ text: payload.text, kind: intent.kind });
-      }
-      if (payload.type === 'attachment') {
-        return captureNoteWithComposerAttachment(payload.attachment, captureText);
-      }
-      return captureNoteWithVoice(payload);
-    },
-    onSuccess: async () => {
-      setCaptureText('');
-      await refreshList();
-    },
-    onError: async (err, payload) => {
-      if (payload.type === 'text') {
-        queueNote(payload.text);
-        setSnackMsg(pm.savedOffline);
-        return;
-      }
-      try {
-        if (payload.type === 'attachment') {
-          queueMediaCapture({ type: 'attachment', attachment: payload.attachment, text: captureText });
-        } else {
-          const queued = await prepareVoiceCapturePayload(payload);
-          queueMediaCapture({ type: 'voice', ...queued });
-        }
-        setCaptureText('');
-        setSnackMsg(pm.savedOffline);
-      } catch {
-        setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
-      }
-    },
-  });
-
-  const handleCapture = useCallback(() => {
-    const text = captureText.trim();
-    if (!text) return;
-    captureMutation.mutate({ type: 'text', text });
-  }, [captureText, captureMutation]);
-
-  const handleVoiceStart = useCallback(async () => {
-    const granted = await requestMicPermission();
-    if (!granted) { setSnackMsg(pm.micDenied); return; }
-    setRecording(true);
-    try {
-      recordingRef.current = await beginRecording(() => {});
-    } catch {
-      setRecording(false);
-      setSnackMsg(pm.actionFailed);
-    }
-  }, [pm]);
-
-  const handleVoiceEnd = useCallback(async () => {
-    setRecording(false);
-    const rec = recordingRef.current;
-    if (!rec) return;
-    recordingRef.current = null;
-    try {
-      const { uri, durationMillis } = await finishRecording(rec);
-      if (!uri || durationMillis < 500) { return; }
-      const mimeType = inferRecordingMimeType(uri);
-      captureMutation.mutate({ type: 'voice', uri, durationMillis, mimeType });
-    } catch {
-      setSnackMsg(pm.actionFailed);
-    }
-  }, [captureMutation, pm]);
-
-
-  const handlePickImage = useCallback(async (source: 'camera' | 'photos') => {
-    try {
-      const attachment = await pickAttachmentFromSource(source);
-      if (!attachment) return;
-      captureMutation.mutate({ type: 'attachment', attachment });
-    } catch (err) {
-      if (err instanceof AttachmentFileError && err.code === 'permission_denied') {
-        setSnackMsg(source === 'camera' ? cm.attachmentCameraPermissionDenied : cm.attachmentPermissionDenied);
-      }
-    }
-  }, [captureMutation, cm.attachmentCameraPermissionDenied, cm.attachmentPermissionDenied]);
-
   const handleNotePress = useCallback((note: NoteIndexEntry) => {
     if (selectionMode) {
       toggleSelected(note.id);
@@ -245,6 +138,22 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
     }
     router.push(`/items/${note.id}`);
   }, [router, selectionMode, toggleSelected]);
+
+  const createNoteMutation = useMutation({
+    mutationFn: createBlankNote,
+    onSuccess: async (result) => {
+      await refreshNotesList(queryClient, notesListQueryKey);
+      router.push(noteDetailRoute(result.note.id));
+    },
+    onError: (err) => {
+      setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
+    },
+  });
+
+  const handleCreateNote = useCallback(() => {
+    if (createNoteMutation.isPending) return;
+    createNoteMutation.mutate();
+  }, [createNoteMutation]);
 
   const handleNoteLongPress = useCallback((note: NoteIndexEntry) => {
     if (selectionMode) return;
@@ -350,14 +259,12 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   }, [ensureNoteTags, notes]);
 
   const filteredNotes = useMemo(
-    () => notes.filter((note) => !pendingDeleteIds.has(note.id) && noteMatchesTagFilter(note, tagFilter)),
+    () => notes.filter((note) => (
+      !pendingDeleteIds.has(note.id)
+      && noteMatchesTagFilter(note, tagFilter)
+    )),
     [notes, pendingDeleteIds, tagFilter],
   );
-
-  const handleOpenCreateTag = useCallback(() => {
-    setFocusTagCreate(true);
-    setShowTagPicker(true);
-  }, []);
 
   const handleCreateTag = useCallback(
     (raw: string) => {
@@ -375,7 +282,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   );
 
   const handleSelectTagFromPicker = useCallback((tag: string | null) => {
-    if (tag) setTagFilter(tag);
+    setTagFilter(tag ?? 'all');
   }, []);
 
   const handleLoadMore = useCallback(() => {
@@ -386,24 +293,8 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   const { onEndReached, onMomentumScrollBegin } = useFlatListEndReached(handleLoadMore);
 
   const onRefresh = useCallback(async () => {
-    await flushPendingNotes();
     await refreshList();
   }, [refreshList]);
-
-  const statusFilters: { key: StatusFilter; label: string }[] = useMemo(() => [
-    { key: 'all', label: pm.filterAll },
-    { key: 'inbox', label: pm.filterInbox },
-    { key: 'processed', label: pm.filterProcessed },
-    { key: 'archived', label: pm.filterArchived },
-  ], [pm]);
-
-  const kindFilters: { key: KindFilter; label: string }[] = useMemo(() => [
-    { key: 'all', label: pm.kindAll },
-    { key: 'thought', label: pm.kindThought },
-    { key: 'todo', label: pm.kindTodo },
-    { key: 'voice', label: pm.kindVoice },
-    { key: 'media', label: pm.kindMedia },
-  ], [pm]);
 
   const batchActions = useMemo(() => [
     {
@@ -460,7 +351,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
 
   const listBottomPadding = selectionMode
     ? insets.bottom + 120
-    : insets.bottom + 80;
+    : floatingBottomPadding(insets.bottom) + FLOATING_BOTTOM_OFFSET + 88;
 
   if (!configured) {
     return (
@@ -478,36 +369,34 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
       <FloatingHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : pm.title}
         onBack={selectionMode ? exitSelectionMode : embedded ? undefined : handleBack}
+        onSearchPress={!selectionMode ? () => setSearchOpen((value) => !value) : undefined}
+        searchPlaceholder={searchText.trim() || m.common.search}
+        rightActions={!selectionMode ? [
+          {
+            icon: 'tag-outline',
+            accessibilityLabel: pm.tagPickerTitle,
+            onPress: () => {
+              setFocusTagCreate(false);
+              setShowTagPicker(true);
+            },
+          },
+        ] : undefined}
       />
 
-      {!selectionMode ? (
-        <NoteTagTabs
-          tags={noteTags}
-          activeTag={tagFilter}
-          onSelect={setTagFilter}
-          onAddPress={handleOpenCreateTag}
-        />
-      ) : null}
-
-      {/* Filters — single row, horizontally scrollable */}
-      {!selectionMode ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-          style={styles.filterStrip}
-        >
-          {statusFilters.map((f) => (
-            <Chip key={f.key} selected={statusFilter === f.key} onPress={() => setStatusFilter(f.key)} compact mode="outlined">
-              {f.label}
-            </Chip>
-          ))}
-          {kindFilters.map((f) => (
-            <Chip key={f.key} selected={kindFilter === f.key} onPress={() => setKindFilter(f.key)} compact mode="outlined">
-              {f.label}
-            </Chip>
-          ))}
-        </ScrollView>
+      {!selectionMode && searchOpen ? (
+        <View style={styles.searchWrap}>
+          <View style={[styles.searchBox, { backgroundColor: colors.surface.panel, borderColor: colors.border.subtle }]}>
+            <Icon source="magnify" size={18} color={colors.text.tertiary} />
+            <TextInput
+              value={searchText}
+              onChangeText={setSearchText}
+              placeholder={m.common.search}
+              placeholderTextColor={colors.text.tertiary}
+              style={[styles.searchInput, { color: colors.text.primary }]}
+              autoFocus
+            />
+          </View>
+        </View>
       ) : null}
 
       <View style={styles.listArea}>
@@ -533,10 +422,10 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
                   <Icon source="note-text-outline" size={40} color={colors.accent.primary} />
                 </View>
                 <Text style={{ color: colors.text.secondary, marginTop: 12, fontSize: 16, fontWeight: '600' }}>
-                  {tagFilter === 'all' ? pm.empty : pm.tagEmptyFiltered}
+                  {searchText.trim() ? pm.searchNoResults : tagFilter === 'all' ? pm.empty : pm.tagEmptyFiltered}
                 </Text>
                 <Text style={{ color: colors.text.tertiary, fontSize: 13, textAlign: 'center', maxWidth: 240 }}>
-                  {tagFilter === 'all' ? pm.emptyHint : pm.tagEmptyFilteredHint}
+                  {searchText.trim() ? pm.searchPlaceholder : tagFilter === 'all' ? pm.emptyHint : pm.tagEmptyFilteredHint}
                 </Text>
               </View>
             }
@@ -544,84 +433,37 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
         )}
       </View>
 
-      {/* Bottom composer — multiline with smart intent detection */}
       {selectionMode ? (
         <BatchActionBar items={batchActions} />
       ) : (
-        <KeyboardStickyView
-          offset={{ closed: 0, opened: 0 }}
-          style={{ marginBottom: FLOATING_BOTTOM_OFFSET }}
+        <View
+          pointerEvents="box-none"
+          style={[
+            styles.newNoteWrap,
+            { paddingBottom: floatingBottomPadding(insets.bottom) + FLOATING_BOTTOM_OFFSET },
+          ]}
         >
-          <View style={[styles.composerWrap, { paddingBottom: floatingBottomPadding(insets.bottom) }]}>
-          {/* Intent badge */}
-          {captureText.trim().length > 0 && (() => {
-            const intent = parseCaptureIntent(captureText);
-            const badgeKey = captureIntentBadgeKey(intent);
-            if (!badgeKey) return null;
-            return (
-              <View style={[styles.intentBadge, { backgroundColor: colors.accent.selectionBg }]}>
-                <Icon source={intent.kind === 'todo' ? 'checkbox-marked-outline' : 'link'} size={14} color={colors.accent.primary} />
-                <Text style={{ fontSize: 11, color: colors.accent.primary }}>
-                  {pm[badgeKey]}
-                </Text>
-              </View>
-            );
-          })()}
-          <View
+          <Pressable
             style={[
-              styles.composerShell,
+              styles.newNoteButton,
               {
-                backgroundColor: isDark ? colors.surface.input : colors.surface.panel,
+                backgroundColor: colors.surface.panel,
                 borderColor: colors.border.default,
               },
             ]}
+            onPress={handleCreateNote}
+            disabled={createNoteMutation.isPending}
+            accessibilityRole="button"
+            accessibilityLabel={pm.quickCapturePlaceholder}
+            accessibilityState={{ disabled: createNoteMutation.isPending }}
           >
-            <View style={styles.composerRow}>
-              <Pressable style={[styles.toolBtn, { backgroundColor: colors.surface.input }]} onPress={() => void handlePickImage('photos')}>
-                <Icon source="image-outline" size={20} color={colors.text.tertiary} />
-              </Pressable>
-              <Pressable style={[styles.toolBtn, { backgroundColor: colors.surface.input }]} onPress={() => void handlePickImage('camera')}>
-                <Icon source="camera-outline" size={20} color={colors.text.tertiary} />
-              </Pressable>
-              <TextInput
-                style={[styles.composerInput, { color: colors.text.primary }]}
-                placeholder={pm.quickCapturePlaceholder}
-                placeholderTextColor={colors.text.tertiary}
-                value={captureText}
-                onChangeText={setCaptureText}
-                onSubmitEditing={handleCapture}
-                returnKeyType="send"
-                multiline
-                blurOnSubmit
-                textAlignVertical="center"
-              />
-              {captureText.trim() ? (
-                <Pressable
-                  style={[styles.sendCircle, { backgroundColor: colors.text.primary }]}
-                  onPress={handleCapture}
-                  disabled={captureMutation.isPending}
-                  hitSlop={8}
-                >
-                  <Icon source="arrow-up" size={20} color={colors.text.inverse} />
-                </Pressable>
-              ) : (
-                <Pressable
-                  style={[
-                    styles.toolBtn,
-                    { backgroundColor: colors.surface.input },
-	                    recording && { backgroundColor: colors.semantic.errorBold },
-	                  ]}
-                  onPressIn={() => void handleVoiceStart()}
-                  onPressOut={() => void handleVoiceEnd()}
-                  hitSlop={8}
-                >
-	                  <Icon source="microphone" size={20} color={recording ? colors.accent.onPrimary : colors.text.tertiary} />
-                </Pressable>
-              )}
-            </View>
-          </View>
+            {createNoteMutation.isPending ? (
+              <ActivityIndicator size={22} color={colors.text.secondary} />
+            ) : (
+              <Icon source="note-plus-outline" size={26} color={colors.text.secondary} />
+            )}
+          </Pressable>
         </View>
-        </KeyboardStickyView>
       )}
 
       <BatchDeleteConfirmDialog
@@ -670,17 +512,53 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  filterStrip: {
-    flexGrow: 0,
-    marginBottom: 6,
-  },
-  filterScroll: {
+  notesHeader: {
     flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 16,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 18,
+  },
+  notesTitle: {
+    flex: 1,
+    fontSize: 34,
+    lineHeight: 40,
+    fontWeight: '800',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  headerIconButton: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerIconPlaceholder: {
+    width: 0,
+    height: 34,
+  },
+  searchWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: 12,
+  },
+  searchBox: {
+    minHeight: 44,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    paddingVertical: Platform.select({ ios: 10, android: 6, default: 8 }),
   },
   listArea: { flex: 1, minHeight: 0 },
-  list: { padding: 16, paddingTop: 8, gap: 10, flexGrow: 1 },
+  list: { padding: spacing.lg, paddingTop: spacing.md, gap: spacing.sm, flexGrow: 1 },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
   empty: { alignItems: 'center', paddingVertical: 48, gap: 6 },
   emptyIconWrap: {
@@ -743,5 +621,26 @@ const styles = StyleSheet.create({
   },
   recordingBtn: {
     borderRadius: 18,
+  },
+  newNoteWrap: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newNoteButton: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: StyleSheet.hairlineWidth,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
 });
