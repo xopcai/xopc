@@ -9,13 +9,14 @@ function commandPaletteGroupOrder(language: StoredLanguage): Record<string, numb
   const g = commandPaletteGroups(language);
   return {
     [g.navigate]: 0,
-    [g.quickSettings]: 1,
-    [g.extensions]: 2,
-    [g.sessions]: 3,
-    [g.files]: 4,
-    [g.commands]: 5,
-    [g.skills]: 6,
-    [g.actions]: 7,
+    [g.projects]: 1,
+    [g.quickSettings]: 2,
+    [g.extensions]: 3,
+    [g.sessions]: 4,
+    [g.files]: 5,
+    [g.commands]: 6,
+    [g.skills]: 7,
+    [g.actions]: 8,
   };
 }
 
@@ -23,6 +24,7 @@ export function commandPaletteGroupCaps(language: StoredLanguage): Record<string
   const g = commandPaletteGroups(language);
   return {
     [g.navigate]: 12,
+    [g.projects]: 8,
     [g.quickSettings]: 12,
     [g.actions]: 8,
     [g.extensions]: 8,

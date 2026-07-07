@@ -177,6 +177,7 @@
   "commandPalette": {
     "groups": {
       "navigate": "Navigate",
+      "projects": "Projects",
       "quickSettings": "Quick Settings",
       "extensions": "Extensions",
       "sessions": "Sessions",
