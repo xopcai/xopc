@@ -135,7 +135,7 @@ export const ReadFileCard = memo(function ReadFileCard({
   );
 });
 
-/* ------------------------------- edit_file -------------------------------- */
+/* ------------------------------ apply_patch ------------------------------- */
 
 function DiffBody({ lines }: { lines: DiffLine[] }) {
   return (
@@ -227,21 +227,21 @@ export const WriteFileCard = memo(function WriteFileCard({
   );
 });
 
-/* --------------------------------- shell ---------------------------------- */
+/* ------------------------------ exec_command ------------------------------ */
 
-const SHELL_PREVIEW_LINE_LIMIT = 12;
+const COMMAND_PREVIEW_LINE_LIMIT = 12;
 
-function shellOutputPreview(text: string): { preview: string; truncated: boolean } {
+function commandOutputPreview(text: string): { preview: string; truncated: boolean } {
   if (!text) return { preview: '', truncated: false };
   const lines = text.split('\n');
-  if (lines.length <= SHELL_PREVIEW_LINE_LIMIT) return { preview: text, truncated: false };
+  if (lines.length <= COMMAND_PREVIEW_LINE_LIMIT) return { preview: text, truncated: false };
   return {
-    preview: `${lines.slice(0, SHELL_PREVIEW_LINE_LIMIT).join('\n')}\n…`,
+    preview: `${lines.slice(0, COMMAND_PREVIEW_LINE_LIMIT).join('\n')}\n…`,
     truncated: true,
   };
 }
 
-export const ShellCard = memo(function ShellCard({
+export const CommandCard = memo(function CommandCard({
   block,
   labels,
 }: {
@@ -250,14 +250,20 @@ export const ShellCard = memo(function ShellCard({
 }) {
   const command = extractCommandPreview(block.input);
   const parsed = useMemo(() => parseToolResult(block.result), [block.result]);
-  const details = detailsAsRecord(parsed);
+  const liveDetails = block.details && typeof block.details === 'object' && !Array.isArray(block.details)
+    ? (block.details as Record<string, unknown>)
+    : null;
+  const details = liveDetails ?? detailsAsRecord(parsed);
   const exitCode = typeof details.exitCode === 'number' ? details.exitCode : null;
   const timedOut = Boolean(details.timedOut);
   const truncated = Boolean(details.truncated);
   const isRunning = block.status === 'running';
   const isError = block.status === 'error';
-  const output = parsed.text;
-  const { preview } = useMemo(() => shellOutputPreview(output), [output]);
+  const output =
+    typeof details.aggregatedOutput === 'string' && details.aggregatedOutput.length > 0
+      ? details.aggregatedOutput
+      : parsed.text;
+  const { preview } = useMemo(() => commandOutputPreview(output), [output]);
 
   const exitBadge = isRunning ? (
     <ToolCardBadge>

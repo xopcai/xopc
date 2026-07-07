@@ -37,7 +37,7 @@ export const PR_REVIEW_SCRIPT = `export const meta = {
   ],
 }
 
-const READ_ONLY_TOOLS = ['read_file', 'grep', 'find', 'list_dir', 'shell']
+const READ_ONLY_TOOLS = ['read_file', 'grep', 'find', 'list_dir', 'exec_command']
 
 const target = args && typeof args === 'object'
   ? String(args.target ?? args.diff ?? '')

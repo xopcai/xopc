@@ -3,6 +3,9 @@ import type { Hono } from 'hono';
 import { commandRegistry } from '../../../chat-commands/index.js';
 import { isRegisteredProvider } from '../../../agent/skills/skills-marketplace.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { effectiveWorkspacePathForSession } from '../../../session/session-workspace.js';
+import { getProjectForSession } from '../../../projects/workspace.js';
+import { buildReviewContext, resolveGitRoot } from '../../../review/review-git.js';
 
 function parseMarketplaceProviderQuery(raw: string | undefined): string | undefined {
   const v = raw?.trim().toLowerCase();
@@ -38,6 +41,32 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
         extensionId: cmd.id.startsWith('ext.') ? cmd.id.split('.')[1] : undefined,
       }));
     return c.json({ ok: true, payload: { commands, extensionCommands } });
+  });
+
+  authenticated.get('/api/review/context', async (c) => {
+    const sessionKey = c.req.query('sessionKey')?.trim() || 'agent:main:main';
+    try {
+      const workspace = effectiveWorkspacePathForSession(
+        service.getConfig(),
+        sessionKey,
+        null,
+        getProjectForSession(sessionKey),
+      );
+      const cwd = await resolveGitRoot(workspace);
+      const payload = await buildReviewContext(cwd);
+      return c.json({ ok: true, payload });
+    } catch (err) {
+      return c.json(
+        {
+          ok: false,
+          error: {
+            code: 'REVIEW_CONTEXT_FAILED',
+            message: err instanceof Error ? err.message : 'Failed to load review context',
+          },
+        },
+        400,
+      );
+    }
   });
 
   // ========== Skills (managed global skills under ~/.xopc/skills) ==========

@@ -34,7 +34,7 @@ const manifest: EffectiveAgentManifest = {
   tools: {
     builtin: {
       read_file: { mode: 'allow', scope: 'workspace' },
-      shell: { mode: 'confirm', scope: 'workspace' },
+      exec_command: { mode: 'confirm', scope: 'workspace' },
       send_message: { mode: 'deny' },
       missing_tool: { mode: 'allow' },
     },
@@ -47,7 +47,7 @@ const manifest: EffectiveAgentManifest = {
     suggested: [{ intent: 'review', workflow: 'review-code' }],
   },
   boundaries: {
-    requiresConfirmation: ['shell'],
+    requiresConfirmation: ['exec_command'],
     forbidden: ['commit secrets'],
     escalation: ['production'],
   },
@@ -63,12 +63,12 @@ const catalog = [
     tool: { id: 'read' },
   },
   {
-    name: 'shell',
+    name: 'exec_command',
     category: 'code' as const,
     risk: 'high' as const,
     supportsConfirm: true,
     scopes: ['workspace' as const],
-    tool: { id: 'shell' },
+    tool: { id: 'exec_command' },
   },
 ];
 
@@ -79,7 +79,7 @@ const workflowCatalog = [
   },
   {
     id: 'review-code',
-    phases: [{ id: 'review', modelRole: 'small', requiredTools: ['read_file', 'shell'] }],
+    phases: [{ id: 'review', modelRole: 'small', requiredTools: ['read_file', 'exec_command'] }],
   },
   {
     id: 'bad-workflow',
@@ -104,8 +104,8 @@ describe('runtime tool registry', () => {
   it('applies allow confirm deny and missing policy', () => {
     const registry = buildRuntimeToolRegistry({ manifest, catalog });
 
-    expect(registry.tools.map((entry) => entry.name)).toEqual(['read_file', 'shell']);
-    expect(registry.tools.find((entry) => entry.name === 'shell')?.requiresConfirmation).toBe(true);
+    expect(registry.tools.map((entry) => entry.name)).toEqual(['exec_command', 'read_file']);
+    expect(registry.tools.find((entry) => entry.name === 'exec_command')?.requiresConfirmation).toBe(true);
     expect(registry.denied).toEqual(['send_message']);
     expect(registry.missing).toEqual(['missing_tool']);
   });
@@ -115,7 +115,7 @@ describe('boundary guard', () => {
   it('orders deny, escalate, confirm, allow decisions', () => {
     expect(checkBoundary({ manifest, action: 'commit secrets to repo' })).toMatchObject({ decision: 'deny' });
     expect(checkBoundary({ manifest, action: 'change production config' })).toMatchObject({ decision: 'escalate' });
-    expect(checkBoundary({ manifest, action: 'run shell command' })).toMatchObject({ decision: 'confirm' });
+    expect(checkBoundary({ manifest, action: 'run exec_command' })).toMatchObject({ decision: 'confirm' });
     expect(checkBoundary({ manifest, action: 'read source file' })).toMatchObject({ decision: 'allow' });
   });
 });
@@ -187,6 +187,6 @@ describe('agent runtime profile', () => {
     expect(profile.resolveModel().model).toBe('anthropic/claude-sonnet-4');
     expect(profile.resolveWorkflow('review').workflow?.id).toBe('review-code');
     expect(profile.validateWorkflow(workflowCatalog[0]!)).toEqual([]);
-    expect(profile.checkBoundary('run shell').decision).toBe('confirm');
+    expect(profile.checkBoundary('run exec_command').decision).toBe('confirm');
   });
 });

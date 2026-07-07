@@ -21,6 +21,104 @@ describe('session-context-for-llm', () => {
     expect(buildSessionContextForLlm(rows)).toEqual([u]);
   });
 
+  it('buildSessionContextForLlm appends compact coding context from recent coder tools', () => {
+    const user = { role: 'user', content: [{ type: 'text', text: 'fix tests' }] } as AgentMessage;
+    const assistant = {
+      role: 'assistant',
+      content: [
+        { type: 'tool_use', id: 'plan-1', name: 'update_plan', input: {} },
+        { type: 'tool_use', id: 'cmd-1', name: 'exec_command', input: { cmd: 'pnpm test' } },
+        { type: 'tool_use', id: 'patch-1', name: 'apply_patch', input: {} },
+      ],
+    } as unknown as AgentMessage;
+    const planResult = {
+      role: 'toolResult',
+      toolCallId: 'plan-1',
+      content: JSON.stringify({
+        details: {
+          explanation: 'P1',
+          plan: [
+            { step: 'Implement', status: 'completed' },
+            { step: 'Review', status: 'in_progress' },
+          ],
+        },
+      }),
+    } as unknown as AgentMessage;
+    const commandResult = {
+      role: 'toolResult',
+      toolCallId: 'cmd-1',
+      content: JSON.stringify({
+        details: {
+          command: 'pnpm test',
+          status: 'failed',
+          exitCode: 1,
+          failureHint: 'Inspect stderr first',
+        },
+      }),
+    } as unknown as AgentMessage;
+    const patchResult = {
+      role: 'toolResult',
+      toolCallId: 'patch-1',
+      content: JSON.stringify({
+        details: {
+          files: ['src/a.ts'],
+          added: 2,
+          removed: 1,
+          summary: 'update: src/a.ts (+2/-1)',
+        },
+      }),
+    } as unknown as AgentMessage;
+
+    const messages = buildSessionContextForLlm([user, assistant, planResult, commandResult, patchResult]);
+    const context = messages.at(-1);
+
+    expect(context?.role).toBe('user');
+    const text = JSON.stringify(context?.content);
+    expect(text).toContain('<coding_context>');
+    expect(text).toContain('Plan (P1): completed: Implement | in_progress: Review');
+    expect(text).toContain('Command failed: pnpm test exit=1 hint=Inspect stderr first');
+    expect(text).toContain('Patch applied: src/a.ts (+2/-1)');
+  });
+
+  it('buildSessionContextForLlm reads coding tool details from top-level toolResult details', () => {
+    const assistant = {
+      role: 'assistant',
+      content: [
+        { type: 'tool_use', id: 'cmd-1', name: 'exec_command', input: { cmd: 'pnpm test' } },
+        { type: 'tool_use', id: 'patch-1', name: 'apply_patch', input: {} },
+      ],
+    } as unknown as AgentMessage;
+    const commandResult = {
+      role: 'toolResult',
+      toolCallId: 'cmd-1',
+      content: 'Command exited with code 1',
+      details: {
+        command: 'pnpm test',
+        status: 'failed',
+        exitCode: 1,
+        failureHint: 'Inspect stderr first',
+      },
+    } as unknown as AgentMessage;
+    const patchResult = {
+      role: 'toolResult',
+      toolCallId: 'patch-1',
+      content: 'update: src/a.ts (+2/-1)',
+      details: {
+        files: ['src/a.ts'],
+        added: 2,
+        removed: 1,
+        summary: 'update: src/a.ts (+2/-1)',
+      },
+    } as unknown as AgentMessage;
+
+    const messages = buildSessionContextForLlm([assistant, commandResult, patchResult]);
+    const text = JSON.stringify(messages.at(-1)?.content);
+
+    expect(text).toContain('Command failed: pnpm test exit=1 hint=Inspect stderr first');
+    expect(text).toContain('Patch applied: src/a.ts (+2/-1)');
+    expect(text).not.toContain('Command unknown');
+  });
+
   it('buildSessionContextForLlm maps included bash execution rows into user context', () => {
     const u = { role: 'user', content: [{ type: 'text', text: 'x' }] } as AgentMessage;
     const bash = { role: 'bashExecution', command: 'pwd', output: '/repo\n', exitCode: 0 } as const;

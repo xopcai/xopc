@@ -13,7 +13,7 @@ import {
  */
 export const TOOL_NAMES_WITH_WORKSPACE_OUTPUT = new Set<string>([
   'write_file',
-  'edit_file',
+  'apply_patch',
   'image_generate',
 ]);
 

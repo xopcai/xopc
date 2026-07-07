@@ -19,25 +19,25 @@ describe('ToolErrorTracker', () => {
 
   describe('recordFailure', () => {
     it('should record a single tool failure', () => {
-      tracker.recordFailure('shell', 'Error: command failed');
-      expect(tracker.getFailureCount('shell')).toBe(1);
+      tracker.recordFailure('exec_command', 'Error: command failed');
+      expect(tracker.getFailureCount('exec_command')).toBe(1);
     });
 
     it('should track multiple failures for the same tool', () => {
-      tracker.recordFailure('shell', 'Error 1');
-      tracker.recordFailure('shell', 'Error 2');
-      tracker.recordFailure('shell', 'Error 3');
+      tracker.recordFailure('exec_command', 'Error 1');
+      tracker.recordFailure('exec_command', 'Error 2');
+      tracker.recordFailure('exec_command', 'Error 3');
       
-      expect(tracker.getFailureCount('shell')).toBe(3);
+      expect(tracker.getFailureCount('exec_command')).toBe(3);
       expect(tracker.getSummary().total).toBe(3);
     });
 
     it('should track failures for different tools separately', () => {
-      tracker.recordFailure('shell', 'Error 1');
+      tracker.recordFailure('exec_command', 'Error 1');
       tracker.recordFailure('read', 'Error 2');
       tracker.recordFailure('write', 'Error 3');
       
-      expect(tracker.getFailureCount('shell')).toBe(1);
+      expect(tracker.getFailureCount('exec_command')).toBe(1);
       expect(tracker.getFailureCount('read')).toBe(1);
       expect(tracker.getFailureCount('write')).toBe(1);
       expect(tracker.getSummary().total).toBe(3);
@@ -46,54 +46,54 @@ describe('ToolErrorTracker', () => {
 
   describe('remainingAttempts', () => {
     it('should return correct remaining attempts', () => {
-      expect(tracker.remainingAttempts('shell')).toBe(3);
+      expect(tracker.remainingAttempts('exec_command')).toBe(3);
       
-      tracker.recordFailure('shell');
-      expect(tracker.remainingAttempts('shell')).toBe(2);
+      tracker.recordFailure('exec_command');
+      expect(tracker.remainingAttempts('exec_command')).toBe(2);
       
-      tracker.recordFailure('shell');
-      expect(tracker.remainingAttempts('shell')).toBe(1);
+      tracker.recordFailure('exec_command');
+      expect(tracker.remainingAttempts('exec_command')).toBe(1);
       
-      tracker.recordFailure('shell');
-      expect(tracker.remainingAttempts('shell')).toBe(0);
+      tracker.recordFailure('exec_command');
+      expect(tracker.remainingAttempts('exec_command')).toBe(0);
     });
 
     it('should not return negative values', () => {
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell'); // Exceed limit
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command'); // Exceed limit
       
-      expect(tracker.remainingAttempts('shell')).toBe(0);
+      expect(tracker.remainingAttempts('exec_command')).toBe(0);
     });
   });
 
   describe('isToolLimitReached', () => {
     it('should return false when limit not reached', () => {
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
-      expect(tracker.isToolLimitReached('shell')).toBe(false);
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
+      expect(tracker.isToolLimitReached('exec_command')).toBe(false);
     });
 
     it('should return true when limit reached', () => {
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
-      expect(tracker.isToolLimitReached('shell')).toBe(true);
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
+      expect(tracker.isToolLimitReached('exec_command')).toBe(true);
     });
 
     it('should return true when limit exceeded', () => {
-      tracker.recordFailure('shell', 'Error 1');
-      tracker.recordFailure('shell', 'Error 2');
-      tracker.recordFailure('shell', 'Error 3');
-      tracker.recordFailure('shell', 'Error 4');
-      expect(tracker.isToolLimitReached('shell')).toBe(true);
+      tracker.recordFailure('exec_command', 'Error 1');
+      tracker.recordFailure('exec_command', 'Error 2');
+      tracker.recordFailure('exec_command', 'Error 3');
+      tracker.recordFailure('exec_command', 'Error 4');
+      expect(tracker.isToolLimitReached('exec_command')).toBe(true);
     });
   });
 
   describe('isTotalLimitReached', () => {
     it('should return false when total limit not reached', () => {
-      tracker.recordFailure('shell');
+      tracker.recordFailure('exec_command');
       tracker.recordFailure('read');
       tracker.recordFailure('write');
       tracker.recordFailure('grep');
@@ -101,7 +101,7 @@ describe('ToolErrorTracker', () => {
     });
 
     it('should return true when total limit reached', () => {
-      tracker.recordFailure('shell');
+      tracker.recordFailure('exec_command');
       tracker.recordFailure('read');
       tracker.recordFailure('write');
       tracker.recordFailure('grep');
@@ -112,15 +112,15 @@ describe('ToolErrorTracker', () => {
 
   describe('isAnyLimitReached', () => {
     it('should return false when no limits reached', () => {
-      tracker.recordFailure('shell');
+      tracker.recordFailure('exec_command');
       tracker.recordFailure('read');
       expect(tracker.isAnyLimitReached()).toBe(false);
     });
 
     it('should return true when tool limit reached', () => {
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
       expect(tracker.isAnyLimitReached()).toBe(true);
     });
 
@@ -136,18 +136,18 @@ describe('ToolErrorTracker', () => {
 
   describe('getFailureHint', () => {
     it('should return warning with remaining attempts', () => {
-      tracker.recordFailure('shell');
-      const hint = tracker.getFailureHint('shell');
-      expect(hint).toContain('shell');
+      tracker.recordFailure('exec_command');
+      const hint = tracker.getFailureHint('exec_command');
+      expect(hint).toContain('exec_command');
       expect(hint).toContain('1 times');
       expect(hint).toContain('Remaining attempts: 2');
     });
 
     it('should return error when tool limit reached', () => {
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
-      const hint = tracker.getFailureHint('shell');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
+      const hint = tracker.getFailureHint('exec_command');
       expect(hint).toContain('Do not retry this tool');
     });
 
@@ -164,11 +164,11 @@ describe('ToolErrorTracker', () => {
 
   describe('reset', () => {
     it('should clear all failures', () => {
-      tracker.recordFailure('shell');
+      tracker.recordFailure('exec_command');
       tracker.recordFailure('read');
       tracker.reset();
       
-      expect(tracker.getFailureCount('shell')).toBe(0);
+      expect(tracker.getFailureCount('exec_command')).toBe(0);
       expect(tracker.getFailureCount('read')).toBe(0);
       expect(tracker.getSummary().total).toBe(0);
     });
@@ -179,22 +179,22 @@ describe('ToolErrorTracker', () => {
         resetOnTurnEnd: false,
       });
       
-      noResetTracker.recordFailure('shell');
+      noResetTracker.recordFailure('exec_command');
       noResetTracker.reset();
       
-      expect(noResetTracker.getFailureCount('shell')).toBe(1);
+      expect(noResetTracker.getFailureCount('exec_command')).toBe(1);
     });
   });
 
   describe('resetTool', () => {
     it('should reset failures for a specific tool', () => {
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
       tracker.recordFailure('read');
       
-      tracker.resetTool('shell');
+      tracker.resetTool('exec_command');
       
-      expect(tracker.getFailureCount('shell')).toBe(0);
+      expect(tracker.getFailureCount('exec_command')).toBe(0);
       expect(tracker.getFailureCount('read')).toBe(1);
       expect(tracker.getSummary().total).toBe(1);
     });
@@ -206,29 +206,29 @@ describe('ToolErrorTracker', () => {
 
   describe('getFailures', () => {
     it('should return a copy of failures map', () => {
-      tracker.recordFailure('shell');
+      tracker.recordFailure('exec_command');
       tracker.recordFailure('read');
       
       const failures = tracker.getFailures();
       expect(failures.size).toBe(2);
-      expect(failures.has('shell')).toBe(true);
+      expect(failures.has('exec_command')).toBe(true);
       expect(failures.has('read')).toBe(true);
       
       // Modifying returned map should not affect tracker
-      failures.delete('shell');
-      expect(tracker.getFailures().has('shell')).toBe(true);
+      failures.delete('exec_command');
+      expect(tracker.getFailures().has('exec_command')).toBe(true);
     });
   });
 
   describe('getSummary', () => {
     it('should return correct summary', () => {
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
       tracker.recordFailure('read');
       
       const summary = tracker.getSummary();
       expect(summary.total).toBe(3);
-      expect(summary.byTool.shell).toBe(2);
+      expect(summary.byTool.exec_command).toBe(2);
       expect(summary.byTool.read).toBe(1);
     });
 
@@ -241,10 +241,10 @@ describe('ToolErrorTracker', () => {
 
   describe('cleanupOldFailures', () => {
     it('should not clean up recent failures', () => {
-      tracker.recordFailure('shell');
+      tracker.recordFailure('exec_command');
       tracker.cleanupOldFailures();
       
-      expect(tracker.getFailureCount('shell')).toBe(1);
+      expect(tracker.getFailureCount('exec_command')).toBe(1);
     });
 
     // Note: Testing old failure cleanup would require mocking Date.now()
@@ -253,25 +253,25 @@ describe('ToolErrorTracker', () => {
 
   describe('getLimitReachedTool', () => {
     it('should return null when no limit reached', () => {
-      tracker.recordFailure('shell');
+      tracker.recordFailure('exec_command');
       expect(tracker.getLimitReachedTool()).toBeNull();
     });
 
     it('should return tool name when limit reached', () => {
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
-      expect(tracker.getLimitReachedTool()).toBe('shell');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
+      expect(tracker.getLimitReachedTool()).toBe('exec_command');
     });
 
     it('should return first tool that reached limit', () => {
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
-      tracker.recordFailure('shell');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
+      tracker.recordFailure('exec_command');
       tracker.recordFailure('read');
       tracker.recordFailure('read');
       tracker.recordFailure('read');
-      expect(tracker.getLimitReachedTool()).toBe('shell');
+      expect(tracker.getLimitReachedTool()).toBe('exec_command');
     });
   });
 });

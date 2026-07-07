@@ -309,6 +309,44 @@ describe('TUI session slash commands', () => {
     expect(sendMessage).toHaveBeenCalledWith('/skill:review audit this diff');
   });
 
+  it('forwards /review to the agent before extension commands', () => {
+    const extensionHandler = vi.fn();
+    const { handler, sendMessage } = makeHandler({
+      extensionSlashCommands: [
+        { name: 'review', description: 'Extension review', handler: extensionHandler },
+      ],
+    });
+
+    handler('/review focus on persistence');
+
+    expect(sendMessage).toHaveBeenCalledWith('/review focus on persistence');
+    expect(extensionHandler).not.toHaveBeenCalled();
+  });
+
+  it('opens the review launcher for bare /review', () => {
+    const openReviewLauncher = vi.fn();
+    const { handler, sendMessage } = makeHandler({
+      uiOverlays: {
+        openModelPicker: vi.fn(),
+        openReviewLauncher,
+        openSessionPicker: vi.fn(),
+        openSessionTree: vi.fn(),
+        openTranscriptTree: vi.fn(),
+        openUserMessageFork: vi.fn(),
+        openScopedModels: vi.fn(),
+        openThinkingSelector: vi.fn(),
+        openSettings: vi.fn(),
+        openProjectTrust: vi.fn(),
+        reloadKeybindings: vi.fn(),
+      },
+    });
+
+    handler('/review');
+
+    expect(openReviewLauncher).toHaveBeenCalledOnce();
+    expect(sendMessage).not.toHaveBeenCalled();
+  });
+
   it('/help lists workflow slash commands', () => {
     const systems: string[] = [];
     const { handler } = makeHandler({

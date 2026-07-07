@@ -3,7 +3,7 @@
  * Ported from web/src/features/chat/streaming.ts — kept in sync.
  */
 
-import type { Message, MessageContent, ToolUseContent } from './messages.types';
+import type { Message, MessageContent, ReviewContent, ToolUseContent } from './messages.types';
 
 /** True if the assistant bubble has something worth keeping (text, thinking, or tools). */
 export function hasRenderableAssistantContent(msg: Message): boolean {
@@ -12,6 +12,7 @@ export function hasRenderableAssistantContent(msg: Message): boolean {
     if (b.type === 'text' && (b.text || '').trim().length > 0) return true;
     if (b.type === 'thinking' && (b.text || '').trim().length > 0) return true;
     if (b.type === 'tool_use') return true;
+    if (b.type === 'review') return true;
     if (b.type === 'audio' && Boolean(b.uri || b.workspaceRelativePath)) return true;
   }
   return false;
@@ -105,6 +106,24 @@ function toolNameMatches(stored: string, fromEvent: string): boolean {
   return stored.trim().toLowerCase() === fromEvent.trim().toLowerCase();
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
+function appendOutput(existing: unknown, delta: string): string {
+  return `${typeof existing === 'string' ? existing : ''}${delta}`;
+}
+
+function commandResultFromDetails(details: Record<string, unknown>): unknown {
+  const output = typeof details.aggregatedOutput === 'string' ? details.aggregatedOutput : '';
+  return {
+    content: output ? [{ type: 'text', text: output }] : [],
+    details,
+  };
+}
+
 export function appendTextDelta(content: MessageContent[], delta: string): void {
   closeStreamingThinkingIfAny(content);
   const last = content[content.length - 1];
@@ -113,6 +132,58 @@ export function appendTextDelta(content: MessageContent[], delta: string): void 
     return;
   }
   content.push({ type: 'text', text: delta });
+}
+
+function normalizeReview(raw: unknown): ReviewContent | null {
+  const rec = asRecord(raw);
+  if (!rec || rec.type !== 'review') return null;
+  const findings = Array.isArray(rec.findings) ? rec.findings : [];
+  const review: ReviewContent = {
+    type: 'review',
+    target: typeof rec.target === 'string' ? rec.target : 'working tree changes',
+    summary: typeof rec.summary === 'string' ? rec.summary : '',
+    findings: findings
+      .map((item): ReviewContent['findings'][number] | null => {
+        const f = asRecord(item);
+        if (!f) return null;
+        const priority = f.priority === 0 || f.priority === 1 || f.priority === 2 || f.priority === 3 ? f.priority : 2;
+        const title = typeof f.title === 'string' ? f.title : '';
+        const body = typeof f.body === 'string' ? f.body : '';
+        if (!title && !body) return null;
+        const finding: ReviewContent['findings'][number] = {
+          title,
+          body,
+          priority,
+        };
+        if (typeof f.confidenceScore === 'number') finding.confidenceScore = f.confidenceScore;
+        if (typeof f.filePath === 'string') finding.filePath = f.filePath;
+        if (typeof f.lineStart === 'number') finding.lineStart = f.lineStart;
+        if (typeof f.lineEnd === 'number') finding.lineEnd = f.lineEnd;
+        return finding;
+      })
+      .filter((item): item is ReviewContent['findings'][number] => item != null),
+    overallCorrectness:
+      rec.overallCorrectness === 'patch is correct' || rec.overallCorrectness === 'patch is incorrect'
+        ? rec.overallCorrectness
+        : 'unknown',
+    overallExplanation: typeof rec.overallExplanation === 'string' ? rec.overallExplanation : '',
+  };
+  if (typeof rec.overallConfidenceScore === 'number') review.overallConfidenceScore = rec.overallConfidenceScore;
+  if (typeof rec.generatedAt === 'number') review.generatedAt = rec.generatedAt;
+  if (rec.source === 'model' || rec.source === 'local') review.source = rec.source;
+  return review;
+}
+
+export function appendReview(content: MessageContent[], rawReview: unknown): void {
+  closeStreamingThinkingIfAny(content);
+  const review = normalizeReview(rawReview);
+  if (!review) return;
+  const existingIndex = content.findIndex((b) => b.type === 'review' && b.target === review.target);
+  if (existingIndex >= 0) {
+    content[existingIndex] = review;
+    return;
+  }
+  content.push(review);
 }
 
 export function appendToolStart(
@@ -151,6 +222,101 @@ export function completeTool(
   }
 }
 
+export function appendCommandOutputDelta(
+  content: MessageContent[],
+  toolCallId: string,
+  stream: 'stdout' | 'stderr',
+  delta: string,
+): void {
+  for (let i = content.length - 1; i >= 0; i--) {
+    const b = content[i];
+    if (b.type !== 'tool_use' || b.name !== 'exec_command') continue;
+    if (b.toolCallId !== toolCallId && b.id !== toolCallId) continue;
+    const prev = asRecord(b.details);
+    const next = {
+      ...prev,
+      stdout: stream === 'stdout' ? appendOutput(prev.stdout, delta) : prev.stdout,
+      stderr: stream === 'stderr' ? appendOutput(prev.stderr, delta) : prev.stderr,
+      aggregatedOutput: appendOutput(prev.aggregatedOutput, delta),
+    };
+    b.details = next;
+    b.result = commandResultFromDetails(next);
+    return;
+  }
+}
+
+export function completeCommand(
+  content: MessageContent[],
+  payload: {
+    toolCallId: string;
+    command: string;
+    cwd?: string;
+    exitCode: number | null;
+    durationMs?: number;
+    timedOut?: boolean;
+    truncated?: boolean;
+  },
+): void {
+  for (let i = content.length - 1; i >= 0; i--) {
+    const b = content[i];
+    if (b.type !== 'tool_use' || b.name !== 'exec_command') continue;
+    if (b.toolCallId !== payload.toolCallId && b.id !== payload.toolCallId) continue;
+    const details = {
+      ...asRecord(b.details),
+      command: payload.command,
+      cwd: payload.cwd,
+      exitCode: payload.exitCode,
+      durationMs: payload.durationMs,
+      timedOut: payload.timedOut === true,
+      truncated: payload.truncated === true,
+    };
+    b.status = 'done';
+    b.details = details;
+    b.result = commandResultFromDetails(details);
+    return;
+  }
+}
+
+export function completePatchApplied(
+  content: MessageContent[],
+  payload: {
+    toolCallId: string;
+    changes: unknown[];
+    diff: string;
+    added: number;
+    removed: number;
+  },
+): void {
+  const details = {
+    changes: payload.changes,
+    diff: payload.diff,
+    added: payload.added,
+    removed: payload.removed,
+  };
+  const result = {
+    content: payload.diff ? [{ type: 'text', text: payload.diff }] : [],
+    details,
+  };
+  for (let i = content.length - 1; i >= 0; i--) {
+    const b = content[i];
+    if (b.type !== 'tool_use' || b.name !== 'apply_patch') continue;
+    if (b.toolCallId !== payload.toolCallId && b.id !== payload.toolCallId) continue;
+    b.status = 'done';
+    b.details = details;
+    b.result = result;
+    return;
+  }
+  content.push({
+    type: 'tool_use',
+    id: payload.toolCallId,
+    toolCallId: payload.toolCallId,
+    name: 'apply_patch',
+    status: 'done',
+    details,
+    result,
+  });
+}
+
 export function updateToolDetails(
   content: MessageContent[],
   toolName: string,
@@ -162,7 +328,10 @@ export function updateToolDetails(
     if (b.type !== 'tool_use' || b.status !== 'running') continue;
     if (toolCallId && b.toolCallId !== toolCallId && b.id !== toolCallId) continue;
     if (!toolCallId && !toolNameMatches(b.name, toolName)) continue;
-    b.details = details;
+    b.details = {
+      ...asRecord(b.details),
+      ...asRecord(details),
+    };
     return;
   }
 }

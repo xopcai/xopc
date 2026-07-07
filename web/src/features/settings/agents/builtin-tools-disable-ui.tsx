@@ -7,8 +7,8 @@ import { BUILTIN_TOOL_UI_GROUPS, miscBuiltinToolIds, type BuiltinToolUiGroupKey 
 import { agentDefaultsQuickActionButtonClass } from './defaults-field-styles';
 
 /** Preset ids are filtered against the live built-in list from the gateway. */
-const PRESET_READ_ONLY_WORKSPACE = ['write_file', 'edit_file', 'shell'] as const;
-const PRESET_HIGH_RISK = ['shell', 'image_generate', 'extensions'] as const;
+const PRESET_READ_ONLY_WORKSPACE = ['write_file', 'apply_patch', 'exec_command'] as const;
+const PRESET_HIGH_RISK = ['exec_command', 'image_generate', 'extensions'] as const;
 const PRESET_NO_OUTBOUND = ['send_message', 'send_media'] as const;
 
 export type BuiltinToolsDisableUiMode = 'defaults' | 'agentEntry';

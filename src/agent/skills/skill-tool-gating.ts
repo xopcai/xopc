@@ -8,7 +8,7 @@ import type { Skill, SkillToolConditions } from './types.js';
 export const SKILL_TOOLSET_TOOLS: Record<string, readonly string[]> = {
   web: ['web_search', 'web_fetch', 'web_extract'],
   browser: ['browser_use'],
-  terminal: ['shell'],
+  terminal: ['exec_command'],
   vision: ['image'],
   image_gen: ['image_generate'],
   skills: ['skills_list', 'skill_view', 'skill_manage'],

@@ -97,4 +97,93 @@ describe('ChatStreamMapper', () => {
     expect(update).toMatchObject({ type: 'tool_update', payload: { toolCallId: 'tc1', details: { phase: 'run' } } });
     expect(end).toMatchObject({ type: 'tool_end', payload: { toolCallId: 'tc1', status: 'success', result: { text: 'done', details: { phase: 'done' } } } });
   });
+
+  it('emits command-specific lifecycle events for exec_command', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+    const start = m.map({ type: 'tool_execution_start', toolCallId: 'tc1', toolName: 'exec_command', args: { cmd: 'pnpm test', cwd: 'web' } });
+    const update = m.map({
+      type: 'tool_execution_update',
+      toolCallId: 'tc1',
+      toolName: 'exec_command',
+      partialResult: { details: { kind: 'command_output_delta', stream: 'stdout', delta: 'ok' } },
+    });
+    const end = m.map({
+      type: 'tool_execution_end',
+      toolCallId: 'tc1',
+      toolName: 'exec_command',
+      isError: false,
+      result: {
+        content: [{ type: 'text', text: 'ok' }],
+        details: { command: 'pnpm test', cwd: '/repo/web', exitCode: 0, durationMs: 42, timedOut: false, truncated: false },
+      },
+    });
+
+    expect(start.map((event) => event.type)).toEqual(['tool_start', 'command_started']);
+    expect(start[1]).toMatchObject({ payload: { command: 'pnpm test', cwd: 'web' } });
+    expect(update.map((event) => event.type)).toEqual(['tool_update', 'command_output_delta']);
+    expect(update[1]).toMatchObject({ payload: { stream: 'stdout', delta: 'ok' } });
+    expect(end.map((event) => event.type)).toEqual(['tool_end', 'command_completed']);
+    expect(end[1]).toMatchObject({ payload: { command: 'pnpm test', exitCode: 0, durationMs: 42 } });
+  });
+
+  it('emits patch_applied and turn_diff for apply_patch', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+    const toolEnd = m.map({
+      type: 'tool_execution_end',
+      toolCallId: 'tc1',
+      toolName: 'apply_patch',
+      isError: false,
+      result: {
+        content: [{ type: 'text', text: 'updated' }],
+        details: {
+          changes: [{ kind: 'update', path: 'a.ts', added: 1, removed: 1, diff: '--- a.ts\n+++ a.ts\n-old\n+new' }],
+          diff: '--- a.ts\n+++ a.ts\n-old\n+new',
+          added: 1,
+          removed: 1,
+        },
+      },
+    });
+    const messageEnd = m.map({ type: 'message_end', message: { role: 'assistant', content: [{ type: 'text', text: 'done' }] } });
+
+    expect(toolEnd.map((event) => event.type)).toEqual(['tool_end', 'patch_applied']);
+    expect(toolEnd[1]).toMatchObject({ payload: { added: 1, removed: 1 } });
+    expect(messageEnd.map((event) => event.type)).toEqual(['assistant_delta', 'thinking_end', 'turn_diff', 'assistant_message_end']);
+    expect(messageEnd[2]).toMatchObject({ type: 'turn_diff', payload: { files: ['a.ts'], added: 1, removed: 1 } });
+  });
+
+  it('emits turn_plan for update_plan', () => {
+    const m = mapper();
+    m.map({ type: 'message_start', message: { role: 'assistant', content: [] } });
+    const events = m.map({
+      type: 'tool_execution_end',
+      toolCallId: 'tc1',
+      toolName: 'update_plan',
+      isError: false,
+      result: {
+        content: [{ type: 'text', text: 'plan updated' }],
+        details: {
+          explanation: 'P0 implementation',
+          plan: [
+            { step: 'Wire event', status: 'completed' },
+            { step: 'Run review', status: 'in_progress' },
+          ],
+        },
+      },
+    });
+
+    expect(events.map((event) => event.type)).toEqual(['tool_end', 'turn_plan']);
+    expect(events[1]).toMatchObject({
+      type: 'turn_plan',
+      payload: {
+        messageId: 'msg_run-1_1',
+        explanation: 'P0 implementation',
+        plan: [
+          { step: 'Wire event', status: 'completed' },
+          { step: 'Run review', status: 'in_progress' },
+        ],
+      },
+    });
+  });
 });

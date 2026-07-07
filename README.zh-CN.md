@@ -8,7 +8,7 @@
 <p align="center">
   <strong>把目标变成循环。</strong><br />
   让真正重要的事情持续向前。<br />
-  XOPC 是一个本地优先的 AI 助手系统：记住上下文，协调 AI 推进下一步，让长期目标持续向前。
+  从一次普通对话开始，把项目持续托管给 xopc；在手机上随手记录 note/idea，再用自动化养成私有的本地 AI 数据飞轮。
 </p>
 
 <p align="center">
@@ -35,16 +35,32 @@
 
 ## 适合谁
 
-- **长期项目** —— 把目标拆成可持续推进的循环：上下文、下一步行动、反馈和校准始终连在一起。
-- **独立开发者 / 一人公司** —— 同一个助手覆盖 CLI、TUI、网页、桌面、Telegram、微信和飞书/Lark。
+- **想先简单用起来的人** —— 先本地开聊；项目变复杂后，再逐步加笔记、通道、连接器和自动化。
+- **长期项目** —— 让目标、决策、阻塞点、下一步、反馈和校准始终连在一起，不会断在一次次聊天里。
+- **随时可用的私有 Agent** —— xopc 跑在你的电脑上，手机 App 扫码连接；出门在外也能继续对话和记录想法，数据仍然留在你自己的 xopc 环境里。
+- **独立开发者 / 一人公司** —— 同一个助手覆盖 CLI、TUI、网页、桌面、手机、Telegram、微信和飞书/Lark。
 - **本地优先 AI 工作流** —— 使用你自己的 API Key，云端/本地模型混用，支持技能和扩展，数据默认保存在 **`~/.xopc/`**。
+
+## 从聊天到数据飞轮
+
+你不需要第一天就搭好复杂系统。xopc 的价值会随着你的使用逐步长出来。
+
+| 阶段 | 你做什么 | xopc 开始帮你什么 |
+| --- | --- | --- |
+| **聊天** | 问问题、讨论想法、做判断。 | 先有一个使用你自己模型配置、状态保存在本地的 AI 助手。 |
+| **项目** | 让它持续跟进一个真实目标。 | 记住目标、当前状态、阻塞点和下一步。 |
+| **笔记 / 想法** | 随手丢进展、反馈、链接、灵感和复盘。 | 把零散输入沉淀成之后能继续使用的上下文。 |
+| **外部入口** | 手机 App 扫码连接，也可以在桌面、终端、网页、IM 和 gateway API 里继续使用同一个助手。 | 不在电脑前也能对话、记录 note/idea；Agent 和数据仍在你的 xopc 环境里。 |
+| **自动化** | 设置定时复盘、提醒、摘要和工作流运行。 | 重要事项会自己回到视野里，不完全依赖你想起来再问。 |
+
+这就是循环：上下文进来，xopc 帮你判断下一步；你去行动，再把结果和反馈带回来；系统越用越知道该如何继续推进。
 
 ## 安装后你能立刻做什么
 
-- 让一个 side project 持续向前：记录目标、阻碍、下一步行动和反馈。
-- 在终端、桌面、浏览器、手机、Telegram、微信或飞书/Lark 中使用同一个助手。
-- 使用自己的 API Key 或本地模型，同时把配置和状态保存在 **`~/.xopc/`**。
-- 设置复盘、提醒、摘要和工作流运行，让重要事项定期回到视野里。
+- **第一天：** 本地开聊，配置一个模型，让 xopc 跟进一个真实项目。
+- **第一周：** 持续丢进展、阻塞点、决策、链接和想法。
+- **用顺手后：** 接入你真的会用的入口：桌面、终端、网页、手机扫码配对、Telegram、微信或飞书/Lark。
+- **事情开始重复时：** 用自动化做复盘、提醒、摘要和工作流运行。
 
 ---
 
@@ -144,11 +160,11 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 
 ## 为什么选 xopc
 
-- 🔁 **循环驱动，而不是一次性对话** — XOPC 持续记住上下文，协调 AI 推进下一步，让真正重要的事情不断向前。
+- 🔁 **从聊天自然长成循环** — 先普通对话，再把项目、笔记、外部入口和自动化逐步接上，让长期事情持续滚动。
 
 - 🏠 **你的机器** — 配置与数据在 **`~/.xopc/`**，无强制云端、无意外账单。
 - 🔑 **使用自己的密钥** — OpenAI、Anthropic、Google、DeepSeek、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端和本地模型可混用，一行配置即可切换模型。详见 **[模型](https://xopcai.github.io/xopc/zh/models)**。
-- 📱 **多个入口，同一个助手** — 终端、浏览器、桌面、[移动端 App](./apps/mobile-expo)、即时通讯共用同一套上下文，无需额外同步。
+- 📱 **自己的 Agent，随时可用** — xopc 跑在你的电脑上，[移动端 App](./apps/mobile-expo) 扫码连接。外出时也能继续对话、记录笔记和想法，但项目数据不需要搬到云端聊天账号里。
 - 🧩 **可按需扩展** — 通过 **`xopc skills install`** 和 **`xopc extensions install`** 扩展工具、频道与 UI；多 Agent 可按场景隔离。
 - ⏰ **支持主动任务** — 用 **自动化** 做定时摘要、提醒与工作流运行；用 **工作流**扇出多子 Agent 任务；用 **多 Agent** 管理不同工作区、工具与系统提示词。
 
@@ -175,7 +191,7 @@ xopc 不是要替代所有编程 Agent 或办公 Agent。它更像一个本地�
 | **TUI** | `xopc` 或 `xopc tui`（远程：`xopc tui --url …`） | 全键盘、流式输出，最快终端路径 |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | 脚本、最小终端环境 |
 | **网页** | `xopc gateway` → 打开控制台地址 | 聊天、设置、日志 |
-| **手机** | [移动端 App](./apps/mobile-expo) + 网关配对（[移动端 App](https://xopcai.github.io/xopc/zh/mobile-app)、[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在 iOS/Android 上继续推进循环 |
+| **手机** | [移动端 App](./apps/mobile-expo) + 网关扫码配对（[移动端 App](https://xopcai.github.io/xopc/zh/mobile-app)、[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在 iOS/Android 上继续对话、记录 note/idea；Agent 仍运行在你的电脑或本地环境里 |
 | **即时通讯** | 配置 `channels.*` 并启动网关 | Telegram、微信、飞书/Lark |
 
 ---
@@ -251,6 +267,7 @@ xopc extensions dev ./my-extension
 | 指南 | 说明 |
 | --- | --- |
 | [快速开始](https://xopcai.github.io/xopc/zh/getting-started) | 安装、向导、第一次对话 |
+| [从聊天到数据飞轮](https://xopcai.github.io/xopc/zh/concepts/loops) | xopc 如何从简单聊天逐步长成项目上下文、外部入口和自动化循环 |
 | [配置](https://xopcai.github.io/xopc/zh/configuration) | `xopc.json` 字段 |
 | [CLI](https://xopcai.github.io/xopc/zh/cli) | 命令与参数 |
 | [频道](https://xopcai.github.io/xopc/zh/channels) | Telegram、微信、飞书 |
@@ -273,7 +290,7 @@ xopc extensions dev ./my-extension
 对大多数用户，优先从 GitHub Releases 安装 **PC 桌面端**，在界面中完成模型设置。习惯终端的用户可以执行 **`xopc onboard --quick`**，然后运行 **`xopc`**。
 
 **它和普通聊天 UI 有什么区别？**  
-xopc 围绕目标循环组织：方向、下一步、反馈、重新校准，并且同一个助手可以跨多个入口继续工作。
+xopc 可以从普通聊天开始，但它的组织方式是为了逐步长成目标循环：项目上下文、笔记、外部信号、下一步、反馈和自动化都能在多个入口里继续工作。
 
 **能在手机或即时通讯里用吗？**
 可以。建议先用本地 TUI 试用；确认方向后，再启动 gateway，用 [移动端 App](./apps/mobile-expo) 连接 iOS/Android，或配置 Telegram、微信、飞书/Lark。

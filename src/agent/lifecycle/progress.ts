@@ -19,7 +19,7 @@ export type ProgressStage =
   | 'searching'     // Web search
   | 'reading'      // Reading files
   | 'writing'       // Writing files  
-  | 'executing'     // Running shell commands
+  | 'executing'     // Running commands
   | 'analyzing'     // Analyzing data
   | 'idle';         // No active operation
 
@@ -92,6 +92,7 @@ const TOOL_STAGE_MAP: Record<string, ProgressStage> = {
   'write_file': 'writing',
   'write_multiple': 'writing',
   'edit': 'writing',
+  'apply_patch': 'writing',
   'patch': 'writing',
   'create': 'writing',
   'mkdir': 'writing',
@@ -100,7 +101,8 @@ const TOOL_STAGE_MAP: Record<string, ProgressStage> = {
   
   // Executing tools
   'bash': 'executing',
-  'shell': 'executing',
+  'exec_command': 'executing',
+  'update_plan': 'thinking',
   'exec': 'executing',
   'run': 'executing',
   'command': 'executing',

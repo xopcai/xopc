@@ -4,7 +4,7 @@ layout: home
 hero:
   name: xopc
   text: 把目标变成循环。
-  tagline: "让真正重要的事情，持续向前。XOPC 是一个 Local-first AI 系统，持续记住上下文，协调 AI 推进下一步，让长期目标不断向前。"
+  tagline: "从一次普通对话开始，把项目持续托管给 xopc；在手机上随手记录 note/idea，再用自动化养成私有的本地 AI 数据飞轮。"
   image:
     src: /logo.svg
     alt: xopc
@@ -18,8 +18,8 @@ hero:
 
 features:
   - title: 🔁 循环驱动，而非一次性对话
-    details: "XOPC 把上下文、下一步行动、反馈和重新校准放进同一个循环，让长期目标不会断在一次次聊天里。"
-    link: /zh/automations
+    details: "先普通聊天，再随着真实工作逐步长出项目、笔记、外部入口和自动化。"
+    link: /zh/concepts/loops
   - title: 🏠 默认本地优先
     details: "xopc 运行在你自己的硬件上。配置、工作区文件、凭据和本地状态默认都在 ~/.xopc/。没有强制云端。"
     link: /zh/configuration
@@ -52,11 +52,26 @@ features:
     link: /zh/voice
 ---
 
+## xopc 会随着你的使用长出来
+
+你不需要第一天就搭好复杂流程。先把它当成本地 AI 助手使用；当你持续把项目上下文交给它，xopc 才会慢慢变成能跟进长期事情的工作系统。
+
+| 阶段 | 先怎么用 | 有需要时再加 |
+| --- | --- | --- |
+| 聊天 | 问问题、整理思路、做判断 | 自己的模型配置和本地状态 |
+| 项目 | 让 xopc 跟进一个真实目标 | 目标状态、阻塞点、决策、下一步 |
+| 笔记 | 随手丢进展、链接、想法和反馈 | 以后还能继续使用的上下文 |
+| 外部入口 | 手机 App 扫码连接，也可以用桌面、终端、网页、IM、gateway API | 从你本来工作的地方收集信号；Agent 和数据仍在你的 xopc 环境里 |
+| 自动化 | 定时复盘、提醒、摘要、工作流 | 不用每次手动想起来再问 |
+
+了解这套思路：[从聊天到数据飞轮](./concepts/loops.md)。
+
 ## 按目标开始
 
 | 你想做什么 | 从这里开始 |
 | --- | --- |
 | 在自己电脑上运行一个私有 AI 助手 | [5 分钟快速入门](./first-5-minutes.md) |
+| 理解 xopc 如何从聊天变成数据飞轮 | [从聊天到数据飞轮](./concepts/loops.md) |
 | 了解 xopc 和 Codex、Claude Code、Qoder、WorkBuddy 的区别 | [产品对比](./comparison.md) |
 | 在 Telegram、微信或飞书/Lark 中使用同一个助手 | [消息通道](./channels/index.md) |
 | 设置定期复盘、提醒和摘要 | [自动化](./automations.md) |

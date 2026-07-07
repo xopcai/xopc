@@ -1,5 +1,6 @@
 import type { ClientHistoryMessage } from '../session/client-history.js';
 import type { ExportFormat } from '../session/types.js';
+import type { ReviewContext } from '../review/review-git.js';
 
 import type { SessionInfo, TuiEventSource } from './tui-types.js';
 
@@ -227,6 +228,9 @@ export interface TuiBackend {
     query: string,
     options?: { limit?: number },
   ): Promise<TuiWorkspaceFileSearchEntry[]>;
+
+  /** Load git branches/commits/status for the interactive review launcher. */
+  getReviewContext?(sessionKey: string): Promise<ReviewContext>;
 
   /** Load chat history for a session. */
   loadHistory(opts: {

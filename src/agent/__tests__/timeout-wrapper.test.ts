@@ -47,12 +47,12 @@ describe('TimeoutWrapper Module', () => {
       await expect(promise).rejects.toThrow('slow-tool');
     });
 
-    it('should use appropriate timeout for shell tools', async () => {
+    it('should use appropriate timeout for exec_command tools', async () => {
       const operation = vi.fn().mockResolvedValue('success');
 
       await executeWithTimeout(operation, { toolName: 'shell_exec' });
 
-      // Should use shell timeout (5 minutes = 300000ms)
+      // Should use exec_command timeout (5 minutes = 300000ms)
       // We can't easily test this without exposing internals,
       // but we can verify it doesn't timeout immediately
       vi.advanceTimersByTime(1000);
@@ -229,12 +229,12 @@ describe('TimeoutWrapper Module', () => {
 
   describe('TimeoutError', () => {
     it('should create error with tool name', () => {
-      const error = new TimeoutError('shell', 300000);
+      const error = new TimeoutError('exec_command', 300000);
 
       expect(error.name).toBe('TimeoutError');
-      expect(error.toolName).toBe('shell');
+      expect(error.toolName).toBe('exec_command');
       expect(error.timeoutMs).toBe(300000);
-      expect(error.message).toContain('shell');
+      expect(error.message).toContain('exec_command');
       expect(error.message).toContain('300');
     });
 
@@ -245,7 +245,7 @@ describe('TimeoutWrapper Module', () => {
       expect(error.description).toBe('custom operation');
     });
 
-    it('should provide user-friendly message for shell', () => {
+    it('should provide user-friendly message for exec_command', () => {
       const error = new TimeoutError('shell_exec', 300000);
       const message = error.getUserMessage();
 

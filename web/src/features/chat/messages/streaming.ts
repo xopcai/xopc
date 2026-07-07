@@ -1,4 +1,4 @@
-import type { Message, MessageContent, ToolUseContent } from '@/features/chat/messages/messages.types';
+import type { Message, MessageContent, ReviewContent, ToolUseContent } from '@/features/chat/messages/messages.types';
 
 /** Pi / wire format may use `thinking` on blocks; UI streaming uses `text`. */
 function thinkingBlockVisibleText(b: MessageContent): string {
@@ -28,6 +28,9 @@ export function hasRenderableAssistantContent(msg: Message): boolean {
       return true;
     }
     if (b.type === 'tool_use') {
+      return true;
+    }
+    if (b.type === 'review') {
       return true;
     }
   }
@@ -149,6 +152,58 @@ export function appendTextDelta(content: MessageContent[], delta: string): void 
   content.push({ type: 'text', text: delta });
 }
 
+function normalizeReview(raw: unknown): ReviewContent | null {
+  const rec = asRecord(raw);
+  if (!rec || rec.type !== 'review') return null;
+  const findings = Array.isArray(rec.findings) ? rec.findings : [];
+  const review: ReviewContent = {
+    type: 'review',
+    target: typeof rec.target === 'string' ? rec.target : 'working tree changes',
+    summary: typeof rec.summary === 'string' ? rec.summary : '',
+    findings: findings
+      .map((item): ReviewContent['findings'][number] | null => {
+        const f = asRecord(item);
+        if (!f) return null;
+        const priority = f.priority === 0 || f.priority === 1 || f.priority === 2 || f.priority === 3 ? f.priority : 2;
+        const title = typeof f.title === 'string' ? f.title : '';
+        const body = typeof f.body === 'string' ? f.body : '';
+        if (!title && !body) return null;
+        const finding: ReviewContent['findings'][number] = {
+          title,
+          body,
+          priority,
+        };
+        if (typeof f.confidenceScore === 'number') finding.confidenceScore = f.confidenceScore;
+        if (typeof f.filePath === 'string') finding.filePath = f.filePath;
+        if (typeof f.lineStart === 'number') finding.lineStart = f.lineStart;
+        if (typeof f.lineEnd === 'number') finding.lineEnd = f.lineEnd;
+        return finding;
+      })
+      .filter((item): item is ReviewContent['findings'][number] => item != null),
+    overallCorrectness:
+      rec.overallCorrectness === 'patch is correct' || rec.overallCorrectness === 'patch is incorrect'
+        ? rec.overallCorrectness
+        : 'unknown',
+    overallExplanation: typeof rec.overallExplanation === 'string' ? rec.overallExplanation : '',
+  };
+  if (typeof rec.overallConfidenceScore === 'number') review.overallConfidenceScore = rec.overallConfidenceScore;
+  if (typeof rec.generatedAt === 'number') review.generatedAt = rec.generatedAt;
+  if (rec.source === 'model' || rec.source === 'local') review.source = rec.source;
+  return review;
+}
+
+export function appendReview(content: MessageContent[], rawReview: unknown): void {
+  closeStreamingThinkingIfAny(content);
+  const review = normalizeReview(rawReview);
+  if (!review) return;
+  const existingIndex = content.findIndex((b) => b.type === 'review' && b.target === review.target);
+  if (existingIndex >= 0) {
+    content[existingIndex] = review;
+    return;
+  }
+  content.push(review);
+}
+
 export function appendToolStart(
   content: MessageContent[],
   toolName: string,
@@ -206,12 +261,38 @@ export function updateToolDetails(
     if (b.type !== 'tool_use') continue;
     if (b.status !== 'running') continue;
     if (toolCallId && b.toolCallId === toolCallId) {
-      b.details = details;
+      b.details = mergeToolDetails(b.details, details);
       return;
     }
     if (!toolCallId && toolNameMatches(b.name, toolName)) {
-      b.details = details;
+      b.details = mergeToolDetails(b.details, details);
       return;
     }
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function mergeToolDetails(previous: unknown, next: unknown): unknown {
+  const incoming = asRecord(next);
+  if (incoming?.kind !== 'command_output_delta') {
+    return next;
+  }
+  const current = asRecord(previous) ?? {};
+  const stream = incoming.stream === 'stderr' ? 'stderr' : 'stdout';
+  const delta = typeof incoming.delta === 'string' ? incoming.delta : '';
+  const stdout = stream === 'stdout' ? `${String(current.stdout ?? '')}${delta}` : String(current.stdout ?? '');
+  const stderr = stream === 'stderr' ? `${String(current.stderr ?? '')}${delta}` : String(current.stderr ?? '');
+  return {
+    ...current,
+    command: typeof incoming.command === 'string' ? incoming.command : current.command,
+    cwd: typeof incoming.cwd === 'string' ? incoming.cwd : current.cwd,
+    stdout,
+    stderr,
+    aggregatedOutput: `${String(current.aggregatedOutput ?? '')}${delta}`,
+  };
 }

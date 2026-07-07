@@ -43,7 +43,7 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
           extends: ['code'],
           workspace: { root: '~/coder-ws' },
           models: { defaultRole: 'deep', roles: { deep: { model: 'anthropic/claude-3-5-sonnet-20241022' } } },
-          tools: { builtin: { shell: { mode: 'deny' } } },
+          tools: { builtin: { exec_command: { mode: 'deny' } } },
         }),
       ],
     },
@@ -117,7 +117,7 @@ describe('agent-profile', () => {
   it('applies capability presets before agent policies', () => {
     const p = resolveEffectiveAgentProfile(minimalConfig(), 'coder');
     expect(p.tools.denied.has('grep')).toBe(true);
-    expect(p.tools.denied.has('shell')).toBe(true);
+    expect(p.tools.denied.has('exec_command')).toBe(true);
   });
 
   it('uses all skills when manifest skill mode is all', () => {

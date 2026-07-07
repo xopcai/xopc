@@ -27,6 +27,7 @@ import type {
 import type { SessionInfo } from '../tui-types.js';
 import { computeTuiSessionStats } from '../tui-session-stats.js';
 import { buildTuiTranscriptTree, transcriptTreeEntryIdToRowNumber } from '../tui-transcript-tree.js';
+import type { ReviewContext } from '../../review/review-git.js';
 
 const log = createLogger('TUI:GatewaySSE');
 
@@ -224,6 +225,20 @@ export class GatewaySseBackend implements TuiBackend {
       log.warn({ err, sessionKey, errorMessage }, `Gateway workspace file search failed: ${errorMessage}`);
       return [];
     }
+  }
+
+  async getReviewContext(sessionKey: string): Promise<ReviewContext> {
+    const params = new URLSearchParams({ sessionKey });
+    const res = await gatewayFetch(this.baseUrl, `/api/review/context?${params.toString()}`, this.token);
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      payload?: ReviewContext;
+      error?: { message?: string };
+    };
+    if (!res.ok || !json.ok || !json.payload) {
+      throw new Error(json.error?.message ?? `Review context failed (${res.status})`);
+    }
+    return json.payload;
   }
 
   async startWorkflowRun(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult> {

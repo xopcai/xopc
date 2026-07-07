@@ -83,7 +83,7 @@ function buildEditInstructions(agentId: string, fileNames: readonly string[]): s
     '- “Read `SOUL.md` first, propose changes, then write them back.”',
     '',
     `Editable profile files: ${files}.`,
-    'I can read and update these by bare filename with `read_file`, `edit_file`, and `write_file`.',
+    'I can read and update these by bare filename with `read_file`, `apply_patch`, and `write_file`.',
   ].join('\n');
 }
 

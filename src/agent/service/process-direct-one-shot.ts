@@ -24,6 +24,7 @@ import {
   setPendingTranscriptUserMessage,
   type TranscriptUserMessage,
 } from '../inbound/attachment-pipeline.js';
+import type { ReviewOutput } from '../../review/review-types.js';
 
 export type RunProcessDirectDeps = {
   log: ProcessDirectStreamLog;
@@ -45,6 +46,11 @@ export type RunProcessDirectDeps = {
   endDirectRequestContext: () => void;
   resetSession: (sessionKey: string) => Promise<{ sessionId: string; previousSessionId: string } | null>;
 };
+
+function isReviewOutput(value: unknown): value is ReviewOutput {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+    && (value as { type?: unknown }).type === 'review';
+}
 
 export async function runProcessDirect(
   deps: RunProcessDirectDeps,
@@ -87,8 +93,13 @@ export async function runProcessDirect(
       if (trimmed) {
         await deps.sessionStore.appendTranscriptMessage(input.sessionKey, {
           role: 'assistant',
-          content: [{ type: 'text', text: trimmed }],
+          content: isReviewOutput(slash.metadata?.review)
+            ? [slash.metadata.review]
+            : [{ type: 'text', text: trimmed }],
           timestamp: Date.now(),
+          ...(slash.metadata && Object.keys(slash.metadata).length > 0
+            ? { metadata: slash.metadata }
+            : {}),
         } as AgentMessage);
       }
       return slash.aggregatedText ?? '';

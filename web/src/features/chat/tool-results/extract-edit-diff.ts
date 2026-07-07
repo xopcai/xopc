@@ -1,4 +1,4 @@
-// Parse the unified-diff string returned by the agent `edit_file` tool's
+// Parse the unified-diff string returned by agent file mutation tools.
 // `details.diff` field (see src/agent/tools/edit-diff.ts on the server) and
 // produce a render-friendly representation for the EditFileCard.
 

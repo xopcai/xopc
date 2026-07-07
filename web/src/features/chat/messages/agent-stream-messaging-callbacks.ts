@@ -8,6 +8,7 @@ import {
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import {
   appendThinkingDelta,
+  appendReview,
   appendTextDelta,
   appendToolStart,
   completeTool,
@@ -139,6 +140,15 @@ export function createAgentStreamMessagingCallbacks(opts: {
       store().mutateSessionStreaming(chatId, (msg) => {
         updateToolDetails(msg.content, toolName, toolCallId, details);
       });
+    },
+    onReview: ({ review }) => {
+      beforeAssistantDelta();
+      store().mutateSessionStreaming(chatId, (msg) => {
+        appendReview(msg.content, review);
+      });
+      if (shouldApplyStreamUpdate(chatId)) {
+        store().setSessionFlags(chatId, { streaming: true });
+      }
     },
     onProgress: (p) => {
       store().setSessionProgress(chatId, p);

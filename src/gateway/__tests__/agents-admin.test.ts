@@ -76,7 +76,7 @@ describe('agents-admin', () => {
               },
             },
             skills: { mode: 'allowlist', allow: ['diagnose'] },
-            tools: { builtin: { shell: { mode: 'deny' } } },
+            tools: { builtin: { exec_command: { mode: 'deny' } } },
           }),
         ],
       },
@@ -87,7 +87,7 @@ describe('agents-admin', () => {
     expect(coder?.workspace.replace(/\\/g, '/')).toMatch(/\/tmp\/coder$/);
     expect(coder?.model?.primary).toBe('anthropic/claude-sonnet-4-5');
     expect(coder?.skills.entry).toEqual(['diagnose']);
-    expect(coder?.tools.effectiveDisable).toEqual(['shell']);
+    expect(coder?.tools.effectiveDisable).toEqual(['exec_command']);
     expect(coder?.typedModels.effective.map((m) => m.id)).toEqual(['deep', 'review']);
     expect(builtinToolIds.length).toBeGreaterThan(0);
   });
@@ -105,13 +105,13 @@ describe('agents-admin', () => {
     } as Partial<Config>);
     const r = prepareUpdateAgent(cfg, 'note-taker', {
       skills: ['note'],
-      tools: { builtin: { shell: { mode: 'deny' } } },
+      tools: { builtin: { exec_command: { mode: 'deny' } } },
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     const e = r.data.nextConfig.agents?.list?.find((x) => x.id === 'note-taker');
     expect(e?.skills).toEqual({ mode: 'allowlist', allow: ['note'] });
-    expect(e?.tools.builtin.shell?.mode).toBe('deny');
+    expect(e?.tools.builtin.exec_command?.mode).toBe('deny');
   });
 
   it('prepareUpdateAgent writes preset inheritance', () => {
@@ -147,7 +147,7 @@ describe('agents-admin', () => {
             id: 'safe-coder',
             name: 'Safe Coder',
             version: 1,
-            tools: { builtin: { shell: { mode: 'deny' } } },
+            tools: { builtin: { exec_command: { mode: 'deny' } } },
             skills: { mode: 'allowlist', allow: ['diagnose'] },
           },
         },
@@ -167,11 +167,11 @@ describe('agents-admin', () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.data.presetChain).toEqual(['default', 'safe-coder']);
-    expect(r.data.manifest.tools.builtin.shell?.mode).toBe('deny');
+    expect(r.data.manifest.tools.builtin.exec_command?.mode).toBe('deny');
     expect(r.data.manifest.tools.builtin.web_search?.mode).toBe('allow');
     expect(r.data.manifest.skills.mode).toBe('all');
     expect(r.data.manifest.models.roles.deep.model).toBe('anthropic/claude-sonnet-4-5');
-    expect(r.data.sources['tools.builtin.shell.mode']).toBe('preset:safe-coder@1');
+    expect(r.data.sources['tools.builtin.exec_command.mode']).toBe('preset:safe-coder@1');
     expect(r.data.sources['skills.mode']).toBe('agent:coder');
     expect(r.data.sources['models.roles.deep.model']).toBe('agent:coder');
   });
@@ -186,7 +186,7 @@ describe('agents-admin', () => {
         defaultRole: 'deep',
         roles: { deep: { model: 'anthropic/claude-sonnet-4', description: 'Deep synthesis' } },
       },
-      tools: { builtin: { shell: { mode: 'deny' } } },
+      tools: { builtin: { exec_command: { mode: 'deny' } } },
     });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
@@ -194,7 +194,7 @@ describe('agents-admin', () => {
     expect((e?.workspace as { root?: string } | undefined)?.root?.replace(/\\/g, '/')).toMatch(/\/tmp\/researcher$/);
     expect(e?.skills).toEqual({ mode: 'allowlist', allow: ['research'] });
     expect(e?.models.roles.deep.model).toBe('anthropic/claude-sonnet-4');
-    expect(e?.tools.builtin.shell?.mode).toBe('deny');
+    expect(e?.tools.builtin.exec_command?.mode).toBe('deny');
   });
 
   it('prepareCreateAgent rejects a defaultRole that is missing from roles', () => {

@@ -25,6 +25,7 @@ import type { CommandHandler } from '../messaging/command-handler.js';
 import type { ModelManager } from '../models/index.js';
 import { injectSourceContextIntoUserMessage } from '../source-context/injector.js';
 import { isSessionSourceBinding, type AgentSourceContextResolver } from '../source-context/types.js';
+import type { ReviewOutput } from '../../review/review-types.js';
 
 import { AsyncQueue } from './async-queue.js';
 import {
@@ -105,11 +106,18 @@ export interface ProcessDirectStreamingInput {
 
 export type ProcessDirectStreamingSseEvent = { type: string; [key: string]: unknown };
 
-function makeAssistantReceiptMessage(text: string): AgentMessage {
+function isReviewOutput(value: unknown): value is ReviewOutput {
+  return !!value && typeof value === 'object' && !Array.isArray(value)
+    && (value as { type?: unknown }).type === 'review';
+}
+
+function makeAssistantReceiptMessage(text: string, metadata?: Record<string, unknown>): AgentMessage {
+  const review = isReviewOutput(metadata?.review) ? metadata.review : undefined;
   return {
     role: 'assistant',
-    content: [{ type: 'text', text }],
+    content: review ? [review] : [{ type: 'text', text }],
     timestamp: Date.now(),
+    ...(metadata && Object.keys(metadata).length > 0 ? { metadata } : {}),
   } as AgentMessage;
 }
 
@@ -117,8 +125,9 @@ function pushAssistantReceipt(
   queue: AsyncQueue<ProcessDirectStreamingSseEvent>,
   text: string,
   runId?: string,
+  metadata?: Record<string, unknown>,
 ): void {
-  const message = makeAssistantReceiptMessage(text);
+  const message = makeAssistantReceiptMessage(text, metadata);
   queue.push({ type: 'message_start', runId, message });
   queue.push({ type: 'message_update', runId, message });
   queue.push({ type: 'message_end', runId, message });
@@ -268,7 +277,7 @@ export async function* runProcessDirectStreaming(
         const text = slash.aggregatedText.trim();
         if (text) {
           webchatSlashReceipt = text;
-          pushAssistantReceipt(queue, text, input.runId);
+          pushAssistantReceipt(queue, text, input.runId, slashCommandMetadata);
         } else if (channel === 'webchat') {
           webchatSlashReceipt =
             'Command finished with no assistant text. If you used `/goal`, a follow-up turn may still be scheduled automatically.';
@@ -388,7 +397,9 @@ export async function* runProcessDirectStreaming(
         if (webchatSlashReceipt?.trim()) {
           const assistantMsg = {
             role: 'assistant' as const,
-            content: [{ type: 'text' as const, text: webchatSlashReceipt.trim() }],
+            content: isReviewOutput(slashCommandMetadata?.review)
+              ? [slashCommandMetadata.review]
+              : [{ type: 'text' as const, text: webchatSlashReceipt.trim() }],
             timestamp: Date.now(),
             ...(slashCommandMetadata && Object.keys(slashCommandMetadata).length > 0
               ? { metadata: slashCommandMetadata }
