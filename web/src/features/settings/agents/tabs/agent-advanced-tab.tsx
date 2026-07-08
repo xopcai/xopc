@@ -192,7 +192,7 @@ export function AgentSharedSettingsTab({
             }
           />
         <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-2 rounded-lg border border-accent/25 bg-accent-soft/20 px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 rounded-lg bg-accent-soft/20 px-3 py-2 shadow-surface sm:flex-row sm:items-center sm:justify-between">
             <button
               type="button"
               className="min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
@@ -202,7 +202,7 @@ export function AgentSharedSettingsTab({
                 <div className="truncate text-sm font-medium text-fg">
                   {globalDefaultsPreset.name || a.capabilityPresetsGlobalDefault}
                 </div>
-                <span className="shrink-0 rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+                <span className="shrink-0 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
                   {a.capabilityPresetsGlobalDefault}
                 </span>
               </div>
@@ -220,7 +220,7 @@ export function AgentSharedSettingsTab({
               return (
                 <div
                   key={presetId}
-                  className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-2 rounded-lg bg-surface-panel/80 px-3 py-2 shadow-surface sm:flex-row sm:items-center sm:justify-between"
                 >
                   <button
                     type="button"
@@ -277,7 +277,7 @@ export function AgentSharedSettingsTab({
               );
             })
           ) : (
-            <div className="rounded-lg border border-dashed border-edge-subtle px-3 py-3 text-sm text-fg-muted">
+            <div className="rounded-lg bg-surface-panel/60 px-3 py-3 text-sm text-fg-muted shadow-surface">
               {a.capabilityPresetsEmptyAdditional}
             </div>
           )}

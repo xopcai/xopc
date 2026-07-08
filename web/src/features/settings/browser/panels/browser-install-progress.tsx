@@ -54,7 +54,7 @@ export function BrowserInstallProgressPanel({
           : null;
 
   return (
-    <div className="space-y-2 rounded-lg border border-edge bg-surface-base px-3 py-2.5">
+    <div className="space-y-2 rounded-lg bg-surface-base px-3 py-2.5 shadow-surface">
       <div className="flex items-center justify-between gap-2 text-xs text-fg-muted">
         <span className="text-fg">{label}</span>
         <div className="flex items-center gap-2">
@@ -84,7 +84,7 @@ export function BrowserInstallProgressPanel({
       </div>
 
       {showLogs && progress.lines.length > 0 ? (
-        <div className="max-h-28 overflow-y-auto rounded-md border border-edge bg-surface-panel px-2 py-1.5 font-mono text-[10px] leading-relaxed text-fg-muted">
+        <div className="max-h-28 overflow-y-auto rounded-md bg-surface-panel px-2 py-1.5 font-mono text-[10px] leading-relaxed text-fg-muted shadow-surface">
           {progress.lines.map((line) => (
             <div key={line} className="truncate">
               {line}

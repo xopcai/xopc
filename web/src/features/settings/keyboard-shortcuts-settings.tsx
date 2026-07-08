@@ -47,12 +47,9 @@ function ShortcutRow({ keys, label, note }: ShortcutEntry) {
 
 function ShortcutSection({ title, shortcuts }: ShortcutCategory) {
   return (
-    <section
-      className={cn('rounded-xl border border-edge-subtle bg-surface-base px-4 sm:px-5')}
-      aria-label={title}
-    >
+    <section className={cn('rounded-xl bg-surface-base px-4 sm:px-5')} aria-label={title}>
       <h2 className="pb-1 pt-3.5 text-sm font-semibold text-fg sm:pt-4">{title}</h2>
-      <div className="divide-y divide-edge-subtle">
+      <div className="grid gap-1 pb-3 sm:pb-4">
         {shortcuts.map((s) => (
           <ShortcutRow key={s.label} {...s} />
         ))}

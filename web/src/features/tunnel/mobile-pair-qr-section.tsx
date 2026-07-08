@@ -217,7 +217,7 @@ export function MobilePairQrSection({
 
       {tunnelActive && !lanOnly ? (
         !effectiveStreamlined ? (
-          <div className="mb-3 space-y-2 rounded-lg border border-edge bg-surface-panel px-3 py-3">
+          <div className="mb-3 space-y-2 rounded-lg bg-surface-panel/80 px-3 py-3 shadow-surface">
             <div>
               <div className="text-xs font-medium text-fg-muted">{t.pairTunnelPublicUrl}</div>
               <div className="mt-0.5 break-all font-mono text-xs text-fg">{tunnelStatus?.publicUrl}</div>
@@ -280,7 +280,7 @@ export function MobilePairQrSection({
       ) : null}
 
       {qrPayload && !effectiveStreamlined ? (
-        <details className="mt-3 rounded-lg border border-edge bg-surface-panel px-3 py-2">
+        <details className="mt-3 rounded-lg bg-surface-panel/80 px-3 py-2 shadow-surface">
           <summary className="cursor-pointer text-xs font-medium text-fg-muted">{t.deeplinkTitle}</summary>
           <p className="mt-2 break-all font-mono text-[10px] leading-relaxed text-fg-subtle">{qrPayload}</p>
         </details>

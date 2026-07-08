@@ -175,7 +175,7 @@ export function CdpCard({
         </AgentDefaultsField>
 
         {instances.length > 0 ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-edge bg-surface-base p-3 text-xs">
+          <div className="flex flex-col gap-2 rounded-lg bg-surface-base p-3 shadow-surface">
             {instances.map((it) => (
               <div key={it.port} className="flex items-center justify-between gap-3">
                 <div className="flex min-w-0 flex-col">

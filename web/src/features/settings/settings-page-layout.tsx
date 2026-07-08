@@ -96,7 +96,7 @@ export function SettingsTabPanel<T extends string>({
       aria-labelledby={`${tabIdPrefix}-${id}`}
       className={cn(
         'min-w-0',
-        framed && 'rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5',
+        framed && 'rounded-2xl bg-surface-base px-4 py-5 sm:px-5',
         className,
       )}
     >

@@ -57,7 +57,7 @@ export function PresetSkillsPolicyEditor(props: {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="rounded-lg border border-edge-subtle bg-surface-panel/50 px-3 py-2">
+      <div className="rounded-lg bg-surface-panel/70 px-3 py-2 shadow-surface">
         <div className="flex items-center gap-2 text-xs font-medium text-fg-muted">
           <BookOpen className="size-3.5" aria-hidden />
           {labels.overrideSummaryTitle}
@@ -79,10 +79,10 @@ export function PresetSkillsPolicyEditor(props: {
               key={nextMode}
               type="button"
               className={cn(
-                'rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                'rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                 mode === nextMode
-                  ? 'border-accent/35 bg-accent-soft text-accent-fg'
-                  : 'border-edge-subtle bg-surface-panel text-fg hover:border-edge hover:bg-surface-hover/55',
+                  ? 'bg-accent-soft text-accent-fg'
+                  : 'bg-surface-panel text-fg hover:bg-surface-hover/55',
               )}
               disabled={disabled}
               onClick={() => onModeChange(nextMode)}
@@ -133,7 +133,7 @@ export function PresetSkillsPolicyEditor(props: {
                 return (
                   <li
                     key={id}
-                    className="h-16 shrink-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel/60 px-3 dark:border-edge-subtle"
+                    className="h-16 shrink-0 overflow-hidden rounded-xl bg-surface-panel/70 px-3 shadow-surface"
                   >
                     <label className="flex h-full cursor-pointer items-center gap-3 text-sm">
                       <input

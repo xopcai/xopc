@@ -42,7 +42,7 @@ export function TuiDefaultAgentSetting({
     : effectiveAgentId;
 
   return (
-    <section className="rounded-lg border border-edge bg-surface-panel px-4 py-3 shadow-surface">
+    <section className="rounded-lg bg-surface-panel/80 px-4 py-3 shadow-surface">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold text-fg">{a.tuiDefaultAgentTitle}</h2>

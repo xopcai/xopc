@@ -40,7 +40,7 @@ export function AgentModelsTab(props: {
         title={a.modelsTabTitle}
         subtitle={a.modelsTabHint}
       />
-      <div className="mb-4 grid gap-2 rounded-lg border border-edge-subtle bg-surface-base/60 p-3 text-xs text-fg-muted dark:border-edge">
+      <div className="mb-4 grid gap-2 rounded-lg bg-surface-panel/60 p-3 text-xs text-fg-muted shadow-surface">
         <div>
           <span className="font-medium text-fg">{a.modelsPresetLabel}</span>{' '}
           {formatTypedModelsSummary(selected.typedModels.preset)}

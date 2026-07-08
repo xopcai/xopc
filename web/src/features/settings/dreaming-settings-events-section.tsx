@@ -55,7 +55,7 @@ export function DreamingEventsSection({ t, hasToken, eventsLoading, events, load
               return (
                 <div
                   key={`${ev.timestamp}:${ev.phase}`}
-                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-edge-subtle bg-surface-panel/60 px-3 py-2 text-xs"
+                  className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-surface-panel/70 px-3 py-2 text-xs shadow-surface"
                 >
                   <span>{phaseIcon}</span>
                   <span className="font-medium text-fg">{ev.phase}</span>

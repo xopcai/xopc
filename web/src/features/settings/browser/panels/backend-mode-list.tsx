@@ -92,7 +92,7 @@ export function BackendModeList({
       </div>
 
       {selected ? (
-        <div className="flex flex-col gap-1.5 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5">
+        <div className="flex flex-col gap-1.5 rounded-lg bg-surface-panel/80 px-3 py-2.5 shadow-surface">
           <div className="flex flex-wrap items-center gap-2">
             {selected.statusLabel ? (
               <span

@@ -668,7 +668,7 @@ function VoiceOverview({
 
 function VoiceStatusPill({ label, value, ready }: { label: string; value: string; ready: boolean }) {
   return (
-    <div className="rounded-xl border border-edge bg-surface-panel px-3 py-2.5">
+    <div className="rounded-xl bg-surface-panel/80 px-3 py-2.5 shadow-surface">
       <div className="text-xs text-fg-muted">{label}</div>
       <div className={cn('mt-1 text-sm font-medium', ready ? 'text-fg' : 'text-fg-muted')}>{value}</div>
     </div>
@@ -1152,7 +1152,7 @@ function TtsSection({
             </div>
 
             <details
-              className="rounded-xl border border-edge bg-surface-panel p-3"
+              className="rounded-xl bg-surface-panel/80 p-3 shadow-surface"
               open={!providerReady || tts.provider === 'tts-local-cli'}
             >
               <summary className="cursor-pointer text-sm font-medium text-fg marker:text-fg-muted">
@@ -1383,7 +1383,7 @@ function TtsSection({
               </div>
             </details>
 
-            <div className="rounded-xl border border-edge bg-surface-panel p-3">
+            <div className="rounded-xl bg-surface-panel/80 p-3 shadow-surface">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <div className="text-sm font-medium text-fg">{v.tts.test.title}</div>
@@ -1462,11 +1462,11 @@ function ProminentVoiceToggle({
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={cn(
-        'group flex w-full items-center justify-between gap-4 rounded-2xl border px-4 py-3 text-left transition-colors',
+        'group flex w-full items-center justify-between gap-4 rounded-2xl px-4 py-3 text-left shadow-surface transition-colors',
         settingsInputFocusClass,
         checked
-          ? 'border-accent/45 bg-accent/10 text-fg shadow-surface dark:bg-accent/15'
-          : 'border-edge bg-surface-panel text-fg hover:border-accent/35 hover:bg-surface-hover',
+          ? 'bg-accent/10 text-fg ring-1 ring-accent/45 dark:bg-accent/15'
+          : 'bg-surface-panel/80 text-fg hover:bg-surface-hover',
       )}
     >
       <span className="min-w-0">
