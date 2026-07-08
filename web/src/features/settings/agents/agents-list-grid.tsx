@@ -124,12 +124,20 @@ export function AgentsListGrid(props: {
   const searchMiss = agents.length > 0 && filtered.length === 0 && searchQuery.trim().length > 0;
 
   if (agents.length === 0) {
-    return <p className="text-sm text-fg-muted">{a.listNoAgentsYet}</p>;
+    return (
+      <p className="rounded-lg bg-surface-panel px-4 py-8 text-center text-sm text-fg-muted shadow-surface">
+        {a.listNoAgentsYet}
+      </p>
+    );
   }
 
   return (
     <div className="flex flex-col gap-4">
-      {searchMiss ? <p className="text-sm text-fg-muted">{a.listEmpty}</p> : null}
+      {searchMiss ? (
+        <p className="rounded-lg bg-surface-panel px-4 py-8 text-center text-sm text-fg-muted shadow-surface">
+          {a.listEmpty}
+        </p>
+      ) : null}
 
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {filtered.map((ag) => {
@@ -161,9 +169,9 @@ export function AgentsListGrid(props: {
                   onOpenAgent(ag.id);
                 }}
                 className={cn(
-                  'flex min-h-[15.5rem] cursor-pointer flex-col rounded-xl border border-edge-subtle bg-surface-panel p-4 shadow-surface',
-                  'transition-[border-color,transform,box-shadow] duration-150 ease-out',
-                  'hover:border-edge-strong',
+                  'flex min-h-[15.5rem] cursor-pointer flex-col rounded-xl bg-surface-panel p-4 shadow-surface',
+                  'transition-[background-color,transform,box-shadow] duration-150 ease-out',
+                  'hover:bg-surface-hover/45',
                   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
                   'aria-disabled:pointer-events-none aria-disabled:cursor-not-allowed aria-disabled:opacity-60',
                   interaction.pressCard,
@@ -209,7 +217,7 @@ export function AgentsListGrid(props: {
                 </div>
 
                 <div className="mt-5 min-h-[6.25rem] text-left">
-                  <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+                  <div className="rounded-lg bg-surface-base px-3 py-3">
                     <p
                       className={cn(
                         'line-clamp-2 text-sm leading-5',

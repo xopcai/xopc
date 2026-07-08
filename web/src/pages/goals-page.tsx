@@ -328,9 +328,9 @@ function GoalCard({
       onDragStart={(event) => onDragStart(goal.id, event)}
       onDragEnd={onDragEnd}
       className={cn(
-        'group relative overflow-hidden rounded-xl border bg-surface-panel p-3.5 transition-colors',
-        selected ? 'border-accent/70 ring-1 ring-accent/30' : 'border-edge',
-        dragging ? 'opacity-50' : 'hover:border-edge-strong hover:bg-surface-hover/50',
+        'group relative overflow-hidden rounded-xl p-3.5 shadow-surface transition-colors',
+        selected ? 'bg-surface-active ring-1 ring-accent/30' : 'bg-surface-panel',
+        dragging ? 'opacity-50' : 'hover:bg-surface-hover/50',
       )}
     >
       <button
@@ -416,8 +416,8 @@ function FocusGoalRow({
   return (
     <article
       className={cn(
-        'rounded-lg border bg-surface-panel transition-colors hover:border-edge-strong hover:bg-surface-hover/40',
-        selected ? 'border-accent/70 ring-1 ring-accent/30' : 'border-edge',
+        'rounded-lg shadow-surface transition-colors hover:bg-surface-hover/40',
+        selected ? 'bg-surface-active ring-1 ring-accent/30' : 'bg-surface-panel',
       )}
     >
       <div className="flex flex-col gap-3 p-3.5 lg:flex-row lg:items-center">
@@ -586,7 +586,7 @@ function GoalDetailDialog({
               </div>
             </div>
 
-            <div className="mt-5 rounded-2xl border border-edge-subtle bg-surface-base/60 p-4">
+            <div className="mt-5 rounded-2xl bg-surface-base/60 p-4">
               <div className="flex items-start gap-3">
                 <div className="rounded-xl bg-accent-soft p-2 text-accent-fg">
                   <ListChecks className="size-4" aria-hidden />
@@ -601,7 +601,7 @@ function GoalDetailDialog({
             </div>
 
             {queueItem ? (
-              <div className="mt-4 rounded-2xl border border-edge-subtle bg-surface-base/60 p-4">
+              <div className="mt-4 rounded-2xl bg-surface-base/60 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold text-fg">{t.executionQueue}</h3>
                   <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', queueTone(queueItem.status))}>
@@ -616,7 +616,7 @@ function GoalDetailDialog({
               </div>
             ) : null}
 
-            <div className="mt-4 rounded-2xl border border-edge-subtle bg-surface-base/60 p-4">
+            <div className="mt-4 rounded-2xl bg-surface-base/60 p-4">
               <h3 className="flex items-center gap-2 text-sm font-semibold text-fg">
                 <ListChecks className="size-4 text-accent" aria-hidden />
                 {t.checklist}
@@ -879,22 +879,22 @@ export function GoalsPage() {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-base">
       <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-3 py-5 sm:px-5 xl:px-6">
-        <section className="w-full rounded-lg border border-edge bg-surface-panel p-3">
+        <section className="w-full rounded-lg bg-surface-panel shadow-surface p-3">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div className="rounded-md border border-edge-subtle bg-surface-muted/50 px-3 py-2">
+              <div className="rounded-md bg-surface-muted/50 px-3 py-2">
                 <p className="text-[11px] font-medium text-fg-muted">{t.overview.attention}</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.attention + counts.failed}</p>
               </div>
-              <div className="rounded-md border border-edge-subtle bg-surface-muted/50 px-3 py-2">
+              <div className="rounded-md bg-surface-muted/50 px-3 py-2">
                 <p className="text-[11px] font-medium text-fg-muted">{t.overview.running}</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.running}</p>
               </div>
-              <div className="rounded-md border border-edge-subtle bg-surface-muted/50 px-3 py-2">
+              <div className="rounded-md bg-surface-muted/50 px-3 py-2">
                 <p className="text-[11px] font-medium text-fg-muted">{t.overview.queued}</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.queued}</p>
               </div>
-              <div className="rounded-md border border-edge-subtle bg-surface-muted/50 px-3 py-2">
+              <div className="rounded-md bg-surface-muted/50 px-3 py-2">
                 <p className="text-[11px] font-medium text-fg-muted">{t.overview.active}</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums text-fg">{counts.active}</p>
               </div>
@@ -906,7 +906,7 @@ export function GoalsPage() {
                 {t.executionQueue}
               </div>
               {queueSummary.map((item) => (
-                <span key={item.key} className="rounded-full border border-edge bg-surface-muted px-2 py-0.5 text-xs text-fg-muted">
+                <span key={item.key} className="rounded-full bg-surface-muted px-2 py-0.5 text-xs text-fg-muted">
                   {formatMessage(t.queueSummary[item.key as keyof typeof t.queueSummary], { count: item.count })}
                 </span>
               ))}
@@ -947,7 +947,7 @@ export function GoalsPage() {
               {FOCUS_SECTIONS.map((section) => {
                 const sectionGoals = focusGroups.get(section) ?? [];
                 return (
-                  <section key={section} className="rounded-lg border border-edge bg-surface-panel/60">
+                  <section key={section} className="rounded-lg bg-surface-panel shadow-surface">
                     <header className="flex flex-wrap items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3">
                       <div className="min-w-0">
                         <h2 className="text-sm font-semibold text-fg">{t.focusSections[section].title}</h2>
@@ -991,8 +991,8 @@ export function GoalsPage() {
                   <section
                     key={lane}
                     className={cn(
-                      'flex h-full w-80 shrink-0 snap-center flex-col overflow-hidden rounded-2xl border bg-surface-panel/40',
-                      dropLane === lane ? 'border-accent ring-1 ring-accent/30' : 'border-edge',
+                      'flex h-full w-80 shrink-0 snap-center flex-col overflow-hidden rounded-2xl shadow-surface',
+                      dropLane === lane ? 'bg-surface-active ring-1 ring-accent/30' : 'bg-surface-panel/40',
                     )}
                     aria-label={t.lanes[lane].title}
                     onDragOver={(event) => {
@@ -1041,7 +1041,7 @@ export function GoalsPage() {
                         />
                       ))}
                       {!loading && laneGoals.length === 0 ? (
-                        <div className="flex min-h-32 items-center justify-center rounded-xl border border-dashed border-edge bg-surface-panel/40 px-3 py-6 sm:px-5 xl:px-6 text-center text-xs text-fg-subtle">
+                        <div className="flex min-h-32 items-center justify-center rounded-xl bg-surface-base px-3 py-6 text-center text-xs text-fg-subtle sm:px-5 xl:px-6">
                           {t.lanes[lane].empty}
                         </div>
                       ) : null}

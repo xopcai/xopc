@@ -158,6 +158,95 @@ describe('connector registry search', () => {
       },
     });
   });
+
+  it('normalizes ModelScope remote MCP configs nested under mcpServers', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        Data: {
+          Data: {
+            Mcp: {
+              TotalCount: 4,
+              McpServers: [
+                {
+                  Name: 'xsct-bench',
+                  ChineseName: 'XSCT model selector',
+                  Path: 'models/xsct-bench',
+                  CallVolume: 100,
+                  StreamableHTTPServerConfig: [
+                    {
+                      mcpServers: {
+                        'xsct-bench': {
+                          url: 'https://xsct.ai/mcp',
+                        },
+                      },
+                    },
+                  ],
+                },
+                {
+                  Name: 'supabase-mcp',
+                  Path: 'supabase/supabase-mcp',
+                  CallVolume: 90,
+                  ServerConfig: [
+                    {
+                      mcpServers: {
+                        supabase: {
+                          type: 'http',
+                          url: 'https://mcp.supabase.com/mcp',
+                        },
+                      },
+                    },
+                  ],
+                },
+                {
+                  Name: 'AI_Go_Hotel_MCP',
+                  ChineseName: 'Global Hotel Booking',
+                  Path: 'travel/AI_Go_Hotel_MCP',
+                  CallVolume: 80,
+                  StreamableHTTPServerConfig: [
+                    {
+                      mcpServers: {
+                        'aigohotel-mcp': {
+                          type: 'streamable_http',
+                          url: 'https://mcp.aigohotel.com/mcp',
+                        },
+                      },
+                    },
+                  ],
+                },
+                {
+                  Name: 'ChatPPT-MCP',
+                  Path: 'slides/ChatPPT-MCP',
+                  CallVolume: 70,
+                },
+              ],
+            },
+          },
+        },
+      }),
+    } as Response);
+
+    const results = await searchConnectorRegistries({
+      source: 'modelscope',
+      query: 'modelscope nested remote config',
+      page: 1,
+      pageSize: 24,
+    });
+
+    expect(results[0]?.connectors.map((connector) => connector.id)).toEqual([
+      'modelscope-models-xsct-bench-xsct-bench',
+      'modelscope-supabase-supabase-mcp-supabase-mcp',
+      'modelscope-travel-ai_go_hotel_mcp-ai_go_hotel_mcp',
+    ]);
+    expect(results[0]?.connectors.map((connector) => (
+      connector.runtime.type === 'mcp' ? connector.runtime.serverTemplate : undefined
+    ))).toEqual([
+      { url: 'https://xsct.ai/mcp', transport: 'streamable-http' },
+      { url: 'https://mcp.supabase.com/mcp', transport: 'streamable-http' },
+      { url: 'https://mcp.aigohotel.com/mcp', transport: 'streamable-http' },
+    ]);
+    expect(results[0]?.totalPages).toBe(1);
+  });
 });
 
 describe('connector OAuth', () => {

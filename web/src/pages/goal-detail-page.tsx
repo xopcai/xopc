@@ -162,7 +162,7 @@ function EvidenceCard({ item, language, t }: { item: GoalEvidence; language: Sto
   const fuzzyMatchUsed = data.fuzzyMatchUsed === true;
 
   return (
-    <li className="rounded-md border border-edge/70 bg-surface-muted/40 px-2.5 py-2">
+    <li className="rounded-md bg-surface-muted/40 px-2.5 py-2">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-start gap-2">
           <Icon className="mt-0.5 size-4 shrink-0 text-accent-fg" aria-hidden />
@@ -171,7 +171,7 @@ function EvidenceCard({ item, language, t }: { item: GoalEvidence; language: Sto
             {path ? <p className="mt-1 break-all text-xs text-fg-muted">{path}</p> : null}
           </div>
         </div>
-        <span className="rounded-full border border-edge px-2 py-0.5 text-xs text-fg-muted">{evidenceKindLabel(item.kind, t)}</span>
+        <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">{evidenceKindLabel(item.kind, t)}</span>
       </div>
       {command ? (
         <pre className="mt-2 overflow-x-auto rounded-md bg-surface-panel px-2 py-1.5 text-xs text-fg"><code>{command}</code></pre>
@@ -773,14 +773,14 @@ export function GoalDetailPage() {
 
         {goal ? (
           <>
-            <section className="rounded-lg border border-edge bg-surface-panel p-4">
+            <section className="rounded-lg bg-surface-panel p-4 shadow-surface">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={cn('rounded-full border px-2 py-0.5 text-xs', badgeClass(goal.status))}>{statusLabel(goal.status, t)}</span>
                 <span className="text-xs text-fg-muted">{formatMessage(t.prioritySummary, { priority: priorityLabel(goal.priority, t) })}</span>
                 <span className="text-xs text-fg-muted">{goal.deadlineAt ? formatDate(goal.deadlineAt, language, t) : t.noDeadline}</span>
               </div>
               {goal.description ? <p className="mt-3 whitespace-pre-wrap break-words text-sm text-fg-muted">{goal.description}</p> : null}
-              <div className="mt-3 rounded-md border border-edge/70 bg-surface-muted/40 px-3 py-2">
+              <div className="mt-3 rounded-md bg-surface-muted/40 px-3 py-2">
                 <p className="text-xs font-medium text-fg-muted">{goal.blockedReason ? t.currentBlocker : t.nextAction}</p>
                 <p className={cn('mt-1 break-words text-sm', goal.blockedReason ? 'text-amber-700 dark:text-amber-300' : 'text-fg')}>
                   {goal.blockedReason || goal.nextAction || t.noNextAction}
@@ -790,7 +790,7 @@ export function GoalDetailPage() {
 
             <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
               <div className="grid min-w-0 gap-4">
-                <section className="rounded-lg border border-edge bg-surface-panel p-4">
+                <section className="rounded-lg bg-surface-panel p-4 shadow-surface">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -802,7 +802,7 @@ export function GoalDetailPage() {
                     <span className="text-xs text-fg-muted">{done}/{total}</span>
                   </div>
                   {latestRun ? (
-                    <div className="mt-3 rounded-md border border-edge/70 bg-surface-muted/40 px-3 py-2">
+                    <div className="mt-3 rounded-md bg-surface-muted/40 px-3 py-2">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
                         <span>{formatMessage(t.latestJudgement, { status: statusLabel(latestRun.verdict ?? latestRun.status, t) })}</span>
                         <time>{formatDateTime(latestRun.finishedAt ?? latestRun.startedAt, language, t)}</time>
@@ -841,7 +841,7 @@ export function GoalDetailPage() {
                 {goal.checklist.length ? (
                   <ul className="space-y-2 text-sm">
                     {goal.checklist.map((item) => (
-                      <li key={item.id} className="rounded-md border border-edge/70 bg-surface-muted/40 px-2.5 py-2">
+                      <li key={item.id} className="rounded-md bg-surface-muted/40 px-2.5 py-2">
                         <div className="flex flex-wrap items-start gap-2">
                           <span className="mt-1 w-5 shrink-0 text-center text-fg-muted">{checklistGlyph(item.status)}</span>
                           <div className="min-w-0 flex-1">
@@ -978,7 +978,7 @@ export function GoalDetailPage() {
                   </div>
                 </section>
 
-                <section className="rounded-lg border border-edge bg-surface-panel p-4">
+                <section className="rounded-lg bg-surface-panel p-4 shadow-surface">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -1014,7 +1014,7 @@ export function GoalDetailPage() {
                       {filteredActivity.map((item) => {
                       const Icon = activityIcon(item.kind);
                       return (
-                        <li key={item.id} className="rounded-md border border-edge/60 bg-surface-muted/50 px-2.5 py-2">
+                        <li key={item.id} className="rounded-md bg-surface-muted/50 px-2.5 py-2">
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="flex min-w-0 flex-1 items-start gap-2">
                               <Icon className="mt-0.5 size-4 shrink-0 text-accent-fg" aria-hidden />
@@ -1082,7 +1082,7 @@ export function GoalDetailPage() {
                     }}
                   />
                 ) : null}
-                <section className="rounded-lg border border-edge bg-surface-panel p-4">
+                <section className="rounded-lg bg-surface-panel p-4 shadow-surface">
                   <h2 className="text-sm font-semibold text-fg">{t.goalSettings}</h2>
                   <dl className="mt-3 grid gap-2 text-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -1102,7 +1102,7 @@ export function GoalDetailPage() {
                       <dd className="text-right text-fg">{formatDateTime(goal.updatedAt, language, t)}</dd>
                     </div>
                   </dl>
-                  <details className="mt-4 rounded-md border border-edge/70 bg-surface-muted/40 px-3 py-2">
+                  <details className="mt-4 rounded-md bg-surface-muted/40 px-3 py-2">
                     <summary className="cursor-pointer text-sm font-medium text-fg">{t.editDetails}</summary>
                     <form className="mt-3 grid gap-3" onSubmit={saveGoalDetails}>
                       <label className="grid gap-1 text-xs font-medium text-fg-muted">
@@ -1214,7 +1214,7 @@ export function GoalDetailPage() {
                   </details>
                 </section>
 
-                <section className="rounded-lg border border-edge bg-surface-panel p-4">
+                <section className="rounded-lg bg-surface-panel p-4 shadow-surface">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -1232,8 +1232,8 @@ export function GoalDetailPage() {
                           key={suggestion.definitionId}
                           type="button"
                           className={cn(
-                            'min-w-0 rounded-md border border-edge/70 bg-surface-muted/40 px-2.5 py-2 text-left hover:border-accent/60 hover:bg-accent-soft/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                            workflowDefinitionDraft === suggestion.definitionId && 'border-accent/70 bg-accent-soft/60',
+                            'min-w-0 rounded-md bg-surface-muted/40 px-2.5 py-2 text-left hover:bg-accent-soft/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                            workflowDefinitionDraft === suggestion.definitionId && 'bg-accent-soft/60 ring-1 ring-accent/30',
                           )}
                           onClick={() => {
                             setWorkflowDefinitionDraft(suggestion.definitionId);
@@ -1242,7 +1242,7 @@ export function GoalDetailPage() {
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="truncate text-sm font-medium text-fg">{suggestion.title}</span>
-                            <span className="shrink-0 rounded-full border border-edge px-2 py-0.5 text-xs text-fg-muted">{suggestion.score}</span>
+                            <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">{suggestion.score}</span>
                           </div>
                           <p className="mt-1 line-clamp-2 text-xs text-fg-muted">{suggestion.description}</p>
                         </button>
@@ -1307,7 +1307,7 @@ export function GoalDetailPage() {
                           const isActive = run.status === 'queued' || run.status === 'running';
                           const canRetry = run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled';
                           return (
-                            <li key={run.id} className="rounded-md border border-edge/70 bg-surface-muted/40 px-2.5 py-2 text-sm">
+                            <li key={run.id} className="rounded-md bg-surface-muted/40 px-2.5 py-2 text-sm">
                               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
                                 <span className="min-w-0 truncate">{run.definitionId}</span>
                                 <span className={cn('shrink-0 rounded-full border px-2 py-0.5', workflowStatusClass(run.status))}>{statusLabel(run.status, t)}</span>

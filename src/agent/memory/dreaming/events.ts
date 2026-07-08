@@ -37,15 +37,15 @@ export type DreamingEvent = DreamingLightEvent | DreamingDeepEvent | DreamingRem
 // ── Write ──────────────────────────────────────────────────────────────
 
 /**
- * Append a single event line to `memory/.dreams/events.jsonl`.
+ * Append a single event line to an agent's `memories/.dreams/events.jsonl`.
  * Creates the directory and file if they don't exist.
  * Failures are silently ignored so audit logging never blocks execution.
  */
-export async function appendDreamingEvent(workspaceDir: string, event: DreamingEvent): Promise<void> {
+export async function appendDreamingEvent(dreamingRoot: string, event: DreamingEvent): Promise<void> {
   try {
-    const dirPath = path.join(workspaceDir, DREAMING_DIR_RELATIVE);
+    const dirPath = path.join(dreamingRoot, DREAMING_DIR_RELATIVE);
     await fs.mkdir(dirPath, { recursive: true });
-    const filePath = path.join(workspaceDir, DREAMING_EVENTS_LOG_RELATIVE);
+    const filePath = path.join(dreamingRoot, DREAMING_EVENTS_LOG_RELATIVE);
     const line = JSON.stringify(event) + '\n';
     await fs.appendFile(filePath, line, 'utf-8');
   } catch {
@@ -60,10 +60,10 @@ export async function appendDreamingEvent(workspaceDir: string, event: DreamingE
  * Returns newest-first. If the file doesn't exist, returns an empty array.
  */
 export async function readDreamingEvents(
-  workspaceDir: string,
+  dreamingRoot: string,
   limit = 50,
 ): Promise<DreamingEvent[]> {
-  const filePath = path.join(workspaceDir, DREAMING_EVENTS_LOG_RELATIVE);
+  const filePath = path.join(dreamingRoot, DREAMING_EVENTS_LOG_RELATIVE);
   let raw: string;
   try {
     raw = await fs.readFile(filePath, 'utf-8');

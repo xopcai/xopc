@@ -83,7 +83,7 @@ export function WorkflowSchemaInputForm({
   };
 
   return (
-    <section className="rounded-2xl border border-edge-subtle bg-surface-base/35 p-4">
+    <section className="rounded-2xl bg-surface-panel/70 p-4 shadow-surface">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-fg">{labels.inputSchemaHeading}</h3>
         <button

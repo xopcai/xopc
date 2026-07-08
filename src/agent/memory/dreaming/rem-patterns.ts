@@ -55,7 +55,7 @@ function resolveConfig(overrides?: Partial<DreamingRemConfig>): DreamingRemConfi
  * Runs weekly; expensive but insightful.
  */
 export async function runRemPatterns(params: {
-  workspaceDir: string;
+  dreamingRoot: string;
   config?: Partial<DreamingRemConfig>;
   now?: Date;
 }): Promise<{
@@ -72,7 +72,7 @@ export async function runRemPatterns(params: {
   const nowMs = now.getTime();
 
   if (!cfg.enabled) {
-    await writeLastRun(params.workspaceDir, {
+    await writeLastRun(params.dreamingRoot, {
       runId, startedAt, cfg, ok: true, reason: 'REM patterns disabled', startMs,
       rem: { patternsDiscovered: 0, entriesAnalyzed: 0 },
     });
@@ -80,7 +80,7 @@ export async function runRemPatterns(params: {
   }
 
   try {
-    const { store } = await loadDreamingStore({ workspaceDir: params.workspaceDir });
+    const { store } = await loadDreamingStore({ dreamingRoot: params.dreamingRoot });
 
     // Filter entries within the lookback window.
     const cutoffMs = nowMs - cfg.lookbackDays * MS_PER_DAY;
@@ -94,7 +94,7 @@ export async function runRemPatterns(params: {
     );
 
     if (recentEntries.length < 2) {
-      await writeLastRun(params.workspaceDir, {
+      await writeLastRun(params.dreamingRoot, {
         runId, startedAt, cfg, ok: true, reason: 'not enough recent entries for pattern analysis', startMs,
         rem: { patternsDiscovered: 0, entriesAnalyzed: recentEntries.length },
       });
@@ -125,16 +125,16 @@ export async function runRemPatterns(params: {
     }
 
     store.updatedAt = now.toISOString();
-    await saveDreamingStore({ workspaceDir: params.workspaceDir, store });
+    await saveDreamingStore({ dreamingRoot: params.dreamingRoot, store });
 
     // Write pattern summary to DREAMS.md (append).
     if (topClusters.length > 0) {
-      await appendPatternSummary(params.workspaceDir, topClusters, now);
+      await appendPatternSummary(params.dreamingRoot, topClusters, now);
     }
 
     log.info(
       {
-        workspaceDir: params.workspaceDir,
+        dreamingRoot: params.dreamingRoot,
         patterns: topClusters.length,
         entriesAnalyzed: recentEntries.length,
         touched: touchedKeys.size,
@@ -142,7 +142,7 @@ export async function runRemPatterns(params: {
       'REM pattern discovery complete',
     );
 
-    await writeLastRun(params.workspaceDir, {
+    await writeLastRun(params.dreamingRoot, {
       runId, startedAt, cfg, ok: true, reason: 'REM patterns complete', startMs,
       rem: { patternsDiscovered: topClusters.length, entriesAnalyzed: recentEntries.length },
     });
@@ -155,8 +155,8 @@ export async function runRemPatterns(params: {
     };
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
-    log.error({ err, errorMessage, workspaceDir: params.workspaceDir }, `REM pattern discovery failed: ${errorMessage}`);
-    await writeLastRun(params.workspaceDir, {
+    log.error({ err, errorMessage, dreamingRoot: params.dreamingRoot }, `REM pattern discovery failed: ${errorMessage}`);
+    await writeLastRun(params.dreamingRoot, {
       runId, startedAt, cfg, ok: false, reason: `REM error: ${errorMessage}`, startMs,
       rem: { patternsDiscovered: 0, entriesAnalyzed: 0 }, errorMessage,
     }).catch(() => undefined);
@@ -298,11 +298,11 @@ function discoverPatternClusters(
 // ── DREAMS.md writer ───────────────────────────────────────────────────
 
 async function appendPatternSummary(
-  workspaceDir: string,
+  dreamingRoot: string,
   clusters: PatternCluster[],
   now: Date,
 ): Promise<void> {
-  const dreamsPath = path.join(workspaceDir, DREAMS_MD_FILENAME);
+  const dreamsPath = path.join(dreamingRoot, DREAMS_MD_FILENAME);
   const existing = await fs.readFile(dreamsPath, 'utf-8').catch((err: unknown) => {
     if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return '';
     throw err;
@@ -345,7 +345,7 @@ async function appendPatternSummary(
 // ── Last-run writer ────────────────────────────────────────────────────
 
 async function writeLastRun(
-  workspaceDir: string,
+  dreamingRoot: string,
   params: {
     runId: string;
     startedAt: string;
@@ -374,7 +374,7 @@ async function writeLastRun(
     ...(params.errorMessage ? { errorMessage: params.errorMessage } : {}),
   };
 
-  const lastRunPath = path.join(workspaceDir, DREAMING_DIR_RELATIVE, 'last-run-rem.json');
+  const lastRunPath = path.join(dreamingRoot, DREAMING_DIR_RELATIVE, 'last-run-rem.json');
   await fs.mkdir(path.dirname(lastRunPath), { recursive: true });
   const tmp = `${lastRunPath}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, `${JSON.stringify(lastRun, null, 2)}\n`, 'utf-8');

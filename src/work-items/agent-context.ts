@@ -15,6 +15,12 @@ export function buildWorkItemAgentContext(item: WorkItem): AgentSourceContext {
       .map((link) => `- ${link.kind}: ${link.title || link.targetId}${link.statusSnapshot ? ` (${link.statusSnapshot})` : ''}`)
       .join('\n')
     : '';
+  const attachments = item.attachments?.length
+    ? item.attachments
+      .slice(0, 12)
+      .map((attachment) => `- ${attachment.fileName} (${attachment.mimeType}, ${attachment.size} bytes)`)
+      .join('\n')
+    : '';
   const text = [
     'You are working inside a project work item. Treat this as the active task context, not as a new user message.',
     '',
@@ -29,6 +35,7 @@ export function buildWorkItemAgentContext(item: WorkItem): AgentSourceContext {
     contextLine('Blocked reason', item.blockedReason),
     item.dueAt ? contextLine('Due at', new Date(item.dueAt).toISOString()) : null,
     links ? `Linked executions:\n${links}` : null,
+    attachments ? `Attachments:\n${attachments}` : null,
     '',
     'When you answer, keep the work item moving. If the discussion changes scope, call out the suggested work item update explicitly.',
   ].filter(Boolean).join('\n');

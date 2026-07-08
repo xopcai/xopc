@@ -85,14 +85,14 @@ function emptyStore(nowIso: string): DreamingStore {
   return { version: 1, updatedAt: nowIso, entries: {} };
 }
 
-async function ensureDreamDir(workspaceDir: string): Promise<string> {
-  const dir = path.join(workspaceDir, path.dirname(SHORT_TERM_RECALL_STORE_RELATIVE));
+async function ensureDreamDir(dreamingRoot: string): Promise<string> {
+  const dir = path.join(dreamingRoot, path.dirname(SHORT_TERM_RECALL_STORE_RELATIVE));
   await fs.mkdir(dir, { recursive: true });
   return dir;
 }
 
-async function readStore(workspaceDir: string, nowIso: string): Promise<DreamingStore> {
-  const storePath = path.join(workspaceDir, SHORT_TERM_RECALL_STORE_RELATIVE);
+async function readStore(dreamingRoot: string, nowIso: string): Promise<DreamingStore> {
+  const storePath = path.join(dreamingRoot, SHORT_TERM_RECALL_STORE_RELATIVE);
   try {
     const raw = await fs.readFile(storePath, 'utf-8');
     const parsed = JSON.parse(raw) as unknown;
@@ -109,29 +109,29 @@ async function readStore(workspaceDir: string, nowIso: string): Promise<Dreaming
   } catch (err) {
     const code = (err as NodeJS.ErrnoException | undefined)?.code;
     if (code === 'ENOENT') return emptyStore(nowIso);
-    log.warn({ err, workspaceDir }, 'Failed to read dreaming store; resetting');
+    log.warn({ err, dreamingRoot }, 'Failed to read dreaming store; resetting');
     return emptyStore(nowIso);
   }
 }
 
-async function writeStore(workspaceDir: string, store: DreamingStore): Promise<void> {
-  await ensureDreamDir(workspaceDir);
-  const storePath = path.join(workspaceDir, SHORT_TERM_RECALL_STORE_RELATIVE);
+async function writeStore(dreamingRoot: string, store: DreamingStore): Promise<void> {
+  await ensureDreamDir(dreamingRoot);
+  const storePath = path.join(dreamingRoot, SHORT_TERM_RECALL_STORE_RELATIVE);
   const tmp = `${storePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
   await fs.writeFile(tmp, `${JSON.stringify(store, null, 2)}\n`, 'utf-8');
   await fs.rename(tmp, storePath);
 }
 
 export async function recordDreamingRecalls(params: {
-  workspaceDir: string;
+  dreamingRoot: string;
   query: string;
   matches: MemoryMatch[];
   options?: MemorySearchOptions;
   now?: Date;
 }): Promise<{ recorded: number; skipped: number; storePath: string }> {
-  const workspaceDir = params.workspaceDir.trim();
+  const dreamingRoot = params.dreamingRoot.trim();
   const query = params.query.trim();
-  if (!workspaceDir || !query) {
+  if (!dreamingRoot || !query) {
     return { recorded: 0, skipped: params.matches.length, storePath: SHORT_TERM_RECALL_STORE_RELATIVE };
   }
   const now = params.now ?? new Date();
@@ -139,7 +139,7 @@ export async function recordDreamingRecalls(params: {
   const dayBucket = isoDay(now);
   const qHash = hashQuery(query);
 
-  const store = await readStore(workspaceDir, nowIso);
+  const store = await readStore(dreamingRoot, nowIso);
 
   let recorded = 0;
   let skipped = 0;
@@ -206,7 +206,7 @@ export async function recordDreamingRecalls(params: {
 
   if (recorded > 0) {
     store.updatedAt = nowIso;
-    await writeStore(workspaceDir, store);
+    await writeStore(dreamingRoot, store);
   }
 
   return {
@@ -217,11 +217,11 @@ export async function recordDreamingRecalls(params: {
 }
 
 export async function withDreamingPromotionLock<T>(
-  workspaceDir: string,
+  dreamingRoot: string,
   task: () => Promise<T>,
 ): Promise<T> {
-  const lockPath = path.join(workspaceDir, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
-  await ensureDreamDir(workspaceDir);
+  const lockPath = path.join(dreamingRoot, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
+  await ensureDreamDir(dreamingRoot);
 
   const startedAt = Date.now();
   const timeoutMs = 10_000;
@@ -251,18 +251,18 @@ export async function withDreamingPromotionLock<T>(
 }
 
 export async function loadDreamingStore(params: {
-  workspaceDir: string;
+  dreamingRoot: string;
 }): Promise<{ store: DreamingStore; storePath: string }> {
   const nowIso = new Date().toISOString();
-  const store = await readStore(params.workspaceDir, nowIso);
+  const store = await readStore(params.dreamingRoot, nowIso);
   return { store, storePath: SHORT_TERM_RECALL_STORE_RELATIVE };
 }
 
 export async function saveDreamingStore(params: {
-  workspaceDir: string;
+  dreamingRoot: string;
   store: DreamingStore;
 }): Promise<void> {
-  await writeStore(params.workspaceDir, params.store);
+  await writeStore(params.dreamingRoot, params.store);
 }
 
 // ── Phase-level signal helpers ─────────────────────────────────────────

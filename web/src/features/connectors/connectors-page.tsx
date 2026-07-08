@@ -320,7 +320,7 @@ export function ConnectorsPage() {
   ];
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-base">
       <div className="flex w-full flex-col gap-6 px-3 py-6 sm:px-5 xl:px-6">
         {!hasToken ? (
           <p className="rounded-xl border border-edge bg-surface-panel px-4 py-3 text-sm text-fg-muted">

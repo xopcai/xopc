@@ -15,7 +15,7 @@ import type { Model, Api } from '@earendil-works/pi-ai';
 import type { AgentInstanceGateway } from './agent-instance-gateway.js';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
-import { resolveAgentProfileDir } from './agent-scope.js';
+import { resolveAgentHomeDir, resolveAgentProfileDir } from './agent-scope.js';
 import {
   type EffectiveAgentProfile,
   resolveEffectiveAgentProfile,
@@ -57,7 +57,7 @@ import type {
 import { createSkillConfigManager, isSkillEnabled, resolveSkillConfig } from './skills/config.js';
 import { isUnderManagedSkillsDir } from './skills/managed-store.js';
 import { loadSkillsLock, type SkillHubLockEntry } from './skills/hub-lock.js';
-import { basename, resolve, sep } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 
 import {
   isMemorySubsystemEnabled,
@@ -993,9 +993,12 @@ export class AgentManager implements AgentInstanceGateway {
     const model = this.resolveModelStringToModel(modelRef);
 
     const contextFiles = this.resolveContextFilesForSession(sessionKey, profile);
+    const dreamingRoot = join(resolveAgentHomeDir(this.config.config!, profile.agentId), 'memories');
     const tools = this.toolsFactory.createAllTools({
       workspace: resolvedWorkspacePath,
       profileMarkdownRoot: resolveAgentProfileDir(this.config.config!, profile.agentId),
+      agentId: profile.agentId,
+      dreamingRoot,
       disabledTools: profile.tools.denied,
       getPrimaryModel: () => this.resolveModelStringToModel(modelRef),
       getMemoryManager: () => rt.memoryManager,

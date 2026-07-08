@@ -69,9 +69,9 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
   return (
     <div
       className={cn(
-        'group relative overflow-hidden rounded-xl border bg-surface-panel p-3.5 transition-colors',
-        selected ? 'border-accent/70 ring-1 ring-accent/30' : 'border-edge',
-        'hover:border-edge-strong hover:bg-surface-hover/50',
+        'group relative overflow-hidden rounded-xl p-3.5 shadow-surface transition-colors',
+        selected ? 'bg-surface-active ring-1 ring-accent/30' : 'bg-surface-panel',
+        'hover:bg-surface-hover/50',
       )}
     >
       <button

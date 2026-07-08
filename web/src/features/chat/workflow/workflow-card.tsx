@@ -21,11 +21,11 @@ import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { interaction } from '@/lib/interaction';
 
-import { WorkflowAgentDetailModal, type WorkflowAgentDetailModalLabels } from './workflow-agent-detail-modal';
+import { WorkflowAgentInlineDetail, type WorkflowAgentInlineDetailLabels } from './workflow-agent-inline-detail';
 import { WorkflowCardHeader, type WorkflowCardHeaderLabels } from './workflow-card-header';
 import { WorkflowErrorCard, type WorkflowErrorCardLabels } from './workflow-error-card';
 import type { WorkflowPhaseRowLabels } from './workflow-phase-row';
-import { ProgressTree, RunningProgressPanel } from './workflow-progress-display';
+import { ProgressTree } from './workflow-progress-display';
 import { WorkflowResultSummary, type WorkflowResultSummaryLabels } from './workflow-result-summary';
 import type { WorkflowAgentSnapshot } from './workflow.types';
 import { isWorkflowResultEnvelope, stringifyWorkflowResult, workflowBoardHref } from '@/features/workflows/workflow-page.utils';
@@ -45,7 +45,7 @@ export type WorkflowCardLabels = {
   phase: WorkflowPhaseRowLabels;
   result: WorkflowResultSummaryLabels;
   error: WorkflowErrorCardLabels;
-  drawer: WorkflowAgentDetailModalLabels;
+  checkDetail: WorkflowAgentInlineDetailLabels;
   /** Header action button tooltips / a11y. */
   cancel: string;
   saveAria: string;
@@ -97,7 +97,6 @@ export interface WorkflowCardProps {
 export const WorkflowCard = memo(function WorkflowCard({
   block,
   startedAt,
-  sessionKey,
   onAbort,
   labels,
   className,
@@ -118,21 +117,24 @@ export const WorkflowCard = memo(function WorkflowCard({
   }, [status]);
 
   const [showSubagentsAfterComplete, setShowSubagentsAfterComplete] = useState(false);
-  const [drawerAgentId, setDrawerAgentId] = useState<number | null>(null);
-  const [logsExpanded, setLogsExpanded] = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
 
-  const drawerAgent = useMemo(() => {
-    if (drawerAgentId == null || !snapshot) return null;
-    return snapshot.agents.find((a) => a.id === drawerAgentId) ?? null;
-  }, [drawerAgentId, snapshot]);
+  const selectedAgent = useMemo(() => {
+    if (selectedAgentId == null || !snapshot) return null;
+    return snapshot.agents.find((a) => a.id === selectedAgentId) ?? null;
+  }, [selectedAgentId, snapshot]);
 
   const handleSelectAgent = useCallback((agent: WorkflowAgentSnapshot) => {
-    setDrawerAgentId(agent.id);
+    setSelectedAgentId(agent.id);
   }, []);
 
-  const closeDrawer = useCallback(() => {
-    setDrawerAgentId(null);
+  const clearSelectedAgent = useCallback(() => {
+    setSelectedAgentId(null);
   }, []);
+
+  useEffect(() => {
+    setSelectedAgentId(null);
+  }, [snapshot?.runId, status]);
 
   // Live elapsed ticker for running state. Tick once a second; cleared on
   // status change.
@@ -184,7 +186,7 @@ export const WorkflowCard = memo(function WorkflowCard({
     if (!runId) return;
     const target = event.target;
     if (target instanceof Element) {
-      const interactive = target.closest('button,a,input,textarea,select,summary,[role="button"]');
+      const interactive = target.closest('button,a,input,textarea,select,summary,[role="button"],[data-workflow-inline-detail]');
       if (interactive) return;
     }
     navigate(workflowBoardHref(runId));
@@ -196,10 +198,10 @@ export const WorkflowCard = memo(function WorkflowCard({
     const failureCtx = buildWorkflowFailureContext(block);
     const scriptPreview = extractScriptPreview(block);
     const failureSnapshot = failureCtx.snapshot;
-    const failureDrawerAgent =
-      drawerAgentId == null || !failureSnapshot
+    const failureSelectedAgent =
+      selectedAgentId == null || !failureSnapshot
         ? null
-        : failureSnapshot.agents.find((agent) => agent.id === drawerAgentId) ?? null;
+        : failureSnapshot.agents.find((agent) => agent.id === selectedAgentId) ?? null;
 
     return (
       <>
@@ -211,18 +213,17 @@ export const WorkflowCard = memo(function WorkflowCard({
           failedAgents={failureCtx.failedAgents}
           snapshot={failureSnapshot}
           scriptPreview={scriptPreview}
-          selectedAgentId={drawerAgentId}
+          selectedAgentId={selectedAgentId}
           onSelectAgent={handleSelectAgent}
           labels={labels.error}
           className={className}
         />
-        <WorkflowAgentDetailModal
-          open={drawerAgentId != null && failureDrawerAgent != null}
-          agent={failureDrawerAgent}
+        <WorkflowAgentInlineDetail
+          agent={failureSelectedAgent}
           snapshot={failureSnapshot}
-          sessionKey={sessionKey}
-          onClose={closeDrawer}
-          labels={labels.drawer}
+          labels={labels.checkDetail}
+          className="mt-2"
+          onClose={clearSelectedAgent}
         />
       </>
     );
@@ -348,14 +349,36 @@ export const WorkflowCard = memo(function WorkflowCard({
           ) : null}
 
           {status === 'running' && snapshot ? (
-            <RunningProgressPanel
-              snapshot={snapshot}
-              labels={labels}
-              logsExpanded={logsExpanded}
-              onToggleLogs={() => setLogsExpanded((v) => !v)}
-              selectedAgentId={drawerAgentId}
-              onSelectAgent={handleSelectAgent}
-            />
+            <div className="rounded-lg border border-edge-subtle bg-surface-base/45 px-3 py-2.5">
+              <div className="flex items-center justify-between gap-3 text-xs text-fg-muted">
+                <span className="min-w-0 truncate">
+                  {snapshot.currentPhase ?? labels.live.activeFallback}
+                </span>
+                <span className="shrink-0 tabular-nums">
+                  {labels.live.progress(snapshot.doneCount, snapshot.agentCount)}
+                </span>
+              </div>
+              {snapshot.agentCount > 0 ? (
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-hover">
+                  <div
+                    className="h-full rounded-full bg-accent transition-all"
+                    style={{ width: `${Math.round((snapshot.doneCount / snapshot.agentCount) * 100)}%` }}
+                  />
+                </div>
+              ) : null}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded-md px-2 py-1 text-xs font-medium text-accent-fg hover:bg-accent-soft',
+                    interaction.focusRingPanel,
+                  )}
+                  onClick={openInWorkflows}
+                >
+                  {labels.live.details}
+                </button>
+              </div>
+            </div>
           ) : null}
 
           {status === 'running' && !snapshot ? (
@@ -384,8 +407,15 @@ export const WorkflowCard = memo(function WorkflowCard({
                   showAllLogsLabel={labels.showAllLogs}
                   logsExpanded={false}
                   onToggleLogs={() => {}}
-                  selectedAgentId={drawerAgentId}
+                  selectedAgentId={selectedAgentId}
                   onSelectAgent={handleSelectAgent}
+                />
+                <WorkflowAgentInlineDetail
+                  agent={selectedAgent}
+                  snapshot={snapshot}
+                  labels={labels.checkDetail}
+                  className="mt-2"
+                  onClose={clearSelectedAgent}
                 />
               </div>
             </details>
@@ -394,14 +424,6 @@ export const WorkflowCard = memo(function WorkflowCard({
       ) : null}
     </div>
 
-    <WorkflowAgentDetailModal
-      open={drawerAgentId != null && drawerAgent != null}
-      agent={drawerAgent}
-      snapshot={snapshot}
-      sessionKey={sessionKey}
-      onClose={closeDrawer}
-      labels={labels.drawer}
-    />
     </>
   );
 });

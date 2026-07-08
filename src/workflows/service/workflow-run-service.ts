@@ -420,9 +420,11 @@ export class WorkflowRunService {
     sessionKey: string;
   }): WorkflowEngine {
     const gatewayService = this.options.service;
+    const profileAgentId = extractProfileAgentId(params.sessionKey, gatewayService.currentConfig);
     const runner = new DelegateSubagentRunner({
       workspace: gatewayService.currentWorkspacePath,
       bus: gatewayService.messageBusInstance,
+      agentId: profileAgentId,
       getDefaultModel: () => resolveModelById(gatewayService.agentService.getModelForSession(params.sessionKey)),
       getConfig: () => gatewayService.currentConfig,
       sessionStore: gatewayService.sessionIndexInstance.getStore(),
@@ -435,12 +437,10 @@ export class WorkflowRunService {
       runStore: params.runStore,
       runner,
       resolveModelId: (modelId) => {
-        const agentId = extractProfileAgentId(params.sessionKey, gatewayService.currentConfig);
-        return resolveModelById(resolveModelRef(gatewayService.currentConfig, agentId, modelId));
+        return resolveModelById(resolveModelRef(gatewayService.currentConfig, profileAgentId, modelId));
       },
       parentSessionKey: params.sessionKey,
       subagentSessionKeyFactory: ({ runId, agentId }) => {
-        const profileAgentId = extractProfileAgentId(params.sessionKey, gatewayService.currentConfig);
         return `agent:${profileAgentId}:workflow:${runId}:subagent:${agentId}`;
       },
       onEventAppended: (event) => {

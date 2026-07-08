@@ -1,27 +1,40 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { CheckCircle2, Columns3, ExternalLink, List, MessageSquarePlus, Plus, RefreshCw, Target, X } from 'lucide-react';
-import { type DragEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, Columns3, Download, ExternalLink, FileText, List, MessageSquarePlus, Paperclip, Plus, RefreshCw, Target, Trash2, X } from 'lucide-react';
+import { type DragEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { segmentedThumbActiveClassName, segmentedThumbBaseClassName, segmentedTrackClassName } from '@/components/ui/segmented-styles';
+import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
+import { arrayBufferToBase64 } from '@/features/chat/attachments/attachment-utils-core';
+import type { MessageAttachment } from '@/features/chat/messages/messages.types';
+import { detectPreviewFileType, inferPreviewMimeType } from '@/features/preview-runtime';
 import { messages } from '@/i18n/messages';
+import { apiFetch } from '@/lib/fetch';
 import { cn } from '@/lib/cn';
+import { showToast } from '@/lib/toast';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import {
   createWorkItem,
   createWorkItemGoal,
+  deleteWorkItemAttachment,
+  downloadWorkItemAttachment,
   fetchProjectWorkItems,
   fetchWorkItemEvents,
   patchWorkItem,
   startWorkItemChat,
+  uploadWorkItemAttachments,
+  workItemAttachmentContentUrl,
   type WorkItem,
+  type WorkItemAttachment,
   type WorkItemEvent,
   type WorkItemPriority,
   type WorkItemStatus,
 } from './api';
 
 type WorkItemsMessages = ReturnType<typeof messages>['projectDetailPage']['workItems'];
+type WorkItemNotice = { title: string; message: string } | null;
 
 const DRAG_TYPE = 'application/x-xopc-work-item';
 const BOARD_COLUMNS: WorkItemStatus[] = ['backlog', 'todo', 'in_progress', 'blocked', 'needs_input', 'in_review', 'done'];
@@ -38,6 +51,141 @@ function statusTone(status: WorkItemStatus): string {
 function formatTime(value: number): string {
   if (!value) return '';
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+
+function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
+function fileDedupeKey(file: File): string {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function isPreviewableFile(fileName: string, mimeType: string): boolean {
+  return detectPreviewFileType(fileName, mimeType) !== 'unsupported';
+}
+
+function messageAttachmentType(mimeType: string, fallback?: WorkItemAttachment['type']): string {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  if (fallback === 'image' || fallback === 'audio' || fallback === 'video') return fallback;
+  return 'document';
+}
+
+function workItemAttachmentToMessageAttachment(attachment: WorkItemAttachment, content?: string): MessageAttachment {
+  return {
+    id: attachment.id,
+    name: attachment.fileName,
+    type: messageAttachmentType(attachment.mimeType, attachment.type),
+    mimeType: attachment.mimeType,
+    size: attachment.size,
+    ...(content ? { content, preview: attachment.mimeType.startsWith('image/') ? content : undefined } : {}),
+  };
+}
+
+async function fileToMessageAttachment(file: File, id: string): Promise<MessageAttachment> {
+  const mimeType = inferPreviewMimeType(file.name || 'upload', file.type || 'application/octet-stream');
+  const content = arrayBufferToBase64(await file.arrayBuffer());
+  return {
+    id,
+    name: file.name || 'upload',
+    type: messageAttachmentType(mimeType),
+    mimeType,
+    size: file.size,
+    content,
+    preview: mimeType.startsWith('image/') ? content : undefined,
+  };
+}
+
+function useObjectUrl(blob: Blob | null): string {
+  const [url, setUrl] = useState('');
+
+  useEffect(() => {
+    if (!blob) {
+      setUrl('');
+      return;
+    }
+    const next = URL.createObjectURL(blob);
+    setUrl(next);
+    return () => URL.revokeObjectURL(next);
+  }, [blob]);
+
+  return url;
+}
+
+function useWorkItemAttachmentThumbnail(workItemId: string | null, attachment: WorkItemAttachment): string {
+  const [url, setUrl] = useState('');
+
+  useEffect(() => {
+    if (!workItemId || !attachment.mimeType.startsWith('image/')) {
+      setUrl('');
+      return;
+    }
+
+    let cancelled = false;
+    let revokeUrl = '';
+
+    void (async () => {
+      const res = await apiFetch(workItemAttachmentContentUrl(workItemId, attachment.id));
+      if (!res.ok || cancelled) return;
+      const blob = await res.blob();
+      if (cancelled) return;
+      revokeUrl = URL.createObjectURL(blob);
+      setUrl(revokeUrl);
+    })().catch(() => {
+      if (!cancelled) setUrl('');
+    });
+
+    return () => {
+      cancelled = true;
+      if (revokeUrl) URL.revokeObjectURL(revokeUrl);
+    };
+  }, [attachment.id, attachment.mimeType, workItemId]);
+
+  return url;
+}
+
+function AttachmentPreviewThumb({
+  name,
+  mimeType,
+  thumbnailUrl,
+  previewable,
+  disabled,
+  onOpen,
+}: {
+  name: string;
+  mimeType: string;
+  thumbnailUrl: string;
+  previewable: boolean;
+  disabled: boolean;
+  onOpen: () => void;
+}) {
+  const isImage = mimeType.startsWith('image/');
+  const content = isImage && thumbnailUrl ? (
+    <img src={thumbnailUrl} alt={name} className="size-10 rounded-md object-cover" />
+  ) : (
+    <span className="inline-flex size-10 items-center justify-center rounded-md border border-edge bg-surface-muted">
+      <FileText className="size-4 text-fg-muted" aria-hidden />
+    </span>
+  );
+
+  if (!previewable) return content;
+
+  return (
+    <button
+      type="button"
+      className="shrink-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel disabled:cursor-wait disabled:opacity-70"
+      title={name}
+      aria-label={name}
+      disabled={disabled}
+      onClick={onOpen}
+    >
+      {content}
+    </button>
+  );
 }
 
 function visibleSummary(item: WorkItem, t: WorkItemsMessages): string {
@@ -74,7 +222,7 @@ function WorkItemCard({
       onDragEnd={onDragEnd}
       title={t.dragToUpdate}
       className={cn(
-        'flex h-24 w-full min-w-0 max-w-full cursor-grab flex-col overflow-hidden rounded-lg border border-edge bg-surface-panel px-3 pt-3 pb-0 transition-colors hover:border-edge-strong hover:bg-surface-hover/50 active:cursor-grabbing',
+        'flex h-24 w-full min-w-0 max-w-full cursor-grab flex-col overflow-hidden rounded-lg bg-surface-panel px-3 pt-3 pb-0 shadow-surface transition-colors hover:bg-surface-hover/50 active:cursor-grabbing',
         dragging && 'opacity-50',
       )}
     >
@@ -90,6 +238,12 @@ function WorkItemCard({
           {t.statuses[item.status]}
         </span>
         <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted">{t.priorities[item.priority]}</span>
+        {item.attachments?.length ? (
+          <span className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted">
+            <Paperclip className="size-3" aria-hidden />
+            {item.attachments.length}
+          </span>
+        ) : null}
         {item.links?.length ? <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted">{item.links.length}</span> : null}
         <Link
           to={`/work-items/${encodeURIComponent(item.id)}`}
@@ -105,7 +259,7 @@ function WorkItemCard({
 
 function WorkItemCardSkeleton() {
   return (
-    <article className="flex h-24 w-full min-w-0 max-w-full flex-col overflow-hidden rounded-lg border border-edge bg-surface-panel px-3 pt-3 pb-0">
+    <article className="flex h-24 w-full min-w-0 max-w-full flex-col overflow-hidden rounded-lg bg-surface-panel px-3 pt-3 pb-0 shadow-surface">
       <div className="flex items-center gap-2">
         <div className="size-3.5 shrink-0 rounded-full bg-surface-muted" />
         <div className="h-3 w-36 rounded bg-surface-muted" />
@@ -119,28 +273,339 @@ function WorkItemCardSkeleton() {
   );
 }
 
+function PendingAttachmentRow({
+  file,
+  index,
+  busy,
+  previewBusy,
+  t,
+  onOpen,
+  onRemove,
+}: {
+  file: File;
+  index: number;
+  busy: boolean;
+  previewBusy: boolean;
+  t: WorkItemsMessages;
+  onOpen: (file: File) => void;
+  onRemove: (index: number) => void;
+}) {
+  const mimeType = inferPreviewMimeType(file.name || 'upload', file.type || 'application/octet-stream');
+  const previewable = isPreviewableFile(file.name || 'upload', mimeType);
+  const thumbnailUrl = useObjectUrl(mimeType.startsWith('image/') ? file : null);
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-md border border-edge bg-surface-panel px-2 py-2 text-sm">
+      <AttachmentPreviewThumb
+        name={file.name || 'upload'}
+        mimeType={mimeType}
+        thumbnailUrl={thumbnailUrl}
+        previewable={previewable}
+        disabled={busy || previewBusy}
+        onOpen={() => onOpen(file)}
+      />
+      <button
+        type="button"
+        className={cn(
+          'min-w-0 flex-1 text-left',
+          previewable ? 'rounded-md hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel' : 'cursor-default',
+        )}
+        disabled={!previewable || busy || previewBusy}
+        onClick={() => onOpen(file)}
+      >
+        <div className="truncate font-medium text-fg">{file.name || 'upload'}</div>
+        <div className="text-xs text-fg-subtle">{formatFileSize(file.size)}</div>
+      </button>
+      <button
+        type="button"
+        className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg"
+        title={t.attachments.remove}
+        aria-label={t.attachments.remove}
+        disabled={busy}
+        onClick={() => onRemove(index)}
+      >
+        <X className="size-3.5" aria-hidden />
+      </button>
+    </div>
+  );
+}
+
+function SavedAttachmentRow({
+  item,
+  attachment,
+  busy,
+  previewBusy,
+  t,
+  onOpen,
+  onDownload,
+  onRemove,
+}: {
+  item: WorkItem;
+  attachment: WorkItemAttachment;
+  busy: boolean;
+  previewBusy: boolean;
+  t: WorkItemsMessages;
+  onOpen: (item: WorkItem, attachment: WorkItemAttachment) => void;
+  onDownload: (item: WorkItem, attachment: WorkItemAttachment) => void;
+  onRemove: (item: WorkItem, attachment: WorkItemAttachment) => void;
+}) {
+  const previewable = isPreviewableFile(attachment.fileName, attachment.mimeType);
+  const thumbnailUrl = useWorkItemAttachmentThumbnail(item.id, attachment);
+
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-md border border-edge bg-surface-panel px-2 py-2 text-sm">
+      <AttachmentPreviewThumb
+        name={attachment.fileName}
+        mimeType={attachment.mimeType}
+        thumbnailUrl={thumbnailUrl}
+        previewable={previewable}
+        disabled={busy || previewBusy}
+        onOpen={() => onOpen(item, attachment)}
+      />
+      <button
+        type="button"
+        className={cn(
+          'min-w-0 flex-1 text-left',
+          previewable ? 'rounded-md hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel' : 'cursor-default',
+        )}
+        disabled={!previewable || busy || previewBusy}
+        onClick={() => onOpen(item, attachment)}
+      >
+        <div className="truncate font-medium text-fg">{attachment.fileName}</div>
+        <div className="truncate text-xs text-fg-subtle">{attachment.mimeType} · {formatFileSize(attachment.size)}</div>
+      </button>
+      <button
+        type="button"
+        className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg"
+        title={t.attachments.download}
+        aria-label={t.attachments.download}
+        disabled={busy}
+        onClick={() => onDownload(item, attachment)}
+      >
+        <Download className="size-3.5" aria-hidden />
+      </button>
+      <button
+        type="button"
+        className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-danger"
+        title={t.attachments.remove}
+        aria-label={t.attachments.remove}
+        disabled={busy}
+        onClick={() => onRemove(item, attachment)}
+      >
+        <Trash2 className="size-3.5" aria-hidden />
+      </button>
+    </div>
+  );
+}
+
+function WorkItemAttachmentsSection({
+  mode,
+  item,
+  pendingFiles,
+  busy,
+  t,
+  onPendingFilesChange,
+  onUpload,
+  onRemove,
+  onDownload,
+  onPreviewError,
+}: {
+  mode: 'create' | 'detail' | null;
+  item: WorkItem | null;
+  pendingFiles: File[];
+  busy: boolean;
+  t: WorkItemsMessages;
+  onPendingFilesChange: (files: File[]) => void;
+  onUpload: (item: WorkItem, files: File[]) => void;
+  onRemove: (item: WorkItem, attachment: WorkItemAttachment) => void;
+  onDownload: (item: WorkItem, attachment: WorkItemAttachment) => void;
+  onPreviewError: (message: string) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [activePreview, setActivePreview] = useState<MessageAttachment | null>(null);
+  const [previewBusyKey, setPreviewBusyKey] = useState<string | null>(null);
+  const authToken = useGatewayStore((state) => state.token);
+  const savedAttachments = item?.attachments ?? [];
+
+  function addFiles(files: File[]) {
+    if (!files.length) return;
+    if (mode === 'detail' && item) {
+      onUpload(item, files);
+      return;
+    }
+    const existing = new Set(pendingFiles.map(fileDedupeKey));
+    const next = [...pendingFiles];
+    for (const file of files) {
+      const key = fileDedupeKey(file);
+      if (existing.has(key)) continue;
+      existing.add(key);
+      next.push(file);
+    }
+    onPendingFilesChange(next);
+  }
+
+  function removePending(index: number) {
+    onPendingFilesChange(pendingFiles.filter((_, fileIndex) => fileIndex !== index));
+  }
+
+  async function openPendingPreview(file: File) {
+    const key = fileDedupeKey(file);
+    setPreviewBusyKey(`pending:${key}`);
+    try {
+      setActivePreview(await fileToMessageAttachment(file, `pending:${key}`));
+      setPreviewOpen(true);
+    } catch (err) {
+      onPreviewError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPreviewBusyKey(null);
+    }
+  }
+
+  async function openSavedPreview(targetItem: WorkItem, attachment: WorkItemAttachment) {
+    setPreviewBusyKey(`saved:${attachment.id}`);
+    try {
+      const res = await apiFetch(workItemAttachmentContentUrl(targetItem.id, attachment.id));
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const content = arrayBufferToBase64(await res.arrayBuffer());
+      setActivePreview(workItemAttachmentToMessageAttachment(attachment, content));
+      setPreviewOpen(true);
+    } catch (err) {
+      onPreviewError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPreviewBusyKey(null);
+    }
+  }
+
+  return (
+    <>
+      <section
+        className={cn(
+          'grid gap-3 rounded-lg border border-edge bg-surface-base p-3',
+          isDragging && 'border-accent bg-accent-soft/40',
+        )}
+        onDragOver={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={(event) => {
+          if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDragging(false);
+        }}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+          addFiles(Array.from(event.dataTransfer.files));
+        }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
+            <Paperclip className="size-4 shrink-0 text-fg-muted" aria-hidden />
+            <span className="truncate">{t.attachments.title}</span>
+          </h3>
+          <Button type="button" variant="secondary" className="h-8 rounded-lg px-2.5 text-xs" disabled={busy} onClick={() => inputRef.current?.click()}>
+            <Plus className="size-3.5" aria-hidden />
+            {t.attachments.add}
+          </Button>
+          <input
+            ref={inputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(event) => {
+              addFiles(Array.from(event.target.files ?? []));
+              event.currentTarget.value = '';
+            }}
+          />
+        </div>
+
+        {pendingFiles.length ? (
+          <div className="grid gap-2">
+            {pendingFiles.map((file, index) => (
+              <PendingAttachmentRow
+                key={fileDedupeKey(file)}
+                file={file}
+                index={index}
+                busy={busy}
+                previewBusy={previewBusyKey === `pending:${fileDedupeKey(file)}`}
+                t={t}
+                onOpen={(target) => void openPendingPreview(target)}
+                onRemove={removePending}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {item && savedAttachments.length ? (
+          <div className="grid gap-2">
+            {savedAttachments.map((attachment) => (
+              <SavedAttachmentRow
+                key={attachment.id}
+                item={item}
+                attachment={attachment}
+                busy={busy}
+                previewBusy={previewBusyKey === `saved:${attachment.id}`}
+                t={t}
+                onOpen={(targetItem, targetAttachment) => void openSavedPreview(targetItem, targetAttachment)}
+                onDownload={onDownload}
+                onRemove={onRemove}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {!pendingFiles.length && !savedAttachments.length ? (
+          <p className="text-sm text-fg-muted">{t.attachments.empty}</p>
+        ) : null}
+      </section>
+      <AttachmentPreviewDialog
+        open={previewOpen}
+        attachment={activePreview}
+        authToken={authToken}
+        layerClassName="z-[100]"
+        onClose={() => {
+          setPreviewOpen(false);
+          setActivePreview(null);
+        }}
+      />
+    </>
+  );
+}
+
 function WorkItemModal({
   mode,
   item,
   events,
   busy,
+  error,
+  notice,
   t,
   onClose,
   onCreate,
   onSave,
   onStartChat,
   onCreateGoal,
+  onAddAttachments,
+  onRemoveAttachment,
+  onDownloadAttachment,
+  onPreviewError,
 }: {
   mode: 'create' | 'detail' | null;
   item: WorkItem | null;
   events: WorkItemEvent[];
   busy: boolean;
+  error: string | null;
+  notice: WorkItemNotice;
   t: WorkItemsMessages;
   onClose: () => void;
-  onCreate: (input: { title: string; description?: string; priority: WorkItemPriority; status: WorkItemStatus; nextAction?: string; blockedReason?: string }) => void;
+  onCreate: (input: { title: string; description?: string; priority: WorkItemPriority; status: WorkItemStatus; nextAction?: string; blockedReason?: string; attachments?: File[] }) => void;
   onSave: (item: WorkItem, patch: Parameters<typeof patchWorkItem>[1]) => void;
   onStartChat: (item: WorkItem) => void;
   onCreateGoal: (item: WorkItem) => void;
+  onAddAttachments: (item: WorkItem, files: File[]) => void;
+  onRemoveAttachment: (item: WorkItem, attachment: WorkItemAttachment) => void;
+  onDownloadAttachment: (item: WorkItem, attachment: WorkItemAttachment) => void;
+  onPreviewError: (message: string) => void;
 }) {
   const open = mode !== null;
   const [title, setTitle] = useState('');
@@ -149,6 +614,7 @@ function WorkItemModal({
   const [priority, setPriority] = useState<WorkItemPriority>('normal');
   const [nextAction, setNextAction] = useState('');
   const [blockedReason, setBlockedReason] = useState('');
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   useEffect(() => {
     if (mode === 'create') {
@@ -158,6 +624,7 @@ function WorkItemModal({
       setPriority('normal');
       setNextAction('');
       setBlockedReason('');
+      setPendingFiles([]);
       return;
     }
     if (mode === 'detail' && item) {
@@ -167,6 +634,7 @@ function WorkItemModal({
       setPriority(item.priority);
       setNextAction(item.nextAction ?? '');
       setBlockedReason(item.blockedReason ?? '');
+      setPendingFiles([]);
     }
   }, [item, mode]);
 
@@ -182,6 +650,7 @@ function WorkItemModal({
         status,
         nextAction: nextAction.trim() || undefined,
         blockedReason: blockedReason.trim() || undefined,
+        attachments: pendingFiles,
       });
       return;
     }
@@ -218,6 +687,20 @@ function WorkItemModal({
 
             <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto px-5 py-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
               <div className="grid content-start gap-4">
+                {error ? (
+                  <div className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">
+                    {error}
+                  </div>
+                ) : null}
+                {!error && notice ? (
+                  <div className="flex items-start gap-2 rounded-lg border border-success/30 bg-success-soft px-3 py-2 text-sm text-fg" role="status" aria-live="polite">
+                    <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden />
+                    <div className="min-w-0">
+                      <div className="font-medium text-success">{notice.title}</div>
+                      <div className="mt-1 text-fg-muted">{notice.message}</div>
+                    </div>
+                  </div>
+                ) : null}
                 <label className="grid gap-1.5 text-sm">
                   <span className="font-medium text-fg-muted">{t.create.titleLabel}</span>
                   <input
@@ -245,6 +728,18 @@ function WorkItemModal({
                   <span className="font-medium text-fg-muted">{t.create.descriptionLabel}</span>
                   <textarea className="min-h-28 rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent" value={description} onChange={(event) => setDescription(event.target.value)} />
                 </label>
+                <WorkItemAttachmentsSection
+                  mode={mode}
+                  item={item}
+                  pendingFiles={pendingFiles}
+                  busy={busy}
+                  t={t}
+                  onPendingFilesChange={setPendingFiles}
+                  onUpload={onAddAttachments}
+                  onRemove={onRemoveAttachment}
+                  onDownload={onDownloadAttachment}
+                  onPreviewError={onPreviewError}
+                />
                 {mode === 'detail' ? (
                   <>
                     <label className="grid gap-1.5 text-sm">
@@ -333,6 +828,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
   const [viewMode, setViewMode] = useState<'list' | 'board'>('board');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<WorkItemNotice>(null);
   const [busy, setBusy] = useState(false);
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [dropStatus, setDropStatus] = useState<WorkItemStatus | null>(null);
@@ -368,6 +864,8 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
     if (!createRequestKey) return;
     setSelectedItem(null);
     setSelectedEvents([]);
+    setError(null);
+    setNotice(null);
     setCreateOpen(true);
   }, [createRequestKey]);
 
@@ -385,6 +883,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
   const updateItem = useCallback(async (item: WorkItem, patch: Parameters<typeof patchWorkItem>[1]) => {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await patchWorkItem(item.id, patch);
       if (res.item.archivedAt) {
@@ -393,24 +892,30 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
         setTotal((value) => Math.max(0, value - 1));
       } else {
         updateLocalItem(res.item);
+        const nextNotice = { title: t.feedback.savedTitle, message: t.feedback.savedNext };
+        setNotice(nextNotice);
+        showToast({ type: 'success', title: nextNotice.title, message: nextNotice.message });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
-  }, [updateLocalItem]);
+  }, [t.feedback.savedNext, t.feedback.savedTitle, updateLocalItem]);
 
   const openItem = useCallback(async (item: WorkItem) => {
     setSelectedItem(item);
     setSelectedEvents([]);
+    setError(null);
+    setNotice(null);
     const res = await fetchWorkItemEvents(item.id).catch(() => null);
     if (res) setSelectedEvents(res.events);
   }, []);
 
-  const createItem = useCallback(async (input: { title: string; description?: string; priority: WorkItemPriority; status: WorkItemStatus; nextAction?: string; blockedReason?: string }) => {
+  const createItem = useCallback(async (input: { title: string; description?: string; priority: WorkItemPriority; status: WorkItemStatus; nextAction?: string; blockedReason?: string; attachments?: File[] }) => {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await createWorkItem(projectId, input);
       setItems((current) => [res.item, ...current]);
@@ -419,16 +924,63 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
       setSelectedItem(res.item);
       const events = await fetchWorkItemEvents(res.item.id).catch(() => ({ events: [] }));
       setSelectedEvents(events.events);
+      const nextNotice = { title: t.feedback.createdTitle, message: t.feedback.createdNext };
+      setNotice(nextNotice);
+      showToast({ type: 'success', title: nextNotice.title, message: nextNotice.message });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setBusy(false);
     }
-  }, [projectId]);
+  }, [projectId, t.feedback.createdNext, t.feedback.createdTitle]);
+
+  const addAttachments = useCallback(async (item: WorkItem, files: File[]) => {
+    if (!files.length) return;
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await uploadWorkItemAttachments(item.id, files);
+      updateLocalItem(res.item);
+      const events = await fetchWorkItemEvents(res.item.id).catch(() => ({ events: [] }));
+      setSelectedEvents(events.events);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [updateLocalItem]);
+
+  const removeAttachment = useCallback(async (item: WorkItem, attachment: WorkItemAttachment) => {
+    setBusy(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await deleteWorkItemAttachment(item.id, attachment.id);
+      updateLocalItem(res.item);
+      const events = await fetchWorkItemEvents(res.item.id).catch(() => ({ events: [] }));
+      setSelectedEvents(events.events);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [updateLocalItem]);
+
+  const downloadAttachment = useCallback(async (item: WorkItem, attachment: WorkItemAttachment) => {
+    setError(null);
+    setNotice(null);
+    try {
+      await downloadWorkItemAttachment(item.id, attachment);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, []);
 
   const startChat = useCallback(async (item: WorkItem) => {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await startWorkItemChat(item.id);
       updateLocalItem(res.item);
@@ -444,6 +996,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
   const createGoal = useCallback(async (item: WorkItem) => {
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await createWorkItemGoal(item.id);
       updateLocalItem(res.item);
@@ -474,7 +1027,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
 
   return (
     <section id="project-panel-work-items" role="tabpanel" aria-labelledby="project-tab-work-items" className="grid gap-4">
-      <div className="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-edge bg-surface-panel px-3 py-2">
+      <div className="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg bg-surface-panel px-3 py-2 shadow-surface">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <div className="min-w-0 shrink-0">
             <h2 className="text-sm font-semibold leading-5 text-fg">{t.title}</h2>
@@ -494,7 +1047,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
           </div>
           <button
             type="button"
-            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel disabled:cursor-wait disabled:opacity-70"
+            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-surface-base px-2.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel disabled:cursor-wait disabled:opacity-70"
             aria-label={loading ? t.refreshing : t.refresh}
             aria-busy={loading}
             title={loading ? t.refreshing : t.refresh}
@@ -510,7 +1063,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
       {error ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div> : null}
 
       {viewMode === 'list' ? (
-        <div className={cn('overflow-hidden rounded-lg border border-edge bg-surface-panel transition-opacity', loading && 'opacity-60')}>
+        <div className={cn('overflow-hidden rounded-lg bg-surface-panel shadow-surface transition-opacity', loading && 'opacity-60')}>
           {items.length ? items.map((item) => (
             <div key={item.id} className="grid w-full gap-1 border-b border-edge px-4 py-3 text-left last:border-b-0 hover:bg-surface-hover">
               <div className="flex items-center justify-between gap-3">
@@ -518,6 +1071,12 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
                   {item.title}
                 </button>
                 <div className="flex shrink-0 items-center gap-2">
+                  {item.attachments?.length ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-xs text-fg-muted">
+                      <Paperclip className="size-3" aria-hidden />
+                      {item.attachments.length}
+                    </span>
+                  ) : null}
                   <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusTone(item.status))}>{t.statuses[item.status]}</span>
                   <Link
                     to={`/work-items/${encodeURIComponent(item.id)}`}
@@ -549,8 +1108,8 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
               <section
                 key={column.status}
                 className={cn(
-                  'flex h-full w-72 min-w-72 max-w-72 shrink-0 flex-col overflow-hidden rounded-lg border bg-surface-panel/60',
-                  dropStatus === column.status ? 'border-accent ring-1 ring-accent/30' : 'border-edge',
+                  'flex h-full w-72 min-w-72 max-w-72 shrink-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface ring-1 ring-transparent',
+                  dropStatus === column.status && 'bg-surface-active/35 ring-accent/40',
                 )}
                 aria-label={column.title}
                 onDragOver={(event) => {
@@ -591,7 +1150,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
                       <WorkItemCardSkeleton />
                     </div>
                   ) : (
-                    <div className="rounded-lg border border-dashed border-edge bg-surface-base px-3 py-6 text-center text-xs text-fg-subtle">
+                    <div className="rounded-lg bg-surface-base px-3 py-6 text-center text-xs text-fg-subtle">
                       {t.emptyColumn}
                     </div>
                   )}
@@ -613,16 +1172,27 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
         item={selectedItem}
         events={selectedEvents}
         busy={busy}
+        error={error}
+        notice={notice}
         t={t}
         onClose={() => {
           setCreateOpen(false);
           setSelectedItem(null);
           setSelectedEvents([]);
+          setError(null);
+          setNotice(null);
         }}
         onCreate={createItem}
         onSave={(item, patch) => void updateItem(item, patch)}
         onStartChat={startChat}
         onCreateGoal={createGoal}
+        onAddAttachments={(item, files) => void addAttachments(item, files)}
+        onRemoveAttachment={(item, attachment) => void removeAttachment(item, attachment)}
+        onDownloadAttachment={(item, attachment) => void downloadAttachment(item, attachment)}
+        onPreviewError={(message) => {
+          setNotice(null);
+          setError(message);
+        }}
       />
     </section>
   );

@@ -196,6 +196,8 @@
         "updated": "已更新",
         "status_changed": "状态已变更",
         "archived": "已归档",
+        "attachment_added": "已添加附件",
+        "attachment_removed": "已移除附件",
         "chat_started": "已启动会话",
         "goal_created": "已创建目标",
         "workflow_started": "已启动工作流",
@@ -206,6 +208,12 @@
         "update_suggestion_applied": "已应用更新",
         "update_suggestion_dismissed": "已忽略更新"
       },
+      "feedback": {
+        "createdTitle": "工作项已创建",
+        "createdNext": "下一步可以启动会话推进，或创建目标把它纳入持续跟进。",
+        "savedTitle": "修改已保存",
+        "savedNext": "下一步可以启动会话继续处理，或创建目标跟踪后续进展。"
+      },
       "create": {
         "short": "新建",
         "header": "新建工作项",
@@ -215,6 +223,13 @@
         "priorityLabel": "优先级",
         "cancel": "取消",
         "submit": "创建"
+      },
+      "attachments": {
+        "title": "附件",
+        "add": "添加附件",
+        "empty": "暂无附件。",
+        "download": "下载附件",
+        "remove": "移除附件"
       },
       "detail": {
         "description": "围绕这个工作项持续推进，直到完成。",
@@ -319,6 +334,13 @@
       "empty": "当前项目暂无会话。",
       "emptyTitle": "还没有项目会话",
       "emptyDescription": "从页面顶部的新建会话启动后，相关工作、目标和摘要会归在一起。",
+      "searchPlaceholder": "搜索会话",
+      "clearSearch": "清除会话搜索",
+      "noMatches": "没有匹配的会话",
+      "fallbackTitle": "会话",
+      "sessionKey": "会话 ID",
+      "agent": "Agent",
+      "updated": "更新",
       "meta": "{{agent}} · {{messages}}",
       "metaWithTime": "{{agent}} · {{messages}} · {{time}}"
     },

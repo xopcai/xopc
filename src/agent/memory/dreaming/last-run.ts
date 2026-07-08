@@ -16,7 +16,7 @@ export type DreamingDeepPhaseSkipped = {
 };
 
 /**
- * On-disk / API shape for `memory/.dreams/last-run.json` (deep promotion sweep).
+ * On-disk / API shape for an agent's `memories/.dreams/last-run.json`.
  */
 export type DreamingDeepLastRun = {
   version: typeof DREAMING_LAST_RUN_FORMAT_VERSION;
@@ -194,10 +194,10 @@ export function emptyDeepPhaseSkipped(): DreamingDeepPhaseSkipped {
 }
 
 export async function writeDreamingDeepLastRun(params: {
-  workspaceDir: string;
+  dreamingRoot: string;
   lastRun: DreamingDeepLastRun;
 }): Promise<void> {
-  const fullPath = path.join(params.workspaceDir, DREAMING_LAST_RUN_RELATIVE);
+  const fullPath = path.join(params.dreamingRoot, DREAMING_LAST_RUN_RELATIVE);
   await fs.mkdir(path.dirname(fullPath), { recursive: true });
   const tmp = `${fullPath}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, `${JSON.stringify(params.lastRun, null, 2)}\n`, 'utf-8');

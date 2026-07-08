@@ -54,7 +54,7 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
   return (
     <section
       className={cn(
-        'flex h-full w-80 shrink-0 snap-center flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel/40',
+        'flex h-full w-80 shrink-0 snap-center flex-col overflow-hidden rounded-2xl bg-surface-panel/40 shadow-surface',
       )}
       aria-label={columnTitle(column.id, labels)}
     >
@@ -70,7 +70,7 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
 
       <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-2.5">
         {visibleRuns.length === 0 ? (
-          <div className="flex min-h-32 items-center justify-center rounded-xl border border-dashed border-edge bg-surface-panel/40 px-4 py-6 text-center text-xs text-fg-subtle">
+          <div className="flex min-h-32 items-center justify-center rounded-xl bg-surface-panel/40 px-4 py-6 text-center text-xs text-fg-subtle">
             {labels.boardColumnEmpty}
           </div>
         ) : (

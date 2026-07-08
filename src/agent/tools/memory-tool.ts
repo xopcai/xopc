@@ -17,11 +17,12 @@ type MemorySearchParams = { query: string; maxResults?: number; minScore?: numbe
 
 export interface MemoryToolOptions {
   workspaceDir: string;
+  dreamingRoot: string;
   getMemoryManager: () => MemoryManager;
 }
 
 export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
-  const { workspaceDir, getMemoryManager } = options;
+  const { dreamingRoot, getMemoryManager } = options;
   return {
     name: 'memory_search',
     label: '🔍 Memory Search',
@@ -54,7 +55,7 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
         }
         // Dreaming: record short-term recall evidence from memory_search.
         void recordDreamingRecalls({
-          workspaceDir,
+          dreamingRoot,
           query,
           matches: results.map((entry) => ({
             file: entry.citation.path ?? entry.record.source.path ?? entry.record.id,

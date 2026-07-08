@@ -19,7 +19,7 @@ function resolveConfig(overrides?: Partial<DreamingLightConfig>): DreamingLightC
 }
 
 export async function runLightSweep(params: {
-  workspaceDir: string;
+  dreamingRoot: string;
   config?: Partial<DreamingLightConfig>;
   now?: Date;
 }): Promise<{
@@ -38,7 +38,7 @@ export async function runLightSweep(params: {
     ? 'light sweep disabled: no implicit file source'
     : 'light sweep disabled';
 
-  await writeLastRun(params.workspaceDir, {
+  await writeLastRun(params.dreamingRoot, {
     runId, startedAt, cfg, ok: true, reason, startMs,
     light: { scannedEntries: 0, newSignals: 0, deduped: 0 },
   });
@@ -48,7 +48,7 @@ export async function runLightSweep(params: {
 // ── Last-run writer ────────────────────────────────────────────────────
 
 async function writeLastRun(
-  workspaceDir: string,
+  dreamingRoot: string,
   params: {
     runId: string;
     startedAt: string;
@@ -77,7 +77,7 @@ async function writeLastRun(
     ...(params.errorMessage ? { errorMessage: params.errorMessage } : {}),
   };
 
-  const lastRunPath = path.join(workspaceDir, DREAMING_DIR_RELATIVE, 'last-run-light.json');
+  const lastRunPath = path.join(dreamingRoot, DREAMING_DIR_RELATIVE, 'last-run-light.json');
   await fs.mkdir(path.dirname(lastRunPath), { recursive: true });
   const tmp = `${lastRunPath}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(tmp, `${JSON.stringify(lastRun, null, 2)}\n`, 'utf-8');

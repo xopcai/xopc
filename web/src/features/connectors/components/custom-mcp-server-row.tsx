@@ -61,13 +61,13 @@ export function CustomMcpServerRow({
 
   return (
     <div
-      className="flex h-full min-h-[10.5rem] cursor-pointer flex-col rounded-lg border border-edge bg-surface-panel p-4 shadow-surface transition-colors hover:border-accent/50"
+      className="flex h-full min-h-[10.5rem] cursor-pointer flex-col rounded-lg bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/45"
       onClick={onEdit}
     >
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="truncate text-sm font-semibold text-fg">{row.id.trim() || t.cardUntitled}</h3>
-          <span className="rounded-full border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted">
+          <span className="rounded-full bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted">
             {cs.customBadge}
           </span>
           <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">

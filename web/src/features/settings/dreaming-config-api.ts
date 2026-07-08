@@ -19,6 +19,7 @@ export type DreamingDeepConfigState = {
   cron: string;
   minScore: number;
   minRecallCount: number;
+  minUniqueQueries: number;
   limit: number;
   recencyHalfLifeDays: number;
   maxAgeDays: number;
@@ -62,6 +63,7 @@ const DEEP_DEFAULTS: DreamingDeepConfigState = {
   cron: '0 3 * * *',
   minScore: 0.8,
   minRecallCount: 3,
+  minUniqueQueries: 3,
   limit: 10,
   recencyHalfLifeDays: 14,
   maxAgeDays: 30,
@@ -140,6 +142,7 @@ export function normalizeDreamingFromConfig(config: unknown): DreamingConfigStat
       cron: typeof deepRaw.cron === 'string' && deepRaw.cron.trim() ? deepRaw.cron.trim() : DEEP_DEFAULTS.cron,
       minScore: clamp01(toNum(deepRaw.minScore, DEEP_DEFAULTS.minScore), DEEP_DEFAULTS.minScore),
       minRecallCount: Math.max(1, toInt(deepRaw.minRecallCount, DEEP_DEFAULTS.minRecallCount)),
+      minUniqueQueries: Math.max(1, toInt(deepRaw.minUniqueQueries, DEEP_DEFAULTS.minUniqueQueries)),
       limit: toInt(deepRaw.limit, DEEP_DEFAULTS.limit),
       recencyHalfLifeDays: Math.max(1, toNum(deepRaw.recencyHalfLifeDays, DEEP_DEFAULTS.recencyHalfLifeDays)),
       maxAgeDays: Math.max(1, toNum(deepRaw.maxAgeDays, DEEP_DEFAULTS.maxAgeDays)),
@@ -189,6 +192,7 @@ export async function patchDreamingConfig(
               ...(state.deep.cron.trim() ? { cron: state.deep.cron.trim() } : {}),
               minScore: clamp01(state.deep.minScore, DEEP_DEFAULTS.minScore),
               minRecallCount: Math.max(1, Math.floor(state.deep.minRecallCount)),
+              minUniqueQueries: Math.max(1, Math.floor(state.deep.minUniqueQueries)),
               limit: Math.max(0, Math.floor(state.deep.limit)),
               recencyHalfLifeDays: Math.max(1, state.deep.recencyHalfLifeDays),
               maxAgeDays: Math.max(1, state.deep.maxAgeDays),
