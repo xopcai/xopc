@@ -107,6 +107,7 @@ export type ConnectorInstance = {
   lastConnectedAt?: string;
   lastError?: string;
   secretStatus: Record<string, boolean>;
+  config?: Record<string, unknown>;
   materialized:
     | {
         type: 'mcp';
@@ -337,6 +338,31 @@ export async function installConnector(
   );
   void revalidateGatewayConfig();
   return requirePayload(response, 'Could not install connector.').instance;
+}
+
+export async function previewConnector(
+  connector: ConnectorDefinition,
+  input: Omit<ConnectorInstallInput, 'definition'> = {},
+): Promise<ConnectorHealthResult> {
+  const response = await fetchJson<ApiEnvelope<{ preview: ConnectorHealthResult }>>(
+    apiUrl('/api/connectors/preview'),
+    {
+      method: 'POST',
+      body: JSON.stringify({ ...input, definition: connector }),
+    },
+  );
+  return requirePayload(response, 'Could not preview connector capabilities.').preview;
+}
+
+export async function updateConnectorConfig(
+  instanceId: string,
+  input: Omit<ConnectorInstallInput, 'definition'>,
+): Promise<ConnectorInstance> {
+  const response = await fetchJson<ApiEnvelope<{ instance: ConnectorInstance }>>(
+    apiUrl(`/api/connectors/${encodeURIComponent(instanceId)}/config`),
+    { method: 'POST', body: JSON.stringify(input) },
+  );
+  return requirePayload(response, 'Could not update connector config.').instance;
 }
 
 export async function removeConnector(instanceId: string): Promise<void> {

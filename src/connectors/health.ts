@@ -4,7 +4,8 @@ import {
 } from '../agent/mcp/bundle-mcp-materialize.js';
 import type { Config } from '../config/schema.js';
 import { getConnectorInstance } from './instances.js';
-import type { ConnectorHealthResult, ConnectorHealthStatus } from './types.js';
+import { materializeConnectorMcpServer } from './materialize.js';
+import type { ConnectorDefinition, ConnectorHealthResult, ConnectorHealthStatus, ConnectorInstallInput } from './types.js';
 
 function classifyConnectorHealthError(error: unknown): ConnectorHealthStatus {
   const message = error instanceof Error ? error.message : String(error);
@@ -99,6 +100,73 @@ export async function testConnectorInstance(config: Config, serverId: string): P
     const status = classifyConnectorHealthError(error);
     return {
       serverId,
+      ok: false,
+      status,
+      toolCount: 0,
+      resourceCount: 0,
+      promptCount: 0,
+      tools: [],
+      resources: [],
+      prompts: [],
+      error: error instanceof Error ? error.message : String(error),
+      action: healthActionForStatus(status),
+    };
+  }
+}
+
+export async function previewConnectorDefinition(
+  config: Config,
+  definition: ConnectorDefinition,
+  input: ConnectorInstallInput = {},
+): Promise<ConnectorHealthResult> {
+  if (definition.runtime.type !== 'mcp') {
+    return {
+      serverId: definition.id,
+      ok: false,
+      status: 'unknown_error',
+      toolCount: 0,
+      resourceCount: 0,
+      promptCount: 0,
+      tools: [],
+      resources: [],
+      prompts: [],
+      error: `Connector type "${definition.runtime.type}" does not support MCP capability preview.`,
+    };
+  }
+
+  try {
+    const { serverId, server } = materializeConnectorMcpServer(definition, input);
+    const workspaceDir = getWorkspacePath(config) || './workspace';
+    const previewConfig: Config = {
+      ...config,
+      mcp: {
+        ...(config.mcp ?? {}),
+        servers: {
+          ...(config.mcp?.servers ?? {}),
+          [serverId]: server,
+        },
+      },
+    };
+    const capabilities = await listBundleMcpServerCapabilitiesForGateway({
+      workspaceDir,
+      cfg: previewConfig,
+      serverId,
+    });
+    return {
+      serverId,
+      ok: true,
+      status: 'ok',
+      toolCount: capabilities.toolCount,
+      resourceCount: capabilities.resourceCount,
+      promptCount: capabilities.promptCount,
+      tools: capabilities.tools,
+      resources: capabilities.resources,
+      prompts: capabilities.prompts,
+    };
+  } catch (error) {
+    const status = classifyConnectorHealthError(error);
+    return {
+      serverId: definition.id,
       ok: false,
       status,
       toolCount: 0,

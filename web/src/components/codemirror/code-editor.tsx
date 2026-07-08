@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
-import { EditorState, type Extension } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { EditorView, keymap, highlightActiveLine, lineNumbers } from '@codemirror/view';
+import { EditorView, keymap, highlightActiveLine, lineNumbers, type KeyBinding } from '@codemirror/view';
 
 import { appCodeMirrorTheme } from './app-editor-theme';
 
@@ -19,6 +19,8 @@ export interface CodeEditorProps {
   language?: Extension;
   isDark?: boolean;
   className?: string;
+  lineWrap?: boolean;
+  keyBindings?: readonly KeyBinding[];
 }
 
 /**
@@ -33,13 +35,19 @@ export function CodeEditor({
   language,
   isDark = false,
   className,
+  lineWrap = false,
+  keyBindings,
 }: CodeEditorProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<EditorView | null>(null);
+  const lineWrapCompartmentRef = useRef(new Compartment());
+  const keymapCompartmentRef = useRef(new Compartment());
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
   const seedRef = useRef(initialContent);
   seedRef.current = initialContent;
+  const keyBindingsRef = useRef(keyBindings);
+  keyBindingsRef.current = keyBindings;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -49,7 +57,12 @@ export function CodeEditor({
       highlightActiveLine(),
       history(),
       isDark ? oneDark : syntaxHighlighting(defaultHighlightStyle),
-      keymap.of([...defaultKeymap, ...historyKeymap]),
+      keymapCompartmentRef.current.of(keymap.of([
+        ...(keyBindingsRef.current ?? []),
+        ...defaultKeymap,
+        ...historyKeymap,
+      ])),
+      lineWrapCompartmentRef.current.of(lineWrap ? EditorView.lineWrapping : []),
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           onChangeRef.current(update.state.doc.toString());
@@ -74,6 +87,22 @@ export function CodeEditor({
       editorRef.current = null;
     };
   }, [isDark, language]);
+
+  useEffect(() => {
+    editorRef.current?.dispatch({
+      effects: lineWrapCompartmentRef.current.reconfigure(lineWrap ? EditorView.lineWrapping : []),
+    });
+  }, [lineWrap]);
+
+  useEffect(() => {
+    editorRef.current?.dispatch({
+      effects: keymapCompartmentRef.current.reconfigure(keymap.of([
+        ...(keyBindings ?? []),
+        ...defaultKeymap,
+        ...historyKeymap,
+      ])),
+    });
+  }, [keyBindings]);
 
   return <div ref={containerRef} className={`size-full overflow-hidden ${className ?? ''}`} />;
 }

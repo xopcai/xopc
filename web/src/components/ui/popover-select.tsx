@@ -4,6 +4,7 @@ import { Children, Fragment, isValidElement, useId, useState, type ReactNode, ty
 
 import { cn } from '@/lib/cn';
 import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
+import { useSettingsShellPopoverPortalContainer } from '@/lib/settings-shell-layer-context';
 
 export type PopoverSelectOption = {
   value: string;
@@ -74,6 +75,7 @@ export function PopoverSelect({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const portalContainer = useSettingsShellPopoverPortalContainer();
   const selected = options.find((option) => option.value === value);
   const label = selected?.label ?? (value ? `${value} · unavailable` : placeholder);
   let lastGroup: string | undefined;
@@ -99,7 +101,7 @@ export function PopoverSelect({
           <ChevronsUpDown className="size-4 shrink-0 text-fg-subtle" aria-hidden="true" />
         </button>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={portalContainer ?? undefined}>
         <Popover.Content
           side={side}
           align={align}

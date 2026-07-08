@@ -14,7 +14,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useState, type MouseEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CircleStop, Copy, Check, GitBranch, MoreHorizontal, Save } from 'lucide-react';
+import { CircleStop, Copy, Check, GitBranch, Save } from 'lucide-react';
 
 import type { ToolUseContent } from '@/features/chat/messages/messages.types';
 import { cn } from '@/lib/cn';
@@ -50,13 +50,8 @@ export type WorkflowCardLabels = {
   cancel: string;
   saveAria: string;
   saveTitle: string;
-  savePlaceholder: string;
-  saveSubmit: string;
-  saveCancel: string;
-  saveDispatched: string;
   copyAria: string;
   copyDoneAria: string;
-  moreAria: string;
   openInWorkflowsAria: string;
   openInWorkflowsTitle: string;
   viewSubagentsHeading: string;
@@ -68,6 +63,24 @@ export type WorkflowCardLabels = {
   currentProgressTpl: (phase: string | undefined, running: number, done: number, total: number) => string;
   recentLogsHeading: string;
   showAllLogs: string;
+  live: {
+    details: string;
+    openRun: string;
+    stop: string;
+    close: string;
+    title: string;
+    overview: string;
+    agents: string;
+    logs: string;
+    result: string;
+    currentState: string;
+    runId: string;
+    elapsed: string;
+    progress: (done: number, total: number) => string;
+    activeFallback: string;
+    noResult: string;
+    status: Record<'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'timeout', string>;
+  };
 };
 
 export interface WorkflowCardProps {
@@ -77,12 +90,6 @@ export interface WorkflowCardProps {
   sessionKey?: string | null;
   /** Cancel handler — wired by parent (typically calls existing /abort path). */
   onAbort?: () => void;
-  /**
-   * Send raw text into the user's chat composer. Used by "Save as…" to
-   * synthesize `/workflow save <name>` and submit it through the same SSE
-   * channel commands already use. When omitted, the save button is hidden.
-   */
-  onSendChatMessage?: (text: string) => void;
   labels: WorkflowCardLabels;
   className?: string;
 }
@@ -163,7 +170,7 @@ export const WorkflowCard = memo(function WorkflowCard({
       return;
     }
     const name = snapshot?.name?.trim();
-    if (name) navigate(`/workflows?tab=catalog&def=${encodeURIComponent(name)}`);
+    if (name) navigate(`/workflows?def=${encodeURIComponent(name)}`);
   }, [navigate, snapshot?.name, snapshot?.runId]);
 
   const openWorkflowCopyEditor = useCallback(() => {
@@ -300,22 +307,6 @@ export const WorkflowCard = memo(function WorkflowCard({
               <GitBranch className="size-4" />
             </button>
           ) : null}
-          <button
-            type="button"
-            className={cn(
-              'inline-flex size-7 items-center justify-center rounded-md text-fg-muted',
-              'hover:bg-surface-hover hover:text-fg',
-              interaction.transition,
-              interaction.focusRingPanel,
-              // P2 menu is intentionally a no-op placeholder; opens nothing
-              // until W-P2b ships its action menu. Hidden when no actions.
-              'invisible',
-            )}
-            aria-label={labels.moreAria}
-            title={labels.moreAria}
-          >
-            <MoreHorizontal className="size-4" />
-          </button>
         </>
       ) : null}
     </>
@@ -424,4 +415,3 @@ function extractScriptPreview(block: ToolUseContent): string | undefined {
   }
   return undefined;
 }
-

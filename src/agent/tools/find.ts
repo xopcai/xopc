@@ -32,6 +32,8 @@ export function createFindTool(cwd: string): AgentTool {
 		label: '📁 find',
 		description: 'Find files by glob pattern (e.g., *.ts, **/*.json).',
 		parameters: findSchema,
+		supportsParallel: true,
+		idempotent: true,
 		execute: async (
 			_toolCallId: string,
 			params: any,

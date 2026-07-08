@@ -26,6 +26,7 @@ import { buildSettingsFieldHits } from '@/features/search/global-command-palette
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/palette/command-palette-api';
 import { dispatchFillChatComposer } from '@/features/chat/composer/fill-composer-dispatch';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
+import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-defaults';
 import { searchWorkspaceFiles } from '@/features/chat/palette/at-mention-api';
 import { listSessions } from '@/features/sessions/session-api';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
@@ -63,6 +64,27 @@ function buildGlobalDefaultModelPatch(modelRef: string) {
       },
     },
   };
+}
+
+function selectChatAgentFromPalette(
+  agentId: string,
+  pathname: string,
+  navigate: ReturnType<typeof useNavigate>,
+  close: () => void,
+) {
+  const next = agentId.trim().toLowerCase();
+  if (!next) return;
+  try {
+    globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, next);
+  } catch {
+    /* noop */
+  }
+  if (pathname.startsWith('/chat')) {
+    window.dispatchEvent(new CustomEvent('xopc-set-chat-agent', { detail: { agentId: next } }));
+  } else {
+    navigate('/chat/new', { state: { agentId: next } });
+  }
+  close();
 }
 
 function iconFor(hit: GlobalHit) {
@@ -573,8 +595,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
         }
         const row = displayedLayerRows[selectedIndex - 1];
         if (!row) return;
-        window.dispatchEvent(new CustomEvent('xopc-set-chat-agent', { detail: { agentId: row.id } }));
-        onClose();
+        selectChatAgentFromPalette(row.id, pathname, navigate, onClose);
         dispatchUi({ type: 'resetMain' });
         return;
       }
@@ -688,10 +709,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
                             dispatchUi({ type: 'resetMain' });
                           })();
                         } else {
-                          window.dispatchEvent(
-                            new CustomEvent('xopc-set-chat-agent', { detail: { agentId: row.id } }),
-                          );
-                          onClose();
+                          selectChatAgentFromPalette(row.id, pathname, navigate, onClose);
                           dispatchUi({ type: 'resetMain' });
                         }
                       }}

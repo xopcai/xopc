@@ -22,9 +22,9 @@ export const MessageList = memo(function MessageList({
   onRetryUserMessageRound,
   deleteRoundDisabled,
   onAbortCurrentTurn,
-  onSendUserMessage,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
+  onSuggestWorkItemUpdate,
 }: {
   messages: Message[];
   authToken?: string;
@@ -40,9 +40,9 @@ export const MessageList = memo(function MessageList({
   onRetryUserMessageRound?: (messageIndex: number) => void;
   deleteRoundDisabled?: boolean;
   onAbortCurrentTurn?: () => void;
-  onSendUserMessage?: (text: string) => void;
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
+  onSuggestWorkItemUpdate?: (content: string) => Promise<void> | void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -101,9 +101,9 @@ export const MessageList = memo(function MessageList({
               }
               deleteRoundDisabled={deleteRoundDisabled}
               onAbortCurrentTurn={onAbortCurrentTurn}
-              onSendUserMessage={onSendUserMessage}
               onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
               onExtractAssistantTask={onExtractAssistantTask}
+              onSuggestWorkItemUpdate={onSuggestWorkItemUpdate}
               suppressAssistantActions={streaming}
             />
           </div>

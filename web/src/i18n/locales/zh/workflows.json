@@ -125,7 +125,6 @@
     "boardColumnEmpty": "暂无任务",
     "boardExpandSucceeded": "展开全部（{{count}}）",
     "boardCollapseSucceeded": "收起",
-    "boardSucceededCapHint": "还有 {{count}} 条近 7 天内的已完成运行未显示。",
     "pickStartTitle": "选择工作流",
     "pickStartHint": "按分类浏览模板，然后启动新的运行。",
     "pickStartClose": "关闭",

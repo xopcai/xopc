@@ -86,6 +86,7 @@ export class WorkflowSessionBridge {
       await this.writeParentRunLink({
         parentSessionKey: params.parentSessionKey.trim(),
         runId: params.runId,
+        ownerAgentId: params.agentId,
         workflowSessionKey: sessionKey,
         definitionId: params.definitionId,
         goal: params.goal,
@@ -115,6 +116,7 @@ export class WorkflowSessionBridge {
       await this.writeParentRunLink({
         parentSessionKey,
         runId,
+        ownerAgentId: view.run.metadata?.agentId ?? '',
         workflowSessionKey: sessionKey,
         definitionId: view.run.definitionId,
         goal: view.run.goal,
@@ -170,6 +172,7 @@ export class WorkflowSessionBridge {
   private async writeParentRunLink(params: {
     parentSessionKey: string;
     runId: string;
+    ownerAgentId?: string;
     workflowSessionKey: string;
     definitionId: string;
     goal: string;
@@ -184,6 +187,7 @@ export class WorkflowSessionBridge {
       data: {
         kind: WORKFLOW_RUN_LINK_CONTEXT_KIND,
         runId: params.runId,
+        ...(params.ownerAgentId ? { ownerAgentId: params.ownerAgentId } : {}),
         workflowSessionKey: params.workflowSessionKey,
         definitionId: params.definitionId,
         goal: params.goal,

@@ -1,7 +1,7 @@
 import type { ImageContent } from '@earendil-works/pi-ai';
 
 export interface SessionSourceBinding {
-  kind: 'note';
+  kind: 'note' | 'work_item';
   sourceId: string;
   version: string;
   attachedAt: number;
@@ -26,7 +26,7 @@ export type AgentSourceContextResolver = (
 export function isSessionSourceBinding(value: unknown): value is SessionSourceBinding {
   if (!value || typeof value !== 'object') return false;
   const row = value as Record<string, unknown>;
-  return row.kind === 'note'
+  return (row.kind === 'note' || row.kind === 'work_item')
     && typeof row.sourceId === 'string'
     && row.sourceId.trim().length > 0
     && typeof row.version === 'string'

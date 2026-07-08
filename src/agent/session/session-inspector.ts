@@ -48,10 +48,10 @@ export interface SessionInspectorOptions {
   /** Effective config snapshot accessor (honours runtime overrides). */
   getConfig: () => Config | undefined;
   /**
-   * Nominal context window the session is budgeted against. Currently derived
-   * from the active model metadata, defaulting to 128k.
+   * Nominal context window the session is budgeted against. Derived from the
+   * effective session model metadata, defaulting to 128k.
    */
-  getContextWindow: () => number;
+  getContextWindow: (sessionKey: string) => number;
 }
 
 export interface SessionContextUsage {
@@ -76,6 +76,23 @@ export class SessionInspector {
     this.opts = opts;
   }
 
+  private async ensureEffectiveSessionModel(sessionKey: string): Promise<void> {
+    await this.opts.sessionHydrator.model(sessionKey);
+    const cfg = this.opts.getConfig();
+    if (!cfg) return;
+
+    const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+    const profileModelRef = profile.primaryModelRef?.trim();
+    if (profileModelRef) {
+      this.opts.modelManager.setSessionProfileDefault(sessionKey, profileModelRef, profile.fallbacks);
+    }
+  }
+
+  private async contextWindowForSession(sessionKey: string): Promise<number> {
+    await this.ensureEffectiveSessionModel(sessionKey);
+    return this.opts.getContextWindow(sessionKey);
+  }
+
   /**
    * Manual compaction triggered by a user / API. Always forces a compaction
    * pass (`force: true` by default) and evicts the in-memory agent so the
@@ -86,7 +103,7 @@ export class SessionInspector {
     options?: { instructions?: string; force?: boolean },
   ): Promise<CompactionResult> {
     const messages = await this.opts.sessionStore.load(sessionKey);
-    const contextWindow = this.opts.getContextWindow();
+    const contextWindow = await this.contextWindowForSession(sessionKey);
     const result = await this.opts.sessionStore.compact(
       sessionKey,
       messages,
@@ -128,7 +145,7 @@ export class SessionInspector {
   /** Rough context usage for TUI footer (estimated tokens vs nominal budget). */
   async contextUsage(sessionKey: string): Promise<SessionContextUsage> {
     const messages = await this.opts.sessionStore.load(sessionKey);
-    const contextWindow = this.opts.getContextWindow();
+    const contextWindow = await this.contextWindowForSession(sessionKey);
     const estimatedTokens = await this.opts.sessionStore.estimateTokenUsage(sessionKey, messages);
     const usagePercent =
       contextWindow > 0 ? Math.min(100, Math.round((estimatedTokens / contextWindow) * 100)) : null;
@@ -142,7 +159,7 @@ export class SessionInspector {
       throw new Error('SessionInspector requires a config snapshot to render report');
     }
     const messages = await this.opts.sessionStore.load(sessionKey);
-    const cw = this.opts.getContextWindow();
+    const cw = await this.contextWindowForSession(sessionKey);
     const computed = this.stats(sessionKey, messages);
     const model = this.opts.modelManager.getModelForSession(sessionKey);
     const sc = await this.opts.sessionConfigStore.get(sessionKey);
@@ -174,20 +191,12 @@ export class SessionInspector {
 
   /** Resolved thinking / model / workspace for the Web UI. */
   async agentConfig(sessionKey: string): Promise<SessionAgentConfigView> {
-    await this.opts.sessionHydrator.model(sessionKey);
+    await this.ensureEffectiveSessionModel(sessionKey);
     const cfg = this.opts.getConfig();
     if (!cfg) {
       throw new Error('SessionInspector requires a config snapshot to resolve agent config');
     }
     const sc = await this.opts.sessionConfigStore.get(sessionKey);
-
-    // Ensure model display matches the effective agent profile even before an Agent instance exists.
-    // Otherwise `ModelManager.getModelForSession()` falls back to the global default until the first turn creates the agent.
-    const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
-    const profileModelRef = profile.primaryModelRef?.trim();
-    if (profileModelRef) {
-      this.opts.modelManager.setSessionProfileDefault(sessionKey, profileModelRef, profile.fallbacks);
-    }
 
     const defThink = 'medium';
     const level = await resolveEffectiveThinkingLevel(this.opts.sessionConfigStore, sessionKey, null, defThink);

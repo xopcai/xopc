@@ -50,6 +50,7 @@ import { registerClarifyBridge } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { GoalNotificationService, GoalRunner, type EnqueueGoalRunOptions } from '../goals/index.js';
 import { ProjectService } from '../projects/index.js';
+import { buildWorkItemAgentContext, WorkItemService } from '../work-items/index.js';
 
 import { disposeAllSessionMcpRuntimes } from '../agent/mcp/bundle-mcp-tools.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
@@ -326,14 +327,20 @@ export class GatewayService {
       getAutomationService: () => this.automationService,
       getWorkflowRunService: () => this.createWorkflowRunService(),
       sourceContextResolver: async (binding) => {
-        if (binding.kind !== 'note') return null;
-        const note = await this.notesService.getNote(binding.sourceId);
-        if (!note) return null;
-        return buildNoteAgentContext({
-          note,
-          notesService: this.notesService,
-          config: this.config,
-        });
+        if (binding.kind === 'note') {
+          const note = await this.notesService.getNote(binding.sourceId);
+          if (!note) return null;
+          return buildNoteAgentContext({
+            note,
+            notesService: this.notesService,
+            config: this.config,
+          });
+        }
+        if (binding.kind === 'work_item') {
+          const item = new WorkItemService().getWorkItem(binding.sourceId);
+          return item ? buildWorkItemAgentContext(item) : null;
+        }
+        return null;
       },
       gatewayClarify: {
         requestClarification: (sessionKey, request) =>

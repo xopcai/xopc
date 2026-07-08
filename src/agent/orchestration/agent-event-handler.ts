@@ -24,6 +24,7 @@ import type { SelfVerifyMiddleware } from '../middleware/index.js';
 import type { SystemReminder } from '../prompt/system-reminder.js';
 import type { ToolUsageAnalyzer } from '../tools/usage-analyzer.js';
 import type { ErrorPatternMatcher } from '../tools/error-pattern-matcher.js';
+import type { TurnDiffTracker } from '../coding/index.js';
 import { extractTextContent } from '../context/workspace.js';
 import { createLogger } from '../../utils/logger.js';
 
@@ -426,6 +427,22 @@ function installSelfVerifyListener(bus: SessionEventBus, selfVerifyMiddleware: S
   });
 }
 
+function installTurnDiffTrackerListener(bus: SessionEventBus, turnDiffTracker: TurnDiffTracker): void {
+  bus.on('tool_execution_end', (event, context) => {
+    const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }> & {
+      args?: unknown;
+      result: unknown;
+    };
+    turnDiffTracker.recordToolResult({
+      sessionKey: context.sessionKey,
+      toolName: e.toolName,
+      args: e.args,
+      result: e.result,
+      isError: e.isError,
+    });
+  });
+}
+
 // ── Public façade ───────────────────────────────────────────────────────────
 
 export interface AgentEventHandlerConfig {
@@ -438,6 +455,7 @@ export interface AgentEventHandlerConfig {
   systemReminder: SystemReminder;
   toolUsageAnalyzer: ToolUsageAnalyzer;
   errorPatternMatcher: ErrorPatternMatcher;
+  turnDiffTracker?: TurnDiffTracker;
 }
 
 /**
@@ -463,6 +481,9 @@ export class AgentEventHandler {
     });
     installLifecycleHookListener(this.bus, config.lifecycleManager);
     installSystemReminderListener(this.bus, config.systemReminder);
+    if (config.turnDiffTracker) {
+      installTurnDiffTrackerListener(this.bus, config.turnDiffTracker);
+    }
     installSelfVerifyListener(this.bus, config.selfVerifyMiddleware);
     installToolUsageListener(this.bus, config.toolUsageAnalyzer);
     installToolChainListener(this.bus, config.toolChainTracker);

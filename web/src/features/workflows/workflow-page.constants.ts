@@ -1,8 +1,3 @@
-export const WORKFLOW_MAIN_TABS = ['catalog', 'active', 'history'] as const;
-export type WorkflowMainTab = (typeof WORKFLOW_MAIN_TABS)[number];
-
-export const WORKFLOW_MAIN_TAB_SET = new Set<string>(WORKFLOW_MAIN_TABS);
-
 export const WORKFLOW_CATEGORY_FILTERS = [
   'all',
   'code-review',
@@ -23,13 +18,21 @@ export const WORKFLOW_SOURCE_FILTER_SET = new Set<string>(WORKFLOW_SOURCE_FILTER
 export const WORKFLOW_SEARCH_PARAM = 'q';
 export const WORKFLOW_WF_FILTER_PARAM = 'wf';
 export const WORKFLOW_AGENT_PARAM = 'agent';
-/** @deprecated Legacy deep links — cleaned on load */
-export const WORKFLOW_TAB_PARAM = 'tab';
+export const WORKFLOW_VIEW_PARAM = 'view';
 export const WORKFLOW_RUN_PARAM = 'run';
+export const WORKFLOW_RUN_TAB_PARAM = 'runTab';
 export const WORKFLOW_TRIGGER_FILTER_PARAM = 'trigger';
 export const WORKFLOW_DEF_PARAM = 'def';
 export const WORKFLOW_START_PARAM = 'start';
 export const WORKFLOW_COPY_PARAM = 'copy';
+
+export const WORKFLOW_VIEW_MODES = ['operations', 'board'] as const;
+export type WorkflowViewMode = (typeof WORKFLOW_VIEW_MODES)[number];
+export const WORKFLOW_VIEW_MODE_SET = new Set<string>(WORKFLOW_VIEW_MODES);
+
+export const WORKFLOW_RUN_PANEL_TABS = ['result', 'process', 'diagnostics', 'artifacts', 'debug'] as const;
+export type WorkflowRunPanelTab = (typeof WORKFLOW_RUN_PANEL_TABS)[number];
+export const WORKFLOW_RUN_PANEL_TAB_SET = new Set<string>(WORKFLOW_RUN_PANEL_TABS);
 
 export const WORKFLOW_TRIGGER_FILTERS = ['all', 'automation', 'webui', 'chat', 'api'] as const;
 export type WorkflowTriggerFilter = (typeof WORKFLOW_TRIGGER_FILTERS)[number];

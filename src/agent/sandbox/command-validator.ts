@@ -69,6 +69,12 @@ const HIGH_PATTERNS: { pattern: RegExp; reason: string }[] = [
   { pattern: /\bsystemctl\s+(start|stop|restart|enable|disable)\b/, reason: 'Systemd service manipulation' },
   { pattern: /\blaunchctl\s+(load|unload|start|stop)\b/, reason: 'macOS launchctl manipulation' },
 
+  // Git operations that mutate repository state or publish externally. Read-only
+  // inspection such as status/log/diff/show remains allowed through exec_command.
+  { pattern: /\bgit\s+(?:-[^\s]+\s+)*(commit|push|checkout|switch|restore|reset|rebase|merge|cherry-pick|clean|apply|am|stash)\b/, reason: 'Git command may mutate repository state or publish changes' },
+  { pattern: /\bgit\s+(?:-[^\s]+\s+)*branch\s+(-[dD]|--delete|--move|-m|-M|--set-upstream-to)\b/, reason: 'Git branch mutation' },
+  { pattern: /\bgit\s+(?:-[^\s]+\s+)*tag\s+(-[adfs]|--delete|--annotate|--force|--sign)\b/, reason: 'Git tag mutation' },
+
   // Package manager with elevated privileges
   { pattern: /\bsudo\s+/, reason: 'Sudo command execution' },
   { pattern: /\bsu\s+-\s/, reason: 'Switch to root user' },

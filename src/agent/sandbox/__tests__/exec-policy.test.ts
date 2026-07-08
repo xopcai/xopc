@@ -66,6 +66,27 @@ describe('evaluateExecPolicy', () => {
     expect(result.allowed).toBe(true);
     expect(result.reason).toContain('Warning');
   });
+
+  it('allows read-only git inspection commands', () => {
+    for (const command of ['git status --short', 'git diff -- src/index.ts', 'git log --oneline -5', 'git show HEAD']) {
+      const result = evaluateExecPolicy({
+        command,
+        cwd: '/tmp/workspace',
+      });
+      expect(result.allowed).toBe(true);
+    }
+  });
+
+  it('blocks git commands that mutate repository state or publish changes', () => {
+    for (const command of ['git commit -m test', 'git push origin main', 'git checkout -- src/index.ts', 'git reset --hard HEAD', 'git clean -fd']) {
+      const result = evaluateExecPolicy({
+        command,
+        cwd: '/tmp/workspace',
+      });
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toContain('Git command');
+    }
+  });
 });
 
 describe('evaluateFilePolicy', () => {

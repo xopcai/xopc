@@ -5,9 +5,11 @@ import { useGatewayStore } from '@/stores/gateway-store';
 
 export interface WorkflowSessionMetadata {
   workflowRunId: string | null;
+  ownerAgentId: string | null;
   sessionType: string | null;
   sourceNoteId: string | null;
   sourceNoteTitle: string | null;
+  sourceWorkItemId: string | null;
 }
 
 /** Read workflow run binding from session metadata (`customData.workflowRunId`). */
@@ -26,6 +28,10 @@ export function useWorkflowSessionMetadata(sessionKey: string | null | undefined
         typeof detail.sessionType === 'string' && detail.sessionType.trim()
           ? detail.sessionType.trim()
           : null;
+      const ownerAgentId =
+        typeof detail.routing?.agentId === 'string' && detail.routing.agentId.trim()
+          ? detail.routing.agentId.trim()
+          : null;
       const rawSourceBinding = detail.customData?.sourceBinding;
       const sourceBinding = rawSourceBinding && typeof rawSourceBinding === 'object'
         ? rawSourceBinding as Record<string, unknown>
@@ -34,8 +40,12 @@ export function useWorkflowSessionMetadata(sessionKey: string | null | undefined
         sourceBinding?.kind === 'note' && typeof sourceBinding.sourceId === 'string' && sourceBinding.sourceId.trim()
           ? sourceBinding.sourceId.trim()
           : null;
+      const sourceWorkItemId =
+        sourceBinding?.kind === 'work_item' && typeof sourceBinding.sourceId === 'string' && sourceBinding.sourceId.trim()
+          ? sourceBinding.sourceId.trim()
+          : null;
       const sourceNoteTitle = null;
-      return { workflowRunId, sessionType, sourceNoteId, sourceNoteTitle };
+      return { workflowRunId, ownerAgentId, sessionType, sourceNoteId, sourceNoteTitle, sourceWorkItemId };
     },
     { revalidateOnFocus: false },
   );

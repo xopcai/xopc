@@ -1029,6 +1029,7 @@ export class AgentManager implements AgentInstanceGateway {
         tools,
         messages: [],
       },
+      toolExecution: 'parallel',
       streamFn: createExtensionAwareStreamFn(),
       getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
       beforeToolCall: async ({ toolCall, args }) => {

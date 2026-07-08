@@ -125,7 +125,6 @@
     "boardColumnEmpty": "Nothing here",
     "boardExpandSucceeded": "Show all ({{count}})",
     "boardCollapseSucceeded": "Show less",
-    "boardSucceededCapHint": "{{count}} more succeeded runs in the last 7 days are hidden.",
     "pickStartTitle": "Choose a workflow",
     "pickStartHint": "Browse templates by category, then start a new run.",
     "pickStartClose": "Close",

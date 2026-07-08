@@ -41,7 +41,7 @@ import {
   type WorkflowRunReplayScope,
   type WorkflowRunView,
 } from './workflow-api';
-import { ACTIVE_RUN_STATUSES } from './workflow-page.constants';
+import { ACTIVE_RUN_STATUSES, type WorkflowRunPanelTab } from './workflow-page.constants';
 import {
   collectWorkflowRunDiagnostics,
   formatDuration,
@@ -56,7 +56,6 @@ import {
 } from './workflow-page.utils';
 
 type WorkflowsMessages = ReturnType<typeof messages>['workflows'];
-type WorkflowRunPanelTab = 'result' | 'process' | 'diagnostics' | 'artifacts' | 'debug';
 
 function statusLabel(status: WorkflowRunView['run']['status'], labels: WorkflowsMessages): string {
   return labels.status[status] ?? status;
@@ -114,6 +113,8 @@ export function WorkflowRunPanel({
   loading,
   language,
   localeTag,
+  activeTab,
+  onTabChange,
   onCancel,
   onRetry,
   onReplay,
@@ -127,6 +128,8 @@ export function WorkflowRunPanel({
   loading: boolean;
   language: StoredLanguage;
   localeTag: string;
+  activeTab: WorkflowRunPanelTab;
+  onTabChange: (tab: WorkflowRunPanelTab) => void;
   onCancel: () => void;
   onRetry: () => void;
   onReplay: (scope: WorkflowRunReplayScope) => void;
@@ -140,7 +143,6 @@ export function WorkflowRunPanel({
   const navigate = useNavigate();
 
   const [processExpanded, setProcessExpanded] = useState(true);
-  const [activeTab, setActiveTab] = useState<WorkflowRunPanelTab>('result');
   const [logsExpanded, setLogsExpanded] = useState(false);
   const [drawerAgentId, setDrawerAgentId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
@@ -157,7 +159,6 @@ export function WorkflowRunPanel({
     const shouldExpandProcess = isActive || runStatus === 'failed' || runStatus === 'timeout';
 
     setProcessExpanded(shouldExpandProcess);
-    setActiveTab('result');
     setDrawerAgentId(null);
     setDownloadError(null);
   }, [view?.run.id, isActive, runStatus, view?.run.metrics.errorAgentCount]);
@@ -357,7 +358,7 @@ export function WorkflowRunPanel({
 
               <WorkflowRunTabs
                 activeTab={activeTab}
-                onChange={setActiveTab}
+                onChange={onTabChange}
                 labels={labels}
                 hasDiagnostics={hasDiagnostics}
                 artifactCount={outcome?.artifacts.length ?? view.artifacts.length}

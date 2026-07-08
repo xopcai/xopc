@@ -33,6 +33,7 @@ import { ToolUsageAnalyzer } from './tools/usage-analyzer.js';
 import { ToolChainTracker } from './tools/chain-tracker.js';
 import { ErrorPatternMatcher } from './tools/error-pattern-matcher.js';
 import { ContextMiddleware, SelfVerifyMiddleware } from './middleware/index.js';
+import { TurnDiffTracker } from './coding/index.js';
 import { LifecycleManager } from './lifecycle/index.js';
 import { CompactionLifecycleHandler } from './lifecycle/handlers/compaction.js';
 
@@ -127,6 +128,7 @@ export class AgentService {
   private toolChainTracker: ToolChainTracker;
   private errorPatternMatcher: ErrorPatternMatcher;
   private selfVerifyMiddleware: SelfVerifyMiddleware;
+  private turnDiffTracker: TurnDiffTracker;
   private contextMiddleware: ContextMiddleware;
 
   private messageRouter: MessageRouter;
@@ -269,8 +271,10 @@ export class AgentService {
       getWorkflowRunService: config.getWorkflowRunService,
       onSkillsUpdated: config.onSkillsUpdated,
       isWorkspaceTrusted: config.isWorkspaceTrusted,
-      getSelfVerifyPromptContext: (sessionKey, agentId) =>
+      getSelfVerifyPromptContext: (sessionKey, agentId) => [
         this.selfVerifyMiddleware.getPendingVerificationContext(sessionKey, agentId),
+        this.turnDiffTracker.buildFinalGuardContext(sessionKey),
+      ].filter(Boolean).join('\n\n'),
     });
 
     this.agentEventHandler = new AgentEventHandler({
@@ -283,6 +287,7 @@ export class AgentService {
       systemReminder: this.systemReminder,
       toolUsageAnalyzer: this.toolUsageAnalyzer,
       errorPatternMatcher: this.errorPatternMatcher,
+      turnDiffTracker: this.turnDiffTracker,
     });
 
     // Wire the workflow progress broker into the session event bus. Channel
@@ -400,7 +405,7 @@ export class AgentService {
       agentManager: this.agentManager,
       sessionHydrator: this.sessionHydrator,
       getConfig: () => this.effectiveAppConfig(),
-      getContextWindow: () => this.getContextWindow(),
+      getContextWindow: (sessionKey) => this.getContextWindowForSession(sessionKey),
     });
 
     this.outboundCoordinator = new OutboundCoordinator({
@@ -542,6 +547,7 @@ export class AgentService {
       minTurnsForVerification: 4,
       resetOnVerification: true,
     });
+    this.turnDiffTracker = new TurnDiffTracker();
 
     this.requestLimiter = new RequestLimiter({
       maxRequestsPerTurn: 50,
@@ -971,7 +977,7 @@ export class AgentService {
   }
 
   private async checkAndCompact(sessionKey: string, messages: AgentMessage[]): Promise<void> {
-    const contextWindow = this.getContextWindow();
+    const contextWindow = this.getContextWindowForSession(sessionKey);
     const prep = this.sessionStore.prepareCompaction(sessionKey, messages, contextWindow);
     if (!prep.needsCompaction) return;
 
@@ -986,8 +992,13 @@ export class AgentService {
     log.info({ sessionKey, tokensBefore: result.tokensBefore, tokensAfter: result.tokensAfter }, 'Session compacted');
   }
 
-  private getContextWindow(): number {
-    return 128000;
+  private getContextWindowForSession(sessionKey: string): number {
+    try {
+      return this.modelManager.getResolvedModelForSession(sessionKey).contextWindow ?? 128000;
+    } catch (err) {
+      log.warn({ err, sessionKey }, 'Failed to resolve session context window; using default');
+      return 128000;
+    }
   }
 
   private dispose(): void {

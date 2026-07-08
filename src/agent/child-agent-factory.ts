@@ -130,6 +130,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
       tools: filteredTools,
       messages: [],
     },
+    toolExecution: 'parallel',
     streamFn: createExtensionAwareStreamFn(),
     getApiKey: (provider: string) =>
       resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',

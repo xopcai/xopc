@@ -30,7 +30,7 @@ export const WorkflowRunLinkCard = memo(function WorkflowRunLinkCard({
   return (
     <button
       type="button"
-      onClick={() => navigate(workflowBoardHref(link.runId))}
+      onClick={() => navigate(workflowBoardHref(link.runId, { ownerAgentId: link.ownerAgentId }))}
       className={cn(
         'flex w-full items-start gap-3 rounded-2xl border border-edge bg-surface-panel px-4 py-3 text-left',
         'transition-colors hover:bg-surface-hover/60',

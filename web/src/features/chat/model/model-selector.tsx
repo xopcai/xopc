@@ -13,7 +13,10 @@ import {
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { settingsShellPopoverZClass } from '@/lib/settings-shell-layer.utils';
-import { useSettingsShellPopoverLayer } from '@/lib/settings-shell-layer-context';
+import {
+  useSettingsShellPopoverLayer,
+  useSettingsShellPopoverPortalContainer,
+} from '@/lib/settings-shell-layer-context';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -112,6 +115,7 @@ export function ModelSelector({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const settingsShellLayer = useSettingsShellPopoverLayer();
+  const portalContainer = useSettingsShellPopoverPortalContainer();
   const settingsShellPopoverZ = settingsShellPopoverZClass(settingsShellLayer);
 
   const { data: models = [], isLoading, error } = useSWR(CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, {
@@ -160,7 +164,7 @@ export function ModelSelector({
           <ChevronsUpDown className="size-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
         </button>
       </Popover.Trigger>
-      <Popover.Portal>
+      <Popover.Portal container={portalContainer ?? undefined}>
         <Popover.Content
           className={cn(
             settingsShellPopoverZ,
