@@ -261,7 +261,7 @@ export function CloakCard({
         ) : null}
 
         {installed && runtime ? (
-          <div className="flex flex-col gap-2 rounded-lg border border-edge bg-surface-base p-3 text-xs">
+          <div className="flex flex-col gap-2 rounded-lg bg-surface-base p-3 shadow-surface">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="font-medium text-fg">
                 {runtime.running
@@ -330,7 +330,7 @@ export function CloakCard({
         </div>
       </BackendModeCard>
 
-      <SettingsFormSection className="mt-4 border border-edge-subtle">
+      <SettingsFormSection className="mt-4">
         <SettingsFormSectionHeader icon={ShieldCheck} title={m.browserCloakAdvancedShow} />
         <div className="grid gap-5 sm:grid-cols-2">
           <AgentDefaultsField label={m.label.browserCloakCacheDir} description={m.desc.browserCloakCacheDir}>

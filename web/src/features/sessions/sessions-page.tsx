@@ -112,7 +112,7 @@ function SessionsTabPanel({
       id={`sessions-panel-${id}`}
       role="tabpanel"
       aria-labelledby={`sessions-tab-${id}`}
-      className={plain ? 'contents' : 'rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5'}
+      className={plain ? 'contents' : 'rounded-2xl bg-surface-base px-4 py-5 sm:px-5'}
     >
       {plain ? (
         children

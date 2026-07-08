@@ -46,7 +46,7 @@ export function ExtensionSetupGuide({
       label: m.browserExtensionInstallStep2,
       done: Boolean(extensionDir) && connected,
       detail: extensionDir ? (
-        <div className="mt-2 rounded-md border border-edge bg-surface-raised px-2.5 py-2">
+        <div className="mt-2 rounded-md bg-surface-raised px-2.5 py-2 shadow-surface">
           <p className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
             {m.browserExtensionInstallStep2FolderLabel}
           </p>
@@ -94,7 +94,7 @@ export function ExtensionSetupGuide({
   return (
     <div
       aria-label={m.browserExtensionInstallGuideTitle}
-      className="rounded-xl border border-edge bg-surface-base px-3 py-3"
+      className="rounded-xl bg-surface-base px-3 py-3"
     >
       <div className="mb-3 flex items-center gap-2">
         <h4 className="text-sm font-medium text-fg">{m.browserExtensionInstallGuideTitle}</h4>

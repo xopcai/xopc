@@ -40,7 +40,7 @@ export function LogsListSection({
     <>
       {loading && logs.length === 0 ? (
         <div
-          className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-panel dark:divide-edge dark:border-edge"
+          className="overflow-hidden rounded-xl bg-surface-panel shadow-surface"
           aria-busy="true"
         >
           {Array.from({ length: 8 }).map((_, i) => (
@@ -55,7 +55,7 @@ export function LogsListSection({
       ) : null}
 
       {!loading && logs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-edge-subtle bg-surface-base py-16 text-center dark:border-edge">
+        <div className="flex flex-col items-center justify-center gap-2 rounded-xl bg-surface-base py-16 text-center">
           <FileText className="size-12 text-fg-subtle" strokeWidth={1.5} aria-hidden />
           <h2 className="text-base font-semibold tracking-tight text-fg">{L.noLogs}</h2>
           <p className="max-w-sm text-sm leading-relaxed text-fg-muted">{L.noLogsDescription}</p>
@@ -73,7 +73,7 @@ export function LogsListSection({
             {hasMore ? <span className="text-fg-subtle"> · {L.moreAvailable}</span> : null}
           </p>
           <ul
-            className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-panel font-mono text-sm leading-6 dark:divide-edge dark:border-edge"
+            className="overflow-hidden rounded-xl bg-surface-panel font-mono text-sm leading-6 shadow-surface"
           >
             {logs.map((log) => {
               const lv = log.level ?? 'info';

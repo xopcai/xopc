@@ -291,8 +291,8 @@ export function ImageProviderCredentialsPanel({
             <section
               key={p.id}
               className={cn(
-                'overflow-hidden rounded-xl border bg-surface-panel shadow-sm transition-colors dark:shadow-none',
-                isDirty ? 'border-accent/50' : 'border-edge',
+                'overflow-hidden rounded-xl bg-surface-panel/80 shadow-surface transition-colors',
+                isDirty && 'ring-1 ring-accent/50',
               )}
             >
               <button
@@ -343,7 +343,7 @@ export function ImageProviderCredentialsPanel({
               </button>
 
               {isExpanded ? (
-                <div id={`img-provider-credentials-${p.id}`} className="border-t border-edge px-4 py-4">
+                <div id={`img-provider-credentials-${p.id}`} className="bg-surface-base/45 px-4 py-4">
                   {extPath ? (
                     <Link
                       to={extPath}

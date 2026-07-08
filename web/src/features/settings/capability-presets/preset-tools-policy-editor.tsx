@@ -181,7 +181,7 @@ export function PresetToolsPolicyEditor(props: {
         </div>
       </div>
 
-      <div className="rounded-lg border border-edge-subtle bg-surface-panel/50 px-3 py-2">
+      <div className="rounded-lg bg-surface-panel/70 px-3 py-2 shadow-surface">
         <div className="text-xs font-medium text-fg-muted">{labels.overrideSummaryTitle}</div>
         {overriddenEntries.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -222,10 +222,10 @@ export function PresetToolsPolicyEditor(props: {
                   <li
                     key={toolId}
                     className={cn(
-                      'rounded-xl border px-3 py-2.5 transition-colors dark:border-edge-subtle',
+                      'rounded-xl px-3 py-2.5 shadow-surface transition-colors',
                       mode === 'inherit'
-                        ? 'border-edge-subtle bg-surface-panel/40'
-                        : 'border-edge bg-surface-panel',
+                        ? 'bg-surface-panel/50'
+                        : 'bg-surface-panel',
                     )}
                   >
                     <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">

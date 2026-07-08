@@ -256,7 +256,7 @@ function ImageModelSelectSection({
   };
 
   return (
-    <section className="rounded-lg border border-edge bg-surface-base p-4">
+    <section className="rounded-lg bg-surface-base p-4">
       <div className="mb-3">
         <h3 className="text-sm font-semibold text-fg">{title}</h3>
         <p className="mt-1 text-xs leading-relaxed text-fg-muted">{description}</p>
@@ -277,7 +277,7 @@ function ImageModelSelectSection({
           <div className="text-xs font-medium text-fg-muted">{fallbackLabel}</div>
           <div className="flex flex-col gap-2">
             {fallbackValues.length === 0 ? (
-              <div className="flex min-h-10 items-center rounded-lg border border-dashed border-edge bg-surface-subtle px-3 text-sm font-normal text-fg-subtle">
+              <div className="flex min-h-10 items-center rounded-lg bg-surface-subtle px-3 text-sm font-normal text-fg-subtle shadow-surface">
                 {fallbackPlaceholder}
               </div>
             ) : (
@@ -522,7 +522,7 @@ export function ImageModelsSettingsPanel() {
         }
       />
 
-      <section className="rounded-lg border border-edge bg-surface-base p-4">
+      <section className="rounded-lg bg-surface-base p-4">
         <div className="mb-3">
           <h3 className="text-sm font-semibold text-fg">{t.runtimeTuningTitle}</h3>
           <p className="mt-1 text-xs leading-relaxed text-fg-muted">{t.runtimeTuningHint}</p>

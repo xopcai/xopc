@@ -9,7 +9,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { type ColorScheme, useThemeStore } from '@/stores/theme-store';
 
 function preferenceCardClassName() {
-  return cn('rounded-xl border border-edge-subtle bg-surface-base px-4 py-1 sm:px-5');
+  return cn('rounded-xl bg-surface-base px-4 py-1 sm:px-5');
 }
 
 /**
@@ -149,7 +149,7 @@ function ColorSchemeSelector() {
   const setColorScheme = useThemeStore((s) => s.setColorScheme);
 
   return (
-    <div className="flex flex-col gap-2 border-b border-edge-subtle py-3.5 last:border-b-0 sm:py-4">
+    <div className="flex flex-col gap-2 rounded-lg bg-surface-panel/50 px-3 py-3.5 sm:py-4">
       <div className="min-w-0">
         <div className="text-sm font-semibold text-fg">{a.colorSchemeTitle}</div>
         <p className="mt-0.5 text-xs text-fg-muted">{a.colorSchemeDescription}</p>

@@ -49,7 +49,7 @@ function healthMeta(tier: SetupHealthTier, s: ReturnType<typeof messages>['setup
   if (tier === 'blocked') {
     return {
       icon: XCircle,
-      className: 'border-red-500/30 bg-red-500/10 text-red-950 dark:text-red-100',
+      className: 'bg-red-500/10 text-red-950 dark:text-red-100',
       title: s.health.blockedTitle,
       body: s.health.blockedBody,
       action: s.health.viewIssues,
@@ -59,7 +59,7 @@ function healthMeta(tier: SetupHealthTier, s: ReturnType<typeof messages>['setup
   if (tier === 'attention') {
     return {
       icon: AlertTriangle,
-      className: 'border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-100',
+      className: 'bg-amber-500/10 text-amber-950 dark:text-amber-100',
       title: s.health.attentionTitle,
       body: s.health.attentionBody,
       action: s.health.viewIssues,
@@ -69,7 +69,7 @@ function healthMeta(tier: SetupHealthTier, s: ReturnType<typeof messages>['setup
   if (tier === 'setup') {
     return {
       icon: Circle,
-      className: 'border-edge bg-surface-panel text-fg',
+      className: 'bg-surface-base text-fg shadow-surface',
       title: s.health.setupTitle,
       body: s.health.setupBody,
       action: s.health.continueSetup,
@@ -78,7 +78,7 @@ function healthMeta(tier: SetupHealthTier, s: ReturnType<typeof messages>['setup
   }
   return {
     icon: CheckCircle2,
-    className: 'border-success/30 bg-success-soft text-success',
+    className: 'bg-success-soft text-success',
     title: s.health.readyTitle,
     body: s.health.readyBody,
     action: s.health.startChat,
@@ -128,7 +128,7 @@ function HealthBanner({
     );
 
   return (
-    <section className={cn('rounded-xl border px-4 py-4', meta.className)}>
+    <section className={cn('rounded-xl px-4 py-4', meta.className)}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 gap-3">
           <Icon className="mt-0.5 size-5 shrink-0" aria-hidden />
@@ -201,14 +201,14 @@ function IssueRow({ issue, fixLabel }: { issue: SetupIssue; fixLabel: string }) 
     return (
       <Link
         to={issue.path}
-        className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-3 hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex items-start gap-3 rounded-lg bg-surface-panel/80 px-3 py-3 shadow-surface hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {content}
       </Link>
     );
   }
 
-  return <div className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-3">{content}</div>;
+  return <div className="flex items-start gap-3 rounded-lg bg-surface-panel/80 px-3 py-3 shadow-surface">{content}</div>;
 }
 
 function ReadinessRow({ item, labels }: { item: ReadinessPipelineItem; labels: Record<string, string> }) {
@@ -260,13 +260,13 @@ function DiagnosticSignalRow({ signal, fixLabel }: { signal: SetupDiagnosticSign
     return (
       <Link
         to={signal.path}
-        className="flex min-w-0 items-start gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5 hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        className="flex min-w-0 items-start gap-2 rounded-lg bg-surface-panel/80 px-3 py-2.5 shadow-surface hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
       >
         {content}
       </Link>
     );
   }
-  return <div className="flex min-w-0 items-start gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5">{content}</div>;
+  return <div className="flex min-w-0 items-start gap-2 rounded-lg bg-surface-panel/80 px-3 py-2.5 shadow-surface">{content}</div>;
 }
 
 export function SetupStatusPanel() {
@@ -351,7 +351,7 @@ export function SetupStatusPanel() {
                 ))}
               </div>
             ) : (
-              <div className="mt-4 divide-y divide-edge-subtle rounded-lg border border-edge-subtle bg-surface-panel">
+              <div className="mt-4 rounded-lg bg-surface-panel/80 shadow-surface">
                 {snapshot.readiness.map((item) => (
                   <ReadinessRow key={item.id} item={item} labels={s.readinessLabels} />
                 ))}
@@ -372,7 +372,7 @@ export function SetupStatusPanel() {
                 ))}
               </div>
             ) : (
-              <p className="mt-4 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-3 text-sm text-fg-muted">
+              <p className="mt-4 rounded-lg bg-surface-panel/80 px-3 py-3 text-sm text-fg-muted shadow-surface">
                 {snapshot.diagnosticSignals.length ? s.diagnosticsAllClear : s.diagnosticsEmpty}
               </p>
             )}

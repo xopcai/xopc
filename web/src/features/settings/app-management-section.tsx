@@ -276,7 +276,7 @@ export function AppManagementSection({
         ) : null}
 
         {isDevBuild ? (
-          <div className="mb-4 rounded-xl border border-edge-subtle bg-surface-panel/60 px-3 py-2.5">
+          <div className="mb-4 rounded-xl bg-surface-panel/70 px-3 py-2.5 shadow-surface">
             <p className="text-sm font-medium text-fg">{m.devOnlyTitle}</p>
             <p className="mt-1 text-xs text-fg-muted">{m.devOnlyBody}</p>
           </div>
@@ -306,7 +306,7 @@ export function AppManagementSection({
         ) : null}
 
         <dl className="space-y-3 text-sm">
-          <div className="rounded-xl border border-edge-subtle bg-surface-panel/60 p-3">
+          <div className="rounded-xl bg-surface-panel/70 p-3 shadow-surface">
             <dt className="text-xs font-medium text-fg-muted">{m.appPath}</dt>
             <dd className="mt-1 flex items-start justify-between gap-2">
               <code className="break-all text-xs text-fg">{info.appPath}</code>
@@ -323,7 +323,7 @@ export function AppManagementSection({
               </button>
             </dd>
           </div>
-          <div className="rounded-xl border border-edge-subtle bg-surface-panel/60 p-3">
+          <div className="rounded-xl bg-surface-panel/70 p-3 shadow-surface">
             <dt className="text-xs font-medium text-fg-muted">{m.dataPath}</dt>
             <dd className="mt-1 flex items-start justify-between gap-2">
               <code className="break-all text-xs text-fg">{info.userDataPath}</code>
@@ -346,7 +346,7 @@ export function AppManagementSection({
         </dl>
 
         <div className="mt-4 space-y-3">
-          <div className="flex flex-col gap-2 rounded-xl border border-edge-subtle bg-surface-panel/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-2 rounded-xl bg-surface-panel/70 p-3 shadow-surface sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-sm font-medium text-fg">{m.clearData}</div>
               <p className="mt-0.5 text-xs text-fg-muted">{m.clearDataDesc}</p>
@@ -365,7 +365,7 @@ export function AppManagementSection({
           </div>
 
           {showUninstall ? (
-            <div className="flex flex-col gap-2 rounded-xl border border-edge-subtle bg-surface-panel/60 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-2 rounded-xl bg-surface-panel/70 p-3 shadow-surface sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-sm font-medium text-fg">{m.uninstall}</div>
                 <p className="mt-0.5 text-xs text-fg-muted">{uninstallDescription}</p>

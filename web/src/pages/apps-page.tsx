@@ -138,7 +138,7 @@ export function AppsPage() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-base">
       <div className="w-full px-3 py-8 sm:px-5 xl:px-6">
-        <div className="mb-5 flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">
+        <div className="mb-5 flex flex-col gap-3 rounded-xl bg-surface-panel/60 px-3 py-3 shadow-surface sm:flex-row sm:items-center sm:justify-between">
           <PageTabs
             items={tabItems}
             activeTab={mainTab}
@@ -423,10 +423,10 @@ function ExtensionDetailDialog({
 
             {ext.source === 'bundled' ? (
               <>
-                <p className="mt-4 rounded-lg border border-edge-subtle bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/20">
+                <p className="mt-4 rounded-lg bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted shadow-surface dark:bg-surface-hover/20">
                   {copy.builtinConfigHint}
                 </p>
-                <div className="mt-3 rounded-lg border border-edge-subtle bg-surface-hover/40 p-3 dark:bg-surface-hover/20">
+                <div className="mt-3 rounded-lg bg-surface-hover/40 p-3 shadow-surface dark:bg-surface-hover/20">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-medium text-fg">{copy.builtinRuntimeToggle}</span>
                     <Button
@@ -457,7 +457,7 @@ function ExtensionDetailDialog({
                 </div>
               </>
             ) : (
-              <p className="mt-4 rounded-lg border border-edge-subtle bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/20">
+              <p className="mt-4 rounded-lg bg-surface-hover/40 px-3 py-2 text-xs text-fg-muted shadow-surface dark:bg-surface-hover/20">
                 {copy.cliManageHint}
               </p>
             )}
