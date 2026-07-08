@@ -26,7 +26,6 @@ type Props = {
   cfgDirty: boolean;
   cfgSaving: boolean;
   runPhase: DreamingPhaseId;
-  setRunPhase: (phase: DreamingPhaseId) => void;
   runBusy: boolean;
   setCfgForm: (next: DreamingConfigState | null | ((prev: DreamingConfigState | null) => DreamingConfigState | null)) => void;
   doRunNow: (phase: DreamingPhaseId) => void | Promise<void>;
@@ -41,7 +40,6 @@ export function DreamingConfigSection({
   cfgDirty,
   cfgSaving,
   runPhase,
-  setRunPhase,
   runBusy,
   setCfgForm,
   doRunNow,
@@ -54,7 +52,6 @@ export function DreamingConfigSection({
         disabled={!hasToken || cfgSaving || runBusy || !phaseEnabled || cfgDirty}
         title={cfgDirty ? t.runNowSaveFirstHint : t.runNowHint}
         onClick={() => {
-          setRunPhase(phase);
           void doRunNow(phase);
         }}
       />
@@ -256,6 +253,21 @@ export function DreamingConfigSection({
                 onChange={(e) =>
                   setCfgForm((prev) =>
                     prev ? { ...prev, deep: { ...prev.deep, minRecallCount: Number(e.target.value) } } : prev,
+                  )
+                }
+              />
+            </FieldCell>
+            <FieldCell label={t.configDeepMinUniqueQueries}>
+              <input
+                type="number"
+                step="1"
+                min={1}
+                className={numInputClass}
+                value={cfgForm.deep.minUniqueQueries}
+                disabled={!hasToken || cfgSaving}
+                onChange={(e) =>
+                  setCfgForm((prev) =>
+                    prev ? { ...prev, deep: { ...prev.deep, minUniqueQueries: Number(e.target.value) } } : prev,
                   )
                 }
               />

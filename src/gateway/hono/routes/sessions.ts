@@ -127,6 +127,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     // Look for existing empty sessions to reuse
     const existingSessions = await service.sessions.listSessions({
       channel,
+      includeHidden: true,
       limit: 50,
       sortBy: 'updatedAt',
       sortOrder: 'desc',

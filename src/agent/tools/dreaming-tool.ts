@@ -25,7 +25,9 @@ type DreamingParams = {
 
 export interface DreamingToolDeps {
   getWorkspace: () => string;
+  getDreamingRoot: () => string;
   getConfig: () => Config | undefined;
+  getAgentId?: () => string | undefined;
 }
 
 function textResult(text: string): AgentToolResult<{}> {
@@ -51,20 +53,21 @@ export function createDreamingTool(deps: DreamingToolDeps): AgentTool {
       'Inspect and maintain the dreaming promotion state.\n\n' +
       'Actions:\n' +
       '- status: show config gates and short-term store stats\n' +
-      '- reset_store: clear short-term recall store (memory/.dreams/short-term-recall.json)\n' +
-      '- clear_lock: remove a stale promotion lock file (memory/.dreams/short-term-promotion.lock)',
+      '- reset_store: clear this agent short-term recall store (.dreams/short-term-recall.json)\n' +
+      '- clear_lock: remove this agent stale promotion lock file (.dreams/short-term-promotion.lock)',
     parameters: DreamingSchema,
     async execute(_toolCallId, params: any): Promise<AgentToolResult<{}>> {
       const action = (params as DreamingParams).action;
-      const workspaceDir = deps.getWorkspace();
+      const dreamingRoot = deps.getDreamingRoot();
       const cfg = deps.getConfig();
-      const resolved = resolveDreamingConfig(cfg);
+      const agentId = deps.getAgentId?.();
+      const resolved = resolveDreamingConfig(cfg, agentId);
 
-      const storePath = path.join(workspaceDir, SHORT_TERM_RECALL_STORE_RELATIVE);
-      const lockPath = path.join(workspaceDir, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
+      const storePath = path.join(dreamingRoot, SHORT_TERM_RECALL_STORE_RELATIVE);
+      const lockPath = path.join(dreamingRoot, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
 
       if (action === 'status') {
-        const { store } = await loadDreamingStore({ workspaceDir });
+        const { store } = await loadDreamingStore({ dreamingRoot });
         const entries = Object.values(store.entries ?? {});
         const total = entries.length;
         const promoted = entries.filter((e) => Boolean(e.promotedAt)).length;
@@ -91,7 +94,8 @@ export function createDreamingTool(deps: DreamingToolDeps): AgentTool {
           `deep.minRecallCount: ${resolved.deep.minRecallCount}`,
           `deep.limit: ${resolved.deep.limit}`,
           '',
-          `storePath: ${SHORT_TERM_RECALL_STORE_RELATIVE}`,
+          `agentId: ${agentId ?? '(unknown)'}`,
+          `storePath: ${storePath}`,
           `entryCount: ${total}`,
           `promotedCount: ${promoted}`,
           `promotedToday: ${promotedToday}`,
@@ -105,13 +109,13 @@ export function createDreamingTool(deps: DreamingToolDeps): AgentTool {
       }
 
       if (action === 'reset_store') {
-        const { store } = await loadDreamingStore({ workspaceDir });
+        const { store } = await loadDreamingStore({ dreamingRoot });
         const before = Object.keys(store.entries ?? {}).length;
         const nowIso = new Date().toISOString();
         store.entries = {};
         store.updatedAt = nowIso;
-        await saveDreamingStore({ workspaceDir, store });
-        log.info({ workspaceDir, before }, 'Dreaming store reset');
+        await saveDreamingStore({ dreamingRoot, store });
+        log.info({ dreamingRoot, before }, 'Dreaming store reset');
         return textResult(
           `Reset short-term store. Removed ${before} entr${before === 1 ? 'y' : 'ies'}. Path: ${storePath}`,
         );
@@ -122,4 +126,3 @@ export function createDreamingTool(deps: DreamingToolDeps): AgentTool {
     },
   } as any;
 }
-

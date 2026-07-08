@@ -1,9 +1,12 @@
+import { deleteMediaBuffer, mimeTypeFromMediaPath, saveMediaBuffer } from '../media/store.js';
+import { readMediaReference } from '../media/media-reference.js';
 import { WorkItemStore } from './work-item-store.js';
 import type {
   CreateWorkItemUpdateSuggestionInput,
   CreateWorkItemInput,
   UpdateWorkItemInput,
   WorkItem,
+  WorkItemAttachment,
   WorkItemEvent,
   WorkItemLink,
   WorkItemListQuery,
@@ -11,6 +14,18 @@ import type {
   WorkItemUpdateSuggestion,
   WorkItemUpdateSuggestionStatus,
 } from './types.js';
+
+export const WORK_ITEM_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
+export const WORK_ITEM_ATTACHMENT_MAX_COUNT = 10;
+export const WORK_ITEM_ATTACHMENT_UPLOAD_BODY_MAX_BYTES =
+  WORK_ITEM_ATTACHMENT_MAX_BYTES * WORK_ITEM_ATTACHMENT_MAX_COUNT + 1024 * 1024;
+
+function inferAttachmentType(mimeType: string): WorkItemAttachment['type'] {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (mimeType.startsWith('audio/')) return 'audio';
+  if (mimeType.startsWith('video/')) return 'video';
+  return 'file';
+}
 
 export class WorkItemService {
   constructor(private readonly store = new WorkItemStore()) {}
@@ -54,6 +69,65 @@ export class WorkItemService {
 
   listEvents(workItemId: string): WorkItemEvent[] {
     return this.store.listEvents(workItemId);
+  }
+
+  listAttachments(workItemId: string): WorkItemAttachment[] | null {
+    if (!this.store.get(workItemId)) return null;
+    return this.store.listAttachments(workItemId);
+  }
+
+  async addAttachment(
+    workItemId: string,
+    file: { name: string; buffer: Buffer; mimeType: string },
+  ): Promise<WorkItemAttachment | null> {
+    if (!this.store.get(workItemId)) return null;
+    const saved = await saveMediaBuffer(file.buffer, {
+      bucket: 'work-item',
+      contentType: file.mimeType,
+      maxBytes: WORK_ITEM_ATTACHMENT_MAX_BYTES,
+      originalFilename: file.name,
+    });
+    const mimeType = saved.contentType || file.mimeType || mimeTypeFromMediaPath(saved.path);
+    const attachment = this.store.addAttachment({
+      workItemId,
+      mediaUri: saved.uri,
+      mediaId: saved.id,
+      bucket: saved.bucket,
+      type: inferAttachmentType(mimeType),
+      mimeType,
+      fileName: file.name.trim() || saved.id,
+      size: saved.size,
+    });
+    this.store.addEvent(workItemId, 'attachment_added', {
+      attachmentId: attachment.id,
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+    });
+    return attachment;
+  }
+
+  async readAttachment(
+    workItemId: string,
+    attachmentId: string,
+  ): Promise<{ attachment: WorkItemAttachment; buffer: Buffer } | null> {
+    const attachment = this.store.getAttachment(workItemId, attachmentId);
+    if (!attachment) return null;
+    const { buffer } = await readMediaReference(attachment.mediaUri, WORK_ITEM_ATTACHMENT_MAX_BYTES);
+    return { attachment, buffer };
+  }
+
+  async removeAttachment(workItemId: string, attachmentId: string): Promise<WorkItemAttachment | null> {
+    const attachment = this.store.removeAttachment(workItemId, attachmentId);
+    if (!attachment) return null;
+    await deleteMediaBuffer(attachment.mediaId, 'work-item');
+    this.store.addEvent(workItemId, 'attachment_removed', {
+      attachmentId: attachment.id,
+      fileName: attachment.fileName,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+    });
+    return attachment;
   }
 
   createUpdateSuggestion(workItemId: string, input: CreateWorkItemUpdateSuggestionInput): WorkItemUpdateSuggestion | null {

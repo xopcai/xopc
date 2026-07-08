@@ -35,15 +35,16 @@ type PreviewItem = {
 
 export async function previewDreamingDeepPromotion(params: {
   workspaceDir: string;
+  dreamingRoot: string;
   config?: Partial<DreamingDeepConfig>;
   limit?: number;
   now?: Date;
 }): Promise<{ ok: boolean; reason: string; items: PreviewItem[]; memoryPath: string }> {
   const cfg = resolveDeepDefaults(params.config);
-  const memoryPath = path.join(params.workspaceDir, MEMORY_MD_FILENAME);
+  const memoryPath = path.join(params.dreamingRoot, MEMORY_MD_FILENAME);
   if (!cfg.enabled) return { ok: true, reason: 'dreaming disabled', items: [], memoryPath };
 
-  const { store } = await loadDreamingStore({ workspaceDir: params.workspaceDir });
+  const { store } = await loadDreamingStore({ dreamingRoot: params.dreamingRoot });
   const nowMs = (params.now ?? new Date()).getTime();
 
   const all = Object.values(store.entries ?? {}).filter((e): e is DreamingStoreEntry => {

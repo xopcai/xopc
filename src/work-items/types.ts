@@ -17,6 +17,8 @@ export type WorkItemEventType =
   | 'updated'
   | 'status_changed'
   | 'archived'
+  | 'attachment_added'
+  | 'attachment_removed'
   | 'chat_started'
   | 'goal_created'
   | 'workflow_started'
@@ -46,6 +48,20 @@ export interface WorkItem {
   createdAt: number;
   updatedAt: number;
   links?: WorkItemLink[];
+  attachments?: WorkItemAttachment[];
+}
+
+export interface WorkItemAttachment {
+  id: string;
+  workItemId: string;
+  mediaUri: string;
+  mediaId: string;
+  bucket: string;
+  type: 'image' | 'audio' | 'video' | 'file';
+  mimeType: string;
+  fileName: string;
+  size: number;
+  createdAt: number;
 }
 
 export interface WorkItemLink {

@@ -77,7 +77,7 @@ export function NoteBreakdownPanel({
         </p>
 
         {contextStatus ? (
-          <section className="mb-4 rounded-xl border border-edge-subtle bg-surface-base p-3">
+          <section className="mb-4 rounded-xl bg-surface-base p-3">
             <div className="flex items-center justify-between gap-2">
               <div className="text-xs font-medium text-fg-muted">{n.contextStatusTitle}</div>
               <button
@@ -223,7 +223,7 @@ export function NoteBreakdownPanel({
         )}
 
         {/* Related discussions */}
-        <section className="mt-6 rounded-xl border border-edge-subtle bg-surface-base p-4">
+        <section className="mt-6 rounded-xl bg-surface-base p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <div className="flex items-center gap-2 text-sm font-semibold text-fg">

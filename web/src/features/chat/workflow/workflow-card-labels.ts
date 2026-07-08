@@ -1,14 +1,14 @@
 import type { StoredLanguage } from '@/lib/storage';
 
 import type { WorkflowCardLabels } from './workflow-card';
-import type { WorkflowAgentDetailModalLabels } from './workflow-agent-detail-modal';
+import type { WorkflowAgentInlineDetailLabels } from './workflow-agent-inline-detail';
 
 export function workflowCardLabels(language: StoredLanguage): WorkflowCardLabels {
   if (language === 'zh') return zhLabels();
   return enLabels();
 }
 
-function drawerLabelsEn(): WorkflowAgentDetailModalLabels {
+function checkDetailLabelsEn(): WorkflowAgentInlineDetailLabels {
   return {
     close: 'Close',
     statusQueued: 'Queued',
@@ -27,11 +27,11 @@ function drawerLabelsEn(): WorkflowAgentDetailModalLabels {
     transcriptHeading: 'Transcript',
     promptHeading: 'Prompt',
     logsHeading: 'Workflow logs',
-    runningPlaceholder: 'Waiting for subagent steps…',
+    runningPlaceholder: 'Waiting for check updates…',
   };
 }
 
-function drawerLabelsZh(): WorkflowAgentDetailModalLabels {
+function checkDetailLabelsZh(): WorkflowAgentInlineDetailLabels {
   return {
     close: '关闭',
     statusQueued: '排队中',
@@ -50,7 +50,7 @@ function drawerLabelsZh(): WorkflowAgentDetailModalLabels {
     transcriptHeading: 'Transcript',
     promptHeading: '输入',
     logsHeading: '工作流日志',
-    runningPlaceholder: '等待子 agent 步骤…',
+    runningPlaceholder: '等待检查项更新…',
   };
 }
 
@@ -76,12 +76,12 @@ function enLabels(): WorkflowCardLabels {
       resultPreviewHeading: 'Result',
       errorHeading: 'Error',
       emptyPreview: '(no preview)',
-      agentNumber: (n) => `#${n}`,
+      agentNumber: (n) => `Check ${n}`,
       queued: 'Queued',
       running: 'Running…',
-      openDetail: 'View agent details',
+      openDetail: 'View check details',
     },
-    drawer: drawerLabelsEn(),
+    checkDetail: checkDetailLabelsEn(),
     result: {
       topFindingsHeading: (n) => `Top findings (${n})`,
       topRisksHeading: (n) => `Top risks (${n})`,
@@ -110,17 +110,17 @@ function enLabels(): WorkflowCardLabels {
         parse_error: ['Check the workflow script syntax.', 'Make sure workflow fields use the expected snake_case shape.'],
         aborted: ['The run was stopped. Start it again if you still need the result.'],
         timeout: ['Retry the workflow.', 'If it times out again, reduce concurrency or check model/API availability.'],
-        runtime_error: ['Review the failed agent first.', 'Use the completed agent results if they are still relevant.', 'Copy the error details if you want to continue diagnosis.'],
+        runtime_error: ['Review the failed check first.', 'Use completed check results if they are still relevant.', 'Copy the error details if you want to continue diagnosis.'],
       },
       logsHeading: 'Technical logs',
-      failedAgentsHeading: 'Agent execution status',
-      executedAgentsHeading: 'Agent execution status',
+      failedAgentsHeading: 'Check status',
+      executedAgentsHeading: 'Check status',
       progressHeading: 'Execution process',
       scriptHeading: 'Submitted script',
       noExtraDetails: 'No additional details recorded.',
       copyReason: 'Copy',
       copyReasonDone: 'Copied',
-      impactTpl: (done, total, failed) => `${done}/${total} agents completed · ${failed} need attention`,
+      impactTpl: (done, total, failed) => `${done}/${total} checks completed · ${failed} need attention`,
       phase: {
         countTpl: (done, total) => `${done}/${total}`,
         runningTag: (n) => `· ${n} running`,
@@ -132,27 +132,27 @@ function enLabels(): WorkflowCardLabels {
         resultPreviewHeading: 'Result',
         errorHeading: 'Error',
         emptyPreview: '(no preview)',
-        agentNumber: (n) => `#${n}`,
+        agentNumber: (n) => `Check ${n}`,
         queued: 'Queued',
         running: 'Running…',
-        openDetail: 'View agent details',
+        openDetail: 'View check details',
       },
     },
-    cancel: 'Cancel workflow',
+    cancel: 'Stop task',
     saveAria: 'Copy and edit workflow…',
     saveTitle: 'Open a copied workflow draft in the Workflows center',
     copyAria: 'Copy result',
     copyDoneAria: 'Copied',
-    openInWorkflowsAria: 'Open in Workflows',
-    openInWorkflowsTitle: 'Open this workflow in the Workflows center',
-    viewSubagentsHeading: 'View agents',
+    openInWorkflowsAria: 'Open task details',
+    openInWorkflowsTitle: 'Open this task in the task center',
+    viewSubagentsHeading: 'View checks',
     runningProgressHeading: 'Current progress',
-    runningAgentsHeading: 'Running agents',
-    completedAgentsHeading: 'Completed agents',
-    queuedAgentsHeading: 'Queued agents',
+    runningAgentsHeading: 'Running checks',
+    completedAgentsHeading: 'Completed checks',
+    queuedAgentsHeading: 'Queued checks',
     failedAgentsHeading: 'Needs attention',
     currentProgressTpl: (phase, running, done, total) => {
-      const phaseText = phase ? `Phase: ${phase}` : 'Workflow is running';
+      const phaseText = phase ? `Step: ${phase}` : 'Task is running';
       return `${phaseText} · ${running} running · ${done}/${total} completed`;
     },
     recentLogsHeading: 'Recent updates',
@@ -162,16 +162,16 @@ function enLabels(): WorkflowCardLabels {
       openRun: 'Open run',
       stop: 'Stop',
       close: 'Close workflow details',
-      title: 'Workflow run',
+      title: 'Task',
       overview: 'Overview',
-      agents: 'Agents',
+      agents: 'Checks',
       logs: 'Logs',
       result: 'Result',
       currentState: 'Current state',
       runId: 'Run ID',
       elapsed: 'Elapsed',
-      progress: (done, total) => `${done}/${total} agents`,
-      activeFallback: 'Workflow is running',
+      progress: (done, total) => `${done}/${total} checks`,
+      activeFallback: 'Task is running',
       noResult: 'No result recorded yet.',
       status: {
         queued: 'Queued',
@@ -205,12 +205,12 @@ function zhLabels(): WorkflowCardLabels {
       resultPreviewHeading: '结果预览',
       errorHeading: '错误',
       emptyPreview: '（暂无预览）',
-      agentNumber: (n) => `#${n}`,
+      agentNumber: (n) => `检查 ${n}`,
       queued: '排队中',
       running: '运行中…',
-      openDetail: '查看 agent 详情',
+      openDetail: '查看检查项详情',
     },
-    drawer: drawerLabelsZh(),
+    checkDetail: checkDetailLabelsZh(),
     result: {
       topFindingsHeading: (n) => `主要发现（${n}）`,
       topRisksHeading: (n) => `主要风险（${n}）`,
@@ -239,17 +239,17 @@ function zhLabels(): WorkflowCardLabels {
         parse_error: ['检查工作流脚本语法。', '确认工作流字段使用预期的 snake_case 格式。'],
         aborted: ['本次执行已停止。如仍需要结果，可以重新运行。'],
         timeout: ['重新运行工作流。', '如果仍然超时，建议降低并发或检查模型/API 可用性。'],
-        runtime_error: ['优先查看失败智能体。', '已完成智能体的结果仍可按需参考。', '需要继续诊断时，可以复制错误详情。'],
+        runtime_error: ['优先查看失败检查项。', '已完成检查项的结果仍可按需参考。', '需要继续诊断时，可以复制错误详情。'],
       },
       logsHeading: '技术日志',
-      failedAgentsHeading: '智能体执行状态',
-      executedAgentsHeading: '智能体执行状态',
+      failedAgentsHeading: '检查项状态',
+      executedAgentsHeading: '检查项状态',
       progressHeading: '执行过程',
       scriptHeading: '提交的脚本',
       noExtraDetails: '没有更多诊断信息。',
       copyReason: '复制',
       copyReasonDone: '已复制',
-      impactTpl: (done, total, failed) => `已完成 ${done}/${total} 个智能体 · ${failed} 个需要关注`,
+      impactTpl: (done, total, failed) => `已完成 ${done}/${total} 个检查项 · ${failed} 个需要关注`,
       phase: {
         countTpl: (done, total) => `${done}/${total}`,
         runningTag: (n) => `· ${n} 运行中`,
@@ -261,27 +261,27 @@ function zhLabels(): WorkflowCardLabels {
         resultPreviewHeading: '结果预览',
         errorHeading: '错误',
         emptyPreview: '（暂无预览）',
-        agentNumber: (n) => `#${n}`,
+        agentNumber: (n) => `检查 ${n}`,
         queued: '排队中',
         running: '运行中…',
-        openDetail: '查看 agent 详情',
+        openDetail: '查看检查项详情',
       },
     },
-    cancel: '取消工作流',
+    cancel: '停止任务',
     saveAria: '复制并编辑工作流…',
     saveTitle: '在工作流中心打开复制草案',
     copyAria: '复制结果',
     copyDoneAria: '已复制',
-    openInWorkflowsAria: '在工作流中心打开',
-    openInWorkflowsTitle: '在工作流中心查看此工作流',
-    viewSubagentsHeading: '查看智能体',
+    openInWorkflowsAria: '打开任务详情',
+    openInWorkflowsTitle: '在任务中心查看此任务',
+    viewSubagentsHeading: '查看检查项',
     runningProgressHeading: '当前进展',
-    runningAgentsHeading: '正在运行',
-    completedAgentsHeading: '已完成',
-    queuedAgentsHeading: '排队中',
+    runningAgentsHeading: '正在检查',
+    completedAgentsHeading: '已完成检查',
+    queuedAgentsHeading: '等待检查',
     failedAgentsHeading: '需要关注',
     currentProgressTpl: (phase, running, done, total) => {
-      const phaseText = phase ? `正在执行 ${phase}` : '工作流正在执行';
+      const phaseText = phase ? `正在执行 ${phase}` : '任务正在执行';
       return `${phaseText} · ${running} 个运行中 · 已完成 ${done}/${total}`;
     },
     recentLogsHeading: '最近更新',
@@ -291,16 +291,16 @@ function zhLabels(): WorkflowCardLabels {
       openRun: '打开运行',
       stop: '停止',
       close: '关闭工作流详情',
-      title: '工作流运行',
+      title: '任务',
       overview: '概览',
-      agents: '智能体',
+      agents: '检查项',
       logs: '日志',
       result: '结果',
       currentState: '当前状态',
       runId: '运行 ID',
       elapsed: '耗时',
-      progress: (done, total) => `${done}/${total} 个智能体`,
-      activeFallback: '工作流正在执行',
+      progress: (done, total) => `${done}/${total} 个检查项`,
+      activeFallback: '任务正在执行',
       noResult: '暂无结果。',
       status: {
         queued: '排队中',

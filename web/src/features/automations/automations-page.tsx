@@ -665,7 +665,7 @@ export function AutomationsPage() {
   }, [clearPageHeader, headerEnd, labels.subtitle, labels.title, setPageHeader]);
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-base">
       <div className="flex w-full flex-col gap-5 px-3 py-6 sm:px-5 xl:px-6">
         <section className="grid gap-3 sm:grid-cols-4">
           <Metric
@@ -803,7 +803,7 @@ export function AutomationsPage() {
                   {templates.map((template) => (
                     <button
                       key={template.name}
-                      className="rounded-lg border border-edge bg-surface-base p-4 text-left hover:bg-surface-hover"
+                      className="rounded-lg bg-surface-base p-4 text-left hover:bg-surface-hover"
                       onClick={() => {
                         setForm(template.form);
                         setCreateMode('blank');
@@ -897,8 +897,8 @@ export function AutomationsPage() {
 function Metric({ label, value, tone = 'neutral' }: { label: string; value: string | number; tone?: 'neutral' | 'danger' }) {
   return (
     <div className={cn(
-      'rounded-lg border bg-surface-panel px-4 py-3',
-      tone === 'danger' ? 'border-red-500/30' : 'border-edge',
+      'rounded-lg bg-surface-panel px-4 py-3 shadow-surface',
+      tone === 'danger' && 'bg-red-500/10',
     )}>
       <div className="text-xs font-medium uppercase text-fg-muted">{label}</div>
       <div className={cn('mt-1 truncate text-lg font-semibold', tone === 'danger' ? 'text-red-700 dark:text-red-300' : 'text-fg')}>
@@ -935,7 +935,7 @@ function DraftPanel({
 }) {
   const requiresApproval = Boolean(draft && draft.simulation.requiredConfirmations.length > 0);
   return (
-    <section className="rounded-lg border border-edge bg-surface-panel p-4">
+    <section className="rounded-lg bg-surface-panel p-4 shadow-surface">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -956,7 +956,7 @@ function DraftPanel({
         placeholder={labels.draft.placeholder}
       />
       {draft ? (
-        <div className="mt-4 grid gap-3 rounded-lg border border-edge bg-surface-base p-4 lg:grid-cols-[1fr_1fr]">
+        <div className="mt-4 grid gap-3 rounded-lg bg-surface-base p-4 lg:grid-cols-[1fr_1fr]">
           <div className="min-w-0">
             <div className="text-sm font-semibold text-fg">{draft.automation.name}</div>
             {draft.automation.description ? (
@@ -1045,7 +1045,7 @@ function AutomationList({
         return (
           <article
             key={automation.id}
-            className="flex min-h-44 cursor-pointer flex-col rounded-lg border border-edge bg-surface-panel p-3.5 outline-none hover:bg-surface-hover"
+            className="flex min-h-44 cursor-pointer flex-col rounded-lg bg-surface-panel p-3.5 shadow-surface outline-none transition-colors hover:bg-surface-hover"
             role="button"
             tabIndex={0}
             onClick={() => onOpenDetails(automation.id)}
@@ -1181,7 +1181,7 @@ function RunsList({
 }) {
   if (runs.length === 0) return <EmptyState icon={<Activity className="size-5" />} title={labels.empty.runs} />;
   return (
-    <div className={cn('rounded-lg border border-edge bg-surface-panel', className)}>
+    <div className={cn('rounded-lg bg-surface-panel shadow-surface', className)}>
       {runs.map((run) => (
         <div
           key={run.id}
@@ -1258,7 +1258,7 @@ function RunDetailPanel({
 }) {
   if (!run) {
     return (
-      <aside className={cn('flex min-h-64 flex-col justify-center rounded-lg border border-edge bg-surface-panel px-4 text-center text-sm text-fg-muted', className)}>
+      <aside className={cn('flex min-h-64 flex-col justify-center rounded-lg bg-surface-panel px-4 text-center text-sm text-fg-muted shadow-surface', className)}>
         <Activity className="mx-auto size-5" />
         <div className="mt-2">{labels.selectRun}</div>
       </aside>
@@ -1266,7 +1266,7 @@ function RunDetailPanel({
   }
 
   return (
-    <aside className={cn('min-h-0 overflow-y-auto rounded-lg border border-edge bg-surface-panel', className)}>
+    <aside className={cn('min-h-0 overflow-y-auto rounded-lg bg-surface-panel shadow-surface', className)}>
       <div className="border-b border-edge px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -1440,7 +1440,7 @@ function AutomationDetailDialog({
 
               <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
                 <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
-                  <aside className="grid h-fit gap-3 rounded-lg border border-edge bg-surface-base p-4">
+                  <aside className="grid h-fit gap-3 rounded-lg bg-surface-base p-4">
                     <Info label={labels.info.when} value={triggerLabel(automation.trigger, labels, cronLabels, language)} />
                     <Info label={labels.info.run} value={actionLabel(automation.action, labels)} />
                     <Info label={labels.info.safety} value={labels.safety[mode]} />
@@ -1460,7 +1460,7 @@ function AutomationDetailDialog({
                         <h3 className="text-sm font-semibold text-fg">{labels.dashboard.runHistory}</h3>
                         <p className="mt-1 text-sm text-fg-muted">{labels.dashboard.runHistoryDescription}</p>
                       </div>
-                      <span className="rounded-full border border-edge bg-surface-base px-2.5 py-1 text-xs text-fg-muted">
+                      <span className="rounded-full bg-surface-base px-2.5 py-1 text-xs text-fg-muted">
                         {runs.length}
                       </span>
                     </div>
@@ -1469,7 +1469,7 @@ function AutomationDetailDialog({
                     ) : (
                       <div className="grid gap-2">
                         {runs.map((run) => (
-                          <div key={run.id} className="rounded-lg border border-edge bg-surface-base p-3">
+                          <div key={run.id} className="rounded-lg bg-surface-base p-3">
                             <div className="flex flex-wrap items-start justify-between gap-2">
                               <button
                                 className="min-w-0 text-left outline-none"
@@ -1594,7 +1594,7 @@ function Info({ label, value }: { label: string; value: string }) {
 
 function EmptyState({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
-    <div className="flex min-h-48 flex-col items-center justify-center rounded-lg border border-edge bg-surface-panel text-fg-muted">
+    <div className="flex min-h-48 flex-col items-center justify-center rounded-lg bg-surface-panel text-fg-muted shadow-surface">
       {icon}
       <div className="mt-2 text-sm">{title}</div>
     </div>

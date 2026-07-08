@@ -6,6 +6,7 @@
  */
 
 import type { Config } from '../../config/schema.js';
+import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import type { InboundMessage } from '../../infra/bus/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
 import type { SessionHydrator } from '../session/index.js';
@@ -33,11 +34,11 @@ import {
   DREAMING_LIGHT_SWEEP_TOKEN,
   DREAMING_REM_SWEEP_TOKEN,
 } from '../memory/dreaming/constants.js';
-import { resolveDreamingConfig } from '../memory/dreaming/config.js';
 import { runDreamingDeepPromotion } from '../memory/dreaming/deep-promotion.js';
 import { appendDreamingEvent, type DreamingEvent } from '../memory/dreaming/events.js';
 import { runLightSweep } from '../memory/dreaming/light-sweep.js';
 import { runRemPatterns } from '../memory/dreaming/rem-patterns.js';
+import { resolveDreamingAgentScope } from '../memory/dreaming/scope.js';
 
 const log = createLogger('AgentOrchestrator');
 
@@ -127,29 +128,36 @@ export class AgentOrchestrator {
         content.includes(DREAMING_REM_SWEEP_TOKEN);
 
       if (isDreamingSweep) {
-        const workspaceDir = this.agentManager.getResolvedWorkspaceForSession(sessionKey);
-        const resolved = resolveDreamingConfig(this.getConfig?.());
+        const cfg = this.getConfig?.();
+        if (!cfg) {
+          log.warn({ sessionKey }, 'Dreaming sweep skipped: config unavailable');
+          return;
+        }
+        const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+        const scope = resolveDreamingAgentScope(cfg, profile.agentId);
+        const resolved = scope.config;
         const t0 = Date.now();
 
         if (content.includes(DREAMING_LIGHT_SWEEP_TOKEN)) {
-          const result = await runLightSweep({ workspaceDir, config: resolved.phases.light });
+          const result = await runLightSweep({ dreamingRoot: scope.memoriesDir, config: resolved.phases.light });
           const event: DreamingEvent = {
             timestamp: new Date().toISOString(), phase: 'light',
             ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
             scannedEntries: result.scannedEntries, newSignals: result.newSignals, deduped: result.deduped,
           };
-          await appendDreamingEvent(workspaceDir, event);
+          await appendDreamingEvent(scope.memoriesDir, event);
         } else if (content.includes(DREAMING_REM_SWEEP_TOKEN)) {
-          const result = await runRemPatterns({ workspaceDir, config: resolved.phases.rem });
+          const result = await runRemPatterns({ dreamingRoot: scope.memoriesDir, config: resolved.phases.rem });
           const event: DreamingEvent = {
             timestamp: new Date().toISOString(), phase: 'rem',
             ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
             patternsDiscovered: result.patternsDiscovered, entriesAnalyzed: result.entriesAnalyzed,
           };
-          await appendDreamingEvent(workspaceDir, event);
+          await appendDreamingEvent(scope.memoriesDir, event);
         } else {
           const result = await runDreamingDeepPromotion({
-            workspaceDir,
+            workspaceDir: scope.workspaceDir,
+            dreamingRoot: scope.memoriesDir,
             config: resolved.phases.deep,
             memoryManager: this.agentManager.getMemoryManagerForSession(sessionKey),
           });
@@ -158,7 +166,7 @@ export class AgentOrchestrator {
             ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
             candidates: result.candidates, applied: result.applied,
           };
-          await appendDreamingEvent(workspaceDir, event);
+          await appendDreamingEvent(scope.memoriesDir, event);
         }
         return;
       }

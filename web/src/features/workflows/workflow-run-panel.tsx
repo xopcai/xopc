@@ -15,13 +15,12 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { useNavigate } from 'react-router-dom';
 
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
-import { WorkflowAgentDetailModal } from '@/features/chat/workflow/workflow-agent-detail-modal';
 import { ProgressTree, RunningProgressPanel } from '@/features/chat/workflow/workflow-progress-display';
 import { WorkflowResultSummary } from '@/features/chat/workflow/workflow-result-summary';
 import { AutomationSuggestionCard } from '@/features/automations/automation-suggestion-card';
 import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import type { WorkflowAgentSnapshot, WorkflowSnapshot } from '@/features/chat/workflow/workflow.types';
-import { rollupPhases, type PhaseRollup } from '@/features/chat/workflow/workflow.utils';
+import { formatAgentElapsed, rollupPhases, type PhaseRollup } from '@/features/chat/workflow/workflow.utils';
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { cn } from '@/lib/cn';
@@ -37,7 +36,6 @@ import {
   type WorkflowFollowUp,
   type WorkflowResultEnvelope,
   type WorkflowRunComparison,
-  type WorkflowRunDefinitionSnapshot,
   type WorkflowRunReplayScope,
   type WorkflowRunView,
 } from './workflow-api';
@@ -96,20 +94,9 @@ function resolveWorkflowSessionKeyFromView(view: WorkflowRunView): string | null
   return resolveWorkflowSessionKey(view);
 }
 
-function formatSourceSummary(source: WorkflowRunView['run']['source']): string {
-  if (!source || typeof source !== 'object' || !('kind' in source)) return 'unknown';
-  if (source.kind === 'chat') return `chat · ${source.sessionKey}`;
-  if (source.kind === 'webui') return source.sessionKey ? `webui · ${source.sessionKey}` : 'webui';
-  if (source.kind === 'automation') return `automation · ${source.automationId}`;
-  if (source.kind === 'api') return source.requestId ? `api · ${source.requestId}` : 'api';
-  if (source.kind === 'im') return `${source.channel} · ${source.chatId}`;
-  return String(source.kind);
-}
-
 export function WorkflowRunPanel({
   view,
   comparison,
-  currentDefinition,
   loading,
   language,
   localeTag,
@@ -144,7 +131,7 @@ export function WorkflowRunPanel({
 
   const [processExpanded, setProcessExpanded] = useState(true);
   const [logsExpanded, setLogsExpanded] = useState(false);
-  const [drawerAgentId, setDrawerAgentId] = useState<number | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
   const [downloadingArtifactId, setDownloadingArtifactId] = useState<string | null>(null);
@@ -159,7 +146,6 @@ export function WorkflowRunPanel({
     const shouldExpandProcess = isActive || runStatus === 'failed' || runStatus === 'timeout';
 
     setProcessExpanded(shouldExpandProcess);
-    setDrawerAgentId(null);
     setDownloadError(null);
   }, [view?.run.id, isActive, runStatus, view?.run.metrics.errorAgentCount]);
 
@@ -171,13 +157,22 @@ export function WorkflowRunPanel({
 
   const snapshot = useMemo(() => (view ? runViewToSnapshot(view) : null), [view]);
   const rollup = useMemo(() => (snapshot ? rollupPhases(snapshot) : { phases: [], unphased: null }), [snapshot]);
-  const drawerAgent = useMemo(() => {
-    if (drawerAgentId == null || !snapshot) return null;
-    return snapshot.agents.find((agent) => agent.id === drawerAgentId) ?? null;
-  }, [drawerAgentId, snapshot]);
+  const selectedAgent = useMemo(() => {
+    if (selectedAgentId == null || !snapshot) return null;
+    return snapshot.agents.find((agent) => agent.id === selectedAgentId) ?? null;
+  }, [selectedAgentId, snapshot]);
+
+  useEffect(() => {
+    if (!snapshot?.runId) return;
+    const nextDefaultAgent =
+      snapshot.agents.find((agent) => agent.status === 'error' || agent.status === 'skipped')
+      ?? snapshot.agents.find((agent) => agent.status === 'running')
+      ?? null;
+    setSelectedAgentId(nextDefaultAgent?.id ?? null);
+  }, [snapshot?.runId]);
 
   const handleSelectAgent = useCallback((agent: WorkflowAgentSnapshot) => {
-    setDrawerAgentId(agent.id);
+    setSelectedAgentId(agent.id);
   }, []);
 
   const diagnostics = useMemo(() => (view ? collectWorkflowRunDiagnostics(view) : []), [view]);
@@ -242,7 +237,7 @@ export function WorkflowRunPanel({
     const index = view.agents.findIndex((agent) => String(agent.id) === rawAgentId);
     if (index < 0) return;
     const parsed = Number.parseInt(rawAgentId, 10);
-    setDrawerAgentId(Number.isFinite(parsed) ? parsed : index + 1);
+    setSelectedAgentId(Number.isFinite(parsed) ? parsed : index + 1);
   }, [view]);
   const workflowSessionKey = view ? resolveWorkflowSessionKeyFromView(view) : null;
   const shouldSuggestWorkflowFailureAutomation = runStatus === 'failed';
@@ -275,8 +270,6 @@ export function WorkflowRunPanel({
     : formatDuration(run.metrics.durationMs ?? undefined);
   const runSummary = buildRunSummary(view, labels);
   const diagnosticHint = buildDiagnosticHint(view, labels);
-  const metadata = run.metadata;
-  const sourceSummary = formatSourceSummary(run.source);
   const canReplayFailedAgents = view.controls.canRetry && view.agents.some((agent) => (agent.status === 'error' || agent.status === 'skipped') && agent.prompt?.trim());
   const canReplayFailedPhases = view.controls.canRetry && (
     view.phases.some((phase) => phase.status === 'failed' && view.agents.some((agent) => agent.phaseId === phase.id && agent.prompt?.trim()))
@@ -288,6 +281,8 @@ export function WorkflowRunPanel({
   const hasRecoveryActions = view.controls.canRetry || canReplayFailedAgents || canReplayFailedPhases;
   const hasResultActions = hasResult;
   const hasAnyActions = hasPrimaryActions || hasRecoveryActions || hasResultActions;
+  const visibleActiveTab: WorkflowRunPanelTab =
+    activeTab === 'diagnostics' || activeTab === 'debug' ? 'process' : activeTab;
 
   return (
     <>
@@ -357,14 +352,13 @@ export function WorkflowRunPanel({
               ) : null}
 
               <WorkflowRunTabs
-                activeTab={activeTab}
+                activeTab={visibleActiveTab}
                 onChange={onTabChange}
                 labels={labels}
-                hasDiagnostics={hasDiagnostics}
                 artifactCount={outcome?.artifacts.length ?? view.artifacts.length}
               />
 
-              {activeTab === 'result' ? (
+              {visibleActiveTab === 'result' ? (
                 <section className="mt-5 space-y-4">
                   {hasResult ? (
                     <div className="rounded-xl border border-edge bg-surface-base/50 p-3">
@@ -443,6 +437,15 @@ export function WorkflowRunPanel({
                     </section>
                   ) : null}
 
+                  {hasDiagnostics ? (
+                    <WorkflowDiagnosticsPanel
+                      diagnostics={diagnostics}
+                      labels={labels}
+                      hint={diagnosticHint}
+                      onOpenAgent={openDiagnosticAgent}
+                    />
+                  ) : null}
+
                   <WorkflowReplayLineagePanel
                     view={view}
                     comparison={comparison}
@@ -452,34 +455,38 @@ export function WorkflowRunPanel({
                 </section>
               ) : null}
 
-              {activeTab === 'process' ? (
-                <WorkflowProcessPanel
-                  snapshot={snapshot}
-                  rollup={rollup}
-                  view={view}
-                  labels={labels}
-                  cardLabels={cardLabels}
-                  isActive={isActive}
-                  processExpanded={processExpanded}
-                  logsExpanded={logsExpanded}
-                  drawerAgentId={drawerAgentId}
-                  durationText={durationText}
-                  onToggleProcess={() => setProcessExpanded((expanded) => !expanded)}
-                  onToggleLogs={() => setLogsExpanded((value) => !value)}
-                  onSelectAgent={handleSelectAgent}
-                />
+              {visibleActiveTab === 'process' ? (
+                <>
+                  {hasDiagnostics ? (
+                    <WorkflowDiagnosticsPanel
+                      diagnostics={diagnostics}
+                      labels={labels}
+                      hint={diagnosticHint}
+                      onOpenAgent={openDiagnosticAgent}
+                    />
+                  ) : null}
+
+                  <WorkflowProcessPanel
+                    snapshot={snapshot}
+                    rollup={rollup}
+                    view={view}
+                    labels={labels}
+                    cardLabels={cardLabels}
+                    isActive={isActive}
+                    processExpanded={processExpanded}
+                    logsExpanded={logsExpanded}
+                    selectedAgentId={selectedAgentId}
+                    selectedAgent={selectedAgent}
+                    durationText={durationText}
+                    onToggleProcess={() => setProcessExpanded((expanded) => !expanded)}
+                    onToggleLogs={() => setLogsExpanded((value) => !value)}
+                    onSelectAgent={handleSelectAgent}
+                  />
+
+                </>
               ) : null}
 
-              {activeTab === 'diagnostics' ? (
-                <WorkflowDiagnosticsPanel
-                  diagnostics={diagnostics}
-                  labels={labels}
-                  hint={diagnosticHint}
-                  onOpenAgent={openDiagnosticAgent}
-                />
-              ) : null}
-
-              {activeTab === 'artifacts' ? (
+              {visibleActiveTab === 'artifacts' ? (
                 <WorkflowOutcomePanel
                   outcome={outcome}
                   labels={labels}
@@ -490,36 +497,11 @@ export function WorkflowRunPanel({
                   onStartFollowUp={handleStartFollowUp}
                 />
               ) : null}
-
-              {activeTab === 'debug' ? (
-                <WorkflowDebugDetails
-                  agents={snapshot.agents}
-                  labels={labels}
-                  metadataItems={[
-                    { label: labels.metadataSession, value: metadata?.sessionKey ?? resolveWorkflowSessionKey(view) ?? '—' },
-                    { label: labels.metadataSource, value: sourceSummary },
-                    { label: labels.metadataDefinition, value: `${metadata?.definition.version ?? run.definitionVersion} · ${metadata?.definition.source ?? 'unknown'}` },
-                    { label: labels.metadataDefinitionHash, value: definitionSnapshotStatus(metadata?.definition, currentDefinition, labels) },
-                    { label: labels.metadataPermissions, value: formatPermissionSnapshot(metadata?.definition) },
-                    { label: labels.metadataRetryOf, value: metadata?.retryOfRunId ?? '—' },
-                  ]}
-                  defaultExpanded
-                />
-              ) : null}
             </section>
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
 
-      <WorkflowAgentDetailModal
-        open={drawerAgentId != null && drawerAgent != null}
-        agent={drawerAgent}
-        snapshot={snapshot}
-        sessionKey={null}
-        ownerAgentId={ownerAgentId}
-        onClose={() => setDrawerAgentId(null)}
-        labels={cardLabels.drawer}
-      />
     </>
   );
 }
@@ -580,21 +562,17 @@ function WorkflowRunTabs({
   activeTab,
   onChange,
   labels,
-  hasDiagnostics,
   artifactCount,
 }: {
   activeTab: WorkflowRunPanelTab;
   onChange: (tab: WorkflowRunPanelTab) => void;
   labels: WorkflowsMessages;
-  hasDiagnostics: boolean;
   artifactCount: number;
 }) {
   const tabs: Array<{ id: WorkflowRunPanelTab; label: string; count?: number }> = [
     { id: 'result', label: labels.resultTitle },
     { id: 'process', label: labels.process },
-    { id: 'diagnostics', label: labels.diagnosticsTitle, count: hasDiagnostics ? 1 : undefined },
     { id: 'artifacts', label: labels.outcomeArtifacts, count: artifactCount || undefined },
-    { id: 'debug', label: labels.debugDetailsTitle },
   ];
 
   return (
@@ -613,7 +591,8 @@ function WorkflowProcessPanel({
   isActive,
   processExpanded,
   logsExpanded,
-  drawerAgentId,
+  selectedAgentId,
+  selectedAgent,
   durationText,
   onToggleProcess,
   onToggleLogs,
@@ -627,7 +606,8 @@ function WorkflowProcessPanel({
   isActive: boolean;
   processExpanded: boolean;
   logsExpanded: boolean;
-  drawerAgentId: number | null;
+  selectedAgentId: number | null;
+  selectedAgent: WorkflowAgentSnapshot | null;
   durationText: string;
   onToggleProcess: () => void;
   onToggleLogs: () => void;
@@ -660,45 +640,172 @@ function WorkflowProcessPanel({
 
       {processExpanded ? (
         <div className="border-t border-edge px-4 pb-4 pt-4">
-          {isActive ? (
-            <RunningProgressPanel
-              snapshot={snapshot}
-              labels={cardLabels}
-              logsExpanded={logsExpanded}
-              onToggleLogs={onToggleLogs}
-              selectedAgentId={drawerAgentId}
-              onSelectAgent={onSelectAgent}
-            />
-          ) : (
-            <ProgressTree
-              rollup={rollup}
-              currentPhase={snapshot.currentPhase}
-              labels={cardLabels.phase}
-              recentLogs={snapshot.logs}
-              recentLogsHeading={cardLabels.recentLogsHeading}
-              showAllLogsLabel={cardLabels.showAllLogs}
-              logsExpanded={logsExpanded}
-              onToggleLogs={onToggleLogs}
-              selectedAgentId={drawerAgentId}
-              onSelectAgent={onSelectAgent}
-            />
-          )}
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)]">
+            <div className="min-w-0">
+              {isActive ? (
+                <RunningProgressPanel
+                  snapshot={snapshot}
+                  labels={cardLabels}
+                  logsExpanded={logsExpanded}
+                  onToggleLogs={onToggleLogs}
+                  selectedAgentId={selectedAgentId}
+                  onSelectAgent={onSelectAgent}
+                />
+              ) : (
+                <ProgressTree
+                  rollup={rollup}
+                  currentPhase={snapshot.currentPhase}
+                  labels={cardLabels.phase}
+                  recentLogs={snapshot.logs}
+                  recentLogsHeading={cardLabels.recentLogsHeading}
+                  showAllLogsLabel={cardLabels.showAllLogs}
+                  logsExpanded={logsExpanded}
+                  onToggleLogs={onToggleLogs}
+                  selectedAgentId={selectedAgentId}
+                  onSelectAgent={onSelectAgent}
+                />
+              )}
 
-          {view.phases.length > 0 ? (
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              {view.phases.map((phase) => (
-                <div key={phase.id} className="rounded-xl border border-edge bg-surface-panel px-3 py-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-fg">{phase.title}</span>
-                    <span className="text-xs text-fg-subtle">{phaseStatusLabel(phase.status, labels)}</span>
-                  </div>
+              {view.phases.length > 0 ? (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  {view.phases.map((phase) => (
+                    <div key={phase.id} className="rounded-xl border border-edge bg-surface-panel px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-sm font-medium text-fg">{phase.title}</span>
+                        <span className="text-xs text-fg-subtle">{phaseStatusLabel(phase.status, labels)}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : null}
             </div>
-          ) : null}
+
+            <WorkflowAgentInspector
+              agent={selectedAgent}
+              snapshot={snapshot}
+              labels={labels}
+              cardLabels={cardLabels}
+            />
+          </div>
         </div>
       ) : null}
     </div>
+  );
+}
+
+function WorkflowAgentInspector({
+  agent,
+  snapshot,
+  labels,
+  cardLabels,
+}: {
+  agent: WorkflowAgentSnapshot | null;
+  snapshot: WorkflowSnapshot;
+  labels: WorkflowsMessages;
+  cardLabels: ReturnType<typeof workflowCardLabels>;
+}) {
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  useEffect(() => {
+    setAdvancedOpen(false);
+  }, [agent?.id]);
+
+  if (!agent) {
+    return (
+      <aside className="min-w-0 rounded-2xl border border-dashed border-edge bg-surface-panel/45 p-4 text-sm text-fg-muted">
+        {labels.noSubagents}
+      </aside>
+    );
+  }
+
+  const elapsed = formatAgentElapsed(agent);
+  const output = agent.error || agent.resultPreview || agent.currentStep || cardLabels.checkDetail.runningPlaceholder;
+
+  return (
+    <aside className="min-w-0 rounded-2xl border border-edge bg-surface-panel p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="truncate text-sm font-semibold text-fg">{agent.label}</h3>
+          <p className="mt-1 text-xs text-fg-subtle">{agent.phase || labels.process}</p>
+        </div>
+        <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', agentStatusTone(agent.status))}>
+          {labels.agentStatus[agent.status] ?? agent.status}
+        </span>
+      </div>
+
+      <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-1">
+        <MetadataItem label={labels.agentInvocationModel} value={agent.invocation?.modelRef ?? agent.invocation?.resolvedModelRef ?? '—'} />
+        <MetadataItem label={labels.metrics.duration} value={elapsed || '—'} />
+      </dl>
+
+      <section className="mt-4 rounded-xl border border-edge-subtle bg-surface-base/60 p-3">
+        <h4 className="text-xs font-semibold text-fg">{labels.agentOutputHeading}</h4>
+        <div
+          className={cn(
+            'mt-2 max-h-72 overflow-auto whitespace-pre-wrap wrap-break-word text-sm leading-6',
+            agent.error ? 'font-mono text-rose-600 dark:text-rose-400' : 'text-fg-muted',
+          )}
+        >
+          {output}
+        </div>
+      </section>
+
+      {agent.steps?.length ? (
+        <section className="mt-3 rounded-xl border border-edge-subtle bg-surface-base/40 p-3">
+          <h4 className="text-xs font-semibold text-fg">{cardLabels.checkDetail.stepsHeading}</h4>
+          <div className="mt-2 space-y-2">
+            {agent.steps.slice(0, 4).map((step) => (
+              <div key={step.id} className="rounded-lg bg-surface-panel px-2.5 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate text-xs font-medium text-fg">{step.label}</span>
+                  <span className="shrink-0 text-[10px] text-fg-subtle">{step.status}</span>
+                </div>
+                {step.detail || step.resultPreview || step.error ? (
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">
+                    {step.error || step.resultPreview || step.detail}
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="mt-3 rounded-xl border border-edge-subtle bg-surface-base/40">
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs font-semibold text-fg"
+          onClick={() => setAdvancedOpen((value) => !value)}
+          aria-expanded={advancedOpen}
+        >
+          {labels.debugDetailsTitle}
+          <ChevronDown className={cn('size-4 shrink-0 text-fg-subtle transition-transform', advancedOpen && 'rotate-180')} aria-hidden />
+        </button>
+        {advancedOpen ? (
+          <div className="space-y-3 border-t border-edge-subtle p-3">
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{labels.agentInputHeading}</div>
+              <pre className="mt-1 max-h-44 overflow-auto whitespace-pre-wrap wrap-break-word rounded-lg bg-surface-panel p-2 font-mono text-xs leading-5 text-fg-muted">
+                {agent.prompt || '—'}
+              </pre>
+            </div>
+            <AgentInvocationSnapshotView agent={agent} labels={labels} />
+            {snapshot.logs.length > 0 ? (
+              <div>
+                <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{cardLabels.recentLogsHeading}</div>
+                <div className="mt-1 max-h-36 space-y-0.5 overflow-auto rounded-lg bg-surface-panel p-2 font-mono text-xs text-fg-subtle">
+                  {snapshot.logs.map((line) => (
+                    <div key={line} className="wrap-break-word">
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+    </aside>
   );
 }
 
@@ -763,31 +870,6 @@ function WorkflowReplayLineagePanel({
       </div>
     </section>
   );
-}
-
-function definitionSnapshotStatus(
-  snapshot: WorkflowRunDefinitionSnapshot | undefined,
-  currentDefinition: WorkflowDefinition | undefined,
-  labels: WorkflowsMessages,
-): string {
-  if (!snapshot?.contentHash) return labels.definitionHashUnavailable;
-  const short = snapshot.contentHash.slice(0, 8);
-  if (!currentDefinition?.contentHash) return `${short} · ${labels.definitionHashCurrentUnknown}`;
-  return currentDefinition.contentHash === snapshot.contentHash
-    ? `${short} · ${labels.definitionHashMatches}`
-    : `${short} · ${labels.definitionHashDrifted}`;
-}
-
-function formatPermissionSnapshot(snapshot: WorkflowRunDefinitionSnapshot | undefined): string {
-  const permissions = snapshot?.permissions;
-  if (!permissions) return '—';
-  const parts = [
-    permissions.tools?.length ? `tools:${permissions.tools.join(',')}` : null,
-    permissions.network != null ? `network:${permissions.network ? 'on' : 'off'}` : null,
-    permissions.fileSystem ? `fs:${permissions.fileSystem}` : null,
-    permissions.approvalRequired ? 'approval' : null,
-  ].filter(Boolean);
-  return parts.length > 0 ? parts.join(' · ') : '—';
 }
 
 function formatDurationDelta(deltaMs: number | null): string {
@@ -883,8 +965,8 @@ function WorkflowOutcomePanel({
       ) : null}
 
       {outcome.structuredOutput !== undefined ? (
-        <OutcomeCard title={labels.outcomeStructuredOutput}>
-          <pre className="max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-base p-2 font-mono text-xs leading-5 text-fg-muted">
+        <OutcomeCard title={labels.outcomeStructuredOutput} className="lg:col-span-3">
+          <pre className="max-h-[28rem] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-base p-3 font-mono text-xs leading-5 text-fg-muted">
             {stringifyWorkflowResult(outcome.structuredOutput)}
           </pre>
         </OutcomeCard>
@@ -902,9 +984,9 @@ function triggerBlobDownload(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
-function OutcomeCard({ title, children }: { title: string; children: ReactNode }) {
+function OutcomeCard({ title, children, className }: { title: string; children: ReactNode; className?: string }) {
   return (
-    <section className="min-w-0 rounded-xl border border-edge-subtle bg-surface-base/35 p-3">
+    <section className={cn('min-w-0 rounded-xl border border-edge-subtle bg-surface-base/35 p-3', className)}>
       <h4 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{title}</h4>
       <div className="mt-2">{children}</div>
     </section>
@@ -924,110 +1006,6 @@ function resolveWorkflowOutcome(result: unknown): WorkflowOutcomeView | null {
   const followUps = Array.isArray(envelope.followUps) ? envelope.followUps : [];
   if (artifacts.length === 0 && followUps.length === 0 && envelope.structuredOutput === undefined) return null;
   return { artifacts, followUps, structuredOutput: envelope.structuredOutput };
-}
-
-function WorkflowDebugDetails({
-  agents,
-  labels,
-  metadataItems,
-  defaultExpanded,
-}: {
-  agents: WorkflowAgentSnapshot[];
-  labels: WorkflowsMessages;
-  metadataItems: Array<{ label: string; value: string }>;
-  defaultExpanded: boolean;
-}) {
-  const [expanded, setExpanded] = useState(defaultExpanded);
-
-  useEffect(() => {
-    setExpanded(defaultExpanded);
-  }, [defaultExpanded]);
-
-  return (
-    <section className="mt-6 rounded-2xl border border-edge bg-surface-base/35">
-      <button
-        type="button"
-        className="flex w-full items-start justify-between gap-4 px-4 py-3 text-left"
-        onClick={() => setExpanded((value) => !value)}
-        aria-expanded={expanded}
-      >
-        <div className="flex min-w-0 flex-col gap-1">
-          <h3 className="text-sm font-semibold text-fg">{labels.debugDetailsTitle}</h3>
-          <p className="text-xs leading-5 text-fg-subtle">{labels.debugDetailsHint}</p>
-        </div>
-        <ChevronDown
-          className={cn('mt-0.5 size-4 shrink-0 text-fg-subtle transition-transform', expanded ? 'rotate-180' : null)}
-          aria-hidden
-        />
-      </button>
-      {expanded ? (
-        <div className="border-t border-edge px-4 py-4">
-          <AgentInputOutputOverview agents={agents} labels={labels} />
-          <div className="mt-4 grid gap-3 rounded-xl border border-edge-subtle bg-surface-panel/60 p-3 sm:grid-cols-2 lg:grid-cols-3">
-            {metadataItems.map((item) => (
-              <MetadataItem key={item.label} label={item.label} value={item.value} />
-            ))}
-          </div>
-        </div>
-      ) : null}
-    </section>
-  );
-}
-
-function AgentInputOutputOverview({
-  agents,
-  labels,
-}: {
-  agents: WorkflowAgentSnapshot[];
-  labels: WorkflowsMessages;
-}) {
-  if (agents.length === 0) return null;
-
-  return (
-    <section>
-      <h4 className="text-sm font-semibold text-fg">{labels.agentIoTitle}</h4>
-      <p className="mt-1 text-xs leading-5 text-fg-subtle">{labels.agentIoHint}</p>
-      <div className="mt-3 grid gap-3">
-          {agents.map((agent) => {
-          const output = agent.error || agent.resultPreview || labels.agentNoOutput;
-          return (
-            <article key={agent.id} className="rounded-xl border border-edge-subtle bg-surface-panel p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0 text-sm font-medium text-fg">{agent.label}</div>
-                <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', agentStatusTone(agent.status))}>
-                  {labels.agentStatus[agent.status] ?? agent.status}
-                </span>
-              </div>
-              <div className="mt-3 grid gap-3 lg:grid-cols-2">
-                <div className="min-w-0">
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                    {labels.agentInputHeading}
-                  </div>
-                  <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-lg border border-edge-subtle bg-surface-base/50 p-2 font-mono text-xs leading-5 text-fg-muted">
-                    {agent.prompt || '—'}
-                  </pre>
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                    {labels.agentOutputHeading}
-                  </div>
-                  <div
-                    className={cn(
-                      'mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap wrap-break-word rounded-lg border border-edge-subtle bg-surface-base/50 p-2 text-xs leading-5',
-                      agent.error ? 'font-mono text-rose-600 dark:text-rose-400' : 'text-fg-muted',
-                    )}
-                  >
-                    {output}
-                  </div>
-                </div>
-              </div>
-              <AgentInvocationSnapshotView agent={agent} labels={labels} />
-            </article>
-          );
-          })}
-      </div>
-    </section>
-  );
 }
 
 function AgentInvocationSnapshotView({

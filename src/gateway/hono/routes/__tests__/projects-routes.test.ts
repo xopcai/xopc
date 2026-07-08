@@ -15,6 +15,7 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
 } from '../../../../storage/sqlite/index.js';
+import { WORK_ITEM_ATTACHMENT_MAX_BYTES } from '../../../../work-items/index.js';
 import type { GatewayService } from '../../../service.js';
 import { registerProjectsRoutes } from '../projects.js';
 import { registerSearchRoutes } from '../search.js';
@@ -40,9 +41,12 @@ function registerSearchRouteApp(service: Partial<GatewayService>): Hono {
 
 describe('project association routes', () => {
   let stateDir: string;
+  let previousStateDir: string | undefined;
 
   beforeEach(() => {
+    previousStateDir = process.env.XOPC_STATE_DIR;
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-project-routes-'));
+    process.env.XOPC_STATE_DIR = stateDir;
     resetXopcDatabaseSingletonForTest();
     openXopcDatabase({ path: join(stateDir, 'xopc.db') });
   });
@@ -50,6 +54,11 @@ describe('project association routes', () => {
   afterEach(() => {
     closeXopcDatabase();
     resetXopcDatabaseSingletonForTest();
+    if (previousStateDir === undefined) {
+      delete process.env.XOPC_STATE_DIR;
+    } else {
+      process.env.XOPC_STATE_DIR = previousStateDir;
+    }
     rmSync(stateDir, { recursive: true, force: true });
   });
 
@@ -129,6 +138,7 @@ describe('project association routes', () => {
   it('creates project sessions with the project default agent when no agent is explicit', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Agent Project', defaultAgentId: 'coder' });
+    const listSessions = vi.fn(async () => ({ items: [] }));
     const app = registerSessionRouteApp({
       currentConfig: {
         agents: {
@@ -138,7 +148,7 @@ describe('project association routes', () => {
       },
       projects,
       sessions: {
-        listSessions: vi.fn(async () => ({ items: [] })),
+        listSessions,
         getSession: vi.fn(async (key: string) => ({ key, routing: { agentId: key.split(':')[1] }, projectId: project.id })),
       } as unknown as GatewayService['sessions'],
       sessionIndexInstance: {
@@ -159,6 +169,91 @@ describe('project association routes', () => {
     expect(body.session.key.startsWith('agent:coder:')).toBe(true);
     expect(body.session.routing?.agentId).toBe('coder');
     expect(projects.listSessionKeys(project.id)).toEqual([body.session.key]);
+    expect(listSessions).toHaveBeenCalledWith(expect.objectContaining({ includeHidden: true }));
+  });
+
+  it('reuses hidden empty project chat shells instead of creating duplicates', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Reusable Project', defaultAgentId: 'coder' });
+    const existingKey = 'agent:coder:webchat:default:direct:chat_1783525363859';
+    const saveMessages = vi.fn();
+    const existingSession = {
+      key: existingKey,
+      messageCount: 0,
+      hiddenFromSessionList: true,
+      projectId: project.id,
+      routing: {
+        agentId: 'coder',
+        source: 'webchat',
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: 'chat_1783525363859',
+      },
+      customData: { genericNewChatShell: true },
+    };
+    const app = registerSessionRouteApp({
+      currentConfig: {
+        agents: {
+          default: 'main',
+          list: [{ id: 'main', enabled: true }, { id: 'coder', enabled: true }],
+        },
+      },
+      projects,
+      sessions: {
+        listSessions: vi.fn(async () => ({ items: [existingSession] })),
+        getSession: vi.fn(async () => existingSession),
+      } as unknown as GatewayService['sessions'],
+      sessionIndexInstance: {
+        saveMessages,
+      } as unknown as GatewayService['sessionIndexInstance'],
+    });
+
+    const res = await app.request('/api/sessions', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: project.id }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { reused?: boolean; session: { key: string } };
+    expect(body.reused).toBe(true);
+    expect(body.session.key).toBe(existingKey);
+    expect(saveMessages).not.toHaveBeenCalled();
+    expect(projects.listSessionKeys(project.id)).toEqual([]);
+  });
+
+  it('omits hidden empty project chat shells from project session lists', async () => {
+    const hiddenKey = 'agent:coder:webchat:default:direct:chat_1783525363859';
+    const visibleKey = 'agent:coder:webchat:default:direct:chat_1783526000000';
+    const app = registerProjectRouteApp({
+      projects: {
+        listSessionKeys: vi.fn(() => [hiddenKey, visibleKey]),
+      } as unknown as GatewayService['projects'],
+      sessions: {
+        getSession: vi.fn(async (key: string) => key === hiddenKey
+          ? {
+              key,
+              messageCount: 0,
+              hiddenFromSessionList: true,
+              routing: { peerId: 'chat_1783525363859' },
+              customData: { genericNewChatShell: true },
+            }
+          : {
+              key,
+              messageCount: 2,
+              hiddenFromSessionList: false,
+              routing: { peerId: 'chat_1783526000000' },
+              customData: { genericNewChatShell: true },
+            }),
+      } as unknown as GatewayService['sessions'],
+    });
+
+    const res = await app.request('/api/projects/project-a/sessions');
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; sessions: Array<{ key: string }> };
+    expect(body.ok).toBe(true);
+    expect(body.sessions).toEqual([expect.objectContaining({ key: visibleKey })]);
   });
 
   it('does not reuse note-scoped empty sessions when creating a generic webchat session', async () => {
@@ -336,6 +431,79 @@ describe('project association routes', () => {
     })]);
   });
 
+  it('creates, reads, and removes work item attachments', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Attachment Project' });
+    const app = registerProjectRouteApp({ projects });
+    const form = new FormData();
+    form.append('title', 'Review attachment');
+    form.append('description', 'Use the attached brief.');
+    form.append('file', new File(['attachment brief'], 'brief.txt', { type: 'text/plain' }));
+
+    const create = await app.request(`/api/projects/${project.id}/work-items`, {
+      method: 'POST',
+      body: form,
+    });
+
+    expect(create.status).toBe(201);
+    const created = await create.json() as {
+      ok: boolean;
+      item: { id: string; attachments: Array<{ id: string; fileName: string; mimeType: string; size: number }> };
+    };
+    expect(created.ok).toBe(true);
+    expect(created.item.attachments).toEqual([
+      expect.objectContaining({
+        fileName: 'brief.txt',
+        mimeType: 'text/plain',
+        size: 'attachment brief'.length,
+      }),
+    ]);
+    const attachmentId = created.item.attachments[0].id;
+
+    const content = await app.request(`/api/work-items/${created.item.id}/attachments/${attachmentId}/content`);
+    expect(content.status).toBe(200);
+    expect(content.headers.get('content-type')).toBe('text/plain');
+    expect(await content.text()).toBe('attachment brief');
+
+    const remove = await app.request(`/api/work-items/${created.item.id}/attachments/${attachmentId}`, {
+      method: 'DELETE',
+    });
+    expect(remove.status).toBe(200);
+    const removed = await remove.json() as { ok: boolean; item: { attachments: unknown[] } };
+    expect(removed.ok).toBe(true);
+    expect(removed.item.attachments).toEqual([]);
+
+    const events = await app.request(`/api/work-items/${created.item.id}/events`);
+    const eventsBody = await events.json() as { events: Array<Record<string, unknown>> };
+    expect(eventsBody.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'attachment_added' }),
+      expect.objectContaining({ type: 'attachment_removed' }),
+    ]));
+  });
+
+  it('rejects oversized work item attachments before creating the work item', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Attachment Limit Project' });
+    const app = registerProjectRouteApp({ projects });
+    const form = new FormData();
+    form.append('title', 'Too large attachment');
+    form.append('file', new File([new Uint8Array(WORK_ITEM_ATTACHMENT_MAX_BYTES + 1)], 'large.bin'));
+
+    const create = await app.request(`/api/projects/${project.id}/work-items`, {
+      method: 'POST',
+      body: form,
+    });
+
+    expect(create.status).toBe(413);
+    const body = await create.json() as { ok: boolean; error: string };
+    expect(body).toMatchObject({ ok: false });
+    expect(body.error).toContain('exceeds 25MB limit');
+
+    const list = await app.request(`/api/projects/${project.id}/work-items`);
+    const listed = await list.json() as { ok: boolean; total: number };
+    expect(listed.total).toBe(0);
+  });
+
   it('paginates project work items beyond the source page size', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Large Workbench Project' });
@@ -401,6 +569,34 @@ describe('project association routes', () => {
     expect(eventsBody.events).toEqual(expect.arrayContaining([
       expect.objectContaining({ type: 'status_changed' }),
     ]));
+  });
+
+  it('updates an incomplete work item without binding undefined completedAt', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Edit Project' });
+    const app = registerProjectRouteApp({ projects });
+    const create = await app.request(`/api/projects/${project.id}/work-items`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Draft title', priority: 'normal' }),
+    });
+    const created = await create.json() as { item: { id: string } };
+
+    const res = await app.request(`/api/work-items/${created.item.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Saved title', priority: 'high' }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { ok: boolean; item: Record<string, unknown> };
+    expect(body.ok).toBe(true);
+    expect(body.item).toMatchObject({
+      id: created.item.id,
+      title: 'Saved title',
+      priority: 'high',
+    });
+    expect(body.item.completedAt).toBeUndefined();
   });
 
   it('creates and applies a work item update suggestion', async () => {

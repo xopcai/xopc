@@ -2,23 +2,31 @@ import {
   ArrowLeft,
   BriefcaseBusiness,
   CheckCircle2,
+  Download,
   ExternalLink,
   FileText,
   MessageSquarePlus,
+  Paperclip,
+  Plus,
   RefreshCw,
   Target,
+  Trash2,
 } from 'lucide-react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { fetchProject, type ProjectWithDetails } from '@/features/projects/api';
 import {
   createWorkItemGoal,
+  deleteWorkItemAttachment,
+  downloadWorkItemAttachment,
   fetchWorkItem,
   fetchWorkItemEvents,
   startWorkItemChat,
+  uploadWorkItemAttachments,
   type WorkItem,
+  type WorkItemAttachment,
   type WorkItemEvent,
   type WorkItemStatus,
 } from '@/features/work-items/api';
@@ -42,6 +50,13 @@ function formatTime(value?: number | string): string {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
 
+function formatFileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
 function linkHref(link: NonNullable<WorkItem['links']>[number]): string {
   if (link.kind === 'chat') return `/chat/${encodeURIComponent(link.targetId)}`;
   if (link.kind === 'goal') return `/goals/${encodeURIComponent(link.targetId)}`;
@@ -63,7 +78,7 @@ function MetaRow({ label, value }: { label: string; value?: string | null }) {
 function ActivityList({ events, t }: { events: WorkItemEvent[]; t: WorkItemsMessages }) {
   if (!events.length) {
     return (
-      <div className="rounded-lg border border-dashed border-edge bg-surface-base px-4 py-8 text-center text-sm text-fg-muted">
+      <div className="rounded-lg bg-surface-panel px-4 py-8 text-center text-sm text-fg-muted shadow-surface">
         {t.detail.noActivity}
       </div>
     );
@@ -71,7 +86,7 @@ function ActivityList({ events, t }: { events: WorkItemEvent[]; t: WorkItemsMess
   return (
     <div className="grid gap-3">
       {events.map((event) => (
-        <article key={event.id} className="rounded-lg border border-edge bg-surface-panel px-4 py-3">
+        <article key={event.id} className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
           <div className="flex items-center justify-between gap-3">
             <h3 className="text-sm font-medium text-fg">{t.eventTypes[event.type] ?? event.type}</h3>
             <time className="shrink-0 text-xs text-fg-subtle">{formatTime(event.createdAt)}</time>
@@ -93,6 +108,7 @@ export function WorkItemDetailPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const attachmentInputRef = useRef<HTMLInputElement | null>(null);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
 
@@ -153,6 +169,51 @@ export function WorkItemDetailPage() {
       setBusy(false);
     }
   }, [item, navigate]);
+
+  const refreshEvents = useCallback(async (id: string) => {
+    const nextEvents = await fetchWorkItemEvents(id).catch(() => ({ events: [] }));
+    setEvents(nextEvents.events);
+  }, []);
+
+  const handleAddAttachments = useCallback(async (files: File[]) => {
+    if (!item || !files.length) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await uploadWorkItemAttachments(item.id, files);
+      setItem(res.item);
+      await refreshEvents(res.item.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [item, refreshEvents]);
+
+  const handleRemoveAttachment = useCallback(async (attachment: WorkItemAttachment) => {
+    if (!item) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await deleteWorkItemAttachment(item.id, attachment.id);
+      setItem(res.item);
+      await refreshEvents(res.item.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [item, refreshEvents]);
+
+  const handleDownloadAttachment = useCallback(async (attachment: WorkItemAttachment) => {
+    if (!item) return;
+    setError(null);
+    try {
+      await downloadWorkItemAttachment(item.id, attachment);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  }, [item]);
 
   const headerEnd = useMemo(() => (
     <>
@@ -231,7 +292,7 @@ export function WorkItemDetailPage() {
 
   return (
     <main className="mx-auto flex w-full max-w-[var(--max-width-app-main)] flex-1 flex-col px-3 py-5 sm:px-5 xl:px-6">
-      <section className="rounded-lg border border-edge bg-surface-panel px-4 py-4 sm:px-5">
+      <section className="rounded-lg bg-surface-panel px-4 py-4 shadow-surface sm:px-5">
         <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex min-w-0 items-center gap-2">
@@ -278,7 +339,60 @@ export function WorkItemDetailPage() {
         </section>
 
         <aside className="grid content-start gap-4">
-          <section className="rounded-lg border border-edge bg-surface-panel px-4 py-3">
+          <section className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
+                <Paperclip className="size-4 shrink-0 text-fg-muted" aria-hidden />
+                <span className="truncate">{t.attachments.title}</span>
+              </h2>
+              <Button type="button" variant="secondary" className="h-8 rounded-lg px-2.5 text-xs" disabled={busy} onClick={() => attachmentInputRef.current?.click()}>
+                <Plus className="size-3.5" aria-hidden />
+                {t.attachments.add}
+              </Button>
+              <input
+                ref={attachmentInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(event) => {
+                  void handleAddAttachments(Array.from(event.target.files ?? []));
+                  event.currentTarget.value = '';
+                }}
+              />
+            </div>
+            <div className="mt-3 grid gap-2">
+              {item.attachments?.length ? item.attachments.map((attachment) => (
+                <div key={attachment.id} className="flex min-w-0 items-center gap-2 rounded-md border border-edge bg-surface-base px-2 py-2 text-sm">
+                  <FileText className="size-4 shrink-0 text-fg-muted" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium text-fg">{attachment.fileName}</div>
+                    <div className="truncate text-xs text-fg-subtle">{attachment.mimeType} · {formatFileSize(attachment.size)}</div>
+                  </div>
+                  <button
+                    type="button"
+                    className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg"
+                    title={t.attachments.download}
+                    aria-label={t.attachments.download}
+                    disabled={busy}
+                    onClick={() => void handleDownloadAttachment(attachment)}
+                  >
+                    <Download className="size-3.5" aria-hidden />
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-danger"
+                    title={t.attachments.remove}
+                    aria-label={t.attachments.remove}
+                    disabled={busy}
+                    onClick={() => void handleRemoveAttachment(attachment)}
+                  >
+                    <Trash2 className="size-3.5" aria-hidden />
+                  </button>
+                </div>
+              )) : <p className="text-sm text-fg-muted">{t.attachments.empty}</p>}
+            </div>
+          </section>
+          <section className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
             <h2 className="text-sm font-semibold text-fg">{t.detail.links}</h2>
             <div className="mt-3 grid gap-1 text-sm">
               {item.links?.length ? item.links.map((link) => (
@@ -292,7 +406,7 @@ export function WorkItemDetailPage() {
               )) : <p className="text-sm text-fg-muted">{t.detail.noLinks}</p>}
             </div>
           </section>
-          <section className="rounded-lg border border-edge bg-surface-panel px-4 py-3">
+          <section className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
             <h2 className="text-sm font-semibold text-fg">{t.detail.project}</h2>
             <Link to={projectHref} className="mt-2 inline-flex min-w-0 items-center gap-2 text-sm font-medium text-accent hover:text-accent-fg">
               <CheckCircle2 className="size-4 shrink-0" aria-hidden />

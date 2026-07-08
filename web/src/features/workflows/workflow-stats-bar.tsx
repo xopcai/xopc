@@ -22,7 +22,7 @@ export function WorkflowStatsBar({
     : null;
 
   return (
-    <section className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg border border-edge bg-surface-panel/70 px-3 py-2">
+    <section className="flex min-w-0 flex-wrap items-center gap-2 rounded-lg bg-surface-panel/70 px-3 py-2 shadow-surface">
       <StatPill label={labels.statsTotalRuns} value={String(stats.totalRuns)} />
       <StatPill label={labels.statsActiveRuns} value={String(stats.activeRuns)} />
       <StatPill
@@ -44,7 +44,7 @@ export function WorkflowStatsBar({
 
 function StatPill({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-muted px-2.5 py-1 text-xs text-fg-muted">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-2.5 py-1 text-xs text-fg-muted">
       <span>{label}</span>
       <span className="font-semibold tabular-nums text-fg">{value}</span>
     </span>

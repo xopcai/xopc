@@ -45,8 +45,8 @@ function WorkflowPickCard({
   return (
     <article
       className={cn(
-        'group flex h-full flex-col rounded-xl border border-edge-subtle bg-surface-base p-4 text-left transition-colors',
-        'hover:border-accent/40 hover:bg-surface-hover',
+        'group flex h-full flex-col rounded-xl bg-surface-panel p-4 text-left shadow-surface transition-colors',
+        'hover:bg-surface-hover',
       )}
     >
       <button

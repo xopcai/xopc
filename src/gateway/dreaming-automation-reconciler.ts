@@ -1,7 +1,7 @@
 import type { Config } from '../config/schema.js';
-import { getWorkspacePath } from '../config/workspace-path-helpers.js';
-import { resolveDefaultAgentId } from '../agent/agent-scope.js';
+import { normalizeAgentId } from '../agent/agent-scope.js';
 import { resolveDreamingConfig, type DreamingResolvedConfig } from '../agent/memory/dreaming/config.js';
+import { resolveDreamingAgentScope } from '../agent/memory/dreaming/scope.js';
 import {
   DREAMING_CRON_NAME,
   DREAMING_CRON_TAG,
@@ -47,6 +47,7 @@ export type DreamingAutomationReconcileResult = {
   created: string[];
   updated: string[];
   disabled: string[];
+  removed: string[];
 };
 
 function phaseDescription(phase: DreamingPhaseId): string {
@@ -66,13 +67,17 @@ function buildTrigger(config: DreamingResolvedConfig, phase: DreamingPhaseId): A
   };
 }
 
+function dreamingAutomationId(agentId: string, phase: DreamingPhaseId): string {
+  return `system-dreaming:${normalizeAgentId(agentId)}:${phase}`;
+}
+
 function buildAction(config: Config, agentId: string, token: string): AutomationAction {
-  const workspaceDir = getWorkspacePath(config);
+  const scope = resolveDreamingAgentScope(config, agentId);
   return {
     kind: 'agent',
-    agentId,
+    agentId: scope.agentId,
     instruction: token,
-    ...(workspaceDir ? { workingDirectory: workspaceDir } : {}),
+    workingDirectory: scope.workspaceDir,
     timeoutSeconds: 3600,
   };
 }
@@ -101,50 +106,78 @@ export async function reconcileDreamingAutomations(params: {
   automationService: AutomationService;
 }): Promise<DreamingAutomationReconcileResult> {
   const { config, automationService } = params;
-  const resolved = resolveDreamingConfig(config);
-  const agentId = resolveDefaultAgentId(config);
-  const result: DreamingAutomationReconcileResult = { created: [], updated: [], disabled: [] };
+  const result: DreamingAutomationReconcileResult = { created: [], updated: [], disabled: [], removed: [] };
 
   for (const spec of DREAMING_AUTOMATIONS) {
-    const current = await automationService.get(spec.id);
-    const enabled = resolved.enabled && resolved.phases[spec.phase].enabled;
+    if (await automationService.remove(spec.id)) {
+      result.removed.push(spec.id);
+    }
+  }
 
-    if (!resolved.enabled) {
-      if (current?.enabled) {
-        await automationService.update(spec.id, { enabled: false });
-        result.disabled.push(spec.id);
+  const expectedIds = new Set<string>();
+  const agents = config.agents.list.filter((agent) => agent.enabled !== false);
+
+  for (const agent of agents) {
+    const agentId = normalizeAgentId(agent.id);
+    const resolved = resolveDreamingConfig(config, agentId);
+
+    for (const spec of DREAMING_AUTOMATIONS) {
+      const id = dreamingAutomationId(agentId, spec.phase);
+      expectedIds.add(id);
+      const current = await automationService.get(id);
+      const enabled = resolved.enabled && resolved.phases[spec.phase].enabled;
+
+      if (!resolved.enabled) {
+        if (current?.enabled) {
+          await automationService.update(id, { enabled: false });
+          result.disabled.push(id);
+        }
+        continue;
       }
+
+      const next = {
+        name: `${spec.name} (${agentId})`,
+        description: phaseDescription(spec.phase),
+        enabled,
+        trigger: buildTrigger(resolved, spec.phase),
+        action: buildAction(config, agentId, spec.token),
+      };
+
+      if (!current) {
+        await automationService.create({
+          id,
+          ...next,
+          safety: { mode: 'auto_apply' },
+          afterRun: { kind: 'none' },
+          reliability: { disableAfterConsecutiveFailures: 3 },
+        });
+        result.created.push(id);
+        continue;
+      }
+
+      if (automationNeedsUpdate(current, next)) {
+        await automationService.update(id, {
+          ...next,
+          safety: { mode: 'auto_apply' },
+          afterRun: { kind: 'none' },
+          reliability: { disableAfterConsecutiveFailures: 3 },
+        });
+        result.updated.push(id);
+      }
+    }
+  }
+
+  const allAutomations = await automationService.list();
+  for (const automation of allAutomations) {
+    if (!automation.id.startsWith('system-dreaming:')) {
       continue;
     }
-
-    const next = {
-      name: spec.name,
-      description: phaseDescription(spec.phase),
-      enabled,
-      trigger: buildTrigger(resolved, spec.phase),
-      action: buildAction(config, agentId, spec.token),
-    };
-
-    if (!current) {
-      await automationService.create({
-        id: spec.id,
-        ...next,
-        safety: { mode: 'auto_apply' },
-        afterRun: { kind: 'none' },
-        reliability: { disableAfterConsecutiveFailures: 3 },
-      });
-      result.created.push(spec.id);
+    if (expectedIds.has(automation.id)) {
       continue;
     }
-
-    if (automationNeedsUpdate(current, next)) {
-      await automationService.update(spec.id, {
-        ...next,
-        safety: { mode: 'auto_apply' },
-        afterRun: { kind: 'none' },
-        reliability: { disableAfterConsecutiveFailures: 3 },
-      });
-      result.updated.push(spec.id);
+    if (automation.enabled) {
+      await automationService.update(automation.id, { enabled: false });
+      result.disabled.push(automation.id);
     }
   }
 

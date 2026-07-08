@@ -1,6 +1,6 @@
 /**
  * One `agent()` call rendered as a row. Holds the status icon, label, and
- * optional current-step / elapsed summary. Click opens the detail drawer.
+ * optional current-step / elapsed summary. Click selects it for inline detail.
  */
 
 import { memo, useEffect, useState } from 'react';

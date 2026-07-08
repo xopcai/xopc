@@ -60,7 +60,7 @@ function ProjectCard({ project, t }: { project: Project; t: ReturnType<typeof me
   return (
     <Link
       to={`/projects/${encodeURIComponent(project.id)}`}
-      className="group flex min-h-36 flex-col rounded-lg border border-edge bg-surface-panel p-4 transition-colors hover:border-accent/50 hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      className="group flex min-h-36 flex-col rounded-lg bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
@@ -462,7 +462,7 @@ export function ProjectsPage() {
       </Dialog.Root>
 
       <section className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-1 rounded-lg border border-edge bg-surface-panel p-1">
+        <div className="flex flex-wrap gap-1 rounded-lg bg-surface-panel p-1 shadow-surface">
           {STATUSES.map((item) => (
             <button
               key={item}
@@ -486,7 +486,7 @@ export function ProjectsPage() {
       {error ? <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</p> : null}
       {loading ? <p className="text-sm text-fg-muted">{t.loading}</p> : null}
       {!loading && projects.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-edge bg-surface-panel p-8 text-center">
+        <div className="rounded-lg bg-surface-panel p-8 text-center shadow-surface">
           <p className="text-sm font-medium text-fg">{t.emptyTitle}</p>
           <p className="mt-1 text-sm text-fg-muted">{t.emptyHint}</p>
         </div>

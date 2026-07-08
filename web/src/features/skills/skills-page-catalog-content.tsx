@@ -108,10 +108,10 @@ export function SkillsPageCatalogContent(p: Props) {
             <article
               key={`${row.directoryId}-${row.path}`}
               className={cn(
-                'group flex h-full flex-col rounded-xl border bg-surface-base p-4 transition-colors',
+                'group flex h-full flex-col rounded-xl bg-surface-panel p-4 shadow-surface transition-colors',
                 enabled
-                  ? 'border-edge-subtle hover:border-accent/40 hover:bg-surface-hover dark:border-edge-subtle'
-                  : 'border-amber-300/70 bg-amber-50/30 hover:border-amber-400/80 hover:bg-amber-50/50 dark:border-amber-700/50 dark:bg-amber-950/20 dark:hover:border-amber-600/60',
+                  ? 'hover:bg-surface-hover'
+                  : 'bg-amber-50/30 hover:bg-amber-50/50 dark:bg-amber-950/20',
               )}
             >
               <div

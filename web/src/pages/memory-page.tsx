@@ -266,14 +266,14 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
         {summary.map((item) => (
-          <div key={item.label} className="rounded-lg border border-edge bg-surface px-4 py-3">
+          <div key={item.label} className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
             <div className="text-xs text-fg-muted">{item.label}</div>
             <div className="mt-1 text-2xl font-semibold text-fg">{item.value}</div>
           </div>
         ))}
       </div>
 
-      <section className="rounded-lg border border-edge bg-surface">
+      <section className="rounded-lg bg-surface-panel shadow-surface">
         <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.providerPolicy}</div>
         <div className="grid gap-3 p-4 md:grid-cols-2">
           <label className="text-xs font-medium text-fg-muted">
@@ -338,7 +338,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
         </div>
       </section>
 
-      <section className="rounded-lg border border-edge bg-surface">
+      <section className="rounded-lg bg-surface-panel shadow-surface">
         <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
           <div>
             <div className="text-sm font-semibold text-fg">{t.inbox}</div>
@@ -384,7 +384,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
         }}
       >
         <input
-          className="min-h-10 flex-1 rounded-md border border-edge bg-surface px-3 text-sm text-fg outline-none focus:border-accent"
+          className="min-h-10 flex-1 rounded-md border border-edge bg-surface-panel px-3 text-sm text-fg outline-none focus:border-accent"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={t.searchPlaceholder}
@@ -395,7 +395,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
       </form>
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="min-w-0 rounded-lg border border-edge bg-surface">
+        <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
           <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">
             {submitted ? `${t.searchResults}${searchLoading ? '…' : ''}` : t.recentRecords}
           </div>
@@ -434,7 +434,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
         </div>
 
         <div className="flex min-w-0 flex-col gap-4">
-          <div className="rounded-lg border border-edge bg-surface">
+          <div className="rounded-lg bg-surface-panel shadow-surface">
             <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.providers}</div>
             <div className="divide-y divide-edge">
               {(providersData?.providers ?? []).map((provider) => (
@@ -454,7 +454,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
             </div>
           </div>
 
-          <div className="rounded-lg border border-edge bg-surface">
+          <div className="rounded-lg bg-surface-panel shadow-surface">
             <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.recallQuality}</div>
             <div className="divide-y divide-edge">
               {feedbackSummaries.slice(0, 8).map((summary) => {
@@ -485,7 +485,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
             </div>
           </div>
 
-          <div className="rounded-lg border border-edge bg-surface">
+          <div className="rounded-lg bg-surface-panel shadow-surface">
             <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.signals}</div>
             <div className="divide-y divide-edge">
               {(signalsData?.signals ?? []).map((signal) => (
@@ -497,7 +497,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
             </div>
           </div>
 
-          <div className="rounded-lg border border-edge bg-surface">
+          <div className="rounded-lg bg-surface-panel shadow-surface">
             <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.trace}</div>
             <div className="divide-y divide-edge">
               {(tracesData?.traces ?? []).slice(0, 20).map((trace) => (

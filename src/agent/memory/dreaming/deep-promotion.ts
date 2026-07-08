@@ -98,6 +98,7 @@ function buildDeepLastRun(base: {
 
 export async function runDreamingDeepPromotion(params: {
   workspaceDir: string;
+  dreamingRoot: string;
   config?: Partial<DreamingDeepConfig>;
   memoryManager?: MemoryManager;
   now?: Date;
@@ -112,7 +113,7 @@ export async function runDreamingDeepPromotion(params: {
   const now = params.now ?? new Date();
   const startedAt = now.toISOString();
   const runId = `${startedAt}:${process.pid}:${Math.random().toString(16).slice(2)}`;
-  const memoryPath = path.join(params.workspaceDir, MEMORY_MD_FILENAME);
+  const memoryPath = path.join(params.dreamingRoot, MEMORY_MD_FILENAME);
   const t0 = Date.now();
 
   // Early exit for disabled or zero-limit configurations.
@@ -121,7 +122,7 @@ export async function runDreamingDeepPromotion(params: {
     const finishedAt = new Date().toISOString();
     const empty = emptyDeepPhaseSkipped();
     await writeDreamingDeepLastRun({
-      workspaceDir: params.workspaceDir,
+      dreamingRoot: params.dreamingRoot,
       lastRun: buildDeepLastRun({
         runId,
         startedAt,
@@ -138,8 +139,8 @@ export async function runDreamingDeepPromotion(params: {
   }
 
   try {
-    const result = await withDreamingPromotionLock(params.workspaceDir, async () => {
-      const { store } = await loadDreamingStore({ workspaceDir: params.workspaceDir });
+    const result = await withDreamingPromotionLock(params.dreamingRoot, async () => {
+      const { store } = await loadDreamingStore({ dreamingRoot: params.dreamingRoot });
 
       const nowMs = now.getTime();
 
@@ -219,7 +220,7 @@ export async function runDreamingDeepPromotion(params: {
         }
         appliedCandidates.push({
           key: candidate.key,
-        hash,
+          hash,
           snippet: rehydrated.snippet,
           path: candidate.path,
           startLine: rehydrated.startLine,
@@ -231,7 +232,7 @@ export async function runDreamingDeepPromotion(params: {
       }
 
       if (appliedCandidates.length === 0) {
-        await saveDreamingStore({ workspaceDir: params.workspaceDir, store });
+        await saveDreamingStore({ dreamingRoot: params.dreamingRoot, store });
         return {
           ok: true,
           reason: 'candidates were stale or already applied',
@@ -255,24 +256,14 @@ export async function runDreamingDeepPromotion(params: {
       sectionLines.push('');
 
       const next = `${header}${existing.endsWith('\n') || existing.length === 0 ? existing : `${existing}\n`}${sectionLines.join('\n')}`;
+      await fs.mkdir(path.dirname(memoryPath), { recursive: true });
       await fs.writeFile(memoryPath, next, 'utf-8');
 
       const nowIso = now.toISOString();
       for (const c of appliedCandidates) {
-        const writeResult = await params.memoryManager?.write({
-          kind: 'derived_insight',
-          content: c.snippet,
-          source: {
-            provider: 'dreaming',
-            path: c.path,
-            lineStart: c.startLine,
-            lineEnd: c.endLine,
-          },
-          tags: ['dreaming', 'promoted'],
-        });
         params.memoryManager?.recordSignal({
           source: 'dreaming',
-          recordId: writeResult?.record?.id,
+          recordId: `dreaming:${c.key}`,
           score: c.score,
           content: c.snippet,
           metadata: {
@@ -292,10 +283,15 @@ export async function runDreamingDeepPromotion(params: {
         }
       }
       store.updatedAt = nowIso;
-      await saveDreamingStore({ workspaceDir: params.workspaceDir, store });
+      await saveDreamingStore({ dreamingRoot: params.dreamingRoot, store });
 
       log.info(
-        { workspaceDir: params.workspaceDir, candidates: ranked.length, applied: appliedCandidates.length },
+        {
+          workspaceDir: params.workspaceDir,
+          dreamingRoot: params.dreamingRoot,
+          candidates: ranked.length,
+          applied: appliedCandidates.length,
+        },
         'Dreaming deep promotion complete',
       );
 
@@ -313,7 +309,7 @@ export async function runDreamingDeepPromotion(params: {
     const empty = emptyDeepPhaseSkipped();
     const resultSkipped = 'skipped' in result ? result.skipped : empty;
     await writeDreamingDeepLastRun({
-      workspaceDir: params.workspaceDir,
+      dreamingRoot: params.dreamingRoot,
       lastRun: buildDeepLastRun({
         runId,
         startedAt,
@@ -343,7 +339,7 @@ export async function runDreamingDeepPromotion(params: {
     const em = err instanceof Error ? err.message : String(err);
     const z = emptyDeepPhaseSkipped();
     await writeDreamingDeepLastRun({
-      workspaceDir: params.workspaceDir,
+      dreamingRoot: params.dreamingRoot,
       lastRun: buildDeepLastRun({
         runId,
         startedAt,

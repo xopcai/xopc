@@ -15,11 +15,11 @@
     "Microsoft YaHei", 微软雅黑, sans-serif;
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Surfaces — light: quiet white canvas + soft operational surface */
-  --color-surface-base: #ffffff;
-  --color-surface-panel: #fafafa;
-  --color-surface-hover: #f4f6ff;
-  --color-surface-active: #eef2ff;
+  /* Surfaces — light: muted canvas + white operational surface */
+  --color-surface-base: #f6f7fb;
+  --color-surface-panel: #ffffff;
+  --color-surface-hover: #eef2ff;
+  --color-surface-active: #e6ecff;
 
   /* Foreground — calm label hierarchy (light) */
   --color-fg: #111111;
@@ -66,8 +66,8 @@
   --radius-xl: 1.125rem;
   --radius-pill: 9999px;
 
-  /* Elevation — nearly flat; hierarchy comes from surfaces, borders, and spacing */
-  --shadow-surface: 0 1px 2px rgb(17 17 17 / 0.03), 0 1px 8px rgb(58 107 255 / 0.04);
+  /* Elevation — nearly flat; hierarchy comes from surface color, spacing, and restrained lift */
+  --shadow-surface: 0 1px 2px rgb(17 17 17 / 0.04), 0 8px 24px rgb(58 107 255 / 0.05);
   --shadow-elevated: 0 2px 10px rgb(17 17 17 / 0.05), 0 8px 32px rgb(58 107 255 / 0.06);
   --shadow-float: 0 8px 24px rgb(17 17 17 / 0.08), 0 18px 56px rgb(58 107 255 / 0.07);
   --shadow-popover: 0 10px 34px rgb(17 17 17 / 0.1), 0 2px 12px rgb(58 107 255 / 0.06);
@@ -1100,6 +1100,52 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
   }
 }
 
+@keyframes dreaming-agent-sleeper-enter {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 18px, 0) scale(0.86) rotate(-3deg);
+  }
+  to {
+    opacity: 0.92;
+    transform: translate3d(0, 0, 0) scale(1) rotate(-1deg);
+  }
+}
+
+@keyframes dreaming-agent-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-10px) rotate(1deg);
+  }
+}
+
+@keyframes dreaming-agent-z {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scale(0.75);
+  }
+  18% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(24px, -58px, 0) scale(1.25);
+  }
+}
+
+@keyframes dreaming-agent-wake {
+  from {
+    opacity: 0.92;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(18vw, -28px, 0) scale(0.86) rotate(5deg);
+  }
+}
+
 .dreaming-overlay-enter {
   animation: dreaming-overlay-enter 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -1119,4 +1165,43 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
   border-radius: 9999px;
   background: currentColor;
   animation: dreaming-pulse-dot 2s ease-in-out infinite;
+}
+
+.dreaming-agent-sleeper {
+  animation:
+    dreaming-agent-sleeper-enter 0.75s cubic-bezier(0.22, 1, 0.36, 1) both,
+    dreaming-agent-float 3.2s ease-in-out 0.75s infinite;
+}
+
+.dreaming-agent-wake {
+  animation: dreaming-agent-wake 1.2s cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.dreaming-agent-z {
+  position: absolute;
+  right: -0.25rem;
+  top: -0.25rem;
+  color: rgb(255 255 255 / 0.82);
+  font-size: 0.875rem;
+  font-weight: 800;
+  text-shadow: 0 2px 10px rgb(58 107 255 / 0.42);
+  animation: dreaming-agent-z 2.4s ease-out infinite;
+}
+
+.dreaming-agent-z-a {
+  animation-delay: 0.4s;
+}
+
+.dreaming-agent-z-b {
+  right: -1.1rem;
+  top: 0.65rem;
+  font-size: 1rem;
+  animation-delay: 1.15s;
+}
+
+.dreaming-agent-z-c {
+  right: 0.7rem;
+  top: -1rem;
+  font-size: 0.75rem;
+  animation-delay: 1.85s;
 }

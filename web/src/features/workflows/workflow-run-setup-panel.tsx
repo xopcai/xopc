@@ -81,8 +81,8 @@ export function WorkflowRunSetupPanel({
   const update = (patch: Partial<WorkflowRunSetupValue>) => onChange({ ...value, ...patch });
 
   return (
-    <div className={cn('space-y-4', mode === 'automation' && 'rounded-xl border border-edge-subtle bg-surface-base/30 p-3')}>
-      <section className="rounded-2xl border border-edge bg-surface-base/70 p-4">
+    <div className={cn('space-y-4', mode === 'automation' && 'rounded-xl bg-surface-panel/70 p-3 shadow-surface')}>
+      <section className="rounded-2xl bg-surface-panel p-4 shadow-surface">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold text-fg">{labels.runPlanPreview}</h3>

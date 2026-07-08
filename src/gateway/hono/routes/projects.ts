@@ -25,7 +25,14 @@ import {
   type SessionMetadataSeed,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
-import { buildWorkItemAgentContext, WorkItemService, type WorkItemPriority, type WorkItemStatus } from '../../../work-items/index.js';
+import {
+  buildWorkItemAgentContext,
+  WorkItemService,
+  WORK_ITEM_ATTACHMENT_MAX_BYTES,
+  WORK_ITEM_ATTACHMENT_MAX_COUNT,
+  type WorkItemPriority,
+  type WorkItemStatus,
+} from '../../../work-items/index.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -41,6 +48,18 @@ function parseLimit(raw: string | undefined, fallback = 50): number | undefined 
   return Number.isFinite(n) ? Math.min(500, Math.max(1, n)) : fallback;
 }
 
+function isHiddenEmptyProjectChatShell(session: {
+  hiddenFromSessionList?: boolean;
+  messageCount?: number;
+  routing?: { peerId?: string };
+  customData?: Record<string, unknown>;
+}): boolean {
+  return session.hiddenFromSessionList === true
+    && session.messageCount === 0
+    && session.customData?.genericNewChatShell !== false
+    && Boolean(session.routing?.peerId?.startsWith('chat_'));
+}
+
 function textField(body: Record<string, unknown>, key: string): string | undefined {
   const value = body[key];
   return typeof value === 'string' ? value : undefined;
@@ -50,6 +69,41 @@ function optionalTextField(body: Record<string, unknown>, key: string): string |
   if (!(key in body)) return undefined;
   const value = body[key];
   return typeof value === 'string' ? value : null;
+}
+
+function finiteNumberField(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function collectUploadedFiles(body: Record<string, unknown>): File[] {
+  const raw = body.file ?? body.files ?? body.attachments;
+  const values = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return values.filter((value): value is File => value instanceof File);
+}
+
+function validateUploadedWorkItemFiles(files: File[]): string | null {
+  if (files.length > WORK_ITEM_ATTACHMENT_MAX_COUNT) {
+    return `Too many attachments (max ${WORK_ITEM_ATTACHMENT_MAX_COUNT})`;
+  }
+  for (const file of files) {
+    if (file.size > WORK_ITEM_ATTACHMENT_MAX_BYTES) {
+      return `Attachment ${JSON.stringify(file.name || 'upload')} exceeds ${Math.floor(WORK_ITEM_ATTACHMENT_MAX_BYTES / (1024 * 1024))}MB limit`;
+    }
+  }
+  return null;
+}
+
+async function uploadedFileToBuffer(file: File): Promise<{ name: string; buffer: Buffer; mimeType: string }> {
+  return {
+    name: file.name || 'upload',
+    buffer: Buffer.from(await file.arrayBuffer()),
+    mimeType: file.type || 'application/octet-stream',
+  };
 }
 
 function parseCsvEnum<T extends string>(raw: string | undefined, values: readonly T[]): T[] | undefined {
@@ -577,15 +631,33 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.post('/api/projects/:id/work-items', async (c) => {
     const project = service.projects.get(c.req.param('id'));
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const contentType = c.req.header('content-type') || '';
+    let body: Record<string, unknown>;
+    let files: File[] = [];
+    if (contentType.includes('multipart/form-data')) {
+      try {
+        body = await c.req.parseBody({ all: true }) as Record<string, unknown>;
+      } catch {
+        return c.json({ ok: false, error: 'Invalid multipart body' }, 400);
+      }
+      files = collectUploadedFiles(body);
+    } else {
+      body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    }
+    const attachmentError = validateUploadedWorkItemFiles(files);
+    if (attachmentError) return c.json({ ok: false, error: attachmentError }, 413);
     const title = textField(body, 'title')?.trim();
     if (!title) return c.json({ ok: false, error: 'Work item title is required' }, 400);
     const status = parseEnumValue(body.status, WORK_ITEM_STATUSES);
     const priority = parseEnumValue(body.priority, WORK_ITEM_PRIORITIES);
-    const dueAt = typeof body.dueAt === 'number' && Number.isFinite(body.dueAt) ? body.dueAt : undefined;
+    const dueAt = finiteNumberField(body.dueAt);
     if (Object.hasOwn(body, 'status') && !status) return c.json({ ok: false, error: 'Invalid work item status' }, 400);
     if (Object.hasOwn(body, 'priority') && !priority) return c.json({ ok: false, error: 'Invalid work item priority' }, 400);
     if (Object.hasOwn(body, 'dueAt') && dueAt === undefined && body.dueAt !== null) return c.json({ ok: false, error: 'Invalid dueAt' }, 400);
+    const uploads: Array<{ name: string; buffer: Buffer; mimeType: string }> = [];
+    for (const file of files) {
+      uploads.push(await uploadedFileToBuffer(file));
+    }
     const item = workItems.createProjectWorkItem(project.id, {
       title,
       description: textField(body, 'description'),
@@ -596,13 +668,64 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       blockedReason: textField(body, 'blockedReason'),
       dueAt,
     });
-    return c.json({ ok: true, item }, 201);
+    for (const upload of uploads) {
+      await workItems.addAttachment(item.id, upload);
+    }
+    const created = files.length > 0 ? workItems.getWorkItem(item.id) ?? item : item;
+    return c.json({ ok: true, item: created }, 201);
   });
 
   authenticated.get('/api/work-items/:id', async (c) => {
     const item = workItems.getWorkItem(c.req.param('id'));
     if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
     return c.json({ ok: true, item });
+  });
+
+  authenticated.get('/api/work-items/:id/attachments', async (c) => {
+    const attachments = workItems.listAttachments(c.req.param('id'));
+    if (!attachments) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    return c.json({ ok: true, attachments });
+  });
+
+  authenticated.post('/api/work-items/:id/attachments', async (c) => {
+    const item = workItems.getWorkItem(c.req.param('id'));
+    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    let body: Record<string, unknown>;
+    try {
+      body = await c.req.parseBody({ all: true }) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: 'Invalid multipart body' }, 400);
+    }
+    const files = collectUploadedFiles(body);
+    if (!files.length) return c.json({ ok: false, error: 'Missing file field' }, 400);
+    const attachmentError = validateUploadedWorkItemFiles(files);
+    if (attachmentError) return c.json({ ok: false, error: attachmentError }, 413);
+    const attachments = [];
+    for (const file of files) {
+      const upload = await uploadedFileToBuffer(file);
+      const attachment = await workItems.addAttachment(item.id, upload);
+      if (attachment) attachments.push(attachment);
+    }
+    return c.json({ ok: true, attachments, item: workItems.getWorkItem(item.id) }, 201);
+  });
+
+  authenticated.get('/api/work-items/:id/attachments/:attachmentId/content', async (c) => {
+    const result = await workItems.readAttachment(c.req.param('id'), c.req.param('attachmentId'));
+    if (!result) return c.json({ ok: false, error: 'Attachment not found' }, 404);
+    return new Response(result.buffer, {
+      headers: {
+        'Content-Type': result.attachment.mimeType,
+        'Content-Length': String(result.attachment.size),
+        'Content-Disposition': `inline; filename="${encodeURIComponent(result.attachment.fileName)}"`,
+        'Cache-Control': 'private, max-age=31536000, immutable',
+      },
+    });
+  });
+
+  authenticated.delete('/api/work-items/:id/attachments/:attachmentId', async (c) => {
+    const attachment = await workItems.removeAttachment(c.req.param('id'), c.req.param('attachmentId'));
+    if (!attachment) return c.json({ ok: false, error: 'Attachment not found' }, 404);
+    return c.json({ ok: true, attachment, item: workItems.getWorkItem(c.req.param('id')) });
   });
 
   authenticated.patch('/api/work-items/:id', async (c) => {
@@ -887,7 +1010,10 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     try {
       const keys = service.projects.listSessionKeys(c.req.param('id'), parseLimit(c.req.query('limit'), 100));
       const sessions = await Promise.all(keys.map((key) => service.sessions.getSession(key)));
-      return c.json({ ok: true, sessions: sessions.filter(Boolean) });
+      return c.json({
+        ok: true,
+        sessions: sessions.filter((session) => session && !isHiddenEmptyProjectChatShell(session)),
+      });
     } catch (error) {
       return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
     }

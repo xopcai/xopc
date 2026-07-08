@@ -47,7 +47,7 @@ export const DIVERSITY_DIMENSION_COUNT = 4;
 
 // ── File paths ─────────────────────────────────────────────────────────
 
-export const DREAMING_DIR_RELATIVE = path.join('memory', '.dreams');
+export const DREAMING_DIR_RELATIVE = '.dreams';
 export const SHORT_TERM_RECALL_STORE_RELATIVE = path.join(DREAMING_DIR_RELATIVE, 'short-term-recall.json');
 export const SHORT_TERM_PROMOTION_LOCK_RELATIVE = path.join(
   DREAMING_DIR_RELATIVE,
@@ -58,4 +58,3 @@ export const DREAMING_EVENTS_LOG_RELATIVE = path.join(DREAMING_DIR_RELATIVE, 'ev
 
 export const MEMORY_MD_FILENAME = 'MEMORY.md';
 export const DREAMS_MD_FILENAME = 'DREAMS.md';
-

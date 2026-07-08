@@ -194,16 +194,16 @@ export function SharePreviewPage() {
             {t.loading}
           </div>
         ) : error ? (
-          <div className="rounded-lg border border-edge bg-surface-panel p-6 text-sm text-fg">
+          <div className="rounded-lg bg-surface-panel p-6 shadow-surface text-sm text-fg">
             <p className="font-medium">{t.error}</p>
             <p className="mt-1 text-fg-muted">{error}</p>
           </div>
         ) : meta?.kind === 'directory' ? (
-          <div className="rounded-lg border border-edge bg-surface-panel p-6 text-sm text-fg-muted">
+          <div className="rounded-lg bg-surface-panel p-6 shadow-surface text-sm text-fg-muted">
             {t.directoryHint}
           </div>
         ) : descriptor ? (
-          <div className="flex min-h-[70vh] flex-1 flex-col overflow-hidden rounded-lg border border-edge bg-surface-panel">
+          <div className="flex min-h-[70vh] flex-1 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
             <PreviewRuntimeView
               language={language}
               descriptor={descriptor}

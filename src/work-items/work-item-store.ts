@@ -6,6 +6,7 @@ import type {
   CreateWorkItemInput,
   UpdateWorkItemInput,
   WorkItem,
+  WorkItemAttachment,
   WorkItemEvent,
   WorkItemEventType,
   WorkItemLink,
@@ -43,6 +44,19 @@ type WorkItemLinkRow = {
   target_id: string;
   title: string | null;
   status_snapshot: string | null;
+  created_at: number;
+};
+
+type WorkItemAttachmentRow = {
+  id: string;
+  work_item_id: string;
+  media_uri: string;
+  media_id: string;
+  bucket: string;
+  type: string;
+  mime_type: string;
+  file_name: string;
+  size: number;
   created_at: number;
 };
 
@@ -116,6 +130,21 @@ function rowToLink(row: WorkItemLinkRow): WorkItemLink {
     targetId: row.target_id,
     title: row.title ?? undefined,
     statusSnapshot: row.status_snapshot ?? undefined,
+    createdAt: row.created_at,
+  };
+}
+
+function rowToAttachment(row: WorkItemAttachmentRow): WorkItemAttachment {
+  return {
+    id: row.id,
+    workItemId: row.work_item_id,
+    mediaUri: row.media_uri,
+    mediaId: row.media_id,
+    bucket: row.bucket,
+    type: row.type as WorkItemAttachment['type'],
+    mimeType: row.mime_type,
+    fileName: row.file_name,
+    size: row.size,
     createdAt: row.created_at,
   };
 }
@@ -227,7 +256,7 @@ export class WorkItemStore {
     const row = getSqliteDatabase()
       .prepare(`SELECT * FROM work_items WHERE id = ?`)
       .get(id) as WorkItemRow | undefined;
-    return row ? { ...rowToItem(row), links: this.listLinks(id) } : null;
+    return row ? { ...rowToItem(row), links: this.listLinks(id), attachments: this.listAttachments(id) } : null;
   }
 
   list(projectId: string, query: WorkItemListQuery = {}): WorkItemListResult {
@@ -236,9 +265,14 @@ export class WorkItemStore {
       .all(projectId) as WorkItemRow[];
     const result = applyQuery(rows.map(rowToItem), query);
     const linksByItem = this.listLinksForItems(result.items.map((item) => item.id));
+    const attachmentsByItem = this.listAttachmentsForItems(result.items.map((item) => item.id));
     return {
       ...result,
-      items: result.items.map((item) => ({ ...item, links: linksByItem.get(item.id) ?? [] })),
+      items: result.items.map((item) => ({
+        ...item,
+        links: linksByItem.get(item.id) ?? [],
+        attachments: attachmentsByItem.get(item.id) ?? [],
+      })),
     };
   }
 
@@ -247,7 +281,9 @@ export class WorkItemStore {
     if (!current) return null;
     const timestamp = nowMs();
     const nextStatus = patch.status ?? current.status;
-    const completedAt = nextStatus === 'done' ? (current.completedAt ?? timestamp) : (nextStatus === current.status ? current.completedAt : null);
+    const completedAt = nextStatus === 'done'
+      ? (current.completedAt ?? timestamp)
+      : (nextStatus === current.status ? (current.completedAt ?? null) : null);
     getSqliteDatabase()
       .prepare(
         `UPDATE work_items
@@ -303,6 +339,67 @@ export class WorkItemStore {
       map.set(row.work_item_id, list);
     }
     return map;
+  }
+
+  addAttachment(input: Omit<WorkItemAttachment, 'id' | 'createdAt'>): WorkItemAttachment {
+    const attachment: WorkItemAttachment = { ...input, id: randomUUID(), createdAt: nowMs() };
+    getSqliteDatabase()
+      .prepare(
+        `INSERT INTO work_item_attachments
+          (id, work_item_id, media_uri, media_id, bucket, type, mime_type, file_name, size, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        attachment.id,
+        attachment.workItemId,
+        attachment.mediaUri,
+        attachment.mediaId,
+        attachment.bucket,
+        attachment.type,
+        attachment.mimeType,
+        attachment.fileName,
+        attachment.size,
+        attachment.createdAt,
+      );
+    return attachment;
+  }
+
+  getAttachment(workItemId: string, attachmentId: string): WorkItemAttachment | null {
+    const row = getSqliteDatabase()
+      .prepare(`SELECT * FROM work_item_attachments WHERE work_item_id = ? AND id = ?`)
+      .get(workItemId, attachmentId) as WorkItemAttachmentRow | undefined;
+    return row ? rowToAttachment(row) : null;
+  }
+
+  listAttachments(workItemId: string): WorkItemAttachment[] {
+    const rows = getSqliteDatabase()
+      .prepare(`SELECT * FROM work_item_attachments WHERE work_item_id = ? ORDER BY created_at DESC`)
+      .all(workItemId) as WorkItemAttachmentRow[];
+    return rows.map(rowToAttachment);
+  }
+
+  listAttachmentsForItems(workItemIds: string[]): Map<string, WorkItemAttachment[]> {
+    const unique = [...new Set(workItemIds)];
+    if (!unique.length) return new Map();
+    const rows = getSqliteDatabase()
+      .prepare(`SELECT * FROM work_item_attachments WHERE work_item_id IN (${unique.map(() => '?').join(', ')}) ORDER BY created_at DESC`)
+      .all(...unique) as WorkItemAttachmentRow[];
+    const map = new Map<string, WorkItemAttachment[]>();
+    for (const row of rows) {
+      const list = map.get(row.work_item_id) ?? [];
+      list.push(rowToAttachment(row));
+      map.set(row.work_item_id, list);
+    }
+    return map;
+  }
+
+  removeAttachment(workItemId: string, attachmentId: string): WorkItemAttachment | null {
+    const attachment = this.getAttachment(workItemId, attachmentId);
+    if (!attachment) return null;
+    getSqliteDatabase()
+      .prepare(`DELETE FROM work_item_attachments WHERE work_item_id = ? AND id = ?`)
+      .run(workItemId, attachmentId);
+    return attachment;
   }
 
   addEvent(workItemId: string, type: WorkItemEventType, payload?: unknown): WorkItemEvent {

@@ -7,7 +7,7 @@ const skelBar =
 export function MarketplaceSkillCardSkeleton() {
   return (
     <div
-      className="flex h-full min-h-[10.5rem] flex-col rounded-xl border border-edge-subtle bg-surface-base p-4 dark:border-edge-subtle"
+      className="flex h-full min-h-[10.5rem] flex-col rounded-xl bg-surface-panel p-4 shadow-surface"
       aria-hidden
     >
       <div className="flex min-h-0 flex-1 items-start gap-3">

@@ -196,6 +196,8 @@
         "updated": "Updated",
         "status_changed": "Status changed",
         "archived": "Archived",
+        "attachment_added": "Attachment added",
+        "attachment_removed": "Attachment removed",
         "chat_started": "Chat started",
         "goal_created": "Goal created",
         "workflow_started": "Workflow started",
@@ -206,6 +208,12 @@
         "update_suggestion_applied": "Update applied",
         "update_suggestion_dismissed": "Update dismissed"
       },
+      "feedback": {
+        "createdTitle": "Work item created",
+        "createdNext": "Next, start a chat to move it forward or create a goal to keep tracking it.",
+        "savedTitle": "Changes saved",
+        "savedNext": "Next, start a chat to continue the work or create a goal to track follow-up."
+      },
       "create": {
         "short": "New",
         "header": "New work item",
@@ -215,6 +223,13 @@
         "priorityLabel": "Priority",
         "cancel": "Cancel",
         "submit": "Create"
+      },
+      "attachments": {
+        "title": "Attachments",
+        "add": "Add attachment",
+        "empty": "No attachments yet.",
+        "download": "Download attachment",
+        "remove": "Remove attachment"
       },
       "detail": {
         "description": "Plan and run the work needed to complete this item.",
@@ -319,6 +334,13 @@
       "empty": "No sessions in this project.",
       "emptyTitle": "No project sessions yet",
       "emptyDescription": "Start a chat from the page header to keep its work, goals, and summaries together.",
+      "searchPlaceholder": "Search sessions",
+      "clearSearch": "Clear session search",
+      "noMatches": "No matching sessions",
+      "fallbackTitle": "Chat session",
+      "sessionKey": "Session key",
+      "agent": "Agent",
+      "updated": "Updated",
       "meta": "{{agent}} · {{messages}}",
       "metaWithTime": "{{agent}} · {{messages}} · {{time}}"
     },

@@ -37,12 +37,14 @@ export function AttachmentPreviewDialog({
   attachment,
   authToken,
   sessionKey,
+  layerClassName = 'z-[81]',
   onClose,
 }: {
   open: boolean;
   attachment: MessageAttachment | null;
   authToken?: string;
   sessionKey?: string | null;
+  layerClassName?: string;
   onClose: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -110,7 +112,8 @@ export function AttachmentPreviewDialog({
       <Dialog.Portal>
         <Dialog.Content
           className={cn(
-            'xopc-dialog-content-fullscreen fixed inset-0 z-[81] flex h-[100dvh] w-full flex-row overflow-hidden',
+            'xopc-dialog-content-fullscreen fixed inset-0 flex h-[100dvh] w-full flex-row overflow-hidden',
+            layerClassName,
             'border-0 bg-transparent p-0 shadow-none outline-none',
           )}
         >

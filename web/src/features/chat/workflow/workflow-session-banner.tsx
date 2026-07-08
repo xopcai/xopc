@@ -9,14 +9,13 @@ import { ProgressTree } from '@/features/chat/workflow/workflow-progress-display
 import { WorkflowResultSummary } from '@/features/chat/workflow/workflow-result-summary';
 import type { WorkflowAgentSnapshot } from '@/features/chat/workflow/workflow.types';
 import { formatDuration, rollupPhases } from '@/features/chat/workflow/workflow.utils';
+import { WorkflowAgentInlineDetail } from '@/features/chat/workflow/workflow-agent-inline-detail';
 import { cancelWorkflowRun, type WorkflowRunStatus, type WorkflowRunView } from '@/features/workflows/workflow-api';
 import { runViewToSnapshot } from '@/features/workflows/run-view-to-snapshot';
 import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constants';
 import { isWorkflowResultEnvelope, workflowBoardHref } from '@/features/workflows/workflow-page.utils';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
-
-import { WorkflowAgentDetailModal } from './workflow-agent-detail-modal';
 
 type WorkflowLiveTab = 'overview' | 'agents' | 'logs' | 'result';
 
@@ -30,7 +29,6 @@ function statusClass(status: WorkflowRunStatus): string {
 /** Live workflow state pinned above the message list in workflow sessions. */
 export const WorkflowSessionBanner = memo(function WorkflowSessionBanner({
   view,
-  sessionKey,
   onAbortCurrentTurn,
 }: {
   view: WorkflowRunView;
@@ -201,18 +199,26 @@ export const WorkflowSessionBanner = memo(function WorkflowSessionBanner({
               ) : null}
 
               {activeTab === 'agents' ? (
-                <ProgressTree
-                  rollup={rollup}
-                  currentPhase={snapshot.currentPhase}
-                  labels={labels.phase}
-                  recentLogs={[]}
-                  recentLogsHeading={labels.recentLogsHeading}
-                  showAllLogsLabel={labels.showAllLogs}
-                  logsExpanded={false}
-                  onToggleLogs={() => undefined}
-                  selectedAgentId={selectedAgent?.id}
-                  onSelectAgent={setSelectedAgent}
-                />
+                <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
+                  <ProgressTree
+                    rollup={rollup}
+                    currentPhase={snapshot.currentPhase}
+                    labels={labels.phase}
+                    recentLogs={[]}
+                    recentLogsHeading={labels.recentLogsHeading}
+                    showAllLogsLabel={labels.showAllLogs}
+                    logsExpanded={false}
+                    onToggleLogs={() => undefined}
+                    selectedAgentId={selectedAgent?.id}
+                    onSelectAgent={setSelectedAgent}
+                  />
+                  <WorkflowAgentInlineDetail
+                    agent={selectedAgent}
+                    snapshot={snapshot}
+                    labels={labels.checkDetail}
+                    onClose={() => setSelectedAgent(null)}
+                  />
+                </div>
               ) : null}
 
               {activeTab === 'logs' ? (
@@ -265,15 +271,6 @@ export const WorkflowSessionBanner = memo(function WorkflowSessionBanner({
         </Dialog.Portal>
       </Dialog.Root>
 
-      <WorkflowAgentDetailModal
-        open={selectedAgent != null}
-        agent={selectedAgent}
-        snapshot={snapshot}
-        sessionKey={sessionKey}
-        ownerAgentId={ownerAgentId}
-        onClose={() => setSelectedAgent(null)}
-        labels={labels.drawer}
-      />
     </div>
   );
 });

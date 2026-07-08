@@ -34,6 +34,7 @@ export interface BuildChildToolsOptions {
   workspace: string;
   bus: MessageBus;
   model: Model<Api>;
+  agentId?: string;
   getConfig: () => Config | undefined;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
 }
@@ -60,6 +61,7 @@ export interface DelegateChildHandleOptions {
   maxIterations: number;
   model: Model<Api>;
   bus: MessageBus;
+  agentId?: string;
   getConfig: () => Config | undefined;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
   /**
@@ -93,6 +95,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
     workspace: options.workspace,
     bus: options.bus,
     model: options.model,
+    agentId: options.agentId,
     getConfig: options.getConfig,
     toolExecutorConfig: options.toolExecutorConfig,
   });

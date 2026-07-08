@@ -28,6 +28,7 @@ import { DreamingHeader } from '@/features/settings/dreaming-settings-header';
 import { DreamingMaintenanceSection } from '@/features/settings/dreaming-settings-maintenance-section';
 import { DreamingPreviewSection } from '@/features/settings/dreaming-settings-preview-section';
 import { DreamingRuntimeSection } from '@/features/settings/dreaming-settings-runtime-section';
+import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
 import {
   SettingsPageFrame,
   SettingsTabPanel,
@@ -38,6 +39,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 type DreamingSettingsI18n = MessageBundle['dreamingSettings'];
 type DreamingSettingsTabId = 'config' | 'runtime' | 'insights' | 'maintenance';
+type DreamingRunAgent = { id: string; name?: string; avatar?: string };
 
 const DREAMING_SETTINGS_TABS: readonly DreamingSettingsTabId[] = ['config', 'runtime', 'insights', 'maintenance'];
 
@@ -104,6 +106,7 @@ type DreamingUi = {
   cfgSaving: boolean;
   cfgOk: boolean;
   cfgError: string | null;
+  enableAllBusy: boolean;
   previewLoading: boolean;
   previewError: string | null;
   previewItems: DreamingPreviewItem[] | null;
@@ -123,6 +126,7 @@ const initialDreamingUi: DreamingUi = {
   cfgSaving: false,
   cfgOk: false,
   cfgError: null,
+  enableAllBusy: false,
   previewLoading: false,
   previewError: null,
   previewItems: null,
@@ -130,6 +134,27 @@ const initialDreamingUi: DreamingUi = {
   eventsError: null,
   events: null,
 };
+
+const MIN_DREAMING_RUN_BUSY_MS = 900;
+
+function waitForNextPaint(): Promise<void> {
+  if (typeof window === 'undefined' || typeof window.requestAnimationFrame !== 'function') {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => resolve());
+    });
+  });
+}
+
+function dispatchDreamingOverlayEvent(
+  name: 'dreaming-phase-start' | 'dreaming-phase-end',
+  detail: { phase: DreamingPhaseId; agentId?: string; agentName?: string; avatar?: string; ok?: boolean },
+): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(name, { detail }));
+}
 
 export function DreamingSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
@@ -143,6 +168,7 @@ export function DreamingSettingsPanel() {
   const hasToken = Boolean(token);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = parseDreamingSettingsTab(searchParams.get('tab'));
+  const agentParam = searchParams.get('agentId')?.trim() || '';
   const setActiveTab = useCallback(
     (tab: DreamingSettingsTabId) => {
       setSearchParams(
@@ -167,6 +193,7 @@ export function DreamingSettingsPanel() {
     runPhase,
     cfgSaving,
     cfgError,
+    enableAllBusy,
     previewLoading,
     previewError,
     previewItems,
@@ -179,9 +206,39 @@ export function DreamingSettingsPanel() {
   const cfgBaseline = cfgDraft.baseline;
   const cfgDirtyRef = useRef(false);
 
-  const { data, error, isLoading, mutate } = useSWR(hasToken ? dreamingSwrKey() : null, fetchDreamingStatus, {
+  const agentsSwr = useSWR(hasToken ? 'dreaming-settings-agents' : null, fetchGatewayAgents, {
     revalidateOnFocus: false,
   });
+  const agentOptions = agentsSwr.data?.agents ?? [];
+  const selectedAgentId = agentParam || agentsSwr.data?.defaultId || '';
+  const selectedAgent = useMemo(
+    () => agentOptions.find((agent) => agent.id === selectedAgentId),
+    [agentOptions, selectedAgentId],
+  );
+  const setSelectedAgentId = useCallback(
+    (agentId: string) => {
+      cfgDirtyRef.current = false;
+      dispatchCfg({ type: 'reset' });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (agentId) next.set('agentId', agentId);
+          else next.delete('agentId');
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+
+  const { data, error, isLoading, mutate } = useSWR(
+    hasToken && selectedAgentId ? dreamingSwrKey(selectedAgentId) : null,
+    fetchDreamingStatus,
+    {
+      revalidateOnFocus: false,
+    },
+  );
 
   const errorMessages = useMemo(() => {
     const list: string[] = [];
@@ -213,7 +270,7 @@ export function DreamingSettingsPanel() {
   const loadPreview = useCallback(async () => {
     dispatchUi({ type: 'patch', patch: { previewLoading: true, previewError: null } });
     try {
-      const res = await fetchDreamingPreview(20);
+      const res = await fetchDreamingPreview(20, selectedAgentId);
       dispatchUi({ type: 'patch', patch: { previewItems: res.items ?? [] } });
     } catch (e) {
       dispatchUi({
@@ -223,12 +280,12 @@ export function DreamingSettingsPanel() {
     } finally {
       dispatchUi({ type: 'patch', patch: { previewLoading: false } });
     }
-  }, []);
+  }, [selectedAgentId]);
 
   const loadEvents = useCallback(async () => {
     dispatchUi({ type: 'patch', patch: { eventsLoading: true, eventsError: null } });
     try {
-      const result = await fetchDreamingEvents(50);
+      const result = await fetchDreamingEvents(50, selectedAgentId);
       dispatchUi({ type: 'patch', patch: { events: result } });
     } catch (e) {
       dispatchUi({
@@ -238,14 +295,44 @@ export function DreamingSettingsPanel() {
     } finally {
       dispatchUi({ type: 'patch', patch: { eventsLoading: false } });
     }
-  }, []);
+  }, [selectedAgentId]);
 
   const doRunNow = useCallback(
     async (phase: DreamingPhaseId = 'deep') => {
-      dispatchUi({ type: 'patch', patch: { runBusy: true, runOk: false, runError: null } });
+      const startedAtMs = Date.now();
+      const targets: DreamingRunAgent[] = agentOptions.length > 0
+        ? agentOptions.map((agent) => ({ id: agent.id, name: agent.name, avatar: agent.avatar }))
+        : [{ id: selectedAgentId, name: selectedAgent?.name, avatar: selectedAgent?.avatar }].filter((agent) => agent.id);
+      const runTargets = targets.length > 0 ? targets : [{ id: selectedAgentId }];
+      const errors: string[] = [];
+      dispatchUi({ type: 'patch', patch: { runPhase: phase, runBusy: true, runOk: false, runError: null } });
       try {
-        await postDreamingRunNow(phase);
-        dispatchUi({ type: 'patch', patch: { runOk: true } });
+        const runs = runTargets.map((target) => {
+          const detail = {
+            phase,
+            ...(target.id ? { agentId: target.id } : {}),
+            ...(target.name ? { agentName: target.name } : {}),
+            ...(target.avatar ? { avatar: target.avatar } : {}),
+          };
+          dispatchDreamingOverlayEvent('dreaming-phase-start', detail);
+          return { target, detail };
+        }).map(async ({ target, detail }) => {
+          await waitForNextPaint();
+          try {
+            await postDreamingRunNow(phase, target.id || selectedAgentId);
+          } catch (e) {
+            const label = target.name || target.id || selectedAgentId || 'default';
+            const message = e instanceof Error ? e.message : String(e);
+            errors.push(`${label}: ${message}`);
+          } finally {
+            dispatchDreamingOverlayEvent('dreaming-phase-end', detail);
+          }
+        });
+        await Promise.all(runs);
+        dispatchUi({
+          type: 'patch',
+          patch: errors.length > 0 ? { runError: errors.join('\n') } : { runOk: true },
+        });
         await mutate();
       } catch (e) {
         dispatchUi({
@@ -253,17 +340,21 @@ export function DreamingSettingsPanel() {
           patch: { runError: e instanceof Error ? e.message : String(e) },
         });
       } finally {
+        const remainingMs = MIN_DREAMING_RUN_BUSY_MS - (Date.now() - startedAtMs);
+        if (remainingMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, remainingMs));
+        }
         dispatchUi({ type: 'patch', patch: { runBusy: false } });
       }
     },
-    [mutate],
+    [agentOptions, mutate, selectedAgent?.avatar, selectedAgent?.name, selectedAgentId],
   );
 
   const doAction = useCallback(
     async (action: 'reset_store' | 'clear_lock') => {
       dispatchUi({ type: 'patch', patch: { actionBusy: action, actionError: null, actionOk: false } });
       try {
-        await postDreamingAction(action);
+        await postDreamingAction(action, selectedAgentId);
         dispatchUi({ type: 'patch', patch: { actionOk: true } });
         await mutate();
       } catch (e) {
@@ -275,7 +366,7 @@ export function DreamingSettingsPanel() {
         dispatchUi({ type: 'patch', patch: { actionBusy: null } });
       }
     },
-    [mutate],
+    [mutate, selectedAgentId],
   );
 
   const disabled = !hasToken || isLoading || Boolean(actionBusy);
@@ -284,7 +375,7 @@ export function DreamingSettingsPanel() {
     const rawCfg = data?.config;
     return normalizeDreamingFromConfig(rawCfg ?? {});
   }, [data]);
-  const cfgAgentId = data?.agentId ?? 'main';
+  const cfgAgentId = data?.agentId || selectedAgentId || 'main';
   const cfgBaseMemory = data?.memory;
 
   useEffect(() => {
@@ -322,15 +413,63 @@ export function DreamingSettingsPanel() {
     }
   }, [cfgAgentId, cfgBaseMemory, cfgForm, mutate]);
 
+  const enableAllAgentsDreaming = useCallback(async () => {
+    const targets = agentOptions.length > 0
+      ? agentOptions
+      : selectedAgentId
+        ? [{ id: selectedAgentId, name: selectedAgent?.name, avatar: selectedAgent?.avatar }]
+        : [];
+    if (targets.length === 0) return;
+
+    dispatchUi({ type: 'patch', patch: { enableAllBusy: true, cfgOk: false, cfgError: null } });
+    const errors: string[] = [];
+    try {
+      for (const agent of targets) {
+        try {
+          const status = await fetchDreamingStatus(agent.id);
+          const current = normalizeDreamingFromConfig(status.config);
+          await patchDreamingConfig(
+            agent.id,
+            {
+              ...current,
+              enabled: true,
+              light: { ...current.light, enabled: true },
+              deep: { ...current.deep, enabled: true },
+              rem: { ...current.rem, enabled: true },
+            },
+            status.memory,
+          );
+        } catch (e) {
+          const label = agent.name || agent.id;
+          errors.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
+
+      if (errors.length > 0) {
+        dispatchUi({ type: 'patch', patch: { cfgError: errors.join('\n') } });
+      } else {
+        dispatchUi({ type: 'patch', patch: { cfgOk: true } });
+      }
+      await mutate();
+    } finally {
+      dispatchUi({ type: 'patch', patch: { enableAllBusy: false } });
+    }
+  }, [agentOptions, mutate, selectedAgent?.avatar, selectedAgent?.name, selectedAgentId]);
+
   return (
     <SettingsPageFrame>
       <DreamingHeader
         t={t}
         hasToken={hasToken}
+        agents={agentOptions}
+        selectedAgentId={selectedAgentId}
+        onAgentChange={setSelectedAgentId}
         cfgForm={cfgForm}
         cfgSaving={cfgSaving}
+        enableAllBusy={enableAllBusy}
         cfgDirty={cfgDirty}
         saveConfig={saveConfig}
+        enableAllAgentsDreaming={enableAllAgentsDreaming}
         doRefresh={doRefresh}
       />
 
@@ -358,7 +497,6 @@ export function DreamingSettingsPanel() {
           cfgDirty={cfgDirty}
           cfgSaving={cfgSaving}
           runPhase={runPhase}
-          setRunPhase={(phase) => dispatchUi({ type: 'patch', patch: { runPhase: phase } })}
           runBusy={runBusy}
           setCfgForm={(next) => {
             cfgDirtyRef.current = true;

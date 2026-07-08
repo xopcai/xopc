@@ -15,6 +15,7 @@ describe('normalizeDreamingFromConfig', () => {
           cron: '30 2 * * *',
           minScore: 0.75,
           minRecallCount: 4,
+          minUniqueQueries: 5,
           limit: 12,
           recencyHalfLifeDays: 10,
           maxAgeDays: 20,
@@ -26,6 +27,7 @@ describe('normalizeDreamingFromConfig', () => {
     expect(normalized.enabled).toBe(true);
     expect(normalized.timezone).toBe('Asia/Shanghai');
     expect(normalized.deep.cron).toBe('30 2 * * *');
+    expect(normalized.deep.minUniqueQueries).toBe(5);
     expect(normalized.rem.enabled).toBe(false);
   });
 });

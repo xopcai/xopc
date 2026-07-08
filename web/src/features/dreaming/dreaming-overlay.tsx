@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useRef } from 'react';
 
+import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { cn } from '@/lib/cn';
 
 import { useDreamingEvents } from './use-dreaming-events';
@@ -104,6 +105,7 @@ export function DreamingOverlay() {
   const isActive = state.status !== 'idle';
   const phase = state.status !== 'idle' ? state.phase : null;
   const isFading = state.status === 'fading-out';
+  const agents = state.status !== 'idle' ? state.agents : [];
 
   const handleDismiss = useCallback(() => {
     dismiss();
@@ -136,6 +138,48 @@ export function DreamingOverlay() {
     >
       {/* Three.js canvas — always pointer-events-none */}
       <canvas ref={canvasRef} className="pointer-events-none size-full" />
+
+      {agents.length > 0 ? (
+        <div className="pointer-events-none absolute inset-x-4 top-[15%] flex justify-center sm:inset-x-10">
+          <div className="grid max-w-4xl grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-3 lg:grid-cols-4">
+            {agents.slice(0, 12).map((agent, index) => (
+              <div
+                key={agent.key}
+                className={cn(
+                  'dreaming-agent-sleeper flex flex-col items-center gap-2',
+                  agent.status === 'waking' && 'dreaming-agent-wake',
+                )}
+                style={{ animationDelay: `${index * 90}ms` }}
+              >
+                <div className="relative">
+                  <div className="absolute inset-[-18px] rounded-full bg-white/10 blur-2xl" />
+                  <AgentAvatarDisplay
+                    agentId={agent.agentId || `dreaming-${index}`}
+                    avatar={agent.avatar}
+                    size={78}
+                    className="relative size-[78px] border border-white/20 shadow-float ring-4 ring-white/10"
+                  />
+                  {agent.status === 'sleeping' ? (
+                    <>
+                      <span className="dreaming-agent-z dreaming-agent-z-a">Z</span>
+                      <span className="dreaming-agent-z dreaming-agent-z-b">Z</span>
+                      <span className="dreaming-agent-z dreaming-agent-z-c">Z</span>
+                    </>
+                  ) : null}
+                </div>
+                <div className="max-w-28 truncate rounded-full border border-white/10 bg-black/30 px-3 py-1 text-xs font-medium text-white/80 shadow-elevated backdrop-blur-md">
+                  {agent.agentName || agent.agentId}
+                </div>
+              </div>
+            ))}
+            {agents.length > 12 ? (
+              <div className="flex items-center justify-center rounded-full border border-white/10 bg-black/30 px-3 py-2 text-sm font-semibold text-white/75 backdrop-blur-md">
+                +{agents.length - 12}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
 
       {/* Phase indicator pill + dismiss button */}
       <div className="pointer-events-auto absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-3">

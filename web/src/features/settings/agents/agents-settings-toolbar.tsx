@@ -20,7 +20,7 @@ export function AgentsSettingsToolbar({
 }: AgentsSettingsToolbarProps) {
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
-      <label className="relative flex min-h-9 min-w-0 max-w-sm cursor-text items-center rounded-pill border border-edge bg-surface-base py-1.5 pl-9 pr-3 shadow-surface dark:bg-surface-hover/40 sm:max-w-md">
+      <label className="relative flex min-h-9 min-w-0 max-w-sm cursor-text items-center rounded-pill bg-surface-panel py-1.5 pl-9 pr-3 shadow-surface dark:bg-surface-hover/40 sm:max-w-md">
         <Search
           className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled"
           strokeWidth={1.75}

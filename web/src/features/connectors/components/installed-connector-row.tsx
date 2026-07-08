@@ -57,7 +57,7 @@ export function InstalledConnectorRow({
 
   return (
     <div
-      className="flex h-full min-h-[10.5rem] cursor-pointer flex-col rounded-lg border border-edge bg-surface-panel p-4 shadow-surface transition-colors hover:border-accent/50"
+      className="flex h-full min-h-[10.5rem] cursor-pointer flex-col rounded-lg bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/45"
       onClick={() => onOpenDetails(instance)}
     >
       <div className="min-w-0 flex-1">
@@ -68,7 +68,7 @@ export function InstalledConnectorRow({
             {t.installedBadge}
           </span>
           {canEditConfig ? (
-            <span className="rounded-full border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted">
+            <span className="rounded-full bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted">
               {t.tabConfig}
             </span>
           ) : null}
@@ -79,10 +79,10 @@ export function InstalledConnectorRow({
             : formatConnectorMessage(t.runtimeLabel, { runtime: instance.materialized.type })}
         </p>
         <div className="mt-3 flex flex-wrap gap-2 text-xs text-fg-muted">
-          <span className="rounded-md border border-edge bg-surface-base px-2 py-1">
+          <span className="rounded-md bg-surface-base px-2 py-1">
             {t.statusLabel} {statusText}
           </span>
-          <span className="rounded-md border border-edge bg-surface-base px-2 py-1">
+          <span className="rounded-md bg-surface-base px-2 py-1">
             {formatConnectorMessage(t.toolsAvailable, { count: String(toolCount) })}
           </span>
         </div>

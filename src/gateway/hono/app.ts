@@ -10,6 +10,7 @@ import { createLogger } from '../../utils/logger.js';
 import type { GatewayService } from '../service.js';
 import { resolveAllowedBrowserOrigins, resolveGatewayServiceListenPort } from '../host.js';
 import { loadTunnelState } from '../../tunnel/tunnel-state.js';
+import { WORK_ITEM_ATTACHMENT_UPLOAD_BODY_MAX_BYTES } from '../../work-items/index.js';
 import { maxWebchatAgentRequestBodyBytes } from '../chat-limits.js';
 import { buildGatewayConsoleCspHeader } from '../security/csp.js';
 import { checkBrowserOrigin } from '../security/origin-check.js';
@@ -194,6 +195,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return path === '/api/notes' && contentType?.includes('multipart/form-data') === true;
   };
 
+  const isWorkItemAttachmentUploadRequest = (path: string, method: string, contentType: string | undefined): boolean => {
+    if (method !== 'POST' || contentType?.includes('multipart/form-data') !== true) return false;
+    return /^\/api\/work-items\/[^/]+\/attachments$/.test(path)
+      || /^\/api\/projects\/[^/]+\/work-items$/.test(path);
+  };
+
   app.use('/api/skills/upload', bodyLimit({
     maxSize: SKILL_UPLOAD_BODY_MAX,
     onError: (c) => {
@@ -212,7 +219,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           ? VOICE_TRANSCRIBE_BODY_MAX
           : isNoteMediaUploadRequest(c.req.path, c.req.method, contentType)
             ? NOTE_MEDIA_BODY_MAX
-            : DEFAULT_API_BODY_MAX;
+            : isWorkItemAttachmentUploadRequest(c.req.path, c.req.method, contentType)
+              ? WORK_ITEM_ATTACHMENT_UPLOAD_BODY_MAX_BYTES
+              : DEFAULT_API_BODY_MAX;
     const maxSizeMb = Math.ceil(maxSize / (1024 * 1024));
     return bodyLimit({
       maxSize,

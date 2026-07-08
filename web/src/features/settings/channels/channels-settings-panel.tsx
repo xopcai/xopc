@@ -359,7 +359,7 @@ function ChannelHubCard({
   const canDirectEnable = !setup.enabled && setup.ready;
   return (
     <article
-      className="flex min-h-[15.5rem] flex-col rounded-xl border border-edge-subtle bg-surface-panel p-4 shadow-surface transition-colors hover:border-edge"
+      className="flex min-h-[15.5rem] flex-col rounded-xl bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/45"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
@@ -394,7 +394,7 @@ function ChannelHubCard({
             ) : null}
           </>
         ) : (
-          <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+          <div className="rounded-lg bg-surface-base px-3 py-3">
             <p className="text-sm font-medium text-fg">{ch.cardSetupTitle}</p>
             <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">
               {summary[0] ?? channelSetupHint(entry, ch)}

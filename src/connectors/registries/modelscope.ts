@@ -19,6 +19,10 @@ function readRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
+function isHttpUrl(value: string | undefined): value is string {
+  return value?.startsWith('http://') || value?.startsWith('https://') || false;
+}
+
 function slugFrom(value: string): string {
   return value
     .trim()
@@ -55,21 +59,38 @@ function secretFieldsFromEnvSchema(schema: unknown): ConnectorSecretField[] {
   });
 }
 
-function firstMcpServerConfig(server: Record<string, unknown>): Record<string, unknown> | undefined {
-  for (const config of readArray(server.ServerConfig ?? server.serverConfig)) {
+function readMcpServerConfigs(value: unknown): Record<string, unknown>[] {
+  const configItems = Array.isArray(value) ? value : [value];
+  const configs: Record<string, unknown>[] = [];
+  for (const config of configItems) {
     const configRecord = readRecord(config);
+    if (!configRecord) continue;
     const mcpServers = readRecord(configRecord?.mcpServers);
-    if (!mcpServers) continue;
+    if (!mcpServers) {
+      configs.push(configRecord);
+      continue;
+    }
     for (const value of Object.values(mcpServers)) {
       const serverConfig = readRecord(value);
-      if (serverConfig && readString(serverConfig.command)) return serverConfig;
+      if (serverConfig) configs.push(serverConfig);
     }
+  }
+  return configs;
+}
+
+function firstMcpServerConfig(
+  server: Record<string, unknown>,
+  predicate: (config: Record<string, unknown>) => boolean = (config) => Boolean(readString(config.command)),
+): Record<string, unknown> | undefined {
+  for (const config of readMcpServerConfigs(server.ServerConfig ?? server.serverConfig)) {
+    if (predicate(config)) return config;
   }
   return undefined;
 }
 
 function secretFieldsFromServerConfig(server: Record<string, unknown>): ConnectorSecretField[] {
-  const config = firstMcpServerConfig(server);
+  const config = firstMcpServerConfig(server, (candidate) => Boolean(readRecord(candidate.env)))
+    ?? firstMcpServerConfig(server);
   const env = readRecord(config?.env);
   if (!env) return [];
   return Object.keys(env).map((key) => ({
@@ -107,19 +128,32 @@ function normalizeEnv(env: unknown, secrets: ConnectorSecretField[]): Record<str
   return Object.keys(output).length ? output : undefined;
 }
 
+function transportFromConfig(config: Record<string, unknown>, fallback: 'sse' | 'streamable-http'): 'sse' | 'streamable-http' {
+  const raw = readString(config.transport ?? config.type)?.toLowerCase();
+  return raw?.includes('sse') ? 'sse' : fallback;
+}
+
 function normalizeServerTemplate(server: Record<string, unknown>, secrets: ConnectorSecretField[]): Record<string, unknown> | undefined {
   const deployedUrl = readString(server.DeployedUrl ?? server.deployedUrl);
-  if (deployedUrl?.startsWith('http://') || deployedUrl?.startsWith('https://')) {
+  if (isHttpUrl(deployedUrl)) {
     const transport = readString(server.DeployedUrlTransportType ?? server.deployedUrlTransportType)?.toLowerCase();
     return { url: deployedUrl, transport: transport === 'sse' ? 'sse' : 'streamable-http' };
   }
 
   for (const key of ['StreamableHTTPServerConfig', 'streamableHTTPServerConfig', 'SSEServerConfig', 'sseServerConfig']) {
-    const config = readRecord(server[key]);
-    const url = readString(config?.url ?? config?.endpoint);
-    if (url?.startsWith('http://') || url?.startsWith('https://')) {
-      return { url, transport: key.toLowerCase().includes('sse') ? 'sse' : 'streamable-http' };
+    const fallbackTransport = key.toLowerCase().includes('sse') ? 'sse' : 'streamable-http';
+    for (const config of readMcpServerConfigs(server[key])) {
+      const url = readString(config.url ?? config.endpoint);
+      if (isHttpUrl(url)) {
+        return { url, transport: transportFromConfig(config, fallbackTransport) };
+      }
     }
+  }
+
+  const remoteConfig = firstMcpServerConfig(server, (candidate) => isHttpUrl(readString(candidate.url ?? candidate.endpoint)));
+  const remoteUrl = readString(remoteConfig?.url ?? remoteConfig?.endpoint);
+  if (isHttpUrl(remoteUrl) && remoteConfig) {
+    return { url: remoteUrl, transport: transportFromConfig(remoteConfig, 'streamable-http') };
   }
 
   const config = firstMcpServerConfig(server);

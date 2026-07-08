@@ -1,5 +1,5 @@
 import type { ProjectGoal, ProjectSession } from '@/features/projects/api';
-import { fetchJson } from '@/lib/fetch';
+import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export type WorkItemStatus =
@@ -19,6 +19,8 @@ export type WorkItemEventType =
   | 'updated'
   | 'status_changed'
   | 'archived'
+  | 'attachment_added'
+  | 'attachment_removed'
   | 'chat_started'
   | 'goal_created'
   | 'workflow_started'
@@ -41,6 +43,19 @@ export type WorkItemLink = {
   createdAt: number;
 };
 
+export type WorkItemAttachment = {
+  id: string;
+  workItemId: string;
+  mediaUri: string;
+  mediaId: string;
+  bucket: string;
+  type: 'image' | 'audio' | 'video' | 'file';
+  mimeType: string;
+  fileName: string;
+  size: number;
+  createdAt: number;
+};
+
 export type WorkItem = {
   id: string;
   projectId: string;
@@ -57,6 +72,7 @@ export type WorkItem = {
   createdAt: number;
   updatedAt: number;
   links?: WorkItemLink[];
+  attachments?: WorkItemAttachment[];
 };
 
 export type WorkItemEvent = {
@@ -118,7 +134,7 @@ export async function fetchProjectWorkItems(projectId: string, query?: {
   );
 }
 
-export async function createWorkItem(projectId: string, input: {
+export type CreateWorkItemPayload = {
   title: string;
   description?: string;
   status?: WorkItemStatus;
@@ -127,10 +143,45 @@ export async function createWorkItem(projectId: string, input: {
   nextAction?: string;
   blockedReason?: string;
   dueAt?: number;
-}): Promise<{ ok: true; item: WorkItem }> {
+  attachments?: File[];
+};
+
+function appendDefined(form: FormData, key: string, value: string | number | undefined): void {
+  if (value === undefined) return;
+  form.append(key, String(value));
+}
+
+export async function createWorkItem(projectId: string, input: CreateWorkItemPayload): Promise<{ ok: true; item: WorkItem }> {
+  if (input.attachments?.length) {
+    const form = new FormData();
+    appendDefined(form, 'title', input.title);
+    appendDefined(form, 'description', input.description);
+    appendDefined(form, 'status', input.status);
+    appendDefined(form, 'priority', input.priority);
+    appendDefined(form, 'ownerAgentId', input.ownerAgentId);
+    appendDefined(form, 'nextAction', input.nextAction);
+    appendDefined(form, 'blockedReason', input.blockedReason);
+    appendDefined(form, 'dueAt', input.dueAt);
+    for (const file of input.attachments) {
+      form.append('file', file);
+    }
+    return fetchJson<{ ok: true; item: WorkItem }>(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/work-items`), {
+      method: 'POST',
+      body: form,
+    });
+  }
   return fetchJson<{ ok: true; item: WorkItem }>(apiUrl(`/api/projects/${encodeURIComponent(projectId)}/work-items`), {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify({
+      title: input.title,
+      description: input.description,
+      status: input.status,
+      priority: input.priority,
+      ownerAgentId: input.ownerAgentId,
+      nextAction: input.nextAction,
+      blockedReason: input.blockedReason,
+      dueAt: input.dueAt,
+    }),
   });
 }
 
@@ -172,6 +223,47 @@ export async function createWorkItemGoal(workItemId: string): Promise<{ ok: true
 
 export async function fetchWorkItemEvents(workItemId: string): Promise<{ ok: true; events: WorkItemEvent[] }> {
   return fetchJson<{ ok: true; events: WorkItemEvent[] }>(apiUrl(`/api/work-items/${encodeURIComponent(workItemId)}/events`));
+}
+
+export async function uploadWorkItemAttachments(workItemId: string, files: File[]): Promise<{ ok: true; attachments: WorkItemAttachment[]; item: WorkItem }> {
+  const form = new FormData();
+  for (const file of files) {
+    form.append('file', file);
+  }
+  return fetchJson<{ ok: true; attachments: WorkItemAttachment[]; item: WorkItem }>(
+    apiUrl(`/api/work-items/${encodeURIComponent(workItemId)}/attachments`),
+    {
+      method: 'POST',
+      body: form,
+    },
+  );
+}
+
+export async function deleteWorkItemAttachment(workItemId: string, attachmentId: string): Promise<{ ok: true; attachment: WorkItemAttachment; item: WorkItem }> {
+  return fetchJson<{ ok: true; attachment: WorkItemAttachment; item: WorkItem }>(
+    apiUrl(`/api/work-items/${encodeURIComponent(workItemId)}/attachments/${encodeURIComponent(attachmentId)}`),
+    { method: 'DELETE' },
+  );
+}
+
+export function workItemAttachmentContentUrl(workItemId: string, attachmentId: string): string {
+  return apiUrl(`/api/work-items/${encodeURIComponent(workItemId)}/attachments/${encodeURIComponent(attachmentId)}/content`);
+}
+
+export async function downloadWorkItemAttachment(workItemId: string, attachment: WorkItemAttachment): Promise<void> {
+  const res = await apiFetch(workItemAttachmentContentUrl(workItemId, attachment.id));
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = attachment.fileName;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export async function createWorkItemUpdateSuggestion(workItemId: string, input: {

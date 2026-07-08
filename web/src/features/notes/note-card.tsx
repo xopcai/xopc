@@ -47,9 +47,11 @@ export function NoteCard({ note, selected = false, onPress, onPin, onArchive, on
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onPress(note.id); }}
       className={cn(
         'group relative flex cursor-pointer flex-col gap-2 rounded-lg px-3 py-2.5',
-        'border border-transparent transition-colors duration-150 ease-out hover:bg-surface-hover',
+        'transition-colors duration-150 ease-out',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
-        selected && 'border-edge bg-surface-active hover:bg-surface-active',
+        selected
+          ? 'bg-surface-active hover:bg-surface-active'
+          : 'bg-surface-base hover:bg-surface-hover',
       )}
       aria-current={selected ? 'true' : undefined}
     >

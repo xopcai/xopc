@@ -82,9 +82,9 @@ function optionalTrimmedString(value: unknown): string | undefined {
 
 // ── Resolver ───────────────────────────────────────────────────────────
 
-/** Resolve the full three-phase dreaming config from the default agent manifest. */
-export function resolveDreamingConfig(cfg: Config | undefined): DreamingResolvedConfig {
-  const agentId = cfg ? resolveDefaultAgentId(cfg) : undefined;
+/** Resolve the full three-phase dreaming config from an agent manifest. */
+export function resolveDreamingConfig(cfg: Config | undefined, requestedAgentId?: string | null): DreamingResolvedConfig {
+  const agentId = cfg ? (requestedAgentId?.trim() || resolveDefaultAgentId(cfg)) : undefined;
   const manifest = cfg && agentId ? resolveEffectiveAgentManifestForAgent(cfg, agentId) : undefined;
   const dreaming = manifest?.memory.dreaming;
   const enabled = dreaming?.enabled === true && manifest?.memory.mode !== 'off';

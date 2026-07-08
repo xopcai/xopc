@@ -572,7 +572,7 @@ function ProjectSwitcher({
             </div>
             {missingWorkspaceRoot ? (
               <div className="px-5 py-4">
-                <div className="flex items-center gap-2 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg-muted">
+                <div className="flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2 text-sm text-fg-muted">
                   <Folder className="size-4 shrink-0 text-fg-subtle" aria-hidden />
                   <span className="min-w-0 truncate">{missingWorkspaceRoot}</span>
                 </div>
@@ -607,6 +607,7 @@ export function ProjectDetailPage() {
   const [project, setProject] = useState<ProjectWithDetails | null>(null);
   const [overview, setOverview] = useState<ProjectOverview | null>(null);
   const [sessions, setSessions] = useState<ProjectSession[]>([]);
+  const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   const [goals, setGoals] = useState<ProjectGoal[]>([]);
   const [workflowDefinitions, setWorkflowDefinitions] = useState<WorkflowDefinition[]>([]);
   const [workflowRuns, setWorkflowRuns] = useState<WorkflowRunSummary[]>([]);
@@ -1301,7 +1302,7 @@ export function ProjectDetailPage() {
           <ArrowLeft className="size-4" aria-hidden />
           {pm.backToProjects}
         </Link>
-        <p className="mt-6 rounded-lg border border-edge bg-surface-panel p-4 text-sm text-fg-muted">
+        <p className="mt-6 rounded-lg bg-surface-panel p-4 shadow-surface text-sm text-fg-muted">
           {error || pm.notFound}
         </p>
       </main>
@@ -1314,6 +1315,21 @@ export function ProjectDetailPage() {
   const overviewTimeline = overview?.timeline ?? [];
   const statusLabel = (status: string) => pm.statuses[status as keyof typeof pm.statuses] ?? status;
   const messageCount = (count: number) => interpolate(pm.common.messages, { count });
+  const sessionSearchNeedle = sessionSearchQuery.trim().toLowerCase();
+  const visibleSessions = sessionSearchNeedle
+    ? sessions.filter((session) => {
+      const updatedAt = formatDate(session.updatedAt);
+      const agentLabel = session.routing?.agentId || session.agentId || pm.common.agent;
+      const title = session.name?.trim() || pm.sessions.fallbackTitle;
+      const messagesLabel = messageCount(session.messageCount ?? 0);
+      return [title, session.key, agentLabel, updatedAt, messagesLabel]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .includes(sessionSearchNeedle);
+    })
+    : sessions;
+  const sessionsSearchMiss = sessions.length > 0 && visibleSessions.length === 0;
   const tabItems = tabOrder.map((id) => {
     const item = TABS.find((candidate) => candidate.id === id)!;
     return { ...item, label: item.id === 'work-items' ? pm.workItems.tab : pm.tabs[item.id] };
@@ -1343,7 +1359,7 @@ export function ProjectDetailPage() {
       {tab === 'overview' ? (
         <section id="project-panel-overview" role="tabpanel" aria-labelledby="project-tab-overview" className="grid h-full min-h-0 overflow-hidden gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="grid min-h-0 min-w-0 content-start gap-4 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
-            <div className="min-w-0 rounded-lg border border-edge bg-surface-panel p-4">
+            <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <h2 className="text-sm font-semibold text-fg">{pm.overview.directionTitle}</h2>
@@ -1364,35 +1380,35 @@ export function ProjectDetailPage() {
                 </div>
               </div>
               <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                <div className="min-w-0 rounded-md border border-edge bg-surface-base px-3 py-2">
+                <div className="min-w-0 rounded-md bg-surface-base px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
                     <MessageSquarePlus className="size-3.5" aria-hidden />
                     <span className="min-w-0 truncate">{pm.overview.sessions}</span>
                   </div>
                   <p className="mt-1 text-xl font-semibold text-fg">{overview?.stats.sessionCount ?? project.sessionCount}</p>
                 </div>
-                <div className="min-w-0 rounded-md border border-edge bg-surface-base px-3 py-2">
+                <div className="min-w-0 rounded-md bg-surface-base px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
                     <Target className="size-3.5" aria-hidden />
                     <span className="min-w-0 truncate">{pm.overview.activeGoals}</span>
                   </div>
                   <p className="mt-1 text-xl font-semibold text-fg">{overview?.stats.activeGoalCount ?? project.activeGoalCount}</p>
                 </div>
-                <div className="min-w-0 rounded-md border border-edge bg-surface-base px-3 py-2">
+                <div className="min-w-0 rounded-md bg-surface-base px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
                     <AlertCircle className="size-3.5" aria-hidden />
                     <span className="min-w-0 truncate">{pm.overview.attention}</span>
                   </div>
                   <p className="mt-1 text-xl font-semibold text-fg">{overview?.stats.attentionCount ?? overviewAttentionItems.length}</p>
                 </div>
-                <div className="min-w-0 rounded-md border border-edge bg-surface-base px-3 py-2">
+                <div className="min-w-0 rounded-md bg-surface-base px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
                     <Clock className="size-3.5" aria-hidden />
                     <span className="min-w-0 truncate">{pm.overview.staleGoals}</span>
                   </div>
                   <p className="mt-1 text-xl font-semibold text-fg">{overview?.stats.staleGoalCount ?? overview?.staleGoals?.length ?? 0}</p>
                 </div>
-                <div className="min-w-0 rounded-md border border-edge bg-surface-base px-3 py-2">
+                <div className="min-w-0 rounded-md bg-surface-base px-3 py-2">
                   <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
                     <Activity className="size-3.5" aria-hidden />
                     <span className="min-w-0 truncate">{pm.overview.recentWorkflowRuns}</span>
@@ -1403,7 +1419,7 @@ export function ProjectDetailPage() {
             </div>
 
             <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="min-w-0 rounded-lg border border-edge bg-surface-panel">
+              <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
                 <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
                   <h2 className="text-sm font-semibold text-fg">{pm.overview.nextActions}</h2>
                   <Button type="button" variant="ghost" className="h-8 rounded-lg px-2 py-1 text-xs" onClick={() => setCreateGoalOpen(true)}>
@@ -1433,7 +1449,7 @@ export function ProjectDetailPage() {
                 </div>
               </div>
 
-              <div className="min-w-0 rounded-lg border border-edge bg-surface-panel">
+              <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
                 <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
                   <h2 className="text-sm font-semibold text-fg">{pm.overview.activeGoals}</h2>
                   <button type="button" className="text-xs font-medium text-accent-fg hover:underline" onClick={() => navigateProjectTab('goals')}>
@@ -1457,7 +1473,7 @@ export function ProjectDetailPage() {
             </div>
 
             <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="min-w-0 rounded-lg border border-edge bg-surface-panel">
+              <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
                 <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
                   <Clock className="size-4 text-fg-muted" aria-hidden />
                   <h2 className="text-sm font-semibold text-fg">{pm.overview.recentSessions}</h2>
@@ -1477,7 +1493,7 @@ export function ProjectDetailPage() {
                 </div>
               </div>
 
-              <div className="min-w-0 rounded-lg border border-edge bg-surface-panel">
+              <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
                 <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
                   <CheckCircle2 className="size-4 text-fg-muted" aria-hidden />
                   <h2 className="text-sm font-semibold text-fg">{pm.overview.workflowRuns}</h2>
@@ -1498,7 +1514,7 @@ export function ProjectDetailPage() {
               </div>
             </div>
 
-            <div className="min-w-0 rounded-lg border border-edge bg-surface-panel">
+            <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
               <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
                 <Activity className="size-4 text-fg-muted" aria-hidden />
                 <h2 className="text-sm font-semibold text-fg">{pm.overview.timeline}</h2>
@@ -1532,16 +1548,16 @@ export function ProjectDetailPage() {
           </div>
 
           <aside className="grid min-h-0 min-w-0 content-start gap-4 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
-            <div className="min-w-0 rounded-lg border border-edge bg-surface-panel p-4">
+            <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
               <h2 className="text-sm font-semibold text-fg">{pm.overview.workspace}</h2>
               <p className="mt-2 break-all text-sm leading-5 text-fg-muted">{project.workspaceRoot || pm.common.defaultWorkspace}</p>
               <p className="mt-3 text-xs text-fg-subtle">{interpolate(pm.common.updated, { time: formatDate(project.updatedAt) })}</p>
             </div>
-            <div className="min-w-0 rounded-lg border border-edge bg-surface-panel p-4">
+            <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
               <h2 className="text-sm font-semibold text-fg">{pm.overview.brief}</h2>
               <p className="mt-2 break-words whitespace-pre-wrap text-sm leading-6 text-fg-muted">{project.brief || pm.overview.noBrief}</p>
             </div>
-            <div className="min-w-0 rounded-lg border border-edge bg-surface-panel p-4">
+            <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
               <h2 className="text-sm font-semibold text-fg">{pm.overview.attention}</h2>
               {overviewAttentionItems.length ? (
                 <div className="mt-3 grid gap-3">
@@ -1559,11 +1575,11 @@ export function ProjectDetailPage() {
                       </>
                     );
                     return item.href ? (
-                      <Link key={item.id} to={item.href} onClick={onProjectTabLinkClick(projectTabForHref(item.href))} className="min-w-0 rounded-md border border-edge bg-surface-base p-3 hover:bg-surface-hover">
+                      <Link key={item.id} to={item.href} onClick={onProjectTabLinkClick(projectTabForHref(item.href))} className="min-w-0 rounded-md bg-surface-base p-3 hover:bg-surface-hover">
                         {content}
                       </Link>
                     ) : (
-                      <div key={item.id} className="min-w-0 rounded-md border border-edge bg-surface-base p-3">
+                      <div key={item.id} className="min-w-0 rounded-md bg-surface-base p-3">
                         {content}
                       </div>
                     );
@@ -1580,7 +1596,7 @@ export function ProjectDetailPage() {
                   placeholder={pm.overview.blockerTitlePlaceholder}
                 />
                 <textarea
-                  className="min-h-20 rounded-md border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent"
+                  className="min-h-20 rounded-md bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent"
                   value={blockerDraft.reason}
                   onChange={(event) => setBlockerDraft((draft) => ({ ...draft, reason: event.target.value }))}
                   placeholder={pm.overview.blockerReasonPlaceholder}
@@ -1602,7 +1618,7 @@ export function ProjectDetailPage() {
       {tab === 'workflows' ? (
         <section id="project-panel-workflows" role="tabpanel" aria-labelledby="project-tab-workflows" className="grid h-full min-h-[28rem] gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="min-h-0">
-            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-edge bg-surface-panel">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge px-4 py-3">
                 <div>
                   <h2 className="text-sm font-semibold text-fg">{pm.workflows.runsTitle}</h2>
@@ -1693,7 +1709,7 @@ export function ProjectDetailPage() {
           </div>
 
           <aside className="min-h-0">
-            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-edge bg-surface-panel">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
               <div className="shrink-0 border-b border-edge px-4 py-3">
                 <h2 className="text-sm font-semibold text-fg">{pm.workflows.startTitle}</h2>
                 <p className="mt-1 text-xs text-fg-muted">{pm.workflows.startHint}</p>
@@ -1704,7 +1720,7 @@ export function ProjectDetailPage() {
                   <button
                     key={definition.id}
                     type="button"
-                    className="grid gap-1 rounded-md border border-edge bg-surface-base p-3 text-left hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent/30"
+                    className="grid gap-1 rounded-md bg-surface-base p-3 text-left hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent/30"
                     onClick={() => setWorkflowStartDefinition(definition)}
                   >
                     <span className="flex items-center gap-2 text-sm font-medium text-fg">
@@ -1727,7 +1743,7 @@ export function ProjectDetailPage() {
 
       {tab === 'automations' ? (
         <section id="project-panel-automations" role="tabpanel" aria-labelledby="project-tab-automations" className="grid h-full min-h-[28rem] overflow-hidden gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border border-edge bg-surface-panel">
+          <div className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-edge px-4 py-3">
               <div>
                 <h2 className="text-sm font-semibold text-fg">{pm.automations.title}</h2>
@@ -1813,7 +1829,7 @@ export function ProjectDetailPage() {
           </div>
 
           <aside className="grid min-h-0 min-w-0 content-start gap-4 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
-            <div className="rounded-lg border border-edge bg-surface-panel">
+            <div className="rounded-lg bg-surface-panel shadow-surface">
               <div className="border-b border-edge px-4 py-3">
                 <h2 className="text-sm font-semibold text-fg">{pm.automations.recentRuns}</h2>
               </div>
@@ -1831,7 +1847,7 @@ export function ProjectDetailPage() {
                 )}
               </div>
             </div>
-            <div className="rounded-lg border border-edge bg-surface-panel p-4">
+            <div className="rounded-lg bg-surface-panel p-4 shadow-surface">
               <h2 className="text-sm font-semibold text-fg">{pm.automations.contextTitle}</h2>
               <p className="mt-2 text-sm leading-6 text-fg-muted">{pm.automations.contextHint}</p>
               <p className="mt-3 break-all text-xs text-fg-subtle">{project.workspaceRoot || pm.common.defaultWorkspace}</p>
@@ -1841,7 +1857,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'notes' ? (
-        <section id="project-panel-notes" role="tabpanel" aria-labelledby="project-tab-notes" className="flex h-full min-h-[28rem] overflow-hidden rounded-lg border border-edge bg-surface-panel">
+        <section id="project-panel-notes" role="tabpanel" aria-labelledby="project-tab-notes" className="flex h-full min-h-[28rem] overflow-hidden rounded-lg bg-surface-panel shadow-surface">
           <NotesWorkbench
             selectedNoteId={noteId}
             basePath={`/projects/${encodeURIComponent(project.id)}/notes`}
@@ -1860,7 +1876,7 @@ export function ProjectDetailPage() {
 
       {tab === 'files' ? (
         <section id="project-panel-files" role="tabpanel" aria-labelledby="project-tab-files" className="h-full min-h-[28rem]">
-          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-edge bg-surface-panel">
+          <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
             {project.workspaceRoot ? (
               <div
                 data-project-files-grid
@@ -1993,48 +2009,85 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'sessions' ? (
-        <section id="project-panel-sessions" role="tabpanel" aria-labelledby="project-tab-sessions" className="grid min-h-full content-start">
-          <div className="overflow-hidden rounded-lg border border-edge bg-surface-panel">
-            {sessions.length ? sessions.map((session) => {
+        <section id="project-panel-sessions" role="tabpanel" aria-labelledby="project-tab-sessions" className="grid min-h-full content-start gap-3">
+          {sessions.length ? (
+            <label className="relative flex min-h-9 w-full max-w-lg cursor-text items-center rounded-lg bg-surface-panel py-1.5 pl-9 pr-9 shadow-surface">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled" aria-hidden />
+              <input
+                type="search"
+                enterKeyHint="search"
+                value={sessionSearchQuery}
+                onChange={(event) => setSessionSearchQuery(event.currentTarget.value)}
+                placeholder={pm.sessions.searchPlaceholder}
+                aria-label={pm.sessions.searchPlaceholder}
+                className="min-w-0 flex-1 appearance-none border-0 bg-transparent py-0.5 text-sm leading-normal text-fg caret-current placeholder:text-fg-disabled focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
+              />
+              {sessionSearchQuery ? (
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  aria-label={pm.sessions.clearSearch}
+                  onClick={() => setSessionSearchQuery('')}
+                >
+                  <X className="size-3.5" aria-hidden />
+                </button>
+              ) : null}
+            </label>
+          ) : null}
+          {visibleSessions.length ? (
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {visibleSessions.map((session) => {
               const updatedAt = formatDate(session.updatedAt);
               const agentLabel = session.routing?.agentId || session.agentId || pm.common.agent;
-              const metaText = updatedAt
-                ? interpolate(pm.sessions.metaWithTime, {
-                  agent: agentLabel,
-                  messages: messageCount(session.messageCount ?? 0),
-                  time: updatedAt,
-                })
-                : interpolate(pm.sessions.meta, {
-                  agent: agentLabel,
-                  messages: messageCount(session.messageCount ?? 0),
-                });
+              const title = session.name?.trim() || pm.sessions.fallbackTitle;
+              const messagesLabel = messageCount(session.messageCount ?? 0);
               return (
-                <article
+                <Link
                   key={session.key}
-                  className="grid gap-3 border-b border-edge px-4 py-3 transition-colors last:border-b-0 hover:bg-surface-hover/50 sm:grid-cols-[minmax(0,1fr)_auto]"
+                  to={`/chat/${encodeURIComponent(session.key)}`}
+                  onClick={onProjectTabLinkClick('sessions')}
+                  className="group flex min-h-[11rem] min-w-0 flex-col rounded-lg bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 >
-                  <Link
-                    to={`/chat/${encodeURIComponent(session.key)}`}
-                    onClick={onProjectTabLinkClick('sessions')}
-                    className="min-w-0 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 sm:col-span-2"
-                  >
-                    <div className="flex min-w-0 items-center justify-between gap-3">
-                      <span className="min-w-0 truncate text-sm font-medium text-fg">{session.name || session.key}</span>
-                      {updatedAt ? <span className="hidden shrink-0 text-xs text-fg-subtle md:block">{updatedAt}</span> : null}
+                  <div className="flex min-w-0 items-start gap-3">
+                    <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-base text-fg-muted">
+                      <MessageSquarePlus className="size-4" aria-hidden />
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold text-fg">{title}</h3>
+                      <p className="mt-1 line-clamp-2 break-all font-mono text-xs leading-5 text-fg-muted" title={session.key}>
+                        {session.key}
+                      </p>
                     </div>
-                    <p className="mt-1 truncate text-xs text-fg-muted">{metaText}</p>
-                  </Link>
-                </article>
+                  </div>
+                  <div className="mt-auto grid gap-2 pt-4 text-xs text-fg-muted">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <span className="min-w-0 max-w-full truncate rounded-md bg-surface-base px-2 py-1">
+                        {pm.sessions.agent}: {agentLabel}
+                      </span>
+                      <span className="rounded-md bg-surface-base px-2 py-1">{messagesLabel}</span>
+                    </div>
+                    {updatedAt ? (
+                      <span className="truncate rounded-md bg-surface-base px-2 py-1">
+                        {pm.sessions.updated}: {updatedAt}
+                      </span>
+                    ) : null}
+                  </div>
+                </Link>
               );
-            }) : (
-              <div className="grid gap-1 px-4 py-8 text-center">
+              })}
+            </div>
+          ) : sessionsSearchMiss ? (
+              <div className="grid gap-1 rounded-lg bg-surface-panel px-4 py-8 text-center shadow-surface">
+                <h3 className="text-sm font-semibold text-fg">{pm.sessions.noMatches}</h3>
+              </div>
+            ) : (
+              <div className="grid gap-1 rounded-lg bg-surface-panel px-4 py-8 text-center shadow-surface">
                 <div>
                   <h3 className="text-sm font-semibold text-fg">{pm.sessions.emptyTitle}</h3>
                   <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-fg-muted">{pm.sessions.emptyDescription}</p>
                 </div>
               </div>
             )}
-          </div>
         </section>
       ) : null}
 
@@ -2055,7 +2108,7 @@ export function ProjectDetailPage() {
               {pm.goals.new}
             </Button>
           </div>
-          <div className="overflow-hidden rounded-lg border border-edge bg-surface-panel">
+          <div className="overflow-hidden rounded-lg bg-surface-panel shadow-surface">
             {goals.length ? goals.map((goal) => (
               <Link
                 key={goal.id}
@@ -2077,7 +2130,7 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'settings' ? (
-        <form id="project-panel-settings" role="tabpanel" aria-labelledby="project-tab-settings" onSubmit={saveProject} className="grid min-h-full content-start gap-4 rounded-lg border border-edge bg-surface-panel p-4">
+        <form id="project-panel-settings" role="tabpanel" aria-labelledby="project-tab-settings" onSubmit={saveProject} className="grid min-h-full content-start gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
           <div className="grid gap-4 md:grid-cols-2">
             <Field label={pm.settings.name}>
               <input className={inputClass()} value={draft.name} onChange={(event) => setDraft((d) => ({ ...d, name: event.target.value }))} />
@@ -2192,7 +2245,7 @@ export function ProjectDetailPage() {
             </div>
             {missingWorkspaceRoot ? (
               <div className="px-5 py-4">
-                <div className="flex items-center gap-2 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg-muted">
+                <div className="flex items-center gap-2 rounded-lg bg-surface-muted px-3 py-2 text-sm text-fg-muted">
                   <Folder className="size-4 shrink-0 text-fg-subtle" aria-hidden />
                   <span className="min-w-0 truncate">{missingWorkspaceRoot}</span>
                 </div>

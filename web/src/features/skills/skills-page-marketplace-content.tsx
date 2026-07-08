@@ -182,9 +182,8 @@ export function SkillsPageMarketplaceContent(p: Props) {
                   <article
                     key={row.id}
                     className={cn(
-                      'group flex h-full flex-col rounded-xl border border-edge-subtle bg-surface-base p-4',
-                      'transition-colors hover:border-accent/40 hover:bg-surface-hover',
-                      'dark:border-edge-subtle',
+                      'group flex h-full flex-col rounded-xl bg-surface-panel p-4 shadow-surface',
+                      'transition-colors hover:bg-surface-hover',
                     )}
                   >
                     <div
