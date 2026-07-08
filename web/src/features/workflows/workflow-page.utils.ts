@@ -149,7 +149,7 @@ export function workflowChatHref(sessionKey: string, draft?: string): string {
   return `${href}?${params.toString()}`;
 }
 
-/** Deep link to the workflows board with a run detail drawer open. */
+/** Deep link to the workflows board with a run detail view open. */
 export function workflowBoardHref(runId: string, options?: { ownerAgentId?: string | null }): string {
   const id = runId.trim();
   const params = new URLSearchParams({ run: id });

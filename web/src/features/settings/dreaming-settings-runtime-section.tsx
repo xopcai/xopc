@@ -110,7 +110,7 @@ export function DreamingRuntimeSection({ t, data, isLoading, localeTag, schedule
                   scheduleBadgeLabels,
                   { timezone: data.config.timezone || undefined },
                 )}
-                details={`minScore=${data.config.phases.deep.minScore}, recalls≥${data.config.phases.deep.minRecallCount}, limit=${data.config.phases.deep.limit}, halfLife=${data.config.phases.deep.recencyHalfLifeDays}d`}
+                details={`minScore=${data.config.phases.deep.minScore}, recalls>=${data.config.phases.deep.minRecallCount}, queries>=${data.config.phases.deep.minUniqueQueries}, limit=${data.config.phases.deep.limit}, halfLife=${data.config.phases.deep.recencyHalfLifeDays}d`}
                 t={t}
               />
               <PhaseStatusCard

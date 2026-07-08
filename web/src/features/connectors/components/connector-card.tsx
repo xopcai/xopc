@@ -26,7 +26,7 @@ function formatConnectorCategory(category: ConnectorCategory, t: ConnectorsSetti
 export function ConnectorCardSkeleton() {
   return (
     <div
-      className="flex h-full min-h-[9.5rem] flex-col rounded-xl border border-edge-subtle bg-surface-base p-4 dark:border-edge-subtle"
+      className="flex h-full min-h-[9.5rem] flex-col rounded-xl bg-surface-panel p-4 shadow-surface"
       aria-hidden
     >
       <div className="flex min-h-0 flex-1 items-start gap-3">
@@ -45,7 +45,7 @@ export function ConnectorCardSkeleton() {
 
 export function InstalledConnectorRowSkeleton() {
   return (
-    <div className="rounded-2xl border border-edge bg-surface-panel p-4 shadow-surface" aria-hidden>
+    <div className="rounded-2xl bg-surface-panel p-4 shadow-surface" aria-hidden>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1 space-y-2">
           <div className={cn('h-4 w-48 max-w-full', connectorSkeletonBar)} />
@@ -106,7 +106,7 @@ export function ConnectorCard({
   return (
     <div
       className={cn(
-        'group flex min-h-[9.5rem] flex-col rounded-lg border border-edge bg-surface-panel p-4 shadow-surface transition-colors hover:border-accent/50 focus-within:border-accent/50',
+        'group flex min-h-[9.5rem] flex-col rounded-lg bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/45 focus-within:ring-2 focus-within:ring-accent/30',
         onOpenDetails ? 'cursor-pointer' : null,
       )}
       role={onOpenDetails ? 'button' : undefined}
@@ -146,13 +146,13 @@ export function ConnectorCard({
             {visibleCapabilities.map((capability) => (
               <span
                 key={capability}
-                className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted"
+                className="rounded-md bg-surface-base px-2 py-0.5 text-[11px] text-fg-muted"
               >
                 {capability}
               </span>
             ))}
             {hiddenCapabilityCount > 0 ? (
-              <span className="rounded-md border border-edge bg-surface-base px-2 py-0.5 text-[11px] text-fg-subtle">
+              <span className="rounded-md bg-surface-base px-2 py-0.5 text-[11px] text-fg-subtle">
                 +{hiddenCapabilityCount}
               </span>
             ) : null}

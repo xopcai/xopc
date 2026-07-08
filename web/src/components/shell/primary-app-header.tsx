@@ -22,7 +22,7 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
   return (
     <header
       className={cn(
-        'flex shrink-0 items-center gap-3 bg-surface-panel',
+        'flex shrink-0 items-center gap-3 bg-surface-base',
         APP_TOP_HEADER_BAR_CLASS,
         'px-3 sm:gap-4 sm:px-5 xl:px-6',
         electronDarwinCollapsedClusterMainPadMd(sidebarCollapsed),

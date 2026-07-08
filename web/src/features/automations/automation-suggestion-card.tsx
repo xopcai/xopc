@@ -58,7 +58,7 @@ export function AutomationSuggestionCard({ title, description, prompt, coverage,
     }
 
     return (
-      <section className={cn('flex min-w-0 items-center gap-2 rounded-lg border border-edge bg-surface-panel px-2.5 py-1.5', className)}>
+      <section className={cn('flex min-w-0 items-center gap-2 rounded-lg bg-surface-panel px-2.5 py-1.5 shadow-surface', className)}>
         <Lightbulb className="size-3.5 shrink-0 text-accent" aria-hidden />
         <span className="min-w-0 truncate text-xs font-medium text-fg" title={description}>{title}</span>
         <Button
@@ -88,13 +88,13 @@ export function AutomationSuggestionCard({ title, description, prompt, coverage,
             </p>
           </div>
         </div>
-        <div className="mt-2 rounded-md border border-emerald-500/20 bg-surface-base/45 px-2.5 py-2">
+        <div className="mt-2 rounded-md bg-surface-base/55 px-2.5 py-2">
           <div className="text-xs font-medium text-fg">{automationLabels.explain.whyCovered}</div>
           <div className="mt-1 flex flex-wrap gap-1.5">
             {coverageExplanation.map((item) => (
               <span
                 key={item}
-                className="rounded-full border border-edge/70 bg-surface-panel px-2 py-0.5 text-xs text-fg-muted"
+                className="rounded-full bg-surface-panel px-2 py-0.5 text-xs text-fg-muted"
               >
                 {item}
               </span>
@@ -115,7 +115,7 @@ export function AutomationSuggestionCard({ title, description, prompt, coverage,
   }
 
   return (
-    <section className={cn('rounded-lg border border-edge bg-surface-panel p-3', className)}>
+    <section className={cn('rounded-lg bg-surface-panel p-3 shadow-surface', className)}>
       <div className="flex items-start gap-2">
         <Lightbulb className="mt-0.5 size-4 shrink-0 text-accent" aria-hidden />
         <div className="min-w-0 flex-1">

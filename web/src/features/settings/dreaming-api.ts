@@ -3,7 +3,7 @@ import { apiUrl } from '@/lib/url';
 
 export type DreamingPhaseId = 'light' | 'deep' | 'rem';
 
-/** Gateway payload shape for memory/.dreams/last-run.json (deep sweep). */
+/** Gateway payload shape for an agent's memories/.dreams/last-run.json. */
 export type DreamingLastRunRecord = {
   version: 2;
   phase: 'deep';
@@ -42,6 +42,7 @@ export type DreamingGatewayStatus = {
   agentId: string;
   memory: Record<string, unknown>;
   workspaceDir: string;
+  memoriesDir: string;
   config: {
     enabled: boolean;
     frequency: string;
@@ -51,7 +52,7 @@ export type DreamingGatewayStatus = {
       deep: { enabled: boolean; cron: string; minScore: number; minRecallCount: number; minUniqueQueries: number; limit: number; recencyHalfLifeDays: number; maxAgeDays: number };
       rem: { enabled: boolean; cron: string; lookbackDays: number; limit: number; minPatternStrength: number };
     };
-    deep: { minScore: number; minRecallCount: number; limit: number };
+    deep: { minScore: number; minRecallCount: number; minUniqueQueries: number; limit: number };
   };
   storePath: string;
   store: {
@@ -69,28 +70,45 @@ export type DreamingGatewayStatus = {
   remLastRun: PhaseLastRun;
 };
 
-export function dreamingSwrKey(): string {
-  return apiUrl('/api/dreaming');
+function dreamingQuery(agentId?: string, extra?: Record<string, string | number | undefined>): string {
+  const params = new URLSearchParams();
+  if (agentId) params.set('agentId', agentId);
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    if (value !== undefined) params.set(key, String(value));
+  }
+  const q = params.toString();
+  return q ? `?${q}` : '';
 }
 
-export async function fetchDreamingStatus(): Promise<DreamingGatewayStatus> {
-  const res = await fetchJson<{ ok?: boolean; payload?: DreamingGatewayStatus }>(dreamingSwrKey());
+export function dreamingSwrKey(agentId?: string): string {
+  return apiUrl(`/api/dreaming${dreamingQuery(agentId)}`);
+}
+
+export async function fetchDreamingStatus(keyOrAgentId?: string): Promise<DreamingGatewayStatus> {
+  const url = keyOrAgentId?.startsWith('/api/') || keyOrAgentId?.includes('/api/dreaming')
+    ? keyOrAgentId
+    : dreamingSwrKey(keyOrAgentId);
+  const res = await fetchJson<{ ok?: boolean; payload?: DreamingGatewayStatus }>(url);
   if (!res.payload) throw new Error('Missing payload');
   return res.payload;
 }
 
-export async function postDreamingAction(action: 'reset_store' | 'clear_lock'): Promise<void> {
-  await fetchJson(apiUrl('/api/dreaming/action'), { method: 'POST', body: JSON.stringify({ action }) });
+export async function postDreamingAction(action: 'reset_store' | 'clear_lock', agentId?: string): Promise<void> {
+  await fetchJson(apiUrl('/api/dreaming/action'), { method: 'POST', body: JSON.stringify({ action, agentId }) });
 }
 
-export async function postDreamingRunNow(phase: DreamingPhaseId = 'deep'): Promise<{ phase: DreamingPhaseId; result: unknown }> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { phase?: string; result?: unknown } }>(
+export async function postDreamingRunNow(
+  phase: DreamingPhaseId = 'deep',
+  agentId?: string,
+): Promise<{ agentId?: string; phase: DreamingPhaseId; result: unknown }> {
+  const res = await fetchJson<{ ok?: boolean; payload?: { agentId?: string; phase?: string; result?: unknown } }>(
     apiUrl('/api/dreaming/run'),
-    { method: 'POST', body: JSON.stringify({ phase }) },
+    { method: 'POST', body: JSON.stringify({ phase, agentId }) },
   );
   if (res.ok === false || !res.payload) throw new Error('Failed to run dreaming phase');
   const returnedPhase = res.payload.phase;
   return {
+    agentId: typeof res.payload.agentId === 'string' ? res.payload.agentId : undefined,
     phase: returnedPhase === 'light' || returnedPhase === 'deep' || returnedPhase === 'rem' ? returnedPhase : phase,
     result: res.payload.result,
   };
@@ -119,9 +137,10 @@ export type DreamingPreviewResponse = {
   memoryPath: string;
 };
 
-export async function fetchDreamingPreview(limit?: number): Promise<DreamingPreviewResponse> {
-  const q = typeof limit === 'number' && Number.isFinite(limit) ? `?limit=${encodeURIComponent(String(limit))}` : '';
-  const res = await fetchJson<{ ok?: boolean; payload?: DreamingPreviewResponse }>(apiUrl(`/api/dreaming/preview${q}`));
+export async function fetchDreamingPreview(limit?: number, agentId?: string): Promise<DreamingPreviewResponse> {
+  const res = await fetchJson<{ ok?: boolean; payload?: DreamingPreviewResponse }>(
+    apiUrl(`/api/dreaming/preview${dreamingQuery(agentId, typeof limit === 'number' && Number.isFinite(limit) ? { limit } : undefined)}`),
+  );
   if (!res.payload) throw new Error('Missing payload');
   return res.payload;
 }
@@ -146,8 +165,9 @@ export type DreamingEvent = {
   entriesAnalyzed?: number;
 };
 
-export async function fetchDreamingEvents(limit = 50): Promise<DreamingEvent[]> {
-  const q = `?limit=${encodeURIComponent(String(limit))}`;
-  const res = await fetchJson<{ ok?: boolean; payload?: { events: DreamingEvent[] } }>(apiUrl(`/api/dreaming/events${q}`));
+export async function fetchDreamingEvents(limit = 50, agentId?: string): Promise<DreamingEvent[]> {
+  const res = await fetchJson<{ ok?: boolean; payload?: { events: DreamingEvent[] } }>(
+    apiUrl(`/api/dreaming/events${dreamingQuery(agentId, { limit })}`),
+  );
   return res.payload?.events ?? [];
 }

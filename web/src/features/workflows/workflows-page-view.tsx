@@ -164,7 +164,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-base">
       <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-3 py-5 sm:px-5 xl:px-6">
-        <section className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-edge bg-surface-panel/70 px-3 py-2">
+        <section className="flex w-full flex-wrap items-center gap-2 rounded-lg bg-surface-panel/70 px-3 py-2 shadow-surface">
           <div className="relative min-w-48 flex-1 sm:max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
             <input
@@ -226,7 +226,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               </SelectOption>
             ))}
           </Select>
-          <div className="flex rounded-lg border border-edge bg-surface-muted p-0.5">
+          <div className="flex rounded-lg bg-surface-muted p-0.5">
             <button
               type="button"
               className={cn(
@@ -272,8 +272,8 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
                 key={section}
                 type="button"
                 className={cn(
-                  'min-w-0 rounded-lg border border-edge bg-surface-panel/70 px-3 py-2 text-left',
-                  'hover:border-edge-strong hover:bg-surface-hover/45',
+                  'min-w-0 rounded-lg bg-surface-panel/70 px-3 py-2 text-left shadow-surface',
+                  'hover:bg-surface-hover/45',
                   interaction.focusRingPanel,
                 )}
                 onClick={() => setViewMode('operations')}
@@ -308,7 +308,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
               {RUN_SECTIONS.map((section) => {
                 const sectionRuns = operationGroups.get(section) ?? [];
                 return (
-                  <section key={section} className="rounded-lg border border-edge bg-surface-panel/60">
+                  <section key={section} className="rounded-lg bg-surface-panel/60 shadow-surface">
                     <header className="flex flex-wrap items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3">
                       <div className="min-w-0">
                         <h2 className="text-sm font-semibold text-fg">{labels.operationSections[section].title}</h2>

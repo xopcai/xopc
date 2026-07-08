@@ -156,6 +156,7 @@ describe('SQLite migrations', () => {
       'work_items',
       'work_item_links',
       'work_item_events',
+      'work_item_attachments',
       'work_item_update_suggestions',
     ]) {
       expect(

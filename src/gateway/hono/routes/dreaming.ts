@@ -3,10 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { type Config } from '../../../config/schema.js';
-import { getWorkspacePath } from '../../../config/workspace-path-helpers.js';
-import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
-import { resolveEffectiveAgentManifestForAgent } from '../../../config/agent-profile.js';
-import { resolveDreamingConfig } from '../../../agent/memory/dreaming/config.js';
+import { normalizeAgentId, resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import {
   DREAMING_DIR_RELATIVE,
   DREAMING_LAST_RUN_RELATIVE,
@@ -20,6 +17,7 @@ import { runLightSweep } from '../../../agent/memory/dreaming/light-sweep.js';
 import { runDreamingDeepPromotion } from '../../../agent/memory/dreaming/deep-promotion.js';
 import { runRemPatterns } from '../../../agent/memory/dreaming/rem-patterns.js';
 import { parseDreamingLastRunFile, type DreamingDeepLastRun } from '../../../agent/memory/dreaming/last-run.js';
+import { resolveDreamingAgentScope, type DreamingAgentScope } from '../../../agent/memory/dreaming/scope.js';
 import {
   loadDreamingStore,
   saveDreamingStore,
@@ -31,11 +29,29 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === 'object' && !Array.isArray(v);
 }
 
-async function readLockInfo(workspaceDir: string): Promise<
+function requestedAgentIdFrom(c: { req: { query(name: string): string | undefined } }, body?: unknown): string | undefined {
+  const fromBody = isRecord(body) && typeof body.agentId === 'string' ? body.agentId : undefined;
+  return fromBody ?? c.req.query('agentId');
+}
+
+function hasEnabledAgent(cfg: Config, agentId: string): boolean {
+  const normalized = normalizeAgentId(agentId);
+  return cfg.agents.list.some((agent) => agent.enabled !== false && normalizeAgentId(agent.id) === normalized);
+}
+
+function resolveRouteScope(cfg: Config, requestedAgentId?: string): DreamingAgentScope {
+  const agentId = normalizeAgentId(requestedAgentId || resolveDefaultAgentId(cfg));
+  if (!hasEnabledAgent(cfg, agentId)) {
+    throw new Error(`Agent not found: ${agentId}`);
+  }
+  return resolveDreamingAgentScope(cfg, agentId);
+}
+
+async function readLockInfo(dreamingRoot: string): Promise<
   | { locked: false }
   | { locked: true; path: string; content: string; mtimeMs?: number }
 > {
-  const lockPath = path.join(workspaceDir, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
+  const lockPath = path.join(dreamingRoot, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
   try {
     const [content, st] = await Promise.all([fs.readFile(lockPath, 'utf-8'), fs.stat(lockPath)]);
     return {
@@ -52,7 +68,7 @@ async function readLockInfo(workspaceDir: string): Promise<
 }
 
 async function readLastRun(
-  workspaceDir: string,
+  dreamingRoot: string,
 ): Promise<
   | { exists: false }
   | {
@@ -63,7 +79,7 @@ async function readLastRun(
       parseError: string | null;
     }
 > {
-  const fullPath = path.join(workspaceDir, DREAMING_LAST_RUN_RELATIVE);
+  const fullPath = path.join(dreamingRoot, DREAMING_LAST_RUN_RELATIVE);
   try {
     const text = await fs.readFile(fullPath, 'utf-8');
     let raw: unknown;
@@ -100,11 +116,11 @@ async function readLastRun(
 }
 
 async function readPhaseLastRun(
-  workspaceDir: string,
+  dreamingRoot: string,
   filename: string,
 ): Promise<{ exists: false } | { exists: true; path: string; raw: unknown }> {
   const relPath = path.join(DREAMING_DIR_RELATIVE, filename);
-  const fullPath = path.join(workspaceDir, relPath);
+  const fullPath = path.join(dreamingRoot, relPath);
   try {
     const text = await fs.readFile(fullPath, 'utf-8');
     const raw = JSON.parse(text) as unknown;
@@ -142,32 +158,32 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.get('/api/dreaming', async (c) => {
     const cfg = service.currentConfig as Config;
-    const workspaceDir = getWorkspacePath(cfg);
-    if (!workspaceDir) {
-      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    let scope: DreamingAgentScope;
+    try {
+      scope = resolveRouteScope(cfg, c.req.query('agentId'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, 404);
     }
-
-    const agentId = resolveDefaultAgentId(cfg);
-    const manifest = resolveEffectiveAgentManifestForAgent(cfg, agentId);
-    const resolved = resolveDreamingConfig(cfg);
-    const { store } = await loadDreamingStore({ workspaceDir });
-    const lock = await readLockInfo(workspaceDir);
+    const { store } = await loadDreamingStore({ dreamingRoot: scope.memoriesDir });
+    const lock = await readLockInfo(scope.memoriesDir);
 
     // Read all three phase last-run files in parallel.
     const [lastRun, lightLastRun, remLastRun] = await Promise.all([
-      readLastRun(workspaceDir),
-      readPhaseLastRun(workspaceDir, 'last-run-light.json'),
-      readPhaseLastRun(workspaceDir, 'last-run-rem.json'),
+      readLastRun(scope.memoriesDir),
+      readPhaseLastRun(scope.memoriesDir, 'last-run-light.json'),
+      readPhaseLastRun(scope.memoriesDir, 'last-run-rem.json'),
     ]);
 
     return c.json({
       ok: true,
       payload: {
-        agentId,
-        memory: manifest.memory,
-        workspaceDir,
-        config: resolved,
-        storePath: SHORT_TERM_RECALL_STORE_RELATIVE,
+        agentId: scope.agentId,
+        memory: scope.memory,
+        workspaceDir: scope.workspaceDir,
+        memoriesDir: scope.memoriesDir,
+        config: scope.config,
+        storePath: path.join(scope.memoriesDir, SHORT_TERM_RECALL_STORE_RELATIVE),
         store: storeStats(store),
         lock,
         lastRun,
@@ -179,18 +195,21 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
 
   authenticated.get('/api/dreaming/preview', async (c) => {
     const cfg = service.currentConfig as Config;
-    const workspaceDir = getWorkspacePath(cfg);
-    if (!workspaceDir) {
-      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    let scope: DreamingAgentScope;
+    try {
+      scope = resolveRouteScope(cfg, c.req.query('agentId'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, 404);
     }
 
-    const resolved = resolveDreamingConfig(cfg);
     const rawLimit = c.req.query('limit');
     const limit = rawLimit ? Number(rawLimit) : 20;
 
     const preview = await previewDreamingDeepPromotion({
-      workspaceDir,
-      config: resolved.deep,
+      workspaceDir: scope.workspaceDir,
+      dreamingRoot: scope.memoriesDir,
+      config: scope.config.deep,
       limit: Number.isFinite(limit) ? limit : 20,
     });
 
@@ -206,11 +225,14 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
         : 'deep';
 
     const cfg = service.currentConfig as Config;
-    const workspaceDir = getWorkspacePath(cfg);
-    if (!workspaceDir) {
-      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    let scope: DreamingAgentScope;
+    try {
+      scope = resolveRouteScope(cfg, requestedAgentIdFrom(c, body));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, 404);
     }
-    const dreaming = resolveDreamingConfig(cfg);
+    const dreaming = scope.config;
     if (!dreaming.enabled || !dreaming.phases[requestedPhase].enabled) {
       return c.json({
         ok: false,
@@ -219,34 +241,46 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     }
 
     try {
-      service.emit('dreaming.phase.start', { phase: requestedPhase, timestamp: new Date().toISOString() });
+      service.emit('dreaming.phase.start', {
+        agentId: scope.agentId,
+        phase: requestedPhase,
+        timestamp: new Date().toISOString(),
+      });
 
       const result =
         requestedPhase === 'light'
-          ? await runLightSweep({ workspaceDir, config: dreaming.phases.light })
+          ? await runLightSweep({ dreamingRoot: scope.memoriesDir, config: dreaming.phases.light })
           : requestedPhase === 'rem'
-            ? await runRemPatterns({ workspaceDir, config: dreaming.phases.rem })
+            ? await runRemPatterns({ dreamingRoot: scope.memoriesDir, config: dreaming.phases.rem })
             : await runDreamingDeepPromotion({
-                workspaceDir,
+                workspaceDir: scope.workspaceDir,
+                dreamingRoot: scope.memoriesDir,
                 config: dreaming.phases.deep,
               });
 
-      service.emit('dreaming.phase.end', { phase: requestedPhase, ok: true, timestamp: new Date().toISOString() });
+      service.emit('dreaming.phase.end', {
+        agentId: scope.agentId,
+        phase: requestedPhase,
+        ok: true,
+        timestamp: new Date().toISOString(),
+      });
 
-      return c.json({ ok: true, payload: { phase: requestedPhase, result } });
+      return c.json({ ok: true, payload: { agentId: scope.agentId, phase: requestedPhase, result } });
     } catch (err) {
       const em = err instanceof Error ? err.message : String(err);
-      service.emit('dreaming.phase.end', { phase: requestedPhase, ok: false, error: em, timestamp: new Date().toISOString() });
+      service.emit('dreaming.phase.end', {
+        agentId: scope.agentId,
+        phase: requestedPhase,
+        ok: false,
+        error: em,
+        timestamp: new Date().toISOString(),
+      });
       return c.json({ ok: false, error: { message: em || 'Failed to trigger job' } }, 400);
     }
   });
 
   authenticated.post('/api/dreaming/action', async (c) => {
     const cfg = service.currentConfig as Config;
-    const workspaceDir = getWorkspacePath(cfg);
-    if (!workspaceDir) {
-      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
-    }
 
     let body: unknown;
     try {
@@ -255,6 +289,13 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
       body = {};
     }
     const action = isRecord(body) && typeof body.action === 'string' ? body.action.trim() : '';
+    let scope: DreamingAgentScope;
+    try {
+      scope = resolveRouteScope(cfg, requestedAgentIdFrom(c, body));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, 404);
+    }
 
     if (action !== 'reset_store' && action !== 'clear_lock') {
       return c.json({ ok: false, error: { message: 'Invalid action' } }, 400);
@@ -263,26 +304,35 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     if (action === 'reset_store') {
       const nowIso = new Date().toISOString();
       const next: DreamingStore = { version: 1, updatedAt: nowIso, entries: {} };
-      await saveDreamingStore({ workspaceDir, store: next });
-      return c.json({ ok: true, payload: { reset: true, storePath: SHORT_TERM_RECALL_STORE_RELATIVE } });
+      await saveDreamingStore({ dreamingRoot: scope.memoriesDir, store: next });
+      return c.json({
+        ok: true,
+        payload: { agentId: scope.agentId, reset: true, storePath: path.join(scope.memoriesDir, SHORT_TERM_RECALL_STORE_RELATIVE) },
+      });
     }
 
-    const lockPath = path.join(workspaceDir, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
+    const lockPath = path.join(scope.memoriesDir, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
     await fs.unlink(lockPath).catch(() => undefined);
-    return c.json({ ok: true, payload: { cleared: true, lockPath: SHORT_TERM_PROMOTION_LOCK_RELATIVE } });
+    return c.json({
+      ok: true,
+      payload: { agentId: scope.agentId, cleared: true, lockPath },
+    });
   });
 
   authenticated.get('/api/dreaming/events', async (c) => {
     const cfg = service.currentConfig as Config;
-    const workspaceDir = getWorkspacePath(cfg);
-    if (!workspaceDir) {
-      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    let scope: DreamingAgentScope;
+    try {
+      scope = resolveRouteScope(cfg, c.req.query('agentId'));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, 404);
     }
 
     const rawLimit = c.req.query('limit');
     const limit = rawLimit ? Math.min(Math.max(Number(rawLimit) || 50, 1), 200) : 50;
 
-    const events = await readDreamingEvents(workspaceDir, limit);
-    return c.json({ ok: true, payload: { events } });
+    const events = await readDreamingEvents(scope.memoriesDir, limit);
+    return c.json({ ok: true, payload: { agentId: scope.agentId, events } });
   });
 }

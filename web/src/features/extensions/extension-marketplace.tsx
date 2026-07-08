@@ -194,9 +194,9 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
                       }
                     }}
                     className={cn(
-                      'flex w-full cursor-pointer flex-wrap items-start gap-3 rounded-xl border border-edge bg-surface-base p-4 text-left shadow-surface',
-                      'transition-[transform,background-color,border-color,box-shadow] duration-150 ease-out',
-                      'hover:border-edge-subtle hover:bg-surface-hover/40',
+                      'flex w-full cursor-pointer flex-wrap items-start gap-3 rounded-xl bg-surface-panel p-4 text-left shadow-surface',
+                      'transition-[transform,background-color,box-shadow] duration-150 ease-out',
+                      'hover:bg-surface-hover/40',
                       'active:scale-[0.992] active:bg-surface-hover/55',
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
                       'dark:hover:bg-surface-hover/25 dark:active:bg-surface-hover/35',

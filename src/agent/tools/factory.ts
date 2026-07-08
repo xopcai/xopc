@@ -59,6 +59,7 @@ import { createBrowserUseTool } from './browser/tool/browser-use-tool.js';
 import { createDelegateTool } from './delegate-tool.js';
 import { createWorkflowTool } from './workflow-tool.js';
 import { createWorkflowCatalog } from '../workflow/catalog.js';
+import { resolveDreamingRootForAgent } from '../memory/dreaming/scope.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import type { AutomationService } from '../../automations/index.js';
 import type { WorkflowRunServiceLike } from '../../workflows/service/workflow-run-service.types.js';
@@ -119,6 +120,9 @@ export interface CreateCoreToolsOptions {
   /** Optional primary model for image tool heuristics. */
   getPrimaryModel?: () => Model<Api>;
   getMemoryManager?: () => MemoryManager;
+  /** Agent-scoped memories directory used for dreaming state (`agents/<id>/memories`). */
+  dreamingRoot?: string;
+  agentId?: string;
   /** When set, registers `skills_list` and `skill_view` bound to this workspace\'s skills. */
   getSkillManager?: () => SkillManager;
 }
@@ -235,6 +239,7 @@ export class AgentToolsFactory {
     const primary = getPrimary?.();
     const modelHasVision = primary?.input?.includes('image') ?? false;
     const cfg = this.deps.getConfig?.();
+    const dreamingRoot = options?.dreamingRoot ?? (cfg ? resolveDreamingRootForAgent(cfg, options?.agentId) : workspace);
     const browserEnabled = cfg?.browser?.enabled !== false;
     const recordGoalEvidence = createGoalEvidenceRecorder({
       getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
@@ -268,7 +273,9 @@ export class AgentToolsFactory {
       createSessionStatusTool(),
       createDreamingTool({
         getWorkspace: () => workspace,
+        getDreamingRoot: () => dreamingRoot,
         getConfig: () => this.deps.getConfig?.(),
+        getAgentId: () => options?.agentId,
       }),
       createToolManualTool(),
       createClarifyTool({
@@ -340,8 +347,8 @@ export class AgentToolsFactory {
         : []),
       ...(getMemMgr
         ? [
-            createMemorySearchTool({ workspaceDir: workspace, getMemoryManager: () => getMemMgr() }),
-            createMemoryGetTool({ workspaceDir: workspace, getMemoryManager: () => getMemMgr() }),
+            createMemorySearchTool({ workspaceDir: workspace, dreamingRoot, getMemoryManager: () => getMemMgr() }),
+            createMemoryGetTool({ workspaceDir: workspace, dreamingRoot, getMemoryManager: () => getMemMgr() }),
           ]
         : []),
       ...(getMemMgr && shouldRegisterCuratedMemoryTool(this.deps.getConfig?.())
@@ -428,6 +435,8 @@ export class AgentToolsFactory {
                 return childFactory.createAllTools({
                   workspace: childOpts.workspace,
                   getPrimaryModel: () => childOpts.model,
+                  agentId: options?.agentId ?? childOpts.agentId,
+                  dreamingRoot: options?.dreamingRoot,
                   disabledTools: new Set(['extensions']),
                 });
               },

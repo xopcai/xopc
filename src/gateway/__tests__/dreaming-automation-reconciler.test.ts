@@ -57,6 +57,26 @@ function config(workspaceDir: string, dreamingEnabled: boolean): Config {
   } as Config;
 }
 
+function multiAgentConfig(workspaceDir: string): Config {
+  const base = config(workspaceDir, true);
+  base.agents.list.push(
+    manifest('research', join(workspaceDir, 'research'), {
+      mode: 'confirmWrite',
+      sources: ['session', 'curated', 'workspace'],
+      writePolicy: { curated: 'confirm', workspace: 'confirm' },
+      dreaming: {
+        enabled: true,
+        phases: {
+          light: { enabled: false, cron: '0 */8 * * *' },
+          deep: { enabled: true, cron: '15 4 * * *', minScore: 0.8, minRecallCount: 3, limit: 10 },
+          rem: { enabled: true, cron: '0 6 * * 0' },
+        },
+      },
+    }),
+  );
+  return base;
+}
+
 function cronExpr(trigger: AutomationTrigger): string {
   expect(trigger.kind).toBe('schedule');
   if (trigger.kind !== 'schedule') return '';
@@ -90,10 +110,10 @@ describe('reconcileDreamingAutomations', () => {
       config: config(workspaceDir, true),
       automationService: service,
     });
-    expect(created.created).toEqual(['system-dreaming-light', 'system-dreaming-deep', 'system-dreaming-rem']);
+    expect(created.created).toEqual(['system-dreaming:main:light', 'system-dreaming:main:deep', 'system-dreaming:main:rem']);
 
-    const deep = await service.get('system-dreaming-deep');
-    const rem = await service.get('system-dreaming-rem');
+    const deep = await service.get('system-dreaming:main:deep');
+    const rem = await service.get('system-dreaming:main:rem');
     expect(deep).toMatchObject({
       enabled: true,
       action: { kind: 'agent', agentId: 'main', workingDirectory: workspaceDir },
@@ -110,9 +130,9 @@ describe('reconcileDreamingAutomations', () => {
       config: nextConfig,
       automationService: service,
     });
-    expect(updated.updated).toEqual(['system-dreaming-deep', 'system-dreaming-rem']);
-    expect(cronExpr((await service.get('system-dreaming-deep'))!.trigger)).toBe('30 2 * * *');
-    expect((await service.get('system-dreaming-rem'))?.enabled).toBe(true);
+    expect(updated.updated).toEqual(['system-dreaming:main:deep', 'system-dreaming:main:rem']);
+    expect(cronExpr((await service.get('system-dreaming:main:deep'))!.trigger)).toBe('30 2 * * *');
+    expect((await service.get('system-dreaming:main:rem'))?.enabled).toBe(true);
   });
 
   it('disables existing dreaming automations when dreaming is turned off', async () => {
@@ -122,9 +142,42 @@ describe('reconcileDreamingAutomations', () => {
       automationService: service,
     });
 
-    expect(disabled.disabled).toEqual(['system-dreaming-light', 'system-dreaming-deep']);
-    expect((await service.get('system-dreaming-light'))?.enabled).toBe(false);
-    expect((await service.get('system-dreaming-deep'))?.enabled).toBe(false);
-    expect((await service.get('system-dreaming-rem'))?.enabled).toBe(false);
+    expect(disabled.disabled).toEqual(['system-dreaming:main:light', 'system-dreaming:main:deep']);
+    expect((await service.get('system-dreaming:main:light'))?.enabled).toBe(false);
+    expect((await service.get('system-dreaming:main:deep'))?.enabled).toBe(false);
+    expect((await service.get('system-dreaming:main:rem'))?.enabled).toBe(false);
+  });
+
+  it('creates isolated dreaming automations per agent and removes legacy ids', async () => {
+    await service.create({
+      id: 'system-dreaming-deep',
+      name: 'Legacy deep',
+      enabled: true,
+      trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: '__xopc_memory_dreaming_sweep__' },
+    });
+
+    const result = await reconcileDreamingAutomations({
+      config: multiAgentConfig(workspaceDir),
+      automationService: service,
+    });
+
+    expect(result.removed).toContain('system-dreaming-deep');
+    expect(await service.get('system-dreaming-deep')).toBeNull();
+    expect(result.created).toEqual([
+      'system-dreaming:main:light',
+      'system-dreaming:main:deep',
+      'system-dreaming:main:rem',
+      'system-dreaming:research:light',
+      'system-dreaming:research:deep',
+      'system-dreaming:research:rem',
+    ]);
+    expect((await service.get('system-dreaming:research:light'))?.enabled).toBe(false);
+    expect(cronExpr((await service.get('system-dreaming:research:deep'))!.trigger)).toBe('15 4 * * *');
+    expect((await service.get('system-dreaming:research:deep'))?.action).toMatchObject({
+      kind: 'agent',
+      agentId: 'research',
+      workingDirectory: join(workspaceDir, 'research'),
+    });
   });
 });

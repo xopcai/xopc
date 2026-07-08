@@ -48,6 +48,7 @@ const DEFAULT_MAX_ITERATIONS = 30;
 export interface DelegateSubagentRunnerDeps {
   workspace: string;
   bus: MessageBus;
+  agentId?: string;
   /** Resolves the default subagent model (typically the parent agent's primary model). */
   getDefaultModel: () => Model<Api>;
   getConfig: () => Config | undefined;
@@ -110,10 +111,11 @@ export class DelegateSubagentRunner implements SubagentRunner {
       maxIterations: opts.maxIterations ?? DEFAULT_MAX_ITERATIONS,
       model,
       bus: this.deps.bus,
+      agentId: this.deps.agentId,
       getConfig: this.deps.getConfig,
       toolExecutorConfig: this.deps.toolExecutorConfig,
       buildChildTools: (childOpts) => {
-        const base = this.deps.buildChildTools(childOpts);
+        const base = this.deps.buildChildTools({ ...childOpts, agentId: this.deps.agentId ?? childOpts.agentId });
         if (!wantStructured || !opts.schema) return base;
         // Replace any existing tool with the same name so the per-run capture wins.
         const filtered = base.filter((t) => t.name !== STRUCTURED_OUTPUT_TOOL_NAME);
