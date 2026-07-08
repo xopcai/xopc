@@ -1,31 +1,10 @@
-/**
- * Default English label bag for the WorkflowCard tree.
- *
- * Kept in a separate file so callers can either consume it as-is (today's
- * call sites that don't thread i18n yet) or override individual fields once
- * they wire `messages(language).chat.workflow.*` through.
- */
-
 import type { StoredLanguage } from '@/lib/storage';
 
 import type { WorkflowCardLabels } from './workflow-card';
 import type { WorkflowAgentDetailModalLabels } from './workflow-agent-detail-modal';
 
-/**
- * Resolve a {@link WorkflowCardLabels} bag for the given language. Falls back
- * to English when an unknown locale is passed.
- *
- * Lives in this module rather than in the global chat.json so all workflow
- * copy stays self-contained — easier to add fields when the card evolves
- * without poking the ~500-line chat translation file.
- */
-export function workflowCardLabels(language: StoredLanguage | undefined): WorkflowCardLabels {
+export function workflowCardLabels(language: StoredLanguage): WorkflowCardLabels {
   if (language === 'zh') return zhLabels();
-  return enLabels();
-}
-
-/** @deprecated Use {@link workflowCardLabels}; kept for callers that don't have a language handy. */
-export function defaultWorkflowCardLabels(): WorkflowCardLabels {
   return enLabels();
 }
 
@@ -162,13 +141,8 @@ function enLabels(): WorkflowCardLabels {
     cancel: 'Cancel workflow',
     saveAria: 'Copy and edit workflow…',
     saveTitle: 'Open a copied workflow draft in the Workflows center',
-    savePlaceholder: 'snake_case_name',
-    saveSubmit: 'Save',
-    saveCancel: 'Cancel',
-    saveDispatched: 'Saved',
     copyAria: 'Copy result',
     copyDoneAria: 'Copied',
-    moreAria: 'More actions',
     openInWorkflowsAria: 'Open in Workflows',
     openInWorkflowsTitle: 'Open this workflow in the Workflows center',
     viewSubagentsHeading: 'View agents',
@@ -183,6 +157,31 @@ function enLabels(): WorkflowCardLabels {
     },
     recentLogsHeading: 'Recent updates',
     showAllLogs: 'Show all',
+    live: {
+      details: 'Details',
+      openRun: 'Open run',
+      stop: 'Stop',
+      close: 'Close workflow details',
+      title: 'Workflow run',
+      overview: 'Overview',
+      agents: 'Agents',
+      logs: 'Logs',
+      result: 'Result',
+      currentState: 'Current state',
+      runId: 'Run ID',
+      elapsed: 'Elapsed',
+      progress: (done, total) => `${done}/${total} agents`,
+      activeFallback: 'Workflow is running',
+      noResult: 'No result recorded yet.',
+      status: {
+        queued: 'Queued',
+        running: 'Running',
+        succeeded: 'Completed',
+        failed: 'Failed',
+        cancelled: 'Cancelled',
+        timeout: 'Timed out',
+      },
+    },
   };
 }
 
@@ -271,13 +270,8 @@ function zhLabels(): WorkflowCardLabels {
     cancel: '取消工作流',
     saveAria: '复制并编辑工作流…',
     saveTitle: '在工作流中心打开复制草案',
-    savePlaceholder: 'snake_case 名字',
-    saveSubmit: '保存',
-    saveCancel: '取消',
-    saveDispatched: '已保存',
     copyAria: '复制结果',
     copyDoneAria: '已复制',
-    moreAria: '更多操作',
     openInWorkflowsAria: '在工作流中心打开',
     openInWorkflowsTitle: '在工作流中心查看此工作流',
     viewSubagentsHeading: '查看智能体',
@@ -292,5 +286,30 @@ function zhLabels(): WorkflowCardLabels {
     },
     recentLogsHeading: '最近更新',
     showAllLogs: '显示全部',
+    live: {
+      details: '详情',
+      openRun: '打开运行',
+      stop: '停止',
+      close: '关闭工作流详情',
+      title: '工作流运行',
+      overview: '概览',
+      agents: '智能体',
+      logs: '日志',
+      result: '结果',
+      currentState: '当前状态',
+      runId: '运行 ID',
+      elapsed: '耗时',
+      progress: (done, total) => `${done}/${total} 个智能体`,
+      activeFallback: '工作流正在执行',
+      noResult: '暂无结果。',
+      status: {
+        queued: '排队中',
+        running: '运行中',
+        succeeded: '已完成',
+        failed: '失败',
+        cancelled: '已取消',
+        timeout: '超时',
+      },
+    },
   };
 }

@@ -5,7 +5,7 @@ import { dirname, relative } from 'node:path';
 
 import { checkFileSafety } from '../prompt/safety.js';
 import { evaluateFilePolicy } from '../sandbox/exec-policy.js';
-import { generateDiffString, normalizeToLF } from './edit-diff.js';
+import { detectLineEnding, generateDiffString, normalizeToLF, restoreLineEndings } from './edit-diff.js';
 import { resolvePathUnderWorkspace } from './tool-paths.js';
 import type { GoalEvidenceRecordInput } from './goal-evidence-recorder.js';
 
@@ -52,6 +52,19 @@ type ParsedPatch =
   | { kind: 'add'; path: string; content: string }
   | { kind: 'delete'; path: string }
   | { kind: 'update'; path: string; moveTo?: string; hunks: PatchHunk[] };
+
+type PlannedPatchChange = {
+  kind: AppliedPatchChangeKind;
+  path: string;
+  absolutePath: string;
+  moveTo?: string;
+  absoluteMoveTo?: string;
+  oldContent?: string;
+  newContent?: string;
+  diff: string;
+  added: number;
+  removed: number;
+};
 
 type PatchHunkLine = { op: 'context' | 'add' | 'remove'; text: string };
 type PatchHunk = { lines: PatchHunkLine[] };
@@ -170,7 +183,7 @@ function applyHunks(original: string, hunks: PatchHunk[], path: string): string 
 }
 
 async function readExisting(path: string): Promise<string> {
-  return normalizeToLF(await readFile(path, 'utf-8'));
+  return readFile(path, 'utf-8');
 }
 
 async function assertWritable(workspace: string, path: string): Promise<string> {
@@ -179,6 +192,139 @@ async function assertWritable(workspace: string, path: string): Promise<string> 
   const policy = evaluateFilePolicy({ operation: 'write', path, workspaceRoot: workspace });
   if (!policy.allowed) throw new Error(`Sandbox: ${policy.reason}`);
   return resolvePathUnderWorkspace(path, workspace);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'ENOENT') return false;
+    throw e;
+  }
+}
+
+async function buildPatchPlan(
+  workspace: string,
+  parsed: ParsedPatch[],
+): Promise<PlannedPatchChange[]> {
+  const changes: PlannedPatchChange[] = [];
+  const plannedTargets = new Set<string>();
+
+  const rememberTarget = (target: string) => {
+    if (plannedTargets.has(target)) {
+      throw new Error(`Patch touches the same target multiple times: ${relative(workspace, target)}`);
+    }
+    plannedTargets.add(target);
+  };
+
+  for (const op of parsed) {
+    if (op.kind === 'add') {
+      const target = await assertWritable(workspace, op.path);
+      rememberTarget(target);
+      if (await pathExists(target)) throw new Error(`Add file target already exists: ${op.path}`);
+      const diff = generateDiffString('', op.content, op.path);
+      const counts = countDiff(diff);
+      changes.push({
+        kind: 'add',
+        path: op.path,
+        absolutePath: target,
+        newContent: op.content,
+        ...counts,
+        diff,
+      });
+      continue;
+    }
+
+    if (op.kind === 'delete') {
+      const target = await assertWritable(workspace, op.path);
+      rememberTarget(target);
+      const oldContent = await readExisting(target);
+      const diff = generateDiffString(oldContent, '', op.path);
+      const counts = countDiff(diff);
+      changes.push({
+        kind: 'delete',
+        path: op.path,
+        absolutePath: target,
+        oldContent,
+        ...counts,
+        diff,
+      });
+      continue;
+    }
+
+    const target = await assertWritable(workspace, op.path);
+    rememberTarget(target);
+    const oldContent = await readExisting(target);
+    const lineEnding = detectLineEnding(oldContent);
+    const newLfContent = applyHunks(normalizeToLF(oldContent), op.hunks, op.path);
+    const newContent = restoreLineEndings(newLfContent, lineEnding);
+    const destination = op.moveTo ? await assertWritable(workspace, op.moveTo) : target;
+    if (destination !== target) {
+      rememberTarget(destination);
+      if (await pathExists(destination)) {
+        throw new Error(`Move target already exists: ${op.moveTo}`);
+      }
+    }
+    const displayPath = op.moveTo ? `${op.path} -> ${op.moveTo}` : op.path;
+    const diff = generateDiffString(oldContent, newContent, displayPath);
+    const counts = countDiff(diff);
+    changes.push({
+      kind: op.moveTo ? 'move' : 'update',
+      path: op.path,
+      absolutePath: target,
+      moveTo: op.moveTo,
+      absoluteMoveTo: op.moveTo ? destination : undefined,
+      oldContent,
+      newContent,
+      ...counts,
+      diff,
+    });
+  }
+
+  return changes;
+}
+
+async function commitPatchPlan(changes: PlannedPatchChange[]): Promise<void> {
+  const committed: PlannedPatchChange[] = [];
+  try {
+    for (const change of changes) {
+      committed.push(change);
+      if (change.kind === 'add') {
+        await mkdir(dirname(change.absolutePath), { recursive: true });
+        await writeFile(change.absolutePath, change.newContent ?? '', 'utf-8');
+      } else if (change.kind === 'delete') {
+        await rm(change.absolutePath);
+      } else {
+        const destination = change.absoluteMoveTo ?? change.absolutePath;
+        await mkdir(dirname(destination), { recursive: true });
+        await writeFile(destination, change.newContent ?? '', 'utf-8');
+        if (destination !== change.absolutePath) {
+          await rm(change.absolutePath);
+        }
+      }
+    }
+  } catch (error) {
+    for (const change of committed.reverse()) {
+      try {
+        if (change.kind === 'add') {
+          await rm(change.absolutePath, { force: true });
+        } else if (change.kind === 'delete') {
+          await mkdir(dirname(change.absolutePath), { recursive: true });
+          await writeFile(change.absolutePath, change.oldContent ?? '', 'utf-8');
+        } else if (change.absoluteMoveTo) {
+          await rm(change.absoluteMoveTo, { force: true });
+          await mkdir(dirname(change.absolutePath), { recursive: true });
+          await writeFile(change.absolutePath, change.oldContent ?? '', 'utf-8');
+        } else {
+          await writeFile(change.absolutePath, change.oldContent ?? '', 'utf-8');
+        }
+      } catch {
+        // Best-effort rollback; the original write error is more useful to the caller.
+      }
+    }
+    throw error;
+  }
 }
 
 export function createApplyPatchTool(
@@ -190,6 +336,12 @@ export function createApplyPatchTool(
     label: 'Apply Patch',
     description: 'Apply a strict multi-file patch. Use this for code edits instead of shell redirection or write_file.',
     parameters: ApplyPatchSchema,
+    mutatesWorkspace: true,
+    mutationScope: 'workspace',
+    supportsParallel: false,
+    idempotent: false,
+    requiresExclusiveWorkspaceLock: true,
+    finalGuardRelevant: true,
 
     async execute(
       _toolCallId: string,
@@ -198,71 +350,8 @@ export function createApplyPatchTool(
       try {
         const patch = params.patch ?? '';
         const parsed = parsePatch(patch);
-        const changes: AppliedPatchChange[] = [];
-
-        for (const op of parsed) {
-          if (op.kind === 'add') {
-            const target = await assertWritable(workspace, op.path);
-            let exists = false;
-            try {
-              await stat(target);
-              exists = true;
-            } catch (e) {
-              if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
-            }
-            if (exists) throw new Error(`Add file target already exists: ${op.path}`);
-            await mkdir(dirname(target), { recursive: true });
-            await writeFile(target, op.content, 'utf-8');
-            const diff = generateDiffString('', op.content, op.path);
-            const counts = countDiff(diff);
-            changes.push({
-              kind: 'add',
-              path: op.path,
-              absolutePath: target,
-              ...counts,
-              diff,
-            });
-            continue;
-          }
-
-          if (op.kind === 'delete') {
-            const target = await assertWritable(workspace, op.path);
-            const oldContent = await readExisting(target);
-            await rm(target);
-            const diff = generateDiffString(oldContent, '', op.path);
-            const counts = countDiff(diff);
-            changes.push({
-              kind: 'delete',
-              path: op.path,
-              absolutePath: target,
-              ...counts,
-              diff,
-            });
-            continue;
-          }
-
-          const target = await assertWritable(workspace, op.path);
-          const oldContent = await readExisting(target);
-          const newContent = applyHunks(oldContent, op.hunks, op.path);
-          const destination = op.moveTo ? await assertWritable(workspace, op.moveTo) : target;
-          await mkdir(dirname(destination), { recursive: true });
-          await writeFile(destination, newContent, 'utf-8');
-          if (destination !== target) {
-            await rm(target);
-          }
-          const displayPath = op.moveTo ? `${op.path} -> ${op.moveTo}` : op.path;
-          const diff = generateDiffString(oldContent, newContent, displayPath);
-          const counts = countDiff(diff);
-          changes.push({
-            kind: op.moveTo ? 'move' : 'update',
-            path: op.path,
-            absolutePath: target,
-            moveTo: op.moveTo,
-            absoluteMoveTo: op.moveTo ? destination : undefined,
-            ...counts,
-            diff,
-          });
-        }
+        const changes = await buildPatchPlan(workspace, parsed);
+        await commitPatchPlan(changes);
 
         const diff = changes.map((change) => change.diff).join('\n');
         const added = changes.reduce((sum, change) => sum + change.added, 0);

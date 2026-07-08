@@ -4,6 +4,14 @@ import { isManagedConnectorServer } from './materialize.js';
 import { getConnectorAuditFromMarker, getConnectorUsageFromMarker } from './usage.js';
 import type { ConnectorInstance } from './types.js';
 
+function readMarkerConfig(marker: unknown): Record<string, unknown> | undefined {
+  if (!marker || typeof marker !== 'object' || Array.isArray(marker)) return undefined;
+  const config = (marker as Record<string, unknown>).config;
+  return config && typeof config === 'object' && !Array.isArray(config)
+    ? config as Record<string, unknown>
+    : undefined;
+}
+
 function secretStatusForServer(server: Record<string, unknown>): Record<string, boolean> {
   const marker = server.xopcConnector as { connectorId?: string } | undefined;
   const definition = marker?.connectorId ? getConnectorDefinition(marker.connectorId) : undefined;
@@ -46,6 +54,7 @@ function connectorInstanceFromRecord(instanceId: string, record: Record<string, 
     lastConnectedAt: typeof markerRecord.lastConnectedAt === 'string' ? markerRecord.lastConnectedAt : undefined,
     lastError: typeof markerRecord.lastError === 'string' ? markerRecord.lastError : undefined,
     secretStatus: {},
+    config: readMarkerConfig(markerRecord),
     materialized: runtimeType === 'composio'
       ? { type: 'composio', id: instanceId }
       : runtimeType === 'channel'
@@ -99,6 +108,7 @@ export function listConnectorInstances(config: Config): ConnectorInstance[] {
           lastConnectedAt: server.xopcConnector.lastConnectedAt,
           lastError: server.xopcConnector.lastError,
           secretStatus: secretStatusForServer(server),
+          config: readMarkerConfig(server.xopcConnector),
           materialized: {
             type: 'mcp' as const,
             serverId,

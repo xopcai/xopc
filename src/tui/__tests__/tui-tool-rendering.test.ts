@@ -341,6 +341,160 @@ describe('tui tool renderers', () => {
     clearTuiToolRenderers();
   });
 
+  it('renders expanded patch tool results as file summaries', () => {
+    const component = tool('apply_patch', {});
+    component.updateResult(
+      [
+        '--- /dev/null',
+        '+++ b/src/agent/session/__tests__/session-inspector.test.ts',
+        '@@ -0,0 +1,2 @@',
+        '+import { describe, expect, it } from "vitest";',
+        '+describe("SessionInspector", () => {});',
+      ].join('\n'),
+      false,
+    );
+
+    const collapsed = stripAnsi(component.render(120).join('\n'));
+    expect(collapsed).toContain('Called apply_patch');
+    expect(collapsed).toContain('preview');
+    expect(collapsed).not.toContain('SessionInspector');
+
+    component.setExpanded(true);
+    const expanded = stripAnsi(component.render(160).join('\n'));
+    expect(expanded).toContain(
+      'Added src/agent/session/__tests__/session-inspector.test.ts (+2 -0)',
+    );
+    expect(expanded).toContain('1 +import');
+    expect(expanded).toContain('2 +describe');
+  });
+
+  it('labels failed fallback tool calls', () => {
+    const component = tool('search', { query: 'needle' });
+    component.updateResult('backend failed', false, true);
+
+    const rendered = stripAnsi(component.render(100).join('\n'));
+    expect(rendered).toContain('Failed search');
+    expect(rendered).toContain('error; 1 error line; Ctrl+O to expand');
+    expect(rendered).not.toContain('1 result');
+  });
+
+  it('summarizes search output without dumping matches while collapsed', () => {
+    const component = tool('search', { query: 'SessionInspector' });
+    component.updateResult(
+      [
+        'src/agent/session/session-inspector.ts:12:export class SessionInspector {}',
+        'src/agent/session/__tests__/session-inspector.test.ts:7:describe("SessionInspector")',
+      ].join('\n'),
+      false,
+    );
+
+    const collapsed = stripAnsi(component.render(80).join('\n'));
+    expect(collapsed).toContain('2 results in 2 files');
+    expect(collapsed).toContain('Ctrl+O to expand');
+    expect(collapsed).not.toContain('export class SessionInspector');
+
+    component.setExpanded(true);
+    expect(stripAnsi(component.render(120).join('\n'))).toContain('export class SessionInspector');
+  });
+
+  it('summarizes exec output with exit code while collapsed', () => {
+    const component = tool('exec_command', { command: 'pnpm test' });
+    component.updateResult({
+      content: [{ type: 'text', text: 'line 1\nline 2\nline 3' }],
+      details: { exitCode: 0 },
+    }, false);
+
+    const collapsed = stripAnsi(component.render(100).join('\n'));
+    expect(collapsed).toContain('Called exec_command');
+    expect(collapsed).toContain('pnpm test');
+    expect(collapsed).toContain('exit 0; 3 output lines; Ctrl+O to expand');
+    expect(collapsed).not.toContain('line 1');
+  });
+
+  it('expands exec output into stdout stderr and exit sections', () => {
+    const component = tool('exec_command', { command: 'pnpm test' });
+    component.updateResult({
+      content: [{ type: 'text', text: 'combined fallback' }],
+      details: {
+        exitCode: 1,
+        stdout: 'ok line',
+        stderr: 'failure line',
+      },
+    }, false);
+
+    const collapsed = stripAnsi(component.render(100).join('\n'));
+    expect(collapsed).toContain('exit 1; 2 output lines; Ctrl+O to expand');
+    expect(collapsed).not.toContain('failure line');
+
+    component.setExpanded(true);
+    const expanded = stripAnsi(component.render(100).join('\n'));
+    expect(expanded).toContain('stdout');
+    expect(expanded).toContain('ok line');
+    expect(expanded).toContain('stderr');
+    expect(expanded).toContain('failure line');
+    expect(expanded).toContain('exit 1');
+    expect(expanded).not.toContain('combined fallback');
+  });
+
+  it('bounds long expanded exec output with a middle truncation marker', () => {
+    const component = tool('exec_command', { command: 'pnpm test' });
+    component.updateResult({
+      content: [{ type: 'text', text: 'combined fallback' }],
+      details: {
+        exitCode: 0,
+        stdout: Array.from({ length: 140 }, (_, index) => `stdout ${index}`).join('\n'),
+      },
+    }, false);
+    component.setExpanded(true);
+
+    const rendered = stripAnsi(component.render(120).join('\n'));
+    expect(rendered).toContain('stdout 0');
+    expect(rendered).toContain('stdout 139');
+    expect(rendered).toContain('rows hidden');
+    expect(rendered).not.toContain('stdout 70');
+  });
+
+  it('bounds long expanded search output with a middle truncation marker', () => {
+    const component = tool('search', { query: 'needle' });
+    component.updateResult(
+      Array.from({ length: 140 }, (_, index) => `src/file-${index}.ts:${index}:needle`).join('\n'),
+      false,
+    );
+    component.setExpanded(true);
+
+    const rendered = stripAnsi(component.render(120).join('\n'));
+    expect(rendered).toContain('src/file-0.ts');
+    expect(rendered).toContain('src/file-139.ts');
+    expect(rendered).toContain('rows hidden');
+    expect(rendered).not.toContain('src/file-70.ts');
+  });
+
+  it('renders MCP-style tool names and content block summaries', () => {
+    const component = tool('github__get_issue', { owner: 'xopc', repo: 'xopc', number: 42 });
+    component.updateResult({
+      content: [
+        { type: 'text', text: 'issue body' },
+        { type: 'image', mimeType: 'image/png', data: 'abc' },
+      ],
+    }, false);
+
+    const rendered = stripAnsi(component.render(120).join('\n'));
+    expect(rendered).toContain('Called github.get_issue');
+    expect(rendered).toContain('1 text, 1 image; Ctrl+O to expand');
+    expect(rendered).not.toContain('issue body');
+  });
+
+  it('compacts long read paths in narrow tool rows', () => {
+    const component = tool('read_file', {
+      path: '/Users/michaelxu/develop/github/xopc/src/agent/session/__tests__/session-inspector.test.ts',
+    });
+
+    const rendered = stripAnsi(component.render(60).join('\n'));
+    expect(rendered).toContain('session-inspector.test.ts');
+    expect(rendered).toContain('.../');
+    expect(rendered).not.toContain('/Users/michaelxu/develop/github/xopc/src/agent');
+  });
+
   it('renders unusual tool argument values without throwing', () => {
     const component = tool('debug_tool', {
       id: 1n,
@@ -473,7 +627,8 @@ describe('tui tool renderers', () => {
     component.updateResult('x'.repeat(200), false);
 
     const rendered = component.render(30).join('\n');
-    expect(rendered).toContain('preview');
+    expect(rendered).toContain('1 result');
+    expect(rendered).toContain('Ctrl+O to expand');
     expect(rendered.split('\n').filter((line) => line.includes('xxxxx')).length).toBeLessThanOrEqual(4);
   });
 

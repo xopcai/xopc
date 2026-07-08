@@ -10,6 +10,7 @@ import {
   Minimize2,
   MoreHorizontal,
   Pencil,
+  WrapText,
   X,
 } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -53,6 +54,8 @@ export interface WorkspaceFilePreviewPanelProps {
   filePath: string | null;
   onClose: () => void;
   targetLine?: number | null;
+  /** Project workspace root. Takes priority over chat session / agent workspace. */
+  projectId?: string;
   /** Per-chat session workspace (takes priority over `agentId`). */
   sessionKey?: string;
   /** Chat agent workspace; omit to use gateway default agent root. */
@@ -63,6 +66,7 @@ export function WorkspaceFilePreviewPanel({
   filePath,
   onClose,
   targetLine,
+  projectId,
   sessionKey,
   agentId,
 }: WorkspaceFilePreviewPanelProps) {
@@ -70,12 +74,13 @@ export function WorkspaceFilePreviewPanel({
   const m = messages(language);
   const resolvedTheme = useThemeStore((s) => s.resolved);
 
-  const state = useWorkspacePreviewState({ filePath, sessionKey, agentId });
+  const state = useWorkspacePreviewState({ filePath, projectId, sessionKey, agentId });
   const previewController = usePreviewRuntimeController(state.descriptor);
   const { rootRef, active, enter, exit } = useFilePreviewFullscreen();
   const { dialogOpen, loading, result, error, createShareLink, handleOpenChange } = useShareLink();
   const [pathCopied, setPathCopied] = useState(false);
   const [openWithMenuOpen, setOpenWithMenuOpen] = useState(false);
+  const [markdownWordWrap, setMarkdownWordWrap] = useState(false);
 
   const ext = filePath ? getPreviewFileExtension(filePath) : '';
   const name = filePath ? getPreviewFileName(filePath) : '';
@@ -95,7 +100,7 @@ export function WorkspaceFilePreviewPanel({
   }, [filePath, m.clipboard.copyFailed, m.workspace.pathCopied]);
 
   const handleShare = useCallback(() => {
-    if (!filePath) return;
+    if (!filePath || projectId) return;
     const scope =
       sessionKey != null
         ? { sessionKey }
@@ -103,7 +108,7 @@ export function WorkspaceFilePreviewPanel({
           ? { agentId: agentId.trim() }
           : {};
     void createShareLink({ path: filePath, ...scope });
-  }, [agentId, createShareLink, filePath, sessionKey]);
+  }, [agentId, createShareLink, filePath, projectId, sessionKey]);
 
   const canPreviewFullscreen = Boolean(filePath && !state.loading && !state.loadError);
   const previewActions = {
@@ -180,6 +185,22 @@ export function WorkspaceFilePreviewPanel({
               onClick={() => state.setHtmlCodeMode((v) => !v)}
             >
               {state.htmlCodeMode ? <Eye className="size-4" /> : <Pencil className="size-4" />}
+            </button>
+          ) : null}
+          {isMd && state.markdownEditMode ? (
+            <button
+              type="button"
+              className={cn(
+                'inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+                markdownWordWrap && 'bg-surface-hover text-fg',
+                interaction.focusRingPanel,
+              )}
+              title={`${m.workspace.wordWrap} (Option+Z)`}
+              aria-label={m.workspace.wordWrap}
+              aria-pressed={markdownWordWrap}
+              onClick={() => setMarkdownWordWrap((value) => !value)}
+            >
+              <WrapText className="size-4" />
             </button>
           ) : null}
           {canPreviewFullscreen ? (
@@ -332,16 +353,18 @@ export function WorkspaceFilePreviewPanel({
               <FolderOpen className="size-4" />
             </button>
           ) : null}
-          <button
-            type="button"
-            className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
-            title={m.workspace.shareLink}
-            aria-label={m.workspace.shareLink}
-            onClick={handleShare}
-            disabled={loading}
-          >
-            {loading ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
-          </button>
+          {!projectId ? (
+            <button
+              type="button"
+              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+              title={m.workspace.shareLink}
+              aria-label={m.workspace.shareLink}
+              onClick={handleShare}
+              disabled={loading}
+            >
+              {loading ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
+            </button>
+          ) : null}
           <button
             type="button"
             className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
@@ -369,6 +392,8 @@ export function WorkspaceFilePreviewPanel({
         workspaceEditing={{
           markdownEditMode: state.markdownEditMode,
           onSaveMarkdown: state.onSaveMarkdown,
+          markdownWordWrap,
+          onToggleMarkdownWordWrap: () => setMarkdownWordWrap((value) => !value),
           htmlCodeMode: state.htmlCodeMode,
           onHtmlChange: state.onHtmlChange,
           isDark: resolvedTheme === 'dark',

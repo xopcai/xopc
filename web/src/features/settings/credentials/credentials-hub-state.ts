@@ -35,7 +35,7 @@ function llmDomain(
         ? labels.llmConfigured(configured)
         : labels.llmMissing;
 
-  return { id: 'llm', status, detail, managePath: '/settings/credentials?tab=providers' };
+  return { id: 'llm', status, detail, managePath: '/settings/credentials?tab=services' };
 }
 
 function webSearchDomain(

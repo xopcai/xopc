@@ -1,0 +1,629 @@
+import * as Dialog from '@radix-ui/react-dialog';
+import { CheckCircle2, Columns3, ExternalLink, List, MessageSquarePlus, Plus, RefreshCw, Target, X } from 'lucide-react';
+import { type DragEvent, type FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+
+import { Button } from '@/components/ui/button';
+import { segmentedThumbActiveClassName, segmentedThumbBaseClassName, segmentedTrackClassName } from '@/components/ui/segmented-styles';
+import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { useLocaleStore } from '@/stores/locale-store';
+import {
+  createWorkItem,
+  createWorkItemGoal,
+  fetchProjectWorkItems,
+  fetchWorkItemEvents,
+  patchWorkItem,
+  startWorkItemChat,
+  type WorkItem,
+  type WorkItemEvent,
+  type WorkItemPriority,
+  type WorkItemStatus,
+} from './api';
+
+type WorkItemsMessages = ReturnType<typeof messages>['projectDetailPage']['workItems'];
+
+const DRAG_TYPE = 'application/x-xopc-work-item';
+const BOARD_COLUMNS: WorkItemStatus[] = ['backlog', 'todo', 'in_progress', 'blocked', 'needs_input', 'in_review', 'done'];
+const PRIORITIES: WorkItemPriority[] = ['low', 'normal', 'high', 'urgent'];
+
+function statusTone(status: WorkItemStatus): string {
+  if (status === 'done' || status === 'in_review') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+  if (status === 'blocked' || status === 'needs_input') return 'bg-red-500/10 text-red-700 dark:text-red-300';
+  if (status === 'in_progress') return 'bg-accent-soft text-accent-fg';
+  if (status === 'backlog' || status === 'todo') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
+  return 'bg-surface-muted text-fg-subtle';
+}
+
+function formatTime(value: number): string {
+  if (!value) return '';
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+
+function visibleSummary(item: WorkItem, t: WorkItemsMessages): string {
+  return item.nextAction || item.blockedReason || item.description || t.noNextAction;
+}
+
+function linkHref(link: NonNullable<WorkItem['links']>[number]): string {
+  if (link.kind === 'chat') return `/chat/${encodeURIComponent(link.targetId)}`;
+  if (link.kind === 'goal') return `/goals/${encodeURIComponent(link.targetId)}`;
+  if (link.kind === 'workflow_run') return `/workflows?run=${encodeURIComponent(link.targetId)}`;
+  if (link.kind === 'automation') return `/automations?automationId=${encodeURIComponent(link.targetId)}`;
+  return '#';
+}
+
+function WorkItemCard({
+  item,
+  dragging,
+  onOpen,
+  onDragStart,
+  onDragEnd,
+  t,
+}: {
+  item: WorkItem;
+  dragging: boolean;
+  onOpen: (item: WorkItem) => void;
+  onDragStart: (item: WorkItem, event: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
+  t: WorkItemsMessages;
+}) {
+  return (
+    <article
+      draggable
+      onDragStart={(event) => onDragStart(item, event)}
+      onDragEnd={onDragEnd}
+      title={t.dragToUpdate}
+      className={cn(
+        'flex h-24 w-full min-w-0 max-w-full cursor-grab flex-col overflow-hidden rounded-lg border border-edge bg-surface-panel px-3 pt-3 pb-0 transition-colors hover:border-edge-strong hover:bg-surface-hover/50 active:cursor-grabbing',
+        dragging && 'opacity-50',
+      )}
+    >
+      <button type="button" className="min-w-0 text-left" onClick={() => onOpen(item)}>
+        <div className="flex min-w-0 max-w-full items-center gap-2">
+          <Target className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
+          <h4 className="min-w-0 flex-1 basis-0 truncate text-sm font-medium text-fg">{item.title}</h4>
+        </div>
+        <p className="mt-2 max-w-full break-words text-xs leading-5 text-fg-muted line-clamp-1">{visibleSummary(item, t)}</p>
+      </button>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', statusTone(item.status))}>
+          {t.statuses[item.status]}
+        </span>
+        <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted">{t.priorities[item.priority]}</span>
+        {item.links?.length ? <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[11px] text-fg-muted">{item.links.length}</span> : null}
+        <Link
+          to={`/work-items/${encodeURIComponent(item.id)}`}
+          className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-accent hover:bg-accent-soft hover:text-accent-fg"
+        >
+          {t.detail.openItem}
+          <ExternalLink className="size-3" aria-hidden />
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function WorkItemCardSkeleton() {
+  return (
+    <article className="flex h-24 w-full min-w-0 max-w-full flex-col overflow-hidden rounded-lg border border-edge bg-surface-panel px-3 pt-3 pb-0">
+      <div className="flex items-center gap-2">
+        <div className="size-3.5 shrink-0 rounded-full bg-surface-muted" />
+        <div className="h-3 w-36 rounded bg-surface-muted" />
+      </div>
+      <div className="mt-3 h-3 w-48 rounded bg-surface-muted" />
+      <div className="mt-3 flex gap-1.5">
+        <div className="h-5 w-16 rounded-full bg-surface-muted" />
+        <div className="h-5 w-10 rounded-full bg-surface-muted" />
+      </div>
+    </article>
+  );
+}
+
+function WorkItemModal({
+  mode,
+  item,
+  events,
+  busy,
+  t,
+  onClose,
+  onCreate,
+  onSave,
+  onStartChat,
+  onCreateGoal,
+}: {
+  mode: 'create' | 'detail' | null;
+  item: WorkItem | null;
+  events: WorkItemEvent[];
+  busy: boolean;
+  t: WorkItemsMessages;
+  onClose: () => void;
+  onCreate: (input: { title: string; description?: string; priority: WorkItemPriority; status: WorkItemStatus; nextAction?: string; blockedReason?: string }) => void;
+  onSave: (item: WorkItem, patch: Parameters<typeof patchWorkItem>[1]) => void;
+  onStartChat: (item: WorkItem) => void;
+  onCreateGoal: (item: WorkItem) => void;
+}) {
+  const open = mode !== null;
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [status, setStatus] = useState<WorkItemStatus>('todo');
+  const [priority, setPriority] = useState<WorkItemPriority>('normal');
+  const [nextAction, setNextAction] = useState('');
+  const [blockedReason, setBlockedReason] = useState('');
+
+  useEffect(() => {
+    if (mode === 'create') {
+      setTitle('');
+      setDescription('');
+      setStatus('todo');
+      setPriority('normal');
+      setNextAction('');
+      setBlockedReason('');
+      return;
+    }
+    if (mode === 'detail' && item) {
+      setTitle(item.title);
+      setDescription(item.description ?? '');
+      setStatus(item.status);
+      setPriority(item.priority);
+      setNextAction(item.nextAction ?? '');
+      setBlockedReason(item.blockedReason ?? '');
+    }
+  }, [item, mode]);
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) return;
+    if (mode === 'create') {
+      onCreate({
+        title: trimmedTitle,
+        description: description.trim() || undefined,
+        priority,
+        status,
+        nextAction: nextAction.trim() || undefined,
+        blockedReason: blockedReason.trim() || undefined,
+      });
+      return;
+    }
+    if (!item) return;
+    onSave(item, {
+      title: trimmedTitle,
+      description: description.trim() || null,
+      status,
+      priority,
+      nextAction: nextAction.trim() || null,
+      blockedReason: blockedReason.trim() || null,
+    });
+  }
+
+  return (
+    <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+        <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(86dvh,48rem)] w-[min(60rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+          <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col">
+            <div className="flex items-start justify-between gap-3 border-b border-edge px-5 py-4">
+              <div className="min-w-0">
+                <Dialog.Title className="truncate text-base font-semibold text-fg">
+                  {mode === 'create' ? t.create.title : (item?.title || t.title)}
+                </Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm text-fg-muted">{t.detail.description}</Dialog.Description>
+              </div>
+              <Dialog.Close asChild>
+                <button type="button" className="inline-flex size-8 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" disabled={busy}>
+                  <X className="size-4" aria-hidden />
+                </button>
+              </Dialog.Close>
+            </div>
+
+            <div className="grid min-h-0 flex-1 gap-6 overflow-y-auto px-5 py-4 lg:grid-cols-[minmax(0,1fr)_16rem]">
+              <div className="grid content-start gap-4">
+                <label className="grid gap-1.5 text-sm">
+                  <span className="font-medium text-fg-muted">{t.create.titleLabel}</span>
+                  <input
+                    className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    autoFocus={mode === 'create'}
+                  />
+                </label>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1.5 text-sm">
+                    <span className="font-medium text-fg-muted">{t.detail.status}</span>
+                    <select className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent" value={status} onChange={(event) => setStatus(event.target.value as WorkItemStatus)}>
+                      {BOARD_COLUMNS.map((value) => <option key={value} value={value}>{t.statuses[value]}</option>)}
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5 text-sm">
+                    <span className="font-medium text-fg-muted">{t.create.priorityLabel}</span>
+                    <select className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent" value={priority} onChange={(event) => setPriority(event.target.value as WorkItemPriority)}>
+                      {PRIORITIES.map((value) => <option key={value} value={value}>{t.priorities[value]}</option>)}
+                    </select>
+                  </label>
+                </div>
+                <label className="grid gap-1.5 text-sm">
+                  <span className="font-medium text-fg-muted">{t.create.descriptionLabel}</span>
+                  <textarea className="min-h-28 rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent" value={description} onChange={(event) => setDescription(event.target.value)} />
+                </label>
+                {mode === 'detail' ? (
+                  <>
+                    <label className="grid gap-1.5 text-sm">
+                      <span className="font-medium text-fg-muted">{t.nextAction}</span>
+                      <textarea className="min-h-20 rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent" value={nextAction} onChange={(event) => setNextAction(event.target.value)} />
+                    </label>
+                    <label className="grid gap-1.5 text-sm">
+                      <span className={cn('font-medium', status === 'blocked' || status === 'needs_input' ? 'text-red-700 dark:text-red-300' : 'text-fg-muted')}>{t.blockedReason}</span>
+                      <textarea className={cn('min-h-20 rounded-lg border bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent', status === 'blocked' || status === 'needs_input' ? 'border-red-500/40' : 'border-edge')} value={blockedReason} onChange={(event) => setBlockedReason(event.target.value)} />
+                    </label>
+                  </>
+                ) : null}
+              </div>
+
+              <aside className="grid content-start gap-5">
+                {mode === 'detail' && item ? (
+                  <section>
+                    <h3 className="text-sm font-semibold text-fg">{t.detail.actions}</h3>
+                    <div className="mt-2 grid gap-2">
+                      <Button type="button" variant="secondary" className="justify-start rounded-lg" disabled={busy} onClick={() => onStartChat(item)}>
+                        <MessageSquarePlus className="size-4" aria-hidden />
+                        {t.detail.startChat}
+                      </Button>
+                      <Button type="button" variant="secondary" className="justify-start rounded-lg" disabled={busy} onClick={() => onCreateGoal(item)}>
+                        <Target className="size-4" aria-hidden />
+                        {t.detail.createGoal}
+                      </Button>
+                      <Button asChild variant="secondary" className="justify-start rounded-lg">
+                        <Link to={`/work-items/${encodeURIComponent(item.id)}`}>
+                          <ExternalLink className="size-4" aria-hidden />
+                          {t.detail.openItem}
+                        </Link>
+                      </Button>
+                    </div>
+                  </section>
+                ) : null}
+
+                <section>
+                  <h3 className="text-sm font-semibold text-fg">{t.detail.links}</h3>
+                  <div className="mt-2 grid gap-2 text-sm">
+                    {item?.links?.length ? item.links.slice(0, 6).map((link) => (
+                      <Link key={link.id} to={linkHref(link)} className="flex min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-surface-hover">
+                        <span className="min-w-0 truncate text-fg">{link.title || link.targetId}</span>
+                        <span className="inline-flex shrink-0 items-center gap-1 text-xs text-fg-muted">
+                          {t.linkKinds[link.kind]}
+                          <ExternalLink className="size-3.5" aria-hidden />
+                        </span>
+                      </Link>
+                    )) : <p className="text-sm text-fg-muted">{t.detail.noLinks}</p>}
+                  </div>
+                </section>
+
+                <section>
+                  <h3 className="text-sm font-semibold text-fg">{t.detail.activity}</h3>
+                  <div className="mt-2 grid gap-2">
+                    {events.length ? events.slice(0, 5).map((event) => (
+                      <div key={event.id} className="text-sm">
+                        <div className="font-medium text-fg">{t.eventTypes[event.type] ?? event.type}</div>
+                        <div className="mt-0.5 text-xs text-fg-subtle">{formatTime(event.createdAt)}</div>
+                      </div>
+                    )) : <p className="text-sm text-fg-muted">{t.detail.noActivity}</p>}
+                  </div>
+                </section>
+              </aside>
+            </div>
+
+            <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
+              <Button type="button" variant="ghost" className="rounded-lg" onClick={onClose} disabled={busy}>{t.create.cancel}</Button>
+              <Button type="submit" variant="primary" className="rounded-lg" disabled={busy || !title.trim()}>
+                {mode === 'create' ? <Plus className="size-4" aria-hidden /> : null}
+                {mode === 'create' ? t.create.submit : t.detail.save}
+              </Button>
+            </div>
+          </form>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  );
+}
+
+export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId: string; createRequestKey?: number }) {
+  const navigate = useNavigate();
+  const language = useLocaleStore((s) => s.language);
+  const t = messages(language).projectDetailPage.workItems;
+  const [items, setItems] = useState<WorkItem[]>([]);
+  const [viewMode, setViewMode] = useState<'list' | 'board'>('board');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
+  const [dropStatus, setDropStatus] = useState<WorkItemStatus | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
+  const [selectedEvents, setSelectedEvents] = useState<WorkItemEvent[]>([]);
+
+  const loadItems = useCallback(async (mode: 'replace' | 'append' = 'replace', offset = 0) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetchProjectWorkItems(projectId, {
+        limit: 100,
+        offset,
+      });
+      setItems((current) => mode === 'append' ? [...current, ...res.items] : res.items);
+      setHasMore(res.hasMore);
+      setTotal(res.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId]);
+
+  useEffect(() => {
+    void loadItems('replace', 0);
+  }, [loadItems]);
+
+  useEffect(() => {
+    if (!createRequestKey) return;
+    setSelectedItem(null);
+    setSelectedEvents([]);
+    setCreateOpen(true);
+  }, [createRequestKey]);
+
+  const boardColumns = useMemo(() => BOARD_COLUMNS.map((status) => ({
+    status,
+    title: t.statuses[status],
+    items: items.filter((item) => item.status === status),
+  })), [items, t.statuses]);
+
+  const updateLocalItem = useCallback((next: WorkItem) => {
+    setItems((current) => current.map((item) => item.id === next.id ? next : item));
+    setSelectedItem((current) => current?.id === next.id ? next : current);
+  }, []);
+
+  const updateItem = useCallback(async (item: WorkItem, patch: Parameters<typeof patchWorkItem>[1]) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await patchWorkItem(item.id, patch);
+      if (res.item.archivedAt) {
+        setItems((current) => current.filter((candidate) => candidate.id !== res.item.id));
+        setSelectedItem(null);
+        setTotal((value) => Math.max(0, value - 1));
+      } else {
+        updateLocalItem(res.item);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [updateLocalItem]);
+
+  const openItem = useCallback(async (item: WorkItem) => {
+    setSelectedItem(item);
+    setSelectedEvents([]);
+    const res = await fetchWorkItemEvents(item.id).catch(() => null);
+    if (res) setSelectedEvents(res.events);
+  }, []);
+
+  const createItem = useCallback(async (input: { title: string; description?: string; priority: WorkItemPriority; status: WorkItemStatus; nextAction?: string; blockedReason?: string }) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await createWorkItem(projectId, input);
+      setItems((current) => [res.item, ...current]);
+      setTotal((value) => value + 1);
+      setCreateOpen(false);
+      setSelectedItem(res.item);
+      const events = await fetchWorkItemEvents(res.item.id).catch(() => ({ events: [] }));
+      setSelectedEvents(events.events);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [projectId]);
+
+  const startChat = useCallback(async (item: WorkItem) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await startWorkItemChat(item.id);
+      updateLocalItem(res.item);
+      await openItem(res.item);
+      navigate(`/chat/${encodeURIComponent(res.session.key)}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [navigate, openItem, updateLocalItem]);
+
+  const createGoal = useCallback(async (item: WorkItem) => {
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await createWorkItemGoal(item.id);
+      updateLocalItem(res.item);
+      await openItem(res.item);
+      navigate(`/goals/${encodeURIComponent(res.goal.id)}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [navigate, openItem, updateLocalItem]);
+
+  const startDrag = useCallback((item: WorkItem, event: DragEvent<HTMLElement>) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData(DRAG_TYPE, item.id);
+    setDraggingItemId(item.id);
+  }, []);
+
+  const dropOnStatus = useCallback((targetStatus: WorkItemStatus, event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    const itemId = event.dataTransfer.getData(DRAG_TYPE) || draggingItemId;
+    setDropStatus(null);
+    setDraggingItemId(null);
+    const item = items.find((candidate) => candidate.id === itemId);
+    if (!item || item.status === targetStatus) return;
+    void updateItem(item, { status: targetStatus });
+  }, [draggingItemId, items, updateItem]);
+
+  return (
+    <section id="project-panel-work-items" role="tabpanel" aria-labelledby="project-tab-work-items" className="grid gap-4">
+      <div className="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg border border-edge bg-surface-panel px-3 py-2">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="min-w-0 shrink-0">
+            <h2 className="text-sm font-semibold leading-5 text-fg">{t.title}</h2>
+            <p className="text-[11px] leading-4 text-fg-subtle">{items.length}/{total}</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <div className={segmentedTrackClassName} aria-label={t.viewAria}>
+            <button type="button" className={cn(segmentedThumbBaseClassName, 'h-8 px-2.5', viewMode === 'list' && segmentedThumbActiveClassName)} onClick={() => setViewMode('list')}>
+              <List className="size-3.5" aria-hidden />
+              <span className="hidden sm:inline">{t.views.list}</span>
+            </button>
+            <button type="button" className={cn(segmentedThumbBaseClassName, 'h-8 px-2.5', viewMode === 'board' && segmentedThumbActiveClassName)} onClick={() => setViewMode('board')}>
+              <Columns3 className="size-3.5" aria-hidden />
+              <span className="hidden sm:inline">{t.views.board}</span>
+            </button>
+          </div>
+          <button
+            type="button"
+            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel disabled:cursor-wait disabled:opacity-70"
+            aria-label={loading ? t.refreshing : t.refresh}
+            aria-busy={loading}
+            title={loading ? t.refreshing : t.refresh}
+            disabled={loading}
+            onClick={() => void loadItems('replace', 0)}
+          >
+            <RefreshCw className={cn('size-4', loading ? 'animate-spin motion-reduce:animate-none' : '')} aria-hidden />
+            <span className="hidden w-12 text-left sm:inline">{t.refreshShort}</span>
+          </button>
+        </div>
+      </div>
+
+      {error ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div> : null}
+
+      {viewMode === 'list' ? (
+        <div className={cn('overflow-hidden rounded-lg border border-edge bg-surface-panel transition-opacity', loading && 'opacity-60')}>
+          {items.length ? items.map((item) => (
+            <div key={item.id} className="grid w-full gap-1 border-b border-edge px-4 py-3 text-left last:border-b-0 hover:bg-surface-hover">
+              <div className="flex items-center justify-between gap-3">
+                <button type="button" className="min-w-0 truncate text-left text-sm font-medium text-fg" onClick={() => void openItem(item)}>
+                  {item.title}
+                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusTone(item.status))}>{t.statuses[item.status]}</span>
+                  <Link
+                    to={`/work-items/${encodeURIComponent(item.id)}`}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:text-accent-fg"
+                  >
+                    {t.detail.openItem}
+                    <ExternalLink className="size-3.5" aria-hidden />
+                  </Link>
+                </div>
+              </div>
+              <span className="truncate text-xs text-fg-muted">{visibleSummary(item, t)}</span>
+            </div>
+          )) : loading ? (
+            <div className="grid gap-2 p-3 animate-pulse motion-reduce:animate-none">
+              <WorkItemCardSkeleton />
+              <WorkItemCardSkeleton />
+            </div>
+          ) : (
+            <div className="px-4 py-8 text-center text-sm text-fg-muted">
+              <CheckCircle2 className="mx-auto mb-2 size-5 text-fg-subtle" aria-hidden />
+              {t.empty}
+            </div>
+          )}
+        </div>
+      ) : (
+        <section className="h-[calc(100dvh-14rem)] min-h-0 max-w-full overflow-x-auto pb-2" aria-label={t.boardAria} aria-busy={loading}>
+          <div className="flex h-full min-w-max gap-3">
+            {boardColumns.map((column) => (
+              <section
+                key={column.status}
+                className={cn(
+                  'flex h-full w-72 min-w-72 max-w-72 shrink-0 flex-col overflow-hidden rounded-lg border bg-surface-panel/60',
+                  dropStatus === column.status ? 'border-accent ring-1 ring-accent/30' : 'border-edge',
+                )}
+                aria-label={column.title}
+                onDragOver={(event) => {
+                  if (!draggingItemId) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = 'move';
+                  setDropStatus(column.status);
+                }}
+                onDragLeave={(event) => {
+                  if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropStatus(null);
+                }}
+                onDrop={(event) => dropOnStatus(column.status, event)}
+              >
+                <header className="flex shrink-0 items-center justify-between gap-2 border-b border-edge bg-surface-panel px-3 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className={cn('size-2 rounded-full', statusTone(column.status).includes('red') ? 'bg-danger' : 'bg-accent')} aria-hidden />
+                    <h3 className="truncate text-sm font-semibold text-fg">{column.title}</h3>
+                  </div>
+                  <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs text-fg-muted">{column.items.length}</span>
+                </header>
+                <div className="grid min-h-0 min-w-0 flex-1 content-start gap-2 overflow-y-auto p-2">
+                  {column.items.length ? column.items.map((item) => (
+                    <WorkItemCard
+                      key={item.id}
+                      item={item}
+                      dragging={draggingItemId === item.id}
+                      onOpen={openItem}
+                      onDragStart={startDrag}
+                      onDragEnd={() => {
+                        setDraggingItemId(null);
+                        setDropStatus(null);
+                      }}
+                      t={t}
+                    />
+                  )) : loading ? (
+                    <div className="grid gap-2 animate-pulse motion-reduce:animate-none">
+                      <WorkItemCardSkeleton />
+                      <WorkItemCardSkeleton />
+                    </div>
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-edge bg-surface-base px-3 py-6 text-center text-xs text-fg-subtle">
+                      {t.emptyColumn}
+                    </div>
+                  )}
+                </div>
+              </section>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!loading && hasMore ? (
+        <Button type="button" variant="secondary" className="justify-self-center" onClick={() => void loadItems('append', items.length)}>
+          {t.loadMore}
+        </Button>
+      ) : null}
+
+      <WorkItemModal
+        mode={createOpen ? 'create' : selectedItem ? 'detail' : null}
+        item={selectedItem}
+        events={selectedEvents}
+        busy={busy}
+        t={t}
+        onClose={() => {
+          setCreateOpen(false);
+          setSelectedItem(null);
+          setSelectedEvents([]);
+        }}
+        onCreate={createItem}
+        onSave={(item, patch) => void updateItem(item, patch)}
+        onStartChat={startChat}
+        onCreateGoal={createGoal}
+      />
+    </section>
+  );
+}

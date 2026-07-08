@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
@@ -43,6 +43,7 @@ export function AgentsEditorModal(props: {
     busy,
     children,
   } = props;
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -51,6 +52,7 @@ export function AgentsEditorModal(props: {
           className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
         />
         <Dialog.Content
+          ref={setPortalContainer}
           className={cn(
             'xopc-dialog-content fixed flex flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover dark:border-edge',
             SETTINGS_SHELL_CONTENT_Z,
@@ -60,7 +62,7 @@ export function AgentsEditorModal(props: {
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <SettingsShellLayerProvider layer="modal">
+          <SettingsShellLayerProvider layer="modal" portalContainer={portalContainer}>
           <div className="flex shrink-0 items-start justify-between gap-2 border-b border-edge-subtle px-4 pb-3 pt-4 dark:border-edge">
             <div className="min-w-0 pr-2">
               <Dialog.Title className="text-base font-semibold leading-snug text-fg">{title}</Dialog.Title>

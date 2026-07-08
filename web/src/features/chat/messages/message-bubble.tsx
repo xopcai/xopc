@@ -1,5 +1,5 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, Copy, FileCode2, FileText, ListTodo, Pencil, RefreshCw, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Copy, FileCode2, FileText, ListTodo, Pencil, RefreshCw, SquarePen, Trash2 } from 'lucide-react';
 
 import type {
   ImageContent,
@@ -63,9 +63,9 @@ export const MessageBubble = memo(function MessageBubble({
   userMessageCanRetry = false,
   deleteRoundDisabled = false,
   onAbortCurrentTurn,
-  onSendUserMessage,
   onSaveAssistantToSourceNote,
   onExtractAssistantTask,
+  onSuggestWorkItemUpdate,
   readonly = false,
   density = 'normal',
   suppressAssistantActions = false,
@@ -88,12 +88,12 @@ export const MessageBubble = memo(function MessageBubble({
   deleteRoundDisabled?: boolean;
   /** Cancel the in-flight assistant turn — wires WorkflowCard's cancel button. */
   onAbortCurrentTurn?: () => void;
-  /** Send a synthetic user message — wires WorkflowCard's "Save as…" entry. */
-  onSendUserMessage?: (text: string) => void;
   /** Append this assistant reply back to the source Note for note-bound chat threads. */
   onSaveAssistantToSourceNote?: (content: string) => Promise<void> | void;
   /** Create a task Note from this assistant reply for note-bound chat threads. */
   onExtractAssistantTask?: (content: string) => Promise<void> | void;
+  /** Draft a structured work item update from this assistant reply. */
+  onSuggestWorkItemUpdate?: (content: string) => Promise<void> | void;
   readonly?: boolean;
   density?: 'normal' | 'compact';
   /** Hide assistant footer actions while the session is receiving live SSE updates. */
@@ -239,8 +239,8 @@ export const MessageBubble = memo(function MessageBubble({
     return extractUserMessagePlainText(message.content);
   }, [isUser, message.content]);
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
-  const [assistantActionFeedback, setAssistantActionFeedback] = useState<'save-note' | 'extract-task' | null>(null);
-  const [assistantActionBusy, setAssistantActionBusy] = useState<'save-note' | 'extract-task' | null>(null);
+  const [assistantActionFeedback, setAssistantActionFeedback] = useState<'save-note' | 'extract-task' | 'work-item-update' | null>(null);
+  const [assistantActionBusy, setAssistantActionBusy] = useState<'save-note' | 'extract-task' | 'work-item-update' | null>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [inlineImagePreview, setInlineImagePreview] = useState<MessageAttachment | null>(null);
   const [userMessageExpanded, setUserMessageExpanded] = useState(false);
@@ -299,6 +299,22 @@ export const MessageBubble = memo(function MessageBubble({
       .catch(() => undefined)
       .finally(() => setAssistantActionBusy(null));
   }, [assistantActionBusy, copyMarkdown, copyPlainText, onExtractAssistantTask]);
+
+  const handleSuggestWorkItemUpdate = useCallback(() => {
+    if (!copyPlainText && !copyMarkdown) return;
+    if (!onSuggestWorkItemUpdate || assistantActionBusy) return;
+    setAssistantActionBusy('work-item-update');
+    void Promise.resolve(onSuggestWorkItemUpdate(copyPlainText || copyMarkdown))
+      .then(() => {
+        setAssistantActionFeedback('work-item-update');
+        window.setTimeout(
+          () => setAssistantActionFeedback((f) => (f === 'work-item-update' ? null : f)),
+          2000,
+        );
+      })
+      .catch(() => undefined)
+      .finally(() => setAssistantActionBusy(null));
+  }, [assistantActionBusy, copyMarkdown, copyPlainText, onSuggestWorkItemUpdate]);
 
   const handleCopyUserMessage = useCallback(() => {
     if (!userCopyText) return;
@@ -449,7 +465,6 @@ export const MessageBubble = memo(function MessageBubble({
                       // turn, so we leave it undefined and the cancel button
                       // stays hidden.
                       onAbort: isAssistant && isStreaming ? onAbortCurrentTurn : undefined,
-                      onSendChatMessage: onSendUserMessage,
                     },
                   )}
                 </div>
@@ -653,6 +668,22 @@ export const MessageBubble = memo(function MessageBubble({
                   <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
                 ) : (
                   <ListTodo className="size-4" strokeWidth={1.75} aria-hidden />
+                )}
+              </button>
+            ) : null}
+            {onSuggestWorkItemUpdate ? (
+              <button
+                type="button"
+                className={messageActionIconButton}
+                onClick={handleSuggestWorkItemUpdate}
+                disabled={(!copyPlainText && !copyMarkdown) || assistantActionBusy !== null}
+                title={assistantActionFeedback === 'work-item-update' ? m.chat.workItemUpdateDrafted : m.chat.workItemUpdateAction}
+                aria-label={assistantActionFeedback === 'work-item-update' ? m.chat.workItemUpdateDrafted : m.chat.workItemUpdateAction}
+              >
+                {assistantActionFeedback === 'work-item-update' ? (
+                  <Check className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                ) : (
+                  <SquarePen className="size-4" strokeWidth={1.75} aria-hidden />
                 )}
               </button>
             ) : null}

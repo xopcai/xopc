@@ -7,8 +7,10 @@ import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { ConnectorCard, ConnectorCardSkeleton, connectorIsInstalled, CONNECTOR_SKELETON_KEYS, InstalledConnectorRowSkeleton } from '@/features/connectors/components/connector-card';
+import { ConnectorDetailDialog } from '@/features/connectors/components/connector-detail-dialog';
 import { ConnectorsPageHeaderEnd } from '@/features/connectors/components/connectors-page-header-end';
 import { CustomMcpServerRow } from '@/features/connectors/components/custom-mcp-server-row';
+import { InstalledConnectorDetailDialog } from '@/features/connectors/components/installed-connector-detail-dialog';
 import { InstalledConnectorRow } from '@/features/connectors/components/installed-connector-row';
 import { buildInitialDraft, InstallConnectorDialog, type InstallDraft } from '@/features/connectors/components/install-connector-dialog';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
@@ -84,6 +86,9 @@ export function ConnectorsPage() {
   const [registrySource, setRegistrySource] = useState(urlRegistrySource);
   const [connectorSort, setConnectorSort] = useState<ConnectorSort>('name');
   const [installDraft, setInstallDraft] = useState<InstallDraft | null>(null);
+  const [detailConnector, setDetailConnector] = useState<ConnectorDefinition | null>(null);
+  const [detailInstanceId, setDetailInstanceId] = useState<string | null>(null);
+  const [detailInstanceSnapshot, setDetailInstanceSnapshot] = useState<ConnectorInstance | null>(null);
   const [customDialog, setCustomDialog] = useState<CustomDialogState>(null);
   const [sessionIdleTtlMinutes, setSessionIdleTtlMinutes] = useState<number | undefined>(undefined);
   const [ttlSaving, setTtlSaving] = useState(false);
@@ -199,6 +204,9 @@ export function ConnectorsPage() {
   }, [registrySource, searchQuery, searchRegistry, state.loading, tab]);
 
   const installedIds = useMemo(() => new Set(state.instances.map((instance) => instance.connectorId)), [state.instances]);
+  const connectorDefinitionsById = useMemo(() => new Map(
+    [...state.catalog, ...state.registryCatalog].map((connector) => [connector.id, connector]),
+  ), [state.catalog, state.registryCatalog]);
   const managedServerIds = useMemo(
     () => new Set(state.instances.flatMap((instance) => instance.materialized.type === 'mcp' ? [instance.materialized.serverId] : [])),
     [state.instances],
@@ -298,6 +306,10 @@ export function ConnectorsPage() {
   const visibleCustomServers = useMemo(
     () => customServers.filter((row) => customServerMatchesQuery(row, searchQuery)),
     [customServers, searchQuery],
+  );
+  const detailInstance = useMemo(
+    () => state.instances.find((instance) => instance.instanceId === detailInstanceId) ?? detailInstanceSnapshot,
+    [detailInstanceId, detailInstanceSnapshot, state.instances],
   );
   const visibleInstalledCount = visibleInstances.length + visibleCustomServers.length;
   const tabItems = [
@@ -410,9 +422,19 @@ export function ConnectorsPage() {
               {installedCount === 0 ? cs.installedEmpty : cs.userEmpty}
             </div>
           ) : (
-            <div className="grid gap-3">
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {visibleInstances.map((instance) => (
-                <InstalledConnectorRow key={instance.instanceId} instance={instance} onChanged={load} t={cs} mcp={mcp} />
+                <InstalledConnectorRow
+                  key={instance.instanceId}
+                  instance={instance}
+                  definition={connectorDefinitionsById.get(instance.connectorId)}
+                  onOpenDetails={(selected) => {
+                    setDetailInstanceId(selected.instanceId);
+                    setDetailInstanceSnapshot(selected);
+                  }}
+                  onChanged={load}
+                  t={cs}
+                />
               ))}
               {visibleCustomServers.map((row) => (
                 <CustomMcpServerRow
@@ -493,6 +515,7 @@ export function ConnectorsPage() {
                       connector={connector}
                       installed={installedIds.has(connector.id) || connectorIsInstalled(connector, state.instances)}
                       onInstall={(selected) => setInstallDraft(buildInitialDraft(selected))}
+                      onOpenDetails={setDetailConnector}
                       t={cs}
                     />
                   ))}
@@ -535,6 +558,7 @@ export function ConnectorsPage() {
                     connector={connector}
                     installed={installedIds.has(connector.id) || connectorIsInstalled(connector, state.instances)}
                     onInstall={(selected) => setInstallDraft(buildInitialDraft(selected))}
+                    onOpenDetails={setDetailConnector}
                     t={cs}
                   />
                 ))}
@@ -555,6 +579,30 @@ export function ConnectorsPage() {
             await mutateConfig();
             setTab('user');
           }}
+        />
+      ) : null}
+
+      {detailConnector ? (
+        <ConnectorDetailDialog
+          connector={detailConnector}
+          installed={installedIds.has(detailConnector.id) || connectorIsInstalled(detailConnector, state.instances)}
+          onClose={() => setDetailConnector(null)}
+          onInstall={(selected) => setInstallDraft(buildInitialDraft(selected))}
+          t={cs}
+        />
+      ) : null}
+
+      {detailInstance ? (
+        <InstalledConnectorDetailDialog
+          instance={detailInstance}
+          definition={connectorDefinitionsById.get(detailInstance.connectorId)}
+          onClose={() => {
+            setDetailInstanceId(null);
+            setDetailInstanceSnapshot(null);
+          }}
+          onChanged={load}
+          t={cs}
+          mcp={mcp}
         />
       ) : null}
 

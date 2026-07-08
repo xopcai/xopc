@@ -150,9 +150,12 @@ export function workflowChatHref(sessionKey: string, draft?: string): string {
 }
 
 /** Deep link to the workflows board with a run detail drawer open. */
-export function workflowBoardHref(runId: string): string {
+export function workflowBoardHref(runId: string, options?: { ownerAgentId?: string | null }): string {
   const id = runId.trim();
-  return `/workflows?run=${encodeURIComponent(id)}`;
+  const params = new URLSearchParams({ run: id });
+  const ownerAgentId = options?.ownerAgentId?.trim();
+  if (ownerAgentId) params.set('agent', ownerAgentId);
+  return `/workflows?${params.toString()}`;
 }
 
 export function runTriggerKind(run: WorkflowRunSummary): string {

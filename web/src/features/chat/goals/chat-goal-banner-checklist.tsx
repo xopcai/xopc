@@ -22,15 +22,6 @@ type Props = {
   onMutate: (m: ChecklistMutation) => void | Promise<void>;
 };
 
-type GoalMessagesWithChecklistBoardCopy = GoalMessages & {
-  pendingGroup?: string;
-  completedGroup?: string;
-  impossibleGroup?: string;
-  judgeGenerated?: string;
-  userAdded?: string;
-  evidenceLabel?: string;
-};
-
 function groupedItems(items: WebchatChecklistItemWire[]): {
   pending: ChecklistItemWithIndex[];
   completed: ChecklistItemWithIndex[];
@@ -51,7 +42,6 @@ export function GoalChecklist({ goal, canEdit, mutationBusy, t, onMutate }: Prop
   const [newCriterion, setNewCriterion] = useState('');
   const items = goal.checklist ?? [];
   const groups = groupedItems(items);
-  const copy = t as GoalMessagesWithChecklistBoardCopy;
 
   const renderGroup = (title: string, rows: ChecklistItemWithIndex[]) => {
     if (rows.length === 0) return null;
@@ -75,11 +65,11 @@ export function GoalChecklist({ goal, canEdit, mutationBusy, t, onMutate }: Prop
                   <p className="break-words text-fg">{it.text}</p>
                   <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-fg-muted">
                     <span className="rounded-full bg-surface-panel px-1.5 py-0.5">
-                      {it.addedBy === 'user' ? (copy.userAdded ?? 'User') : (copy.judgeGenerated ?? 'Judge')}
+                      {it.addedBy === 'user' ? t.userAdded : t.judgeGenerated}
                     </span>
                     {it.evidenceSummary ? (
                       <span className="min-w-0 break-words">
-                        {(copy.evidenceLabel ?? 'Evidence')}: {it.evidenceSummary}
+                        {t.evidenceLabel}: {it.evidenceSummary}
                       </span>
                     ) : null}
                   </div>
@@ -130,9 +120,9 @@ export function GoalChecklist({ goal, canEdit, mutationBusy, t, onMutate }: Prop
         <p className="text-xs text-fg-muted">{t.checklistEmpty}</p>
       ) : (
         <div className="max-h-48 space-y-2 overflow-y-auto pr-0.5 text-xs">
-          {renderGroup(copy.pendingGroup ?? 'Pending', groups.pending)}
-          {renderGroup(copy.completedGroup ?? 'Completed', groups.completed)}
-          {renderGroup(copy.impossibleGroup ?? 'Blocked', groups.impossible)}
+          {renderGroup(t.pendingGroup, groups.pending)}
+          {renderGroup(t.completedGroup, groups.completed)}
+          {renderGroup(t.impossibleGroup, groups.impossible)}
         </div>
       )}
       {canEdit ? (

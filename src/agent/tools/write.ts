@@ -37,6 +37,12 @@ export function createWriteFileTool(
       'Create or overwrite a file. Relative paths are under the current agent workspace; profile Markdown (SOUL.md, etc.) is written automatically when given by filename.',
     parameters: WriteFileSchema,
     label: '📝 Write',
+    mutatesWorkspace: true,
+    mutationScope: 'workspace',
+    supportsParallel: false,
+    idempotent: false,
+    requiresExclusiveWorkspaceLock: true,
+    finalGuardRelevant: true,
 
     async execute(
       _toolCallId: string,

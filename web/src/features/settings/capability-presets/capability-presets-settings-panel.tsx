@@ -250,6 +250,7 @@ export function CapabilityPresetsSettingsPanel() {
   const [draft, setDraft] = useState<Draft>(() => starterDraft('blank'));
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
 
   const presets = data?.presets ?? [];
   const defaultPresetId = data?.defaultPresetId ?? 'default';
@@ -518,13 +519,14 @@ export function CapabilityPresetsSettingsPanel() {
         <Dialog.Portal>
           <Dialog.Overlay className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)} />
           <Dialog.Content
+            ref={setPortalContainer}
             className={cn(
               'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(90vh,760px)] w-[min(100%-2rem,64rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover dark:border-edge',
               SETTINGS_SHELL_CONTENT_Z,
             )}
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
-            <SettingsShellLayerProvider layer="modal">
+            <SettingsShellLayerProvider layer="modal" portalContainer={portalContainer}>
               <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3 dark:border-edge">
                 <div className="min-w-0">
                   <Dialog.Title className="truncate text-base font-semibold text-fg">{dialogTitle}</Dialog.Title>

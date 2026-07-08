@@ -32,4 +32,44 @@ describe('parseWorkflowRunLinksFromTranscriptRows', () => {
       }),
     ]);
   });
+
+  it('keeps the owner agent when a terminal row updates the same run link', () => {
+    const rows = [
+      {
+        kind: 'context',
+        id: 'workflow-run-link:run-1',
+        data: {
+          kind: WORKFLOW_RUN_LINK_CONTEXT_KIND,
+          runId: 'run-1',
+          ownerAgentId: 'researcher',
+          workflowSessionKey: 'agent:researcher:webchat:default:direct:wf_run-1',
+          definitionId: 'audit_repo',
+          goal: 'Check repo',
+          status: 'running',
+        },
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+      {
+        kind: 'context',
+        id: 'workflow-run-link:run-1',
+        data: {
+          kind: WORKFLOW_RUN_LINK_CONTEXT_KIND,
+          runId: 'run-1',
+          workflowSessionKey: 'agent:researcher:webchat:default:direct:wf_run-1',
+          definitionId: 'audit_repo',
+          goal: 'Check repo',
+          status: 'succeeded',
+        },
+        createdAt: '2026-01-01T00:01:00.000Z',
+      },
+    ];
+
+    expect(parseWorkflowRunLinksFromTranscriptRows(rows)).toEqual([
+      expect.objectContaining({
+        runId: 'run-1',
+        ownerAgentId: 'researcher',
+        status: 'succeeded',
+      }),
+    ]);
+  });
 });

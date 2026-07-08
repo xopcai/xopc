@@ -38,6 +38,8 @@ export function createReadFileTool(
       'Read file contents. Relative paths are from the current agent workspace; profile Markdown (SOUL.md, etc.) is found automatically when given by filename.',
     parameters: ReadFileSchema,
     label: '📄 Read',
+    supportsParallel: true,
+    idempotent: true,
 
     async execute(
       _toolCallId: string,

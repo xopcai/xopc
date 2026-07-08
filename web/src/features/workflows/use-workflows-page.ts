@@ -11,7 +11,6 @@ import {
   cancelWorkflowRun,
   deleteWorkflowDefinition,
   getWorkflowRunComparison,
-  getWorkflowRun,
   getWorkflowStats,
   listWorkflowDefinitions,
   listWorkflowRuns,
@@ -29,11 +28,16 @@ import {
   WORKFLOW_COPY_PARAM,
   WORKFLOW_DEF_PARAM,
   WORKFLOW_RUN_PARAM,
+  WORKFLOW_RUN_PANEL_TAB_SET,
+  WORKFLOW_RUN_TAB_PARAM,
   WORKFLOW_SEARCH_PARAM,
   WORKFLOW_START_PARAM,
-  WORKFLOW_TAB_PARAM,
   WORKFLOW_TRIGGER_FILTER_PARAM,
+  WORKFLOW_VIEW_MODE_SET,
+  WORKFLOW_VIEW_PARAM,
   WORKFLOW_WF_FILTER_PARAM,
+  type WorkflowRunPanelTab,
+  type WorkflowViewMode,
 } from './workflow-page.constants';
 import { filterDefinitions, interpolate, workflowChatHref } from './workflow-page.utils';
 import { resolveRunSessionKey } from './workflow-board.utils';
@@ -52,7 +56,13 @@ export function useWorkflowsPage() {
   const workflowFilterId = searchParams.get(WORKFLOW_WF_FILTER_PARAM)?.trim() ?? '';
   const triggerFilter = searchParams.get(WORKFLOW_TRIGGER_FILTER_PARAM)?.trim() || 'all';
   const runParam = searchParams.get(WORKFLOW_RUN_PARAM)?.trim() ?? '';
+  const viewParam = searchParams.get(WORKFLOW_VIEW_PARAM)?.trim() ?? '';
+  const runTabParam = searchParams.get(WORKFLOW_RUN_TAB_PARAM)?.trim() ?? '';
   const ownerAgentParam = searchParams.get(WORKFLOW_AGENT_PARAM)?.trim() ?? '';
+  const viewMode: WorkflowViewMode = WORKFLOW_VIEW_MODE_SET.has(viewParam) ? (viewParam as WorkflowViewMode) : 'operations';
+  const runTab: WorkflowRunPanelTab = WORKFLOW_RUN_PANEL_TAB_SET.has(runTabParam)
+    ? (runTabParam as WorkflowRunPanelTab)
+    : 'result';
 
   const [startDefinition, setStartDefinition] = useState<WorkflowDefinition | null>(null);
   const [pickStartOpen, setPickStartOpen] = useState(false);
@@ -230,11 +240,32 @@ export function useWorkflowsPage() {
     [patchSearchParams],
   );
 
+  const setViewMode = useCallback(
+    (value: WorkflowViewMode) => {
+      patchSearchParams((next) => {
+        if (value === 'operations') next.delete(WORKFLOW_VIEW_PARAM);
+        else next.set(WORKFLOW_VIEW_PARAM, value);
+      });
+    },
+    [patchSearchParams],
+  );
+
+  const setRunTab = useCallback(
+    (value: WorkflowRunPanelTab) => {
+      patchSearchParams((next) => {
+        if (value === 'result') next.delete(WORKFLOW_RUN_TAB_PARAM);
+        else next.set(WORKFLOW_RUN_TAB_PARAM, value);
+      });
+    },
+    [patchSearchParams],
+  );
+
   const openRunDetails = useCallback(
     (run: WorkflowRunSummary) => {
       patchSearchParams((next) => {
         if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
         next.set(WORKFLOW_RUN_PARAM, run.id);
+        next.delete(WORKFLOW_RUN_TAB_PARAM);
       });
     },
     [ownerAgentId, patchSearchParams],
@@ -243,6 +274,7 @@ export function useWorkflowsPage() {
   const closeRunDetails = useCallback(() => {
     patchSearchParams((next) => {
       next.delete(WORKFLOW_RUN_PARAM);
+      next.delete(WORKFLOW_RUN_TAB_PARAM);
     });
   }, [patchSearchParams]);
 
@@ -251,6 +283,7 @@ export function useWorkflowsPage() {
       patchSearchParams((next) => {
         if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
         next.set(WORKFLOW_RUN_PARAM, runId);
+        next.delete(WORKFLOW_RUN_TAB_PARAM);
       });
     },
     [ownerAgentId, patchSearchParams],
@@ -265,13 +298,6 @@ export function useWorkflowsPage() {
     },
     [navigate],
   );
-
-  useEffect(() => {
-    if (!searchParams.get(WORKFLOW_TAB_PARAM)) return;
-    patchSearchParams((next) => {
-      next.delete(WORKFLOW_TAB_PARAM);
-    });
-  }, [patchSearchParams, searchParams]);
 
   useEffect(() => {
     const defId = searchParams.get(WORKFLOW_DEF_PARAM);
@@ -337,6 +363,7 @@ export function useWorkflowsPage() {
         patchSearchParams((next) => {
           if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
           next.set(WORKFLOW_RUN_PARAM, result.runId);
+          next.delete(WORKFLOW_RUN_TAB_PARAM);
         });
       } catch (err) {
         setActionError(err instanceof Error ? err.message : labels.startFailed);
@@ -375,6 +402,7 @@ export function useWorkflowsPage() {
         patchSearchParams((next) => {
           if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
           next.set(WORKFLOW_RUN_PARAM, result.runId);
+          next.delete(WORKFLOW_RUN_TAB_PARAM);
         });
       } catch (err) {
         setActionError(err instanceof Error ? err.message : labels.retryFailed);
@@ -392,6 +420,7 @@ export function useWorkflowsPage() {
         patchSearchParams((next) => {
           if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
           next.set(WORKFLOW_RUN_PARAM, result.runId);
+          next.delete(WORKFLOW_RUN_TAB_PARAM);
         });
       } catch (err) {
         setActionError(err instanceof Error ? err.message : labels.retryFailed);
@@ -441,6 +470,7 @@ export function useWorkflowsPage() {
         patchSearchParams((next) => {
           if (ownerAgentId) next.set(WORKFLOW_AGENT_PARAM, ownerAgentId);
           next.set(WORKFLOW_RUN_PARAM, result.runId);
+          next.delete(WORKFLOW_RUN_TAB_PARAM);
         });
       } catch (err) {
         setActionError(err instanceof Error ? err.message : labels.startFailed);
@@ -484,6 +514,10 @@ export function useWorkflowsPage() {
     setWorkflowFilterId,
     triggerFilter,
     setTriggerFilter,
+    viewMode,
+    setViewMode,
+    runTab,
+    setRunTab,
     definitions,
     filteredDefinitions,
     runs,
@@ -531,8 +565,3 @@ function renameWorkflowScript(script: string, nextName: string): string {
 }
 
 export type WorkflowsPageVm = ReturnType<typeof useWorkflowsPage>;
-
-/** Resolve run by id for legacy callers (e.g. tests). */
-export async function fetchWorkflowRunById(runId: string) {
-  return getWorkflowRun(runId);
-}

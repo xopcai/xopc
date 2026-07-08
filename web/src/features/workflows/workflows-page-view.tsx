@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState } from 'react';
+import { useLayoutEffect } from 'react';
 import { GitBranch, LayoutGrid, ListFilter, Search } from 'lucide-react';
 
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
@@ -21,7 +21,6 @@ import { filterRunsForBoard } from './workflow-board.utils';
 import { WorkflowsPageHeaderActions } from './workflows-page-header-actions';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 
-type WorkflowsViewMode = 'operations' | 'board';
 type RunSectionId = 'attention' | 'running' | 'queued' | 'recent';
 
 const RUN_SECTIONS: RunSectionId[] = ['attention', 'running', 'queued', 'recent'];
@@ -73,6 +72,10 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
     setWorkflowFilterId,
     triggerFilter,
     setTriggerFilter,
+    viewMode,
+    setViewMode,
+    runTab,
+    setRunTab,
     selectedRunId,
     selectedRunView,
     selectedRunComparison,
@@ -109,7 +112,6 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
-  const [viewMode, setViewMode] = useState<WorkflowsViewMode>('operations');
   const nowMs = Date.now();
   const filteredRuns = filterRunsForBoard(runs, { searchQuery, workflowFilterId, triggerFilter });
   const operationGroups = groupRunsForOperations(filteredRuns);
@@ -262,6 +264,34 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
           </div>
         ) : null}
 
+        <section className="grid w-full gap-2 sm:grid-cols-2 xl:grid-cols-4" aria-label={labels.subtitleBoard}>
+          {RUN_SECTIONS.map((section) => {
+            const count = operationGroups.get(section)?.length ?? 0;
+            return (
+              <button
+                key={section}
+                type="button"
+                className={cn(
+                  'min-w-0 rounded-lg border border-edge bg-surface-panel/70 px-3 py-2 text-left',
+                  'hover:border-edge-strong hover:bg-surface-hover/45',
+                  interaction.focusRingPanel,
+                )}
+                onClick={() => setViewMode('operations')}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="truncate text-xs font-medium text-fg-muted">
+                    {labels.operationSections[section].title}
+                  </span>
+                  <span className="font-mono text-sm font-semibold tabular-nums text-fg">{count}</span>
+                </div>
+                <p className="mt-1 truncate text-xs text-fg-subtle">
+                  {labels.operationSections[section].description}
+                </p>
+              </button>
+            );
+          })}
+        </section>
+
         <div className="w-full">
           <WorkflowStatsBar stats={stats} language={language} />
         </div>
@@ -349,6 +379,8 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
         loading={Boolean(selectedRunId) && selectedRunLoading}
         language={language}
         localeTag={localeTag}
+        activeTab={runTab}
+        onTabChange={setRunTab}
         onCancel={() => {
           if (selectedRunId) void cancelRun(selectedRunId);
         }}

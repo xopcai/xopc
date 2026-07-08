@@ -143,6 +143,32 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
         ) : null}
       </button>
 
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-edge-subtle pt-2">
+        <button
+          type="button"
+          className={cn(
+            'rounded-md px-2 py-1 text-xs font-medium',
+            'text-accent-fg hover:bg-accent-soft',
+            interaction.focusRingPanel,
+            chatDisabled && 'cursor-not-allowed text-fg-disabled hover:bg-transparent',
+          )}
+          disabled={chatDisabled}
+          onClick={handleOpenChat}
+        >
+          {labels.continueInChat}
+        </button>
+        <button
+          type="button"
+          className={cn(
+            'rounded-md px-2 py-1 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg',
+            interaction.focusRingPanel,
+          )}
+          onClick={handleOpen}
+        >
+          {labels.taskOpenDetails}
+        </button>
+      </div>
+
       <div className="absolute right-2 top-2">
         <Button
           variant="ghost"
@@ -162,14 +188,6 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
               onClick={() => setMenuOpen(false)}
             />
             <div className="absolute right-0 z-20 mt-1 min-w-36 rounded-lg border border-edge bg-surface-panel py-1 shadow-surface">
-              <TaskMenuItem
-                label={labels.continueInChat}
-                disabled={chatDisabled}
-                onClick={() => {
-                  setMenuOpen(false);
-                  handleOpenChat();
-                }}
-              />
               {active ? (
                 <TaskMenuItem
                   label={labels.cancel}

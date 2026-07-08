@@ -88,6 +88,32 @@ export function buildInitialDraft(connector: ConnectorDefinition): InstallDraft 
   };
 }
 
+function CapabilityResultList({
+  title,
+  items,
+}: {
+  title: string;
+  items: Array<{ id: string; title: string; description?: string }>;
+}) {
+  if (items.length === 0) return null;
+  return (
+    <div className="rounded-lg border border-edge bg-surface-panel">
+      <div className="border-b border-edge px-3 py-2 text-xs font-semibold text-fg">{title}</div>
+      <div className="max-h-40 overflow-y-auto">
+        {items.slice(0, 12).map((item) => (
+          <div key={item.id} className="border-b border-edge-subtle px-3 py-2 last:border-b-0">
+            <div className="break-words font-mono text-xs font-medium text-fg">{item.title}</div>
+            {item.description ? <div className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">{item.description}</div> : null}
+          </div>
+        ))}
+        {items.length > 12 ? (
+          <div className="px-3 py-2 text-xs text-fg-subtle">+{items.length - 12}</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 export function InstallConnectorDialog({
   draft,
   onChange,
@@ -367,20 +393,48 @@ export function InstallConnectorDialog({
                 </span>
               </div>
               {draft.health ? (
-                <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
-                  <div className="rounded-lg border border-edge bg-surface-panel px-3 py-2">
-                    <div className="font-semibold text-fg">{draft.health.toolCount}</div>
-                    <div>{t.toolsMetric}</div>
+                <>
+                  <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+                    <div className="rounded-lg border border-edge bg-surface-panel px-3 py-2">
+                      <div className="font-semibold text-fg">{draft.health.toolCount}</div>
+                      <div>{t.toolsMetric}</div>
+                    </div>
+                    <div className="rounded-lg border border-edge bg-surface-panel px-3 py-2">
+                      <div className="font-semibold text-fg">{draft.health.resourceCount}</div>
+                      <div>{t.resourcesMetric}</div>
+                    </div>
+                    <div className="rounded-lg border border-edge bg-surface-panel px-3 py-2">
+                      <div className="font-semibold text-fg">{draft.health.promptCount}</div>
+                      <div>{t.promptsMetric}</div>
+                    </div>
                   </div>
-                  <div className="rounded-lg border border-edge bg-surface-panel px-3 py-2">
-                    <div className="font-semibold text-fg">{draft.health.resourceCount}</div>
-                    <div>{t.resourcesMetric}</div>
+                  <div className="mt-3 grid gap-2">
+                    <CapabilityResultList
+                      title={t.detailTools}
+                      items={draft.health.tools.map((tool) => ({
+                        id: tool.name,
+                        title: tool.shortName ?? tool.name,
+                        description: tool.description,
+                      }))}
+                    />
+                    <CapabilityResultList
+                      title={t.detailResources}
+                      items={draft.health.resources.map((resource) => ({
+                        id: resource.uri,
+                        title: resource.title ?? resource.name ?? resource.uri,
+                        description: resource.description ?? resource.uri,
+                      }))}
+                    />
+                    <CapabilityResultList
+                      title={t.detailPrompts}
+                      items={draft.health.prompts.map((prompt) => ({
+                        id: prompt.name,
+                        title: prompt.title ?? prompt.name,
+                        description: prompt.description ?? formatConnectorMessage(t.promptArgumentCount, { count: String(prompt.argumentCount) }),
+                      }))}
+                    />
                   </div>
-                  <div className="rounded-lg border border-edge bg-surface-panel px-3 py-2">
-                    <div className="font-semibold text-fg">{draft.health.promptCount}</div>
-                    <div>{t.promptsMetric}</div>
-                  </div>
-                </div>
+                </>
               ) : (
                 <p className="mt-3">{t.installedWithoutHealth}</p>
               )}

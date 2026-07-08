@@ -176,14 +176,14 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       id: 'route:settings:providers',
       title: m.nav.settingsProviders,
       subtitle: r.providersSubtitle,
-      path: '/settings/credentials?tab=providers',
+      path: '/settings/credentials?tab=services',
       keywords: ['api', 'key', 'openai', 'anthropic', 'google'],
     },
     {
       id: 'route:settings:models',
       title: m.nav.settingsModels,
       subtitle: r.modelsSubtitle,
-      path: '/settings/credentials?tab=catalog',
+      path: '/settings/credentials?tab=services',
       keywords: ['gpt', 'claude', 'gemini', 'llm'],
     },
     {

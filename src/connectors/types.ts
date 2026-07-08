@@ -122,6 +122,7 @@ export type ConnectorInstance = {
   lastConnectedAt?: string;
   lastError?: string;
   secretStatus: Record<string, boolean>;
+  config?: Record<string, unknown>;
   materialized:
     | {
         type: 'mcp';
@@ -174,4 +175,5 @@ export type ManagedConnectorMarker = {
   lastConnectedAt?: string;
   lastError?: string;
   displayName?: string;
+  config?: Record<string, unknown>;
 };

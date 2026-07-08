@@ -142,4 +142,26 @@ describe('SQLite migrations', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('upgrades v21 databases with first-class work item tables', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    setSchemaVersion(db, 21);
+
+    const finalVersion = applyPendingMigrations(db);
+
+    expect(finalVersion).toBe(XOPC_DB_SCHEMA_VERSION);
+    expect(readSchemaVersion(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+    for (const table of [
+      'work_items',
+      'work_item_links',
+      'work_item_events',
+      'work_item_update_suggestions',
+    ]) {
+      expect(
+        db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table),
+      ).toBeDefined();
+    }
+  });
+
 });

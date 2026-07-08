@@ -31,7 +31,7 @@ export function buildQuickSettingHits(
       title: q.switchModel,
       subtitle: q.switchModelSubtitle,
       groupLabel,
-      keywords: ['model', 'gpt', 'claude', 'gemini', 'llm'],
+      keywords: ['model', 'default model', '默认模型', 'gpt', 'claude', 'gemini', 'llm', '模型'],
       run: () => opts.openModelPalette(),
     },
     {

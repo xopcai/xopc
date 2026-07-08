@@ -1,4 +1,5 @@
 import { CheckCircle2, PackagePlus } from 'lucide-react';
+import type { KeyboardEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { ConnectorsSettingsMessages } from '@/i18n/messages';
@@ -69,11 +70,13 @@ export function ConnectorCard({
   connector,
   installed,
   onInstall,
+  onOpenDetails,
   t,
 }: {
   connector: ConnectorDefinition;
   installed: boolean;
   onInstall: (connector: ConnectorDefinition) => void;
+  onOpenDetails?: (connector: ConnectorDefinition) => void;
   t: ConnectorsSettingsMessages;
 }) {
   const categoryLabel = formatConnectorCategory(connector.category, t);
@@ -84,15 +87,33 @@ export function ConnectorCard({
       type="button"
       variant="primary"
       className={cn('h-8 justify-center px-2.5 text-xs font-medium', className)}
-      onClick={() => onInstall(connector)}
+      onClick={(event) => {
+        event.stopPropagation();
+        onInstall(connector);
+      }}
     >
       <PackagePlus className="size-4" />
       {t.install}
     </Button>
   );
+  const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (!onOpenDetails || event.currentTarget !== event.target) return;
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    event.preventDefault();
+    onOpenDetails(connector);
+  };
 
   return (
-    <div className="group flex min-h-[9.5rem] flex-col rounded-lg border border-edge bg-surface-panel p-4 shadow-surface transition-colors hover:border-accent/50 focus-within:border-accent/50">
+    <div
+      className={cn(
+        'group flex min-h-[9.5rem] flex-col rounded-lg border border-edge bg-surface-panel p-4 shadow-surface transition-colors hover:border-accent/50 focus-within:border-accent/50',
+        onOpenDetails ? 'cursor-pointer' : null,
+      )}
+      role={onOpenDetails ? 'button' : undefined}
+      tabIndex={onOpenDetails ? 0 : undefined}
+      onClick={() => onOpenDetails?.(connector)}
+      onKeyDown={handleCardKeyDown}
+    >
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-3">
@@ -140,7 +161,7 @@ export function ConnectorCard({
       </div>
 
       {!installed ? (
-        <div className="mt-4 flex items-center justify-end border-t border-edge pt-3 sm:hidden">
+        <div className="mt-4 flex flex-col gap-2 border-t border-edge pt-3 sm:hidden">
           {renderInstallButton('w-full')}
         </div>
       ) : null}

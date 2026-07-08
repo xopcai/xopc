@@ -82,7 +82,7 @@ export function GoalActions({ goal, canEditChecklist, mutationBusy, t, onAction,
             disabled={mutationBusy}
             onClick={() => void onAction('detach')}
           >
-            Detach
+            {t.detach}
           </button>
         </div>
       </details>

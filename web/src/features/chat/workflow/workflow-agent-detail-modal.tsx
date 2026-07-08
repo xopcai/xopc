@@ -149,9 +149,9 @@ export const WorkflowAgentDetailModal = memo(function WorkflowAgentDetailModal({
   return (
     <Dialog.Root open={open} onOpenChange={(v) => !v && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-70 bg-scrim backdrop-blur-[1px]" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[130] bg-scrim backdrop-blur-[1px]" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-71 flex h-[min(90vh,52rem)] w-[min(100%-2rem,64rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none"
+          className="fixed left-1/2 top-1/2 z-[131] flex h-[min(90vh,52rem)] w-[min(100%-2rem,64rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none"
           aria-describedby={undefined}
         >
           {agent ? (

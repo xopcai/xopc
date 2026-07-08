@@ -223,6 +223,50 @@ describe('SessionStore', () => {
       expect(page?.pagination.total).toBe(2);
     });
 
+    it('should hide synthetic coding context from display history', async () => {
+      const key = 'agent:main:webchat:default:direct:coding-context-display';
+      const messages: any[] = [
+        { role: 'user', content: 'inspect repo', timestamp: Date.now() },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'tool_use', id: 'cmd-1', name: 'exec_command', input: { cmd: 'git log --oneline -20' } },
+          ],
+          timestamp: Date.now() + 1,
+        },
+        {
+          role: 'toolResult',
+          toolCallId: 'cmd-1',
+          content: JSON.stringify({
+            details: {
+              command: 'git log --oneline -20',
+              status: 'success',
+              exitCode: 0,
+            },
+          }),
+          timestamp: Date.now() + 2,
+        },
+      ];
+
+      await store.saveMessages(key, messages);
+
+      const llmMessages = await store.loadMessages(key);
+      const detail = await store.get(key);
+      const page = await store.getMessagePage(key, { offset: 0, limit: 50 });
+      const llmText = JSON.stringify(llmMessages);
+      const detailText = JSON.stringify(detail?.messages);
+      const pageText = JSON.stringify(page?.session.messages);
+
+      expect(llmText).toContain('<coding_context>');
+      expect(llmText).toContain('Command success: git log --oneline -20 exit=0');
+      expect(detail?.messages).toHaveLength(3);
+      expect(page?.pagination.total).toBe(3);
+      expect(detailText).not.toContain('<coding_context>');
+      expect(detailText).not.toContain('Command success: git log --oneline -20 exit=0');
+      expect(pageText).not.toContain('<coding_context>');
+      expect(pageText).not.toContain('Command success: git log --oneline -20 exit=0');
+    });
+
     it('should page messages from the newest tail while preserving chronological order', async () => {
       const key = 'agent:main:webchat:default:direct:history-page';
       const messages: any[] = Array.from({ length: 5 }, (_, index) => ({

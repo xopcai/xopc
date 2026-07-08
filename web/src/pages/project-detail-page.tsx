@@ -1,13 +1,17 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { Activity, AlertCircle, ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, Clock, File, Folder, FolderPlus, LayoutDashboard, MessageSquarePlus, Pause, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, Zap, type LucideIcon } from 'lucide-react';
-import { type FormEvent, type MouseEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { Activity, AlertCircle, ArrowLeft, Check, CheckCircle2, ChevronDown, Clock, File, Folder, FolderPlus, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { automationApi, type Automation, type AutomationRun } from '@/features/automations/automation-api';
+import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
+import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
 import { fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
+import { FileTree } from '@/features/file-tree/file-tree';
+import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
 import { GoalCreateDialog, normalizeChecklist, type CreateGoalDraft, type GoalCreateOptions } from '@/features/goals/goal-create-dialog';
@@ -47,15 +51,26 @@ import {
 } from '@/features/workflows/workflow-api';
 import { WorkflowStartDialog } from '@/features/workflows/workflow-start-dialog';
 import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
+import { WorkItemsPanel } from '@/features/work-items/work-items-panel';
+import { detectPreviewFileType, getPreviewFileName, readModeForPreviewType } from '@/features/preview-runtime';
+import {
+  downloadBinaryFile,
+  downloadTextFile,
+  fetchWorkspaceFileBlob,
+  readWorkspaceFile,
+} from '@/features/workspace/workspace-api';
+import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-preview-dialog';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-type TabId = 'overview' | 'workflows' | 'automations' | 'notes' | 'files' | 'sessions' | 'goals' | 'settings';
+type TabId = 'overview' | 'work-items' | 'workflows' | 'automations' | 'notes' | 'files' | 'sessions' | 'goals' | 'settings';
 
 const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'overview', icon: LayoutDashboard },
+  { id: 'work-items', icon: ListChecks },
   { id: 'sessions', icon: MessageSquarePlus },
   { id: 'goals', icon: Target },
   { id: 'workflows', icon: Play },
@@ -68,6 +83,33 @@ const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
 const DEFAULT_PROJECT_TAB_ORDER = TABS.map((tab) => tab.id);
 const PROJECT_TAB_IDS = new Set<TabId>(TABS.map((tab) => tab.id));
 const PROJECT_TAB_STORAGE_PREFIX = 'xopc.projectTabs.';
+const PROJECT_FILES_PANEL_WIDTH_STORAGE_KEY = 'xopc.projectFiles.panelWidthPx';
+const PROJECT_FILES_PANEL_WIDTH_DEFAULT = 320;
+const PROJECT_FILES_PANEL_WIDTH_MIN = 220;
+const PROJECT_FILES_PANEL_WIDTH_MAX = 560;
+
+function clampProjectFilesPanelWidth(px: number): number {
+  return Math.min(PROJECT_FILES_PANEL_WIDTH_MAX, Math.max(PROJECT_FILES_PANEL_WIDTH_MIN, Math.round(px)));
+}
+
+function readProjectFilesPanelWidth(): number {
+  try {
+    const raw = window.localStorage.getItem(PROJECT_FILES_PANEL_WIDTH_STORAGE_KEY);
+    if (raw == null) return PROJECT_FILES_PANEL_WIDTH_DEFAULT;
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isFinite(parsed) ? clampProjectFilesPanelWidth(parsed) : PROJECT_FILES_PANEL_WIDTH_DEFAULT;
+  } catch {
+    return PROJECT_FILES_PANEL_WIDTH_DEFAULT;
+  }
+}
+
+function writeProjectFilesPanelWidth(px: number): void {
+  try {
+    window.localStorage.setItem(PROJECT_FILES_PANEL_WIDTH_STORAGE_KEY, String(clampProjectFilesPanelWidth(px)));
+  } catch {
+    /* ignore storage failures */
+  }
+}
 
 function isProjectTabId(value: string | undefined): value is TabId {
   return Boolean(value && PROJECT_TAB_IDS.has(value as TabId));
@@ -111,19 +153,6 @@ function formatDate(value?: string | number, fallback = ''): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
-}
-
-function formatBytes(value?: number): string {
-  if (value === undefined) return '';
-  if (value < 1024) return `${value} B`;
-  const units = ['KB', 'MB', 'GB', 'TB'];
-  let size = value / 1024;
-  let index = 0;
-  while (size >= 1024 && index < units.length - 1) {
-    size /= 1024;
-    index += 1;
-  }
-  return `${size >= 10 ? size.toFixed(0) : size.toFixed(1)} ${units[index]}`;
 }
 
 function statusTone(status: string): string {
@@ -183,6 +212,32 @@ function directoryName(path: string): string {
 function getMissingWorkspaceRoot(err: unknown): string | null {
   const body = (err as { body?: { code?: string; workspaceRoot?: string } } | null)?.body;
   return body?.code === 'workspace_root_missing' && body.workspaceRoot ? body.workspaceRoot : null;
+}
+
+function projectFileEntriesToTreeEntries(entries: ProjectFileEntry[]): TreeEntry[] {
+  return entries.map((entry) => ({
+    name: entry.name,
+    path: entry.path,
+    absolutePath: entry.absolutePath,
+    isDirectory: entry.type === 'directory',
+    children: entry.type === 'directory' ? [] : undefined,
+  }));
+}
+
+function mergeProjectFileChildren(
+  tree: TreeEntry[],
+  targetPath: string,
+  children: TreeEntry[],
+): TreeEntry[] {
+  return tree.map((entry) => {
+    if (entry.path === targetPath) {
+      return { ...entry, children };
+    }
+    if (entry.isDirectory && entry.children?.length) {
+      return { ...entry, children: mergeProjectFileChildren(entry.children, targetPath, children) };
+    }
+    return entry;
+  });
 }
 
 function ProjectSwitcher({
@@ -560,9 +615,13 @@ export function ProjectDetailPage() {
   const [automationsLoading, setAutomationsLoading] = useState(false);
   const [automationActionBusy, setAutomationActionBusy] = useState<string | null>(null);
   const [savingDigest, setSavingDigest] = useState(false);
-  const [filePath, setFilePath] = useState('');
-  const [fileEntries, setFileEntries] = useState<ProjectFileEntry[]>([]);
-  const [fileParentPath, setFileParentPath] = useState<string | null>(null);
+  const [projectFileTree, setProjectFileTree] = useState<TreeEntry[]>([]);
+  const loadedProjectFileDirsRef = useRef<Set<string>>(new Set());
+  const [previewFilePath, setPreviewFilePath] = useState<string | null>(null);
+  const [projectFilesPanelWidth, setProjectFilesPanelWidth] = useState(readProjectFilesPanelWidth);
+  const [projectFilesPanelResizing, setProjectFilesPanelResizing] = useState(false);
+  const [projectFileSearchOpen, setProjectFileSearchOpen] = useState(false);
+  const [projectFileSearchQuery, setProjectFileSearchQuery] = useState('');
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [agents, setAgents] = useState<GatewayAgentRow[]>([]);
@@ -573,6 +632,7 @@ export function ProjectDetailPage() {
   const [missingWorkspaceRoot, setMissingWorkspaceRoot] = useState<string | null>(null);
   const [deletingProject, setDeletingProject] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
+  const [createWorkItemRequestKey, setCreateWorkItemRequestKey] = useState(0);
   const [workflowsLoading, setWorkflowsLoading] = useState(false);
   const [startingWorkflow, setStartingWorkflow] = useState(false);
   const [workflowActionBusy, setWorkflowActionBusy] = useState<string | null>(null);
@@ -825,26 +885,44 @@ export function ProjectDetailPage() {
 
   const refreshProjectFiles = useCallback(async () => {
     if (!project?.workspaceRoot?.trim()) {
-      setFileEntries([]);
-      setFileParentPath(null);
+      setProjectFileTree([]);
+      loadedProjectFileDirsRef.current.clear();
       setFilesError(null);
       return;
     }
     setFilesLoading(true);
     setFilesError(null);
+    loadedProjectFileDirsRef.current.clear();
     try {
-      const result = await fetchProjectFiles(project.id, filePath);
-      setFileEntries(result.entries);
-      setFilePath(result.path);
-      setFileParentPath(result.parentPath);
+      const result = await fetchProjectFiles(project.id, '');
+      setProjectFileTree(projectFileEntriesToTreeEntries(result.entries));
+      loadedProjectFileDirsRef.current.add('');
     } catch (err) {
-      setFileEntries([]);
-      setFileParentPath(null);
+      setProjectFileTree([]);
+      loadedProjectFileDirsRef.current.clear();
       setFilesError(err instanceof Error ? err.message : String(err));
     } finally {
       setFilesLoading(false);
     }
-  }, [filePath, project]);
+  }, [project]);
+
+  const loadProjectFileChildren = useCallback(
+    async (dirPath: string) => {
+      if (!project?.workspaceRoot?.trim() || loadedProjectFileDirsRef.current.has(dirPath)) return;
+      loadedProjectFileDirsRef.current.add(dirPath);
+      setFilesError(null);
+      try {
+        const result = await fetchProjectFiles(project.id, dirPath);
+        setProjectFileTree((current) =>
+          mergeProjectFileChildren(current, dirPath, projectFileEntriesToTreeEntries(result.entries)),
+        );
+      } catch (err) {
+        loadedProjectFileDirsRef.current.delete(dirPath);
+        setFilesError(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [project],
+  );
 
   useEffect(() => {
     if (tab !== 'files') return;
@@ -856,14 +934,19 @@ export function ProjectDetailPage() {
     setStartingChat(true);
     setError(null);
     try {
-      const session = await createProjectSession(project.id, selectedAgentId || undefined);
+      const session = await createProjectSession(project.id);
       navigateFromProjectTab('sessions', `/chat/${encodeURIComponent(session.key)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setStartingChat(false);
     }
-  }, [navigateFromProjectTab, project, selectedAgentId]);
+  }, [navigateFromProjectTab, project]);
+
+  const openCreateWorkItem = useCallback(() => {
+    navigateProjectTab('work-items');
+    setCreateWorkItemRequestKey((value) => value + 1);
+  }, [navigateProjectTab]);
 
   const refreshProjectGoals = useCallback(async () => {
     if (!project) return;
@@ -931,10 +1014,11 @@ export function ProjectDetailPage() {
     setStartingWorkflow(true);
     setError(null);
     try {
+      const ownerAgentId = selectedAgentId || project.defaultAgentId || undefined;
       const result = await startWorkflowRun({
         definitionId: workflowStartDefinition.id,
         projectId: project.id,
-        agentId: selectedAgentId || undefined,
+        agentId: ownerAgentId,
         goal: payload.goal,
         input: payload.input,
         concurrency: payload.concurrency,
@@ -942,7 +1026,7 @@ export function ProjectDetailPage() {
       });
       setWorkflowStartDefinition(null);
       await refreshProjectWorkflows();
-      navigateFromProjectTab('workflows', workflowBoardHref(result.runId));
+      navigateFromProjectTab('workflows', workflowBoardHref(result.runId, { ownerAgentId }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -960,7 +1044,9 @@ export function ProjectDetailPage() {
         projectId: run.metadata?.projectId || project.id,
       });
       await refreshProjectWorkflows();
-      navigateFromProjectTab('workflows', workflowBoardHref(result.runId));
+      navigateFromProjectTab('workflows', workflowBoardHref(result.runId, {
+        ownerAgentId: selectedAgentId || run.metadata?.agentId || project.defaultAgentId,
+      }));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -993,26 +1079,17 @@ export function ProjectDetailPage() {
   const headerEnd = useMemo(
     () => project ? (
       <>
-        <select
-          className="h-9 rounded-lg border border-edge bg-surface-muted px-3 text-sm text-fg outline-none focus:border-accent"
-          value={selectedAgentId}
-          onChange={(event) => setSelectedAgentId(event.target.value)}
-          aria-label={pm.common.agent}
-        >
-          <option value="">{pm.common.defaultAgent}</option>
-          {agents.map((agent) => (
-            <option key={agent.id} value={agent.id}>
-              {agent.name || agent.id}
-            </option>
-          ))}
-        </select>
+        <Button variant="secondary" className="h-9 rounded-lg" onClick={openCreateWorkItem}>
+          <Plus className="size-4" aria-hidden />
+          {pm.workItems.create.header}
+        </Button>
         <Button variant="primary" className="h-9 rounded-lg" onClick={() => void startChat()} disabled={startingChat}>
           <MessageSquarePlus className="size-4" aria-hidden />
           {pm.common.newChat}
         </Button>
       </>
     ) : null,
-    [agents, pm.common.agent, pm.common.defaultAgent, pm.common.newChat, project, selectedAgentId, startChat, startingChat],
+    [openCreateWorkItem, pm.common.newChat, pm.workItems.create.header, project, startChat, startingChat],
   );
 
   useLayoutEffect(() => {
@@ -1097,6 +1174,122 @@ export function ProjectDetailPage() {
     }
   }
 
+  const previewProjectFile = useCallback((path: string) => {
+    setPreviewFilePath(path);
+  }, []);
+
+  const handleProjectFileEntrySelect = useCallback((path: string, isDirectory: boolean) => {
+    if (!isDirectory) setPreviewFilePath(path);
+  }, []);
+
+  const handleProjectFileAction = useCallback(
+    async (action: FileTreeAction, entry: TreeEntry, appPath?: string) => {
+      const pid = project?.id;
+      if (!pid) return;
+      switch (action) {
+        case 'preview':
+          if (!entry.isDirectory) setPreviewFilePath(entry.path);
+          break;
+        case 'download':
+          if (entry.isDirectory) return;
+          try {
+            const fileName = getPreviewFileName(entry.path);
+            if (readModeForPreviewType(detectPreviewFileType(fileName)) !== 'text') {
+              const blob = await fetchWorkspaceFileBlob(entry.path, { projectId: pid });
+              const mime = inferMimeTypeFromFileName(fileName) ?? 'application/octet-stream';
+              downloadBinaryFile(fileName, await blob.arrayBuffer(), mime);
+            } else {
+              const { content } = await readWorkspaceFile(entry.path, { projectId: pid });
+              downloadTextFile(fileName, content);
+            }
+          } catch (err) {
+            showComposerNotification('warning', err instanceof Error ? err.message : String(err), undefined, { duration: 4000 });
+          }
+          break;
+        case 'copyPath':
+          try {
+            const ok = await copyTextToClipboard(entry.absolutePath ?? entry.path);
+            if (ok) showComposerNotification('success', msg.workspace.pathCopied, undefined, { duration: 2500 });
+          } catch {
+            showComposerNotification('warning', msg.clipboard.copyFailed, undefined, { duration: 4000 });
+          }
+          break;
+        case 'openDefault':
+          if (!entry.absolutePath || !window.electronAPI?.shell?.openPath) return;
+          await window.electronAPI.shell.openPath(entry.absolutePath);
+          break;
+        case 'openWith':
+          if (!entry.absolutePath || !window.electronAPI?.shell?.chooseAppAndOpenPath) return;
+          await window.electronAPI.shell.chooseAppAndOpenPath(entry.absolutePath);
+          break;
+        case 'openWithApp':
+          if (!entry.absolutePath || !appPath || !window.electronAPI?.shell?.openPathWithApp) return;
+          await window.electronAPI.shell.openPathWithApp(entry.absolutePath, appPath);
+          break;
+        case 'revealInFolder':
+          if (!entry.absolutePath || !window.electronAPI?.shell?.showItemInFolder) return;
+          await window.electronAPI.shell.showItemInFolder(entry.absolutePath);
+          break;
+        default:
+          break;
+      }
+    },
+    [msg.clipboard.copyFailed, msg.workspace.pathCopied, project?.id],
+  );
+
+  const handleProjectFilesResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    if (!window.matchMedia('(min-width: 1024px)').matches) return;
+    event.preventDefault();
+    const handle = event.currentTarget;
+    const grid = handle.closest<HTMLElement>('[data-project-files-grid]');
+    if (!grid) return;
+    handle.setPointerCapture(event.pointerId);
+    setProjectFilesPanelResizing(true);
+    const startX = event.clientX;
+    const startWidth = projectFilesPanelWidth;
+    const pointerId = event.pointerId;
+    let rafId = 0;
+    let nextWidth = startWidth;
+    let committedWidth = startWidth;
+    const applyWidth = () => {
+      rafId = 0;
+      committedWidth = nextWidth;
+      grid.style.setProperty('--project-files-panel-width', `${committedWidth}px`);
+    };
+    const onMove = (moveEvent: PointerEvent) => {
+      nextWidth = clampProjectFilesPanelWidth(startWidth + (moveEvent.clientX - startX));
+      if (rafId === 0) {
+        rafId = window.requestAnimationFrame(applyWidth);
+      }
+    };
+    const onDone = () => {
+      if (rafId !== 0) {
+        window.cancelAnimationFrame(rafId);
+        applyWidth();
+      }
+      try {
+        handle.releasePointerCapture(pointerId);
+      } catch {
+        /* ignore */
+      }
+      setProjectFilesPanelResizing(false);
+      setProjectFilesPanelWidth(committedWidth);
+      writeProjectFilesPanelWidth(committedWidth);
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onDone);
+      window.removeEventListener('pointercancel', onDone);
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onDone);
+    window.addEventListener('pointercancel', onDone);
+  }, [projectFilesPanelWidth]);
+
+  useEffect(() => {
+    if (tab !== 'files') {
+      setPreviewFilePath(null);
+    }
+  }, [projectId, tab]);
+
   if (loading) {
     return <main className="w-full flex-1 px-3 py-3 text-sm text-fg-muted sm:px-5 sm:py-4 xl:px-6">{pm.loading}</main>;
   }
@@ -1119,12 +1312,11 @@ export function ProjectDetailPage() {
   const overviewWorkflowRuns = overview?.recentWorkflowRuns.length ? overview.recentWorkflowRuns : project.recentWorkflowRuns;
   const overviewAttentionItems = overview?.attentionItems ?? [];
   const overviewTimeline = overview?.timeline ?? [];
-  const fileCrumbs = filePath ? filePath.split('/').filter(Boolean) : [];
   const statusLabel = (status: string) => pm.statuses[status as keyof typeof pm.statuses] ?? status;
   const messageCount = (count: number) => interpolate(pm.common.messages, { count });
   const tabItems = tabOrder.map((id) => {
     const item = TABS.find((candidate) => candidate.id === id)!;
-    return { ...item, label: pm.tabs[item.id] };
+    return { ...item, label: item.id === 'work-items' ? pm.workItems.tab : pm.tabs[item.id] };
   });
 
   return (
@@ -1403,6 +1595,10 @@ export function ProjectDetailPage() {
         </section>
       ) : null}
 
+      {tab === 'work-items' ? (
+        <WorkItemsPanel projectId={project.id} createRequestKey={createWorkItemRequestKey} />
+      ) : null}
+
       {tab === 'workflows' ? (
         <section id="project-panel-workflows" role="tabpanel" aria-labelledby="project-tab-workflows" className="grid h-full min-h-[28rem] gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
           <div className="min-h-0">
@@ -1429,7 +1625,9 @@ export function ProjectDetailPage() {
                         <button
                           type="button"
                           className="min-w-0 truncate text-left text-sm font-medium text-fg hover:text-accent-fg"
-                          onClick={() => navigateFromProjectTab('workflows', workflowBoardHref(run.id))}
+                          onClick={() => navigateFromProjectTab('workflows', workflowBoardHref(run.id, {
+                            ownerAgentId: selectedAgentId || run.metadata?.agentId || project.defaultAgentId,
+                          }))}
                         >
                           {run.title || run.definitionId}
                         </button>
@@ -1451,7 +1649,9 @@ export function ProjectDetailPage() {
                             type="button"
                             variant="ghost"
                             className="h-8 rounded-lg px-2 py-1 text-xs"
-                            onClick={() => navigateFromProjectTab('workflows', workflowBoardHref(run.id))}
+                            onClick={() => navigateFromProjectTab('workflows', workflowBoardHref(run.id, {
+                              ownerAgentId: selectedAgentId || run.metadata?.agentId || project.defaultAgentId,
+                            }))}
                           >
                             {pm.common.open}
                           </Button>
@@ -1661,108 +1861,123 @@ export function ProjectDetailPage() {
       {tab === 'files' ? (
         <section id="project-panel-files" role="tabpanel" aria-labelledby="project-tab-files" className="h-full min-h-[28rem]">
           <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-edge bg-surface-panel">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-edge px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <h2 className="text-sm font-semibold text-fg">{pm.files.title}</h2>
-                <p className="truncate text-xs text-fg-muted">{project.workspaceRoot || pm.files.noWorkspace}</p>
-                <p className="mt-1 max-w-3xl text-xs leading-5 text-fg-subtle">{pm.files.boundaryHint}</p>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="h-9 rounded-lg"
-                  onClick={() => void refreshProjectFiles()}
-                  disabled={filesLoading || !project.workspaceRoot}
-                >
-                  <RotateCcw className="size-4" aria-hidden />
-                  {pm.common.refresh}
-                </Button>
-                <Button type="button" variant="primary" className="h-9 rounded-lg" onClick={() => navigateProjectTab('workflows')}>
-                  <Play className="size-4" aria-hidden />
-                  {pm.tabs.workflows}
-                </Button>
-              </div>
-            </div>
-
             {project.workspaceRoot ? (
-              <>
-                <div className="flex min-h-10 flex-wrap items-center gap-1 border-b border-edge bg-surface-muted/50 px-3 py-1.5 text-sm">
-                  <button
-                    type="button"
-                    className={cn('rounded-md px-2 py-1 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg', !filePath && 'bg-surface-hover text-fg')}
-                    onClick={() => setFilePath('')}
-                  >
-                    {pm.common.root}
-                  </button>
-                  {fileCrumbs.map((crumb, index) => {
-                    const crumbPath = fileCrumbs.slice(0, index + 1).join('/');
-                    return (
-                      <span key={crumbPath} className="inline-flex items-center gap-1">
-                        <ChevronRight className="size-3.5 text-fg-subtle" aria-hidden />
-                        <button
-                          type="button"
-                          className={cn('max-w-40 truncate rounded-md px-2 py-1 text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg', index === fileCrumbs.length - 1 && 'bg-surface-hover text-fg')}
-                          onClick={() => setFilePath(crumbPath)}
-                        >
-                          {crumb}
-                        </button>
-                      </span>
-                    );
-                  })}
-                </div>
-
-                {filesError ? (
-                  <div className="border-b border-edge bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{filesError}</div>
-                ) : null}
-
-                <div className="min-h-0 flex-1 overflow-y-auto py-1">
-                  {fileParentPath !== null ? (
+              <div
+                data-project-files-grid
+                className={cn(
+                  'grid min-h-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[var(--project-files-panel-width)_6px_minmax(0,1fr)]',
+                  projectFilesPanelResizing && 'cursor-col-resize select-none',
+                )}
+                style={{ '--project-files-panel-width': `${projectFilesPanelWidth}px` } as CSSProperties}
+              >
+                <aside className="flex min-h-0 flex-col border-b border-edge lg:border-b-0 lg:border-r">
+                  <div className="flex min-h-10 flex-wrap items-center gap-1 border-b border-edge bg-surface-muted/50 px-3 py-1.5 text-sm">
                     <button
                       type="button"
-                      className="grid h-8 w-full grid-cols-[minmax(0,1fr)_5rem] items-center gap-3 px-3 text-left text-sm hover:bg-surface-hover sm:grid-cols-[minmax(0,1fr)_8rem_10rem]"
-                      onClick={() => setFilePath(fileParentPath)}
+                      className="rounded-md bg-surface-hover px-2 py-1 text-xs font-medium text-fg hover:bg-surface-hover hover:text-fg"
+                      onClick={() => void refreshProjectFiles()}
                     >
-                      <span className="flex min-w-0 items-center gap-1.5 text-fg">
-                        <ChevronRight className="size-3.5 shrink-0 rotate-180 text-fg-subtle" aria-hidden />
-                        <Folder className="size-4 shrink-0 text-accent-fg" aria-hidden />
-                        <span className="truncate font-medium">..</span>
-                      </span>
-                      <span className="text-xs text-fg-subtle">{pm.common.folder}</span>
-                      <span className="hidden sm:block" />
+                      {pm.common.root}
                     </button>
-                  ) : null}
-                  {filesLoading && fileEntries.length === 0 ? (
-                    <div className="px-4 py-6 text-sm text-fg-muted">{pm.files.loading}</div>
-                  ) : fileEntries.length ? fileEntries.map((entry) => {
-                    const isDirectory = entry.type === 'directory';
-                    const Icon = isDirectory ? Folder : File;
-                    return (
+                    <div className="ml-auto flex min-w-0 items-center gap-1">
+                      {projectFileSearchOpen ? (
+                        <input
+                          type="search"
+                          value={projectFileSearchQuery}
+                          onChange={(event) => setProjectFileSearchQuery(event.target.value)}
+                          placeholder={pm.files.searchPlaceholder}
+                          aria-label={pm.files.searchPlaceholder}
+                          autoFocus
+                          className="h-7 min-w-32 flex-1 rounded-md border border-edge bg-surface-panel px-2 text-xs text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
+                        />
+                      ) : null}
                       <button
-                        key={entry.path}
                         type="button"
                         className={cn(
-                          'grid h-8 w-full grid-cols-[minmax(0,1fr)_5rem] items-center gap-3 px-3 text-left text-sm sm:grid-cols-[minmax(0,1fr)_8rem_10rem]',
-                          isDirectory ? 'hover:bg-surface-hover' : 'cursor-default',
+                          'inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg',
+                          projectFileSearchOpen && 'bg-surface-hover text-fg',
                         )}
                         onClick={() => {
-                          if (isDirectory) setFilePath(entry.path);
+                          if (projectFileSearchOpen) {
+                            setProjectFileSearchQuery('');
+                            setProjectFileSearchOpen(false);
+                            return;
+                          }
+                          setProjectFileSearchOpen(true);
                         }}
+                        aria-label={projectFileSearchOpen ? pm.files.clearSearch : pm.files.search}
+                        title={projectFileSearchOpen ? pm.files.clearSearch : pm.files.search}
                       >
-                        <span className="flex min-w-0 items-center gap-1.5 text-fg">
-                          <ChevronRight className={cn('size-3.5 shrink-0 text-fg-subtle', !isDirectory && 'opacity-0')} aria-hidden />
-                          <Icon className={cn('size-4 shrink-0', isDirectory ? 'text-accent-fg' : 'text-fg-muted')} aria-hidden />
-                          <span className={cn('truncate', isDirectory && 'font-medium')}>{entry.name}</span>
-                        </span>
-                        <span className="text-xs text-fg-subtle">{isDirectory ? pm.common.folder : formatBytes(entry.size)}</span>
-                        <span className="hidden truncate text-right text-xs text-fg-subtle sm:block">{formatDate(entry.updatedAt)}</span>
+                        {projectFileSearchOpen ? (
+                          <X className="size-3.5" aria-hidden />
+                        ) : (
+                          <Search className="size-3.5" aria-hidden />
+                        )}
                       </button>
-                    );
-                  }) : (
-                    <div className="px-4 py-6 text-sm text-fg-muted">{pm.files.emptyDirectory}</div>
+                    </div>
+                  </div>
+
+                  {filesError ? (
+                    <div className="border-b border-edge bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{filesError}</div>
+                  ) : null}
+
+                  {filesLoading && projectFileTree.length === 0 ? (
+                    <div className="px-4 py-6 text-sm text-fg-muted">{pm.files.loading}</div>
+                  ) : (
+                    <FileTree
+                      tree={projectFileTree}
+                      selectedPath={previewFilePath}
+                      onSelectFile={previewProjectFile}
+                      onSelectEntry={handleProjectFileEntrySelect}
+                      onExpandDir={(dirPath) => void loadProjectFileChildren(dirPath)}
+                      onAction={handleProjectFileAction}
+                      actionLabels={{
+                        preview: msg.workspace.preview,
+                        download: msg.workspace.download,
+                        copyPath: msg.workspace.copyPath,
+                        openDefault: msg.workspace.openSystemApp,
+                        openWith: msg.workspace.openWith,
+                        revealInFolder: msg.workspace.revealInFolder,
+                        recommendedApps: msg.workspace.recommendedApps,
+                      }}
+                      emptyHint={pm.files.emptyDirectory}
+                      searchQuery={projectFileSearchQuery}
+                      emptySearchHint={pm.files.noSearchResults}
+                    />
+                  )}
+                </aside>
+
+                <div
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label={pm.files.resizeHandle}
+                  className={cn(
+                    'hidden cursor-col-resize touch-none items-stretch justify-center bg-surface-panel transition-colors hover:bg-surface-hover lg:flex',
+                    projectFilesPanelResizing && 'bg-surface-hover',
+                  )}
+                  onPointerDown={handleProjectFilesResizePointerDown}
+                >
+                  <div className="my-3 w-px rounded-full bg-edge-strong/70" />
+                </div>
+
+                <div className="min-h-0 min-w-0 overflow-hidden bg-surface-base">
+                  {previewFilePath ? (
+                    <WorkspaceFilePreviewPanel
+                      filePath={previewFilePath}
+                      projectId={project.id}
+                      onClose={() => setPreviewFilePath(null)}
+                    />
+                  ) : (
+                    <div className="flex h-full min-h-[18rem] items-center justify-center px-6 text-center">
+                      <div className="max-w-sm">
+                        <Folder className="mx-auto size-8 text-fg-subtle" aria-hidden />
+                        <p className="mt-3 text-sm font-medium text-fg">{pm.files.previewEmptyTitle}</p>
+                        <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.files.previewEmptyDescription}</p>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </>
+              </div>
             ) : (
               <div className="grid gap-3 px-4 py-8 text-sm text-fg-muted">
                 <p>{pm.files.needWorkspace}</p>

@@ -91,6 +91,8 @@ function renderTextLike(props: PreviewRuntimeRenderProps, mode: 'text' | 'markdo
               initialContent={text}
               onSave={(c) => void editing?.onSaveMarkdown?.(c)}
               isDark={(editing?.isDark ?? (props.resolvedTheme === 'dark')) === true}
+              wordWrap={editing?.markdownWordWrap === true}
+              onToggleWordWrap={editing?.onToggleMarkdownWordWrap}
             />
           </Suspense>
         </div>

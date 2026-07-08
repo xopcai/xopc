@@ -1,4 +1,17 @@
 // Export all agent tools
+export {
+  getToolMetadata,
+  DEFAULT_TOOL_METADATA,
+  type AgentToolWithMetadata,
+  type ToolMutationScope,
+  type ToolVerificationKind,
+  type XopcToolMetadata,
+} from './metadata.js';
+export {
+  ToolConcurrencyController,
+  resolveToolLockMode,
+  type ToolLockMode,
+} from './concurrency.js';
 export { createReadFileTool, type CreateReadFileToolOptions } from './read.js';
 export { createWriteFileTool, writeFileTool } from './write.js';
 export { createListDirTool, listDirTool } from './list-dir.js';

@@ -51,10 +51,10 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
     // --- Agent manifest ---
     {
       id: 'field:agent:model',
-      title: isZh ? '默认模型' : 'Default Model',
-      subtitle: isZh ? '对话使用的 LLM 模型' : 'LLM model for conversations',
+      title: isZh ? 'Agent 模型配置' : 'Agent model configuration',
+      subtitle: isZh ? '配置智能体的模型角色与回退模型' : 'Configure agent model roles and fallbacks',
       path: '/agents',
-      keywords: ['model', 'llm', 'gpt', 'claude', 'gemini', '模型'],
+      keywords: ['agent model', 'model roles', 'llm', 'gpt', 'claude', 'gemini', '智能体模型', '模型角色'],
     },
     {
       id: 'field:agent:temperature',
@@ -213,14 +213,14 @@ function buildFieldSeeds(language: StoredLanguage): FieldSeed[] {
       id: 'field:channels:telegram',
       title: isZh ? 'Telegram Bot Token' : 'Telegram Bot Token',
       subtitle: isZh ? '配置 Telegram 频道连接' : 'Configure Telegram channel connection',
-      path: '/settings/channels',
+      path: '/channels',
       keywords: ['telegram', 'bot', 'token', 'channel', '频道'],
     },
     {
       id: 'field:channels:dmPolicy',
       title: isZh ? '私聊接入策略' : 'DM Access Policy',
       subtitle: isZh ? 'Telegram 私聊白名单/配对策略' : 'Telegram DM allowlist/pairing policy',
-      path: '/settings/channels',
+      path: '/channels',
       keywords: ['dm', 'policy', 'pairing', 'allowlist', 'access', '私聊', '策略'],
     },
 

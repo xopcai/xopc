@@ -75,6 +75,8 @@ export function createGrepTool(cwd: string): AgentTool {
 		label: '🔍 grep',
 		description: 'Search file contents for a pattern (regex or literal).',
 		parameters: grepSchema,
+		supportsParallel: true,
+		idempotent: true,
 		execute: async (
 			_toolCallId: string,
 			params: any,

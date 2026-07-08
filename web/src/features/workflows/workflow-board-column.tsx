@@ -104,11 +104,6 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
           </Button>
         ) : null}
 
-        {isSucceeded && (column.hiddenByCap ?? 0) > 0 ? (
-          <p className="px-1 text-center text-[11px] text-fg-subtle">
-            {interpolate(labels.boardSucceededCapHint, { count: column.hiddenByCap ?? 0 })}
-          </p>
-        ) : null}
       </div>
     </section>
   );

@@ -151,6 +151,10 @@ export function createExecCommandTool(
     ].join(' '),
     parameters: ExecCommandSchema,
     label: 'Run Command',
+    mutationScope: 'unknown',
+    supportsParallel: false,
+    idempotent: false,
+    finalGuardRelevant: true,
 
     async execute(
       _toolCallId: string,

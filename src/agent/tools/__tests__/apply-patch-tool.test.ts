@@ -71,4 +71,57 @@ describe('apply_patch tool', () => {
       await rm(workspace, { recursive: true, force: true });
     }
   });
+
+  it('does not partially apply earlier operations when a later hunk fails', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'xopc-patch-'));
+    try {
+      await writeFile(join(workspace, 'existing.txt'), 'alpha\nbeta\n', 'utf-8');
+      const tool = createApplyPatchTool(workspace);
+
+      await expect(
+        tool.execute('tc4', {
+          patch: [
+            '*** Begin Patch',
+            '*** Add File: created.txt',
+            '+one',
+            '*** Update File: existing.txt',
+            '@@',
+            ' alpha',
+            '-missing',
+            '+gamma',
+            '*** End Patch',
+          ].join('\n'),
+        }),
+      ).rejects.toThrow('Re-read the target lines');
+
+      await expect(readFile(join(workspace, 'created.txt'), 'utf-8')).rejects.toMatchObject({ code: 'ENOENT' });
+      expect(await readFile(join(workspace, 'existing.txt'), 'utf-8')).toBe('alpha\nbeta\n');
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves existing CRLF line endings for updated files', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'xopc-patch-'));
+    try {
+      await writeFile(join(workspace, 'existing.txt'), 'alpha\r\nbeta\r\n', 'utf-8');
+      const tool = createApplyPatchTool(workspace);
+
+      await tool.execute('tc5', {
+        patch: [
+          '*** Begin Patch',
+          '*** Update File: existing.txt',
+          '@@',
+          ' alpha',
+          '-beta',
+          '+gamma',
+          '*** End Patch',
+        ].join('\n'),
+      });
+
+      expect(await readFile(join(workspace, 'existing.txt'), 'utf-8')).toBe('alpha\r\ngamma\r\n');
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
 });

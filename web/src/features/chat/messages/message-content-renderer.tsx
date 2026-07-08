@@ -25,7 +25,6 @@ import { UserMessageSegments } from '@/features/chat/messages/user-message-segme
 import { stripEnvelopeTimestampPrefix } from '@/features/chat/messages/user-message-plain-text';
 import { stripStartupContextForDisplay } from '@/features/chat/messages/wire-text-scrub';
 import { WorkflowCard, type WorkflowCardLabels } from '@/features/chat/workflow/workflow-card';
-import { defaultWorkflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { isWorkflowToolBlock } from '@/features/chat/workflow/workflow.utils';
 import { ProviderSetupRequiredCard } from '@/features/chat/messages/provider-setup-required-banner';
 import { parseProviderSetupRequired } from '@/features/chat/messages/provider-setup-required.parser';
@@ -409,12 +408,11 @@ export function renderChunkedContent(
   imagePreviewLabel: string,
   onImagePreview: ((block: ImageContent, index: number) => void) | undefined,
   sessionKey: string | null | undefined,
-  workflowOptions?: WorkflowRenderOptions,
+  workflowOptions: WorkflowRenderOptions,
 ) {
   const renderContent = isUser ? content : mergeConsecutiveTextBlocks(content);
   const nodes: ReactNode[] = [];
-  const wfOpts = workflowOptions ?? {};
-  const wfLabels = wfOpts.labels ?? defaultWorkflowCardLabels();
+  const wfOpts = workflowOptions;
   let i = 0;
   let imageOrdinal = 0;
   while (i < renderContent.length) {
@@ -431,8 +429,7 @@ export function renderChunkedContent(
           startedAt={wfOpts.getStartedAt?.(b)}
           sessionKey={sessionKey}
           onAbort={wfOpts.onAbort}
-          onSendChatMessage={wfOpts.onSendChatMessage}
-          labels={wfLabels}
+          labels={wfOpts.labels}
         />,
       );
       i++;
@@ -490,14 +487,12 @@ export function renderChunkedContent(
 }
 
 /**
- * Optional plumbing for WorkflowCard. All fields optional — when absent the
- * card renders with default English labels, hides the cancel button (running
- * → no abort), and hides the "Save as…" entry (no chat-send channel).
+ * Plumbing for WorkflowCard. The message bubble owns locale labels; running
+ * rows may additionally receive an abort handler and elapsed-time anchor.
  */
 export interface WorkflowRenderOptions {
-  labels?: WorkflowCardLabels;
+  labels: WorkflowCardLabels;
   onAbort?: () => void;
-  onSendChatMessage?: (text: string) => void;
   /**
    * Resolve a "running since" timestamp for the live elapsed-time ticker.
    * Defaults to `undefined` (no elapsed time shown until the snapshot

@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import type { WorkflowRunSummary } from '@/features/workflows/workflow-api';
 import {
-  BOARD_SUCCEEDED_MAX,
-  BOARD_SUCCEEDED_WINDOW_MS,
   boardColumnForRun,
   buildWorkflowBoardColumns,
   filterRunsForBoard,
@@ -45,13 +43,13 @@ describe('workflow board utils', () => {
     expect(columns.find((c) => c.id === 'attention')?.runs.map((r) => r.id)).toEqual(['f1']);
   });
 
-  it('excludes succeeded runs older than 7 days', () => {
+  it('keeps old succeeded runs visible in history', () => {
     const old = run({
       id: 'old',
       status: 'succeeded',
-      completedAtMs: now - BOARD_SUCCEEDED_WINDOW_MS - 1,
+      completedAtMs: now - 30 * 24 * 60 * 60 * 1000,
     });
-    expect(boardColumnForRun(old, now)).toBeNull();
+    expect(boardColumnForRun(old, now)).toBe('succeeded');
   });
 
   it('filters runs by trigger source', () => {
@@ -67,7 +65,7 @@ describe('workflow board utils', () => {
     expect(automationOnly.map((item) => item.id)).toEqual(['c1']);
   });
 
-  it('caps succeeded column at 20 runs', () => {
+  it('does not cap succeeded runs in the board model', () => {
     const runs = Array.from({ length: 25 }, (_, index) =>
       run({
         id: `s${index}`,
@@ -76,8 +74,8 @@ describe('workflow board utils', () => {
       }),
     );
     const succeeded = buildWorkflowBoardColumns(runs, now).find((c) => c.id === 'succeeded');
-    expect(succeeded?.runs).toHaveLength(BOARD_SUCCEEDED_MAX);
-    expect(succeeded?.hiddenByCap).toBe(5);
+    expect(succeeded?.runs).toHaveLength(25);
+    expect(succeeded).not.toHaveProperty('hiddenByCap');
   });
 
   it('sorts queued runs oldest first', () => {

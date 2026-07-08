@@ -20,6 +20,9 @@ import type {
 import { createLogger } from '../../utils/logger.js';
 import { executeWithTimeout, TimeoutError } from '../lifecycle/timeout-wrapper.js';
 import { withRetry } from '../../infra/retry.js';
+import type { XopcToolMetadata } from './metadata.js';
+import { ToolConcurrencyController, resolveToolLockMode } from './concurrency.js';
+import type { ToolConcurrencyController as ToolConcurrencyControllerType } from './concurrency.js';
 
 const log = createLogger('ToolExecutor');
 
@@ -53,9 +56,8 @@ const DEFAULT_CONFIG: ToolExecutorConfig = {
  * - `idempotent`: marks a tool as safe to retry. The wrapper retries only
  *   tools that opt in — write/edit-like tools must leave this `false`.
  */
-export interface XopcToolHints {
+export interface XopcToolHints extends XopcToolMetadata {
   timeoutMs?: number;
-  idempotent?: boolean;
 }
 
 function readToolHints(tool: AgentTool<any, any>): XopcToolHints {
@@ -154,7 +156,9 @@ export async function executeToolWithProtection<TDetails>(
 export function wrapToolWithProtection<TDetails>(
   tool: AgentTool<any, TDetails>,
   config?: Partial<ToolExecutorConfig>,
+  concurrency?: ToolConcurrencyControllerType,
 ): AgentTool<any, TDetails> {
+  const lockMode = resolveToolLockMode(tool);
   return {
     ...tool,
     async execute(
@@ -163,7 +167,8 @@ export function wrapToolWithProtection<TDetails>(
       signal?: AbortSignal,
       onUpdate?: AgentToolUpdateCallback<TDetails>,
     ): Promise<AgentToolResult<TDetails>> {
-      return executeToolWithProtection(tool, toolCallId, params, signal, onUpdate, config);
+      const run = () => executeToolWithProtection(tool, toolCallId, params, signal, onUpdate, config);
+      return concurrency ? concurrency.run(lockMode, run) : run();
     },
   } as AgentTool<any, TDetails>;
 }
@@ -174,8 +179,9 @@ export function wrapToolWithProtection<TDetails>(
 export function wrapToolsWithProtection(
   tools: AgentTool<any, any>[],
   config?: Partial<ToolExecutorConfig>,
+  concurrency = new ToolConcurrencyController(),
 ): AgentTool<any, any>[] {
-  return tools.map((tool) => wrapToolWithProtection(tool, config));
+  return tools.map((tool) => wrapToolWithProtection(tool, config, concurrency));
 }
 
 // Export configuration

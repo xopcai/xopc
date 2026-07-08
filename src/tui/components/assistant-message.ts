@@ -29,6 +29,25 @@ function blockText(block: ContentBlock, key: 'text' | 'thinking'): string {
   return typeof value === 'string' ? value : '';
 }
 
+function compactToolAdjacentText(text: string, linkedToolCall: boolean): string {
+  if (!linkedToolCall) return text;
+  const lines = text.split('\n');
+  const kept = lines.filter((line) => !isMechanicalToolSummaryLine(line));
+  return kept.join('\n').trim();
+}
+
+function isMechanicalToolSummaryLine(line: string): boolean {
+  const normalized = line.trim();
+  if (!normalized) return false;
+  const withoutBullet = normalized.replace(/^[-*•]\s+/, '');
+  return (
+    /^(Added|Deleted|Edited|Modified|Updated)\s+.+\(\+\d+\s+-\d+\)\.?$/i.test(withoutBullet) ||
+    /^Edited\s+\d+\s+files?\s+\(\+\d+\s+-\d+\)\.?$/i.test(withoutBullet) ||
+    /^Created\s+.+\(\+\d+\s+-0\)\.?$/i.test(withoutBullet) ||
+    /^Removed\s+.+\(\+0\s+-\d+\)\.?$/i.test(withoutBullet)
+  );
+}
+
 function reviewMarkdown(block: ContentBlock): string {
   const findings = Array.isArray(block.findings) ? block.findings : [];
   const lines: string[] = ['Code review', ''];
@@ -137,7 +156,9 @@ export class AssistantMessageComponent extends Container {
     this.contentContainer.clear();
     const blocks = contentBlocks(this.message);
     const visibleBlocks = blocks.filter((block) => {
-      if (block.type === 'text') return blockText(block, 'text').trim().length > 0;
+      if (block.type === 'text') {
+        return compactToolAdjacentText(blockText(block, 'text'), this.linkedToolCall).trim().length > 0;
+      }
       if (block.type === 'thinking') return blockText(block, 'thinking').trim().length > 0;
       if (block.type === 'image' || block.type === 'image_url') return true;
       if (block.type === 'review') return true;
@@ -153,7 +174,7 @@ export class AssistantMessageComponent extends Container {
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i]!;
       if (block.type === 'text') {
-        const text = blockText(block, 'text').trim();
+        const text = compactToolAdjacentText(blockText(block, 'text'), this.linkedToolCall).trim();
         if (!text) continue;
         if (renderedVisible > 0) this.contentContainer.addChild(new Spacer(1));
         this.contentContainer.addChild(

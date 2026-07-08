@@ -1,5 +1,5 @@
 import { ChevronRight, FileText, Folder, MoreHorizontal } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import type { FileTreeAction, TreeEntry } from '@/features/file-tree/file-tree-types';
 import { fileExtColor } from '@/features/file-tree/file-tree-utils';
@@ -10,7 +10,7 @@ type FileTreeActionLabels = {
   preview: string;
   download: string;
   copyPath: string;
-  share: string;
+  share?: string;
   openDefault?: string;
   openWith?: string;
   revealInFolder?: string;
@@ -84,14 +84,14 @@ function ActionMenu({
   const items: { action: FileTreeAction; label: string; appPath?: string }[] = entry.isDirectory
     ? [
         ...localItems,
-        { action: 'share', label: labels.share },
+        ...(labels.share ? [{ action: 'share' as const, label: labels.share }] : []),
         { action: 'copyPath', label: labels.copyPath },
       ]
     : [
         ...localItems,
         { action: 'preview', label: labels.preview },
         { action: 'download', label: labels.download },
-        { action: 'share', label: labels.share },
+        ...(labels.share ? [{ action: 'share' as const, label: labels.share }] : []),
         { action: 'copyPath', label: labels.copyPath },
       ];
 
@@ -199,6 +199,7 @@ function TreeRow({
   entry,
   depth,
   selectedPath,
+  forceOpen,
   onSelect,
   onExpandDir,
   onAction,
@@ -207,6 +208,7 @@ function TreeRow({
   entry: TreeEntry;
   depth: number;
   selectedPath: string | null;
+  forceOpen?: boolean;
   onSelect: (path: string, isDir: boolean) => void;
   onExpandDir?: (dirPath: string) => void;
   onAction?: (action: FileTreeAction, entry: TreeEntry, appPath?: string) => void;
@@ -214,6 +216,7 @@ function TreeRow({
 }) {
   /** Collapsed by default; chevron must match visibility of children (incl. lazy-loaded empty → []). */
   const [open, setOpen] = useState(false);
+  const visibleOpen = forceOpen || open;
   const isSel = selectedPath === entry.path;
 
   if (entry.isDirectory) {
@@ -222,7 +225,7 @@ function TreeRow({
         <div className="group flex w-full items-stretch gap-0.5">
           <button
             type="button"
-            aria-expanded={open}
+            aria-expanded={visibleOpen}
             className={cn(
               'flex min-w-0 flex-1 items-center gap-1 rounded-md py-1 pr-2 text-left text-sm',
               'hover:bg-surface-hover',
@@ -230,14 +233,14 @@ function TreeRow({
             )}
             style={{ paddingLeft: 8 + depth * 12 }}
             onClick={() => {
-              const next = !open;
+              const next = !visibleOpen;
               setOpen(next);
               if (next) onExpandDir?.(entry.path);
               onSelect(entry.path, true);
             }}
           >
             <ChevronRight
-              className={cn('size-3.5 shrink-0 transition-transform', open && 'rotate-90')}
+              className={cn('size-3.5 shrink-0 transition-transform', visibleOpen && 'rotate-90')}
               aria-hidden
             />
             <Folder className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
@@ -247,7 +250,7 @@ function TreeRow({
             <ActionMenu entry={entry} labels={actionLabels} onAction={onAction} />
           ) : null}
         </div>
-        {open && entry.children?.length ? (
+        {visibleOpen && entry.children?.length ? (
           <div>
             {entry.children.map((c) => (
               <TreeRow
@@ -255,6 +258,7 @@ function TreeRow({
                 entry={c}
                 depth={depth + 1}
                 selectedPath={selectedPath}
+                forceOpen={forceOpen}
                 onSelect={onSelect}
                 onExpandDir={onExpandDir}
                 onAction={onAction}
@@ -289,6 +293,25 @@ function TreeRow({
   );
 }
 
+function fileTreeEntryMatches(entry: TreeEntry, query: string) {
+  return (
+    entry.name.toLocaleLowerCase().includes(query) ||
+    entry.path.toLocaleLowerCase().includes(query) ||
+    entry.absolutePath?.toLocaleLowerCase().includes(query)
+  );
+}
+
+function filterTreeEntries(entries: TreeEntry[], query: string): TreeEntry[] {
+  if (!query) return entries;
+  return entries.flatMap((entry) => {
+    const children = entry.children ? filterTreeEntries(entry.children, query) : undefined;
+    if (fileTreeEntryMatches(entry, query) || children?.length) {
+      return [{ ...entry, children }];
+    }
+    return [];
+  });
+}
+
 export function FileTree({
   tree,
   selectedPath,
@@ -298,6 +321,8 @@ export function FileTree({
   onAction,
   actionLabels,
   emptyHint,
+  searchQuery,
+  emptySearchHint,
 }: {
   tree: TreeEntry[];
   selectedPath: string | null;
@@ -308,7 +333,14 @@ export function FileTree({
   onAction?: (action: FileTreeAction, entry: TreeEntry, appPath?: string) => void;
   actionLabels?: FileTreeActionLabels;
   emptyHint: string;
+  searchQuery?: string;
+  emptySearchHint?: string;
 }) {
+  const normalizedSearchQuery = (searchQuery ?? '').trim().toLocaleLowerCase();
+  const visibleTree = useMemo(
+    () => filterTreeEntries(tree, normalizedSearchQuery),
+    [tree, normalizedSearchQuery],
+  );
   const handleSelect = (path: string, isDir: boolean) => {
     onSelectEntry?.(path, isDir);
     if (!isDir) onSelectFile(path);
@@ -318,14 +350,19 @@ export function FileTree({
     return <p className="text-fg-muted px-3 py-2 text-xs">{emptyHint}</p>;
   }
 
+  if (!visibleTree.length) {
+    return <p className="px-3 py-2 text-xs text-fg-muted">{emptySearchHint ?? emptyHint}</p>;
+  }
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto py-2">
-      {tree.map((e) => (
+      {visibleTree.map((e) => (
         <TreeRow
           key={e.path}
           entry={e}
           depth={0}
           selectedPath={selectedPath}
+          forceOpen={Boolean(normalizedSearchQuery)}
           onSelect={handleSelect}
           onExpandDir={onExpandDir}
           onAction={onAction}

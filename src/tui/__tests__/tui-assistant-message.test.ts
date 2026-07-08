@@ -130,6 +130,40 @@ describe('assistant message rendering', () => {
     expect(rendered).not.toContain('\x1b]133;C\x07');
   });
 
+  it('hides mechanical patch summaries when linked to tool calls', () => {
+    const component = new AssistantMessageComponent(
+      createAssistantMessageFromText('• Added src/agent/session/__tests__/session-inspector.test.ts (+38 -0)'),
+    );
+    component.setHasToolCalls(true);
+
+    expect(component.render(100)).toEqual([]);
+  });
+
+  it('keeps explanatory text while removing linked mechanical summary lines', () => {
+    const component = new AssistantMessageComponent(
+      createAssistantMessageFromText([
+        'Implemented the focused SessionInspector coverage.',
+        '• Added src/agent/session/__tests__/session-inspector.test.ts (+38 -0)',
+        'The test uses mocks and does not touch a real database.',
+      ].join('\n')),
+    );
+    component.setHasToolCalls(true);
+
+    const rendered = stripAnsi(component.render(100).join('\n'));
+    expect(rendered).toContain('Implemented the focused SessionInspector coverage.');
+    expect(rendered).toContain('The test uses mocks');
+    expect(rendered).not.toContain('(+38 -0)');
+  });
+
+  it('does not compact mechanical-looking text without linked tool calls', () => {
+    const component = new AssistantMessageComponent(
+      createAssistantMessageFromText('• Added docs/notes.md (+2 -0)'),
+    );
+
+    const rendered = stripAnsi(component.render(100).join('\n'));
+    expect(rendered).toContain('Added docs/notes.md (+2 -0)');
+  });
+
   it('treats tool_use blocks as tool calls for assistant zone handling', () => {
     const component = new AssistantMessageComponent(
       assistantMessage([

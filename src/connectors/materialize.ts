@@ -93,6 +93,7 @@ export function materializeConnectorMcpServer(
     connectorId: definition.id,
     version: definition.version,
     displayName: definition.displayName,
+    ...(input.config && Object.keys(input.config).length > 0 ? { config: input.config } : {}),
   };
   const server = {
     ...(rawServer as Record<string, unknown>),

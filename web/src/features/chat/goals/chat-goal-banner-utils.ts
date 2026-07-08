@@ -10,14 +10,6 @@ export type GoalMessages = ReturnType<typeof messages>['chat']['goal'];
 
 export type GoalUiPhase = 'agent_running' | 'paused' | 'done' | 'judge_recently_completed' | 'idle';
 
-type GoalMessagesWithMissionCopy = GoalMessages & {
-  phaseAgentRunning?: string;
-  phasePaused?: string;
-  phaseDone?: string;
-  phaseJudged?: string;
-  missionHeading?: string;
-};
-
 export function shouldShowGoal(g: WebchatPersistentGoalWire | null): g is WebchatPersistentGoalWire {
   return g !== null && g.status !== 'archived';
 }
@@ -49,12 +41,11 @@ export function goalUiPhase(g: WebchatPersistentGoalWire, agentBusy: boolean): G
 }
 
 export function phaseLabel(phase: GoalUiPhase, t: GoalMessages): string {
-  const copy = t as GoalMessagesWithMissionCopy;
-  if (phase === 'agent_running') return copy.phaseAgentRunning ?? t.agentRunning;
-  if (phase === 'paused') return copy.phasePaused ?? t.statusPaused;
-  if (phase === 'done') return copy.phaseDone ?? t.statusDone;
-  if (phase === 'judge_recently_completed') return copy.phaseJudged ?? t.lastVerdict;
-  return copy.missionHeading ?? t.heading;
+  if (phase === 'agent_running') return t.phaseAgentRunning;
+  if (phase === 'paused') return t.phasePaused;
+  if (phase === 'done') return t.phaseDone;
+  if (phase === 'judge_recently_completed') return t.phaseJudged;
+  return t.missionHeading;
 }
 
 export function statusLabel(g: WebchatPersistentGoalWire, t: GoalMessages): string {

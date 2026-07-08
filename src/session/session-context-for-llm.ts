@@ -515,6 +515,24 @@ export function buildSessionContextForLlm(rows: TranscriptStoredRow[]): AgentMes
   return out;
 }
 
+/** Visible chat messages only - no LLM-only audit/context expansion. */
+export function buildSessionDisplayMessages(rows: TranscriptStoredRow[]): AgentMessage[] {
+  const out: AgentMessage[] = [];
+  for (const r of rows) {
+    if (isTranscriptCustomMessageEntry(r)) {
+      if (r.display === false) {
+        continue;
+      }
+      out.push(customMessageRowToLlmMessage(r));
+      continue;
+    }
+    if (isLikelyAgentMessage(r)) {
+      out.push(r);
+    }
+  }
+  return out;
+}
+
 /**
  * When persisting LLM messages, keep prior `kind: 'context'` rows in their relative positions:
  * each non-context slot in the previous file is replaced by the next incoming LLM message;

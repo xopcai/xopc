@@ -1,4 +1,4 @@
-import { FolderOpen, X } from 'lucide-react';
+import { FolderOpen, Search, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useState, type CSSProperties } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -49,6 +49,8 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
   const widthPx = useWorkspacePanelStore((s) => s.widthPx);
   const setWidthPx = useWorkspacePanelStore((s) => s.setWidthPx);
   const [widthResizing, setWidthResizing] = useState(false);
+  const [fileSearchOpen, setFileSearchOpen] = useState(false);
+  const [fileSearchQuery, setFileSearchQuery] = useState('');
   const previewPath = useWorkspacePreviewStore((s) => s.path);
   const setPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
   const workspaceAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
@@ -289,9 +291,42 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
             />
             <div className="flex h-11 shrink-0 items-center gap-2 border-b border-edge px-4 dark:border-edge">
               <FolderOpen className="size-4 shrink-0 text-fg-muted" aria-hidden />
-              <h2 className="min-w-0 flex-1 truncate text-base font-semibold leading-tight tracking-tight text-fg">
-                {m.workspace.title}
-              </h2>
+              {fileSearchOpen ? (
+                <input
+                  type="search"
+                  value={fileSearchQuery}
+                  onChange={(event) => setFileSearchQuery(event.target.value)}
+                  placeholder={m.workspace.searchPlaceholder}
+                  aria-label={m.workspace.searchPlaceholder}
+                  autoFocus
+                  className="h-8 min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
+                />
+              ) : (
+                <h2 className="min-w-0 flex-1 truncate text-base font-semibold leading-tight tracking-tight text-fg">
+                  {m.workspace.title}
+                </h2>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                className="size-9 shrink-0 rounded-md p-0"
+                aria-label={fileSearchOpen ? m.workspace.clearSearch : m.workspace.search}
+                title={fileSearchOpen ? m.workspace.clearSearch : m.workspace.search}
+                onClick={() => {
+                  if (fileSearchOpen) {
+                    setFileSearchQuery('');
+                    setFileSearchOpen(false);
+                    return;
+                  }
+                  setFileSearchOpen(true);
+                }}
+              >
+                {fileSearchOpen ? (
+                  <X className="size-4" strokeWidth={1.75} />
+                ) : (
+                  <Search className="size-4" strokeWidth={1.75} />
+                )}
+              </Button>
               <RefreshButton
                 className="size-9 shrink-0 rounded-md p-0"
                 loading={loading}
@@ -337,6 +372,8 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
                   : {}),
               }}
               emptyHint={m.workspace.emptyDir}
+              searchQuery={fileSearchQuery}
+              emptySearchHint={m.workspace.noSearchResults}
             />
           </div>
         ) : null}

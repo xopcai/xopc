@@ -78,6 +78,53 @@ export async function installConnector(
   return installConnectorDefinition(config, definition, input, resolver);
 }
 
+export function updateConnectorConfig(
+  config: Config,
+  instanceId: string,
+  input: ConnectorInstallInput,
+): ConnectorInstance {
+  const existingServer = config.mcp?.servers?.[instanceId];
+  if (!existingServer || !isManagedConnectorServer(existingServer)) {
+    throw new Error(`MCP server "${instanceId}" is not managed by Connectors.`);
+  }
+  const definition = getConnectorDefinition(existingServer.xopcConnector.connectorId);
+  if (!definition) {
+    throw new Error(`Unknown connector: ${existingServer.xopcConnector.connectorId}`);
+  }
+  if (definition.runtime.type !== 'mcp') {
+    throw new Error(`Connector type "${definition.runtime.type}" does not support config updates.`);
+  }
+  if ((definition.setup.secrets ?? []).length > 0) {
+    throw new Error('Connectors with secrets must be reinstalled to change configuration.');
+  }
+
+  const { serverId, server } = materializeConnectorMcpServer(definition, input);
+  if (serverId !== instanceId) {
+    throw new Error(`Connector config update cannot change server id from "${instanceId}" to "${serverId}".`);
+  }
+
+  config.mcp = config.mcp ?? {};
+  config.mcp.servers = {
+    ...(config.mcp.servers ?? {}),
+    [serverId]: {
+      ...server,
+      xopcConnector: {
+        ...existingServer.xopcConnector,
+        ...(server.xopcConnector as Record<string, unknown>),
+        enabled: existingServer.xopcConnector.enabled,
+        lastConnectedAt: existingServer.xopcConnector.lastConnectedAt,
+        lastError: existingServer.xopcConnector.lastError,
+      },
+    },
+  };
+
+  const instance = listConnectorInstances(config).find((candidate) => candidate.instanceId === serverId);
+  if (!instance) {
+    throw new Error(`Connector "${definition.id}" was updated but could not be resolved.`);
+  }
+  return instance;
+}
+
 export function uninstallConnector(config: Config, instanceId: string): ConnectorInstance {
   const server = config.mcp?.servers?.[instanceId];
   const connectorRecord = config.connectors?.instances?.[instanceId];

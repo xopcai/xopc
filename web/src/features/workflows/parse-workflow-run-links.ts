@@ -5,6 +5,7 @@ export const WORKFLOW_RUN_LINK_CONTEXT_KIND = 'workflow-run-link';
 export interface WorkflowRunLinkEntry {
   id: string;
   runId: string;
+  ownerAgentId?: string;
   workflowSessionKey: string;
   definitionId: string;
   goal: string;
@@ -26,6 +27,7 @@ function readContextRow(row: unknown): WorkflowRunLinkEntry | null {
   const runId = typeof data.runId === 'string' ? data.runId.trim() : '';
   const workflowSessionKey =
     typeof data.workflowSessionKey === 'string' ? data.workflowSessionKey.trim() : '';
+  const ownerAgentId = typeof data.ownerAgentId === 'string' ? data.ownerAgentId.trim() : '';
   const definitionId = typeof data.definitionId === 'string' ? data.definitionId.trim() : '';
   if (!runId || !workflowSessionKey || !definitionId) return null;
 
@@ -42,6 +44,7 @@ function readContextRow(row: unknown): WorkflowRunLinkEntry | null {
   return {
     id,
     runId,
+    ownerAgentId: ownerAgentId || undefined,
     workflowSessionKey,
     definitionId,
     goal,
@@ -57,7 +60,15 @@ export function parseWorkflowRunLinksFromTranscriptRows(rows: unknown[] | undefi
   for (const row of rows) {
     const parsed = readContextRow(row);
     if (!parsed) continue;
-    byRunId.set(parsed.runId, parsed);
+    const previous = byRunId.get(parsed.runId);
+    byRunId.set(parsed.runId, {
+      ...previous,
+      ...parsed,
+      ownerAgentId: parsed.ownerAgentId ?? previous?.ownerAgentId,
+      workflowSessionKey: parsed.workflowSessionKey || previous?.workflowSessionKey || '',
+      definitionId: parsed.definitionId || previous?.definitionId || '',
+      goal: parsed.goal || previous?.goal || '',
+    });
   }
   return [...byRunId.values()].toSorted(
     (a, b) => (a.createdAtMs ?? 0) - (b.createdAtMs ?? 0),

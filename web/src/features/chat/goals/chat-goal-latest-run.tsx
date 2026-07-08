@@ -33,12 +33,6 @@ type Props = {
   t: GoalMessages;
 };
 
-type GoalMessagesWithRunCopy = GoalMessages & {
-  latestRunTitle?: string;
-  nextStepContinue?: string;
-  nextStepStop?: string;
-};
-
 export function GoalLatestRun({ sessionKey, goal, language, t }: Props) {
   const { data: runs, loading } = useAsyncResource(
     async () => {
@@ -51,12 +45,11 @@ export function GoalLatestRun({ sessionKey, goal, language, t }: Props) {
 
   const run = runs[0];
   if (!run && !loading) return null;
-  const copy = t as GoalMessagesWithRunCopy;
 
   return (
     <section className="rounded-xl border border-edge/70 bg-surface-panel px-2.5 py-2 text-xs">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-[10px] text-fg-muted">
-        <span className="font-medium uppercase tracking-wide">{copy.latestRunTitle ?? t.runHistory}</span>
+        <span className="font-medium uppercase tracking-wide">{t.latestRunTitle}</span>
         {run ? (
           <time suppressHydrationWarning dateTime={new Date(run.at).toISOString()}>
             {formatGoalRunAt(run.at, language)}
@@ -87,7 +80,7 @@ export function GoalLatestRun({ sessionKey, goal, language, t }: Props) {
             {run.reason ? <p className="mt-1 line-clamp-2 break-words text-fg-muted">{run.reason}</p> : null}
           </div>
           <div className="text-[10px] text-accent sm:text-right">
-            {run.willContinue ? (copy.nextStepContinue ?? t.runHistoryContinue) : (copy.nextStepStop ?? t.runHistoryStop)}
+            {run.willContinue ? t.nextStepContinue : t.nextStepStop}
           </div>
         </div>
       ) : (
