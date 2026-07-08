@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -10,6 +10,7 @@ import { ProjectService } from '../../../../projects/index.js';
 import {
   closeXopcDatabase,
   ensureSessionRecord,
+  getSqliteDatabase,
   listMemoryRecords,
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
@@ -295,6 +296,236 @@ describe('project association routes', () => {
     expect(body.overview.recommendedAction).toBe('Wire the overview into the project page.');
   });
 
+  it('creates and lists first-class project work items', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Workbench Project' });
+    const app = registerProjectRouteApp({ projects });
+
+    const create = await app.request(`/api/projects/${project.id}/work-items`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        title: 'Ship login',
+        description: 'Build the project login flow',
+        priority: 'high',
+        status: 'todo',
+      }),
+    });
+    expect(create.status).toBe(201);
+    const created = await create.json() as { ok: boolean; item: Record<string, unknown> };
+    expect(created.ok).toBe(true);
+    expect(created.item).toMatchObject({
+      title: 'Ship login',
+      description: 'Build the project login flow',
+      priority: 'high',
+      status: 'todo',
+      projectId: project.id,
+    });
+
+    const res = await app.request(`/api/projects/${project.id}/work-items?sortBy=createdAt&sortOrder=asc`);
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { ok: boolean; items: Array<Record<string, unknown>>; total: number };
+    expect(body.ok).toBe(true);
+    expect(body.total).toBe(1);
+    expect(body.items).toEqual([expect.objectContaining({
+      id: created.item.id,
+      title: 'Ship login',
+      priority: 'high',
+      status: 'todo',
+    })]);
+  });
+
+  it('paginates project work items beyond the source page size', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Large Workbench Project' });
+    for (let index = 0; index < 520; index++) {
+      getSqliteDatabase().prepare(
+        `INSERT INTO work_items (id, project_id, title, status, priority, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ).run(`wi-${index}`, project.id, `Large work item ${String(index).padStart(3, '0')}`, 'todo', 'normal', index, index);
+    }
+    const app = registerProjectRouteApp({ projects });
+
+    const first = await app.request(`/api/projects/${project.id}/work-items?sortBy=createdAt&sortOrder=asc&limit=20`);
+    const firstBody = await first.json() as { ok: boolean; total: number; items: Array<Record<string, unknown>>; hasMore: boolean };
+    expect(first.status).toBe(200);
+    expect(firstBody.ok).toBe(true);
+    expect(firstBody.total).toBe(520);
+    expect(firstBody.items).toHaveLength(20);
+    expect(firstBody.hasMore).toBe(true);
+
+    const afterSourcePage = await app.request(`/api/projects/${project.id}/work-items?sortBy=createdAt&sortOrder=asc&limit=20&offset=500`);
+    const afterBody = await afterSourcePage.json() as { ok: boolean; total: number; items: Array<Record<string, unknown>>; hasMore: boolean };
+    expect(afterSourcePage.status).toBe(200);
+    expect(afterBody.ok).toBe(true);
+    expect(afterBody.total).toBe(520);
+    expect(afterBody.items).toHaveLength(20);
+    expect(afterBody.hasMore).toBe(false);
+  });
+
+  it('updates work item status and writes an event', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Status Project' });
+    const app = registerProjectRouteApp({ projects });
+    const create = await app.request(`/api/projects/${project.id}/work-items`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Review implementation' }),
+    });
+    const created = await create.json() as { item: { id: string } };
+
+    const res = await app.request(`/api/work-items/${created.item.id}`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ status: 'in_review', priority: 'urgent', dueAt: 1783324340003 }),
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { ok: boolean; item: Record<string, unknown> };
+    expect(body.ok).toBe(true);
+    expect(body.item).toMatchObject({
+      id: created.item.id,
+      status: 'in_review',
+      priority: 'urgent',
+      dueAt: 1783324340003,
+    });
+
+    const list = await app.request(`/api/projects/${project.id}/work-items?status=in_review`);
+    const listBody = await list.json() as { items: Array<Record<string, unknown>> };
+    expect(listBody.items).toEqual([expect.objectContaining({ id: created.item.id, status: 'in_review' })]);
+
+    const events = await app.request(`/api/work-items/${created.item.id}/events`);
+    const eventsBody = await events.json() as { ok: boolean; events: Array<Record<string, unknown>> };
+    expect(eventsBody.ok).toBe(true);
+    expect(eventsBody.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'status_changed' }),
+    ]));
+  });
+
+  it('creates and applies a work item update suggestion', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Suggestion Project' });
+    const app = registerProjectRouteApp({ projects });
+    const create = await app.request(`/api/projects/${project.id}/work-items`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Keep work item updated', status: 'in_progress' }),
+    });
+    const created = await create.json() as { item: { id: string } };
+
+    const suggest = await app.request(`/api/work-items/${created.item.id}/update-suggestions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sourceKind: 'chat',
+        sourceId: 'agent:main:webchat:default:direct:s1',
+        patch: {
+          status: 'in_review',
+          nextAction: 'Ask the user to verify the result.',
+        },
+        progressNote: 'Implemented the first pass and verified the build.',
+      }),
+    });
+
+    expect(suggest.status).toBe(201);
+    const suggested = await suggest.json() as { ok: boolean; suggestion: { id: string; status: string } };
+    expect(suggested.ok).toBe(true);
+    expect(suggested.suggestion.status).toBe('pending');
+
+    const apply = await app.request(`/api/work-item-update-suggestions/${suggested.suggestion.id}/apply`, {
+      method: 'POST',
+    });
+
+    expect(apply.status).toBe(200);
+    const applied = await apply.json() as { ok: boolean; item: Record<string, unknown>; suggestion: Record<string, unknown> };
+    expect(applied.ok).toBe(true);
+    expect(applied.item).toMatchObject({
+      id: created.item.id,
+      status: 'in_review',
+      nextAction: 'Ask the user to verify the result.',
+    });
+    expect(applied.suggestion).toMatchObject({ id: suggested.suggestion.id, status: 'applied' });
+
+    const events = await app.request(`/api/work-items/${created.item.id}/events`);
+    const eventsBody = await events.json() as { events: Array<Record<string, unknown>> };
+    expect(eventsBody.events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'progress_note_added' }),
+      expect.objectContaining({ type: 'update_suggestion_applied' }),
+    ]));
+  });
+
+  it('starts a chat from a work item and links it back', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Chat Work Item Project', defaultAgentId: 'coder' });
+    const app = registerProjectRouteApp({
+      projects,
+      currentConfig: {
+        agents: {
+          default: 'main',
+          list: [{ id: 'main', enabled: true }, { id: 'coder', enabled: true }],
+        },
+      },
+      sessionIndexInstance: {
+        saveMessages: vi.fn(async (sessionKey: string) => {
+          ensureSessionRecord(sessionKey, process.cwd());
+        }),
+      } as unknown as GatewayService['sessionIndexInstance'],
+      sessions: {
+        getSession: vi.fn(async (key: string) => ({ key, name: 'Work item chat', status: 'active', projectId: project.id })),
+      } as unknown as GatewayService['sessions'],
+    });
+    const create = await app.request(`/api/projects/${project.id}/work-items`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Investigate issue' }),
+    });
+    const created = await create.json() as { item: { id: string } };
+
+    const res = await app.request(`/api/work-items/${created.item.id}/start-chat`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(201);
+    const body = await res.json() as { ok: boolean; item: Record<string, unknown>; session: { key: string } };
+    expect(body.ok).toBe(true);
+    expect(body.item).toMatchObject({
+      id: created.item.id,
+      status: 'in_progress',
+    });
+    expect((body.item.links as Array<Record<string, unknown>>)).toEqual([
+      expect.objectContaining({ kind: 'chat', targetId: body.session.key }),
+    ]);
+  });
+
+  it('creates a goal from a work item and links it back', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Goal Work Item Project', defaultAgentId: 'coder' });
+    const app = registerProjectRouteApp({ projects });
+    const create = await app.request(`/api/projects/${project.id}/work-items`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: 'Implement review flow', priority: 'high' }),
+    });
+    const created = await create.json() as { item: { id: string } };
+
+    const res = await app.request(`/api/work-items/${created.item.id}/create-goal`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+
+    expect(res.status).toBe(201);
+    const body = await res.json() as { ok: boolean; item: Record<string, unknown>; goal: { id: string; title: string; projectId: string } };
+    expect(body.ok).toBe(true);
+    expect(body.goal).toMatchObject({ title: 'Implement review flow', projectId: project.id });
+    expect((body.item.links as Array<Record<string, unknown>>)).toEqual([
+      expect.objectContaining({ kind: 'goal', targetId: body.goal.id }),
+    ]);
+  });
+
   it('updates a stable project digest memory record instead of creating duplicates', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Digest Project', brief: 'Keep a stable digest' });
@@ -335,8 +566,13 @@ describe('project association routes', () => {
     const workspaceRoot = join(stateDir, 'workspace');
     mkdirSync(join(workspaceRoot, 'src'), { recursive: true });
     mkdirSync(join(workspaceRoot, '.git'), { recursive: true });
+    const outsideRoot = join(stateDir, 'outside');
+    mkdirSync(outsideRoot, { recursive: true });
     writeFileSync(join(workspaceRoot, 'README.md'), '# Project\n');
     writeFileSync(join(workspaceRoot, 'src', 'index.ts'), 'export {};\n');
+    writeFileSync(join(outsideRoot, 'secret.txt'), 'secret\n');
+    symlinkSync(join(outsideRoot, 'secret.txt'), join(workspaceRoot, 'escape.txt'));
+    const readmeRealPath = realpathSync(join(workspaceRoot, 'README.md'));
     const projects = new ProjectService();
     const project = projects.create({ name: 'Files Project', workspaceRoot });
     const app = registerProjectRouteApp({
@@ -376,5 +612,58 @@ describe('project association routes', () => {
     const outsideRes = await app.request(`/api/projects/${project.id}/files?path=..`);
     expect(outsideRes.status).toBe(400);
     expect(await outsideRes.json()).toEqual({ ok: false, error: 'Path is outside project workspace' });
+
+    const readRes = await app.request(`/api/projects/${project.id}/files/read?path=README.md`);
+    expect(readRes.status).toBe(200);
+    const readBody = (await readRes.json()) as {
+      ok: true;
+      payload: { content: string; path: string; absolutePath: string; mtimeMs: number };
+    };
+    expect(readBody.payload.content).toBe('# Project\n');
+    expect(readBody.payload.path).toBe('README.md');
+    expect(readBody.payload.absolutePath).toBe(readmeRealPath);
+    expect(typeof readBody.payload.mtimeMs).toBe('number');
+
+    const rawRes = await app.request(`/api/projects/${project.id}/files/raw?path=README.md`);
+    expect(rawRes.status).toBe(200);
+    expect(rawRes.headers.get('content-type')).toContain('text/markdown');
+    expect(await rawRes.text()).toBe('# Project\n');
+
+    const resolveRes = await app.request(`/api/projects/${project.id}/files/resolve-reference?path=README.md`);
+    expect(resolveRes.status).toBe(200);
+    const resolveBody = (await resolveRes.json()) as {
+      ok: true;
+      payload: { exists: boolean; absolutePath: string; workspaceRelativePath: string; capabilities: string[] };
+    };
+    expect(resolveBody.payload.exists).toBe(true);
+    expect(resolveBody.payload.absolutePath).toBe(readmeRealPath);
+    expect(resolveBody.payload.workspaceRelativePath).toBe('README.md');
+    expect(resolveBody.payload.capabilities).toContain('preview');
+
+    const writeRes = await app.request(`/api/projects/${project.id}/files/write`, {
+      method: 'PUT',
+      body: JSON.stringify({ path: 'README.md', content: '# Updated\n' }),
+    });
+    expect(writeRes.status).toBe(200);
+    expect(readFileSync(join(workspaceRoot, 'README.md'), 'utf-8')).toBe('# Updated\n');
+
+    const outsideReadRes = await app.request(`/api/projects/${project.id}/files/read?path=..`);
+    expect(outsideReadRes.status).toBe(400);
+
+    const symlinkReadRes = await app.request(`/api/projects/${project.id}/files/read?path=escape.txt`);
+    expect(symlinkReadRes.status).toBe(400);
+
+    const symlinkRawRes = await app.request(`/api/projects/${project.id}/files/raw?path=escape.txt`);
+    expect(symlinkRawRes.status).toBe(400);
+
+    const symlinkResolveRes = await app.request(`/api/projects/${project.id}/files/resolve-reference?path=escape.txt`);
+    expect(symlinkResolveRes.status).toBe(400);
+
+    const symlinkWriteRes = await app.request(`/api/projects/${project.id}/files/write`, {
+      method: 'PUT',
+      body: JSON.stringify({ path: 'escape.txt', content: 'overwritten\n' }),
+    });
+    expect(symlinkWriteRes.status).toBe(400);
+    expect(readFileSync(join(outsideRoot, 'secret.txt'), 'utf-8')).toBe('secret\n');
   });
 });

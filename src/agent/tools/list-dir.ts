@@ -16,6 +16,8 @@ export function createListDirTool(workspace: string): AgentTool {
     description: 'List the contents of a directory. Relative paths are under the current agent workspace.',
     parameters: ListDirSchema,
     label: '📁 List Directory',
+    supportsParallel: true,
+    idempotent: true,
 
     async execute(
       _toolCallId: string,

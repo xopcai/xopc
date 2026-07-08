@@ -168,8 +168,8 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'connectors') return '/connectors';
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
   if (tab === 'settingsAgentBrowser') return '/settings/agent-browser';
-  if (tab === 'settingsProviders') return '/settings/credentials?tab=providers';
-  if (tab === 'settingsModels') return '/settings/credentials?tab=catalog';
+  if (tab === 'settingsProviders') return '/settings/credentials?tab=services';
+  if (tab === 'settingsModels') return '/settings/credentials?tab=services';
   if (tab === 'settingsImageModels') return '/settings/credentials?tab=image-models';
   if (tab === 'settingsVoice') return '/settings/credentials?tab=voice';
   if (tab === 'settingsSearch') return '/settings/credentials?tab=search';

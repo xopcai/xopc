@@ -24,18 +24,22 @@ import type { WorkspaceEditorRequestOptions } from '@/features/workspace/workspa
 import { isElectron } from '@/lib/electron-env';
 
 function useWorkspacePreviewReadOpts({
+  projectId,
   sessionKey,
   agentId,
 }: {
+  projectId?: string;
   sessionKey?: string;
   agentId?: string;
 }): WorkspaceEditorRequestOptions | undefined {
   return useMemo(() => {
+    const pid = projectId?.trim();
+    if (pid) return { projectId: pid };
     const sk = sessionKey?.trim();
     if (sk) return { sessionKey: sk };
     const aid = agentId?.trim();
     return aid ? { agentId: aid } : undefined;
-  }, [sessionKey, agentId]);
+  }, [agentId, projectId, sessionKey]);
 }
 
 type WorkspacePreviewLoadState = PreviewLoadedSource & {
@@ -132,14 +136,16 @@ function editorReducer(state: EditorUiState, action: { type: 'reset' } | { type:
 
 export function useWorkspacePreviewState({
   filePath,
+  projectId,
   sessionKey,
   agentId,
 }: {
   filePath: string | null;
+  projectId?: string;
   sessionKey?: string;
   agentId?: string;
 }) {
-  const readOpts = useWorkspacePreviewReadOpts({ sessionKey, agentId });
+  const readOpts = useWorkspacePreviewReadOpts({ projectId, sessionKey, agentId });
   const descriptor = useMemo((): PreviewFileDescriptor => {
     const fileName = filePath ? getPreviewFileName(filePath) : '';
     const mimeType = inferPreviewMimeType(fileName, inferMimeTypeFromFileName(fileName));
@@ -279,7 +285,7 @@ export function useWorkspacePreviewState({
       if (saveStatusClearRef.current !== undefined) clearTimeout(saveStatusClearRef.current);
       dispatchEditorUi({ type: 'saveStatus', value: 'saving' });
       try {
-        const { mtimeMs } = await writeWorkspaceFile(filePath, next, agentId?.trim() ? { agentId: agentId.trim() } : undefined);
+        const { mtimeMs } = await writeWorkspaceFile(filePath, next, readOpts);
         if (typeof mtimeMs === 'number') dispatchPreview({ type: 'patchMtime', mtimeMs });
         dispatchEditorUi({ type: 'saveStatus', value: 'saved' });
         saveStatusClearRef.current = setTimeout(() => dispatchEditorUi({ type: 'saveStatus', value: 'idle' }), 2000);
@@ -287,7 +293,7 @@ export function useWorkspacePreviewState({
         dispatchEditorUi({ type: 'saveStatus', value: 'idle' });
       }
     },
-    [agentId, filePath],
+    [filePath, readOpts],
   );
 
   const debouncedHtmlSave = useDebouncedCallback((value: string) => void onSaveMarkdown(value), 500);

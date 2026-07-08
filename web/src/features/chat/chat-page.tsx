@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FileText } from 'lucide-react';
+import { BriefcaseBusiness, ChevronDown, FileText, Target } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
@@ -28,6 +28,15 @@ import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-wor
 import { useWorkflowRunLive } from '@/features/workflows/use-workflow-run-live';
 import { useWorkflowSessionMetadata } from '@/features/workflows/use-workflow-session-metadata';
 import { appendNoteContent, createTaskNote, getNote } from '@/features/notes/notes-api';
+import {
+  applyWorkItemUpdateSuggestion,
+  createWorkItemUpdateSuggestion,
+  dismissWorkItemUpdateSuggestion,
+  fetchWorkItem,
+  type WorkItem,
+  type WorkItemStatus,
+  type WorkItemUpdateSuggestion,
+} from '@/features/work-items/api';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { AgentRunErrorBanner } from '@/features/chat/messages/agent-run-error-banner';
 import { agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
@@ -45,6 +54,79 @@ type SourceNoteSaveDraft = {
   content: string;
 };
 
+type WorkItemUpdateDraft = {
+  statusEnabled: boolean;
+  status: WorkItemStatus | '';
+  nextActionEnabled: boolean;
+  nextAction: string;
+  blockedReasonEnabled: boolean;
+  blockedReason: string;
+  progressNoteEnabled: boolean;
+  progressNote: string;
+  rationale: string;
+  suggestion?: WorkItemUpdateSuggestion;
+};
+
+const WORK_ITEM_STATUS_OPTIONS: WorkItemStatus[] = [
+  'backlog',
+  'todo',
+  'in_progress',
+  'blocked',
+  'needs_input',
+  'in_review',
+  'done',
+  'cancelled',
+];
+
+function compactAssistantText(content: string, max = 1400): string {
+  return content
+    .replace(/```[\s\S]*?```/g, (block) => block.slice(0, 400))
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, max)
+    .trim();
+}
+
+function extractLineAfterLabel(text: string, labels: string[]): string {
+  const lines = text.split(/\r?\n/).map((line) => line.replace(/^[-*#>\s]+/, '').trim());
+  for (const line of lines) {
+    for (const label of labels) {
+      const pattern = new RegExp(`^${label}\\s*[:：-]\\s*(.+)$`, 'i');
+      const match = line.match(pattern);
+      if (match?.[1]?.trim()) return match[1].trim();
+    }
+  }
+  return '';
+}
+
+function inferSuggestedStatus(text: string): WorkItemStatus | '' {
+  const lower = text.toLowerCase();
+  if (/needs?\s+(user\s+)?input|需要.*(确认|输入|反馈)/i.test(text)) return 'needs_input';
+  if (/blocked|blocker|无法继续|阻塞|卡住/i.test(text)) return 'blocked';
+  if (/ready\s+for\s+review|in\s+review|等待.*(检查|验收|review)|待验收/i.test(text)) return 'in_review';
+  if (/done|completed|已完成|完成了/i.test(text)) return 'in_review';
+  if (lower.includes('next step') || text.includes('下一步')) return 'in_progress';
+  return '';
+}
+
+function buildWorkItemUpdateDraft(content: string): WorkItemUpdateDraft {
+  const progressNote = compactAssistantText(content);
+  const nextAction = extractLineAfterLabel(content, ['next action', 'next step', '下一步', '后续动作']);
+  const blockedReason = extractLineAfterLabel(content, ['blocked reason', 'blocker', '阻塞', '阻塞原因']);
+  const status = inferSuggestedStatus(content);
+  return {
+    statusEnabled: Boolean(status),
+    status,
+    nextActionEnabled: Boolean(nextAction),
+    nextAction,
+    blockedReasonEnabled: Boolean(blockedReason),
+    blockedReason,
+    progressNoteEnabled: Boolean(progressNote),
+    progressNote,
+    rationale: '',
+  };
+}
+
 export function ChatPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -60,6 +142,10 @@ export function ChatPage() {
   const pendingSourceNoteSaveRef = useRef<PendingSourceNoteSave | null>(null);
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
   const [sourceNoteLoadedTitle, setSourceNoteLoadedTitle] = useState<string | null>(null);
+  const [sourceWorkItem, setSourceWorkItem] = useState<WorkItem | null>(null);
+  const [workItemContextExpanded, setWorkItemContextExpanded] = useState(false);
+  const [workItemUpdateDraft, setWorkItemUpdateDraft] = useState<WorkItemUpdateDraft | null>(null);
+  const [workItemUpdateSubmitting, setWorkItemUpdateSubmitting] = useState(false);
   const [sourceNoteSaveDraft, setSourceNoteSaveDraft] = useState<SourceNoteSaveDraft | null>(null);
   const [sourceNoteSaveSubmitting, setSourceNoteSaveSubmitting] = useState(false);
 
@@ -71,7 +157,8 @@ export function ChatPage() {
   const chatSessionKey = session.decodedKey ?? session.sessionKey;
   const { data: workflowMeta } = useWorkflowSessionMetadata(chatSessionKey);
   const workflowRunId = workflowMeta?.workflowRunId ?? null;
-  const { view: workflowRunView } = useWorkflowRunLive(workflowRunId);
+  const workflowOwnerAgentId = workflowMeta?.ownerAgentId ?? undefined;
+  const { view: workflowRunView } = useWorkflowRunLive(workflowRunId, { ownerAgentId: workflowOwnerAgentId });
   const { data: workflowRunLinks = [], mutate: refreshWorkflowRunLinks } =
     useSessionWorkflowRunLinks(chatSessionKey);
   const showWorkflowLiveBanner = Boolean(
@@ -387,6 +474,7 @@ export function ChatPage() {
   ]);
 
   const sourceNoteId = workflowMeta?.sourceNoteId ?? null;
+  const sourceWorkItemId = workflowMeta?.sourceWorkItemId ?? null;
   useEffect(() => {
     let cancelled = false;
     setSourceNoteLoadedTitle(null);
@@ -403,6 +491,23 @@ export function ChatPage() {
       cancelled = true;
     };
   }, [sourceNoteId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setSourceWorkItem(null);
+    setWorkItemContextExpanded(false);
+    if (!sourceWorkItemId) return undefined;
+    void fetchWorkItem(sourceWorkItemId)
+      .then((result) => {
+        if (!cancelled) setSourceWorkItem(result.item);
+      })
+      .catch(() => {
+        if (!cancelled) setSourceWorkItem(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceWorkItemId]);
 
   const sourceNoteTitle =
     sourceNoteLoadedTitle || workflowMeta?.sourceNoteTitle || m.chat.sourceNoteFallbackTitle;
@@ -562,6 +667,78 @@ export function ChatPage() {
     stream,
   ]);
 
+  const sendWorkItemPrompt = useCallback((prompt: string) => {
+    if (stream.streaming || stream.sending) {
+      void followUp.addPendingFollowUp(prompt);
+      return;
+    }
+    void stream.sendMessage(prompt);
+  }, [followUp, stream]);
+
+  const handleSummarizeWorkItemProgress = useCallback(() => {
+    if (!sourceWorkItem) return;
+    sendWorkItemPrompt(m.chat.workItemSummarizePrompt.replace('{{title}}', sourceWorkItem.title));
+  }, [m.chat.workItemSummarizePrompt, sendWorkItemPrompt, sourceWorkItem]);
+
+  const handlePlanWorkItemNextStep = useCallback(() => {
+    if (!sourceWorkItem) return;
+    sendWorkItemPrompt(m.chat.workItemNextStepPrompt.replace('{{title}}', sourceWorkItem.title));
+  }, [m.chat.workItemNextStepPrompt, sendWorkItemPrompt, sourceWorkItem]);
+
+  const handleSuggestWorkItemUpdate = useCallback(
+    async (content: string) => {
+      if (!sourceWorkItem || !chatSessionKey) return;
+      setWorkItemUpdateDraft(buildWorkItemUpdateDraft(content));
+    },
+    [chatSessionKey, sourceWorkItem],
+  );
+
+  const closeWorkItemUpdateDialog = useCallback(() => {
+    const suggestion = workItemUpdateDraft?.suggestion;
+    if (suggestion?.status === 'pending') {
+      void dismissWorkItemUpdateSuggestion(suggestion.id).catch(() => undefined);
+    }
+    setWorkItemUpdateDraft(null);
+    setWorkItemUpdateSubmitting(false);
+  }, [workItemUpdateDraft?.suggestion]);
+
+  const handleApplyWorkItemUpdate = useCallback(async () => {
+    if (!sourceWorkItem || !chatSessionKey || !workItemUpdateDraft) return;
+    const patch = {
+      ...(workItemUpdateDraft.statusEnabled && workItemUpdateDraft.status ? { status: workItemUpdateDraft.status } : {}),
+      ...(workItemUpdateDraft.nextActionEnabled ? { nextAction: workItemUpdateDraft.nextAction.trim() || null } : {}),
+      ...(workItemUpdateDraft.blockedReasonEnabled ? { blockedReason: workItemUpdateDraft.blockedReason.trim() || null } : {}),
+    };
+    const progressNote = workItemUpdateDraft.progressNoteEnabled
+      ? workItemUpdateDraft.progressNote.trim()
+      : '';
+    if (Object.keys(patch).length === 0 && !progressNote) return;
+
+    setWorkItemUpdateSubmitting(true);
+    try {
+      const existing = workItemUpdateDraft.suggestion;
+      const suggestion = existing ?? (await createWorkItemUpdateSuggestion(sourceWorkItem.id, {
+        sourceKind: 'chat',
+        sourceId: chatSessionKey,
+        patch,
+        progressNote: progressNote || undefined,
+        rationale: workItemUpdateDraft.rationale.trim() || undefined,
+      })).suggestion;
+      const result = await applyWorkItemUpdateSuggestion(suggestion.id);
+      setSourceWorkItem(result.item);
+      setWorkItemUpdateDraft(null);
+      showToast({ type: 'success', title: m.chat.workItemUpdateApplied });
+    } catch (err) {
+      showToast({
+        type: 'error',
+        title: m.chat.workItemUpdateFailed,
+        message: err instanceof Error ? err.message : undefined,
+      });
+    } finally {
+      setWorkItemUpdateSubmitting(false);
+    }
+  }, [chatSessionKey, m.chat.workItemUpdateApplied, m.chat.workItemUpdateFailed, sourceWorkItem, workItemUpdateDraft]);
+
   if (!auth.hasToken) {
     return (
       <div className="mx-auto w-full max-w-[var(--max-width-chat)] px-3 py-16 text-center text-sm leading-relaxed text-fg-muted sm:px-5">
@@ -621,6 +798,94 @@ export function ChatPage() {
             </div>
           </div>
         ) : null}
+        {sourceWorkItem ? (
+          <div className="shrink-0 border-b border-edge-subtle bg-surface-panel/90 px-3 py-1.5 sm:px-5 xl:px-6">
+            <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
+              <button
+                type="button"
+                className="flex min-w-0 items-center gap-2 text-left"
+                onClick={() => setWorkItemContextExpanded((open) => !open)}
+                aria-expanded={workItemContextExpanded}
+              >
+                <BriefcaseBusiness className="size-3.5 shrink-0 text-accent-fg" strokeWidth={1.75} aria-hidden />
+                <span className="min-w-0 truncate">
+                  {m.chat.workItemBanner.replace('{{title}}', sourceWorkItem.title)}
+                </span>
+                <span className="shrink-0 rounded-full bg-surface-muted px-1.5 py-0.5 text-[11px] text-fg-muted">
+                  {sourceWorkItem.status.replace(/_/g, ' ')}
+                </span>
+                <ChevronDown
+                  className={cn('size-3.5 shrink-0 transition-transform', workItemContextExpanded ? 'rotate-180' : '')}
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-edge-subtle px-2 font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+                  onClick={handlePlanWorkItemNextStep}
+                >
+                  <Target className="size-3.5" strokeWidth={1.75} aria-hidden />
+                  <span>{m.chat.workItemNextStepAction}</span>
+                </button>
+                <button
+                  type="button"
+                  className="inline-flex h-7 items-center gap-1.5 rounded-md border border-edge-subtle px-2 font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent"
+                  onClick={handleSummarizeWorkItemProgress}
+                >
+                  <FileText className="size-3.5" strokeWidth={1.75} aria-hidden />
+                  <span>{m.chat.workItemSummarizeAction}</span>
+                </button>
+                <Link
+                  to={`/work-items/${encodeURIComponent(sourceWorkItem.id)}`}
+                  className="font-medium text-accent transition-colors hover:text-accent-fg"
+                >
+                  {m.chat.workItemOpenItem}
+                </Link>
+                <Link
+                  to={`/projects/${encodeURIComponent(sourceWorkItem.projectId)}/work-items`}
+                  className="font-medium text-fg-muted transition-colors hover:text-fg"
+                >
+                  {m.chat.workItemOpenProject}
+                </Link>
+              </div>
+            </div>
+            {workItemContextExpanded ? (
+              <div className="mt-2 grid gap-2 rounded-md border border-edge-subtle bg-surface-base px-3 py-2 text-xs leading-5 text-fg-muted sm:grid-cols-2">
+                <p className="min-w-0">
+                  <span className="font-medium text-fg">{m.chat.workItemPriorityLabel}: </span>
+                  {sourceWorkItem.priority}
+                </p>
+                <p className="min-w-0">
+                  <span className="font-medium text-fg">{m.chat.workItemUpdatedLabel}: </span>
+                  {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(sourceWorkItem.updatedAt))}
+                </p>
+                {sourceWorkItem.description ? (
+                  <p className="min-w-0 sm:col-span-2">
+                    <span className="font-medium text-fg">{m.chat.workItemDescriptionLabel}: </span>
+                    {sourceWorkItem.description}
+                  </p>
+                ) : null}
+                {sourceWorkItem.nextAction ? (
+                  <p className="min-w-0">
+                    <span className="font-medium text-fg">{m.chat.workItemNextActionLabel}: </span>
+                    {sourceWorkItem.nextAction}
+                  </p>
+                ) : null}
+                {sourceWorkItem.blockedReason ? (
+                  <p className="min-w-0">
+                    <span className="font-medium text-fg">{m.chat.workItemBlockedLabel}: </span>
+                    {sourceWorkItem.blockedReason}
+                  </p>
+                ) : null}
+                {!sourceWorkItem.description && !sourceWorkItem.nextAction && !sourceWorkItem.blockedReason ? (
+                  <p className="min-w-0 sm:col-span-2">{m.chat.workItemNoDetails}</p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {session.sessionKey && !session.showSessionLoading && !session.sessionRoutePending ? (
           <ChatGoalBanner
             sessionKey={session.sessionKey}
@@ -670,13 +935,6 @@ export function ChatPage() {
                       view={workflowRunView}
                       sessionKey={chatSessionKey}
                       onAbortCurrentTurn={stream.abort}
-                      onSendUserMessage={(text) => {
-                        if (stream.streaming || stream.sending) {
-                          void followUp.addPendingFollowUp(text);
-                        } else {
-                          void stream.sendMessage(text);
-                        }
-                      }}
                     />
                   ) : null}
                   {chatSessionKey ? (
@@ -702,21 +960,9 @@ export function ChatPage() {
                     onRetryUserMessageRound={stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}
                     onAbortCurrentTurn={stream.abort}
-                    onSendUserMessage={(text) => {
-                      // stream.sendMessage silently no-ops when the assistant
-                      // is still streaming/sending — so chat-card actions like
-                      // "save workflow" would vanish if the user clicked while
-                      // the post-tool synthesis was still being written. Route
-                      // through the pending-follow-up queue in that case; it
-                      // auto-flushes after the current turn settles.
-                      if (stream.streaming || stream.sending) {
-                        void followUp.addPendingFollowUp(text);
-                      } else {
-                        void stream.sendMessage(text);
-                      }
-                    }}
                     onSaveAssistantToSourceNote={sourceNoteId ? handleSaveAssistantToSourceNote : undefined}
                     onExtractAssistantTask={sourceNoteId ? handleExtractAssistantTask : undefined}
+                    onSuggestWorkItemUpdate={sourceWorkItem ? handleSuggestWorkItemUpdate : undefined}
                   />
                 </>
               )}
@@ -857,6 +1103,147 @@ export function ChatPage() {
         visible={!session.showSessionLoading && !atBottom}
         onClick={() => scrollToBottom(true)}
       />
+
+      <Dialog.Root
+        open={workItemUpdateDraft !== null}
+        onOpenChange={(open) => {
+          if (!open && !workItemUpdateSubmitting) closeWorkItemUpdateDialog();
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Content className="fixed right-0 top-0 z-[90] flex h-dvh w-[min(100%,32rem)] flex-col overflow-hidden border-l border-edge bg-surface-panel shadow-popover outline-none">
+            <div className="shrink-0 border-b border-edge-subtle px-5 py-4">
+              <Dialog.Title className="text-base font-semibold text-fg">
+                {m.chat.workItemUpdateDialogTitle}
+              </Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm text-fg-muted">
+                {sourceWorkItem
+                  ? m.chat.workItemUpdateDialogDescription.replace('{{title}}', sourceWorkItem.title)
+                  : m.chat.workItemUpdateDialogDescriptionFallback}
+              </Dialog.Description>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">
+              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4"
+                  checked={Boolean(workItemUpdateDraft?.statusEnabled)}
+                  onChange={(event) =>
+                    setWorkItemUpdateDraft((draft) => draft ? { ...draft, statusEnabled: event.target.checked } : draft)
+                  }
+                  disabled={workItemUpdateSubmitting}
+                />
+                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <span className="text-sm font-medium text-fg">{m.chat.workItemUpdateStatusLabel}</span>
+                  <select
+                    value={workItemUpdateDraft?.status ?? ''}
+                    onChange={(event) =>
+                      setWorkItemUpdateDraft((draft) => draft ? { ...draft, status: event.target.value as WorkItemStatus | '' } : draft)
+                    }
+                    disabled={workItemUpdateSubmitting || !workItemUpdateDraft?.statusEnabled}
+                    className="h-9 rounded-lg border border-edge bg-surface-panel px-2 text-sm text-fg outline-none focus:border-accent"
+                  >
+                    <option value="">{m.chat.workItemUpdateStatusUnchanged}</option>
+                    {WORK_ITEM_STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>
+                    ))}
+                  </select>
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4"
+                  checked={Boolean(workItemUpdateDraft?.nextActionEnabled)}
+                  onChange={(event) =>
+                    setWorkItemUpdateDraft((draft) => draft ? { ...draft, nextActionEnabled: event.target.checked } : draft)
+                  }
+                  disabled={workItemUpdateSubmitting}
+                />
+                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <span className="text-sm font-medium text-fg">{m.chat.workItemUpdateNextActionLabel}</span>
+                  <textarea
+                    value={workItemUpdateDraft?.nextAction ?? ''}
+                    onChange={(event) =>
+                      setWorkItemUpdateDraft((draft) => draft ? { ...draft, nextAction: event.target.value } : draft)
+                    }
+                    disabled={workItemUpdateSubmitting || !workItemUpdateDraft?.nextActionEnabled}
+                    className="min-h-20 resize-none rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm leading-6 text-fg outline-none focus:border-accent"
+                  />
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4"
+                  checked={Boolean(workItemUpdateDraft?.blockedReasonEnabled)}
+                  onChange={(event) =>
+                    setWorkItemUpdateDraft((draft) => draft ? { ...draft, blockedReasonEnabled: event.target.checked } : draft)
+                  }
+                  disabled={workItemUpdateSubmitting}
+                />
+                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <span className="text-sm font-medium text-fg">{m.chat.workItemUpdateBlockedReasonLabel}</span>
+                  <textarea
+                    value={workItemUpdateDraft?.blockedReason ?? ''}
+                    onChange={(event) =>
+                      setWorkItemUpdateDraft((draft) => draft ? { ...draft, blockedReason: event.target.value } : draft)
+                    }
+                    disabled={workItemUpdateSubmitting || !workItemUpdateDraft?.blockedReasonEnabled}
+                    className="min-h-20 resize-none rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm leading-6 text-fg outline-none focus:border-accent"
+                  />
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 rounded-lg border border-edge-subtle bg-surface-base px-3 py-3">
+                <input
+                  type="checkbox"
+                  className="mt-1 size-4"
+                  checked={Boolean(workItemUpdateDraft?.progressNoteEnabled)}
+                  onChange={(event) =>
+                    setWorkItemUpdateDraft((draft) => draft ? { ...draft, progressNoteEnabled: event.target.checked } : draft)
+                  }
+                  disabled={workItemUpdateSubmitting}
+                />
+                <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <span className="text-sm font-medium text-fg">{m.chat.workItemUpdateProgressNoteLabel}</span>
+                  <textarea
+                    value={workItemUpdateDraft?.progressNote ?? ''}
+                    onChange={(event) =>
+                      setWorkItemUpdateDraft((draft) => draft ? { ...draft, progressNote: event.target.value } : draft)
+                    }
+                    disabled={workItemUpdateSubmitting || !workItemUpdateDraft?.progressNoteEnabled}
+                    className="min-h-40 resize-none rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm leading-6 text-fg outline-none focus:border-accent"
+                  />
+                </span>
+              </label>
+            </div>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-edge-subtle px-5 py-4">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={closeWorkItemUpdateDialog}
+                disabled={workItemUpdateSubmitting}
+              >
+                {m.chat.workItemUpdateDialogCancel}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => void handleApplyWorkItemUpdate()}
+                disabled={workItemUpdateSubmitting}
+              >
+                {workItemUpdateSubmitting
+                  ? m.chat.workItemUpdateDialogApplying
+                  : m.chat.workItemUpdateDialogApply}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }

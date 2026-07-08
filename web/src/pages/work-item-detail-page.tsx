@@ -1,0 +1,306 @@
+import {
+  ArrowLeft,
+  BriefcaseBusiness,
+  CheckCircle2,
+  ExternalLink,
+  FileText,
+  MessageSquarePlus,
+  RefreshCw,
+  Target,
+} from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+
+import { Button } from '@/components/ui/button';
+import { fetchProject, type ProjectWithDetails } from '@/features/projects/api';
+import {
+  createWorkItemGoal,
+  fetchWorkItem,
+  fetchWorkItemEvents,
+  startWorkItemChat,
+  type WorkItem,
+  type WorkItemEvent,
+  type WorkItemStatus,
+} from '@/features/work-items/api';
+import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
+import { useLocaleStore } from '@/stores/locale-store';
+import { usePageHeaderStore } from '@/stores/page-header-store';
+
+type WorkItemsMessages = ReturnType<typeof messages>['projectDetailPage']['workItems'];
+
+function statusTone(status: WorkItemStatus): string {
+  if (status === 'done' || status === 'in_review') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
+  if (status === 'blocked' || status === 'needs_input') return 'bg-red-500/10 text-red-700 dark:text-red-300';
+  if (status === 'in_progress') return 'bg-accent-soft text-accent-fg';
+  if (status === 'backlog' || status === 'todo') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
+  return 'bg-surface-muted text-fg-subtle';
+}
+
+function formatTime(value?: number | string): string {
+  if (!value) return '';
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+}
+
+function linkHref(link: NonNullable<WorkItem['links']>[number]): string {
+  if (link.kind === 'chat') return `/chat/${encodeURIComponent(link.targetId)}`;
+  if (link.kind === 'goal') return `/goals/${encodeURIComponent(link.targetId)}`;
+  if (link.kind === 'workflow_run') return `/workflows?run=${encodeURIComponent(link.targetId)}`;
+  if (link.kind === 'automation') return `/automations?automationId=${encodeURIComponent(link.targetId)}`;
+  if (link.kind === 'note') return `/notes/${encodeURIComponent(link.targetId)}`;
+  return '#';
+}
+
+function MetaRow({ label, value }: { label: string; value?: string | null }) {
+  return (
+    <div className="grid gap-1">
+      <dt className="text-xs font-medium text-fg-subtle">{label}</dt>
+      <dd className="min-w-0 break-words text-sm text-fg">{value || '-'}</dd>
+    </div>
+  );
+}
+
+function ActivityList({ events, t }: { events: WorkItemEvent[]; t: WorkItemsMessages }) {
+  if (!events.length) {
+    return (
+      <div className="rounded-lg border border-dashed border-edge bg-surface-base px-4 py-8 text-center text-sm text-fg-muted">
+        {t.detail.noActivity}
+      </div>
+    );
+  }
+  return (
+    <div className="grid gap-3">
+      {events.map((event) => (
+        <article key={event.id} className="rounded-lg border border-edge bg-surface-panel px-4 py-3">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-medium text-fg">{t.eventTypes[event.type] ?? event.type}</h3>
+            <time className="shrink-0 text-xs text-fg-subtle">{formatTime(event.createdAt)}</time>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+export function WorkItemDetailPage() {
+  const { workItemId = '' } = useParams();
+  const navigate = useNavigate();
+  const language = useLocaleStore((s) => s.language);
+  const t = messages(language).projectDetailPage.workItems;
+  const [item, setItem] = useState<WorkItem | null>(null);
+  const [project, setProject] = useState<ProjectWithDetails | null>(null);
+  const [events, setEvents] = useState<WorkItemEvent[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+
+  const projectHref = useMemo(() => (
+    item ? `/projects/${encodeURIComponent(item.projectId)}/work-items` : '/projects'
+  ), [item]);
+
+  const load = useCallback(async () => {
+    if (!workItemId) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const [itemRes, eventsRes] = await Promise.all([
+        fetchWorkItem(workItemId),
+        fetchWorkItemEvents(workItemId).catch(() => ({ events: [] })),
+      ]);
+      setItem(itemRes.item);
+      setEvents(eventsRes.events);
+      const loadedProject = await fetchProject(itemRes.item.projectId).catch(() => null);
+      setProject(loadedProject);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  }, [workItemId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const handleStartChat = useCallback(async () => {
+    if (!item) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await startWorkItemChat(item.id);
+      setItem(res.item);
+      navigate(`/chat/${encodeURIComponent(res.session.key)}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [item, navigate]);
+
+  const handleCreateGoal = useCallback(async () => {
+    if (!item) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await createWorkItemGoal(item.id);
+      setItem(res.item);
+      navigate(`/goals/${encodeURIComponent(res.goal.id)}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [item, navigate]);
+
+  const headerEnd = useMemo(() => (
+    <>
+      <Button type="button" variant="ghost" className="h-8 rounded-lg px-2.5 text-xs" onClick={() => void load()}>
+        <RefreshCw className="size-3.5" aria-hidden />
+        <span className="hidden sm:inline">{t.refreshShort}</span>
+      </Button>
+      {item ? (
+        <>
+          <Button type="button" variant="secondary" className="h-8 rounded-lg px-2.5 text-xs" disabled={busy} onClick={handleStartChat}>
+            <MessageSquarePlus className="size-3.5" aria-hidden />
+            <span className="hidden md:inline">{t.detail.startChat}</span>
+          </Button>
+          <Button type="button" variant="secondary" className="h-8 rounded-lg px-2.5 text-xs" disabled={busy} onClick={handleCreateGoal}>
+            <Target className="size-3.5" aria-hidden />
+            <span className="hidden md:inline">{t.detail.createGoal}</span>
+          </Button>
+        </>
+      ) : null}
+    </>
+  ), [busy, handleCreateGoal, handleStartChat, item, load, t.detail.createGoal, t.detail.startChat, t.refreshShort]);
+
+  useLayoutEffect(() => {
+    setPageHeader({
+      startExtra: (
+        <Link
+          to={projectHref}
+          className="inline-flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg"
+          aria-label={project?.name ? t.detail.backToProject.replace('{{name}}', project.name) : t.detail.backToProjects}
+        >
+          <ArrowLeft className="size-4" aria-hidden />
+        </Link>
+      ),
+      main: (
+        <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-2">
+            <BriefcaseBusiness className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
+            <h1 className="truncate text-base font-semibold tracking-tight text-fg">
+              {item?.title ?? (loading ? t.detail.loading : t.detail.notFound)}
+            </h1>
+          </div>
+          {item ? (
+            <p className="truncate text-xs text-fg-muted">
+              {t.statuses[item.status]} · {t.priorities[item.priority]} · {project?.name || item.projectId} · {t.updated}: {formatTime(item.updatedAt)}
+            </p>
+          ) : null}
+        </div>
+      ),
+      end: headerEnd,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, headerEnd, item, loading, project?.name, projectHref, setPageHeader, t, project]);
+
+  if (loading) {
+    return (
+      <main className="mx-auto flex w-full max-w-[var(--max-width-app-main)] flex-1 flex-col px-3 py-6 sm:px-5 xl:px-6" aria-busy>
+        <div className="h-8 w-40 animate-pulse rounded-md bg-surface-hover" />
+        <div className="mt-5 h-44 animate-pulse rounded-xl bg-surface-hover" />
+      </main>
+    );
+  }
+
+  if (error || !item) {
+    return (
+      <main className="mx-auto flex w-full max-w-[var(--max-width-app-main)] flex-1 flex-col px-3 py-6 sm:px-5 xl:px-6">
+        <Link to="/projects" className="inline-flex items-center gap-1 text-sm font-medium text-accent hover:text-accent-fg">
+          <ArrowLeft className="size-4" aria-hidden />
+          {t.detail.backToProjects}
+        </Link>
+        <div className="mt-5 rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">
+          {error || t.detail.notFound}
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="mx-auto flex w-full max-w-[var(--max-width-app-main)] flex-1 flex-col px-3 py-5 sm:px-5 xl:px-6">
+      <section className="rounded-lg border border-edge bg-surface-panel px-4 py-4 sm:px-5">
+        <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex min-w-0 items-center gap-2">
+              <BriefcaseBusiness className="size-4 shrink-0 text-accent-fg" aria-hidden />
+              <h1 className="min-w-0 break-words text-lg font-semibold leading-7 text-fg">{item.title}</h1>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+              <span className={cn('rounded-full px-2 py-0.5 font-medium', statusTone(item.status))}>
+                {t.statuses[item.status]}
+              </span>
+              <span className="rounded-full bg-surface-muted px-2 py-0.5 text-fg-muted">
+                {t.priorities[item.priority]}
+              </span>
+              {item.archivedAt ? <span className="rounded-full bg-surface-muted px-2 py-0.5 text-fg-muted">{t.detail.archived}</span> : null}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button type="button" variant="secondary" className="h-8 rounded-lg px-2.5 text-xs" disabled={busy} onClick={handleStartChat}>
+              <MessageSquarePlus className="size-3.5" aria-hidden />
+              {t.detail.startChat}
+            </Button>
+            <Button type="button" variant="secondary" className="h-8 rounded-lg px-2.5 text-xs" disabled={busy} onClick={handleCreateGoal}>
+              <Target className="size-3.5" aria-hidden />
+              {t.detail.createGoal}
+            </Button>
+          </div>
+        </div>
+
+        <dl className="mt-5 grid gap-4 border-t border-edge pt-4 sm:grid-cols-2">
+          <MetaRow label={t.create.descriptionLabel} value={item.description || t.detail.noDescription} />
+          <MetaRow label={t.nextAction} value={item.nextAction || t.noNextAction} />
+          <MetaRow label={t.blockedReason} value={item.blockedReason || t.detail.noBlockedReason} />
+          <MetaRow label={t.updated} value={formatTime(item.updatedAt)} />
+        </dl>
+      </section>
+
+      <div className="mt-4 grid min-h-0 gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <section className="min-w-0">
+          <div className="mb-2 flex items-center gap-2">
+            <FileText className="size-4 text-fg-muted" aria-hidden />
+            <h2 className="text-sm font-semibold text-fg">{t.detail.activity}</h2>
+          </div>
+          <ActivityList events={events} t={t} />
+        </section>
+
+        <aside className="grid content-start gap-4">
+          <section className="rounded-lg border border-edge bg-surface-panel px-4 py-3">
+            <h2 className="text-sm font-semibold text-fg">{t.detail.links}</h2>
+            <div className="mt-3 grid gap-1 text-sm">
+              {item.links?.length ? item.links.map((link) => (
+                <Link key={link.id} to={linkHref(link)} className="flex min-w-0 items-center justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-surface-hover">
+                  <span className="min-w-0 truncate text-fg">{link.title || link.targetId}</span>
+                  <span className="inline-flex shrink-0 items-center gap-1 text-xs text-fg-muted">
+                    {t.linkKinds[link.kind]}
+                    <ExternalLink className="size-3.5" aria-hidden />
+                  </span>
+                </Link>
+              )) : <p className="text-sm text-fg-muted">{t.detail.noLinks}</p>}
+            </div>
+          </section>
+          <section className="rounded-lg border border-edge bg-surface-panel px-4 py-3">
+            <h2 className="text-sm font-semibold text-fg">{t.detail.project}</h2>
+            <Link to={projectHref} className="mt-2 inline-flex min-w-0 items-center gap-2 text-sm font-medium text-accent hover:text-accent-fg">
+              <CheckCircle2 className="size-4 shrink-0" aria-hidden />
+              <span className="min-w-0 truncate">{project?.name || item.projectId}</span>
+            </Link>
+          </section>
+        </aside>
+      </div>
+    </main>
+  );
+}

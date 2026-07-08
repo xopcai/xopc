@@ -30,6 +30,8 @@ interface WriteResponse {
 }
 
 export type WorkspaceEditorRequestOptions = {
+  /** Project workspace root. Takes priority over `sessionKey` and `agentId`. */
+  projectId?: string;
   /** When set, uses that chat session's effective workspace (override or agent default). Takes priority over `agentId`. */
   sessionKey?: string;
   /** When set, lists/reads/writes that agent's Markdown workspace (`resolveAgentWorkspaceDir`). */
@@ -81,15 +83,24 @@ export type FileReferenceAction = 'openExternal' | 'revealInFolder';
 function editorQuery(dir: string, options?: WorkspaceEditorRequestOptions): string {
   const params = new URLSearchParams();
   if (dir) params.set('dir', dir);
-  const sk = options?.sessionKey?.trim();
+  const sk = options?.projectId ? '' : options?.sessionKey?.trim();
   if (sk) {
     params.set('sessionKey', sk);
   } else {
-    const aid = options?.agentId?.trim();
+    const aid = options?.projectId ? '' : options?.agentId?.trim();
     if (aid) params.set('agentId', aid);
   }
   const qs = params.toString();
   return qs ? `?${qs}` : '';
+}
+
+function projectFileUrl(options: WorkspaceEditorRequestOptions | undefined, action: 'read' | 'raw' | 'resolve-reference' | 'write', path?: string): string | null {
+  const projectId = options?.projectId?.trim();
+  if (!projectId) return null;
+  const params = new URLSearchParams();
+  if (path) params.set('path', path);
+  const qs = params.toString();
+  return apiUrl(`/api/projects/${encodeURIComponent(projectId)}/files/${action}${qs ? `?${qs}` : ''}`);
 }
 
 /** List a single directory level under the workspace. */
@@ -108,6 +119,11 @@ export async function readWorkspaceFile(
   path: string,
   options?: WorkspaceEditorRequestOptions,
 ): Promise<{ content: string; path: string; absolutePath?: string; mtimeMs?: number }> {
+  const projectUrl = projectFileUrl(options, 'read', path);
+  if (projectUrl) {
+    const res = await fetchJson<ReadResponse>(projectUrl);
+    return res.payload;
+  }
   const params = new URLSearchParams({ path });
   const sk = options?.sessionKey?.trim();
   if (sk) {
@@ -145,6 +161,13 @@ export async function resolveWorkspaceFileReference(
   path: string,
   options?: WorkspaceEditorRequestOptions,
 ): Promise<WorkspaceFileReference | null> {
+  const projectUrl = projectFileUrl(options, 'resolve-reference', path);
+  if (projectUrl) {
+    const res = await apiFetch(projectUrl);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { ok?: boolean; payload?: WorkspaceFileReference };
+    return data.ok && data.payload ? data.payload : null;
+  }
   const params = new URLSearchParams({ path });
   const sk = options?.sessionKey?.trim();
   if (sk) {
@@ -194,6 +217,18 @@ export async function fetchWorkspaceFileBlob(
   path: string,
   options?: WorkspaceEditorRequestOptions,
 ): Promise<Blob> {
+  const projectUrl = projectFileUrl(options, 'raw', path);
+  if (projectUrl) {
+    const res = await apiFetch(projectUrl, {
+      headers: { Accept: '*/*' },
+    });
+    if (!res.ok) {
+      const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+      const msg = err.error?.message ?? `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    return res.blob();
+  }
   const params = new URLSearchParams({ path });
   const sk = options?.sessionKey?.trim();
   if (sk) {
@@ -303,6 +338,14 @@ export async function writeWorkspaceFile(
   content: string,
   options?: WorkspaceEditorRequestOptions,
 ): Promise<{ path: string; mtimeMs?: number }> {
+  const projectUrl = projectFileUrl(options, 'write');
+  if (projectUrl) {
+    const res = await fetchJson<WriteResponse>(projectUrl, {
+      method: 'PUT',
+      body: JSON.stringify({ path, content }),
+    });
+    return res.payload;
+  }
   const sk = options?.sessionKey?.trim();
   const qs = sk
     ? `?sessionKey=${encodeURIComponent(sk)}`

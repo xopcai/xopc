@@ -4,8 +4,8 @@ import type { Config } from '../../../config/schema.js';
 import { getConnectorDefinition, listConnectorCatalog, listConnectorProviders } from '../../../connectors/catalog.js';
 import { executeComposioTool, getComposioToolkitScope, listComposioConnections, listComposioTools, setComposioToolkitScope, startComposioAuthorize, type ComposioScope } from '../../../connectors/composio.js';
 import { appendComposioTriggerEvent, listComposioTriggerEvents } from '../../../connectors/composio-triggers.js';
-import { testConnectorInstance } from '../../../connectors/health.js';
-import { installConnector, installConnectorDefinition, uninstallConnector } from '../../../connectors/install.js';
+import { previewConnectorDefinition, testConnectorInstance } from '../../../connectors/health.js';
+import { installConnector, installConnectorDefinition, uninstallConnector, updateConnectorConfig } from '../../../connectors/install.js';
 import { getConnectorInstance, listConnectorInstances } from '../../../connectors/instances.js';
 import { setConnectorEnabled } from '../../../connectors/lifecycle.js';
 import { startConnectorOAuth, completeConnectorOAuth } from '../../../connectors/oauth.js';
@@ -171,6 +171,23 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
     return c.json({ ok: true, payload: { connector, instances } });
   });
 
+  authenticated.post('/api/connectors/preview', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const definition = body && typeof body === 'object' && !Array.isArray(body) && body.definition && typeof body.definition === 'object' && !Array.isArray(body.definition)
+      ? body.definition as ConnectorDefinition
+      : undefined;
+    if (!definition) {
+      return c.json({ ok: false, error: 'Missing connector definition.' }, 400);
+    }
+    const input: ConnectorInstallInput = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+    try {
+      const preview = await previewConnectorDefinition(service.currentConfig as Config, definition, input);
+      return c.json({ ok: true, payload: { preview } });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
+    }
+  });
+
   authenticated.post('/api/connectors/approvals/respond', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     return c.json({ ok: true, payload: { acknowledged: true, body } });
@@ -250,6 +267,23 @@ export function registerConnectorRoutes(authenticated: Hono, deps: Authenticated
       return c.json({ ok: true, payload: result });
     } catch (error) {
       return c.json({ ok: false, error: errorMessage(error) }, 500);
+    }
+  });
+
+  authenticated.post('/api/connectors/:id/config', strictRateLimitMiddleware, async (c) => {
+    const instanceId = c.req.param('id');
+    const body = await c.req.json().catch(() => ({}));
+    const input: ConnectorInstallInput = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+    const config = service.currentConfig as Config;
+    try {
+      const instance = updateConnectorConfig(config, instanceId, input);
+      const saved = await service.saveConfig(config);
+      if (!saved.saved) {
+        return c.json({ ok: false, error: saved.error }, 500);
+      }
+      return c.json({ ok: true, payload: { instance } });
+    } catch (error) {
+      return c.json({ ok: false, error: errorMessage(error) }, 400);
     }
   });
 

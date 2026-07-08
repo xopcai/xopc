@@ -32,6 +32,7 @@ import {
 } from '../storage/sqlite/index.js';
 import type { TranscriptCompactionRecord, XopcSessionTranscriptV1 } from './transcript-format.js';
 import {
+  buildSessionDisplayMessages,
   buildSessionContextForLlm,
   mergeLlmMessagesPreservingContextRows,
   transcriptRowsFromJsonArray,
@@ -805,7 +806,7 @@ export class SessionStore {
     const messages: AgentMessage[] = [];
     const seen = new Set<string>();
     for (const rows of rowSets) {
-      for (const message of buildSessionContextForLlm(rows)) {
+      for (const message of buildSessionDisplayMessages(rows)) {
         if (this.isCompactionSummaryMessage(message)) {
           continue;
         }

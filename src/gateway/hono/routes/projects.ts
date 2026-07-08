@@ -1,5 +1,5 @@
 import type { Hono } from 'hono';
-import { readdir, realpath, stat } from 'node:fs/promises';
+import { readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import type { GoalWithDetails } from '../../../goals/index.js';
@@ -16,13 +16,16 @@ import {
   type ProjectStatus,
   type ProjectWorkflowRunBrief,
 } from '../../../projects/index.js';
+import { buildSessionKey } from '../../../routing/session-key.js';
 import {
   getSqliteDatabase,
   getSessionMetadata,
   listMemoryRecords,
   loadTranscriptRowsForSession,
+  type SessionMetadataSeed,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
+import { buildWorkItemAgentContext, WorkItemService, type WorkItemPriority, type WorkItemStatus } from '../../../work-items/index.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
@@ -49,7 +52,62 @@ function optionalTextField(body: Record<string, unknown>, key: string): string |
   return typeof value === 'string' ? value : null;
 }
 
+function parseCsvEnum<T extends string>(raw: string | undefined, values: readonly T[]): T[] | undefined {
+  if (!raw) return undefined;
+  const allowed = new Set(values);
+  const parsed = raw
+    .split(',')
+    .map((item) => item.trim())
+    .filter((item): item is T => allowed.has(item as T));
+  return parsed.length > 0 ? [...new Set(parsed)] : undefined;
+}
+
+function parseEnumValue<T extends string>(raw: unknown, values: readonly T[]): T | undefined {
+  if (typeof raw !== 'string') return undefined;
+  return values.includes(raw as T) ? raw as T : undefined;
+}
+
+const WORK_ITEM_STATUSES = [
+  'backlog',
+  'todo',
+  'in_progress',
+  'blocked',
+  'needs_input',
+  'in_review',
+  'done',
+  'cancelled',
+] as const satisfies readonly WorkItemStatus[];
+const WORK_ITEM_PRIORITIES = ['urgent', 'high', 'normal', 'low'] as const satisfies readonly WorkItemPriority[];
+const WORK_ITEM_SUGGESTION_STATUSES = ['pending', 'applied', 'dismissed'] as const;
+
 const SKIP_FILE_NAMES = new Set(['.git', 'node_modules']);
+
+const PROJECT_FILE_MIME_BY_EXT: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  bmp: 'image/bmp',
+  svg: 'image/svg+xml',
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  json: 'application/json',
+  html: 'text/html',
+  css: 'text/css',
+  js: 'text/javascript',
+  ts: 'text/typescript',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  webm: 'video/webm',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+};
 
 function normalizeRelativePath(raw: string | undefined): string {
   const normalized = (raw ?? '').trim().replaceAll('\\', '/');
@@ -59,6 +117,144 @@ function normalizeRelativePath(raw: string | undefined): string {
 function isWithinDirectory(root: string, target: string): boolean {
   const relativePath = path.relative(root, target);
   return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+}
+
+async function resolveProjectWorkspaceRoot(
+  service: AuthenticatedRouteDeps['service'],
+  projectId: string,
+): Promise<{ ok: true; projectId: string; root: string } | { ok: false; status: number; error: string }> {
+  const project = service.projects.get(projectId);
+  if (!project) return { ok: false, status: 404, error: 'Project not found' };
+  if (!project.workspaceRoot?.trim()) {
+    return { ok: false, status: 400, error: 'Project workspace root is not set' };
+  }
+
+  try {
+    const root = await realpath(project.workspaceRoot);
+    const rootStat = await stat(root);
+    if (!rootStat.isDirectory()) {
+      return { ok: false, status: 400, error: 'Project workspace root is not a directory' };
+    }
+    return { ok: true, projectId: project.id, root };
+  } catch (err) {
+    log.warn({ err, projectId: project.id, path: project.workspaceRoot }, 'project workspace root unavailable');
+    return { ok: false, status: 404, error: 'Project workspace root is unavailable' };
+  }
+}
+
+async function resolveProjectWorkspacePath(
+  service: AuthenticatedRouteDeps['service'],
+  projectId: string,
+  rawPath: string | undefined,
+): Promise<
+  | { ok: true; projectId: string; root: string; requestedPath: string; absolutePath: string; relativePath: string }
+  | { ok: false; status: number; error: string }
+> {
+  const rootResult = await resolveProjectWorkspaceRoot(service, projectId);
+  if (rootResult.ok === false) {
+    return { ok: false, status: rootResult.status, error: rootResult.error };
+  }
+
+  const requestedPath = normalizeRelativePath(rawPath);
+  const candidate = path.resolve(rootResult.root, requestedPath);
+  if (!isWithinDirectory(rootResult.root, candidate)) {
+    return { ok: false, status: 400, error: 'Path is outside project workspace' };
+  }
+
+  const relativePath = path.relative(rootResult.root, candidate).split(path.sep).join('/');
+  return {
+    ok: true,
+    projectId: rootResult.projectId,
+    root: rootResult.root,
+    requestedPath,
+    absolutePath: candidate,
+    relativePath: relativePath === '.' ? '' : relativePath,
+  };
+}
+
+async function resolveExistingProjectWorkspacePath(
+  service: AuthenticatedRouteDeps['service'],
+  projectId: string,
+  rawPath: string | undefined,
+): Promise<
+  | {
+      ok: true;
+      projectId: string;
+      root: string;
+      requestedPath: string;
+      absolutePath: string;
+      relativePath: string;
+      stat: Awaited<ReturnType<typeof stat>>;
+    }
+  | { ok: false; status: number; error: string }
+> {
+  const resolved = await resolveProjectWorkspacePath(service, projectId, rawPath);
+  if (resolved.ok === false) return resolved;
+  if (!resolved.requestedPath.trim()) {
+    return { ok: false, status: 400, error: 'Missing path' };
+  }
+
+  let realTarget: string;
+  try {
+    realTarget = await realpath(resolved.absolutePath);
+  } catch {
+    return { ok: false, status: 404, error: 'Not found' };
+  }
+  if (!isWithinDirectory(resolved.root, realTarget)) {
+    return { ok: false, status: 400, error: 'Path is outside project workspace' };
+  }
+  const targetStat = await stat(realTarget);
+  return {
+    ...resolved,
+    absolutePath: realTarget,
+    stat: targetStat,
+  };
+}
+
+async function resolveProjectWorkspaceWritePath(
+  service: AuthenticatedRouteDeps['service'],
+  projectId: string,
+  rawPath: string | undefined,
+): Promise<
+  | {
+      ok: true;
+      projectId: string;
+      root: string;
+      requestedPath: string;
+      absolutePath: string;
+      relativePath: string;
+      existingStat?: Awaited<ReturnType<typeof stat>>;
+    }
+  | { ok: false; status: number; error: string }
+> {
+  const resolved = await resolveProjectWorkspacePath(service, projectId, rawPath);
+  if (resolved.ok === false) return resolved;
+  if (!resolved.requestedPath.trim()) {
+    return { ok: false, status: 400, error: 'Missing path' };
+  }
+
+  try {
+    const realTarget = await realpath(resolved.absolutePath);
+    if (!isWithinDirectory(resolved.root, realTarget)) {
+      return { ok: false, status: 400, error: 'Path is outside project workspace' };
+    }
+    return {
+      ...resolved,
+      absolutePath: realTarget,
+      existingStat: await stat(realTarget),
+    };
+  } catch {
+    const parentPath = path.dirname(resolved.absolutePath);
+    try {
+      const realParent = await realpath(parentPath);
+      if (!isWithinDirectory(resolved.root, realParent)) {
+        return { ok: false, status: 400, error: 'Path is outside project workspace' };
+      }
+    } catch {
+      return { ok: false, status: 404, error: 'Parent directory not found' };
+    }
+    return resolved;
+  }
 }
 
 function textFromTranscriptContent(content: unknown): string {
@@ -98,6 +294,40 @@ function buildSessionSummaryMemoryContent(sessionKey: string, explicitSummary?: 
   return lines.length > 0
     ? [`Session summary for ${sessionKey}:`, ...lines].join('\n')
     : `Session summary for ${sessionKey}: no transcript content available.`;
+}
+
+function buildWorkItemChatSessionMetadata(params: {
+  agentId: string;
+  accountId: string;
+  peerId: string;
+  workItemId: string;
+  title: string;
+  updatedAt: number;
+}): SessionMetadataSeed {
+  return {
+    name: params.title,
+    tags: ['work-item'],
+    sourceChannel: 'webchat',
+    sourceChatId: [params.accountId, 'direct', params.peerId].join(':'),
+    sessionType: 'chat',
+    hiddenFromSessionList: true,
+    routing: {
+      agentId: params.agentId,
+      source: 'webchat',
+      accountId: params.accountId,
+      peerKind: 'direct',
+      peerId: params.peerId,
+    },
+    customData: {
+      genericNewChatShell: false,
+      sourceBinding: {
+        kind: 'work_item',
+        sourceId: params.workItemId,
+        version: String(params.updatedAt),
+        attachedAt: Date.now(),
+      },
+    },
+  };
 }
 
 function listFailedProjectWorkflowRuns(projectId: string, limit = 5): ProjectWorkflowRunBrief[] {
@@ -153,6 +383,7 @@ function projectDigestMemoryRecordId(projectId: string): string {
 export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
   const goals = new GoalService();
+  const workItems = new WorkItemService();
 
   authenticated.post('/api/projects', async (c) => {
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
@@ -327,6 +558,226 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     });
   });
 
+  authenticated.get('/api/projects/:id/work-items', async (c) => {
+    const project = service.projects.get(c.req.param('id'));
+    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+    const result = workItems.listProjectWorkItems(project.id, {
+      status: parseCsvEnum(c.req.query('status'), WORK_ITEM_STATUSES),
+      priority: parseCsvEnum(c.req.query('priority'), WORK_ITEM_PRIORITIES),
+      includeArchived: c.req.query('includeArchived') === 'true',
+      search: c.req.query('search'),
+      sortBy: c.req.query('sortBy') as 'updatedAt' | 'createdAt' | 'priority' | 'status' | undefined,
+      sortOrder: c.req.query('sortOrder') as 'asc' | 'desc' | undefined,
+      limit: parseLimit(c.req.query('limit')),
+      offset: c.req.query('offset') ? Math.max(0, Number.parseInt(c.req.query('offset')!, 10) || 0) : undefined,
+    });
+    return c.json({ ok: true, ...result });
+  });
+
+  authenticated.post('/api/projects/:id/work-items', async (c) => {
+    const project = service.projects.get(c.req.param('id'));
+    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const title = textField(body, 'title')?.trim();
+    if (!title) return c.json({ ok: false, error: 'Work item title is required' }, 400);
+    const status = parseEnumValue(body.status, WORK_ITEM_STATUSES);
+    const priority = parseEnumValue(body.priority, WORK_ITEM_PRIORITIES);
+    const dueAt = typeof body.dueAt === 'number' && Number.isFinite(body.dueAt) ? body.dueAt : undefined;
+    if (Object.hasOwn(body, 'status') && !status) return c.json({ ok: false, error: 'Invalid work item status' }, 400);
+    if (Object.hasOwn(body, 'priority') && !priority) return c.json({ ok: false, error: 'Invalid work item priority' }, 400);
+    if (Object.hasOwn(body, 'dueAt') && dueAt === undefined && body.dueAt !== null) return c.json({ ok: false, error: 'Invalid dueAt' }, 400);
+    const item = workItems.createProjectWorkItem(project.id, {
+      title,
+      description: textField(body, 'description'),
+      status,
+      priority,
+      ownerAgentId: textField(body, 'ownerAgentId') || project.defaultAgentId || undefined,
+      nextAction: textField(body, 'nextAction'),
+      blockedReason: textField(body, 'blockedReason'),
+      dueAt,
+    });
+    return c.json({ ok: true, item }, 201);
+  });
+
+  authenticated.get('/api/work-items/:id', async (c) => {
+    const item = workItems.getWorkItem(c.req.param('id'));
+    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    return c.json({ ok: true, item });
+  });
+
+  authenticated.patch('/api/work-items/:id', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const status = Object.hasOwn(body, 'status')
+      ? parseEnumValue(body.status, WORK_ITEM_STATUSES)
+      : undefined;
+    const priority = Object.hasOwn(body, 'priority')
+      ? parseEnumValue(body.priority, WORK_ITEM_PRIORITIES)
+      : undefined;
+    const dueAt = Object.hasOwn(body, 'dueAt')
+      ? (body.dueAt === null ? null : (typeof body.dueAt === 'number' && Number.isFinite(body.dueAt) ? body.dueAt : undefined))
+      : undefined;
+    const archivedAt = Object.hasOwn(body, 'archivedAt')
+      ? (body.archivedAt === null ? null : (typeof body.archivedAt === 'number' && Number.isFinite(body.archivedAt) ? body.archivedAt : undefined))
+      : undefined;
+    if (status === undefined && Object.hasOwn(body, 'status')) return c.json({ ok: false, error: 'Invalid work item status' }, 400);
+    if (priority === undefined && Object.hasOwn(body, 'priority')) return c.json({ ok: false, error: 'Invalid work item priority' }, 400);
+    if (dueAt === undefined && Object.hasOwn(body, 'dueAt')) return c.json({ ok: false, error: 'Invalid dueAt' }, 400);
+    if (archivedAt === undefined && Object.hasOwn(body, 'archivedAt')) return c.json({ ok: false, error: 'Invalid archivedAt' }, 400);
+
+    const item = workItems.updateWorkItem(c.req.param('id'), {
+      ...(Object.hasOwn(body, 'title') ? { title: textField(body, 'title') ?? '' } : {}),
+      ...(Object.hasOwn(body, 'description') ? { description: optionalTextField(body, 'description') } : {}),
+      ...(Object.hasOwn(body, 'status') ? { status } : {}),
+      ...(Object.hasOwn(body, 'priority') ? { priority } : {}),
+      ...(Object.hasOwn(body, 'ownerAgentId') ? { ownerAgentId: optionalTextField(body, 'ownerAgentId') } : {}),
+      ...(Object.hasOwn(body, 'nextAction') ? { nextAction: optionalTextField(body, 'nextAction') } : {}),
+      ...(Object.hasOwn(body, 'blockedReason') ? { blockedReason: optionalTextField(body, 'blockedReason') } : {}),
+      ...(Object.hasOwn(body, 'dueAt') ? { dueAt } : {}),
+      ...(Object.hasOwn(body, 'archivedAt') ? { archivedAt } : {}),
+    });
+    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    return c.json({ ok: true, item });
+  });
+
+  authenticated.delete('/api/work-items/:id', async (c) => {
+    const item = workItems.updateWorkItem(c.req.param('id'), { archivedAt: Date.now() });
+    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    return c.json({ ok: true, item });
+  });
+
+  authenticated.get('/api/work-items/:id/events', async (c) => {
+    const item = workItems.getWorkItem(c.req.param('id'));
+    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    return c.json({ ok: true, events: workItems.listEvents(item.id) });
+  });
+
+  authenticated.get('/api/work-items/:id/update-suggestions', async (c) => {
+    const item = workItems.getWorkItem(c.req.param('id'));
+    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    const status = parseEnumValue(c.req.query('status'), WORK_ITEM_SUGGESTION_STATUSES);
+    if (c.req.query('status') && !status) return c.json({ ok: false, error: 'Invalid suggestion status' }, 400);
+    return c.json({ ok: true, suggestions: workItems.listUpdateSuggestions(item.id, status) });
+  });
+
+  authenticated.post('/api/work-items/:id/update-suggestions', async (c) => {
+    const item = workItems.getWorkItem(c.req.param('id'));
+    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const sourceKind = parseEnumValue(body.sourceKind, ['chat', 'goal', 'workflow_run', 'automation'] as const);
+    const sourceId = textField(body, 'sourceId')?.trim();
+    if (!sourceKind) return c.json({ ok: false, error: 'Invalid sourceKind' }, 400);
+    if (!sourceId) return c.json({ ok: false, error: 'sourceId is required' }, 400);
+    const patchBody = body.patch && typeof body.patch === 'object' && !Array.isArray(body.patch)
+      ? body.patch as Record<string, unknown>
+      : {};
+    const status = Object.hasOwn(patchBody, 'status')
+      ? parseEnumValue(patchBody.status, WORK_ITEM_STATUSES)
+      : undefined;
+    if (Object.hasOwn(patchBody, 'status') && !status) return c.json({ ok: false, error: 'Invalid work item status' }, 400);
+    const confidence = typeof body.confidence === 'number' && Number.isFinite(body.confidence)
+      ? Math.max(0, Math.min(1, body.confidence))
+      : undefined;
+    const suggestion = workItems.createUpdateSuggestion(item.id, {
+      sourceKind,
+      sourceId,
+      patch: {
+        ...(Object.hasOwn(patchBody, 'status') ? { status } : {}),
+        ...(Object.hasOwn(patchBody, 'nextAction') ? { nextAction: optionalTextField(patchBody, 'nextAction') } : {}),
+        ...(Object.hasOwn(patchBody, 'blockedReason') ? { blockedReason: optionalTextField(patchBody, 'blockedReason') } : {}),
+      },
+      progressNote: optionalTextField(body, 'progressNote') ?? undefined,
+      rationale: optionalTextField(body, 'rationale') ?? undefined,
+      confidence,
+    });
+    if (!suggestion) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    return c.json({ ok: true, suggestion }, 201);
+  });
+
+  authenticated.post('/api/work-item-update-suggestions/:id/apply', async (c) => {
+    const result = workItems.applyUpdateSuggestion(c.req.param('id'));
+    if (!result) return c.json({ ok: false, error: 'Suggestion not found or already resolved' }, 404);
+    return c.json({ ok: true, item: result.item, suggestion: result.suggestion });
+  });
+
+  authenticated.post('/api/work-item-update-suggestions/:id/dismiss', async (c) => {
+    const suggestion = workItems.dismissUpdateSuggestion(c.req.param('id'));
+    if (!suggestion) return c.json({ ok: false, error: 'Suggestion not found or already resolved' }, 404);
+    return c.json({ ok: true, suggestion });
+  });
+
+  authenticated.post('/api/work-items/:id/start-chat', async (c) => {
+    const item = workItems.getWorkItem(c.req.param('id'));
+    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    const project = service.projects.get(item.projectId);
+    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+    const agentId = resolveProjectAgentId({
+      config: service.currentConfig,
+      projects: service.projects,
+      explicitAgentId: item.ownerAgentId,
+      projectId: project.id,
+    });
+    const peerId = `work_item_${Date.now()}`;
+    const sessionKey = buildSessionKey({
+      agentId,
+      source: 'webchat',
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId,
+    });
+    await service.sessionIndexInstance.saveMessages(sessionKey, [], {
+      metadata: buildWorkItemChatSessionMetadata({
+        agentId,
+        accountId: 'default',
+        peerId,
+        workItemId: item.id,
+        title: item.title,
+        updatedAt: item.updatedAt,
+      }),
+    });
+    service.projects.attachSession(sessionKey, project.id);
+    const session = await service.sessions.getSession(sessionKey);
+    workItems.addLink(item.id, {
+      kind: 'chat',
+      targetId: sessionKey,
+      title: session?.name || item.title,
+      statusSnapshot: session?.status,
+    }, 'chat_started');
+    const updated = item.status === 'todo' || item.status === 'backlog'
+      ? workItems.updateWorkItem(item.id, { status: 'in_progress' })
+      : workItems.getWorkItem(item.id);
+    return c.json({ ok: true, session, item: updated }, 201);
+  });
+
+  authenticated.post('/api/work-items/:id/create-goal', async (c) => {
+    const item = workItems.getWorkItem(c.req.param('id'));
+    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    const project = service.projects.get(item.projectId);
+    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+    const goal = goals.create({
+      title: item.title,
+      description: item.description || item.nextAction,
+      priority: item.priority === 'urgent' ? 'high' : item.priority,
+      agentId: item.ownerAgentId || project.defaultAgentId || undefined,
+      projectId: project.id,
+      source: 'api',
+      config: service.currentConfig,
+    });
+    goals.setContextMessage({
+      goalId: goal.id,
+      text: buildWorkItemAgentContext(item).text,
+    });
+    workItems.addLink(item.id, {
+      kind: 'goal',
+      targetId: goal.id,
+      title: goal.title,
+      statusSnapshot: goal.status,
+    }, 'goal_created');
+    const updated = item.status === 'todo' || item.status === 'backlog'
+      ? workItems.updateWorkItem(item.id, { status: 'in_progress' })
+      : workItems.getWorkItem(item.id);
+    return c.json({ ok: true, goal, item: updated }, 201);
+  });
+
   authenticated.post('/api/projects/:id/digest-memory', async (c) => {
     const project = service.projects.getWithDetails(c.req.param('id'));
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
@@ -452,30 +903,9 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   });
 
   authenticated.get('/api/projects/:id/files', async (c) => {
-    const project = service.projects.get(c.req.param('id'));
-    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    if (!project.workspaceRoot?.trim()) {
-      return c.json({ ok: false, error: 'Project workspace root is not set' }, 400);
-    }
-
-    let root: string;
-    try {
-      root = await realpath(project.workspaceRoot);
-      const rootStat = await stat(root);
-      if (!rootStat.isDirectory()) {
-        return c.json({ ok: false, error: 'Project workspace root is not a directory' }, 400);
-      }
-    } catch (err) {
-      log.warn({ err, projectId: project.id, path: project.workspaceRoot }, 'project workspace root unavailable');
-      return c.json({ ok: false, error: 'Project workspace root is unavailable' }, 404);
-    }
-
-    const requestedPath = normalizeRelativePath(c.req.query('path'));
-    const candidate = path.resolve(root, requestedPath);
-    if (!isWithinDirectory(root, candidate)) {
-      return c.json({ ok: false, error: 'Path is outside project workspace' }, 400);
-    }
-
+    const resolved = await resolveProjectWorkspacePath(service, c.req.param('id'), c.req.query('path'));
+    if (resolved.ok === false) return c.json({ ok: false, error: resolved.error }, resolved.status as 400);
+    const { root, absolutePath: candidate } = resolved;
     let currentPath: string;
     try {
       currentPath = await realpath(candidate);
@@ -487,7 +917,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         return c.json({ ok: false, error: 'Path is not a directory' }, 400);
       }
     } catch (err) {
-      log.warn({ err, projectId: project.id, path: candidate }, 'project file path unavailable');
+      log.warn({ err, projectId: resolved.projectId, path: candidate }, 'project file path unavailable');
       return c.json({ ok: false, error: 'Path not found' }, 404);
     }
 
@@ -496,18 +926,23 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       const entries = await Promise.all(dirents
         .filter((entry) => !SKIP_FILE_NAMES.has(entry.name))
         .map(async (entry) => {
-          const absolutePath = path.join(currentPath, entry.name);
+          const displayPath = path.join(currentPath, entry.name);
+          const absolutePath = await realpath(displayPath).catch(() => null);
+          if (!absolutePath || !isWithinDirectory(root, absolutePath)) return null;
           const entryStat = await stat(absolutePath).catch(() => null);
-          const relativePath = path.relative(root, absolutePath).split(path.sep).join('/');
+          if (!entryStat) return null;
+          const relativePath = path.relative(root, displayPath).split(path.sep).join('/');
           return {
             name: entry.name,
             path: relativePath,
-            type: entry.isDirectory() ? 'directory' : 'file',
+            absolutePath,
+            type: entryStat.isDirectory() ? 'directory' : 'file',
             size: entryStat?.isFile() ? entryStat.size : undefined,
             updatedAt: entryStat?.mtime.toISOString(),
           };
         }));
-      entries.sort((left, right) => {
+      const visibleEntries = entries.filter((entry): entry is NonNullable<typeof entry> => entry !== null);
+      visibleEntries.sort((left, right) => {
         if (left.type !== right.type) return left.type === 'directory' ? -1 : 1;
         return left.name.localeCompare(right.name);
       });
@@ -518,14 +953,144 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         root,
         path: relativeCurrentPath === '.' ? '' : relativeCurrentPath,
         parentPath: parentRelativePath === '.' ? '' : parentRelativePath,
-        entries,
+        entries: visibleEntries,
       });
     } catch (err) {
-      log.warn({ err, projectId: project.id, path: currentPath }, 'project file list failed');
+      log.warn({ err, projectId: resolved.projectId, path: currentPath }, 'project file list failed');
       if ((err as NodeJS.ErrnoException)?.code === 'EACCES') {
         return c.json({ ok: false, error: 'Permission denied' }, 403);
       }
       return c.json({ ok: false, error: 'Failed to read project files' }, 500);
+    }
+  });
+
+  authenticated.get('/api/projects/:id/files/read', async (c) => {
+    const resolved = await resolveExistingProjectWorkspacePath(service, c.req.param('id'), c.req.query('path'));
+    if (resolved.ok === false) return c.json({ ok: false, error: { message: resolved.error } }, resolved.status as 400);
+    if (!resolved.stat.isFile()) {
+      return c.json({ ok: false, error: { message: 'Not a file' } }, 400);
+    }
+    try {
+      const content = await readFile(resolved.absolutePath, 'utf-8');
+      return c.json({
+        ok: true,
+        payload: {
+          content,
+          path: resolved.relativePath,
+          absolutePath: resolved.absolutePath,
+          mtimeMs: resolved.stat.mtimeMs,
+        },
+      });
+    } catch {
+      return c.json({ ok: false, error: { message: 'Read failed' } }, 500);
+    }
+  });
+
+  authenticated.get('/api/projects/:id/files/raw', async (c) => {
+    const resolved = await resolveExistingProjectWorkspacePath(service, c.req.param('id'), c.req.query('path'));
+    if (resolved.ok === false) return c.json({ ok: false, error: { message: resolved.error } }, resolved.status as 400);
+    if (!resolved.stat.isFile()) {
+      return c.json({ ok: false, error: { message: 'Not a file' } }, 400);
+    }
+    const ext = resolved.relativePath.split('.').pop()?.toLowerCase() ?? '';
+    const contentType = PROJECT_FILE_MIME_BY_EXT[ext] || 'application/octet-stream';
+    try {
+      const buf = await readFile(resolved.absolutePath);
+      return new Response(buf, {
+        headers: {
+          'Content-Type': contentType,
+          'Cache-Control': 'private, max-age=3600',
+        },
+      });
+    } catch {
+      return c.json({ ok: false, error: { message: 'Read failed' } }, 500);
+    }
+  });
+
+  authenticated.get('/api/projects/:id/files/resolve-reference', async (c) => {
+    const rawPath = typeof c.req.query('path') === 'string' ? c.req.query('path')!.trim() : '';
+    if (!rawPath) {
+      return c.json({ ok: false, error: { code: 'INVALID_PATH', message: 'Missing path' } }, 400);
+    }
+    const resolved = await resolveProjectWorkspacePath(service, c.req.param('id'), rawPath);
+    if (resolved.ok === false) {
+      return c.json({ ok: false, error: { code: 'PROJECT_WORKSPACE_RESOLUTION_FAILED', message: resolved.error } }, resolved.status as 400);
+    }
+    let st: Awaited<ReturnType<typeof stat>> | null = null;
+    let absolutePath = resolved.absolutePath;
+    try {
+      absolutePath = await realpath(resolved.absolutePath);
+      if (!isWithinDirectory(resolved.root, absolutePath)) {
+        return c.json({
+          ok: false,
+          error: { code: 'PROJECT_WORKSPACE_RESOLUTION_FAILED', message: 'Path is outside project workspace' },
+        }, 400);
+      }
+      st = await stat(absolutePath);
+    } catch {
+      st = null;
+    }
+    const displayName = path.basename(rawPath);
+    if (!st) {
+      return c.json({
+        ok: true,
+        payload: {
+          inputPath: rawPath,
+          displayName,
+          scope: 'missing',
+          exists: false,
+          absolutePath: resolved.absolutePath,
+          capabilities: ['copyPath'],
+          errorCode: 'FILE_NOT_FOUND',
+        },
+      });
+    }
+    return c.json({
+      ok: true,
+      payload: {
+        inputPath: rawPath,
+        displayName,
+        scope: 'workspace',
+        exists: true,
+        isDirectory: st.isDirectory(),
+        absolutePath,
+        workspaceRelativePath: resolved.relativePath,
+        capabilities: st.isDirectory()
+          ? ['openExternal', 'revealInFolder', 'copyPath']
+          : ['preview', 'edit', 'openExternal', 'revealInFolder', 'copyPath'],
+        mtimeMs: st.mtimeMs,
+      },
+    });
+  });
+
+  authenticated.put('/api/projects/:id/files/write', async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const bodyRecord = typeof body === 'object' && body !== null ? body as Record<string, unknown> : {};
+    const pathRel = typeof bodyRecord.path === 'string' ? bodyRecord.path : '';
+    const content = typeof bodyRecord.content === 'string' ? bodyRecord.content : '';
+    if (!pathRel.trim()) {
+      return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
+    }
+    const resolved = await resolveProjectWorkspaceWritePath(service, c.req.param('id'), pathRel);
+    if (resolved.ok === false) return c.json({ ok: false, error: { message: resolved.error } }, resolved.status as 400);
+    if (resolved.existingStat && !resolved.existingStat.isFile()) {
+      return c.json({ ok: false, error: { message: 'Not a file' } }, 400);
+    }
+    try {
+      await writeFile(resolved.absolutePath, content, 'utf-8');
+      const mtimeMs = (await stat(resolved.absolutePath).catch(() => ({ mtimeMs: Date.now() }))).mtimeMs;
+      return c.json({
+        ok: true,
+        payload: { path: resolved.relativePath, mtimeMs },
+      });
+    } catch (err) {
+      log.error({ err, projectId: resolved.projectId, path: resolved.absolutePath }, 'project file write failed');
+      return c.json({ ok: false, error: { message: 'Write failed' } }, 500);
     }
   });
 

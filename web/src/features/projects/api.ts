@@ -118,6 +118,7 @@ export type ProjectGoal = {
 export type ProjectFileEntry = {
   name: string;
   path: string;
+  absolutePath?: string;
   type: 'directory' | 'file';
   size?: number;
   updatedAt?: string;

@@ -4,8 +4,6 @@ import { runMatchesTriggerFilter } from './workflow-page.utils';
 export const WORKFLOW_BOARD_COLUMNS = ['queued', 'running', 'succeeded', 'attention'] as const;
 export type WorkflowBoardColumnId = (typeof WORKFLOW_BOARD_COLUMNS)[number];
 
-export const BOARD_SUCCEEDED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-export const BOARD_SUCCEEDED_MAX = 20;
 export const BOARD_SUCCEEDED_COLLAPSED = 5;
 
 const ATTENTION_STATUSES = new Set<WorkflowRunStatus>(['failed', 'timeout', 'cancelled']);
@@ -78,20 +76,13 @@ function runCompletedAtMs(run: WorkflowRunSummary): number {
   return run.completedAtMs ?? run.createdAtMs;
 }
 
-function isWithinSucceededWindow(run: WorkflowRunSummary, nowMs: number): boolean {
-  const at = runCompletedAtMs(run);
-  return nowMs - at <= BOARD_SUCCEEDED_WINDOW_MS;
-}
-
 export function boardColumnForRun(
   run: WorkflowRunSummary,
-  nowMs: number,
+  _nowMs: number,
 ): WorkflowBoardColumnId | null {
   if (run.status === 'queued') return 'queued';
   if (run.status === 'running') return 'running';
-  if (run.status === 'succeeded') {
-    return isWithinSucceededWindow(run, nowMs) ? 'succeeded' : null;
-  }
+  if (run.status === 'succeeded') return 'succeeded';
   if (ATTENTION_STATUSES.has(run.status)) return 'attention';
   return null;
 }
@@ -113,10 +104,8 @@ export function sortRunsForBoardColumn(
 export type WorkflowBoardColumnData = {
   id: WorkflowBoardColumnId;
   runs: WorkflowRunSummary[];
-  /** Succeeded column only: total matching 7d window before max cap */
+  /** Succeeded column only: total matching runs in the fetched result set. */
   totalInWindow?: number;
-  /** Succeeded column only: count hidden by 20-cap */
-  hiddenByCap?: number;
 };
 
 export function buildWorkflowBoardColumns(
@@ -135,18 +124,13 @@ export function buildWorkflowBoardColumns(
     if (column) buckets[column].push(run);
   }
 
-  const succeededSorted = sortRunsForBoardColumn('succeeded', buckets.succeeded);
-  const totalInWindow = succeededSorted.length;
-  const capped = succeededSorted.slice(0, BOARD_SUCCEEDED_MAX);
-  const hiddenByCap = Math.max(0, totalInWindow - BOARD_SUCCEEDED_MAX);
-
   return WORKFLOW_BOARD_COLUMNS.map((id) => {
     if (id === 'succeeded') {
+      const runs = sortRunsForBoardColumn('succeeded', buckets.succeeded);
       return {
         id,
-        runs: capped,
-        totalInWindow,
-        hiddenByCap,
+        runs,
+        totalInWindow: runs.length,
       };
     }
     return {

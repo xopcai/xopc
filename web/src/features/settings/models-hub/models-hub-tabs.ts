@@ -10,6 +10,9 @@ export const MODELS_HUB_TABS: readonly ModelsHubTabId[] = [
 
 export function parseModelsHubTab(raw: string | null | undefined): ModelsHubTabId {
   const id = (raw ?? '').trim();
+  if (id === 'providers' || id === 'catalog') {
+    return 'services';
+  }
   if ((MODELS_HUB_TABS as readonly string[]).includes(id)) {
     return id as ModelsHubTabId;
   }

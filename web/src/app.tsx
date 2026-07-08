@@ -18,6 +18,7 @@ import {
   loadGoalsPage,
   loadProjectDetailPage,
   loadProjectsPage,
+  loadWorkItemDetailPage,
   loadExtensionDebugPage,
   loadExtensionPage,
   loadExtensionSettingsPage,
@@ -38,6 +39,7 @@ const SessionsPage = lazy(() => loadSessionsPage().then((m) => ({ default: m.Ses
 const AutomationsPage = lazy(() => loadAutomationsPage().then((m) => ({ default: m.AutomationsPage })));
 const ProjectsPage = lazy(() => loadProjectsPage().then((m) => ({ default: m.ProjectsPage })));
 const ProjectDetailPage = lazy(() => loadProjectDetailPage().then((m) => ({ default: m.ProjectDetailPage })));
+const WorkItemDetailPage = lazy(() => loadWorkItemDetailPage().then((m) => ({ default: m.WorkItemDetailPage })));
 const GoalsPage = lazy(() => loadGoalsPage().then((m) => ({ default: m.GoalsPage })));
 const GoalDetailPage = lazy(() => loadGoalDetailPage().then((m) => ({ default: m.GoalDetailPage })));
 const NotesPage = lazy(() => loadNotesPage().then((m) => ({ default: m.NotesPage })));
@@ -157,6 +159,14 @@ const router = createHashRouter([
             ),
           },
         ],
+      },
+      {
+        path: 'work-items/:workItemId',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <WorkItemDetailPage />
+          </Suspense>
+        ),
       },
       {
         path: 'goals',

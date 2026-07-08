@@ -1,8 +1,9 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { UserPlus, X } from 'lucide-react';
-import { type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
@@ -15,7 +16,6 @@ import {
 import { SettingsShellLayerProvider } from '@/lib/settings-shell-layer-context';
 import { agentListDisplayName } from './agent-display-names';
 import { agentsSettingsInputClass } from './utils';
-import { Select, SelectOption } from '@/components/ui/popover-select';
 
 export function CreateAgentDialog(props: {
   open: boolean;
@@ -65,6 +65,7 @@ export function CreateAgentDialog(props: {
     duplicateSourceId,
     onSelectDuplicateSource,
   } = props;
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -73,6 +74,7 @@ export function CreateAgentDialog(props: {
           className={cn('xopc-dialog-overlay fixed inset-0 bg-scrim', SETTINGS_SHELL_OVERLAY_Z)}
         />
         <Dialog.Content
+          ref={setPortalContainer}
           className={cn(
             'xopc-dialog-content fixed left-1/2 top-1/2 max-h-[min(90vh,640px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
             SETTINGS_SHELL_CONTENT_Z,
@@ -80,7 +82,7 @@ export function CreateAgentDialog(props: {
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          <SettingsShellLayerProvider layer="modal">
+          <SettingsShellLayerProvider layer="modal" portalContainer={portalContainer}>
           <div className="mb-3 flex items-start justify-between gap-2">
             <div className="min-w-0 pr-2">
               <Dialog.Title className="text-base font-semibold text-fg">{a.addAgent}</Dialog.Title>

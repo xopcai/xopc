@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { CredentialResolver } from '../../auth/credentials.js';
+import * as bundleMcpMaterialize from '../../agent/mcp/bundle-mcp-materialize.js';
 import type { Config } from '../../config/schema.js';
 import { getConnectorDefinition, listConnectorCatalog } from '../catalog.js';
-import { installConnector, uninstallConnector } from '../install.js';
+import { installConnector, uninstallConnector, updateConnectorConfig } from '../install.js';
+import { previewConnectorDefinition } from '../health.js';
 import { setConnectorEnabled } from '../lifecycle.js';
 import { listConnectorInstances } from '../instances.js';
 import { materializeConnectorMcpServer } from '../materialize.js';
@@ -257,6 +259,23 @@ describe('connector install and instances', () => {
     expect(config.mcp?.servers?.fetch).toBeUndefined();
   });
 
+  it('updates config-only MCP connectors without reinstalling secrets', async () => {
+    const config = { mcp: { servers: {} } } as Config;
+
+    await installConnector(config, 'filesystem', { config: { rootPath: '/tmp/one' } });
+    const updated = updateConnectorConfig(config, 'filesystem', { config: { rootPath: '/tmp/two' } });
+
+    expect(updated.config).toEqual({ rootPath: '/tmp/two' });
+    expect(config.mcp?.servers?.filesystem).toMatchObject({
+      args: ['-y', '@modelcontextprotocol/server-filesystem', '/tmp/two'],
+      xopcConnector: {
+        managed: true,
+        connectorId: 'filesystem',
+        config: { rootPath: '/tmp/two' },
+      },
+    });
+  });
+
   it('blocks unmanaged MCP server conflicts without listing them as connectors', async () => {
     const config = {
       mcp: {
@@ -268,6 +287,47 @@ describe('connector install and instances', () => {
 
     await expect(installConnector(config, 'fetch', {})).rejects.toThrow(/not managed by Connectors/);
     expect(() => uninstallConnector(config, 'fetch')).toThrow(/not managed by Connectors/);
+    expect(listConnectorInstances(config)).toEqual([]);
+  });
+
+  it('previews MCP connector capabilities without saving the server config', async () => {
+    const config = { mcp: { servers: {} } } as Config;
+    const fetch = getConnectorDefinition('fetch');
+    expect(fetch).toBeDefined();
+    const capabilitySpy = vi
+      .spyOn(bundleMcpMaterialize, 'listBundleMcpServerCapabilitiesForGateway')
+      .mockResolvedValue({
+        serverId: 'fetch',
+        toolCount: 1,
+        resourceCount: 0,
+        promptCount: 0,
+        tools: [{ name: 'fetch', shortName: 'fetch', description: 'Fetch a URL.' }],
+        resources: [],
+        prompts: [],
+      });
+
+    const preview = await previewConnectorDefinition(config, fetch!, {});
+
+    expect(preview).toMatchObject({
+      serverId: 'fetch',
+      ok: true,
+      status: 'ok',
+      toolCount: 1,
+      tools: [{ name: 'fetch', shortName: 'fetch', description: 'Fetch a URL.' }],
+    });
+    expect(capabilitySpy).toHaveBeenCalledWith(expect.objectContaining({
+      serverId: 'fetch',
+      cfg: expect.objectContaining({
+        mcp: expect.objectContaining({
+          servers: expect.objectContaining({
+            fetch: expect.objectContaining({
+              xopcConnector: expect.objectContaining({ managed: true, connectorId: 'fetch' }),
+            }),
+          }),
+        }),
+      }),
+    }));
+    expect(config.mcp?.servers?.fetch).toBeUndefined();
     expect(listConnectorInstances(config)).toEqual([]);
   });
 
