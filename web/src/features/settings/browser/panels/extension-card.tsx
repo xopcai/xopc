@@ -311,7 +311,7 @@ export function ExtensionCard({
       }
     >
       <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-edge bg-surface-base px-3 py-2">
+        <div className="flex items-center justify-between gap-3 rounded-lg bg-surface-base px-3 py-2 shadow-surface">
           <span className="font-mono text-xs text-fg-muted">{wsUrl}</span>
           <span className={`inline-flex items-center gap-1.5 text-xs ${badge.color}`}>
             <BadgeIcon className="size-3.5" />

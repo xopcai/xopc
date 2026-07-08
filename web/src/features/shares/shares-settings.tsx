@@ -606,7 +606,7 @@ function ShareRow({
 
   return (
     <>
-      <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2.5">
+      <div className="rounded-lg bg-surface-panel/80 px-3 py-2.5 shadow-surface">
         <div className="flex items-start gap-3">
           <button
             type="button"
@@ -688,7 +688,7 @@ function ShareRow({
         {isActive && linksOpen ? (
           <div
             id={linksPanelId}
-            className="mt-3 border-t border-edge-subtle pt-3 pl-7"
+            className="mt-3 bg-surface-base/45 py-3 pl-7 pr-3"
           >
             <ShareUrlCopyRows
               shareUrl={share.shareUrl}

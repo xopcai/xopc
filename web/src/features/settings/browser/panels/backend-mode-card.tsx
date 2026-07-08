@@ -73,7 +73,7 @@ export function BackendModeCard({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-edge bg-surface-panel p-4">
+    <div className="flex flex-col gap-4 rounded-xl bg-surface-panel/80 p-4 shadow-surface">
       <div className="flex items-start gap-3">
         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-fg-muted">
           <Icon className="size-4" strokeWidth={1.75} />

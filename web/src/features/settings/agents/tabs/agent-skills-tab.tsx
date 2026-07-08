@@ -119,7 +119,7 @@ export function AgentSkillsTab(props: {
               return (
                 <li
                   key={id}
-                  className="h-16 shrink-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-panel/60 px-3 dark:border-edge-subtle"
+                  className="h-16 shrink-0 overflow-hidden rounded-xl bg-surface-panel/70 px-3 shadow-surface"
                 >
                   <label className="flex h-full cursor-pointer items-center gap-3 text-sm">
                     <input

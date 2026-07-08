@@ -271,7 +271,7 @@ export function ChannelSetupCard({
   const diagnostics = state.payload?.type === 'diagnostics' ? state.payload.checks : null;
 
   return (
-    <div className={compact ? 'space-y-3' : 'rounded-lg border border-edge-subtle bg-surface-panel p-4'}>
+    <div className={compact ? 'space-y-3' : 'rounded-lg bg-surface-panel/80 p-4 shadow-surface'}>
       <div className={cn('flex flex-wrap items-start gap-3', compact ? 'justify-end' : 'justify-between')}>
         {!compact ? (
           <div>
@@ -313,7 +313,7 @@ export function ChannelSetupCard({
       {qrStageActive ? (
         <div
           className={cn(
-            'flex h-80 items-center justify-center gap-4 overflow-hidden rounded-lg border border-edge-subtle bg-surface-base px-3 py-3',
+            'flex h-80 items-center justify-center gap-4 overflow-hidden rounded-lg bg-surface-base px-3 py-3 shadow-surface',
             compact ? 'mt-1 flex-col text-center sm:h-64 sm:flex-row sm:text-left' : 'mt-4 flex-col sm:h-64 sm:flex-row',
           )}
         >
@@ -344,7 +344,7 @@ export function ChannelSetupCard({
       ) : null}
 
       {state.payload?.type === 'poll' && state.payload.phase === 'done' ? (
-        <div className="mt-4 flex items-center gap-2 rounded-lg border border-edge-subtle bg-surface-base px-3 py-2 text-sm">
+        <div className="mt-4 flex items-center gap-2 rounded-lg bg-surface-base px-3 py-2 text-sm shadow-surface">
           <CheckCircle2 className={state.payload.ok ? 'size-4 text-green-600' : 'size-4 text-red-600'} />
           <span className={state.payload.ok ? 'text-fg' : 'text-red-600 dark:text-red-400'}>
             {state.payload.message ?? (state.payload.ok ? ch.complete : ch.failed)}
@@ -375,7 +375,7 @@ export function ChannelSetupCard({
       {diagnostics ? (
         <div className="mt-4 space-y-2">
           {diagnostics.map((check, index) => (
-            <div key={check.id ?? index} className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-2">
+            <div key={check.id ?? index} className="rounded-lg bg-surface-base px-3 py-2 shadow-surface">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-sm font-medium text-fg">{check.label ?? check.id ?? ch.diagnosticCheckFallback.replace('{{index}}', String(index + 1))}</p>
                 <span className="rounded-full bg-surface-hover px-2 py-0.5 text-xs text-fg-muted">

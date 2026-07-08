@@ -179,7 +179,7 @@ function ExtensionSttProviderSettingsBody({
   const modelOptions = providerId === 'groq' ? GROQ_MODELS : [{ id: credDraft.model, name: credDraft.model }];
 
   return (
-    <div className="flex flex-col gap-4 rounded-xl border border-edge bg-surface-base p-4">
+    <div className="flex flex-col gap-4 rounded-xl bg-surface-base p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-sm font-semibold text-fg">{xs.credentialsTitle}</h2>

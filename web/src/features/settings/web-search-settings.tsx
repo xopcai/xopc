@@ -299,7 +299,7 @@ function ProviderRowEditor({
   );
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-panel/60 p-4 dark:border-edge-subtle">
+    <div className="flex flex-col gap-3 rounded-xl bg-surface-panel/70 p-4 shadow-surface">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Select
           className={cn(selectClassName(), 'min-w-[8rem]')}

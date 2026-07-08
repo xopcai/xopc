@@ -144,16 +144,16 @@ export function DreamingRuntimeSection({ t, data, isLoading, localeTag, schedule
                 </p>
               ) : null}
               {data.lastRun.record ? (
-                <div className="rounded-lg border border-edge-subtle/80 bg-surface-panel/50 p-2.5">
+                <div className="rounded-lg bg-surface-panel/70 p-2.5 shadow-surface">
                   <LastRunStructuredView t={t} r={data.lastRun.record} />
                 </div>
               ) : null}
               {data.lastRun.raw !== undefined && data.lastRun.raw !== null ? (
-                <details className="group rounded-lg border border-edge-subtle">
+                <details className="group rounded-lg bg-surface-panel/70 shadow-surface">
                   <summary className="cursor-pointer list-none px-2.5 py-1.5 text-xs font-medium text-fg-muted marker:hidden [&::-webkit-details-marker]:hidden">
                     <span className="underline decoration-edge underline-offset-2 group-open:text-fg">{t.lastRunRaw}</span>
                   </summary>
-                  <pre className="max-h-40 overflow-auto border-t border-edge-subtle p-2.5 text-xs text-fg-muted">
+                  <pre className="max-h-40 overflow-auto bg-surface-base/50 p-2.5 text-xs text-fg-muted">
                     {JSON.stringify(data.lastRun.raw, null, 2)}
                   </pre>
                 </details>

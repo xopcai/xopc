@@ -170,7 +170,7 @@ export function ConnectedProvidersGrid({ labels, onAdd, onManage }: ConnectedPro
 
       {/* Empty state */}
       {configuredCards.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-edge-subtle bg-surface-panel/40 px-6 py-10 text-center">
+        <div className="rounded-2xl bg-surface-panel/60 px-6 py-10 text-center shadow-surface">
           <p className="text-sm font-medium text-fg">{labels.empty}</p>
           <p className="mt-1 text-sm text-fg-muted">{labels.emptyHint}</p>
           <Button type="button" variant="primary" className="mt-4 gap-1.5" onClick={onAdd}>
@@ -208,7 +208,7 @@ function ProviderCard({
       type="button"
       onClick={onManage}
       className={cn(
-        'group relative flex flex-col justify-between rounded-2xl border border-edge-subtle bg-surface-base p-4 text-left transition-colors',
+        'group relative flex flex-col justify-between rounded-2xl bg-surface-base p-4 text-left shadow-surface transition-colors',
         'hover:bg-surface-hover/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         interaction.pressCard,
       )}

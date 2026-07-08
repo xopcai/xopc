@@ -557,7 +557,7 @@ export function TunnelSettingsPanel({ embedded = false }: { embedded?: boolean }
         ) : null}
       </SettingsFormSection>
 
-      <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-xs text-fg-subtle">
+      <div className="flex flex-col gap-2 rounded-lg bg-surface-panel/80 px-3 py-2 text-xs text-fg-subtle shadow-surface">
         <p className="flex items-start gap-2">
           <Globe className="mt-0.5 size-4 shrink-0 text-accent" />
           <span>{t.brokerNote}</span>

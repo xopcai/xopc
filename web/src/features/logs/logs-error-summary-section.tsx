@@ -21,7 +21,7 @@ export function LogsErrorSummarySection({ L, items, loading, onSelectItem }: Pro
   const totalCount = items.reduce((sum, item) => sum + item.count, 0);
 
   return (
-    <section className="overflow-hidden rounded-xl border border-edge bg-surface-panel dark:border-edge">
+    <section className="overflow-hidden rounded-xl bg-surface-panel shadow-surface">
       <button
         type="button"
         onClick={() => setExpanded((open) => !open)}

@@ -195,8 +195,8 @@ export function BuiltinToolsDisableUi(props: BuiltinToolsDisableUiProps) {
                       <li
                         key={tid}
                         className={cn(
-                          'rounded-xl border border-edge-subtle bg-surface-panel/60 px-3 py-2.5 dark:border-edge-subtle',
-                          unknown && 'border-dashed',
+                          'rounded-xl bg-surface-panel/70 px-3 py-2.5 shadow-surface',
+                          unknown && 'bg-surface-panel/50',
                           lockedByDefault && 'opacity-60',
                         )}
                       >

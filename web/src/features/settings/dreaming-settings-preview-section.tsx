@@ -48,7 +48,7 @@ export function DreamingPreviewSection({ t, hasToken, previewLoading, previewIte
               return (
                 <div
                   key={`${it.key}:${it.hash}:${src}`}
-                  className="rounded-lg border border-edge-subtle bg-surface-panel/60 px-2.5 py-2"
+                  className="rounded-lg bg-surface-panel/70 px-2.5 py-2 shadow-surface"
                 >
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
                     <span className="font-medium text-fg">{src}</span>

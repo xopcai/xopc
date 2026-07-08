@@ -28,7 +28,7 @@ export function ExtensionDebugPage() {
         <p className="mt-1 text-sm text-fg-muted">{t.subtitle}</p>
       </div>
 
-      <section className="rounded-xl border border-edge bg-surface-base p-4">
+      <section className="rounded-xl bg-surface-base p-4">
         <h2 className="text-sm font-semibold text-fg">{t.grantsHeading}</h2>
         <p className="mt-1 text-xs text-fg-muted">{t.grantsHint}</p>
         <pre className="mt-3 max-h-48 overflow-auto rounded-lg border border-edge-subtle bg-surface-muted p-3 font-mono text-xs text-fg">
@@ -43,7 +43,7 @@ export function ExtensionDebugPage() {
         </button>
       </section>
 
-      <section className="rounded-xl border border-edge bg-surface-base p-4">
+      <section className="rounded-xl bg-surface-base p-4">
         <h2 className="text-sm font-semibold text-fg">{t.listHeading}</h2>
         <div className="mt-3 overflow-x-auto">
           <table className="w-full min-w-[32rem] border-collapse text-left text-sm">
@@ -69,7 +69,7 @@ export function ExtensionDebugPage() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-dashed border-edge-subtle bg-surface-muted/50 p-4 text-sm text-fg-muted">
+      <section className="rounded-xl bg-surface-muted/50 p-4 text-sm text-fg-muted shadow-surface">
         <h2 className="text-sm font-semibold text-fg">{t.futureHeading}</h2>
         <p className="mt-2">{t.futureBody}</p>
       </section>

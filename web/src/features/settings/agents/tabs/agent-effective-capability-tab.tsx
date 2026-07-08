@@ -24,10 +24,10 @@ function SourceBadge({ source }: { source: string }) {
   return (
     <span
       className={cn(
-        'shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium',
-        preset && 'border-accent/25 bg-accent/10 text-accent',
-        agent && 'border-edge bg-surface-base text-fg-muted',
-        !preset && !agent && 'border-edge-subtle bg-surface-panel text-fg-subtle',
+        'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+        preset && 'bg-accent/10 text-accent',
+        agent && 'bg-surface-base text-fg-muted',
+        !preset && !agent && 'bg-surface-panel text-fg-subtle',
       )}
     >
       {source}
@@ -37,7 +37,7 @@ function SourceBadge({ source }: { source: string }) {
 
 function PolicyRow(props: { name: string; value: string; source: string; monoValue?: boolean }) {
   return (
-    <div className="grid gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] sm:items-center">
+    <div className="grid gap-2 rounded-lg bg-surface-panel/80 px-3 py-2 shadow-surface sm:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] sm:items-center">
       <div className="min-w-0 truncate font-mono text-xs font-medium text-fg">{props.name}</div>
       <div className={cn('min-w-0 truncate text-sm text-fg', props.monoValue && 'font-mono text-xs')}>
         {props.value}
@@ -93,7 +93,7 @@ export function AgentEffectiveCapabilityTab(props: {
               <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">
                 {a.effectivePresetChain}
               </h4>
-              <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-sm text-fg">
+              <div className="rounded-lg bg-surface-panel/80 px-3 py-2 text-sm text-fg shadow-surface">
                 {presetChain.length ? presetChain.join(' -> ') : a.effectiveNoPresets}
               </div>
             </div>
@@ -136,7 +136,7 @@ export function AgentEffectiveCapabilityTab(props: {
                   ))}
                 </div>
               ) : (
-                <p className="rounded-lg border border-dashed border-edge-subtle px-3 py-2 text-sm text-fg-muted">
+                <p className="rounded-lg bg-surface-panel/60 px-3 py-2 text-sm text-fg-muted shadow-surface">
                   {a.effectiveNoToolPolicies}
                 </p>
               )}

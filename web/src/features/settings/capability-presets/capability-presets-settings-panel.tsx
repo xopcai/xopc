@@ -427,7 +427,7 @@ export function CapabilityPresetsSettingsPanel() {
                 <button
                   key={starter}
                   type="button"
-                  className="min-h-28 rounded-lg border border-edge-subtle bg-surface-panel px-4 py-3 text-left text-sm text-fg transition-colors hover:border-edge hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className="min-h-28 rounded-lg bg-surface-panel/80 px-4 py-3 text-left text-sm text-fg shadow-surface transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   onClick={() => startNew(starter)}
                 >
                   <span className="font-medium">{cp.starters[starter].title}</span>
@@ -449,19 +449,19 @@ export function CapabilityPresetsSettingsPanel() {
               <button
                 type="button"
                 onClick={() => selectPreset(defaultPreset)}
-                className="group rounded-lg border border-accent/25 bg-accent/5 px-4 py-3 text-left text-fg transition-colors hover:border-accent/40 hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                className="group rounded-lg bg-accent/5 px-4 py-3 text-left text-fg shadow-surface transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="text-sm font-semibold text-fg">{defaultPreset.name}</span>
-                      <span className="rounded-full border border-accent/25 bg-surface-panel px-2 py-0.5 text-[11px] font-medium text-accent">
+                      <span className="rounded-full bg-surface-panel px-2 py-0.5 text-[11px] font-medium text-accent">
                         {cp.globalDefaultsBadge}
                       </span>
                     </div>
                     <div className="mt-1 font-mono text-[11px] text-fg-subtle">{defaultPreset.id}</div>
                   </div>
-                  <span className="shrink-0 rounded-full border border-edge-subtle bg-surface-panel px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+                  <span className="shrink-0 rounded-full bg-surface-panel px-2 py-0.5 text-[11px] font-medium text-fg-muted">
                     {cp.globalDefaultsInherited}
                   </span>
                 </div>
@@ -478,7 +478,7 @@ export function CapabilityPresetsSettingsPanel() {
           <SettingsFormSection>
             <SettingsFormSectionHeader icon={Layers} title={cp.listTitle} subtitle={cp.listHint} />
             {sharedPresets.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-edge-subtle px-3 py-4 text-sm text-fg-muted">
+              <div className="rounded-lg bg-surface-panel/70 px-3 py-4 text-sm text-fg-muted shadow-surface">
                 {cp.empty}
               </div>
             ) : (
@@ -488,14 +488,14 @@ export function CapabilityPresetsSettingsPanel() {
                     key={preset.id}
                     type="button"
                     onClick={() => selectPreset(preset)}
-                    className="group min-h-36 rounded-lg border border-edge-subtle bg-surface-panel px-4 py-3 text-left text-fg transition-colors hover:border-edge hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    className="group min-h-36 rounded-lg bg-surface-panel/80 px-4 py-3 text-left text-fg shadow-surface transition-colors hover:bg-surface-hover/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <div className="truncate text-sm font-semibold text-fg">{preset.name}</div>
                         <div className="mt-1 truncate font-mono text-[11px] text-fg-subtle">{preset.id}</div>
                       </div>
-                      <span className="shrink-0 rounded-full border border-edge-subtle px-2 py-0.5 text-[11px] font-medium text-fg-muted">
+                      <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">
                         {preset.usage.length}
                       </span>
                     </div>
@@ -727,7 +727,7 @@ export function CapabilityPresetsSettingsPanel() {
                 {selected?.usage.length ? (
                   <div className="grid gap-2">
                     {selected.usage.map((usage) => (
-                      <div key={usage.agentId} className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2">
+                      <div key={usage.agentId} className="rounded-lg bg-surface-panel/80 px-3 py-2 shadow-surface">
                         <div className="text-sm font-medium text-fg">{usage.agentName || usage.agentId}</div>
                         <div className="mt-1 font-mono text-[11px] text-fg-muted">{usage.agentId}</div>
                       </div>
@@ -785,7 +785,7 @@ export function CapabilityPresetsSettingsPanel() {
 
 function SummaryTile({ icon: Icon, label, value }: { icon: typeof Copy; label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2">
+    <div className="rounded-lg bg-surface-panel/80 px-3 py-2 shadow-surface">
       <div className="flex items-center gap-2 text-xs text-fg-muted">
         <Icon className="size-3.5" aria-hidden />
         {label}

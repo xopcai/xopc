@@ -95,7 +95,7 @@ export function PhaseConfigPanel({
 }) {
   return (
     <div className={phasePanelClass}>
-      <div className="mb-2.5 flex flex-wrap items-start justify-between gap-2 border-b border-edge-subtle/80 pb-2.5">
+      <div className="mb-2.5 flex flex-wrap items-start justify-between gap-2 rounded-lg bg-surface-base/45 px-3 py-2.5">
         <div className="flex min-w-0 items-start gap-2">
           <span className="mt-0.5 shrink-0">{icon}</span>
           <div className="min-w-0">
@@ -183,14 +183,14 @@ export function PhaseLastRunBlock({
   t: DreamingSettingsI18n;
 }) {
   return (
-    <div className="border-t border-edge-subtle/80 pt-3">
+    <div className="rounded-lg bg-surface-base/45 p-3">
       <PanelHeading label={label} className="mb-2" />
       {lastRun?.exists ? (
-        <details className="group rounded-lg border border-edge-subtle">
+        <details className="group rounded-lg bg-surface-panel/70 shadow-surface">
           <summary className="cursor-pointer list-none px-2.5 py-1.5 text-xs font-medium text-fg-muted marker:hidden [&::-webkit-details-marker]:hidden">
             <span className="underline decoration-edge underline-offset-2 group-open:text-fg">{t.lastRunRaw}</span>
           </summary>
-          <pre className="max-h-40 overflow-auto border-t border-edge-subtle p-2.5 text-xs text-fg-muted">
+          <pre className="max-h-40 overflow-auto bg-surface-base/50 p-2.5 text-xs text-fg-muted">
             {JSON.stringify(lastRun.raw, null, 2)}
           </pre>
         </details>

@@ -117,8 +117,8 @@ export function RemoteAccessStatusStrip({ onOpenTab }: { onOpenTab: (tab: Remote
             type="button"
             onClick={() => onOpenTab(item.tab)}
             className={cn(
-              'flex items-start gap-3 rounded-xl border border-edge-subtle bg-surface-base px-3 py-2.5 text-left transition-colors',
-              'hover:border-edge hover:bg-surface-hover/50',
+              'flex items-start gap-3 rounded-xl bg-surface-base px-3 py-2.5 text-left shadow-surface transition-colors',
+              'hover:bg-surface-hover/50',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
             )}
           >

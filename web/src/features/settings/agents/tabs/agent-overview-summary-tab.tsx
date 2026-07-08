@@ -22,7 +22,7 @@ function FieldCard({
   mono?: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-edge-subtle bg-surface-panel px-4 py-3">
+    <div className="rounded-xl bg-surface-panel/80 px-4 py-3 shadow-surface">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">{label}</p>
         <span className="shrink-0 rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg-muted">
@@ -46,7 +46,7 @@ function CapabilityCard({
   value: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-edge-subtle bg-surface-panel px-4 py-3">
+    <div className="flex items-center gap-3 rounded-xl bg-surface-panel/80 px-4 py-3 shadow-surface">
       <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover text-fg-muted">
         <Icon className="size-4" strokeWidth={1.8} aria-hidden />
       </div>

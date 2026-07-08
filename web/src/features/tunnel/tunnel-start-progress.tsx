@@ -109,7 +109,7 @@ export function TunnelStartProgressPanel({
     status.startProgress?.phase !== 'registering';
 
   return (
-    <div className="mt-3 space-y-3 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-3">
+    <div className="mt-3 space-y-3 rounded-lg bg-surface-panel/80 px-3 py-3 shadow-surface">
       <div>
         <p className="text-xs font-medium text-fg">{t.startProgressTitle}</p>
         <p className="mt-1 text-xs text-fg-muted">{t.startProgressHint}</p>

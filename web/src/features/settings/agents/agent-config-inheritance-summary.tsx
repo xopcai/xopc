@@ -44,9 +44,9 @@ function InheritanceRow({
   );
 
   const className = cn(
-    'flex flex-col gap-1 rounded-xl border border-edge-subtle bg-surface-panel px-4 py-3 sm:flex-row sm:items-center sm:justify-between',
+    'flex flex-col gap-1 rounded-xl bg-surface-panel/80 px-4 py-3 shadow-surface sm:flex-row sm:items-center sm:justify-between',
     onClick
-      ? 'w-full text-left transition-colors hover:border-edge hover:bg-surface-hover/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.995] motion-reduce:active:scale-100'
+      ? 'w-full text-left transition-colors hover:bg-surface-hover/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.995] motion-reduce:active:scale-100'
       : undefined,
   );
 

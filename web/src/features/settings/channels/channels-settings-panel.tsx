@@ -679,7 +679,7 @@ export function ChannelsSettingsPanel() {
       >
         {activeEntry ? (
           <div className="space-y-4">
-            <div className="rounded-xl border border-edge-subtle bg-surface-panel px-3 py-3">
+            <div className="rounded-xl bg-surface-panel/80 px-3 py-3 shadow-surface">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">
                   <ChannelIcon entry={activeEntry} />
@@ -765,7 +765,7 @@ export function ChannelsSettingsPanel() {
             ) : null}
 
             {showSchemaConfig && hasBasicConfigFields ? (
-              <section className="rounded-xl border border-edge-subtle bg-surface-panel p-4">
+              <section className="rounded-xl bg-surface-panel/80 p-4 shadow-surface">
                 <div className="mb-4">
                   <h3 className="text-sm font-semibold text-fg">{ch.basicConfiguration}</h3>
                   <p className="mt-1 text-sm text-fg-muted">{ch.basicConfigurationHint}</p>
@@ -781,12 +781,12 @@ export function ChannelsSettingsPanel() {
             ) : null}
 
             {showSchemaConfig && hasSchemaFields(advancedConfigSchema) ? (
-              <details className="group rounded-xl border border-edge-subtle bg-surface-panel">
+              <details className="group rounded-xl bg-surface-panel/80 shadow-surface">
                 <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fg marker:hidden [&::-webkit-details-marker]:hidden">
                   <Settings2 className="size-4 text-fg-muted" />
                   {ch.advancedConfiguration}
                 </summary>
-                <div className="border-t border-edge-subtle p-4">
+                <div className="bg-surface-base/50 p-4">
                   <SchemaForm
                     schema={advancedConfigSchema}
                     values={effectiveConfig}

@@ -116,7 +116,7 @@ function SecurityAuditBody({ g, audit }: { g: GatewaySettingsMessages; audit: Ga
       ) : null}
 
       {audit.hints.length > 0 ? (
-        <div className="space-y-1 border-t border-edge pt-3">
+        <div className="space-y-1 rounded-lg bg-surface-panel/50 px-3 py-2.5">
           <p className="text-xs font-medium text-fg-muted">{g.securityAuditHintsTitle}</p>
           <ul className="space-y-1 text-xs text-fg-subtle">
             {audit.hints.map((hint) => (
@@ -135,7 +135,7 @@ function FindingRow({ g, finding }: { g: GatewaySettingsMessages; finding: Gatew
   const meta = severityMeta(finding.severity);
 
   return (
-    <li className="rounded-lg border border-edge bg-surface-panel/50 px-3 py-2.5">
+    <li className="rounded-lg bg-surface-panel/70 px-3 py-2.5 shadow-surface">
       <div className="flex items-start gap-2">
         <meta.icon className={cn('mt-0.5 size-4 shrink-0', meta.iconClass)} aria-hidden />
         <div className="min-w-0 flex-1">

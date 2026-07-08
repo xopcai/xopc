@@ -192,7 +192,7 @@ function GoalNotificationTargetRow({
     (target.chatId && !selectedChatKnown);
 
   return (
-    <div className="grid gap-2 rounded-md border border-edge/70 bg-surface-panel p-2">
+    <div className="grid gap-2 rounded-lg bg-surface-panel/80 p-3 shadow-surface">
       <div className="grid gap-2 sm:grid-cols-[10rem_10rem_minmax(0,1fr)_2rem]">
         <Select
           className={inputClass}
@@ -467,7 +467,7 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
 
   if (!hasToken || !form) {
     return isLoading ? (
-      <div className="rounded-2xl border border-edge bg-surface-base px-4 py-5 sm:px-5">
+      <div className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
         <Loader2 className="size-4 animate-spin text-fg-muted" />
       </div>
     ) : null;
@@ -568,7 +568,7 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
           <div className="grid gap-2 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-sm font-medium text-fg">{t.notificationsChannels}</label>
-              <div className="rounded-lg border border-edge bg-surface-panel p-2">
+              <div className="rounded-lg bg-surface-panel/80 p-2 shadow-surface">
                 <div className="grid max-h-40 gap-1 overflow-y-auto pr-1">
                   {notificationChannelOptions.map((channel) => {
                     const selected = form.notifications.channels.includes(channel.id);
@@ -591,11 +591,11 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
                         <span className="min-w-0 flex-1 truncate">{channel.label}</span>
                         <span className="shrink-0 text-xs text-fg-muted">{channel.id}</span>
                         {channel.enabled ? (
-                          <span className="shrink-0 rounded-full border border-accent/40 bg-accent-soft px-1.5 py-0.5 text-[11px] text-accent-fg">
+                          <span className="shrink-0 rounded-full bg-accent-soft px-1.5 py-0.5 text-[11px] text-accent-fg">
                             {t.notificationsChannelEnabled}
                           </span>
                         ) : channel.configured ? (
-                          <span className="shrink-0 rounded-full border border-edge px-1.5 py-0.5 text-[11px] text-fg-muted">
+                          <span className="shrink-0 rounded-full bg-surface-hover px-1.5 py-0.5 text-[11px] text-fg-muted">
                             {t.notificationsChannelConfigured}
                           </span>
                         ) : null}
@@ -615,10 +615,10 @@ export function GoalsConfigSection({ hasToken }: { hasToken: boolean }) {
                       key={event}
                       type="button"
                       className={cn(
-                        'rounded-md border px-2 py-1 text-xs',
+                        'rounded-md px-2 py-1 text-xs transition-colors',
                         selected
-                          ? 'border-accent bg-accent-soft text-accent-fg'
-                          : 'border-edge bg-surface-panel text-fg-muted hover:bg-surface-hover',
+                          ? 'bg-accent-soft text-accent-fg'
+                          : 'bg-surface-panel text-fg-muted hover:bg-surface-hover',
                       )}
                       onClick={() => {
                         const events = selected

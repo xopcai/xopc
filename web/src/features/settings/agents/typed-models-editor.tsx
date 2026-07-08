@@ -111,7 +111,7 @@ export function TypedModelsEditor(props: {
     return (
       <div
         key={rowKeysRef.current[index] ?? `typed-model-row-${index}`}
-        className="grid gap-3 rounded-lg border border-edge-subtle bg-surface-panel/40 p-3 lg:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto] lg:items-start dark:border-edge-subtle"
+        className="grid gap-3 rounded-lg bg-surface-panel/70 p-3 shadow-surface lg:grid-cols-[minmax(0,11rem)_minmax(0,1fr)_auto] lg:items-start"
       >
         {options.recommended ? (
           <div className="min-w-0">
@@ -201,7 +201,7 @@ export function TypedModelsEditor(props: {
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg border border-dashed border-edge-subtle px-3 py-2 text-xs text-fg-muted">
+              <div className="rounded-lg bg-surface-panel/60 px-3 py-2 text-xs text-fg-muted shadow-surface">
                 {labels.fallbackEmptyHint}
               </div>
             )}
@@ -269,7 +269,7 @@ export function TypedModelsEditor(props: {
         {customRows.length > 0 ? (
           customRows.map((item) => renderRow(item, { recommended: false }))
         ) : (
-          <div className="rounded-lg border border-dashed border-edge-subtle px-3 py-2 text-sm text-fg-muted">
+          <div className="rounded-lg bg-surface-panel/60 px-3 py-2 text-sm text-fg-muted shadow-surface">
             {labels.noCustomRoles}
           </div>
         )}

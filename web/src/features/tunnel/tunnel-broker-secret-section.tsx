@@ -120,7 +120,7 @@ export function BrokerSecretSetupSection({
             </a>
 
             {brokerSecretFromEnv ? (
-              <p className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-xs text-fg-muted">
+              <p className="rounded-lg bg-surface-panel/80 px-3 py-2 text-xs text-fg-muted shadow-surface">
                 {t.brokerSecretEnvHint}
               </p>
             ) : null}

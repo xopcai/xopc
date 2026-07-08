@@ -61,7 +61,7 @@ export function ExtensionSettingsPage() {
     <div className="flex w-full flex-col gap-3 px-3 py-8 sm:px-5 xl:px-6">
       <h1 className="text-lg font-semibold text-fg">{title}</h1>
       {isImageGeneration ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-base px-4 py-3 text-sm">
+        <div className="flex flex-col gap-2 rounded-lg bg-surface-base px-4 py-3 text-sm">
           <p className="leading-relaxed text-fg-muted">{xm.banner}</p>
           <Link
             to="/settings/credentials?tab=image-models"
@@ -74,7 +74,7 @@ export function ExtensionSettingsPage() {
       ) : null}
       {isImageGeneration ? <ExtensionImageProviderSettings extensionId={extensionId} /> : null}
       {isMediaProvider ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-edge-subtle bg-surface-base px-4 py-3 text-sm">
+        <div className="flex flex-col gap-2 rounded-lg bg-surface-base px-4 py-3 text-sm">
           <p className="leading-relaxed text-fg-muted">{xs.banner}</p>
           <Link to="/settings/credentials?tab=voice" className="w-fit font-medium text-accent hover:underline">
             {xs.openVoice}
@@ -84,7 +84,7 @@ export function ExtensionSettingsPage() {
       {isMediaProvider ? <ExtensionSttProviderSettings extensionId={extensionId} /> : null}
       {hasAutoForm ? <ExtensionAutoSettings extensionId={extensionId} /> : null}
       {hasIframe && panel && extension.ui ? (
-        <div className="overflow-hidden rounded-xl border border-edge bg-surface-base">
+        <div className="overflow-hidden rounded-xl bg-surface-base shadow-surface">
           <ExtensionIframeHost
             extensionId={extensionId}
             extensionName={extension.name}
