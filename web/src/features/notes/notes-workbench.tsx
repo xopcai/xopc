@@ -62,7 +62,7 @@ const initialUi: NotesUi = {
   pinnedOnly: false,
 };
 
-const NOTES_LIST_MIN_WIDTH = 288;
+const NOTES_LIST_MIN_WIDTH = 240;
 const NOTES_LIST_DEFAULT_WIDTH = 320;
 const NOTES_LIST_MAX_WIDTH = 520;
 const NOTES_EDITOR_MIN_WIDTH = 560;
@@ -169,6 +169,7 @@ export function NotesWorkbench({
   const [creatingBlankNote, setCreatingBlankNote] = useState(false);
   const [autoFocusNoteId, setAutoFocusNoteId] = useState<string | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const notesListRef = useRef<HTMLElement>(null);
   const [nowMs] = useState(() => Date.now());
   const navigate = useNavigate();
 
@@ -525,23 +526,36 @@ export function NotesWorkbench({
   const handleListResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     const el = event.currentTarget;
+    const listEl = notesListRef.current;
     el.setPointerCapture(event.pointerId);
     setResizingList(true);
 
+    const workspaceWidth = workspaceRef.current?.clientWidth ?? window.innerWidth;
+    const availableMax = Math.max(NOTES_LIST_MIN_WIDTH, workspaceWidth - NOTES_EDITOR_MIN_WIDTH);
+    const maxWidth = Math.min(NOTES_LIST_MAX_WIDTH, availableMax);
+    const clampWidth = (width: number) => Math.max(NOTES_LIST_MIN_WIDTH, Math.min(maxWidth, width));
     const startX = event.clientX;
-    const startWidth = notesListWidth;
+    const startWidth = clampWidth(notesListWidth);
     const pointerId = event.pointerId;
     let rafId = 0;
-    let nextWidth = notesListWidth;
-    let committedWidth = notesListWidth;
+    let nextWidth = startWidth;
+    let committedWidth = startWidth;
+
+    if (listEl) {
+      listEl.style.transition = 'none';
+      listEl.style.width = `${startWidth}px`;
+    }
+
     const applyWidth = () => {
       rafId = 0;
       committedWidth = nextWidth;
-      workspaceRef.current?.style.setProperty('--notes-list-width', `${committedWidth}px`);
+      if (listEl) {
+        listEl.style.width = `${committedWidth}px`;
+      }
     };
 
     const onMove = (moveEvent: PointerEvent) => {
-      nextWidth = clampNotesListWidth(startWidth + moveEvent.clientX - startX);
+      nextWidth = clampWidth(startWidth + moveEvent.clientX - startX);
       if (rafId === 0) {
         rafId = window.requestAnimationFrame(applyWidth);
       }
@@ -558,6 +572,11 @@ export function NotesWorkbench({
         // Pointer capture may already be released by the browser.
       }
       setResizingList(false);
+      workspaceRef.current?.style.setProperty('--notes-list-width', `${committedWidth}px`);
+      if (listEl) {
+        listEl.style.removeProperty('transition');
+        listEl.style.removeProperty('width');
+      }
       setNotesListWidth(committedWidth);
       writeStoredNotesListWidth(listWidthStorageKey, committedWidth);
       window.removeEventListener('pointermove', onMove);
@@ -568,7 +587,7 @@ export function NotesWorkbench({
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onDone);
     window.addEventListener('pointercancel', onDone);
-  }, [clampNotesListWidth, listWidthStorageKey, notesListWidth]);
+  }, [listWidthStorageKey, notesListWidth]);
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -615,9 +634,10 @@ export function NotesWorkbench({
       style={{ '--notes-list-width': `${notesListWidth}px` } as CSSProperties}
     >
       <section
+        ref={notesListRef}
         className={cn(
           'relative flex min-h-0 w-full shrink-0 flex-col overflow-hidden bg-surface-panel',
-          'lg:transition-[width] lg:duration-[280ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:lg:transition-none',
+          !resizingList && 'lg:transition-[width] lg:duration-[280ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:lg:transition-none',
           notesListCollapsed ? 'lg:w-0 lg:min-w-0 lg:max-w-0 lg:pointer-events-none' : 'lg:w-[var(--notes-list-width)]',
           selectedNoteId && 'hidden lg:flex',
         )}
@@ -757,21 +777,30 @@ export function NotesWorkbench({
         aria-valuenow={Math.round(notesListWidth)}
         tabIndex={0}
         onPointerDown={handleListResizePointerDown}
+        onDoubleClick={() => commitNotesListWidth(NOTES_LIST_DEFAULT_WIDTH)}
         onKeyDown={handleListResizeKeyDown}
+        title={n.resizeNotesList}
         className={cn(
-          'relative hidden shrink-0 cursor-col-resize touch-none select-none items-stretch justify-center lg:flex',
+          'group relative hidden shrink-0 cursor-col-resize touch-none select-none items-center justify-center lg:flex',
           'lg:transition-[width,opacity] lg:duration-[280ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:lg:transition-none',
-          notesListCollapsed ? 'lg:w-0 lg:opacity-0 lg:pointer-events-none' : 'lg:w-2 lg:opacity-100',
+          notesListCollapsed ? 'lg:w-0 lg:opacity-0 lg:pointer-events-none' : 'lg:w-3 lg:opacity-100',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-0',
-          "before:pointer-events-none before:block before:h-full before:w-px before:bg-edge-subtle before:transition-colors before:duration-150",
-          'hover:before:bg-edge-strong',
-          resizingList && 'before:bg-accent',
         )}
-      />
+      >
+        <span
+          aria-hidden
+          className={cn(
+            'h-8 w-1 rounded-pill opacity-0 transition-[background-color,opacity,transform] duration-150',
+            'bg-edge-strong/55 group-hover:opacity-100 group-focus-visible:opacity-100',
+            'group-hover:scale-y-110 group-focus-visible:scale-y-110',
+            resizingList && 'bg-accent opacity-100 scale-y-125',
+          )}
+        />
+      </div>
 
       <section
         className={cn(
-          'relative min-w-0 flex-1 bg-surface-base',
+          'relative min-w-0 flex-1 bg-surface-panel',
           !selectedNoteId && 'hidden lg:flex',
         )}
       >

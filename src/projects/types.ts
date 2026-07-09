@@ -44,6 +44,15 @@ export interface ProjectListQuery {
   offset?: number;
 }
 
+export interface SidebarProjectListQuery {
+  status?: ProjectStatus | ProjectStatus[];
+  updatedAfter?: number;
+  includePinned?: boolean;
+  includeSessionKey?: string;
+  limit?: number;
+  offset?: number;
+}
+
 export interface CreateProjectInput {
   name?: string;
   slug?: string;

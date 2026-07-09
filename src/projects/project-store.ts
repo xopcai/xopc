@@ -8,6 +8,7 @@ import type {
   ProjectListQuery,
   ProjectListResult,
   ProjectStatus,
+  SidebarProjectListQuery,
   ProjectWithDetails,
   UpdateProjectInput,
 } from './types.js';
@@ -202,6 +203,61 @@ export class ProjectStore {
     const total = (db.prepare(`SELECT COUNT(*) AS total FROM projects p ${where}`).get(...params) as { total: number }).total;
     const rows = db
       .prepare(`SELECT p.* FROM projects p ${where} ORDER BY ${sortColumn} ${sortOrder} LIMIT ? OFFSET ?`)
+      .all(...params, limit, offset) as ProjectRow[];
+    return { items: rows.map(projectFromRow), total, limit, offset, hasMore: offset + limit < total };
+  }
+
+  listWithSidebarSessions(query: SidebarProjectListQuery = {}): ProjectListResult {
+    const projectConditions: string[] = [];
+    const sessionConditions = [
+      `s.hidden_from_session_list = 0`,
+      `s.session_type = 'chat'`,
+    ];
+    const params: Array<string | number> = [];
+
+    if (query.status) {
+      const statuses = Array.isArray(query.status) ? query.status : [query.status];
+      projectConditions.push(`p.status IN (${statuses.map(() => '?').join(', ')})`);
+      params.push(...statuses);
+    }
+
+    if (query.updatedAfter !== undefined) {
+      const clauses = [`s.updated_at >= ?`];
+      params.push(query.updatedAfter);
+      if (query.includePinned) {
+        clauses.push(`s.status = 'pinned'`);
+      }
+      const includeSessionKey = query.includeSessionKey?.trim();
+      if (includeSessionKey) {
+        clauses.push(`s.session_key = ?`);
+        params.push(includeSessionKey);
+      }
+      sessionConditions.push(`(${clauses.join(' OR ')})`);
+    }
+
+    const whereParts = [...projectConditions, ...sessionConditions];
+    const where = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
+    const limit = clampLimit(query.limit, 50);
+    const offset = Math.max(0, Math.floor(query.offset ?? 0));
+    const db = getSqliteDatabase();
+    const total = (db
+      .prepare(
+        `SELECT COUNT(DISTINCT p.project_id) AS total
+         FROM projects p
+         JOIN sessions s ON s.project_id = p.project_id
+         ${where}`,
+      )
+      .get(...params) as { total: number }).total;
+    const rows = db
+      .prepare(
+        `SELECT p.*, MAX(s.updated_at) AS latest_session_at
+         FROM projects p
+         JOIN sessions s ON s.project_id = p.project_id
+         ${where}
+         GROUP BY p.project_id
+         ORDER BY latest_session_at DESC, p.updated_at DESC
+         LIMIT ? OFFSET ?`,
+      )
       .all(...params, limit, offset) as ProjectRow[];
     return { items: rows.map(projectFromRow), total, limit, offset, hasMore: offset + limit < total };
   }
