@@ -14,7 +14,7 @@ export function AgentsSettingsPanel() {
 
   if (!vm.hasToken) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6" className="min-h-full bg-surface-base">
+      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6" className="min-h-full bg-surface-panel">
         <SettingsPageHeader title={vm.a.title} />
         <p className="text-sm text-fg-muted">{vm.a.needToken}</p>
       </SettingsPageFrame>
@@ -22,7 +22,7 @@ export function AgentsSettingsPanel() {
   }
 
   return (
-    <SettingsPageFrame gap="gap-6" padding="px-3 py-8 sm:px-5 xl:px-6" className="min-h-full bg-surface-base">
+    <SettingsPageFrame gap="gap-6" padding="px-3 py-8 sm:px-5 xl:px-6" className="min-h-full bg-surface-panel">
       {vm.displayError ? (
         <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 shadow-surface dark:text-red-300">
           {vm.displayError}

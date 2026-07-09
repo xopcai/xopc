@@ -111,6 +111,104 @@ describe('sqlite repositories', () => {
     expect(page.items[0]?.status).toBe(SessionStatus.PINNED);
   });
 
+  it('filters unassigned sessions separately from project sessions', () => {
+    const unassignedKey = 'agent:main:webchat:default:direct:chat_unassigned';
+    const projectKey = 'agent:main:webchat:default:direct:chat_project';
+
+    ensureSessionRecord(unassignedKey, CWD, {
+      ...METADATA,
+      sourceChatId: 'default:direct:chat_unassigned',
+    });
+    ensureSessionRecord(projectKey, CWD, {
+      ...METADATA,
+      sourceChatId: 'default:direct:chat_project',
+      projectId: 'project-1',
+    });
+
+    const unassigned = listSessionMetadata({ unassigned: true, limit: 10 });
+    expect(unassigned.items.map((item) => item.key)).toContain(unassignedKey);
+    expect(unassigned.items.map((item) => item.key)).not.toContain(projectKey);
+
+    const project = listSessionMetadata({ projectId: 'project-1', limit: 10 });
+    expect(project.items.map((item) => item.key)).toEqual([projectKey]);
+  });
+
+  it('lists only projects with sidebar-eligible sessions', () => {
+    const projects = new ProjectStore();
+    const emptyProject = projects.create({ name: 'Empty Project' });
+    const oldProject = projects.create({ name: 'Old Project' });
+    const recentProject = projects.create({ name: 'Recent Project' });
+    const pinnedProject = projects.create({ name: 'Pinned Project' });
+    const currentProject = projects.create({ name: 'Current Project' });
+    const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
+    const oldIso = new Date(cutoff - 24 * 60 * 60 * 1000).toISOString();
+
+    const oldKey = 'agent:main:webchat:default:direct:old_project';
+    const recentKey = 'agent:main:webchat:default:direct:recent_project';
+    const pinnedKey = 'agent:main:webchat:default:direct:pinned_project';
+    const currentKey = 'agent:main:webchat:default:direct:current_project';
+
+    ensureSessionRecord(oldKey, CWD, { ...METADATA, projectId: oldProject.id });
+    ensureSessionRecord(recentKey, CWD, { ...METADATA, projectId: recentProject.id });
+    ensureSessionRecord(pinnedKey, CWD, { ...METADATA, projectId: pinnedProject.id });
+    ensureSessionRecord(currentKey, CWD, { ...METADATA, projectId: currentProject.id });
+    patchSessionMetadata(oldKey, { updatedAt: oldIso, lastAccessedAt: oldIso });
+    patchSessionMetadata(pinnedKey, {
+      status: SessionStatus.PINNED,
+      updatedAt: oldIso,
+      lastAccessedAt: oldIso,
+    });
+    patchSessionMetadata(currentKey, { updatedAt: oldIso, lastAccessedAt: oldIso });
+
+    const withoutCurrent = projects.listWithSidebarSessions({
+      status: 'active',
+      updatedAfter: cutoff,
+      includePinned: true,
+      limit: 10,
+    });
+    expect(withoutCurrent.items.map((project) => project.id)).toContain(recentProject.id);
+    expect(withoutCurrent.items.map((project) => project.id)).toContain(pinnedProject.id);
+    expect(withoutCurrent.items.map((project) => project.id)).not.toContain(emptyProject.id);
+    expect(withoutCurrent.items.map((project) => project.id)).not.toContain(oldProject.id);
+    expect(withoutCurrent.items.map((project) => project.id)).not.toContain(currentProject.id);
+
+    const withCurrent = projects.listWithSidebarSessions({
+      status: 'active',
+      updatedAfter: cutoff,
+      includePinned: true,
+      includeSessionKey: currentKey,
+      limit: 10,
+    });
+    expect(withCurrent.items.map((project) => project.id)).toContain(currentProject.id);
+  });
+
+  it('moves deleted project sessions to unassigned while keeping sidebar age filtering', () => {
+    const projects = new ProjectStore();
+    const project = projects.create({ name: 'Deleted Project' });
+    const cutoff = Date.now() - 60 * 24 * 60 * 60 * 1000;
+    const oldIso = new Date(cutoff - 24 * 60 * 60 * 1000).toISOString();
+    const key = 'agent:main:webchat:default:direct:deleted_project_session';
+
+    ensureSessionRecord(key, CWD, { ...METADATA, projectId: project.id });
+    patchSessionMetadata(key, { updatedAt: oldIso, lastAccessedAt: oldIso });
+    projects.delete(project.id);
+
+    expect(getSessionMetadata(key)?.projectId).toBeUndefined();
+    expect(listSessionMetadata({
+      unassigned: true,
+      updatedAfter: cutoff,
+      includePinned: true,
+      limit: 10,
+    }).items.map((item) => item.key)).not.toContain(key);
+    expect(listSessionMetadata({
+      unassigned: true,
+      updatedAfter: cutoff,
+      includePinned: true,
+      includeSessionKey: key,
+      limit: 10,
+    }).items.map((item) => item.key)).toContain(key);
+  });
+
   it('hides empty shells from default session lists until a user message is written', () => {
     ensureSessionRecord(SESSION_KEY, CWD, {
       ...METADATA,

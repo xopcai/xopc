@@ -18,6 +18,7 @@ const log = createGatewayRouteLogger('Sessions');
 type SessionsStartupMethod = StartupUnavailableGatewayMethod;
 
 const SESSION_TYPES = new Set<SessionType>(['chat', 'workflow-run', 'workflow-subagent', 'cron', 'heartbeat']);
+const DEFAULT_SIDEBAR_STALE_DAYS = 60;
 
 function isSessionType(value: string): value is SessionType {
   return SESSION_TYPES.has(value as SessionType);
@@ -32,6 +33,17 @@ function ensureGatewayReadyForSessions(
     return null;
   }
   return respondStartupUnavailable(c, method);
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number, max: number): number {
+  const parsed = value ? Number.parseInt(value, 10) : fallback;
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(1, parsed));
+}
+
+function parseOffset(value: string | undefined): number {
+  const parsed = value ? Number.parseInt(value, 10) : 0;
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
 function buildDirectSessionMetadata(params: {
@@ -81,6 +93,73 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
   const { service } = deps;
 
   // ========== Session REST API (/api/sessions) ==========
+
+  authenticated.get('/api/sidebar/chat-list', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.list');
+    if (blocked) {
+      return blocked;
+    }
+
+    const projectLimit = parsePositiveInt(c.req.query('projectLimit'), 12, 50);
+    const projectOffset = parseOffset(c.req.query('projectOffset'));
+    const sessionPreviewLimit = parsePositiveInt(c.req.query('sessionPreviewLimit'), 5, 20);
+    const inboxLimit = parsePositiveInt(c.req.query('inboxLimit'), 20, 100);
+    const inboxOffset = parseOffset(c.req.query('inboxOffset'));
+    const staleDays = parsePositiveInt(c.req.query('staleDays'), DEFAULT_SIDEBAR_STALE_DAYS, 3650);
+    const updatedAfter = Date.now() - staleDays * 24 * 60 * 60 * 1000;
+    const includeSessionKey = c.req.query('includeSessionKey')?.trim() || undefined;
+
+    const projects = service.projects.listWithSidebarSessions({
+      status: 'active',
+      limit: projectLimit,
+      offset: projectOffset,
+      updatedAfter,
+      includePinned: true,
+      includeSessionKey,
+    });
+    const projectItems = await Promise.all(
+      projects.items.map(async (project) => {
+        const sessions = await service.sessions.listSessions({
+          projectId: project.id,
+          limit: sessionPreviewLimit,
+          offset: 0,
+          updatedAfter,
+          includePinned: true,
+          includeSessionKey,
+          sortBy: 'updatedAt',
+          sortOrder: 'desc',
+        });
+        return {
+          project,
+          sessions: sessions.items,
+          sessionTotal: sessions.total,
+          sessionHasMore: sessions.hasMore,
+        };
+      }),
+    );
+    const inbox = await service.sessions.listSessions({
+      unassigned: true,
+      limit: inboxLimit,
+      offset: inboxOffset,
+      updatedAfter,
+      includePinned: true,
+      includeSessionKey,
+      sortBy: 'updatedAt',
+      sortOrder: 'desc',
+    });
+
+    return c.json({
+      ok: true,
+      projects: {
+        items: projectItems,
+        total: projects.total,
+        limit: projects.limit,
+        offset: projects.offset,
+        hasMore: projects.hasMore,
+      },
+      inbox,
+    });
+  });
 
   // POST /api/sessions - Create new session (reuses empty sessions)
   authenticated.post('/api/sessions', async (c) => {
@@ -188,6 +267,10 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       sessionTypes: sessionTypes?.length ? sessionTypes : undefined,
       includeHidden: query.includeHidden === 'true',
       projectId: query.projectId,
+      unassigned: query.unassigned === 'true',
+      updatedAfter: query.updatedAfter ? parseInt(query.updatedAfter) : undefined,
+      includePinned: query.includePinned === 'true',
+      includeSessionKey: query.includeSessionKey,
       limit: query.limit ? parseInt(query.limit) : undefined,
       offset: query.offset ? parseInt(query.offset) : undefined,
     });

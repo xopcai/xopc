@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { Activity, AlertCircle, ArrowLeft, Check, CheckCircle2, ChevronDown, Clock, File, Folder, FolderPlus, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, ChevronDown, Clock, File, Folder, FolderPlus, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -1310,9 +1310,7 @@ export function ProjectDetailPage() {
   }
 
   const overviewSessions = overview?.recentSessions.length ? overview.recentSessions : project.recentSessions;
-  const overviewWorkflowRuns = overview?.recentWorkflowRuns.length ? overview.recentWorkflowRuns : project.recentWorkflowRuns;
   const overviewAttentionItems = overview?.attentionItems ?? [];
-  const overviewTimeline = overview?.timeline ?? [];
   const statusLabel = (status: string) => pm.statuses[status as keyof typeof pm.statuses] ?? status;
   const messageCount = (count: number) => interpolate(pm.common.messages, { count });
   const sessionSearchNeedle = sessionSearchQuery.trim().toLowerCase();
@@ -1353,12 +1351,12 @@ export function ProjectDetailPage() {
       <div
         className={cn(
           'mt-3 min-h-0 flex-1',
-          tab === 'overview' ? 'overflow-hidden' : 'overflow-y-auto pr-1 [scrollbar-gutter:stable]',
+          tab === 'overview' ? 'overflow-y-auto pr-1 [scrollbar-gutter:stable] xl:overflow-hidden xl:pr-0' : 'overflow-y-auto pr-1 [scrollbar-gutter:stable]',
         )}
       >
       {tab === 'overview' ? (
-        <section id="project-panel-overview" role="tabpanel" aria-labelledby="project-tab-overview" className="grid h-full min-h-0 overflow-hidden gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="grid min-h-0 min-w-0 content-start gap-4 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
+        <section id="project-panel-overview" role="tabpanel" aria-labelledby="project-tab-overview" className="grid min-h-full gap-4 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_20rem] xl:overflow-hidden">
+          <div className="grid min-w-0 content-start gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]">
             <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
@@ -1379,184 +1377,40 @@ export function ProjectDetailPage() {
                   </Button>
                 </div>
               </div>
-              <div className="mt-4 grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-5">
-                <div className="min-w-0 rounded-md bg-surface-base px-3 py-2">
-                  <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
-                    <MessageSquarePlus className="size-3.5" aria-hidden />
-                    <span className="min-w-0 truncate">{pm.overview.sessions}</span>
-                  </div>
-                  <p className="mt-1 text-xl font-semibold text-fg">{overview?.stats.sessionCount ?? project.sessionCount}</p>
-                </div>
-                <div className="min-w-0 rounded-md bg-surface-base px-3 py-2">
-                  <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
-                    <Target className="size-3.5" aria-hidden />
-                    <span className="min-w-0 truncate">{pm.overview.activeGoals}</span>
-                  </div>
-                  <p className="mt-1 text-xl font-semibold text-fg">{overview?.stats.activeGoalCount ?? project.activeGoalCount}</p>
-                </div>
-                <div className="min-w-0 rounded-md bg-surface-base px-3 py-2">
-                  <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
-                    <AlertCircle className="size-3.5" aria-hidden />
-                    <span className="min-w-0 truncate">{pm.overview.attention}</span>
-                  </div>
-                  <p className="mt-1 text-xl font-semibold text-fg">{overview?.stats.attentionCount ?? overviewAttentionItems.length}</p>
-                </div>
-                <div className="min-w-0 rounded-md bg-surface-base px-3 py-2">
-                  <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
-                    <Clock className="size-3.5" aria-hidden />
-                    <span className="min-w-0 truncate">{pm.overview.staleGoals}</span>
-                  </div>
-                  <p className="mt-1 text-xl font-semibold text-fg">{overview?.stats.staleGoalCount ?? overview?.staleGoals?.length ?? 0}</p>
-                </div>
-                <div className="min-w-0 rounded-md bg-surface-base px-3 py-2">
-                  <div className="flex min-w-0 items-center gap-2 text-xs text-fg-muted">
-                    <Activity className="size-3.5" aria-hidden />
-                    <span className="min-w-0 truncate">{pm.overview.recentWorkflowRuns}</span>
-                  </div>
-                  <p className="mt-1 text-xl font-semibold text-fg">{overview?.stats.recentWorkflowRunCount ?? project.recentWorkflowRuns.length}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
-                <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
-                  <h2 className="text-sm font-semibold text-fg">{pm.overview.nextActions}</h2>
-                  <Button type="button" variant="ghost" className="h-8 rounded-lg px-2 py-1 text-xs" onClick={() => setCreateGoalOpen(true)}>
-                    <Plus className="size-4" aria-hidden />
-                    {pm.overview.goal}
-                  </Button>
-                </div>
-                <div className="divide-y divide-edge">
-                  {overview?.nextActions.length ? overview.nextActions.map((item) => (
-                    <Link
-                      key={item.goalId}
-                      to={`/goals/${encodeURIComponent(item.goalId)}`}
-                      onClick={onProjectTabLinkClick('goals')}
-                      className="block px-4 py-3 hover:bg-surface-hover"
-                    >
-                      <div className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-medium text-fg">{item.title}</span>
-                        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(item.status))}>{statusLabel(item.status)}</span>
-                      </div>
-                      <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{item.nextAction}</p>
-                    </Link>
-                  )) : (
-                    <div className="px-4 py-6 text-sm text-fg-muted">
-                      {pm.overview.noNextActions}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
-                <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
-                  <h2 className="text-sm font-semibold text-fg">{pm.overview.activeGoals}</h2>
-                  <button type="button" className="text-xs font-medium text-accent-fg hover:underline" onClick={() => navigateProjectTab('goals')}>
-                    {pm.common.viewAll}
-                  </button>
-                </div>
-                <div className="divide-y divide-edge">
-                  {overview?.activeGoals.length ? overview.activeGoals.map((goal) => (
-                    <Link key={goal.id} to={`/goals/${encodeURIComponent(goal.id)}`} onClick={onProjectTabLinkClick('goals')} className="block px-4 py-3 hover:bg-surface-hover">
-                      <div className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-medium text-fg">{goal.title}</span>
-                        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(goal.status))}>{statusLabel(goal.status)}</span>
-                      </div>
-                      <p className="mt-1 truncate text-xs text-fg-muted">{goal.nextAction || goal.description || pm.overview.noNextAction}</p>
-                    </Link>
-                  )) : (
-                    <div className="px-4 py-6 text-sm text-fg-muted">{pm.overview.noActiveGoals}</div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-              <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
-                <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
-                  <Clock className="size-4 text-fg-muted" aria-hidden />
-                  <h2 className="text-sm font-semibold text-fg">{pm.overview.recentSessions}</h2>
-                </div>
-                <div className="divide-y divide-edge">
-                  {overviewSessions.length ? overviewSessions.map((session) => (
-                    <Link key={session.key} to={`/chat/${encodeURIComponent(session.key)}`} onClick={onProjectTabLinkClick('sessions')} className="block px-4 py-3 hover:bg-surface-hover">
-                      <div className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-medium text-fg">{session.name || session.key}</span>
-                        <span className="shrink-0 text-xs text-fg-subtle">{formatDate(session.updatedAt)}</span>
-                      </div>
-                      <p className="mt-1 truncate text-xs text-fg-muted">{session.agentId || pm.common.agent}</p>
-                    </Link>
-                  )) : (
-                    <div className="px-4 py-6 text-sm text-fg-muted">{pm.overview.noSessions}</div>
-                  )}
-                </div>
-              </div>
-
-              <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
-                <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
-                  <CheckCircle2 className="size-4 text-fg-muted" aria-hidden />
-                  <h2 className="text-sm font-semibold text-fg">{pm.overview.workflowRuns}</h2>
-                </div>
-                <div className="divide-y divide-edge">
-                  {overviewWorkflowRuns.length ? overviewWorkflowRuns.map((run) => (
-                    <div key={run.runId} className="px-4 py-3">
-                      <div className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-medium text-fg">{run.definitionId}</span>
-                        <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', workflowStatusTone(run.status))}>{statusLabel(run.status)}</span>
-                      </div>
-                      <p className="mt-1 text-xs text-fg-muted">{formatDate(run.createdAt)}</p>
-                    </div>
-                  )) : (
-                    <div className="px-4 py-6 text-sm text-fg-muted">{pm.overview.noWorkflowRuns}</div>
-                  )}
-                </div>
-              </div>
             </div>
 
             <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
-              <div className="flex items-center gap-2 border-b border-edge px-4 py-3">
-                <Activity className="size-4 text-fg-muted" aria-hidden />
-                <h2 className="text-sm font-semibold text-fg">{pm.overview.timeline}</h2>
+              <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
+                <h2 className="text-sm font-semibold text-fg">{pm.overview.nextActions}</h2>
+                <Button type="button" variant="ghost" className="h-8 rounded-lg px-2 py-1 text-xs" onClick={() => setCreateGoalOpen(true)}>
+                  <Plus className="size-4" aria-hidden />
+                  {pm.overview.goal}
+                </Button>
               </div>
               <div className="divide-y divide-edge">
-                {overviewTimeline.length ? overviewTimeline.map((item) => {
-                  const content = (
-                    <>
-                      <div className="flex min-w-0 items-center justify-between gap-3">
-                        <span className="min-w-0 truncate text-sm font-medium text-fg">{item.title}</span>
-                        <span className="shrink-0 text-xs text-fg-subtle">{formatDate(item.timestamp)}</span>
-                      </div>
-                      <p className="mt-1 truncate text-xs text-fg-muted">
-                        {pm.overview.timelineKinds[item.kind] ?? item.kind}
-                        {item.detail ? ` · ${item.detail}` : ''}
-                      </p>
-                    </>
-                  );
-                  return item.href ? (
-                    <Link key={item.id} to={item.href} onClick={onProjectTabLinkClick(projectTabForHref(item.href))} className="block px-4 py-3 hover:bg-surface-hover">
-                      {content}
-                    </Link>
-                  ) : (
-                    <div key={item.id} className="px-4 py-3">{content}</div>
-                  );
-                }) : (
-                  <div className="px-4 py-6 text-sm text-fg-muted">{pm.overview.noTimeline}</div>
+                {overview?.nextActions.length ? overview.nextActions.map((item) => (
+                  <Link
+                    key={item.goalId}
+                    to={`/goals/${encodeURIComponent(item.goalId)}`}
+                    onClick={onProjectTabLinkClick('goals')}
+                    className="block px-4 py-3 hover:bg-surface-hover"
+                  >
+                    <div className="flex min-w-0 items-center justify-between gap-3">
+                      <span className="min-w-0 truncate text-sm font-medium text-fg">{item.title}</span>
+                      <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(item.status))}>{statusLabel(item.status)}</span>
+                    </div>
+                    <p className="mt-1 line-clamp-2 text-sm leading-5 text-fg-muted">{item.nextAction}</p>
+                  </Link>
+                )) : (
+                  <div className="px-4 py-6 text-sm text-fg-muted">
+                    {pm.overview.noNextActions}
+                  </div>
                 )}
               </div>
             </div>
           </div>
 
-          <aside className="grid min-h-0 min-w-0 content-start gap-4 overflow-y-auto pr-1 [scrollbar-gutter:stable]">
-            <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
-              <h2 className="text-sm font-semibold text-fg">{pm.overview.workspace}</h2>
-              <p className="mt-2 break-all text-sm leading-5 text-fg-muted">{project.workspaceRoot || pm.common.defaultWorkspace}</p>
-              <p className="mt-3 text-xs text-fg-subtle">{interpolate(pm.common.updated, { time: formatDate(project.updatedAt) })}</p>
-            </div>
-            <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
-              <h2 className="text-sm font-semibold text-fg">{pm.overview.brief}</h2>
-              <p className="mt-2 break-words whitespace-pre-wrap text-sm leading-6 text-fg-muted">{project.brief || pm.overview.noBrief}</p>
-            </div>
+          <aside className="grid min-w-0 content-start gap-4 xl:min-h-0 xl:overflow-y-auto xl:pr-1 xl:[scrollbar-gutter:stable]">
             <div className="min-w-0 rounded-lg bg-surface-panel p-4 shadow-surface">
               <h2 className="text-sm font-semibold text-fg">{pm.overview.attention}</h2>
               {overviewAttentionItems.length ? (
@@ -1588,24 +1442,49 @@ export function ProjectDetailPage() {
               ) : (
                 <p className="mt-2 text-sm text-fg-muted">{pm.overview.noBlockedGoals}</p>
               )}
-              <form onSubmit={submitBlocker} className="mt-4 grid gap-2 border-t border-edge pt-4">
+              <form onSubmit={submitBlocker} className="mt-4 flex gap-2 border-t border-edge pt-4">
                 <input
-                  className="min-h-9 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
+                  className="min-h-9 min-w-0 flex-1 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
                   value={blockerDraft.title}
                   onChange={(event) => setBlockerDraft((draft) => ({ ...draft, title: event.target.value }))}
                   placeholder={pm.overview.blockerTitlePlaceholder}
                 />
-                <textarea
-                  className="min-h-20 rounded-md bg-surface-base px-3 py-2 text-sm text-fg outline-none focus:border-accent"
-                  value={blockerDraft.reason}
-                  onChange={(event) => setBlockerDraft((draft) => ({ ...draft, reason: event.target.value }))}
-                  placeholder={pm.overview.blockerReasonPlaceholder}
-                />
-                <Button type="submit" variant="secondary" className="justify-self-start rounded-lg" disabled={creatingBlocker || !blockerDraft.title.trim()}>
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  className="shrink-0 rounded-lg px-3"
+                  disabled={creatingBlocker || !blockerDraft.title.trim()}
+                  aria-label={creatingBlocker ? pm.overview.addingBlocker : pm.overview.addBlocker}
+                  title={creatingBlocker ? pm.overview.addingBlocker : pm.overview.addBlocker}
+                >
                   <Plus className="size-4" aria-hidden />
-                  {creatingBlocker ? pm.overview.addingBlocker : pm.overview.addBlocker}
                 </Button>
               </form>
+            </div>
+
+            <div className="min-w-0 rounded-lg bg-surface-panel shadow-surface">
+              <div className="flex items-center justify-between gap-3 border-b border-edge px-4 py-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Clock className="size-4 shrink-0 text-fg-muted" aria-hidden />
+                  <h2 className="min-w-0 truncate text-sm font-semibold text-fg">{pm.overview.recentSessions}</h2>
+                </div>
+                <button type="button" className="shrink-0 text-xs font-medium text-accent-fg hover:underline" onClick={() => navigateProjectTab('sessions')}>
+                  {pm.common.viewAll}
+                </button>
+              </div>
+              <div className="divide-y divide-edge">
+                {overviewSessions.length ? overviewSessions.map((session) => (
+                  <Link key={session.key} to={`/chat/${encodeURIComponent(session.key)}`} onClick={onProjectTabLinkClick('sessions')} className="block px-4 py-3 hover:bg-surface-hover">
+                    <div className="flex min-w-0 items-center justify-between gap-3">
+                      <span className="min-w-0 truncate text-sm font-medium text-fg">{session.name || session.key}</span>
+                      <span className="shrink-0 text-xs text-fg-subtle">{formatDate(session.updatedAt)}</span>
+                    </div>
+                    <p className="mt-1 truncate text-xs text-fg-muted">{session.agentId || pm.common.agent}</p>
+                  </Link>
+                )) : (
+                  <div className="px-4 py-6 text-sm text-fg-muted">{pm.overview.noSessions}</div>
+                )}
+              </div>
             </div>
           </aside>
         </section>

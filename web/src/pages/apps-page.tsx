@@ -136,9 +136,9 @@ export function AppsPage() {
   ];
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-base">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="w-full px-3 py-8 sm:px-5 xl:px-6">
-        <div className="mb-5 flex flex-col gap-3 rounded-xl bg-surface-panel/60 px-3 py-3 shadow-surface sm:flex-row sm:items-center sm:justify-between">
+        <div className="mb-5 flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base px-3 py-3 shadow-surface sm:flex-row sm:items-center sm:justify-between">
           <PageTabs
             items={tabItems}
             activeTab={mainTab}
@@ -173,7 +173,7 @@ export function AppsPage() {
         ) : mainTab === 'user' && userExtensions.length === 0 ? (
           <EmptyAppsState message={m.appsPage.emptyUser} />
         ) : filtered.length === 0 ? (
-          <p className="rounded-xl bg-surface-panel px-3 py-8 text-center text-sm text-fg-muted shadow-surface sm:px-5 xl:px-6">
+          <p className="rounded-xl border border-edge-subtle bg-surface-base px-3 py-8 text-center text-sm text-fg-muted shadow-surface sm:px-5 xl:px-6">
             {m.appsPage.noSearchResults}
           </p>
         ) : (
@@ -243,7 +243,7 @@ function ExtensionAppCard({
       type="button"
       onClick={onOpen}
       className={cn(
-        'group flex w-full flex-col rounded-xl bg-surface-panel p-4 text-left shadow-surface transition-colors',
+        'group flex w-full flex-col rounded-xl border border-edge-subtle bg-surface-base p-4 text-left shadow-surface transition-colors',
         'hover:bg-surface-hover/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
         'dark:hover:bg-surface-hover/25',
       )}
@@ -548,14 +548,14 @@ function ContributionBadge({
 
 function AppsPageSkeleton() {
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-base">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="w-full px-3 py-8 sm:px-5 xl:px-6">
         <div className="mb-6 h-8 w-40 max-w-full animate-pulse rounded-md bg-surface-hover" />
         <div className="mb-2 h-4 w-full max-w-md animate-pulse rounded bg-surface-hover" />
         <div className="mb-5 h-9 w-full max-w-lg animate-pulse rounded-full bg-surface-hover" />
         <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {(['ap0', 'ap1', 'ap2', 'ap3', 'ap4', 'ap5'] as const).map((k) => (
-            <div key={k} className="h-36 animate-pulse rounded-xl bg-surface-panel shadow-surface" />
+            <div key={k} className="h-36 animate-pulse rounded-xl border border-edge-subtle bg-surface-base shadow-surface" />
           ))}
         </div>
       </div>
@@ -565,7 +565,7 @@ function AppsPageSkeleton() {
 
 function EmptyAppsState({ message }: { message: string }) {
   return (
-    <div className="flex min-h-[min(40vh,16rem)] flex-col items-center justify-center rounded-xl bg-surface-panel px-4 py-12 text-center shadow-surface">
+    <div className="flex min-h-[min(40vh,16rem)] flex-col items-center justify-center rounded-xl border border-edge-subtle bg-surface-base px-4 py-12 text-center shadow-surface">
       <p className="text-sm text-fg-muted">{message}</p>
     </div>
   );

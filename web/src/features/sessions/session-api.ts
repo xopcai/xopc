@@ -1,6 +1,7 @@
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import type { Project } from '@/features/projects/api';
 
 import type {
   PaginatedResult,
@@ -17,6 +18,10 @@ function buildListQuery(query?: SessionListQuery): string {
   if (query.search) params.set('search', query.search);
   if (query.channel) params.set('channel', query.channel);
   if (query.projectId) params.set('projectId', query.projectId);
+  if (query.unassigned) params.set('unassigned', 'true');
+  if (query.updatedAfter != null) params.set('updatedAfter', String(query.updatedAfter));
+  if (query.includePinned) params.set('includePinned', 'true');
+  if (query.includeSessionKey) params.set('includeSessionKey', query.includeSessionKey);
   if (query.sessionTypes?.length) params.set('types', query.sessionTypes.join(','));
   if (query.limit != null) params.set('limit', String(query.limit));
   if (query.offset != null) params.set('offset', String(query.offset));
@@ -31,6 +36,10 @@ function listSessionsDedupeKey(query?: SessionListQuery): string {
     search: query.search,
     channel: query.channel,
     projectId: query.projectId,
+    unassigned: query.unassigned,
+    updatedAfter: query.updatedAfter,
+    includePinned: query.includePinned,
+    includeSessionKey: query.includeSessionKey,
     sessionTypes: query.sessionTypes,
     limit: query.limit,
     offset: query.offset,
@@ -38,6 +47,19 @@ function listSessionsDedupeKey(query?: SessionListQuery): string {
 }
 
 const listSessionsInflight = new Map<string, Promise<PaginatedResult<SessionMetadata>>>();
+
+export type SidebarChatListProject = {
+  project: Project;
+  sessions: SessionMetadata[];
+  sessionTotal: number;
+  sessionHasMore: boolean;
+};
+
+export type SidebarChatListResponse = {
+  ok: true;
+  projects: PaginatedResult<SidebarChatListProject>;
+  inbox: PaginatedResult<SessionMetadata>;
+};
 
 /**
  * List sessions (paginated). Concurrent calls with the same query share one HTTP request so the
@@ -65,6 +87,29 @@ export async function listSessions(query?: SessionListQuery): Promise<PaginatedR
   });
   listSessionsInflight.set(key, pending);
   return pending;
+}
+
+export async function fetchSidebarChatList(query?: {
+  projectLimit?: number;
+  projectOffset?: number;
+  sessionPreviewLimit?: number;
+  inboxLimit?: number;
+  inboxOffset?: number;
+  staleDays?: number;
+  includeSessionKey?: string;
+}): Promise<SidebarChatListResponse> {
+  const params = new URLSearchParams();
+  if (query?.projectLimit != null) params.set('projectLimit', String(query.projectLimit));
+  if (query?.projectOffset != null) params.set('projectOffset', String(query.projectOffset));
+  if (query?.sessionPreviewLimit != null) {
+    params.set('sessionPreviewLimit', String(query.sessionPreviewLimit));
+  }
+  if (query?.inboxLimit != null) params.set('inboxLimit', String(query.inboxLimit));
+  if (query?.inboxOffset != null) params.set('inboxOffset', String(query.inboxOffset));
+  if (query?.staleDays != null) params.set('staleDays', String(query.staleDays));
+  if (query?.includeSessionKey) params.set('includeSessionKey', query.includeSessionKey);
+  const qs = params.toString();
+  return fetchJson<SidebarChatListResponse>(apiUrl(`/api/sidebar/chat-list${qs ? `?${qs}` : ''}`));
 }
 
 export async function getSessionStats(): Promise<SessionStats> {

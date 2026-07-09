@@ -110,7 +110,7 @@ export function AppShell() {
           <SidebarColumn />
 
           {/* Main + workspace: workspace is a right rail sibling (not a dialog), like app-sidebar */}
-          <div className="flex min-h-0 min-w-0 flex-1 min-w-0 flex-col overflow-hidden bg-surface-base">
+          <div className="flex min-h-0 min-w-0 flex-1 min-w-0 flex-col overflow-hidden bg-surface-panel">
             <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 {!isSettingsRoute && !previewPath ? <PrimaryAppHeader /> : null}
@@ -121,7 +121,7 @@ export function AppShell() {
                     <div
                       key={routeKey}
                       className={cn(
-                        'page-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-surface-base',
+                        'page-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden bg-surface-panel',
                         routeKey === 'settings'
                           ? 'page-enter--gentle overflow-hidden'
                           : routeUsesInternalScroll
