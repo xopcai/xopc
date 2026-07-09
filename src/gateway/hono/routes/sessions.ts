@@ -424,6 +424,27 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, items });
   });
 
+  // GET /api/sessions/:key/transcript/window — TUI-focused transcript slice around a row.
+  authenticated.get('/api/sessions/:key/transcript/window', async (c) => {
+    const blocked = ensureGatewayReadyForSessions(c, service, 'sessions.history');
+    if (blocked) {
+      return blocked;
+    }
+    const key = c.req.param('key');
+    const rowNumberRaw = c.req.query('rowNumber');
+    const rowNumber = rowNumberRaw ? Number.parseInt(rowNumberRaw, 10) : NaN;
+    if (!Number.isFinite(rowNumber) || rowNumber < 1) {
+      return c.json({ ok: false, error: 'rowNumber must be a positive integer' }, 400);
+    }
+    const before = parsePositiveInt(c.req.query('before'), 80, 200);
+    const after = parsePositiveInt(c.req.query('after'), 120, 200);
+    const window = await service.sessions.getTranscriptWindow(key, { rowNumber, before, after });
+    if (!window) {
+      return c.json({ ok: false, error: 'Session not found' }, 404);
+    }
+    return c.json({ ok: true, payload: window });
+  });
+
   // POST /api/sessions/:key/transcript/context — append persisted-only `kind: 'context'` row (not in LLM context)
   authenticated.post('/api/sessions/:key/transcript/context', async (c) => {
     const key = c.req.param('key');

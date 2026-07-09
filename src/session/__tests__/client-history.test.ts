@@ -66,6 +66,48 @@ describe('messagesToClientHistory', () => {
       ['row-2', 'b'],
       ['row-3', 'c'],
     ]);
+    expect(out.map((m) => m.displayIndex)).toEqual([1, 2]);
+  });
+
+  it('preserves global display indexes when limiting transcript history around tool rows', () => {
+    const rows = [
+      { role: 'user', content: 'turn 1' },
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'tool-1',
+            name: 'read_file',
+            input: { path: 'a.ts' },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: 'tool-1', content: 'done' },
+      { role: 'user', content: 'turn 2' },
+      { role: 'assistant', content: 'answer 2' },
+    ] as unknown as TranscriptStoredRow[];
+
+    const out = transcriptRowsToClientHistory(rows, { limit: 2 });
+    expect(out.map((m) => [m.id, m.content, m.displayIndex])).toEqual([
+      ['row-4', 'turn 2', 2],
+      ['row-5', 'answer 2', 3],
+    ]);
+  });
+
+  it('preserves row numbers and global display indexes for explicit transcript windows', () => {
+    const rows = [
+      { role: 'user', content: 'turn 1' },
+      { role: 'assistant', content: 'answer 1' },
+      { role: 'user', content: 'turn 2' },
+      { role: 'assistant', content: 'answer 2' },
+    ] as unknown as TranscriptStoredRow[];
+
+    const out = transcriptRowsToClientHistory(rows, { startRowNumber: 3, endRowNumber: 4 });
+    expect(out.map((m) => [m.id, m.content, m.displayIndex])).toEqual([
+      ['row-3', 'turn 2', 2],
+      ['row-4', 'answer 2', 3],
+    ]);
   });
 
   it('preserves compaction transcript rows for TUI replay', () => {
@@ -82,7 +124,14 @@ describe('messagesToClientHistory', () => {
     ] as unknown as TranscriptStoredRow[];
 
     expect(transcriptRowsToClientHistory(rows)).toEqual([
-      { id: 'row-1', role: 'user', kind: 'message', content: 'before', timestamp: undefined },
+      {
+        id: 'row-1',
+        role: 'user',
+        kind: 'message',
+        content: 'before',
+        displayIndex: 0,
+        timestamp: undefined,
+      },
       {
         id: 'row-2',
         role: 'system',
@@ -120,6 +169,7 @@ describe('messagesToClientHistory', () => {
         role: 'system',
         kind: 'bash',
         content: '\u001b[32mok\u001b[0m\n',
+        displayIndex: 0,
         timestamp: Date.parse('2026-06-17T00:00:02.000Z'),
         bash: {
           command: 'pnpm test',
@@ -171,6 +221,7 @@ describe('messagesToClientHistory', () => {
         kind: 'custom',
         content: 'Loaded **skill**',
         rawContent: [{ type: 'text', text: 'Loaded **skill**' }],
+        displayIndex: 0,
         timestamp: 123,
         custom: {
           customType: 'skill',
@@ -184,6 +235,7 @@ describe('messagesToClientHistory', () => {
         kind: 'custom',
         content: 'secret',
         rawContent: 'secret',
+        displayIndex: 1,
         timestamp: undefined,
         custom: {
           customType: 'hidden',
@@ -197,6 +249,7 @@ describe('messagesToClientHistory', () => {
         kind: 'custom',
         content: 'Hook note',
         rawContent: 'Hook note',
+        displayIndex: 2,
         timestamp: undefined,
         custom: {
           customType: 'hook',

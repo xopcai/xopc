@@ -1,3 +1,5 @@
+import { buildSessionHistoryPath } from '@xopcai/gateway-contract';
+
 import type { Message } from '@/features/chat/messages/messages.types';
 import type { SessionInfo } from '@/features/chat/chat.types';
 import { sessionWireToUiMessages } from '@/features/chat/messages/agent-messages';
@@ -179,14 +181,12 @@ export class SessionManager {
 
     const pending = (async () => {
       const loadPage = async (pageOffset: number, pageBeforeCursor?: string | null) => {
-        const params = new URLSearchParams({ limit: String(INITIAL_HISTORY_PAGE_LIMIT) });
-        if (pageBeforeCursor) {
-          params.set('before', pageBeforeCursor);
-        } else {
-          params.set('offset', String(pageOffset));
-        }
         const res = await apiFetchWithStartupRetry(
-          apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/history?${params.toString()}`),
+          apiUrl(buildSessionHistoryPath(sessionKey, {
+            limit: INITIAL_HISTORY_PAGE_LIMIT,
+            before: pageBeforeCursor,
+            offset: pageBeforeCursor ? undefined : pageOffset,
+          })),
         );
         if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
         return (await res.json()) as {
