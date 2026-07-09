@@ -112,6 +112,63 @@ export interface SessionActiveRunPayload {
   runId?: string;
 }
 
+export interface SessionResponse {
+  session: SessionDetail;
+}
+
+export interface SessionCreateResponse {
+  session?: {
+    key?: string;
+    sessionId?: string;
+  };
+  reused?: boolean;
+}
+
+export interface SessionActiveRunResponse {
+  ok?: boolean;
+  payload?: SessionActiveRunPayload;
+}
+
+export interface SessionActionResponse {
+  ok?: boolean;
+  error?: string;
+  [key: string]: unknown;
+}
+
+export interface SessionRenameResponse extends SessionActionResponse {
+  renamed?: boolean;
+}
+
+export interface SessionResetResponse extends SessionActionResponse {
+  reset?: boolean;
+  sessionId?: string;
+  previousSessionId?: string;
+  session?: unknown;
+}
+
+export interface SessionResolveResponse {
+  ok: boolean;
+  payload?: {
+    sessionKey: string;
+    sessionId: string;
+    session: unknown;
+  };
+  error?: string;
+}
+
+export interface SidebarChatListProject<TProject = unknown> {
+  project: TProject;
+  sessions: SessionMetadata[];
+  sessionTotal: number;
+  sessionHasMore: boolean;
+}
+
+export interface SidebarChatListResponse<TProject = unknown> {
+  ok: true;
+  projects: PaginatedResult<SidebarChatListProject<TProject>>;
+  inbox: PaginatedResult<SessionMetadata>;
+}
+
 export interface SessionMessagePage {
   session: {
     key: string;
@@ -178,6 +235,148 @@ export const sessionsListResponseSchema = z.object({
   hasMore: z.boolean(),
 });
 
+export const sessionMessageSchema = z
+  .object({
+    role: z.string(),
+    content: z.unknown(),
+    timestamp: z.string().optional(),
+  })
+  .passthrough();
+
+export const sessionDetailSchema = z
+  .object({
+    key: z.string(),
+    messages: z.array(sessionMessageSchema),
+  })
+  .passthrough();
+
+export const sessionResponseSchema = z.object({
+  session: sessionDetailSchema,
+});
+
+export const sessionMessagePageSchema = z
+  .object({
+    session: z
+      .object({
+        key: z.string(),
+        sessionId: z.string().optional(),
+        messages: z.array(sessionMessageSchema),
+        name: z.string().optional(),
+        status: sessionStatusSchema.optional(),
+        sourceChannel: z.string().optional(),
+        sourceChatId: z.string().optional(),
+        routing: sessionRoutingMetaSchema.optional(),
+      })
+      .passthrough(),
+    pagination: z
+      .object({
+        total: z.number(),
+        limit: z.number(),
+        offset: z.number(),
+        hasMore: z.boolean(),
+        before: z.string().optional(),
+        nextBeforeCursor: z.string().optional(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+export const sessionCreateResponseSchema = z
+  .object({
+    session: z
+      .object({
+        key: z.string().optional(),
+        sessionId: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+    reused: z.boolean().optional(),
+  })
+  .passthrough();
+
+export const sessionActiveRunResponseSchema = z
+  .object({
+    ok: z.boolean().optional(),
+    payload: z
+      .object({
+        active: z.boolean(),
+        runId: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+export const sessionActionResponseSchema = z
+  .object({
+    ok: z.boolean().optional(),
+    error: z.string().optional(),
+  })
+  .passthrough();
+
+export const sessionRenameResponseSchema = sessionActionResponseSchema.extend({
+  renamed: z.boolean().optional(),
+});
+
+export const sessionResetResponseSchema = sessionActionResponseSchema.extend({
+  reset: z.boolean().optional(),
+  sessionId: z.string().optional(),
+  previousSessionId: z.string().optional(),
+  session: z.unknown().optional(),
+});
+
+export const sessionStatsResponseSchema = z
+  .object({
+    totalSessions: z.number(),
+    activeSessions: z.number(),
+    archivedSessions: z.number(),
+    pinnedSessions: z.number(),
+    totalMessages: z.number(),
+    totalTokens: z.number(),
+    oldestSession: z.string().optional(),
+    newestSession: z.string().optional(),
+    byChannel: z.record(z.string(), z.number()),
+  })
+  .passthrough();
+
+export const sessionResolveResponseSchema = z
+  .object({
+    ok: z.boolean(),
+    payload: z
+      .object({
+        sessionKey: z.string(),
+        sessionId: z.string(),
+        session: z.unknown(),
+      })
+      .passthrough()
+      .optional(),
+    error: z.string().optional(),
+  })
+  .passthrough();
+
+export const sidebarChatListResponseSchema = z
+  .object({
+    ok: z.literal(true),
+    projects: z.object({
+      items: z.array(
+        z
+          .object({
+            project: z.unknown(),
+            sessions: z.array(z.unknown()),
+            sessionTotal: z.number(),
+            sessionHasMore: z.boolean(),
+          })
+          .passthrough(),
+      ),
+      total: z.number(),
+      limit: z.number(),
+      offset: z.number(),
+      hasMore: z.boolean(),
+    }),
+    inbox: sessionsListResponseSchema,
+  })
+  .passthrough();
+
 export function parseSessionsListResponse(raw: unknown): SessionsListResponse {
   return sessionsListResponseSchema.parse(raw);
 }
@@ -185,6 +384,63 @@ export function parseSessionsListResponse(raw: unknown): SessionsListResponse {
 export function tryParseSessionListItem(raw: unknown): SessionListItem | null {
   const parsed = sessionListItemSchema.safeParse(raw);
   return parsed.success ? parsed.data : null;
+}
+
+export function parseSessionResponse(raw: unknown): SessionResponse {
+  return sessionResponseSchema.parse(raw) as unknown as SessionResponse;
+}
+
+export function parseSessionMessagePage(raw: unknown): SessionMessagePage {
+  return sessionMessagePageSchema.parse(raw) as unknown as SessionMessagePage;
+}
+
+export function parseSessionCreateResponse(raw: unknown): SessionCreateResponse {
+  return sessionCreateResponseSchema.parse(raw) as SessionCreateResponse;
+}
+
+export function parseSessionActiveRunResponse(raw: unknown): SessionActiveRunResponse {
+  return sessionActiveRunResponseSchema.parse(raw) as SessionActiveRunResponse;
+}
+
+export function parseSessionActionResponse(raw: unknown): SessionActionResponse {
+  return sessionActionResponseSchema.parse(raw) as SessionActionResponse;
+}
+
+export function parseSessionRenameResponse(raw: unknown): SessionRenameResponse {
+  return sessionRenameResponseSchema.parse(raw) as SessionRenameResponse;
+}
+
+export function parseSessionResetResponse(raw: unknown): SessionResetResponse {
+  return sessionResetResponseSchema.parse(raw) as SessionResetResponse;
+}
+
+export function parseSessionStatsResponse(raw: unknown): SessionStats {
+  return sessionStatsResponseSchema.parse(raw) as SessionStats;
+}
+
+export function parseSessionResolveResponse(raw: unknown): SessionResolveResponse {
+  return sessionResolveResponseSchema.parse(raw) as SessionResolveResponse;
+}
+
+export function parseSidebarChatListResponse(raw: unknown): SidebarChatListResponse {
+  return sidebarChatListResponseSchema.parse(raw) as unknown as SidebarChatListResponse;
+}
+
+export function normalizeSessionActiveRunResponse(raw: unknown): SessionActiveRunPayload {
+  const data = parseSessionActiveRunResponse(raw);
+  const payload = data.payload;
+  const runId = typeof payload?.runId === 'string' ? payload.runId.trim() : '';
+  if (!payload?.active || !runId) return { active: false };
+  return { active: true, runId };
+}
+
+export function extractCreatedSessionKey(raw: unknown): string {
+  const data = parseSessionCreateResponse(raw);
+  const key = data.session?.key;
+  if (typeof key !== 'string' || !key.trim()) {
+    throw new Error('Create session: missing key');
+  }
+  return key.trim();
 }
 
 export function buildSessionListQueryString(query?: SessionListQuery): string {
@@ -209,6 +465,83 @@ export function buildSessionListQueryString(query?: SessionListQuery): string {
 
 export function buildSessionListPath(query?: SessionListQuery): string {
   return `/api/sessions${buildSessionListQueryString(query)}`;
+}
+
+export function buildSessionDetailPath(
+  key: string,
+  options?: { includeTranscript?: boolean; includeTranscriptRows?: boolean },
+): string {
+  const includeParts: string[] = [];
+  if (options?.includeTranscript) includeParts.push('transcript');
+  if (options?.includeTranscriptRows) includeParts.push('transcriptRows');
+  const qs = includeParts.length ? `?include=${includeParts.join(',')}` : '';
+  return `/api/sessions/${encodeURIComponent(key)}${qs}`;
+}
+
+export function buildSessionHistoryPath(
+  key: string,
+  options?: { limit?: number; offset?: number; before?: string | null },
+): string {
+  const params = new URLSearchParams();
+  params.set('limit', String(options?.limit ?? 50));
+  const before = options?.before?.trim();
+  if (before) {
+    params.set('before', before);
+  } else if (options?.offset != null) {
+    params.set('offset', String(options.offset));
+  }
+  return `/api/sessions/${encodeURIComponent(key)}/history?${params.toString()}`;
+}
+
+export function buildSessionRunPath(key: string): string {
+  return `/api/sessions/${encodeURIComponent(key)}/run`;
+}
+
+export function buildSessionStatsPath(): string {
+  return '/api/sessions/stats';
+}
+
+export function buildSessionResolvePath(query?: { sessionId?: string; sessionKey?: string; key?: string }): string {
+  const params = new URLSearchParams();
+  if (query?.sessionId) params.set('sessionId', query.sessionId);
+  if (query?.sessionKey) params.set('sessionKey', query.sessionKey);
+  if (query?.key) params.set('key', query.key);
+  const qs = params.toString();
+  return `/api/sessions/resolve${qs ? `?${qs}` : ''}`;
+}
+
+export function buildSidebarChatListPath(query?: {
+  projectLimit?: number;
+  projectOffset?: number;
+  sessionPreviewLimit?: number;
+  inboxLimit?: number;
+  inboxOffset?: number;
+  staleDays?: number;
+  includeSessionKey?: string;
+}): string {
+  const params = new URLSearchParams();
+  if (query?.projectLimit != null) params.set('projectLimit', String(query.projectLimit));
+  if (query?.projectOffset != null) params.set('projectOffset', String(query.projectOffset));
+  if (query?.sessionPreviewLimit != null) params.set('sessionPreviewLimit', String(query.sessionPreviewLimit));
+  if (query?.inboxLimit != null) params.set('inboxLimit', String(query.inboxLimit));
+  if (query?.inboxOffset != null) params.set('inboxOffset', String(query.inboxOffset));
+  if (query?.staleDays != null) params.set('staleDays', String(query.staleDays));
+  if (query?.includeSessionKey) params.set('includeSessionKey', query.includeSessionKey);
+  const qs = params.toString();
+  return `/api/sidebar/chat-list${qs ? `?${qs}` : ''}`;
+}
+
+export function buildSessionActionPath(
+  key: string,
+  action: 'delete' | 'archive' | 'unarchive' | 'pin' | 'unpin' | 'rename' | 'reset',
+): string {
+  const encoded = encodeURIComponent(key);
+  if (action === 'delete') return `/api/sessions/${encoded}`;
+  return `/api/sessions/${encoded}/${action}`;
+}
+
+export function buildCreateSessionPath(): string {
+  return '/api/sessions';
 }
 
 export function sessionListDedupeKey(query?: SessionListQuery): string {

@@ -1,11 +1,13 @@
 import type { Message } from './types.js';
 import type { TranscriptStoredRow } from './session-context-for-llm.js';
+import { buildTranscriptOutline } from './transcript-outline.js';
 
 /** Transcript row for TUI and HTTP clients (flattened from persisted session messages). */
 export interface ClientHistoryMessage {
   id?: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  displayIndex?: number;
   rawContent?: string | unknown[];
   timestamp?: number;
   kind?: 'message' | 'compaction' | 'context' | 'bash' | 'custom' | 'branch';
@@ -336,14 +338,28 @@ function branchSummaryRowToClientHistory(row: TranscriptStoredRow): ClientHistor
  */
 export function transcriptRowsToClientHistory(
   rows: TranscriptStoredRow[],
-  opts?: { limit?: number },
+  opts?: { limit?: number; startRowNumber?: number; endRowNumber?: number },
 ): ClientHistoryMessage[] {
-  const startIndex =
-    opts?.limit !== undefined && rows.length > opts.limit
+  const displayIndexByRowNumber = new Map(
+    buildTranscriptOutline(rows)
+      .filter((entry) => entry.displayIndex !== undefined)
+      .map((entry) => [entry.rowNumber, entry.displayIndex!] as const),
+  );
+  const hasRowWindow = opts?.startRowNumber !== undefined || opts?.endRowNumber !== undefined;
+  const startIndex = hasRowWindow
+    ? Math.max(0, Math.trunc(opts?.startRowNumber ?? 1) - 1)
+    : opts?.limit !== undefined && rows.length > opts.limit
       ? rows.length - opts.limit
       : 0;
-  const slice =
-    opts?.limit !== undefined && rows.length > opts.limit
+  const endIndex = hasRowWindow
+    ? Math.max(
+        startIndex,
+        Math.min(rows.length, Math.trunc(opts?.endRowNumber ?? rows.length)),
+      )
+    : rows.length;
+  const slice = hasRowWindow
+    ? rows.slice(startIndex, endIndex)
+    : opts?.limit !== undefined && rows.length > opts.limit
       ? rows.slice(-opts.limit)
       : rows;
   const messages = slice
@@ -353,13 +369,16 @@ export function transcriptRowsToClientHistory(
   const out: ClientHistoryMessage[] = [];
 
   for (const [offset, row] of slice.entries()) {
-    const id = `row-${startIndex + offset + 1}`;
+    const rowNumber = startIndex + offset + 1;
+    const id = `row-${rowNumber}`;
+    const displayIndex = displayIndexByRowNumber.get(rowNumber);
     if (isCompactionRow(row)) {
       out.push({
         id,
         role: 'system',
         kind: 'compaction',
         content: typeof row.summary === 'string' ? row.summary : '',
+        ...(displayIndex !== undefined ? { displayIndex } : {}),
         timestamp: parseTimestamp(row.at),
         tokensBefore: row.tokensBefore,
         tokensAfter: row.tokensAfter,
@@ -369,37 +388,61 @@ export function transcriptRowsToClientHistory(
 
     const compactionSummaryRow = compactionSummaryRowToClientHistory(row);
     if (compactionSummaryRow) {
-      out.push({ id, ...compactionSummaryRow });
+      out.push({
+        id,
+        ...compactionSummaryRow,
+        ...(displayIndex !== undefined ? { displayIndex } : {}),
+      });
       continue;
     }
 
     const contextRow = contextRowToClientHistory(row);
     if (contextRow) {
-      out.push({ id, ...contextRow });
+      out.push({
+        id,
+        ...contextRow,
+        ...(displayIndex !== undefined ? { displayIndex } : {}),
+      });
       continue;
     }
 
     const bashRow = bashRowToClientHistory(row);
     if (bashRow) {
-      out.push({ id, ...bashRow });
+      out.push({
+        id,
+        ...bashRow,
+        ...(displayIndex !== undefined ? { displayIndex } : {}),
+      });
       continue;
     }
 
     const customRow = customRowToClientHistory(row);
     if (customRow) {
-      out.push({ id, ...customRow });
+      out.push({
+        id,
+        ...customRow,
+        ...(displayIndex !== undefined ? { displayIndex } : {}),
+      });
       continue;
     }
 
     const customStateRow = customStateRowToClientHistory(row);
     if (customStateRow) {
-      out.push({ id, ...customStateRow });
+      out.push({
+        id,
+        ...customStateRow,
+        ...(displayIndex !== undefined ? { displayIndex } : {}),
+      });
       continue;
     }
 
     const branchSummaryRow = branchSummaryRowToClientHistory(row);
     if (branchSummaryRow) {
-      out.push({ id, ...branchSummaryRow });
+      out.push({
+        id,
+        ...branchSummaryRow,
+        ...(displayIndex !== undefined ? { displayIndex } : {}),
+      });
       continue;
     }
 
@@ -415,6 +458,7 @@ export function transcriptRowsToClientHistory(
         role: messageRow.role,
         kind: 'message',
         content: flattenMessageContent(messageRow.content ?? ''),
+        ...(displayIndex !== undefined ? { displayIndex } : {}),
         timestamp: parseTimestampValue(messageRow.timestamp),
       });
       continue;
@@ -425,6 +469,7 @@ export function transcriptRowsToClientHistory(
       role: 'assistant',
       kind: 'message',
       content: flattenMessageContent(messageRow.content ?? ''),
+      ...(displayIndex !== undefined ? { displayIndex } : {}),
       timestamp: parseTimestampValue(messageRow.timestamp),
       toolCalls: toolCallsWithResults(messageRow.tool_calls ?? messageRow.toolCalls, results),
     });

@@ -52,6 +52,12 @@ import { inferSuggestedProjectDefaultAgentId, ProjectService } from '../../proje
 
 const log = createLogger('TUI:Embedded');
 
+function clampHistoryWindowSpan(value: number | undefined, fallback: number): number {
+  const parsed = Math.trunc(value ?? fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(200, Math.max(0, parsed));
+}
+
 interface EmbeddedBackendOptions {
   config?: Config;
   extensionRegistry?: ExtensionRegistryImpl;
@@ -410,6 +416,42 @@ export class EmbeddedBackend implements TuiBackend {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, errorMessage }, `Embedded loadHistory failed: ${errorMessage}`);
       return { messages: [] };
+    }
+  }
+
+  async loadHistoryWindow(opts: {
+    sessionKey: string;
+    rowNumber: number;
+    before?: number;
+    after?: number;
+  }) {
+    if (!this.agent) {
+      return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows: 0 };
+    }
+    try {
+      const rows = await this.agent.sessionStore.loadTranscriptRows(opts.sessionKey);
+      const totalRows = rows.length;
+      if (totalRows === 0) {
+        return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows };
+      }
+      const targetRowNumber = Math.min(totalRows, Math.max(1, Math.trunc(opts.rowNumber)));
+      const before = clampHistoryWindowSpan(opts.before, 80);
+      const after = clampHistoryWindowSpan(opts.after, 120);
+      const startRowNumber = Math.max(1, targetRowNumber - before);
+      const endRowNumber = Math.min(totalRows, targetRowNumber + after);
+      return {
+        messages: transcriptRowsToClientHistory(rows, { startRowNumber, endRowNumber }),
+        startRowNumber,
+        endRowNumber,
+        totalRows,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn(
+        { err: error, sessionKey: opts.sessionKey, rowNumber: opts.rowNumber, errorMessage },
+        `Embedded loadHistoryWindow failed: ${errorMessage}`,
+      );
+      return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows: 0 };
     }
   }
 

@@ -118,6 +118,21 @@ describe('history replay rendering', () => {
     expect(stripAnsi(chatLog.render(100).join('\n'))).toContain('latest answer');
   });
 
+  it('uses persisted display indexes when replaying a limited history window', () => {
+    const chatLog = new ChatLog();
+    appendHistoryToChatLog(
+      chatLog,
+      [
+        { role: 'user', content: 'target question', displayIndex: 8 },
+        { role: 'assistant', content: 'target answer', displayIndex: 9 },
+      ],
+      false,
+    );
+
+    expect(chatLog.jumpToDisplayIndex(8)).toBe(true);
+    expect(chatLog.jumpToDisplayIndex(0)).toBe(false);
+  });
+
   it('replays compaction rows as expandable summary components', () => {
     const chatLog = new ChatLog();
     appendHistoryToChatLog(

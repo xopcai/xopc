@@ -16,11 +16,18 @@ import type { CompactionResult } from '../../agent/memory/compaction.js';
 import { retireSessionMcpRuntimeForSessionKey } from '../../agent/mcp/bundle-mcp-tools.js';
 import { SessionIndex } from '../../session/index.js';
 import type { ExportFormat, SessionListQuery } from '../../session/types.js';
+import { transcriptRowsToClientHistory } from '../../session/client-history.js';
 import { buildSessionTimeline } from '../../session/transcript-outline.js';
 import type { SessionPatchBody } from '../../session/patch-metadata.js';
 import { collectMediaUrisFromMessages, deleteMediaUris } from '../../media/session-references.js';
 import { getDistinctSessionChatIds } from './session-chat-ids.js';
 import { performSessionReset, type SessionResetResult } from '../session-reset-service.js';
+
+function clampWindowSpan(value: number | undefined, fallback: number): number {
+  const parsed = Math.trunc(value ?? fallback);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(200, Math.max(0, parsed));
+}
 
 export interface GatewaySessionsApiOptions {
   sessionIndex: SessionIndex;
@@ -110,6 +117,37 @@ export class GatewaySessionsApi {
     if (!metadata) return null;
     const rows = await this.opts.sessionIndex.getStore().loadTranscriptRows(key);
     return buildSessionTimeline(rows);
+  }
+
+  async getTranscriptWindow(
+    key: string,
+    options: { rowNumber: number; before?: number; after?: number },
+  ) {
+    const metadata = await this.opts.sessionIndex.getSessionMetadata(key);
+    if (!metadata) return null;
+    const rows = await this.opts.sessionIndex.getStore().loadTranscriptRows(key);
+    const totalRows = rows.length;
+    if (totalRows === 0) {
+      return {
+        messages: [],
+        startRowNumber: 0,
+        endRowNumber: 0,
+        totalRows,
+      };
+    }
+
+    const targetRowNumber = Math.min(totalRows, Math.max(1, Math.trunc(options.rowNumber)));
+    const before = clampWindowSpan(options.before, 80);
+    const after = clampWindowSpan(options.after, 120);
+    const startRowNumber = Math.max(1, targetRowNumber - before);
+    const endRowNumber = Math.min(totalRows, targetRowNumber + after);
+
+    return {
+      messages: transcriptRowsToClientHistory(rows, { startRowNumber, endRowNumber }),
+      startRowNumber,
+      endRowNumber,
+      totalRows,
+    };
   }
 
   // ── Metadata patches ──────────────────────────────────────────────────

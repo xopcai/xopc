@@ -85,6 +85,36 @@ describe('TUI session slash commands', () => {
     expect(sendMessage).not.toHaveBeenCalled();
   });
 
+  it('/timeline loads a transcript window when the selected turn is not in the current chat log', async () => {
+    const chatLog = new ChatLog();
+    const loadHistoryWindow = vi.fn(async () => {
+      chatLog.addUser('target turn', { displayIndex: 8, role: 'user' });
+      return true;
+    });
+    const { handler } = makeHandler({
+      chatLog,
+      loadTimeline: () => [
+        {
+          id: 'row-30',
+          kind: 'turn',
+          role: 'user',
+          title: 'Turn 6',
+          preview: 'target turn',
+          depth: 0,
+          turn: 6,
+          displayIndex: 8,
+          rowNumber: 30,
+        },
+      ],
+      loadHistoryWindow,
+    });
+
+    handler('/timeline 6');
+
+    await vi.waitFor(() => expect(loadHistoryWindow).toHaveBeenCalledWith({ rowNumber: 30 }));
+    expect(chatLog.getTimelineViewportState()).toEqual({ mode: 'history', displayIndex: 8 });
+  });
+
   it('/agent switches to the same suffix under the target agent', async () => {
     const systems: string[] = [];
     const switchAgentSession = vi.fn(async () => {});

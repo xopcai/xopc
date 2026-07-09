@@ -119,6 +119,38 @@ export function createSessionActions(context: SessionActionsContext) {
     }
   };
 
+  const loadHistoryWindow = async (opts: {
+    rowNumber: number;
+    before?: number;
+    after?: number;
+  }): Promise<boolean> => {
+    if (!client.loadHistoryWindow) {
+      return false;
+    }
+    try {
+      const { messages } = await client.loadHistoryWindow({
+        sessionKey: state.currentSessionKey,
+        rowNumber: opts.rowNumber,
+        before: opts.before,
+        after: opts.after,
+      });
+      if (messages.length === 0) {
+        return false;
+      }
+      sessionSnapshot?.replaceFromHistory(messages);
+      chatLog.clearAll();
+      appendHistoryToChatLog(chatLog, messages, state.toolsExpanded, state.showThinking);
+      lastHistoryKeys = messages.map(historyMessageKey);
+      state.historyLoaded = true;
+      return true;
+    } catch {
+      return false;
+    } finally {
+      await refreshSessionInfo();
+      tui.requestRender();
+    }
+  };
+
   const setSession = async (rawKey: string) => {
     const nextKey = resolveSessionKey(rawKey);
     updateAgentFromSessionKey(nextKey);
@@ -156,6 +188,7 @@ export function createSessionActions(context: SessionActionsContext) {
   return {
     refreshSessionInfo,
     loadHistory,
+    loadHistoryWindow,
     setSession,
     abortActive,
     resetCurrentSession,

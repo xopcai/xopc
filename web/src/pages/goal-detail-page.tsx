@@ -269,6 +269,13 @@ function evidenceKindLabel(kind: EvidenceKind, t: GoalDetailMessages): string {
   return t.evidenceKinds[kind] ?? kind;
 }
 
+function safeGoalReturnPath(value: string | null): string {
+  const path = value?.trim();
+  if (!path || !path.startsWith('/projects/')) return '/goals';
+  if (path.startsWith('//') || path.includes('://')) return '/goals';
+  return path;
+}
+
 async function fetchGoal(goalId: string): Promise<GoalDetail> {
   const res = await fetchJson<{ ok: true; goal: GoalDetail }>(apiUrl(`/api/goals/${encodeURIComponent(goalId)}`));
   return res.goal;
@@ -336,6 +343,7 @@ export function GoalDetailPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const backPath = useMemo(() => safeGoalReturnPath(searchParams.get('returnTo')), [searchParams]);
 
   const refresh = useCallback(async () => {
     if (!goalId) return;
@@ -734,7 +742,7 @@ export function GoalDetailPage() {
   useLayoutEffect(() => {
     setPageHeader({
       startExtra: (
-        <Link to="/goals" className="inline-flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={t.back}>
+        <Link to={backPath} className="inline-flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg" aria-label={t.back}>
           <ArrowLeft className="size-4" aria-hidden />
         </Link>
       ),
@@ -752,7 +760,7 @@ export function GoalDetailPage() {
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, done, goal, headerEnd, loading, setPageHeader, t, total]);
+  }, [backPath, clearPageHeader, done, goal, headerEnd, loading, setPageHeader, t, total]);
 
   const setTimelineFilter = (next: TimelineFilter) => {
     const params = new URLSearchParams(searchParams);

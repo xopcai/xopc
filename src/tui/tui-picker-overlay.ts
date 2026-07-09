@@ -152,10 +152,18 @@ export async function openTimelineOverlay(
   list.onSelect = (turn) => {
     svc.closeOverlay();
     svc.tui.setFocus(svc.editor);
-    if (!svc.chatLog.jumpToDisplayIndex(turn.displayIndex)) {
-      svc.chatLog.addSystem(`Turn ${turn.turn} is outside loaded history.`);
-    }
-    svc.tui.requestRender();
+    void (async () => {
+      if (!svc.chatLog.jumpToDisplayIndex(turn.displayIndex)) {
+        const loaded =
+          turn.rowNumber !== undefined
+            ? await svc.loadHistoryWindow({ rowNumber: turn.rowNumber })
+            : false;
+        if (!loaded || !svc.chatLog.jumpToDisplayIndex(turn.displayIndex)) {
+          svc.chatLog.addSystem(`Turn ${turn.turn} is outside loaded history.`);
+        }
+      }
+      svc.tui.requestRender();
+    })();
   };
   list.onCancel = () => {
     svc.closeOverlay();

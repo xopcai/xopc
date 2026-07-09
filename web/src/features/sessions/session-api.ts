@@ -1,6 +1,17 @@
 import {
+  buildSidebarChatListPath,
+  buildSessionActionPath,
+  buildSessionDetailPath,
   buildSessionListQueryString,
+  buildSessionStatsPath,
+  parseSessionActionResponse,
+  parseSessionRenameResponse,
+  parseSessionResponse,
+  parseSessionStatsResponse,
+  parseSidebarChatListResponse,
   sessionListDedupeKey,
+  type SidebarChatListProject as GatewaySidebarChatListProject,
+  type SidebarChatListResponse as GatewaySidebarChatListResponse,
 } from '@xopcai/gateway-contract';
 
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
@@ -18,18 +29,8 @@ import type {
 
 const listSessionsInflight = new Map<string, Promise<PaginatedResult<SessionMetadata>>>();
 
-export type SidebarChatListProject = {
-  project: Project;
-  sessions: SessionMetadata[];
-  sessionTotal: number;
-  sessionHasMore: boolean;
-};
-
-export type SidebarChatListResponse = {
-  ok: true;
-  projects: PaginatedResult<SidebarChatListProject>;
-  inbox: PaginatedResult<SessionMetadata>;
-};
+export type SidebarChatListProject = GatewaySidebarChatListProject<Project>;
+export type SidebarChatListResponse = GatewaySidebarChatListResponse<Project>;
 
 /**
  * List sessions (paginated). Concurrent calls with the same query share one HTTP request so the
@@ -68,34 +69,21 @@ export async function fetchSidebarChatList(query?: {
   staleDays?: number;
   includeSessionKey?: string;
 }): Promise<SidebarChatListResponse> {
-  const params = new URLSearchParams();
-  if (query?.projectLimit != null) params.set('projectLimit', String(query.projectLimit));
-  if (query?.projectOffset != null) params.set('projectOffset', String(query.projectOffset));
-  if (query?.sessionPreviewLimit != null) {
-    params.set('sessionPreviewLimit', String(query.sessionPreviewLimit));
-  }
-  if (query?.inboxLimit != null) params.set('inboxLimit', String(query.inboxLimit));
-  if (query?.inboxOffset != null) params.set('inboxOffset', String(query.inboxOffset));
-  if (query?.staleDays != null) params.set('staleDays', String(query.staleDays));
-  if (query?.includeSessionKey) params.set('includeSessionKey', query.includeSessionKey);
-  const qs = params.toString();
-  return fetchJson<SidebarChatListResponse>(apiUrl(`/api/sidebar/chat-list${qs ? `?${qs}` : ''}`));
+  return parseSidebarChatListResponse(
+    await fetchJson<unknown>(apiUrl(buildSidebarChatListPath(query))),
+  ) as SidebarChatListResponse;
 }
 
 export async function getSessionStats(): Promise<SessionStats> {
-  return fetchJson<SessionStats>(apiUrl('/api/sessions/stats'));
+  return parseSessionStatsResponse(await fetchJson<unknown>(apiUrl(buildSessionStatsPath())));
 }
 
 export async function getSessionDetail(
   key: string,
   options?: { includeTranscript?: boolean; includeTranscriptRows?: boolean },
 ): Promise<SessionDetail> {
-  const includeParts: string[] = [];
-  if (options?.includeTranscript) includeParts.push('transcript');
-  if (options?.includeTranscriptRows) includeParts.push('transcriptRows');
-  const qs = includeParts.length ? `?include=${includeParts.join(',')}` : '';
-  const data = await fetchJson<{ session: SessionDetail }>(
-    apiUrl(`/api/sessions/${encodeURIComponent(key)}${qs}`),
+  const data = parseSessionResponse(
+    await fetchJson<unknown>(apiUrl(buildSessionDetailPath(key, options))),
   );
   if (!data.session) throw new Error('Session not found');
   return data.session;
@@ -119,30 +107,43 @@ export async function resolveSession(
 }
 
 export async function deleteSession(key: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(key)}`), { method: 'DELETE' });
+  parseSessionActionResponse(
+    await fetchJson<unknown>(apiUrl(buildSessionActionPath(key, 'delete')), { method: 'DELETE' }),
+  );
 }
 
 export async function renameSession(key: string, name: string): Promise<{ renamed: boolean }> {
-  return fetchJson<{ renamed: boolean }>(apiUrl(`/api/sessions/${encodeURIComponent(key)}/rename`), {
-    method: 'POST',
-    body: JSON.stringify({ name }),
-  });
+  const parsed = parseSessionRenameResponse(
+    await fetchJson<unknown>(apiUrl(buildSessionActionPath(key, 'rename')), {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+  );
+  return { renamed: parsed.renamed === true };
 }
 
 export async function archiveSession(key: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(key)}/archive`), { method: 'POST' });
+  parseSessionActionResponse(
+    await fetchJson<unknown>(apiUrl(buildSessionActionPath(key, 'archive')), { method: 'POST' }),
+  );
 }
 
 export async function unarchiveSession(key: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(key)}/unarchive`), { method: 'POST' });
+  parseSessionActionResponse(
+    await fetchJson<unknown>(apiUrl(buildSessionActionPath(key, 'unarchive')), { method: 'POST' }),
+  );
 }
 
 export async function pinSession(key: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(key)}/pin`), { method: 'POST' });
+  parseSessionActionResponse(
+    await fetchJson<unknown>(apiUrl(buildSessionActionPath(key, 'pin')), { method: 'POST' }),
+  );
 }
 
 export async function unpinSession(key: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(key)}/unpin`), { method: 'POST' });
+  parseSessionActionResponse(
+    await fetchJson<unknown>(apiUrl(buildSessionActionPath(key, 'unpin')), { method: 'POST' }),
+  );
 }
 
 export async function exportSessionJson(key: string): Promise<string> {

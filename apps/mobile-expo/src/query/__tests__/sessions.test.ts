@@ -1,6 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createSession, fetchSessionActiveRun, fetchSessionsList } from '../sessions';
+import {
+  createSession,
+  fetchSession,
+  fetchSessionActiveRun,
+  fetchSessionMessagePage,
+  fetchSessionsList,
+} from '../sessions';
 import { sessionDisplayName } from '../../lib/session-helpers';
 import { apiFetch } from '../../api/client';
 
@@ -190,5 +196,79 @@ describe('fetchSessionActiveRun', () => {
     } as Response);
 
     await expect(fetchSessionActiveRun('missing')).resolves.toEqual({ active: false });
+  });
+});
+
+describe('fetchSession', () => {
+  beforeEach(() => {
+    mockedApiFetch.mockReset();
+  });
+
+  it('fetches session detail through the gateway contract path', async () => {
+    mockedApiFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        session: {
+          key: 'agent:main:webchat:default:direct:chat_a',
+          messages: [{ role: 'user', content: 'hello' }],
+          status: 'active',
+          tags: [],
+          createdAt: '2026-07-09T00:00:00.000Z',
+          updatedAt: '2026-07-09T00:00:00.000Z',
+          lastAccessedAt: '2026-07-09T00:00:00.000Z',
+          messageCount: 1,
+          estimatedTokens: 1,
+          compactedCount: 0,
+          sourceChannel: 'webchat',
+          sourceChatId: 'chat_a',
+        },
+      }),
+    } as Response);
+
+    const session = await fetchSession('agent:main:webchat:default:direct:chat_a');
+
+    expect(session?.key).toBe('agent:main:webchat:default:direct:chat_a');
+    expect(mockedApiFetch).toHaveBeenCalledWith(
+      '/api/sessions/agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_a',
+    );
+  });
+
+  it('returns null for missing session detail', async () => {
+    mockedApiFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 404,
+      json: async () => ({}),
+    } as Response);
+
+    await expect(fetchSession('missing')).resolves.toBeNull();
+  });
+});
+
+describe('fetchSessionMessagePage', () => {
+  beforeEach(() => {
+    mockedApiFetch.mockReset();
+  });
+
+  it('fetches history pages with encoded session keys and before cursors', async () => {
+    mockedApiFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        session: {
+          key: 'agent:main:webchat:default:direct:chat_a',
+          messages: [{ role: 'assistant', content: [{ type: 'text', text: 'hi' }] }],
+        },
+        pagination: { total: 1, limit: 50, offset: 0, hasMore: false, nextBeforeCursor: 'cursor_0' },
+      }),
+    } as Response);
+
+    const page = await fetchSessionMessagePage('agent:main:webchat:default:direct:chat_a', {
+      limit: 50,
+      before: 'cursor_1',
+    });
+
+    expect(page?.session.messages).toHaveLength(1);
+    expect(mockedApiFetch).toHaveBeenCalledWith(
+      '/api/sessions/agent%3Amain%3Awebchat%3Adefault%3Adirect%3Achat_a/history?limit=50&before=cursor_1',
+    );
   });
 });

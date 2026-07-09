@@ -1,8 +1,18 @@
 import {
+  buildCreateSessionPath,
+  buildSessionActionPath,
+  buildSessionDetailPath,
+  buildSessionHistoryPath,
   buildSessionListPath,
+  buildSessionRunPath,
+  extractCreatedSessionKey,
+  normalizeSessionActiveRunResponse,
+  parseSessionMessagePage,
+  parseSessionResponse,
   parseSessionsListResponse,
   tryParseSessionListItem,
   type SessionListItem as GatewaySessionListItem,
+  type SessionRoutingMeta as GatewaySessionRoutingMeta,
   type SessionStatus as GatewaySessionStatus,
   type SessionsListResponse,
 } from '@xopcai/gateway-contract';
@@ -37,15 +47,7 @@ export type SessionDetail = {
   routing?: SessionRoutingMeta;
 };
 
-export type SessionRoutingMeta = {
-  agentId: string;
-  source: string;
-  accountId: string;
-  peerKind: string;
-  peerId: string;
-  threadId?: string;
-  scopeId?: string;
-};
+export type SessionRoutingMeta = GatewaySessionRoutingMeta;
 
 export type SessionMessagePage = {
   session: SessionDetail;
@@ -85,10 +87,6 @@ function throwApiError(res: Response, body: unknown): never {
 
 async function parseErrorBody(res: Response): Promise<unknown> {
   return res.json().catch(() => ({}));
-}
-
-function encKey(key: string): string {
-  return encodeURIComponent(key);
 }
 
 function normalizedSessionName(item: SessionListItem): string | undefined {
@@ -163,10 +161,10 @@ export function readPlaceholderSessions(): SessionListItem[] | null {
 }
 
 export async function fetchSession(key: string): Promise<SessionDetail | null> {
-  const res = await apiFetch(`/api/sessions/${encKey(key)}`);
+  const res = await apiFetch(buildSessionDetailPath(key));
   if (res.status === 404) return null;
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
-  const data = (await res.json()) as { session?: SessionDetail };
+  const data = parseSessionResponse(await res.json());
   return data.session ?? null;
 }
 
@@ -174,32 +172,20 @@ export async function fetchSessionActiveRun(key: string): Promise<SessionActiveR
   const normalizedKey = key.trim();
   if (!normalizedKey) return { active: false };
 
-  const res = await apiFetch(`/api/sessions/${encKey(normalizedKey)}/run`);
+  const res = await apiFetch(buildSessionRunPath(normalizedKey));
   if (res.status === 404) return { active: false };
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
-
-  const data = (await res.json()) as { payload?: SessionActiveRunPayload };
-  const payload = data.payload;
-  const runId = typeof payload?.runId === 'string' ? payload.runId.trim() : '';
-  if (!payload?.active || !runId) return { active: false };
-  return { active: true, runId };
+  return normalizeSessionActiveRunResponse(await res.json());
 }
 
 export async function fetchSessionMessagePage(
   key: string,
   options?: { limit?: number; before?: string },
 ): Promise<SessionMessagePage | null> {
-  const params = new URLSearchParams();
-  params.set('limit', String(options?.limit ?? 50));
-  const before = options?.before?.trim();
-  if (before) {
-    params.set('before', before);
-  }
-
-  const res = await apiFetch(`/api/sessions/${encKey(key)}/history?${params.toString()}`);
+  const res = await apiFetch(buildSessionHistoryPath(key, options));
   if (res.status === 404) return null;
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
-  return (await res.json()) as SessionMessagePage;
+  return parseSessionMessagePage(await res.json());
 }
 
 export async function createSession(
@@ -207,27 +193,24 @@ export async function createSession(
 ): Promise<string> {
   const body: Record<string, unknown> = { channel: 'webchat' };
   if (agentId?.trim()) body.agentId = agentId.trim().toLowerCase();
-  const res = await apiFetch('/api/sessions', {
+  const res = await apiFetch(buildCreateSessionPath(), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
-  const data = (await res.json()) as { session?: { key?: string } };
-  const key = data.session?.key;
-  if (typeof key !== 'string' || !key.trim()) throw new Error('Create session: missing key');
-  return key.trim();
+  return extractCreatedSessionKey(await res.json());
 }
 
 // ── Session actions ──────────────────────────────────────────────
 
 export async function deleteSession(key: string): Promise<void> {
-  const res = await apiFetch(`/api/sessions/${encKey(key)}`, { method: 'DELETE' });
+  const res = await apiFetch(buildSessionActionPath(key, 'delete'), { method: 'DELETE' });
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
 }
 
 export async function renameSession(key: string, name: string): Promise<void> {
-  const res = await apiFetch(`/api/sessions/${encKey(key)}/rename`, {
+  const res = await apiFetch(buildSessionActionPath(key, 'rename'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name }),
@@ -236,22 +219,22 @@ export async function renameSession(key: string, name: string): Promise<void> {
 }
 
 export async function archiveSession(key: string): Promise<void> {
-  const res = await apiFetch(`/api/sessions/${encKey(key)}/archive`, { method: 'POST' });
+  const res = await apiFetch(buildSessionActionPath(key, 'archive'), { method: 'POST' });
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
 }
 
 export async function unarchiveSession(key: string): Promise<void> {
-  const res = await apiFetch(`/api/sessions/${encKey(key)}/unarchive`, { method: 'POST' });
+  const res = await apiFetch(buildSessionActionPath(key, 'unarchive'), { method: 'POST' });
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
 }
 
 export async function pinSession(key: string): Promise<void> {
-  const res = await apiFetch(`/api/sessions/${encKey(key)}/pin`, { method: 'POST' });
+  const res = await apiFetch(buildSessionActionPath(key, 'pin'), { method: 'POST' });
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
 }
 
 export async function unpinSession(key: string): Promise<void> {
-  const res = await apiFetch(`/api/sessions/${encKey(key)}/unpin`, { method: 'POST' });
+  const res = await apiFetch(buildSessionActionPath(key, 'unpin'), { method: 'POST' });
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
 }
 

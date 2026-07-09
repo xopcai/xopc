@@ -1,4 +1,10 @@
 import {
+  buildSessionRunPath,
+  normalizeSessionActiveRunResponse,
+  type SessionActiveRunPayload,
+} from '@xopcai/gateway-contract';
+
+import {
   hasPendingAgentRunForChat,
   pendingAgentRunStorageKey,
   setPendingAgentRun,
@@ -6,23 +12,17 @@ import {
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export type SessionActiveRunPayload = {
-  active: boolean;
-  runId?: string;
-};
-
 /** Gateway source of truth for in-flight webchat runs (Phase 1). */
 export async function fetchSessionActiveRun(sessionKey: string): Promise<SessionActiveRunPayload> {
   const key = String(sessionKey ?? '').trim();
   if (!key) return { active: false };
-  const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(key)}/run`));
+  const res = await apiFetch(apiUrl(buildSessionRunPath(key)));
   if (!res.ok) return { active: false };
-  const data = (await res.json()) as { payload?: SessionActiveRunPayload };
-  const payload = data.payload;
-  if (!payload?.active || typeof payload.runId !== 'string' || !payload.runId.trim()) {
+  try {
+    return normalizeSessionActiveRunResponse(await res.json());
+  } catch {
     return { active: false };
   }
-  return { active: true, runId: payload.runId.trim() };
 }
 
 /**
