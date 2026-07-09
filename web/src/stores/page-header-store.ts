@@ -5,6 +5,7 @@ export type PageHeaderPayload = {
   startExtra: ReactNode | null;
   main: ReactNode | null;
   end: ReactNode | null;
+  className?: string;
 };
 
 type PageHeaderState = PageHeaderPayload & {
