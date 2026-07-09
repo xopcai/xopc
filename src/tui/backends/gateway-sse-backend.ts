@@ -3,6 +3,7 @@ import { parseModelRef } from '../../agent/models/selection.js';
 import type { ExportFormat } from '../../session/types.js';
 import type { TranscriptStoredRow } from '../../session/session-context-for-llm.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
+import type { SessionTimelineItem } from '../../session/transcript-outline.js';
 import { createLogger } from '../../utils/logger.js';
 import { consumeSSEStream, parseSSEData } from '../sse-consumer.js';
 import type {
@@ -444,6 +445,23 @@ export class GatewaySseBackend implements TuiBackend {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, sessionKey, errorMessage }, `Failed to load transcript tree: ${errorMessage}`);
+      return [];
+    }
+  }
+
+  async loadTimeline(sessionKey: string): Promise<SessionTimelineItem[]> {
+    try {
+      const res = await gatewayFetch(
+        this.baseUrl,
+        `/api/sessions/${encodeURIComponent(sessionKey)}/timeline`,
+        this.token,
+      );
+      if (!res.ok) return [];
+      const json = (await res.json()) as { items?: unknown[] };
+      return Array.isArray(json.items) ? (json.items as SessionTimelineItem[]) : [];
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn({ err: error, sessionKey, errorMessage }, `Failed to load timeline: ${errorMessage}`);
       return [];
     }
   }

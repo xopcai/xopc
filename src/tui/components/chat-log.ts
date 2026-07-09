@@ -18,6 +18,14 @@ import type { TuiBranchSummary, TuiCompactionResult } from '../tui-backend.js';
 const MAX_COMPONENTS = 180;
 
 type ExpandableBlock = { setExpanded(expanded: boolean): void };
+export type ChatLogEntryMeta = {
+  displayIndex?: number;
+  historyIndex?: number;
+  rowNumber?: number;
+  role?: 'user' | 'assistant' | 'system';
+};
+
+type ChatLogEntryRecord = ChatLogEntryMeta & { component: Component };
 
 function assistantPlainText(message: AgentMessage): string {
   const content = (message as { content?: unknown }).content;
@@ -53,6 +61,9 @@ export class ChatLog extends Container {
   private lastStatusEntry: Container | null = null;
   private lastStatusText: Text | null = null;
   private workflowStatusByRunId = new Map<string, { entry: Container; text: Text }>();
+  private entryRecords: ChatLogEntryRecord[] = [];
+  private viewportRowsProvider: (() => number) | undefined;
+  private historyViewDisplayIndex: number | null = null;
 
   constructor(private readonly keybindings?: KeybindingsManager) {
     super();
@@ -93,10 +104,17 @@ export class ChatLog extends Container {
     for (const [runId, status] of this.workflowStatusByRunId.entries()) {
       if (status.entry === component) this.workflowStatusByRunId.delete(runId);
     }
+    this.entryRecords = this.entryRecords.filter((entry) => entry.component !== component);
+    if (!this.findEntryRecord(this.historyViewDisplayIndex)) {
+      this.historyViewDisplayIndex = null;
+    }
   }
 
-  private append(component: Component): void {
+  private append(component: Component, meta?: ChatLogEntryMeta): void {
     this.addChild(component);
+    if (meta) {
+      this.entryRecords.push({ component, ...meta });
+    }
     this.pruneOverflow();
   }
 
@@ -116,6 +134,8 @@ export class ChatLog extends Container {
     this.lastStatusEntry = null;
     this.lastStatusText = null;
     this.workflowStatusByRunId.clear();
+    this.entryRecords = [];
+    this.historyViewDisplayIndex = null;
   }
 
   private createAssistantMessage(message?: AgentMessage): AssistantMessageComponent {
@@ -127,11 +147,11 @@ export class ChatLog extends Container {
     return component;
   }
 
-  addSystem(text: string): void {
+  addSystem(text: string, meta?: ChatLogEntryMeta): void {
     const entry = new Container();
     entry.addChild(new Spacer(1));
     entry.addChild(new Text(theme.system(text), 1, 0));
-    this.append(entry);
+    this.append(entry, meta);
   }
 
   addStatus(text: string): void {
@@ -214,9 +234,9 @@ export class ChatLog extends Container {
     }
   }
 
-  addUser(text: string | unknown[]): void {
+  addUser(text: string | unknown[], meta?: ChatLogEntryMeta): void {
     this.assistantAnchorByRunId.clear();
-    this.append(new UserMessageComponent(text));
+    this.append(new UserMessageComponent(text), meta);
   }
 
   /** Stream local `!command` output in a bordered block. */
@@ -269,7 +289,7 @@ export class ChatLog extends Container {
     existing.setHasToolCalls(this.runsWithTools.has(runId));
   }
 
-  finalizeAssistant(message: AgentMessage, runId: string): void {
+  finalizeAssistant(message: AgentMessage, runId: string, meta?: ChatLogEntryMeta): void {
     const text = assistantPlainText(message);
     if (text.trim()) this.lastAssistantText = text;
     const existing = this.streamingRuns.get(runId);
@@ -282,7 +302,7 @@ export class ChatLog extends Container {
     }
     const finalMessage = this.createAssistantMessage(message);
     finalMessage.setHasToolCalls(this.runsWithTools.has(runId));
-    this.append(finalMessage);
+    this.append(finalMessage, meta);
     if (text.trim()) {
       this.assistantAnchorByRunId.set(runId, finalMessage);
     }
@@ -310,8 +330,7 @@ export class ChatLog extends Container {
 
     const assistant = this.streamingRuns.get(runId) ?? this.assistantAnchorByRunId.get(runId);
     assistant?.setHasToolCalls(true);
-    this.addChild(component);
-    this.pruneOverflow();
+    this.append(component);
   }
 
   markToolExecutionStarted(toolCallId: string): void {
@@ -389,5 +408,63 @@ export class ChatLog extends Container {
 
   getLastAssistantText(): string {
     return this.lastAssistantText;
+  }
+
+  setViewportRowsProvider(provider: (() => number) | undefined): void {
+    this.viewportRowsProvider = provider;
+  }
+
+  jumpToDisplayIndex(displayIndex: number): boolean {
+    const target = this.findEntryRecord(displayIndex);
+    if (!target) return false;
+    this.historyViewDisplayIndex = target.displayIndex ?? null;
+    return true;
+  }
+
+  jumpToLatest(): void {
+    this.historyViewDisplayIndex = null;
+  }
+
+  getTimelineViewportState(): { mode: 'latest' } | { mode: 'history'; displayIndex: number } {
+    if (this.historyViewDisplayIndex === null) return { mode: 'latest' };
+    return { mode: 'history', displayIndex: this.historyViewDisplayIndex };
+  }
+
+  override render(width: number): string[] {
+    const allLines: string[] = [];
+    const ranges: Array<{ record: ChatLogEntryRecord; start: number; end: number }> = [];
+    for (const child of this.children) {
+      const start = allLines.length;
+      const childLines = child.render(width);
+      allLines.push(...childLines);
+      const record = this.entryRecords.find((entry) => entry.component === child);
+      if (record) {
+        ranges.push({ record, start, end: allLines.length });
+      }
+    }
+
+    if (this.historyViewDisplayIndex === null) return allLines;
+
+    const target = this.findEntryRecord(this.historyViewDisplayIndex);
+    const range = target
+      ? ranges.find((candidate) => candidate.record.component === target.component)
+      : undefined;
+    if (!range) {
+      this.historyViewDisplayIndex = null;
+      return allLines;
+    }
+
+    const viewportRows = Math.max(8, Math.floor(this.viewportRowsProvider?.() ?? 24));
+    const start = Math.max(0, range.start - 1);
+    const end = Math.min(allLines.length, start + Math.max(1, viewportRows - 1));
+    return [
+      theme.dim('Viewing previous transcript - /timeline latest returns to live view.'),
+      ...allLines.slice(start, end),
+    ];
+  }
+
+  private findEntryRecord(displayIndex: number | null): ChatLogEntryRecord | undefined {
+    if (displayIndex === null || !Number.isFinite(displayIndex)) return undefined;
+    return this.entryRecords.find((entry) => entry.displayIndex === displayIndex);
   }
 }
