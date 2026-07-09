@@ -194,7 +194,7 @@ function parseGoalContextAttachments(raw: string): GoalContextAttachment[] {
     const ref = item as Partial<GoalContextAttachment>;
     return (
       typeof ref.id === 'string' &&
-      (ref.bucket === 'inbound' || ref.bucket === 'tts' || ref.bucket === 'outbound') &&
+      (ref.bucket === 'inbound' || ref.bucket === 'tts' || ref.bucket === 'outbound' || ref.bucket === 'work-item') &&
       typeof ref.type === 'string' &&
       typeof ref.mimeType === 'string' &&
       typeof ref.name === 'string' &&

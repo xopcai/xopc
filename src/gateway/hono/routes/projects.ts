@@ -876,6 +876,9 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
     const project = service.projects.get(item.projectId);
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+    const attachments = await workItems.snapshotAttachmentsForGoal(item.id);
+    if (!attachments) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    const context = await buildWorkItemAgentContext(item, { attachments, includeImages: false });
     const goal = goals.create({
       title: item.title,
       description: item.description || item.nextAction,
@@ -885,10 +888,11 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       source: 'api',
       config: service.currentConfig,
     });
-    goals.setContextMessage({
+    const goalWithContext = goals.setContextMessage({
       goalId: goal.id,
-      text: buildWorkItemAgentContext(item).text,
-    });
+      text: context.text,
+      attachments,
+    }) ?? goal;
     workItems.addLink(item.id, {
       kind: 'goal',
       targetId: goal.id,
@@ -898,7 +902,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     const updated = item.status === 'todo' || item.status === 'backlog'
       ? workItems.updateWorkItem(item.id, { status: 'in_progress' })
       : workItems.getWorkItem(item.id);
-    return c.json({ ok: true, goal, item: updated }, 201);
+    return c.json({ ok: true, goal: goalWithContext, item: updated }, 201);
   });
 
   authenticated.post('/api/projects/:id/digest-memory', async (c) => {

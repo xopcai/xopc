@@ -338,7 +338,7 @@ export class GatewayService {
         }
         if (binding.kind === 'work_item') {
           const item = new WorkItemService().getWorkItem(binding.sourceId);
-          return item ? buildWorkItemAgentContext(item) : null;
+          return item ? await buildWorkItemAgentContext(item) : null;
         }
         return null;
       },

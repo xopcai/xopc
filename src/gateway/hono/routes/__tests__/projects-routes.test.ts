@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -700,12 +700,15 @@ describe('project association routes', () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Goal Work Item Project', defaultAgentId: 'coder' });
     const app = registerProjectRouteApp({ projects });
-    const create = await app.request(`/api/projects/${project.id}/work-items`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ title: 'Implement review flow', priority: 'high' }),
-    });
-    const created = await create.json() as { item: { id: string } };
+    const form = new FormData();
+    form.append('title', 'Implement review flow');
+    form.append('priority', 'high');
+    form.append('file', new File(['goal attachment brief'], 'brief.txt', { type: 'text/plain' }));
+    const create = await app.request(`/api/projects/${project.id}/work-items`, { method: 'POST', body: form });
+    const created = await create.json() as {
+      item: { id: string; attachments: Array<{ id: string; mediaUri: string }> };
+    };
+    const originalAttachment = created.item.attachments[0]!;
 
     const res = await app.request(`/api/work-items/${created.item.id}/create-goal`, {
       method: 'POST',
@@ -720,6 +723,27 @@ describe('project association routes', () => {
     expect((body.item.links as Array<Record<string, unknown>>)).toEqual([
       expect.objectContaining({ kind: 'goal', targetId: body.goal.id }),
     ]);
+
+    const goal = new GoalService().get(body.goal.id);
+    const snapshot = goal?.contextMessage?.attachments[0];
+    expect(snapshot).toMatchObject({
+      bucket: 'inbound',
+      type: 'document',
+      mimeType: 'text/plain',
+      name: 'brief.txt',
+      size: 'goal attachment brief'.length,
+    });
+    expect(snapshot?.uri).not.toBe(originalAttachment.mediaUri);
+    expect(goal?.contextMessage?.text).toContain(`xopc-media-uri:${snapshot!.uri}`);
+    expect(goal?.contextMessage?.text).not.toContain(`xopc-media-uri:${originalAttachment.mediaUri}`);
+    expect(readFileSync(snapshot!.path, 'utf-8')).toBe('goal attachment brief');
+
+    const remove = await app.request(`/api/work-items/${created.item.id}/attachments/${originalAttachment.id}`, {
+      method: 'DELETE',
+    });
+    expect(remove.status).toBe(200);
+    expect(existsSync(snapshot!.path)).toBe(true);
+    expect(readFileSync(snapshot!.path, 'utf-8')).toBe('goal attachment brief');
   });
 
   it('updates a stable project digest memory record instead of creating duplicates', async () => {
