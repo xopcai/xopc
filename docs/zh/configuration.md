@@ -12,6 +12,8 @@ xopc 所有配置集中在 `~/.xopc/xopc.json` 文件中。
 | 添加另一个 agent | [如何创建第二个 agent](how-to/create-second-agent.md) |
 | 排查损坏的设置 | [如何诊断损坏的设置](how-to/diagnose-broken-setup.md) |
 
+完整字段参考见 [配置参考](./reference/configuration.md)。
+
 本页其余内容是 `xopc.json` 结构参考。
 
 ## 快速开始

@@ -88,4 +88,24 @@ describe('EmbeddedBackend', () => {
 
     backend.stop();
   });
+
+  it('starts lazily when an agent operation happens before explicit start', async () => {
+    const backend = new EmbeddedBackend({ config: {} as never });
+    const connected = vi.fn();
+    backend.onConnected = connected;
+
+    await backend.patchSession('agent:coder:tui-start-race', {
+      workingDirectory: '/tmp/project',
+    });
+
+    expect(connected).toHaveBeenCalledTimes(1);
+    expect(mocks.sessionIndexInitialize).toHaveBeenCalledTimes(1);
+    expect(mocks.agentService).toHaveBeenCalledTimes(1);
+    expect(mocks.sessionConfigPatch).toHaveBeenCalledWith(
+      'agent:coder:tui-start-race',
+      expect.objectContaining({ workingDirectory: '/tmp/project' }),
+    );
+
+    backend.stop();
+  });
 });

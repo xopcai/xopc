@@ -2,16 +2,16 @@
 
 XOPC supports **outbound bundle-MCP**: the agent connects to external MCP servers and exposes their tools in conversation. XOPC also provides an **inbound channel bridge** (`xopc mcp serve`) that lets external MCP clients (e.g. Claude Desktop) talk to gateway sessions over stdio.
 
-This guide covers configuration, the gateway console UI, tool naming, lifecycle, and security. For CLI and HTTP API details, see [MCP CLI & API](./cli/mcp.md).
-
 ---
 
 ## Table of contents
 
 - [How it works](#how-it-works)
 - [Configuration](#configuration)
-- [Gateway console (Web UI)](#gateway-console-web-ui)
 - [Disable MCP tools](#disable-mcp-tools)
+- [Gateway console (Web UI)](#gateway-console-web-ui)
+- [Gateway REST API](#gateway-rest-api)
+- [Inbound channel bridge](#inbound-channel-bridge)
 - [Extension MCP manifests](#extension-mcp-manifests)
 - [Lifecycle](#lifecycle)
 - [Security notes](#security-notes)
@@ -96,7 +96,42 @@ You cannot set both `command` and `url` on the same server entry.
 
 Current `xopc --help` does not expose `mcp` as a root command. Edit `mcp.servers` in `xopc.json` directly, or use the gateway console when available.
 
-See [MCP CLI & API](./cli/mcp.md) for historical commands retained for installs or development branches that still expose them.
+### Historical server management commands
+
+These are retained for installs or development branches that still expose the historical MCP CLI:
+
+```bash
+xopc mcp list
+xopc mcp show [name]
+xopc mcp set fetch '{"command":"npx","args":["-y","@modelcontextprotocol/server-fetch"]}'
+xopc mcp unset fetch
+```
+
+---
+
+## Disable MCP tools
+
+**All MCP tools** for an agent profile:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "tools": {
+        "disable": ["bundle-mcp"]
+      }
+    }
+  }
+}
+```
+
+You can also add `bundle-mcp` to a specific entry in `agents.list[].tools.disable`.
+
+**Individual MCP tools** — disable by full registered name, e.g. `fetch__browse`.
+
+In the gateway console: **Settings → Agent defaults → Tools** — disable the **MCP** group or specific tool ids.
+
+Delegate sub-agents cannot use MCP tools (`bundle-mcp` is blocklisted for delegation).
 
 ---
 
@@ -134,29 +169,48 @@ Changes are written to `~/.xopc/xopc.json` via `PATCH /api/config` when you clic
 
 ---
 
-## Disable MCP tools
+## Gateway REST API
 
-**All MCP tools** for an agent profile:
+Requires gateway auth (Bearer token or configured password).
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/mcp/servers` | GET | List configured + extension-merged servers |
+| `/api/mcp/servers/:id/tools` | GET | Tool catalog for a server (uses saved config) |
+| `/api/mcp/servers/:id/test` | POST | Connect with optional body override + list tools |
+| `/api/mcp/approvals/respond` | POST | Channel bridge approval stub |
+
+Config CRUD for MCP uses the general config API: `GET /api/config` and `PATCH /api/config` (see [Gateway](./gateway.md)).
+
+### Test / tools response shape
+
+Tool entries include:
 
 ```json
 {
-  "agents": {
-    "defaults": {
-      "tools": {
-        "disable": ["bundle-mcp"]
-      }
-    }
-  }
+  "name": "fetch__browse",
+  "shortName": "browse",
+  "description": "Fetch a URL and return readable content"
 }
 ```
 
-You can also add `bundle-mcp` to a specific entry in `agents.list[].tools.disable`.
+---
 
-**Individual MCP tools** — disable by full registered name, e.g. `fetch__browse`.
+## Inbound channel bridge
 
-In the gateway console: **Settings → Agent defaults → Tools** — disable the **MCP** group or specific tool ids.
+Expose gateway sessions to external MCP clients (stdio):
 
-Delegate sub-agents cannot use MCP tools (`bundle-mcp` is blocklisted for delegation).
+```bash
+xopc mcp serve --url http://127.0.0.1:18790 --token-file ~/.xopc/gateway.token
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--url` | Gateway base URL |
+| `--token` / `--token-file` | Bearer auth |
+| `--password` / `--password-file` | Password auth (when configured) |
+| `--claude-channel-mode` | `auto` \| `on` \| `off` — Claude Desktop channel compatibility |
+| `-v` | Verbose logging |
 
 ---
 
@@ -195,7 +249,6 @@ Config changes under `mcp` trigger hot reload (see [Configuration rules](./confi
 
 ## Related docs
 
-- [MCP CLI & API](./cli/mcp.md) — `xopc mcp`, `xopc mcp serve`, REST endpoints
 - [Built-in tools](./tools.md) — tool registry overview
 - [Configuration](./configuration.md) — full config schema
 - [Extensions](./extensions.md) — extension MCP manifests

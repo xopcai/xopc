@@ -131,6 +131,11 @@ export class EmbeddedBackend implements TuiBackend {
       return this.agentLoading;
     }
     if (!this.config || !this.sessionIndex) {
+      if (!this.running) {
+        this.start();
+      }
+    }
+    if (!this.config || !this.sessionIndex) {
       throw new Error('Embedded backend not started');
     }
 
