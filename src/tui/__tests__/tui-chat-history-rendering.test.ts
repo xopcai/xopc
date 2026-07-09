@@ -92,6 +92,32 @@ describe('history replay rendering', () => {
     expect(rendered).not.toContain('private plan');
   });
 
+  it('can render a window around a selected history display index', () => {
+    const chatLog = new ChatLog();
+    chatLog.setViewportRowsProvider(() => 8);
+    appendHistoryToChatLog(
+      chatLog,
+      [
+        { role: 'user', content: 'first question' },
+        { role: 'assistant', content: 'first answer' },
+        { role: 'user', content: 'target question' },
+        { role: 'assistant', content: 'target answer' },
+        { role: 'user', content: 'latest question' },
+        { role: 'assistant', content: 'latest answer' },
+      ],
+      false,
+    );
+
+    expect(chatLog.jumpToDisplayIndex(2)).toBe(true);
+    const historyView = stripAnsi(chatLog.render(100).join('\n'));
+    expect(historyView).toContain('Viewing previous transcript');
+    expect(historyView).toContain('target question');
+    expect(historyView).not.toContain('latest answer');
+
+    chatLog.jumpToLatest();
+    expect(stripAnsi(chatLog.render(100).join('\n'))).toContain('latest answer');
+  });
+
   it('replays compaction rows as expandable summary components', () => {
     const chatLog = new ChatLog();
     appendHistoryToChatLog(

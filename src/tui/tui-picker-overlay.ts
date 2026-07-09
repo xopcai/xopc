@@ -10,6 +10,11 @@ import type { TuiAgentInfo, TuiSessionItem } from './tui-backend.js';
 import type { PickerServices } from './tui-picker-services.js';
 import { formatSessionPickerDescription } from './tui-session-format.js';
 import { searchableSelectListTheme, theme } from './theme.js';
+import { buildTuiTimelineTurns } from './tui-timeline.js';
+import {
+  formatTimelineOpenedHint,
+  TimelineSelectList,
+} from './tui-timeline-picker.js';
 import { filterTuiTranscriptTreeEntries } from './tui-transcript-tree.js';
 import {
   defaultTranscriptForkKey,
@@ -120,6 +125,47 @@ export function formatSessionTreeOpenedHint(keybindings: KeybindingsManager): st
   const confirm = formatKeyIds(keybindings, 'tui.select.confirm', { capitalize: true });
   const cancel = formatKeyIds(keybindings, 'tui.select.cancel', { capitalize: true });
   return `Session tree (${nav} · type to filter · ${confirm} resume · ${cancel} close)`;
+}
+
+export async function openTimelineOverlay(
+  svc: PickerServices,
+  initialQuery?: string,
+): Promise<void> {
+  const items = await svc.client.loadTimeline(svc.state.currentSessionKey);
+  const turns = buildTuiTimelineTurns(items);
+  if (turns.length === 0) {
+    svc.chatLog.addSystem('No timeline turns found.');
+    svc.tui.requestRender();
+    return;
+  }
+
+  const viewState = svc.chatLog.getTimelineViewportState();
+  const activeDisplayIndex =
+    viewState.mode === 'history'
+      ? viewState.displayIndex
+      : turns[turns.length - 1]?.displayIndex;
+  const list = new TimelineSelectList(turns, {
+    keybindings: svc.keybindings,
+    ...(activeDisplayIndex !== undefined ? { activeDisplayIndex } : {}),
+    ...(initialQuery ? { initialQuery } : {}),
+  });
+  list.onSelect = (turn) => {
+    svc.closeOverlay();
+    svc.tui.setFocus(svc.editor);
+    if (!svc.chatLog.jumpToDisplayIndex(turn.displayIndex)) {
+      svc.chatLog.addSystem(`Turn ${turn.turn} is outside loaded history.`);
+    }
+    svc.tui.requestRender();
+  };
+  list.onCancel = () => {
+    svc.closeOverlay();
+    svc.tui.setFocus(svc.editor);
+    svc.tui.requestRender();
+  };
+
+  svc.openOverlay(list);
+  svc.chatLog.addSystem(theme.dim(formatTimelineOpenedHint(svc.keybindings)));
+  svc.tui.requestRender();
 }
 
 function resumeSession(svc: PickerServices, sessionKey: string): void {

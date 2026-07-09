@@ -1,4 +1,5 @@
 import type { ClientHistoryMessage } from '../session/client-history.js';
+import type { SessionTimelineItem } from '../session/transcript-outline.js';
 import type { ExportFormat } from '../session/types.js';
 import type { ReviewContext } from '../review/review-git.js';
 
@@ -240,6 +241,9 @@ export interface TuiBackend {
 
   /** Load current transcript rows as a tree-shaped list. */
   loadTranscriptTree(sessionKey: string): Promise<TuiTranscriptTreeEntry[]>;
+
+  /** Load current transcript rows as timeline items for turn navigation. */
+  loadTimeline(sessionKey: string): Promise<SessionTimelineItem[]>;
 
   /** Compute transcript message/token statistics. */
   getSessionStats(sessionKey: string): Promise<TuiSessionStats>;

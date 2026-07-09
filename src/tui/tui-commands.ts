@@ -13,6 +13,13 @@ import type {
   TuiAgentInfo,
 } from './tui-backend.js';
 import type { ChatLog } from './components/chat-log.js';
+import type { SessionTimelineItem } from '../session/transcript-outline.js';
+import {
+  buildTuiTimelineTurns,
+  findNearestTimelineTurnByDisplayIndex,
+  findTimelineTurnByNumber,
+  type TuiTimelineTurn,
+} from './tui-timeline.js';
 import {
   formatKeyIds,
   formatXopcTuiHotkeys,
@@ -64,6 +71,7 @@ import {
 
 import { rewriteUnknownSlashAsWorkflow } from './tui-workflow-slash.js';
 import { formatTuiStartupText } from './tui-startup-text.js';
+import { theme } from './theme.js';
 
 export interface SlashCommandDef {
   name: string;
@@ -125,6 +133,7 @@ export function getSlashCommands(
     { name: 'list', description: 'List sessions' },
     { name: 'resume', description: `Open session picker (or ${sessionKey})` },
     { name: 'tree', description: 'Show grouped session tree' },
+    { name: 'timeline', description: 'Jump to a previous turn in the current session' },
     { name: 'scoped-models', description: `Choose models for ${modelCycleKey} cycling` },
     { name: 'compact', description: 'Compact session history (local API)' },
     { name: 'think', description: 'Set thinking level (e.g. /think high)' },
@@ -287,6 +296,7 @@ export type CommandHandlerDeps = {
     openSessionPicker: () => void;
     openSessionTree: () => void;
     openTranscriptTree: () => void;
+    openTimeline: (initialSearch?: string) => void;
     openUserMessageFork: () => void;
     openScopedModels: () => void;
     openThinkingSelector: () => void;
@@ -309,6 +319,7 @@ export type CommandHandlerDeps = {
   getSessionStats?: () => TuiSessionStats | Promise<TuiSessionStats>;
   getStartupResources?: () => TuiStartupResources | undefined;
   loadTranscriptTree?: () => TuiTranscriptTreeEntry[] | Promise<TuiTranscriptTreeEntry[]>;
+  loadTimeline?: () => SessionTimelineItem[] | Promise<SessionTimelineItem[]>;
   exportSession?: (request: TuiExportRequest) => void | Promise<void>;
   importSession?: (request: TuiImportRequest) => void | Promise<void>;
   createShare?: (request: TuiShareRequest) => void | Promise<void>;
@@ -355,6 +366,98 @@ function defaultAuthProfiles(): NonNullable<CommandHandlerDeps['authProfiles']> 
     remove: (profileId) => removeAuthProfile(profileId),
     getStorePath: () => getAuthStorePath(),
   };
+}
+
+function timelineUsage(): string {
+  return [
+    'Usage: /timeline [turn|latest|prev|next|search <text>]',
+    'Examples: /timeline, /timeline 12, /timeline prev, /timeline search deploy',
+  ].join('\n');
+}
+
+function currentTimelineTurnIndex(turns: readonly TuiTimelineTurn[], chatLog: ChatLog): number {
+  const viewState = chatLog.getTimelineViewportState();
+  if (viewState.mode === 'history') {
+    const current = findNearestTimelineTurnByDisplayIndex(turns, viewState.displayIndex);
+    const index = current ? turns.findIndex((turn) => turn.id === current.id) : -1;
+    return index >= 0 ? index : turns.length - 1;
+  }
+  return turns.length - 1;
+}
+
+async function runTimelineCommand(
+  commandArgs: string,
+  deps: Pick<CommandHandlerDeps, 'chatLog' | 'tui' | 'uiOverlays' | 'loadTimeline'>,
+): Promise<void> {
+  const raw = commandArgs.trim();
+  if (!raw) {
+    if (deps.uiOverlays?.openTimeline) {
+      deps.uiOverlays.openTimeline();
+    } else {
+      deps.chatLog.addSystem('Timeline picker is not available in this mode.');
+      deps.tui.requestRender();
+    }
+    return;
+  }
+
+  const [subcommandRaw, ...rest] = raw.split(/\s+/);
+  const subcommand = (subcommandRaw ?? '').toLowerCase();
+
+  if (subcommand === 'search' || subcommand === 'find') {
+    if (deps.uiOverlays?.openTimeline) {
+      deps.uiOverlays.openTimeline(rest.join(' ').trim());
+    } else {
+      deps.chatLog.addSystem('Timeline picker is not available in this mode.');
+      deps.tui.requestRender();
+    }
+    return;
+  }
+
+  if (subcommand === 'latest' || subcommand === 'live' || subcommand === 'end') {
+    deps.chatLog.jumpToLatest();
+    deps.chatLog.addSystem(theme.dim('Returned to latest transcript view.'));
+    deps.tui.requestRender();
+    return;
+  }
+
+  if (!deps.loadTimeline) {
+    deps.chatLog.addSystem('Timeline is not available in this mode.');
+    deps.tui.requestRender();
+    return;
+  }
+
+  const turns = buildTuiTimelineTurns(await Promise.resolve(deps.loadTimeline()));
+  if (turns.length === 0) {
+    deps.chatLog.addSystem('No timeline turns found.');
+    deps.tui.requestRender();
+    return;
+  }
+
+  let target: TuiTimelineTurn | undefined;
+  if (subcommand === 'prev' || subcommand === 'previous') {
+    target = turns[Math.max(0, currentTimelineTurnIndex(turns, deps.chatLog) - 1)];
+  } else if (subcommand === 'next') {
+    target = turns[Math.min(turns.length - 1, currentTimelineTurnIndex(turns, deps.chatLog) + 1)];
+  } else {
+    const turnNumber = Number.parseInt(subcommand, 10);
+    if (!Number.isFinite(turnNumber) || String(turnNumber) !== subcommand) {
+      deps.chatLog.addSystem(timelineUsage());
+      deps.tui.requestRender();
+      return;
+    }
+    target = findTimelineTurnByNumber(turns, turnNumber);
+  }
+
+  if (!target) {
+    deps.chatLog.addSystem(`Timeline turn not found: ${raw}`);
+    deps.tui.requestRender();
+    return;
+  }
+
+  if (!deps.chatLog.jumpToDisplayIndex(target.displayIndex)) {
+    deps.chatLog.addSystem(`Turn ${target.turn} is outside loaded history.`);
+  }
+  deps.tui.requestRender();
 }
 
 function formatAgentsList(agents: TuiAgentInfo[], currentAgentId?: string): string {
@@ -978,6 +1081,13 @@ export function createTuiCommandHandler(deps: CommandHandlerDeps): (input: strin
           chatLog.addSystem(
             formatTuiSessionTreeInfo(sessions, { currentSessionKey: state.currentSessionKey }),
           );
+          tui.requestRender();
+        });
+        return;
+      case 'timeline':
+        void runTimelineCommand(commandArgs, deps).catch((err: unknown) => {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          chatLog.addSystem(`Timeline failed: ${errorMessage}`);
           tui.requestRender();
         });
         return;

@@ -118,16 +118,28 @@ export function appendHistoryToChatLog(
     }
 
     if (hm.role === 'user') {
-      chatLog.addUser(historyContentText(hm.content));
+      chatLog.addUser(historyContentText(hm.content), {
+        displayIndex: historyIndex,
+        historyIndex,
+        role: 'user',
+      });
       return;
     }
 
     if (hm.role === 'system') {
-      chatLog.addSystem(historyContentText(hm.content));
+      chatLog.addSystem(historyContentText(hm.content), {
+        displayIndex: historyIndex,
+        historyIndex,
+        role: 'system',
+      });
       return;
     }
 
-    chatLog.finalizeAssistant(assistantHistoryMessage(hm.content), runId);
+    chatLog.finalizeAssistant(assistantHistoryMessage(hm.content), runId, {
+      displayIndex: historyIndex,
+      historyIndex,
+      role: 'assistant',
+    });
 
     const tools = hm.toolCalls ?? [];
     for (let t = 0; t < tools.length; t++) {
