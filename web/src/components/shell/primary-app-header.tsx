@@ -16,6 +16,7 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
   const startExtra = usePageHeaderStore((s) => s.startExtra);
   const main = usePageHeaderStore((s) => s.main);
   const end = usePageHeaderStore((s) => s.end);
+  const headerClassName = usePageHeaderStore((s) => s.className);
   const showMobileNav = !pathname.startsWith('/settings');
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
 
@@ -26,6 +27,7 @@ export const PrimaryAppHeader = memo(function PrimaryAppHeader() {
         APP_TOP_HEADER_BAR_CLASS,
         'px-3 sm:gap-4 sm:px-5 xl:px-6',
         electronDarwinCollapsedClusterMainPadMd(sidebarCollapsed),
+        headerClassName,
       )}
     >
       <DarwinCollapsedTitlebarCluster />

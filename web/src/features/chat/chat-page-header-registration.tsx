@@ -54,6 +54,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
 
   useLayoutEffect(() => {
     setPageHeader({
+      className: 'bg-surface-panel',
       startExtra: showNewChatLink ? (
         <Link
           to="/chat/new"
