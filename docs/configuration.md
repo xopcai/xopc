@@ -12,6 +12,8 @@ Use task guides first when you are trying to accomplish something:
 | Add another agent | [How to create a second agent](how-to/create-second-agent.md) |
 | Debug a broken setup | [How to diagnose a broken setup](how-to/diagnose-broken-setup.md) |
 
+For the exhaustive field reference, see [Configuration reference](./reference/configuration.md).
+
 The rest of this page is reference material for the `xopc.json` shape.
 
 ## Quick Start

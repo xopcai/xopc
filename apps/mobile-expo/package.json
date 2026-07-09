@@ -46,6 +46,7 @@
     "@tiptap/extension-task-list": "^3.27.1",
     "@tiptap/react": "^3.27.1",
     "@tiptap/starter-kit": "^3.27.1",
+    "@xopcai/gateway-contract": "workspace:*",
     "@xopcai/gateway-sse-client": "workspace:*",
     "expo": "~56.0.12",
     "expo-asset": "^56.0.17",

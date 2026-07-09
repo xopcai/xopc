@@ -1,8 +1,8 @@
 # Getting Started
 
-Use this page after you want the full map: install options, setup modes, surfaces, and where to go next.
+Use this page as the full map: what runs, setup modes, surfaces, and where to go next.
 
-If you have not tried xopc yet, start with the [PC Desktop app](./desktop-app.md) for the friendliest path, or [First 5 Minutes](./first-5-minutes.md) for a terminal-first path.
+If you have not tried xopc yet, start with the **[PC Desktop app](./desktop-app.md)** for the friendliest path, or **[First 5 Minutes](./first-5-minutes.md)** for a terminal-first path — both cover the actual install commands step by step.
 
 ## What xopc runs
 
@@ -21,18 +21,8 @@ xopc is one package with several surfaces:
 ## Requirements
 
 - Node.js **22** or newer for the CLI package.
-- `pnpm` only when building from this repository.
 - At least one model provider key, local model server, or configured OpenAI-compatible endpoint.
-
-## Install options
-
-| Method | Command | Use when |
-| --- | --- | --- |
-| Installer script | `curl -fsSL https://xopc.ai/install.sh \| bash` | macOS, Linux, WSL, Termux |
-| Windows installer script | `iex (irm https://xopc.ai/install.ps1)` | PowerShell |
-| npm package | `npm install -g @xopcai/xopc` | Node.js 22+ is already installed |
-| China npm mirror | `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com` | npmjs access is slow |
-| Source build | `pnpm install && pnpm run build` | Developing xopc itself |
+- `pnpm` only when building from this repository.
 
 ## Setup modes
 
@@ -46,8 +36,6 @@ xopc is one package with several surfaces:
 Configuration is stored in `~/.xopc/xopc.json` by default. Override it with `XOPC_CONFIG` or `XOPC_CONFIG_PATH`.
 
 ## Choose the next surface
-
-Choose one next step:
 
 | Need | Start here |
 | --- | --- |
