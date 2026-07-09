@@ -1,5 +1,6 @@
 import { deleteMediaBuffer, mimeTypeFromMediaPath, saveMediaBuffer } from '../media/store.js';
 import { readMediaReference } from '../media/media-reference.js';
+import type { MediaRef } from '../media/types.js';
 import { WorkItemStore } from './work-item-store.js';
 import type {
   CreateWorkItemUpdateSuggestionInput,
@@ -25,6 +26,10 @@ function inferAttachmentType(mimeType: string): WorkItemAttachment['type'] {
   if (mimeType.startsWith('audio/')) return 'audio';
   if (mimeType.startsWith('video/')) return 'video';
   return 'file';
+}
+
+function attachmentTypeForMediaRef(attachment: WorkItemAttachment): string {
+  return attachment.type === 'file' ? 'document' : attachment.type;
 }
 
 export class WorkItemService {
@@ -128,6 +133,32 @@ export class WorkItemService {
       size: attachment.size,
     });
     return attachment;
+  }
+
+  async snapshotAttachmentsForGoal(workItemId: string): Promise<MediaRef[] | null> {
+    const item = this.store.get(workItemId);
+    if (!item) return null;
+    const refs: MediaRef[] = [];
+    for (const attachment of item.attachments ?? []) {
+      const { buffer } = await readMediaReference(attachment.mediaUri, WORK_ITEM_ATTACHMENT_MAX_BYTES);
+      const saved = await saveMediaBuffer(buffer, {
+        bucket: 'inbound',
+        contentType: attachment.mimeType,
+        maxBytes: WORK_ITEM_ATTACHMENT_MAX_BYTES,
+        originalFilename: attachment.fileName,
+      });
+      refs.push({
+        id: saved.id,
+        bucket: saved.bucket,
+        type: attachmentTypeForMediaRef(attachment),
+        mimeType: saved.contentType || attachment.mimeType,
+        name: attachment.fileName,
+        size: saved.size,
+        uri: saved.uri,
+        path: saved.path,
+      });
+    }
+    return refs;
   }
 
   createUpdateSuggestion(workItemId: string, input: CreateWorkItemUpdateSuggestionInput): WorkItemUpdateSuggestion | null {
