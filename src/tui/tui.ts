@@ -81,6 +81,7 @@ import {
   openSessionPickerOverlay,
   openSessionTreeOverlay,
   openSettingsOverlay,
+  openTimelineOverlay,
   openTranscriptTreeOverlay,
   openThinkingSelectorOverlay,
   openUserMessageForkOverlay,
@@ -450,6 +451,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     () => formatKeyIds(keybindings, 'app.message.dequeue', { capitalize: true }),
   );
   const chatLog = new ChatLog(keybindings);
+  chatLog.setViewportRowsProvider(() => Math.max(8, tui.terminal.rows - 8));
   let startupResources: TuiStartupResources | undefined;
   let startupCardShown = false;
   chatLog.setShowThinking(state.showThinking);
@@ -1838,6 +1840,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const sendMessage = (text: string) => {
+    chatLog.jumpToLatest();
     if (state.activeRunId && pendingImageAttachments.length > 0) {
       chatLog.addSystem(
         theme.dim('Image attachments cannot be steered into an active run. Wait for this reply to finish, then send.'),
@@ -2034,6 +2037,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     openReviewLauncher: () => {},
     openSessionPicker: () => {},
     openSessionTree: () => {},
+    openTimeline: (_initialSearch?: string) => {},
     openTranscriptTree: () => {},
     openUserMessageFork: () => {},
     openScopedModels: () => {},
@@ -2114,6 +2118,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     getSessionStats: () => client.getSessionStats(state.currentSessionKey),
     getStartupResources: () => startupResources,
     loadTranscriptTree: () => client.loadTranscriptTree(state.currentSessionKey),
+    loadTimeline: () => client.loadTimeline(state.currentSessionKey),
     exportSession: exportCurrentSession,
     importSession: importSessionExport,
     createShare: createShareLink,
@@ -2347,6 +2352,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   uiOverlays.openReviewLauncher = () => void openReviewLauncherOverlay(pickerSvc);
   uiOverlays.openSessionPicker = () => void openSessionPickerOverlay(pickerSvc);
   uiOverlays.openSessionTree = () => void openSessionTreeOverlay(pickerSvc);
+  uiOverlays.openTimeline = (initialSearch?: string) =>
+    void openTimelineOverlay(pickerSvc, initialSearch);
   uiOverlays.openTranscriptTree = () => void openTranscriptTreeOverlay(pickerSvc);
   uiOverlays.openUserMessageFork = () => void openUserMessageForkOverlay(pickerSvc);
   uiOverlays.openScopedModels = () => void openScopedModelsOverlay(pickerSvc);

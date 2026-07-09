@@ -6,6 +6,7 @@ import { resolveAgentIdFromSessionKey } from '../../routing/agent-session-key.js
 import { parseModelRef } from '../../agent/models/selection.js';
 import { createCreateShareTool, isShareToolAvailable } from '../../agent/tools/create-share-tool.js';
 import { transcriptRowsToClientHistory } from '../../session/client-history.js';
+import { buildSessionTimeline, type SessionTimelineItem } from '../../session/transcript-outline.js';
 import { prependEnvelopeTimestamp } from '../../channels/envelope-timestamp.js';
 import { loadConfig, getWorkspacePath, saveConfig } from '../../config/index.js';
 import { getAgentDefaultModelRef, type Config } from '../../config/schema.js';
@@ -415,6 +416,18 @@ export class EmbeddedBackend implements TuiBackend {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, sessionKey, errorMessage }, `Embedded loadTranscriptTree failed: ${errorMessage}`);
+      return [];
+    }
+  }
+
+  async loadTimeline(sessionKey: string): Promise<SessionTimelineItem[]> {
+    if (!this.agent) return [];
+    try {
+      const rows = await this.agent.sessionStore.loadTranscriptRows(sessionKey);
+      return buildSessionTimeline(rows);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn({ err: error, sessionKey, errorMessage }, `Embedded loadTimeline failed: ${errorMessage}`);
       return [];
     }
   }

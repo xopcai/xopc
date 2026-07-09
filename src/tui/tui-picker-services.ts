@@ -18,6 +18,9 @@ export type PickerServices = {
   chatLog: {
     addSystem: (t: string) => void;
     addBranchSummary: (summary: TuiBranchSummary) => void;
+    getTimelineViewportState: () => { mode: 'latest' } | { mode: 'history'; displayIndex: number };
+    jumpToDisplayIndex: (displayIndex: number) => boolean;
+    jumpToLatest: () => void;
   };
   client: TuiBackend;
   sendMessage: (text: string) => void;
