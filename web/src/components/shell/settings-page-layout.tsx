@@ -274,7 +274,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
             onClick={() => setMobileNavOpen(false)}
             aria-label={m.nav.settings}
           />
-          <aside className="absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-3rem))] flex-col bg-surface-base shadow-float">
+          <aside className="absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-3rem))] flex-col bg-surface-rail shadow-float">
             <div className="flex shrink-0 items-center justify-between gap-2 px-4 pb-2 pt-4">
               {backControl}
               <button
@@ -291,10 +291,10 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
         </div>
       ) : null}
 
-      {/* Left: surface-base — no border vs right; §2.1 */}
+      {/* Left rail stays visually darker than the bright right content surface. */}
       <div
         className={cn(
-          'relative hidden shrink-0 flex-col bg-surface-base md:flex',
+          'relative hidden shrink-0 flex-col bg-surface-rail md:flex',
           'md:h-full md:min-h-0 md:shrink-0 md:overflow-hidden',
           'settings-page-rail',
           widthResizing && 'settings-page-rail-resizing',

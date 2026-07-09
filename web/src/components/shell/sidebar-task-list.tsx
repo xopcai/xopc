@@ -23,17 +23,17 @@ import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { Button } from '@/components/ui/button';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
-import { createProjectSession, fetchProjects, type Project } from '@/features/projects/api';
+import { createProjectSession, type Project } from '@/features/projects/api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import {
   deleteSession,
+  fetchSidebarChatList,
   listSessions,
   pinSession,
   renameSession,
   unpinSession,
 } from '@/features/sessions/session-api';
-import { patchSidebarSessionName } from '@/features/sessions/patch-sidebar-session-meta';
 import type { SessionMetadata } from '@/features/sessions/session.types';
 import { messages } from '@/i18n/messages';
 import { formControlBorderFocusClass } from '@/lib/form-field-width';
@@ -46,15 +46,20 @@ import { useLocaleStore } from '@/stores/locale-store';
 const PAGE_SIZE = 20;
 const PROJECT_LIMIT = 12;
 const PROJECT_PREVIEW_LIMIT = 5;
+const SIDEBAR_STALE_DAYS = 60;
 
 type ProjectSidebarGroup = {
   project: Project;
   sessions: SessionMetadata[];
+  sessionTotal: number;
+  sessionHasMore: boolean;
+  sessionLoading?: boolean;
   latestAt: number;
 };
 
-type SidebarTaskPage = {
-  items: SessionMetadata[];
+type ProjectSessionOverride = {
+  sessions: SessionMetadata[];
+  sessionTotal: number;
   hasMore: boolean;
 };
 
@@ -363,7 +368,9 @@ function SidebarProjectSection({
     : isExpanded
     ? group.sessions
     : group.sessions.slice(0, PROJECT_PREVIEW_LIMIT);
-  const canToggleSessionLimit = group.sessions.length > PROJECT_PREVIEW_LIMIT;
+  const hasLoadedMore = group.sessions.length > PROJECT_PREVIEW_LIMIT;
+  const canToggleSessionLimit = group.sessionHasMore || hasLoadedMore;
+  const showLess = isExpanded && !group.sessionHasMore && hasLoadedMore;
   const hasActiveSession = group.sessions.some((session) => session.key === activeSessionKey);
 
   return (
@@ -448,16 +455,22 @@ function SidebarProjectSection({
             type="button"
             className="ml-1 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
             onClick={() => onToggleExpanded(group.project.id)}
+            disabled={group.sessionLoading}
+            aria-busy={group.sessionLoading || undefined}
           >
-            <ChevronDown
-              className={cn(
-                'size-3.5 transition-transform duration-150 ease-out',
-                isExpanded && 'rotate-180',
-              )}
-              strokeWidth={1.75}
-              aria-hidden
-            />
-            {isExpanded ? sb.projectShowLess : sb.projectShowMore}
+            {group.sessionLoading ? (
+              <Loader2 className="size-3.5 animate-spin" strokeWidth={1.75} aria-hidden />
+            ) : (
+              <ChevronDown
+                className={cn(
+                  'size-3.5 transition-transform duration-150 ease-out',
+                  showLess && 'rotate-180',
+                )}
+                strokeWidth={1.75}
+                aria-hidden
+              />
+            )}
+            {showLess ? sb.projectShowLess : sb.projectShowMore}
           </button>
         ) : null}
       </div>
@@ -467,8 +480,11 @@ function SidebarProjectSection({
 
 function SidebarInboxSection({
   sessions,
+  hasMore,
+  loadingMore,
   isCollapsed,
   onToggleCollapsed,
+  onLoadMore,
   activeSessionKey,
   onNavigate,
   mutate,
@@ -483,8 +499,11 @@ function SidebarInboxSection({
   language,
 }: {
   sessions: SessionMetadata[];
+  hasMore: boolean;
+  loadingMore: boolean;
   isCollapsed: boolean;
   onToggleCollapsed: () => void;
+  onLoadMore: () => void;
   activeSessionKey?: string;
   onNavigate?: () => void;
   mutate: () => void;
@@ -552,6 +571,22 @@ function SidebarInboxSection({
             />
           );
         })}
+        {hasMore ? (
+          <button
+            type="button"
+            className="ml-1 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            aria-busy={loadingMore || undefined}
+          >
+            {loadingMore ? (
+              <Loader2 className="size-3.5 animate-spin" strokeWidth={1.75} aria-hidden />
+            ) : (
+              <ChevronDown className="size-3.5" strokeWidth={1.75} aria-hidden />
+            )}
+            {sb.projectShowMore}
+          </button>
+        ) : null}
       </div>
     </section>
   );
@@ -580,6 +615,11 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   }, [mutateChatAgents]);
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const activeSessionKey = chatSessionKeyFromPath(pathname);
+  const sidebarUpdatedAfter = useMemo(
+    () => Date.now() - SIDEBAR_STALE_DAYS * 24 * 60 * 60 * 1000,
+    [],
+  );
 
   const [renameKey, setRenameKey] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
@@ -588,97 +628,106 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
+  const [projectSessionOverrides, setProjectSessionOverrides] = useState<Record<string, ProjectSessionOverride>>({});
+  const [loadingProjectIds, setLoadingProjectIds] = useState<Set<string>>(() => new Set());
+  const [inboxExtraItems, setInboxExtraItems] = useState<SessionMetadata[]>([]);
+  const [inboxHasMoreOverride, setInboxHasMoreOverride] = useState<boolean | null>(null);
+  const [loadingInboxMore, setLoadingInboxMore] = useState(false);
 
-  const { data: projectsData, mutate: mutateProjects } = useSWR(
-    token ? (['sidebar-projects', token] as const) : null,
-    () => fetchProjects({
-      status: 'active',
-      sortBy: 'updatedAt',
-      sortOrder: 'desc',
-      limit: PROJECT_LIMIT,
-    }),
-    { revalidateOnFocus: false },
-  );
-
-  const { data, size, setSize, isValidating, mutate } = useSWRInfinite<SidebarTaskPage>(
+  const { data, size, setSize, isValidating, mutate } = useSWRInfinite<Awaited<ReturnType<typeof fetchSidebarChatList>>>(
     (pageIndex, previousPageData) => {
       if (!token) return null;
-      if (previousPageData && !previousPageData.hasMore) return null;
-      return ['sidebar-tasks', token, pageIndex] as const;
+      if (previousPageData && !previousPageData.projects.hasMore) return null;
+      return ['sidebar-chat-list', token, activeSessionKey ?? '', pageIndex] as const;
     },
-    async ([, , pageIndex]: readonly [
-      'sidebar-tasks',
+    async ([, , includeSessionKey, pageIndex]: readonly [
+      'sidebar-chat-list',
+      string,
       string,
       number,
     ]) => {
-      const offset = pageIndex * PAGE_SIZE;
-      const result = await listSessions({
-        limit: PAGE_SIZE,
-        offset,
+      return fetchSidebarChatList({
+        projectLimit: PROJECT_LIMIT,
+        projectOffset: pageIndex * PROJECT_LIMIT,
+        sessionPreviewLimit: PROJECT_PREVIEW_LIMIT,
+        inboxLimit: pageIndex === 0 ? PAGE_SIZE : 1,
+        inboxOffset: 0,
+        staleDays: SIDEBAR_STALE_DAYS,
+        includeSessionKey: includeSessionKey || undefined,
       });
-      return {
-        items: result.items,
-        hasMore: result.hasMore,
-      };
     },
     { revalidateOnFocus: false },
   );
 
-  const items = useMemo(() => {
+  const projectGroups = useMemo(() => {
     const pages = data ?? [];
+    const groups: ProjectSidebarGroup[] = [];
+    const seenProjects = new Set<string>();
+    for (const p of pages) {
+      for (const entry of p.projects.items) {
+        if (seenProjects.has(entry.project.id)) continue;
+        seenProjects.add(entry.project.id);
+        const override = projectSessionOverrides[entry.project.id];
+        const sessions = override?.sessions ?? entry.sessions;
+        groups.push({
+          project: entry.project,
+          sessions,
+          sessionTotal: override?.sessionTotal ?? entry.sessionTotal,
+          sessionHasMore: override?.hasMore ?? entry.sessionHasMore,
+          sessionLoading: loadingProjectIds.has(entry.project.id),
+          latestAt: Math.max(projectUpdatedAtMs(entry.project), ...sessions.map(sessionUpdatedAtMs)),
+        });
+      }
+    }
+    groups.sort((a, b) => b.latestAt - a.latestAt);
+    return groups;
+  }, [data, loadingProjectIds, projectSessionOverrides]);
+
+  const firstInbox = data?.[0]?.inbox;
+  const inboxItems = useMemo(() => {
     const out: SessionMetadata[] = [];
     const seen = new Set<string>();
-    for (const p of pages) {
-      for (const s of p.items) {
-        if (!seen.has(s.key)) {
-          seen.add(s.key);
-          out.push(s);
-        }
+    for (const session of [...(firstInbox?.items ?? []), ...inboxExtraItems]) {
+      if (seen.has(session.key)) continue;
+      seen.add(session.key);
+      out.push(session);
+    }
+    out.sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a));
+    return out;
+  }, [firstInbox?.items, inboxExtraItems]);
+  const inboxHasMore = inboxHasMoreOverride ?? firstInbox?.hasMore ?? false;
+
+  const items = useMemo(() => {
+    const out: SessionMetadata[] = [];
+    const seen = new Set<string>();
+    for (const group of projectGroups) {
+      for (const session of group.sessions) {
+        if (seen.has(session.key)) continue;
+        seen.add(session.key);
+        out.push(session);
       }
+    }
+    for (const session of inboxItems) {
+      if (seen.has(session.key)) continue;
+      seen.add(session.key);
+      out.push(session);
     }
     return out;
-  }, [data]);
-
-  const projects = projectsData?.items ?? [];
-  const { projectGroups, inboxItems } = useMemo(() => {
-    const projectById = new Map(projects.map((project) => [project.id, project]));
-    const grouped = new Map<string, SessionMetadata[]>();
-    const inbox: SessionMetadata[] = [];
-
-    for (const session of items) {
-      if (session.projectId && projectById.has(session.projectId)) {
-        const bucket = grouped.get(session.projectId) ?? [];
-        bucket.push(session);
-        grouped.set(session.projectId, bucket);
-      } else {
-        inbox.push(session);
-      }
-    }
-
-    const projectGroups: ProjectSidebarGroup[] = [];
-    for (const project of projects) {
-      const sessions = grouped.get(project.id) ?? [];
-      if (sessions.length === 0) continue;
-      const sortedSessions = [...sessions].sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a));
-      projectGroups.push({
-        project,
-        sessions: sortedSessions,
-        latestAt: Math.max(projectUpdatedAtMs(project), ...sortedSessions.map(sessionUpdatedAtMs)),
-      });
-    }
-
-    projectGroups.sort((a, b) => b.latestAt - a.latestAt);
-    inbox.sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a));
-
-    return { projectGroups, inboxItems: inbox };
-  }, [items, projects]);
+  }, [inboxItems, projectGroups]);
 
   const hasGroupedItems = projectGroups.length > 0 || inboxItems.length > 0;
 
   const loadingMore = Boolean(data && size > data.length);
   const lastPage = data?.[data.length - 1];
-  const hasMorePages = lastPage?.hasMore ?? false;
+  const hasMorePages = lastPage?.projects.hasMore ?? false;
   const loadingFirst = Boolean(token && !data && isValidating);
+
+  const refreshSidebar = useCallback(() => {
+    setProjectSessionOverrides({});
+    setInboxExtraItems([]);
+    setInboxHasMoreOverride(null);
+    void mutate();
+  }, [mutate]);
 
   const onScroll = useCallback(
     (e: UIEvent<HTMLDivElement>) => {
@@ -694,26 +743,15 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   useEffect(() => {
     if (!token) return;
     const onSessionListRefresh = () => {
-      void mutate();
-      void mutateProjects();
+      refreshSidebar();
     };
     const onSessionUpdated = (e: Event) => {
       const d = (e as CustomEvent<{ key?: string; name?: string }>).detail;
       if (!d?.key) {
-        void mutate();
+        refreshSidebar();
         return;
       }
-      if (typeof d.name === 'string' && d.name.trim()) {
-        if (data?.length) {
-          patchSidebarSessionName(mutate, d.key, d.name);
-        } else {
-          void mutate();
-        }
-        void mutateProjects();
-        return;
-      }
-      void mutate();
-      void mutateProjects();
+      refreshSidebar();
     };
     window.addEventListener('session-updated', onSessionUpdated);
     window.addEventListener('session-created', onSessionListRefresh);
@@ -721,9 +759,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       window.removeEventListener('session-updated', onSessionUpdated);
       window.removeEventListener('session-created', onSessionListRefresh);
     };
-  }, [token, mutate, mutateProjects, data?.length]);
-
-  const activeSessionKey = chatSessionKeyFromPath(pathname);
+  }, [token, refreshSidebar]);
 
   // Refetch on session switch (skip initial mount) to refresh metadata (message count, etc).
   useEffect(() => {
@@ -734,8 +770,8 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     }
     if (lastActiveSessionKeyRef.current === activeSessionKey) return;
     lastActiveSessionKeyRef.current = activeSessionKey;
-    void mutate();
-  }, [token, activeSessionKey, mutate]);
+    refreshSidebar();
+  }, [token, activeSessionKey, refreshSidebar]);
 
   const openRename = useCallback((key: string) => {
     const row = items.find((s) => s.key === key);
@@ -750,7 +786,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     try {
       await renameSession(renameKey, name);
       setRenameKey(null);
-      void mutate();
+      refreshSidebar();
     } catch {
       /* optional toast */
     }
@@ -762,8 +798,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       if (activeSessionKey === key) {
         navigate('/chat/new');
       }
-      void mutate();
-      void mutateProjects();
+      refreshSidebar();
     } catch {
       /* optional toast */
     }
@@ -782,28 +817,104 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   }, []);
 
   const toggleProjectExpanded = useCallback((projectId: string) => {
+    const group = projectGroups.find((candidate) => candidate.project.id === projectId);
+    if (!group) return;
+    const isExpanded = expandedProjects.has(projectId);
+    if (isExpanded && !group.sessionHasMore) {
+      setExpandedProjects((prev) => {
+        const next = new Set(prev);
+        next.delete(projectId);
+        return next;
+      });
+      return;
+    }
     setExpandedProjects((prev) => {
       const next = new Set(prev);
-      if (next.has(projectId)) {
-        next.delete(projectId);
-      } else {
-        next.add(projectId);
-      }
+      next.add(projectId);
       return next;
     });
-  }, []);
+    if (!group.sessionHasMore || loadingProjectIds.has(projectId)) return;
+
+    setLoadingProjectIds((prev) => new Set(prev).add(projectId));
+    void (async () => {
+      try {
+        const result = await listSessions({
+          projectId,
+          limit: PAGE_SIZE,
+          offset: group.sessions.length,
+          updatedAfter: sidebarUpdatedAfter,
+          includePinned: true,
+          includeSessionKey: activeSessionKey,
+        });
+        setProjectSessionOverrides((prev) => {
+          const existing = prev[projectId]?.sessions ?? group.sessions;
+          const seen = new Set(existing.map((session) => session.key));
+          const appended = [...existing];
+          for (const session of result.items) {
+            if (seen.has(session.key)) continue;
+            seen.add(session.key);
+            appended.push(session);
+          }
+          appended.sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a));
+          return {
+            ...prev,
+            [projectId]: {
+              sessions: appended,
+              sessionTotal: result.total,
+              hasMore: result.hasMore,
+            },
+          };
+        });
+      } finally {
+        setLoadingProjectIds((prev) => {
+          const next = new Set(prev);
+          next.delete(projectId);
+          return next;
+        });
+      }
+    })();
+  }, [activeSessionKey, expandedProjects, loadingProjectIds, projectGroups, sidebarUpdatedAfter]);
+
+  const loadMoreInbox = useCallback(() => {
+    if (!inboxHasMore || loadingInboxMore) return;
+    setLoadingInboxMore(true);
+    void (async () => {
+      try {
+        const result = await listSessions({
+          unassigned: true,
+          limit: PAGE_SIZE,
+          offset: inboxItems.length,
+          updatedAfter: sidebarUpdatedAfter,
+          includePinned: true,
+          includeSessionKey: activeSessionKey,
+        });
+        setInboxExtraItems((prev) => {
+          const seen = new Set([...(firstInbox?.items ?? []), ...prev].map((session) => session.key));
+          const next = [...prev];
+          for (const session of result.items) {
+            if (seen.has(session.key)) continue;
+            seen.add(session.key);
+            next.push(session);
+          }
+          return next;
+        });
+        setInboxHasMoreOverride(result.hasMore);
+      } finally {
+        setLoadingInboxMore(false);
+      }
+    })();
+  }, [activeSessionKey, firstInbox?.items, inboxHasMore, inboxItems.length, loadingInboxMore, sidebarUpdatedAfter]);
 
   const createProjectChat = useCallback(async (project: Project) => {
     try {
       const session = await createProjectSession(project.id, project.defaultAgentId ?? defaultAgentId);
-      void mutate();
-      void mutateProjects();
+      refreshSidebar();
       navigate(`/chat/${encodeURIComponent(session.key)}`);
       onNavigate?.();
     } catch {
       /* optional toast */
     }
-  }, [defaultAgentId, mutate, mutateProjects, navigate, onNavigate]);
+  }, [defaultAgentId, navigate, onNavigate, refreshSidebar]);
 
   const renameTarget = renameKey ? items.find((s) => s.key === renameKey) : undefined;
 
@@ -861,7 +972,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                     onToggleExpanded={toggleProjectExpanded}
                     onCreateProjectChat={(project) => void createProjectChat(project)}
                     onNavigate={onNavigate}
-                    mutate={mutate}
+                    mutate={refreshSidebar}
                     onRequestRename={openRename}
                     onRequestDelete={setDeleteKey}
                     sb={sb}
@@ -878,11 +989,14 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
 
             <SidebarInboxSection
               sessions={inboxItems}
+              hasMore={inboxHasMore}
+              loadingMore={loadingInboxMore}
               isCollapsed={inboxCollapsed}
               onToggleCollapsed={() => setInboxCollapsed((value) => !value)}
+              onLoadMore={loadMoreInbox}
               activeSessionKey={activeSessionKey}
               onNavigate={onNavigate}
-              mutate={mutate}
+              mutate={refreshSidebar}
               onRequestRename={openRename}
               onRequestDelete={setDeleteKey}
               sb={sb}

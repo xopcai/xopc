@@ -162,6 +162,10 @@ export interface SessionListQuery {
   sessionTypes?: SessionType[];
   includeHidden?: boolean;
   projectId?: string;
+  unassigned?: boolean;
+  updatedAfter?: number;
+  includePinned?: boolean;
+  includeSessionKey?: string;
   sortBy?: 'updatedAt' | 'createdAt' | 'messageCount' | 'lastAccessedAt';
   sortOrder?: 'asc' | 'desc';
   limit?: number;

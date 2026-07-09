@@ -877,9 +877,9 @@ export function GoalsPage() {
   }, [clearPageHeader, counts.attention, counts.open, headerEnd, setPageHeader, t.summary, t.title, visibleGoals.length]);
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-base">
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
       <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-3 py-5 sm:px-5 xl:px-6">
-        <section className="w-full rounded-lg bg-surface-panel shadow-surface p-3">
+        <section className="w-full rounded-lg border border-edge-subtle bg-surface-base p-3 shadow-surface">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               <div className="rounded-md bg-surface-muted/50 px-3 py-2">
@@ -947,7 +947,7 @@ export function GoalsPage() {
               {FOCUS_SECTIONS.map((section) => {
                 const sectionGoals = focusGroups.get(section) ?? [];
                 return (
-                  <section key={section} className="rounded-lg bg-surface-panel shadow-surface">
+                  <section key={section} className="rounded-lg border border-edge-subtle bg-surface-base shadow-surface">
                     <header className="flex flex-wrap items-start justify-between gap-3 border-b border-edge-subtle px-4 py-3">
                       <div className="min-w-0">
                         <h2 className="text-sm font-semibold text-fg">{t.focusSections[section].title}</h2>

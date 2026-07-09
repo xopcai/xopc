@@ -16,7 +16,7 @@ export function SettingsPageFrame({
   padding?: string;
 } & ComponentPropsWithoutRef<'div'>) {
   return (
-    <div className={cn('flex w-full flex-col', gap, padding, className)} {...props}>
+    <div className={cn('flex min-h-full w-full flex-col bg-surface-panel', gap, padding, className)} {...props}>
       {children}
     </div>
   );
@@ -96,7 +96,7 @@ export function SettingsTabPanel<T extends string>({
       aria-labelledby={`${tabIdPrefix}-${id}`}
       className={cn(
         'min-w-0',
-        framed && 'rounded-2xl bg-surface-base px-4 py-5 sm:px-5',
+        framed && 'rounded-2xl border border-edge-subtle bg-surface-base px-4 py-5 sm:px-5',
         className,
       )}
     >

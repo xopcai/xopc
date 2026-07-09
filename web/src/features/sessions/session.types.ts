@@ -53,6 +53,12 @@ export interface SessionListQuery {
   channel?: string;
   /** Filter by project id. */
   projectId?: string;
+  /** Only sessions not attached to any project. */
+  unassigned?: boolean;
+  /** Only sessions updated after this epoch ms, unless an include rule keeps them visible. */
+  updatedAfter?: number;
+  includePinned?: boolean;
+  includeSessionKey?: string;
   /** Filter by session origin types, sent as the gateway `types` query parameter. */
   sessionTypes?: string[];
   limit?: number;

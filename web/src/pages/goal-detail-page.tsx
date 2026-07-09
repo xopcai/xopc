@@ -765,7 +765,7 @@ export function GoalDetailPage() {
   };
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-base">
+    <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
       <div className="flex w-full flex-1 flex-col gap-4 px-3 py-5 sm:px-5 xl:px-6">
         {loading ? <p className="text-sm text-fg-muted">{t.loading}</p> : null}
         {error ? <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
@@ -773,7 +773,7 @@ export function GoalDetailPage() {
 
         {goal ? (
           <>
-            <section className="rounded-lg bg-surface-panel p-4 shadow-surface">
+            <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={cn('rounded-full border px-2 py-0.5 text-xs', badgeClass(goal.status))}>{statusLabel(goal.status, t)}</span>
                 <span className="text-xs text-fg-muted">{formatMessage(t.prioritySummary, { priority: priorityLabel(goal.priority, t) })}</span>
@@ -790,7 +790,7 @@ export function GoalDetailPage() {
 
             <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
               <div className="grid min-w-0 gap-4">
-                <section className="rounded-lg bg-surface-panel p-4 shadow-surface">
+                <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -978,7 +978,7 @@ export function GoalDetailPage() {
                   </div>
                 </section>
 
-                <section className="rounded-lg bg-surface-panel p-4 shadow-surface">
+                <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -1082,7 +1082,7 @@ export function GoalDetailPage() {
                     }}
                   />
                 ) : null}
-                <section className="rounded-lg bg-surface-panel p-4 shadow-surface">
+                <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
                   <h2 className="text-sm font-semibold text-fg">{t.goalSettings}</h2>
                   <dl className="mt-3 grid gap-2 text-sm">
                     <div className="flex items-center justify-between gap-3">
@@ -1214,7 +1214,7 @@ export function GoalDetailPage() {
                   </details>
                 </section>
 
-                <section className="rounded-lg bg-surface-panel p-4 shadow-surface">
+                <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">

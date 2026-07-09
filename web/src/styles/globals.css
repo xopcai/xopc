@@ -17,6 +17,7 @@
 
   /* Surfaces — light: muted canvas + white operational surface */
   --color-surface-base: #f6f7fb;
+  --color-surface-rail: #ebeef5;
   --color-surface-panel: #ffffff;
   --color-surface-hover: #eef2ff;
   --color-surface-active: #e6ecff;
@@ -81,6 +82,7 @@
 /* Dark — lifted workstation gray, restrained rim light, Loop Blue signals */
 html.dark {
   --color-surface-base: #15171b;
+  --color-surface-rail: #111318;
   --color-surface-panel: #1c1f25;
   --color-surface-hover: #252932;
   --color-surface-active: #2e3440;

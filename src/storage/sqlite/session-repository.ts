@@ -181,6 +181,22 @@ export function listSessionMetadata(query: SessionListQuery = {}): PaginatedResu
   if (query.projectId) {
     conditions.push(`s.project_id = ?`);
     params.push(query.projectId);
+  } else if (query.unassigned) {
+    conditions.push(`(s.project_id IS NULL OR s.project_id = '')`);
+  }
+
+  if (query.updatedAfter !== undefined) {
+    const clauses = [`s.updated_at >= ?`];
+    params.push(query.updatedAfter);
+    if (query.includePinned) {
+      clauses.push(`s.status = 'pinned'`);
+    }
+    const includeSessionKey = query.includeSessionKey?.trim();
+    if (includeSessionKey) {
+      clauses.push(`s.session_key = ?`);
+      params.push(includeSessionKey);
+    }
+    conditions.push(`(${clauses.join(' OR ')})`);
   }
 
   if (query.channel) {

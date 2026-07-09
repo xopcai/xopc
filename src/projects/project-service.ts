@@ -2,7 +2,7 @@ import { getSessionMetadata } from '../storage/sqlite/index.js';
 import { ProjectStore } from './project-store.js';
 import { bindGoalToProject, listProjectGoalIds, unbindGoalFromProject } from './goal-bind.js';
 import { bindSessionToProject, listProjectSessionKeys, unbindSessionFromProject } from './session-bind.js';
-import type { CreateProjectInput, Project, ProjectListQuery, ProjectListResult, ProjectWithDetails, UpdateProjectInput } from './types.js';
+import type { CreateProjectInput, Project, ProjectListQuery, ProjectListResult, ProjectWithDetails, SidebarProjectListQuery, UpdateProjectInput } from './types.js';
 import {
   canonicalWorkspacePath,
   ensureWorkspaceDirectory,
@@ -71,6 +71,10 @@ export class ProjectService {
 
   list(query?: ProjectListQuery): ProjectListResult {
     return this.store.list(query);
+  }
+
+  listWithSidebarSessions(query?: SidebarProjectListQuery): ProjectListResult {
+    return this.store.listWithSidebarSessions(query);
   }
 
   findByWorkspaceRoot(workspaceRoot: string, options: { excludeProjectId?: string } = {}): Project | null {
