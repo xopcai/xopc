@@ -67,6 +67,7 @@ export interface TuiRunStatus {
   lastCompletedRunId: string | null;
   source: TuiEventSource;
   lastEvent: string | null;
+  startedAt: number | null;
   lastActivityAt: number | null;
   stalledAt: number | null;
   recoveredAt: number | null;
@@ -133,6 +134,7 @@ export function createInitialState(sessionKey: string): TuiState {
       lastCompletedRunId: null,
       source: 'unknown',
       lastEvent: null,
+      startedAt: null,
       lastActivityAt: null,
       stalledAt: null,
       recoveredAt: null,

@@ -17,6 +17,7 @@ describe('tui stream recovery helpers', () => {
       ...state.runStatus,
       phase: 'streaming',
       runId: 'run-1',
+      startedAt: 1_000,
       lastActivityAt: 1_000,
     };
 
@@ -25,6 +26,7 @@ describe('tui stream recovery helpers', () => {
 
     expect(state.activeRunId).toBe('run-1');
     expect(state.runStatus.phase).toBe('stalled');
+    expect(state.runStatus.startedAt).toBe(1_000);
     expect(state.runStatus.stalledAt).toBe(32_000);
   });
 

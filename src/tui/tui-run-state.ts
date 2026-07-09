@@ -14,6 +14,16 @@ export function markRunEvent(
     (source === 'agent-response' || source === 'agent-resume') && runId
       ? runId
       : state.runStatus.directStreamRunId;
+  const isStartingNewRun =
+    phase !== 'idle' &&
+    state.runStatus.phase === 'idle' &&
+    (runId === null || state.runStatus.runId === null || state.runStatus.runId !== runId);
+  const startedAt =
+    phase === 'idle'
+      ? null
+      : isStartingNewRun || state.runStatus.startedAt == null
+        ? nowMs
+        : state.runStatus.startedAt;
   state.runStatus = {
     ...state.runStatus,
     phase,
@@ -21,6 +31,7 @@ export function markRunEvent(
     directStreamRunId,
     source,
     lastEvent: event,
+    startedAt,
     lastActivityAt: nowMs,
     stalledAt: null,
   };
@@ -35,6 +46,7 @@ export function markRunSending(state: TuiState, nowMs = Date.now()): void {
     lastCompletedRunId: null,
     source: 'unknown',
     lastEvent: 'send',
+    startedAt: nowMs,
     lastActivityAt: nowMs,
     stalledAt: null,
   };
@@ -46,6 +58,7 @@ export function markRunAborting(state: TuiState, runId: string, nowMs = Date.now
     phase: 'aborting',
     runId,
     lastEvent: 'abort',
+    startedAt: state.runStatus.startedAt ?? nowMs,
     lastActivityAt: nowMs,
   };
 }
@@ -56,6 +69,7 @@ export function markRunIdleAfterAbort(state: TuiState, nowMs = Date.now()): void
     phase: 'idle',
     runId: null,
     lastEvent: 'abort',
+    startedAt: null,
     lastActivityAt: nowMs,
     stalledAt: null,
   };
@@ -80,6 +94,7 @@ export function resetRunStatus(state: TuiState): void {
     directStreamRunId: null,
     lastCompletedRunId: null,
     lastEvent: null,
+    startedAt: null,
     stalledAt: null,
   };
 }
@@ -106,6 +121,7 @@ export function markActiveRunStalled(state: TuiState, nowMs: number): boolean {
     ...state.runStatus,
     phase: 'stalled',
     runId: state.activeRunId,
+    startedAt: state.runStatus.startedAt ?? state.runStatus.lastActivityAt ?? nowMs,
     stalledAt: nowMs,
   };
   return true;
@@ -116,6 +132,7 @@ export function markRunRecovering(state: TuiState, nowMs: number): void {
     ...state.runStatus,
     phase: 'recovering',
     runId: state.activeRunId,
+    startedAt: state.runStatus.startedAt ?? state.runStatus.lastActivityAt ?? nowMs,
     recoveredAt: nowMs,
   };
 }
@@ -126,6 +143,7 @@ export function markRunRecoveryComplete(state: TuiState, nowMs: number): void {
       ...state.runStatus,
       phase: 'stalled',
       runId: state.activeRunId,
+      startedAt: state.runStatus.startedAt ?? state.runStatus.lastActivityAt ?? nowMs,
       recoveredAt: nowMs,
     };
     return;
@@ -134,6 +152,7 @@ export function markRunRecoveryComplete(state: TuiState, nowMs: number): void {
     ...state.runStatus,
     phase: 'idle',
     runId: null,
+    startedAt: null,
     recoveredAt: nowMs,
   };
 }

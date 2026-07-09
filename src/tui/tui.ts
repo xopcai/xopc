@@ -174,6 +174,7 @@ import {
   markRunRecovering,
   markRunRecoveryComplete,
 } from './tui-run-state.js';
+import { formatActiveRunStatus, formatRunDuration } from './tui-run-status-format.js';
 
 export type { TuiOptions, TuiResult };
 
@@ -1133,7 +1134,16 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   let statusStartedAt: number | null = null;
   let lastActivityStatus = '';
   let elapsedTimerId: ReturnType<typeof setInterval> | null = null;
-  const busyStates = new Set(['sending', 'waiting', 'streaming', 'running', 'compacting', 'recovering']);
+  const busyStates = new Set([
+    'sending',
+    'waiting',
+    'streaming',
+    'running',
+    'compacting',
+    'stalled',
+    'recovering',
+    'aborting',
+  ]);
 
   const syncTerminalProgress = () => {
     if (!tuiSettings.showTerminalProgress) {
@@ -1152,17 +1162,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       state.runStatus = {
         ...state.runStatus,
         runId: state.activeRunId,
+        startedAt: state.runStatus.startedAt ?? lastStreamActivityAt,
         lastActivityAt: lastStreamActivityAt,
       };
     }
-  };
-
-  const formatElapsed = (startMs: number) => {
-    const totalSeconds = Math.max(0, Math.floor((Date.now() - startMs) / 1000));
-    if (totalSeconds < 60) return `${totalSeconds}s`;
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-    return `${minutes}m ${seconds}s`;
   };
 
   const renderStatus = () => {
@@ -1182,19 +1185,18 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         );
         statusContainer.addChild(statusLoader);
       }
-      const elapsed = formatElapsed(statusStartedAt);
-      const loaderMessage = state.progressMessage ?? extensionWorkingMessage ?? state.activityStatus;
-      statusLoader.setMessage(
-        `${loaderMessage} • ${elapsed} | ${state.connectionStatus}`,
-      );
+      const renderLoaderMessage = () => {
+        const activeRunStatus = formatActiveRunStatus(state);
+        if (activeRunStatus) return activeRunStatus;
+        const elapsed = formatRunDuration(Date.now() - statusStartedAt!);
+        const message = state.progressMessage ?? extensionWorkingMessage ?? state.activityStatus;
+        return `${message} (${elapsed})`;
+      };
+      statusLoader.setMessage(`xopc • ${renderLoaderMessage()} | ${state.connectionStatus}`);
       if (!elapsedTimerId) {
         elapsedTimerId = setInterval(() => {
           if (statusStartedAt && statusLoader) {
-            const el = formatElapsed(statusStartedAt);
-            const message = state.progressMessage ?? extensionWorkingMessage ?? state.activityStatus;
-            statusLoader.setMessage(
-              `${message} • ${el} | ${state.connectionStatus}`,
-            );
+            statusLoader.setMessage(`xopc • ${renderLoaderMessage()} | ${state.connectionStatus}`);
           }
         }, 1000);
       }
@@ -1382,7 +1384,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     if (streamRecoveryPromise) return streamRecoveryPromise;
     const runId = state.activeRunId;
     markRunRecovering(state, Date.now());
-    state.progressMessage = 'recovering stream history';
+    state.progressMessage = 'Reconnecting output';
     setActivityStatus('recovering');
     streamRecoveryPromise = (async () => {
       try {
@@ -1393,26 +1395,25 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
           if (client.resumeChat) {
             const resumed = await client.resumeChat({ sessionKey: state.currentSessionKey, runId });
             if (resumed.ok) {
-              state.progressMessage = 'resuming stream';
+              state.progressMessage = 'Reconnecting output';
               setActivityStatus('recovering');
-              chatLog.addSystem(theme.dim(`Reattached to active run after ${reason}.`));
             } else {
               markRunRecoveryComplete(state, Date.now());
-              state.progressMessage = 'stream stalled; resume unavailable';
+              state.progressMessage = 'Output stale';
               setActivityStatus('stalled');
               chatLog.addSystem(
                 theme.dim(
-                  `Recovered persisted history after ${reason}, but could not resume stream: ${resumed.reason ?? 'run relay unavailable'}. Press Escape or /abort to stop it.`,
+                  `Output connection is stale. The task may still be running, but xopc could not reattach to live output: ${resumed.reason ?? 'run relay unavailable'}. Press Escape or /abort to stop it.`,
                 ),
               );
             }
           } else {
             markRunRecoveryComplete(state, Date.now());
-            state.progressMessage = 'stream stalled; waiting for new events or abort';
+            state.progressMessage = 'Output stale';
             setActivityStatus('stalled');
             chatLog.addSystem(
               theme.dim(
-                `Recovered persisted history after ${reason}. Active run is still marked stalled; press Escape or /abort to stop it.`,
+                'Output connection is stale. The task may still be running. Press Escape or /abort to stop it.',
               ),
             );
           }
@@ -2468,11 +2469,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     const now = Date.now();
     if (!isActiveRunStreamStale(state, now, DEFAULT_STREAMING_WATCHDOG_MS)) return;
     if (!markActiveRunStalled(state, now)) return;
-    chatLog.addSystem(
-      theme.dim(
-        'No stream activity for 30s; preserving active run and reloading persisted history.',
-      ),
-    );
+    state.progressMessage = 'Reconnecting output';
     setActivityStatus('stalled');
     void recoverActiveRunFromHistory('stream watchdog');
     tui.requestRender();
