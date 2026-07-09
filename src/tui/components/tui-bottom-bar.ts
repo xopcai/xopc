@@ -6,9 +6,19 @@ import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import { theme } from '../theme.js';
 import { formatContextUsageLabel } from '../tui-context-usage.js';
 import { getGitBranchCached } from '../tui-git-branch.js';
+import { formatActiveRunStatus } from '../tui-run-status-format.js';
 import type { TuiState } from '../tui-types.js';
 
-const BUSY_ACTIVITY = new Set(['sending', 'waiting', 'streaming', 'running']);
+const BUSY_ACTIVITY = new Set([
+  'sending',
+  'waiting',
+  'streaming',
+  'running',
+  'compacting',
+  'stalled',
+  'recovering',
+  'aborting',
+]);
 
 /** Compact token counts (aligned with pi coding-agent footer). */
 export function formatTokens(count: number): string {
@@ -137,7 +147,10 @@ export class TuiBottomBar implements Component {
 
     const busy = BUSY_ACTIVITY.has(state.activityStatus);
     const leftParts: string[] = [state.connectionStatus];
-    if (!busy && state.activityStatus && state.activityStatus !== 'idle') {
+    const activeRunStatus = formatActiveRunStatus(state);
+    if (activeRunStatus) {
+      leftParts.push(activeRunStatus);
+    } else if (!busy && state.activityStatus && state.activityStatus !== 'idle') {
       leftParts.push(state.activityStatus);
     }
     if (state.sessionInfo.totalTokens != null) {
@@ -154,13 +167,6 @@ export class TuiBottomBar implements Component {
       leftParts.push('compact…');
     } else if (state.compactionQueue.length > 0) {
       leftParts.push(`C${state.compactionQueue.length}`);
-    }
-    if (state.runStatus?.phase === 'stalled') {
-      leftParts.push('run:stalled');
-    } else if (state.runStatus?.phase === 'recovering') {
-      leftParts.push('run:recovering');
-    } else if (state.runStatus?.source === 'agent-resume' && state.activeRunId) {
-      leftParts.push('run:resumed');
     }
     if (state.messageFollowUpQueue.length > 0) {
       leftParts.push(`Q${state.messageFollowUpQueue.length}`);

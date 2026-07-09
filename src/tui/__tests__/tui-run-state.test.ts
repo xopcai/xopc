@@ -25,6 +25,7 @@ describe('tui run state transitions', () => {
       lastCompletedRunId: null,
       source: 'unknown',
       lastEvent: 'send',
+      startedAt: 1_000,
       lastActivityAt: 1_000,
       stalledAt: null,
     });
@@ -35,9 +36,21 @@ describe('tui run state transitions', () => {
 
     markRunEvent(state, 'waiting', 'run-1', 'status', 'agent-response', 2_000);
     expect(state.runStatus.directStreamRunId).toBe('run-1');
+    expect(state.runStatus.startedAt).toBe(2_000);
 
     markRunEvent(state, 'waiting', 'run-2', 'status', 'agent-resume', 3_000);
     expect(state.runStatus.directStreamRunId).toBe('run-2');
+    expect(state.runStatus.startedAt).toBe(2_000);
+  });
+
+  it('preserves run start time while updating last activity', () => {
+    const state = createInitialState('agent:main:main');
+    markRunSending(state, 1_000);
+
+    markRunEvent(state, 'streaming', 'run-1', 'message_update', 'agent-response', 4_000);
+
+    expect(state.runStatus.startedAt).toBe(1_000);
+    expect(state.runStatus.lastActivityAt).toBe(4_000);
   });
 
   it('records completed runs without clearing direct ownership immediately', () => {
@@ -62,6 +75,7 @@ describe('tui run state transitions', () => {
     markRunIdleAfterAbort(state, 2_000);
     expect(state.runStatus.phase).toBe('idle');
     expect(state.runStatus.lastEvent).toBe('abort');
+    expect(state.runStatus.startedAt).toBeNull();
 
     state.runStatus.directStreamRunId = 'run-1';
     state.runStatus.lastCompletedRunId = 'run-1';

@@ -187,6 +187,7 @@ it('exposes native usage and context commands', () => {
 
   it('formats current session status from local TUI state', () => {
     const text = formatTuiSessionInfo({
+      ...createInitialState('agent:research:tui-123'),
       currentSessionKey: 'agent:research:tui-123',
       activeRunId: null,
       isConnected: true,
@@ -210,11 +211,6 @@ it('exposes native usage and context commands', () => {
       exitRequested: false,
       messageFollowUpQueue: ['next'],
       steeringQueue: ['queued steer'],
-      scopedModelRefs: null,
-      lastEscapeAt: 0,
-      progressMessage: null,
-      isCompacting: false,
-      compactionQueue: [],
     });
 
     expect(text).toContain('Session Info');
@@ -231,6 +227,7 @@ it('exposes native usage and context commands', () => {
 
   it('formats usage and context details from local TUI state', () => {
     const state = {
+      ...createInitialState('agent:main:main'),
       currentSessionKey: 'agent:main:main',
       activeRunId: null,
       isConnected: true,
@@ -249,13 +246,8 @@ it('exposes native usage and context commands', () => {
       lastCtrlCAt: 0,
       exitRequested: false,
       messageFollowUpQueue: [],
-        steeringQueue: [],
-      scopedModelRefs: null,
-      lastEscapeAt: 0,
-      progressMessage: null,
-      isCompacting: false,
-      compactionQueue: [],
-    } as const;
+      steeringQueue: [],
+    };
 
     expect(formatTuiUsageInfo(state)).toContain('Context Usage: 32%/200k ctx');
     expect(formatTuiUsageInfo(state)).toContain('Model: anthropic/claude-sonnet-4');
@@ -313,6 +305,7 @@ it('exposes native usage and context commands', () => {
 
   it('formats a local config summary', () => {
     const text = formatTuiConfigInfo({
+      ...createInitialState('agent:main:main'),
       currentSessionKey: 'agent:main:main',
       activeRunId: null,
       isConnected: true,
@@ -332,7 +325,7 @@ it('exposes native usage and context commands', () => {
       lastCtrlCAt: 0,
       exitRequested: false,
       messageFollowUpQueue: [],
-        steeringQueue: [],
+      steeringQueue: [],
       scopedModelRefs: ['openai/gpt-5'],
       lastEscapeAt: 0,
       progressMessage: null,

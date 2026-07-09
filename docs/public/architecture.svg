@@ -1,0 +1,247 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1120" viewBox="0 0 1700 1120" role="img" aria-labelledby="title desc">
+  <title id="title">xopc System Architecture</title>
+  <desc id="desc">Runtime architecture diagram showing clients, gateway process, agent internals, local state, and external systems.</desc>
+  <defs>
+    <marker id="arrow-blue" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#2563eb" />
+    </marker>
+    <marker id="arrow-green" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#16a34a" />
+    </marker>
+    <marker id="arrow-purple" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#7c3aed" />
+    </marker>
+    <marker id="arrow-amber" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#ca8a04" />
+    </marker>
+    <marker id="arrow-gray" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#64748b" />
+    </marker>
+    <style>
+      .title { font: 700 28px Arial, Helvetica, sans-serif; fill: #111827; }
+      .subtitle { font: 13px Arial, Helvetica, sans-serif; fill: #4b5563; }
+      .lane-title { font: 700 15px Arial, Helvetica, sans-serif; fill: #0f172a; }
+      .box-title { font: 700 14px Arial, Helvetica, sans-serif; fill: #0f172a; }
+      .box-text { font: 12px Arial, Helvetica, sans-serif; fill: #334155; }
+      .edge-label { font: 11px Arial, Helvetica, sans-serif; fill: #475569; }
+      .lane { fill: #f8fafc; stroke: #94a3b8; stroke-width: 1.4; }
+      .gateway-lane { fill: #ffffff; stroke: #64748b; stroke-width: 1.4; }
+      .state-lane { fill: #fff7ed; stroke: #fb923c; stroke-width: 1.4; }
+      .blue { fill: #dbeafe; stroke: #2563eb; stroke-width: 1.2; }
+      .sky { fill: #e0f2fe; stroke: #0284c7; stroke-width: 1.2; }
+      .green { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.2; }
+      .purple { fill: #ede9fe; stroke: #7c3aed; stroke-width: 1.2; }
+      .pink { fill: #fae8ff; stroke: #c026d3; stroke-width: 1.2; }
+      .amber { fill: #fef3c7; stroke: #d97706; stroke-width: 1.2; }
+      .yellow { fill: #fef9c3; stroke: #ca8a04; stroke-width: 1.2; }
+      .orange { fill: #ffedd5; stroke: #ea580c; stroke-width: 1.2; }
+      .red { fill: #fee2e2; stroke: #dc2626; stroke-width: 1.2; }
+      .gray { fill: #f1f5f9; stroke: #64748b; stroke-width: 1.2; }
+      .magenta { fill: #fce7f3; stroke: #db2777; stroke-width: 1.2; }
+    </style>
+  </defs>
+
+  <rect width="1700" height="1120" fill="#ffffff" />
+  <text x="40" y="48" class="title">xopc System Architecture</text>
+  <text x="40" y="75" class="subtitle">Runtime wiring verified from GatewayService, AgentService, Hono routes, ChannelManager, SessionStore, ExtensionLoader, and MCP modules.</text>
+
+  <g id="clients">
+    <rect x="40" y="100" width="260" height="720" class="lane" />
+    <rect x="40" y="100" width="260" height="30" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.4" />
+    <text x="55" y="121" class="lane-title">Clients and entry surfaces</text>
+
+    <rect x="70" y="150" width="200" height="72" rx="8" class="blue" />
+    <text x="170" y="174" text-anchor="middle" class="box-title">Web console SPA</text>
+    <text x="170" y="194" text-anchor="middle" class="box-text">React/Vite, hash routes</text>
+    <text x="170" y="211" text-anchor="middle" class="box-text">REST + SSE</text>
+
+    <rect x="70" y="240" width="200" height="58" rx="8" class="blue" />
+    <text x="170" y="264" text-anchor="middle" class="box-title">Mobile app</text>
+    <text x="170" y="284" text-anchor="middle" class="box-text">Gateway REST/SSE client</text>
+
+    <rect x="70" y="320" width="200" height="64" rx="8" class="sky" />
+    <text x="170" y="346" text-anchor="middle" class="box-title">CLI / TUI</text>
+    <text x="170" y="366" text-anchor="middle" class="box-text">xopc agent, tui, gateway</text>
+
+    <rect x="70" y="405" width="200" height="64" rx="8" class="sky" />
+    <text x="170" y="431" text-anchor="middle" class="box-title">Electron shell</text>
+    <text x="170" y="451" text-anchor="middle" class="box-text">embedded gateway subprocess</text>
+
+    <rect x="70" y="495" width="200" height="64" rx="8" class="green" />
+    <text x="170" y="520" text-anchor="middle" class="box-title">Messaging platforms</text>
+    <text x="170" y="540" text-anchor="middle" class="box-text">Telegram, Weixin, Feishu</text>
+
+    <rect x="70" y="580" width="200" height="58" rx="8" class="amber" />
+    <text x="170" y="604" text-anchor="middle" class="box-title">External MCP clients</text>
+    <text x="170" y="624" text-anchor="middle" class="box-text">stdio MCP bridge</text>
+
+    <rect x="70" y="660" width="200" height="58" rx="8" class="magenta" />
+    <text x="170" y="684" text-anchor="middle" class="box-title">Browser extension</text>
+    <text x="170" y="704" text-anchor="middle" class="box-text">WS bridge on localhost</text>
+
+    <rect x="70" y="740" width="200" height="58" rx="8" class="gray" />
+    <text x="170" y="764" text-anchor="middle" class="box-title">Remote access wrappers</text>
+    <text x="170" y="784" text-anchor="middle" class="box-text">Tailscale, FRP, SSH tunnel</text>
+  </g>
+
+  <g id="gateway">
+    <rect x="340" y="100" width="720" height="720" class="gateway-lane" />
+    <rect x="340" y="100" width="720" height="30" fill="#e2e8f0" stroke="#64748b" stroke-width="1.4" />
+    <text x="355" y="121" class="lane-title">Gateway process</text>
+
+    <rect x="380" y="150" width="640" height="78" rx="8" class="sky" />
+    <text x="700" y="174" text-anchor="middle" class="box-title">Hono HTTP app</text>
+    <text x="700" y="194" text-anchor="middle" class="box-text">auth, CORS/CSRF, body limits, rate limits</text>
+    <text x="700" y="211" text-anchor="middle" class="box-text">static Web UI, REST, /api/events SSE, /api/agent SSE</text>
+
+    <rect x="575" y="265" width="250" height="82" rx="8" class="purple" />
+    <text x="700" y="290" text-anchor="middle" class="box-title">GatewayService</text>
+    <text x="700" y="310" text-anchor="middle" class="box-text">composition root and lifecycle</text>
+    <text x="700" y="327" text-anchor="middle" class="box-text">config hot reload, readiness, SSE hub</text>
+
+    <rect x="380" y="400" width="210" height="78" rx="8" class="yellow" />
+    <text x="485" y="424" text-anchor="middle" class="box-title">MessageBus</text>
+    <text x="485" y="444" text-anchor="middle" class="box-text">inbound queue + outbound queue</text>
+    <text x="485" y="461" text-anchor="middle" class="box-text">in-process EventEmitter</text>
+
+    <rect x="630" y="390" width="390" height="92" rx="8" class="green" />
+    <text x="825" y="416" text-anchor="middle" class="box-title">AgentService</text>
+    <text x="825" y="436" text-anchor="middle" class="box-text">turn dispatch, orchestration, prompts</text>
+    <text x="825" y="453" text-anchor="middle" class="box-text">tools, skills, memory, progress, compaction</text>
+
+    <rect x="380" y="530" width="280" height="86" rx="8" class="green" />
+    <text x="520" y="556" text-anchor="middle" class="box-title">ChannelManager</text>
+    <text x="520" y="576" text-anchor="middle" class="box-text">plugin registry, lifecycle supervisor</text>
+    <text x="520" y="593" text-anchor="middle" class="box-text">health, heartbeat, outbound sender/replay</text>
+
+    <rect x="710" y="530" width="310" height="86" rx="8" class="pink" />
+    <text x="865" y="556" text-anchor="middle" class="box-title">ExtensionLoader + Registry</text>
+    <text x="865" y="576" text-anchor="middle" class="box-text">activation plan, hooks, tools</text>
+    <text x="865" y="593" text-anchor="middle" class="box-text">channel plugins, gateway methods, UI assets</text>
+
+    <rect x="380" y="660" width="310" height="86" rx="8" class="gray" />
+    <text x="535" y="686" text-anchor="middle" class="box-title">Gateway services</text>
+    <text x="535" y="706" text-anchor="middle" class="box-text">automations, heartbeat, goals</text>
+    <text x="535" y="723" text-anchor="middle" class="box-text">workflows, notes, projects, marketplace</text>
+
+    <rect x="730" y="660" width="290" height="86" rx="8" class="orange" />
+    <text x="875" y="686" text-anchor="middle" class="box-title">SessionIndex + SessionStore</text>
+    <text x="875" y="706" text-anchor="middle" class="box-text">session CRUD, transcript APIs</text>
+    <text x="875" y="723" text-anchor="middle" class="box-text">compaction checkpoints and search</text>
+  </g>
+
+  <g id="agent">
+    <rect x="1110" y="100" width="520" height="430" class="lane" />
+    <rect x="1110" y="100" width="520" height="30" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.4" />
+    <text x="1125" y="121" class="lane-title">Agent internals</text>
+
+    <rect x="1145" y="155" width="210" height="80" rx="8" class="green" />
+    <text x="1250" y="180" text-anchor="middle" class="box-title">Embedded pi-agent session</text>
+    <text x="1250" y="200" text-anchor="middle" class="box-text">AgentManager + session runner</text>
+    <text x="1250" y="217" text-anchor="middle" class="box-text">runXopcEmbeddedTurn</text>
+
+    <rect x="1390" y="155" width="205" height="80" rx="8" class="blue" />
+    <text x="1492" y="180" text-anchor="middle" class="box-title">ModelManager</text>
+    <text x="1492" y="200" text-anchor="middle" class="box-text">typed roles, overrides</text>
+    <text x="1492" y="217" text-anchor="middle" class="box-text">provider/model resolution</text>
+
+    <rect x="1145" y="270" width="210" height="92" rx="8" class="yellow" />
+    <text x="1250" y="296" text-anchor="middle" class="box-title">Built-in + extension tools</text>
+    <text x="1250" y="316" text-anchor="middle" class="box-text">filesystem, shell, web, memory</text>
+    <text x="1250" y="333" text-anchor="middle" class="box-text">media, session, workflow tools</text>
+
+    <rect x="1390" y="275" width="205" height="82" rx="8" class="amber" />
+    <text x="1492" y="300" text-anchor="middle" class="box-title">Outbound MCP runtime</text>
+    <text x="1492" y="320" text-anchor="middle" class="box-text">stdio/HTTP transports</text>
+    <text x="1492" y="337" text-anchor="middle" class="box-text">materialized as agent tools</text>
+
+    <rect x="1145" y="400" width="210" height="82" rx="8" class="sky" />
+    <text x="1250" y="426" text-anchor="middle" class="box-title">Prompt + context</text>
+    <text x="1250" y="446" text-anchor="middle" class="box-text">agent profile Markdown, skills</text>
+    <text x="1250" y="463" text-anchor="middle" class="box-text">memory prefetch, workspace state</text>
+
+    <rect x="1390" y="400" width="205" height="82" rx="8" class="red" />
+    <text x="1492" y="426" text-anchor="middle" class="box-title">Turn reliability</text>
+    <text x="1492" y="446" text-anchor="middle" class="box-text">loop guard, request limiter</text>
+    <text x="1492" y="463" text-anchor="middle" class="box-text">self-verify, retries, timeout/abort</text>
+  </g>
+
+  <g id="state">
+    <rect x="340" y="860" width="720" height="230" class="state-lane" />
+    <rect x="340" y="860" width="720" height="30" fill="#fed7aa" stroke="#fb923c" stroke-width="1.4" />
+    <text x="355" y="881" class="lane-title">Local state directory, usually ~/.xopc</text>
+
+    <rect x="380" y="930" width="210" height="90" rx="8" class="orange" />
+    <text x="485" y="956" text-anchor="middle" class="box-title">xopc.db SQLite</text>
+    <text x="485" y="976" text-anchor="middle" class="box-text">sessions, transcript rows</text>
+    <text x="485" y="993" text-anchor="middle" class="box-text">FTS, notes, memory records</text>
+    <text x="485" y="1010" text-anchor="middle" class="box-text">compaction checkpoints</text>
+
+    <rect x="620" y="930" width="190" height="90" rx="8" class="amber" />
+    <text x="715" y="956" text-anchor="middle" class="box-title">xopc.json + env</text>
+    <text x="715" y="976" text-anchor="middle" class="box-text">agents, providers, gateway</text>
+    <text x="715" y="993" text-anchor="middle" class="box-text">channels, MCP, extensions</text>
+
+    <rect x="840" y="930" width="180" height="90" rx="8" class="gray" />
+    <text x="930" y="956" text-anchor="middle" class="box-title">Files and dirs</text>
+    <text x="930" y="976" text-anchor="middle" class="box-text">profiles, skills, workspace</text>
+    <text x="930" y="993" text-anchor="middle" class="box-text">media, logs, extensions</text>
+  </g>
+
+  <g id="external">
+    <rect x="1110" y="590" width="520" height="260" class="lane" />
+    <rect x="1110" y="590" width="520" height="30" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1.4" />
+    <text x="1125" y="611" class="lane-title">External systems</text>
+
+    <rect x="1150" y="650" width="210" height="88" rx="8" class="blue" />
+    <text x="1255" y="676" text-anchor="middle" class="box-title">LLM and model providers</text>
+    <text x="1255" y="696" text-anchor="middle" class="box-text">@earendil-works/pi-ai</text>
+    <text x="1255" y="713" text-anchor="middle" class="box-text">OpenAI, Anthropic, Gemini</text>
+
+    <rect x="1395" y="650" width="195" height="72" rx="8" class="amber" />
+    <text x="1492" y="676" text-anchor="middle" class="box-title">Configured MCP servers</text>
+    <text x="1492" y="696" text-anchor="middle" class="box-text">stdio child processes</text>
+    <text x="1492" y="713" text-anchor="middle" class="box-text">or HTTP servers</text>
+
+    <rect x="1150" y="775" width="440" height="50" rx="8" class="green" />
+    <text x="1370" y="797" text-anchor="middle" class="box-title">Platform APIs</text>
+    <text x="1370" y="815" text-anchor="middle" class="box-text">Telegram Bot API, Weixin, Feishu, browser extension, remote tunnels</text>
+  </g>
+
+  <g id="edges" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M270 186 H380" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+    <path d="M270 269 H380" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+    <path d="M270 352 H575" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-blue)" />
+    <path d="M270 437 H575" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-blue)" />
+    <path d="M270 527 H380" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)" />
+    <path d="M270 609 H325 V189 H380" stroke="#d97706" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <path d="M270 689 H325 V306 H575" stroke="#db2777" stroke-width="2" marker-end="url(#arrow-purple)" />
+    <path d="M270 769 H325 V210 H380" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-gray)" />
+
+    <path d="M700 228 V265" stroke="#7c3aed" stroke-width="2" marker-end="url(#arrow-purple)" />
+    <path d="M825 347 V390" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)" />
+    <path d="M575 306 H485 V400" stroke="#ca8a04" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <path d="M590 430 H630" stroke="#ca8a04" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <path d="M630 455 H590" stroke="#ca8a04" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <path d="M485 478 V530" stroke="#ca8a04" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <path d="M710 573 H660" stroke="#c026d3" stroke-width="2" marker-end="url(#arrow-green)" />
+    <path d="M865 530 V482" stroke="#c026d3" stroke-width="2" marker-end="url(#arrow-green)" />
+    <path d="M690 703 H730" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-gray)" />
+    <path d="M1020 436 H1040 V703 H1020" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-amber)" />
+
+    <path d="M1020 436 H1085 V195 H1145" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)" />
+    <path d="M1020 414 H1090 V142 H1492 V155" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+    <path d="M1250 235 V270" stroke="#ca8a04" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <path d="M1355 316 H1390" stroke="#d97706" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <path d="M1250 400 V362" stroke="#0284c7" stroke-width="2" marker-end="url(#arrow-blue)" />
+    <path d="M1492 400 V357" stroke="#dc2626" stroke-width="2" marker-end="url(#arrow-gray)" />
+
+    <path d="M875 746 V840 H485 V930" stroke="#ea580c" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <path d="M700 347 H330 V975 H620" stroke="#d97706" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <path d="M1020 460 H1075 V1030 H930 V1020" stroke="#64748b" stroke-width="2" marker-end="url(#arrow-gray)" />
+
+    <path d="M1595 195 H1650 V694 H1360" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow-blue)" />
+    <path d="M1595 316 H1645 V686 H1590" stroke="#d97706" stroke-width="2" marker-end="url(#arrow-amber)" />
+    <path d="M520 616 V810 H1150" stroke="#16a34a" stroke-width="2" marker-end="url(#arrow-green)" />
+  </g>
+</svg>
