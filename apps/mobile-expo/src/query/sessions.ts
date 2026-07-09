@@ -1,27 +1,24 @@
+import {
+  buildSessionListPath,
+  parseSessionsListResponse,
+  tryParseSessionListItem,
+  type SessionListItem as GatewaySessionListItem,
+  type SessionStatus as GatewaySessionStatus,
+  type SessionsListResponse,
+} from '@xopcai/gateway-contract';
+
 import { apiFetch, formatApiHttpError } from '../api/client';
 import {
   readCachedSessions,
   writeCachedSessions,
 } from '../features/gateway/sessions-cache';
-import { sessionListItemSchema, sessionsListResponseSchema } from '../config/schema';
 import { useGatewayStore } from '../stores/gateway-store';
 
 // ── Types ────────────────────────────────────────────────────────
 
-export type SessionStatus = 'active' | 'pinned' | 'archived';
+export type SessionStatus = GatewaySessionStatus;
 
-export type SessionListItem = {
-  key: string;
-  sessionId?: string;
-  name?: string;
-  title?: string;
-  displayName?: string;
-  messageCount: number;
-  updatedAt: string;
-  sourceChannel?: string;
-  status?: SessionStatus;
-  routing?: SessionRoutingMeta;
-};
+export type SessionListItem = GatewaySessionListItem;
 
 export type SessionMessage = {
   role: string;
@@ -121,25 +118,28 @@ export async function fetchSessionsList(
   const limit = options?.limit ?? 20;
   const offset = options?.offset ?? 0;
   const search = options?.search?.trim() ?? '';
+  const channel = options?.channel === undefined ? 'webchat' : options.channel;
 
-  const params = new URLSearchParams({
-    limit: String(limit),
-    offset: String(offset),
+  const res = await apiFetch(buildSessionListPath({
+    limit,
+    offset,
+    search: search || undefined,
+    channel,
     sortBy: 'updatedAt',
     sortOrder: 'desc',
-  });
-  if (options?.channel !== null) params.set('channel', options?.channel ?? 'webchat');
-  if (search) params.set('search', search);
-
-  const res = await apiFetch(`/api/sessions?${params.toString()}`);
+  }));
   if (!res.ok) throwApiError(res, await parseErrorBody(res));
   const raw = await res.json();
-  const parsed = sessionsListResponseSchema.safeParse(raw);
-  if (!parsed.success) throw new Error('Invalid sessions response');
+  let parsed: SessionsListResponse;
+  try {
+    parsed = parseSessionsListResponse(raw);
+  } catch {
+    throw new Error('Invalid sessions response');
+  }
   const items: SessionListItem[] = [];
-  for (const row of parsed.data.items) {
-    const one = sessionListItemSchema.safeParse(row);
-    if (one.success) items.push(normalizeSessionListItem(one.data));
+  for (const row of parsed.items) {
+    const item = tryParseSessionListItem(row);
+    if (item) items.push(normalizeSessionListItem(item));
   }
   // Persist only the unfiltered first page so cold-start hydration matches
   // the next live first request.
@@ -148,10 +148,10 @@ export async function fetchSessionsList(
   }
   return {
     items,
-    total: parsed.data.total,
-    limit: parsed.data.limit,
-    offset: parsed.data.offset,
-    hasMore: parsed.data.hasMore,
+    total: parsed.total,
+    limit: parsed.limit,
+    offset: parsed.offset,
+    hasMore: parsed.hasMore,
   };
 }
 

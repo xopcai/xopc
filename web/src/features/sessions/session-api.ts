@@ -1,3 +1,8 @@
+import {
+  buildSessionListQueryString,
+  sessionListDedupeKey,
+} from '@xopcai/gateway-contract';
+
 import { apiFetchWithStartupRetry } from '@/lib/gateway-startup-retry';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -10,41 +15,6 @@ import type {
   SessionMetadata,
   SessionStats,
 } from '@/features/sessions/session.types';
-
-function buildListQuery(query?: SessionListQuery): string {
-  const params = new URLSearchParams();
-  if (!query) return '';
-  if (query.status) params.set('status', query.status);
-  if (query.search) params.set('search', query.search);
-  if (query.channel) params.set('channel', query.channel);
-  if (query.projectId) params.set('projectId', query.projectId);
-  if (query.unassigned) params.set('unassigned', 'true');
-  if (query.updatedAfter != null) params.set('updatedAfter', String(query.updatedAfter));
-  if (query.includePinned) params.set('includePinned', 'true');
-  if (query.includeSessionKey) params.set('includeSessionKey', query.includeSessionKey);
-  if (query.sessionTypes?.length) params.set('types', query.sessionTypes.join(','));
-  if (query.limit != null) params.set('limit', String(query.limit));
-  if (query.offset != null) params.set('offset', String(query.offset));
-  const qs = params.toString();
-  return qs ? `?${qs}` : '';
-}
-
-function listSessionsDedupeKey(query?: SessionListQuery): string {
-  if (!query) return 'default';
-  return JSON.stringify({
-    status: query.status,
-    search: query.search,
-    channel: query.channel,
-    projectId: query.projectId,
-    unassigned: query.unassigned,
-    updatedAfter: query.updatedAfter,
-    includePinned: query.includePinned,
-    includeSessionKey: query.includeSessionKey,
-    sessionTypes: query.sessionTypes,
-    limit: query.limit,
-    offset: query.offset,
-  });
-}
 
 const listSessionsInflight = new Map<string, Promise<PaginatedResult<SessionMetadata>>>();
 
@@ -66,11 +36,11 @@ export type SidebarChatListResponse = {
  * sidebar and chat initial fetch do not triple-fetch the first page on load.
  */
 export async function listSessions(query?: SessionListQuery): Promise<PaginatedResult<SessionMetadata>> {
-  const key = listSessionsDedupeKey(query);
+  const key = sessionListDedupeKey(query);
   const existing = listSessionsInflight.get(key);
   if (existing) return existing;
 
-  const url = apiUrl(`/api/sessions${buildListQuery(query)}`);
+  const url = apiUrl(`/api/sessions${buildSessionListQueryString(query)}`);
   const pending = (async () => {
     const res = await apiFetchWithStartupRetry(url);
     if (!res.ok) {

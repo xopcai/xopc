@@ -50,7 +50,7 @@ export default defineConfig({
           alt: 'xopc'
         },
         nav: [
-          { text: 'Guide', link: '/first-5-minutes' },
+          { text: 'Guide', link: '/concepts/loops' },
           { text: 'Reference', link: '/configuration' }
         ],
         sidebar: [
@@ -110,6 +110,7 @@ export default defineConfig({
               { text: 'Trusted proxy', link: '/gateway/trusted-proxy' },
               { text: 'Updates', link: '/update' },
               { text: 'Heartbeat', link: '/heartbeat' }
+              { text: 'Releases', link: '/releases' }
             ]
           },
           {
@@ -135,7 +136,6 @@ export default defineConfig({
               { text: 'State & workspace layout', link: '/workspace' },
               { text: 'Templates', link: '/reference/templates' },
               { text: 'UI Design System', link: '/design/ui-design-system' },
-              { text: 'Documentation Quality', link: '/documentation-quality' }
             ]
           }
         ],
@@ -157,7 +157,7 @@ export default defineConfig({
           alt: 'xopc'
         },
         nav: [
-          { text: '指南', link: '/zh/first-5-minutes' },
+          { text: '指南', link: '/zh/concepts/loops' },
           { text: '参考', link: '/zh/configuration' }
         ],
         sidebar: [
@@ -213,6 +213,7 @@ export default defineConfig({
               { text: '远程访问', link: '/zh/remote-access' },
               { text: '更新', link: '/zh/update' },
               { text: '心跳监控', link: '/zh/heartbeat' }
+              { text: '版本发布', link: '/zh/releases' }
             ]
           },
           {
@@ -238,7 +239,6 @@ export default defineConfig({
               { text: '状态目录与工作空间', link: '/zh/workspace' },
               { text: '模板文件', link: '/zh/reference/templates' },
               { text: '控制台 UI 设计规范', link: '/design/ui-design-system' },
-              { text: '文档质量计划', link: '/zh/documentation-quality' }
             ]
           }
         ],
