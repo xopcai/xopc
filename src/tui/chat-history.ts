@@ -69,6 +69,7 @@ export function appendHistoryToChatLog(
 
   messages.forEach((hm, idx) => {
     const historyIndex = (opts?.startIndex ?? 0) + idx;
+    const displayIndex = hm.displayIndex ?? historyIndex;
     const runId = `history:${historyIndex}`;
 
     if (hm.kind === 'bash') {
@@ -119,7 +120,7 @@ export function appendHistoryToChatLog(
 
     if (hm.role === 'user') {
       chatLog.addUser(historyContentText(hm.content), {
-        displayIndex: historyIndex,
+        displayIndex,
         historyIndex,
         role: 'user',
       });
@@ -128,7 +129,7 @@ export function appendHistoryToChatLog(
 
     if (hm.role === 'system') {
       chatLog.addSystem(historyContentText(hm.content), {
-        displayIndex: historyIndex,
+        displayIndex,
         historyIndex,
         role: 'system',
       });
@@ -136,7 +137,7 @@ export function appendHistoryToChatLog(
     }
 
     chatLog.finalizeAssistant(assistantHistoryMessage(hm.content), runId, {
-      displayIndex: historyIndex,
+      displayIndex,
       historyIndex,
       role: 'assistant',
     });

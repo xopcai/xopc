@@ -427,6 +427,51 @@ export class GatewaySseBackend implements TuiBackend {
     }
   }
 
+  async loadHistoryWindow(opts: {
+    sessionKey: string;
+    rowNumber: number;
+    before?: number;
+    after?: number;
+  }) {
+    const params = new URLSearchParams({
+      rowNumber: String(opts.rowNumber),
+      before: String(opts.before ?? 80),
+      after: String(opts.after ?? 120),
+    });
+    try {
+      const res = await gatewayFetch(
+        this.baseUrl,
+        `/api/sessions/${encodeURIComponent(opts.sessionKey)}/transcript/window?${params.toString()}`,
+        this.token,
+      );
+      if (!res.ok) {
+        return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows: 0 };
+      }
+      const json = (await res.json()) as {
+        payload?: {
+          messages?: unknown[];
+          startRowNumber?: unknown;
+          endRowNumber?: unknown;
+          totalRows?: unknown;
+        };
+      };
+      const payload = json.payload ?? {};
+      return {
+        messages: Array.isArray(payload.messages) ? (payload.messages as HistoryMessage[]) : [],
+        startRowNumber: typeof payload.startRowNumber === 'number' ? payload.startRowNumber : 0,
+        endRowNumber: typeof payload.endRowNumber === 'number' ? payload.endRowNumber : 0,
+        totalRows: typeof payload.totalRows === 'number' ? payload.totalRows : 0,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      log.warn(
+        { err: error, sessionKey: opts.sessionKey, rowNumber: opts.rowNumber, errorMessage },
+        `Failed to load history window: ${errorMessage}`,
+      );
+      return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows: 0 };
+    }
+  }
+
   async loadTranscriptTree(sessionKey: string): Promise<TuiTranscriptTreeEntry[]> {
     try {
       const res = await gatewayFetch(

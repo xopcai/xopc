@@ -2,71 +2,34 @@
  * Client-side parser for xopc Chat Stream Protocol v1 over SSE.
  */
 
-export interface ProgressState {
-  stage: string;
-  message: string;
-  detail?: string;
-  toolName?: string;
-  timestamp: number;
-}
+import type {
+  AgentSseClarifyRequestPayload,
+  AgentSseCommandCompletedPayload,
+  AgentSseCommandOutputDeltaPayload,
+  AgentSseCommandStartedPayload,
+  AgentSsePatchAppliedPayload,
+  AgentSseProgressState,
+  AgentSseReviewPayload,
+  AgentSseTtsAudioPayload,
+  AgentSseTurnDiffPayload,
+  AgentSseTurnPlanUpdatedPayload,
+  AgentSseUserTranscriptAttachment,
+  AgentSseUserTranscriptPayload,
+} from '@xopcai/gateway-contract';
 
-export type UserTranscriptAttachment = {
-  uri?: string;
-  workspaceRelativePath?: string;
-  mimeType?: string;
-  name?: string;
-  durationSeconds?: number;
-};
-
-export type CommandStartedPayload = {
-  toolCallId: string;
-  command: string;
-  cwd?: string;
-};
-
-export type CommandOutputDeltaPayload = {
-  toolCallId: string;
-  stream: 'stdout' | 'stderr';
-  delta: string;
-};
-
-export type CommandCompletedPayload = {
-  toolCallId: string;
-  command: string;
-  cwd?: string;
-  exitCode: number | null;
-  durationMs?: number;
-  timedOut?: boolean;
-  truncated?: boolean;
-};
-
-export type PatchAppliedPayload = {
-  toolCallId: string;
-  changes: unknown[];
-  diff: string;
-  added: number;
-  removed: number;
-};
-
-export type TurnDiffPayload = {
-  files: string[];
-  diff: string;
-  added: number;
-  removed: number;
-};
-
-export type TurnPlanUpdatedPayload = {
-  explanation?: string;
-  plan: { step: string; status: 'pending' | 'in_progress' | 'completed' }[];
-};
-
-export type ReviewPayload = {
-  review: unknown;
-};
+export type ProgressState = AgentSseProgressState;
+export type UserTranscriptAttachment = AgentSseUserTranscriptAttachment;
+export type CommandStartedPayload = AgentSseCommandStartedPayload;
+export type CommandOutputDeltaPayload = AgentSseCommandOutputDeltaPayload;
+export type CommandCompletedPayload = AgentSseCommandCompletedPayload;
+export type PatchAppliedPayload = AgentSsePatchAppliedPayload;
+export type TurnDiffPayload = AgentSseTurnDiffPayload;
+export type TurnPlanUpdatedPayload = AgentSseTurnPlanUpdatedPayload;
+export type ReviewPayload = AgentSseReviewPayload;
 
 export type AgentSseCallbacks = {
   onStreamStart: () => void;
-  onUserTranscript?: (payload: { text: string; attachments?: UserTranscriptAttachment[] }) => void;
+  onUserTranscript?: (payload: AgentSseUserTranscriptPayload) => void;
   onToken: (delta: string) => void;
   onThinking: (content: string, isDelta: boolean) => void;
   onThinkingEnd: () => void;
@@ -81,19 +44,8 @@ export type AgentSseCallbacks = {
   onTurnDiff?: (payload: TurnDiffPayload) => void;
   onReview?: (payload: ReviewPayload) => void;
   onProgress: (progress: ProgressState) => void;
-  onTtsAudio?: (payload: {
-    uri: string;
-    mimeType: string;
-    name: string;
-    attachTo?: 'last_assistant';
-    messageId?: string;
-  }) => void;
-  onClarifyRequest?: (payload: {
-    requestId: string;
-    question: string;
-    choices?: string[];
-    default?: string;
-  }) => void;
+  onTtsAudio?: (payload: AgentSseTtsAudioPayload) => void;
+  onClarifyRequest?: (payload: AgentSseClarifyRequestPayload) => void;
   onResult: () => void;
   onError: (msg: string) => void;
 };

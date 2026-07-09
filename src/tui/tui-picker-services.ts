@@ -33,6 +33,11 @@ export type PickerServices = {
   switchAgentSession?: (sessionKey: string, agentId: string) => void | Promise<void>;
   clearChatForSessionSwitch: () => void;
   loadSessionHistory: () => Promise<void>;
+  loadHistoryWindow: (opts: {
+    rowNumber: number;
+    before?: number;
+    after?: number;
+  }) => Promise<boolean>;
   setEditorText: (text: string) => void;
   setModelChoices: (models: TuiModelChoice[]) => void;
   getScopedModelRefs: () => string[] | null;

@@ -672,6 +672,11 @@ export function ProjectDetailPage() {
     return `/projects/${encodeURIComponent(projectId)}/${nextTab}`;
   }, [projectId]);
 
+  const projectGoalHref = useCallback((goalId: string) => {
+    const returnTo = projectTabHref('goals');
+    return `/goals/${encodeURIComponent(goalId)}?returnTo=${encodeURIComponent(returnTo)}`;
+  }, [projectTabHref]);
+
   const replaceProjectHistoryTab = useCallback((nextTab: TabId) => {
     if (!projectId) return;
     navigate(projectTabHref(nextTab), { replace: true });
@@ -1391,7 +1396,7 @@ export function ProjectDetailPage() {
                 {overview?.nextActions.length ? overview.nextActions.map((item) => (
                   <Link
                     key={item.goalId}
-                    to={`/goals/${encodeURIComponent(item.goalId)}`}
+                    to={projectGoalHref(item.goalId)}
                     onClick={onProjectTabLinkClick('goals')}
                     className="block px-4 py-3 hover:bg-surface-hover"
                   >
@@ -1991,7 +1996,7 @@ export function ProjectDetailPage() {
             {goals.length ? goals.map((goal) => (
               <Link
                 key={goal.id}
-                to={`/goals/${encodeURIComponent(goal.id)}`}
+                to={projectGoalHref(goal.id)}
                 onClick={onProjectTabLinkClick('goals')}
                 className="grid gap-1 border-b border-edge px-4 py-3 last:border-b-0 hover:bg-surface-hover"
               >

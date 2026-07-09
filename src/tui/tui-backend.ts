@@ -72,6 +72,13 @@ export interface TuiSessionStats {
   };
 }
 
+export interface TuiHistoryWindow {
+  messages: HistoryMessage[];
+  startRowNumber: number;
+  endRowNumber: number;
+  totalRows: number;
+}
+
 export type TuiExportFormat = ExportFormat | 'html';
 
 export interface TuiCompactionResult {
@@ -238,6 +245,14 @@ export interface TuiBackend {
     sessionKey: string;
     limit?: number;
   }): Promise<{ messages: HistoryMessage[] }>;
+
+  /** Load a bounded transcript window around a persisted row number. */
+  loadHistoryWindow?(opts: {
+    sessionKey: string;
+    rowNumber: number;
+    before?: number;
+    after?: number;
+  }): Promise<TuiHistoryWindow>;
 
   /** Load current transcript rows as a tree-shaped list. */
   loadTranscriptTree(sessionKey: string): Promise<TuiTranscriptTreeEntry[]>;

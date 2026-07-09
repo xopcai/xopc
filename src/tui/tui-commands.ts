@@ -320,6 +320,12 @@ export type CommandHandlerDeps = {
   getStartupResources?: () => TuiStartupResources | undefined;
   loadTranscriptTree?: () => TuiTranscriptTreeEntry[] | Promise<TuiTranscriptTreeEntry[]>;
   loadTimeline?: () => SessionTimelineItem[] | Promise<SessionTimelineItem[]>;
+  loadHistoryWindow?: (opts: {
+    rowNumber: number;
+    before?: number;
+    after?: number;
+  }) => boolean | Promise<boolean>;
+  loadSessionHistory?: () => void | Promise<void>;
   exportSession?: (request: TuiExportRequest) => void | Promise<void>;
   importSession?: (request: TuiImportRequest) => void | Promise<void>;
   createShare?: (request: TuiShareRequest) => void | Promise<void>;
@@ -387,7 +393,10 @@ function currentTimelineTurnIndex(turns: readonly TuiTimelineTurn[], chatLog: Ch
 
 async function runTimelineCommand(
   commandArgs: string,
-  deps: Pick<CommandHandlerDeps, 'chatLog' | 'tui' | 'uiOverlays' | 'loadTimeline'>,
+  deps: Pick<
+    CommandHandlerDeps,
+    'chatLog' | 'tui' | 'uiOverlays' | 'loadTimeline' | 'loadHistoryWindow' | 'loadSessionHistory'
+  >,
 ): Promise<void> {
   const raw = commandArgs.trim();
   if (!raw) {
@@ -414,6 +423,7 @@ async function runTimelineCommand(
   }
 
   if (subcommand === 'latest' || subcommand === 'live' || subcommand === 'end') {
+    await deps.loadSessionHistory?.();
     deps.chatLog.jumpToLatest();
     deps.chatLog.addSystem(theme.dim('Returned to latest transcript view.'));
     deps.tui.requestRender();
@@ -455,6 +465,14 @@ async function runTimelineCommand(
   }
 
   if (!deps.chatLog.jumpToDisplayIndex(target.displayIndex)) {
+    const loaded =
+      target.rowNumber !== undefined && deps.loadHistoryWindow
+        ? await deps.loadHistoryWindow({ rowNumber: target.rowNumber })
+        : false;
+    if (loaded && deps.chatLog.jumpToDisplayIndex(target.displayIndex)) {
+      deps.tui.requestRender();
+      return;
+    }
     deps.chatLog.addSystem(`Turn ${target.turn} is outside loaded history.`);
   }
   deps.tui.requestRender();
