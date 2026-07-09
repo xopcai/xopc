@@ -17,6 +17,7 @@
   <img src="https://img.shields.io/badge/node.js-%E2%89%A522-339933?logo=nodedotjs&amp;logoColor=white" alt="Node.js">
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License">
   <img src="https://img.shields.io/badge/大模型厂商-20%2B-5865F2" alt="大模型厂商">
+  <a href="https://github.com/xopcai/xopc/stargazers"><img src="https://img.shields.io/github/stars/xopcai/xopc?style=flat-square&amp;color=gold" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
@@ -31,15 +32,33 @@
   <img src="docs/public/xopc-tui.gif" alt="xopc 终端界面演示" width="720">
 </p>
 
+<details>
+<summary><strong>目录</strong></summary>
+
+- [适合谁](#适合谁)
+- [从聊天到数据飞轮](#从聊天到数据飞轮)
+- [快速开始](#快速开始)
+- [为什么选 xopc](#为什么选-xopc)
+- [和 Codex / Claude Code / QoderWork / WorkBuddy 的区别](#和-codex--claude-code--qoderwork--workbuddy-的区别)
+- [在哪里聊](#在哪里聊)
+- [内置频道](#内置频道)
+- [扩展与技能](#扩展与技能)
+- [配置示例](#配置示例)
+- [文档](#文档)
+- [常见问题](#常见问题)
+- [桌面版](#desktop-app)
+- [参与贡献](#参与贡献)
+
+</details>
+
 ---
 
 ## 适合谁
 
 - **想先简单用起来的人** —— 先本地开聊；项目变复杂后，再逐步加笔记、通道、连接器和自动化。
-- **长期项目** —— 让目标、决策、阻塞点、下一步、反馈和校准始终连在一起，不会断在一次次聊天里。
-- **随时可用的私有 Agent** —— xopc 跑在你的电脑上，手机 App 扫码连接；出门在外也能继续对话和记录想法，数据仍然留在你自己的 xopc 环境里。
-- **独立开发者 / 一人公司** —— 同一个助手覆盖 CLI、TUI、网页、桌面、手机、Telegram、微信和飞书/Lark。
-- **本地优先 AI 工作流** —— 使用你自己的 API Key，云端/本地模型混用，支持技能和扩展，数据默认保存在 **`~/.xopc/`**。
+- **长期目标持续跟踪** —— 目标、决策、阻塞点、下⼀步不会断在一次次聊天里。
+- **自己的 Agent，随时可用** —— CLI、TUI、网页、桌面、手机、Telegram、微信和飞书/Lark。手机 App 扫码连接，数据留在你的环境里。
+- **本地优先，用自己的密钥** —— 用你自己的 API Key，云端/本地模型混用，支持技能和扩展，数据默认保存在 **`~/.xopc/`**。
 
 ## 从聊天到数据飞轮
 
@@ -53,14 +72,9 @@
 | **外部入口** | 手机 App 扫码连接，也可以在桌面、终端、网页、IM 和 gateway API 里继续使用同一个助手。 | 不在电脑前也能对话、记录 note/idea；Agent 和数据仍在你的 xopc 环境里。 |
 | **自动化** | 设置定时复盘、提醒、摘要和工作流运行。 | 重要事项会自己回到视野里，不完全依赖你想起来再问。 |
 
-这就是循环：上下文进来，xopc 帮你判断下一步；你去行动，再把结果和反馈带回来；系统越用越知道该如何继续推进。
+**这就是循环：** 上下文进来，xopc 帮你判断下一步；你去行动，再把结果和反馈带回来；系统越用越知道该如何继续推进。
 
-## 安装后你能立刻做什么
-
-- **第一天：** 本地开聊，配置一个模型，让 xopc 跟进一个真实项目。
-- **第一周：** 持续丢进展、阻塞点、决策、链接和想法。
-- **用顺手后：** 接入你真的会用的入口：桌面、终端、网页、手机扫码配对、Telegram、微信或飞书/Lark。
-- **事情开始重复时：** 用自动化做复盘、提醒、摘要和工作流运行。
+**你的时间线：** 第一天 → 聊天 + 跟进项目。第一周 → 喂进展和笔记。用顺手后 → 加手机、IM、桌面。事情重复时 → 加自动化。
 
 ---
 
@@ -79,17 +93,7 @@
 
 详见 **[PC 桌面端](https://xopcai.github.io/xopc/zh/desktop-app)**：安装说明、源码打包命令，以及后续截图/GIF/视频素材的预留文件位置。
 
-### 最快终端路径
-
-```bash
-curl -fsSL https://xopc.ai/install.sh | bash
-xopc onboard --quick
-xopc
-```
-
-这条路径会启动本地嵌入式 TUI，不需要先配置网关、桌面端或即时通讯。
-
-### 一键安装（推荐）
+### 一键安装（30 秒启动 — 推荐）
 
 **Linux、macOS、WSL2、Termux**
 
@@ -101,24 +105,18 @@ curl -fsSL https://xopc.ai/install.sh | bash
 
 > **提示：** 原生 Windows 无需 WSL 即可运行 xopc——CLI、网关、TUI 与工具均可在本机使用。若更习惯 WSL2，在 WSL 里执行上面的 bash 命令即可。
 
-在 PowerShell 中运行：
-
 ```powershell
 iex (irm https://xopc.ai/install.ps1)
 ```
 
 安装脚本会自动识别系统、在需要时安装 **Node.js ≥ 22**，并安装 **`@xopcai/xopc`**。国内镜像：bash 加 `--cn`，PowerShell 加 `-Cn`，或指定 `--registry https://registry.npmmirror.com`。
 
-> **30 秒启动：** 这是官网推荐路径，覆盖 macOS、Linux 与 Windows 的环境初始化。
-
-### 配置并开聊
+然后直接开聊：
 
 ```bash
-xopc onboard          # 更快：xopc onboard --quick
-xopc                  # 等同于 xopc tui，打开本地 TUI
+xopc onboard --quick
+xopc                    # 打开本地 TUI
 ```
-
-> **第一次用？** 想少碰终端，优先用 **PC 桌面端**；习惯终端则直接运行 **`xopc`**。需要浏览器控制台或即时通讯时，再启动 **`xopc gateway`**。
 
 ### npm（已具备 Node.js 22+）
 
@@ -131,13 +129,10 @@ npm install -g @xopcai/xopc
 ### 更多命令
 
 ```bash
-xopc agent -i                    # 经典交互式 CLI
+xopc agent -i                    # 交互式 CLI
 xopc agent -m "总结最近 5 条提交"  # 只问一句
-
-xopc init                        # 完整 ~/.xopc 状态目录（首次安装 / 修复）
-xopc gateway                     # 本地网页服务 + React 控制台（地址见终端输出）
-xopc gateway service install     # OS 系统服务；xopc gateway stop | status | logs
-xopc profile list                # 可选：独立状态 Profile
+xopc gateway                     # 网页服务 + React 控制台
+xopc gateway service install     # OS 系统服务
 ```
 
 **从源码**（安装脚本或 pnpm workspace）：
@@ -160,17 +155,16 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 
 ## 为什么选 xopc
 
-- 🔁 **从聊天自然长成循环** — 先普通对话，再把项目、笔记、外部入口和自动化逐步接上，让长期事情持续滚动。
-
+- 🔁 **从聊天自然长成循环** — 项目、笔记、外部入口和自动化逐步接上，让长期事情持续滚动。
 - 🏠 **你的机器** — 配置与数据在 **`~/.xopc/`**，无强制云端、无意外账单。
-- 🔑 **使用自己的密钥** — OpenAI、Anthropic、Google、DeepSeek、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端和本地模型可混用，一行配置即可切换模型。详见 **[模型](https://xopcai.github.io/xopc/zh/models)**。
-- 📱 **自己的 Agent，随时可用** — xopc 跑在你的电脑上，[移动端 App](./apps/mobile-expo) 扫码连接。外出时也能继续对话、记录笔记和想法，但项目数据不需要搬到云端聊天账号里。
-- 🧩 **可按需扩展** — 通过 **`xopc skills install`** 和 **`xopc extensions install`** 扩展工具、频道与 UI；多 Agent 可按场景隔离。
-- ⏰ **支持主动任务** — 用 **自动化** 做定时摘要、提醒与工作流运行；用 **工作流**扇出多子 Agent 任务；用 **多 Agent** 管理不同工作区、工具与系统提示词。
+- 🔑 **使用自己的密钥** — OpenAI、Anthropic、Google、DeepSeek、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端和本地模型可混用。
+- 📱 **随时可用** — 手机 App 扫码连接，也可从桌面、终端、网页、Telegram、微信和飞书/Lark 继续对话。数据不出你的环境。
+- 🧩 **可按需扩展** — **`xopc skills install`** / **`xopc extensions install`** 扩展工具、频道与 UI；多 Agent 可按场景隔离。
+- ⏰ **支持主动任务** — 自动化做定时摘要、提醒和工作流运行；子 Agent 扇出并行任务。
 
 ## 和 Codex / Claude Code / QoderWork / WorkBuddy 的区别
 
-xopc 不是要替代所有编程 Agent 或办公 Agent。它更像一个本地优先的系统层：让同一个助手记住长期目标、保留状态、运行自动化，并在多个入口中持续可用。
+xopc 不是又一个聊天 UI。它更像一个本地优先的系统层：让同一个助手记住长期目标、保留状态、运行自动化，并在多个入口中持续可用。
 
 | 产品 | 更擅长 | 为什么还需要 xopc |
 | --- | --- | --- |
@@ -224,41 +218,16 @@ xopc extensions dev ./my-extension
 
 ## 配置示例
 
-默认路径：**`~/.xopc/xopc.json`**。
+默认路径：**`~/.xopc/xopc.json`**。一个最小骨架：
 
 ```json
 {
-  "agents": {
-    "default": "main",
-    "list": [
-      {
-        "id": "main",
-        "identity": { "name": "Main", "role": "General assistant" },
-        "responsibilities": { "primary": ["Help the user complete tasks"] },
-        "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "deepseek/deepseek-v4-flash" }
-          }
-        },
-        "tools": { "builtin": {} },
-        "skills": { "mode": "all" },
-        "memory": { "mode": "confirmWrite", "sources": ["session"] },
-        "workflows": {},
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
-      }
-    ]
-  },
-  "providers": {
-    "deepseek": "${DEEPSEEK_API_KEY}"
-  }
+  "providers": { "deepseek": "${DEEPSEEK_API_KEY}" },
+  "agents": { "default": "main", "list": [{ "id": "main", "models": { "roles": { "deep": { "model": "deepseek/deepseek-v4-flash" } } } }] }
 }
 ```
 
-需要即时通讯时再补 **`channels.telegram`**、**`channels.weixin`**、**`channels.feishu`** —— 见 **[配置](https://xopcai.github.io/xopc/zh/configuration)**。
-
-可选工具（如浏览器）默认**关闭**，启用后按需安装 Playwright Chromium。
+完整参考：**[配置](https://xopcai.github.io/xopc/zh/configuration)**。需要即时通讯时再补 **`channels.*`**，可选工具（如浏览器）默认关闭。
 
 ---
 
@@ -280,43 +249,25 @@ xopc extensions dev ./my-extension
 
 ## 常见问题
 
-**xopc 是云服务吗？**  
-不是。xopc 跑在你的机器上，配置、工作区文件、凭据和本地状态默认都在 **`~/.xopc/`**。
+**xopc 是云服务吗？** — 不是。一切跑在你的机器上，默认在 **`~/.xopc/`**。
 
-**必须使用付费云端模型吗？**  
-不必须。你可以自带云厂商 API Key，也可以使用 Ollama、LM Studio、vLLM 等本地/自部署模型服务。
+**必须使用付费云端模型吗？** — 不必须。自带 API Key 或用本地模型（Ollama、LM Studio、vLLM）。
 
-**最快怎么试用？**  
-对大多数用户，优先从 GitHub Releases 安装 **PC 桌面端**，在界面中完成模型设置。习惯终端的用户可以执行 **`xopc onboard --quick`**，然后运行 **`xopc`**。
+**最快怎么试用？** — [桌面端](#快速开始) 适合 GUI 用户，终端用户执行 `xopc onboard --quick && xopc`。
 
-**它和普通聊天 UI 有什么区别？**  
-xopc 可以从普通聊天开始，但它的组织方式是为了逐步长成目标循环：项目上下文、笔记、外部信号、下一步、反馈和自动化都能在多个入口里继续工作。
+**它和普通聊天 UI 有什么区别？** — xopc 从聊天长成目标循环：项目上下文、笔记、外部入口、自动化，跨多个入口继续工作。
 
-**能在手机或即时通讯里用吗？**
-可以。建议先用本地 TUI 试用；确认方向后，再启动 gateway，用 [移动端 App](./apps/mobile-expo) 连接 iOS/Android，或配置 Telegram、微信、飞书/Lark。
+**能在手机或即时通讯里用吗？** — 可以。用 [移动端 App](./apps/mobile-expo) 扫码连接，或配置 Telegram、微信、飞书/Lark。
 
----
+**还有问题？** — 去 [GitHub Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a) 提问。
 
 <a id="desktop-app"></a>
-<a id="electron-desktop"></a>
-
-## 桌面版
-
-PC 桌面端是大多数用户最省心的开始方式：它会启动内置本地 gateway，并在原生窗口里打开 gateway 控制台。
-
-1. 从 **[GitHub Releases](https://github.com/xopcai/xopc/releases)** 下载 — macOS `.dmg`，Windows `xopc-<版本>-x64.exe` 或 `xopc-<版本>-arm64.exe`，Linux `.AppImage` / `.deb`。
-2. 打开应用，完成模型设置，然后开始聊天。
-3. 暂无对应平台安装包时，先用 **`xopc gateway`** + npm 命令行版。
-
-**从源码打包：** `pnpm install && pnpm run electron:build` → `dist/release/`
-
-文档与素材预留：**[PC 桌面端](https://xopcai.github.io/xopc/zh/desktop-app)**。
 
 ---
 
 ## 安全
 
-来自即时通讯的消息视为**不可信输入**。私聊建议 **pairing（配对）** 或 **allowlist（白名单）**。请勿泄露网关监听地址与 token —— **[频道](https://xopcai.github.io/xopc/zh/channels)**。
+来自即时通讯的消息视为**不可信输入**。私聊建议 **pairing（配对）** 或 **allowlist（白名单）**。请勿泄露网关监听地址与 token。详见 **[频道](https://xopcai.github.io/xopc/zh/channels)**。
 
 ---
 
@@ -331,6 +282,8 @@ pnpm run build && pnpm test && pnpm run lint
 **[AGENTS.md](./AGENTS.md)** · **[CONTRIBUTING.md](./CONTRIBUTING.md)**（英文）
 
 **反馈：** [Bug 反馈](https://github.com/xopcai/xopc/issues/new?template=bug_report.yml) · [功能建议](https://github.com/xopcai/xopc/issues/new?template=feature_request.yml) · [Q&A 讨论](https://github.com/xopcai/xopc/discussions/categories/q-a) · [安全漏洞反馈](https://github.com/xopcai/xopc/security/advisories/new)（请勿公开发布漏洞细节）
+
+**技术栈：** TypeScript、Node.js ≥ 22、pnpm workspace。内置 LLM 层 `@earendil-works/pi-ai`，React 网关控制台，Electron 桌面端。
 
 ## 致谢
 

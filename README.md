@@ -17,6 +17,7 @@
   <img src="https://img.shields.io/badge/node.js-%E2%89%A522-339933?logo=nodedotjs&amp;logoColor=white" alt="Node.js">
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License">
   <img src="https://img.shields.io/badge/LLM_providers-20%2B-5865F2" alt="LLM providers">
+  <a href="https://github.com/xopcai/xopc/stargazers"><img src="https://img.shields.io/github/stars/xopcai/xopc?style=flat-square&amp;color=gold" alt="GitHub Stars"></a>
 </p>
 
 <p align="center">
@@ -31,15 +32,33 @@
   <img src="docs/public/xopc-tui.gif" alt="xopc terminal UI demo" width="720">
 </p>
 
+<details>
+<summary><strong>Table of Contents</strong></summary>
+
+- [Built for](#built-for)
+- [From chat to loops](#from-chat-to-loops)
+- [Get started](#get-started)
+- [Why xopc](#why-xopc)
+- [How xopc compares](#how-xopc-compares)
+- [Where to chat](#where-to-chat)
+- [Channels](#channels)
+- [Extensions &amp; skills](#extensions--skills)
+- [Configuration](#configuration)
+- [Documentation](#documentation)
+- [FAQ](#faq)
+- [Desktop app](#desktop-app)
+- [Contributing](#contributing)
+
+</details>
+
 ---
 
 ## Built for
 
 - **People who start simple** — open a local chat first, then grow into projects, notes, channels, connectors, and automations when the work needs them.
-- **Long-running projects** — keep goals, decisions, blockers, next actions, feedback, and recalibration connected across chats.
-- **Private agents you can reach anywhere** — run xopc on your computer, pair the mobile app by QR code, and keep chatting or capturing notes while your data stays in your own runtime.
-- **One-person companies and solo builders** — use the same assistant from CLI, TUI, Web, Desktop, mobile, Telegram, WeChat, and Feishu/Lark.
-- **Local-first AI workflows** — bring your own keys, mix cloud/local models, add skills/extensions, and keep data under **`~/.xopc/`**.
+- **Long-running goals, not one-shot chats** — carry goals, blockers, decisions, and next actions across sessions. Projects grow without starting over.
+- **Your agent, reachable anywhere** — CLI, TUI, Web, Desktop, mobile, Telegram, WeChat, Feishu/Lark. Pair the mobile app by QR code; data stays in your runtime.
+- **Local-first, your keys** — bring your own keys, mix cloud/local models, add skills/extensions, and keep everything under **`~/.xopc/`**.
 
 ## From chat to loops
 
@@ -50,17 +69,12 @@ You do not need a perfect system on day one. xopc is designed to become more use
 | **Chat** | Ask questions, think through work, make decisions. | Gives you a local AI assistant that uses your model keys and local state. |
 | **Project** | Ask it to keep track of one active goal. | Carries the goal, current state, blockers, and next actions across sessions. |
 | **Notes & ideas** | Drop rough notes, progress updates, links, and feedback as they happen. | Turns scattered inputs into context the assistant can reuse. |
-| **Connectors** | Pair the mobile app by QR code, or bring the same assistant to desktop, terminal, messengers, and gateway APIs. | Lets you chat and capture notes from anywhere while the agent and data stay in your xopc runtime. |
+| **Connectors** | Pair the mobile app by QR code, or use the same assistant on desktop, terminal, messengers, and gateway APIs. | Lets you chat and capture notes from anywhere while the agent and data stay in your xopc runtime. |
 | **Automations** | Schedule reviews, reminders, summaries, and workflow runs. | Keeps important work resurfacing and closes the loop without you starting every turn manually. |
 
-That is the loop: context comes in, xopc helps decide the next move, you act, feedback comes back, and the system gets better at keeping the project moving.
+**That is the loop:** context comes in, xopc helps decide the next move, you act, feedback comes back, and the system gets better at keeping the project moving.
 
-## What you can do after install
-
-- **Day 1:** chat locally, configure one model, and ask xopc to track a real project.
-- **This week:** feed it notes, blockers, decisions, links, and progress updates.
-- **When it sticks:** add the surfaces you actually use: desktop, terminal, browser, mobile QR pairing, Telegram, WeChat, or Feishu/Lark.
-- **As work repeats:** add automations for reviews, reminders, summaries, and workflow runs.
+**Your timeline:** Day 1 → chat and track a project. This week → feed it notes and progress. When it sticks → add mobile, messengers, desktop. As work repeats → add automations.
 
 ---
 
@@ -79,17 +93,7 @@ For most users, the **PC desktop app** is the easiest way to start: install the 
 
 See **[PC Desktop app](https://xopcai.github.io/xopc/desktop-app)** for install notes, build-from-source commands, and reserved screenshot/GIF/video file locations.
 
-### Fastest terminal path
-
-```bash
-curl -fsSL https://xopc.ai/install.sh | bash
-xopc onboard --quick
-xopc
-```
-
-This path starts the embedded terminal UI: no gateway, desktop app, or messenger setup required.
-
-### One-liner (recommended)
+### One-liner (30-second start — recommended)
 
 **Linux, macOS, WSL2, Termux**
 
@@ -101,24 +105,18 @@ curl -fsSL https://xopc.ai/install.sh | bash
 
 > **Heads up:** Native Windows runs xopc without WSL — CLI, gateway, TUI, and tools all work natively. Prefer WSL2? Use the bash one-liner above there too.
 
-Run this in PowerShell:
-
 ```powershell
 iex (irm https://xopc.ai/install.ps1)
 ```
 
 The installer detects your OS, installs **Node.js ≥ 22** when needed, and installs **`@xopcai/xopc`**. China mirror: add `--cn` (bash) or `-Cn` (PowerShell), or pass `--registry https://registry.npmmirror.com`.
 
-> **30-second start:** this is the homepage-recommended path, including Node setup on macOS, Linux, and Windows.
-
-### Onboard & chat
+Then chat immediately:
 
 ```bash
-xopc onboard          # faster: xopc onboard --quick
-xopc                  # same as xopc tui; opens the local TUI
+xopc onboard --quick
+xopc                    # opens the local TUI
 ```
-
-> **New here?** Use the **PC desktop app** for the easiest setup, or run **`xopc`** for the fastest terminal path. Run **`xopc gateway`** when you want the browser console or messengers without the desktop shell.
 
 ### npm (already have Node.js 22+)
 
@@ -126,18 +124,15 @@ xopc                  # same as xopc tui; opens the local TUI
 npm install -g @xopcai/xopc
 ```
 
-Or with pnpm: `pnpm add -g @xopcai/xopc` · China: `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
+Or with pnpm: `pnpm add -g @xopcai/xopc` · China mirror: `npm install -g @xopcai/xopc --registry=https://registry.npmmirror.com`
 
 ### More commands
 
 ```bash
-xopc agent -i                              # classic interactive CLI
-xopc agent -m "Summarize the last 5 commits" # one-shot
-
-xopc init                                  # full ~/.xopc state tree (first install / repair)
-xopc gateway                               # local web server + React console (URL in logs)
-xopc gateway service install               # OS service; xopc gateway stop | status | logs
-xopc profile list                          # optional isolated state profiles
+xopc agent -i                               # interactive CLI
+xopc agent -m "Summarize the last 5 commits"  # one-shot
+xopc gateway                                # web server + React console
+xopc gateway service install                # OS service
 ```
 
 **From source** (installer or pnpm workspace):
@@ -160,17 +155,16 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 
 ## Why xopc
 
-- 🔁 **A path from chat to momentum** — Start with a normal conversation, then let projects, notes, connectors, and automations compound into durable loops.
-
+- 🔁 **From chat to durable loops** — Projects, notes, connectors, and automations compound into momentum across sessions.
 - 🏠 **Your machine** — Data and config under **`~/.xopc/`**. No mandatory cloud or surprise bills.
-- 🔑 **Bring your own keys** — OpenAI, Anthropic, Google, DeepSeek, Ollama, LM Studio, vLLM, and **20+** providers. Mix cloud and local; switch catalog models in one config line. See **[Models](https://xopcai.github.io/xopc/models)**.
-- 📱 **Your agent, reachable anywhere** — Run xopc on your computer, pair the [mobile app](./apps/mobile-expo) by QR code, and keep talking or capturing notes on the go without moving your project data into a hosted chat account.
-- 🧩 **Grows with you** — **`xopc skills install`** · **`xopc extensions install`** for tools, channels, and UI panels; multi-agent routing per context.
-- ⏰ **Proactive** — **Automations** for scheduled summaries, reminders, and workflow runs; **workflows** for fan-out subagent tasks; **multi-agent** routing with isolated workspaces, tools, and prompts.
+- 🔑 **Bring your own keys** — OpenAI, Anthropic, Google, DeepSeek, Ollama, LM Studio, vLLM, and **20+** providers. Mix cloud and local models.
+- 📱 **Reachable anywhere** — Pair the [mobile app](./apps/mobile-expo) by QR code, or chat from desktop, terminal, browser, Telegram, WeChat, and Feishu/Lark. Data stays in your runtime.
+- 🧩 **Grows with you** — **`xopc skills install`** / **`xopc extensions install`** for tools, channels, and UI panels; multi-agent routing per context.
+- ⏰ **Proactive** — Automations for scheduled summaries, reminders, and workflow runs; subagent fan-out for parallel tasks.
 
 ## How xopc compares
 
-xopc is not trying to replace every coding agent or office agent. It is the local-first system layer for people who want one assistant to remember goals, keep state, run automations, and stay reachable across surfaces.
+xopc is not another chat UI. It is the local-first system layer for people who want one assistant to remember goals, keep state, run automations, and stay reachable across surfaces.
 
 | Product | Best at | Why use xopc too |
 | --- | --- | --- |
@@ -224,41 +218,16 @@ Guides: **[Extensions](https://xopcai.github.io/xopc/extensions)** · **[Skills]
 
 ## Configuration
 
-Default: **`~/.xopc/xopc.json`**.
+Default: **`~/.xopc/xopc.json`**. A minimal skeleton:
 
 ```json
 {
-  "agents": {
-    "default": "main",
-    "list": [
-      {
-        "id": "main",
-        "identity": { "name": "Main", "role": "General assistant" },
-        "responsibilities": { "primary": ["Help the user complete tasks"] },
-        "workspace": { "root": "~/.xopc/workspace/main" },
-        "models": {
-          "defaultRole": "deep",
-          "roles": {
-            "deep": { "model": "deepseek/deepseek-v4-flash" }
-          }
-        },
-        "tools": { "builtin": {} },
-        "skills": { "mode": "all" },
-        "memory": { "mode": "confirmWrite", "sources": ["session"] },
-        "workflows": {},
-        "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
-      }
-    ]
-  },
-  "providers": {
-    "deepseek": "${DEEPSEEK_API_KEY}"
-  }
+  "providers": { "deepseek": "${DEEPSEEK_API_KEY}" },
+  "agents": { "default": "main", "list": [{ "id": "main", "models": { "roles": { "deep": { "model": "deepseek/deepseek-v4-flash" } } } }] }
 }
 ```
 
-Add **`channels.telegram`**, **`channels.weixin`**, or **`channels.feishu`** when you need IM — see **[configuration](https://xopcai.github.io/xopc/configuration)**.
-
-Optional tools (e.g. browser) stay **off until enabled**; use Playwright Chromium if you turn on browser tools.
+Full reference: **[Configuration](https://xopcai.github.io/xopc/configuration)**. Add **`channels.*`** for IM, or browser tools (Playwright Chromium) when needed.
 
 ---
 
@@ -280,41 +249,24 @@ Also: [Tools](https://xopcai.github.io/xopc/tools) · [Mobile app](https://xopca
 
 ## FAQ
 
-**Is xopc a hosted service?**  
-No. xopc runs on your machine. Config, workspace files, credentials, and local state live under **`~/.xopc/`** by default.
+**Is xopc a hosted service?** — No. Everything runs on your machine under **`~/.xopc/`**.
 
-**Do I need a paid cloud model?**  
-No. Bring your own keys for cloud providers, or use local/model-server options such as Ollama, LM Studio, and vLLM.
+**Do I need a paid cloud model?** — No. Bring your own keys, or use local models (Ollama, LM Studio, vLLM).
 
-**What is the fastest way to try it?**  
-For most users, install the **PC desktop app** from GitHub Releases and complete model setup in the UI. For terminal users, use **`xopc onboard --quick`** and then run **`xopc`**.
+**What is the fastest way to try it?** — [Desktop app](#get-started) for GUI users, or `xopc onboard --quick && xopc` for terminal.
 
-**How is this different from another chat UI?**  
-xopc can start as a chat UI, but it is organized to grow into goal loops: project context, notes, outside signals, next actions, feedback, and automations across multiple surfaces.
+**How is this different from another chat UI?** — xopc grows from chat into goal loops: project context, notes, connectors, and automations across multiple surfaces.
 
-**Can I use it from my phone or messengers?**  
-Yes. Start with local TUI first; when ready, run the gateway and use the [mobile app](./apps/mobile-expo) on iOS/Android, or configure Telegram, WeChat, or Feishu/Lark.
+**Can I use it from my phone or messengers?** — Yes. Pair the [mobile app](./apps/mobile-expo) by QR code, or configure Telegram, WeChat, or Feishu/Lark via the gateway.
 
-<a id="desktop-app"></a>
-<a id="electron-desktop"></a>
-
-## Desktop app
-
-The PC desktop app is the easiest way to start for most users: it launches an embedded local gateway and opens the gateway console in a native window.
-
-1. Download from **[GitHub Releases](https://github.com/xopcai/xopc/releases)** — macOS `.dmg`, Windows `xopc-<version>-x64.exe` or `xopc-<version>-arm64.exe`, Linux `.AppImage` / `.deb`.
-2. Open the app, complete model setup, and start chatting.
-3. Or use **`xopc gateway`** + the npm CLI until a build exists for your OS.
-
-**Build from source:** `pnpm install && pnpm run electron:build` → `dist/release/`
-
-Docs and media placeholders: **[PC Desktop app](https://xopcai.github.io/xopc/desktop-app)**.
+**Have a question?** — Ask on [GitHub Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a).
 
 ---
+<a id="desktop-app"></a>
 
 ## Security
 
-Treat inbound IM messages as **untrusted**. Prefer **pairing** or **allowlist** for DMs. Keep gateway bind addresses and tokens secret — **[Channels](https://xopcai.github.io/xopc/channels)**.
+Treat inbound IM messages as **untrusted**. Prefer **pairing** or **allowlist** for DMs. Keep gateway bind addresses and tokens private. See **[Security](https://xopcai.github.io/xopc/channels)** for details.
 
 ---
 
@@ -328,7 +280,9 @@ pnpm run build && pnpm test && pnpm run lint
 
 **[AGENTS.md](./AGENTS.md)** · **[CONTRIBUTING.md](./CONTRIBUTING.md)**
 
-**Issues:** [bug](https://github.com/xopcai/xopc/issues/new?template=bug_report.yml) · [feature](https://github.com/xopcai/xopc/issues/new?template=feature_request.yml) · [Q&A Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a) · [security advisory](https://github.com/xopcai/xopc/security/advisories/new) (not public issues)
+**Issues:** [Bug report](https://github.com/xopcai/xopc/issues/new?template=bug_report.yml) · [Feature request](https://github.com/xopcai/xopc/issues/new?template=feature_request.yml) · [Q&A Discussions](https://github.com/xopcai/xopc/discussions/categories/q-a) · [Security advisory](https://github.com/xopcai/xopc/security/advisories/new) (not public issues)
+
+**Tech stack:** TypeScript, Node.js ≥ 22, pnpm workspace. Built-in LLM layer via `@earendil-works/pi-ai`, React gateway console, Electron desktop.
 
 ## Credits
 
