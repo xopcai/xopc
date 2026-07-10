@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -99,6 +99,23 @@ describe('xopc_use tool', () => {
     expect(result.ok).toBe(true);
     expect(result.match.project.id).toBe(project.id);
     expect(result.match.created).toBe(false);
+  });
+
+  it('accepts path as a project workspace alias', async () => {
+    const workspaceRoot = mkdtempSync(join(stateDir, 'workspace-'));
+    const tool = createXopcUseTool({
+      getProjectService: () => projects,
+      getCurrentSessionKey: () => SESSION_KEY,
+    });
+
+    const created = parseToolJson(await tool.execute('call-1', {
+      mode: 'project',
+      command: 'create',
+      args: { name: 'Path Alias Project', path: workspaceRoot },
+    }));
+
+    expect(created.ok).toBe(true);
+    expect(created.project.workspaceRoot).toBe(realpathSync(workspaceRoot));
   });
 
   it('creates and appends to a note', async () => {

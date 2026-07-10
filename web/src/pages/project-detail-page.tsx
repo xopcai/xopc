@@ -189,6 +189,17 @@ function inputClass(multiline = false): string {
   );
 }
 
+function SettingsMetaItem({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="min-w-0 rounded-md bg-surface-base px-3 py-2">
+      <div className="text-xs font-medium text-fg-subtle">{label}</div>
+      <div className={cn('mt-1 min-w-0 truncate text-sm text-fg', mono && 'font-mono text-xs')} title={value}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
 function projectSearchText(project: Project): string {
   return [
     project.name,
@@ -1396,6 +1407,8 @@ export function ProjectDetailPage() {
     })
     : sessions;
   const sessionsSearchMiss = sessions.length > 0 && visibleSessions.length === 0;
+  const selectedAgentLabel = agents.find((agent) => agent.id === draft.defaultAgentId)?.name || draft.defaultAgentId || pm.settings.globalDefaultAgent;
+  const workspaceRootLabel = draft.workspaceRoot.trim() || pm.common.defaultWorkspace;
   const tabItems = tabOrder.map((id) => {
     const item = TABS.find((candidate) => candidate.id === id)!;
     return { ...item, label: item.id === 'work-items' ? pm.workItems.tab : pm.tabs[item.id] };
@@ -2156,48 +2169,72 @@ export function ProjectDetailPage() {
       ) : null}
 
       {tab === 'settings' ? (
-        <form id="project-panel-settings" role="tabpanel" aria-labelledby="project-tab-settings" onSubmit={saveProject} className="grid min-h-full content-start gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label={pm.settings.name}>
-              <input className={inputClass()} value={draft.name} onChange={(event) => setDraft((d) => ({ ...d, name: event.target.value }))} />
+        <form id="project-panel-settings" role="tabpanel" aria-labelledby="project-tab-settings" onSubmit={saveProject} className="grid min-h-full content-start gap-4">
+          <section className="grid gap-3 rounded-lg bg-surface-panel p-4 shadow-surface">
+            <div className="flex min-w-0 items-start justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold text-fg">{pm.settings.contextTitle}</h2>
+                <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.contextHint}</p>
+              </div>
+              <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusTone(draft.status))}>
+                {pm.settings.statuses[draft.status]}
+              </span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <SettingsMetaItem label={pm.settings.workspaceRoot} value={workspaceRootLabel} mono />
+              <SettingsMetaItem label={pm.settings.defaultAgent} value={selectedAgentLabel} />
+              <SettingsMetaItem label={pm.settings.createdAt} value={formatDate(project.createdAt) || pm.common.never} />
+              <SettingsMetaItem label={pm.settings.updatedAt} value={formatDate(project.updatedAt) || pm.common.never} />
+            </div>
+          </section>
+
+          <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
+            <div>
+              <h2 className="text-sm font-semibold text-fg">{pm.settings.detailsTitle}</h2>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field label={pm.settings.name}>
+                <input className={inputClass()} value={draft.name} onChange={(event) => setDraft((d) => ({ ...d, name: event.target.value }))} />
+              </Field>
+              <Field label={pm.settings.status}>
+                <select className={inputClass()} value={draft.status} onChange={(event) => setDraft((d) => ({ ...d, status: event.target.value as ProjectStatus }))}>
+                  <option value="active">{pm.settings.statuses.active}</option>
+                  <option value="paused">{pm.settings.statuses.paused}</option>
+                  <option value="archived">{pm.settings.statuses.archived}</option>
+                </select>
+              </Field>
+              <Field label={pm.settings.defaultAgent}>
+                <select className={inputClass()} value={draft.defaultAgentId} onChange={(event) => setDraft((d) => ({ ...d, defaultAgentId: event.target.value }))}>
+                  <option value="">{pm.settings.globalDefaultAgent}</option>
+                  {agents.map((agent) => (
+                    <option key={agent.id} value={agent.id}>
+                      {agent.name || agent.id}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+            <Field label={pm.settings.workspaceRoot}>
+              <DirectoryPickerPathField
+                value={draft.workspaceRoot}
+                onChange={(workspaceRoot) => setDraft((d) => ({ ...d, workspaceRoot }))}
+                disabled={saving}
+                wd={wd}
+                placeholder={pm.settings.workspacePlaceholder}
+                inputClassName={inputClass()}
+              />
+              <span className="text-xs leading-5 text-fg-subtle">{pm.settings.workspaceHint}</span>
             </Field>
-            <Field label={pm.settings.status}>
-              <select className={inputClass()} value={draft.status} onChange={(event) => setDraft((d) => ({ ...d, status: event.target.value as ProjectStatus }))}>
-                <option value="active">{pm.settings.statuses.active}</option>
-                <option value="paused">{pm.settings.statuses.paused}</option>
-                <option value="archived">{pm.settings.statuses.archived}</option>
-              </select>
+            <Field label={pm.settings.description}>
+              <input className={inputClass()} value={draft.description} onChange={(event) => setDraft((d) => ({ ...d, description: event.target.value }))} />
             </Field>
-            <Field label={pm.settings.defaultAgent}>
-              <select className={inputClass()} value={draft.defaultAgentId} onChange={(event) => setDraft((d) => ({ ...d, defaultAgentId: event.target.value }))}>
-                <option value="">{pm.settings.globalDefaultAgent}</option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name || agent.id}
-                  </option>
-                ))}
-              </select>
+            <Field label={pm.settings.brief}>
+              <textarea className={inputClass(true)} value={draft.brief} onChange={(event) => setDraft((d) => ({ ...d, brief: event.target.value }))} />
             </Field>
-          </div>
-          <Field label={pm.settings.description}>
-            <input className={inputClass()} value={draft.description} onChange={(event) => setDraft((d) => ({ ...d, description: event.target.value }))} />
-          </Field>
-          <Field label={pm.settings.workspaceRoot}>
-            <DirectoryPickerPathField
-              value={draft.workspaceRoot}
-              onChange={(workspaceRoot) => setDraft((d) => ({ ...d, workspaceRoot }))}
-              disabled={saving}
-              wd={wd}
-              placeholder={pm.settings.workspacePlaceholder}
-              inputClassName={inputClass()}
-            />
-          </Field>
-          <Field label={pm.settings.brief}>
-            <textarea className={inputClass(true)} value={draft.brief} onChange={(event) => setDraft((d) => ({ ...d, brief: event.target.value }))} />
-          </Field>
-          <Field label={pm.settings.instructions}>
-            <textarea className={inputClass(true)} value={draft.instructions} onChange={(event) => setDraft((d) => ({ ...d, instructions: event.target.value }))} />
-          </Field>
+            <Field label={pm.settings.instructions}>
+              <textarea className={inputClass(true)} value={draft.instructions} onChange={(event) => setDraft((d) => ({ ...d, instructions: event.target.value }))} />
+            </Field>
+          </section>
           <div className="flex flex-wrap justify-between gap-2 border-t border-edge pt-4">
             <Button type="button" variant="ghost" onClick={() => setDeleteConfirmOpen(true)}>
               <Trash2 className="size-4" aria-hidden />
