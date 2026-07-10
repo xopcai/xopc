@@ -109,7 +109,7 @@ export default defineConfig({
               { text: 'SSH tunnel', link: '/gateway/remote' },
               { text: 'Trusted proxy', link: '/gateway/trusted-proxy' },
               { text: 'Updates', link: '/update' },
-              { text: 'Heartbeat', link: '/heartbeat' }
+              { text: 'Heartbeat', link: '/heartbeat' },
               { text: 'Releases', link: '/releases' }
             ]
           },
@@ -212,7 +212,7 @@ export default defineConfig({
               { text: '配置参考', link: '/zh/configuration' },
               { text: '远程访问', link: '/zh/remote-access' },
               { text: '更新', link: '/zh/update' },
-              { text: '心跳监控', link: '/zh/heartbeat' }
+              { text: '心跳监控', link: '/zh/heartbeat' },
               { text: '版本发布', link: '/zh/releases' }
             ]
           },
