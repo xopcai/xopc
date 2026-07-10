@@ -3,6 +3,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
+  ChevronDown,
   CheckCircle2,
   ExternalLink,
   GitBranch,
@@ -65,6 +66,7 @@ type TriggerMode =
 type ActionMode = 'agent' | 'workflow';
 type AutomationsMessages = MessageBundle['automations'];
 type CronMessages = MessageBundle['cron'];
+type RunEventLabels = AutomationsMessages['events'];
 
 interface FormState {
   name: string;
@@ -169,6 +171,19 @@ function isActiveRun(run: AutomationRun): boolean {
 
 function needsAttention(run: AutomationRun): boolean {
   return run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled';
+}
+
+function automationManagedBy(automation: Automation): string | null {
+  const marker = automation.description?.match(/\[managed-by=([^\]]+)\]/);
+  return marker?.[1]?.trim() || null;
+}
+
+function isSystemManagedAutomation(automation: Automation): boolean {
+  return Boolean(automationManagedBy(automation));
+}
+
+function visibleAutomationDescription(automation: Automation): string {
+  return automation.description?.replace(/\s*\[managed-by=[^\]]+\]\s*/g, ' ').trim() ?? '';
 }
 
 function runSortWeight(run: AutomationRun): number {
@@ -343,6 +358,31 @@ export function AutomationsPage() {
 
   const automations = automationsSwr.data?.automations ?? [];
   const runs = useMemo(() => sortRunsForOperations(runsSwr.data?.runs ?? []), [runsSwr.data?.runs]);
+  const userAutomations = useMemo(
+    () => automations.filter((automation) => !isSystemManagedAutomation(automation)),
+    [automations],
+  );
+  const systemAutomations = useMemo(
+    () => automations.filter(isSystemManagedAutomation),
+    [automations],
+  );
+  const systemAutomationIds = useMemo(
+    () => new Set(systemAutomations.map((automation) => automation.id)),
+    [systemAutomations],
+  );
+  const userRuns = useMemo(
+    () => runs.filter((run) => !systemAutomationIds.has(run.automationId)),
+    [runs, systemAutomationIds],
+  );
+  const nextUserRunAtMs = useMemo(() => {
+    let next: number | undefined;
+    for (const automation of userAutomations) {
+      const runAtMs = automation.state.nextRunAtMs;
+      if (!runAtMs) continue;
+      if (next == null || runAtMs < next) next = runAtMs;
+    }
+    return next;
+  }, [userAutomations]);
   const selectedRun = useMemo(
     () => runs.find((run) => run.id === selectedRunId) ?? null,
     [runs, selectedRunId],
@@ -356,9 +396,8 @@ export function AutomationsPage() {
     [runs, selectedAutomationId],
   );
   const runEvents = runEventsSwr.data?.events ?? [];
-  const metrics = metricsSwr.data;
-  const attentionRuns = useMemo(() => runs.filter(needsAttention), [runs]);
-  const latestRun = runs[0] ?? null;
+  const attentionRuns = useMemo(() => userRuns.filter(needsAttention), [userRuns]);
+  const latestRun = userRuns[0] ?? null;
   const workflowDefinitions = useMemo(() => workflowDefinitionsSwr.data ?? [], [workflowDefinitionsSwr.data]);
   const agentOptions = chatAgentsSwr.data?.items ?? [];
   const selectedWorkflow = useMemo(
@@ -670,22 +709,22 @@ export function AutomationsPage() {
         <section className="grid gap-3 sm:grid-cols-4">
           <Metric
             label={labels.dashboard.needsAttention}
-            value={metrics?.failedLastHour ?? attentionRuns.length}
+            value={attentionRuns.length}
             tone={attentionRuns.length > 0 ? 'danger' : 'neutral'}
           />
-          <Metric label={labels.metrics.running} value={metrics?.runningRuns ?? runs.filter((r) => r.status === 'running').length} />
+          <Metric label={labels.metrics.running} value={userRuns.filter((r) => r.status === 'running').length} />
           <Metric
             label={labels.dashboard.latestResult}
             value={latestRun ? labels.status[latestRun.status] : labels.none}
             tone={latestRun && needsAttention(latestRun) ? 'danger' : 'neutral'}
           />
-          <Metric label={labels.metrics.next} value={metrics?.nextRun ? formatDate(metrics.nextRun.runAtMs, labels, language) : labels.none} />
+          <Metric label={labels.metrics.next} value={nextUserRunAtMs ? formatDate(nextUserRunAtMs, labels, language) : labels.none} />
         </section>
 
         <nav className="inline-flex w-fit rounded-lg border border-edge bg-surface-panel p-1">
           {([
-            { id: 'activity' as const, label: labels.dashboard.activity, count: runs.length },
-            { id: 'automations' as const, label: labels.dashboard.manage, count: automations.length },
+            { id: 'activity' as const, label: labels.dashboard.activity, count: userRuns.length },
+            { id: 'automations' as const, label: labels.dashboard.manage, count: userAutomations.length },
           ]).map((item) => (
             <button
               key={item.id}
@@ -713,22 +752,22 @@ export function AutomationsPage() {
         ) : null}
 
         {viewTab === 'activity' ? (
-          <section className="grid h-[min(42rem,calc(100vh-17rem))] min-h-[28rem] items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
-            <div className="min-h-0 min-w-0">
+          <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
+            <div className="min-w-0">
               <RunsList
-                runs={runs.slice(0, 12)}
+                runs={userRuns.slice(0, 12)}
                 labels={labels}
                 cronLabels={cronLabels}
                 language={language}
                 selectedRunId={selectedRunId}
                 busyAction={busyAction}
-                className="h-full overflow-y-auto"
+                className="h-auto"
                 onSelectRun={selectRun}
                 onAction={mutateAutomation}
               />
             </div>
             <RunDetailPanel
-              className="hidden h-full xl:block"
+              className="hidden xl:block"
               run={selectedRun}
               events={runEvents}
               labels={labels}
@@ -747,8 +786,8 @@ export function AutomationsPage() {
         ) : (
           <section>
             <AutomationList
-              automations={automations}
-              runs={runs}
+              automations={userAutomations}
+              runs={userRuns}
               labels={labels}
               cronLabels={cronLabels}
               language={language}
@@ -756,6 +795,18 @@ export function AutomationsPage() {
               onOpenDetails={setSelectedAutomationId}
               onAction={mutateAutomation}
             />
+            {systemAutomations.length > 0 ? (
+              <SystemAutomationSection
+                automations={systemAutomations}
+                runs={runs}
+                labels={labels}
+                cronLabels={cronLabels}
+                language={language}
+                busyAction={busyAction}
+                onOpenDetails={setSelectedAutomationId}
+                onAction={mutateAutomation}
+              />
+            ) : null}
           </section>
         )}
       </div>
@@ -869,9 +920,9 @@ export function AutomationsPage() {
                 </Button>
               </Dialog.Close>
             </div>
-            <div className="min-h-0 flex-1 overflow-hidden">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               <RunDetailPanel
-                className="h-full rounded-none border-0"
+                className="rounded-none border-0"
                 run={selectedRun}
                 events={runEvents}
                 labels={labels}
@@ -1018,6 +1069,7 @@ function AutomationList({
   cronLabels,
   language,
   busyAction,
+  readOnly = false,
   onOpenDetails,
   onAction,
 }: {
@@ -1027,6 +1079,7 @@ function AutomationList({
   cronLabels: CronMessages;
   language: StoredLanguage;
   busyAction: string | null;
+  readOnly?: boolean;
   onOpenDetails: (automationId: string) => void;
   onAction: (actionKey: string, action: () => Promise<unknown>, successTitle?: string) => Promise<boolean>;
 }) {
@@ -1036,6 +1089,7 @@ function AutomationList({
   return (
     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
       {automations.map((automation) => {
+        const description = visibleAutomationDescription(automation);
         const recentRuns = runs.filter((run) => run.automationId === automation.id);
         const activeRun = recentRuns.find(isActiveRun);
         const latestRunForAutomation = recentRuns[0];
@@ -1059,8 +1113,8 @@ function AutomationList({
                   <span className="truncate font-medium text-fg">{automation.name}</span>
                   {activeRun ? <span className="size-2 shrink-0 rounded-full bg-blue-500" /> : null}
                 </div>
-                {automation.description ? (
-                  <div className="mt-1 line-clamp-2 text-sm text-fg-muted">{automation.description}</div>
+                {description ? (
+                  <div className="mt-1 line-clamp-2 text-sm text-fg-muted">{description}</div>
                 ) : null}
               </div>
               <span className={cn(
@@ -1093,6 +1147,7 @@ function AutomationList({
               ) : null}
             </div>
 
+            {!readOnly ? (
             <div className="mt-auto flex justify-end pt-3">
               <div className="flex items-center gap-1">
                 <Button
@@ -1151,10 +1206,67 @@ function AutomationList({
                 </Button>
               </div>
             </div>
+            ) : null}
           </article>
         );
       })}
     </div>
+  );
+}
+
+function SystemAutomationSection({
+  automations,
+  runs,
+  labels,
+  cronLabels,
+  language,
+  busyAction,
+  onOpenDetails,
+  onAction,
+}: {
+  automations: Automation[];
+  runs: AutomationRun[];
+  labels: AutomationsMessages;
+  cronLabels: CronMessages;
+  language: StoredLanguage;
+  busyAction: string | null;
+  onOpenDetails: (automationId: string) => void;
+  onAction: (actionKey: string, action: () => Promise<unknown>, successTitle?: string) => Promise<boolean>;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <section className="mt-5 rounded-lg border border-edge-subtle bg-surface-base shadow-surface">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-hover"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+      >
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-fg">{labels.system.title}</div>
+          <div className="mt-1 text-sm text-fg-muted">
+            {labels.system.description.replace('{count}', String(automations.length))}
+          </div>
+        </div>
+        <ChevronDown className={cn('size-4 shrink-0 text-fg-muted transition-transform', expanded && 'rotate-180')} aria-hidden />
+      </button>
+      {expanded ? (
+        <div className="border-t border-edge p-4">
+          <AutomationList
+            automations={automations}
+            runs={runs}
+            labels={labels}
+            cronLabels={cronLabels}
+            language={language}
+            busyAction={busyAction}
+            readOnly
+            onOpenDetails={onOpenDetails}
+            onAction={onAction}
+          />
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -1181,7 +1293,7 @@ function RunsList({
 }) {
   if (runs.length === 0) return <EmptyState icon={<Activity className="size-5" />} title={labels.empty.runs} />;
   return (
-    <div className={cn('rounded-lg border border-edge-subtle bg-surface-base shadow-surface', className)}>
+    <div className={cn('overflow-hidden rounded-lg border border-edge-subtle bg-surface-base shadow-surface', className)}>
       {runs.map((run) => (
         <div
           key={run.id}
@@ -1221,6 +1333,82 @@ function RunsList({
           ) : null}
         </div>
       ))}
+    </div>
+  );
+}
+
+function runEventLabel(event: AutomationRunEvent, labels: AutomationsMessages): string {
+  const eventLabels: RunEventLabels = labels.events;
+  const data = event.data && typeof event.data === 'object' ? event.data as Record<string, unknown> : {};
+  const actionKind = typeof data.actionKind === 'string' ? data.actionKind : null;
+  const status = typeof data.status === 'string' && data.status in labels.status
+    ? labels.status[data.status as keyof typeof labels.status]
+    : null;
+
+  switch (event.type) {
+    case 'run.queued':
+      if (event.message.toLowerCase().includes('manual')) return eventLabels.manualQueued;
+      if (event.message.toLowerCase().includes('scheduled')) return eventLabels.scheduledQueued;
+      return eventLabels.eventQueued;
+    case 'run.started':
+      return eventLabels.runStarted;
+    case 'action.started':
+      return actionKind ? eventLabels.actionStarted.replace('{kind}', actionKind) : eventLabels.actionStartedFallback;
+    case 'action.completed':
+      return actionKind ? eventLabels.actionCompleted.replace('{kind}', actionKind) : eventLabels.actionCompletedFallback;
+    case 'action.failed':
+      return actionKind ? eventLabels.actionFailed.replace('{kind}', actionKind) : eventLabels.actionFailedFallback;
+    case 'after_run.started':
+      return eventLabels.afterRunStarted;
+    case 'after_run.completed':
+      return eventLabels.afterRunCompleted;
+    case 'after_run.failed':
+      return eventLabels.afterRunFailed;
+    case 'run.completed':
+      return status ? eventLabels.runCompleted.replace('{status}', status) : eventLabels.runCompletedFallback;
+    default:
+      return event.message;
+  }
+}
+
+function JsonDetails({
+  value,
+  labels,
+  title,
+  defaultExpanded = false,
+}: {
+  value: unknown;
+  labels: AutomationsMessages;
+  title: string;
+  defaultExpanded?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+  const json = useMemo(() => JSON.stringify(value, null, 2), [value]);
+  const lineCount = useMemo(() => json.split('\n').length, [json]);
+  const isLong = json.length > 720 || lineCount > 18;
+  const preview = isLong ? `${json.split('\n').slice(0, 10).join('\n').trimEnd()}...` : json;
+
+  return (
+    <div className="mt-2 rounded-md border border-edge/70 bg-surface-muted/35">
+      {isLong ? (
+        <button
+          type="button"
+          className="flex w-full items-center justify-between gap-3 px-2.5 py-2 text-left text-xs font-medium text-fg-muted hover:bg-surface-hover hover:text-fg"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+        >
+          <span>{title}</span>
+          <span className="inline-flex items-center gap-1 text-accent-fg">
+            {expanded ? labels.details.hideDetails : labels.details.showDetails}
+            <ChevronDown className={cn('size-3.5 transition-transform', expanded && 'rotate-180')} aria-hidden />
+          </span>
+        </button>
+      ) : (
+        <div className="px-2.5 py-2 text-xs font-medium text-fg-muted">{title}</div>
+      )}
+      <pre className="whitespace-pre-wrap break-all px-2.5 pb-2 text-xs leading-relaxed text-fg-muted">
+        {expanded || !isLong ? json : preview}
+      </pre>
     </div>
   );
 }
@@ -1266,7 +1454,7 @@ function RunDetailPanel({
   }
 
   return (
-    <aside className={cn('min-h-0 overflow-y-auto rounded-lg border border-edge-subtle bg-surface-base shadow-surface', className)}>
+    <aside className={cn('rounded-lg border border-edge-subtle bg-surface-base shadow-surface', className)}>
       <div className="border-b border-edge px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
@@ -1326,9 +1514,7 @@ function RunDetailPanel({
             <div className="mt-2 text-sm text-fg-muted">{repairDraft.expectedEffect}</div>
           ) : null}
           <ReviewList title={labels.repair.risks} items={repairDraft.risks} empty={labels.none} />
-          <pre className="mt-3 max-h-36 overflow-auto rounded-md bg-surface-base p-2 text-xs text-fg-muted">
-            {JSON.stringify(repairDraft.patch, null, 2)}
-          </pre>
+          <JsonDetails value={repairDraft.patch} labels={labels} title={labels.details.repairPatch} />
           {repairDraft.requiresApproval ? (
             <label className="mt-3 flex items-start gap-2 text-sm text-fg">
               <input
@@ -1364,14 +1550,12 @@ function RunDetailPanel({
               <li key={event.id} className="grid grid-cols-[0.75rem_1fr] gap-3">
                 <span className={cn('mt-1 size-2 rounded-full', eventTone(event.type))} />
                 <div className="min-w-0">
-                  <div className="text-sm text-fg">{event.message}</div>
+                  <div className="text-sm text-fg">{runEventLabel(event, labels)}</div>
                   <div className="mt-1 text-xs text-fg-muted">
                     {formatDate(event.createdAtMs, labels, language)} · {event.type}
                   </div>
                   {event.data && typeof event.data === 'object' ? (
-                    <pre className="mt-2 max-h-28 overflow-auto rounded-md bg-surface-base p-2 text-xs text-fg-muted">
-                      {JSON.stringify(event.data, null, 2)}
-                    </pre>
+                    <JsonDetails value={event.data} labels={labels} title={labels.details.eventData} />
                   ) : null}
                 </div>
               </li>
