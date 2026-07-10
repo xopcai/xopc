@@ -4,6 +4,9 @@ import type { Config } from '../config/schema.js';
 import type { SessionStore } from '../session/store.js';
 import type { AutomationService } from '../automations/index.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
+import type { NotesService } from '../notes/index.js';
+import type { ProjectService } from '../projects/index.js';
+import type { WorkItemService } from '../work-items/index.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import type { ProgressStage } from './lifecycle/progress.js';
 import type { AgentSourceContextResolver } from './source-context/types.js';
@@ -26,6 +29,10 @@ export interface AgentServiceConfig {
     requestClarification: GatewayClarifyRequestFn;
   };
   getAutomationService?: () => AutomationService | undefined;
+  /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */
+  getNotesService?: () => NotesService | undefined;
+  getProjectService?: () => ProjectService | undefined;
+  getWorkItemService?: () => WorkItemService | undefined;
   /**
    * Gateway: reuse the gateway `SessionManager` store so web API and agent share one index + files.
    * When omitted, `AgentService` creates its own `SessionStore` (CLI / embedded).

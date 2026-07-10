@@ -1,4 +1,5 @@
 import { browserUseManual } from './browser.js';
+import { xopcUseManual } from './xopc-use.js';
 
 export interface ToolManual {
   toolName: string;
@@ -15,6 +16,12 @@ const TOOL_MANUALS: Record<string, ToolManual> = {
     title: 'Browser Tool Manual',
     description: 'Usage guide for browser navigation, inspection, interaction, screenshots, and pipelines.',
     content: browserUseManual,
+  },
+  xopc_use: {
+    toolName: 'xopc_use',
+    title: 'XOPC Use Tool Manual',
+    description: 'Usage guide for operating XOPC projects, notes, and project work items.',
+    content: xopcUseManual,
   },
 };
 
