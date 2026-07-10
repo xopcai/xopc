@@ -325,6 +325,9 @@ export class GatewayService {
       },
       extensionRegistry: this.extensionLoader?.getRegistry(),
       getAutomationService: () => this.automationService,
+      getNotesService: () => this.notesService,
+      getProjectService: () => this.projects,
+      getWorkItemService: () => new WorkItemService(),
       getWorkflowRunService: () => this.createWorkflowRunService(),
       sourceContextResolver: async (binding) => {
         if (binding.kind === 'note') {

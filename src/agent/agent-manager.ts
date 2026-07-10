@@ -46,6 +46,9 @@ import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/i
 import type { MessageBus } from '../infra/bus/index.js';
 import type { AutomationService } from '../automations/index.js';
 import type { SessionStore } from '../session/store.js';
+import type { NotesService } from '../notes/index.js';
+import type { ProjectService } from '../projects/index.js';
+import type { WorkItemService } from '../work-items/index.js';
 import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import type { SessionContext } from './session/session-context.js';
 import type {
@@ -138,6 +141,10 @@ export interface AgentManagerConfig {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: exposes AutomationService for the `automation` tool. */
   getAutomationService?: () => AutomationService | undefined;
+  /** Gateway: exposes first-class xopc product objects for the `xopc_use` tool. */
+  getNotesService?: () => NotesService | undefined;
+  getProjectService?: () => ProjectService | undefined;
+  getWorkItemService?: () => WorkItemService | undefined;
   /** Gateway: starts persisted workflow runs (dedicated chat session per run). */
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike | undefined;
   /** Runtime notification for UI/CLI shells that cache skill catalogs. */
@@ -339,6 +346,9 @@ export class AgentManager implements AgentInstanceGateway {
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getAutomationService: this.config.getAutomationService,
+      getNotesService: this.config.getNotesService,
+      getProjectService: this.config.getProjectService,
+      getWorkItemService: this.config.getWorkItemService,
       getWorkflowRunService: this.config.getWorkflowRunService,
       getSkillIndexingContext: () => {
         const ctx = this.config.getCurrentContext?.();
