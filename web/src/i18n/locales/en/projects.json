@@ -395,6 +395,9 @@
       "noNextAction": "No next action set."
     },
     "settings": {
+      "contextTitle": "Project context",
+      "contextHint": "Chats, goals, files, workflow runs, and automations use this project context.",
+      "detailsTitle": "Editable details",
       "name": "Name",
       "status": "Status",
       "defaultAgent": "Default agent",
@@ -402,6 +405,9 @@
       "description": "Description",
       "workspaceRoot": "Workspace root",
       "workspacePlaceholder": "Agent default workspace",
+      "workspaceHint": "Leave empty to use the selected agent's default workspace.",
+      "createdAt": "Created",
+      "updatedAt": "Updated",
       "workspaceMissingTitle": "Workspace folder does not exist",
       "workspaceMissingDescription": "“{{workspace}}” does not exist yet. Create this folder and save the project?",
       "workspaceMissingCreate": "Create folder",

@@ -53,8 +53,7 @@
       "next": "下次"
     },
     "system": {
-      "title": "系统自动化",
-      "description": "{count} 条后台维护任务已从主列表隐藏。"
+      "title": "系统自动化"
     },
     "createMenu": {
       "draft": "用 AI 起草",

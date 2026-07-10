@@ -395,6 +395,9 @@
       "noNextAction": "尚未设置下一步。"
     },
     "settings": {
+      "contextTitle": "项目上下文",
+      "contextHint": "会话、目标、文件、工作流运行和自动化都会使用这份项目上下文。",
+      "detailsTitle": "可编辑信息",
       "name": "名称",
       "status": "状态",
       "defaultAgent": "默认 Agent",
@@ -402,6 +405,9 @@
       "description": "描述",
       "workspaceRoot": "工作区根目录",
       "workspacePlaceholder": "Agent 默认工作区",
+      "workspaceHint": "留空时使用所选 agent 的默认工作区。",
+      "createdAt": "创建时间",
+      "updatedAt": "更新时间",
       "workspaceMissingTitle": "工作区目录不存在",
       "workspaceMissingDescription": "「{{workspace}}」还不存在。是否创建该文件夹并保存项目？",
       "workspaceMissingCreate": "创建文件夹",

@@ -51,7 +51,7 @@ import {
 import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type CreateMode = 'blank' | 'draft' | 'template';
-type ViewTab = 'activity' | 'automations';
+type ViewTab = 'activity' | 'automations' | 'system';
 type TriggerMode =
   | 'manual'
   | 'daily'
@@ -725,6 +725,7 @@ export function AutomationsPage() {
           {([
             { id: 'activity' as const, label: labels.dashboard.activity, count: userRuns.length },
             { id: 'automations' as const, label: labels.dashboard.manage, count: userAutomations.length },
+            { id: 'system' as const, label: labels.system.title, count: systemAutomations.length },
           ]).map((item) => (
             <button
               key={item.id}
@@ -783,7 +784,7 @@ export function AutomationsPage() {
               onApplyRepair={applyRepairDraft}
             />
           </section>
-        ) : (
+        ) : viewTab === 'automations' ? (
           <section>
             <AutomationList
               automations={userAutomations}
@@ -795,18 +796,20 @@ export function AutomationsPage() {
               onOpenDetails={setSelectedAutomationId}
               onAction={mutateAutomation}
             />
-            {systemAutomations.length > 0 ? (
-              <SystemAutomationSection
-                automations={systemAutomations}
-                runs={runs}
-                labels={labels}
-                cronLabels={cronLabels}
-                language={language}
-                busyAction={busyAction}
-                onOpenDetails={setSelectedAutomationId}
-                onAction={mutateAutomation}
-              />
-            ) : null}
+          </section>
+        ) : (
+          <section>
+            <AutomationList
+              automations={systemAutomations}
+              runs={runs}
+              labels={labels}
+              cronLabels={cronLabels}
+              language={language}
+              busyAction={busyAction}
+              readOnly
+              onOpenDetails={setSelectedAutomationId}
+              onAction={mutateAutomation}
+            />
           </section>
         )}
       </div>
@@ -1211,62 +1214,6 @@ function AutomationList({
         );
       })}
     </div>
-  );
-}
-
-function SystemAutomationSection({
-  automations,
-  runs,
-  labels,
-  cronLabels,
-  language,
-  busyAction,
-  onOpenDetails,
-  onAction,
-}: {
-  automations: Automation[];
-  runs: AutomationRun[];
-  labels: AutomationsMessages;
-  cronLabels: CronMessages;
-  language: StoredLanguage;
-  busyAction: string | null;
-  onOpenDetails: (automationId: string) => void;
-  onAction: (actionKey: string, action: () => Promise<unknown>, successTitle?: string) => Promise<boolean>;
-}) {
-  const [expanded, setExpanded] = useState(false);
-
-  return (
-    <section className="mt-5 rounded-lg border border-edge-subtle bg-surface-base shadow-surface">
-      <button
-        type="button"
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-surface-hover"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((value) => !value)}
-      >
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-fg">{labels.system.title}</div>
-          <div className="mt-1 text-sm text-fg-muted">
-            {labels.system.description.replace('{count}', String(automations.length))}
-          </div>
-        </div>
-        <ChevronDown className={cn('size-4 shrink-0 text-fg-muted transition-transform', expanded && 'rotate-180')} aria-hidden />
-      </button>
-      {expanded ? (
-        <div className="border-t border-edge p-4">
-          <AutomationList
-            automations={automations}
-            runs={runs}
-            labels={labels}
-            cronLabels={cronLabels}
-            language={language}
-            busyAction={busyAction}
-            readOnly
-            onOpenDetails={onOpenDetails}
-            onAction={onAction}
-          />
-        </div>
-      ) : null}
-    </section>
   );
 }
 

@@ -42,7 +42,7 @@ Projects group sessions, work items, goals, workflows, files, and project instru
 
 ### Create a project
 
-Use when the user asks to start or formalize a project. Include \`brief\` for the concise product idea and \`instructions\` for agent-operating guidance.
+Use when the user asks to start or formalize a project. Include \`workspaceRoot\` when the project maps to a local repository or directory. Include \`brief\` for the concise product idea and \`instructions\` for agent-operating guidance.
 
 \`\`\`json
 {
@@ -50,6 +50,7 @@ Use when the user asks to start or formalize a project. Include \`brief\` for th
   "command": "create",
   "args": {
     "name": "AI Product Research",
+    "workspaceRoot": "/path/to/repo",
     "brief": "Explore demand and feasibility for an AI product.",
     "instructions": "Keep decisions and open questions current."
   }
