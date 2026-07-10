@@ -53,8 +53,7 @@
       "next": "Next"
     },
     "system": {
-      "title": "System automations",
-      "description": "{count} background maintenance tasks are hidden from the main list."
+      "title": "System automations"
     },
     "createMenu": {
       "draft": "Draft with AI",

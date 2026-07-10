@@ -142,6 +142,17 @@ function currentProjectId(args: Record<string, unknown>, deps: XopcUseToolDeps):
   return sessionKey ? getSessionMetadata(sessionKey)?.projectId : undefined;
 }
 
+function projectWorkspaceRootArg(args: Record<string, unknown>): string | undefined {
+  return trimString(args.workspaceRoot) ?? trimString(args.workspacePath) ?? trimString(args.path);
+}
+
+function optionalProjectWorkspaceRootArg(args: Record<string, unknown>): string | null | undefined {
+  if (args.workspaceRoot !== undefined) return optionalString(args.workspaceRoot);
+  if (args.workspacePath !== undefined) return optionalString(args.workspacePath);
+  if (args.path !== undefined) return optionalString(args.path);
+  return undefined;
+}
+
 function validateDefaultAgentId(raw: unknown, config: Config | undefined): string | null | undefined {
   if (raw === null) return null;
   const normalized = normalizeProjectAgentId(trimString(raw));
@@ -183,7 +194,7 @@ async function handleProject(
   }
 
   if (command === 'resolve_workspace') {
-    const workspacePath = trimString(args.workspacePath) ?? trimString(args.workspaceRoot);
+    const workspacePath = projectWorkspaceRootArg(args);
     if (!workspacePath) return { ok: false, error: 'workspacePath is required' };
     const defaultAgentId = args.defaultAgentId !== undefined
       ? validateDefaultAgentId(args.defaultAgentId, deps.getConfig?.()) ?? undefined
@@ -201,7 +212,7 @@ async function handleProject(
 
   if (command === 'create') {
     const name = trimString(args.name);
-    const workspaceRoot = trimString(args.workspaceRoot);
+    const workspaceRoot = projectWorkspaceRootArg(args);
     if (!name && !workspaceRoot) return { ok: false, error: 'name or workspaceRoot is required' };
     const input = {
       name,
@@ -221,12 +232,13 @@ async function handleProject(
   if (command === 'update') {
     const id = trimString(args.projectId) ?? trimString(args.id);
     if (!id) return { ok: false, error: 'projectId is required' };
+    const workspaceRoot = optionalProjectWorkspaceRootArg(args);
     const patch = {
       ...(args.name !== undefined ? { name: trimString(args.name) ?? '' } : {}),
       ...(args.description !== undefined ? { description: optionalString(args.description) } : {}),
       ...(args.status !== undefined ? { status: enumValue(args.status, PROJECT_STATUSES) } : {}),
       ...(args.defaultAgentId !== undefined ? { defaultAgentId: validateDefaultAgentId(args.defaultAgentId, deps.getConfig?.()) } : {}),
-      ...(args.workspaceRoot !== undefined ? { workspaceRoot: optionalString(args.workspaceRoot) } : {}),
+      ...(workspaceRoot !== undefined ? { workspaceRoot } : {}),
       ...(args.createWorkspaceRoot === true ? { createWorkspaceRoot: true } : {}),
       ...(args.brief !== undefined ? { brief: optionalString(args.brief) } : {}),
       ...(args.instructions !== undefined ? { instructions: optionalString(args.instructions) } : {}),
