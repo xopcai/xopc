@@ -16,20 +16,45 @@
     "next": "Next",
     "workflowPrefix": "workflow",
     "loading": "Loading...",
-    "selectRun": "Select a run to inspect its timeline.",
-    "timeline": "Timeline",
+    "selectRun": "Select a run to inspect its progress.",
+    "timeline": "Run progress",
     "details": {
       "created": "Created",
       "started": "Started",
       "duration": "Duration",
       "model": "Model",
-      "session": "Session"
+      "session": "Session",
+      "showDetails": "Expand",
+      "hideDetails": "Collapse",
+      "eventData": "Details",
+      "repairPatch": "Patch"
+    },
+    "events": {
+      "manualQueued": "Manual run queued",
+      "scheduledQueued": "Scheduled run queued",
+      "eventQueued": "Event queued this automation",
+      "runStarted": "Automation run started",
+      "actionStarted": "Running {kind} action",
+      "actionStartedFallback": "Running action",
+      "actionCompleted": "{kind} action completed",
+      "actionCompletedFallback": "Action completed",
+      "actionFailed": "{kind} action failed",
+      "actionFailedFallback": "Action failed",
+      "afterRunStarted": "Running after-run step",
+      "afterRunCompleted": "After-run step completed",
+      "afterRunFailed": "After-run step failed",
+      "runCompleted": "Automation run {status}",
+      "runCompletedFallback": "Automation run completed"
     },
     "metrics": {
       "total": "Total",
       "enabled": "Enabled",
       "running": "Running",
       "next": "Next"
+    },
+    "system": {
+      "title": "System automations",
+      "description": "{count} background maintenance tasks are hidden from the main list."
     },
     "createMenu": {
       "draft": "Draft with AI",

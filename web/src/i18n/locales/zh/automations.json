@@ -16,20 +16,45 @@
     "next": "下次",
     "workflowPrefix": "工作流",
     "loading": "正在加载...",
-    "selectRun": "选择一次执行查看时间线。",
-    "timeline": "时间线",
+    "selectRun": "选择一次执行查看运行过程。",
+    "timeline": "运行过程",
     "details": {
       "created": "创建",
       "started": "开始",
       "duration": "耗时",
       "model": "模型",
-      "session": "会话"
+      "session": "会话",
+      "showDetails": "展开",
+      "hideDetails": "收起",
+      "eventData": "详情",
+      "repairPatch": "修复内容"
+    },
+    "events": {
+      "manualQueued": "手动运行已加入队列",
+      "scheduledQueued": "定时运行已加入队列",
+      "eventQueued": "事件已触发自动化",
+      "runStarted": "自动化开始运行",
+      "actionStarted": "正在执行 {kind} 动作",
+      "actionStartedFallback": "正在执行动作",
+      "actionCompleted": "{kind} 动作已完成",
+      "actionCompletedFallback": "动作已完成",
+      "actionFailed": "{kind} 动作失败",
+      "actionFailedFallback": "动作失败",
+      "afterRunStarted": "正在执行运行后步骤",
+      "afterRunCompleted": "运行后步骤已完成",
+      "afterRunFailed": "运行后步骤失败",
+      "runCompleted": "自动化运行已{status}",
+      "runCompletedFallback": "自动化运行已完成"
     },
     "metrics": {
       "total": "总数",
       "enabled": "已启用",
       "running": "运行中",
       "next": "下次"
+    },
+    "system": {
+      "title": "系统自动化",
+      "description": "{count} 条后台维护任务已从主列表隐藏。"
     },
     "createMenu": {
       "draft": "用 AI 起草",
