@@ -58,6 +58,7 @@
       "goals": "目标",
       "workflows": "工作流",
       "files": "文件",
+      "activity": "活动",
       "automations": "自动化",
       "notes": "笔记",
       "settings": "设置"
@@ -281,6 +282,48 @@
       "emptyRuns": "暂无项目自动化运行记录。",
       "contextTitle": "自动化上下文",
       "contextHint": "Agent 自动化默认使用项目工作区；工作流自动化会把当前项目传入工作流运行。"
+    },
+    "activity": {
+      "title": "项目活动",
+      "count": "{{count}} 条活动",
+      "loading": "正在加载活动…",
+      "empty": "暂无项目活动。",
+      "includeRelated": "包含相关活动",
+      "related": "相关",
+      "actor": "操作者",
+      "source": "来源",
+      "types": {
+        "project.created": "项目已创建",
+        "project.updated": "项目已更新",
+        "project.status_changed": "项目状态已变更",
+        "project.workspace_changed": "项目工作区已变更",
+        "note.created": "笔记已创建",
+        "note.appended": "笔记已追加",
+        "note.updated": "笔记已更新",
+        "note.status_changed": "笔记状态已变更",
+        "work_item.created": "工作项已创建",
+        "work_item.updated": "工作项已更新",
+        "work_item.status_changed": "工作项状态已变更",
+        "work_item.archived": "工作项已归档",
+        "work_item.link_added": "工作项已关联记录",
+        "session.attached_to_project": "会话已绑定",
+        "session.detached_from_project": "会话已解绑",
+        "goal.created": "目标已创建",
+        "goal.status_changed": "目标状态已变更",
+        "workflow_run.started": "工作流运行已启动",
+        "workflow_run.completed": "工作流运行已完成",
+        "automation.run_started": "自动化运行已启动",
+        "automation.run_completed": "自动化运行已完成"
+      },
+      "objectKinds": {
+        "project": "项目",
+        "note": "笔记",
+        "work_item": "工作项",
+        "session": "会话",
+        "goal": "目标",
+        "workflow_run": "工作流运行",
+        "automation": "自动化"
+      }
     },
     "notes": {
       "title": "项目笔记",

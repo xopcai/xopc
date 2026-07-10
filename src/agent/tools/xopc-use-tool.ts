@@ -1,6 +1,7 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 
+import { runWithActivityContext } from '../../activity/index.js';
 import type { Config } from '../../config/schema.js';
 import type { NoteKind, NotesService, NoteStatus } from '../../notes/index.js';
 import {
@@ -43,6 +44,7 @@ export interface XopcUseToolInput {
 
 export interface XopcUseToolDeps {
   getConfig?: () => Config | undefined;
+  getCurrentAgentId?: () => string | undefined;
   getCurrentSessionKey?: () => string | undefined;
   getNotesService?: () => NotesService | undefined;
   getProjectService?: () => ProjectService | undefined;
@@ -429,7 +431,7 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
     mutationScope: 'external',
     requiresExclusiveWorkspaceLock: true,
     finalGuardRelevant: true,
-    async execute(_toolCallId, input: XopcUseToolInput): Promise<AgentToolResult<XopcUseDetails>> {
+    async execute(toolCallId, input: XopcUseToolInput): Promise<AgentToolResult<XopcUseDetails>> {
       const mode = input.mode;
       const command = input.command.trim();
       const dryRun = input.dryRun === true;
@@ -438,14 +440,23 @@ export function createXopcUseTool(deps: XopcUseToolDeps): AgentTool<typeof XopcU
       if (!command) return errorText('command is required', details);
 
       try {
-        const result =
-          mode === 'project'
-            ? await handleProject(command, args, deps, dryRun)
-            : mode === 'note'
-              ? await handleNote(command, args, deps, dryRun)
-              : mode === 'work_item'
-                ? await handleWorkItem(command, args, deps, dryRun)
-                : { ok: false, error: `Unsupported mode: ${String(mode)}` };
+        const sessionKey = deps.getCurrentSessionKey?.();
+        const agentId = deps.getCurrentAgentId?.();
+        const result = await runWithActivityContext(
+          {
+            actor: { kind: 'agent', agentId, sessionKey },
+            initiator: { kind: 'user', sessionKey },
+            source: { kind: 'xopc_use', toolCallId },
+          },
+          async () =>
+            mode === 'project'
+              ? await handleProject(command, args, deps, dryRun)
+              : mode === 'note'
+                ? await handleNote(command, args, deps, dryRun)
+                : mode === 'work_item'
+                  ? await handleWorkItem(command, args, deps, dryRun)
+                  : { ok: false, error: `Unsupported mode: ${String(mode)}` },
+        );
         return okText({ ...details, result });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);

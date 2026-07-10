@@ -125,3 +125,12 @@ export {
   setSessionConfig,
   updateSessionConfig,
 } from './config-repository.js';
+export {
+  createObjectLinkRecord,
+  getActivityEventRecord,
+  listActivityRecords,
+  listObjectActivityRecords,
+  listObjectLinkRecords,
+  listProjectActivityRecords,
+  recordActivityEvent,
+} from './activity-repository.js';
