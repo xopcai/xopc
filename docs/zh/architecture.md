@@ -8,11 +8,11 @@
 
 ## 系统架构
 
-![xopc 系统架构](/xopc/architecture.png)
+![xopc 系统架构](/architecture.png)
 
-当前架构图的 draw.io 源文件是 [architecture.drawio](/xopc/architecture.drawio)，
-渲染图片是 [architecture.png](/xopc/architecture.png) 和
-[architecture.svg](/xopc/architecture.svg)。需要编辑时，请用 diagrams.net 或 draw.io
+当前架构图的 draw.io 源文件是 [architecture.drawio](/architecture.drawio)，
+渲染图片是 [architecture.png](/architecture.png) 和
+[architecture.svg](/architecture.svg)。需要编辑时，请用 diagrams.net 或 draw.io
 桌面版打开 draw.io 源文件，然后重新导出图片。
 
 运行时，Gateway 进程是主要组合根。CLI/TUI 与 Electron shell 可以启动或访问
