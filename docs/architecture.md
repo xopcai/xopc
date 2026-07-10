@@ -9,11 +9,11 @@ Last verified: 2026-07-09.
 
 ## System Architecture
 
-![xopc system architecture](/xopc/architecture.png)
+![xopc system architecture](/architecture.png)
 
 The draw.io source for the current architecture diagram is
-[architecture.drawio](/xopc/architecture.drawio). The rendered images are
-[architecture.png](/xopc/architecture.png) and [architecture.svg](/xopc/architecture.svg).
+[architecture.drawio](/architecture.drawio). The rendered images are
+[architecture.png](/architecture.png) and [architecture.svg](/architecture.svg).
 Open the draw.io source with diagrams.net or the draw.io desktop app when you
 need to edit the diagram, then export the image again.
 
