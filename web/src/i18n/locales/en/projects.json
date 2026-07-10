@@ -58,6 +58,7 @@
       "goals": "Goals",
       "workflows": "Workflows",
       "files": "Files",
+      "activity": "Activity",
       "automations": "Automations",
       "notes": "Notes",
       "settings": "Settings"
@@ -281,6 +282,48 @@
       "emptyRuns": "No project automation runs yet.",
       "contextTitle": "Automation context",
       "contextHint": "Agent automations default to this project workspace. Workflow automations pass this project into workflow runs."
+    },
+    "activity": {
+      "title": "Project activity",
+      "count": "{{count}} events",
+      "loading": "Loading activity…",
+      "empty": "No project activity yet.",
+      "includeRelated": "Include related",
+      "related": "Related",
+      "actor": "Actor",
+      "source": "Source",
+      "types": {
+        "project.created": "Project created",
+        "project.updated": "Project updated",
+        "project.status_changed": "Project status changed",
+        "project.workspace_changed": "Project workspace changed",
+        "note.created": "Note created",
+        "note.appended": "Note appended",
+        "note.updated": "Note updated",
+        "note.status_changed": "Note status changed",
+        "work_item.created": "Work item created",
+        "work_item.updated": "Work item updated",
+        "work_item.status_changed": "Work item status changed",
+        "work_item.archived": "Work item archived",
+        "work_item.link_added": "Work item link added",
+        "session.attached_to_project": "Session attached",
+        "session.detached_from_project": "Session detached",
+        "goal.created": "Goal created",
+        "goal.status_changed": "Goal status changed",
+        "workflow_run.started": "Workflow run started",
+        "workflow_run.completed": "Workflow run completed",
+        "automation.run_started": "Automation run started",
+        "automation.run_completed": "Automation run completed"
+      },
+      "objectKinds": {
+        "project": "Project",
+        "note": "Note",
+        "work_item": "Work item",
+        "session": "Session",
+        "goal": "Goal",
+        "workflow_run": "Workflow run",
+        "automation": "Automation"
+      }
     },
     "notes": {
       "title": "Project notes",

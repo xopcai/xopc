@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { createMiddleware } from 'hono/factory';
 
+import { runWithActivityContext } from '../../../activity/index.js';
 import { runWithLogContext } from '../../../utils/logger/context.js';
 
 /**
@@ -22,7 +23,12 @@ export function logContextMiddleware() {
         ...(sessionHeader ? { sessionId: sessionHeader } : {}),
       },
       async () => {
-        await next();
+        await runWithActivityContext(
+          { source: { kind: 'gateway_api', requestId } },
+          async () => {
+            await next();
+          },
+        );
       },
     );
   });

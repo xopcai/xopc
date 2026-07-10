@@ -385,6 +385,7 @@ export class AgentToolsFactory {
         ? [
             createXopcUseTool({
               getConfig: () => this.deps.getConfig?.(),
+              getCurrentAgentId: () => options.agentId,
               getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
               getNotesService: this.deps.getNotesService,
               getProjectService: this.deps.getProjectService,

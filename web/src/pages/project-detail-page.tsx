@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { AlertCircle, ArrowLeft, Check, ChevronDown, Clock, File, Folder, FolderPlus, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Check, ChevronDown, Clock, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
@@ -23,6 +23,7 @@ import {
   createProjectGoal,
   createProject,
   deleteProject,
+  fetchProjectActivity,
   fetchProjectFiles,
   fetchProjectGoals,
   fetchProjectOverview,
@@ -31,6 +32,7 @@ import {
   saveProjectDigest,
   updateProject,
   type Project,
+  type ProjectActivityEvent,
   type ProjectFileEntry,
   type ProjectGoal,
   type ProjectOverview,
@@ -66,7 +68,7 @@ import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 
-type TabId = 'overview' | 'work-items' | 'workflows' | 'automations' | 'notes' | 'files' | 'sessions' | 'goals' | 'settings';
+type TabId = 'overview' | 'work-items' | 'workflows' | 'automations' | 'notes' | 'files' | 'activity' | 'sessions' | 'goals' | 'settings';
 
 const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'overview', icon: LayoutDashboard },
@@ -75,6 +77,7 @@ const TABS: Array<{ id: TabId; icon: LucideIcon }> = [
   { id: 'goals', icon: Target },
   { id: 'workflows', icon: Play },
   { id: 'files', icon: Folder },
+  { id: 'activity', icon: History },
   { id: 'automations', icon: Zap },
   { id: 'notes', icon: File },
   { id: 'settings', icon: Settings },
@@ -212,6 +215,39 @@ function directoryName(path: string): string {
 function getMissingWorkspaceRoot(err: unknown): string | null {
   const body = (err as { body?: { code?: string; workspaceRoot?: string } } | null)?.body;
   return body?.code === 'workspace_root_missing' && body.workspaceRoot ? body.workspaceRoot : null;
+}
+
+function activityActorLabel(activity: ProjectActivityEvent): string {
+  const actor = activity.actor;
+  if (actor.name) return actor.name;
+  if (actor.agentId) return actor.agentId;
+  if (actor.id) return actor.id;
+  if (actor.sessionKey) return actor.sessionKey;
+  return actor.kind;
+}
+
+function activityObjectLabel(activity: ProjectActivityEvent): string {
+  return activity.primaryObject.title?.trim() || activity.primaryObject.id;
+}
+
+function activitySourceLabel(activity: ProjectActivityEvent): string {
+  const source = activity.source;
+  if (source.toolCallId) return `${source.kind} · ${source.toolCallId}`;
+  if (source.runId) return `${source.kind} · ${source.runId}`;
+  if (source.requestId) return `${source.kind} · ${source.requestId}`;
+  return source.kind;
+}
+
+function activityPayloadPreview(activity: ProjectActivityEvent): string {
+  const changes = activity.payload.changes;
+  if (Array.isArray(changes) && changes.length) {
+    return changes.filter((value): value is string => typeof value === 'string').join(', ');
+  }
+  const contentPreview = activity.payload.contentPreview;
+  if (typeof contentPreview === 'string' && contentPreview.trim()) return contentPreview.trim();
+  const title = activity.payload.title ?? activity.payload.name;
+  if (typeof title === 'string' && title.trim()) return title.trim();
+  return '';
 }
 
 function projectFileEntriesToTreeEntries(entries: ProjectFileEntry[]): TreeEntry[] {
@@ -615,6 +651,10 @@ export function ProjectDetailPage() {
   const [automationRuns, setAutomationRuns] = useState<AutomationRun[]>([]);
   const [automationsLoading, setAutomationsLoading] = useState(false);
   const [automationActionBusy, setAutomationActionBusy] = useState<string | null>(null);
+  const [projectActivity, setProjectActivity] = useState<ProjectActivityEvent[]>([]);
+  const [projectActivityTotal, setProjectActivityTotal] = useState(0);
+  const [projectActivityLoading, setProjectActivityLoading] = useState(false);
+  const [projectActivityIncludeRelated, setProjectActivityIncludeRelated] = useState(false);
   const [savingDigest, setSavingDigest] = useState(false);
   const [projectFileTree, setProjectFileTree] = useState<TreeEntry[]>([]);
   const loadedProjectFileDirsRef = useRef<Set<string>>(new Set());
@@ -858,6 +898,29 @@ export function ProjectDetailPage() {
     if (tab !== 'automations') return;
     void refreshProjectAutomations();
   }, [refreshProjectAutomations, tab]);
+
+  const refreshProjectActivity = useCallback(async () => {
+    if (!project) return;
+    setProjectActivityLoading(true);
+    setError(null);
+    try {
+      const result = await fetchProjectActivity(project.id, {
+        includeRelated: projectActivityIncludeRelated,
+        limit: 100,
+      });
+      setProjectActivity(result.items);
+      setProjectActivityTotal(result.total);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProjectActivityLoading(false);
+    }
+  }, [project, projectActivityIncludeRelated]);
+
+  useEffect(() => {
+    if (tab !== 'activity') return;
+    void refreshProjectActivity();
+  }, [refreshProjectActivity, tab]);
 
   const runAutomation = useCallback(async (automation: Automation) => {
     setAutomationActionBusy(`run:${automation.id}`);
@@ -2009,6 +2072,85 @@ export function ProjectDetailPage() {
                 <span className="truncate text-xs text-fg-muted">{goal.nextAction || goal.description || pm.goals.noNextAction}</span>
               </Link>
             )) : <p className="p-4 text-sm text-fg-muted">{pm.goals.empty}</p>}
+          </div>
+        </section>
+      ) : null}
+
+      {tab === 'activity' ? (
+        <section id="project-panel-activity" role="tabpanel" aria-labelledby="project-tab-activity" className="grid min-h-full content-start gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-fg">{pm.activity.title}</h2>
+              <p className="mt-1 text-sm text-fg-muted">
+                {interpolate(pm.activity.count, { count: projectActivityTotal })}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-surface-panel px-3 text-sm text-fg-muted shadow-surface">
+                <input
+                  type="checkbox"
+                  checked={projectActivityIncludeRelated}
+                  onChange={(event) => setProjectActivityIncludeRelated(event.currentTarget.checked)}
+                  className="size-4 rounded border-edge text-accent focus:ring-accent/30"
+                />
+                {pm.activity.includeRelated}
+              </label>
+              <Button type="button" variant="secondary" className="h-9 rounded-lg px-3" onClick={() => void refreshProjectActivity()} disabled={projectActivityLoading}>
+                <RotateCcw className={cn('size-4', projectActivityLoading && 'animate-spin')} aria-hidden />
+                {pm.common.refresh}
+              </Button>
+            </div>
+          </div>
+
+          <div className="overflow-hidden rounded-lg bg-surface-panel shadow-surface">
+            {projectActivityLoading && projectActivity.length === 0 ? (
+              <div className="px-4 py-8 text-sm text-fg-muted">{pm.activity.loading}</div>
+            ) : projectActivity.length ? (
+              <div className="divide-y divide-edge">
+                {projectActivity.map((activity) => {
+                  const typeLabel = pm.activity.types[activity.type as keyof typeof pm.activity.types] ?? activity.type;
+                  const objectKind = pm.activity.objectKinds[activity.primaryObject.kind] ?? activity.primaryObject.kind;
+                  const payloadPreview = activityPayloadPreview(activity);
+                  const isRelatedOnly = activity.relatedProjects.length > 0
+                    && !activity.scopes.some((scope) => scope.scopeKind === 'project' && scope.scopeId === project.id);
+                  return (
+                    <article key={activity.id} className="grid gap-2 px-4 py-3">
+                      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <span className="min-w-0 truncate text-sm font-medium text-fg">{typeLabel}</span>
+                            {isRelatedOnly ? (
+                              <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">
+                                {pm.activity.related}
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 min-w-0 truncate text-sm text-fg-muted">
+                            {objectKind}: {activityObjectLabel(activity)}
+                          </p>
+                        </div>
+                        <time className="shrink-0 text-xs text-fg-subtle" dateTime={new Date(activity.createdAt).toISOString()}>
+                          {formatDate(activity.createdAt)}
+                        </time>
+                      </div>
+                      {payloadPreview ? (
+                        <p className="line-clamp-2 text-sm leading-5 text-fg-muted">{payloadPreview}</p>
+                      ) : null}
+                      <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs text-fg-subtle">
+                        <span className="rounded-md bg-surface-base px-2 py-1">
+                          {pm.activity.actor}: {activityActorLabel(activity)}
+                        </span>
+                        <span className="max-w-full truncate rounded-md bg-surface-base px-2 py-1">
+                          {pm.activity.source}: {activitySourceLabel(activity)}
+                        </span>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="px-4 py-8 text-sm text-fg-muted">{pm.activity.empty}</div>
+            )}
           </div>
         </section>
       ) : null}

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ActivityService } from '../../../../activity/index.js';
 import { GoalService } from '../../../../goals/index.js';
 import { ProjectService } from '../../../../projects/index.js';
 import {
@@ -17,9 +18,16 @@ import {
 } from '../../../../storage/sqlite/index.js';
 import { WORK_ITEM_ATTACHMENT_MAX_BYTES } from '../../../../work-items/index.js';
 import type { GatewayService } from '../../../service.js';
+import { registerActivityRoutes } from '../activity.js';
 import { registerProjectsRoutes } from '../projects.js';
 import { registerSearchRoutes } from '../search.js';
 import { registerSessionsRoutes } from '../sessions.js';
+
+function registerActivityRouteApp(service: Partial<GatewayService>): Hono {
+  const app = new Hono();
+  registerActivityRoutes(app, { service: service as GatewayService });
+  return app;
+}
 
 function registerProjectRouteApp(service: Partial<GatewayService>): Hono {
   const app = new Hono();
@@ -80,6 +88,101 @@ describe('project association routes', () => {
       error: `Workspace root does not exist: ${workspaceRoot}`,
       workspaceRoot,
     });
+  });
+
+  it('lists global activity and object activity through gateway routes', async () => {
+    const activity = new ActivityService();
+    const projectEvent = activity.record({
+      type: 'project.created',
+      primaryObject: { kind: 'project', id: 'project-a', title: 'Project A' },
+      actor: { kind: 'system' },
+      source: { kind: 'system' },
+      payload: { name: 'Project A' },
+      nowMs: 100,
+    });
+    activity.record({
+      type: 'note.created',
+      primaryObject: { kind: 'note', id: 'note-a', title: 'Note A' },
+      actor: { kind: 'system' },
+      source: { kind: 'system' },
+      payload: { title: 'Note A' },
+      nowMs: 200,
+    });
+    const app = registerActivityRouteApp({});
+
+    const globalRes = await app.request('/api/activity?limit=1');
+    expect(globalRes.status).toBe(200);
+    const globalBody = await globalRes.json() as { ok: boolean; total: number; items: Array<{ id: string }> };
+    expect(globalBody.ok).toBe(true);
+    expect(globalBody.total).toBe(2);
+    expect(globalBody.items).toHaveLength(1);
+
+    const objectRes = await app.request('/api/activity/objects/project/project-a');
+    expect(objectRes.status).toBe(200);
+    const objectBody = await objectRes.json() as { ok: boolean; items: Array<{ id: string; type: string }> };
+    expect(objectBody.ok).toBe(true);
+    expect(objectBody.items).toEqual([
+      expect.objectContaining({ id: projectEvent.id, type: 'project.created' }),
+    ]);
+  });
+
+  it('rejects unsupported activity object kinds', async () => {
+    const app = registerActivityRouteApp({});
+
+    const res = await app.request('/api/activity/objects/unknown/object-a');
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'Unsupported activity object kind' });
+  });
+
+  it('lists stable and optionally related project activity', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Activity Project' });
+    const activity = new ActivityService();
+    const stableEvent = activity.record({
+      type: 'project.updated',
+      primaryObject: { kind: 'project', id: project.id, title: project.name },
+      actor: { kind: 'system' },
+      source: { kind: 'system' },
+      payload: { changes: ['brief'] },
+      scopes: [{ scopeKind: 'project', scopeId: project.id, reason: 'object_owner' }],
+      nowMs: 100,
+    });
+    const relatedEvent = activity.record({
+      type: 'note.created',
+      primaryObject: { kind: 'note', id: 'note-a', title: 'Related note' },
+      actor: { kind: 'system' },
+      source: { kind: 'system' },
+      payload: { title: 'Related note' },
+      relatedProjects: [{ projectId: project.id, reason: 'object_link', confidence: 0.9 }],
+      nowMs: 200,
+    });
+    const app = registerProjectRouteApp({ projects });
+
+    const stableRes = await app.request(`/api/projects/${project.id}/activity`);
+    expect(stableRes.status).toBe(200);
+    const stableBody = await stableRes.json() as { ok: boolean; items: Array<{ id: string }> };
+    expect(stableBody.ok).toBe(true);
+    expect(stableBody.items.map((item) => item.id)).toContain(stableEvent.id);
+    expect(stableBody.items.map((item) => item.id)).not.toContain(relatedEvent.id);
+
+    const relatedRes = await app.request(`/api/projects/${project.id}/activity?includeRelated=true`);
+    expect(relatedRes.status).toBe(200);
+    const relatedBody = await relatedRes.json() as { ok: boolean; items: Array<{ id: string }> };
+    expect(relatedBody.items.map((item) => item.id)).toEqual(
+      expect.arrayContaining([relatedEvent.id, stableEvent.id]),
+    );
+  });
+
+  it('returns 404 for missing project activity', async () => {
+    const app = registerProjectRouteApp({
+      projects: new ProjectService(),
+    });
+
+    const res = await app.request('/api/projects/missing/activity');
+
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'Project not found' });
   });
 
   it('returns project hits from global search', async () => {

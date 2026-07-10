@@ -132,6 +132,71 @@ export type ProjectFilesResponse = {
   entries: ProjectFileEntry[];
 };
 
+export type ProjectActivityObjectKind =
+  | 'project'
+  | 'note'
+  | 'work_item'
+  | 'session'
+  | 'goal'
+  | 'workflow_run'
+  | 'automation';
+
+export type ProjectActivityEvent = {
+  id: string;
+  type: string;
+  primaryObject: {
+    kind: ProjectActivityObjectKind;
+    id: string;
+    title?: string;
+  };
+  actor: {
+    kind: string;
+    id?: string;
+    name?: string;
+    sessionKey?: string;
+    agentId?: string;
+  };
+  initiator?: {
+    kind: string;
+    id?: string;
+    name?: string;
+    sessionKey?: string;
+    agentId?: string;
+  };
+  source: {
+    kind: string;
+    requestId?: string;
+    toolCallId?: string;
+    runId?: string;
+  };
+  payload: Record<string, unknown>;
+  visibility: 'timeline' | 'audit' | 'debug';
+  importance: 'low' | 'normal' | 'high';
+  createdAt: number;
+  scopes: Array<{
+    activityId: string;
+    scopeKind: string;
+    scopeId: string;
+    reason: string;
+  }>;
+  relatedProjects: Array<{
+    activityId: string;
+    projectId: string;
+    reason: string;
+    confidence: number;
+    computedAt: number;
+  }>;
+};
+
+export type ProjectActivityResponse = {
+  ok: true;
+  items: ProjectActivityEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+};
+
 export type CreateProjectGoalInput = {
   title: string;
   description?: string;
@@ -180,6 +245,21 @@ export async function fetchProjectOverview(id: string): Promise<ProjectOverview>
     apiUrl(`/api/projects/${encodeURIComponent(id)}/overview`),
   );
   return res.overview;
+}
+
+export async function fetchProjectActivity(
+  projectId: string,
+  options: { includeRelated?: boolean; limit?: number; offset?: number } = {},
+): Promise<ProjectActivityResponse> {
+  const params = new URLSearchParams();
+  params.set('visibility', 'timeline');
+  if (options.includeRelated) params.set('includeRelated', 'true');
+  if (options.limit) params.set('limit', String(options.limit));
+  if (options.offset) params.set('offset', String(options.offset));
+  const suffix = params.toString();
+  return fetchJson<ProjectActivityResponse>(
+    apiUrl(`/api/projects/${encodeURIComponent(projectId)}/activity${suffix ? `?${suffix}` : ''}`),
+  );
 }
 
 export async function createProject(input: {

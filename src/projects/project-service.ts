@@ -1,3 +1,4 @@
+import { changedFieldsFromPatch, emitActivity, systemActivityActor, systemActivitySource } from '../activity/emitter.js';
 import { getSessionMetadata } from '../storage/sqlite/index.js';
 import { ProjectStore } from './project-store.js';
 import { bindGoalToProject, listProjectGoalIds, unbindGoalFromProject } from './goal-bind.js';
@@ -58,7 +59,21 @@ export class ProjectService {
     }
     const name = input.name?.trim() || inferProjectNameFromWorkspaceRoot(workspaceRoot) || '';
     const slug = input.slug?.trim() || this.store.generateSlug(name);
-    return this.store.create({ ...input, name, slug, workspaceRoot });
+    const project = this.store.create({ ...input, name, slug, workspaceRoot });
+    emitActivity({
+      type: 'project.created',
+      primaryObject: { kind: 'project', id: project.id, title: project.name },
+      actor: systemActivityActor(),
+      source: systemActivitySource(),
+      payload: {
+        name: project.name,
+        workspaceRoot: project.workspaceRoot,
+        brief: project.brief,
+      },
+      scopes: [{ scopeKind: 'project', scopeId: project.id, reason: 'object_owner' }],
+      nowMs: project.createdAt,
+    });
+    return project;
   }
 
   get(id: string): Project | null {
@@ -144,7 +159,28 @@ export class ProjectService {
       }
       patch.workspaceRoot = workspaceRoot;
     }
-    return this.store.update(id, patch);
+    const before = this.store.get(id);
+    const project = this.store.update(id, patch);
+    const changes = changedFieldsFromPatch(patch as Record<string, unknown>, ['createWorkspaceRoot']);
+    const type = before?.status !== project.status
+      ? 'project.status_changed'
+      : before?.workspaceRoot !== project.workspaceRoot
+        ? 'project.workspace_changed'
+        : 'project.updated';
+    emitActivity({
+      type,
+      primaryObject: { kind: 'project', id: project.id, title: project.name },
+      actor: systemActivityActor(),
+      source: systemActivitySource(),
+      payload: {
+        changes,
+        ...(type === 'project.status_changed' ? { from: before?.status, to: project.status } : {}),
+        ...(type === 'project.workspace_changed' ? { from: before?.workspaceRoot, to: project.workspaceRoot } : {}),
+      },
+      scopes: [{ scopeKind: 'project', scopeId: project.id, reason: 'object_owner' }],
+      nowMs: project.updatedAt,
+    });
+    return project;
   }
 
   delete(id: string): void {

@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { ActivityService } from '../../../activity/index.js';
 import { NotesService, NotesStore } from '../../../notes/index.js';
 import { ProjectService } from '../../../projects/index.js';
 import {
@@ -27,6 +28,7 @@ describe('xopc_use tool', () => {
   let projects: ProjectService;
   let notes: NotesService;
   let workItems: WorkItemService;
+  let activity: ActivityService;
 
   beforeEach(async () => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-use-tool-'));
@@ -37,6 +39,7 @@ describe('xopc_use tool', () => {
     notes = new NotesService(new NotesStore());
     await notes.initialize();
     workItems = new WorkItemService();
+    activity = new ActivityService();
   });
 
   afterEach(() => {
@@ -47,6 +50,7 @@ describe('xopc_use tool', () => {
 
   it('creates and updates a project through one entry point', async () => {
     const tool = createXopcUseTool({
+      getCurrentAgentId: () => 'main',
       getProjectService: () => projects,
       getCurrentSessionKey: () => SESSION_KEY,
     });
@@ -68,6 +72,14 @@ describe('xopc_use tool', () => {
 
     expect(updated.project.status).toBe('paused');
     expect(updated.project.instructions).toBe('Use safe previews.');
+
+    const page = activity.listForProject({ projectId: created.project.id });
+    expect(page.items[0]).toMatchObject({
+      type: 'project.status_changed',
+      actor: { kind: 'agent', agentId: 'main', sessionKey: SESSION_KEY },
+      initiator: { kind: 'user', sessionKey: SESSION_KEY },
+      source: { kind: 'xopc_use', toolCallId: 'call-2' },
+    });
   });
 
   it('resolves an existing workspace project', async () => {

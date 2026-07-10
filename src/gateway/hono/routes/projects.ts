@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 import { readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
+import { ActivityService } from '../../../activity/index.js';
 import type { GoalWithDetails } from '../../../goals/index.js';
 import { GoalService } from '../../../goals/index.js';
 import {
@@ -34,6 +35,7 @@ import {
   type WorkItemStatus,
 } from '../../../work-items/index.js';
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
+import { parseActivityIncludeRelated, parseActivityQuery } from './activity.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const log = createGatewayRouteLogger('Projects');
@@ -436,6 +438,7 @@ function projectDigestMemoryRecordId(projectId: string): string {
 
 export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service } = deps;
+  const activity = new ActivityService();
   const goals = new GoalService();
   const workItems = new WorkItemService();
 
@@ -610,6 +613,17 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         recommendedAction: loop.recommendedAction,
       },
     });
+  });
+
+  authenticated.get('/api/projects/:id/activity', (c) => {
+    const project = service.projects.get(c.req.param('id'));
+    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+    const result = activity.listForProject({
+      projectId: project.id,
+      includeRelated: parseActivityIncludeRelated(c.req.query('includeRelated')),
+      ...parseActivityQuery(c),
+    });
+    return c.json({ ok: true, ...result });
   });
 
   authenticated.get('/api/projects/:id/work-items', async (c) => {
