@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
 
+import { changedFieldsFromPatch, emitActivity, previewText, systemActivityActor, systemActivitySource } from '../activity/emitter.js';
 import { publishAutomationProductEvent } from '../automations/product-events.js';
 import type { Config } from '../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../providers/index.js';
@@ -184,6 +185,20 @@ export class NotesService {
       localVersion: 1,
     };
     await this.store.addNote(note);
+    emitActivity({
+      type: 'note.created',
+      primaryObject: { kind: 'note', id: note.id, title: note.title },
+      actor: systemActivityActor(),
+      source: systemActivitySource(),
+      payload: {
+        title: note.title,
+        kind: note.kind,
+        tags: note.tags,
+        contentPreview: previewText(note.markdown),
+        contentLength: note.markdown.length,
+      },
+      nowMs: note.createdAt,
+    });
     log.debug({ id: note.id, kind: note.kind }, 'Quick capture');
     return note;
   }
@@ -210,6 +225,20 @@ export class NotesService {
       localVersion: 1,
     };
     await this.store.addNote(note);
+    emitActivity({
+      type: 'note.created',
+      primaryObject: { kind: 'note', id: note.id, title: note.title },
+      actor: systemActivityActor(),
+      source: systemActivitySource(),
+      payload: {
+        title: note.title,
+        kind: note.kind,
+        tags: note.tags,
+        contentPreview: previewText(note.markdown),
+        contentLength: note.markdown.length,
+      },
+      nowMs: note.createdAt,
+    });
     publishNoteEvent('note.created', note);
     log.debug({ id: note.id, kind: note.kind }, 'Note created');
     return note;
@@ -237,6 +266,19 @@ export class NotesService {
     const updatedRaw = await this.store.updateNote(id, normalizedPatch);
     const updated = updatedRaw ? await this.reconcileAttachments(updatedRaw) : null;
     if (updated) {
+      const changes = changedFieldsFromPatch(patch as Record<string, unknown>);
+      emitActivity({
+        type: existing.status !== updated.status ? 'note.status_changed' : 'note.updated',
+        primaryObject: { kind: 'note', id: updated.id, title: updated.title },
+        actor: systemActivityActor(),
+        source: systemActivitySource(),
+        payload: {
+          changes,
+          contentTouched,
+          ...(existing.status !== updated.status ? { from: existing.status, to: updated.status } : {}),
+        },
+        nowMs: updated.updatedAt,
+      });
       publishNoteEvent('note.updated', updated, {
         contentTouched,
         trigger,

@@ -1,3 +1,4 @@
+import { changedFieldsFromPatch, emitActivity, systemActivityActor, systemActivitySource } from '../activity/emitter.js';
 import { deleteMediaBuffer, mimeTypeFromMediaPath, saveMediaBuffer } from '../media/store.js';
 import { readMediaReference } from '../media/media-reference.js';
 import type { MediaRef } from '../media/types.js';
@@ -42,6 +43,15 @@ export class WorkItemService {
   createProjectWorkItem(projectId: string, input: CreateWorkItemInput): WorkItem {
     const item = this.store.create(projectId, input);
     this.store.addEvent(item.id, 'created', { title: item.title, status: item.status, priority: item.priority });
+    emitActivity({
+      type: 'work_item.created',
+      primaryObject: { kind: 'work_item', id: item.id, title: item.title },
+      actor: systemActivityActor(),
+      source: systemActivitySource(),
+      payload: { title: item.title, status: item.status, priority: item.priority },
+      scopes: [{ scopeKind: 'project', scopeId: projectId, reason: 'object_owner' }],
+      nowMs: item.createdAt,
+    });
     return { ...item, links: [] };
   }
 
@@ -62,6 +72,24 @@ export class WorkItemService {
     if (!before.archivedAt && after.archivedAt) {
       this.store.addEvent(id, 'archived', { archivedAt: after.archivedAt });
     }
+    const type = !before.archivedAt && after.archivedAt
+      ? 'work_item.archived'
+      : before.status !== after.status
+        ? 'work_item.status_changed'
+        : 'work_item.updated';
+    emitActivity({
+      type,
+      primaryObject: { kind: 'work_item', id: after.id, title: after.title },
+      actor: systemActivityActor(),
+      source: systemActivitySource(),
+      payload: {
+        changes: changedFieldsFromPatch(patch as Record<string, unknown>),
+        ...(type === 'work_item.status_changed' ? { from: before.status, to: after.status } : {}),
+        ...(type === 'work_item.archived' ? { archivedAt: after.archivedAt } : {}),
+      },
+      scopes: [{ scopeKind: 'project', scopeId: after.projectId, reason: 'object_owner' }],
+      nowMs: after.updatedAt,
+    });
     return after;
   }
 
@@ -69,6 +97,18 @@ export class WorkItemService {
     if (!this.store.get(workItemId)) return null;
     const link = this.store.addLink({ ...input, workItemId });
     this.store.addEvent(workItemId, eventType, { kind: link.kind, targetId: link.targetId, title: link.title, statusSnapshot: link.statusSnapshot });
+    const item = this.store.get(workItemId);
+    if (item) {
+      emitActivity({
+        type: 'work_item.link_added',
+        primaryObject: { kind: 'work_item', id: item.id, title: item.title },
+        actor: systemActivityActor(),
+        source: systemActivitySource(),
+        payload: { target: { kind: link.kind, id: link.targetId, title: link.title } },
+        scopes: [{ scopeKind: 'project', scopeId: item.projectId, reason: 'object_owner' }],
+        nowMs: link.createdAt,
+      });
+    }
     return link;
   }
 
