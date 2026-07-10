@@ -14,7 +14,7 @@ import {
   Plus,
   Trash2,
 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
@@ -378,7 +378,7 @@ function SidebarProjectSection({
       <div
         className={cn(
           'group flex min-w-0 items-center gap-2 rounded-xl px-2 text-sm font-medium leading-5',
-          hasActiveSession ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted',
+          hasActiveSession ? 'bg-surface-active text-fg' : 'text-fg-muted',
         )}
       >
         <button
@@ -526,7 +526,7 @@ function SidebarInboxSection({
       <div
         className={cn(
           'group flex min-w-0 items-center gap-2 rounded-xl px-2 text-sm font-medium leading-5',
-          hasActiveSession ? 'bg-surface-panel text-fg shadow-surface' : 'text-fg-muted',
+          hasActiveSession ? 'bg-surface-active text-fg' : 'text-fg-muted',
         )}
       >
         <button
@@ -624,7 +624,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const [renameKey, setRenameKey] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
-  const lastActiveSessionKeyRef = useRef<string | null>(null);
+  const [includedSessionKey, setIncludedSessionKey] = useState<string | undefined>(() => activeSessionKey);
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
@@ -638,7 +638,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     (pageIndex, previousPageData) => {
       if (!token) return null;
       if (previousPageData && !previousPageData.projects.hasMore) return null;
-      return ['sidebar-chat-list', token, activeSessionKey ?? '', pageIndex] as const;
+      return ['sidebar-chat-list', token, includedSessionKey ?? '', pageIndex] as const;
     },
     async ([, , includeSessionKey, pageIndex]: readonly [
       'sidebar-chat-list',
@@ -761,17 +761,11 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     };
   }, [token, refreshSidebar]);
 
-  // Refetch on session switch (skip initial mount) to refresh metadata (message count, etc).
   useEffect(() => {
-    if (!token || !activeSessionKey) return;
-    if (lastActiveSessionKeyRef.current === null) {
-      lastActiveSessionKeyRef.current = activeSessionKey;
-      return;
-    }
-    if (lastActiveSessionKeyRef.current === activeSessionKey) return;
-    lastActiveSessionKeyRef.current = activeSessionKey;
-    refreshSidebar();
-  }, [token, activeSessionKey, refreshSidebar]);
+    if (!token || !activeSessionKey || !data) return;
+    if (items.some((session) => session.key === activeSessionKey)) return;
+    setIncludedSessionKey((prev) => (prev === activeSessionKey ? prev : activeSessionKey));
+  }, [activeSessionKey, data, items, token]);
 
   const openRename = useCallback((key: string) => {
     const row = items.find((s) => s.key === key);
