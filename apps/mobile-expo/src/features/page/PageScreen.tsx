@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, AppState, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Snackbar, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
@@ -13,10 +13,11 @@ import { useTheme } from '../../theme';
 import { NoteDetailHeader } from '../notes/NoteDetailHeader';
 import { NoteViewActionBar, type NoteViewActionBarItem } from '../notes/NoteViewActionBar';
 import { NoteTagPickerSheet } from '../notes/NoteTagPickerSheet';
-import { NoteEditorBridge, type NoteEditorBridgeHandle } from '../notes/editor/NoteEditorBridge';
+import { NoteEditorBridge, type NoteEditorAiAction, type NoteEditorBridgeHandle } from '../notes/editor/NoteEditorBridge';
 import { countNoteCharacters } from '../notes/note-title';
 import { getNotePrimaryTag, getTagColors } from '../notes/note-tag-utils';
 import { useVoiceCaptureInteraction } from '../notes/use-voice-capture-interaction';
+import { applyMarkdownPatchResult } from '../notes/markdown/markdown-patch';
 import { DEFAULT_EDITOR_RUNTIME_STATE } from '../notes/editor/editor-contract';
 import type {
   EditorCommand,
@@ -26,6 +27,7 @@ import type {
   NoteEditorLabels,
 } from '../notes/editor/editor-protocol';
 import { useNoteTagsStore } from '../../stores/note-tags-store';
+import { requestNoteAiEdit } from '../../query/notes';
 import { useNoteEditSession } from './useNoteEditSession';
 import { useNoteEditorAttachments } from './useNoteEditorAttachments';
 import { useNotePageActions } from './useNotePageActions';
@@ -55,6 +57,7 @@ export function PageScreen() {
   const [noteEditorMode, setNoteEditorMode] = useState<NoteEditorMode>('viewing');
   const [editorRuntimeState, setEditorRuntimeState] = useState<EditorRuntimeState>(DEFAULT_EDITOR_RUNTIME_STATE);
   const [editorCommand, setEditorCommand] = useState<EditorCommand | null>(null);
+  const [aiLoadingKey, setAiLoadingKey] = useState<string | null>(null);
 
   const editorCommandIdRef = useRef(0);
   const editorRef = useRef<NoteEditorBridgeHandle | null>(null);
@@ -315,6 +318,99 @@ export function PageScreen() {
     audio: pm.editorInsertAudio,
   }), [m.common.apply, pm]);
 
+  const aiActions = useMemo<NoteEditorAiAction[]>(() => [
+    {
+      key: 'continue',
+      label: pm.editorAIContinue,
+      instruction: pm.editorAIContinueInstruction,
+    },
+    {
+      key: 'rewrite',
+      label: pm.editorAIRewrite,
+      instruction: pm.editorAIRewriteInstruction,
+    },
+    {
+      key: 'summarize',
+      label: pm.editorAISummarize,
+      instruction: pm.editorAISummarizeInstruction,
+    },
+    {
+      key: 'fixGrammar',
+      label: pm.editorAIFixGrammar,
+      instruction: pm.editorAIFixGrammarInstruction,
+    },
+    {
+      key: 'improve',
+      label: pm.editorAIImprove,
+      instruction: pm.editorAIImproveInstruction,
+    },
+  ], [pm]);
+
+  const handleRequestAiAction = useCallback(async (action: NoteEditorAiAction) => {
+    if (!id || !note || aiLoadingKey) return;
+    setAiLoadingKey(action.key);
+    try {
+      await flushEditorToDraft();
+      const currentMarkdown = markdownRef.current;
+      const result = await requestNoteAiEdit(id, {
+        instruction: action.instruction,
+        markdown: currentMarkdown,
+        context: {
+          type: 'note',
+          range: { start: 0, end: currentMarkdown.length },
+          markdown: currentMarkdown,
+        },
+      });
+      const patchResult = applyMarkdownPatchResult(currentMarkdown, result.patch.operations);
+      const titleChanged = patchResult.metadata.title !== undefined && patchResult.metadata.title !== titleRef.current;
+      const tagsChanged = patchResult.metadata.tags !== undefined;
+      if (patchResult.markdown === currentMarkdown && !titleChanged && !tagsChanged) {
+        setSnackMsg(pm.editorAINoChanges);
+        return;
+      }
+
+      const summary = result.patch.summary || result.message || action.label;
+      Alert.alert(pm.editorAIApplyTitle, summary, [
+        { text: m.common.cancel, style: 'cancel' },
+        {
+          text: m.common.apply,
+          onPress: () => {
+            if (patchResult.markdown !== currentMarkdown) {
+              updateMarkdown(patchResult.markdown);
+            }
+            if (patchResult.metadata.title !== undefined) {
+              updateTitle(patchResult.metadata.title ?? '');
+            }
+            if (patchResult.metadata.tags !== undefined) {
+              updateTags(patchResult.metadata.tags);
+            }
+            setSnackMsg(pm.editorAIApplied);
+          },
+        },
+      ]);
+    } catch (error) {
+      setSnackMsg(error instanceof Error ? error.message : pm.actionFailed);
+    } finally {
+      setAiLoadingKey(null);
+    }
+  }, [
+    aiLoadingKey,
+    flushEditorToDraft,
+    id,
+    m.common.apply,
+    m.common.cancel,
+    markdownRef,
+    note,
+    pm.actionFailed,
+    pm.editorAIApplyTitle,
+    pm.editorAIApplied,
+    pm.editorAINoChanges,
+    titleRef,
+    updateMarkdown,
+    updateTags,
+    updateTitle,
+  ]);
+
   const showLoading = noteQuery.isLoading && !note;
   const showError = noteQuery.isError && !note;
   const showViewActions = Boolean(note && id && !keyboardVisible && noteEditorMode === 'viewing');
@@ -422,6 +518,9 @@ export function PageScreen() {
               onFocusChange={handleEditorFocusChange}
               onNativeModalChange={handleNativeModalChange}
               onRuntimeStateChange={setEditorRuntimeState}
+              aiActions={aiActions}
+              aiLoadingKey={aiLoadingKey}
+              onRequestAiAction={handleRequestAiAction}
               voiceFeedback={voice.feedback}
               voicePanHandlers={voice.panHandlers}
               voicePressHandler={voice.onPress}
@@ -444,19 +543,28 @@ export function PageScreen() {
         </View>
       ) : null}
 
-      {saveState === 'failed' ? (
+      {saveState === 'failed' || saveState === 'pending' ? (
         <Pressable
           style={[
             styles.retryBar,
             showViewActions ? styles.retryBarAboveActions : null,
             { backgroundColor: colors.surface.panel, borderColor: colors.border.default },
           ]}
-          onPress={() => void flushSave()}
+          onPress={() => {
+            if (saveState === 'pending') void handleSyncNow();
+            else void flushSave();
+          }}
           accessibilityRole="button"
-          accessibilityLabel={pm.saveFailed}
+          accessibilityLabel={saveState === 'pending' ? pm.syncPending : pm.saveFailed}
         >
-          <Icon source="cloud-alert-outline" size={18} color={colors.semantic.error} />
-          <Text style={[styles.retryText, { color: colors.text.primary }]}>{pm.saveFailed}</Text>
+          <Icon
+            source={saveState === 'pending' ? 'cloud-clock-outline' : 'cloud-alert-outline'}
+            size={18}
+            color={saveState === 'pending' ? colors.accent.primary : colors.semantic.error}
+          />
+          <Text style={[styles.retryText, { color: colors.text.primary }]}>
+            {saveState === 'pending' ? pm.syncPending : pm.saveFailed}
+          </Text>
         </Pressable>
       ) : null}
 
