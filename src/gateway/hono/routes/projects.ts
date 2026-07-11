@@ -3,6 +3,7 @@ import { readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import { ActivityService } from '../../../activity/index.js';
+import { resolveEffectiveAgentProfile } from '../../../config/agent-profile.js';
 import type { GoalWithDetails } from '../../../goals/index.js';
 import { GoalService } from '../../../goals/index.js';
 import {
@@ -13,6 +14,7 @@ import {
   normalizeProjectAgentId,
   ProjectWorkspaceConflictError,
   ProjectWorkspaceMissingError,
+  type Project,
   resolveProjectAgentId,
   type ProjectStatus,
   type ProjectWorkflowRunBrief,
@@ -71,6 +73,31 @@ function optionalTextField(body: Record<string, unknown>, key: string): string |
   if (!(key in body)) return undefined;
   const value = body[key];
   return typeof value === 'string' ? value : null;
+}
+
+function resolveEffectiveWorkspaceRoot(
+  service: AuthenticatedRouteDeps['service'],
+  project: Project,
+): string | undefined {
+  const fixedRoot = project.workspaceRoot?.trim();
+  if (fixedRoot) return fixedRoot;
+  const agentId = resolveProjectAgentId({
+    config: service.currentConfig,
+    projects: service.projects,
+    projectId: project.id,
+  });
+  return resolveEffectiveAgentProfile(service.currentConfig, agentId).resolvedWorkspacePath;
+}
+
+function enrichProjectWorkspace<T extends Project>(
+  service: AuthenticatedRouteDeps['service'],
+  project: T,
+): T {
+  return {
+    ...project,
+    workspaceMode: project.workspaceRoot?.trim() ? 'fixed' : 'followAgent',
+    effectiveWorkspaceRoot: resolveEffectiveWorkspaceRoot(service, project),
+  };
 }
 
 function finiteNumberField(value: unknown): number | undefined {
@@ -181,19 +208,20 @@ async function resolveProjectWorkspaceRoot(
 ): Promise<{ ok: true; projectId: string; root: string } | { ok: false; status: number; error: string }> {
   const project = service.projects.get(projectId);
   if (!project) return { ok: false, status: 404, error: 'Project not found' };
-  if (!project.workspaceRoot?.trim()) {
+  const workspaceRoot = resolveEffectiveWorkspaceRoot(service, project);
+  if (!workspaceRoot?.trim()) {
     return { ok: false, status: 400, error: 'Project workspace root is not set' };
   }
 
   try {
-    const root = await realpath(project.workspaceRoot);
+    const root = await realpath(workspaceRoot);
     const rootStat = await stat(root);
     if (!rootStat.isDirectory()) {
       return { ok: false, status: 400, error: 'Project workspace root is not a directory' };
     }
     return { ok: true, projectId: project.id, root };
   } catch (err) {
-    log.warn({ err, projectId: project.id, path: project.workspaceRoot }, 'project workspace root unavailable');
+    log.warn({ err, projectId: project.id, path: workspaceRoot }, 'project workspace root unavailable');
     return { ok: false, status: 404, error: 'Project workspace root is unavailable' };
   }
 }
@@ -472,7 +500,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         brief: textField(body, 'brief'),
         instructions: textField(body, 'instructions'),
       });
-      return c.json({ ok: true, project }, 201);
+      return c.json({ ok: true, project: enrichProjectWorkspace(service, project) }, 201);
     } catch (error) {
       if (error instanceof ProjectWorkspaceConflictError) {
         return c.json({ ok: false, code: 'workspace_already_bound', error: error.message, project: error.project }, 409);
@@ -494,7 +522,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       limit: parseLimit(c.req.query('limit')),
       offset: c.req.query('offset') ? Math.max(0, Number.parseInt(c.req.query('offset')!, 10) || 0) : undefined,
     });
-    return c.json({ ok: true, ...result });
+    return c.json({ ok: true, ...result, items: result.items.map((project) => enrichProjectWorkspace(service, project)) });
   });
 
   authenticated.get('/api/projects/suggestions', async (c) => {
@@ -590,7 +618,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({
       ok: true,
       overview: {
-        project,
+        project: enrichProjectWorkspace(service, project),
         stats: {
           sessionCount: project.sessionCount,
           goalCount: project.goalCount,
@@ -985,7 +1013,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
   authenticated.get('/api/projects/:id', async (c) => {
     const project = service.projects.getWithDetails(c.req.param('id'));
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
-    return c.json({ ok: true, project });
+    return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
   });
 
   authenticated.patch('/api/projects/:id', async (c) => {
@@ -1007,7 +1035,7 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
         ...(optionalTextField(body, 'brief') !== undefined ? { brief: optionalTextField(body, 'brief') } : {}),
         ...(optionalTextField(body, 'instructions') !== undefined ? { instructions: optionalTextField(body, 'instructions') } : {}),
       });
-      return c.json({ ok: true, project });
+      return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
     } catch (error) {
       if (error instanceof ProjectWorkspaceConflictError) {
         return c.json({ ok: false, code: 'workspace_already_bound', error: error.message, project: error.project }, 409);

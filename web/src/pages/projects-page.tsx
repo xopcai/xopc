@@ -23,6 +23,7 @@ const STATUSES: Array<ProjectStatus | 'all'> = ['all', 'active', 'paused', 'arch
 const AUTO_AGENT_CHOICE = '__auto__';
 const GLOBAL_AGENT_CHOICE = '__global__';
 type AgentChoice = typeof AUTO_AGENT_CHOICE | typeof GLOBAL_AGENT_CHOICE | string;
+type WorkspaceMode = 'follow' | 'fixed';
 
 function statusTone(status: ProjectStatus): string {
   if (status === 'active') return 'bg-accent-soft text-accent-fg';
@@ -75,7 +76,7 @@ function ProjectCard({ project, t }: { project: Project; t: ReturnType<typeof me
         {project.description || project.brief || t.noDescription}
       </p>
       <div className="mt-auto grid gap-1 pt-4 text-xs text-fg-subtle">
-        <div className="truncate">{interpolate(t.workspaceLabel, { workspace: project.workspaceRoot || t.agentDefault })}</div>
+        <div className="truncate">{interpolate(t.workspaceLabel, { workspace: project.workspaceRoot || project.effectiveWorkspaceRoot || t.agentDefault })}</div>
         <div>{interpolate(t.lastActive, { time: formatDate(project.lastActiveAt ?? project.updatedAt, t.never) })}</div>
       </div>
     </Link>
@@ -97,9 +98,11 @@ export function ProjectsPage() {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [workspaceRoot, setWorkspaceRoot] = useState('');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('follow');
   const [projectKind, setProjectKind] = useState<ProjectKindSelection>('auto');
   const [agentChoice, setAgentChoice] = useState<AgentChoice>(AUTO_AGENT_CHOICE);
   const [agents, setAgents] = useState<GatewayAgentRow[]>([]);
+  const [gatewayDefaultAgentId, setGatewayDefaultAgentId] = useState<string | undefined>();
   const [inferredDefaultAgentId, setInferredDefaultAgentId] = useState<string | undefined>();
   const [inferredKind, setInferredKind] = useState<'coding' | 'general' | 'unknown'>('unknown');
   const [createOpen, setCreateOpen] = useState(false);
@@ -135,10 +138,16 @@ export function ProjectsPage() {
     let cancelled = false;
     void fetchGatewayAgents()
       .then((payload) => {
-        if (!cancelled) setAgents(payload.agents);
+        if (!cancelled) {
+          setAgents(payload.agents);
+          setGatewayDefaultAgentId(payload.defaultId);
+        }
       })
       .catch(() => {
-        if (!cancelled) setAgents([]);
+        if (!cancelled) {
+          setAgents([]);
+          setGatewayDefaultAgentId(undefined);
+        }
       });
     return () => {
       cancelled = true;
@@ -151,7 +160,7 @@ export function ProjectsPage() {
     const timeout = window.setTimeout(() => {
       void inferProjectDefaults({
         ...(name.trim() ? { name: name.trim() } : {}),
-        ...(workspaceRoot.trim() ? { workspaceRoot: workspaceRoot.trim() } : {}),
+        ...(workspaceMode === 'fixed' && workspaceRoot.trim() ? { workspaceRoot: workspaceRoot.trim() } : {}),
         projectKind,
       })
         .then((result) => {
@@ -169,7 +178,7 @@ export function ProjectsPage() {
       cancelled = true;
       window.clearTimeout(timeout);
     };
-  }, [createOpen, name, projectKind, workspaceRoot]);
+  }, [createOpen, name, projectKind, workspaceMode, workspaceRoot]);
 
   const grouped = useMemo(() => {
     const active = projects.filter((p) => p.status === 'active');
@@ -180,7 +189,7 @@ export function ProjectsPage() {
 
   const submitProjectCreate = useCallback(async (options: { createWorkspaceRoot?: boolean } = {}) => {
     const trimmedName = name.trim();
-    const trimmedWorkspace = workspaceRoot.trim();
+    const trimmedWorkspace = workspaceMode === 'fixed' ? workspaceRoot.trim() : '';
     if (!trimmedName && !trimmedWorkspace) return;
     setCreating(true);
     setError(null);
@@ -196,6 +205,7 @@ export function ProjectsPage() {
       setProjects((items) => [project, ...items]);
       setName('');
       setWorkspaceRoot('');
+      setWorkspaceMode('follow');
       setProjectKind('auto');
       setAgentChoice(AUTO_AGENT_CHOICE);
       setCreateOpen(false);
@@ -217,7 +227,7 @@ export function ProjectsPage() {
     } finally {
       setCreating(false);
     }
-  }, [agentChoice, name, projectKind, workspaceRoot]);
+  }, [agentChoice, name, projectKind, workspaceMode, workspaceRoot]);
 
   const onCreate = useCallback((event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -249,6 +259,21 @@ export function ProjectsPage() {
     const agent = agents.find((item) => item.id === inferredDefaultAgentId);
     return agent?.name || inferredDefaultAgentId || '';
   }, [agents, inferredDefaultAgentId]);
+
+  const selectedWorkspaceAgentId = useMemo(() => {
+    if (agentChoice === GLOBAL_AGENT_CHOICE) return gatewayDefaultAgentId;
+    if (agentChoice !== AUTO_AGENT_CHOICE) return agentChoice;
+    return inferredDefaultAgentId || gatewayDefaultAgentId;
+  }, [agentChoice, gatewayDefaultAgentId, inferredDefaultAgentId]);
+
+  const selectedWorkspaceAgent = useMemo(
+    () => agents.find((agent) => agent.id === selectedWorkspaceAgentId),
+    [agents, selectedWorkspaceAgentId],
+  );
+
+  const workspaceCurrentLabel = workspaceMode === 'fixed'
+    ? (workspaceRoot.trim() || t.workspacePlaceholder)
+    : (selectedWorkspaceAgent?.workspace || t.workspacePlaceholder);
 
   const createAgentHint = useMemo(() => {
     if (agentChoice === GLOBAL_AGENT_CHOICE) return t.agentHintGlobal;
@@ -329,16 +354,46 @@ export function ProjectsPage() {
                 </label>
                 <div className="grid gap-1.5 text-sm">
                   <span className="font-medium text-fg-muted">{t.workspaceRoot}</span>
-                  <DirectoryPickerPathField
-                    value={workspaceRoot}
-                    onChange={setWorkspaceRoot}
-                    disabled={creating}
-                    wd={wd}
-                    placeholder={t.workspacePlaceholder}
-                    inputClassName="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
-                  />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2 text-sm', workspaceMode === 'follow' ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
+                      <input
+                        type="radio"
+                        className="mt-0.5 size-4"
+                        checked={workspaceMode === 'follow'}
+                        onChange={() => setWorkspaceMode('follow')}
+                        disabled={creating}
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">{t.workspaceModeFollow}</span>
+                        <span className="block text-xs leading-5 text-fg-subtle">{t.workspaceFollowHint}</span>
+                      </span>
+                    </label>
+                    <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2 text-sm', workspaceMode === 'fixed' ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
+                      <input
+                        type="radio"
+                        className="mt-0.5 size-4"
+                        checked={workspaceMode === 'fixed'}
+                        onChange={() => setWorkspaceMode('fixed')}
+                        disabled={creating}
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">{t.workspaceModeFixed}</span>
+                        <span className="block text-xs leading-5 text-fg-subtle">{t.workspaceFixedHint}</span>
+                      </span>
+                    </label>
+                  </div>
+                  {workspaceMode === 'fixed' ? (
+                    <DirectoryPickerPathField
+                      value={workspaceRoot}
+                      onChange={setWorkspaceRoot}
+                      disabled={creating}
+                      wd={wd}
+                      placeholder={t.workspacePlaceholder}
+                      inputClassName="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
+                    />
+                  ) : null}
                   <p className="text-xs text-fg-subtle">
-                    {t.workspaceHint}
+                    {interpolate(t.workspaceCurrent, { workspace: workspaceCurrentLabel })}
                   </p>
                 </div>
                 <label className="grid gap-1.5 text-sm">
@@ -379,7 +434,7 @@ export function ProjectsPage() {
                     {t.cancel}
                   </Button>
                 </Dialog.Close>
-                <Button type="submit" variant="primary" className="rounded-lg" disabled={creating || !(name.trim() || workspaceRoot.trim())}>
+                <Button type="submit" variant="primary" className="rounded-lg" disabled={creating || !name.trim() || (workspaceMode === 'fixed' && !workspaceRoot.trim())}>
                   <Plus className="size-4" aria-hidden />
                   {t.create}
                 </Button>
