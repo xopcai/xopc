@@ -357,7 +357,7 @@ function ProjectSwitcher({
 
   const statusLabel = (project: Project) => pm.statuses[project.status] ?? project.status;
   const subtitle = (project: Project) =>
-    project.workspaceRoot || project.description || project.brief || pm.common.defaultWorkspace;
+    project.workspaceRoot || project.effectiveWorkspaceRoot || project.description || project.brief || pm.common.defaultWorkspace;
 
   const openCreateDialog = (mode: 'new' | 'directory') => {
     setCreateMode(mode);
@@ -964,7 +964,7 @@ export function ProjectDetailPage() {
   }, [refreshProjectAutomations]);
 
   const refreshProjectFiles = useCallback(async () => {
-    if (!project?.workspaceRoot?.trim()) {
+    if (!project?.effectiveWorkspaceRoot?.trim()) {
       setProjectFileTree([]);
       loadedProjectFileDirsRef.current.clear();
       setFilesError(null);
@@ -988,7 +988,7 @@ export function ProjectDetailPage() {
 
   const loadProjectFileChildren = useCallback(
     async (dirPath: string) => {
-      if (!project?.workspaceRoot?.trim() || loadedProjectFileDirsRef.current.has(dirPath)) return;
+      if (!project?.effectiveWorkspaceRoot?.trim() || loadedProjectFileDirsRef.current.has(dirPath)) return;
       loadedProjectFileDirsRef.current.add(dirPath);
       setFilesError(null);
       try {
@@ -1408,7 +1408,9 @@ export function ProjectDetailPage() {
     : sessions;
   const sessionsSearchMiss = sessions.length > 0 && visibleSessions.length === 0;
   const selectedAgentLabel = agents.find((agent) => agent.id === draft.defaultAgentId)?.name || draft.defaultAgentId || pm.settings.globalDefaultAgent;
-  const workspaceRootLabel = draft.workspaceRoot.trim() || pm.common.defaultWorkspace;
+  const selectedDraftAgent = agents.find((agent) => agent.id === draft.defaultAgentId);
+  const effectiveDraftWorkspace = draft.workspaceRoot.trim() || selectedDraftAgent?.workspace || project.effectiveWorkspaceRoot || pm.common.defaultWorkspace;
+  const workspaceRootLabel = draft.workspaceRoot.trim() || effectiveDraftWorkspace;
   const tabItems = tabOrder.map((id) => {
     const item = TABS.find((candidate) => candidate.id === id)!;
     return { ...item, label: item.id === 'work-items' ? pm.workItems.tab : pm.tabs[item.id] };
@@ -1810,7 +1812,7 @@ export function ProjectDetailPage() {
             <div className="rounded-lg bg-surface-panel p-4 shadow-surface">
               <h2 className="text-sm font-semibold text-fg">{pm.automations.contextTitle}</h2>
               <p className="mt-2 text-sm leading-6 text-fg-muted">{pm.automations.contextHint}</p>
-              <p className="mt-3 break-all text-xs text-fg-subtle">{project.workspaceRoot || pm.common.defaultWorkspace}</p>
+              <p className="mt-3 break-all text-xs text-fg-subtle">{project.workspaceRoot || project.effectiveWorkspaceRoot || pm.common.defaultWorkspace}</p>
             </div>
           </aside>
         </section>
@@ -1837,7 +1839,7 @@ export function ProjectDetailPage() {
       {tab === 'files' ? (
         <section id="project-panel-files" role="tabpanel" aria-labelledby="project-tab-files" className="h-full min-h-[28rem]">
           <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface">
-            {project.workspaceRoot ? (
+            {project.effectiveWorkspaceRoot ? (
               <div
                 data-project-files-grid
                 className={cn(
@@ -2214,17 +2216,50 @@ export function ProjectDetailPage() {
                 </select>
               </Field>
             </div>
-            <Field label={pm.settings.workspaceRoot}>
-              <DirectoryPickerPathField
-                value={draft.workspaceRoot}
-                onChange={(workspaceRoot) => setDraft((d) => ({ ...d, workspaceRoot }))}
-                disabled={saving}
-                wd={wd}
-                placeholder={pm.settings.workspacePlaceholder}
-                inputClassName={inputClass()}
-              />
-              <span className="text-xs leading-5 text-fg-subtle">{pm.settings.workspaceHint}</span>
-            </Field>
+            <div className="grid gap-2 text-sm">
+              <span className="font-medium text-fg-muted">{pm.settings.workspaceMode}</span>
+              <div className="grid gap-2 md:grid-cols-2">
+                <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2', !draft.workspaceRoot.trim() ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
+                  <input
+                    type="radio"
+                    className="mt-0.5 size-4"
+                    checked={!draft.workspaceRoot.trim()}
+                    onChange={() => setDraft((d) => ({ ...d, workspaceRoot: '' }))}
+                    disabled={saving}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-medium">{pm.settings.workspaceModeFollow}</span>
+                    <span className="block text-xs leading-5 text-fg-subtle">{pm.settings.workspaceHint}</span>
+                  </span>
+                </label>
+                <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2', draft.workspaceRoot.trim() ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
+                  <input
+                    type="radio"
+                    className="mt-0.5 size-4"
+                    checked={Boolean(draft.workspaceRoot.trim())}
+                    onChange={() => setDraft((d) => ({ ...d, workspaceRoot: d.workspaceRoot || project.workspaceRoot || project.effectiveWorkspaceRoot || '' }))}
+                    disabled={saving}
+                  />
+                  <span className="min-w-0">
+                    <span className="block font-medium">{pm.settings.workspaceModeFixed}</span>
+                    <span className="block text-xs leading-5 text-fg-subtle">{pm.settings.workspaceCurrent ? interpolate(pm.settings.workspaceCurrent, { workspace: effectiveDraftWorkspace }) : effectiveDraftWorkspace}</span>
+                  </span>
+                </label>
+              </div>
+              {draft.workspaceRoot.trim() ? (
+                <DirectoryPickerPathField
+                  value={draft.workspaceRoot}
+                  onChange={(workspaceRoot) => setDraft((d) => ({ ...d, workspaceRoot }))}
+                  disabled={saving}
+                  wd={wd}
+                  placeholder={pm.settings.workspacePlaceholder}
+                  inputClassName={inputClass()}
+                />
+              ) : null}
+              <span className="text-xs leading-5 text-fg-subtle">
+                {interpolate(pm.settings.workspaceCurrent, { workspace: effectiveDraftWorkspace })}
+              </span>
+            </div>
             <Field label={pm.settings.description}>
               <input className={inputClass()} value={draft.description} onChange={(event) => setDraft((d) => ({ ...d, description: event.target.value }))} />
             </Field>

@@ -10,6 +10,8 @@ export interface Project {
   status: ProjectStatus;
   defaultAgentId?: string;
   workspaceRoot?: string;
+  workspaceMode?: 'followAgent' | 'fixed';
+  effectiveWorkspaceRoot?: string;
   brief?: string;
   instructions?: string;
   createdAt: number;

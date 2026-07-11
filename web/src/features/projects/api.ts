@@ -14,6 +14,8 @@ export type Project = {
   status: ProjectStatus;
   defaultAgentId?: string;
   workspaceRoot?: string;
+  workspaceMode?: 'followAgent' | 'fixed';
+  effectiveWorkspaceRoot?: string;
   brief?: string;
   instructions?: string;
   createdAt: string;
