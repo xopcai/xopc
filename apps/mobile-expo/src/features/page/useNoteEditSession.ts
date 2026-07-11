@@ -12,6 +12,7 @@ import {
   type Note,
   type NoteAttachment,
 } from '../../query/notes';
+import { queueWorkspaceOperation } from '../../sync/workspace-sync';
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -23,6 +24,13 @@ export type AttachmentDisplaySeed = {
   markdown: string;
   attachments: NoteAttachment[] | undefined;
 } | null;
+
+type SaveSnapshot = {
+  markdown: string;
+  title: string | undefined;
+  tags: string[] | undefined;
+  status: Note['status'];
+};
 
 type UseNoteEditSessionArgs = {
   id: string | undefined;
@@ -43,6 +51,21 @@ function tagsEqual(a: string[] | undefined, b: string[] | undefined): boolean {
   const right = b ?? [];
   if (left.length !== right.length) return false;
   return left.every((tag, index) => tag === right[index]);
+}
+
+function saveSnapshotsEqual(a: SaveSnapshot | null, b: SaveSnapshot): boolean {
+  if (!a) return false;
+  return a.markdown === b.markdown
+    && a.title === b.title
+    && tagsEqual(a.tags, b.tags)
+    && a.status === b.status;
+}
+
+function isRetryableSaveError(error: unknown): boolean {
+  const status = typeof (error as Partial<ApiError> | null)?.status === 'number'
+    ? (error as Partial<ApiError>).status
+    : undefined;
+  return status == null || status >= 500 || status === 408 || status === 429;
 }
 
 export function useNoteEditSession({
@@ -78,6 +101,7 @@ export function useNoteEditSession({
   const attachmentDisplayVersionRef = useRef(0);
   const saveInFlightRef = useRef<Promise<void> | null>(null);
   const saveAgainRef = useRef(false);
+  const queuedSaveSnapshotRef = useRef<SaveSnapshot | null>(null);
 
   markdownRef.current = markdown;
   titleRef.current = title;
@@ -123,6 +147,10 @@ export function useNoteEditSession({
       && (titleRef.current.trim() || undefined) === previousServerTitle
       && tagsEqual(tagsRef.current, previousServerTags)
       && statusRef.current === previousServerStatus;
+    const localMatchesNextServer = markdownRef.current === nextMarkdown
+      && (titleRef.current.trim() || undefined) === nextTitle
+      && tagsEqual(tagsRef.current, nextTags)
+      && statusRef.current === nextStatus;
     const shouldHydrateFromServer = isNewNote || !dirtyRef.current || localStillMatchesPreviousServer;
 
     if (shouldHydrateFromServer) {
@@ -142,6 +170,11 @@ export function useNoteEditSession({
         markdown: nextMarkdown,
         attachments: note.attachments,
       });
+      setEditorReady(true);
+    } else if (localMatchesNextServer) {
+      dirtyRef.current = false;
+      queuedSaveSnapshotRef.current = null;
+      setSaveState('saved');
       setEditorReady(true);
     } else {
       setEditorReady(true);
@@ -207,6 +240,17 @@ export function useNoteEditSession({
     const sentTitle = nextTitle;
     const sentTags = nextTags;
     const sentStatus = nextStatus;
+    const sentSnapshot: SaveSnapshot = {
+      markdown: sentMarkdown,
+      title: sentTitle,
+      tags: sentTags,
+      status: sentStatus,
+    };
+
+    if (saveSnapshotsEqual(queuedSaveSnapshotRef.current, sentSnapshot)) {
+      setSaveState('pending');
+      return;
+    }
 
     setSaveState('saving');
     const savePromise = (async () => {
@@ -225,6 +269,7 @@ export function useNoteEditSession({
         serverTitleRef.current = updated.title ?? undefined;
         serverTagsRef.current = updated.tags;
         serverStatusRef.current = updated.status;
+        queuedSaveSnapshotRef.current = null;
         attachmentDisplayVersionRef.current += 1;
         setAttachmentDisplaySeed({
           version: attachmentDisplayVersionRef.current,
@@ -240,8 +285,25 @@ export function useNoteEditSession({
         dirtyRef.current = changedWhileSaving;
         setSaveState(changedWhileSaving ? 'dirty' : 'saved');
         if (changedWhileSaving) saveAgainRef.current = true;
-      } catch {
-        setSaveState('failed');
+      } catch (error) {
+        if (!isRetryableSaveError(error)) {
+          setSaveState('failed');
+          setSnackMsg(error instanceof Error ? error.message : messages.savedOffline);
+          return;
+        }
+        queueWorkspaceOperation({
+          type: 'update_note',
+          noteId: id,
+          patch: {
+            markdown: sentMarkdown,
+            title: sentTitle ?? null,
+            tags: sentTags,
+            status: sentStatus,
+          },
+        });
+        queuedSaveSnapshotRef.current = sentSnapshot;
+        dirtyRef.current = true;
+        setSaveState('pending');
         setSnackMsg(messages.savedOffline);
       }
     })();

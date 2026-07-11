@@ -19,6 +19,7 @@ import { refreshNetworkSnapshotWithDeadline } from '@/features/gateway/network-i
 import { queryClient } from '@/query/query-client';
 import { useGatewayConfigured } from '@/query/sessions';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useWorkspaceSyncFlush } from '@/sync/use-workspace-sync-flush';
 import {
   subscribeSystemAppearance,
   usePreferencesStore,
@@ -39,6 +40,7 @@ export default function RootLayout() {
 
   useGatewaySse();
   useGatewayConnectionWatch(configured);
+  useWorkspaceSyncFlush(configured);
 
   const isDark = resolvedTheme === 'dark';
   const paperTheme = useMemo(() => createPaperTheme(isDark), [isDark]);

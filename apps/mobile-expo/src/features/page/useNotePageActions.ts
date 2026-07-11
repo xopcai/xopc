@@ -10,6 +10,7 @@ import { noteToIndexEntry, upsertNoteInListCaches } from '../../query/note-list-
 import { invalidateNoteLists } from '../../query/workspace-sync';
 import { updateNote, type Note } from '../../query/notes';
 import { createSession } from '../../query/sessions';
+import { flushWorkspaceSyncNow } from '../../sync/use-workspace-sync-flush';
 import { setAppClipboardStringAsync } from '../clipboard-intake/write-app-clipboard';
 import { writeNoteChatPrefill } from '../chat/note-chat-prefill-storage';
 import {
@@ -125,6 +126,7 @@ export function useNotePageActions({
     try {
       await flushEditorToDraft();
       await flushSave();
+      await flushWorkspaceSyncNow();
       if (id) await queryClient.invalidateQueries({ queryKey: queryKeys.note(id) });
       await invalidateNoteLists(queryClient);
       setSnackMsg(messages.saved);
