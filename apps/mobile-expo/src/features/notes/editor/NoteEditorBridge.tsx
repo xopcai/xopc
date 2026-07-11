@@ -40,6 +40,12 @@ type ToolbarAction = {
   onPress: () => void;
 };
 
+export type NoteEditorAiAction = {
+  key: string;
+  label: string;
+  instruction: string;
+};
+
 export type NoteEditorBridgeHandle = NoteEditorHandle;
 
 const TOOL_BUTTON_SIZE = 44;
@@ -123,6 +129,9 @@ export interface NoteEditorBridgeProps {
   onFocusChange?: (focused: boolean) => void;
   onNativeModalChange?: (open: boolean) => void;
   onRuntimeStateChange?: (state: EditorRuntimeState) => void;
+  aiActions?: NoteEditorAiAction[];
+  aiLoadingKey?: string | null;
+  onRequestAiAction?: (action: NoteEditorAiAction) => void;
   voiceFeedback?: ReactNode;
   voicePanHandlers?: GestureResponderHandlers;
   voicePressHandler?: () => void;
@@ -142,6 +151,9 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   onFocusChange,
   onNativeModalChange,
   onRuntimeStateChange,
+  aiActions = [],
+  aiLoadingKey,
+  onRequestAiAction,
   voiceFeedback,
   voicePanHandlers,
   voicePressHandler,
@@ -440,7 +452,8 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     pickAndInsertAttachment('document');
   }, [pickAndInsertAttachment]);
 
-  const actions = useMemo<ToolbarAction[]>(() => [
+  const actions = useMemo<ToolbarAction[]>(() => {
+    const nextActions: ToolbarAction[] = [
     {
       key: 'undo',
       label: labels.undo,
@@ -522,12 +535,19 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
       active: editorState.link,
       onPress: openLinkSheet,
     },
-    {
-      key: 'ai',
-      label: labels.ai,
-      icon: 'creation-outline',
-      onPress: () => openEditorSheet('ai'),
-    },
+    ];
+
+    if (onRequestAiAction && aiActions.length > 0) {
+      nextActions.push({
+        key: 'ai',
+        label: labels.ai,
+        icon: 'creation-outline',
+        disabled: Boolean(aiLoadingKey),
+        onPress: () => openEditorSheet('ai'),
+      });
+    }
+
+    nextActions.push(
     {
       key: 'audio',
       label: labels.audio,
@@ -537,7 +557,12 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
       panHandlers: voiceActive ? voicePanHandlers : undefined,
       onPress: voicePressHandler ?? (() => undefined),
     },
-  ], [
+    );
+
+    return nextActions;
+  }, [
+    aiActions.length,
+    aiLoadingKey,
     canUseDomEditor,
     dispatch,
     editorState.blockquote,
@@ -562,6 +587,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     labels.textStyle,
     labels.todo,
     labels.undo,
+    onRequestAiAction,
     openLinkSheet,
     openEditorSheet,
     voiceActive,
@@ -700,12 +726,17 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
         maxHeight="52%"
       >
         <View style={styles.imageMenu}>
-          {['Continue Writing', 'Rewrite', 'Translate', 'Summarize', 'Fix Grammar', 'Expand', 'Compress', 'Improve', 'Ask AI'].map((label) => (
+          {aiActions.map((action) => (
             <ImageSourceRow
-              key={label}
-              label={label}
+              key={action.key}
+              label={action.label}
               icon="sparkles"
-              onPress={closeEditorSheet}
+              disabled={Boolean(aiLoadingKey)}
+              suffix={aiLoadingKey === action.key ? '…' : undefined}
+              onPress={() => {
+                closeEditorSheet();
+                onRequestAiAction?.(action);
+              }}
             />
           ))}
         </View>
