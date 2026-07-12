@@ -115,7 +115,7 @@ describe('xopc_use tool', () => {
     }));
 
     expect(created.ok).toBe(true);
-    expect(created.project.workspaceRoot).toBe(realpathSync(workspaceRoot));
+    expect(realpathSync.native(created.project.workspaceRoot)).toBe(realpathSync.native(workspaceRoot));
   });
 
   it('creates and appends to a note', async () => {

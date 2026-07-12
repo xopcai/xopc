@@ -1,11 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { AlertCircle, ArrowLeft, Check, ChevronDown, Clock, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Copy, File, Folder, FolderOpen, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { automationApi, type Automation, type AutomationRun } from '@/features/automations/automation-api';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
@@ -18,6 +19,7 @@ import { GoalCreateDialog, normalizeChecklist, type CreateGoalDraft, type GoalCr
 import { NotesWorkbench } from '@/features/notes/notes-workbench';
 import {
   addProjectGoalChecklistItem,
+  archiveProject,
   createProjectBlocker,
   createProjectSession,
   createProjectGoal,
@@ -30,6 +32,9 @@ import {
   fetchProjects,
   fetchProjectSessions,
   saveProjectDigest,
+  pinProject,
+  restoreProject,
+  unpinProject,
   updateProject,
   type Project,
   type ProjectActivityEvent,
@@ -90,6 +95,7 @@ const PROJECT_FILES_PANEL_WIDTH_STORAGE_KEY = 'xopc.projectFiles.panelWidthPx';
 const PROJECT_FILES_PANEL_WIDTH_DEFAULT = 320;
 const PROJECT_FILES_PANEL_WIDTH_MIN = 220;
 const PROJECT_FILES_PANEL_WIDTH_MAX = 560;
+type WorkspaceMigrationMode = 'follow' | 'fixed';
 
 function clampProjectFilesPanelWidth(px: number): number {
   return Math.min(PROJECT_FILES_PANEL_WIDTH_MAX, Math.max(PROJECT_FILES_PANEL_WIDTH_MIN, Math.round(px)));
@@ -173,11 +179,12 @@ function workflowStatusTone(status: string): string {
   return 'bg-surface-hover text-fg-muted';
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="grid gap-1.5 text-sm">
       <span className="font-medium text-fg-muted">{label}</span>
       {children}
+      {hint ? <span className="text-xs leading-5 text-fg-subtle">{hint}</span> : null}
     </label>
   );
 }
@@ -682,6 +689,10 @@ export function ProjectDetailPage() {
   const [saving, setSaving] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [missingWorkspaceRoot, setMissingWorkspaceRoot] = useState<string | null>(null);
+  const [workspaceMigrationOpen, setWorkspaceMigrationOpen] = useState(false);
+  const [workspaceMigrationMode, setWorkspaceMigrationMode] = useState<WorkspaceMigrationMode>('fixed');
+  const [workspaceMigrationRoot, setWorkspaceMigrationRoot] = useState('');
+  const [projectActionBusy, setProjectActionBusy] = useState<'pin' | 'archive' | null>(null);
   const [deletingProject, setDeletingProject] = useState(false);
   const [startingChat, setStartingChat] = useState(false);
   const [createWorkItemRequestKey, setCreateWorkItemRequestKey] = useState(0);
@@ -1190,7 +1201,24 @@ export function ProjectDetailPage() {
     return () => clearPageHeader();
   }, [clearPageHeader, headerEnd, headerStart, pm, project, projectsText, setPageHeader, wd]);
 
-  async function submitProjectSave(options: { createWorkspaceRoot?: boolean } = {}) {
+  function applyProjectUpdate(updated: Project) {
+    setProject((current) => current ? { ...current, ...updated } : null);
+    setOverview((current) => current ? { ...current, project: { ...current.project, ...updated } } : null);
+    setSelectedAgentId(updated.defaultAgentId ?? '');
+    setDraft((current) => ({
+      ...current,
+      name: updated.name,
+      description: updated.description ?? '',
+      status: updated.status,
+      defaultAgentId: updated.defaultAgentId ?? '',
+      workspaceRoot: updated.workspaceRoot ?? '',
+      brief: updated.brief ?? '',
+      instructions: updated.instructions ?? '',
+    }));
+    window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: updated.id } }));
+  }
+
+  async function submitProjectSave() {
     if (!project || !draft.name.trim()) return;
     setSaving(true);
     setError(null);
@@ -1201,14 +1229,10 @@ export function ProjectDetailPage() {
         status: draft.status,
         description: draft.description,
         defaultAgentId: draft.defaultAgentId,
-        workspaceRoot: draft.workspaceRoot,
-        ...(options.createWorkspaceRoot ? { createWorkspaceRoot: true } : {}),
         brief: draft.brief,
         instructions: draft.instructions,
       });
-      setProject((current) => current ? { ...current, ...updated } : null);
-      setOverview((current) => current ? { ...current, project: { ...current.project, ...updated } } : null);
-      setSelectedAgentId(updated.defaultAgentId ?? '');
+      applyProjectUpdate(updated);
     } catch (err) {
       const missingRoot = getMissingWorkspaceRoot(err);
       if (missingRoot) {
@@ -1224,6 +1248,70 @@ export function ProjectDetailPage() {
   function saveProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void submitProjectSave();
+  }
+
+  const openWorkspaceMigration = useCallback(() => {
+    if (!project) return;
+    const fixedRoot = project.workspaceRoot?.trim() ?? '';
+    setWorkspaceMigrationMode(fixedRoot ? 'fixed' : 'follow');
+    setWorkspaceMigrationRoot(fixedRoot || project.effectiveWorkspaceRoot || '');
+    setWorkspaceMigrationOpen(true);
+  }, [project]);
+
+  async function submitWorkspaceMigration(options: { createWorkspaceRoot?: boolean } = {}) {
+    if (!project) return;
+    const nextWorkspaceRoot = workspaceMigrationMode === 'fixed' ? workspaceMigrationRoot.trim() : '';
+    if (workspaceMigrationMode === 'fixed' && !nextWorkspaceRoot) return;
+    setSaving(true);
+    setError(null);
+    setMissingWorkspaceRoot(null);
+    try {
+      const updated = await updateProject(project.id, {
+        workspaceRoot: nextWorkspaceRoot,
+        ...(options.createWorkspaceRoot ? { createWorkspaceRoot: true } : {}),
+      });
+      applyProjectUpdate(updated);
+      setWorkspaceMigrationOpen(false);
+      setMissingWorkspaceRoot(null);
+    } catch (err) {
+      const missingRoot = getMissingWorkspaceRoot(err);
+      if (missingRoot) {
+        setMissingWorkspaceRoot(missingRoot);
+        setWorkspaceMigrationOpen(false);
+      } else {
+        setError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleProjectPin() {
+    if (!project || projectActionBusy) return;
+    setProjectActionBusy('pin');
+    setError(null);
+    try {
+      const updated = project.pinnedAt ? await unpinProject(project.id) : await pinProject(project.id);
+      applyProjectUpdate(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProjectActionBusy(null);
+    }
+  }
+
+  async function toggleProjectArchive() {
+    if (!project || projectActionBusy) return;
+    setProjectActionBusy('archive');
+    setError(null);
+    try {
+      const updated = project.status === 'archived' ? await restoreProject(project.id) : await archiveProject(project.id);
+      applyProjectUpdate(updated);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProjectActionBusy(null);
+    }
   }
 
   async function removeProject() {
@@ -1409,12 +1497,40 @@ export function ProjectDetailPage() {
   const sessionsSearchMiss = sessions.length > 0 && visibleSessions.length === 0;
   const selectedAgentLabel = agents.find((agent) => agent.id === draft.defaultAgentId)?.name || draft.defaultAgentId || pm.settings.globalDefaultAgent;
   const selectedDraftAgent = agents.find((agent) => agent.id === draft.defaultAgentId);
-  const effectiveDraftWorkspace = draft.workspaceRoot.trim() || selectedDraftAgent?.workspace || project.effectiveWorkspaceRoot || pm.common.defaultWorkspace;
-  const workspaceRootLabel = draft.workspaceRoot.trim() || effectiveDraftWorkspace;
+  const fixedProjectWorkspace = project.workspaceRoot?.trim() || '';
+  const projectIsArchived = project.status === 'archived';
+  const projectIsPinned = Boolean(project.pinnedAt);
+  const projectFollowsAgentWorkspace = !fixedProjectWorkspace;
+  const effectiveDraftWorkspace = fixedProjectWorkspace || selectedDraftAgent?.workspace || project.effectiveWorkspaceRoot || pm.common.defaultWorkspace;
+  const workspaceRootLabel = effectiveDraftWorkspace;
+  const workspaceMigrationPreview = workspaceMigrationMode === 'fixed'
+    ? (workspaceMigrationRoot.trim() || pm.settings.workspacePlaceholder)
+    : (selectedDraftAgent?.workspace || project.effectiveWorkspaceRoot || pm.common.defaultWorkspace);
+  const workspaceMigrationValue = workspaceMigrationMode === 'fixed' ? workspaceMigrationRoot.trim() : '';
+  const workspaceMigrationChanged = workspaceMigrationValue !== fixedProjectWorkspace;
+  const workspaceMigrationCanSubmit = workspaceMigrationChanged && (workspaceMigrationMode === 'follow' || Boolean(workspaceMigrationRoot.trim()));
+  const canOpenProjectWorkspace = Boolean(workspaceRootLabel && window.electronAPI?.shell?.openPath);
   const tabItems = tabOrder.map((id) => {
     const item = TABS.find((candidate) => candidate.id === id)!;
     return { ...item, label: item.id === 'work-items' ? pm.workItems.tab : pm.tabs[item.id] };
   });
+
+  async function openProjectWorkspaceFolder() {
+    if (!workspaceRootLabel || !window.electronAPI?.shell?.openPath) return;
+    const result = await window.electronAPI.shell.openPath(workspaceRootLabel);
+    if (result.error) showComposerNotification('warning', result.error, undefined, { duration: 4000 });
+  }
+
+  async function copyProjectWorkspacePath() {
+    if (!workspaceRootLabel) return;
+    const ok = await copyTextToClipboard(workspaceRootLabel);
+    showComposerNotification(ok ? 'success' : 'warning', ok ? msg.workspace.pathCopied : msg.clipboard.copyFailed, undefined, { duration: ok ? 2500 : 4000 });
+  }
+
+  function returnToWorkspaceMigrationFromMissingWorkspace() {
+    setMissingWorkspaceRoot(null);
+    setWorkspaceMigrationOpen(true);
+  }
 
   return (
     <main className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden px-3 py-3 sm:px-5 sm:py-4 xl:px-6">
@@ -2182,9 +2298,10 @@ export function ProjectDetailPage() {
                 {pm.settings.statuses[draft.status]}
               </span>
             </div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               <SettingsMetaItem label={pm.settings.workspaceRoot} value={workspaceRootLabel} mono />
               <SettingsMetaItem label={pm.settings.defaultAgent} value={selectedAgentLabel} />
+              <SettingsMetaItem label={pm.settings.pinState} value={projectIsPinned ? pm.settings.pinned : pm.settings.notPinned} />
               <SettingsMetaItem label={pm.settings.createdAt} value={formatDate(project.createdAt) || pm.common.never} />
               <SettingsMetaItem label={pm.settings.updatedAt} value={formatDate(project.updatedAt) || pm.common.never} />
             </div>
@@ -2198,83 +2315,129 @@ export function ProjectDetailPage() {
               <Field label={pm.settings.name}>
                 <input className={inputClass()} value={draft.name} onChange={(event) => setDraft((d) => ({ ...d, name: event.target.value }))} />
               </Field>
-              <Field label={pm.settings.status}>
-                <select className={inputClass()} value={draft.status} onChange={(event) => setDraft((d) => ({ ...d, status: event.target.value as ProjectStatus }))}>
-                  <option value="active">{pm.settings.statuses.active}</option>
-                  <option value="paused">{pm.settings.statuses.paused}</option>
-                  <option value="archived">{pm.settings.statuses.archived}</option>
-                </select>
-              </Field>
               <Field label={pm.settings.defaultAgent}>
-                <select className={inputClass()} value={draft.defaultAgentId} onChange={(event) => setDraft((d) => ({ ...d, defaultAgentId: event.target.value }))}>
-                  <option value="">{pm.settings.globalDefaultAgent}</option>
+                <Select className={inputClass()} value={draft.defaultAgentId} onChange={(event) => setDraft((d) => ({ ...d, defaultAgentId: event.target.value }))}>
+                  <SelectOption value="">{pm.settings.globalDefaultAgent}</SelectOption>
                   {agents.map((agent) => (
-                    <option key={agent.id} value={agent.id}>
+                    <SelectOption key={agent.id} value={agent.id}>
                       {agent.name || agent.id}
-                    </option>
+                    </SelectOption>
                   ))}
-                </select>
+                </Select>
+              </Field>
+              <Field label={pm.settings.status}>
+                {projectIsArchived ? (
+                  <div className="grid min-h-10 content-center rounded-md border border-edge bg-surface-muted px-3 text-sm text-fg-muted">
+                    {pm.settings.statuses.archived}
+                  </div>
+                ) : (
+                  <Select className={inputClass()} value={draft.status === 'archived' ? 'active' : draft.status} onChange={(event) => setDraft((d) => ({ ...d, status: event.target.value as ProjectStatus }))}>
+                    <SelectOption value="active">{pm.settings.statuses.active}</SelectOption>
+                    <SelectOption value="paused">{pm.settings.statuses.paused}</SelectOption>
+                  </Select>
+                )}
+              </Field>
+              <Field label={pm.settings.description} hint={pm.settings.descriptionHint}>
+                <textarea className={inputClass(true)} value={draft.description} onChange={(event) => setDraft((d) => ({ ...d, description: event.target.value }))} />
               </Field>
             </div>
+          </section>
+
+          <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
             <div className="grid gap-2 text-sm">
-              <span className="font-medium text-fg-muted">{pm.settings.workspaceMode}</span>
-              <div className="grid gap-2 md:grid-cols-2">
-                <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2', !draft.workspaceRoot.trim() ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
-                  <input
-                    type="radio"
-                    className="mt-0.5 size-4"
-                    checked={!draft.workspaceRoot.trim()}
-                    onChange={() => setDraft((d) => ({ ...d, workspaceRoot: '' }))}
-                    disabled={saving}
-                  />
-                  <span className="min-w-0">
-                    <span className="block font-medium">{pm.settings.workspaceModeFollow}</span>
-                    <span className="block text-xs leading-5 text-fg-subtle">{pm.settings.workspaceHint}</span>
-                  </span>
-                </label>
-                <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2', draft.workspaceRoot.trim() ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
-                  <input
-                    type="radio"
-                    className="mt-0.5 size-4"
-                    checked={Boolean(draft.workspaceRoot.trim())}
-                    onChange={() => setDraft((d) => ({ ...d, workspaceRoot: d.workspaceRoot || project.workspaceRoot || project.effectiveWorkspaceRoot || '' }))}
-                    disabled={saving}
-                  />
-                  <span className="min-w-0">
-                    <span className="block font-medium">{pm.settings.workspaceModeFixed}</span>
-                    <span className="block text-xs leading-5 text-fg-subtle">{pm.settings.workspaceCurrent ? interpolate(pm.settings.workspaceCurrent, { workspace: effectiveDraftWorkspace }) : effectiveDraftWorkspace}</span>
-                  </span>
-                </label>
+              <span className="font-medium text-fg-muted">{pm.settings.workspaceRoot}</span>
+              <div className="grid gap-3 rounded-md border border-edge bg-surface-base px-3 py-3">
+                <div className="flex min-w-0 flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-md bg-surface-muted px-2 py-0.5 text-xs font-medium text-fg-muted">
+                        {projectFollowsAgentWorkspace ? pm.settings.workspaceModeFollow : pm.settings.workspaceModeFixed}
+                      </span>
+                    </div>
+                    <div className="mt-2 break-all font-mono text-xs leading-5 text-fg" title={workspaceRootLabel}>
+                      {workspaceRootLabel}
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Button type="button" variant="ghost" className="rounded-lg" onClick={() => void copyProjectWorkspacePath()}>
+                      <Copy className="size-4" aria-hidden />
+                      {pm.settings.copyWorkspacePath}
+                    </Button>
+                    <Button type="button" variant="ghost" className="rounded-lg" onClick={() => void openProjectWorkspaceFolder()} disabled={!canOpenProjectWorkspace}>
+                      <FolderOpen className="size-4" aria-hidden />
+                      {pm.settings.openWorkspace}
+                    </Button>
+                    <Button type="button" variant="ghost" className="rounded-lg" onClick={openWorkspaceMigration}>
+                      <FolderPlus className="size-4" aria-hidden />
+                      {pm.settings.migrateWorkspace}
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs leading-5 text-fg-subtle">{pm.settings.workspaceMigrationHint}</p>
               </div>
-              {draft.workspaceRoot.trim() ? (
-                <DirectoryPickerPathField
-                  value={draft.workspaceRoot}
-                  onChange={(workspaceRoot) => setDraft((d) => ({ ...d, workspaceRoot }))}
-                  disabled={saving}
-                  wd={wd}
-                  placeholder={pm.settings.workspacePlaceholder}
-                  inputClassName={inputClass()}
-                />
-              ) : null}
-              <span className="text-xs leading-5 text-fg-subtle">
-                {interpolate(pm.settings.workspaceCurrent, { workspace: effectiveDraftWorkspace })}
-              </span>
             </div>
-            <Field label={pm.settings.description}>
-              <input className={inputClass()} value={draft.description} onChange={(event) => setDraft((d) => ({ ...d, description: event.target.value }))} />
-            </Field>
-            <Field label={pm.settings.brief}>
+          </section>
+
+          <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
+            <div>
+              <h2 className="text-sm font-semibold text-fg">{pm.settings.agentContextTitle}</h2>
+              <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.agentContextHint}</p>
+            </div>
+            <Field label={pm.settings.brief} hint={pm.settings.briefHint}>
               <textarea className={inputClass(true)} value={draft.brief} onChange={(event) => setDraft((d) => ({ ...d, brief: event.target.value }))} />
             </Field>
-            <Field label={pm.settings.instructions}>
+            <Field label={pm.settings.instructions} hint={pm.settings.instructionsHint}>
               <textarea className={inputClass(true)} value={draft.instructions} onChange={(event) => setDraft((d) => ({ ...d, instructions: event.target.value }))} />
             </Field>
           </section>
-          <div className="flex flex-wrap justify-between gap-2 border-t border-edge pt-4">
-            <Button type="button" variant="ghost" onClick={() => setDeleteConfirmOpen(true)}>
+
+          <section className="grid gap-4 rounded-lg bg-surface-panel p-4 shadow-surface">
+            <div>
+              <h2 className="text-sm font-semibold text-fg">{pm.settings.managementTitle}</h2>
+              <p className="mt-1 text-sm leading-6 text-fg-muted">{pm.settings.managementHint}</p>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="grid gap-3 rounded-md border border-edge bg-surface-base px-3 py-3">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-medium text-fg">{projectIsPinned ? pm.settings.pinnedTitle : pm.settings.pinTitle}</h3>
+                  <p className="mt-1 text-xs leading-5 text-fg-subtle">{pm.settings.pinHint}</p>
+                </div>
+                <Button type="button" variant="ghost" className="w-fit rounded-lg" disabled={projectActionBusy === 'pin'} onClick={() => void toggleProjectPin()}>
+                  {projectIsPinned ? <PinOff className="size-4" aria-hidden /> : <Pin className="size-4" aria-hidden />}
+                  {projectIsPinned ? pm.settings.unpinProject : pm.settings.pinProject}
+                </Button>
+              </div>
+              <div className="grid gap-3 rounded-md border border-edge bg-surface-base px-3 py-3">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-medium text-fg">{projectIsArchived ? pm.settings.restoreTitle : pm.settings.archiveTitle}</h3>
+                  <p className="mt-1 text-xs leading-5 text-fg-subtle">{projectIsArchived ? pm.settings.restoreHint : pm.settings.archiveHint}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant={projectIsArchived ? 'primary' : 'ghost'}
+                  className="w-fit rounded-lg"
+                  disabled={projectActionBusy === 'archive'}
+                  onClick={() => void toggleProjectArchive()}
+                >
+                  {projectIsArchived ? <RotateCcw className="size-4" aria-hidden /> : <Archive className="size-4" aria-hidden />}
+                  {projectIsArchived ? pm.settings.restoreProject : pm.settings.archiveProject}
+                </Button>
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-3 rounded-lg border border-red-500/20 bg-red-500/5 p-4">
+            <div>
+              <h2 className="text-sm font-semibold text-red-700 dark:text-red-300">{pm.settings.dangerTitle}</h2>
+              <p className="mt-1 text-sm leading-6 text-red-700/80 dark:text-red-200/80">{pm.settings.dangerHint}</p>
+            </div>
+            <Button type="button" variant="ghost" className="w-fit text-red-600 hover:bg-red-500/10 hover:text-red-700 focus-visible:ring-red-500 dark:text-red-400 dark:hover:text-red-300" onClick={() => setDeleteConfirmOpen(true)}>
               <Trash2 className="size-4" aria-hidden />
-              {pm.common.delete}
+              {pm.settings.deleteConfirmAction}
             </Button>
+          </section>
+
+          <div className="flex flex-wrap justify-end gap-2 border-t border-edge pt-4">
             <Button type="submit" variant="primary" disabled={saving || !draft.name.trim()}>
               <Save className="size-4" aria-hidden />
               {pm.common.save}
@@ -2327,6 +2490,86 @@ export function ProjectDetailPage() {
         </Dialog.Portal>
       </Dialog.Root>
 
+      <Dialog.Root
+        open={workspaceMigrationOpen}
+        onOpenChange={(open) => {
+          if (!saving) setWorkspaceMigrationOpen(open);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[90] flex h-[min(34rem,calc(100vh-2rem))] w-[min(36rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-float focus:outline-none">
+            <div className="shrink-0 border-b border-edge px-5 py-4">
+              <Dialog.Title className="text-base font-semibold text-fg">{pm.settings.workspaceMigrationTitle}</Dialog.Title>
+              <Dialog.Description className="mt-1 text-sm leading-6 text-fg-muted">
+                {pm.settings.workspaceMigrationDescription}
+              </Dialog.Description>
+            </div>
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
+              <div className="grid gap-2 text-sm">
+                <span className="font-medium text-fg-muted">{pm.settings.workspaceMode}</span>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2', workspaceMigrationMode === 'fixed' ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
+                    <input
+                      type="radio"
+                      className="mt-0.5 size-4"
+                      checked={workspaceMigrationMode === 'fixed'}
+                      onChange={() => setWorkspaceMigrationMode('fixed')}
+                      disabled={saving}
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-medium">{pm.settings.workspaceModeFixed}</span>
+                      <span className="block text-xs leading-5 text-fg-subtle">{pm.settings.workspaceMigrationFixedHint}</span>
+                    </span>
+                  </label>
+                  <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2', workspaceMigrationMode === 'follow' ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
+                    <input
+                      type="radio"
+                      className="mt-0.5 size-4"
+                      checked={workspaceMigrationMode === 'follow'}
+                      onChange={() => setWorkspaceMigrationMode('follow')}
+                      disabled={saving}
+                    />
+                    <span className="min-w-0">
+                      <span className="block font-medium">{pm.settings.workspaceModeFollow}</span>
+                      <span className="block text-xs leading-5 text-fg-subtle">{pm.settings.workspaceHint}</span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+              {workspaceMigrationMode === 'fixed' ? (
+                <DirectoryPickerPathField
+                  value={workspaceMigrationRoot}
+                  onChange={setWorkspaceMigrationRoot}
+                  disabled={saving}
+                  wd={wd}
+                  placeholder={pm.settings.workspacePlaceholder}
+                  inputClassName={inputClass()}
+                  autoFocus
+                />
+              ) : null}
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm leading-6 text-amber-800 dark:text-amber-200">
+                {pm.settings.workspaceMigrationImpact}
+              </div>
+              <div className="rounded-lg bg-surface-muted px-3 py-2 text-xs leading-5 text-fg-subtle">
+                {interpolate(pm.settings.workspaceCurrent, { workspace: workspaceMigrationPreview })}
+              </div>
+            </div>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-5 py-4">
+              <Dialog.Close asChild>
+                <Button type="button" variant="ghost" className="rounded-lg" disabled={saving}>
+                  {pm.common.cancel}
+                </Button>
+              </Dialog.Close>
+              <Button type="button" variant="primary" className="rounded-lg" disabled={saving || !workspaceMigrationCanSubmit} onClick={() => void submitWorkspaceMigration()}>
+                <FolderPlus className="size-4" aria-hidden />
+                {pm.settings.workspaceMigrationConfirm}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
       <Dialog.Root open={Boolean(missingWorkspaceRoot)} onOpenChange={(open) => {
         if (!open) setMissingWorkspaceRoot(null);
       }}>
@@ -2350,10 +2593,10 @@ export function ProjectDetailPage() {
               </div>
             ) : null}
             <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
-              <Button type="button" variant="ghost" className="rounded-lg" onClick={() => setMissingWorkspaceRoot(null)} disabled={saving}>
+              <Button type="button" variant="ghost" className="rounded-lg" onClick={returnToWorkspaceMigrationFromMissingWorkspace} disabled={saving}>
                 {pm.settings.workspaceMissingBack}
               </Button>
-              <Button type="button" variant="primary" className="rounded-lg" onClick={() => void submitProjectSave({ createWorkspaceRoot: true })} disabled={saving}>
+              <Button type="button" variant="primary" className="rounded-lg" onClick={() => void submitWorkspaceMigration({ createWorkspaceRoot: true })} disabled={saving}>
                 <FolderPlus className="size-4" aria-hidden />
                 {pm.settings.workspaceMissingCreate}
               </Button>

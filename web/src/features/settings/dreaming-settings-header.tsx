@@ -1,6 +1,7 @@
 import { Loader2, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import type { DreamingConfigState } from '@/features/settings/dreaming-config-api';
 import { type DreamingSettingsI18n } from '@/features/settings/dreaming-settings-shared';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
@@ -42,7 +43,7 @@ export function DreamingHeader({
       actions={
         <>
         {agents.length > 0 ? (
-          <select
+          <Select
             className="h-9 max-w-44 rounded-md border border-edge bg-surface-panel px-2 text-sm text-fg outline-none transition focus:border-accent"
             value={selectedAgentId}
             disabled={!hasToken || cfgSaving}
@@ -50,11 +51,11 @@ export function DreamingHeader({
             aria-label="Agent"
           >
             {agents.map((agent) => (
-              <option key={agent.id} value={agent.id}>
+              <SelectOption key={agent.id} value={agent.id}>
                 {agent.name || agent.id}
-              </option>
+              </SelectOption>
             ))}
-          </select>
+          </Select>
         ) : null}
         <Button
           type="button"

@@ -12,9 +12,10 @@ describe('exec_command tool', () => {
     try {
       const tool = createExecCommandTool(workspace);
       const updates: unknown[] = [];
+      const node = JSON.stringify(process.execPath);
       const result = await tool.execute(
         'tc1',
-        { cmd: 'printf "hello"; printf "err" >&2', timeoutMs: 10_000 },
+        { cmd: `${node} -e "process.stdout.write('hello'); process.stderr.write('err')"`, timeoutMs: 10_000 },
         undefined,
         (update) => {
           updates.push(update.details);
@@ -43,8 +44,9 @@ describe('exec_command tool', () => {
     const workspace = await mkdtemp(join(tmpdir(), 'xopc-exec-'));
     try {
       const tool = createExecCommandTool(workspace);
+      const node = JSON.stringify(process.execPath);
       const result = await tool.execute('tc2', {
-        cmd: 'printf "bad" >&2; exit 7',
+        cmd: `${node} -e "process.stderr.write('bad'); process.exit(7)"`,
         timeoutMs: 10_000,
       });
 

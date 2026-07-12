@@ -4,6 +4,7 @@ import { BriefcaseBusiness, ChevronDown, FileText, Target } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
 import { ChatGoalBanner } from '@/features/chat/goals/chat-goal-banner';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
@@ -1149,7 +1150,7 @@ export function ChatPage() {
                 />
                 <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                   <span className="text-sm font-medium text-fg">{m.chat.workItemUpdateStatusLabel}</span>
-                  <select
+                  <Select
                     value={workItemUpdateDraft?.status ?? ''}
                     onChange={(event) =>
                       setWorkItemUpdateDraft((draft) => draft ? { ...draft, status: event.target.value as WorkItemStatus | '' } : draft)
@@ -1157,11 +1158,11 @@ export function ChatPage() {
                     disabled={workItemUpdateSubmitting || !workItemUpdateDraft?.statusEnabled}
                     className="h-9 rounded-lg border border-edge bg-surface-panel px-2 text-sm text-fg outline-none focus:border-accent"
                   >
-                    <option value="">{m.chat.workItemUpdateStatusUnchanged}</option>
+                    <SelectOption value="">{m.chat.workItemUpdateStatusUnchanged}</SelectOption>
                     {WORK_ITEM_STATUS_OPTIONS.map((status) => (
-                      <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>
+                      <SelectOption key={status} value={status}>{status.replace(/_/g, ' ')}</SelectOption>
                     ))}
-                  </select>
+                  </Select>
                 </span>
               </label>
 

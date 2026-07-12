@@ -245,6 +245,25 @@ describe('ProjectService', () => {
     expect(projects.get(project.id)?.defaultAgentId).toBeUndefined();
   });
 
+  it('pins projects ahead of more recent sidebar projects', () => {
+    const recent = projects.create({ name: 'Recent Sidebar Project' });
+    const pinned = projects.create({ name: 'Pinned Sidebar Project' });
+    ensureSessionRecord('agent:main:webchat:default:direct:recent-sidebar-project', process.cwd(), {
+      projectId: recent.id,
+    });
+    ensureSessionRecord('agent:main:webchat:default:direct:pinned-sidebar-project', process.cwd(), {
+      projectId: pinned.id,
+    });
+
+    projects.pin(pinned.id);
+
+    const page = projects.listWithSidebarSessions({ status: 'active', limit: 10 });
+    expect(page.items.map((project) => project.id).slice(0, 2)).toEqual([pinned.id, recent.id]);
+
+    projects.unpin(pinned.id);
+    expect(projects.get(pinned.id)?.pinnedAt).toBeUndefined();
+  });
+
   it('binds sessions and goals without deleting them when project is deleted', () => {
     const project = projects.create({ name: 'Grouped Work' });
     ensureSessionRecord(SESSION_KEY, process.cwd());

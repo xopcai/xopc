@@ -4,6 +4,7 @@ import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useSt
 import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import {
   createProject,
@@ -97,8 +98,9 @@ export function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
+  const [nameEdited, setNameEdited] = useState(false);
   const [workspaceRoot, setWorkspaceRoot] = useState('');
-  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('follow');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('fixed');
   const [projectKind, setProjectKind] = useState<ProjectKindSelection>('auto');
   const [agentChoice, setAgentChoice] = useState<AgentChoice>(AUTO_AGENT_CHOICE);
   const [agents, setAgents] = useState<GatewayAgentRow[]>([]);
@@ -109,6 +111,16 @@ export function ProjectsPage() {
   const [creating, setCreating] = useState(false);
   const [workspaceConflict, setWorkspaceConflict] = useState<Project | null>(null);
   const [missingWorkspaceRoot, setMissingWorkspaceRoot] = useState<string | null>(null);
+
+  const updateProjectName = useCallback((value: string) => {
+    setName(value);
+    setNameEdited(Boolean(value.trim()));
+  }, []);
+
+  const updateWorkspaceRoot = useCallback((value: string) => {
+    setWorkspaceRoot(value);
+    if (!nameEdited) setName(directoryName(value));
+  }, [nameEdited]);
 
   useEffect(() => {
     let cancelled = false;
@@ -204,8 +216,9 @@ export function ProjectsPage() {
       });
       setProjects((items) => [project, ...items]);
       setName('');
+      setNameEdited(false);
       setWorkspaceRoot('');
-      setWorkspaceMode('follow');
+      setWorkspaceMode('fixed');
       setProjectKind('auto');
       setAgentChoice(AUTO_AGENT_CHOICE);
       setCreateOpen(false);
@@ -342,32 +355,9 @@ export function ProjectsPage() {
             </div>
             <form onSubmit={onCreate} className="flex min-h-0 flex-1 flex-col">
               <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4">
-                <label className="grid gap-1.5 text-sm">
-                  <span className="font-medium text-fg-muted">{t.projectName}</span>
-                  <input
-                    className="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    placeholder={workspaceRoot.trim() ? directoryName(workspaceRoot) || 'xopc' : 'xopc'}
-                    autoFocus
-                  />
-                </label>
                 <div className="grid gap-1.5 text-sm">
                   <span className="font-medium text-fg-muted">{t.workspaceRoot}</span>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2 text-sm', workspaceMode === 'follow' ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
-                      <input
-                        type="radio"
-                        className="mt-0.5 size-4"
-                        checked={workspaceMode === 'follow'}
-                        onChange={() => setWorkspaceMode('follow')}
-                        disabled={creating}
-                      />
-                      <span className="min-w-0">
-                        <span className="block font-medium">{t.workspaceModeFollow}</span>
-                        <span className="block text-xs leading-5 text-fg-subtle">{t.workspaceFollowHint}</span>
-                      </span>
-                    </label>
                     <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2 text-sm', workspaceMode === 'fixed' ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
                       <input
                         type="radio"
@@ -381,15 +371,29 @@ export function ProjectsPage() {
                         <span className="block text-xs leading-5 text-fg-subtle">{t.workspaceFixedHint}</span>
                       </span>
                     </label>
+                    <label className={cn('flex min-h-10 items-start gap-2 rounded-md border px-3 py-2 text-sm', workspaceMode === 'follow' ? 'border-accent bg-accent-soft/40 text-fg' : 'border-edge bg-surface-base text-fg-muted')}>
+                      <input
+                        type="radio"
+                        className="mt-0.5 size-4"
+                        checked={workspaceMode === 'follow'}
+                        onChange={() => setWorkspaceMode('follow')}
+                        disabled={creating}
+                      />
+                      <span className="min-w-0">
+                        <span className="block font-medium">{t.workspaceModeFollow}</span>
+                        <span className="block text-xs leading-5 text-fg-subtle">{t.workspaceFollowHint}</span>
+                      </span>
+                    </label>
                   </div>
                   {workspaceMode === 'fixed' ? (
                     <DirectoryPickerPathField
                       value={workspaceRoot}
-                      onChange={setWorkspaceRoot}
+                      onChange={updateWorkspaceRoot}
                       disabled={creating}
                       wd={wd}
                       placeholder={t.workspacePlaceholder}
                       inputClassName="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
+                      autoFocus
                     />
                   ) : null}
                   <p className="text-xs text-fg-subtle">
@@ -397,34 +401,43 @@ export function ProjectsPage() {
                   </p>
                 </div>
                 <label className="grid gap-1.5 text-sm">
+                  <span className="font-medium text-fg-muted">{t.projectName}</span>
+                  <input
+                    className="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-accent"
+                    value={name}
+                    onChange={(event) => updateProjectName(event.target.value)}
+                    placeholder={workspaceRoot.trim() ? directoryName(workspaceRoot) || 'xopc' : 'xopc'}
+                  />
+                </label>
+                <label className="grid gap-1.5 text-sm">
                   <span className="font-medium text-fg-muted">{t.projectType}</span>
-                  <select
+                  <Select
                     className="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
                     value={projectKind}
                     onChange={(event) => setProjectKind(event.target.value as ProjectKindSelection)}
                     disabled={creating}
                   >
-                    <option value="auto">{t.projectTypes.auto}</option>
-                    <option value="coding">{t.projectTypes.coding}</option>
-                    <option value="general">{t.projectTypes.general}</option>
-                  </select>
+                    <SelectOption value="auto">{t.projectTypes.auto}</SelectOption>
+                    <SelectOption value="coding">{t.projectTypes.coding}</SelectOption>
+                    <SelectOption value="general">{t.projectTypes.general}</SelectOption>
+                  </Select>
                 </label>
                 <label className="grid gap-1.5 text-sm">
                   <span className="font-medium text-fg-muted">{t.defaultAgent}</span>
-                  <select
+                  <Select
                     className="min-h-10 rounded-md border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent"
                     value={agentChoice}
                     onChange={(event) => setAgentChoice(event.target.value)}
                     disabled={creating}
                   >
-                    <option value={AUTO_AGENT_CHOICE}>{t.agentAuto}</option>
-                    <option value={GLOBAL_AGENT_CHOICE}>{t.agentGlobalDefault}</option>
+                    <SelectOption value={AUTO_AGENT_CHOICE}>{t.agentAuto}</SelectOption>
+                    <SelectOption value={GLOBAL_AGENT_CHOICE}>{t.agentGlobalDefault}</SelectOption>
                     {agents.map((agent) => (
-                      <option key={agent.id} value={agent.id}>
+                      <SelectOption key={agent.id} value={agent.id}>
                         {agent.name || agent.id}
-                      </option>
+                      </SelectOption>
                     ))}
-                  </select>
+                  </Select>
                   <p className="text-xs text-fg-subtle">{createAgentHint}</p>
                 </label>
               </div>
@@ -434,7 +447,7 @@ export function ProjectsPage() {
                     {t.cancel}
                   </Button>
                 </Dialog.Close>
-                <Button type="submit" variant="primary" className="rounded-lg" disabled={creating || !name.trim() || (workspaceMode === 'fixed' && !workspaceRoot.trim())}>
+                <Button type="submit" variant="primary" className="rounded-lg" disabled={creating || (!name.trim() && (workspaceMode !== 'fixed' || !workspaceRoot.trim()))}>
                   <Plus className="size-4" aria-hidden />
                   {t.create}
                 </Button>

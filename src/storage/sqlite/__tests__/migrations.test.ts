@@ -146,6 +146,22 @@ describe('SQLite migrations', () => {
   it('upgrades v21 databases with first-class work item tables', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
+    db.exec(`
+      CREATE TABLE projects (
+        project_id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        description TEXT,
+        status TEXT NOT NULL DEFAULT 'active',
+        default_agent_id TEXT,
+        workspace_root TEXT,
+        brief TEXT,
+        instructions TEXT,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        last_active_at INTEGER
+      );
+    `);
     setSchemaVersion(db, 21);
 
     const finalVersion = applyPendingMigrations(db);

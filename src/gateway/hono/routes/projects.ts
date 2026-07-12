@@ -1010,6 +1010,24 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, goal: blocked ?? goals.get(goal.id) }, 201);
   });
 
+  authenticated.post('/api/projects/:id/pin', async (c) => {
+    try {
+      const project = service.projects.pin(c.req.param('id'));
+      return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
+    }
+  });
+
+  authenticated.post('/api/projects/:id/unpin', async (c) => {
+    try {
+      const project = service.projects.unpin(c.req.param('id'));
+      return c.json({ ok: true, project: enrichProjectWorkspace(service, project) });
+    } catch (error) {
+      return c.json({ ok: false, error: error instanceof Error ? error.message : String(error) }, 404);
+    }
+  });
+
   authenticated.get('/api/projects/:id', async (c) => {
     const project = service.projects.getWithDetails(c.req.param('id'));
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);

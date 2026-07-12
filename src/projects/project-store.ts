@@ -26,6 +26,7 @@ export type ProjectRow = {
   created_at: number;
   updated_at: number;
   last_active_at: number | null;
+  pinned_at: number | null;
 };
 
 function trimOptional(value: string | null | undefined): string | undefined {
@@ -54,6 +55,7 @@ function projectFromRow(row: ProjectRow): Project {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastActiveAt: row.last_active_at ?? undefined,
+    pinnedAt: row.pinned_at ?? undefined,
   };
 }
 
@@ -139,14 +141,15 @@ export class ProjectStore {
       createdAt: now,
       updatedAt: now,
       lastActiveAt: now,
+      pinnedAt: undefined,
     };
 
     runSqliteWriteTransaction((db) => {
       db.prepare(
         `INSERT INTO projects (
           project_id, name, slug, description, status, default_agent_id, workspace_root,
-          brief, instructions, created_at, updated_at, last_active_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          brief, instructions, created_at, updated_at, last_active_at, pinned_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         project.id,
         project.name,
@@ -160,6 +163,7 @@ export class ProjectStore {
         project.createdAt,
         project.updatedAt,
         project.lastActiveAt ?? null,
+        project.pinnedAt ?? null,
       );
       syncProjectFts(db, project);
     });
@@ -255,7 +259,11 @@ export class ProjectStore {
          JOIN sessions s ON s.project_id = p.project_id
          ${where}
          GROUP BY p.project_id
-         ORDER BY latest_session_at DESC, p.updated_at DESC
+         ORDER BY
+           CASE WHEN p.pinned_at IS NULL THEN 1 ELSE 0 END ASC,
+           p.pinned_at DESC,
+           latest_session_at DESC,
+           p.updated_at DESC
          LIMIT ? OFFSET ?`,
       )
       .all(...params, limit, offset) as ProjectRow[];
@@ -274,13 +282,14 @@ export class ProjectStore {
       ...(input.workspaceRoot !== undefined ? { workspaceRoot: nullableText(input.workspaceRoot) ?? undefined } : {}),
       ...(input.brief !== undefined ? { brief: nullableText(input.brief) ?? undefined } : {}),
       ...(input.instructions !== undefined ? { instructions: nullableText(input.instructions) ?? undefined } : {}),
+      ...(input.pinnedAt !== undefined ? { pinnedAt: input.pinnedAt ?? undefined } : {}),
       updatedAt: Date.now(),
     } satisfies Project;
 
     runSqliteWriteTransaction((db) => {
       db.prepare(
         `UPDATE projects SET
-          name = ?, description = ?, status = ?, default_agent_id = ?, workspace_root = ?, brief = ?, instructions = ?, updated_at = ?
+          name = ?, description = ?, status = ?, default_agent_id = ?, workspace_root = ?, brief = ?, instructions = ?, pinned_at = ?, updated_at = ?
          WHERE project_id = ?`,
       ).run(
         next.name,
@@ -290,6 +299,7 @@ export class ProjectStore {
         next.workspaceRoot ?? null,
         next.brief ?? null,
         next.instructions ?? null,
+        next.pinnedAt ?? null,
         next.updatedAt,
         id,
       );

@@ -13,6 +13,7 @@ type Props = {
   wd: MessageBundle['chat']['workingDirectory'];
   placeholder?: string;
   inputClassName?: string;
+  autoFocus?: boolean;
   /** Buttons after the folder picker (e.g. set default). */
   trailing?: ReactNode;
 };
@@ -25,6 +26,7 @@ export function DirectoryPickerPathField({
   wd,
   placeholder,
   inputClassName,
+  autoFocus,
   trailing,
 }: Props) {
   const picker = useDirectoryPicker({ initialPath: value, onPicked: onChange });
@@ -44,6 +46,7 @@ export function DirectoryPickerPathField({
           disabled={disabled || picker.picking}
           onChange={(e) => void onChange(e.target.value)}
           placeholder={placeholder ?? wd.pathInputPlaceholder}
+          autoFocus={autoFocus}
           autoComplete="off"
           spellCheck={false}
         />

@@ -1,10 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import {
+  Archive,
   ChevronDown,
   ClipboardCopy,
   ExternalLink,
   FolderKanban,
+  FolderOpen,
   Loader2,
   MessageSquareText,
   MoreHorizontal,
@@ -23,7 +25,15 @@ import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { Button } from '@/components/ui/button';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
-import { createProjectSession, type Project } from '@/features/projects/api';
+import {
+  archiveProject,
+  createProjectSession,
+  deleteProject,
+  pinProject,
+  renameProject,
+  unpinProject,
+  type Project,
+} from '@/features/projects/api';
 import { AgentAvatarDisplay } from '@/features/settings/agents/agent-avatar-display';
 import { agentAvatarFromOptions, resolveSessionAgentId } from '@/features/sessions/session-agent-resolve';
 import {
@@ -111,6 +121,11 @@ function sessionUpdatedAtMs(session: SessionMetadata): number {
 
 function projectUpdatedAtMs(project: Project): number {
   const timestamp = new Date(project.lastActiveAt ?? project.updatedAt).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function projectPinnedAtMs(project: Project): number {
+  const timestamp = project.pinnedAt ?? 0;
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
@@ -324,6 +339,146 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
   );
 });
 
+function SidebarProjectMenu({
+  project,
+  onNavigate,
+  onPinToggle,
+  onRequestRename,
+  onArchive,
+  onRequestRemove,
+  sb,
+}: {
+  project: Project;
+  onNavigate?: () => void;
+  onPinToggle: (project: Project) => void;
+  onRequestRename: (project: Project) => void;
+  onArchive: (project: Project) => void;
+  onRequestRemove: (project: Project) => void;
+  sb: ReturnType<typeof messages>['sidebar'];
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const workspaceRoot = project.effectiveWorkspaceRoot?.trim() || project.workspaceRoot?.trim() || '';
+  const canOpenWorkspace = Boolean(workspaceRoot && window.electronAPI?.shell?.openPath);
+  const isPinned = Boolean(project.pinnedAt);
+
+  const openWorkspace = async () => {
+    if (!workspaceRoot || !window.electronAPI?.shell?.openPath) {
+      showComposerNotification('warning', sb.projectOpenInExplorerUnavailable, undefined, { duration: 3500 });
+      setMenuOpen(false);
+      return;
+    }
+    const result = await window.electronAPI.shell.openPath(workspaceRoot);
+    setMenuOpen(false);
+    if (result.ok === false) {
+      showComposerNotification('warning', result.error || sb.projectOpenInExplorerFailed, undefined, {
+        duration: 4000,
+      });
+    }
+  };
+
+  return (
+    <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'relative z-10 flex size-7 shrink-0 items-center justify-center rounded-lg text-fg-subtle transition-opacity',
+            'opacity-0 group-hover:opacity-100 focus:opacity-100',
+            menuOpen && 'opacity-100',
+            'hover:bg-surface-hover hover:text-fg-muted',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+          )}
+          aria-label={sb.projectMenuAria}
+          title={sb.projectMenuAria}
+          aria-expanded={menuOpen}
+        >
+          <MoreHorizontal className="size-3.5" strokeWidth={2} aria-hidden />
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          className="z-50 w-[12rem] rounded-lg border border-edge bg-surface-panel p-1 shadow-elevated dark:border-edge"
+          side="bottom"
+          align="end"
+          sideOffset={4}
+          collisionPadding={12}
+          onCloseAutoFocus={(e) => e.preventDefault()}
+        >
+          <Link
+            to={`/projects/${encodeURIComponent(project.id)}`}
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+            onClick={() => {
+              setMenuOpen(false);
+              onNavigate?.();
+            }}
+          >
+            <ExternalLink className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            {sb.projectOpen}
+          </Link>
+          <button
+            type="button"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+            onClick={() => {
+              setMenuOpen(false);
+              onPinToggle(project);
+            }}
+          >
+            {isPinned ? (
+              <PinOff className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            ) : (
+              <Pin className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            )}
+            {isPinned ? sb.projectUnpin : sb.projectPin}
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:text-fg-subtle disabled:hover:bg-transparent"
+            onClick={() => void openWorkspace()}
+            disabled={!canOpenWorkspace}
+            title={!canOpenWorkspace ? sb.projectOpenInExplorerUnavailable : undefined}
+          >
+            <FolderOpen className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            {sb.projectOpenInExplorer}
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+            onClick={() => {
+              setMenuOpen(false);
+              onRequestRename(project);
+            }}
+          >
+            <Pencil className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            {sb.projectRename}
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-fg transition-colors hover:bg-surface-hover"
+            onClick={() => {
+              setMenuOpen(false);
+              onArchive(project);
+            }}
+          >
+            <Archive className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            {sb.projectArchive}
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-medium leading-snug text-red-600 transition-colors hover:bg-surface-hover dark:text-red-400"
+            onClick={() => {
+              setMenuOpen(false);
+              onRequestRemove(project);
+            }}
+          >
+            <Trash2 className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+            {sb.projectRemove}
+          </button>
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
 function SidebarProjectSection({
   group,
   isExpanded,
@@ -332,6 +487,10 @@ function SidebarProjectSection({
   onToggleCollapsed,
   onToggleExpanded,
   onCreateProjectChat,
+  onToggleProjectPin,
+  onRequestProjectRename,
+  onArchiveProject,
+  onRequestProjectRemove,
   onNavigate,
   mutate,
   onRequestRename,
@@ -351,6 +510,10 @@ function SidebarProjectSection({
   onToggleCollapsed: (projectId: string) => void;
   onToggleExpanded: (projectId: string) => void;
   onCreateProjectChat: (project: Project) => void;
+  onToggleProjectPin: (project: Project) => void;
+  onRequestProjectRename: (project: Project) => void;
+  onArchiveProject: (project: Project) => void;
+  onRequestProjectRemove: (project: Project) => void;
   onNavigate?: () => void;
   mutate: () => void;
   onRequestRename: (key: string) => void;
@@ -377,19 +540,28 @@ function SidebarProjectSection({
     <section className="flex flex-col gap-0.5" aria-label={group.project.name}>
       <div
         className={cn(
-          'group flex min-w-0 items-center gap-2 rounded-xl px-2 text-sm font-medium leading-5',
+          'group flex h-7 min-w-0 items-center gap-1.5 rounded-xl px-2 text-sm font-medium leading-5',
           hasActiveSession ? 'bg-surface-active text-fg' : 'text-fg-muted',
         )}
       >
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+          className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
           onClick={() => onToggleCollapsed(group.project.id)}
           title={group.project.name}
           aria-expanded={!isCollapsed}
         >
-          <FolderKanban className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
-          <span className="min-w-0 max-w-[9rem] truncate">{group.project.name}</span>
+          <span className="relative flex size-4 shrink-0 items-center justify-center">
+            <FolderKanban className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+            {group.project.pinnedAt ? (
+              <Pin
+                className="absolute -right-1 -top-1 size-2.5 rotate-45 rounded-sm bg-surface-base text-fg-subtle"
+                strokeWidth={2}
+                aria-hidden
+              />
+            ) : null}
+          </span>
+          <span className="min-w-0 flex-1 truncate">{group.project.name}</span>
           <ChevronDown
             className={cn(
               'size-3.5 shrink-0 text-fg-subtle transition-transform duration-150 ease-out',
@@ -399,19 +571,15 @@ function SidebarProjectSection({
             aria-hidden
           />
         </button>
-        <Link
-          to={`/projects/${encodeURIComponent(group.project.id)}`}
-          className={cn(
-            'flex size-7 shrink-0 items-center justify-center rounded-lg text-fg-subtle transition-opacity hover:bg-surface-hover hover:text-fg-muted',
-            'opacity-0 group-hover:opacity-100 focus:opacity-100',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-          )}
-          onClick={() => onNavigate?.()}
-          title={sb.projectOpen}
-          aria-label={sb.projectOpen}
-        >
-          <ExternalLink className="size-3.5" strokeWidth={1.75} aria-hidden />
-        </Link>
+        <SidebarProjectMenu
+          project={group.project}
+          onNavigate={onNavigate}
+          onPinToggle={onToggleProjectPin}
+          onRequestRename={onRequestProjectRename}
+          onArchive={onArchiveProject}
+          onRequestRemove={onRequestProjectRemove}
+          sb={sb}
+        />
         <button
           type="button"
           className={cn(
@@ -624,6 +792,9 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const [renameKey, setRenameKey] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
+  const [renameProjectId, setRenameProjectId] = useState<string | null>(null);
+  const [renameProjectDraft, setRenameProjectDraft] = useState('');
+  const [removeProjectId, setRemoveProjectId] = useState<string | null>(null);
   const [includedSessionKey, setIncludedSessionKey] = useState<string | undefined>(() => activeSessionKey);
   const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
@@ -679,7 +850,11 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         });
       }
     }
-    groups.sort((a, b) => b.latestAt - a.latestAt);
+    groups.sort((a, b) => {
+      const pinnedDelta = projectPinnedAtMs(b.project) - projectPinnedAtMs(a.project);
+      if (pinnedDelta !== 0) return pinnedDelta;
+      return b.latestAt - a.latestAt;
+    });
     return groups;
   }, [data, loadingProjectIds, projectSessionOverrides]);
 
@@ -798,6 +973,65 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     }
   };
 
+  const openProjectRename = useCallback((project: Project) => {
+    setRenameProjectId(project.id);
+    setRenameProjectDraft(project.name.trim());
+  }, []);
+
+  const runProjectRename = async () => {
+    if (!renameProjectId) return;
+    const name = renameProjectDraft.trim();
+    if (!name) return;
+    try {
+      await renameProject(renameProjectId, name);
+      setRenameProjectId(null);
+      refreshSidebar();
+      window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: renameProjectId } }));
+    } catch {
+      /* optional toast */
+    }
+  };
+
+  const runProjectArchive = useCallback(async (project: Project) => {
+    try {
+      await archiveProject(project.id);
+      if (pathname === `/projects/${encodeURIComponent(project.id)}`) {
+        navigate('/projects');
+      }
+      refreshSidebar();
+      window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
+    } catch {
+      /* optional toast */
+    }
+  }, [navigate, pathname, refreshSidebar]);
+
+  const toggleProjectPin = useCallback(async (project: Project) => {
+    try {
+      if (project.pinnedAt) {
+        await unpinProject(project.id);
+      } else {
+        await pinProject(project.id);
+      }
+      refreshSidebar();
+      window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: project.id } }));
+    } catch {
+      /* optional toast */
+    }
+  }, [refreshSidebar]);
+
+  const runProjectRemove = async (projectId: string) => {
+    try {
+      await deleteProject(projectId);
+      if (pathname === `/projects/${encodeURIComponent(projectId)}`) {
+        navigate('/projects');
+      }
+      refreshSidebar();
+      window.dispatchEvent(new CustomEvent('project-updated', { detail: { id: projectId } }));
+    } catch {
+      /* optional toast */
+    }
+  };
+
   const toggleProjectCollapsed = useCallback((projectId: string) => {
     setCollapsedProjects((prev) => {
       const next = new Set(prev);
@@ -911,6 +1145,12 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   }, [defaultAgentId, navigate, onNavigate, refreshSidebar]);
 
   const renameTarget = renameKey ? items.find((s) => s.key === renameKey) : undefined;
+  const renameProjectTarget = renameProjectId
+    ? projectGroups.find((group) => group.project.id === renameProjectId)?.project
+    : undefined;
+  const removeProjectTarget = removeProjectId
+    ? projectGroups.find((group) => group.project.id === removeProjectId)?.project
+    : undefined;
 
   if (!token) {
     return (
@@ -965,6 +1205,10 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                     onToggleCollapsed={toggleProjectCollapsed}
                     onToggleExpanded={toggleProjectExpanded}
                     onCreateProjectChat={(project) => void createProjectChat(project)}
+                    onToggleProjectPin={(project) => void toggleProjectPin(project)}
+                    onRequestProjectRename={openProjectRename}
+                    onArchiveProject={(project) => void runProjectArchive(project)}
+                    onRequestProjectRemove={(project) => setRemoveProjectId(project.id)}
                     onNavigate={onNavigate}
                     mutate={refreshSidebar}
                     onRequestRename={openRename}
@@ -1081,6 +1325,79 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                 }}
               >
                 {sess.delete}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={renameProjectId !== null} onOpenChange={(o) => !o && setRenameProjectId(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge">
+            <Dialog.Title className="text-base font-semibold text-fg">{sb.projectRenameTitle}</Dialog.Title>
+            <label className="mt-3 block text-xs font-medium text-fg-subtle" htmlFor="sidebar-project-rename-input">
+              {sb.projectRenamePlaceholder}
+            </label>
+            <input
+              id="sidebar-project-rename-input"
+              type="text"
+              value={renameProjectDraft}
+              onChange={(e) => setRenameProjectDraft(e.target.value)}
+              className={cn(
+                'mt-1.5 w-full rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg',
+                formControlBorderFocusClass,
+                'dark:border-edge',
+              )}
+              placeholder={renameProjectTarget?.name ?? ''}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void runProjectRename();
+                }
+              }}
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setRenameProjectId(null)}>
+                {sb.taskRenameCancel}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => void runProjectRename()}
+                disabled={!renameProjectDraft.trim()}
+              >
+                {sb.taskRenameSave}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={removeProjectId !== null} onOpenChange={(o) => !o && setRemoveProjectId(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge">
+            <Dialog.Title className="text-base font-semibold text-fg">{sb.projectRemoveTitle}</Dialog.Title>
+            <p className="mt-2 text-sm leading-relaxed text-fg-muted">
+              {removeProjectTarget
+                ? interpolate(sb.projectRemoveMessage, { name: removeProjectTarget.name })
+                : ''}
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setRemoveProjectId(null)}>
+                {sess.cancel}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => {
+                  if (removeProjectId) void runProjectRemove(removeProjectId);
+                  setRemoveProjectId(null);
+                }}
+              >
+                {sb.projectRemove}
               </Button>
             </div>
           </Dialog.Content>

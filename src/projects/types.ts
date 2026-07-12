@@ -17,6 +17,7 @@ export interface Project {
   createdAt: number;
   updatedAt: number;
   lastActiveAt?: number;
+  pinnedAt?: number;
 }
 
 export interface ProjectWithDetails extends Project {
@@ -76,6 +77,7 @@ export interface UpdateProjectInput {
   createWorkspaceRoot?: boolean;
   brief?: string | null;
   instructions?: string | null;
+  pinnedAt?: number | null;
 }
 
 export type ProjectListResult = PaginatedResult<Project>;
