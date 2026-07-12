@@ -1,22 +1,12 @@
 import { constants } from 'node:fs';
-import { access, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 
 import { resolveStateDir } from '../config/paths-state.js';
+import { DESKTOP_PET_ACTIONS, type DesktopPetPackageAction } from './manifest.js';
+import { validateDesktopPetPackage } from './validator.js';
 
-export const DESKTOP_PET_ACTIONS = [
-  'idle',
-  'typing',
-  'toolbox',
-  'search',
-  'file',
-  'terminal',
-  'browser',
-  'success',
-  'error',
-] as const;
-
-export type DesktopPetPackageAction = (typeof DESKTOP_PET_ACTIONS)[number];
+export { DESKTOP_PET_ACTIONS, type DesktopPetPackageAction } from './manifest.js';
 
 export type CreateDesktopPetPackageInput = {
   id?: string;
@@ -336,6 +326,44 @@ async function readExistingManifest(dir: string): Promise<Record<string, unknown
   }
 }
 
+function assertChildPath(root: string, child: string): void {
+  const normalizedRoot = resolve(root);
+  const normalizedChild = resolve(child);
+  if (
+    normalizedChild !== normalizedRoot &&
+    !normalizedChild.startsWith(`${normalizedRoot}\\`) &&
+    !normalizedChild.startsWith(`${normalizedRoot}/`)
+  ) {
+    throw new Error(`Refusing to publish pet package outside target directory: ${normalizedChild}`);
+  }
+}
+
+async function publishPackageDir(targetRoot: string, tempDir: string, finalDir: string, overwrite: boolean): Promise<void> {
+  assertChildPath(targetRoot, tempDir);
+  assertChildPath(targetRoot, finalDir);
+  if (!overwrite || !(await pathExists(finalDir))) {
+    await rename(tempDir, finalDir);
+    return;
+  }
+
+  const backupDir = `${finalDir}.backup-${Date.now().toString(36)}`;
+  assertChildPath(targetRoot, backupDir);
+  await rename(finalDir, backupDir);
+  let published = false;
+  try {
+    await rename(tempDir, finalDir);
+    published = true;
+  } catch (e) {
+    if (!(await pathExists(finalDir)) && (await pathExists(backupDir))) {
+      await rename(backupDir, finalDir);
+    }
+    throw e;
+  }
+  if (published) {
+    await rm(backupDir, { recursive: true, force: true }).catch(() => undefined);
+  }
+}
+
 export async function createDesktopPetPackage(
   input: CreateDesktopPetPackageInput,
 ): Promise<CreateDesktopPetPackageResult> {
@@ -352,7 +380,6 @@ export async function createDesktopPetPackage(
     initialId,
     input.overwrite === true,
   );
-  await mkdir(dir, { recursive: true });
   const existingManifest = input.overwrite === true ? await readExistingManifest(dir) : null;
   const existingName = typeof existingManifest?.name === 'string' ? existingManifest.name.trim() : '';
   const baseName = clampText(input.name?.trim() || existingName || titleFromPrompt(prompt), 36);
@@ -361,9 +388,10 @@ export async function createDesktopPetPackage(
     120,
   );
 
-  const spritesheetPath = join(dir, 'pet.svg');
-  const thumbnailPath = join(dir, 'thumbnail.svg');
-  const manifestPath = join(dir, 'manifest.json');
+  const tempDir = await mkdtemp(join(targetRoot, `.tmp-${id}-`));
+  const spritesheetPath = join(tempDir, 'pet.svg');
+  const thumbnailPath = join(tempDir, 'thumbnail.svg');
+  const manifestPath = join(tempDir, 'manifest.json');
   const manifest = {
     id,
     name: baseName,
@@ -390,18 +418,32 @@ export async function createDesktopPetPackage(
     ),
   };
 
-  await writeFile(spritesheetPath, renderSpritesheet(prompt), 'utf8');
-  await writeFile(thumbnailPath, renderThumbnail(baseName, prompt), 'utf8');
-  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+  try {
+    await writeFile(spritesheetPath, renderSpritesheet(prompt), 'utf8');
+    await writeFile(thumbnailPath, renderThumbnail(baseName, prompt), 'utf8');
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+
+    const validation = await validateDesktopPetPackage(tempDir);
+    if (validation.ok === false) {
+      const detailText = validation.issue.details?.length ? `: ${validation.issue.details.join('; ')}` : '';
+      throw new Error(`${validation.issue.reason}${detailText}`);
+    }
+    await publishPackageDir(targetRoot, tempDir, dir, input.overwrite === true);
+  } catch (e) {
+    if (await pathExists(tempDir)) {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+    throw e;
+  }
 
   return {
     id,
     name: baseName,
     description,
     dir,
-    manifestPath,
-    thumbnailPath,
-    spritesheetPath,
+    manifestPath: join(dir, 'manifest.json'),
+    thumbnailPath: join(dir, 'thumbnail.svg'),
+    spritesheetPath: join(dir, 'pet.svg'),
     sourcePrompt: prompt,
   };
 }

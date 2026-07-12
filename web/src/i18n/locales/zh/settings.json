@@ -668,12 +668,53 @@
     "createChatDraft": "/skill:hatch-pet 我想创建一个新的 xopc 宠物。请先问我想要的宠物设定，等设定清楚后再调用 create_desktop_pet 创建。",
     "optimizeInChat": "优化",
     "optimizeChatDraft": "/skill:hatch-pet 我想优化已有宠物 {name}。petId 是 {id}。当前描述：{description}。原始设定：{sourcePrompt}。请先问我想怎么调整；当我给出修改要求后，调用 create_desktop_pet，并使用 mode=update、petId={id} 覆盖更新同一个宠物包。",
+    "fixInChat": "修复",
+    "fixChatDraft": "/skill:hatch-pet 我想修复一个无法加载的 xopc 宠物包。目录：{dir}。加载失败原因：{reason}。诊断细节：{details}。请先检查这个宠物包的问题，向我说明最小修复方案；确认后修复或重新生成同一个宠物包。",
+    "noIssueDetails": "无更多诊断细节",
     "petList": "宠物列表",
     "petListDesc": "选择内置宠物，或在自定义文件夹中添加 manifest。",
     "selected": "已选",
     "select": "选择",
     "customBadge": "自定义",
     "customPets": "自定义宠物",
+    "builtinPets": {
+      "ember": {
+        "name": "逐焰",
+        "description": "给日常代理工作一点温热的推进感。"
+      },
+      "relay": {
+        "name": "信铃",
+        "description": "在不同应用和渠道之间传递消息。"
+      },
+      "loom": {
+        "name": "织忆",
+        "description": "把上下文、笔记和记忆织在一起。"
+      },
+      "scout": {
+        "name": "探光",
+        "description": "帮你从信息里找到真正有用的线索。"
+      },
+      "forge": {
+        "name": "铸匠",
+        "description": "陪你构建、修复和调用工具。"
+      },
+      "sprout": {
+        "name": "新芽",
+        "description": "给新的工作流和想法留出生长空间。"
+      },
+      "atlas": {
+        "name": "叠境",
+        "description": "为大型工作区提供清晰的结构感。"
+      },
+      "pulse": {
+        "name": "脉点",
+        "description": "感知网关、自动化和持续运行的状态。"
+      },
+      "patch": {
+        "name": "补丁",
+        "description": "适合陪你做细致改动和审阅差异。"
+      }
+    },
     "invalidPets": "部分自定义宠物无法加载",
     "size": "宠物大小",
     "sizeDesc": "调整浮窗和宠物尺寸。",

@@ -83,6 +83,12 @@ import {
 } from './tunnel-main.js';
 import { createTray, destroyTray, updateTrayLanguage } from './tray.js';
 import {
+  MAIN_WINDOW_MIN_HEIGHT,
+  MAIN_WINDOW_MIN_WIDTH,
+  registerMainWindowStatePersistence,
+  resolveInitialMainWindowState,
+} from './window-state.js';
+import {
   appendElectronStartupLog,
   devToolsGlobalShortcutAccelerator,
   openMainWindowDevTools,
@@ -548,11 +554,11 @@ function createWindow(): void {
     return;
   }
 
+  const initialWindowState = resolveInitialMainWindowState();
   const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
-    minWidth: 800,
-    minHeight: 560,
+    ...initialWindowState.bounds,
+    minWidth: MAIN_WINDOW_MIN_WIDTH,
+    minHeight: MAIN_WINDOW_MIN_HEIGHT,
     /** Allows renderer `Element.requestFullscreen()` (file preview) like Chromium. */
     fullscreenable: true,
     ...browserWindowChromeOptions(),
@@ -566,6 +572,10 @@ function createWindow(): void {
   });
 
   mainWindow = win;
+  registerMainWindowStatePersistence(win);
+  if (initialWindowState.isMaximized) {
+    win.maximize();
+  }
 
   if (process.platform === 'darwin') {
     applyDarwinWindowButtonPosition(win);

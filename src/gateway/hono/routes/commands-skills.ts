@@ -77,6 +77,11 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     return c.json({ ok: true, payload });
   });
 
+  authenticated.get('/api/chat/capabilities', (c) => {
+    const payload = service.agentService.getCapabilityCatalog(c.req.query('sessionKey')?.trim());
+    return c.json({ ok: true, payload });
+  });
+
   authenticated.get('/api/skills', (c) => {
     const payload = service.marketplace.getSkillsApi();
     return c.json({ ok: true, payload });
