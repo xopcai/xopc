@@ -36,6 +36,12 @@ import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap
 import { loadProjectAgentsContextFile } from './bootstrap/project-agents-context.js';
 import type { EmbeddedContextFile } from './bootstrap/types.js';
 import { AgentToolsFactory } from './tools/factory.js';
+import {
+  createAgentCapabilitySessionState,
+  resolveAgentCapabilityCatalog,
+  type AgentCapabilityCatalogEntry,
+  type AgentCapabilitySessionState,
+} from './capabilities/index.js';
 import { parseMcpToolName } from './mcp/bundle-mcp-policy.js';
 import {
   disposeAllSessionMcpRuntimes,
@@ -167,8 +173,8 @@ export interface AgentInstance {
   resolvedWorkspacePath: string;
   /** Tool names registered on this agent (for skill indexing / tool gating). */
   registeredToolNames: string[];
-  /** Capability packs activated by explicit skills in this session. */
-  activeSkillCapabilityNames: Set<string>;
+  /** Capability packs activated by explicit skills or UI entry points in this session. */
+  activeCapabilities: Map<string, AgentCapabilitySessionState>;
   activeProjectContext?: string;
   activeSelfVerifyContext?: string;
   /** Declared env var names from skill_view; exec_command reads values from process.env at spawn time. */
@@ -189,6 +195,47 @@ export class AgentManager implements AgentInstanceGateway {
   private mergedConfig(): Config | undefined {
     const base = this.config.config;
     return base ? applyConfigOverrides(base) : undefined;
+  }
+
+  private activeCapabilityNames(inst: AgentInstance | undefined): string[] {
+    return inst ? [...inst.activeCapabilities.keys()] : [];
+  }
+
+  private buildActiveCapabilityContext(
+    instance: AgentInstance,
+    capabilityNames: readonly string[],
+    registeredToolNames: readonly string[],
+  ): string | undefined {
+    const availableCatalog = this.resolveCapabilityCatalogForInstance(instance, registeredToolNames)
+      .filter((definition) => definition.availableTools.length > 0);
+    const definitionsById = new Map(availableCatalog.map((definition) => [definition.id, definition]));
+    const definitions = [...new Set(capabilityNames)]
+      .map((name) => definitionsById.get(name))
+      .filter((definition): definition is AgentCapabilityCatalogEntry => Boolean(definition));
+    if (definitions.length === 0) return undefined;
+    const rows = definitions.map((definition) => {
+      const tools = definition.availableTools.join(', ');
+      const hint = definition.promptHint?.trim() ? `\n  Guidance: ${definition.promptHint.trim()}` : '';
+      return `- ${definition.id} (${definition.label}): ${definition.description}\n  Tools: ${tools}${hint}`;
+    });
+    return [
+      '# Active Capability Packs',
+      '',
+      'These capability packs are active for the current task. Use their tools only when they directly help satisfy the user request.',
+      '',
+      ...rows,
+    ].join('\n');
+  }
+
+  private resolveCapabilityCatalogForInstance(
+    instance: AgentInstance | undefined,
+    registeredToolNames: readonly string[] = instance?.registeredToolNames ?? [],
+  ): AgentCapabilityCatalogEntry[] {
+    return resolveAgentCapabilityCatalog({
+      registeredToolNames,
+      lazyToolNames: this.toolsFactory.getLazyCapabilityToolNames(),
+      deniedToolNames: instance ? [...instance.effectiveProfile.tools.denied] : [],
+    });
   }
   /** Default agent workspace (effective profile for `getDefaultAgentId`). */
   private baseWorkspacePath: string;
@@ -464,7 +511,7 @@ export class AgentManager implements AgentInstanceGateway {
     if (!text.includes('/skill:')) {
       return {
         text,
-        activatedCapabilityNames: inst ? [...inst.activeSkillCapabilityNames] : [],
+        activatedCapabilityNames: this.activeCapabilityNames(inst),
       };
     }
     const rt = this.getWorkspaceRuntimeForSession(sessionKey);
@@ -476,12 +523,25 @@ export class AgentManager implements AgentInstanceGateway {
       ? rt.skillManager.expandCommand(text, options)
       : text;
     const selectedCapabilities = rt.skillManager.getActivatedCapabilitiesForText(text, options);
+    const turnOnlyCapabilities: string[] = [];
+    const now = Date.now();
     for (const capabilityName of selectedCapabilities) {
-      inst?.activeSkillCapabilityNames.add(capabilityName);
+      const state = createAgentCapabilitySessionState(capabilityName, 'skill', now);
+      if (!state) continue;
+      if (state.ttl === 'turn') {
+        turnOnlyCapabilities.push(state.id);
+        continue;
+      }
+      inst?.activeCapabilities.set(state.id, state);
     }
     return {
       text: expanded,
-      activatedCapabilityNames: inst ? [...inst.activeSkillCapabilityNames] : selectedCapabilities,
+      activatedCapabilityNames: [
+        ...new Set([
+          ...this.activeCapabilityNames(inst),
+          ...turnOnlyCapabilities,
+        ]),
+      ],
     };
   }
 
@@ -502,16 +562,19 @@ export class AgentManager implements AgentInstanceGateway {
     });
     const existingNames = new Set(inst.registeredToolNames);
     const newTools = activatedTools.filter((tool) => !existingNames.has(tool.name));
-    if (newTools.length === 0) return run();
 
     const originalTools = inst.agent.state.tools as AgentTool<any, any>[];
     const originalRegisteredToolNames = inst.registeredToolNames;
     const originalSystemPrompt = inst.agent.state.systemPrompt;
     const nextRegisteredToolNames = [...originalRegisteredToolNames, ...newTools.map((tool) => tool.name)];
 
-    inst.agent.state.tools = [...originalTools, ...newTools];
+    inst.agent.state.tools = newTools.length > 0 ? [...originalTools, ...newTools] : originalTools;
     inst.registeredToolNames = nextRegisteredToolNames;
-    inst.agent.state.systemPrompt = this.buildSystemPromptForInstance(inst, nextRegisteredToolNames);
+    inst.agent.state.systemPrompt = this.buildSystemPromptForInstance(
+      inst,
+      nextRegisteredToolNames,
+      requested,
+    );
     try {
       return await run();
     } finally {
@@ -524,6 +587,7 @@ export class AgentManager implements AgentInstanceGateway {
   private buildSystemPromptForInstance(
     instance: AgentInstance,
     registeredToolNames: string[] = instance.registeredToolNames,
+    activeCapabilityNames: readonly string[] = this.activeCapabilityNames(instance),
   ): string {
     const cfg = this.config.config!;
     const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
@@ -549,6 +613,7 @@ export class AgentManager implements AgentInstanceGateway {
       activeProjectContext: this.composeDynamicProjectContext(
         instance.activeProjectContext,
         instance.activeSelfVerifyContext,
+        this.buildActiveCapabilityContext(instance, activeCapabilityNames, registeredToolNames),
       ),
     });
   }
@@ -905,7 +970,7 @@ export class AgentManager implements AgentInstanceGateway {
       effectiveProfile: profile,
       resolvedWorkspacePath: resolvedPath,
       registeredToolNames,
-      activeSkillCapabilityNames: new Set<string>(),
+      activeCapabilities: new Map<string, AgentCapabilitySessionState>(),
       activeProjectContext,
       activeSelfVerifyContext,
       skillEnvPassthroughKeys: new Set<string>(),
@@ -1089,10 +1154,15 @@ export class AgentManager implements AgentInstanceGateway {
     return this.config.getSelfVerifyPromptContext?.(sessionKey, agentId).trim() ?? '';
   }
 
-  private composeDynamicProjectContext(activeProjectContext?: string, selfVerifyContext?: string): string | undefined {
-    return [activeProjectContext?.trim(), selfVerifyContext?.trim()]
+  private composeDynamicProjectContext(...sections: Array<string | undefined>): string | undefined {
+    return sections.map((section) => section?.trim())
       .filter((section): section is string => Boolean(section))
       .join('\n\n') || undefined;
+  }
+
+  getCapabilityCatalogForSession(sessionKey?: string): AgentCapabilityCatalogEntry[] {
+    const inst = sessionKey?.trim() ? this.agents.get(sessionKey.trim()) : undefined;
+    return this.resolveCapabilityCatalogForInstance(inst);
   }
 
   private createAgentForProfile(

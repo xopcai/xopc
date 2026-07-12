@@ -10,6 +10,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { DesktopPetSprite } from '@/features/desktop-pet/desktop-pet-sprite';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
@@ -17,7 +18,12 @@ import { cn } from '@/lib/cn';
 import { isElectron } from '@/lib/electron-env';
 import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
-import type { DesktopPetDefinition, DesktopPetFeedbackLevel, DesktopPetState } from '@/types/electron';
+import type {
+  DesktopPetDefinition,
+  DesktopPetFeedbackLevel,
+  DesktopPetIssue,
+  DesktopPetState,
+} from '@/types/electron';
 
 function ToggleRow({
   title,
@@ -48,6 +54,11 @@ function ToggleRow({
     </div>
   );
 }
+
+type PetDisplayText = {
+  name: string;
+  description: string;
+};
 
 export function DesktopPetSettings() {
   const language = useLocaleStore((s) => s.language);
@@ -113,6 +124,14 @@ export function DesktopPetSettings() {
     void patch({ selectedPetId: id });
   };
 
+  const petDisplayText = (pet: DesktopPetDefinition): PetDisplayText => {
+    if (pet.builtin && pet.i18nKey) {
+      const builtinText = t.builtinPets[pet.i18nKey as keyof typeof t.builtinPets];
+      if (builtinText) return builtinText;
+    }
+    return { name: pet.name, description: pet.description };
+  };
+
   const openPetChat = (draft: string) => {
     navigate({
       pathname: '/chat/new',
@@ -122,7 +141,8 @@ export function DesktopPetSettings() {
 
   const sourcePromptForPet = (pet: DesktopPetDefinition): string => {
     if (pet.sourcePrompt?.trim()) return pet.sourcePrompt.trim();
-    return pet.description.replace(/^Custom pet generated from:\s*/i, '').trim() || pet.description;
+    const { description } = petDisplayText(pet);
+    return description.replace(/^Custom pet generated from:\s*/i, '').trim() || description;
   };
 
   const fillDraftTemplate = (template: string, values: Record<string, string>): string =>
@@ -135,9 +155,18 @@ export function DesktopPetSettings() {
   const openOptimizePetChat = (pet: DesktopPetDefinition) => {
     const draft = fillDraftTemplate(t.optimizeChatDraft, {
       id: pet.id,
-      name: pet.name,
-      description: pet.description,
+      name: petDisplayText(pet).name,
+      description: petDisplayText(pet).description,
       sourcePrompt: sourcePromptForPet(pet),
+    });
+    openPetChat(draft);
+  };
+
+  const openFixPetIssueChat = (issue: DesktopPetIssue) => {
+    const draft = fillDraftTemplate(t.fixChatDraft, {
+      dir: issue.dir,
+      reason: issue.reason,
+      details: issue.details?.join('; ') || t.noIssueDetails,
     });
     openPetChat(draft);
   };
@@ -235,26 +264,27 @@ export function DesktopPetSettings() {
             </div>
             {selectedPet ? (
               <span className="rounded-full bg-accent-soft px-2.5 py-1 text-xs font-medium text-accent-fg">
-                {selectedPet.name}
+                {petDisplayText(selectedPet).name}
               </span>
             ) : null}
           </div>
           <div className="divide-y divide-edge-subtle rounded-xl border border-edge bg-surface-base">
             {state.pets.map((pet) => {
               const selected = pet.id === state.prefs.selectedPetId;
+              const displayText = petDisplayText(pet);
               return (
                 <div key={pet.id} className="flex items-center gap-3 px-3 py-3">
                   <DesktopPetSprite pet={pet} action="idle" size="tiny" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-fg">{pet.name}</p>
+                      <p className="truncate text-sm font-semibold text-fg">{displayText.name}</p>
                       {!pet.builtin ? (
                         <span className="rounded-full bg-surface-hover px-2 py-0.5 text-[11px] font-medium text-fg-muted">
                           {t.customBadge}
                         </span>
                       ) : null}
                     </div>
-                    <p className="truncate text-xs text-fg-muted">{pet.description}</p>
+                    <p className="truncate text-xs text-fg-muted">{displayText.description}</p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {!pet.builtin ? (
@@ -311,12 +341,28 @@ export function DesktopPetSettings() {
               </div>
               <div className="mt-2 space-y-2">
                 {state.petIssues.map((issue) => (
-                  <div key={`${issue.dir}-${issue.reason}`} className="text-xs text-fg-muted">
-                    <p className="font-mono text-[11px] text-fg">{issue.dir}</p>
-                    <p>{issue.reason}</p>
-                    {issue.details?.length ? (
-                      <p className="line-clamp-2">{issue.details.join('; ')}</p>
-                    ) : null}
+                  <div
+                    key={`${issue.dir}-${issue.reason}`}
+                    className="flex flex-col gap-2 rounded-lg bg-surface-base/70 p-2 text-xs text-fg-muted sm:flex-row sm:items-start sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-[11px] text-fg">{issue.dir}</p>
+                      <p>{issue.reason}</p>
+                      {issue.details?.length ? (
+                        <p className="line-clamp-2">{issue.details.join('; ')}</p>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-danger/30 bg-surface-base px-2.5 text-xs font-medium text-danger hover:bg-danger/10',
+                        interaction.press,
+                      )}
+                      onClick={() => openFixPetIssueChat(issue)}
+                    >
+                      <MessageSquarePlus className="size-3.5" strokeWidth={1.75} />
+                      {t.fixInChat}
+                    </button>
                   </div>
                 ))}
               </div>
@@ -371,15 +417,16 @@ export function DesktopPetSettings() {
               <div className="text-sm font-medium text-fg">{t.feedbackLevel}</div>
               <p className="text-xs text-fg-muted">{t.feedbackLevelDesc}</p>
             </div>
-            <select
-              className="h-9 rounded-lg border border-edge bg-surface-panel px-2 text-sm text-fg"
+            <Select
+              className="w-full sm:w-40"
+              triggerClassName="h-9 bg-surface-panel"
               value={state.prefs.feedbackLevel}
               onChange={(e) => void patch({ feedbackLevel: e.target.value as DesktopPetFeedbackLevel })}
             >
-              <option value="quiet">{t.feedbackQuiet}</option>
-              <option value="normal">{t.feedbackNormal}</option>
-              <option value="chatty">{t.feedbackChatty}</option>
-            </select>
+              <SelectOption value="quiet">{t.feedbackQuiet}</SelectOption>
+              <SelectOption value="normal">{t.feedbackNormal}</SelectOption>
+              <SelectOption value="chatty">{t.feedbackChatty}</SelectOption>
+            </Select>
           </div>
           <button
             type="button"

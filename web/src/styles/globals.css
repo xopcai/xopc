@@ -80,19 +80,32 @@
 }
 
 :root {
-  --app-chrome-sidebar-bg: linear-gradient(
-    160deg,
-    color-mix(in oklab, var(--color-surface-base) 95%, var(--color-loop-indigo) 5%) 0%,
-    color-mix(in oklab, var(--color-surface-base) 96%, var(--color-accent) 4%) 48%,
-    color-mix(in oklab, var(--color-surface-base) 97%, var(--color-momentum-cyan) 3%) 100%
-  );
-  --app-chrome-titlebar-bg: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--color-surface-base) 95%, var(--color-loop-indigo) 5%) 0%,
-    color-mix(in oklab, var(--color-surface-base) 97%, var(--color-accent) 3%) 22rem,
-    var(--color-surface-panel) 48rem
-  );
+  --app-chrome-bg:
+    linear-gradient(
+      118deg,
+      rgb(117 101 255 / 0.12) 0%,
+      rgb(255 116 172 / 0.075) 42%,
+      transparent 78%
+    ),
+    linear-gradient(
+      180deg,
+      rgb(231 236 247 / 0.92) 0%,
+      rgb(248 241 244 / 0.88) 48%,
+      rgb(253 246 241 / 0.82) 100%
+    ),
+    linear-gradient(
+      90deg,
+      rgb(226 232 244) 0%,
+      rgb(246 239 243) 56%,
+      rgb(255 255 255) 100%
+    );
+  --app-chrome-sidebar-bg: var(--app-chrome-bg);
+  --app-chrome-titlebar-bg: var(--app-chrome-bg);
   --app-chrome-border: color-mix(in srgb, var(--color-edge) 78%, transparent);
+  --app-chrome-sidebar-shadow:
+    inset -1px 0 0 var(--app-chrome-border),
+    inset -34px 0 38px -38px rgb(255 255 255 / 0.92),
+    inset 1px 0 0 rgb(255 255 255 / 0.6);
 }
 
 /* Dark — lifted workstation gray, restrained rim light, Loop Blue signals */
@@ -136,13 +149,32 @@ html.dark {
   --shadow-float: 0 16px 48px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(58 107 255 / 0.05);
   --shadow-popover: 0 18px 54px rgb(0 0 0 / 0.38), 0 0 0 1px rgb(58 107 255 / 0.07);
 
-  --app-chrome-sidebar-bg: linear-gradient(
-    160deg,
-    color-mix(in oklab, var(--color-surface-base) 94%, var(--color-loop-indigo) 6%) 0%,
-    var(--color-surface-base) 52%,
-    color-mix(in oklab, var(--color-surface-base) 96%, var(--color-momentum-cyan) 4%) 100%
-  );
+  --app-chrome-bg:
+    linear-gradient(
+      118deg,
+      rgb(123 120 255 / 0.2) 0%,
+      rgb(255 116 172 / 0.12) 42%,
+      transparent 78%
+    ),
+    linear-gradient(
+      180deg,
+      rgb(25 29 38 / 0.98) 0%,
+      rgb(23 24 31 / 0.96) 50%,
+      rgb(20 22 28 / 0.98) 100%
+    ),
+    linear-gradient(
+      90deg,
+      rgb(30 35 48) 0%,
+      rgb(25 28 38) 58%,
+      rgb(21 23 29) 100%
+    );
+  --app-chrome-sidebar-bg: var(--app-chrome-bg);
+  --app-chrome-titlebar-bg: var(--app-chrome-bg);
   --app-chrome-border: color-mix(in srgb, var(--color-edge) 72%, transparent);
+  --app-chrome-sidebar-shadow:
+    inset -1px 0 0 var(--app-chrome-border),
+    inset -34px 0 40px -38px rgb(100 227 255 / 0.18),
+    inset 1px 0 0 rgb(255 255 255 / 0.08);
 }
 
 @layer base {
@@ -365,12 +397,21 @@ html.dark {
 }
 
 .app-chrome-sidebar {
-  background: var(--app-chrome-sidebar-bg);
-  box-shadow: inset -1px 0 0 var(--app-chrome-border);
+  background-image: var(--app-chrome-sidebar-bg);
+  background-attachment: fixed;
+  background-position: left top;
+  background-repeat: no-repeat;
+  background-size: 100vw 100vh;
+  box-shadow: var(--app-chrome-sidebar-shadow, inset -1px 0 0 var(--app-chrome-border));
 }
 
 .windows-titlebar {
-  background: var(--app-chrome-titlebar-bg);
+  background-image: var(--app-chrome-titlebar-bg);
+  background-attachment: fixed;
+  background-position: left top;
+  background-repeat: no-repeat;
+  background-size: 100vw 100vh;
+  border-bottom-color: transparent;
   padding-inline-start: max(0.5rem, env(titlebar-area-x, 0px));
   padding-inline-end: max(
     0.5rem,
@@ -1215,10 +1256,10 @@ html[data-desktop-pet='true'] body {
 
 .desktop-pet-stage {
   position: absolute;
-  right: 24px;
-  bottom: 16px;
-  width: 132px;
-  height: 132px;
+  right: var(--desktop-pet-stage-right, 24px);
+  bottom: var(--desktop-pet-stage-bottom, 16px);
+  width: var(--desktop-pet-stage-size, 132px);
+  height: var(--desktop-pet-stage-size, 132px);
   display: grid;
   place-items: center;
   pointer-events: none;
@@ -1226,8 +1267,8 @@ html[data-desktop-pet='true'] body {
 }
 
 .desktop-pet-hit-area {
-  width: 132px;
-  height: 132px;
+  width: var(--desktop-pet-stage-size, 132px);
+  height: var(--desktop-pet-stage-size, 132px);
   display: grid;
   place-items: center;
   border: 0;
@@ -1246,12 +1287,12 @@ html[data-desktop-pet='true'] body {
 
 .desktop-pet-menu-button {
   position: absolute;
-  left: -6px;
-  bottom: 12px;
+  left: var(--desktop-pet-menu-left, -6px);
+  bottom: var(--desktop-pet-menu-bottom, 12px);
   z-index: 4;
   display: inline-flex;
-  width: 28px;
-  height: 28px;
+  width: var(--desktop-pet-menu-size, 28px);
+  height: var(--desktop-pet-menu-size, 28px);
   align-items: center;
   justify-content: center;
   border: 1px solid rgb(15 23 42 / 0.08);

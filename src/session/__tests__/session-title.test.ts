@@ -34,6 +34,39 @@ describe('provisionalTitleFromUserText', () => {
     expect(provisionalTitleFromUserText('[2026-01-15 10:00 UTC] 你好')).toBe('你好');
   });
 
+  it('uses skill arguments instead of the expanded skill header', () => {
+    expect(
+      provisionalTitleFromUserText(
+        [
+          '',
+          '## Skill: hatch-pet',
+          '',
+          'Create animated pets.',
+          '',
+          '# Hatch Pet',
+          '',
+          'Use this skill when making sprite sheets.',
+          '',
+          '**Arguments**: 生成一个蓝色机器人宠物',
+        ].join('\n'),
+      ),
+    ).toBe('生成一个蓝色机器人宠物');
+  });
+
+  it('falls back to the skill name when an expanded skill has no arguments', () => {
+    expect(
+      provisionalTitleFromUserText(
+        ['## Skill: hatch-pet', '', 'Create animated pets.', '', '# Hatch Pet'].join('\n'),
+      ),
+    ).toBe('hatch-pet');
+  });
+
+  it('uses raw skill command arguments when the skill was not expanded', () => {
+    expect(provisionalTitleFromUserText('/skill:hatch-pet 做一个水晶风格宠物')).toBe(
+      '做一个水晶风格宠物',
+    );
+  });
+
   it('returns null for blank input', () => {
     expect(provisionalTitleFromUserText('   ')).toBeNull();
   });
@@ -67,5 +100,26 @@ describe('fallbackTitleFromMessages', () => {
       },
     ]);
     expect(title).toBe('你好');
+  });
+
+  it('uses expanded skill arguments for user-message fallback titles', () => {
+    const title = fallbackTitleFromMessages([
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: [
+              '## Skill: hatch-pet',
+              '',
+              'Create animated pets.',
+              '',
+              '**Arguments**: make a tiny space rover pet',
+            ].join('\n'),
+          },
+        ],
+      },
+    ]);
+    expect(title).toBe('make a tiny space rover pet');
   });
 });

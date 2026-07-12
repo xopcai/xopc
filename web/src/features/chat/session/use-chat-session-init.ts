@@ -58,6 +58,7 @@ export function useChatSessionInit(opts: {
   } = opts;
 
   const initGenRef = useRef(0);
+  const newRouteLocationSearch = isNewRoute ? locationSearch : '';
 
   useEffect(() => {
     if (!token) {
@@ -92,7 +93,7 @@ export function useChatSessionInit(opts: {
         routeSessionKey: null,
         navigateToSession,
         replaceNavigate: true,
-        search: searchParamsForComposerHandoff(locationSearch),
+        search: searchParamsForComposerHandoff(newRouteLocationSearch),
         onOpened: (key) => adoptEmptySession(key, null),
       }).then(() => undefined);
     };
@@ -181,7 +182,7 @@ export function useChatSessionInit(opts: {
     token,
     isNewRoute,
     decodedKey,
-    locationSearch,
+    newRouteLocationSearch,
     sessionMgrRef,
     resolveAgentIdForPost,
     navigateToSession,

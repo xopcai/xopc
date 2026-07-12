@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { BriefcaseBusiness, ChevronDown, FileText, Target } from 'lucide-react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -290,6 +290,19 @@ export function ChatPage() {
     loadingMore: session.loadingMore,
     loadMoreMessages: session.loadMoreMessages,
   });
+  const clarifyPromptVisible = Boolean(clarify.clarifyPrompt);
+  const prevClarifyPromptVisibleRef = useRef(clarifyPromptVisible);
+
+  useLayoutEffect(() => {
+    const prev = prevClarifyPromptVisibleRef.current;
+    prevClarifyPromptVisibleRef.current = clarifyPromptVisible;
+    if (prev === clarifyPromptVisible) return;
+    if (session.showSessionLoading || session.sessionRoutePending) return;
+
+    scrollToBottom(false);
+    const raf = requestAnimationFrame(() => scrollToBottom(false));
+    return () => cancelAnimationFrame(raf);
+  }, [clarifyPromptVisible, scrollToBottom, session.showSessionLoading, session.sessionRoutePending]);
 
   const [activeMessageIndex, setActiveMessageIndex] = useState(0);
   const timelineRafRef = useRef<number | null>(null);
