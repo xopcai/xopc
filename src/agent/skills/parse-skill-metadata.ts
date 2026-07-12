@@ -1,5 +1,16 @@
 import type { SkillInstallSpec, SkillMetadata, SkillRequires } from './types.js';
 
+function stringList(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const out = value.map((x) => String(x).trim()).filter(Boolean);
+    return out.length ? out : undefined;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return [value.trim()];
+  }
+  return undefined;
+}
+
 /**
  * Maps SKILL.md YAML frontmatter to {@link SkillMetadata} (Hermes / xopc shapes).
  */
@@ -28,6 +39,7 @@ export function parseSkillMetadata(frontmatter: Record<string, unknown>): SkillM
       requires: xopcMeta.requires as SkillRequires | undefined,
       install: xopcMeta.install as SkillInstallSpec[] | undefined,
       os: xopcMeta.os as Array<'darwin' | 'linux' | 'win32'> | undefined,
+      activatesCapabilities: stringList(xopcMeta.activates_capabilities),
     };
   }
 

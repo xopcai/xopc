@@ -109,6 +109,7 @@ export { createXopcUseTool, type XopcUseToolDeps, type XopcUseToolInput } from '
 export { createSkillsListTool, createSkillViewTool, type SkillsToolsDeps } from './skills-tools.js';
 export { createSkillManageTool, type SkillManageToolDeps } from './skill-manage-tool.js';
 export { createToolManualTool } from './tool-manual-tool.js';
+export { createDesktopPetTool, type DesktopPetCreateDetails } from './desktop-pet-tool.js';
 
 export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';
 export { createImageGenerateTool, resolveImageGenerationModelConfigForTool } from './image-generate-tool.js';

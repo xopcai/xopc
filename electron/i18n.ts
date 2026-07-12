@@ -66,8 +66,10 @@ export type ElectronMenuMessages = {
   tray: {
     newChat: string;
     showWindow: string;
+    toggleDesktopPet: string;
     remoteAccess: string;
     settings: string;
+    desktopPetSettings: string;
     developerTools: string;
     quit: string;
     remoteAccessConnected: string;
@@ -144,8 +146,10 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
     tray: {
       newChat: 'New Chat',
       showWindow: 'Show Window',
+      toggleDesktopPet: 'Show / Hide Pet',
       remoteAccess: 'Remote Access…',
       settings: 'Settings',
+      desktopPetSettings: 'Pet Settings',
       developerTools: 'Developer Tools',
       quit: 'Quit',
       remoteAccessConnected: 'Remote Access: Connected ✓',
@@ -220,8 +224,10 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
     tray: {
       newChat: '新建聊天',
       showWindow: '显示窗口',
+      toggleDesktopPet: '显示 / 隐藏宠物',
       remoteAccess: '远程访问…',
       settings: '设置',
+      desktopPetSettings: '宠物设置',
       developerTools: '开发者工具',
       quit: '退出',
       remoteAccessConnected: '远程访问：已连接 ✓',

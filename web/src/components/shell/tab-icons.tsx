@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
+  Bot,
   Cloud,
   Cpu,
   FileText,
@@ -44,6 +45,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsAppearance: Palette,
   settingsKeyboardShortcuts: Keyboard,
   settingsSystem: Shield,
+  settingsDesktopPet: Bot,
   settingsAppManagement: Package,
   settingsAgentBrowser: Globe,
   settingsUserProfile: UserCircle,
