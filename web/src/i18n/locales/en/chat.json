@@ -18,6 +18,9 @@
     "timelineMessageFallback": "Message",
     "timelineToolCount_one": "{{count}} step",
     "timelineToolCount_other": "{{count}} steps",
+    "timelineOpen": "Open timeline",
+    "timelineClose": "Close timeline",
+    "timelineCurrent": "Current",
     "welcomeTitle": "Welcome to xopc",
     "welcomeDescription": "Send a message to get started",
     "welcomeSpotlight": {

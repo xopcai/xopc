@@ -6,6 +6,7 @@ import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ActivityService } from '../../../../activity/index.js';
+import { ConfigSchema } from '../../../../config/schema.js';
 import { GoalService } from '../../../../goals/index.js';
 import { ProjectService } from '../../../../projects/index.js';
 import {
@@ -31,7 +32,7 @@ function registerActivityRouteApp(service: Partial<GatewayService>): Hono {
 
 function registerProjectRouteApp(service: Partial<GatewayService>): Hono {
   const app = new Hono();
-  registerProjectsRoutes(app, { service: service as GatewayService });
+  registerProjectsRoutes(app, { service: { currentConfig: ConfigSchema.parse({}), ...service } as GatewayService });
   return app;
 }
 

@@ -1,4 +1,5 @@
 import type { SessionTimelineItem } from '@/features/chat/session/session-manager';
+import { stripEnvelopeTimestampPrefix } from '@/features/chat/messages/user-message-plain-text';
 
 export type ChatTimelineLabels = {
   title: string;
@@ -47,6 +48,10 @@ function compactText(text: string | undefined, max: number): string {
   return `${normalized.slice(0, Math.max(0, max - 3)).trimEnd()}...`;
 }
 
+function compactUserTurnPreview(text: string | undefined, max: number): string {
+  return compactText(stripEnvelopeTimestampPrefix(text ?? ''), max);
+}
+
 function toolLabel(name: string, labels: ChatTimelineLabels): string {
   const normalized = name.toLowerCase().replace(/[-.]/g, '_');
   if (normalized.includes('search')) return labels.searchedWeb;
@@ -90,7 +95,7 @@ export function buildTimeline(
         messageIndex: item.displayIndex ?? lastDisplayIndex,
         ordinal,
         title: labels.turn.replace('{{count}}', String(ordinal)),
-        preview: compactText(item.preview || item.title || labels.messageFallback, 88),
+        preview: compactUserTurnPreview(item.preview || item.title, 88) || labels.messageFallback,
         ...(item.timestamp !== undefined ? { timestamp: item.timestamp } : {}),
         tools: [],
         events: [],

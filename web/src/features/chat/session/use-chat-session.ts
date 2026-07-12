@@ -66,6 +66,7 @@ export function useChatSession() {
 
   const focusedSessionKey = routedFocusedSessionKey;
   const initLoading = useChatSessionStore((s) => s.initLoading);
+  const loadingSessionKey = useChatSessionStore((s) => s.loadingSessionKey);
   const loadingMore = useChatSessionStore((s) => s.loadingMore);
   const shellError = useChatSessionStore((s) => s.shellError);
   /** URL is visible-session truth; do not read the store via lagging `focusedSessionKey`. */
@@ -111,6 +112,9 @@ export function useChatSession() {
   });
 
   const sessionRoutePending = Boolean(decodedKey !== undefined && focusedSessionKey !== decodedKey);
+  const sessionContentLoading = Boolean(
+    decodedKey && loadingSessionKey === decodedKey && !sessionRoutePending,
+  );
   const showSessionLoading = useMemo(
     () => initLoading && (focusedSessionKey == null || decodedKey === undefined),
     [initLoading, focusedSessionKey, decodedKey],
@@ -388,6 +392,7 @@ export function useChatSession() {
       sessionName,
       decodedKey,
       sessionRoutePending,
+      sessionContentLoading,
       showSessionLoading,
       loading: initLoading,
       sessionModel,

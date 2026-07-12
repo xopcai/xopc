@@ -12,6 +12,7 @@ import { MessageList } from '@/features/chat/messages/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll/scroll-to-bottom-button';
 import { useChatScrollViewport } from '@/features/chat/scroll/use-chat-scroll-viewport';
 import { useChatSession } from '@/features/chat/session/use-chat-session';
+import { ChatTimelinePanel } from '@/features/chat/timeline/chat-timeline-panel';
 import { ChatTimelineRail } from '@/features/chat/timeline/chat-timeline-rail';
 import { ClarifyPrompt } from '@/features/chat/composer/clarify-prompt';
 import { messages } from '@/i18n/messages';
@@ -457,8 +458,9 @@ export function ChatPage() {
   }, [auth.hasToken, agents.displayAgentId, setWorkspaceEditorAgentId]);
 
   /** Match `MessageList` empty welcome: tighter vertical padding so the first screen fits without scrolling. */
+  const showConversationLoading = session.showSessionLoading || session.sessionContentLoading;
   const compactWelcomeLayout =
-    !session.showSessionLoading && msgSlice.items.length === 0 && !stream.streaming;
+    !showConversationLoading && msgSlice.items.length === 0 && !stream.streaming;
   const chatHeadline = useMemo(() => {
     const titleKey =
       session.sessionRoutePending && session.decodedKey ? session.decodedKey : session.sessionKey;
@@ -894,6 +896,15 @@ export function ChatPage() {
           />
         ) : null}
         <div className="relative flex min-h-0 min-w-0 flex-1 px-3 sm:px-5 xl:px-6">
+          <ChatTimelinePanel
+            items={timeline.items}
+            activeMessageIndex={activeMessageIndex + timelineDisplayOffset}
+            labels={timelineLabels}
+            openLabel={m.chat.timelineOpen}
+            closeLabel={m.chat.timelineClose}
+            currentLabel={m.chat.timelineCurrent}
+            onSelectMessage={handleTimelineSelect}
+          />
           <div className="absolute inset-y-0 right-0 hidden xl:block">
             <ChatTimelineRail
               items={timeline.items}
@@ -953,6 +964,7 @@ export function ChatPage() {
                     sessionKey={session.decodedKey ?? session.sessionKey}
                     streaming={stream.streaming}
                     progress={stream.progress}
+                    loading={session.sessionContentLoading}
                     reasoningLevel={session.reasoningLevel}
                     registerListContentRef={registerListContentRef}
                     onPickWelcomePrompt={onPickWelcomePrompt}
@@ -985,6 +997,7 @@ export function ChatPage() {
               <ChatComposer
                 disabled={
                   session.showSessionLoading ||
+                  session.sessionContentLoading ||
                   session.sessionRoutePending ||
                   Boolean(clarify.clarifyPrompt)
                 }

@@ -18,6 +18,9 @@
     "timelineMessageFallback": "消息",
     "timelineToolCount_one": "{{count}} 步",
     "timelineToolCount_other": "{{count}} 步",
+    "timelineOpen": "打开时间线",
+    "timelineClose": "关闭时间线",
+    "timelineCurrent": "当前",
     "welcomeTitle": "今天想让 xopc 帮你做什么？",
     "welcomeDescription": "输入问题、任务或文件处理需求，开始对话。",
     "welcomeSpotlight": {

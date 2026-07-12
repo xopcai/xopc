@@ -130,4 +130,25 @@ describe('chat timeline rail model', () => {
 
     expect(turns.map((turn) => turn.messageIndex)).toEqual([18, 40]);
   });
+
+  it('strips injected envelope timestamps from user turn previews', () => {
+    const turns = buildTimeline(
+      [
+        {
+          id: 'row-1',
+          kind: 'turn',
+          role: 'user',
+          title: 'Turn 1',
+          preview: '[2026-01-15 10:00 UTC] Investigate the timeline hover card',
+          depth: 0,
+          turn: 1,
+          displayIndex: 0,
+          rowNumber: 1,
+        },
+      ],
+      labels,
+    );
+
+    expect(turns[0]?.preview).toBe('Investigate the timeline hover card');
+  });
 });
