@@ -1550,7 +1550,11 @@ export function ProjectDetailPage() {
       <div
         className={cn(
           'mt-3 min-h-0 flex-1',
-          tab === 'overview' ? 'overflow-y-auto pr-1 [scrollbar-gutter:stable] xl:overflow-hidden xl:pr-0' : 'overflow-y-auto pr-1 [scrollbar-gutter:stable]',
+          tab === 'work-items'
+            ? '-mx-3 -mb-3 overflow-hidden sm:-mx-5 sm:-mb-4 xl:-mx-6'
+            : tab === 'overview'
+              ? 'overflow-y-auto pr-1 [scrollbar-gutter:stable] xl:overflow-hidden xl:pr-0'
+              : 'overflow-y-auto pr-1 [scrollbar-gutter:stable]',
         )}
       >
       {tab === 'overview' ? (
