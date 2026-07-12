@@ -79,6 +79,22 @@
   --max-width-chat: var(--max-width-app-main);
 }
 
+:root {
+  --app-chrome-sidebar-bg: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--color-surface-base) 95%, var(--color-loop-indigo) 5%) 0%,
+    color-mix(in oklab, var(--color-surface-base) 96%, var(--color-accent) 4%) 48%,
+    color-mix(in oklab, var(--color-surface-base) 97%, var(--color-momentum-cyan) 3%) 100%
+  );
+  --app-chrome-titlebar-bg: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-surface-base) 95%, var(--color-loop-indigo) 5%) 0%,
+    color-mix(in oklab, var(--color-surface-base) 97%, var(--color-accent) 3%) 22rem,
+    var(--color-surface-panel) 48rem
+  );
+  --app-chrome-border: color-mix(in srgb, var(--color-edge) 78%, transparent);
+}
+
 /* Dark — lifted workstation gray, restrained rim light, Loop Blue signals */
 html.dark {
   --color-surface-base: #15171b;
@@ -119,6 +135,14 @@ html.dark {
   --shadow-elevated: 0 10px 30px rgb(0 0 0 / 0.32), 0 0 0 1px rgb(58 107 255 / 0.035);
   --shadow-float: 0 16px 48px rgb(0 0 0 / 0.4), 0 0 0 1px rgb(58 107 255 / 0.05);
   --shadow-popover: 0 18px 54px rgb(0 0 0 / 0.38), 0 0 0 1px rgb(58 107 255 / 0.07);
+
+  --app-chrome-sidebar-bg: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--color-surface-base) 94%, var(--color-loop-indigo) 6%) 0%,
+    var(--color-surface-base) 52%,
+    color-mix(in oklab, var(--color-surface-base) 96%, var(--color-momentum-cyan) 4%) 100%
+  );
+  --app-chrome-border: color-mix(in srgb, var(--color-edge) 72%, transparent);
 }
 
 @layer base {
@@ -340,6 +364,37 @@ html.dark {
   transition: none !important;
 }
 
+.app-chrome-sidebar {
+  background: var(--app-chrome-sidebar-bg);
+  box-shadow: inset -1px 0 0 var(--app-chrome-border);
+}
+
+.windows-titlebar {
+  background: var(--app-chrome-titlebar-bg);
+  padding-inline-start: max(0.5rem, env(titlebar-area-x, 0px));
+  padding-inline-end: max(
+    0.5rem,
+    calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 138px)))
+  );
+}
+
+/* Keep Radix trigger and portal descendants out of Electron's native drag hit testing. */
+.windows-titlebar-interactive,
+.windows-titlebar-interactive * {
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
+.sidebar-chrome-row {
+  container-type: inline-size;
+}
+
+@container (max-width: 320px) {
+  .sidebar-chrome-row-darwin .sidebar-chrome-secondary-actions {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .app-sidebar-push {
     transition: none;
@@ -515,6 +570,19 @@ html[data-color-scheme='emerald'] {
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
+
+  --app-chrome-sidebar-bg: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--color-surface-base) 88%, var(--color-accent) 12%) 0%,
+    var(--color-surface-base) 48%,
+    color-mix(in oklab, var(--color-surface-base) 90%, var(--color-success) 10%) 100%
+  );
+  --app-chrome-titlebar-bg: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-surface-base) 88%, var(--color-accent) 12%) 0%,
+    var(--color-surface-base) 22rem,
+    var(--color-surface-panel) 48rem
+  );
 }
 
 html.dark[data-color-scheme='emerald'] {
@@ -557,6 +625,19 @@ html.dark[data-color-scheme='emerald'] {
   --radius-md: 0.375rem;
   --radius-lg: 0.5rem;
   --radius-xl: 0.75rem;
+
+  --app-chrome-sidebar-bg: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--color-surface-base) 82%, var(--color-accent) 18%) 0%,
+    var(--color-surface-base) 54%,
+    color-mix(in oklab, var(--color-surface-base) 86%, var(--color-success) 14%) 100%
+  );
+  --app-chrome-titlebar-bg: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-surface-base) 82%, var(--color-accent) 18%) 0%,
+    var(--color-surface-base) 22rem,
+    var(--color-surface-panel) 48rem
+  );
 }
 
 /*
@@ -610,6 +691,19 @@ html[data-color-scheme='mono'] {
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+
+  --app-chrome-sidebar-bg: linear-gradient(
+    160deg,
+    var(--color-surface-panel) 0%,
+    var(--color-surface-base) 52%,
+    color-mix(in oklab, var(--color-surface-hover) 88%, var(--color-fg) 12%) 100%
+  );
+  --app-chrome-titlebar-bg: linear-gradient(
+    90deg,
+    var(--color-surface-panel) 0%,
+    var(--color-surface-base) 22rem,
+    var(--color-surface-panel) 48rem
+  );
 }
 
 html[data-color-scheme='mono'] body {
@@ -661,6 +755,19 @@ html.dark[data-color-scheme='mono'] {
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
+
+  --app-chrome-sidebar-bg: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--color-surface-base) 84%, var(--color-accent) 16%) 0%,
+    var(--color-surface-base) 54%,
+    color-mix(in oklab, var(--color-surface-hover) 88%, var(--color-fg-muted) 12%) 100%
+  );
+  --app-chrome-titlebar-bg: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-surface-base) 84%, var(--color-accent) 16%) 0%,
+    var(--color-surface-base) 22rem,
+    var(--color-surface-panel) 48rem
+  );
 }
 
 /*
@@ -711,6 +818,19 @@ html[data-color-scheme='clay'] {
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
   --radius-xl: 1.5rem;
+
+  --app-chrome-sidebar-bg: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--color-surface-base) 88%, var(--color-warning) 12%) 0%,
+    var(--color-surface-base) 46%,
+    color-mix(in oklab, var(--color-surface-base) 92%, var(--color-accent-fg) 8%) 100%
+  );
+  --app-chrome-titlebar-bg: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-surface-base) 88%, var(--color-warning) 12%) 0%,
+    var(--color-surface-base) 22rem,
+    var(--color-surface-panel) 48rem
+  );
 }
 
 html[data-color-scheme='clay'] body {
@@ -761,6 +881,19 @@ html.dark[data-color-scheme='clay'] {
   --radius-md: 0.75rem;
   --radius-lg: 1rem;
   --radius-xl: 1.5rem;
+
+  --app-chrome-sidebar-bg: linear-gradient(
+    160deg,
+    color-mix(in oklab, var(--color-surface-base) 84%, var(--color-accent) 16%) 0%,
+    var(--color-surface-base) 50%,
+    color-mix(in oklab, var(--color-surface-base) 88%, var(--color-fg-muted) 12%) 100%
+  );
+  --app-chrome-titlebar-bg: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--color-surface-base) 84%, var(--color-accent) 16%) 0%,
+    var(--color-surface-base) 22rem,
+    var(--color-surface-panel) 48rem
+  );
 }
 
 ::-webkit-scrollbar {
