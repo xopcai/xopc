@@ -807,7 +807,39 @@ export const en = {
       days: '{{n}}d ago',
     },
     aiOrganizeTitle: 'AI organize suggestions',
-    aiOrganizeComingSoon: 'AI organize is coming soon',
+    aiOrganizeEmpty: 'No safe suggestions right now.',
+    aiOrganizeUntitled: 'Untitled item',
+    aiOrganizeApply: 'Apply',
+    aiOrganizeApplying: 'Applying…',
+    aiOrganizeApplied: 'Organized {{count}} item(s)',
+    aiOrganizeSuggestions: {
+      bookmark: {
+        title: 'Process saved links',
+        subtitle: 'Move {{count}} link item(s) out of inbox and tag them.',
+      },
+      todo: {
+        title: 'Process checklists',
+        subtitle: 'Move {{count}} checklist item(s) out of inbox and tag them.',
+      },
+      voice: {
+        title: 'Tag voice captures',
+        subtitle: 'Add a voice tag to {{count}} item(s).',
+      },
+      media: {
+        title: 'Tag media captures',
+        subtitle: 'Add a media tag to {{count}} item(s).',
+      },
+    },
+    syncStatus: {
+      title: 'Waiting to sync',
+      pending: '{{count}} change(s) will sync when the gateway is reachable.',
+      failed: '{{count}} change(s) need a retry.',
+      syncNow: 'Sync',
+      retry: 'Retry',
+      synced: 'Synced {{count}} change(s)',
+      nothingToSync: 'Nothing to sync',
+      syncFailed: 'Sync failed',
+    },
   },
 
   notesPage: {

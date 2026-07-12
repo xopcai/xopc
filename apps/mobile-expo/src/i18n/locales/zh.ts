@@ -807,7 +807,39 @@ export const zh: MessageBundle = {
       days: '{{n}} 天前',
     },
     aiOrganizeTitle: 'AI 整理建议',
-    aiOrganizeComingSoon: 'AI 整理功能即将上线',
+    aiOrganizeEmpty: '当前没有稳妥的整理建议。',
+    aiOrganizeUntitled: '未命名条目',
+    aiOrganizeApply: '应用',
+    aiOrganizeApplying: '应用中…',
+    aiOrganizeApplied: '已整理 {{count}} 条',
+    aiOrganizeSuggestions: {
+      bookmark: {
+        title: '处理链接收集',
+        subtitle: '将 {{count}} 条链接移出 Inbox 并打标签。',
+      },
+      todo: {
+        title: '处理清单',
+        subtitle: '将 {{count}} 条清单移出 Inbox 并打标签。',
+      },
+      voice: {
+        title: '标记语音记录',
+        subtitle: '为 {{count}} 条记录添加语音标签。',
+      },
+      media: {
+        title: '标记媒体记录',
+        subtitle: '为 {{count}} 条记录添加媒体标签。',
+      },
+    },
+    syncStatus: {
+      title: '等待同步',
+      pending: '{{count}} 个改动会在 gateway 可用后同步。',
+      failed: '{{count}} 个改动需要重试。',
+      syncNow: '同步',
+      retry: '重试',
+      synced: '已同步 {{count}} 个改动',
+      nothingToSync: '没有待同步改动',
+      syncFailed: '同步失败',
+    },
   },
 
   notesPage: {
