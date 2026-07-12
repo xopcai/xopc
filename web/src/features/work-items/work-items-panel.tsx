@@ -12,7 +12,6 @@ import { detectPreviewFileType, inferPreviewMimeType } from '@/features/preview-
 import { messages } from '@/i18n/messages';
 import { apiFetch } from '@/lib/fetch';
 import { cn } from '@/lib/cn';
-import { showToast } from '@/lib/toast';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import {
@@ -923,7 +922,6 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
         updateLocalItem(res.item);
         const nextNotice = { title: t.feedback.savedTitle, message: t.feedback.savedNext };
         setNotice(nextNotice);
-        showToast({ type: 'success', title: nextNotice.title, message: nextNotice.message });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -954,7 +952,6 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
       setSelectedEvents(events.events);
       const nextNotice = { title: t.feedback.createdTitle, message: t.feedback.createdNext };
       setNotice(nextNotice);
-      showToast({ type: 'success', title: nextNotice.title, message: nextNotice.message });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
