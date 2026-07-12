@@ -171,6 +171,8 @@
       "loadMore": "加载更多",
       "noNextAction": "暂无下一步。",
       "dragToUpdate": "拖拽以更新状态",
+      "markDone": "标记工作项为已完成",
+      "markTodo": "标记工作项为待处理",
       "agent": "Agent",
       "updated": "更新",
       "nextAction": "下一步",
@@ -229,7 +231,8 @@
         "descriptionLabel": "描述",
         "priorityLabel": "优先级",
         "cancel": "取消",
-        "submit": "创建"
+        "submit": "创建",
+        "addToColumn": "在{{status}}中新建工作项"
       },
       "attachments": {
         "title": "附件",
