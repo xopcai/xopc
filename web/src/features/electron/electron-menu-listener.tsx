@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { isElectron } from '@/lib/electron-env';
+import { useSidebarStore } from '@/stores/sidebar-store';
 
 export function ElectronMenuListener() {
   const navigate = useNavigate();
@@ -19,9 +20,24 @@ export function ElectronMenuListener() {
       window.dispatchEvent(new CustomEvent('toggle-command-palette'));
     });
 
+    const offQuickCapture = api.menu.onQuickCapture(() => {
+      window.dispatchEvent(new CustomEvent('open-quick-capture'));
+    });
+
+    const offSidebar = api.menu.onToggleSidebar(() => {
+      useSidebarStore.getState().toggleCollapsed();
+    });
+
+    const offHistory = api.menu.onHistoryNavigate((delta) => {
+      navigate(delta);
+    });
+
     return () => {
       offNav();
       offPalette();
+      offQuickCapture();
+      offSidebar();
+      offHistory();
     };
   }, [navigate]);
 

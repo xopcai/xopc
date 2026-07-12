@@ -23,7 +23,7 @@ export function SidebarNav({
     <div className="flex min-h-0 flex-1 flex-col">
       {/* Fixed: primary links do not scroll with the task list */}
       <nav
-        className={cn('shrink-0', collapsed ? 'px-1.5' : 'px-4')}
+        className={cn('shrink-0 pt-2', collapsed ? 'px-1.5' : 'px-4')}
         aria-label="Main"
       >
         <div className="flex flex-col gap-0.5">

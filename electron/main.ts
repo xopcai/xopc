@@ -60,7 +60,7 @@ import {
   stopAutoUpdater,
 } from './auto-updater.js';
 import { getElectronMenuMessages, type ElectronUiLanguage } from './i18n.js';
-import { buildAppMenu } from './menu.js';
+import { buildAppMenu, buildAppMenuModel, invokeAppMenuAction } from './menu.js';
 import {
   classifyGatewayStartupFailure,
   enrichGatewayStartupFailure,
@@ -103,6 +103,9 @@ function refreshElectronMenus(language?: ElectronUiLanguage): void {
   const messages = getElectronMenuMessages(language ?? getElectronShellLanguage());
   if (mainWindow && !mainWindow.isDestroyed()) {
     Menu.setApplicationMenu(buildAppMenu(mainWindow, messages));
+    if (process.platform === 'win32') {
+      mainWindow.setMenuBarVisibility(false);
+    }
     mainWindow.webContents.send('electron-locale:changed', language ?? getElectronShellLanguage());
   }
   updateTrayLanguage(messages);
@@ -157,11 +160,25 @@ function startLocalCrashReporter(): void {
   }
 }
 
-function browserWindowChromeOptions(): Pick<BrowserWindowConstructorOptions, 'titleBarStyle' | 'titleBarOverlay'> {
+function browserWindowChromeOptions(): Pick<
+  BrowserWindowConstructorOptions,
+  'titleBarStyle' | 'titleBarOverlay' | 'autoHideMenuBar'
+> {
   if (process.platform === 'darwin') {
     return { titleBarStyle: 'hiddenInset' };
   }
-  // Windows/Linux: native frame so File/Edit/View menu bar and caption buttons use OS defaults.
+  if (process.platform === 'win32') {
+    return {
+      titleBarStyle: 'hidden',
+      titleBarOverlay: {
+        color: '#00000000',
+        symbolColor: '#475569',
+        height: 36,
+      },
+      autoHideMenuBar: true,
+    };
+  }
+  // Linux keeps the native frame so menu bar and caption buttons follow the window manager.
   return {};
 }
 
@@ -561,6 +578,9 @@ function createWindow(): void {
 
   const menuMessages = currentMenuMessages();
   Menu.setApplicationMenu(buildAppMenu(win, menuMessages));
+  if (process.platform === 'win32') {
+    win.setMenuBarVisibility(false);
+  }
 
   const trayIconDir = app.isPackaged
     ? join(process.resourcesPath, 'resources')
@@ -820,6 +840,23 @@ app.whenReady().then(async () => {
   });
 
   ipcMain.handle('clipboard:read-text', () => clipboard.readText());
+
+  ipcMain.handle('menu:get-model', (event) => {
+    assertTrustedRenderer(event);
+    return buildAppMenuModel(currentMenuMessages(), process.platform);
+  });
+
+  ipcMain.handle('menu:invoke', (event, actionId: unknown) => {
+    assertTrustedRenderer(event);
+    if (typeof actionId !== 'string' || !actionId) {
+      return { ok: false as const, error: 'UNKNOWN_MENU_ACTION' as const };
+    }
+    const win = BrowserWindow.fromWebContents(event.sender) ?? mainWindow;
+    if (!win || win.isDestroyed()) {
+      return { ok: false as const, error: 'UNKNOWN_MENU_ACTION' as const };
+    }
+    return invokeAppMenuAction(win, actionId);
+  });
 
   ipcMain.handle('window:fullscreen-enter', () => {
     const win = BrowserWindow.getFocusedWindow();

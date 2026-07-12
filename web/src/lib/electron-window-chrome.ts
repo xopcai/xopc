@@ -10,14 +10,10 @@ export function isElectronDarwin(): boolean {
   return isElectron() && window.electronAPI?.platform === 'darwin';
 }
 
-export function electronDarwinTitlebarLeftPad(): string {
-  return isElectronDarwin() ? DARWIN_TRAFFIC_LIGHT_LEFT_PAD : '';
+export function isElectronWin32(): boolean {
+  return isElectron() && window.electronAPI?.platform === 'win32';
 }
 
-/**
- * Main header: reserve space for the fixed title-bar cluster (sidebar + search + new)
- * when the left rail is fully hidden on macOS Electron (`md+`).
- */
-export function electronDarwinCollapsedClusterMainPadMd(collapsed: boolean): string {
-  return isElectronDarwin() && collapsed ? 'md:pl-[200px]' : '';
+export function electronDarwinTitlebarLeftPad(): string {
+  return isElectronDarwin() ? DARWIN_TRAFFIC_LIGHT_LEFT_PAD : '';
 }

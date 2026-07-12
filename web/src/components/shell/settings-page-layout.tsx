@@ -3,6 +3,7 @@ import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } f
 import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
 
 import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
 import { SettingsModeToggle } from '@/components/shell/settings-mode-toggle';
 import { TabIcon } from '@/components/shell/tab-icons';
 import { messages, tabLabel } from '@/i18n/messages';
@@ -17,7 +18,6 @@ import {
 import type { SettingsShellNavGroup } from '@/navigation';
 import { isSettingsPathVisibleInMode, isSettingsTabVisibleInMode } from '@/navigation/settings-nav-visibility';
 import { isElectron } from '@/lib/electron-env';
-import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-window-chrome';
 import { preloadRouteForPath } from '@/lib/route-preload';
 import { SETTINGS_SHEET_PORTAL_BODY_MQ } from '@/lib/settings-shell-dialog-layer';
 import { useMediaQuery } from '@/lib/use-media-query';
@@ -125,8 +125,13 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   /** Full-screen portal only: rail touches window edge and needs traffic-light inset on macOS Electron. */
   const settingsPortalFullscreen = useMediaQuery(SETTINGS_SHEET_PORTAL_BODY_MQ);
+  const chromeLayout = resolveShellChromeLayout({
+    runtime: getShellChromeRuntime(),
+    sidebarCollapsed: false,
+    mobileNavOpen,
+  });
   const darwinTitlebarPad =
-    settingsPortalFullscreen && isElectronDarwin() ? electronDarwinTitlebarLeftPad() : '';
+    settingsPortalFullscreen ? chromeLayout.sidebarLeadingInsetClass : '';
 
   const onSettingsRailResizePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -245,7 +250,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
       <div
         className={cn(
           'flex shrink-0 items-center gap-2 border-b border-edge-subtle bg-surface-panel px-3 py-2 md:hidden',
-          APP_CHROME_DRAG_CLASS,
+          chromeLayout.mainHeaderDraggable && APP_CHROME_DRAG_CLASS,
         )}
       >
         <Link to={backTo} className={mobileToolbarButtonClass} title={backLabel} aria-label={backLabel}>
@@ -274,7 +279,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
             onClick={() => setMobileNavOpen(false)}
             aria-label={m.nav.settings}
           />
-          <aside className="absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-3rem))] flex-col bg-surface-rail shadow-float">
+          <aside className="app-chrome-sidebar absolute inset-y-0 left-0 flex w-[min(20rem,calc(100vw-3rem))] flex-col bg-surface-rail shadow-float">
             <div className="flex shrink-0 items-center justify-between gap-2 px-4 pb-2 pt-4">
               {backControl}
               <button
@@ -294,7 +299,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
       {/* Left rail stays visually darker than the bright right content surface. */}
       <div
         className={cn(
-          'relative hidden shrink-0 flex-col bg-surface-rail md:flex',
+          'app-chrome-sidebar relative hidden shrink-0 flex-col bg-surface-rail md:flex',
           'md:h-full md:min-h-0 md:shrink-0 md:overflow-hidden',
           'settings-page-rail',
           widthResizing && 'settings-page-rail-resizing',
@@ -308,9 +313,9 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
         <div
           className={cn(
             'flex shrink-0 items-center justify-start pb-2 pt-4',
-            APP_CHROME_DRAG_CLASS,
+            chromeLayout.sidebarChromeDraggable && APP_CHROME_DRAG_CLASS,
             darwinTitlebarPad,
-            settingsPortalFullscreen && isElectronDarwin() ? 'pr-4' : 'px-4',
+            settingsPortalFullscreen && chromeLayout.sidebarLeadingInsetClass ? 'pr-4' : 'px-4',
           )}
         >
           {backControl}

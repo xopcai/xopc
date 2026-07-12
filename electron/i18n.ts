@@ -7,6 +7,7 @@ export type ElectronMenuMessages = {
   file: {
     label: string;
     newChat: string;
+    quickCapture: string;
     search: string;
     settings: string;
   };
@@ -23,6 +24,7 @@ export type ElectronMenuMessages = {
   };
   view: {
     label: string;
+    toggleSidebar: string;
     reload: string;
     forceReload: string;
     toggleDevTools: string;
@@ -30,6 +32,11 @@ export type ElectronMenuMessages = {
     zoomIn: string;
     zoomOut: string;
     toggleFullscreen: string;
+  };
+  navigate: {
+    label: string;
+    back: string;
+    forward: string;
   };
   agent: {
     label: string;
@@ -78,6 +85,7 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
     file: {
       label: 'File',
       newChat: 'New Chat',
+      quickCapture: 'Quick Capture',
       search: 'Search',
       settings: 'Settings…',
     },
@@ -94,6 +102,7 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
     },
     view: {
       label: 'View',
+      toggleSidebar: 'Toggle Sidebar',
       reload: 'Reload',
       forceReload: 'Force Reload',
       toggleDevTools: 'Toggle Developer Tools',
@@ -101,6 +110,11 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       zoomIn: 'Zoom In',
       zoomOut: 'Zoom Out',
       toggleFullscreen: 'Toggle Full Screen',
+    },
+    navigate: {
+      label: 'Navigate',
+      back: 'Back',
+      forward: 'Forward',
     },
     agent: {
       label: 'Agent',
@@ -147,6 +161,7 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
     file: {
       label: '文件',
       newChat: '新建聊天',
+      quickCapture: '快速记录',
       search: '搜索',
       settings: '设置…',
     },
@@ -163,6 +178,7 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
     },
     view: {
       label: '视图',
+      toggleSidebar: '切换侧边栏',
       reload: '重新加载',
       forceReload: '强制重新加载',
       toggleDevTools: '切换开发者工具',
@@ -170,6 +186,11 @@ const messages: Record<ElectronUiLanguage, ElectronMenuMessages> = {
       zoomIn: '放大',
       zoomOut: '缩小',
       toggleFullscreen: '切换全屏',
+    },
+    navigate: {
+      label: '导航',
+      back: '后退',
+      forward: '前进',
     },
     agent: {
       label: '智能体',
