@@ -34,7 +34,14 @@ import {
 } from '../notes/capture-note-media';
 import { parseCaptureIntent } from '../notes/capture-parser';
 import { QuickCaptureComposer } from '../notes/QuickCaptureComposer';
+import {
+  buildInboxOrganizePatch,
+  buildInboxOrganizeSuggestions,
+  type InboxOrganizeSuggestion,
+} from './ai-organize';
+import { AiOrganizeSheet } from './AiOrganizeSheet';
 import { InboxItemContent } from './InboxItemContent';
+import { WorkspaceSyncStatusCard } from './WorkspaceSyncStatusCard';
 
 type CapturePayload =
   | { type: 'text'; text: string }
@@ -58,6 +65,8 @@ export function InboxScreen() {
   const [captureText, setCaptureText] = useState('');
   const [snackMsg, setSnackMsg] = useState('');
   const [showBatchDelete, setShowBatchDelete] = useState(false);
+  const [organizeOpen, setOrganizeOpen] = useState(false);
+  const [applyingSuggestionId, setApplyingSuggestionId] = useState<string>();
   const {
     selectionMode,
     selectedIds,
@@ -86,6 +95,8 @@ export function InboxScreen() {
       .filter((item) => !pendingDeleteIds.has(item.id)),
     [inboxQuery.data?.pages, pendingDeleteIds],
   );
+  const itemsById = useMemo(() => new Map(items.map((item) => [item.id, item])), [items]);
+  const organizeSuggestions = useMemo(() => buildInboxOrganizeSuggestions(items), [items]);
 
   const invalidateInbox = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: queryKeys.notes('inbox') });
@@ -153,6 +164,25 @@ export function InboxScreen() {
     },
     onError: (err) => setSnackMsg(err instanceof Error ? err.message : pm.actionFailed),
   });
+
+  const applyOrganizeSuggestion = useCallback(async (suggestion: InboxOrganizeSuggestion) => {
+    if (applyingSuggestionId) return;
+    setApplyingSuggestionId(suggestion.id);
+    try {
+      await Promise.all(suggestion.itemIds.map((id) => {
+        const item = itemsById.get(id);
+        if (!item) return Promise.resolve();
+        return updateNote(id, buildInboxOrganizePatch(item, suggestion.id));
+      }));
+      await invalidateInbox();
+      setOrganizeOpen(false);
+      setSnackMsg(t(im.aiOrganizeApplied, { count: suggestion.count }));
+    } catch (err) {
+      setSnackMsg(err instanceof Error ? err.message : pm.actionFailed);
+    } finally {
+      setApplyingSuggestionId(undefined);
+    }
+  }, [applyingSuggestionId, im.aiOrganizeApplied, invalidateInbox, itemsById, pm.actionFailed]);
 
   const handleCapture = useCallback(() => {
     const text = captureText.trim();
@@ -310,6 +340,13 @@ export function InboxScreen() {
       <FloatingHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : im.title}
         onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
+        rightActions={selectionMode ? undefined : [
+          {
+            icon: 'auto-fix',
+            onPress: () => setOrganizeOpen(true),
+            accessibilityLabel: im.aiOrganizeTitle,
+          },
+        ]}
       />
 
       {inboxQuery.isLoading ? (
@@ -333,6 +370,12 @@ export function InboxScreen() {
             />
           }
           ListFooterComponent={inboxQuery.isFetchingNextPage ? <View style={styles.footerLoader}><Text style={{ color: colors.text.tertiary }}>{m.common.loading}</Text></View> : null}
+          ListHeaderComponent={
+            <WorkspaceSyncStatusCard
+              onChanged={invalidateInbox}
+              onToast={setSnackMsg}
+            />
+          }
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <Icon source="tray" size={42} color={colors.text.tertiary} />
@@ -370,6 +413,17 @@ export function InboxScreen() {
         onDismiss={() => setShowBatchDelete(false)}
         onConfirm={() => deleteMutation.mutate([...selectedIds])}
         loading={deleteMutation.isPending}
+      />
+
+      <AiOrganizeSheet
+        visible={organizeOpen}
+        suggestions={organizeSuggestions}
+        itemsById={itemsById}
+        applyingId={applyingSuggestionId}
+        onDismiss={() => setOrganizeOpen(false)}
+        onApply={(suggestion) => {
+          void applyOrganizeSuggestion(suggestion);
+        }}
       />
 
       <AppToast
