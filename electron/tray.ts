@@ -17,6 +17,8 @@ export type TrayActions = {
   showWindow: () => void;
   /** Open app and navigate once content can receive IPC. */
   navigate: (hashPath: string) => void;
+  toggleDesktopPet: () => void;
+  openDesktopPetSettings: () => void;
   /** Main-process DevTools (works when the page is blank). */
   openDevTools: () => void;
   quit: () => void;
@@ -50,6 +52,12 @@ function buildContextMenu(actions: TrayActions, t: ElectronMenuMessages): Menu {
         actions.showWindow();
       },
     },
+    {
+      label: t.tray.toggleDesktopPet,
+      click: () => {
+        actions.toggleDesktopPet();
+      },
+    },
     { type: 'separator' },
     {
       label: tunnelStatusLabel(t, currentTunnelStatus),
@@ -66,6 +74,12 @@ function buildContextMenu(actions: TrayActions, t: ElectronMenuMessages): Menu {
       label: t.tray.settings,
       click: () => {
         actions.navigate('/settings/appearance');
+      },
+    },
+    {
+      label: t.tray.desktopPetSettings,
+      click: () => {
+        actions.openDesktopPetSettings();
       },
     },
     ...(showDeveloperTrayItems

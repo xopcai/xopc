@@ -7,6 +7,7 @@
 
 import {
   Agent,
+  type AgentTool,
   type AgentMessage,
   type AgentEvent,
   type ThinkingLevel,
@@ -166,10 +167,17 @@ export interface AgentInstance {
   resolvedWorkspacePath: string;
   /** Tool names registered on this agent (for skill indexing / tool gating). */
   registeredToolNames: string[];
+  /** Capability packs activated by explicit skills in this session. */
+  activeSkillCapabilityNames: Set<string>;
   activeProjectContext?: string;
   activeSelfVerifyContext?: string;
   /** Declared env var names from skill_view; exec_command reads values from process.env at spawn time. */
   skillEnvPassthroughKeys: Set<string>;
+}
+
+export interface PreparedSkillTurn {
+  text: string;
+  activatedCapabilityNames: string[];
 }
 
 
@@ -447,6 +455,101 @@ export class AgentManager implements AgentInstanceGateway {
     return this.getWorkspaceRuntimeForSession(sessionKey).skillManager.expandCommand(text, {
       skillAllowlist: inst?.effectiveProfile.skillsAllowlist,
       registeredToolNames: inst?.registeredToolNames,
+    });
+  }
+
+  prepareSkillTurn(sessionKey: string, text: string): PreparedSkillTurn {
+    this.getOrCreateAgent(sessionKey);
+    const inst = this.agents.get(sessionKey);
+    if (!text.includes('/skill:')) {
+      return {
+        text,
+        activatedCapabilityNames: inst ? [...inst.activeSkillCapabilityNames] : [],
+      };
+    }
+    const rt = this.getWorkspaceRuntimeForSession(sessionKey);
+    const options = {
+      skillAllowlist: inst?.effectiveProfile.skillsAllowlist,
+      registeredToolNames: inst?.registeredToolNames,
+    };
+    const expanded = text.trimStart().startsWith('/skill:')
+      ? rt.skillManager.expandCommand(text, options)
+      : text;
+    const selectedCapabilities = rt.skillManager.getActivatedCapabilitiesForText(text, options);
+    for (const capabilityName of selectedCapabilities) {
+      inst?.activeSkillCapabilityNames.add(capabilityName);
+    }
+    return {
+      text: expanded,
+      activatedCapabilityNames: inst ? [...inst.activeSkillCapabilityNames] : selectedCapabilities,
+    };
+  }
+
+  async withSkillCapabilities<T>(
+    sessionKey: string,
+    capabilityNames: readonly string[],
+    run: () => Promise<T>,
+  ): Promise<T> {
+    const requested = [...new Set(capabilityNames.map((name) => name.trim()).filter(Boolean))];
+    if (requested.length === 0) return run();
+
+    this.getOrCreateAgent(sessionKey);
+    const inst = this.agents.get(sessionKey);
+    if (!inst) return run();
+
+    const activatedTools = this.toolsFactory.createCapabilityTools(requested, {
+      disabledTools: inst.effectiveProfile.tools.denied,
+    });
+    const existingNames = new Set(inst.registeredToolNames);
+    const newTools = activatedTools.filter((tool) => !existingNames.has(tool.name));
+    if (newTools.length === 0) return run();
+
+    const originalTools = inst.agent.state.tools as AgentTool<any, any>[];
+    const originalRegisteredToolNames = inst.registeredToolNames;
+    const originalSystemPrompt = inst.agent.state.systemPrompt;
+    const nextRegisteredToolNames = [...originalRegisteredToolNames, ...newTools.map((tool) => tool.name)];
+
+    inst.agent.state.tools = [...originalTools, ...newTools];
+    inst.registeredToolNames = nextRegisteredToolNames;
+    inst.agent.state.systemPrompt = this.buildSystemPromptForInstance(inst, nextRegisteredToolNames);
+    try {
+      return await run();
+    } finally {
+      inst.agent.state.tools = originalTools;
+      inst.registeredToolNames = originalRegisteredToolNames;
+      inst.agent.state.systemPrompt = originalSystemPrompt;
+    }
+  }
+
+  private buildSystemPromptForInstance(
+    instance: AgentInstance,
+    registeredToolNames: string[] = instance.registeredToolNames,
+  ): string {
+    const cfg = this.config.config!;
+    const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
+    const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
+    const contextFiles = this.resolveContextFilesForSession(instance.sessionKey, instance.effectiveProfile);
+    const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
+    const thinkingLevel =
+      (instance.agent.state.thinkingLevel as ThinkingLevel | undefined) ??
+      (instance.effectiveProfile.thinkingDefault as ThinkingLevel | undefined) ??
+      this.config.thinkingLevel ??
+      'medium';
+    return rt.systemPromptBuilder.build(contextFiles, {
+      externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+      workspaceOverride: resolvedWorkspacePath,
+      profileMarkdownPathRoot: resolveAgentProfileDir(cfg, instance.effectiveProfile.agentId),
+      systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
+      skillAllowlist: instance.effectiveProfile.skillsAllowlist,
+      registeredToolNames,
+      sessionKey: instance.sessionKey,
+      modelRef,
+      agentId: instance.effectiveProfile.agentId,
+      thinkingLevel,
+      activeProjectContext: this.composeDynamicProjectContext(
+        instance.activeProjectContext,
+        instance.activeSelfVerifyContext,
+      ),
     });
   }
 
@@ -802,6 +905,7 @@ export class AgentManager implements AgentInstanceGateway {
       effectiveProfile: profile,
       resolvedWorkspacePath: resolvedPath,
       registeredToolNames,
+      activeSkillCapabilityNames: new Set<string>(),
       activeProjectContext,
       activeSelfVerifyContext,
       skillEnvPassthroughKeys: new Set<string>(),

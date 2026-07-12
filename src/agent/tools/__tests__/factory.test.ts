@@ -43,4 +43,17 @@ describe('AgentToolsFactory', () => {
 
     expect(factory.createCoreTools().map((tool) => tool.name)).not.toContain('browser_use');
   });
+
+  it('does not register desktop pet creation as a core tool', () => {
+    const factory = new AgentToolsFactory({
+      workspace: '/tmp/xopc-tools-factory-test',
+      bus: {} as MessageBus,
+      getCurrentContext: () => null,
+    });
+
+    expect(factory.createCoreTools().map((tool) => tool.name)).not.toContain('create_desktop_pet');
+    expect(factory.createCapabilityTools(['desktop-pet-authoring']).map((tool) => tool.name)).toEqual([
+      'create_desktop_pet',
+    ]);
+  });
 });

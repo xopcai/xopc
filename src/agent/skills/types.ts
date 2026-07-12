@@ -69,6 +69,11 @@ export interface SkillMetadata {
     requires?: SkillRequires;
     install?: SkillInstallSpec[];
     os?: Array<'darwin' | 'linux' | 'win32'>;
+    /**
+     * Lazy capability packs to inject only when this skill is explicitly selected for a turn.
+     * Parsed from `metadata.xopc.activates_capabilities`.
+     */
+    activatesCapabilities?: string[];
   };
 }
 

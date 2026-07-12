@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Bot,
   Check,
   ChevronRight,
   ExternalLink,
@@ -9,7 +10,7 @@ import {
   Settings,
   Type,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
@@ -19,6 +20,7 @@ import { helpDocsHomeUrl } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 import { type FontScalePreference, useFontScaleStore } from '@/stores/font-scale-store';
 import { type ThemePreference, useThemeStore } from '@/stores/theme-store';
+import type { DesktopPetState } from '@/types/electron';
 
 type FlyoutId = 'lang' | 'theme' | 'font';
 
@@ -74,6 +76,7 @@ export function SidebarAppMenu({
   onAboutClick?: () => void;
 }) {
   const [openFlyout, setOpenFlyout] = useState<FlyoutId | null>(null);
+  const [petState, setPetState] = useState<DesktopPetState | null>(null);
 
   const language = useLocaleStore((s) => s.language);
   const setLanguage = useLocaleStore((s) => s.setLanguage);
@@ -98,6 +101,34 @@ export function SidebarAppMenu({
       : fontPref === 'large'
         ? a.fontScaleLarge
         : a.fontScaleDefault;
+  const petApi = typeof window !== 'undefined' ? window.electronAPI?.pet : undefined;
+  const showPetToggle = Boolean(petApi);
+  const petToggleLabel = petState?.visible ? a.hideDesktopPet : a.showDesktopPet;
+
+  useEffect(() => {
+    if (!petApi) return;
+    let cancelled = false;
+    void petApi.getState().then((next) => {
+      if (!cancelled) setPetState(next);
+    });
+    const cleanup = petApi.onStateChanged((next) => {
+      if (!cancelled) setPetState(next);
+    });
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, [petApi]);
+
+  const togglePetVisibility = async () => {
+    if (!petApi) return;
+    if (petState?.visible) {
+      await petApi.hide();
+    } else {
+      await petApi.show();
+    }
+    setPetState(await petApi.getState());
+  };
 
   /** Modest gap between the left rail and the flyout. */
   const flyoutGapClass = 'ml-2 sm:ml-2.5';
@@ -217,6 +248,19 @@ export function SidebarAppMenu({
           </div>
         </div>
       </div>
+
+      {showPetToggle ? (
+        <button
+          type="button"
+          className={rowClass}
+          onClick={() => void togglePetVisibility()}
+          onMouseEnter={() => setOpenFlyout(null)}
+          onFocus={() => setOpenFlyout(null)}
+        >
+          <Bot className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
+          <span className="min-w-0 flex-1 text-left">{petToggleLabel}</span>
+        </button>
+      ) : null}
 
       <div className="my-2 h-px bg-edge-subtle" role="separator" />
 

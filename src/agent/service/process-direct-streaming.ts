@@ -294,9 +294,8 @@ export async function* runProcessDirectStreaming(
         return;
       }
 
-      const textForAgent = mergedUserText.trimStart().startsWith('/skill:')
-        ? deps.agentManager.expandSkillUserText(mergedUserText)
-        : mergedUserText;
+      const skillTurn = deps.agentManager.prepareSkillTurn(sessionKey, mergedUserText);
+      const textForAgent = skillTurn.text;
       const userMessage = await deps.buildTranscriptUserMessage(textForAgent, prepared, sessionKey);
       let sourceEnrichedUserMessage: AgentMessage = userMessage;
       let sourceImages: ImageContent[] | undefined;
@@ -328,27 +327,32 @@ export async function* runProcessDirectStreaming(
       setPendingTranscriptUserMessage(sessionKey, pendingUserMessage);
 
       try {
-        const result = await runDirectAgentTurn(
-          {
-            sessionStore: deps.sessionStore,
-            agentManager: deps.agentManager,
-            modelManager: deps.modelManager,
-            config: deps.getConfig(),
-          },
-          {
-            sessionKey,
-            userMessage: sourceEnrichedUserMessage,
-            abortSignal: signal,
-            sourceImages,
-            runId: input.runId,
-            onEvent: (embeddedEvent) => {
-              const event = { ...embeddedEvent };
-              if (event.type === 'error' && typeof event.content === 'string') {
-                event.content = formatStreamError(event.content);
-              }
-              pushVisible(event);
-            },
-          },
+        const result = await deps.agentManager.withSkillCapabilities(
+          sessionKey,
+          skillTurn.activatedCapabilityNames,
+          () =>
+            runDirectAgentTurn(
+              {
+                sessionStore: deps.sessionStore,
+                agentManager: deps.agentManager,
+                modelManager: deps.modelManager,
+                config: deps.getConfig(),
+              },
+              {
+                sessionKey,
+                userMessage: sourceEnrichedUserMessage,
+                abortSignal: signal,
+                sourceImages,
+                runId: input.runId,
+                onEvent: (embeddedEvent) => {
+                  const event = { ...embeddedEvent };
+                  if (event.type === 'error' && typeof event.content === 'string') {
+                    event.content = formatStreamError(event.content);
+                  }
+                  pushVisible(event);
+                },
+              },
+            ),
         );
 
         if (result.lastAssistantText) {

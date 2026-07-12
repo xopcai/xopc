@@ -24,6 +24,7 @@ export const loadAppearanceSettingsPanel = () => import('@/features/settings/app
 export const loadKeyboardShortcutsSettingsPanel = () => import('@/features/settings/keyboard-shortcuts-settings');
 export const loadUserProfileSettingsPanel = () => import('@/features/settings/user-profile-settings-panel');
 export const loadSystemSettingsPanel = () => import('@/features/settings/system-settings-panel');
+export const loadDesktopPetSettingsPanel = () => import('@/features/desktop-pet/desktop-pet-settings');
 export const loadAppManagementSettingsPanel = () => import('@/features/settings/app-management-settings-panel');
 export const loadModelsHubPanel = () => import('@/features/settings/models-hub/models-hub-panel');
 export const loadGatewaySettingsPanel = () => import('@/features/settings/gateway-settings');
@@ -61,6 +62,7 @@ function preloadSettingsSection(path: string) {
   if (section === 'keyboard-shortcuts') return preload(loadKeyboardShortcutsSettingsPanel);
   if (section === 'user-profile') return preload(loadUserProfileSettingsPanel);
   if (section === 'system') return preload(loadSystemSettingsPanel);
+  if (section === 'desktop-pet') return preload(loadDesktopPetSettingsPanel);
   if (section === 'app-management') return preload(loadAppManagementSettingsPanel);
   if (section === 'credentials') return preload(loadModelsHubPanel);
   if (section === 'gateway') return preload(loadGatewaySettingsPanel);
