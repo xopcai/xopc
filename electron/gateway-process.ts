@@ -8,6 +8,13 @@ import { app } from 'electron';
 
 import type { GatewayBindMode } from '../src/config/schema.js';
 
+import {
+  GatewayStartupError,
+  classifyGatewayStartupFailure,
+  createGatewayTimeoutFailure,
+  createPortInUseFailure,
+} from './startup-failure.js';
+
 let gatewayChild: ChildProcess | null = null;
 let gatewayExitHandler: ((code: number | null, signal: string | null) => void) | null = null;
 
@@ -89,8 +96,11 @@ export async function resolveGatewayStartupMode(params: {
     return 'spawn';
   }
 
-  throw new Error(
-    `Gateway port ${params.port} is already in use, but the process on that port does not accept the configured xopc gateway token. Stop the other process or change gateway.port in ~/.xopc/xopc.json.`,
+  throw new GatewayStartupError(
+    createPortInUseFailure(
+      params.port,
+      `Gateway port ${params.port} is already in use, but the process on that port does not accept the configured xopc gateway token.`,
+    ),
   );
 }
 
@@ -262,10 +272,14 @@ export async function waitForGatewayReady(
   while (Date.now() < deadline) {
     if (child.exitCode !== null || child.signalCode !== null) {
       const logHint = gatewayLogSnippetForError();
-      throw new Error(
-        `Gateway process exited before becoming ready (code=${child.exitCode}, signal=${child.signalCode}). ` +
-          (logHint ? `Output:\n${logHint}\n\n` : '') +
-          `Port ${port} may be in use by another program, or the gateway failed to start.`,
+      throw new GatewayStartupError(
+        classifyGatewayStartupFailure({
+          rawOutput: logHint,
+          port,
+          exitCode: child.exitCode,
+          signal: child.signalCode,
+          message: `Gateway process exited before becoming ready (code=${child.exitCode}, signal=${child.signalCode}).`,
+        }),
       );
     }
     try {
@@ -280,9 +294,12 @@ export async function waitForGatewayReady(
     await new Promise((r) => setTimeout(r, 250));
   }
   const logHint = gatewayLogSnippetForError();
-  throw new Error(
-    `Gateway did not become ready with expected auth at ${url} within ${timeoutMs}ms` +
-      (logHint ? `\n\nRecent gateway output:\n${logHint}` : ''),
+  throw new GatewayStartupError(
+    createGatewayTimeoutFailure({
+      port,
+      timeoutMs,
+      rawOutput: logHint,
+    }),
   );
 }
 
