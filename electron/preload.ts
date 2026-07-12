@@ -170,6 +170,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   platform: process.platform as 'darwin' | 'win32' | 'linux',
   menu: {
+    getModel: () =>
+      ipcRenderer.invoke('menu:get-model') as Promise<
+        Array<{
+          id: string;
+          label: string;
+          items: Array<
+            | { type: 'separator' }
+            | {
+                type: 'item';
+                id: string;
+                label: string;
+                accelerator?: string;
+                role?: string;
+              }
+          >;
+        }>
+      >,
+    invoke: (id: string) =>
+      ipcRenderer.invoke('menu:invoke', id) as Promise<
+        { ok: true } | { ok: false; error: 'UNKNOWN_MENU_ACTION' }
+      >,
     onNavigate: (callback: (path: string) => void) => {
       const handler = (_: unknown, path: string) => callback(path);
       ipcRenderer.on('menu:navigate', handler);
@@ -179,6 +200,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
       const handler = () => callback();
       ipcRenderer.on('menu:toggle-palette', handler);
       return () => ipcRenderer.removeListener('menu:toggle-palette', handler);
+    },
+    onQuickCapture: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on('menu:quick-capture', handler);
+      return () => ipcRenderer.removeListener('menu:quick-capture', handler);
+    },
+    onToggleSidebar: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on('menu:toggle-sidebar', handler);
+      return () => ipcRenderer.removeListener('menu:toggle-sidebar', handler);
+    },
+    onHistoryNavigate: (callback: (delta: -1 | 1) => void) => {
+      const handler = (_: unknown, delta: unknown) => {
+        if (delta === -1 || delta === 1) callback(delta);
+      };
+      ipcRenderer.on('menu:history-navigate', handler);
+      return () => ipcRenderer.removeListener('menu:history-navigate', handler);
     },
   },
   locale: {

@@ -7,6 +7,7 @@ import { PrimaryAppHeader } from '@/components/shell/primary-app-header';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
+import { WindowsTitlebar } from '@/components/shell/windows-titlebar';
 import { DesktopNotificationBridge } from '@/features/electron/desktop-notification-bridge';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
 import { ElectronMenuListener } from '@/features/electron/electron-menu-listener';
@@ -69,8 +70,11 @@ export function AppShell() {
   if (!token) {
     return (
       <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
+        <WindowsTitlebar />
         <ElectronMenuListener />
-        <GatewayConnectLanding />
+        <div className="min-h-0 flex-1">
+          <GatewayConnectLanding />
+        </div>
       </div>
     );
   }
@@ -101,6 +105,7 @@ export function AppShell() {
       <TokenDialog />
       <OnboardingDialog />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <WindowsTitlebar />
         <TopBannerStack>
           <ElectronGatewayExitBanner />
           <UpdateReminderBar reminder={updateReminder} />

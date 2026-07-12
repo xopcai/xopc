@@ -3,6 +3,7 @@ import { memo, useLayoutEffect } from 'react';
 import { Link } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
 import { ChatAgentSelector } from '@/features/chat/agent-selection/chat-agent-selector';
 import type { ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { messages } from '@/i18n/messages';
@@ -12,7 +13,6 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
-import { isElectronDarwin } from '@/lib/electron-window-chrome';
 import { useMediaQuery } from '@/lib/use-media-query';
 
 const MAX_MD = '(max-width: 767px)';
@@ -47,10 +47,15 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
 
   const isMobileLayout = useMediaQuery(MAX_MD);
+  const chromeLayout = resolveShellChromeLayout({
+    runtime: getShellChromeRuntime(),
+    sidebarCollapsed,
+    mobileNavOpen,
+  });
 
   const showNewChatLink = isMobileLayout
     ? !mobileNavOpen
-    : sidebarCollapsed && !isElectronDarwin();
+    : chromeLayout.collapsedNewChatVisible;
 
   useLayoutEffect(() => {
     setPageHeader({

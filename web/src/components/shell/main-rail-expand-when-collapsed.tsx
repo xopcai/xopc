@@ -1,17 +1,16 @@
 import { memo } from 'react';
 import { useLocation } from 'react-router-dom';
 
-import { CommandPaletteSearchButton } from '@/components/shell/command-palette-search-button';
-import { QuickCaptureButton } from '@/components/shell/quick-capture-button';
-import { SidebarRailToggleButton } from '@/components/shell/sidebar-rail-toggle-button';
+import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
+import { ShellQuickActions } from '@/components/shell/shell-quick-actions';
 import { cn } from '@/lib/cn';
-import { isElectronDarwin } from '@/lib/electron-window-chrome';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
 /**
  * Desktop (`md+`) only: when the main rail is collapsed, show the expand control inline
  * (left rail is fully hidden). Hidden on small viewports — drawer menu applies.
- * macOS Electron: expand is in {@link DarwinCollapsedTitlebarCluster} instead.
+ * macOS owns its collapsed-state actions in `PrimaryAppHeader` so its traffic-light safe area
+ * remains a single layout track.
  * No-op on `/settings/*` where `AppShell` omits the main sidebar.
  */
 export const MainRailExpandWhenCollapsed = memo(function MainRailExpandWhenCollapsed({
@@ -21,15 +20,15 @@ export const MainRailExpandWhenCollapsed = memo(function MainRailExpandWhenColla
 }) {
   const { pathname } = useLocation();
   const collapsed = useSidebarStore((s) => s.collapsed);
+  const chromeLayout = resolveShellChromeLayout({
+    runtime: getShellChromeRuntime(),
+    sidebarCollapsed: collapsed,
+    mobileNavOpen: false,
+  });
   if (pathname.startsWith('/settings') || !collapsed) return null;
-  /** macOS: expand lives in {@link DarwinCollapsedTitlebarCluster} with search + new. */
-  if (isElectronDarwin()) return null;
+  if (!chromeLayout.mainHeaderQuickActionsVisible || chromeLayout.mainHeaderLeadingInsetClass) return null;
 
   return (
-    <div className={cn('hidden shrink-0 items-center gap-0.5 md:flex', className)}>
-      <SidebarRailToggleButton variant="main" />
-      <QuickCaptureButton />
-      <CommandPaletteSearchButton />
-    </div>
+    <ShellQuickActions sidebarToggleVariant="main" className={cn('hidden md:flex', className)} />
   );
 });

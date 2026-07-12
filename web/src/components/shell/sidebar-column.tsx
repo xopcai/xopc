@@ -1,15 +1,13 @@
 import { X } from 'lucide-react';
 import { memo, useCallback, useEffect, useState, type CSSProperties } from 'react';
 
-import { APP_CHROME_NO_DRAG_CLASS, APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
-import { CommandPaletteSearchButton } from '@/components/shell/command-palette-search-button';
-import { QuickCaptureButton } from '@/components/shell/quick-capture-button';
-import { SidebarRailToggleButton } from '@/components/shell/sidebar-rail-toggle-button';
+import { APP_CHROME_BAR_CLASS, APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { getShellChromeRuntime, resolveShellChromeLayout } from '@/components/shell/chrome-layout';
+import { ShellQuickActions } from '@/components/shell/shell-quick-actions';
 import { SidebarNav } from '@/components/shell/sidebar';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { electronDarwinTitlebarLeftPad, isElectronDarwin } from '@/lib/electron-window-chrome';
 import { useAppShellStore } from '@/stores/app-shell-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { clampExpandedWidthPx, useSidebarStore } from '@/stores/sidebar-store';
@@ -33,6 +31,11 @@ export const SidebarColumn = memo(function SidebarColumn() {
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useAppShellStore((s) => s.setMobileNavOpen);
   const [widthResizing, setWidthResizing] = useState(false);
+  const chromeLayout = resolveShellChromeLayout({
+    runtime: getShellChromeRuntime(),
+    sidebarCollapsed,
+    mobileNavOpen,
+  });
 
   const onSidebarResizePointerDown = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
@@ -124,7 +127,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
       <aside
         id="app-sidebar"
         className={cn(
-          'app-sidebar-push flex min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base',
+          'app-sidebar-push app-chrome-sidebar flex min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base',
           widthResizing && 'sidebar-width-resizing',
           // Mobile: overlay; animate with transform only (no main-column width reflow).
           'max-md:fixed max-md:left-0 max-md:top-0 max-md:z-50 max-md:h-[100dvh] max-md:w-[min(16rem,85vw)]',
@@ -144,37 +147,39 @@ export const SidebarColumn = memo(function SidebarColumn() {
             : undefined
         }
       >
-        <div
-          className={cn(
-            'flex bg-surface-base',
-            APP_TOP_HEADER_BAR_CLASS,
-            electronDarwinTitlebarLeftPad(),
-            sidebarCollapsed
-              ? 'justify-center gap-1 px-1.5 max-md:flex'
-              : cn('justify-start gap-1.5', isElectronDarwin() ? 'pr-4' : 'px-4'),
-            sidebarCollapsed && 'md:hidden',
-          )}
-        >
-          {mobileNavOpen ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className={cn('size-8 shrink-0 rounded-xl p-0 md:hidden', APP_CHROME_NO_DRAG_CLASS)}
-              aria-label={m.closeMenu}
-              title={m.closeMenu}
-              onClick={() => setMobileNavOpen(false)}
-            >
-              <X className="size-4" strokeWidth={1.5} aria-hidden />
-            </Button>
-          ) : null}
-          {!sidebarCollapsed ? (
-            <>
-              <SidebarRailToggleButton variant="sidebar" />
-              <QuickCaptureButton className="inline-flex" />
-              <CommandPaletteSearchButton className="inline-flex" />
-            </>
-          ) : null}
-        </div>
+        {chromeLayout.sidebarChromeVisible ? (
+          <div
+            className={cn(
+              'sidebar-chrome-row flex min-w-0',
+              APP_CHROME_BAR_CLASS,
+              chromeLayout.sidebarChromeDraggable && APP_CHROME_DRAG_CLASS,
+              chromeLayout.sidebarLeadingInsetClass,
+              sidebarCollapsed
+                ? 'justify-center gap-1 px-1.5 max-md:flex'
+                : cn(
+                    'justify-start gap-1',
+                    chromeLayout.sidebarLeadingInsetClass ? 'sidebar-chrome-row-darwin pr-3' : 'px-3',
+                  ),
+              sidebarCollapsed && 'md:hidden',
+            )}
+          >
+            {mobileNavOpen ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className={cn('size-8 shrink-0 rounded-xl p-0 md:hidden', APP_CHROME_NO_DRAG_CLASS)}
+                aria-label={m.closeMenu}
+                title={m.closeMenu}
+                onClick={() => setMobileNavOpen(false)}
+              >
+                <X className="size-4" strokeWidth={1.5} aria-hidden />
+              </Button>
+            ) : null}
+            {chromeLayout.sidebarQuickActionsVisible && !sidebarCollapsed ? (
+              <ShellQuickActions sidebarToggleVariant="sidebar" className="overflow-hidden" />
+            ) : null}
+          </div>
+        ) : null}
         <SidebarNav collapsed={false} onNavigate={() => setMobileNavOpen(false)} />
         {!sidebarCollapsed ? (
           <div

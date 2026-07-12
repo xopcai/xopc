@@ -163,9 +163,30 @@ export type PermissionRequestResult = {
   outcome: PermissionRequestOutcome;
 };
 
+export type ElectronMenuItemModel =
+  | { type: 'separator' }
+  | {
+      type: 'item';
+      id: string;
+      label: string;
+      accelerator?: string;
+      role?: string;
+    };
+
+export type ElectronMenuGroupModel = {
+  id: string;
+  label: string;
+  items: ElectronMenuItemModel[];
+};
+
 export interface ElectronMenuAPI {
+  getModel(): Promise<ElectronMenuGroupModel[]>;
+  invoke(id: string): Promise<{ ok: true } | { ok: false; error: 'UNKNOWN_MENU_ACTION' }>;
   onNavigate(callback: (path: string) => void): () => void;
   onTogglePalette(callback: () => void): () => void;
+  onQuickCapture(callback: () => void): () => void;
+  onToggleSidebar(callback: () => void): () => void;
+  onHistoryNavigate(callback: (delta: -1 | 1) => void): () => void;
 }
 
 export type ElectronUiLanguage = 'en' | 'zh';
