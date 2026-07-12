@@ -81,9 +81,12 @@ After that works, move on to agents, memory, channels, mobile pairing, or workfl
 | Check runtime problems | **Settings -> Logs** |
 | Connect Telegram, WeChat, or Feishu/Lark | **Channels** |
 | Pair the mobile app | **Settings -> Remote access** |
+| Configure the desktop pet | **Settings -> Pet** |
 | Update xopc | **Settings -> Gateway / Update** or the release installer |
 
 The desktop app is meant to be the primary local control surface. You can still use `xopc` for the TUI, `xopc agent -m` for scripts, and `xopc gateway` when you explicitly want a browser-hosted console.
+
+Desktop pet customization is documented in [Desktop Pets](./desktop-pets.md).
 
 ## Desktop Gateway and CLI Gateway
 

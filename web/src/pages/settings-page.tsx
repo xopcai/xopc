@@ -6,6 +6,7 @@ import {
   loadAppManagementSettingsPanel,
   loadAppearanceSettingsPanel,
   loadDreamingSettingsPanel,
+  loadDesktopPetSettingsPanel,
   loadGatewaySettingsPanel,
   loadGoalsSettingsPanel,
   loadHeartbeatSettingsPanel,
@@ -27,6 +28,7 @@ const SECTIONS: SettingsSectionId[] = [
   'keyboard-shortcuts',
   'user-profile',
   'system',
+  'desktop-pet',
   'app-management',
   'credentials',
   'capability-presets',
@@ -49,6 +51,7 @@ const UserProfileSettingsPanel = lazy(() =>
   loadUserProfileSettingsPanel().then((m) => ({ default: m.UserProfileSettingsPanel })),
 );
 const SystemSettingsPanel = lazy(() => loadSystemSettingsPanel().then((m) => ({ default: m.SystemSettingsPanel })));
+const DesktopPetSettings = lazy(() => loadDesktopPetSettingsPanel().then((m) => ({ default: m.DesktopPetSettings })));
 const AppManagementSettingsPanel = lazy(() =>
   loadAppManagementSettingsPanel().then((m) => ({ default: m.AppManagementSettingsPanel })),
 );
@@ -118,6 +121,10 @@ export function SettingsPage() {
 
   if (id === 'system') {
     return renderLazySection(SystemSettingsPanel);
+  }
+
+  if (id === 'desktop-pet') {
+    return renderLazySection(DesktopPetSettings);
   }
 
   if (id === 'app-management') {

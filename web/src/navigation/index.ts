@@ -8,6 +8,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsOverview'
   | 'settingsAppearance'
   | 'settingsSystem'
+  | 'settingsDesktopPet'
   | 'settingsAppManagement'
   | 'settingsKeyboardShortcuts'
   | 'settingsAgents'
@@ -35,6 +36,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsAppearance: 'appearance',
   settingsKeyboardShortcuts: 'keyboard-shortcuts',
   settingsSystem: 'system',
+  settingsDesktopPet: 'desktop-pet',
   settingsAppManagement: 'app-management',
   settingsAgents: 'agents',
   settingsCapabilityPresets: 'capability-presets',
@@ -77,12 +79,16 @@ export type SettingsShellNavGroup = {
 };
 
 /** Settings tabs shown only in the Electron desktop shell. */
-export const ELECTRON_ONLY_SETTINGS_TABS = new Set<Tab>(['settingsSystem', 'settingsAppManagement']);
+export const ELECTRON_ONLY_SETTINGS_TABS = new Set<Tab>([
+  'settingsSystem',
+  'settingsDesktopPet',
+  'settingsAppManagement',
+]);
 
 /** Electron-only group — rendered above Extensions in the settings rail. */
 export const ELECTRON_SYSTEM_NAV_GROUP: SettingsShellNavGroup = {
   id: 'system',
-  tabs: ['settingsSystem', 'settingsAppManagement'],
+  tabs: ['settingsSystem', 'settingsDesktopPet', 'settingsAppManagement'],
 };
 
 /**

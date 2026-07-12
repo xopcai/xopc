@@ -6,6 +6,7 @@ import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
 import { SettingsSheet } from '@/components/shell/settings-sheet';
 import { ChatPage } from '@/features/chat/chat-page';
 import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
+import { DesktopPetEventBridge } from '@/features/desktop-pet/desktop-pet-event-bridge';
 import { ExtensionProvider } from '@/features/extensions/extension-provider';
 import {
   loadAgentsSettingsPage,
@@ -64,6 +65,7 @@ const ExtensionDebugPage = lazy(() =>
   loadExtensionDebugPage().then((m) => ({ default: m.ExtensionDebugPage })),
 );
 const SharePreviewPage = lazy(() => loadSharePreviewPage().then((m) => ({ default: m.SharePreviewPage })));
+const DesktopPetPage = lazy(() => import('@/pages/desktop-pet').then((m) => ({ default: m.DesktopPetPage })));
 
 function SecondaryRouteFallback() {
   return (
@@ -91,6 +93,14 @@ function SettingsRouteFallback() {
 }
 
 const router = createHashRouter([
+  {
+    path: '/desktop-pet',
+    element: (
+      <Suspense fallback={null}>
+        <DesktopPetPage />
+      </Suspense>
+    ),
+  },
   {
     // Public share preview — bypasses `AppShell`'s gateway-token gate so any
     // recipient of a share link can render it. Talks only to /s/:token/* APIs.
@@ -402,6 +412,7 @@ export function App() {
         <div className="flex min-h-0 flex-1 flex-col">
           <ThemeEffects />
           <div className="flex min-h-0 flex-1 flex-col *:min-h-0 *:flex-1">
+            <DesktopPetEventBridge />
             <RouterProvider router={router} />
           </div>
         </div>

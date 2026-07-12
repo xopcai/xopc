@@ -244,6 +244,33 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('window:fullscreen-changed', handler);
     },
   },
+  pet: {
+    getState: () => ipcRenderer.invoke('desktop-pet:get-state'),
+    setPrefs: (patch: Record<string, unknown>) => ipcRenderer.invoke('desktop-pet:set-prefs', patch),
+    show: () => ipcRenderer.invoke('desktop-pet:show'),
+    hide: () => ipcRenderer.invoke('desktop-pet:hide'),
+    toggle: () => ipcRenderer.invoke('desktop-pet:toggle'),
+    resetPosition: () => ipcRenderer.invoke('desktop-pet:reset-position'),
+    openMainWindow: (path?: string) => ipcRenderer.invoke('desktop-pet:open-main-window', path),
+    setClickThrough: (enabled: boolean) => ipcRenderer.invoke('desktop-pet:set-click-through', enabled),
+    sendEvent: (event: Record<string, unknown>) => ipcRenderer.invoke('desktop-pet:send-event', event),
+    openCustomPetsDir: () => ipcRenderer.invoke('desktop-pet:open-custom-dir'),
+    createFromPrompt: (request: Record<string, unknown>) =>
+      ipcRenderer.invoke('desktop-pet:create-from-prompt', request),
+    startDrag: (point: { screenX: number; screenY: number }) => ipcRenderer.invoke('desktop-pet:drag-start', point),
+    drag: (point: { screenX: number; screenY: number }) => ipcRenderer.invoke('desktop-pet:drag-move', point),
+    endDrag: () => ipcRenderer.invoke('desktop-pet:drag-end'),
+    onStateChanged: (callback: (state: Record<string, unknown>) => void) => {
+      const handler = (_: unknown, state: Record<string, unknown>) => callback(state);
+      ipcRenderer.on('desktop-pet:state-changed', handler);
+      return () => ipcRenderer.removeListener('desktop-pet:state-changed', handler);
+    },
+    onEvent: (callback: (event: Record<string, unknown>) => void) => {
+      const handler = (_: unknown, event: Record<string, unknown>) => callback(event);
+      ipcRenderer.on('desktop-pet:event', handler);
+      return () => ipcRenderer.removeListener('desktop-pet:event', handler);
+    },
+  },
   system: {
     getBehavior: () => ipcRenderer.invoke('system-settings:get-behavior'),
     setBehavior: (patch: {

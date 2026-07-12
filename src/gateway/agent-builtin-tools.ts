@@ -37,6 +37,7 @@ export const GATEWAY_BUILTIN_TOOL_IDS = [
   'execute_code',
   'image',
   'image_generate',
+  'create_desktop_pet',
   'browser_use',
   'extensions',
   'bundle-mcp',

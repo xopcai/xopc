@@ -105,9 +105,8 @@ export async function runProcessDirect(
       return slash.aggregatedText ?? '';
     }
 
-    const textForDirect = turnBody.trimStart().startsWith('/skill:')
-      ? deps.agentManager.expandSkillUserText(turnBody)
-      : turnBody;
+    const skillTurn = deps.agentManager.prepareSkillTurn(input.sessionKey, turnBody);
+    const textForDirect = skillTurn.text;
     const userMessage = await buildDirectUserMessageContent({
       content: textForDirect,
       attachments: prepared,
@@ -122,12 +121,17 @@ export async function runProcessDirect(
 
     const result = await (async () => {
       try {
-        return await runDirectAgentTurn(
-          { ...deps, config: deps.config },
-          {
-            sessionKey: input.sessionKey,
-            userMessage,
-          },
+        return await deps.agentManager.withSkillCapabilities(
+          input.sessionKey,
+          skillTurn.activatedCapabilityNames,
+          () =>
+            runDirectAgentTurn(
+              { ...deps, config: deps.config },
+              {
+                sessionKey: input.sessionKey,
+                userMessage,
+              },
+            ),
         );
       } finally {
         clearPendingTranscriptUserMessage(input.sessionKey, pendingUserMessage);

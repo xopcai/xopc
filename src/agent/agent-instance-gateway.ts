@@ -67,4 +67,10 @@ export interface AgentInstanceGateway {
 
   // ── Skill prompt expansion (`/skill:name` shorthand) ──────────────────
   expandSkillUserText(text: string): string;
+  prepareSkillTurn(sessionKey: string, text: string): { text: string; activatedCapabilityNames: string[] };
+  withSkillCapabilities<T>(
+    sessionKey: string,
+    capabilityNames: readonly string[],
+    run: () => Promise<T>,
+  ): Promise<T>;
 }

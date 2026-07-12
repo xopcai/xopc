@@ -33,6 +33,7 @@ export type Tab =
   | 'settingsAgents'
   | 'settingsKeyboardShortcuts'
   | 'settingsSystem'
+  | 'settingsDesktopPet'
   | 'settingsAppManagement';
 
 export type SettingsSectionId =
@@ -59,6 +60,7 @@ export type SettingsSectionId =
   | 'agents'
   | 'keyboard-shortcuts'
   | 'system'
+  | 'desktop-pet'
   | 'app-management'
   | 'skills';
 

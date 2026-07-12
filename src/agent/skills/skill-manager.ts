@@ -17,6 +17,7 @@ import type {
 } from './types.js';
 
 const log = createLogger('SkillManager');
+const SKILL_TOKEN_RE = /\/skill:([A-Za-z0-9][A-Za-z0-9._-]*)/g;
 
 export interface SkillLoadResult {
   skills: Skill[];
@@ -219,6 +220,29 @@ export class SkillManager {
     registeredToolNames?: string[];
   }): Skill[] {
     return this.selectSkillsForAgentIndexing(options);
+  }
+
+  getActivatedCapabilitiesForText(
+    text: string,
+    options?: { skillAllowlist?: string[]; registeredToolNames?: string[] },
+  ): string[] {
+    if (!text.includes('/skill:')) return [];
+    const selected = new Set<string>();
+    for (const match of text.matchAll(SKILL_TOKEN_RE)) {
+      if (match[1]) selected.add(match[1]);
+    }
+    if (selected.size === 0) return [];
+
+    const visible = this.selectSkillsForAgentIndexing(options);
+    const activeCapabilities = new Set<string>();
+    for (const skill of visible) {
+      if (!selected.has(skill.name)) continue;
+      for (const capabilityName of skill.metadata.xopc?.activatesCapabilities ?? []) {
+        const trimmed = capabilityName.trim();
+        if (trimmed) activeCapabilities.add(trimmed);
+      }
+    }
+    return [...activeCapabilities];
   }
 
   /**

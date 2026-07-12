@@ -209,6 +209,141 @@ export interface ElectronFullscreenAPI {
   onChange(callback: (isFullscreen: boolean) => void): () => void;
 }
 
+export type DesktopPetAction =
+  | 'idle'
+  | 'typing'
+  | 'toolbox'
+  | 'search'
+  | 'file'
+  | 'terminal'
+  | 'browser'
+  | 'success'
+  | 'error';
+
+export type DesktopPetFeedbackLevel = 'quiet' | 'normal' | 'chatty';
+
+export type DesktopPetBounds = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type DesktopPetDragPoint = {
+  screenX: number;
+  screenY: number;
+};
+
+export type DesktopPetAnimation = {
+  imageDataUrl: string;
+  frameWidth: number;
+  frameHeight: number;
+  frameCount: number;
+  fps: number;
+  loop: boolean;
+  offsetX: number;
+  offsetY: number;
+  sheetWidth?: number;
+  sheetHeight?: number;
+};
+
+export type DesktopPetDefinition = {
+  id: string;
+  name: string;
+  description: string;
+  sourcePrompt?: string;
+  builtin: boolean;
+  canvasWidth: number;
+  canvasHeight: number;
+  thumbnailDataUrl: string;
+  animations: Record<DesktopPetAction, DesktopPetAnimation>;
+};
+
+export type DesktopPetIssue = {
+  dir: string;
+  reason: string;
+  details?: string[];
+};
+
+export type DesktopPetCreateRequest = {
+  name?: string;
+  prompt: string;
+  description?: string;
+  overwrite?: boolean;
+};
+
+export type DesktopPetCreateResult = {
+  id: string;
+  name: string;
+  dir: string;
+  manifestPath: string;
+  sourcePrompt?: string;
+};
+
+export type DesktopPetPrefs = {
+  enabled: boolean;
+  showOnStartup: boolean;
+  selectedPetId: string;
+  alwaysOnTop: boolean;
+  bubbleEnabled: boolean;
+  clickThroughWhenIdle: boolean;
+  muted: boolean;
+  feedbackLevel: DesktopPetFeedbackLevel;
+  sizePercent: number;
+  collapsed: boolean;
+  bounds?: DesktopPetBounds;
+};
+
+export type DesktopPetEvent = {
+  id?: string;
+  kind:
+    | 'hello'
+    | 'info'
+    | 'agent-start'
+    | 'agent-tool'
+    | 'agent-progress'
+    | 'agent-success'
+    | 'agent-error'
+    | 'goal'
+    | 'toast';
+  title?: string;
+  message?: string;
+  severity?: 'info' | 'success' | 'warning' | 'error';
+  sessionKey?: string;
+  route?: string;
+  toolName?: string;
+  createdAt?: number;
+};
+
+export type DesktopPetState = {
+  prefs: DesktopPetPrefs;
+  pets: DesktopPetDefinition[];
+  visible: boolean;
+  customPetsDir: string;
+  petIssues: DesktopPetIssue[];
+};
+
+export interface ElectronDesktopPetAPI {
+  getState(): Promise<DesktopPetState>;
+  setPrefs(patch: Partial<DesktopPetPrefs>): Promise<DesktopPetState>;
+  show(): Promise<void>;
+  hide(): Promise<void>;
+  toggle(): Promise<void>;
+  resetPosition(): Promise<DesktopPetState>;
+  openMainWindow(path?: string): Promise<void>;
+  setClickThrough(enabled: boolean): Promise<void>;
+  sendEvent(event: DesktopPetEvent): Promise<void>;
+  openCustomPetsDir(): Promise<{ ok: true } | { ok: false; error: string }>;
+  createFromPrompt(
+    request: DesktopPetCreateRequest,
+  ): Promise<{ ok: true; result: DesktopPetCreateResult } | { ok: false; error: string }>;
+  startDrag(point: DesktopPetDragPoint): Promise<void>;
+  drag(point: DesktopPetDragPoint): Promise<void>;
+  endDrag(): Promise<void>;
+  onStateChanged(callback: (state: DesktopPetState) => void): () => void;
+  onEvent(callback: (event: DesktopPetEvent) => void): () => void;
+}
+
 export interface ElectronSystemSettingsAPI {
   getBehavior(): Promise<SystemSettingsBehavior>;
   setBehavior(patch: {
@@ -244,6 +379,7 @@ export interface ElectronAPI {
   locale?: ElectronLocaleAPI;
   cron?: ElectronCronDisplayWakeAPI;
   fullscreen?: ElectronFullscreenAPI;
+  pet?: ElectronDesktopPetAPI;
   system?: ElectronSystemSettingsAPI;
 }
 

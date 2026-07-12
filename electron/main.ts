@@ -44,6 +44,13 @@ import {
 import { isShellChromiumPermissionGranted } from './ipc/shell-permission-gates.js';
 import { registerCronDisplayWakeIpc, stopCronDisplayWakeBlocker } from './ipc/cron-display-wake-ipc.js';
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
+import { registerDesktopPetIpc } from './desktop-pet/ipc.js';
+import {
+  destroyDesktopPetWindow,
+  initDesktopPetWindow,
+  maybeShowDesktopPetOnStartup,
+  toggleDesktopPet,
+} from './desktop-pet/window.js';
 import { assertTrustedRenderer } from './ipc/trusted-renderer.js';
 import {
   getLoadingPageDataUrl,
@@ -522,6 +529,19 @@ function focusOrCreateMainWindow(): void {
   mainWindow.focus();
 }
 
+function resolveDesktopPetUrl(): string | null {
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+  const baseHref = rendererUrl || lastGatewayConsoleHref;
+  if (!baseHref) return null;
+  try {
+    const u = new URL(baseHref);
+    u.hash = '#/desktop-pet';
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 function createWindow(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.focus();
@@ -597,6 +617,12 @@ function createWindow(): void {
       openDevTools: () => {
         focusOrCreateMainWindow();
         toggleMainWindowDevTools(mainWindow);
+      },
+      toggleDesktopPet: () => {
+        void toggleDesktopPet();
+      },
+      openDesktopPetSettings: () => {
+        navigateMainWindow('/settings/desktop-pet');
       },
       quit: () => {
         app.quit();
@@ -770,6 +796,7 @@ function createWindow(): void {
       // loadURL (data: loading page → loopback gateway SPA); deferring avoids any chance that
       // will-navigate / window.open handlers interfere with that transition on Windows.
       attachExternalUrlHandlersOnce();
+      void maybeShowDesktopPetOnStartup();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (embed && !win.isDestroyed()) {
@@ -812,6 +839,14 @@ app.whenReady().then(async () => {
       refreshElectronMenus(language);
     },
   });
+  initDesktopPetWindow({
+    resolveUrl: resolveDesktopPetUrl,
+    openMainWindow: (hashPath) => {
+      navigateMainWindow(hashPath ?? '/chat');
+    },
+    disableSandbox: win32DisableSandbox,
+  });
+  registerDesktopPetIpc(ipcMain);
   registerCronDisplayWakeIpc(ipcMain);
   registerUpdaterIpc(ipcMain);
 
@@ -1027,6 +1062,7 @@ app.whenReady().then(async () => {
 
 app.on('before-quit', () => {
   appIsQuitting = true;
+  destroyDesktopPetWindow();
   destroyTray();
   globalShortcut.unregisterAll();
   stopAllPowerSaveBlockers();

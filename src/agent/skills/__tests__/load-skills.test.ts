@@ -73,4 +73,21 @@ describe('loadSkills', () => {
     expect(result.skills.map((skill) => skill.name)).not.toContain('legacy-skill');
     rmSync(workspace, { recursive: true, force: true });
   });
+
+  it('parses xopc activated capabilities metadata', () => {
+    const root = mkdtempSync(join(tmpdir(), 'xopc-skills-'));
+    const skillDir = join(root, 'hatch-pet');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, 'SKILL.md'),
+      `---\nname: hatch-pet\ndescription: Create pets\nmetadata:\n  xopc:\n    activates_capabilities:\n      - desktop-pet-authoring\n---\n\nCreate a pet.\n`,
+    );
+
+    const result = loadSkills({ globalDir: root });
+
+    expect(result.skills.find((skill) => skill.name === 'hatch-pet')?.metadata.xopc?.activatesCapabilities).toEqual([
+      'desktop-pet-authoring',
+    ]);
+    rmSync(root, { recursive: true, force: true });
+  });
 });
