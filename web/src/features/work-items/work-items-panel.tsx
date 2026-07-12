@@ -1,11 +1,10 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { CheckCircle2, Columns3, Download, ExternalLink, FileText, List, MessageSquarePlus, Paperclip, Plus, RefreshCw, Target, Trash2, X } from 'lucide-react';
-import { type DragEvent, type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, Download, ExternalLink, FileText, MessageSquarePlus, MoreHorizontal, Paperclip, Plus, Target, Trash2, X } from 'lucide-react';
+import { type DragEvent, type FormEvent, type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
-import { segmentedThumbActiveClassName, segmentedThumbBaseClassName, segmentedTrackClassName } from '@/components/ui/segmented-styles';
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { arrayBufferToBase64 } from '@/features/chat/attachments/attachment-utils-core';
 import type { MessageAttachment } from '@/features/chat/messages/messages.types';
@@ -36,6 +35,12 @@ import {
 
 type WorkItemsMessages = ReturnType<typeof messages>['projectDetailPage']['workItems'];
 type WorkItemNotice = { title: string; message: string } | null;
+type BoardPanState = {
+  pointerId: number;
+  startX: number;
+  scrollLeft: number;
+  active: boolean;
+};
 
 const DRAG_TYPE = 'application/x-xopc-work-item';
 const BOARD_COLUMNS: WorkItemStatus[] = ['backlog', 'todo', 'in_progress', 'blocked', 'needs_input', 'in_review', 'done'];
@@ -189,10 +194,6 @@ function AttachmentPreviewThumb({
   );
 }
 
-function visibleSummary(item: WorkItem, t: WorkItemsMessages): string {
-  return item.nextAction || item.blockedReason || item.description || t.noNextAction;
-}
-
 function linkHref(link: NonNullable<WorkItem['links']>[number]): string {
   if (link.kind === 'chat') return `/chat/${encodeURIComponent(link.targetId)}`;
   if (link.kind === 'goal') return `/goals/${encodeURIComponent(link.targetId)}`;
@@ -201,10 +202,20 @@ function linkHref(link: NonNullable<WorkItem['links']>[number]): string {
   return '#';
 }
 
+function shouldIgnoreBoardPan(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return true;
+  return Boolean(target.closest('a,button,input,select,textarea,[contenteditable="true"],[draggable="true"],[data-board-pan-skip="true"]'));
+}
+
+function visibleSummary(item: WorkItem, t: WorkItemsMessages): string {
+  return item.nextAction || item.blockedReason || item.description || t.noNextAction;
+}
+
 function WorkItemCard({
   item,
   dragging,
   onOpen,
+  onToggleDone,
   onDragStart,
   onDragEnd,
   t,
@@ -212,10 +223,13 @@ function WorkItemCard({
   item: WorkItem;
   dragging: boolean;
   onOpen: (item: WorkItem) => void;
+  onToggleDone: (item: WorkItem) => void;
   onDragStart: (item: WorkItem, event: DragEvent<HTMLElement>) => void;
   onDragEnd: () => void;
   t: WorkItemsMessages;
 }) {
+  const done = item.status === 'done';
+
   return (
     <article
       draggable
@@ -223,17 +237,28 @@ function WorkItemCard({
       onDragEnd={onDragEnd}
       title={t.dragToUpdate}
       className={cn(
-        'flex h-24 w-full min-w-0 max-w-full cursor-grab flex-col overflow-hidden rounded-lg bg-surface-panel px-3 pt-3 pb-0 shadow-surface transition-colors hover:bg-surface-hover/50 active:cursor-grabbing',
+        'flex min-h-24 w-full min-w-0 max-w-full cursor-grab flex-col overflow-hidden rounded-lg bg-surface-panel px-3 py-3 shadow-surface transition-colors hover:bg-surface-hover active:cursor-grabbing',
         dragging && 'opacity-50',
       )}
     >
-      <button type="button" className="min-w-0 text-left" onClick={() => onOpen(item)}>
-        <div className="flex min-w-0 max-w-full items-center gap-2">
-          <Target className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
-          <h4 className="min-w-0 flex-1 basis-0 truncate text-sm font-medium text-fg">{item.title}</h4>
-        </div>
-        <p className="mt-2 max-w-full break-words text-xs leading-5 text-fg-muted line-clamp-1">{visibleSummary(item, t)}</p>
-      </button>
+      <div className="flex min-w-0 max-w-full items-start gap-2">
+        <button
+          type="button"
+          className={cn(
+            'mt-0.5 inline-flex size-3.5 shrink-0 items-center justify-center rounded border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+            done ? 'border-success bg-success text-white' : 'border-edge bg-surface-base hover:border-accent/50',
+          )}
+          aria-label={done ? t.markTodo : t.markDone}
+          title={done ? t.markTodo : t.markDone}
+          onClick={() => onToggleDone(item)}
+        >
+          {done ? <CheckCircle2 className="size-3" aria-hidden /> : null}
+        </button>
+        <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onOpen(item)}>
+          <h4 className="min-w-0 flex-1 basis-0 text-sm font-medium leading-5 text-fg line-clamp-2">{item.title}</h4>
+          <p className="mt-2 max-w-full break-words text-xs leading-5 text-fg-muted line-clamp-1">{visibleSummary(item, t)}</p>
+        </button>
+      </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', statusTone(item.status))}>
           {t.statuses[item.status]}
@@ -576,6 +601,7 @@ function WorkItemAttachmentsSection({
 function WorkItemModal({
   mode,
   item,
+  initialStatus,
   events,
   busy,
   error,
@@ -593,6 +619,7 @@ function WorkItemModal({
 }: {
   mode: 'create' | 'detail' | null;
   item: WorkItem | null;
+  initialStatus: WorkItemStatus;
   events: WorkItemEvent[];
   busy: boolean;
   error: string | null;
@@ -621,7 +648,7 @@ function WorkItemModal({
     if (mode === 'create') {
       setTitle('');
       setDescription('');
-      setStatus('todo');
+      setStatus(initialStatus);
       setPriority('normal');
       setNextAction('');
       setBlockedReason('');
@@ -637,7 +664,7 @@ function WorkItemModal({
       setBlockedReason(item.blockedReason ?? '');
       setPendingFiles([]);
     }
-  }, [item, mode]);
+  }, [initialStatus, item, mode]);
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -825,17 +852,19 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
   const navigate = useNavigate();
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).projectDetailPage.workItems;
+  const boardScrollerRef = useRef<HTMLDivElement | null>(null);
+  const boardPanRef = useRef<BoardPanState | null>(null);
   const [items, setItems] = useState<WorkItem[]>([]);
-  const [viewMode, setViewMode] = useState<'list' | 'board'>('board');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<WorkItemNotice>(null);
   const [busy, setBusy] = useState(false);
   const [draggingItemId, setDraggingItemId] = useState<string | null>(null);
   const [dropStatus, setDropStatus] = useState<WorkItemStatus | null>(null);
+  const [isPanningBoard, setIsPanningBoard] = useState(false);
   const [hasMore, setHasMore] = useState(false);
-  const [total, setTotal] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  const [createStatus, setCreateStatus] = useState<WorkItemStatus>('todo');
   const [selectedItem, setSelectedItem] = useState<WorkItem | null>(null);
   const [selectedEvents, setSelectedEvents] = useState<WorkItemEvent[]>([]);
 
@@ -849,7 +878,6 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
       });
       setItems((current) => mode === 'append' ? [...current, ...res.items] : res.items);
       setHasMore(res.hasMore);
-      setTotal(res.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -867,6 +895,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
     setSelectedEvents([]);
     setError(null);
     setNotice(null);
+    setCreateStatus('todo');
     setCreateOpen(true);
   }, [createRequestKey]);
 
@@ -890,7 +919,6 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
       if (res.item.archivedAt) {
         setItems((current) => current.filter((candidate) => candidate.id !== res.item.id));
         setSelectedItem(null);
-        setTotal((value) => Math.max(0, value - 1));
       } else {
         updateLocalItem(res.item);
         const nextNotice = { title: t.feedback.savedTitle, message: t.feedback.savedNext };
@@ -920,7 +948,6 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
     try {
       const res = await createWorkItem(projectId, input);
       setItems((current) => [res.item, ...current]);
-      setTotal((value) => value + 1);
       setCreateOpen(false);
       setSelectedItem(res.item);
       const events = await fetchWorkItemEvents(res.item.id).catch(() => ({ events: [] }));
@@ -1026,91 +1053,87 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
     void updateItem(item, { status: targetStatus });
   }, [draggingItemId, items, updateItem]);
 
-  return (
-    <section id="project-panel-work-items" role="tabpanel" aria-labelledby="project-tab-work-items" className="grid gap-4">
-      <div className="flex min-w-0 items-center gap-2 overflow-hidden rounded-lg bg-surface-panel px-3 py-2 shadow-surface">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <div className="min-w-0 shrink-0">
-            <h2 className="text-sm font-semibold leading-5 text-fg">{t.title}</h2>
-            <p className="text-[11px] leading-4 text-fg-subtle">{items.length}/{total}</p>
-          </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <div className={segmentedTrackClassName} aria-label={t.viewAria}>
-            <button type="button" className={cn(segmentedThumbBaseClassName, 'h-8 px-2.5', viewMode === 'list' && segmentedThumbActiveClassName)} onClick={() => setViewMode('list')}>
-              <List className="size-3.5" aria-hidden />
-              <span className="hidden sm:inline">{t.views.list}</span>
-            </button>
-            <button type="button" className={cn(segmentedThumbBaseClassName, 'h-8 px-2.5', viewMode === 'board' && segmentedThumbActiveClassName)} onClick={() => setViewMode('board')}>
-              <Columns3 className="size-3.5" aria-hidden />
-              <span className="hidden sm:inline">{t.views.board}</span>
-            </button>
-          </div>
-          <button
-            type="button"
-            className="inline-flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-surface-base px-2.5 text-xs font-medium text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel disabled:cursor-wait disabled:opacity-70"
-            aria-label={loading ? t.refreshing : t.refresh}
-            aria-busy={loading}
-            title={loading ? t.refreshing : t.refresh}
-            disabled={loading}
-            onClick={() => void loadItems('replace', 0)}
-          >
-            <RefreshCw className={cn('size-4', loading ? 'animate-spin motion-reduce:animate-none' : '')} aria-hidden />
-            <span className="hidden w-12 text-left sm:inline">{t.refreshShort}</span>
-          </button>
-        </div>
-      </div>
+  const toggleDone = useCallback((item: WorkItem) => {
+    void updateItem(item, { status: item.status === 'done' ? 'todo' : 'done' });
+  }, [updateItem]);
 
+  const openCreateForStatus = useCallback((status: WorkItemStatus) => {
+    setSelectedItem(null);
+    setSelectedEvents([]);
+    setError(null);
+    setNotice(null);
+    setCreateStatus(status);
+    setCreateOpen(true);
+  }, []);
+
+  const endBoardPan = useCallback((event: PointerEvent<HTMLElement>) => {
+    const pan = boardPanRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    boardPanRef.current = null;
+    setIsPanningBoard(false);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
+  const handleBoardPointerDown = useCallback((event: PointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || draggingItemId || shouldIgnoreBoardPan(event.target)) return;
+    const scroller = boardScrollerRef.current;
+    if (!scroller) return;
+    boardPanRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      scrollLeft: scroller.scrollLeft,
+      active: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [draggingItemId]);
+
+  const handleBoardPointerMove = useCallback((event: PointerEvent<HTMLElement>) => {
+    const pan = boardPanRef.current;
+    const scroller = boardScrollerRef.current;
+    if (!pan || !scroller || pan.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - pan.startX;
+    if (!pan.active && Math.abs(deltaX) < 5) return;
+    if (!pan.active) {
+      pan.active = true;
+      setIsPanningBoard(true);
+    }
+    event.preventDefault();
+    scroller.scrollLeft = pan.scrollLeft - deltaX;
+  }, []);
+
+  return (
+    <section id="project-panel-work-items" role="tabpanel" aria-labelledby="project-tab-work-items" className="flex h-full min-h-0 flex-col">
       {error ? <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{error}</div> : null}
 
-      {viewMode === 'list' ? (
-        <div className={cn('overflow-hidden rounded-lg bg-surface-panel shadow-surface transition-opacity', loading && 'opacity-60')}>
-          {items.length ? items.map((item) => (
-            <div key={item.id} className="grid w-full gap-1 border-b border-edge px-4 py-3 text-left last:border-b-0 hover:bg-surface-hover">
-              <div className="flex items-center justify-between gap-3">
-                <button type="button" className="min-w-0 truncate text-left text-sm font-medium text-fg" onClick={() => void openItem(item)}>
-                  {item.title}
-                </button>
-                <div className="flex shrink-0 items-center gap-2">
-                  {item.attachments?.length ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-xs text-fg-muted">
-                      <Paperclip className="size-3" aria-hidden />
-                      {item.attachments.length}
-                    </span>
-                  ) : null}
-                  <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', statusTone(item.status))}>{t.statuses[item.status]}</span>
-                  <Link
-                    to={`/work-items/${encodeURIComponent(item.id)}`}
-                    className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:text-accent-fg"
-                  >
-                    {t.detail.openItem}
-                    <ExternalLink className="size-3.5" aria-hidden />
-                  </Link>
-                </div>
-              </div>
-              <span className="truncate text-xs text-fg-muted">{visibleSummary(item, t)}</span>
-            </div>
-          )) : loading ? (
-            <div className="grid gap-2 p-3 animate-pulse motion-reduce:animate-none">
-              <WorkItemCardSkeleton />
-              <WorkItemCardSkeleton />
-            </div>
-          ) : (
-            <div className="px-4 py-8 text-center text-sm text-fg-muted">
-              <CheckCircle2 className="mx-auto mb-2 size-5 text-fg-subtle" aria-hidden />
-              {t.empty}
-            </div>
-          )}
-        </div>
-      ) : (
-        <section className="h-[calc(100dvh-14rem)] min-h-0 max-w-full overflow-x-auto pb-2" aria-label={t.boardAria} aria-busy={loading}>
-          <div className="flex h-full min-w-max gap-3">
+      <section
+        ref={boardScrollerRef}
+        className={cn(
+          'min-h-0 flex-1 overflow-x-auto rounded-lg px-2 py-2 transition-opacity',
+          loading && 'opacity-60',
+          isPanningBoard ? 'cursor-grabbing select-none' : 'cursor-grab',
+        )}
+        aria-label={t.boardAria}
+        aria-busy={loading}
+        onPointerDown={handleBoardPointerDown}
+        onPointerMove={handleBoardPointerMove}
+        onPointerUp={endBoardPan}
+        onPointerCancel={endBoardPan}
+        onLostPointerCapture={(event) => {
+          if (boardPanRef.current?.pointerId === event.pointerId) {
+            boardPanRef.current = null;
+            setIsPanningBoard(false);
+          }
+        }}
+      >
+          <div className="flex min-h-full min-w-max items-start gap-3 pr-4">
             {boardColumns.map((column) => (
               <section
                 key={column.status}
                 className={cn(
-                  'flex h-full w-72 min-w-72 max-w-72 shrink-0 flex-col overflow-hidden rounded-lg bg-surface-panel shadow-surface ring-1 ring-transparent',
-                  dropStatus === column.status && 'bg-surface-active/35 ring-accent/40',
+                  'flex max-h-full w-72 min-w-72 max-w-72 shrink-0 flex-col overflow-y-auto rounded-lg bg-surface-base shadow-surface',
+                  dropStatus === column.status && 'bg-surface-active',
                 )}
                 aria-label={column.title}
                 onDragOver={(event) => {
@@ -1124,20 +1147,21 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
                 }}
                 onDrop={(event) => dropOnStatus(column.status, event)}
               >
-                <header className="flex shrink-0 items-center justify-between gap-2 border-b border-edge bg-surface-panel px-3 py-2.5">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span className={cn('size-2 rounded-full', statusTone(column.status).includes('red') ? 'bg-danger' : 'bg-accent')} aria-hidden />
+                <header className="flex shrink-0 items-center justify-between gap-2 px-3 py-3">
+                  <div className="flex min-w-0 items-baseline gap-2">
                     <h3 className="truncate text-sm font-semibold text-fg">{column.title}</h3>
+                    <span className="shrink-0 text-xs text-fg-subtle">{column.items.length}</span>
                   </div>
-                  <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs text-fg-muted">{column.items.length}</span>
+                  <MoreHorizontal className="size-4 shrink-0 text-fg-subtle" aria-hidden />
                 </header>
-                <div className="grid min-h-0 min-w-0 flex-1 content-start gap-2 overflow-y-auto p-2">
+                <div className="mx-2 mt-3 grid min-h-0 min-w-0 content-start gap-2 pb-2 pr-1 [scrollbar-gutter:stable]">
                   {column.items.length ? column.items.map((item) => (
                     <WorkItemCard
                       key={item.id}
                       item={item}
                       dragging={draggingItemId === item.id}
                       onOpen={openItem}
+                      onToggleDone={toggleDone}
                       onDragStart={startDrag}
                       onDragEnd={() => {
                         setDraggingItemId(null);
@@ -1151,16 +1175,26 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
                       <WorkItemCardSkeleton />
                     </div>
                   ) : (
-                    <div className="rounded-lg bg-surface-base px-3 py-6 text-center text-xs text-fg-subtle">
+                    <div className="rounded-lg bg-surface-panel/70 px-3 py-6 text-center text-xs text-fg-subtle">
                       {t.emptyColumn}
                     </div>
                   )}
+                  {!loading ? (
+                    <button
+                      type="button"
+                      className="inline-flex h-8 w-full items-center justify-center rounded-lg bg-surface-panel/85 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-muted"
+                      aria-label={t.create.addToColumn.replace('{{status}}', column.title)}
+                      title={t.create.addToColumn.replace('{{status}}', column.title)}
+                      onClick={() => openCreateForStatus(column.status)}
+                    >
+                      <Plus className="size-4" aria-hidden />
+                    </button>
+                  ) : null}
                 </div>
               </section>
             ))}
           </div>
-        </section>
-      )}
+      </section>
 
       {!loading && hasMore ? (
         <Button type="button" variant="secondary" className="justify-self-center" onClick={() => void loadItems('append', items.length)}>
@@ -1171,6 +1205,7 @@ export function WorkItemsPanel({ projectId, createRequestKey = 0 }: { projectId:
       <WorkItemModal
         mode={createOpen ? 'create' : selectedItem ? 'detail' : null}
         item={selectedItem}
+        initialStatus={createStatus}
         events={selectedEvents}
         busy={busy}
         error={error}

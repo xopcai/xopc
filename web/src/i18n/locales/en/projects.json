@@ -171,6 +171,8 @@
       "loadMore": "Load more",
       "noNextAction": "No next action recorded.",
       "dragToUpdate": "Drag to update status",
+      "markDone": "Mark work item done",
+      "markTodo": "Mark work item todo",
       "agent": "Agent",
       "updated": "Updated",
       "nextAction": "Next action",
@@ -229,7 +231,8 @@
         "descriptionLabel": "Description",
         "priorityLabel": "Priority",
         "cancel": "Cancel",
-        "submit": "Create"
+        "submit": "Create",
+        "addToColumn": "Create work item in {{status}}"
       },
       "attachments": {
         "title": "Attachments",
