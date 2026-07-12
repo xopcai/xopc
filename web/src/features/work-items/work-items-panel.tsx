@@ -4,6 +4,7 @@ import { type DragEvent, type FormEvent, useCallback, useEffect, useMemo, useRef
 import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { segmentedThumbActiveClassName, segmentedThumbBaseClassName, segmentedTrackClassName } from '@/components/ui/segmented-styles';
 import { AttachmentPreviewDialog } from '@/features/chat/attachments/attachment-preview-dialog';
 import { arrayBufferToBase64 } from '@/features/chat/attachments/attachment-utils-core';
@@ -713,15 +714,15 @@ function WorkItemModal({
                 <div className="grid gap-3 sm:grid-cols-2">
                   <label className="grid gap-1.5 text-sm">
                     <span className="font-medium text-fg-muted">{t.detail.status}</span>
-                    <select className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent" value={status} onChange={(event) => setStatus(event.target.value as WorkItemStatus)}>
-                      {BOARD_COLUMNS.map((value) => <option key={value} value={value}>{t.statuses[value]}</option>)}
-                    </select>
+                    <Select className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent" value={status} onChange={(event) => setStatus(event.target.value as WorkItemStatus)}>
+                      {BOARD_COLUMNS.map((value) => <SelectOption key={value} value={value}>{t.statuses[value]}</SelectOption>)}
+                    </Select>
                   </label>
                   <label className="grid gap-1.5 text-sm">
                     <span className="font-medium text-fg-muted">{t.create.priorityLabel}</span>
-                    <select className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent" value={priority} onChange={(event) => setPriority(event.target.value as WorkItemPriority)}>
-                      {PRIORITIES.map((value) => <option key={value} value={value}>{t.priorities[value]}</option>)}
-                    </select>
+                    <Select className="h-10 rounded-lg border border-edge bg-surface-base px-3 text-sm text-fg outline-none focus:border-accent" value={priority} onChange={(event) => setPriority(event.target.value as WorkItemPriority)}>
+                      {PRIORITIES.map((value) => <SelectOption key={value} value={value}>{t.priorities[value]}</SelectOption>)}
+                    </Select>
                   </label>
                 </div>
                 <label className="grid gap-1.5 text-sm">
