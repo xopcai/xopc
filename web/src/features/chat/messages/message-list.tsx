@@ -14,6 +14,7 @@ export const MessageList = memo(function MessageList({
   sessionKey,
   streaming,
   progress,
+  loading,
   reasoningLevel,
   registerListContentRef,
   onPickWelcomePrompt,
@@ -31,6 +32,7 @@ export const MessageList = memo(function MessageList({
   sessionKey?: string | null;
   streaming: boolean;
   progress: ProgressState | null;
+  loading?: boolean;
   reasoningLevel: ReasoningLevel;
   /** Plain column root — observed by scroll viewport for tail-follow (Cursor-style, non-virtual). */
   registerListContentRef: (el: HTMLDivElement | null) => void;
@@ -47,7 +49,27 @@ export const MessageList = memo(function MessageList({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
 
-  const showWelcome = list.length === 0 && !streaming;
+  const showSkeleton = Boolean(loading && list.length === 0 && !streaming);
+  const showWelcome = list.length === 0 && !streaming && !showSkeleton;
+
+  if (showSkeleton) {
+    return (
+      <div ref={registerListContentRef} className="flex w-full min-w-0 flex-col gap-10 pb-8" aria-busy="true">
+        <div className="flex justify-end">
+          <div className="h-11 w-[min(70%,22rem)] animate-pulse rounded-2xl bg-surface-hover" />
+        </div>
+        <div className="flex flex-col gap-3">
+          <div className="h-4 w-24 animate-pulse rounded bg-surface-hover" />
+          <div className="h-4 w-[min(82%,36rem)] animate-pulse rounded bg-surface-hover" />
+          <div className="h-4 w-[min(74%,32rem)] animate-pulse rounded bg-surface-hover" />
+          <div className="h-4 w-[min(48%,22rem)] animate-pulse rounded bg-surface-hover" />
+        </div>
+        <div className="flex justify-end">
+          <div className="h-11 w-[min(62%,18rem)] animate-pulse rounded-2xl bg-surface-hover" />
+        </div>
+      </div>
+    );
+  }
 
   if (showWelcome) {
     if (welcomeOverlay) {
