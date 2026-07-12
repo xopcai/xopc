@@ -37,6 +37,7 @@ export type ChatSessionSlice = {
 type ChatSessionStoreState = {
   focusedSessionKey: string | null;
   initLoading: boolean;
+  loadingSessionKey: string | null;
   loadingMore: boolean;
   shellError: string | null;
   sessions: Record<string, ChatSessionSlice>;
@@ -45,6 +46,7 @@ type ChatSessionStoreState = {
 type ChatSessionStoreActions = {
   setFocusedSessionKey: (key: string | null) => void;
   setInitLoading: (loading: boolean) => void;
+  setLoadingSessionKey: (key: string | null) => void;
   setLoadingMore: (loading: boolean) => void;
   setShellError: (error: string | null) => void;
   patchSessionMeta: (
@@ -185,12 +187,14 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
   (set, get) => ({
     focusedSessionKey: null,
     initLoading: true,
+    loadingSessionKey: null,
     loadingMore: false,
     shellError: null,
     sessions: {},
 
     setFocusedSessionKey: (key) => set({ focusedSessionKey: key }),
     setInitLoading: (loading) => set({ initLoading: loading }),
+    setLoadingSessionKey: (key) => set({ loadingSessionKey: key }),
     setLoadingMore: (loading) => set({ loadingMore: loading }),
     setShellError: (error) => set({ shellError: error }),
 

@@ -168,6 +168,9 @@ export function useChatSessionLoad(deps: {
           dismissClarifyOnSessionLoad();
         }
         loadingSessionRef.current = true;
+        if (initialLoad) {
+          store().setLoadingSessionKey(k);
+        }
         try {
           const {
             messages: loaded,
@@ -237,6 +240,9 @@ export function useChatSessionLoad(deps: {
           return undefined;
         } finally {
           loadingSessionRef.current = false;
+          if (initialLoad && store().loadingSessionKey === k) {
+            store().setLoadingSessionKey(null);
+          }
         }
       };
 

@@ -50,7 +50,7 @@ function TimelinePreviewCard({
   return (
     <div
       className={cn(
-        'pointer-events-none absolute right-12 top-1/2 z-[100] w-[min(25rem,calc(100vw-8rem))] -translate-y-1/2',
+        'pointer-events-auto absolute right-12 top-1/2 z-[100] w-[min(25rem,calc(100vw-8rem))] -translate-y-1/2',
         'rounded-2xl border border-edge bg-surface-panel/95 p-3 text-left shadow-popover backdrop-blur',
       )}
     >
@@ -207,10 +207,6 @@ export function ChatTimelineRail({
           <ol
             className="my-auto flex w-full flex-col items-end py-1"
             onMouseEnter={() => setPreviewTurnId((current) => current ?? activeTurnId ?? null)}
-            onMouseLeave={() => {
-              wheelDeltaRef.current = 0;
-              setPreviewTurnId(null);
-            }}
             onWheel={handleRailWheel}
           >
             {turns.map((turn, index) => {
