@@ -730,7 +730,6 @@ export function ChatPage() {
       const result = await applyWorkItemUpdateSuggestion(suggestion.id);
       setSourceWorkItem(result.item);
       setWorkItemUpdateDraft(null);
-      showToast({ type: 'success', title: m.chat.workItemUpdateApplied });
     } catch (err) {
       showToast({
         type: 'error',
@@ -740,7 +739,7 @@ export function ChatPage() {
     } finally {
       setWorkItemUpdateSubmitting(false);
     }
-  }, [chatSessionKey, m.chat.workItemUpdateApplied, m.chat.workItemUpdateFailed, sourceWorkItem, workItemUpdateDraft]);
+  }, [chatSessionKey, m.chat.workItemUpdateFailed, sourceWorkItem, workItemUpdateDraft]);
 
   if (!auth.hasToken) {
     return (
