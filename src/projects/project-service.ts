@@ -183,6 +183,14 @@ export class ProjectService {
     return project;
   }
 
+  pin(id: string): Project {
+    return this.update(id, { pinnedAt: Date.now() });
+  }
+
+  unpin(id: string): Project {
+    return this.update(id, { pinnedAt: null });
+  }
+
   delete(id: string): void {
     this.store.delete(id);
   }

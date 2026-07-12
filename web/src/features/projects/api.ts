@@ -21,6 +21,7 @@ export type Project = {
   createdAt: string;
   updatedAt: string;
   lastActiveAt?: string;
+  pinnedAt?: number;
 };
 
 export type ProjectWithDetails = Project & {
@@ -319,6 +320,34 @@ export async function updateProject(
     method: 'PATCH',
     body: JSON.stringify(input),
   });
+  return res.project;
+}
+
+export async function renameProject(id: string, name: string): Promise<Project> {
+  return updateProject(id, { name });
+}
+
+export async function archiveProject(id: string): Promise<Project> {
+  return updateProject(id, { status: 'archived' });
+}
+
+export async function restoreProject(id: string): Promise<Project> {
+  return updateProject(id, { status: 'active' });
+}
+
+export async function pinProject(id: string): Promise<Project> {
+  const res = await fetchJson<{ ok: true; project: Project }>(
+    apiUrl(`/api/projects/${encodeURIComponent(id)}/pin`),
+    { method: 'POST' },
+  );
+  return res.project;
+}
+
+export async function unpinProject(id: string): Promise<Project> {
+  const res = await fetchJson<{ ok: true; project: Project }>(
+    apiUrl(`/api/projects/${encodeURIComponent(id)}/unpin`),
+    { method: 'POST' },
+  );
   return res.project;
 }
 

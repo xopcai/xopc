@@ -22,6 +22,7 @@ import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -647,7 +648,7 @@ export function NotesWorkbench({
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               {showLibrary ? (
-                <select
+                <Select
                   value={activeLibraryView.id}
                   onChange={(event) => {
                     const next = libraryViews.find((view) => view.id === event.target.value);
@@ -657,9 +658,9 @@ export function NotesWorkbench({
                   aria-label={n.libraryTitle}
                 >
                   {libraryViews.map((view) => (
-                    <option key={view.id} value={view.id}>{view.label}</option>
+                    <SelectOption key={view.id} value={view.id}>{view.label}</SelectOption>
                   ))}
-                </select>
+                </Select>
               ) : (
                 <h2 className="truncate text-sm font-semibold text-fg">{effectiveListTitle}</h2>
               )}

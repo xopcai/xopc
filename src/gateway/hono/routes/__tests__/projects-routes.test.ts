@@ -210,6 +210,26 @@ describe('project association routes', () => {
     });
   });
 
+  it('pins and unpins projects through project routes', async () => {
+    const projects = new ProjectService();
+    const project = projects.create({ name: 'Pin Route Project' });
+    const app = registerProjectRouteApp({ projects });
+
+    const pinRes = await app.request(`/api/projects/${project.id}/pin`, { method: 'POST' });
+    expect(pinRes.status).toBe(200);
+    const pinBody = await pinRes.json() as { ok: boolean; project: { id: string; pinnedAt?: number } };
+    expect(pinBody.ok).toBe(true);
+    expect(pinBody.project.id).toBe(project.id);
+    expect(pinBody.project.pinnedAt).toEqual(expect.any(Number));
+
+    const unpinRes = await app.request(`/api/projects/${project.id}/unpin`, { method: 'POST' });
+    expect(unpinRes.status).toBe(200);
+    const unpinBody = await unpinRes.json() as { ok: boolean; project: { id: string; pinnedAt?: number } };
+    expect(unpinBody.ok).toBe(true);
+    expect(unpinBody.project.id).toBe(project.id);
+    expect(unpinBody.project.pinnedAt).toBeUndefined();
+  });
+
   it('validates projectId before patching session metadata', async () => {
     const patch = vi.fn(async () => ({ ok: true as const }));
     const attachSession = vi.fn();
@@ -896,7 +916,7 @@ describe('project association routes', () => {
     writeFileSync(join(workspaceRoot, 'src', 'index.ts'), 'export {};\n');
     writeFileSync(join(outsideRoot, 'secret.txt'), 'secret\n');
     symlinkSync(join(outsideRoot, 'secret.txt'), join(workspaceRoot, 'escape.txt'));
-    const readmeRealPath = realpathSync(join(workspaceRoot, 'README.md'));
+    const readmeRealPath = realpathSync.native(join(workspaceRoot, 'README.md'));
     const projects = new ProjectService();
     const project = projects.create({ name: 'Files Project', workspaceRoot });
     const app = registerProjectRouteApp({
@@ -945,7 +965,7 @@ describe('project association routes', () => {
     };
     expect(readBody.payload.content).toBe('# Project\n');
     expect(readBody.payload.path).toBe('README.md');
-    expect(readBody.payload.absolutePath).toBe(readmeRealPath);
+    expect(realpathSync.native(readBody.payload.absolutePath)).toBe(readmeRealPath);
     expect(typeof readBody.payload.mtimeMs).toBe('number');
 
     const rawRes = await app.request(`/api/projects/${project.id}/files/raw?path=README.md`);
