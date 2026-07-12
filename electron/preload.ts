@@ -83,6 +83,45 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('startup:failed', handler);
       return () => ipcRenderer.removeListener('startup:failed', handler);
     },
+    getDiagnostic: () =>
+      ipcRenderer.invoke('startup:get-diagnostic') as Promise<Record<string, unknown> | null>,
+    copyDiagnostic: () =>
+      ipcRenderer.invoke('startup:copy-diagnostic') as Promise<{ ok: boolean; message?: string }>,
+    openDataDir: () =>
+      ipcRenderer.invoke('startup:open-data-dir') as Promise<{ ok: boolean; message?: string }>,
+    getUpdateStatus: () =>
+      ipcRenderer.invoke('startup:get-update-status') as Promise<{
+        state: string;
+        version?: string;
+        releaseNotes?: string;
+        percent?: number;
+        bytesPerSecond?: number;
+        transferred?: number;
+        total?: number;
+        message?: string;
+      }>,
+    checkUpdate: () =>
+      ipcRenderer.invoke('startup:check-update') as Promise<{ ok: boolean; message?: string }>,
+    quitAndInstall: () =>
+      ipcRenderer.invoke('startup:quit-and-install') as Promise<{ ok: boolean; message?: string }>,
+    retryGateway: () =>
+      ipcRenderer.invoke('startup:retry-gateway') as Promise<{ ok: boolean; message?: string }>,
+    onUpdateStatusChanged: (
+      callback: (status: {
+        state: string;
+        version?: string;
+        releaseNotes?: string;
+        percent?: number;
+        bytesPerSecond?: number;
+        transferred?: number;
+        total?: number;
+        message?: string;
+      }) => void,
+    ) => {
+      const handler = (_: unknown, status: Record<string, unknown>) => callback(status as never);
+      ipcRenderer.on('updater:status-changed', handler);
+      return () => ipcRenderer.removeListener('updater:status-changed', handler);
+    },
   },
   gateway: {
     onExited: (callback: (detail: { code: number | null; signal: string | null }) => void) => {

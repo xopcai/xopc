@@ -13,6 +13,7 @@ import {
   session,
   shell,
   type BrowserWindowConstructorOptions,
+  type IpcMainInvokeEvent,
 } from 'electron';
 
 /** Before config loader initializes pino (thread-stream worker path breaks when bundled under `out/main/`). */
@@ -44,11 +45,28 @@ import { isShellChromiumPermissionGranted } from './ipc/shell-permission-gates.j
 import { registerCronDisplayWakeIpc, stopCronDisplayWakeBlocker } from './ipc/cron-display-wake-ipc.js';
 import { registerUpdaterIpc } from './ipc/updater-ipc.js';
 import { assertTrustedRenderer } from './ipc/trusted-renderer.js';
-import { getLoadingPageDataUrl, getRendererCrashPageDataUrl } from './loading-page.js';
+import {
+  getLoadingPageDataUrl,
+  getRendererCrashPageDataUrl,
+  getStartupRecoveryPageDataUrl,
+} from './loading-page.js';
 import { isEmbeddedGatewayLoopbackUrl } from './loopback-url.js';
-import { hasPendingInstall, initAutoUpdater, stopAutoUpdater } from './auto-updater.js';
+import {
+  checkForUpdates,
+  getUpdateStatus,
+  hasPendingInstall,
+  initAutoUpdater,
+  quitAndInstall,
+  stopAutoUpdater,
+} from './auto-updater.js';
 import { getElectronMenuMessages, type ElectronUiLanguage } from './i18n.js';
 import { buildAppMenu } from './menu.js';
+import {
+  classifyGatewayStartupFailure,
+  enrichGatewayStartupFailure,
+  isGatewayStartupError,
+  type GatewayStartupFailure,
+} from './startup-failure.js';
 import {
   maybeAutoStartTunnel,
   registerTunnelPowerMonitor,
@@ -72,6 +90,7 @@ let crashReporterStarted = false;
 let rendererCrashReloadAttempted = false;
 let lastGatewayConsoleHref: string | null = null;
 let rendererCrashExternalOpened = false;
+let currentStartupFailure: GatewayStartupFailure | null = null;
 
 const debugWindowLifecycle = process.env['XOPC_ELECTRON_DEBUG_LIFECYCLE'] === '1';
 const openBrowserOnRendererCrash = process.env['XOPC_ELECTRON_OPEN_BROWSER_ON_CRASH'] === '1';
@@ -349,6 +368,47 @@ function buildStartupFailureMessage(detail: string): string {
     'Electron uses the shared xopc gateway configured in ~/.xopc/xopc.json. If the configured port is occupied by another process, stop it or change gateway.port, then restart.\n\n' +
     '(Developers: pnpm run build && pnpm run electron:vite:build && pnpm run electron:server:build && pnpm run electron:extensions:build)'
   );
+}
+
+function startupFailureFromError(error: unknown): GatewayStartupFailure {
+  if (isGatewayStartupError(error)) {
+    return error.failure;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return classifyGatewayStartupFailure({ message });
+}
+
+function enrichStartupFailureForElectron(failure: GatewayStartupFailure): GatewayStartupFailure {
+  const paths = getElectronUserPaths();
+  return enrichGatewayStartupFailure(failure, {
+    configPath: paths.configPath,
+    stateDir: paths.stateDir,
+    dbPath: join(paths.stateDir, 'xopc.db'),
+    appRelease: app.getVersion(),
+    isPackaged: app.isPackaged,
+  });
+}
+
+async function loadStartupRecoveryPage(
+  win: BrowserWindow,
+  failure: GatewayStartupFailure,
+): Promise<void> {
+  currentStartupFailure = enrichStartupFailureForElectron(failure);
+  appendElectronStartupLog(`startup recovery kind=${currentStartupFailure.kind} message=${currentStartupFailure.message}`);
+  await loadMainWindowUrl(win, getStartupRecoveryPageDataUrl(app.getLocale(), currentStartupFailure));
+}
+
+function assertStartupRecoveryRenderer(event: IpcMainInvokeEvent): void {
+  if (!currentStartupFailure || !mainWindow || mainWindow.isDestroyed()) {
+    throw new Error('No startup recovery session is active');
+  }
+  if (event.sender !== mainWindow.webContents) {
+    throw new Error('IPC denied from non-recovery renderer');
+  }
+}
+
+function startupDiagnosticText(): string {
+  return JSON.stringify(currentStartupFailure ?? { kind: 'none' }, null, 2);
 }
 
 async function resolveWindowLoad(): Promise<
@@ -693,7 +753,8 @@ function createWindow(): void {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (embed && !win.isDestroyed()) {
-        win.webContents.send('startup:failed', { message: msg });
+        await loadStartupRecoveryPage(win, startupFailureFromError(e));
+        return;
       }
       void dialog.showErrorBox('xopc', buildStartupFailureMessage(msg));
       app.quit();
@@ -797,6 +858,76 @@ app.whenReady().then(async () => {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };
+    }
+  });
+
+  ipcMain.handle('startup:get-diagnostic', (event) => {
+    assertStartupRecoveryRenderer(event);
+    return currentStartupFailure;
+  });
+
+  ipcMain.handle('startup:copy-diagnostic', (event) => {
+    assertStartupRecoveryRenderer(event);
+    clipboard.writeText(startupDiagnosticText());
+    return { ok: true };
+  });
+
+  ipcMain.handle('startup:open-data-dir', async (event) => {
+    assertStartupRecoveryRenderer(event);
+    const target = currentStartupFailure?.stateDir ?? getElectronUserPaths().stateDir;
+    const message = await shell.openPath(target);
+    return message ? { ok: false, message } : { ok: true };
+  });
+
+  ipcMain.handle('startup:get-update-status', (event) => {
+    assertStartupRecoveryRenderer(event);
+    return getUpdateStatus();
+  });
+
+  ipcMain.handle('startup:check-update', (event) => {
+    assertStartupRecoveryRenderer(event);
+    if (!app.isPackaged) {
+      return {
+        ok: false,
+        message: 'Auto-update is only available in packaged desktop builds. Rebuild this development checkout, then retry.',
+      };
+    }
+    checkForUpdates(true);
+    return { ok: true };
+  });
+
+  ipcMain.handle('startup:quit-and-install', (event) => {
+    assertStartupRecoveryRenderer(event);
+    quitAndInstall();
+    return { ok: true };
+  });
+
+  ipcMain.handle('startup:retry-gateway', async (event) => {
+    assertStartupRecoveryRenderer(event);
+    if (!shouldEmbedGateway()) {
+      return { ok: false, message: 'Embedded gateway is not active in this session.' };
+    }
+    const win = BrowserWindow.fromWebContents(event.sender);
+    if (!win || win.isDestroyed()) {
+      return { ok: false, message: 'Recovery window is no longer available.' };
+    }
+    try {
+      const load = await resolveWindowLoad();
+      if (load.kind !== 'url') {
+        return { ok: false, message: 'Embedded gateway did not return a gateway URL.' };
+      }
+      currentStartupFailure = null;
+      appendElectronStartupLog(`startup recovery retry succeeded url=${redactUrlForLog(load.href)}`);
+      if (isEmbeddedGatewayLoopbackUrl(load.href)) {
+        lastGatewayConsoleHref = load.href;
+      }
+      await loadMainWindowUrl(win, load.href);
+      attachExternalUrlHandlers(win);
+      return { ok: true };
+    } catch (err) {
+      const failure = startupFailureFromError(err);
+      await loadStartupRecoveryPage(win, failure);
+      return { ok: false, message: failure.message };
     }
   });
 
