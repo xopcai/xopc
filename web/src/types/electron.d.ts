@@ -251,6 +251,7 @@ export type DesktopPetDefinition = {
   id: string;
   name: string;
   description: string;
+  i18nKey?: string;
   sourcePrompt?: string;
   builtin: boolean;
   canvasWidth: number;

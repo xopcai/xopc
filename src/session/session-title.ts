@@ -42,7 +42,7 @@ function firstUserText(messages: AgentMessage[]): string {
   const u = messages.find((m) => m.role === 'user');
   if (!u) return '';
   const raw = extractTextFromMessage(u);
-  return stripMediaClaimChecks(stripEnvelopeTimestampPrefix(stripSessionStartupContextFromUserText(raw)));
+  return normalizeUserTextForTitle(raw);
 }
 
 function stripMediaClaimChecks(text: string): string {
@@ -60,6 +60,47 @@ function stripMediaClaimChecks(text: string): string {
     .replace(/\s*Use the read_media tool[^\r\n]*/g, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+function stripExpandedSkillBlockForTitle(text: string): string {
+  const trimmed = text.trimStart();
+  if (!/^##\s+Skill:\s*\S+/i.test(trimmed)) {
+    return text;
+  }
+
+  const markerRe = /(?:^|\r?\n)\*\*Arguments\*\*:\s*/gi;
+  let argsStart = -1;
+  while (markerRe.exec(trimmed) !== null) {
+    argsStart = markerRe.lastIndex;
+  }
+
+  if (argsStart !== -1) {
+    const args = trimmed.slice(argsStart).trim();
+    if (args) return args;
+  }
+
+  const firstLine = trimmed.split(/\r?\n/)[0]?.trim() ?? '';
+  return firstLine.replace(/^##\s+Skill:\s*/i, '').trim();
+}
+
+function stripSkillCommandForTitle(text: string): string {
+  const trimmed = text.trimStart();
+  const match = trimmed.match(/^\/skill:([^\s]+)(?:\s+([\s\S]*))?$/i);
+  if (!match) {
+    return text;
+  }
+  const args = match[2]?.trim();
+  return args || match[1]?.trim() || text;
+}
+
+function normalizeUserTextForTitle(raw: string): string {
+  return stripSkillCommandForTitle(
+    stripExpandedSkillBlockForTitle(
+      stripMediaClaimChecks(
+        stripEnvelopeTimestampPrefix(stripSessionStartupContextFromUserText(raw)),
+      ),
+    ),
+  ).trim();
 }
 
 /** First assistant message that has visible text (skips tool-only assistant rows). */
@@ -111,9 +152,7 @@ export function getSessionTitleSource(
 
 /** Title from a single user message (first line), for immediate sidebar labels. */
 export function provisionalTitleFromUserText(raw: string): string | null {
-  const text = stripEnvelopeTimestampPrefix(
-    stripSessionStartupContextFromUserText((raw ?? '').trim()),
-  );
+  const text = normalizeUserTextForTitle((raw ?? '').trim());
   if (!text) return null;
   const line = text.split(/\n/)[0]?.trim();
   if (!line) return null;

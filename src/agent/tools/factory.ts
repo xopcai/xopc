@@ -76,14 +76,12 @@ import { createSkillManageTool } from './skill-manage-tool.js';
 import { createTextToSpeechTool } from './tts-tool.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { createGoalEvidenceRecorder } from './goal-evidence-recorder.js';
+import { getAgentCapabilityToolNames } from '../capabilities/index.js';
 
 const log = createLogger('AgentToolsFactory');
 
 /** Channels where `clarify` can block for a user answer (web UI, Telegram, CLI readline). */
 const CLARIFY_SUPPORTED_CHANNELS = new Set(['webchat', 'telegram', 'cli']);
-const CAPABILITY_TOOL_NAMES: Record<string, readonly string[]> = {
-  'desktop-pet-authoring': ['create_desktop_pet'],
-};
 
 export interface ToolFactoryDeps {
   workspace: string;
@@ -480,14 +478,16 @@ export class AgentToolsFactory {
     const disabled = options?.disabledTools;
     const raw: AgentTool<any, any>[] = [];
     const toolNames = new Set<string>();
-    for (const capabilityName of new Set(capabilityNames.map((name) => name.trim()).filter(Boolean))) {
-      for (const toolName of CAPABILITY_TOOL_NAMES[capabilityName] ?? []) {
-        if (disabled?.has(toolName) || toolNames.has(toolName)) continue;
-        toolNames.add(toolName);
-        if (toolName === 'create_desktop_pet') raw.push(createDesktopPetTool() as AgentTool<any, any>);
-      }
+    for (const toolName of getAgentCapabilityToolNames(capabilityNames)) {
+      if (disabled?.has(toolName) || toolNames.has(toolName)) continue;
+      toolNames.add(toolName);
+      if (toolName === 'create_desktop_pet') raw.push(createDesktopPetTool() as AgentTool<any, any>);
     }
     return wrapToolsWithProtection(raw, this.deps.toolExecutorConfig);
+  }
+
+  getLazyCapabilityToolNames(): string[] {
+    return ['create_desktop_pet'];
   }
 
   createAllTools(coreOptions?: CreateCoreToolsOptions): AgentTool<any, any>[] {

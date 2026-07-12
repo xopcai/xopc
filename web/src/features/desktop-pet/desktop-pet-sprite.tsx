@@ -9,15 +9,18 @@ export function DesktopPetSprite({
   pet,
   action,
   size = 'normal',
+  displayHeight: displayHeightOverride,
   className,
 }: {
   pet: DesktopPetDefinition;
   action: DesktopPetAction;
   size?: 'tiny' | 'small' | 'normal';
+  displayHeight?: number;
   className?: string;
 }) {
   const animation = pet.animations[action];
-  const displayHeight = size === 'tiny' ? 40 : size === 'small' ? 54 : 112;
+  const defaultDisplayHeight = size === 'tiny' ? 40 : size === 'small' ? 54 : 112;
+  const displayHeight = Math.max(1, Math.round(displayHeightOverride ?? defaultDisplayHeight));
   const scale = displayHeight / animation.frameHeight;
   const displayWidth = Math.round(animation.frameWidth * scale);
   const sheetHeight = Math.max(

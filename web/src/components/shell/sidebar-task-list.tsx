@@ -1155,7 +1155,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   if (!token) {
     return (
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="flex flex-col gap-1.5 px-4 pt-2">
+        <div className="flex flex-col gap-1.5 px-4 pt-4">
           <div className="rounded-xl bg-surface-panel p-3">
             <p className="text-xs leading-relaxed text-fg-muted">{sb.taskListNeedToken}</p>
             <Button
@@ -1189,7 +1189,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
             <Loader2 className="size-5 animate-spin text-fg-subtle" strokeWidth={1.75} aria-hidden />
           </div>
         ) : hasGroupedItems ? (
-          <div className="flex flex-col px-4 pt-2">
+          <div className="flex flex-col px-4 pt-4">
             {projectGroups.length > 0 ? (
               <div className="pb-1">
                 <div className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">

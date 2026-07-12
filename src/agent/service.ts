@@ -67,6 +67,7 @@ import {
   type SkillCatalogSnapshot,
 } from './agent-manager.js';
 import type { SkillMarkdownPreviewPayload } from './skills/types.js';
+import type { AgentCapabilityCatalogEntry } from './capabilities/index.js';
 import type { AgentServiceConfig, StreamHandle } from './service.types.js';
 import { PersistentGoalService } from './goals/persistent-goal-service.js';
 import { parseNoteAttachmentTarget } from '../notes/attachment-ref.js';
@@ -631,6 +632,10 @@ export class AgentService {
 
   getAgentSkillAvailability(agentId: string): AgentSkillAvailabilityPayload {
     return this.agentManager.getAgentSkillAvailability(agentId);
+  }
+
+  getCapabilityCatalog(sessionKey?: string): AgentCapabilityCatalogEntry[] {
+    return this.agentManager.getCapabilityCatalogForSession(sessionKey);
   }
 
   getSkillMarkdownSource(skillName: string): SkillMarkdownPreviewPayload | null {

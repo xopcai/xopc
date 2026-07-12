@@ -668,12 +668,53 @@
     "createChatDraft": "/skill:hatch-pet I want to create a new xopc pet. Please ask me what kind of pet I want first, then call create_desktop_pet once the concept is clear.",
     "optimizeInChat": "Refine",
     "optimizeChatDraft": "/skill:hatch-pet I want to refine the existing pet {name}. The petId is {id}. Current description: {description}. Original concept: {sourcePrompt}. Please ask what I want to adjust first; once I describe the change, call create_desktop_pet with mode=update and petId={id} to overwrite the same pet package.",
+    "fixInChat": "Fix",
+    "fixChatDraft": "/skill:hatch-pet I want to fix an xopc pet package that cannot load. Directory: {dir}. Load failure: {reason}. Diagnostics: {details}. Please inspect the package first, explain the smallest repair plan, then repair or regenerate the same pet package after I confirm.",
+    "noIssueDetails": "No additional diagnostics",
     "petList": "Pets",
     "petListDesc": "Choose a built-in pet or add your own manifest in the custom folder.",
     "selected": "Selected",
     "select": "Select",
     "customBadge": "Custom",
     "customPets": "Custom pets",
+    "builtinPets": {
+      "ember": {
+        "name": "Ember",
+        "description": "A warm little push for everyday agent work."
+      },
+      "relay": {
+        "name": "Relay",
+        "description": "Carries messages across apps and channels."
+      },
+      "loom": {
+        "name": "Loom",
+        "description": "Weaves context, notes, and memory together."
+      },
+      "scout": {
+        "name": "Scout",
+        "description": "Finds the useful signal inside the noise."
+      },
+      "forge": {
+        "name": "Forge",
+        "description": "Helps you build, repair, and call tools."
+      },
+      "sprout": {
+        "name": "Sprout",
+        "description": "Gives new workflows and ideas room to grow."
+      },
+      "atlas": {
+        "name": "Atlas",
+        "description": "Brings structure to large workspaces."
+      },
+      "pulse": {
+        "name": "Pulse",
+        "description": "Keeps a feel for gateway, automation, and runtime status."
+      },
+      "patch": {
+        "name": "Patch",
+        "description": "Best for careful edits and diff review."
+      }
+    },
     "invalidPets": "Some custom pets could not be loaded",
     "size": "Pet size",
     "sizeDesc": "Adjust the floating window and sprite size.",

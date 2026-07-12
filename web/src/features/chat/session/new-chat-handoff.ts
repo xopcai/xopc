@@ -43,6 +43,7 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
     });
 
     if (resolution.kind === 'noop') {
+      markSkipInitialSessionLoad(resolution.sessionKey);
       opts.onOpened(resolution.sessionKey);
       const routeKey = opts.routeSessionKey?.trim() || null;
       if (routeKey !== resolution.sessionKey) {

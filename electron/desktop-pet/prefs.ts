@@ -4,6 +4,7 @@ import { basename, extname, join, resolve } from 'node:path';
 import { app } from 'electron';
 
 import { resolveStateDir } from '../../src/config/paths-state.js';
+import { validateDesktopPetPackage } from '../../src/pets/validator.js';
 import type {
   DesktopPetAction,
   DesktopPetAnimation,
@@ -42,6 +43,7 @@ type BuiltInPetKind =
 
 type BuiltInPetPalette = {
   id: string;
+  i18nKey: string;
   name: string;
   description: string;
   kind: BuiltInPetKind;
@@ -56,6 +58,7 @@ type BuiltInPetPalette = {
 const builtInPetPalettes: BuiltInPetPalette[] = [
   {
     id: 'ember',
+    i18nKey: 'ember',
     name: '逐焰',
     description: '给日常代理工作一点温热的推进感。',
     kind: 'ember',
@@ -68,6 +71,7 @@ const builtInPetPalettes: BuiltInPetPalette[] = [
   },
   {
     id: 'relay',
+    i18nKey: 'relay',
     name: '信铃',
     description: '在不同应用和渠道之间传递消息。',
     kind: 'relay',
@@ -80,6 +84,7 @@ const builtInPetPalettes: BuiltInPetPalette[] = [
   },
   {
     id: 'loom',
+    i18nKey: 'loom',
     name: '织忆',
     description: '把上下文、笔记和记忆织在一起。',
     kind: 'loom',
@@ -92,6 +97,7 @@ const builtInPetPalettes: BuiltInPetPalette[] = [
   },
   {
     id: 'scout',
+    i18nKey: 'scout',
     name: '探光',
     description: '帮你从信息里找到真正有用的线索。',
     kind: 'scout',
@@ -104,6 +110,7 @@ const builtInPetPalettes: BuiltInPetPalette[] = [
   },
   {
     id: 'forge',
+    i18nKey: 'forge',
     name: '铸匠',
     description: '陪你构建、修复和调用工具。',
     kind: 'forge',
@@ -116,6 +123,7 @@ const builtInPetPalettes: BuiltInPetPalette[] = [
   },
   {
     id: 'sprout',
+    i18nKey: 'sprout',
     name: '新芽',
     description: '给新的工作流和想法留出生长空间。',
     kind: 'sprout',
@@ -128,6 +136,7 @@ const builtInPetPalettes: BuiltInPetPalette[] = [
   },
   {
     id: 'atlas',
+    i18nKey: 'atlas',
     name: '叠境',
     description: '为大型工作区提供清晰的结构感。',
     kind: 'atlas',
@@ -140,6 +149,7 @@ const builtInPetPalettes: BuiltInPetPalette[] = [
   },
   {
     id: 'pulse',
+    i18nKey: 'pulse',
     name: '脉点',
     description: '感知网关、自动化和持续运行的状态。',
     kind: 'pulse',
@@ -152,6 +162,7 @@ const builtInPetPalettes: BuiltInPetPalette[] = [
   },
   {
     id: 'patch',
+    i18nKey: 'patch',
     name: '补丁',
     description: '适合陪你做细致改动和审阅差异。',
     kind: 'patch',
@@ -599,6 +610,7 @@ function createBuiltInPet(palette: BuiltInPetPalette): DesktopPetDefinition {
     id: palette.id,
     name: palette.name,
     description: palette.description,
+    i18nKey: palette.i18nKey,
     builtin: true,
     canvasWidth: FRAME_SIZE,
     canvasHeight: FRAME_SIZE,
@@ -692,6 +704,11 @@ function estimateManifestSheetBounds(rawAnimations: Record<string, unknown>): Ma
 }
 
 async function loadCustomPet(dir: string): Promise<{ pet: DesktopPetDefinition | null; issue?: DesktopPetIssue }> {
+  const validation = await validateDesktopPetPackage(dir);
+  if (!validation.ok) {
+    return { pet: null, issue: validation.issue };
+  }
+
   try {
     const raw = JSON.parse(await readFile(join(dir, 'manifest.json'), 'utf8')) as Record<string, unknown>;
     const folderId = basename(dir).toLowerCase().replace(/[^a-z0-9_-]+/g, '-');

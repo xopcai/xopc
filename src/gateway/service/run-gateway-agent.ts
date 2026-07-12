@@ -96,6 +96,7 @@ export async function *runGatewayAgent(
 
   const streamSessionKey = webchatSessionKey ?? chatId;
   const mapper = new ChatStreamMapper({ runId, sessionKey: streamSessionKey, channel });
+  let registeredActiveWebchatRun = false;
   const publishStreamEvent = (event: ChatStreamEvent): ChatStreamEvent =>
     channel === 'webchat'
       ? ((runRelay.publish(runId, event as unknown as import('../agent-run-relay.js').RelayEvent) as unknown as ChatStreamEvent | undefined) ?? event)
@@ -143,7 +144,10 @@ export async function *runGatewayAgent(
         : runAbort.signal;
 
       agentService.beginInboundTurn(sessionKey);
-      activeWebchatRunBySession.set(sessionKey, runId);
+      if (!activeWebchatRunBySession.has(sessionKey)) {
+        activeWebchatRunBySession.set(sessionKey, runId);
+        registeredActiveWebchatRun = true;
+      }
       let streamError: string | undefined;
       try {
         const eventStream = agentService.turnDispatcher.processDirectStreaming(
@@ -194,7 +198,9 @@ export async function *runGatewayAgent(
         runRelay.complete(runId);
         return { status: 'error', summary: streamError };
       } finally {
-        activeWebchatRunBySession.delete(sessionKey);
+        if (registeredActiveWebchatRun && activeWebchatRunBySession.get(sessionKey) === runId) {
+          activeWebchatRunBySession.delete(sessionKey);
+        }
         runAbortControllers.delete(runId);
         const assistantPlainText = agentService.getLastAssistantPlainText(sessionKey);
         const streamOutcome = agentService.persistentGoals.takeStreamOutcome(sessionKey);

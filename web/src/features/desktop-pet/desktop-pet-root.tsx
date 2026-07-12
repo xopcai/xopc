@@ -1,5 +1,13 @@
 import { ChevronDown } from 'lucide-react';
-import { type PointerEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type PointerEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import { DesktopPetSprite } from '@/features/desktop-pet/desktop-pet-sprite';
 import { actionForEvent, messageForEvent } from '@/features/desktop-pet/desktop-pet-copy';
@@ -90,6 +98,16 @@ export function DesktopPetRoot() {
     () => state.pets.find((pet) => pet.id === state.prefs.selectedPetId) ?? state.pets[0],
     [state.pets, state.prefs.selectedPetId],
   );
+  const sizeScale = Math.min(1.4, Math.max(0.7, state.prefs.sizePercent / 100));
+  const petDisplayHeight = Math.round(112 * sizeScale);
+  const petWindowStyle = {
+    '--desktop-pet-stage-size': `${Math.round(132 * sizeScale)}px`,
+    '--desktop-pet-stage-right': `${Math.round(24 * sizeScale)}px`,
+    '--desktop-pet-stage-bottom': `${Math.round(16 * sizeScale)}px`,
+    '--desktop-pet-menu-size': `${Math.round(28 * sizeScale)}px`,
+    '--desktop-pet-menu-left': `${Math.round(-6 * sizeScale)}px`,
+    '--desktop-pet-menu-bottom': `${Math.round(12 * sizeScale)}px`,
+  } as CSSProperties;
 
   const openTarget = () => {
     void window.electronAPI?.pet?.openMainWindow(activeRoute);
@@ -158,7 +176,7 @@ export function DesktopPetRoot() {
   }
 
   return (
-    <div className="desktop-pet-window">
+    <div className="desktop-pet-window" style={petWindowStyle}>
       {state.prefs.bubbleEnabled && !state.prefs.collapsed && bubble ? (
         <button
           type="button"
@@ -196,7 +214,7 @@ export function DesktopPetRoot() {
           onPointerCancel={endDrag}
           title={t.openApp}
         >
-          <DesktopPetSprite pet={selectedPet} action={action} />
+          <DesktopPetSprite pet={selectedPet} action={action} displayHeight={petDisplayHeight} />
         </button>
       </div>
     </div>
