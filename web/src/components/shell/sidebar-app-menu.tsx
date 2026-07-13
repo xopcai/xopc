@@ -1,12 +1,12 @@
 import {
   BookOpen,
-  Bot,
   Check,
   ChevronRight,
   ExternalLink,
   Globe,
   Info,
   Palette,
+  PawPrint,
   Settings,
   Type,
 } from 'lucide-react';
@@ -257,7 +257,7 @@ export function SidebarAppMenu({
           onMouseEnter={() => setOpenFlyout(null)}
           onFocus={() => setOpenFlyout(null)}
         >
-          <Bot className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
+          <PawPrint className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
           <span className="min-w-0 flex-1 text-left">{petToggleLabel}</span>
         </button>
       ) : null}

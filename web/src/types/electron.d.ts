@@ -130,10 +130,8 @@ export type UninstallInfo = {
   platform: 'darwin' | 'win32' | 'linux';
   uninstallMode: UninstallMode;
   appPath: string;
-  userDataPath: string;
-  userDataSizeBytes: number | null;
-  hasSeparateCliData: boolean;
-  cliDataPath: string | null;
+  dataPath: string;
+  dataSizeBytes: number | null;
   uninstallerPath: string | null;
   pendingUpdate: boolean;
   linuxPackageKind?: LinuxPackageKind;
@@ -221,6 +219,24 @@ export type DesktopPetAction =
   | 'error';
 
 export type DesktopPetFeedbackLevel = 'quiet' | 'normal' | 'chatty';
+
+export type DesktopPetActivityPhase =
+  | 'preparing'
+  | 'planning'
+  | 'researching'
+  | 'reading'
+  | 'editing'
+  | 'running'
+  | 'browsing'
+  | 'compacting'
+  | 'waiting';
+
+export type DesktopPetActivity = {
+  phase?: DesktopPetActivityPhase;
+  detail?: string;
+  completed?: number;
+  total?: number;
+};
 
 export type DesktopPetBounds = {
   x: number;
@@ -311,8 +327,10 @@ export type DesktopPetEvent = {
   message?: string;
   severity?: 'info' | 'success' | 'warning' | 'error';
   sessionKey?: string;
+  runId?: string;
   route?: string;
   toolName?: string;
+  activity?: DesktopPetActivity;
   createdAt?: number;
 };
 

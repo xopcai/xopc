@@ -34,7 +34,7 @@ export type Tab =
   | 'settingsKeyboardShortcuts'
   | 'settingsSystem'
   | 'settingsDesktopPet'
-  | 'settingsAppManagement';
+  | 'settingsDesktopApp';
 
 export type SettingsSectionId =
   | 'overview'
@@ -61,7 +61,7 @@ export type SettingsSectionId =
   | 'keyboard-shortcuts'
   | 'system'
   | 'desktop-pet'
-  | 'app-management'
+  | 'desktop-app'
   | 'skills';
 
 export type MessageBundle = typeof en;

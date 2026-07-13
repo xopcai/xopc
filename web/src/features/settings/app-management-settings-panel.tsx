@@ -10,7 +10,7 @@ export function AppManagementSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const t = m.systemSettings;
-  const app = t.appManagement;
+  const app = t.desktopApp;
 
   const api = typeof window !== 'undefined' ? window.electronAPI?.system : undefined;
 

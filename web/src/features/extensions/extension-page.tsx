@@ -1,7 +1,7 @@
 /**
  * ExtensionPage — renders a full-page extension UI via ExtensionIframeHost.
  *
- * Mounted at /apps/:extensionId (or /apps/:extensionId/:pageId for multi-page extensions).
+ * Mounted at /extensions/:extensionId (or /extensions/:extensionId/:pageId for multi-page extensions).
  */
 
 import { useLayoutEffect } from 'react';

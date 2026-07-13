@@ -69,7 +69,7 @@ const initialMarketplaceUi: MarketplaceUi = {
 export function ExtensionMarketplacePanel({ className }: { className?: string }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const copy = m.appsPage;
+  const copy = m.extensionsPage;
   const hasToken = useGatewayStore((s) => Boolean(s.token));
   const extensions = useExtensions();
   const { mutate } = useSWRConfig();
@@ -327,7 +327,7 @@ function ExtensionMarketplaceDetailDialog({
   onUninstall,
 }: {
   packageName: string;
-  copy: MessageBundle['appsPage'];
+  copy: MessageBundle['extensionsPage'];
   extensions: ExtensionApiRow[];
   onClose: () => void;
   onInstall: (name: string, overwrite: boolean) => Promise<void>;
@@ -422,7 +422,7 @@ function ExtensionMarketplaceDetailDialog({
                 <div className="flex w-full flex-col items-stretch gap-2">
                   <p className="text-sm leading-relaxed text-fg-muted">{copy.marketplaceBuiltinManageHint}</p>
                   <Link
-                    to="/apps?tab=builtin"
+                    to="/extensions?tab=builtin"
                     onClick={onClose}
                     className="inline-flex w-fit items-center justify-center rounded-lg border border-edge px-3 py-2 text-sm font-medium text-fg hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                   >

@@ -13,9 +13,24 @@ import { DesktopPetSprite } from '@/features/desktop-pet/desktop-pet-sprite';
 import { actionForEvent, messageForEvent } from '@/features/desktop-pet/desktop-pet-copy';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { apiFetch } from '@/lib/fetch';
 import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 import type { DesktopPetAction, DesktopPetEvent, DesktopPetState } from '@/types/electron';
+
+type ActivityEntry = {
+  id: string;
+  label: string;
+  detail?: string;
+};
+
+function activityDetail(event: DesktopPetEvent): string | undefined {
+  const detail = event.activity?.detail;
+  const { completed, total } = event.activity ?? {};
+  const progress =
+    typeof completed === 'number' && typeof total === 'number' ? `${completed}/${total}` : undefined;
+  return [detail, progress].filter((value): value is string => Boolean(value)).join(' · ') || undefined;
+}
 
 function fallbackState(): DesktopPetState {
   return {
@@ -44,10 +59,16 @@ export function DesktopPetRoot() {
   const [state, setState] = useState<DesktopPetState>(() => fallbackState());
   const [action, setAction] = useState<DesktopPetAction>('idle');
   const [bubble, setBubble] = useState<string | null>(null);
+  const [bubbleDetail, setBubbleDetail] = useState<string | null>(null);
+  const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>([]);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [taskStartedAt, setTaskStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [tipCount, setTipCount] = useState(0);
   const [activeRoute, setActiveRoute] = useState('/chat');
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; moved: boolean } | null>(null);
   const suppressClickRef = useRef(false);
+  const bubbleTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     document.documentElement.dataset.desktopPet = 'true';
@@ -68,27 +89,61 @@ export function DesktopPetRoot() {
       if (!next.prefs.collapsed) setTipCount(0);
     });
     const offEvent = api.onEvent((event: DesktopPetEvent) => {
-      if (state.prefs.feedbackLevel === 'quiet' && event.severity !== 'error' && event.kind !== 'agent-success') {
+      if (
+        state.prefs.feedbackLevel === 'quiet' &&
+        event.severity !== 'error' &&
+        event.kind !== 'agent-success' &&
+        event.activity?.phase !== 'waiting'
+      ) {
         return;
       }
+      const label = messageForEvent(event, language, t);
+      const detail = activityDetail(event);
+      const isWaiting = event.activity?.phase === 'waiting';
+      const isTerminal = event.kind === 'agent-success' || event.kind === 'agent-error';
       setAction(actionForEvent(event));
-      setBubble(messageForEvent(event, language, t));
+      setBubble(label);
+      setBubbleDetail(detail ?? null);
+      if (event.kind === 'agent-start') {
+        setActivityEntries([]);
+        setTaskStartedAt(Date.now());
+        setElapsedSeconds(0);
+      }
+      if (event.runId) setActiveRunId(event.runId);
+      if (event.kind === 'agent-tool' || event.kind === 'agent-progress') {
+        setActivityEntries((current) => [
+          { id: `${Date.now()}-${event.kind}-${Math.random().toString(36).slice(2, 7)}`, label, detail },
+          ...current.filter((entry) => entry.label !== label || entry.detail !== detail),
+        ].slice(0, 3));
+      }
+      if (isTerminal) setActiveRunId(null);
       setTipCount((current) => (state.prefs.collapsed ? Math.min(99, Math.max(1, current) + 1) : 1));
       if (event.route?.startsWith('/')) {
         setActiveRoute(event.route);
       }
-      window.clearTimeout(Number((window as unknown as { desktopPetBubbleTimer?: number }).desktopPetBubbleTimer));
-      (window as unknown as { desktopPetBubbleTimer?: number }).desktopPetBubbleTimer = window.setTimeout(() => {
+      if (bubbleTimerRef.current !== null) window.clearTimeout(bubbleTimerRef.current);
+      if (isWaiting) return;
+      bubbleTimerRef.current = window.setTimeout(() => {
         setAction('idle');
         setBubble(null);
+        setBubbleDetail(null);
         if (!state.prefs.collapsed) setTipCount(0);
       }, event.severity === 'error' ? 9000 : 6200);
     });
     return () => {
       offState();
       offEvent();
+      if (bubbleTimerRef.current !== null) window.clearTimeout(bubbleTimerRef.current);
     };
   }, [language, state.prefs.collapsed, state.prefs.feedbackLevel, t]);
+
+  useEffect(() => {
+    if (!taskStartedAt || !activeRunId) return;
+    const tick = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - taskStartedAt) / 1000)));
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [activeRunId, taskStartedAt]);
 
   useEffect(() => {
     void window.electronAPI?.pet?.setClickThrough(false);
@@ -111,6 +166,20 @@ export function DesktopPetRoot() {
 
   const openTarget = () => {
     void window.electronAPI?.pet?.openMainWindow(activeRoute);
+  };
+
+  const stopTask = async () => {
+    if (!activeRunId) return;
+    const response = await apiFetch('/api/agent/abort', {
+      method: 'POST',
+      body: JSON.stringify({ runId: activeRunId }),
+    }).catch(() => null);
+    if (response?.ok) {
+      setActiveRunId(null);
+      setBubble(t.taskStopped);
+      setBubbleDetail(null);
+      setAction('idle');
+    }
   };
 
   const toggleBubble = async () => {
@@ -178,14 +247,40 @@ export function DesktopPetRoot() {
   return (
     <div className="desktop-pet-window" style={petWindowStyle}>
       {state.prefs.bubbleEnabled && !state.prefs.collapsed && bubble ? (
-        <button
-          type="button"
-          className={cn('desktop-pet-bubble', interaction.press)}
-          onClick={openTarget}
-          title={t.openApp}
-        >
-          <span className="line-clamp-2">{bubble}</span>
-        </button>
+        <div className="desktop-pet-bubble">
+          <button
+            type="button"
+            className={cn('desktop-pet-bubble-main', interaction.press)}
+            onClick={openTarget}
+            title={t.openApp}
+          >
+            <span className="desktop-pet-bubble-title">{bubble}</span>
+            {state.prefs.feedbackLevel === 'chatty' && bubbleDetail ? (
+              <span className="desktop-pet-bubble-detail">{bubbleDetail}</span>
+            ) : null}
+          </button>
+          {state.prefs.feedbackLevel === 'chatty' && (activityEntries.length > 0 || activeRunId) ? (
+            <div className="desktop-pet-activity-card">
+              <div className="desktop-pet-activity-heading">
+                {activeRunId ? `${t.taskInProgress} · ${elapsedSeconds}s` : t.taskRecentActivity}
+              </div>
+              {activityEntries.length > 0 ? (
+                <ul className="desktop-pet-activity-list">
+                  {activityEntries.map((entry) => (
+                    <li key={entry.id}>
+                      <span>{entry.label}</span>
+                      {entry.detail ? <small>{entry.detail}</small> : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <div className="desktop-pet-activity-actions">
+                <button type="button" onClick={openTarget}>{t.viewSession}</button>
+                {activeRunId ? <button type="button" onClick={() => void stopTask()}>{t.stopTask}</button> : null}
+              </div>
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="desktop-pet-stage">

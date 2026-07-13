@@ -45,7 +45,7 @@
         {
           "id": "hello.dashboard",
           "title": "Hello",
-          "path": "/apps/hello",
+          "path": "/extensions/hello",
           "entrypoint": "ui/panel.html",
           "showInNav": true,
           "navIcon": "hand-metal"

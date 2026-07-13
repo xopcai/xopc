@@ -85,7 +85,10 @@ export type AssistantMessageEndEvent = ChatStreamEnvelope<
   'assistant_message_end',
   { messageId: string; usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number; cost?: number } }
 >;
-export type ProgressEvent = ChatStreamEnvelope<'progress', { stage: string; message: string; detail?: string; toolName?: string }>;
+export type ProgressEvent = ChatStreamEnvelope<
+  'progress',
+  { stage: string; message: string; detail?: string; toolName?: string; completed?: number; total?: number }
+>;
 export type CompactionEvent = ChatStreamEnvelope<
   'compaction',
   { status: 'started' | 'completed' | 'skipped'; tokensBefore?: number; tokensAfter?: number; summary?: string }

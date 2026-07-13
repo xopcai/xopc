@@ -105,7 +105,7 @@ function createConnectorsCommand(ctx: CLIContext): Command {
 register({
   id: 'connectors',
   name: 'connectors',
-  description: 'Browse and install connector capabilities from xopc-store',
+  description: 'Browse and install verified connector capabilities from xopc-store',
   factory: createConnectorsCommand,
   metadata: {
     category: 'setup',

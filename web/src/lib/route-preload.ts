@@ -14,7 +14,7 @@ export const loadSettingsPage = () => import('@/pages/settings-page');
 export const loadAgentsSettingsPage = () => import('@/features/settings/agents');
 export const loadAgentBrowserSettingsPage = () => import('@/features/settings/browser/browser-settings-page');
 export const loadChannelsPage = () => import('@/features/settings/channels-settings');
-export const loadAppsPage = () => import('@/pages/apps-page');
+export const loadExtensionsPage = () => import('@/pages/apps-page');
 export const loadExtensionPage = () => import('@/features/extensions/extension-page');
 export const loadExtensionSettingsPage = () => import('@/features/extensions/extension-settings-page');
 export const loadExtensionDebugPage = () => import('@/features/extensions/extension-debug-page');
@@ -63,7 +63,7 @@ function preloadSettingsSection(path: string) {
   if (section === 'user-profile') return preload(loadUserProfileSettingsPanel);
   if (section === 'system') return preload(loadSystemSettingsPanel);
   if (section === 'desktop-pet') return preload(loadDesktopPetSettingsPanel);
-  if (section === 'app-management') return preload(loadAppManagementSettingsPanel);
+  if (section === 'desktop-app') return preload(loadAppManagementSettingsPanel);
   if (section === 'credentials') return preload(loadModelsHubPanel);
   if (section === 'gateway') return preload(loadGatewaySettingsPanel);
   if (section === 'heartbeat') return preload(loadHeartbeatSettingsPanel);
@@ -93,13 +93,12 @@ export function preloadRouteForPath(to: string) {
   if (path === '/workflows') return preload(loadWorkflowsPage);
   if (path === '/channels' || path.startsWith('/channels/')) return preload(loadChannelsPage);
   if (path === '/agents' || path.startsWith('/agents/')) return preload(loadAgentsSettingsPage);
-  if (path === '/apps') return preload(loadAppsPage);
-  if (path.startsWith('/apps/')) return preload(loadExtensionPage);
+  if (path === '/extensions') return preload(loadExtensionsPage);
+  if (path.startsWith('/extensions/')) return preload(loadExtensionPage);
   if (path.startsWith('/share/')) return preload(loadSharePreviewPage);
 
   if (path === '/settings/sessions') return preload(loadSessionsPage);
   if (path === '/settings/logs') return preload(loadLogsPage);
-  if (path === '/settings/apps') return preload(loadAppsPage);
   if (path === '/settings/extensions/debug') return preload(loadExtensionDebugPage);
   if (path.startsWith('/settings/ext/')) return preload(loadExtensionSettingsPage);
   if (path.startsWith('/settings/')) return preloadSettingsSection(path);

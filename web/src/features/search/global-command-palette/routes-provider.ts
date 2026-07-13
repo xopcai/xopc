@@ -67,10 +67,10 @@ export function buildRouteSeeds(language: StoredLanguage): RouteHitSeed[] {
       keywords: ['agent', 'persona', 'switch'],
     },
     {
-      id: 'route:apps',
-      title: m.nav.apps,
-      subtitle: r.appsSubtitle,
-      path: '/apps',
+      id: 'route:extensions',
+      title: m.nav.extensions,
+      subtitle: r.extensionsSubtitle,
+      path: '/extensions',
       keywords: ['extension', 'plugin', 'addon'],
     },
     {

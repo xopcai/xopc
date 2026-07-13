@@ -212,7 +212,7 @@ export interface ChatWidgetMatch {
 export interface PageContribution {
   id: string;
   title: string;
-  /** Relative path; host may mount under `/apps/` (see Phase 2). */
+  /** Relative path; host may mount under `/extensions/` (see Phase 2). */
   path: string;
   entrypoint: string;
   showInNav?: boolean;

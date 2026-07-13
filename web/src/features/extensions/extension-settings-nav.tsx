@@ -2,7 +2,7 @@
  * ExtensionSettingsNav — settings left-rail links for `settingsPanels` contributions.
  */
 
-import { Bug, LayoutGrid, Puzzle } from 'lucide-react';
+import { Bug, Puzzle } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
@@ -34,10 +34,6 @@ export function ExtensionSettingsNav({ navLinkClassName, showAdvanced = true }: 
         {m.settingsNavGroups.extensions}
       </p>
       <div className="flex flex-col gap-0.5">
-        <NavLink to="/settings/apps" className={navLinkClassName}>
-          <LayoutGrid className="size-5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-          <span className="min-w-0 flex-1 truncate">{m.nav.apps}</span>
-        </NavLink>
         <NavLink to="/settings/extensions/debug" className={navLinkClassName}>
           <Bug className="size-5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
           <span className="min-w-0 flex-1 truncate">{m.extensionDebug.nav}</span>

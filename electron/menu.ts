@@ -286,7 +286,7 @@ export function invokeAppMenuAction(
       break;
     case 'help.checkForUpdates':
       checkForUpdates(true);
-      wc.send('menu:navigate', '/settings/app-management');
+      wc.send('menu:navigate', '/settings/desktop-app');
       break;
     case 'help.openLogs':
       wc.send('menu:navigate', '/settings/logs');

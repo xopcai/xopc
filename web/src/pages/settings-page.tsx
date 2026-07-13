@@ -29,7 +29,7 @@ const SECTIONS: SettingsSectionId[] = [
   'user-profile',
   'system',
   'desktop-pet',
-  'app-management',
+  'desktop-app',
   'credentials',
   'capability-presets',
   'gateway',
@@ -127,7 +127,7 @@ export function SettingsPage() {
     return renderLazySection(DesktopPetSettings);
   }
 
-  if (id === 'app-management') {
+  if (id === 'desktop-app') {
     return renderLazySection(AppManagementSettingsPanel);
   }
 

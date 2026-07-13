@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest';
 import {
   NSIS_UNINSTALL_EXE,
   detectLinuxPackageKind,
-  detectSeparateCliData,
   resolveAppPath,
   resolveDataRemovalTargets,
   resolveNsisUninstallerPath,
@@ -51,32 +50,6 @@ describe('resolveNsisUninstallerPath', () => {
   it('returns null when uninstaller is missing', () => {
     const execPath = pathWin32.join('C:\\Program Files', 'xopc', 'xopc.exe');
     expect(resolveNsisUninstallerPath(execPath, () => false, 'win32')).toBeNull();
-  });
-});
-
-describe('detectSeparateCliData', () => {
-  it('returns false when cli dir does not exist', () => {
-    expect(
-      detectSeparateCliData('/Users/me/Library/Application Support/xopc', '/Users/me/.xopc', () => false),
-    ).toBe(false);
-  });
-
-  it('returns false when cli dir is the same as userData', () => {
-    const path = '/Users/me/Library/Application Support/xopc';
-    expect(
-      detectSeparateCliData(path, '/Users/me/.xopc', () => true, () => path),
-    ).toBe(false);
-  });
-
-  it('returns true when cli dir exists and differs from userData', () => {
-    expect(
-      detectSeparateCliData(
-        '/Users/me/Library/Application Support/xopc',
-        '/Users/me/.xopc',
-        () => true,
-        (p) => p,
-      ),
-    ).toBe(true);
   });
 });
 

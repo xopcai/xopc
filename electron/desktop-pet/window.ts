@@ -25,6 +25,7 @@ import type {
   DesktopPetPrefs,
   DesktopPetState,
 } from './types.js';
+import { clampDesktopPetBounds, desktopPetDefaultBounds } from './window-bounds.js';
 
 type DesktopPetRuntime = {
   resolveUrl: () => string | null;
@@ -42,28 +43,13 @@ function scaleFromPrefs(prefs: DesktopPetPrefs): number {
 }
 
 function defaultBounds(prefs: DesktopPetPrefs): Rectangle {
-  const scale = scaleFromPrefs(prefs);
-  const width = Math.round(360 * scale);
-  const height = Math.round(250 * scale);
   const display = screen.getPrimaryDisplay().workArea;
-  return {
-    width,
-    height,
-    x: Math.round(display.x + display.width - width - 32),
-    y: Math.round(display.y + display.height - height - 54),
-  };
+  return desktopPetDefaultBounds(display, scaleFromPrefs(prefs));
 }
 
 function clampBounds(bounds: Rectangle): Rectangle {
   const display = screen.getDisplayMatching(bounds).workArea;
-  const width = Math.min(Math.max(180, bounds.width), display.width);
-  const height = Math.min(Math.max(140, bounds.height), display.height);
-  return {
-    width,
-    height,
-    x: Math.min(Math.max(display.x, bounds.x), display.x + display.width - width),
-    y: Math.min(Math.max(display.y, bounds.y), display.y + display.height - height),
-  };
+  return clampDesktopPetBounds(bounds, display);
 }
 
 async function getInitialBounds(): Promise<Rectangle> {

@@ -19,7 +19,7 @@ function manifestDeclaresGatewayContributions(e: ExtensionApiRow): boolean {
 
 /**
  * Built-in extensions ship UI assets with the gateway; `/api/extensions/:id/assets/*` does not
- * require the Node runtime to be activated. Used for Apps detail + `/apps/...` routes only —
+ * require the Node runtime to be activated. Used for Extensions detail + `/extensions/...` routes only —
  * not for sidebar/command palette ({@link useUiExtensions} stays gated on activation).
  */
 function extensionBundledUiBrowsable(e: ExtensionApiRow): boolean {
@@ -40,7 +40,7 @@ export function extensionExposesGatewayShellUi(e: ExtensionApiRow): boolean {
   return manifestDeclaresGatewayContributions(e);
 }
 
-/** Extension UI reachable from Apps page or `/apps/:id` (includes bundled static UI when off). */
+/** Extension UI reachable from Extensions page or `/extensions/:id` (includes bundled static UI when off). */
 export function extensionShellUiReachable(e: ExtensionApiRow): boolean {
   return extensionExposesGatewayShellUi(e) || extensionBundledUiBrowsable(e);
 }

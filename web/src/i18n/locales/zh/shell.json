@@ -21,7 +21,7 @@
     "connectors": "连接器",
     "channels": "消息通道",
     "agents": "智能体",
-    "apps": "应用",
+    "extensions": "扩展",
     "logs": "诊断日志",
     "settingsAppearance": "偏好设置",
     "settingsOverview": "系统状态",
@@ -38,7 +38,7 @@
     "settingsSearch": "网络搜索",
     "settingsDreams": "梦境",
     "settingsCron": "定时任务",
-    "settingsGoals": "目标评判",
+    "settingsGoals": "目标运行规则",
     "settingsAgentBrowser": "浏览器",
     "settingsUserProfile": "个人资料",
     "settingsCapabilityPresets": "共享配置",
@@ -46,7 +46,7 @@
     "settingsKeyboardShortcuts": "快捷键",
     "settingsSystem": "系统授权",
     "settingsDesktopPet": "宠物",
-    "settingsAppManagement": "应用管理"
+    "settingsDesktopApp": "应用数据"
   },
   "token": {
     "title": "需要身份验证",
@@ -205,7 +205,7 @@
     "routes": {
       "chatSubtitle": "打开聊天",
       "agentsSubtitle": "管理智能体",
-      "appsSubtitle": "扩展应用",
+      "extensionsSubtitle": "发现和管理扩展",
       "sessionsSubtitle": "管理与搜索会话",
       "logsSubtitle": "网关诊断日志",
       "skillsSubtitle": "管理技能",
@@ -213,7 +213,7 @@
       "channelsSubtitle": "消息通道设置",
       "cronSubtitle": "定时任务与调度",
       "cronSettingsSubtitle": "定时任务调度引擎全局设置",
-      "goalsSettingsSubtitle": "/goal 目标评判默认配置",
+      "goalsSettingsSubtitle": "/goal 目标运行规则",
       "dreamsSettingsSubtitle": "记忆整合（梦境）调度",
       "settingsSubtitle": "打开设置",
       "credentialsSubtitle": "服务商密钥、自定义模型、图片、语音与网络搜索",

@@ -1,13 +1,12 @@
 import { app } from 'electron';
 
+import { resolveStateDir } from '../../src/config/paths.js';
 import { hasPendingInstall } from '../auto-updater.js';
 
 import { estimateDirSizeBytes, queryWindowsUninstallerFromRegistry } from './dir-size.js';
 import {
-  detectSeparateCliData,
   detectLinuxPackageKind,
   resolveAppPath,
-  resolveCliDataPath,
   resolveLinuxDebPackageName,
   resolveNsisUninstallerPath,
 } from './paths.js';
@@ -40,9 +39,7 @@ async function resolveUninstallerPath(): Promise<string | null> {
 export async function getUninstallInfo(): Promise<UninstallInfo> {
   const platform = process.platform as 'darwin' | 'win32' | 'linux';
   const packaged = app.isPackaged;
-  const userDataPath = app.getPath('userData');
-  const cliDataPath = resolveCliDataPath();
-  const hasSeparateCliData = detectSeparateCliData(userDataPath, cliDataPath);
+  const dataPath = resolveStateDir();
   const linuxPackageKind: LinuxPackageKind | undefined =
     platform === 'linux' ? detectLinuxPackageKind(process.execPath) : undefined;
   const linuxDebPackageName =
@@ -53,10 +50,8 @@ export async function getUninstallInfo(): Promise<UninstallInfo> {
     platform,
     uninstallMode: resolveUninstallMode(platform, packaged),
     appPath: resolveAppPath(platform, process.execPath),
-    userDataPath,
-    userDataSizeBytes: await estimateDirSizeBytes(userDataPath),
-    hasSeparateCliData,
-    cliDataPath: hasSeparateCliData ? cliDataPath : null,
+    dataPath,
+    dataSizeBytes: await estimateDirSizeBytes(dataPath),
     uninstallerPath: await resolveUninstallerPath(),
     pendingUpdate: hasPendingInstall(),
     linuxPackageKind,

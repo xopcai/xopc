@@ -149,7 +149,7 @@ function issuePath(id: string): string | undefined {
   if (id === 'channel-config' || id === 'channel-pairing-pending' || id.startsWith('channel:')) return '/channels';
   if (id === 'security-audit') return '/settings/gateway';
   if (id === 'gateway-service' || id === 'gateway-health') return '/settings/gateway';
-  if (id === 'version-check') return '/settings/app-management';
+  if (id === 'version-check') return '/settings/desktop-app';
   return undefined;
 }
 
