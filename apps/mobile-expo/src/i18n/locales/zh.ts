@@ -497,6 +497,9 @@ export const zh: MessageBundle = {
     softwareVersion: '软件版本',
     gatewayNotConfigured: '未配置',
     clipboardIntake: '检测剪贴板内容',
+    notifications: '任务通知',
+    notificationsHint: '当智能体需要输入或任务失败时接收提醒。',
+    notificationsPermissionDenied: '系统设置中已关闭通知权限。',
     // 网关
     gateway: '网关',
     gatewayHint: '管理多个网关连接。开发构建中通过 MMKV 持久化存储。Expo Go 仅使用内存存储。',

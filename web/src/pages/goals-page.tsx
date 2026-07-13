@@ -10,6 +10,7 @@ import {
   LayoutGrid,
   ListChecks,
   ListFilter,
+  MoreHorizontal,
   Plus,
   RotateCcw,
   Search,
@@ -353,9 +354,9 @@ function GoalCard({
       onDragStart={(event) => onDragStart(goal.id, event)}
       onDragEnd={onDragEnd}
       className={cn(
-        'group relative overflow-hidden rounded-xl p-3.5 shadow-surface transition-colors',
-        selected ? 'bg-surface-active ring-1 ring-accent/30' : 'bg-surface-panel',
-        dragging ? 'opacity-50' : 'hover:bg-surface-hover/50',
+        'group relative flex min-h-24 w-full min-w-0 max-w-full cursor-grab flex-col overflow-hidden rounded-lg bg-surface-panel px-3 py-3 shadow-surface transition-colors active:cursor-grabbing',
+        selected && 'ring-1 ring-accent/30',
+        dragging ? 'opacity-50' : 'hover:bg-surface-hover',
       )}
     >
       <button
@@ -367,8 +368,8 @@ function GoalCard({
       >
         <div className="flex min-w-0 items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="line-clamp-2 text-sm font-semibold leading-5 text-fg">{goal.title}</div>
-            <div className="mt-1 truncate text-[11px] font-medium text-fg-muted">{goal.agentId}</div>
+            <div className="line-clamp-2 text-sm font-medium leading-5 text-fg">{goal.title}</div>
+            <div className="mt-1 truncate text-[11px] text-fg-muted">{goal.agentId}</div>
           </div>
           <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-sm', statusClass(goal.status))}>
             {statusLabel(goal.status, t)}
@@ -395,10 +396,10 @@ function GoalCard({
           </div>
         ) : null}
 
-        {goal.blockedReason ? <p className="mt-2 line-clamp-2 text-xs text-amber-700 dark:text-amber-300">{goal.blockedReason}</p> : null}
-        {goal.nextAction ? <p className="mt-2 line-clamp-2 text-xs text-fg-muted">{goal.nextAction}</p> : null}
+        {goal.blockedReason ? <p className="mt-2 line-clamp-1 text-xs leading-5 text-amber-700 dark:text-amber-300">{goal.blockedReason}</p> : null}
+        {goal.nextAction ? <p className="mt-2 line-clamp-1 text-xs leading-5 text-fg-muted">{goal.nextAction}</p> : null}
         {!goal.blockedReason && !goal.nextAction && goal.latestRun?.reason ? (
-          <p className="mt-2 line-clamp-2 text-xs text-fg-muted">{goal.latestRun.reason}</p>
+          <p className="mt-2 line-clamp-1 text-xs leading-5 text-fg-muted">{goal.latestRun.reason}</p>
         ) : null}
 
         <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-fg-subtle">
@@ -559,7 +560,7 @@ function FocusGoalRowSkeleton() {
 
 function GoalCardSkeleton() {
   return (
-    <article className="rounded-xl bg-surface-panel p-3.5 shadow-surface" aria-hidden="true">
+    <article className="min-h-24 rounded-lg bg-surface-panel px-3 py-3 shadow-surface" aria-hidden="true">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <Skeleton className="h-4 w-4/5" />
@@ -1062,16 +1063,16 @@ export function GoalsPage() {
             </div>
           </section>
         ) : (
-          <section className="min-h-0 w-full flex-1 overflow-x-auto pb-3" aria-label={t.boardLabel}>
-            <div className="flex h-full min-w-max snap-x snap-mandatory gap-3">
+          <section className="min-h-0 w-full flex-1 overflow-x-auto rounded-lg px-2 py-2" aria-label={t.boardLabel}>
+            <div className="flex min-h-full min-w-max items-start gap-3 pr-4">
               {BOARD_LANES.map((lane) => {
                 const laneGoals = lanes.get(lane) ?? [];
                 return (
                   <section
                     key={lane}
                     className={cn(
-                      'flex h-full w-80 shrink-0 snap-center flex-col overflow-hidden rounded-2xl shadow-surface',
-                      dropLane === lane ? 'bg-surface-active ring-1 ring-accent/30' : 'bg-surface-panel/40',
+                      'flex max-h-full w-72 min-w-72 max-w-72 shrink-0 flex-col overflow-y-auto rounded-lg bg-surface-base shadow-surface',
+                      dropLane === lane && 'bg-surface-active',
                     )}
                     aria-label={t.lanes[lane].title}
                     onDragOver={(event) => {
@@ -1088,16 +1089,14 @@ export function GoalsPage() {
                       if (goalId) void applyDrop(goalId, lane);
                     }}
                   >
-                    <header className="flex shrink-0 items-center justify-between gap-2 rounded-t-2xl border-b border-edge-subtle bg-surface-panel/90 px-3.5 py-3 backdrop-blur">
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="size-2 rounded-full bg-accent" aria-hidden />
+                    <header className="flex shrink-0 items-center justify-between gap-2 px-3 py-3">
+                      <div className="flex min-w-0 items-baseline gap-2">
                         <h2 className="truncate text-sm font-semibold text-fg">{t.lanes[lane].title}</h2>
+                        <span className="shrink-0 text-xs text-fg-subtle">{laneGoals.length}</span>
                       </div>
-                      <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold tabular-nums text-fg-muted">
-                        {laneGoals.length}
-                      </span>
+                      <MoreHorizontal className="size-4 shrink-0 text-fg-subtle" aria-hidden />
                     </header>
-                    <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-2.5">
+                    <div className="mx-2 mt-3 grid min-h-0 min-w-0 content-start gap-2 pb-2 pr-1 [scrollbar-gutter:stable]">
                       {loading && laneGoals.length === 0
                         ? Array.from({ length: 3 }).map((_, i) => <GoalCardSkeleton key={i} />)
                         : laneGoals.map((goal) => (
@@ -1122,7 +1121,7 @@ export function GoalsPage() {
                             />
                           ))}
                       {!loading && laneGoals.length === 0 ? (
-                        <div className="flex min-h-32 items-center justify-center rounded-xl bg-surface-base px-3 py-6 text-center text-xs text-fg-subtle sm:px-5 xl:px-6">
+                        <div className="rounded-lg bg-surface-panel/70 px-3 py-6 text-center text-xs text-fg-subtle">
                           {t.lanes[lane].empty}
                         </div>
                       ) : null}

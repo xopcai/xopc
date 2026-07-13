@@ -172,6 +172,7 @@ export interface AutomationDeps {
   workflowRunService?: {
     startWorkflowRun(params: StartWorkflowRunServiceParams): Promise<WorkflowRunServiceResult>;
   };
+  onRunCompleted?: (run: AutomationRun) => void;
 }
 
 export interface AutomationActionOutcome {

@@ -17,6 +17,8 @@ export const KEYS = {
   clipboardLatestAppHash: 'clipboard.latestAppHash',
   defaultAgentId: 'prefs.defaultAgentId',
   selectedModelRef: 'prefs.selectedModelRef',
+  mobileInstallationId: 'mobile.installationId',
+  notificationsEnabled: 'prefs.notificationsEnabled',
   noteTags: 'prefs.noteTags',
 } as const;
 

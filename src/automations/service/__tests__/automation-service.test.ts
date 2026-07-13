@@ -88,6 +88,28 @@ describe('AutomationService', () => {
     });
   });
 
+  it('reports completed runs through the completion hook', async () => {
+    const onRunCompleted = vi.fn();
+    service.setDeps({ onRunCompleted });
+    const automation = await service.create({
+      name: 'Notify on completion',
+      trigger: { kind: 'manual' },
+      action: { kind: 'agent', instruction: 'finish this task' },
+    });
+
+    const queued = await service.runNow(automation.id);
+    await waitFor(
+      () => onRunCompleted.mock.calls,
+      (calls) => calls.some(([run]) => run.id === queued.id),
+    );
+
+    expect(onRunCompleted).toHaveBeenCalledWith(expect.objectContaining({
+      id: queued.id,
+      automationId: automation.id,
+      status: 'succeeded',
+    }));
+  });
+
   it('passes workflow run limits to workflow automations', async () => {
     const workflowCalls: unknown[] = [];
     service.setDeps({

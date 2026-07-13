@@ -26,10 +26,13 @@ export type PreferencesState = {
   selectedModelRef: string | null;
   /** Foreground clipboard intake prompt. */
   clipboardIntakeEnabled: boolean;
+  /** Opt-in gateway push notifications. System permission is requested separately. */
+  notificationsEnabled: boolean;
 
   setLanguage: (lang: Language) => void;
   setThemePreference: (pref: ThemePreference) => void;
   setClipboardIntakeEnabled: (enabled: boolean) => void;
+  setNotificationsEnabled: (enabled: boolean) => void;
   setDefaultAgentId: (agentId: string | null) => void;
   setSelectedModelRef: (modelRef: string | null) => void;
   /** Call once at app startup to hydrate from MMKV. */
@@ -69,6 +72,7 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
   defaultAgentId: null,
   selectedModelRef: null,
   clipboardIntakeEnabled: true,
+  notificationsEnabled: false,
 
   setLanguage: (language) => {
     storage.set(KEYS.language, language);
@@ -85,6 +89,11 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
   setClipboardIntakeEnabled: (clipboardIntakeEnabled) => {
     storage.set(KEYS.clipboardIntakeEnabled, clipboardIntakeEnabled);
     set({ clipboardIntakeEnabled });
+  },
+
+  setNotificationsEnabled: (notificationsEnabled) => {
+    storage.set(KEYS.notificationsEnabled, notificationsEnabled);
+    set({ notificationsEnabled });
   },
 
   setDefaultAgentId: (defaultAgentId) => {
@@ -107,11 +116,13 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
     const clipboardRaw = storage.getString(KEYS.clipboardIntakeEnabled);
     const agentRaw = storage.getString(KEYS.defaultAgentId);
     const modelRaw = storage.getString(KEYS.selectedModelRef);
+    const notificationsRaw = storage.getString(KEYS.notificationsEnabled);
     const language = isValidLanguage(langRaw) ? langRaw : 'en';
     const themePreference = isValidThemePref(themeRaw) ? themeRaw : 'system';
     const clipboardIntakeEnabled = clipboardRaw === undefined ? true : clipboardRaw !== 'false';
     const defaultAgentId = agentRaw?.trim().toLowerCase() || null;
     const selectedModelRef = modelRaw?.trim() || null;
+    const notificationsEnabled = notificationsRaw === 'true';
     syncAppearance(themePreference);
     set({
       hydrated: true,
@@ -119,6 +130,7 @@ export const usePreferencesStore = create<PreferencesState>((set, _get) => ({
       themePreference,
       resolvedTheme: resolveTheme(themePreference),
       clipboardIntakeEnabled,
+      notificationsEnabled,
       defaultAgentId,
       selectedModelRef,
     });

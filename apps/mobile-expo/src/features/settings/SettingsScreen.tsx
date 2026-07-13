@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Switch } from 'react-native-paper';
 
@@ -13,6 +13,10 @@ import { dismissOrHome, useDismissOnHardwareBack } from '@/lib/navigation';
 import { useGatewayConfigured } from '@/query/sessions';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { usePreferencesStore } from '@/stores/preferences-store';
+import {
+  disableMobileNotifications,
+  enableMobileNotifications,
+} from '@/features/notifications/mobile-notifications';
 
 import { AppearanceSection } from './AppearanceSection';
 import {
@@ -28,6 +32,9 @@ export function SettingsScreen() {
   const colors = useSettingsColors();
   const clipboardIntakeEnabled = usePreferencesStore((st) => st.clipboardIntakeEnabled);
   const setClipboardIntakeEnabled = usePreferencesStore((st) => st.setClipboardIntakeEnabled);
+  const notificationsEnabled = usePreferencesStore((st) => st.notificationsEnabled);
+  const setNotificationsEnabled = usePreferencesStore((st) => st.setNotificationsEnabled);
+  const [notificationsUpdating, setNotificationsUpdating] = useState(false);
 
   const configured = useGatewayConfigured();
   const connectionView = useGatewayConnectionView();
@@ -57,6 +64,22 @@ export function SettingsScreen() {
   ]);
 
   useDismissOnHardwareBack(router);
+  const toggleNotifications = useCallback(async (next: boolean) => {
+    if (notificationsUpdating) return;
+    setNotificationsUpdating(true);
+    try {
+      if (next) {
+        const registered = await enableMobileNotifications();
+        if (registered) setNotificationsEnabled(true);
+      } else {
+        setNotificationsEnabled(false);
+        await disableMobileNotifications();
+      }
+    } finally {
+      setNotificationsUpdating(false);
+    }
+  }, [notificationsUpdating, setNotificationsEnabled]);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
       <FloatingHeader title={s.title} onBack={() => dismissOrHome(router)} />
@@ -71,9 +94,25 @@ export function SettingsScreen() {
             iconColor={colors.accent}
             label={s.gateway}
             value={gatewayValue}
-            isLast
+            isLast={!configured}
             onPress={() => router.push('/settings/gateway')}
           />
+          {configured ? (
+            <SettingsRow
+              icon="bell-outline"
+              iconColor={colors.accent}
+              label={s.notifications}
+              value={s.notificationsHint}
+              showChevron={false}
+              rightAccessory={(
+                <Switch
+                  value={notificationsEnabled}
+                  disabled={notificationsUpdating}
+                  onValueChange={(value) => void toggleNotifications(value)}
+                />
+              )}
+            />
+          ) : null}
         </SettingsSection>
 
         <SettingsSection title={s.sectionPreferences}>

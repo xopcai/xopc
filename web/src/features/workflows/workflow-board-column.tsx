@@ -1,6 +1,8 @@
+import { MoreHorizontal } from 'lucide-react';
 import { memo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
@@ -26,6 +28,7 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
   localeTag,
   nowMs,
   selectedRunId,
+  loading,
   onOpenRun,
   onOpenRunChat,
   onCancelRun,
@@ -36,6 +39,7 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
   localeTag: string;
   nowMs: number;
   selectedRunId: string | null;
+  loading: boolean;
   onOpenRun: (run: WorkflowRunSummary) => void;
   onOpenRunChat: (run: WorkflowRunSummary) => void;
   onCancelRun: (runId: string) => void;
@@ -54,23 +58,23 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
   return (
     <section
       className={cn(
-        'flex h-full w-80 shrink-0 snap-center flex-col overflow-hidden rounded-2xl bg-surface-panel/40 shadow-surface',
+        'flex max-h-full w-72 min-w-72 max-w-72 shrink-0 flex-col overflow-y-auto rounded-lg bg-surface-base shadow-surface',
       )}
       aria-label={columnTitle(column.id, labels)}
     >
-      <header className="flex shrink-0 items-center justify-between gap-2 rounded-t-2xl border-b border-edge-subtle bg-surface-panel/90 px-3.5 py-3 backdrop-blur">
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="size-2 rounded-full bg-accent" aria-hidden />
+      <header className="flex shrink-0 items-center justify-between gap-2 px-3 py-3">
+        <div className="flex min-w-0 items-baseline gap-2">
           <h2 className="truncate text-sm font-semibold text-fg">{columnTitle(column.id, labels)}</h2>
+          <span className="shrink-0 text-xs text-fg-subtle">{column.runs.length}</span>
         </div>
-        <span className="rounded-full bg-surface-hover px-2.5 py-1 text-xs font-semibold tabular-nums text-fg-muted">
-          {column.runs.length}
-        </span>
+        <MoreHorizontal className="size-4 shrink-0 text-fg-subtle" aria-hidden />
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-2.5">
-        {visibleRuns.length === 0 ? (
-          <div className="flex min-h-32 items-center justify-center rounded-xl bg-surface-panel/40 px-4 py-6 text-center text-xs text-fg-subtle">
+      <div className="mx-2 mt-3 grid min-h-0 min-w-0 content-start gap-2 pb-2 pr-1 [scrollbar-gutter:stable]">
+        {loading && visibleRuns.length === 0 ? (
+          <WorkflowBoardCardSkeleton />
+        ) : visibleRuns.length === 0 ? (
+          <div className="rounded-lg bg-surface-panel/70 px-3 py-6 text-center text-xs text-fg-subtle">
             {labels.boardColumnEmpty}
           </div>
         ) : (
@@ -108,3 +112,19 @@ export const WorkflowBoardColumn = memo(function WorkflowBoardColumn({
     </section>
   );
 });
+
+function WorkflowBoardCardSkeleton() {
+  return (
+    <article className="min-h-24 rounded-lg bg-surface-panel px-3 py-3 shadow-surface" aria-hidden="true">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="mt-2 h-3 w-24" />
+        </div>
+        <Skeleton className="h-5 w-14 rounded-full" />
+      </div>
+      <Skeleton className="mt-3 h-3 w-2/3" />
+      <Skeleton className="mt-4 h-5 w-20 rounded-full" />
+    </article>
+  );
+}
