@@ -1,0 +1,27 @@
+<!doctype html><!-- Bundled algorithmic-art viewer. -->
+<html lang="en">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generative study</title>
+  <style>
+    body { margin: 0; background: #eef1f7; color: #172033; font: 14px/1.4 system-ui, sans-serif; }
+    main { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) 260px; max-width: 1100px; margin: 32px auto; padding: 0 20px; }
+    canvas { width: 100%; aspect-ratio: 1; background: #f7f8fc; border: 1px solid #cbd3e1; }
+    aside { align-self: start; padding: 16px; background: #fff; border: 1px solid #cbd3e1; border-radius: 10px; }
+    label, button { display: block; width: 100%; margin: 0 0 10px; } button { padding: 8px; }
+  </style>
+  <main>
+    <canvas id="art" width="900" height="900"></canvas>
+    <aside>
+      <label>Seed <input id="seed" type="number" value="1"></label>
+      <button id="previous">Previous seed</button><button id="next">Next seed</button>
+      <button id="random">Random seed</button><button id="export">Export PNG</button>
+    </aside>
+  </main>
+  <script>
+    const canvas = document.querySelector('#art'); const context = canvas.getContext('2d');
+    let seed = 1; const draw = () => { context.fillStyle = '#f7f8fc'; context.fillRect(0, 0, 900, 900); for (let i = 0; i < 180; i += 1) { const n = Math.sin(seed * 13 + i * 19) * 10000; const r = n - Math.floor(n); context.fillStyle = `hsla(${190 + r * 90},65%,40%,.45)`; context.beginPath(); context.arc(r * 900, ((Math.sin(seed + i * 7) + 1) / 2) * 900, 3 + r * 7, 0, Math.PI * 2); context.fill(); } };
+    const setSeed = value => { seed = Number(value); document.querySelector('#seed').value = seed; draw(); };
+    document.querySelector('#seed').onchange = event => setSeed(event.target.value); document.querySelector('#previous').onclick = () => setSeed(seed - 1); document.querySelector('#next').onclick = () => setSeed(seed + 1); document.querySelector('#random').onclick = () => setSeed(Math.floor(Math.random() * 2 ** 31)); document.querySelector('#export').onclick = () => { const link = document.createElement('a'); link.href = canvas.toDataURL('image/png'); link.download = `study-${seed}.png`; link.click(); }; draw();
+  </script>
+</html>
