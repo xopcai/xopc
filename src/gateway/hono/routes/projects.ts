@@ -39,6 +39,7 @@ import {
 import { createGatewayRouteLogger } from '../lib/route-logger.js';
 import { parseActivityIncludeRelated, parseActivityQuery } from './activity.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import { FILE_SEARCH_MAX_LIMIT, fuzzySearchWorkspaceFiles } from '../../workspace-file-search.js';
 
 const log = createGatewayRouteLogger('Projects');
 
@@ -1152,6 +1153,20 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
       }
       return c.json({ ok: false, error: 'Failed to read project files' }, 500);
     }
+  });
+
+  /** Fuzzy filename / path search across the entire project workspace. */
+  authenticated.get('/api/projects/:id/files/search', async (c) => {
+    const q = typeof c.req.query('q') === 'string' ? c.req.query('q')!.trim() : '';
+    const limitRaw = c.req.query('limit');
+    const limit = Math.min(
+      Math.max(parseInt(typeof limitRaw === 'string' ? limitRaw : '50', 10) || 50, 1),
+      FILE_SEARCH_MAX_LIMIT,
+    );
+    const root = await resolveProjectWorkspaceRoot(service, c.req.param('id'));
+    if (root.ok === false) return c.json({ ok: false, error: root.error }, root.status as 400);
+    const entries = await fuzzySearchWorkspaceFiles(root.root, q, limit);
+    return c.json({ ok: true, entries });
   });
 
   authenticated.get('/api/projects/:id/files/read', async (c) => {

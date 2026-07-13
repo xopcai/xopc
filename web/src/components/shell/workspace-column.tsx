@@ -1,10 +1,11 @@
-import { FolderOpen, Search, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { FileText, Search, X } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/ui/refresh-button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   FileTree,
 } from '@/features/file-tree/file-tree';
@@ -15,6 +16,7 @@ import {
   downloadTextFile,
   fetchWorkspaceFileBlob,
   readWorkspaceFile,
+  searchWorkspaceFiles,
 } from '@/features/workspace/workspace-api';
 import {
   detectPreviewFileType,
@@ -25,6 +27,7 @@ import { showComposerNotification } from '@/features/chat/composer/composer-noti
 import { ShareLinkDialog } from '@/features/shares/share-link-dialog';
 import { useShareLink } from '@/features/shares/use-share-link';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
+import { WorkspaceOpenLocationMenu } from '@/features/workspace/workspace-open-location-menu';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { isElectron } from '@/lib/electron-env';
@@ -51,23 +54,30 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
   const [widthResizing, setWidthResizing] = useState(false);
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
   const [fileSearchQuery, setFileSearchQuery] = useState('');
+  const [fileSearchResults, setFileSearchResults] = useState<Array<{ name: string; path: string }>>([]);
+  const [fileSearchLoading, setFileSearchLoading] = useState(false);
+  const [fileSearchError, setFileSearchError] = useState<string | null>(null);
   const previewPath = useWorkspacePreviewStore((s) => s.path);
   const setPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
   const workspaceAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
 
-  const { tree, loading, error, loadRoot, loadChildren, reset } = useWorkspaceTree(
+  const { tree, loading, error, workspaceRoot, loadRoot, loadChildren, reset } = useWorkspaceTree(
     workspaceAgentId,
     chatSessionKey,
   );
   /** When the tree is session-scoped, agent id from the store is irrelevant — avoid re-fetching on agent sync. */
   const treeScopeKey = chatSessionKey ?? workspaceAgentId;
 
-  const workspaceReadOpts =
-    chatSessionKey != null
-      ? { sessionKey: chatSessionKey }
-      : workspaceAgentId.trim()
-        ? { agentId: workspaceAgentId.trim() }
-        : undefined;
+  const workspaceReadOpts = useMemo(
+    () =>
+      chatSessionKey != null
+        ? { sessionKey: chatSessionKey }
+        : workspaceAgentId.trim()
+          ? { agentId: workspaceAgentId.trim() }
+          : undefined,
+    [chatSessionKey, workspaceAgentId],
+  );
+  const normalizedFileSearchQuery = fileSearchQuery.trim();
 
   const { dialogOpen, loading: shareLoading, result, error: shareError, createShareLink, handleOpenChange } =
     useShareLink();
@@ -141,12 +151,48 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
+      if (fileSearchOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        setFileSearchQuery('');
+        setFileSearchOpen(false);
+        return;
+      }
       if (useWorkspacePreviewStore.getState().path) return;
       setOpen(false);
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [open, setOpen]);
+  }, [fileSearchOpen, open, setOpen]);
+
+  useEffect(() => {
+    if (!open || !fileSearchOpen || !normalizedFileSearchQuery) {
+      setFileSearchResults([]);
+      setFileSearchLoading(false);
+      setFileSearchError(null);
+      return;
+    }
+    let cancelled = false;
+    setFileSearchLoading(true);
+    setFileSearchError(null);
+    setFileSearchResults([]);
+    const timer = window.setTimeout(() => {
+      void searchWorkspaceFiles(normalizedFileSearchQuery, workspaceReadOpts, 50)
+        .then((entries) => {
+          if (!cancelled) setFileSearchResults(entries);
+        })
+        .catch((err) => {
+          if (!cancelled) setFileSearchError(err instanceof Error ? err.message : String(err));
+        })
+        .finally(() => {
+          if (!cancelled) setFileSearchLoading(false);
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [fileSearchOpen, normalizedFileSearchQuery, open, workspaceReadOpts]);
 
   useEffect(() => {
     if (!open) return;
@@ -290,60 +336,68 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
               )}
             />
             <div className="flex h-11 shrink-0 items-center gap-2 border-b border-edge px-4 dark:border-edge">
-              <FolderOpen className="size-4 shrink-0 text-fg-muted" aria-hidden />
-              {fileSearchOpen ? (
-                <input
-                  type="search"
-                  value={fileSearchQuery}
-                  onChange={(event) => setFileSearchQuery(event.target.value)}
-                  placeholder={m.workspace.searchPlaceholder}
-                  aria-label={m.workspace.searchPlaceholder}
-                  autoFocus
-                  className="h-8 min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-2 text-sm text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
-                />
-              ) : (
-                <h2 className="min-w-0 flex-1 truncate text-base font-semibold leading-tight tracking-tight text-fg">
-                  {m.workspace.title}
-                </h2>
-              )}
-              <Button
-                type="button"
-                variant="ghost"
-                className="size-9 shrink-0 rounded-md p-0"
-                aria-label={fileSearchOpen ? m.workspace.clearSearch : m.workspace.search}
-                title={fileSearchOpen ? m.workspace.clearSearch : m.workspace.search}
-                onClick={() => {
-                  if (fileSearchOpen) {
-                    setFileSearchQuery('');
-                    setFileSearchOpen(false);
-                    return;
-                  }
-                  setFileSearchOpen(true);
-                }}
-              >
-                {fileSearchOpen ? (
-                  <X className="size-4" strokeWidth={1.75} />
-                ) : (
+              <h2 className="sr-only">{m.workspace.title}</h2>
+              <WorkspaceOpenLocationMenu workspacePath={workspaceRoot ?? ''} />
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className={cn('size-9 shrink-0 rounded-md p-0', fileSearchOpen && 'bg-surface-hover text-fg')}
+                  aria-label={m.workspace.search}
+                  title={m.workspace.search}
+                  aria-pressed={fileSearchOpen}
+                  onClick={() => setFileSearchOpen(true)}
+                >
                   <Search className="size-4" strokeWidth={1.75} />
-                )}
-              </Button>
-              <RefreshButton
-                className="size-9 shrink-0 rounded-md p-0"
-                loading={loading}
-                label={m.cron.refresh}
-                onClick={loadRoot}
-              />
-              <Button
-                type="button"
-                variant="ghost"
-                className="size-9 shrink-0 rounded-md p-0"
-                aria-label={m.workspace.close}
-                title={m.workspace.close}
-                onClick={() => setOpen(false)}
-              >
-                <X className="size-4" strokeWidth={1.75} />
-              </Button>
+                </Button>
+                <RefreshButton
+                  className="size-9 shrink-0 rounded-md p-0"
+                  loading={loading}
+                  label={m.cron.refresh}
+                  onClick={loadRoot}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="size-9 shrink-0 rounded-md p-0"
+                  aria-label={m.workspace.close}
+                  title={m.workspace.close}
+                  onClick={() => setOpen(false)}
+                >
+                  <X className="size-4" strokeWidth={1.75} />
+                </Button>
+              </div>
             </div>
+
+            {fileSearchOpen ? (
+              <div className="shrink-0 border-b border-edge bg-surface-muted/40 px-3 py-2">
+                <div className="flex h-9 items-center gap-2 rounded-md border border-edge bg-surface-panel px-2 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
+                  <Search className="size-4 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden />
+                  <input
+                    type="text"
+                    role="searchbox"
+                    value={fileSearchQuery}
+                    onChange={(event) => setFileSearchQuery(event.target.value)}
+                    placeholder={m.workspace.searchPlaceholder}
+                    aria-label={m.workspace.searchPlaceholder}
+                    autoFocus
+                    className="min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle"
+                  />
+                  <button
+                    type="button"
+                    className="flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg"
+                    aria-label={m.workspace.clearSearch}
+                    title={m.workspace.clearSearch}
+                    onClick={() => {
+                      setFileSearchQuery('');
+                      setFileSearchOpen(false);
+                    }}
+                  >
+                    <X className="size-4" strokeWidth={1.75} aria-hidden />
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             {error ? (
               <p className="shrink-0 px-4 py-2 text-xs text-red-600 dark:text-red-400">
@@ -351,30 +405,65 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
               </p>
             ) : null}
 
-            <FileTree
-              tree={tree}
-              selectedPath={previewPath}
-              onSelectFile={(path) => setPreviewPath(path)}
-              onExpandDir={handleExpandDir}
-              onAction={handleAction}
-              actionLabels={{
-                preview: m.workspace.preview,
-                download: m.workspace.download,
-                copyPath: m.workspace.copyPath,
-                share: m.workspace.shareLink,
-                ...(isElectron()
-                  ? {
-                      openDefault: m.workspace.openSystemApp,
-                      openWith: m.workspace.chooseApp,
-                      revealInFolder: m.workspace.revealInFolder,
-                      recommendedApps: m.workspace.recommendedApps,
-                    }
-                  : {}),
-              }}
-              emptyHint={m.workspace.emptyDir}
-              searchQuery={fileSearchQuery}
-              emptySearchHint={m.workspace.noSearchResults}
-            />
+            {normalizedFileSearchQuery ? (
+              <div className="min-h-0 flex-1 overflow-y-auto py-2">
+                {fileSearchLoading ? (
+                  <div className="space-y-2 px-3 py-1">
+                    <Skeleton className="h-11 w-full" />
+                    <Skeleton className="h-11 w-full" />
+                    <Skeleton className="h-11 w-full" />
+                  </div>
+                ) : fileSearchError ? (
+                  <p className="px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                    {m.workspace.loadError}: {fileSearchError}
+                  </p>
+                ) : fileSearchResults.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-fg-muted">{m.workspace.noSearchResults}</p>
+                ) : (
+                  fileSearchResults.map((entry) => (
+                    <button
+                      key={entry.path}
+                      type="button"
+                      className={cn(
+                        'flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left hover:bg-surface-hover',
+                        previewPath === entry.path && 'bg-accent-soft text-accent-fg',
+                      )}
+                      onClick={() => setPreviewPath(entry.path)}
+                      title={entry.path}
+                    >
+                      <FileText className="size-4 shrink-0 text-fg-muted" aria-hidden />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm text-fg">{entry.name}</span>
+                        <span className="block truncate text-xs text-fg-subtle">{entry.path}</span>
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            ) : (
+              <FileTree
+                tree={tree}
+                selectedPath={previewPath}
+                onSelectFile={(path) => setPreviewPath(path)}
+                onExpandDir={handleExpandDir}
+                onAction={handleAction}
+                actionLabels={{
+                  preview: m.workspace.preview,
+                  download: m.workspace.download,
+                  copyPath: m.workspace.copyPath,
+                  share: m.workspace.shareLink,
+                  ...(isElectron()
+                    ? {
+                        openDefault: m.workspace.openSystemApp,
+                        openWith: m.workspace.chooseApp,
+                        revealInFolder: m.workspace.revealInFolder,
+                        recommendedApps: m.workspace.recommendedApps,
+                      }
+                    : {}),
+                }}
+                emptyHint={m.workspace.emptyDir}
+              />
+            )}
           </div>
         ) : null}
       </aside>

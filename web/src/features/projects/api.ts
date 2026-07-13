@@ -135,6 +135,12 @@ export type ProjectFilesResponse = {
   entries: ProjectFileEntry[];
 };
 
+export type ProjectFileSearchEntry = {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+};
+
 export type ProjectActivityObjectKind =
   | 'project'
   | 'note'
@@ -398,6 +404,14 @@ export async function fetchProjectFiles(projectId: string, path?: string): Promi
   return fetchJson<ProjectFilesResponse>(
     apiUrl(`/api/projects/${encodeURIComponent(projectId)}/files${suffix ? `?${suffix}` : ''}`),
   );
+}
+
+export async function searchProjectFiles(projectId: string, query: string, limit = 50): Promise<ProjectFileSearchEntry[]> {
+  const params = new URLSearchParams({ q: query.trim(), limit: String(limit) });
+  const res = await fetchJson<{ ok: true; entries: ProjectFileSearchEntry[] }>(
+    apiUrl(`/api/projects/${encodeURIComponent(projectId)}/files/search?${params.toString()}`),
+  );
+  return res.entries;
 }
 
 export async function createProjectSession(projectId: string, agentId?: string): Promise<ProjectSession> {
