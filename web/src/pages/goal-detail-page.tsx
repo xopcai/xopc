@@ -51,6 +51,14 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 type GoalStatus = 'active' | 'paused' | 'blocked' | 'needs_input' | 'done' | 'archived';
 type ChecklistStatus = 'pending' | 'completed' | 'impossible';
 type EvidenceKind = 'file' | 'diff' | 'command' | 'test' | 'link' | 'message' | 'artifact';
+type EvidenceRequirementStatus = 'pending' | 'ai_verified' | 'approved' | 'rejected';
+
+function contractLines(value: string): string[] {
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
 
 function GoalDetailPageSkeleton() {
   return (
@@ -104,6 +112,23 @@ type GoalDetail = {
   judgeModelRef?: string;
   createdAt: number;
   updatedAt: number;
+  contract?: {
+    version: number;
+    objective: string;
+    scopeBoundary?: string;
+    evidencePlan: string[];
+  };
+  evidenceRequirements: Array<{
+    id: string;
+    text: string;
+    status: EvidenceRequirementStatus;
+    evidenceIds: string[];
+    reviewReason?: string;
+    reviewConfidence?: number;
+    reviewedBy?: 'ai' | 'user' | 'system';
+    reviewedAt?: number;
+    requiresHumanApproval: boolean;
+  }>;
   checklist: Array<{
     id: string;
     text: string;
@@ -131,6 +156,7 @@ type GoalEvidence = {
   summary?: string;
   uri?: string;
   data?: unknown;
+  requirementIds?: string[];
   createdAt: number;
 };
 
@@ -367,6 +393,7 @@ export function GoalDetailPage() {
   const [evidenceTitle, setEvidenceTitle] = useState('');
   const [evidenceSummary, setEvidenceSummary] = useState('');
   const [evidenceUri, setEvidenceUri] = useState('');
+  const [evidenceRequirementDraft, setEvidenceRequirementDraft] = useState('');
   const [titleDraft, setTitleDraft] = useState('');
   const [descriptionDraft, setDescriptionDraft] = useState('');
   const [priorityDraft, setPriorityDraft] = useState<GoalDetail['priority']>('normal');
@@ -375,6 +402,10 @@ export function GoalDetailPage() {
   const [judgeModelDraft, setJudgeModelDraft] = useState('');
   const [nextActionDraft, setNextActionDraft] = useState('');
   const [blockedReasonDraft, setBlockedReasonDraft] = useState('');
+  const [contractObjectiveDraft, setContractObjectiveDraft] = useState('');
+  const [contractScopeBoundaryDraft, setContractScopeBoundaryDraft] = useState('');
+  const [contractCriteriaDraft, setContractCriteriaDraft] = useState('');
+  const [contractEvidencePlanDraft, setContractEvidencePlanDraft] = useState('');
   const [workflowDefinitionDraft, setWorkflowDefinitionDraft] = useState('');
   const [workflowGoalDraft, setWorkflowGoalDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -439,6 +470,13 @@ export function GoalDetailPage() {
     setJudgeModelDraft(goal.judgeModelRef ?? '');
     setNextActionDraft(goal.nextAction ?? '');
     setBlockedReasonDraft(goal.blockedReason ?? '');
+    setContractObjectiveDraft(goal.contract?.objective ?? goal.title);
+    setContractScopeBoundaryDraft(goal.contract?.scopeBoundary ?? '');
+    setContractCriteriaDraft(goal.checklist.map((item) => item.text).join('\n'));
+    setContractEvidencePlanDraft(goal.contract?.evidencePlan.join('\n') ?? '');
+    setEvidenceRequirementDraft((current) => goal.evidenceRequirements.some((item) => item.id === current)
+      ? current
+      : goal.evidenceRequirements[0]?.id ?? '');
     setWorkflowGoalDraft((current) => current || goal.nextAction || goal.title);
   }, [goal?.id, goal?.updatedAt]);
 
@@ -484,6 +522,35 @@ export function GoalDetailPage() {
             judgeModelRef: judgeModelDraft.trim() || undefined,
             nextAction: nextActionDraft.trim() || undefined,
             blockedReason: blockedReasonDraft.trim() || undefined,
+          }),
+        },
+      );
+      setGoal(res.goal);
+      await reloadTimeline(goal.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.errors.save);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveGoalContract = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!goal) return;
+    const objective = contractObjectiveDraft.trim();
+    if (!objective) return;
+    setBusy('contract:save');
+    setError(null);
+    try {
+      const res = await fetchJson<{ ok: true; goal: GoalDetail }>(
+        apiUrl(`/api/goals/${encodeURIComponent(goal.id)}/contract`),
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            objective,
+            scopeBoundary: contractScopeBoundaryDraft.trim() || undefined,
+            criteria: contractLines(contractCriteriaDraft),
+            evidencePlan: contractLines(contractEvidencePlanDraft),
           }),
         },
       );
@@ -659,13 +726,51 @@ export function GoalDetailPage() {
             title,
             summary: evidenceSummary.trim() || undefined,
             uri: evidenceUri.trim() || undefined,
+            requirementId: evidenceRequirementDraft || undefined,
           }),
         },
       );
       setEvidence((items) => [res.evidence, ...items]);
+      setGoal(await fetchGoal(goal.id));
       setEvidenceTitle('');
       setEvidenceSummary('');
       setEvidenceUri('');
+      await reloadTimeline(goal.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.errors.addEvidence);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const reviewEvidenceRequirement = async (requirementId: string) => {
+    if (!goal) return;
+    setBusy(`requirement:${requirementId}:review`);
+    setError(null);
+    try {
+      await fetchJson(
+        apiUrl(`/api/goals/${encodeURIComponent(goal.id)}/evidence-requirements/${encodeURIComponent(requirementId)}/review`),
+        { method: 'POST', body: JSON.stringify({ modelRef: goal.judgeModelRef }) },
+      );
+      setGoal(await fetchGoal(goal.id));
+      await reloadTimeline(goal.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.errors.addEvidence);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const approveEvidenceRequirement = async (requirementId: string) => {
+    if (!goal) return;
+    setBusy(`requirement:${requirementId}:approve`);
+    setError(null);
+    try {
+      await fetchJson(
+        apiUrl(`/api/goals/${encodeURIComponent(goal.id)}/evidence-requirements/${encodeURIComponent(requirementId)}/approve`),
+        { method: 'POST', body: JSON.stringify({}) },
+      );
+      setGoal(await fetchGoal(goal.id));
       await reloadTimeline(goal.id);
     } catch (e) {
       setError(e instanceof Error ? e.message : t.errors.addEvidence);
@@ -830,6 +935,82 @@ export function GoalDetailPage() {
                 <span className="text-xs text-fg-muted">{goal.deadlineAt ? formatDate(goal.deadlineAt, language, t) : t.noDeadline}</span>
               </div>
               {goal.description ? <p className="mt-3 whitespace-pre-wrap break-words text-sm text-fg-muted">{goal.description}</p> : null}
+              {goal.contract ? (
+                <div className="mt-3 rounded-md border border-edge-subtle bg-surface-muted/40 px-3 py-3">
+                  <p className="text-xs font-medium text-fg-muted">{t.goalContract}</p>
+                  <p className="mt-1 break-words text-sm text-fg">{goal.contract.objective}</p>
+                  {goal.contract.scopeBoundary ? (
+                    <div className="mt-3">
+                      <p className="text-xs font-medium text-fg-muted">{t.scopeBoundary}</p>
+                      <p className="mt-1 whitespace-pre-wrap break-words text-sm text-fg-muted">{goal.contract.scopeBoundary}</p>
+                    </div>
+                  ) : null}
+                  {goal.contract.evidencePlan.length ? (
+                    <div className="mt-3">
+                      <p className="text-xs font-medium text-fg-muted">{t.completionEvidence}</p>
+                      <ul className="mt-1 grid gap-1 text-sm text-fg-muted">
+                        {goal.contract.evidencePlan.map((item) => <li key={item}>• {item}</li>)}
+                      </ul>
+                    </div>
+                  ) : null}
+                  <details className="mt-3 rounded-md bg-surface-base/70 px-3 py-2">
+                    <summary className="cursor-pointer text-sm font-medium text-fg">{t.editContract}</summary>
+                    <form className="mt-3 grid gap-3" onSubmit={saveGoalContract}>
+                      <label className="grid gap-1 text-xs font-medium text-fg-muted">
+                        {t.contractObjective}
+                        <textarea
+                          value={contractObjectiveDraft}
+                          onChange={(event) => setContractObjectiveDraft(event.target.value)}
+                          name="contractObjective"
+                          autoComplete="off"
+                          className={cn(fieldClass, 'resize-y')}
+                          rows={2}
+                          placeholder={t.contractObjectivePlaceholder}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs font-medium text-fg-muted">
+                        {t.scopeBoundary}
+                        <textarea
+                          value={contractScopeBoundaryDraft}
+                          onChange={(event) => setContractScopeBoundaryDraft(event.target.value)}
+                          name="contractScopeBoundary"
+                          autoComplete="off"
+                          className={cn(fieldClass, 'resize-y')}
+                          rows={2}
+                          placeholder={t.scopeBoundaryPlaceholder}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs font-medium text-fg-muted">
+                        {t.acceptanceCriteria}
+                        <textarea
+                          value={contractCriteriaDraft}
+                          onChange={(event) => setContractCriteriaDraft(event.target.value)}
+                          name="contractCriteria"
+                          autoComplete="off"
+                          className={cn(fieldClass, 'resize-y')}
+                          rows={3}
+                          placeholder={t.contractLinesHint}
+                        />
+                      </label>
+                      <label className="grid gap-1 text-xs font-medium text-fg-muted">
+                        {t.completionEvidence}
+                        <textarea
+                          value={contractEvidencePlanDraft}
+                          onChange={(event) => setContractEvidencePlanDraft(event.target.value)}
+                          name="contractEvidencePlan"
+                          autoComplete="off"
+                          className={cn(fieldClass, 'resize-y')}
+                          rows={3}
+                          placeholder={t.contractLinesHint}
+                        />
+                      </label>
+                      <Button type="submit" variant="secondary" className="h-9 w-fit" disabled={busy != null || !contractObjectiveDraft.trim()}>
+                        {t.saveContract}
+                      </Button>
+                    </form>
+                  </details>
+                </div>
+              ) : null}
               <div className="mt-3 rounded-md bg-surface-muted/40 px-3 py-2">
                 <p className="text-xs font-medium text-fg-muted">{goal.blockedReason ? t.currentBlocker : t.nextAction}</p>
                 <p className={cn('mt-1 break-words text-sm', goal.blockedReason ? 'text-amber-700 dark:text-amber-300' : 'text-fg')}>
@@ -956,6 +1137,52 @@ export function GoalDetailPage() {
                       <FilePlus2 className="size-4 text-accent" aria-hidden />
                       {t.evidence}
                     </h3>
+                    {goal.evidenceRequirements.length ? (
+                      <div className="mb-4 grid gap-2 rounded-md border border-edge-subtle bg-surface-muted/40 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-xs font-medium text-fg-muted">{t.evidenceRequirements}</p>
+                          <span className="text-xs text-fg-muted">
+                            {formatMessage(t.evidenceRequirementProgress, {
+                              approved: goal.evidenceRequirements.filter((item) => item.status === 'approved').length,
+                              total: goal.evidenceRequirements.length,
+                            })}
+                          </span>
+                        </div>
+                        {goal.evidenceRequirements.map((requirement) => (
+                          <div key={requirement.id} className="rounded-md bg-surface-base px-2.5 py-2">
+                            <div className="flex flex-wrap items-start justify-between gap-2">
+                              <div className="min-w-0 flex-1">
+                                <p className="break-words text-sm text-fg">{requirement.text}</p>
+                                <p className="mt-1 text-xs text-fg-muted">
+                                  {formatMessage(t.linkedEvidenceCount, { count: requirement.evidenceIds.length })} · {t.evidenceRequirementStatuses[requirement.status]}
+                                </p>
+                                {requirement.reviewReason ? <p className="mt-1 break-words text-xs text-fg-muted">{requirement.reviewReason}</p> : null}
+                              </div>
+                              <div className="flex shrink-0 flex-wrap gap-1.5">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  className="h-7 text-xs"
+                                  disabled={busy != null || requirement.evidenceIds.length === 0}
+                                  onClick={() => void reviewEvidenceRequirement(requirement.id)}
+                                >
+                                  {t.reviewEvidence}
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="secondary"
+                                  className="h-7 text-xs"
+                                  disabled={busy != null || requirement.evidenceIds.length === 0 || requirement.status === 'approved'}
+                                  onClick={() => void approveEvidenceRequirement(requirement.id)}
+                                >
+                                  {t.approveEvidence}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
                     <form className="mb-3 grid gap-2" onSubmit={addEvidence}>
                       <div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
                         <label className="grid gap-1 text-xs font-medium text-fg-muted">
@@ -985,6 +1212,21 @@ export function GoalDetailPage() {
                           />
                         </label>
                       </div>
+                      {goal.evidenceRequirements.length ? (
+                        <label className="grid gap-1 text-xs font-medium text-fg-muted">
+                          {t.provesRequirement}
+                          <Select
+                            value={evidenceRequirementDraft}
+                            onChange={(event) => setEvidenceRequirementDraft(event.target.value)}
+                            name="evidenceRequirement"
+                            className={fieldClass}
+                          >
+                            {goal.evidenceRequirements.map((requirement) => (
+                              <SelectOption key={requirement.id} value={requirement.id}>{requirement.text}</SelectOption>
+                            ))}
+                          </Select>
+                        </label>
+                      ) : null}
                       <label className="grid gap-1 text-xs font-medium text-fg-muted">
                         {t.uriOrPath}
                         <input

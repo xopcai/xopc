@@ -29,7 +29,15 @@ describe('GoalRunner', () => {
 
   it('runs the first goal turn with context text and persisted attachments', async () => {
     const goals = new GoalService();
-    const goal = goals.create({ title: 'Ship a multimodal goal', sessionKey: 'agent:main:webchat:default:direct:g1' });
+    const goal = goals.create({
+      title: 'Ship a multimodal goal',
+      sessionKey: 'agent:main:webchat:default:direct:g1',
+      contract: {
+        objective: 'Ship a multimodal goal that follows the uploaded specification.',
+        scopeBoundary: 'Do not change unrelated features.',
+        evidencePlan: ['The implementation is verified against the specification.'],
+      },
+    });
     goals.setContextMessage({
       goalId: goal.id,
       text: 'Use the uploaded spec before writing code.',
@@ -58,7 +66,9 @@ describe('GoalRunner', () => {
     await vi.waitFor(() => expect(runTurn).toHaveBeenCalledTimes(1));
     const [sessionKey, userTurn] = runTurn.mock.calls[0]!;
     expect(sessionKey).toBe(goal.activeSessionKey);
-    expect(userTurn.text).toContain('Goal:\nShip a multimodal goal');
+    expect(userTurn.text).toContain('Goal:\nShip a multimodal goal that follows the uploaded specification.');
+    expect(userTurn.text).toContain('Scope boundary:\nDo not change unrelated features.');
+    expect(userTurn.text).toContain('Expected completion evidence:');
     expect(userTurn.text).toContain('Context:\nUse the uploaded spec before writing code.');
     expect(userTurn.text).toContain('User-provided acceptance criteria:');
     expect(userTurn.attachments).toEqual([
