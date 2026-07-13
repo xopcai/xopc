@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react';
-import { Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { ListSelectionCheckbox } from '../../components/ListSelectionCheckbox';
@@ -90,16 +90,15 @@ export function NoteCard({
     <Pressable
       style={({ pressed }) => [
         styles.card,
-        !selected && (Platform.OS === 'web' ? styles.cardRaisedWeb : styles.cardRaisedNative),
         {
           backgroundColor: selected
             ? colors.accent.selectionBg
             : pressed
-              ? colors.surface.hover
+              ? colors.surface.pressed
               : colors.surface.panel,
-          borderColor: selected ? colors.accent.primary : colors.border.default,
+          borderColor: selected ? colors.accent.primary : colors.border.subtle,
         },
-        pressed && !selected && (Platform.OS === 'web' ? styles.cardPressedWeb : styles.cardPressedNative),
+        selected && styles.selectedCard,
       ]}
       onPress={handlePress}
       onLongPress={handleLongPress}
@@ -226,30 +225,15 @@ export function NoteCard({
 const styles = StyleSheet.create({
   card: {
     width: '100%',
-    borderRadius: radii.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    minHeight: 84,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.content,
+    paddingVertical: spacing.md,
+    minHeight: 78,
     gap: 8,
   },
-  cardRaisedNative: {
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
-  },
-  cardRaisedWeb: {
-    boxShadow: '0 3px 10px rgba(17, 19, 24, 0.08)',
-  },
-  cardPressedNative: {
-    shadowOpacity: 0.03,
-    transform: [{ translateY: 1 }],
-  },
-  cardPressedWeb: {
-    boxShadow: '0 1px 4px rgba(17, 19, 24, 0.06)',
-    transform: [{ translateY: 1 }],
+  selectedCard: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderRadius: radii.md,
   },
   topRow: {
     flexDirection: 'row',
@@ -264,7 +248,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     lineHeight: 21,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   subtitle: {
     fontSize: 13,

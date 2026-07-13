@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -17,10 +17,9 @@ import { useListSelection } from '../../hooks/use-list-selection';
 import { useMessages, t } from '../../i18n/messages';
 import { sessionDisplayName } from '../../lib/session-helpers';
 import { useFlatListEndReached } from '../../lib/use-flat-list-end-reached';
-import { dismissOrHome, openNoteDetail, useDismissOnHardwareBack } from '../../lib/navigation';
+import { dismissOrHome, useDismissOnHardwareBack } from '../../lib/navigation';
 import { refreshSessionsList } from '../../query/infinite-list-sync';
 import { queryKeys } from '../../query/keys';
-import { createBlankNote } from '../../query/notes';
 import {
   archiveSession,
   deleteSession,
@@ -89,21 +88,6 @@ export function SessionsScreen() {
   const refreshList = useCallback(async () => {
     await refreshSessionsList(queryClient);
   }, [queryClient]);
-
-  const createNoteMutation = useMutation({
-    mutationFn: createBlankNote,
-    onSuccess: (result) => {
-      openNoteDetail(router, result.note.id);
-    },
-    onError: (err) => {
-      setSnackMsg(err instanceof Error ? err.message : m.notesPage.actionFailed);
-    },
-  });
-
-  const handleCreateNote = useCallback(() => {
-    if (createNoteMutation.isPending) return;
-    createNoteMutation.mutate();
-  }, [createNoteMutation]);
 
   const runBatchArchive = useCallback(async () => {
     const keys = [...selectedIds];
@@ -306,6 +290,7 @@ export function SessionsScreen() {
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <FloatingHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : sm.title}
+        variant={selectionMode ? 'compact' : 'large'}
         onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
       />
 
@@ -345,36 +330,6 @@ export function SessionsScreen() {
       )}
 
       {selectionMode ? <BatchActionBar items={batchActions} /> : null}
-      {!selectionMode ? (
-        <View
-          pointerEvents="box-none"
-          style={[
-            styles.newNoteWrap,
-            { paddingBottom: floatingBottomPadding(insets.bottom) + FLOATING_BOTTOM_OFFSET },
-          ]}
-        >
-          <Pressable
-            style={[
-              styles.newNoteButton,
-              {
-                backgroundColor: colors.surface.panel,
-                borderColor: colors.border.default,
-              },
-            ]}
-            onPress={handleCreateNote}
-            disabled={createNoteMutation.isPending}
-            accessibilityRole="button"
-            accessibilityLabel={m.homePage.quickNewNote}
-            accessibilityState={{ disabled: createNoteMutation.isPending }}
-          >
-            {createNoteMutation.isPending ? (
-              <ActivityIndicator size={22} color={colors.text.secondary} />
-            ) : (
-              <Icon source="note-plus-outline" size={26} color={colors.text.secondary} />
-            )}
-          </Pressable>
-        </View>
-      ) : null}
 
       <RenameDialog
         visible={Boolean(renameTarget)}
@@ -411,29 +366,8 @@ export function SessionsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 8 },
-  list: { padding: spacing.lg, paddingTop: spacing.md, gap: spacing.sm, flexGrow: 1 },
+  list: { paddingTop: spacing.xs, paddingBottom: spacing.lg, gap: 0, flexGrow: 1 },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: '600' },
   emptyText: { fontSize: 13, textAlign: 'center' },
-  newNoteWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  newNoteButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
-  },
 });

@@ -5,6 +5,10 @@ packages:
   - 'apps/*'
   - 'web'
 
+# Keep native Android build paths below CMake's Windows object path limit.
+virtualStoreDir: .pnpm
+virtualStoreDirMaxLength: 20
+
 overrides:
   axios: ">=1.15.2"
   esbuild: ">=0.28.1"

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
   Platform,
-  Pressable,
   RefreshControl,
   StyleSheet,
   TextInput,
@@ -368,10 +367,16 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <FloatingHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : pm.title}
+        variant={selectionMode ? 'compact' : 'large'}
         onBack={selectionMode ? exitSelectionMode : embedded ? undefined : handleBack}
         onSearchPress={!selectionMode ? () => setSearchOpen((value) => !value) : undefined}
         searchPlaceholder={searchText.trim() || m.common.search}
         rightActions={!selectionMode ? [
+          {
+            icon: 'note-plus-outline',
+            accessibilityLabel: pm.quickCapturePlaceholder,
+            onPress: handleCreateNote,
+          },
           {
             icon: 'tag-outline',
             accessibilityLabel: pm.tagPickerTitle,
@@ -433,38 +438,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
         )}
       </View>
 
-      {selectionMode ? (
-        <BatchActionBar items={batchActions} />
-      ) : (
-        <View
-          pointerEvents="box-none"
-          style={[
-            styles.newNoteWrap,
-            { paddingBottom: floatingBottomPadding(insets.bottom) + FLOATING_BOTTOM_OFFSET },
-          ]}
-        >
-          <Pressable
-            style={[
-              styles.newNoteButton,
-              {
-                backgroundColor: colors.surface.panel,
-                borderColor: colors.border.default,
-              },
-            ]}
-            onPress={handleCreateNote}
-            disabled={createNoteMutation.isPending}
-            accessibilityRole="button"
-            accessibilityLabel={pm.quickCapturePlaceholder}
-            accessibilityState={{ disabled: createNoteMutation.isPending }}
-          >
-            {createNoteMutation.isPending ? (
-              <ActivityIndicator size={22} color={colors.text.secondary} />
-            ) : (
-              <Icon source="note-plus-outline" size={26} color={colors.text.secondary} />
-            )}
-          </Pressable>
-        </View>
-      )}
+      {selectionMode ? <BatchActionBar items={batchActions} /> : null}
 
       <BatchDeleteConfirmDialog
         visible={showBatchDelete}
@@ -558,7 +532,7 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.select({ ios: 10, android: 6, default: 8 }),
   },
   listArea: { flex: 1, minHeight: 0 },
-  list: { padding: spacing.lg, paddingTop: spacing.md, gap: spacing.sm, flexGrow: 1 },
+  list: { paddingTop: spacing.xs, paddingBottom: spacing.lg, gap: 0, flexGrow: 1 },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
   empty: { alignItems: 'center', paddingVertical: 48, gap: 6 },
   emptyIconWrap: {
@@ -621,26 +595,5 @@ const styles = StyleSheet.create({
   },
   recordingBtn: {
     borderRadius: 18,
-  },
-  newNoteWrap: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  newNoteButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: StyleSheet.hairlineWidth,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
   },
 });

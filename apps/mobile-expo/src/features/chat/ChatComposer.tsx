@@ -587,7 +587,7 @@ export const ChatComposer = memo(function ChatComposer({
     [draft],
   );
 
-  const surface = colors.surface.panel;
+  const surface = colors.surface.elevated;
   const border = colors.border.default;
   const accent = colors.accent.primary;
   const shellBorder = isExpanded || mode === 'voice' ? colors.border.strong : border;
@@ -979,7 +979,7 @@ export const ChatComposer = memo(function ChatComposer({
 
 const styles = StyleSheet.create({
   wrap: {
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.content,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
   },

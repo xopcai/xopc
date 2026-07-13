@@ -1,7 +1,7 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { FlatList, Platform, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { KeyboardStickyView } from 'react-native-keyboard-controller';
 import { Icon, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -267,16 +267,15 @@ export function InboxScreen() {
       <Pressable
         style={({ pressed }) => [
           styles.itemCard,
-          !selected && (Platform.OS === 'web' ? styles.itemCardRaisedWeb : styles.itemCardRaisedNative),
           {
             backgroundColor: selected
               ? colors.accent.selectionBg
               : pressed
-                ? colors.surface.hover
+                ? colors.surface.pressed
                 : colors.surface.panel,
-            borderColor: selected ? colors.accent.primary : colors.border.default,
+            borderColor: selected ? colors.accent.primary : colors.border.subtle,
           },
-          pressed && !selected && (Platform.OS === 'web' ? styles.itemCardPressedWeb : styles.itemCardPressedNative),
+          selected && styles.itemCardSelected,
         ]}
         onPress={() => handleItemPress(item)}
         onLongPress={() => handleItemLongPress(item)}
@@ -339,6 +338,7 @@ export function InboxScreen() {
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <FloatingHeader
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : im.title}
+        variant={selectionMode ? 'compact' : 'large'}
         onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
         rightActions={selectionMode ? undefined : [
           {
@@ -446,33 +446,18 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
   },
-  listContent: { padding: spacing.lg, paddingTop: spacing.md, gap: spacing.sm },
+  listContent: { paddingTop: spacing.xs, paddingBottom: spacing.lg, gap: 0 },
   itemCard: {
     height: INBOX_ITEM_HEIGHT,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radii.xl,
-    paddingHorizontal: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.content,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
   },
-  itemCardRaisedNative: {
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 1,
-  },
-  itemCardRaisedWeb: {
-    boxShadow: '0 3px 10px rgba(17, 19, 24, 0.08)',
-  },
-  itemCardPressedNative: {
-    shadowOpacity: 0.03,
-    transform: [{ translateY: 1 }],
-  },
-  itemCardPressedWeb: {
-    boxShadow: '0 1px 4px rgba(17, 19, 24, 0.06)',
-    transform: [{ translateY: 1 }],
+  itemCardSelected: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderRadius: radii.md,
   },
   itemIcon: {
     width: 36,

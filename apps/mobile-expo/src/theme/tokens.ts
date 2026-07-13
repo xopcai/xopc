@@ -14,12 +14,18 @@
 export type SurfaceColors = {
   /** App background / grouped sections */
   base: string;
+  /** Subtle grouped-list base and secondary regions */
+  grouped: string;
   /** Cards, panels, elevated content */
   panel: string;
+  /** Floating docks, popovers, and other intentionally raised surfaces */
+  elevated: string;
   /** Input fields, composer shell */
   input: string;
   /** Hover / pressed state */
   hover: string;
+  /** Explicit pressed state for custom pressables */
+  pressed: string;
   /** Active / strong selection */
   active: string;
 };
@@ -73,35 +79,41 @@ export type ColorScheme = {
 // ── Surface & Layer ─────────────────────────────────────────
 
 const lightSurface: SurfaceColors = {
-  base: '#F7F8FA',
+  base: '#F7F7F5',
+  grouped: '#EFEFED',
   panel: '#FFFFFF',
-  input: '#F2F4F7',
-  hover: '#F0F4FF',
-  active: '#E8EEFF',
+  elevated: '#FFFFFF',
+  input: '#EEF0F4',
+  hover: '#ECEDEA',
+  pressed: '#E8E9E8',
+  active: '#E8EDFF',
 };
 
 const darkSurface: SurfaceColors = {
-  base: '#090A0C',
-  panel: '#121418',
-  input: '#181B20',
-  hover: '#1D2430',
-  active: '#202A3D',
+  base: '#101113',
+  grouped: '#17181B',
+  panel: '#1B1C20',
+  elevated: '#24262C',
+  input: '#23252B',
+  hover: '#2B2D33',
+  pressed: '#2B2D33',
+  active: '#263250',
 };
 
 // ── Text ────────────────────────────────────────────────────
 
 const lightText: TextColors = {
-  primary: '#111318',
-  secondary: '#5F6673',
-  tertiary: '#8B93A1',
+  primary: '#17181C',
+  secondary: '#63656E',
+  tertiary: '#8E9099',
   disabled: '#B8BEC8',
   inverse: '#FFFFFF',
 };
 
 const darkText: TextColors = {
-  primary: '#F4F6FA',
-  secondary: '#A8AFBA',
-  tertiary: '#737B88',
+  primary: '#F5F5F7',
+  secondary: '#A8AAB4',
+  tertiary: '#777982',
   disabled: '#4F5661',
   inverse: '#000000',
 };
@@ -109,41 +121,41 @@ const darkText: TextColors = {
 // ── Border ──────────────────────────────────────────────────
 
 const lightBorder: BorderColors = {
-  subtle: '#ECEFF4',
-  default: '#DFE4EC',
-  strong: '#CBD3E1',
+  subtle: '#E7E7E5',
+  default: '#DCDDDF',
+  strong: '#C9CAD0',
 };
 
 const darkBorder: BorderColors = {
-  subtle: '#1A1D23',
-  default: '#252A33',
-  strong: '#343B49',
+  subtle: '#292A2F',
+  default: '#36373E',
+  strong: '#4A4B53',
 };
 
 // ── Accent & Semantic ───────────────────────────────────────
 
 const lightAccent: AccentColors = {
-  primary: '#315CFF',
-  primaryHover: '#294CD6',
+  primary: '#4B63D9',
+  primaryHover: '#3D52B8',
   onPrimary: '#FFFFFF',
-  selectionBg: 'rgba(49,92,255,0.10)',
-  soft: '#EEF3FF',
+  selectionBg: 'rgba(75,99,217,0.13)',
+  soft: '#EEF1FF',
 };
 
 const darkAccent: AccentColors = {
-  primary: '#6F91FF',
-  primaryHover: '#91AAFF',
+  primary: '#91A4FF',
+  primaryHover: '#B5C2FF',
   onPrimary: '#FFFFFF',
-  selectionBg: 'rgba(111,145,255,0.18)',
-  soft: '#151B2F',
+  selectionBg: 'rgba(145,164,255,0.20)',
+  soft: '#202944',
 };
 
 export const semantic = {
-  success: { light: '#1FA873', dark: '#35D18A' },
-  warning: { light: '#D98A19', dark: '#FFBE55' },
-  error: { light: '#E5484D', dark: '#FF6B6B' },
-  errorBold: { light: '#E5484D', dark: '#FF6B6B' },
-  info: { light: '#315CFF', dark: '#6F91FF' },
+  success: { light: '#27845A', dark: '#56C58D' },
+  warning: { light: '#B66A15', dark: '#F0AD4E' },
+  error: { light: '#C83C45', dark: '#FF7A82' },
+  errorBold: { light: '#C83C45', dark: '#FF7A82' },
+  info: { light: '#4B63D9', dark: '#91A4FF' },
 } as const;
 
 // ── Composed palette per scheme ─────────────────────────────
@@ -197,8 +209,12 @@ export const spacing = {
   md: 12,
   /** 16px */
   lg: 16,
+  /** 20px — default editorial/content inset */
+  content: 20,
   /** 24px */
   xl: 24,
+  /** 28px — intentional section separation */
+  section: 28,
   /** 32px */
   xxl: 32,
   /** 48px */
@@ -227,6 +243,8 @@ export const radii = {
 export const typography = {
   /** 30px — welcome/empty state hero */
   display: { fontSize: 30, lineHeight: 36, fontWeight: '600' as const },
+  /** 28px — root screen identity */
+  largeTitle: { fontSize: 28, lineHeight: 34, fontWeight: '700' as const },
   /** 20px — page/modal titles */
   title: { fontSize: 20, lineHeight: 28, fontWeight: '600' as const },
   /** 17px — section titles */
