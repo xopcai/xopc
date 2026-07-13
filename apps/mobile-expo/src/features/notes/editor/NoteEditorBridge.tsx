@@ -12,6 +12,7 @@ import { useKeyboardListPadding } from '../../../hooks/use-keyboard-list-padding
 import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, radii, spacing, useTheme } from '../../../theme';
 import NoteEditorDomAdapter, { type NoteEditorAdapterCommand } from '../web-editor/NoteEditorDomAdapter';
 import { DEFAULT_EDITOR_RUNTIME_STATE } from './editor-contract';
+import type { NoteEditorInteractionState, NoteEditorPresentationState } from './editor-interaction';
 import { canUseDomEditor } from './editor-platform';
 import {
   isNativeMarkdownFlushResponse,
@@ -79,6 +80,11 @@ type NativeRichEditorHandle = {
 
 type EditorSheet = 'image' | 'link' | 'heading' | 'ai';
 
+type SheetPresentation = {
+  active: EditorSheet | null;
+  pending: EditorSheet | null;
+};
+
 function afterNativeInteractions(): Promise<void> {
   return new Promise((resolve) => {
     InteractionManager.runAfterInteractions(() => resolve());
@@ -88,6 +94,22 @@ function afterNativeInteractions(): Promise<void> {
 function waitForNativePresentation(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
+  });
+}
+
+function dismissKeyboardAndWait(): Promise<void> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      subscription.remove();
+      clearTimeout(timeout);
+      resolve();
+    };
+    const subscription = Keyboard.addListener('keyboardDidHide', finish);
+    const timeout = setTimeout(finish, 180);
+    Keyboard.dismiss();
   });
 }
 
@@ -126,8 +148,7 @@ export interface NoteEditorBridgeProps {
   onChangeMarkdown: (markdown: string) => void;
   onSelectionChange?: (context: EditorSelectionContext) => void;
   onRequestAttachment: (source: EditorAttachmentPickSource) => Promise<EditorAttachmentPickResult>;
-  onFocusChange?: (focused: boolean) => void;
-  onNativeModalChange?: (open: boolean) => void;
+  onInteractionStateChange?: (state: NoteEditorInteractionState) => void;
   onRuntimeStateChange?: (state: EditorRuntimeState) => void;
   aiActions?: NoteEditorAiAction[];
   aiLoadingKey?: string | null;
@@ -148,8 +169,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   onChangeMarkdown,
   onSelectionChange,
   onRequestAttachment,
-  onFocusChange,
-  onNativeModalChange,
+  onInteractionStateChange,
   onRuntimeStateChange,
   aiActions = [],
   aiLoadingKey,
@@ -164,6 +184,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   const insets = useSafeAreaInsets();
   const keyboardBottomInset = useKeyboardListPadding();
   const richEditorRef = useRef<NativeRichEditorHandle | null>(null);
+  const linkUrlInputRef = useRef<TextInput | null>(null);
   const commandIdRef = useRef(0);
   const flushRequestIdRef = useRef(0);
   const pendingFlushesRef = useRef(new Map<number, PendingFlush>());
@@ -173,12 +194,14 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   const editorStateRef = useRef<EditorRuntimeState>(DEFAULT_EDITOR_RUNTIME_STATE);
   const pendingEditorStateRef = useRef<EditorRuntimeState | null>(null);
   const editorStateFrameRef = useRef<number | null>(null);
-  const [activeSheet, setActiveSheet] = useState<EditorSheet | null>(null);
+  const [sheetPresentation, setSheetPresentation] = useState<SheetPresentation>({ active: null, pending: null });
   const [linkTitle, setLinkTitle] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [nativeActionActive, setNativeActionActive] = useState(false);
-  const sheetVisible = activeSheet !== null;
-  const nativeModalVisible = sheetVisible || nativeActionActive;
+  const sheetRequestIdRef = useRef(0);
+  const activeSheet = sheetPresentation.active;
+  const presentation: NoteEditorPresentationState = activeSheet ? 'open' : (sheetPresentation.pending || nativeActionActive) ? 'opening' : 'none';
+  const nativeModalVisible = presentation !== 'none';
   const canUseDomEditor = useMemo(() => isExpoDomWebViewAvailable(), []);
   const keyboardOverlayInset = keyboardBottomInset;
   const toolbarBottomPadding = keyboardBottomInset > 0 ? floatingBottomPadding(0) : floatingBottomPadding(insets.bottom);
@@ -252,12 +275,11 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   }, [markdown]);
 
   useEffect(() => {
-    onFocusChange?.(editorState.focused || nativeModalVisible);
-  }, [editorState.focused, nativeModalVisible, onFocusChange]);
-
-  useEffect(() => {
-    onNativeModalChange?.(nativeModalVisible);
-  }, [nativeModalVisible, onNativeModalChange]);
+    onInteractionStateChange?.({
+      focused: editorState.focused,
+      presentation,
+    });
+  }, [editorState.focused, onInteractionStateChange, presentation]);
 
   useEffect(() => {
     if (canUseDomEditor) return;
@@ -381,14 +403,27 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   }), [dispatch, flushMarkdown]);
 
   const openEditorSheet = useCallback((sheet: EditorSheet) => {
-    Keyboard.dismiss();
+    sheetRequestIdRef.current += 1;
+    const requestId = sheetRequestIdRef.current;
+    setSheetPresentation({ active: null, pending: sheet });
     richEditorRef.current?.blur();
-    setActiveSheet(sheet);
+    void (async () => {
+      await dismissKeyboardAndWait();
+      await afterNativeInteractions();
+      if (sheetRequestIdRef.current !== requestId) return;
+      setSheetPresentation({ active: sheet, pending: null });
+    })();
   }, []);
 
   const closeEditorSheet = useCallback(() => {
-    setActiveSheet(null);
+    sheetRequestIdRef.current += 1;
+    setSheetPresentation({ active: null, pending: null });
   }, []);
+
+  const runAfterEditorSheetClose = useCallback((action: () => void) => {
+    closeEditorSheet();
+    void afterNativeInteractions().then(action);
+  }, [closeEditorSheet]);
 
   const openLinkSheet = useCallback(() => {
     setLinkTitle('');
@@ -396,25 +431,35 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     openEditorSheet('link');
   }, [openEditorSheet]);
 
+  useEffect(() => {
+    if (activeSheet !== 'link') return;
+    const timer = setTimeout(() => {
+      linkUrlInputRef.current?.focus();
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [activeSheet]);
+
   const handleApplyLink = useCallback(() => {
     const url = linkUrl.trim();
     if (!url) return;
-    closeEditorSheet();
-    if (!canUseDomEditor) {
-      richEditorRef.current?.setLink(linkTitle, url);
-      return;
-    }
-    dispatch({ type: 'setLink', title: linkTitle, url });
-  }, [canUseDomEditor, closeEditorSheet, dispatch, linkTitle, linkUrl]);
+    runAfterEditorSheetClose(() => {
+      if (!canUseDomEditor) {
+        richEditorRef.current?.setLink(linkTitle, url);
+        return;
+      }
+      dispatch({ type: 'setLink', title: linkTitle, url });
+    });
+  }, [canUseDomEditor, dispatch, linkTitle, linkUrl, runAfterEditorSheetClose]);
 
   const handleRemoveLink = useCallback(() => {
-    closeEditorSheet();
-    if (!canUseDomEditor) {
-      richEditorRef.current?.removeLink();
-      return;
-    }
-    dispatch({ type: 'removeLink' });
-  }, [canUseDomEditor, closeEditorSheet, dispatch]);
+    runAfterEditorSheetClose(() => {
+      if (!canUseDomEditor) {
+        richEditorRef.current?.removeLink();
+        return;
+      }
+      dispatch({ type: 'removeLink' });
+    });
+  }, [canUseDomEditor, dispatch, runAfterEditorSheetClose]);
 
   const insertPickedAttachment = useCallback((attachment: NonNullable<EditorAttachmentPickResult>) => {
     if (canUseDomEditor) {
@@ -766,6 +811,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
             autoCorrect
           />
           <TextInput
+            ref={linkUrlInputRef}
             style={[
               styles.linkInput,
               {

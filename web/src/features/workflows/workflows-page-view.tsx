@@ -1,6 +1,7 @@
 import { useLayoutEffect } from 'react';
 import { GitBranch, LayoutGrid, ListFilter, Search } from 'lucide-react';
 
+import { Skeleton } from '@/components/ui/skeleton';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -53,6 +54,28 @@ function groupRunsForOperations(runs: WorkflowRunSummary[]): Map<RunSectionId, W
     grouped.set(section, sortRunsForOperations(section, grouped.get(section) ?? []));
   }
   return grouped;
+}
+
+function WorkflowTaskCardSkeleton() {
+  return (
+    <article className="rounded-lg bg-surface-panel p-3 shadow-surface" aria-hidden="true">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <Skeleton className="size-4 rounded-full" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <Skeleton className="mt-3 h-4 w-full" />
+          <Skeleton className="mt-2 h-4 w-2/3" />
+        </div>
+        <Skeleton className="h-6 w-20 rounded-full" />
+      </div>
+      <div className="mt-4 flex gap-2">
+        <Skeleton className="h-8 w-20 rounded-md" />
+        <Skeleton className="h-8 w-24 rounded-md" />
+      </div>
+    </article>
+  );
 }
 
 export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
@@ -319,20 +342,22 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
                       </span>
                     </header>
                     <div className="grid gap-2 p-2.5 md:grid-cols-2 xl:grid-cols-3">
-                      {sectionRuns.map((run) => (
-                        <WorkflowTaskCard
-                          key={run.id}
-                          run={run}
-                          language={language}
-                          localeTag={localeTag}
-                          nowMs={nowMs}
-                          selected={run.id === selectedRunId}
-                          onOpen={openRunDetails}
-                          onOpenChat={openRunInChat}
-                          onCancel={(runId) => void cancelRun(runId)}
-                          onRetry={(runId) => void retryRun(runId)}
-                        />
-                      ))}
+                      {loading && sectionRuns.length === 0
+                        ? Array.from({ length: 3 }).map((_, i) => <WorkflowTaskCardSkeleton key={i} />)
+                        : sectionRuns.map((run) => (
+                            <WorkflowTaskCard
+                              key={run.id}
+                              run={run}
+                              language={language}
+                              localeTag={localeTag}
+                              nowMs={nowMs}
+                              selected={run.id === selectedRunId}
+                              onOpen={openRunDetails}
+                              onOpenChat={openRunInChat}
+                              onCancel={(runId) => void cancelRun(runId)}
+                              onRetry={(runId) => void retryRun(runId)}
+                            />
+                          ))}
                       {!loading && sectionRuns.length === 0 ? (
                         <div className="flex min-h-24 items-center justify-center rounded-md border border-dashed border-edge bg-surface-panel/40 px-4 py-5 text-center text-xs text-fg-subtle md:col-span-2 xl:col-span-3">
                           {labels.operationSections[section].empty}

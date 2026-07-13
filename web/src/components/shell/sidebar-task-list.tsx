@@ -23,6 +23,7 @@ import useSWRInfinite from 'swr/infinite';
 
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
 import { useSidebarSessionAgentRun } from '@/features/chat/session/use-sidebar-session-agent-run';
 import {
@@ -1185,8 +1186,16 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         onScroll={onScroll}
       >
         {loadingFirst ? (
-          <div className="flex justify-center py-6">
-            <Loader2 className="size-5 animate-spin text-fg-subtle" strokeWidth={1.75} aria-hidden />
+          <div className="flex flex-col gap-2 px-4 py-4" aria-busy="true">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
+                <Skeleton className="size-5 rounded-md" />
+                <div className="min-w-0 flex-1">
+                  <Skeleton className="h-3 w-4/5" />
+                  <Skeleton className="mt-1.5 h-2.5 w-1/2" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : hasGroupedItems ? (
           <div className="flex flex-col px-4 pt-4">

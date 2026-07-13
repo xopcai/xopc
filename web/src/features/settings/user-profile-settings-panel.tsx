@@ -6,6 +6,7 @@ import {
   saveUserProfileContent,
 } from '@/features/settings/agents-admin-api';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   SettingsFormSection,
   SettingsFormSectionHeader,
@@ -37,6 +38,25 @@ function userWithDetectedTimezone(user: UserFields): UserFields {
   if (user.timezone) return user;
   const detected = detectBrowserTimezone();
   return detected ? { ...user, timezone: detected } : user;
+}
+
+function UserProfileFormSkeleton() {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2" aria-hidden="true">
+      <div className="grid gap-2">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-10 rounded-lg" />
+      </div>
+      <div className="grid gap-2">
+        <Skeleton className="h-4 w-24" />
+        <Skeleton className="h-10 rounded-lg" />
+      </div>
+      <div className="grid gap-2 sm:col-span-2">
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-28 rounded-lg" />
+      </div>
+    </div>
+  );
 }
 
 export function UserProfileSettingsPanel() {
@@ -163,7 +183,7 @@ export function UserProfileSettingsPanel() {
         />
 
         {loading ? (
-          <p className="text-sm text-fg-muted">{t.loading}</p>
+          <UserProfileFormSkeleton />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="flex flex-col gap-1.5 text-sm">

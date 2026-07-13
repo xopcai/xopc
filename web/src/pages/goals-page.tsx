@@ -20,6 +20,7 @@ import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/ui/refresh-button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
@@ -505,6 +506,54 @@ function GoalActionButton({
   );
 }
 
+function FocusGoalRowSkeleton() {
+  return (
+    <article className="rounded-lg bg-surface-panel p-3.5 shadow-surface" aria-hidden="true">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <Skeleton className="h-5 w-16 rounded-full" />
+            <Skeleton className="h-5 w-20 rounded-full" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+          <Skeleton className="mt-3 h-4 w-2/3 max-w-full" />
+          <Skeleton className="mt-2 h-4 w-full max-w-xl" />
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-28" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Skeleton className="h-9 w-24 rounded-lg" />
+          <Skeleton className="h-9 w-24 rounded-lg" />
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function GoalCardSkeleton() {
+  return (
+    <article className="rounded-xl bg-surface-panel p-3.5 shadow-surface" aria-hidden="true">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <Skeleton className="h-4 w-4/5" />
+          <Skeleton className="mt-2 h-3 w-24" />
+        </div>
+        <Skeleton className="h-5 w-16 rounded-full" />
+      </div>
+      <div className="mt-3 flex gap-2">
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-3 w-24" />
+      </div>
+      <Skeleton className="mt-3 h-4 w-full" />
+      <Skeleton className="mt-2 h-4 w-2/3" />
+      <Skeleton className="mt-4 h-5 w-28 rounded-full" />
+    </article>
+  );
+}
+
 function GoalDetailDialog({
   goal,
   queueItem,
@@ -939,7 +988,6 @@ export function GoalsPage() {
         </section>
 
         {error ? <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
-        {loading ? <p className="text-sm text-fg-muted">{t.loading}</p> : null}
 
         {viewMode === 'focus' ? (
           <section className="min-h-0 flex-1 overflow-y-auto pb-3" aria-label={t.focusLabel}>
@@ -958,19 +1006,23 @@ export function GoalsPage() {
                       </span>
                     </header>
                     <div className="grid gap-2 p-2.5">
-                      {sectionGoals.map((goal) => (
-                        <FocusGoalRow
-                          key={goal.id}
-                          goal={goal}
-                          queueItem={queueByGoal.get(goal.id)}
-                          t={t}
-                          language={language}
-                          busy={busy}
-                          selected={goal.id === selectedGoalId}
-                          onOpen={(next) => setSelectedGoalId(next.id)}
-                          onAction={(id, action) => void runAction(id, action)}
-                        />
-                      ))}
+                      {loading && sectionGoals.length === 0
+                        ? Array.from({ length: section === 'attention' ? 2 : 1 }).map((_, i) => (
+                            <FocusGoalRowSkeleton key={i} />
+                          ))
+                        : sectionGoals.map((goal) => (
+                            <FocusGoalRow
+                              key={goal.id}
+                              goal={goal}
+                              queueItem={queueByGoal.get(goal.id)}
+                              t={t}
+                              language={language}
+                              busy={busy}
+                              selected={goal.id === selectedGoalId}
+                              onOpen={(next) => setSelectedGoalId(next.id)}
+                              onAction={(id, action) => void runAction(id, action)}
+                            />
+                          ))}
                       {!loading && sectionGoals.length === 0 ? (
                         <div className="flex min-h-20 items-center justify-center rounded-md border border-dashed border-edge bg-surface-panel/40 px-4 py-5 text-center text-xs text-fg-subtle">
                           {t.focusSections[section].empty}
@@ -1019,27 +1071,29 @@ export function GoalsPage() {
                       </span>
                     </header>
                     <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-2.5">
-                      {laneGoals.map((goal) => (
-                        <GoalCard
-                          key={goal.id}
-                          goal={goal}
-                          queueItem={queueByGoal.get(goal.id)}
-                          t={t}
-                          language={language}
-                          selected={goal.id === selectedGoalId}
-                          dragging={goal.id === draggingGoalId}
-                          onOpen={(next) => setSelectedGoalId(next.id)}
-                          onDragStart={(goalId, event) => {
-                            event.dataTransfer.effectAllowed = 'move';
-                            event.dataTransfer.setData(DRAG_TYPE, goalId);
-                            setDraggingGoalId(goalId);
-                          }}
-                          onDragEnd={() => {
-                            setDraggingGoalId(null);
-                            setDropLane(null);
-                          }}
-                        />
-                      ))}
+                      {loading && laneGoals.length === 0
+                        ? Array.from({ length: 3 }).map((_, i) => <GoalCardSkeleton key={i} />)
+                        : laneGoals.map((goal) => (
+                            <GoalCard
+                              key={goal.id}
+                              goal={goal}
+                              queueItem={queueByGoal.get(goal.id)}
+                              t={t}
+                              language={language}
+                              selected={goal.id === selectedGoalId}
+                              dragging={goal.id === draggingGoalId}
+                              onOpen={(next) => setSelectedGoalId(next.id)}
+                              onDragStart={(goalId, event) => {
+                                event.dataTransfer.effectAllowed = 'move';
+                                event.dataTransfer.setData(DRAG_TYPE, goalId);
+                                setDraggingGoalId(goalId);
+                              }}
+                              onDragEnd={() => {
+                                setDraggingGoalId(null);
+                                setDropLane(null);
+                              }}
+                            />
+                          ))}
                       {!loading && laneGoals.length === 0 ? (
                         <div className="flex min-h-32 items-center justify-center rounded-xl bg-surface-base px-3 py-6 text-center text-xs text-fg-subtle sm:px-5 xl:px-6">
                           {t.lanes[lane].empty}

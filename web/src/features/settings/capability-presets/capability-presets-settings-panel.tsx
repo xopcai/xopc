@@ -37,6 +37,7 @@ import {
 } from '@/features/settings/capability-presets/preset-skills-policy-editor';
 import { PresetToolsPolicyEditor } from '@/features/settings/capability-presets/preset-tools-policy-editor';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
+import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -417,7 +418,7 @@ export function CapabilityPresetsSettingsPanel() {
       ) : null}
 
       {isLoading ? (
-        <p className="text-sm text-fg-muted">{cp.loading}</p>
+        <SettingsPageSkeleton sections={2} />
       ) : (
         <div className="flex flex-col gap-5">
           <SettingsFormSection>

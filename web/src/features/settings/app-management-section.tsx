@@ -5,6 +5,7 @@ import { uiPatchReducer } from '@/lib/settings-form-draft';
 import * as Dialog from '@radix-ui/react-dialog';
 
 import { Button } from '@/components/ui/button';
+import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { cn } from '@/lib/cn';
@@ -242,7 +243,7 @@ export function AppManagementSection({
   }
 
   if (!info) {
-    return <p className="text-sm text-fg-muted">{m.loading}</p>;
+    return <SettingsPanelSkeleton rows={2} />;
   }
 
   const isDevBuild = !info.packaged;

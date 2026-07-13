@@ -1,6 +1,7 @@
 import { existsSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { basename, dirname, join } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import pathPosix from 'node:path/posix';
 import pathWin32 from 'node:path/win32';
 
 /** Matches electron-builder `productName: xopc`. */
@@ -39,7 +40,7 @@ export async function resolveLinuxDebPackageName(execPath: string): Promise<stri
 
 export function resolveAppPath(platform: NodeJS.Platform, execPath: string): string {
   if (platform === 'darwin') {
-    return join(dirname(execPath), '..', '..');
+    return pathPosix.join(pathPosix.dirname(execPath), '..', '..');
   }
   if (platform === 'win32') {
     return pathWin32.dirname(execPath);
@@ -54,7 +55,7 @@ export function resolveShowInFolderTarget(
   appPath: string,
 ): string {
   if (platform === 'darwin') {
-    return join(appPath, 'Contents', 'MacOS', basename(execPath));
+    return pathPosix.join(appPath, 'Contents', 'MacOS', pathPosix.basename(execPath));
   }
   return execPath;
 }
@@ -93,4 +94,28 @@ export function detectSeparateCliData(
   } catch {
     return cliDataPath !== userDataPath;
   }
+}
+
+export function resolveDataRemovalTargets(paths: string[]): string[] {
+  const normalized = paths
+    .map((target) => target.trim())
+    .filter(Boolean)
+    .map((target) => resolve(target));
+  const unique = [...new Set(normalized)];
+
+  return unique.filter((target) => {
+    return !unique.some((candidate) => {
+      if (candidate === target) {
+        return false;
+      }
+      const rel = relative(candidate, target);
+      return (
+        rel !== '' &&
+        !isAbsolute(rel) &&
+        !rel.startsWith('..') &&
+        !rel.startsWith('..\\') &&
+        !rel.startsWith('../')
+      );
+    });
+  });
 }

@@ -1,4 +1,5 @@
 import { WEBCHAT_AGENT_STORAGE_KEY } from '@/features/chat/session/chat-session-defaults';
+import { Skeleton } from '@/components/ui/skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 
 import { AgentDeleteConfirmDialog } from './agent-delete-confirm-dialog';
@@ -8,6 +9,39 @@ import { AgentsEditorPanelContent } from './agents-editor-panel-content';
 import { AgentsListGrid } from './agents-list-grid';
 import { CreateAgentDialog } from './create-agent-dialog';
 import { useAgentsSettingsPanel } from './use-agents-settings-panel';
+
+function AgentsSettingsSkeleton() {
+  return (
+    <div className="grid gap-4" aria-hidden="true">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-2">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-3 w-64 max-w-full" />
+        </div>
+        <Skeleton className="h-9 w-28 rounded-lg" />
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="rounded-xl bg-surface-base p-4 shadow-surface">
+            <div className="flex items-start gap-3">
+              <Skeleton className="size-11 rounded-xl" />
+              <div className="min-w-0 flex-1">
+                <Skeleton className="h-4 w-2/3" />
+                <Skeleton className="mt-2 h-3 w-24" />
+              </div>
+            </div>
+            <Skeleton className="mt-4 h-3 w-full" />
+            <Skeleton className="mt-2 h-3 w-4/5" />
+            <div className="mt-4 flex gap-2">
+              <Skeleton className="h-6 w-16 rounded-full" />
+              <Skeleton className="h-6 w-20 rounded-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function AgentsSettingsPanel() {
   const vm = useAgentsSettingsPanel();
@@ -30,7 +64,7 @@ export function AgentsSettingsPanel() {
       ) : null}
 
       {vm.loading ? (
-        <p className="text-sm text-fg-muted">{vm.a.loading}</p>
+        <AgentsSettingsSkeleton />
       ) : vm.data ? (
         <div className="flex flex-col gap-4">
           <AgentsListGrid
@@ -71,7 +105,7 @@ export function AgentsSettingsPanel() {
           busy={vm.busy}
         >
           {vm.loading || !vm.data ? (
-            <p className="text-sm text-fg-muted">{vm.a.loading}</p>
+            <AgentsSettingsSkeleton />
           ) : (
             <AgentsEditorPanelContent {...vm.editorPanelProps} />
           )}

@@ -117,7 +117,12 @@ export function TunnelControlCard({
               )}
               aria-hidden
             />
-            {isLoading && !st.enabled ? t.loading : statusLabel(t, st)}
+            {isLoading && !st.enabled ? (
+              <span
+                aria-hidden="true"
+                className="inline-block h-3 w-16 animate-pulse rounded-full bg-surface-hover/70 motion-reduce:animate-none"
+              />
+            ) : statusLabel(t, st)}
           </span>
           {st.connectedSince && st.state === 'connected' ? (
             <span className="text-xs text-fg-subtle">

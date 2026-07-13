@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/api/registry-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
@@ -140,11 +141,11 @@ export function ConnectedProvidersGrid({ labels, onAdd, onManage }: ConnectedPro
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-3">
-        <div className="h-6 w-48 animate-pulse rounded bg-surface-hover" />
+      <div className="flex flex-col gap-3" aria-busy="true">
+        <Skeleton className="h-6 w-48 max-w-full" />
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-32 animate-pulse rounded-2xl bg-surface-hover" />
+            <Skeleton key={i} className="h-32 rounded-2xl" />
           ))}
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { Download, ExternalLink, Loader2 } from 'lucide-react';
+import { Download, ExternalLink } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -12,6 +12,7 @@ import {
   TEXT_PREVIEW_MAX_BYTES,
   type PreviewFileDescriptor,
 } from '@/features/preview-runtime';
+import { Skeleton } from '@/components/ui/skeleton';
 import { apiUrl } from '@/lib/url';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -154,9 +155,15 @@ export function SharePreviewPage() {
           #
         </span>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-fg" title={meta?.fileName ?? ''}>
-            {meta?.fileName ?? t.loading}
-          </div>
+          {meta ? (
+            <div className="truncate text-sm font-semibold text-fg" title={meta.fileName}>
+              {meta.fileName}
+            </div>
+          ) : loading ? (
+            <Skeleton className="h-4 w-48 max-w-full" />
+          ) : (
+            <div className="truncate text-sm font-semibold text-fg">{t.error}</div>
+          )}
           {meta ? (
             <div className="truncate text-xs text-fg-muted">
               {formatBytes(meta.fileSize)} · {t.expiresAt}{' '}
@@ -189,9 +196,15 @@ export function SharePreviewPage() {
 
       <main className="flex min-h-0 w-full flex-1 flex-col px-3 py-6 sm:px-5 xl:px-6">
         {loading ? (
-          <div className="flex min-h-[50vh] items-center justify-center text-sm text-fg-muted">
-            <Loader2 className="mr-2 size-4 animate-spin" />
-            {t.loading}
+          <div className="flex min-h-[70vh] flex-1 flex-col overflow-hidden rounded-lg bg-surface-panel p-4 shadow-surface" aria-busy="true">
+            <Skeleton className="h-5 w-56 max-w-full" />
+            <div className="mt-5 grid gap-3">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-11/12" />
+              <Skeleton className="h-4 w-10/12" />
+              <Skeleton className="h-4 w-3/4" />
+            </div>
+            <Skeleton className="mt-6 min-h-0 flex-1 rounded-lg" />
           </div>
         ) : error ? (
           <div className="rounded-lg bg-surface-panel p-6 shadow-surface text-sm text-fg">
@@ -235,7 +248,6 @@ function formatBytes(n: number): string {
 }
 
 const PREVIEW_LABELS_ZH = {
-  loading: '加载中...',
   error: '加载失败',
   expired: '链接已失效',
   notFound: '链接不存在',
@@ -248,7 +260,6 @@ const PREVIEW_LABELS_ZH = {
 } as const;
 
 const PREVIEW_LABELS_EN = {
-  loading: 'Loading...',
   error: 'Failed to load',
   expired: 'Link no longer valid',
   notFound: 'Link not found',

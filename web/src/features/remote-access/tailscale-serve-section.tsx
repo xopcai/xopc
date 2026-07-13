@@ -4,6 +4,7 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { CopyTextRow } from '@/components/ui/copy-text-row';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   SettingsFormSection,
   SettingsFormSectionHeader,
@@ -127,7 +128,10 @@ export function TailscaleServeSection({ embedded = false }: { embedded?: boolean
       ) : null}
 
       {isLoading && !data ? (
-        <p className="text-sm text-fg-muted">{t.loading}</p>
+        <div className="grid gap-3" aria-busy="true">
+          <Skeleton className="h-20 rounded-lg" />
+          <Skeleton className="h-20 rounded-lg" />
+        </div>
       ) : (
         <>
           <SettingsFormSection>

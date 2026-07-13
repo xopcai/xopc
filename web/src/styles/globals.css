@@ -16,8 +16,8 @@
   --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /* Surfaces — light: muted canvas + white operational surface */
-  --color-surface-base: #f6f7fb;
-  --color-surface-rail: #ebeef5;
+  --color-surface-base: #f7f8fb;
+  --color-surface-rail: #eef2f7;
   --color-surface-panel: #ffffff;
   --color-surface-hover: #eef2ff;
   --color-surface-active: #e6ecff;
@@ -82,38 +82,34 @@
 :root {
   --app-chrome-bg:
     linear-gradient(
-      118deg,
-      rgb(117 101 255 / 0.12) 0%,
-      rgb(255 116 172 / 0.075) 42%,
-      transparent 78%
+      128deg,
+      rgb(74 103 150 / 0.055) 0%,
+      rgb(120 138 170 / 0.035) 42%,
+      transparent 76%
     ),
     linear-gradient(
       180deg,
-      rgb(231 236 247 / 0.92) 0%,
-      rgb(248 241 244 / 0.88) 48%,
-      rgb(253 246 241 / 0.82) 100%
+      rgb(244 247 252 / 0.96) 0%,
+      rgb(249 250 253 / 0.92) 52%,
+      rgb(255 255 255 / 0.86) 100%
     ),
     linear-gradient(
       90deg,
-      rgb(226 232 244) 0%,
-      rgb(246 239 243) 56%,
+      rgb(234 239 247) 0%,
+      rgb(247 249 252) 58%,
       rgb(255 255 255) 100%
     );
   --app-chrome-sidebar-bg: var(--app-chrome-bg);
-  --app-chrome-titlebar-bg: var(--app-chrome-bg);
   --app-chrome-border: color-mix(in srgb, var(--color-edge) 78%, transparent);
-  --app-chrome-sidebar-shadow:
-    inset -1px 0 0 var(--app-chrome-border),
-    inset -34px 0 38px -38px rgb(255 255 255 / 0.92),
-    inset 1px 0 0 rgb(255 255 255 / 0.6);
+  --app-chrome-sidebar-shadow: inset -1px 0 0 var(--app-chrome-border);
 }
 
 /* Dark — lifted workstation gray, restrained rim light, Loop Blue signals */
 html.dark {
-  --color-surface-base: #15171b;
+  --color-surface-base: #14171c;
   --color-surface-rail: #111318;
-  --color-surface-panel: #1c1f25;
-  --color-surface-hover: #252932;
+  --color-surface-panel: #1b1f26;
+  --color-surface-hover: #242933;
   --color-surface-active: #2e3440;
 
   --color-fg: #f4f6f8;
@@ -151,30 +147,26 @@ html.dark {
 
   --app-chrome-bg:
     linear-gradient(
-      118deg,
-      rgb(123 120 255 / 0.2) 0%,
-      rgb(255 116 172 / 0.12) 42%,
-      transparent 78%
+      128deg,
+      rgb(98 122 158 / 0.12) 0%,
+      rgb(78 91 112 / 0.08) 44%,
+      transparent 76%
     ),
     linear-gradient(
       180deg,
-      rgb(25 29 38 / 0.98) 0%,
-      rgb(23 24 31 / 0.96) 50%,
-      rgb(20 22 28 / 0.98) 100%
+      rgb(24 28 35 / 0.98) 0%,
+      rgb(22 25 31 / 0.97) 52%,
+      rgb(19 22 28 / 0.98) 100%
     ),
     linear-gradient(
       90deg,
-      rgb(30 35 48) 0%,
-      rgb(25 28 38) 58%,
+      rgb(25 30 39) 0%,
+      rgb(22 26 33) 58%,
       rgb(21 23 29) 100%
     );
   --app-chrome-sidebar-bg: var(--app-chrome-bg);
-  --app-chrome-titlebar-bg: var(--app-chrome-bg);
   --app-chrome-border: color-mix(in srgb, var(--color-edge) 72%, transparent);
-  --app-chrome-sidebar-shadow:
-    inset -1px 0 0 var(--app-chrome-border),
-    inset -34px 0 40px -38px rgb(100 227 255 / 0.18),
-    inset 1px 0 0 rgb(255 255 255 / 0.08);
+  --app-chrome-sidebar-shadow: inset -1px 0 0 var(--app-chrome-border);
 }
 
 @layer base {
@@ -396,6 +388,14 @@ html.dark {
   transition: none !important;
 }
 
+.app-chrome-shell {
+  background-image: var(--app-chrome-sidebar-bg);
+  background-attachment: fixed;
+  background-position: left top;
+  background-repeat: no-repeat;
+  background-size: 100vw 100vh;
+}
+
 .app-chrome-sidebar {
   background-image: var(--app-chrome-sidebar-bg);
   background-attachment: fixed;
@@ -405,12 +405,25 @@ html.dark {
   box-shadow: var(--app-chrome-sidebar-shadow, inset -1px 0 0 var(--app-chrome-border));
 }
 
+.app-chrome-shell .app-chrome-sidebar {
+  background: transparent;
+}
+
+.app-main-surface {
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .app-main-surface {
+    border-top-left-radius: 1.125rem;
+    box-shadow:
+      inset 1px 1px 0 color-mix(in srgb, var(--color-edge-subtle) 72%, transparent),
+      -1px 0 0 color-mix(in srgb, var(--app-chrome-border) 74%, transparent);
+  }
+}
+
 .windows-titlebar {
-  background-image: var(--app-chrome-titlebar-bg);
-  background-attachment: fixed;
-  background-position: left top;
-  background-repeat: no-repeat;
-  background-size: 100vw 100vh;
+  background: transparent;
   border-bottom-color: transparent;
   padding-inline-start: max(0.5rem, env(titlebar-area-x, 0px));
   padding-inline-end: max(
@@ -618,12 +631,6 @@ html[data-color-scheme='emerald'] {
     var(--color-surface-base) 48%,
     color-mix(in oklab, var(--color-surface-base) 90%, var(--color-success) 10%) 100%
   );
-  --app-chrome-titlebar-bg: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--color-surface-base) 88%, var(--color-accent) 12%) 0%,
-    var(--color-surface-base) 22rem,
-    var(--color-surface-panel) 48rem
-  );
 }
 
 html.dark[data-color-scheme='emerald'] {
@@ -672,12 +679,6 @@ html.dark[data-color-scheme='emerald'] {
     color-mix(in oklab, var(--color-surface-base) 82%, var(--color-accent) 18%) 0%,
     var(--color-surface-base) 54%,
     color-mix(in oklab, var(--color-surface-base) 86%, var(--color-success) 14%) 100%
-  );
-  --app-chrome-titlebar-bg: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--color-surface-base) 82%, var(--color-accent) 18%) 0%,
-    var(--color-surface-base) 22rem,
-    var(--color-surface-panel) 48rem
   );
 }
 
@@ -739,12 +740,6 @@ html[data-color-scheme='mono'] {
     var(--color-surface-base) 52%,
     color-mix(in oklab, var(--color-surface-hover) 88%, var(--color-fg) 12%) 100%
   );
-  --app-chrome-titlebar-bg: linear-gradient(
-    90deg,
-    var(--color-surface-panel) 0%,
-    var(--color-surface-base) 22rem,
-    var(--color-surface-panel) 48rem
-  );
 }
 
 html[data-color-scheme='mono'] body {
@@ -803,12 +798,6 @@ html.dark[data-color-scheme='mono'] {
     var(--color-surface-base) 54%,
     color-mix(in oklab, var(--color-surface-hover) 88%, var(--color-fg-muted) 12%) 100%
   );
-  --app-chrome-titlebar-bg: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--color-surface-base) 84%, var(--color-accent) 16%) 0%,
-    var(--color-surface-base) 22rem,
-    var(--color-surface-panel) 48rem
-  );
 }
 
 /*
@@ -866,12 +855,6 @@ html[data-color-scheme='clay'] {
     var(--color-surface-base) 46%,
     color-mix(in oklab, var(--color-surface-base) 92%, var(--color-accent-fg) 8%) 100%
   );
-  --app-chrome-titlebar-bg: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--color-surface-base) 88%, var(--color-warning) 12%) 0%,
-    var(--color-surface-base) 22rem,
-    var(--color-surface-panel) 48rem
-  );
 }
 
 html[data-color-scheme='clay'] body {
@@ -928,12 +911,6 @@ html.dark[data-color-scheme='clay'] {
     color-mix(in oklab, var(--color-surface-base) 84%, var(--color-accent) 16%) 0%,
     var(--color-surface-base) 50%,
     color-mix(in oklab, var(--color-surface-base) 88%, var(--color-fg-muted) 12%) 100%
-  );
-  --app-chrome-titlebar-bg: linear-gradient(
-    90deg,
-    color-mix(in oklab, var(--color-surface-base) 84%, var(--color-accent) 16%) 0%,
-    var(--color-surface-base) 22rem,
-    var(--color-surface-panel) 48rem
   );
 }
 
