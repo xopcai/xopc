@@ -6,11 +6,44 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import { effectiveWorkspacePathForSession } from '../../../session/session-workspace.js';
 import { getProjectForSession } from '../../../projects/workspace.js';
 import { buildReviewContext, resolveGitRoot } from '../../../review/review-git.js';
+import {
+  isSkillInstallTarget,
+  type SkillInstallTarget,
+} from '../../../agent/skills/install-target.js';
 
 function parseMarketplaceProviderQuery(raw: string | undefined): string | undefined {
   const v = raw?.trim().toLowerCase();
   if (v && isRegisteredProvider(v)) return v;
   return undefined;
+}
+
+function optionalTrimmedString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function optionalBoolean(value: unknown): boolean | undefined {
+  if (value === true || value === 'true' || value === '1') return true;
+  if (value === false || value === 'false' || value === '0') return false;
+  return undefined;
+}
+
+function optionalSkillInstallTarget(value: unknown): SkillInstallTarget | undefined {
+  if (value == null || value === '') return undefined;
+  return isSkillInstallTarget(value) ? value : undefined;
+}
+
+function skillHubInstallStatus(err: unknown): 400 | 409 | 502 {
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.includes('already exists')) return 409;
+  if (
+    message.startsWith('HTTP ') ||
+    message.includes('fetching archive') ||
+    message.includes('git clone failed') ||
+    message.includes('Git operation failed')
+  ) {
+    return 502;
+  }
+  return 400;
 }
 
 export function registerCommandsSkillsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -223,7 +256,13 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
   });
 
   authenticated.post('/api/skills/marketplace/install', async (c) => {
-    let body: { name?: unknown; version?: unknown; overwrite?: unknown; provider?: unknown };
+    let body: {
+      name?: unknown;
+      version?: unknown;
+      overwrite?: unknown;
+      provider?: unknown;
+      target?: unknown;
+    };
     try {
       body = (await c.req.json()) as typeof body;
     } catch {
@@ -238,16 +277,56 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     const provider = parseMarketplaceProviderQuery(
       typeof body.provider === 'string' ? body.provider : undefined,
     );
+    const target = optionalSkillInstallTarget(body.target);
+    if (body.target != null && !target) {
+      return c.json({ ok: false, error: 'Expected target to be "workspace" or "global"' }, 400);
+    }
     if (!name) {
       return c.json({ ok: false, error: 'Expected { name: string, version?: string, overwrite?: boolean }' }, 400);
     }
     try {
-      const payload = await service.marketplace.installSkill({ name, version, overwrite, provider });
+      const payload = await service.marketplace.installSkill({ name, version, overwrite, provider, target });
       return c.json({ ok: true, payload });
     } catch (err) {
       return c.json(
         { ok: false, error: err instanceof Error ? err.message : 'Install failed' },
         400,
+      );
+    }
+  });
+
+  authenticated.post('/api/skills/hub/install', async (c) => {
+    let body: Record<string, unknown>;
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: 'Invalid JSON' }, 400);
+    }
+
+    const source = optionalTrimmedString(body.source);
+    if (!source) {
+      return c.json({ ok: false, error: 'Expected { source: string }' }, 400);
+    }
+    const target = optionalSkillInstallTarget(body.target);
+    if (body.target != null && body.target !== '' && !target) {
+      return c.json({ ok: false, error: 'Expected target to be "workspace" or "global"' }, 400);
+    }
+
+    try {
+      const payload = await service.marketplace.installSkillFromSource({
+        source,
+        ref: optionalTrimmedString(body.ref),
+        path: optionalTrimmedString(body.path),
+        skillId: optionalTrimmedString(body.skillId),
+        target,
+        force: optionalBoolean(body.force) ?? false,
+        strictScan: optionalBoolean(body.strictScan) ?? false,
+      });
+      return c.json({ ok: true, payload });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : 'Install failed' },
+        skillHubInstallStatus(err),
       );
     }
   });
@@ -278,9 +357,14 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
       overwriteRaw === 'true' ||
       overwriteRaw === true ||
       overwriteRaw === '1';
+    const targetRaw = body['target'];
+    const target = optionalSkillInstallTarget(targetRaw);
+    if (targetRaw != null && targetRaw !== '' && !target) {
+      return c.json({ ok: false, error: 'Expected target to be "workspace" or "global"' }, 400);
+    }
 
     try {
-      const result = service.marketplace.installSkillZip(buf, { skillId, overwrite });
+      const result = service.marketplace.installSkillZip(buf, { skillId, overwrite, target });
       return c.json({ ok: true, payload: result });
     } catch (err) {
       return c.json(
@@ -295,8 +379,13 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     if (!id) {
       return c.json({ ok: false, error: 'Missing id' }, 400);
     }
+    const targetRaw = c.req.query('target');
+    const target = optionalSkillInstallTarget(targetRaw);
+    if (targetRaw != null && targetRaw !== '' && !target) {
+      return c.json({ ok: false, error: 'Expected target to be "workspace" or "global"' }, 400);
+    }
     try {
-      service.marketplace.deleteSkill(id);
+      service.marketplace.deleteSkill(id, target);
       return c.json({ ok: true });
     } catch (err) {
       return c.json(

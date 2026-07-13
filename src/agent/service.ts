@@ -71,6 +71,16 @@ import type { AgentCapabilityCatalogEntry } from './capabilities/index.js';
 import type { AgentServiceConfig, StreamHandle } from './service.types.js';
 import { PersistentGoalService } from './goals/persistent-goal-service.js';
 import { parseNoteAttachmentTarget } from '../notes/attachment-ref.js';
+import { pullSkillFromSource } from './skills/hub-pull.js';
+import {
+  resolveWorkspaceSkillsDir,
+  resolveWorkspaceSkillsLockPath,
+} from './skills/workspace-skills-dir.js';
+import { normalizeSkillInstallTarget } from './skills/install-target.js';
+import type {
+  SkillInstallToolOptions,
+  SkillInstallToolResult,
+} from './tools/skill-install-tool.js';
 
 import {
   resolveAgentHomeDir,
@@ -274,6 +284,7 @@ export class AgentService {
       getWorkItemService: config.getWorkItemService,
       getWorkflowRunService: config.getWorkflowRunService,
       onSkillsUpdated: config.onSkillsUpdated,
+      installSkillFromSource: (opts) => this.installSkillFromSource(opts),
       isWorkspaceTrusted: config.isWorkspaceTrusted,
       getSelfVerifyPromptContext: (sessionKey, agentId) => [
         this.selfVerifyMiddleware.getPendingVerificationContext(sessionKey, agentId),
@@ -371,6 +382,7 @@ export class AgentService {
         this.agentOrchestrator.abort(sessionKey);
       },
       reloadSkills: () => this.refreshSkillsAfterDiskChange(),
+      installSkillFromSource: (opts) => this.installSkillFromSource(opts),
       compactSession: (sessionKey, options) => this.sessionInspector.compact(sessionKey, options),
       btwQuery: (sessionKey, question) => this.sessionInspector.btwQuery(sessionKey, question),
       getSessionContextReport: (sessionKey, mode) => this.sessionInspector.report(sessionKey, mode),
@@ -644,6 +656,25 @@ export class AgentService {
 
   refreshSkillsAfterDiskChange(): void {
     this.agentManager.refreshSkillsAfterDiskChange();
+  }
+
+  async installSkillFromSource(opts: SkillInstallToolOptions): Promise<SkillInstallToolResult> {
+    const target = normalizeSkillInstallTarget(opts.target);
+    const workspace =
+      opts.workspace?.trim() ||
+      (opts.sessionKey ? this.agentManager.getResolvedWorkspaceForSession(opts.sessionKey) : undefined) ||
+      this.workspaceDir;
+    const result = await pullSkillFromSource(opts.source, {
+      ref: opts.ref,
+      subpath: opts.path,
+      skillId: opts.skillId,
+      force: opts.force ?? false,
+      installRoot: target === 'workspace' ? resolveWorkspaceSkillsDir(workspace) : undefined,
+      lockPath: target === 'workspace' ? resolveWorkspaceSkillsLockPath(workspace) : undefined,
+      strictScan: opts.strictScan ?? false,
+    });
+    this.refreshSkillsAfterDiskChange();
+    return { ...result, target };
   }
 
   refreshSkillsAfterSkillConfigChange(): void {

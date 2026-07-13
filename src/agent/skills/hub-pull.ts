@@ -3,6 +3,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import AdmZip from 'adm-zip';
 import {
   cpSync,
   existsSync,
@@ -14,7 +15,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { basename, join, normalize, resolve } from 'node:path';
+import { basename, dirname, join, normalize, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
@@ -26,6 +27,7 @@ import { getSkillsLockEntry, recordSkillsHubInstall } from './hub-lock.js';
 import type { SkillHubKind } from './hub-lock.js';
 import {
   installSkillFromZip,
+  isIgnorableZipEntry,
   isValidSkillId,
   prepareManagedSkillTempDir,
   promoteManagedSkillTempDir,
@@ -37,6 +39,10 @@ export interface HubPullOptions {
   ref?: string;
   subpath?: string;
   force?: boolean;
+  /** Destination skills root. Defaults to the global managed skills directory. */
+  installRoot?: string;
+  /** Hub lock path. Defaults to the global skills-lock.json. */
+  lockPath?: string;
   /** When true, critical scanner findings fail the install. */
   strictScan?: boolean;
 }
@@ -47,6 +53,126 @@ export interface HubPullResult {
   contentHash: string;
   kind: SkillHubKind;
   source: string;
+}
+
+interface GitHubSkillSource {
+  owner: string;
+  repo: string;
+  cloneUrl: string;
+  sourceLabel: string;
+  ref?: string;
+  subpath?: string;
+  treePathParts?: string[];
+}
+
+class GitHubArchiveDownloadError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'GitHubArchiveDownloadError';
+  }
+}
+
+function githubHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github+json',
+    'User-Agent': 'xopc-skill-installer',
+  };
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  if (token?.trim()) {
+    headers.Authorization = `Bearer ${token.trim()}`;
+  }
+  return headers;
+}
+
+function normalizeSourceSubpath(subpath?: string): string | undefined {
+  const raw = subpath?.trim().replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!raw || raw === '.') return undefined;
+  if (/^[a-zA-Z]:/.test(raw)) {
+    throw new Error(`Invalid source path: ${subpath}`);
+  }
+  const normalized = normalize(raw);
+  if (normalized === '..' || normalized.startsWith(`..${sep}`) || resolve('/', normalized) === resolve('/')) {
+    throw new Error(`Invalid source path: ${subpath}`);
+  }
+  return normalized.replace(/\\/g, '/');
+}
+
+function decodeUrlPathPart(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function parseSshGitHubSource(
+  raw: string,
+  optionRef?: string,
+  optionSubpath?: string,
+): GitHubSkillSource | undefined {
+  const ssh = raw.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/i);
+  if (!ssh) return undefined;
+  const owner = ssh[1];
+  const repo = ssh[2].replace(/\.git$/i, '');
+  return {
+    owner,
+    repo,
+    cloneUrl: `https://github.com/${owner}/${repo}.git`,
+    sourceLabel: raw,
+    ref: optionRef,
+    subpath: optionSubpath,
+  };
+}
+
+export function parseGitHubSkillSource(
+  raw: string,
+  options: Pick<HubPullOptions, 'ref' | 'subpath'> = {},
+): GitHubSkillSource | undefined {
+  const optionRef = options.ref?.trim() || undefined;
+  const optionSubpath = normalizeSourceSubpath(options.subpath);
+  const sshSource = parseSshGitHubSource(raw, optionRef, optionSubpath);
+  if (sshSource) return sshSource;
+
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return undefined;
+  if (url.hostname.toLowerCase() !== 'github.com') return undefined;
+
+  const parts = url.pathname.split('/').filter(Boolean).map(decodeUrlPathPart);
+  if (parts.length < 2) return undefined;
+
+  const owner = parts[0];
+  const repo = parts[1].replace(/\.git$/i, '');
+  if (!owner || !repo) return undefined;
+
+    let ref: string | undefined;
+    let subpath: string | undefined;
+    let treePathParts: string[] | undefined;
+    const marker = parts[2]?.toLowerCase();
+    if ((marker === 'tree' || marker === 'blob') && parts[3]) {
+      treePathParts = parts.slice(3);
+      ref = treePathParts[0];
+      subpath = normalizeSourceSubpath(treePathParts.slice(1).join('/'));
+  } else if (parts.length > 2 && !parts[1].toLowerCase().endsWith('.git')) {
+    subpath = normalizeSourceSubpath(parts.slice(2).join('/'));
+  }
+
+  return {
+    owner,
+    repo,
+    cloneUrl: `https://github.com/${owner}/${repo}.git`,
+    sourceLabel: raw,
+    ref: optionRef || ref,
+    subpath: optionSubpath || subpath,
+    treePathParts,
+  };
 }
 
 export function classifyHubSource(raw: string): 'git' | 'archive' {
@@ -86,10 +212,12 @@ export function classifyHubSource(raw: string): 'git' | 'archive' {
 }
 
 export function findSkillRoot(repoRoot: string, subpath?: string): string {
-  const sub = subpath?.trim()
-    ? normalize(subpath.trim()).replace(/^[/\\]+/, '')
-    : '';
-  const base = sub ? resolve(repoRoot, sub) : resolve(repoRoot);
+  const sub = normalizeSourceSubpath(subpath) || '';
+  const root = resolve(repoRoot);
+  const base = sub ? resolve(root, sub) : root;
+  if (base !== root && !base.startsWith(root + sep)) {
+    throw new Error(`Invalid source path: ${subpath}`);
+  }
   if (!existsSync(base)) {
     throw new Error(`Path not found in source: ${sub || '.'}`);
   }
@@ -147,7 +275,7 @@ async function copySkillTreeToManaged(
     throw new Error(`Invalid skill id "${targetId}" (letters, digits, ._-; max 63 chars after first)`);
   }
 
-  const { destDir, tempDir } = prepareManagedSkillTempDir(targetId);
+  const { destDir, tempDir } = prepareManagedSkillTempDir(targetId, ctx.installRoot);
   try {
     if (existsSync(destDir) && !ctx.force) {
       throw new Error(`Skill "${targetId}" already exists. Use --force to replace.`);
@@ -164,6 +292,7 @@ async function copySkillTreeToManaged(
       skillId: targetId,
       tempDir,
       overwrite: ctx.force,
+      rootDir: ctx.installRoot,
     });
     const hash = computeSkillTreeHashSync(promoted.path);
     recordSkillsHubInstall(
@@ -175,6 +304,7 @@ async function copySkillTreeToManaged(
         subpath: ctx.kind === 'git' ? ctx.subpath : undefined,
       },
       hash,
+      ctx.lockPath,
     );
 
     return {
@@ -198,9 +328,10 @@ async function pullSkillFromZipBuffer(
   const r = installSkillFromZip(buf, {
     skillId: options.skillId,
     overwrite: options.force ?? false,
+    rootDir: options.installRoot,
   });
   const hash = computeSkillTreeHashSync(r.path);
-  recordSkillsHubInstall(r.skillId, { kind: 'archive', source: sourceLabel }, hash);
+  recordSkillsHubInstall(r.skillId, { kind: 'archive', source: sourceLabel }, hash, options.lockPath);
   await runScan(r.path, options.strictScan);
   return {
     skillId: r.skillId,
@@ -229,6 +360,212 @@ async function pullSkillFromTarFile(
   }
 }
 
+function isSafeArchivePath(name: string): boolean {
+  if (!name) return false;
+  const normalized = name.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (normalized.startsWith('/') || /^[a-zA-Z]:/.test(normalized)) return false;
+  return normalized.split('/').every((part) => part && part !== '..');
+}
+
+function extractZipBufferToTempDir(buf: Buffer, tmpRoot: string): void {
+  const zip = new AdmZip(buf);
+  const rootResolved = resolve(tmpRoot);
+  for (const entry of zip.getEntries()) {
+    const normalized = entry.entryName.replace(/\\/g, '/');
+    if (!normalized || isIgnorableZipEntry(normalized)) continue;
+    if (!isSafeArchivePath(normalized)) {
+      throw new Error(`Unsafe zip entry path: ${entry.entryName}`);
+    }
+
+    const target = join(tmpRoot, normalized);
+    const targetResolved = resolve(target);
+    if (targetResolved !== rootResolved && !targetResolved.startsWith(rootResolved + sep)) {
+      throw new Error(`Unsafe zip entry path: ${entry.entryName}`);
+    }
+
+    if (entry.isDirectory) {
+      mkdirSync(target, { recursive: true });
+      continue;
+    }
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, entry.getData());
+  }
+}
+
+function findExtractedRepositoryRoot(tmpRoot: string): string {
+  const entries = readdirSync(tmpRoot, { withFileTypes: true }).filter((entry) => !entry.name.startsWith('.'));
+  const dirs = entries.filter((entry) => entry.isDirectory());
+  const files = entries.filter((entry) => entry.isFile());
+  if (dirs.length === 1 && files.length === 0) {
+    return join(tmpRoot, dirs[0].name);
+  }
+  return tmpRoot;
+}
+
+async function resolveGitHubDefaultBranch(source: GitHubSkillSource): Promise<string | undefined> {
+  const apiUrl = `https://api.github.com/repos/${source.owner}/${source.repo}`;
+  try {
+    const res = await fetch(apiUrl, { headers: githubHeaders() });
+    if (!res.ok) return undefined;
+    const body = (await res.json()) as { default_branch?: unknown };
+    const branch = typeof body.default_branch === 'string' ? body.default_branch.trim() : '';
+    return branch || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function githubRefExists(
+  source: GitHubSkillSource,
+  namespace: 'heads' | 'tags',
+  ref: string,
+): Promise<boolean> {
+  const url = `https://api.github.com/repos/${source.owner}/${source.repo}/git/ref/${namespace}/${encodeURI(ref)}`;
+  try {
+    const res = await fetch(url, { headers: githubHeaders() });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveGitHubTreeRefAndSubpath(
+  source: GitHubSkillSource,
+  options: HubPullOptions,
+): Promise<{ ref?: string; subpath?: string }> {
+  const optionRef = options.ref?.trim() || undefined;
+  const optionSubpath = options.subpath || undefined;
+  if (optionRef || !source.treePathParts?.length) {
+    return {
+      ref: optionRef || source.ref,
+      subpath: optionSubpath || source.subpath,
+    };
+  }
+
+  for (let i = source.treePathParts.length; i >= 1; i -= 1) {
+    const candidate = source.treePathParts.slice(0, i).join('/');
+    if (
+      (await githubRefExists(source, 'heads', candidate)) ||
+      (await githubRefExists(source, 'tags', candidate))
+    ) {
+      return {
+        ref: candidate,
+        subpath: optionSubpath || normalizeSourceSubpath(source.treePathParts.slice(i).join('/')),
+      };
+    }
+  }
+
+  return {
+    ref: source.ref,
+    subpath: optionSubpath || source.subpath,
+  };
+}
+
+async function pullSkillFromGitHubArchive(
+  source: GitHubSkillSource,
+  options: HubPullOptions,
+): Promise<HubPullResult> {
+  const ref = options.ref?.trim() || (await resolveGitHubDefaultBranch(source)) || 'main';
+  const zipUrl = `https://codeload.github.com/${source.owner}/${source.repo}/zip/${encodeURI(ref)}`;
+  const res = await fetch(zipUrl, { headers: githubHeaders() });
+  if (!res.ok) {
+    throw new GitHubArchiveDownloadError(`HTTP ${res.status} while fetching GitHub archive`, res.status);
+  }
+
+  const tmpRoot = mkdtempSync(join(tmpdir(), 'xopc-github-zip-'));
+  try {
+    const buf = Buffer.from(await res.arrayBuffer());
+    extractZipBufferToTempDir(buf, tmpRoot);
+    const repoRoot = findExtractedRepositoryRoot(tmpRoot);
+    const effectiveOptions = { ...options, ref, subpath: options.subpath || source.subpath };
+    const skillRoot = findSkillRoot(repoRoot, effectiveOptions.subpath);
+    return await copySkillTreeToManaged(skillRoot, {
+      ...effectiveOptions,
+      kind: 'git',
+      source: source.sourceLabel,
+    });
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
+}
+
+async function pullSkillFromGitHubSparse(
+  source: GitHubSkillSource,
+  options: HubPullOptions,
+): Promise<HubPullResult> {
+  const subpath = normalizeSourceSubpath(options.subpath || source.subpath);
+  if (!subpath) {
+    return pullSkillFromGit(source.cloneUrl, options, source.sourceLabel);
+  }
+
+  const tmpRoot = mkdtempSync(join(tmpdir(), 'xopc-github-sparse-'));
+  const cloneDir = join(tmpRoot, 'clone');
+  let clonedRef = options.ref?.trim() || undefined;
+  try {
+    const args = ['clone', '--depth', '1', '--filter=blob:none', '--sparse'];
+    if (clonedRef) {
+      args.push('--branch', clonedRef);
+    }
+    args.push(source.cloneUrl, cloneDir);
+    try {
+      execFileSync('git', args, { stdio: 'pipe', encoding: 'utf-8' });
+    } catch {
+      if (!clonedRef) throw new Error(`git clone failed for ${source.cloneUrl}`);
+      clonedRef = undefined;
+      execFileSync(
+        'git',
+        ['clone', '--depth', '1', '--filter=blob:none', '--sparse', source.cloneUrl, cloneDir],
+        { stdio: 'pipe', encoding: 'utf-8' },
+      );
+    }
+
+    execFileSync('git', ['-C', cloneDir, 'sparse-checkout', 'set', '--no-cone', subpath], {
+      stdio: 'pipe',
+      encoding: 'utf-8',
+    });
+    const effectiveOptions = { ...options, subpath, ref: clonedRef };
+    const skillRoot = findSkillRoot(cloneDir, subpath);
+    return await copySkillTreeToManaged(skillRoot, {
+      ...effectiveOptions,
+      kind: 'git',
+      source: source.sourceLabel,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg.includes('ENOENT') || msg.includes('git clone failed')) {
+      throw new Error(
+        `Git operation failed (${msg}). Ensure git is installed and the repository URL is valid.`,
+      );
+    }
+    throw e;
+  } finally {
+    rmSync(tmpRoot, { recursive: true, force: true });
+  }
+}
+
+async function pullSkillFromGitHub(
+  source: GitHubSkillSource,
+  options: HubPullOptions,
+): Promise<HubPullResult> {
+  const resolved = await resolveGitHubTreeRefAndSubpath(source, options);
+  const effectiveOptions = {
+    ...options,
+    ref: resolved.ref,
+    subpath: resolved.subpath,
+  };
+  try {
+    return await pullSkillFromGitHubArchive(source, effectiveOptions);
+  } catch (archiveErr) {
+    try {
+      return await pullSkillFromGitHubSparse(source, effectiveOptions);
+    } catch (gitErr) {
+      const archiveMsg = archiveErr instanceof Error ? archiveErr.message : String(archiveErr);
+      const gitMsg = gitErr instanceof Error ? gitErr.message : String(gitErr);
+      throw new Error(`GitHub archive install failed (${archiveMsg}); git fallback failed (${gitMsg})`);
+    }
+  }
+}
+
 async function pullSkillFromLocalPath(absPath: string, options: HubPullOptions): Promise<HubPullResult> {
   const resolved = resolve(absPath);
   if (!existsSync(resolved)) {
@@ -249,19 +586,25 @@ async function pullSkillFromLocalPath(absPath: string, options: HubPullOptions):
   throw new Error('Unsupported file type (expected .zip, .tar.gz, or .tgz)');
 }
 
-async function pullSkillFromGit(url: string, options: HubPullOptions): Promise<HubPullResult> {
+async function pullSkillFromGit(
+  url: string,
+  options: HubPullOptions,
+  sourceLabel = url,
+): Promise<HubPullResult> {
   const tmpRoot = mkdtempSync(join(tmpdir(), 'xopc-hub-'));
   const cloneDir = join(tmpRoot, 'clone');
+  let clonedRef = options.ref?.trim() || undefined;
   try {
     const args = ['clone', '--depth', '1'];
-    if (options.ref?.trim()) {
-      args.push('--branch', options.ref.trim());
+    if (clonedRef) {
+      args.push('--branch', clonedRef);
     }
     args.push(url, cloneDir);
     try {
       execFileSync('git', args, { stdio: 'pipe', encoding: 'utf-8' });
     } catch {
-      if (options.ref?.trim()) {
+      if (clonedRef) {
+        clonedRef = undefined;
         execFileSync('git', ['clone', '--depth', '1', url, cloneDir], {
           stdio: 'pipe',
           encoding: 'utf-8',
@@ -271,7 +614,12 @@ async function pullSkillFromGit(url: string, options: HubPullOptions): Promise<H
       }
     }
     const skillRoot = findSkillRoot(cloneDir, options.subpath);
-    return await copySkillTreeToManaged(skillRoot, { ...options, kind: 'git', source: url });
+    return await copySkillTreeToManaged(skillRoot, {
+      ...options,
+      ref: clonedRef,
+      kind: 'git',
+      source: sourceLabel,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (msg.includes('ENOENT') || msg.includes('git clone failed')) {
@@ -303,6 +651,11 @@ export async function pullSkillFromSource(
 
   if (!/^[a-zA-Z][a-zA-Z+.-]*:\/\//.test(trimmed) && existsSync(trimmed)) {
     return pullSkillFromLocalPath(resolve(trimmed), options);
+  }
+
+  const githubSource = parseGitHubSkillSource(trimmed, options);
+  if (githubSource) {
+    return pullSkillFromGitHub(githubSource, options);
   }
 
   const kind = classifyHubSource(trimmed);

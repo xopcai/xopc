@@ -19,6 +19,10 @@ import {
 import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
 import type { PersistentGoalApis } from '../goals/persistent-goal-apis.js';
 import type { WorkflowRunServiceLike } from '../../workflows/service/workflow-run-service.types.js';
+import type {
+  SkillInstallToolOptions,
+  SkillInstallToolResult,
+} from '../tools/skill-install-tool.js';
 
 const log = createLogger('CommandHandler');
 
@@ -54,6 +58,8 @@ export interface CommandHandlerConfig {
   abortSessionTurn?: (sessionKey: string) => Promise<void>;
   /** Reload skills from disk and refresh active agent prompts. */
   reloadSkills?: () => void | Promise<void>;
+  /** Install a managed skill from an explicit source and refresh active agent prompts. */
+  installSkillFromSource?: (opts: SkillInstallToolOptions) => Promise<SkillInstallToolResult>;
 
   compactSession?: (
     sessionKey: string,
@@ -87,6 +93,7 @@ export class CommandHandler {
   private invalidateAgentSession?: (sessionKey: string) => void;
   private abortSessionTurn?: (sessionKey: string) => Promise<void>;
   private reloadSkills?: CommandHandlerConfig['reloadSkills'];
+  private installSkillFromSource?: CommandHandlerConfig['installSkillFromSource'];
   private compactSession?: CommandHandlerConfig['compactSession'];
   private btwQuery?: CommandHandlerConfig['btwQuery'];
   private getSessionContextReport?: CommandHandlerConfig['getSessionContextReport'];
@@ -105,6 +112,7 @@ export class CommandHandler {
     this.invalidateAgentSession = handlerConfig.invalidateAgentSession;
     this.abortSessionTurn = handlerConfig.abortSessionTurn;
     this.reloadSkills = handlerConfig.reloadSkills;
+    this.installSkillFromSource = handlerConfig.installSkillFromSource;
     this.compactSession = handlerConfig.compactSession;
     this.btwQuery = handlerConfig.btwQuery;
     this.getSessionContextReport = handlerConfig.getSessionContextReport;
@@ -227,6 +235,9 @@ export class CommandHandler {
         ? async () => {
             await this.reloadSkills!();
           }
+        : undefined,
+      installSkillFromSource: this.installSkillFromSource
+        ? (opts) => this.installSkillFromSource!({ ...opts, sessionKey: context.sessionKey })
         : undefined,
 
       compactSession: this.compactSession,

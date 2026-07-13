@@ -69,6 +69,8 @@ export interface CommandContextDeps {
   abortCurrentTurn?: () => Promise<void>;
   /** Reload skills from disk and refresh active agent prompts. */
   reloadSkills?: () => Promise<void>;
+  /** Install a managed skill from an explicit source and refresh active agent prompts. */
+  installSkillFromSource?: CommandContext['installSkillFromSource'];
 
   compactSession?: (
     sessionKey: string,
@@ -98,6 +100,7 @@ export class CommandContextImpl implements CommandContext {
   readonly config: Config;
   readonly abortCurrentTurn?: () => Promise<void>;
   readonly reloadSkills?: () => Promise<void>;
+  readonly installSkillFromSource?: CommandContext['installSkillFromSource'];
   readonly persistentGoalApis?: PersistentGoalApis;
   readonly workflowRunApis?: CommandContext['workflowRunApis'];
 
@@ -127,6 +130,10 @@ export class CommandContextImpl implements CommandContext {
       this.reloadSkills = async () => {
         await run();
       };
+    }
+
+    if (deps.installSkillFromSource) {
+      this.installSkillFromSource = deps.installSkillFromSource;
     }
 
     this.persistentGoalApis = deps.persistentGoalApis;

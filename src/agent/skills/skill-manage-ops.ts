@@ -23,8 +23,8 @@ export type AgentWritePolicy = 'global' | 'workspace' | 'both';
 
 export function effectiveAgentWritePolicy(cfg?: SkillsConfig): AgentWritePolicy {
   const p = cfg?.agentWritePolicy;
-  if (p === 'workspace' || p === 'both') return p;
-  return 'global';
+  if (p === 'global' || p === 'workspace' || p === 'both') return p;
+  return 'both';
 }
 
 export function maxSkillMdChars(_cfg?: SkillsConfig): number {

@@ -94,6 +94,15 @@ export const AGENT_CAPABILITY_DEFINITIONS = [
     permissions: { writesFiles: true, requiresConfirm: true },
   },
   {
+    id: 'skill-installation',
+    label: 'Skill installation',
+    description: 'Find, install, and update xopc skills from explicit sources.',
+    category: 'authoring',
+    tools: ['skills_list', 'skill_view', 'skill_install'],
+    activation: { mode: 'explicit', ttl: 'turn' },
+    permissions: { writesFiles: true, usesNetwork: true },
+  },
+  {
     id: 'visual-asset-authoring',
     label: 'Visual asset authoring',
     description: 'Generate and inspect images, icons, sprites, and other visual assets.',

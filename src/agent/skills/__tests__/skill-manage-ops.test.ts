@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   applyPatchToContent,
   ensureCategorySegment,
+  effectiveAgentWritePolicy,
+  resolveCreateSkillDir,
   validateSkillMdContent,
   validateSkillNameSegment,
   validateSupportingRelativePath,
@@ -68,5 +70,19 @@ describe('ensureCategorySegment', () => {
   });
   it('rejects slash', () => {
     expect(ensureCategorySegment('a/b')).not.toBeNull();
+  });
+});
+
+describe('skill manage write targets', () => {
+  it('allows both global and workspace writes by default', () => {
+    expect(effectiveAgentWritePolicy()).toBe('both');
+  });
+
+  it('resolves workspace create paths when requested', () => {
+    const result = resolveCreateSkillDir('demo', undefined, 'workspace', 'C:/work/project', 'both');
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.dir.replace(/\\/g, '/')).toBe('C:/work/project/.xopc/skills/demo');
+    }
   });
 });

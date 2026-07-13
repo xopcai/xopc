@@ -1,4 +1,4 @@
-import { mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -72,6 +72,19 @@ describe('managed-store', () => {
     expect(result.skillId).toBe('demo-skill');
     expect(entries).toEqual(['demo-skill']);
     expect(entries.some(isManagedSkillTransientDirName)).toBe(false);
+  });
+
+  it('installs zip into an explicit workspace skills root', () => {
+    useTempStateDir();
+    const workspaceRoot = mkdtempSync(join(tmpdir(), 'xopc-workspace-skills-'));
+    stateDirs.push(workspaceRoot);
+    const skillsRoot = join(workspaceRoot, '.xopc', 'skills');
+
+    const result = installSkillFromZip(makeSkillZip('workspace-skill'), { rootDir: skillsRoot });
+
+    expect(result.path).toBe(join(skillsRoot, 'workspace-skill'));
+    expect(existsSync(join(skillsRoot, 'workspace-skill', 'SKILL.md'))).toBe(true);
+    expect(existsSync(join(resolveSkillsDir(), 'workspace-skill'))).toBe(false);
   });
 
   it('deletes through a transient trash directory and removes the final skill', () => {

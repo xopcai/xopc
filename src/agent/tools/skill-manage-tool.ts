@@ -37,7 +37,8 @@ const SkillManageSchema = Type.Object({
   category: Type.Optional(Type.String({ description: 'Optional single-segment category folder under skills root' })),
   write_target: Type.Optional(
     Type.Union([Type.Literal('global'), Type.Literal('workspace')], {
-      description: 'Where to create the skill (default global). Respects skills.agentWritePolicy.',
+      description:
+        'Where to create the skill. Defaults to workspace. Use global only when the user explicitly asks for a global/personal skill. Respects skills.agentWritePolicy.',
     }),
   ),
   old_string: Type.Optional(Type.String()),
@@ -100,14 +101,7 @@ export function createSkillManageTool(deps: SkillManageToolDeps): AgentTool {
             const md = validateSkillMdContent(params.content ?? '', name, mdMax);
             if (md.ok === false) return jsonResult({ success: false, error: md.error });
 
-            if (mgr.hasSkill(name)) {
-              return jsonResult({
-                success: false,
-                error: `A skill named "${name}" already exists. Use edit or choose another name.`,
-              });
-            }
-
-            const target = params.write_target ?? 'global';
+            const target = params.write_target ?? 'workspace';
             const dirRes = resolveCreateSkillDir(name, params.category?.trim(), target, workspace, policy);
             if (dirRes.ok === false) return jsonResult({ success: false, error: dirRes.error });
 
@@ -132,6 +126,7 @@ export function createSkillManageTool(deps: SkillManageToolDeps): AgentTool {
             return jsonResult({
               success: true,
               message: `Skill "${name}" created.`,
+              target,
               path: dirRes.dir,
             });
           }

@@ -46,6 +46,15 @@ import {
 } from '../../agent/skills/managed-store.js';
 import { createSkillConfigManager } from '../../agent/skills/config.js';
 import { removeSkillsLockEntry } from '../../agent/skills/hub-lock.js';
+import type { HubPullResult } from '../../agent/skills/hub-pull.js';
+import {
+  normalizeSkillInstallTarget,
+  type SkillInstallTarget,
+} from '../../agent/skills/install-target.js';
+import {
+  resolveWorkspaceSkillsDir,
+  resolveWorkspaceSkillsLockPath,
+} from '../../agent/skills/workspace-skills-dir.js';
 import { getExtensionLockfileManager } from '../../extensions/lockfile.js';
 import { resolveExtensionsDir, resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
@@ -57,6 +66,7 @@ export interface GatewayMarketplaceServiceOptions {
   getAgentService: () => AgentService;
   getExtensionLoader: () => ExtensionLoader | null;
   getChannelManager: () => ChannelManager;
+  getWorkspacePath: () => string;
   saveConfig: (config: Config) => Promise<{ saved: boolean; error?: string }>;
   emit: (type: string, payload: unknown) => void;
 }
@@ -75,7 +85,24 @@ export interface SkillInstallAvailability {
 export interface SkillInstallResultPayload {
   skillId: string;
   path: string;
+  target?: SkillInstallTarget;
   availability: SkillInstallAvailability;
+}
+
+export interface SkillSourceInstallOptions {
+  source: string;
+  ref?: string;
+  path?: string;
+  skillId?: string;
+  target?: SkillInstallTarget;
+  force?: boolean;
+  strictScan?: boolean;
+}
+
+export interface SkillSourceInstallResultPayload extends SkillInstallResultPayload {
+  source: string;
+  kind: HubPullResult['kind'];
+  contentHash: string;
 }
 
 export class GatewayMarketplaceService {
@@ -83,6 +110,23 @@ export class GatewayMarketplaceService {
 
   constructor(opts: GatewayMarketplaceServiceOptions) {
     this.opts = opts;
+  }
+
+  private resolveInstallTarget(target: unknown): {
+    target: SkillInstallTarget;
+    rootDir?: string;
+    lockPath?: string;
+  } {
+    const normalized = normalizeSkillInstallTarget(target);
+    if (normalized === 'global') {
+      return { target: normalized };
+    }
+    const workspace = this.opts.getWorkspacePath();
+    return {
+      target: normalized,
+      rootDir: resolveWorkspaceSkillsDir(workspace),
+      lockPath: resolveWorkspaceSkillsLockPath(workspace),
+    };
   }
 
   // ── Local skills (managed dir) ────────────────────────────────────────
@@ -120,7 +164,20 @@ export class GatewayMarketplaceService {
     return this.opts.getAgentService().getSkillMarkdownSource(skillName);
   }
 
-  deleteSkill(skillId: string): void {
+  deleteSkill(skillId: string, target?: SkillInstallTarget): void {
+    const requestedTarget = target ? this.resolveInstallTarget(target) : undefined;
+    const workspaceTarget = requestedTarget ?? this.resolveInstallTarget('workspace');
+    try {
+      removeSkillsLockEntry(skillId, workspaceTarget.lockPath);
+      deleteManagedSkillDir(skillId, workspaceTarget.rootDir);
+      this.opts.getAgentService().refreshSkillsAfterDiskChange();
+      return;
+    } catch (err) {
+      if (requestedTarget || !(err instanceof Error) || !err.message.includes('Skill not found')) {
+        throw err;
+      }
+    }
+
     removeSkillsLockEntry(skillId);
     deleteManagedSkillDir(skillId);
     this.opts.getAgentService().refreshSkillsAfterDiskChange();
@@ -128,13 +185,19 @@ export class GatewayMarketplaceService {
 
   installSkillZip(
     buffer: Buffer,
-    opts: { skillId?: string; overwrite?: boolean },
+    opts: { skillId?: string; overwrite?: boolean; target?: SkillInstallTarget },
   ): SkillInstallResultPayload {
-    const result = installSkillFromZip(buffer, opts);
-    removeSkillsLockEntry(result.skillId);
+    const target = this.resolveInstallTarget(opts.target);
+    const result = installSkillFromZip(buffer, {
+      skillId: opts.skillId,
+      overwrite: opts.overwrite,
+      rootDir: target.rootDir,
+    });
+    removeSkillsLockEntry(result.skillId, target.lockPath);
     this.opts.getAgentService().refreshSkillsAfterDiskChange();
     return {
       ...result,
+      target: target.target,
       availability: this.getInstallAvailability(result.skillId),
     };
   }
@@ -178,6 +241,7 @@ export class GatewayMarketplaceService {
     version?: string;
     overwrite?: boolean;
     provider?: string;
+    target?: SkillInstallTarget;
   }): Promise<SkillInstallResultPayload> {
     const { downloadFromMarketplace } = await import('../../agent/skills/skills-marketplace.js');
     const { buffer, skillId } = await downloadFromMarketplace(
@@ -186,7 +250,35 @@ export class GatewayMarketplaceService {
       opts.version,
       opts.provider,
     );
-    return this.installSkillZip(buffer, { skillId, overwrite: opts.overwrite ?? false });
+    return this.installSkillZip(buffer, {
+      skillId,
+      overwrite: opts.overwrite ?? false,
+      target: opts.target,
+    });
+  }
+
+  async installSkillFromSource(
+    opts: SkillSourceInstallOptions,
+  ): Promise<SkillSourceInstallResultPayload> {
+    const result = await this.opts.getAgentService().installSkillFromSource({
+      source: opts.source,
+      ref: opts.ref,
+      path: opts.path,
+      skillId: opts.skillId,
+      target: opts.target,
+      workspace: this.opts.getWorkspacePath(),
+      force: opts.force ?? false,
+      strictScan: opts.strictScan ?? false,
+    });
+    return {
+      skillId: result.skillId,
+      path: result.path,
+      target: result.target,
+      source: result.source,
+      kind: result.kind,
+      contentHash: result.contentHash,
+      availability: this.getInstallAvailability(result.skillId),
+    };
   }
 
   async getSkillsProvider(): Promise<{ provider: string; displayName: string }> {

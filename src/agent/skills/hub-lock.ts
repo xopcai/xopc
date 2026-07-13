@@ -32,8 +32,8 @@ function emptyLock(): SkillsLockFile {
   return { version: 1, entries: {} };
 }
 
-export function loadSkillsLock(): SkillsLockFile {
-  const p = resolveSkillsLockPath();
+export function loadSkillsLock(lockPath = resolveSkillsLockPath()): SkillsLockFile {
+  const p = lockPath;
   if (!existsSync(p)) return emptyLock();
   try {
     const raw = readFileSync(p, 'utf-8');
@@ -47,8 +47,8 @@ export function loadSkillsLock(): SkillsLockFile {
   }
 }
 
-export function saveSkillsLock(lock: SkillsLockFile): void {
-  const p = resolveSkillsLockPath();
+export function saveSkillsLock(lock: SkillsLockFile, lockPath = resolveSkillsLockPath()): void {
+  const p = lockPath;
   writeTextAtomicSync(p, `${JSON.stringify(lock, null, 2)}\n`);
 }
 
@@ -57,8 +57,9 @@ export function recordSkillsHubInstall(
   skillId: string,
   meta: Pick<SkillHubLockEntry, 'kind' | 'source' | 'ref' | 'subpath'>,
   contentHash: string,
+  lockPath?: string,
 ): void {
-  const lock = loadSkillsLock();
+  const lock = loadSkillsLock(lockPath);
   const now = new Date().toISOString();
   const prev = lock.entries[skillId];
   lock.entries[skillId] = {
@@ -70,16 +71,16 @@ export function recordSkillsHubInstall(
     installedAt: prev?.installedAt ?? now,
     updatedAt: now,
   };
-  saveSkillsLock(lock);
+  saveSkillsLock(lock, lockPath);
 }
 
-export function removeSkillsLockEntry(skillId: string): void {
-  const lock = loadSkillsLock();
+export function removeSkillsLockEntry(skillId: string, lockPath?: string): void {
+  const lock = loadSkillsLock(lockPath);
   if (!lock.entries[skillId]) return;
   delete lock.entries[skillId];
-  saveSkillsLock(lock);
+  saveSkillsLock(lock, lockPath);
 }
 
-export function getSkillsLockEntry(skillId: string): SkillHubLockEntry | undefined {
-  return loadSkillsLock().entries[skillId];
+export function getSkillsLockEntry(skillId: string, lockPath?: string): SkillHubLockEntry | undefined {
+  return loadSkillsLock(lockPath).entries[skillId];
 }
