@@ -1,12 +1,14 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Copy, File, Folder, FolderOpen, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
+import { AlertCircle, Archive, ArrowLeft, Check, ChevronDown, Clock, Copy, File, Folder, FolderPlus, History, LayoutDashboard, ListChecks, MessageSquarePlus, Pause, Pin, PinOff, Play, Plus, RotateCcw, Save, Search, Settings, Square, Target, Trash2, X, Zap, type LucideIcon } from 'lucide-react';
 import { type CSSProperties, type FormEvent, type MouseEvent, type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { RefreshButton } from '@/components/ui/refresh-button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { automationApi, type Automation, type AutomationRun } from '@/features/automations/automation-api';
 import { inferMimeTypeFromFileName } from '@/features/chat/attachments/attachment-utils-core';
 import { showComposerNotification } from '@/features/chat/composer/composer-notifications';
@@ -32,6 +34,7 @@ import {
   fetchProjects,
   fetchProjectSessions,
   saveProjectDigest,
+  searchProjectFiles,
   pinProject,
   restoreProject,
   unpinProject,
@@ -39,6 +42,7 @@ import {
   type Project,
   type ProjectActivityEvent,
   type ProjectFileEntry,
+  type ProjectFileSearchEntry,
   type ProjectGoal,
   type ProjectOverview,
   type ProjectSession,
@@ -67,6 +71,7 @@ import {
   readWorkspaceFile,
 } from '@/features/workspace/workspace-api';
 import { WorkspaceFilePreviewPanel } from '@/features/workspace/workspace-file-preview-dialog';
+import { WorkspaceOpenLocationMenu } from '@/features/workspace/workspace-open-location-menu';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
@@ -681,6 +686,9 @@ export function ProjectDetailPage() {
   const [projectFilesPanelResizing, setProjectFilesPanelResizing] = useState(false);
   const [projectFileSearchOpen, setProjectFileSearchOpen] = useState(false);
   const [projectFileSearchQuery, setProjectFileSearchQuery] = useState('');
+  const [projectFileSearchResults, setProjectFileSearchResults] = useState<ProjectFileSearchEntry[]>([]);
+  const [projectFileSearchLoading, setProjectFileSearchLoading] = useState(false);
+  const [projectFileSearchError, setProjectFileSearchError] = useState<string | null>(null);
   const [filesLoading, setFilesLoading] = useState(false);
   const [filesError, setFilesError] = useState<string | null>(null);
   const [agents, setAgents] = useState<GatewayAgentRow[]>([]);
@@ -1019,6 +1027,37 @@ export function ProjectDetailPage() {
     if (tab !== 'files') return;
     void refreshProjectFiles();
   }, [refreshProjectFiles, tab]);
+
+  const normalizedProjectFileSearchQuery = projectFileSearchQuery.trim();
+
+  useEffect(() => {
+    if (tab !== 'files' || !project || !projectFileSearchOpen || !normalizedProjectFileSearchQuery) {
+      setProjectFileSearchResults([]);
+      setProjectFileSearchLoading(false);
+      setProjectFileSearchError(null);
+      return;
+    }
+    let cancelled = false;
+    setProjectFileSearchLoading(true);
+    setProjectFileSearchError(null);
+    setProjectFileSearchResults([]);
+    const timer = window.setTimeout(() => {
+      void searchProjectFiles(project.id, normalizedProjectFileSearchQuery, 50)
+        .then((entries) => {
+          if (!cancelled) setProjectFileSearchResults(entries);
+        })
+        .catch((err) => {
+          if (!cancelled) setProjectFileSearchError(err instanceof Error ? err.message : String(err));
+        })
+        .finally(() => {
+          if (!cancelled) setProjectFileSearchLoading(false);
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [normalizedProjectFileSearchQuery, project, projectFileSearchOpen, tab]);
 
   const startChat = useCallback(async () => {
     if (!project) return;
@@ -1509,17 +1548,10 @@ export function ProjectDetailPage() {
   const workspaceMigrationValue = workspaceMigrationMode === 'fixed' ? workspaceMigrationRoot.trim() : '';
   const workspaceMigrationChanged = workspaceMigrationValue !== fixedProjectWorkspace;
   const workspaceMigrationCanSubmit = workspaceMigrationChanged && (workspaceMigrationMode === 'follow' || Boolean(workspaceMigrationRoot.trim()));
-  const canOpenProjectWorkspace = Boolean(workspaceRootLabel && window.electronAPI?.shell?.openPath);
   const tabItems = tabOrder.map((id) => {
     const item = TABS.find((candidate) => candidate.id === id)!;
     return { ...item, label: item.id === 'work-items' ? pm.workItems.tab : pm.tabs[item.id] };
   });
-
-  async function openProjectWorkspaceFolder() {
-    if (!workspaceRootLabel || !window.electronAPI?.shell?.openPath) return;
-    const result = await window.electronAPI.shell.openPath(workspaceRootLabel);
-    if (result.error) showComposerNotification('warning', result.error, undefined, { duration: 4000 });
-  }
 
   async function copyProjectWorkspacePath() {
     if (!workspaceRootLabel) return;
@@ -1969,57 +2001,101 @@ export function ProjectDetailPage() {
                 style={{ '--project-files-panel-width': `${projectFilesPanelWidth}px` } as CSSProperties}
               >
                 <aside className="flex min-h-0 flex-col border-b border-edge lg:border-b-0 lg:border-r">
-                  <div className="flex min-h-10 flex-wrap items-center gap-1 border-b border-edge bg-surface-muted/50 px-3 py-1.5 text-sm">
-                    <button
-                      type="button"
-                      className="rounded-md bg-surface-hover px-2 py-1 text-xs font-medium text-fg hover:bg-surface-hover hover:text-fg"
-                      onClick={() => void refreshProjectFiles()}
-                    >
-                      {pm.common.root}
-                    </button>
-                    <div className="ml-auto flex min-w-0 items-center gap-1">
-                      {projectFileSearchOpen ? (
-                        <input
-                          type="search"
-                          value={projectFileSearchQuery}
-                          onChange={(event) => setProjectFileSearchQuery(event.target.value)}
-                          placeholder={pm.files.searchPlaceholder}
-                          aria-label={pm.files.searchPlaceholder}
-                          autoFocus
-                          className="h-7 min-w-32 flex-1 rounded-md border border-edge bg-surface-panel px-2 text-xs text-fg outline-none placeholder:text-fg-subtle focus:border-accent focus:ring-2 focus:ring-accent/20"
-                        />
-                      ) : null}
+                  <div className="flex h-11 items-center gap-1 border-b border-edge bg-surface-muted/50 px-3 text-sm">
+                    <WorkspaceOpenLocationMenu workspacePath={workspaceRootLabel} />
+                    <div className="ml-auto flex shrink-0 items-center gap-1">
                       <button
                         type="button"
                         className={cn(
                           'inline-flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg',
                           projectFileSearchOpen && 'bg-surface-hover text-fg',
                         )}
-                        onClick={() => {
-                          if (projectFileSearchOpen) {
-                            setProjectFileSearchQuery('');
-                            setProjectFileSearchOpen(false);
-                            return;
-                          }
-                          setProjectFileSearchOpen(true);
-                        }}
-                        aria-label={projectFileSearchOpen ? pm.files.clearSearch : pm.files.search}
-                        title={projectFileSearchOpen ? pm.files.clearSearch : pm.files.search}
+                        onClick={() => setProjectFileSearchOpen(true)}
+                        aria-label={pm.files.search}
+                        title={pm.files.search}
+                        aria-pressed={projectFileSearchOpen}
                       >
-                        {projectFileSearchOpen ? (
-                          <X className="size-3.5" aria-hidden />
-                        ) : (
-                          <Search className="size-3.5" aria-hidden />
-                        )}
+                        <Search className="size-3.5" aria-hidden />
                       </button>
+                      <RefreshButton
+                        className="size-7 shrink-0 rounded-md p-0"
+                        loading={filesLoading}
+                        label={msg.cron.refresh}
+                        onClick={() => void refreshProjectFiles()}
+                      />
                     </div>
                   </div>
+
+                  {projectFileSearchOpen ? (
+                    <div className="shrink-0 border-b border-edge bg-surface-muted/40 px-3 py-2">
+                      <div className="flex h-8 items-center gap-2 rounded-md border border-edge bg-surface-panel px-2 focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20">
+                        <Search className="size-3.5 shrink-0 text-fg-subtle" aria-hidden />
+                        <input
+                          type="text"
+                          role="searchbox"
+                          value={projectFileSearchQuery}
+                          onChange={(event) => setProjectFileSearchQuery(event.target.value)}
+                          placeholder={pm.files.searchPlaceholder}
+                          aria-label={pm.files.searchPlaceholder}
+                          autoFocus
+                          className="min-w-0 flex-1 bg-transparent text-xs text-fg outline-none placeholder:text-fg-subtle"
+                        />
+                        <button
+                          type="button"
+                          className="flex size-6 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-surface-hover hover:text-fg"
+                          aria-label={pm.files.clearSearch}
+                          title={pm.files.clearSearch}
+                          onClick={() => {
+                            setProjectFileSearchQuery('');
+                            setProjectFileSearchOpen(false);
+                          }}
+                        >
+                          <X className="size-3.5" aria-hidden />
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
 
                   {filesError ? (
                     <div className="border-b border-edge bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">{filesError}</div>
                   ) : null}
 
-                  {filesLoading && projectFileTree.length === 0 ? (
+                  {normalizedProjectFileSearchQuery ? (
+                    <div className="min-h-0 flex-1 overflow-y-auto py-2">
+                      {projectFileSearchLoading ? (
+                        <div className="space-y-2 px-3 py-1">
+                          <Skeleton className="h-11 w-full" />
+                          <Skeleton className="h-11 w-full" />
+                          <Skeleton className="h-11 w-full" />
+                        </div>
+                      ) : projectFileSearchError ? (
+                        <p className="px-3 py-2 text-xs text-red-600 dark:text-red-400">
+                          {msg.workspace.loadError}: {projectFileSearchError}
+                        </p>
+                      ) : projectFileSearchResults.length === 0 ? (
+                        <p className="px-3 py-2 text-xs text-fg-muted">{pm.files.noSearchResults}</p>
+                      ) : (
+                        projectFileSearchResults.map((entry) => (
+                          <button
+                            key={entry.path}
+                            type="button"
+                            className={cn(
+                              'flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left hover:bg-surface-hover',
+                              previewFilePath === entry.path && 'bg-accent-soft text-accent-fg',
+                            )}
+                            onClick={() => setPreviewFilePath(entry.path)}
+                            title={entry.path}
+                          >
+                            <File className="size-4 shrink-0 text-fg-muted" aria-hidden />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm text-fg">{entry.name}</span>
+                              <span className="block truncate text-xs text-fg-subtle">{entry.path}</span>
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  ) : filesLoading && projectFileTree.length === 0 ? (
                     <div className="px-4 py-6 text-sm text-fg-muted">{pm.files.loading}</div>
                   ) : (
                     <FileTree
@@ -2039,8 +2115,6 @@ export function ProjectDetailPage() {
                         recommendedApps: msg.workspace.recommendedApps,
                       }}
                       emptyHint={pm.files.emptyDirectory}
-                      searchQuery={projectFileSearchQuery}
-                      emptySearchHint={pm.files.noSearchResults}
                     />
                   )}
                 </aside>
@@ -2367,10 +2441,7 @@ export function ProjectDetailPage() {
                       <Copy className="size-4" aria-hidden />
                       {pm.settings.copyWorkspacePath}
                     </Button>
-                    <Button type="button" variant="ghost" className="rounded-lg" onClick={() => void openProjectWorkspaceFolder()} disabled={!canOpenProjectWorkspace}>
-                      <FolderOpen className="size-4" aria-hidden />
-                      {pm.settings.openWorkspace}
-                    </Button>
+                    <WorkspaceOpenLocationMenu workspacePath={workspaceRootLabel} />
                     <Button type="button" variant="ghost" className="rounded-lg" onClick={openWorkspaceMigration}>
                       <FolderPlus className="size-4" aria-hidden />
                       {pm.settings.migrateWorkspace}

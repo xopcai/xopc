@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { TreeEntry } from '@/features/file-tree/file-tree-types';
-import { listWorkspaceDir, type WorkspaceEntry } from '@/features/workspace/workspace-api';
+import { fetchWorkspaceDirectoryListing, listWorkspaceDir, type WorkspaceEntry } from '@/features/workspace/workspace-api';
 
 /** Convert flat API entries into TreeEntry nodes (children initially empty for dirs). */
 function toTreeEntries(entries: WorkspaceEntry[]): TreeEntry[] {
@@ -35,6 +35,7 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [workspaceRoot, setWorkspaceRoot] = useState<string | null>(null);
   const loadedDirsRef = useRef<Set<string>>(new Set());
   const trimmedAgentId = agentId.trim();
   const trimmedSessionKey = sessionKey?.trim() ?? '';
@@ -53,8 +54,9 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
     setError(null);
     loadedDirsRef.current.clear();
     try {
-      const entries = await listWorkspaceDir('', editorOpts);
-      setTree(toTreeEntries(entries));
+      const listing = await fetchWorkspaceDirectoryListing('', editorOpts);
+      setTree(toTreeEntries(listing.entries));
+      setWorkspaceRoot(listing.root?.trim() || null);
       loadedDirsRef.current.add('');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -81,8 +83,9 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
   const reset = useCallback(() => {
     setTree([]);
     setError(null);
+    setWorkspaceRoot(null);
     loadedDirsRef.current.clear();
   }, []);
 
-  return { tree, loading, error, loadRoot, loadChildren, reset };
+  return { tree, loading, error, workspaceRoot, loadRoot, loadChildren, reset };
 }

@@ -11,8 +11,24 @@ export interface WorkspaceEntry {
 
 interface ListResponse {
   ok: boolean;
-  payload: { entries: WorkspaceEntry[] };
+  payload: { root?: string; entries: WorkspaceEntry[] };
 }
+
+interface FileSearchResponse {
+  ok: boolean;
+  payload: { entries: WorkspaceFileSearchEntry[] };
+}
+
+export type WorkspaceDirectoryListing = {
+  root?: string;
+  entries: WorkspaceEntry[];
+};
+
+export type WorkspaceFileSearchEntry = {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+};
 
 interface ReadResponse {
   ok: boolean;
@@ -103,13 +119,42 @@ function projectFileUrl(options: WorkspaceEditorRequestOptions | undefined, acti
   return apiUrl(`/api/projects/${encodeURIComponent(projectId)}/files/${action}${qs ? `?${qs}` : ''}`);
 }
 
+/** List a single directory level under the workspace, including its host root when available. */
+export async function fetchWorkspaceDirectoryListing(
+  dir = '',
+  options?: WorkspaceEditorRequestOptions,
+): Promise<WorkspaceDirectoryListing> {
+  const res = await fetchJson<ListResponse>(
+    apiUrl(`/api/workspace/editor/list${editorQuery(dir, options)}`),
+  );
+  return res.payload;
+}
+
 /** List a single directory level under the workspace. */
 export async function listWorkspaceDir(
   dir = '',
   options?: WorkspaceEditorRequestOptions,
 ): Promise<WorkspaceEntry[]> {
-  const res = await fetchJson<ListResponse>(
-    apiUrl(`/api/workspace/editor/list${editorQuery(dir, options)}`),
+  const listing = await fetchWorkspaceDirectoryListing(dir, options);
+  return listing.entries;
+}
+
+/** Search every file name and relative path in the effective workspace. */
+export async function searchWorkspaceFiles(
+  query: string,
+  options?: WorkspaceEditorRequestOptions,
+  limit = 50,
+): Promise<WorkspaceFileSearchEntry[]> {
+  const params = new URLSearchParams({ q: query.trim(), limit: String(limit) });
+  const sk = options?.sessionKey?.trim();
+  if (sk) {
+    params.set('sessionKey', sk);
+  } else {
+    const aid = options?.agentId?.trim();
+    if (aid) params.set('agentId', aid);
+  }
+  const res = await fetchJson<FileSearchResponse>(
+    apiUrl(`/api/workspace/editor/files/search?${params.toString()}`),
   );
   return res.payload.entries;
 }

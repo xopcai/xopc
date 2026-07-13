@@ -257,7 +257,7 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
       if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
       return a.name.localeCompare(b.name);
     });
-    return c.json({ ok: true, payload: { entries } });
+    return c.json({ ok: true, payload: { root: workspaceRoot, entries } });
   });
 
   authenticated.get('/api/workspace/editor/read', async (c) => {
