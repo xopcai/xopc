@@ -50,6 +50,9 @@ function asStringArray(value: unknown, label: string): string[] {
   return value.map((item) => item.trim());
 }
 
+const NPM_PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/;
+const EXACT_SEMVER = /^v?(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+
 function assertSafeRemoteUrl(value: unknown): string {
   const urlString = asString(value, 'Connector MCP endpoint');
   let url: URL;
@@ -72,9 +75,10 @@ function assertSafeRemoteUrl(value: unknown): string {
   return url.toString();
 }
 
-function readPermissions(value: unknown): ConnectorPermissions {
+function readPermissions(value: unknown, isLocal: boolean): ConnectorPermissions {
   const permissions = asRecord(value, 'Connector permissions');
-  if (permissions.localExec !== false) {
+  if (permissions.localExec !== isLocal) {
+    if (isLocal) throw new Error('Local Store connectors must explicitly allow local command execution.');
     throw new Error('Store connectors must explicitly deny local command execution.');
   }
   const filesystem = permissions.filesystem === undefined
@@ -84,15 +88,36 @@ function readPermissions(value: unknown): ConnectorPermissions {
     throw new Error('Store connectors cannot request filesystem access.');
   }
   const networkDomains = asStringArray(permissions.networkDomains, 'Connector network domains');
-  if (networkDomains.length === 0) {
+  if (!isLocal && networkDomains.length === 0) {
     throw new Error('Store connectors must declare at least one network domain.');
   }
   return {
     ...(permissions.data === undefined ? {} : { data: asStringArray(permissions.data, 'Connector data permissions') }),
     networkDomains,
-    localExec: false,
+    localExec: isLocal,
     filesystem,
   };
+}
+
+function readPinnedLocalRuntime(runtime: JsonRecord, template: JsonRecord): { registry: 'npm'; name: string; version: string } | null {
+  if (runtime.localPackage === undefined) return null;
+  const localPackage = asRecord(runtime.localPackage, 'Connector localPackage');
+  if (localPackage.registry !== 'npm') {
+    throw new Error('Local Store connectors must use the npm registry.');
+  }
+  const name = asString(localPackage.name, 'Connector local package name');
+  const version = asString(localPackage.version, 'Connector local package version');
+  if (!NPM_PACKAGE_NAME.test(name) || !EXACT_SEMVER.test(version)) {
+    throw new Error('Local Store connectors must use a valid exact npm package version.');
+  }
+  if (template.command !== 'npx' ||
+    JSON.stringify(asStringArray(template.args, 'Connector local MCP arguments')) !== JSON.stringify(['--yes', `${name}@${version}`])) {
+    throw new Error('Local Store connectors must use the pinned npx launch form.');
+  }
+  for (const field of ['url', 'env', 'cwd', 'workingDirectory', 'headers', 'transport']) {
+    if (field in template) throw new Error('Local Store connectors cannot define additional MCP process fields.');
+  }
+  return { registry: 'npm', name, version };
 }
 
 function readConnectorManifest(
@@ -110,8 +135,9 @@ function readConnectorManifest(
     throw new Error('Store connectors must use the MCP runtime.');
   }
   const serverTemplate = asRecord(runtime.serverTemplate, 'Connector MCP serverTemplate');
+  const localPackage = readPinnedLocalRuntime(runtime, serverTemplate);
   const transport = serverTemplate.transport;
-  if (transport !== 'streamable-http' && transport !== 'sse') {
+  if (!localPackage && transport !== 'streamable-http' && transport !== 'sse') {
     throw new Error('Store connectors must use streamable-http or sse transport.');
   }
   const auth = asRecord(manifest.auth, 'Connector auth');
@@ -126,16 +152,16 @@ function readConnectorManifest(
   const capabilities = asStringArray(manifest.capabilities, 'Connector capabilities');
   const allowedCapabilities = new Set([
     'tools', 'resources', 'prompts', 'context', 'events', 'auth.apiKey', 'auth.oauth',
-    'runtime.mcp.sse', 'runtime.mcp.streamableHttp',
+    'runtime.mcp.stdio', 'runtime.mcp.sse', 'runtime.mcp.streamableHttp',
   ]);
   if (capabilities.some((capability) => !allowedCapabilities.has(capability))) {
     throw new Error('Connector manifest contains an unsupported capability.');
   }
   const setup = manifest.setup === undefined ? {} : asRecord(manifest.setup, 'Connector setup');
-  const permissions = readPermissions(manifest.permissions);
-  const endpoint = assertSafeRemoteUrl(serverTemplate.url);
-  const hostname = new URL(endpoint).hostname;
-  if (permissions.networkDomains?.length && !permissions.networkDomains.includes(hostname)) {
+  const permissions = readPermissions(manifest.permissions, Boolean(localPackage));
+  const endpoint = localPackage ? undefined : assertSafeRemoteUrl(serverTemplate.url);
+  const hostname = endpoint ? new URL(endpoint).hostname : undefined;
+  if (hostname && permissions.networkDomains?.length && !permissions.networkDomains.includes(hostname)) {
     throw new Error('Connector network permissions must include the MCP endpoint host.');
   }
 
@@ -154,7 +180,8 @@ function readConnectorManifest(
     runtime: {
       type: 'mcp',
       serverId: asString(runtime.serverId, 'Connector MCP serverId'),
-      serverTemplate: { ...serverTemplate, url: endpoint },
+      serverTemplate: localPackage ? serverTemplate : { ...serverTemplate, url: endpoint },
+      ...(localPackage ? { localPackage } : {}),
     },
     permissions,
     provenance: { packageName, sha256 },

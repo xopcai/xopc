@@ -56,6 +56,11 @@ export type ConnectorRuntimeDefinition =
       type: 'mcp';
       serverId: string;
       serverTemplate: Record<string, unknown>;
+      localPackage?: {
+        registry: 'npm';
+        name: string;
+        version: string;
+      };
     }
   | {
       type: 'channel';
