@@ -10,6 +10,7 @@ import {
   downloadExtensionStoreZipBuffer,
   resolveExtensionZipDownloadUrl,
   resolveExtensionsStoreBaseUrl,
+  verifyStoreArtifactSha256,
 } from '../agent/skills/marketplace/adapters/store/store-api-client.js';
 import type { Config } from '../config/schema.js';
 import { resolveBundledExtensionsDir, resolveExtensionsDir } from '../config/paths.js';
@@ -111,12 +112,13 @@ async function installExtensionFromStoreWithLock(params: {
   lock: ReturnType<typeof getExtensionLockfileManager>;
 }): Promise<{ ok: true; extensionId: string; version: string } | { ok: false; error: string }> {
   try {
-    const { downloadUrl, version } = await resolveExtensionZipDownloadUrl(
+    const { downloadUrl, version, sha256 } = await resolveExtensionZipDownloadUrl(
       params.storeBase,
       params.packageName,
       params.version,
     );
     const buf = await downloadExtensionStoreZipBuffer(params.storeBase, downloadUrl);
+    verifyStoreArtifactSha256(buf, sha256);
     const result = await installExtensionFromStoreZip(buf, params.targetDir);
     if (!result.ok || !result.extensionId) {
       return { ok: false, error: result.error ?? 'install failed' };

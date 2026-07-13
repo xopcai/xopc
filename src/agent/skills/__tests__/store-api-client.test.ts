@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { createHash } from 'node:crypto';
 
 import { ConfigSchema } from '../../../config/schema.js';
 import {
@@ -6,6 +7,7 @@ import {
   downloadSkillZipBuffer,
   resolveSkillsStoreBaseUrl,
   skillIdForMarketplaceInstall,
+  verifyStoreArtifactSha256,
 } from '../marketplace/adapters/store/store-api-client.js';
 
 describe('store-api-client (XOPC Store HTTP)', () => {
@@ -90,6 +92,19 @@ describe('store-api-client (XOPC Store HTTP)', () => {
         'https://store.xopc.ai/files/a.zip',
       );
       expect(buf.equals(Buffer.from('tiny'))).toBe(true);
+    });
+
+    it('verifies a Store-provided artifact digest', async () => {
+      const expected = createHash('sha256').update('tiny').digest('hex');
+      const buf = await downloadSkillZipBuffer(
+        storeBase,
+        'https://store.xopc.ai/files/a.zip',
+        expected,
+      );
+      expect(buf.equals(Buffer.from('tiny'))).toBe(true);
+      expect(() => verifyStoreArtifactSha256(buf, '0'.repeat(64))).toThrow(
+        'checksum verification failed',
+      );
     });
   });
 });

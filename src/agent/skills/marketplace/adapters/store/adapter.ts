@@ -6,6 +6,7 @@ import {
   resolveSkillZipDownloadUrl,
   resolveSkillsStoreBaseUrl,
   skillIdForMarketplaceInstall,
+  verifyStoreArtifactSha256,
 } from './store-api-client.js';
 
 import type { SkillsMarketplaceAdapter } from '../../adapter.types.js';
@@ -48,12 +49,13 @@ export const storeMarketplaceAdapter: SkillsMarketplaceAdapter = {
 
   async downloadPackage(config, packageName, version) {
     const base = resolveSkillsStoreBaseUrl(config);
-    const { downloadUrl, version: resolvedVersion } = await resolveSkillZipDownloadUrl(
+    const { downloadUrl, version: resolvedVersion, sha256 } = await resolveSkillZipDownloadUrl(
       base,
       packageName,
       version,
     );
     const buffer = await downloadSkillZipBuffer(base, downloadUrl);
+    verifyStoreArtifactSha256(buffer, sha256);
     return {
       buffer,
       skillId: skillIdForMarketplaceInstall(packageName) ?? packageName,
