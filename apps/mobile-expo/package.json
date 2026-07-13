@@ -5,6 +5,7 @@
   "description": "Expo mobile client for the xopc gateway",
   "main": "index.js",
   "scripts": {
+    "assets": "node ../../scripts/generate-brand-assets.mjs --target=mobile",
     "start": "RCT_METRO_PORT=8082 expo start --port 8082",
     "start:offline": "RCT_METRO_PORT=8082 expo start --offline --port 8082",
     "start:no-proxy": "HTTPS_PROXY= HTTP_PROXY= ALL_PROXY= http_proxy= https_proxy= RCT_METRO_PORT=8082 expo start --port 8082",
