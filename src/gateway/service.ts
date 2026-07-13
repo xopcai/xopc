@@ -271,6 +271,7 @@ export class GatewayService {
       getAgentService: () => this.ensureAgentService(),
       getExtensionLoader: () => this.extensionLoader,
       getChannelManager: () => this.channelManager,
+      getWorkspacePath: () => this.currentWorkspacePath,
       saveConfig: (cfg) => this.saveConfig(cfg),
       emit: (type, payload) => this.emit(type, payload),
     });

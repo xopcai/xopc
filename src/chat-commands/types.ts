@@ -214,6 +214,24 @@ export interface CommandContext {
   /** Reload skills from disk and refresh active agent prompts. */
   reloadSkills?(): Promise<void>;
 
+  /** Install a managed skill from an explicit source and refresh active agent prompts. */
+  installSkillFromSource?(opts: {
+    source: string;
+    ref?: string;
+    path?: string;
+    skillId?: string;
+    target?: 'workspace' | 'global';
+    force?: boolean;
+    strictScan?: boolean;
+  }): Promise<{
+    skillId: string;
+    path: string;
+    source: string;
+    kind: 'git' | 'archive';
+    contentHash: string;
+    target?: 'workspace' | 'global';
+  }>;
+
   /** Persist session thinking level and sync in-memory agent (when wired) */
   setThinkingLevel?(level: ThinkLevel): Promise<void>;
 

@@ -41,6 +41,9 @@ import {
   createAutomationTool,
   createXopcUseTool,
   createDesktopPetTool,
+  createSkillInstallTool,
+  type SkillInstallToolOptions,
+  type SkillInstallToolResult,
 } from './index.js';
 import { createCuratedMemoryTool } from './curated-memory-tool.js';
 import { createSessionSearchTool } from './session-search-tool.js';
@@ -118,6 +121,8 @@ export interface ToolFactoryDeps {
   getSkillPassthroughEnvVarNames?: () => string[];
   /** Add declared env names for the current session (no values stored). */
   registerSkillEnvPassthrough?: (names: string[]) => void;
+  /** Install managed skills from explicit sources when a capability/tool enables it. */
+  installSkillFromSource?: (opts: SkillInstallToolOptions) => Promise<SkillInstallToolResult>;
 }
 
 export interface CreateCoreToolsOptions {
@@ -482,12 +487,21 @@ export class AgentToolsFactory {
       if (disabled?.has(toolName) || toolNames.has(toolName)) continue;
       toolNames.add(toolName);
       if (toolName === 'create_desktop_pet') raw.push(createDesktopPetTool() as AgentTool<any, any>);
+      if (toolName === 'skill_install') {
+        raw.push(createSkillInstallTool({
+          installSkillFromSource: this.deps.installSkillFromSource,
+          getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+        }) as AgentTool<any, any>);
+      }
     }
     return wrapToolsWithProtection(raw, this.deps.toolExecutorConfig);
   }
 
   getLazyCapabilityToolNames(): string[] {
-    return ['create_desktop_pet'];
+    return [
+      'create_desktop_pet',
+      ...(this.deps.installSkillFromSource ? ['skill_install'] : []),
+    ];
   }
 
   createAllTools(coreOptions?: CreateCoreToolsOptions): AgentTool<any, any>[] {

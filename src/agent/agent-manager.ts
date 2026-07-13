@@ -36,6 +36,10 @@ import { clearBootstrapSnapshot, resolveBootstrapContextSync } from './bootstrap
 import { loadProjectAgentsContextFile } from './bootstrap/project-agents-context.js';
 import type { EmbeddedContextFile } from './bootstrap/types.js';
 import { AgentToolsFactory } from './tools/factory.js';
+import type {
+  SkillInstallToolOptions,
+  SkillInstallToolResult,
+} from './tools/skill-install-tool.js';
 import {
   createAgentCapabilitySessionState,
   resolveAgentCapabilityCatalog,
@@ -66,7 +70,7 @@ import type {
 } from './skills/types.js';
 import { createSkillConfigManager, isSkillEnabled, resolveSkillConfig } from './skills/config.js';
 import { isUnderManagedSkillsDir } from './skills/managed-store.js';
-import { loadSkillsLock, type SkillHubLockEntry } from './skills/hub-lock.js';
+import { loadSkillsLock, type SkillHubLockEntry, type SkillsLockFile } from './skills/hub-lock.js';
 import { basename, join, resolve, sep } from 'node:path';
 
 import {
@@ -79,6 +83,7 @@ import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-run
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
 import { SkillFilesystemWatcher } from './skills/filesystem-watcher.js';
+import { resolveWorkspaceSkillsDir, resolveWorkspaceSkillsLockPath } from './skills/workspace-skills-dir.js';
 import { ProjectTrustStore, hasTrustRequiringProjectResources } from '../project-trust/trust-store.js';
 
 const log = createLogger('AgentManager');
@@ -156,6 +161,8 @@ export interface AgentManagerConfig {
   getWorkflowRunService?: () => import('../workflows/service/workflow-run-service.types.js').WorkflowRunServiceLike | undefined;
   /** Runtime notification for UI/CLI shells that cache skill catalogs. */
   onSkillsUpdated?: (payload: { reason: 'disk' | 'config' }) => void;
+  /** Install a managed skill from an explicit source and refresh runtime state. */
+  installSkillFromSource?: (opts: SkillInstallToolOptions) => Promise<SkillInstallToolResult>;
   /** Dynamic workspace verification context injected into the system prompt when edits are pending. */
   getSelfVerifyPromptContext?: (sessionKey: string, agentId?: string) => string;
   /**
@@ -434,6 +441,7 @@ export class AgentManager implements AgentInstanceGateway {
           }
         }
       },
+      installSkillFromSource: this.config.installSkillFromSource,
     };
   }
 
@@ -689,13 +697,23 @@ export class AgentManager implements AgentInstanceGateway {
     return contextFiles;
   }
 
-  private skillCatalogEntryFromSkill(s: Skill, skillsConfig = createSkillConfigManager(resolveStateDir()).load(), lock = loadSkillsLock()): SkillCatalogEntry {
+  private skillCatalogEntryFromSkill(
+    s: Skill,
+    skillsConfig = createSkillConfigManager(resolveStateDir()).load(),
+    lock = loadSkillsLock(),
+    workspaceLock?: SkillsLockFile,
+    workspaceDir?: string,
+  ): SkillCatalogEntry {
     const base = resolve(s.baseDir);
-    const managed = isUnderManagedSkillsDir(s.baseDir);
+    const workspaceRoot = workspaceDir ? resolveWorkspaceSkillsDir(workspaceDir) : '';
+    const workspaceManaged = workspaceRoot ? s.source === 'workspace' && base.startsWith(resolve(workspaceRoot) + sep) : false;
+    const globalManaged = isUnderManagedSkillsDir(s.baseDir);
+    const managed = globalManaged || workspaceManaged;
     const directoryId = base.split(sep).filter(Boolean).pop() || s.name;
     const enabled = !(skillsConfig.entries?.[s.name]?.enabled === false);
     const hubKey = managed ? basename(base) : '';
-    const hub = managed && hubKey ? lock.entries[hubKey] : undefined;
+    const sourceLock = workspaceManaged ? workspaceLock : lock;
+    const hub = managed && hubKey ? sourceLock?.entries[hubKey] : undefined;
 
     return {
       directoryId,
@@ -718,11 +736,14 @@ export class AgentManager implements AgentInstanceGateway {
   getSkillCatalogSnapshot(): SkillCatalogSnapshot {
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
+    const sessionKey = this.config.getCurrentContext?.()?.sessionKey;
+    const workspaceDir = sessionKey ? this.getResolvedWorkspaceForSession(sessionKey) : this.baseWorkspacePath;
+    const workspaceLock = loadSkillsLock(resolveWorkspaceSkillsLockPath(workspaceDir));
     const rt = this.getCurrentWorkspaceRuntime();
     return {
       catalog: rt.skillManager
         .getSkills()
-        .map((s) => this.skillCatalogEntryFromSkill(s, skillsConfig, lock)),
+        .map((s) => this.skillCatalogEntryFromSkill(s, skillsConfig, lock, workspaceLock, workspaceDir)),
       version: rt.skillManager.getVersion(),
       loadedAt: rt.skillManager.getLoadedAt(),
       diagnostics: rt.skillManager.getDiagnostics(),
@@ -739,6 +760,7 @@ export class AgentManager implements AgentInstanceGateway {
     const rt = this.workspaceRuntimes.getOrCreate(profile.resolvedWorkspacePath);
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
+    const workspaceLock = loadSkillsLock(resolveWorkspaceSkillsLockPath(profile.resolvedWorkspacePath));
     const allow = profile.skillsAllowlist === undefined ? undefined : new Set(profile.skillsAllowlist.map((s) => s.toLowerCase()));
 
     const skills = rt.skillManager.getSkills().map((s) => {
@@ -755,7 +777,13 @@ export class AgentManager implements AgentInstanceGateway {
       }
 
       return {
-        ...this.skillCatalogEntryFromSkill(s, skillsConfig, lock),
+        ...this.skillCatalogEntryFromSkill(
+          s,
+          skillsConfig,
+          lock,
+          workspaceLock,
+          profile.resolvedWorkspacePath,
+        ),
         availableForCurrentAgent: unavailableReason === null,
         unavailableReason,
       };

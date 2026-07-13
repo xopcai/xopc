@@ -10,9 +10,11 @@ import type {
   MarketplaceCategoryItem,
   MarketplacePackageDetailPayload,
   SkillDiagnostic,
+  SkillInstallTarget,
   SkillInstallResultPayload,
   SkillMarkdownPreviewPayload,
   SkillRuntimeStatus,
+  SkillSourceInstallResultPayload,
   SkillsMarketplacePayload,
 } from '@/features/skills/skill.types';
 
@@ -20,7 +22,7 @@ export { getSkills, reloadSkills };
 
 export async function uploadSkillZip(
   file: File,
-  opts: { skillId?: string; overwrite?: boolean },
+  opts: { skillId?: string; overwrite?: boolean; target?: SkillInstallTarget },
 ): Promise<SkillInstallResultPayload> {
   const form = new FormData();
   form.append('file', file);
@@ -30,6 +32,7 @@ export async function uploadSkillZip(
   if (opts.overwrite) {
     form.append('overwrite', 'true');
   }
+  form.append('target', opts.target ?? 'workspace');
 
   const token = useGatewayStore.getState().token;
   const headers = new Headers();
@@ -61,8 +64,9 @@ export async function uploadSkillZip(
   return data.payload;
 }
 
-export async function deleteSkill(skillId: string): Promise<void> {
-  const res = await apiFetch(apiUrl(`/api/skills/${encodeURIComponent(skillId)}`), {
+export async function deleteSkill(skillId: string, target?: SkillInstallTarget): Promise<void> {
+  const qs = target ? `?target=${encodeURIComponent(target)}` : '';
+  const res = await apiFetch(apiUrl(`/api/skills/${encodeURIComponent(skillId)}${qs}`), {
     method: 'DELETE',
   });
   if (!res.ok) {
@@ -177,11 +181,12 @@ export async function installMarketplaceSkill(opts: {
   version?: string;
   overwrite?: boolean;
   provider?: string;
+  target?: SkillInstallTarget;
 }): Promise<SkillInstallResultPayload> {
   const res = await apiFetch(apiUrl('/api/skills/marketplace/install'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(opts),
+    body: JSON.stringify({ target: 'workspace', ...opts }),
   });
   if (!res.ok) {
     throw new Error(await readSkillApiErrorMessage(res));
@@ -190,6 +195,34 @@ export async function installMarketplaceSkill(opts: {
     ok?: boolean;
     error?: string;
     payload?: SkillInstallResultPayload;
+  };
+  if (!data.payload?.skillId) {
+    throw new Error(data.error || 'Invalid response');
+  }
+  return data.payload;
+}
+
+export async function installSkillFromSource(opts: {
+  source: string;
+  ref?: string;
+  path?: string;
+  skillId?: string;
+  target?: SkillInstallTarget;
+  force?: boolean;
+  strictScan?: boolean;
+}): Promise<SkillSourceInstallResultPayload> {
+  const res = await apiFetch(apiUrl('/api/skills/hub/install'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ target: 'workspace', ...opts }),
+  });
+  if (!res.ok) {
+    throw new Error(await readSkillApiErrorMessage(res));
+  }
+  const data = (await res.json()) as {
+    ok?: boolean;
+    error?: string;
+    payload?: SkillSourceInstallResultPayload;
   };
   if (!data.payload?.skillId) {
     throw new Error(data.error || 'Invalid response');
