@@ -5,6 +5,8 @@
  * Facade: {@link ../../../skills-marketplace.js}.
  */
 
+import { createHash } from 'node:crypto';
+
 import type { Config } from '../../../../../config/schema.js';
 import { MAX_EXTENSION_STORE_ZIP_BYTES } from '../../../../../extensions/store-zip-limits.js';
 import { isValidSkillId, MAX_SKILL_ZIP_BYTES } from '../../../managed-store.js';
@@ -258,7 +260,7 @@ export async function resolveSkillZipDownloadUrl(
   storeBaseUrl: string,
   packageName: string,
   version?: string,
-): Promise<{ downloadUrl: string; version: string }> {
+): Promise<{ downloadUrl: string; version: string; sha256?: string }> {
   const base = normalizeBaseUrl(storeBaseUrl);
   const enc = encodeURIComponent(packageName);
   if (version?.trim()) {
@@ -266,17 +268,22 @@ export async function resolveSkillZipDownloadUrl(
     const detail = await fetchJson<{
       downloadUrl: string;
       version: string;
+      sha256?: string | null;
     }>(`${base}/api/v1/packages/${enc}/versions/${v}`);
     if (!detail.downloadUrl) {
       throw new Error('Store version has no download URL');
     }
     assertDownloadUrlAllowed(detail.downloadUrl, base);
-    return { downloadUrl: detail.downloadUrl, version: detail.version };
+    return {
+      downloadUrl: detail.downloadUrl,
+      version: detail.version,
+      ...(detail.sha256 ? { sha256: detail.sha256 } : {}),
+    };
   }
 
   const pkg = await fetchJson<{
     name: string;
-    latestVersion: { downloadUrl: string; version: string };
+    latestVersion: { downloadUrl: string; version: string; sha256?: string | null };
   }>(`${base}/api/v1/packages/${enc}`);
   if (!pkg.latestVersion?.downloadUrl) {
     throw new Error('Package has no published version');
@@ -285,12 +292,25 @@ export async function resolveSkillZipDownloadUrl(
   return {
     downloadUrl: pkg.latestVersion.downloadUrl,
     version: pkg.latestVersion.version,
+    ...(pkg.latestVersion.sha256 ? { sha256: pkg.latestVersion.sha256 } : {}),
   };
+}
+
+/** Verify Store-provided immutable artifact digest before any local installation. */
+export function verifyStoreArtifactSha256(buffer: Buffer, expected: string | null | undefined): void {
+  if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) {
+    throw new Error('Store version is missing a valid SHA-256 checksum');
+  }
+  const actual = createHash('sha256').update(buffer).digest('hex');
+  if (actual !== expected.toLowerCase()) {
+    throw new Error('Store artifact checksum verification failed');
+  }
 }
 
 export async function downloadSkillZipBuffer(
   storeBaseUrl: string,
   downloadUrl: string,
+  expectedSha256?: string,
 ): Promise<Buffer> {
   const base = normalizeBaseUrl(storeBaseUrl);
   assertDownloadUrlAllowed(downloadUrl, base);
@@ -311,6 +331,7 @@ export async function downloadSkillZipBuffer(
   if (buf.length > MAX_SKILL_ZIP_BYTES) {
     throw new Error(`Zip exceeds maximum size (${MAX_SKILL_ZIP_BYTES} bytes)`);
   }
+  if (expectedSha256 !== undefined) verifyStoreArtifactSha256(buf, expectedSha256);
   return buf;
 }
 
@@ -331,7 +352,7 @@ export async function resolveExtensionZipDownloadUrl(
   storeBaseUrl: string,
   packageName: string,
   version?: string,
-): Promise<{ downloadUrl: string; version: string; integrity?: string }> {
+): Promise<{ downloadUrl: string; version: string; integrity?: string; sha256?: string }> {
   const base = normalizeBaseUrl(storeBaseUrl);
   const enc = encodeURIComponent(packageName.trim());
   const meta = await fetchJson<StorePublishedPackageHead>(`${base}/api/v1/packages/${enc}`);
@@ -358,6 +379,7 @@ export async function resolveExtensionZipDownloadUrl(
       downloadUrl: detail.downloadUrl,
       version: detail.version,
       integrity: detail.integrity ?? detail.checksum ?? detail.sha256,
+      ...(detail.sha256 ? { sha256: detail.sha256 } : {}),
     };
   }
   const lv = meta.latestVersion;
@@ -369,6 +391,7 @@ export async function resolveExtensionZipDownloadUrl(
     downloadUrl: lv.downloadUrl,
     version: lv.version,
     integrity: lv.integrity ?? lv.checksum ?? lv.sha256,
+    ...(lv.sha256 ? { sha256: lv.sha256 } : {}),
   };
 }
 

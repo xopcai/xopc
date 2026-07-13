@@ -367,6 +367,7 @@ export class GatewayMarketplaceService {
       downloadExtensionStoreZipBuffer,
       resolveExtensionZipDownloadUrl,
       resolveExtensionsStoreBaseUrl,
+      verifyStoreArtifactSha256,
     } = await import('../../agent/skills/marketplace/adapters/store/store-api-client.js');
     const {
       installExtensionFromStoreZip,
@@ -376,12 +377,13 @@ export class GatewayMarketplaceService {
     const targetDir = resolveExtensionsDir();
     mkdirSync(targetDir, { recursive: true });
 
-    const { downloadUrl, version } = await resolveExtensionZipDownloadUrl(
+    const { downloadUrl, version, sha256 } = await resolveExtensionZipDownloadUrl(
       storeBase,
       packageName,
       opts.version,
     );
     const buf = await downloadExtensionStoreZipBuffer(storeBase, downloadUrl);
+    verifyStoreArtifactSha256(buf, sha256);
 
     if (opts.overwrite) {
       const peekId = peekExtensionIdFromStoreZip(buf);
