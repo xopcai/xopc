@@ -90,6 +90,7 @@ electronLanguages:
   - zh-TW
 
 mac:
+  icon: icon.icns
   category: public.app-category.productivity
   hardenedRuntime: true
   entitlements: '__XOPC_ELECTRON_ENTITLEMENTS__'
@@ -100,6 +101,7 @@ mac:
   notarize: true
 
 win:
+  icon: icon.ico
   target:
     - nsis
 
@@ -107,6 +109,7 @@ nsis:
   buildUniversalInstaller: false
 
 linux:
+  icon: icon.png
   category: Utility
   target:
     - AppImage

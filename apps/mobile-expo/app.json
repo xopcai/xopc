@@ -12,6 +12,11 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
+      "icon": {
+        "light": "./assets/icon-light.png",
+        "dark": "./assets/icon-dark.png",
+        "tinted": "./assets/icon-tinted.png"
+      },
       "infoPlist": {
         "NSLocalNetworkUsageDescription": "Allow xopc to connect to your gateway on the local network when available.",
         "NSAppTransportSecurity": {
@@ -29,7 +34,8 @@
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "monochromeImage": "./assets/adaptive-icon-monochrome.png",
+        "backgroundColor": "#0B0D10"
       },
       "predictiveBackGestureEnabled": false,
       "permissions": [
@@ -65,7 +71,12 @@
         {
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "backgroundColor": "#F8FAFC",
+          "imageWidth": 176,
+          "dark": {
+            "image": "./assets/splash-icon-dark.png",
+            "backgroundColor": "#0B0D10"
+          }
         }
       ],
       [

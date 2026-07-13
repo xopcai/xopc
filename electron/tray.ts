@@ -130,7 +130,12 @@ export function createTray(iconDir: string, actions: TrayActions, messages: Elec
     tray = null;
   }
 
-  const iconFile = process.platform === 'win32' ? 'tray-icon-win.png' : 'tray-icon.png';
+  const iconFile =
+    process.platform === 'darwin'
+      ? 'tray-iconTemplate.png'
+      : process.platform === 'win32'
+        ? 'tray-icon-win.png'
+        : 'tray-icon.png';
   const iconPath = join(iconDir, iconFile);
   let icon = nativeImage.createFromPath(iconPath);
   if (icon.isEmpty()) {
@@ -139,6 +144,7 @@ export function createTray(iconDir: string, actions: TrayActions, messages: Elec
   if (process.platform === 'darwin') {
     // Keep status bar icon aligned with macOS menubar glyph size.
     icon = icon.resize({ height: 18 });
+    icon.setTemplateImage(true);
   } else if (process.platform === 'win32') {
     // Windows notification area icons render best from a real small bitmap.
     icon = icon.resize({ width: 16, height: 16 });
