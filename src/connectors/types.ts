@@ -20,6 +20,13 @@ export type ConnectorCapability =
 
 export type ConnectorAuthMode = 'none' | 'apiKey' | 'oauth';
 
+export type ConnectorPermissions = {
+  data?: string[];
+  networkDomains?: string[];
+  localExec?: boolean;
+  filesystem?: string[];
+};
+
 export type ConnectorSecretReference = {
   xopcSecretRef: {
     provider: string;
@@ -75,7 +82,7 @@ export type ConnectorDefinition = {
   description: string;
   category: ConnectorCategory;
   kind: ConnectorKind;
-  source: 'builtin' | 'extension' | 'custom' | 'registry';
+  source: 'builtin' | 'extension' | 'custom' | 'registry' | 'store';
   capabilities: ConnectorCapability[];
   tags?: string[];
   auth: {
@@ -86,6 +93,11 @@ export type ConnectorDefinition = {
     config?: ConnectorConfigField[];
   };
   runtime: ConnectorRuntimeDefinition;
+  permissions?: ConnectorPermissions;
+  provenance?: {
+    packageName: string;
+    sha256: string;
+  };
 };
 
 export type ConnectorInstallInput = {
@@ -176,4 +188,6 @@ export type ManagedConnectorMarker = {
   lastError?: string;
   displayName?: string;
   config?: Record<string, unknown>;
+  source?: ConnectorDefinition['source'];
+  artifactSha256?: string;
 };
