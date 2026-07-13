@@ -1,9 +1,9 @@
-import { Loader2 } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { FieldLabel } from '@/features/settings/channels/field-primitives';
+import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import {
   VoiceApiKeyField,
   type VoiceApiKeyFieldLabels,
@@ -314,12 +314,7 @@ export function ExtensionSttProviderSettings({ extensionId }: { extensionId: str
   }
 
   if (detailLoading || voiceLoading) {
-    return (
-      <div className="flex items-center gap-2 py-6 text-sm text-fg-muted">
-        <Loader2 className="size-4 animate-spin" />
-        …
-      </div>
-    );
+    return <SettingsPanelSkeleton rows={2} />;
   }
 
   if (!providerId) {

@@ -127,7 +127,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
       <aside
         id="app-sidebar"
         className={cn(
-          'app-sidebar-push app-chrome-sidebar flex min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base',
+          'app-sidebar-push app-chrome-sidebar flex min-h-0 shrink-0 flex-col overflow-hidden bg-transparent',
           widthResizing && 'sidebar-width-resizing',
           // Mobile: overlay; animate with transform only (no main-column width reflow).
           'max-md:fixed max-md:left-0 max-md:top-0 max-md:z-50 max-md:h-[100dvh] max-md:w-[min(16rem,85vw)]',

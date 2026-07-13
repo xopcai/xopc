@@ -18,6 +18,7 @@ import useSWR from 'swr';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { PageTabs, type PageTabItem } from '@/components/ui/page-tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
 import {
   SettingsPageFrame,
@@ -228,10 +229,19 @@ function SharesManageTab({
         </div>
 
         {isLoading && !data ? (
-          <p className="flex items-center gap-2 text-sm text-fg-muted">
-            <Loader2 className="size-4 animate-spin" />
-            {t.loading}
-          </p>
+          <div className="grid gap-2" aria-busy="true">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-lg border border-edge bg-surface-base p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Skeleton className="h-4 w-2/3" />
+                    <Skeleton className="mt-2 h-3 w-1/2" />
+                  </div>
+                  <Skeleton className="h-7 w-20 rounded-md" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : error ? (
           <div className="flex items-center gap-2 text-sm text-red-600 dark:text-red-400">
             <span>{t.error}</span>

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { ExtensionIframeHost } from '@/features/extensions/extension-iframe-host';
+import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -633,7 +634,7 @@ export function ChannelsSettingsPanel() {
   return (
     <SettingsPageFrame gap="gap-4">
       {catalog.isLoading ? (
-        <p className="text-sm text-fg-muted">{ch.loadingChannels}</p>
+        <SettingsPageSkeleton sections={2} />
       ) : catalog.error ? (
         <p className="text-sm text-red-600 dark:text-red-400">{String(catalog.error)}</p>
       ) : (

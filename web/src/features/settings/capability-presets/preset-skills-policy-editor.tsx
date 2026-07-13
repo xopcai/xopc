@@ -2,6 +2,7 @@ import { BookOpen } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SettingsListSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { agentDefaultsQuickActionButtonClass } from '@/features/settings/agents/defaults-field-styles';
 import type { SkillCatalogRow } from '@/features/settings/types/agent-gateway';
 import { cn } from '@/lib/cn';
@@ -120,7 +121,7 @@ export function PresetSkillsPolicyEditor(props: {
           </div>
 
           {loading ? (
-            <p className="text-sm text-fg-muted">{labels.catalogLoading}</p>
+            <SettingsListSkeleton rows={3} />
           ) : catalog.length === 0 ? (
             <p className="text-sm text-fg-muted">{labels.emptyCatalog}</p>
           ) : (

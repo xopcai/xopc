@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { ChannelsSettingsMessages } from '@/i18n/messages';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -266,7 +267,6 @@ export function ChannelSetupCard({
     state.payload?.type === 'qr' ||
     state.payload?.type === 'poll'
   );
-  const qrStageWaiting = state.busy || Boolean(qrContent && !qrImage);
   const formPayload = state.payload?.type === 'form' ? state.payload : null;
   const diagnostics = state.payload?.type === 'diagnostics' ? state.payload.checks : null;
 
@@ -321,13 +321,20 @@ export function ChannelSetupCard({
             {qrImage ? (
               <img src={qrImage} alt={`${entry.label} setup QR`} className="size-52 object-contain" />
             ) : (
-              <div className="flex size-52 items-center justify-center rounded-md bg-surface-base text-fg-muted">
-                <Loader2 className={cn('size-6', qrStageWaiting && 'animate-spin')} />
+              <div className="flex size-52 items-center justify-center rounded-md bg-surface-base">
+                <Skeleton className="size-48 rounded-md" />
               </div>
             )}
           </div>
           <div className={cn('min-w-0 max-w-sm text-sm text-fg-muted', compact && 'w-full sm:w-auto')}>
-            <p className="line-clamp-3">{qrImage ? ch.waitingConfirmation : ch.loading}</p>
+            {qrImage ? (
+              <p className="line-clamp-3">{ch.waitingConfirmation}</p>
+            ) : (
+              <div className="space-y-2" aria-busy="true">
+                <Skeleton className="h-4 w-48 max-w-full" />
+                <Skeleton className="h-4 w-36 max-w-full" />
+              </div>
+            )}
             {qrContent ? (
               <a
                 className="mt-2 inline-flex items-center gap-1 text-accent hover:underline"

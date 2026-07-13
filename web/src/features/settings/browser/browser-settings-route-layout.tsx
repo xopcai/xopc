@@ -2,6 +2,7 @@ import { Cpu } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
 import type { SettingsSectionId } from '@/i18n/messages';
@@ -40,10 +41,8 @@ export function AgentDefaultsRouteLayout(props: {
 
   if (vm.loading) {
     return (
-      <SettingsPageFrame gap="gap-0" padding="px-3 py-8 sm:px-5 xl:px-6">
-        <div className="h-8 w-48 animate-pulse rounded bg-surface-hover" />
-        <div className="mt-6 h-32 animate-pulse rounded-xl bg-surface-hover" />
-        <p className="mt-4 text-sm text-fg-muted">{m.logs.loading}</p>
+      <SettingsPageFrame gap="gap-6" padding="px-3 py-8 sm:px-5 xl:px-6">
+        <SettingsPageSkeleton sections={1} />
       </SettingsPageFrame>
     );
   }

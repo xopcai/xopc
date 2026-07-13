@@ -2,6 +2,7 @@ import { Link2, RefreshCw } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import type { GatewayConfigBinding } from '@/features/settings/agents-admin-api';
+import { Skeleton } from '@/components/ui/skeleton';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import type { ChannelStatus, SessionChatId } from '@/features/settings/channel-recipient-api';
 import { formatRecipientOptionLabel } from '@/features/settings/channel-recipient-api';
@@ -75,7 +76,11 @@ export function AgentChannelsTab(props: {
         subtitle={a.channelsHint}
       />
       {bindingsLoading ? (
-        <p className="text-sm text-fg-muted">{a.channelsLoading}</p>
+        <div className="flex flex-col gap-2" aria-busy="true">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <Skeleton key={index} className="h-10 rounded-lg" />
+          ))}
+        </div>
       ) : agentBindings.length === 0 ? (
         <p className="text-sm text-fg-muted">{a.channelsNone}</p>
       ) : (
@@ -95,7 +100,10 @@ export function AgentChannelsTab(props: {
       )}
       <form className="mt-4 flex flex-col gap-3" onSubmit={onAddBinding}>
         {channelsStatusLoading ? (
-          <p className="text-sm text-fg-muted">{a.channelsLoadingChannels}</p>
+          <div className="space-y-2" aria-busy="true">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-10 w-full rounded-lg" />
+          </div>
         ) : useManualChannel ? (
           <label className="flex flex-col gap-1 text-sm">
             <span className="text-fg-muted">{a.channelLabel}</span>
@@ -146,7 +154,10 @@ export function AgentChannelsTab(props: {
               </Button>
             </div>
             {sessionsLoading && bindSessionChats.length === 0 ? (
-              <p className="text-xs text-fg-muted">{a.channelsLoadingSessions}</p>
+              <div className="space-y-2" aria-busy="true">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-10 w-full rounded-lg" />
+              </div>
             ) : null}
             <label className="flex flex-col gap-1">
               <span className="text-fg-muted">{a.channelsPeerFromSessions}</span>

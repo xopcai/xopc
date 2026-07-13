@@ -21,6 +21,7 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { RefreshButton } from '@/components/ui/refresh-button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
 import { formatCronExpressionLabel } from '@/features/scheduling/cron/format-cron-label';
@@ -218,6 +219,51 @@ function useMediaQuery(query: string): boolean {
   return matches;
 }
 
+function AutomationsPageSkeleton() {
+  return (
+    <div className="grid gap-4" aria-hidden="true">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_26rem]">
+        <section className="rounded-xl bg-surface-panel p-4 shadow-surface">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 space-y-2">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-3 w-56 max-w-full" />
+            </div>
+            <Skeleton className="h-7 w-20 rounded-full" />
+          </div>
+          <div className="mt-4 grid gap-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-lg bg-surface-base p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="size-4 rounded-full" />
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                    <Skeleton className="mt-3 h-4 w-full" />
+                    <Skeleton className="mt-2 h-4 w-3/5" />
+                  </div>
+                  <Skeleton className="h-8 w-24 rounded-md" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="hidden rounded-xl bg-surface-panel p-4 shadow-surface xl:block">
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="mt-4 h-24 rounded-lg" />
+          <div className="mt-4 grid gap-2">
+            <Skeleton className="h-12 rounded-lg" />
+            <Skeleton className="h-12 rounded-lg" />
+            <Skeleton className="h-12 rounded-lg" />
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 export function buildInput(form: FormState, selectedWorkflow: WorkflowDefinition | null): AutomationInput {
   const [hourRaw, minuteRaw] = form.time.split(':');
   const hour = Number.parseInt(hourRaw || '9', 10);
@@ -355,6 +401,10 @@ export function AutomationsPage() {
   );
   const workflowDefinitionsSwr = useSWR('automation-workflow-definitions', listWorkflowDefinitions);
   const chatAgentsSwr = useSWR('automation-chat-agents', fetchChatAgents);
+  const initialLoading =
+    (automationsSwr.isLoading && !automationsSwr.data) ||
+    (runsSwr.isLoading && !runsSwr.data) ||
+    (metricsSwr.isLoading && !metricsSwr.data);
 
   const automations = automationsSwr.data?.automations ?? [];
   const runs = useMemo(() => sortRunsForOperations(runsSwr.data?.runs ?? []), [runsSwr.data?.runs]);
@@ -752,7 +802,9 @@ export function AutomationsPage() {
           </div>
         ) : null}
 
-        {viewTab === 'activity' ? (
+        {initialLoading ? (
+          <AutomationsPageSkeleton />
+        ) : viewTab === 'activity' ? (
           <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
             <div className="min-w-0">
               <RunsList
