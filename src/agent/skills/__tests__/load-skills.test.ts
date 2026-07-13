@@ -74,6 +74,35 @@ describe('loadSkills', () => {
     rmSync(workspace, { recursive: true, force: true });
   });
 
+  it('lets workspace skills override global skills without diagnostics', () => {
+    const globalDir = mkdtempSync(join(tmpdir(), 'xopc-global-skills-'));
+    const workspace = mkdtempSync(join(tmpdir(), 'xopc-workspace-skills-'));
+    const globalSkillDir = join(globalDir, 'same-name');
+    const workspaceSkillDir = join(workspace, '.xopc', 'skills', 'same-name');
+    mkdirSync(globalSkillDir, { recursive: true });
+    mkdirSync(workspaceSkillDir, { recursive: true });
+    writeFileSync(
+      join(globalSkillDir, 'SKILL.md'),
+      '---\nname: same-name\ndescription: Global skill\n---\n\nGlobal content.\n',
+    );
+    writeFileSync(
+      join(workspaceSkillDir, 'SKILL.md'),
+      '---\nname: same-name\ndescription: Workspace skill\n---\n\nWorkspace content.\n',
+    );
+
+    const result = loadSkills({ globalDir, workspaceDir: workspace });
+
+    expect(result.skills.find((skill) => skill.name === 'same-name')).toMatchObject({
+      description: 'Workspace skill',
+      source: 'workspace',
+    });
+    expect(result.diagnostics).not.toContainEqual(
+      expect.objectContaining({ type: 'collision', skillName: 'same-name' }),
+    );
+    rmSync(globalDir, { recursive: true, force: true });
+    rmSync(workspace, { recursive: true, force: true });
+  });
+
   it('parses xopc activated capabilities metadata', () => {
     const root = mkdtempSync(join(tmpdir(), 'xopc-skills-'));
     const skillDir = join(root, 'hatch-pet');

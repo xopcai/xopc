@@ -178,7 +178,7 @@ export function useSkillsPage() {
           const info = await getMarketplaceProvider();
           return { providers: [] as MarketplaceProviderInfo[], current: info.provider };
         } catch {
-          return { providers: [] as MarketplaceProviderInfo[], current: 'skillhub' };
+          return { providers: [] as MarketplaceProviderInfo[], current: 'store' };
         }
       }
     },
