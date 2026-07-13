@@ -49,6 +49,7 @@ import { AgentRunRelay, type RelayEvent } from './agent-run-relay.js';
 import { registerClarifyBridge } from './clarify-runtime.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { GoalNotificationService, GoalRunner, type EnqueueGoalRunOptions } from '../goals/index.js';
+import { MobileNotificationService } from '../mobile/notification-service.js';
 import { ProjectService } from '../projects/index.js';
 import { buildWorkItemAgentContext, WorkItemService } from '../work-items/index.js';
 
@@ -133,6 +134,7 @@ export class GatewayService {
   private workflowRunServiceInstance: WorkflowRunService | null = null;
   private goalRunner: GoalRunner | null = null;
   private goalNotifications: GoalNotificationService | null = null;
+  private mobileNotifications: MobileNotificationService | null = null;
   private connectorSupervisor: ConnectorSupervisor | null = null;
   private stopAutomationProductEventBridge: (() => void) | null = null;
   private stopSessionTranscriptAutomationEvents: (() => void) | null = null;
@@ -369,6 +371,7 @@ export class GatewayService {
       getDefaultAgentId: () => getDefaultAgentId(this.config),
       getProjectWorkspaceRoot: (projectId) => this.projects.get(projectId)?.workspaceRoot,
       workflowRunService: this.createWorkflowRunService(),
+      onRunCompleted: (run) => this.emit('automation.run.completed', { run }),
     });
 
     this._agentService.persistentGoals.setWebchatContinuationScheduler((sessionKey, message) => {
@@ -473,6 +476,13 @@ export class GatewayService {
       });
     }
     return this.goalNotifications;
+  }
+
+  private createMobileNotificationService(): MobileNotificationService {
+    if (!this.mobileNotifications) {
+      this.mobileNotifications = new MobileNotificationService();
+    }
+    return this.mobileNotifications;
   }
 
   enqueueGoalRun(goalId: string, options?: EnqueueGoalRunOptions) {
@@ -776,6 +786,7 @@ export class GatewayService {
       agentService: this.agentService,
       getDefaultAgentId: () => getDefaultAgentId(this.config),
       workflowRunService: this.createWorkflowRunService(),
+      onRunCompleted: (run) => this.emit('automation.run.completed', { run }),
     });
     this.startAutomationProductEventBridge();
 
@@ -1477,6 +1488,7 @@ export class GatewayService {
   emit(type: string, payload: unknown): void {
     this.sse.emit(type, payload);
     this.createGoalNotificationService().handleGatewayEvent(type, payload);
+    this.createMobileNotificationService().handleGatewayEvent(type, payload);
   }
 
   private startAutomationProductEventBridge(): void {

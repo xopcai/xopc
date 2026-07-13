@@ -68,6 +68,12 @@
           "backgroundColor": "#ffffff"
         }
       ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "xopc-default"
+        }
+      ],
       "expo-router",
       [
         "expo-audio",

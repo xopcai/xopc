@@ -69,9 +69,9 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
   return (
     <div
       className={cn(
-        'group relative overflow-hidden rounded-xl p-3.5 shadow-surface transition-colors',
-        selected ? 'bg-surface-active ring-1 ring-accent/30' : 'bg-surface-panel',
-        'hover:bg-surface-hover/50',
+        'group relative min-h-24 overflow-hidden rounded-lg bg-surface-panel px-3 py-3 shadow-surface transition-colors',
+        selected && 'ring-1 ring-accent/30',
+        'hover:bg-surface-hover',
       )}
     >
       <button
@@ -84,7 +84,7 @@ export const WorkflowTaskCard = memo(function WorkflowTaskCard({
         <div className="pr-7">
           <div className="flex min-w-0 items-start justify-between gap-2">
             <div className="min-w-0">
-              <div className="line-clamp-2 text-sm font-semibold leading-5 text-fg">
+              <div className="line-clamp-2 text-sm font-medium leading-5 text-fg">
                 {cardTitle}
               </div>
               <div className="mt-1 truncate text-[11px] font-medium text-fg-muted">
