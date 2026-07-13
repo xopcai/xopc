@@ -1,4 +1,4 @@
-import { Platform, Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, View, type ViewStyle } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { radii, spacing, typography, useTheme } from '../../theme';
@@ -8,6 +8,7 @@ export function useSettingsColors() {
   return {
     pageBg: colors.surface.base,
     card: colors.surface.panel,
+    pressed: colors.surface.pressed,
     text: colors.text.primary,
     textMuted: colors.text.tertiary,
     border: colors.border.default,
@@ -36,7 +37,6 @@ export function SettingsSection({ title, children, style }: SettingsSectionProps
       <View
         style={[
           styles.card,
-          Platform.OS === 'web' ? styles.cardRaisedWeb : styles.cardRaisedNative,
           { backgroundColor: colors.card, borderColor: colors.border },
         ]}
       >
@@ -64,12 +64,13 @@ export function SettingsRow({
   value,
   rightAccessory,
   showChevron = true,
+  isLast = false,
   onPress,
 }: SettingsRowProps) {
   const colors = useSettingsColors();
   const resolvedIconColor = iconColor ?? colors.accent;
   const content = (
-    <View style={styles.row}>
+    <View style={[styles.row, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
       <View style={[styles.iconWrap, { backgroundColor: colors.accentSoft }]}>
         <Icon source={icon} size={18} color={resolvedIconColor} />
       </View>
@@ -88,7 +89,10 @@ export function SettingsRow({
   if (!onPress) return content;
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => pressed && styles.rowPressed}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => pressed && { backgroundColor: colors.pressed }}
+    >
       {content}
     </Pressable>
   );
@@ -184,41 +188,32 @@ export function SettingsAgentRow({
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xl,
   },
   sectionTitle: {
     ...typography.micro,
-    marginBottom: spacing.sm,
-    marginLeft: spacing.xs,
+    marginBottom: spacing.xs,
+    marginLeft: spacing.md,
   },
   card: {
-    borderRadius: radii.xl,
+    borderRadius: radii.lg,
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
-  },
-  cardRaisedNative: {
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 7,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 1,
-  },
-  cardRaisedWeb: {
-    boxShadow: '0 2px 10px rgba(17, 19, 24, 0.07)',
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 13,
+    minHeight: 54,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
     gap: 12,
   },
   rowPressed: {
-    opacity: 0.65,
+    opacity: 0.68,
   },
   iconWrap: {
-    width: 30,
-    height: 30,
+    width: 32,
+    height: 32,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',

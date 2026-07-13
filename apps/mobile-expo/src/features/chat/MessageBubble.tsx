@@ -521,7 +521,7 @@ export const MessageBubble = memo(function MessageBubble({
               style={[
                 styles.artifactCard,
                 {
-	                  backgroundColor: isDark ? chatColors.assistantBgDark : chatColors.assistantBg,
+                  backgroundColor: colors.surface.panel,
 	                  borderColor: colors.border.default,
                 },
               ]}

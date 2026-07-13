@@ -6,8 +6,8 @@ import { colors } from '../../theme';
 export const chatColors = {
   userBubbleBg: colors.light.accent.selectionBg,
   userBubbleBgDark: colors.dark.accent.selectionBg,
-  assistantBg: colors.light.surface.panel,
-  assistantBgDark: colors.dark.surface.panel,
+  assistantBg: 'transparent',
+  assistantBgDark: 'transparent',
   thinkingBg: colors.light.surface.hover,
   thinkingBgDark: colors.dark.surface.active,
   thinkingBorder: colors.light.border.default,
@@ -34,17 +34,17 @@ export const chatColors = {
 
 export const chatLayout = StyleSheet.create({
   messageBubbleRow: {
-    paddingHorizontal: 12,
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
   userBubbleContainer: {
     alignSelf: 'flex-end',
-    maxWidth: '85%',
+    maxWidth: '82%',
   },
   assistantBubbleContainer: {
     alignSelf: 'flex-start',
-    width: '92%',
-    maxWidth: '92%',
+    width: '100%',
+    maxWidth: '100%',
   },
   userBubble: {
     borderRadius: 16,
@@ -52,8 +52,7 @@ export const chatLayout = StyleSheet.create({
     paddingVertical: 10,
   },
   assistantBubble: {
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 0,
+    paddingVertical: 4,
   },
 });

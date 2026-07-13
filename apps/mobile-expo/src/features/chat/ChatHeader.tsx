@@ -13,7 +13,7 @@ export const ChatHeader = memo(function ChatHeader({
   models,
   currentModelId,
   paddingTop,
-  headerBg,
+  headerBg: _headerBg,
   pillText,
   pillMuted,
   onBackPress,
@@ -52,14 +52,14 @@ export const ChatHeader = memo(function ChatHeader({
     <>
       <View style={[styles.header, { paddingTop }]}> 
         {onBackPress ? (
-          <Pressable style={[styles.iconButton, { backgroundColor: headerBg }]} onPress={onBackPress}>
-            <Icon source="chevron-left" size={24} color={pillMuted} />
+          <Pressable style={styles.iconButton} onPress={onBackPress} hitSlop={6}>
+            <Icon source="chevron-left" size={26} color={pillText} />
           </Pressable>
         ) : (
           <View style={styles.iconPlaceholder} />
         )}
 
-        <View style={[styles.headerCenter, { backgroundColor: headerBg }]}> 
+        <View style={styles.headerCenter}>
           <Pressable
             style={styles.titlePressable}
             onPress={onAgentPress}
@@ -84,17 +84,17 @@ export const ChatHeader = memo(function ChatHeader({
         </View>
 
         <View style={styles.rightActions}>
-          <Pressable style={[styles.iconButton, { backgroundColor: headerBg }]} onPress={onNewChat}>
-            <Icon source="plus" size={22} color={pillMuted} />
+          <Pressable style={styles.iconButton} onPress={onNewChat} hitSlop={6}>
+            <Icon source="square-edit-outline" size={21} color={pillText} />
           </Pressable>
           {onFilesPress ? (
             <Pressable
-              style={[styles.iconButton, { backgroundColor: headerBg }]}
+              style={styles.iconButton}
               onPress={onFilesPress}
               accessibilityRole="button"
               accessibilityLabel={m.chat.openSessionFiles}
             >
-              <Icon source="folder-outline" size={21} color={pillMuted} />
+              <Icon source="folder-outline" size={21} color={pillText} />
             </Pressable>
           ) : null}
         </View>
@@ -116,14 +116,13 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingBottom: 8,
+    gap: 4,
+    paddingHorizontal: 20,
+    paddingBottom: 6,
   },
   iconButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -139,11 +138,10 @@ const styles = StyleSheet.create({
   headerCenter: {
     flex: 1,
     minWidth: 0,
-    height: 44,
-    borderRadius: 22,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 8,
   },
   titlePressable: {
     maxWidth: '100%',
@@ -157,12 +155,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   agentTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
     textAlign: 'center',
   },
   modelTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
     textAlign: 'center',
     flexShrink: 1,
