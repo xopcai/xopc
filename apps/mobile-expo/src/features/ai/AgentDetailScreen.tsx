@@ -14,6 +14,7 @@ import { queryKeys } from '../../query/keys';
 import { createSession, useGatewayConfigured } from '../../query/sessions';
 import { invalidateSessionLists } from '../../query/workspace-sync';
 import { usePreferencesStore } from '../../stores/preferences-store';
+import { radii, spacing, typography } from '../../theme';
 import { useSettingsColors } from '../settings/settings-ui';
 import { pickEffectiveDefaultId, useSetDefaultAgent } from '../settings/use-set-default-agent';
 import { AgentAvatar } from './AgentAvatar';
@@ -217,7 +218,7 @@ function DetailSection({ title, children }: { title: string; children: React.Rea
   return (
     <View style={styles.section}>
       <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>{title}</Text>
-      <View style={[styles.sectionBody, { backgroundColor: colors.card }]}>{children}</View>
+      <View style={[styles.sectionBody, { backgroundColor: colors.card, borderColor: colors.border }]}>{children}</View>
     </View>
   );
 }
@@ -225,7 +226,7 @@ function DetailSection({ title, children }: { title: string; children: React.Rea
 function DetailRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   const colors = useSettingsColors();
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, { borderBottomColor: colors.border }]}>
       <Text style={[styles.rowLabel, { color: colors.textMuted }]}>{label}</Text>
       <Text
         style={[styles.rowValue, { color: colors.text }, mono && styles.mono]}
@@ -246,9 +247,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   scroll: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 32,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl,
   },
   emptyText: {
     marginTop: 12,
@@ -256,10 +257,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   hero: {
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
     flexDirection: 'row',
-    gap: 12,
+    gap: spacing.md,
   },
   heroText: {
     flex: 1,
@@ -274,8 +275,7 @@ const styles = StyleSheet.create({
   name: {
     flex: 1,
     minWidth: 0,
-    fontSize: 20,
-    fontWeight: '700',
+    ...typography.title,
   },
   badge: {
     minHeight: 24,
@@ -308,22 +308,24 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   section: {
-    marginTop: 18,
+    marginTop: spacing.xxl,
   },
   sectionTitle: {
-    fontSize: 13,
+    ...typography.label,
     fontWeight: '600',
-    marginBottom: 8,
-    marginLeft: 4,
+    marginBottom: spacing.sm,
+    marginLeft: spacing.md,
   },
   sectionBody: {
-    borderRadius: 12,
+    borderRadius: radii.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
   },
   row: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    gap: spacing.xs,
   },
   rowLabel: {
     fontSize: 12,

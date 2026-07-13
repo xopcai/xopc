@@ -50,7 +50,7 @@ export const AppearanceSection = memo(function AppearanceSection() {
   );
 
   return (
-    <SettingsSection title={s.sectionPreferences}>
+    <SettingsSection>
       <Text style={[styles.groupLabel, { color: colors.textMuted }]}>{s.language}</Text>
       {LANGUAGE_OPTIONS.map((opt, i) => (
         <SettingsOptionRow
@@ -81,10 +81,10 @@ export const AppearanceSection = memo(function AppearanceSection() {
 const styles = StyleSheet.create({
   groupLabel: {
     fontSize: 13,
-    fontWeight: '500',
-    marginTop: 4,
-    marginBottom: 2,
-    marginLeft: 16,
+    fontWeight: '600',
+    marginTop: 8,
+    marginBottom: 4,
+    marginLeft: 12,
   },
   divider: {
     height: StyleSheet.hairlineWidth,

@@ -20,7 +20,7 @@ import {
 import { queryKeys } from '../../query/keys';
 import { useGatewayConfigured } from '../../query/sessions';
 import { usePreferencesStore } from '../../stores/preferences-store';
-import { useTheme } from '../../theme';
+import { spacing, typography, useTheme } from '../../theme';
 
 import { formatScheduleLabel } from './cron-schedule';
 
@@ -68,7 +68,7 @@ export function SchedulesList() {
 
   const jobs = jobsQuery.data ?? [];
 
-  const cardBg = colors.surface.panel;
+  const cardBg = colors.surface.base;
   const textPrimary = colors.text.primary;
   const textSecondary = colors.text.secondary;
   const enabledColor = colors.semantic.success;
@@ -111,7 +111,10 @@ export function SchedulesList() {
       return (
         <Pressable
           onPress={() => openJob(item)}
-          style={[styles.card, { backgroundColor: cardBg }]}
+          style={({ pressed }) => [
+            styles.card,
+            { backgroundColor: pressed ? colors.surface.pressed : cardBg, borderColor: colors.border.subtle },
+          ]}
         >
           <View style={styles.cardHeader}>
             <Icon source="clock-outline" size={24} color={textSecondary} />
@@ -253,22 +256,22 @@ export function SchedulesList() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  list: { padding: 16, paddingTop: 0, gap: 12, flexGrow: 1 },
-  headerBlock: { marginBottom: 12 },
-  subtitle: { fontSize: 13, lineHeight: 18 },
+  list: { paddingHorizontal: spacing.xl, paddingTop: 0, paddingBottom: spacing.xxl, gap: 0, flexGrow: 1 },
+  headerBlock: { marginBottom: spacing.md },
+  subtitle: typography.label,
   card: {
-    borderRadius: 14,
-    padding: 14,
-    gap: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: spacing.md,
   },
   cardTitleArea: { flex: 1, minWidth: 0 },
-  cardTitle: { fontSize: 16, fontWeight: '600' },
-  scheduleText: { fontSize: 13, marginTop: 2 },
+  cardTitle: { ...typography.ui, fontWeight: '600' },
+  scheduleText: { ...typography.label, marginTop: spacing.xxs },
   badge: {
     paddingHorizontal: 8,
     paddingVertical: 4,

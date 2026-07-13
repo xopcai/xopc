@@ -3,8 +3,6 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import {
-  Animated,
-  Easing,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -329,8 +327,7 @@ export function WorkspaceHomeScreen() {
           <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{hm.connectGatewayTitle}</Text>
           <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>{hm.connectGatewayHint}</Text>
         </View>
-        <CenterNewNoteButton
-          active={false}
+        <WorkspaceActionDock
           accessibilityLabel={hm.quickNewNote}
           disabled={createNoteMutation.isPending}
           onPress={handleCreateNote}
@@ -421,8 +418,7 @@ export function WorkspaceHomeScreen() {
         )}
       </ScrollView>
 
-      <CenterNewNoteButton
-        active={false}
+      <WorkspaceActionDock
         accessibilityLabel={hm.quickNewNote}
         disabled={createNoteMutation.isPending}
         onPress={handleCreateNote}
@@ -845,36 +841,22 @@ function LibraryButton({ icon, label, onPress, last = false }: { icon: string; l
   );
 }
 
-function CenterNewNoteButton({
-  active,
+function WorkspaceActionDock({
   accessibilityLabel,
   disabled,
   onPress,
   onAskAi,
 }: {
-  active: boolean;
   accessibilityLabel: string;
   disabled: boolean;
   onPress: () => void;
   onAskAi?: () => void;
 }) {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const { homePage: hm } = useMessages();
   const insets = useSafeAreaInsets();
   const transition = useOptionalWorkspaceTransition();
   const askAiRef = useRef<View>(null);
-  const shadowOpacity = isDark ? 0.18 : 0.06;
-  const scale = useRef(new Animated.Value(active ? 1 : 0)).current;
-
-  useEffect(() => {
-    Animated.timing(scale, {
-      toValue: active ? 1 : 0,
-      duration: 180,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    }).start();
-  }, [active, scale]);
-
   useEffect(() => {
     if (!transition || !onAskAi) return;
     transition.registerPillMeasurer(async () => new Promise<{ x: number; y: number; width: number; height: number } | null>((resolve) => {
@@ -890,19 +872,6 @@ function CenterNewNoteButton({
     return () => transition.registerPillMeasurer(null);
   }, [onAskAi, transition]);
 
-  const buttonScale = scale.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.08],
-  });
-  const ringScale = scale.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.9, 1.55],
-  });
-  const ringOpacity = scale.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 0.18],
-  });
-
   return (
     <View
       pointerEvents="box-none"
@@ -911,16 +880,17 @@ function CenterNewNoteButton({
         { paddingBottom: floatingBottomPadding(insets.bottom) + FLOATING_BOTTOM_OFFSET },
       ]}
     >
-      <View style={styles.workspaceDock}>
+      <View
+        style={[
+          styles.workspaceDock,
+          { backgroundColor: colors.surface.elevated, borderColor: colors.border.default },
+        ]}
+      >
         {onAskAi ? (
           <Pressable
             ref={askAiRef}
             style={({ pressed }) => [
-              styles.askAiButton,
-              {
-                backgroundColor: colors.surface.elevated,
-                borderColor: colors.border.default,
-              },
+              styles.dockAction,
               pressed && { backgroundColor: colors.surface.pressed },
             ]}
             onPress={onAskAi}
@@ -931,46 +901,27 @@ function CenterNewNoteButton({
             <Text style={[styles.askAiLabel, { color: colors.text.primary }]}>{hm.askAi}</Text>
           </Pressable>
         ) : null}
-        <View style={styles.centerNewNoteCluster}>
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.centerNewNoteRing,
-            {
-              backgroundColor: colors.accent.primary,
-              opacity: ringOpacity,
-              transform: [{ scale: ringScale }],
-            },
-          ]}
-        />
-        <Animated.View
-          style={[
-            styles.centerNewNoteButton,
-            {
-              backgroundColor: active ? colors.accent.primary : colors.surface.panel,
-              borderColor: active ? colors.accent.primary : colors.border.default,
-              shadowOpacity,
-              transform: [{ scale: buttonScale }],
-            },
+        <Pressable
+          style={({ pressed }) => [
+            styles.dockAction,
+            styles.dockPrimaryAction,
+            { backgroundColor: colors.accent.primary },
+            pressed && { backgroundColor: colors.accent.primaryHover },
             disabled && styles.disabled,
           ]}
+          onPress={onPress}
+          disabled={disabled}
+          accessibilityRole="button"
+          accessibilityLabel={accessibilityLabel}
+          accessibilityState={{ disabled }}
         >
-          <Pressable
-            style={styles.centerNewNotePressable}
-            onPress={onPress}
-            disabled={disabled}
-            accessibilityRole="button"
-            accessibilityLabel={accessibilityLabel}
-            accessibilityState={{ disabled }}
-          >
-            {disabled ? (
-              <ActivityIndicator size={22} color={colors.accent.onPrimary} />
-            ) : (
-              <Icon source="note-plus-outline" size={26} color={active ? colors.accent.onPrimary : colors.text.secondary} />
-            )}
-          </Pressable>
-        </Animated.View>
-        </View>
+          {disabled ? (
+            <ActivityIndicator size={20} color={colors.accent.onPrimary} />
+          ) : (
+            <Icon source="note-plus-outline" size={19} color={colors.accent.onPrimary} />
+          )}
+          <Text style={[styles.askAiLabel, { color: colors.accent.onPrimary }]}>{hm.quickNewNote}</Text>
+        </Pressable>
       </View>
     </View>
   );
@@ -1174,62 +1125,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  centerNewNoteCluster: {
-    width: 60,
-    height: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   workspaceDock: {
+    width: 252,
+    height: 56,
+    padding: 4,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  askAiButton: {
-    minWidth: 104,
-    height: 52,
-    borderRadius: 26,
-    borderWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
     shadowColor: '#000',
     shadowOpacity: 0.07,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
     elevation: 3,
   },
-  askAiLabel: { ...typography.ui, fontWeight: '600' },
-  centerNewNoteRing: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-  },
-  centerNewNoteButton: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    borderWidth: StyleSheet.hairlineWidth,
+  dockAction: {
+    flex: 1,
+    height: 48,
+    borderRadius: 16,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  dockPrimaryAction: {
     shadowColor: '#000',
+    shadowOpacity: 0.08,
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+    elevation: 1,
   },
-  centerNewNotePressable: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 30,
-  },
+  askAiLabel: { ...typography.ui, fontWeight: '600' },
 });

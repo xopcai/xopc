@@ -184,9 +184,9 @@ export function SettingsScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 40,
   },
   bottomSpacer: {
     height: 24,

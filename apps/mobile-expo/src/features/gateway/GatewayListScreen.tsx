@@ -2,7 +2,7 @@ import { useFocusEffect } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Icon, Text } from 'react-native-paper';
+import { ActivityIndicator, Icon, Text } from 'react-native-paper';
 
 import { FloatingHeader } from '@/components/FloatingHeader';
 import {
@@ -82,7 +82,16 @@ export function GatewayListScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <FloatingHeader title={s.gateway} onBack={() => router.back()} />
+      <FloatingHeader
+        variant="large"
+        title={s.gateway}
+        onBack={() => router.back()}
+        rightActions={[{
+          icon: 'plus',
+          onPress: () => router.push('/settings/gateway/new'),
+          accessibilityLabel: s.addGateway,
+        }]}
+      />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}
@@ -149,12 +158,6 @@ export function GatewayListScreen() {
         </SettingsSection>
       )}
 
-      <View style={styles.addRow}>
-        <Button mode="contained" icon="plus" onPress={() => router.push('/settings/gateway/new')}>
-          {s.addGateway}
-        </Button>
-      </View>
-
       {configured ? (
         <>
           <GatewayConnectionCard
@@ -177,8 +180,9 @@ export function GatewayListScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    padding: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 40,
   },
   hint: {
     marginBottom: 16,
@@ -221,11 +225,6 @@ const styles = StyleSheet.create({
   },
   rowPressed: {
     opacity: 0.65,
-  },
-  addRow: {
-    marginTop: 16,
-    marginBottom: 8,
-    alignItems: 'flex-start',
   },
   syncNotice: {
     marginTop: 8,
