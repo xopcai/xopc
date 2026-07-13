@@ -13,7 +13,13 @@ function terminalGoalStatus(status: GoalWithDetails['status']): boolean {
 
 function buildInitialGoalTurn(goal: GoalWithDetails): UserTurnInput {
   const context = goal.contextMessage;
-  const parts = [`Goal:\n${goal.title}`];
+  const parts = [`Goal:\n${goal.contract?.objective || goal.title}`];
+  if (goal.contract?.scopeBoundary) {
+    parts.push(`Scope boundary:\n${goal.contract.scopeBoundary}`);
+  }
+  if (goal.contract?.evidencePlan.length) {
+    parts.push(`Expected completion evidence:\n${goal.contract.evidencePlan.map((item) => `- ${item}`).join('\n')}`);
+  }
   if (context?.text.trim()) {
     parts.push(`Context:\n${context.text.trim()}`);
   }

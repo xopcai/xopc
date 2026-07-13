@@ -215,6 +215,12 @@ export type CreateProjectGoalInput = {
   maxTurns?: number;
   agentId?: string;
   judgeModelRef?: string;
+  contract?: {
+    objective?: string;
+    scopeBoundary?: string;
+    evidencePlan?: string[];
+    criteria?: string[];
+  };
 };
 
 export type ProjectListResponse = {
@@ -437,6 +443,7 @@ export async function createProjectGoal(projectId: string, input: CreateProjectG
       maxTurns: input.maxTurns,
       agentId: input.agentId,
       judgeModelRef: input.judgeModelRef,
+      contract: input.contract,
       source: 'api',
     }),
   });

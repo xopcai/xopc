@@ -177,6 +177,64 @@ describe('goal routes', () => {
     expect(abortAgentRun).not.toHaveBeenCalled();
   });
 
+  it('requires planned evidence before a contracted goal can be completed', async () => {
+    const goals = new GoalService();
+    const goal = goals.create({
+      title: 'Release the goal contract',
+      contract: {
+        objective: 'Deliver a verified release',
+        evidencePlan: ['Automated test output'],
+      },
+    });
+    const app = createApp({});
+
+    const blocked = await app.request(`/api/goals/${encodeURIComponent(goal.id)}/complete`, { method: 'POST' });
+    expect(blocked.status).toBe(409);
+    expect(await blocked.json()).toMatchObject({
+      ok: false,
+      missingEvidence: ['Automated test output'],
+    });
+
+    const saved = await app.request(`/api/goals/${encodeURIComponent(goal.id)}/contract`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        objective: 'Deliver a verified release',
+        scopeBoundary: 'Only the release workflow',
+        criteria: ['Release notes are published'],
+        evidencePlan: ['Automated test output'],
+      }),
+    });
+    expect(saved.status).toBe(200);
+    expect((await saved.json()).goal.contract).toMatchObject({
+      scopeBoundary: 'Only the release workflow',
+      evidencePlan: ['Automated test output'],
+    });
+
+    const requirementId = goals.get(goal.id)!.evidenceRequirements[0]!.id;
+    const evidence = await app.request(`/api/goals/${encodeURIComponent(goal.id)}/evidence`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ kind: 'test', title: 'Automated test output', requirementId }),
+    });
+    expect(evidence.status).toBe(200);
+
+    const waitingForApproval = await app.request(`/api/goals/${encodeURIComponent(goal.id)}/complete`, { method: 'POST' });
+    expect(waitingForApproval.status).toBe(409);
+    expect(await waitingForApproval.json()).toMatchObject({
+      pendingApproval: ['Automated test output'],
+    });
+
+    const approval = await app.request(`/api/goals/${encodeURIComponent(goal.id)}/evidence-requirements/${requirementId}/approve`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ reason: 'The test output was inspected.' }),
+    });
+    expect(approval.status).toBe(200);
+    const completed = await app.request(`/api/goals/${encodeURIComponent(goal.id)}/complete`, { method: 'POST' });
+    expect(completed.status).toBe(200);
+  });
+
   it('attaches a generated continuation session to the goal project', async () => {
     const projects = new ProjectService();
     const workspaceRoot = join(stateDir, 'project-root');

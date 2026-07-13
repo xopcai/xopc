@@ -26,7 +26,13 @@ function buildHistoryExcerpt(messages: AgentMessage[], maxChars: number): string
 }
 
 function buildGoalContextText(goal: NonNullable<ReturnType<GoalService['get']>>): string {
-  const lines = [`Title: ${goal.title}`];
+  const lines = [`Title: ${goal.contract?.objective || goal.title}`];
+  if (goal.contract?.scopeBoundary) {
+    lines.push(`Scope boundary:\n${goal.contract.scopeBoundary}`);
+  }
+  if (goal.contract?.evidencePlan.length) {
+    lines.push(`Expected completion evidence:\n${goal.contract.evidencePlan.map((item) => `- ${item}`).join('\n')}`);
+  }
   if (goal.contextMessage?.text.trim()) {
     lines.push(`Context:\n${goal.contextMessage.text.trim()}`);
   }
@@ -163,12 +169,32 @@ export async function handlePersistentGoalPostTurn(opts: {
     );
   }
 
-  const decision = await evaluateAfterTurnHermesLike(state, assistantPlainText, judgeRef, signal, {
+  let decision = await evaluateAfterTurnHermesLike(state, assistantPlainText, judgeRef, signal, {
     goalsSlice: goalsCfg,
     historyExcerpt,
     goalContextExcerpt: buildGoalContextText(goal),
     uiLocale: resolveGoalUiLocale(state),
   });
+
+  const completionReadiness = goalService.getCompletionReadiness(goal.id);
+  if (decision.verdict === 'done' && completionReadiness && !completionReadiness.ready && decision.newState) {
+    const reason = `Completion evidence still needed: ${completionReadiness.missingEvidence.join('; ')}`;
+    decision = {
+      ...decision,
+      newState: {
+        ...decision.newState,
+        status: 'active',
+        lastVerdict: 'continue',
+        lastReason: reason,
+      },
+      shouldContinue: true,
+      continuationPrompt: `Before declaring the goal complete, collect this evidence:\n${completionReadiness.missingEvidence.map((item) => `- ${item}`).join('\n')}`,
+      verdict: 'continue',
+      reason,
+      message: reason,
+      missingEvidence: completionReadiness.missingEvidence,
+    };
+  }
 
   if (decision.newState) {
     const ns = decision.newState;

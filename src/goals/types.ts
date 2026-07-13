@@ -85,7 +85,28 @@ export interface GoalEvidence {
   summary?: string;
   uri?: string;
   data?: unknown;
+  requirementIds?: string[];
   createdAt: number;
+}
+
+export type GoalEvidenceRequirementStatus = 'pending' | 'ai_verified' | 'approved' | 'rejected';
+export type GoalEvidenceReviewSource = 'ai' | 'user' | 'system';
+
+/** A single, reviewable proof obligation from the goal contract. */
+export interface GoalEvidenceRequirement {
+  id: string;
+  goalId: string;
+  text: string;
+  status: GoalEvidenceRequirementStatus;
+  evidenceIds: string[];
+  reviewReason?: string;
+  reviewConfidence?: number;
+  reviewedBy?: GoalEvidenceReviewSource;
+  reviewedAt?: number;
+  requiresHumanApproval: boolean;
+  createdAt: number;
+  updatedAt: number;
+  sortOrder: number;
 }
 
 export type GoalContextAttachment = MediaRef;
@@ -98,10 +119,34 @@ export interface GoalContextMessage {
   updatedAt: number;
 }
 
+/**
+ * The user-confirmed definition of success for a persistent goal.
+ * Checklist items hold the individual acceptance criteria; this contract
+ * supplies the outcome, scope boundary, and expected evidence around them.
+ */
+export interface GoalContract {
+  goalId: string;
+  version: number;
+  objective: string;
+  scopeBoundary?: string;
+  evidencePlan: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface GoalContractInput {
+  objective?: string;
+  scopeBoundary?: string;
+  evidencePlan?: string[];
+  criteria?: string[];
+}
+
 export interface GoalWithDetails extends Goal {
   checklist: GoalChecklistItem[];
   latestRun?: GoalRun;
   contextMessage?: GoalContextMessage;
+  contract?: GoalContract;
+  evidenceRequirements: GoalEvidenceRequirement[];
 }
 
 export interface GoalListQuery {
@@ -125,6 +170,7 @@ export interface CreateGoalInput {
   uiLocale?: GoalUiLocale;
   source?: GoalSource;
   projectId?: string;
+  contract?: GoalContractInput;
 }
 
 export interface GoalJudgeDecision {

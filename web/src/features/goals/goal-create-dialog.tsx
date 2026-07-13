@@ -19,9 +19,12 @@ export type ChatMessages = ReturnType<typeof messages>['chat'];
 
 export type CreateGoalDraft = {
   title: string;
+  objective: string;
   description: string;
   attachments: WireAttachment[];
   checklist: string[];
+  scopeBoundary: string;
+  evidencePlan: string[];
   priority: GoalPriority;
   deadlineMode: 'none' | 'today' | 'tomorrow' | 'friday' | 'custom';
   deadline: string;
@@ -40,9 +43,12 @@ export type GoalCreateOptions = {
 export function emptyCreateDraft(): CreateGoalDraft {
   return {
     title: '',
+    objective: '',
     description: '',
     attachments: [],
     checklist: [''],
+    scopeBoundary: '',
+    evidencePlan: [''],
     priority: 'normal',
     deadlineMode: 'none',
     deadline: '',
@@ -100,11 +106,6 @@ function nextDeadlineForMode(mode: CreateGoalDraft['deadlineMode']): string {
   return '';
 }
 
-function aiChecklistDraft(draft: CreateGoalDraft, t: GoalsPageMessages): string[] {
-  const subject = draft.title.trim() || t.createDialog.goalFallback;
-  return t.createDialog.aiChecklistTemplates.map((template) => formatMessage(template, { goal: subject }));
-}
-
 export function normalizeChecklist(items: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -125,6 +126,7 @@ export function GoalCreateDialog({
   options,
   onClose,
   onCreate,
+  onDraftContract,
 }: {
   open: boolean;
   t: GoalsPageMessages;
@@ -133,10 +135,12 @@ export function GoalCreateDialog({
   options: GoalCreateOptions;
   onClose: () => void;
   onCreate: (draft: CreateGoalDraft) => Promise<void>;
+  onDraftContract?: (draft: CreateGoalDraft) => Promise<Pick<CreateGoalDraft, 'objective' | 'scopeBoundary' | 'evidencePlan' | 'checklist'>>;
 }) {
   const [draft, setDraft] = useState<CreateGoalDraft>(() => emptyCreateDraft());
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  const [drafting, setDrafting] = useState(false);
   const attachmentTools = useComposerAttachments({ chat });
 
   useEffect(() => {
@@ -144,6 +148,7 @@ export function GoalCreateDialog({
       setDraft(emptyCreateDraft());
       setAdvancedOpen(false);
       setLocalError(null);
+      setDrafting(false);
       attachmentTools.clearAttachments();
     }
   }, [attachmentTools.clearAttachments, open]);
@@ -183,6 +188,39 @@ export function GoalCreateDialog({
   };
   const removeChecklist = (index: number) => {
     setDraft((prev) => ({ ...prev, checklist: prev.checklist.filter((_, i) => i !== index) }));
+  };
+  const patchEvidence = (index: number, text: string) => {
+    setDraft((prev) => ({
+      ...prev,
+      evidencePlan: prev.evidencePlan.map((item, i) => (i === index ? text : item)),
+    }));
+  };
+  const removeEvidence = (index: number) => {
+    setDraft((prev) => ({ ...prev, evidencePlan: prev.evidencePlan.filter((_, i) => i !== index) }));
+  };
+  const generateContract = async () => {
+    setLocalError(null);
+    setDrafting(true);
+    try {
+      const next = onDraftContract
+        ? await onDraftContract({
+            ...draft,
+            attachments: attachmentTools.wireAttachmentsPayload(),
+          })
+        : {
+            objective: draft.objective || draft.title,
+            scopeBoundary: draft.scopeBoundary,
+            evidencePlan: normalizeChecklist(draft.evidencePlan).length
+              ? draft.evidencePlan
+              : [...t.createDialog.defaultEvidencePlan],
+            checklist: draft.checklist,
+          };
+      patch(next);
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : t.createDialog.draftFailed);
+    } finally {
+      setDrafting(false);
+    }
   };
 
   const submit = async () => {
@@ -284,11 +322,11 @@ export function GoalCreateDialog({
                     type="button"
                     variant="secondary"
                     className="h-8 rounded-lg text-xs"
-                    onClick={() => patch({ checklist: aiChecklistDraft(draft, t) })}
-                    disabled={!draft.title.trim() && !draft.description.trim()}
+                    onClick={() => void generateContract()}
+                    disabled={drafting || (!draft.title.trim() && !draft.description.trim())}
                   >
                     <Sparkles className="size-3.5" aria-hidden />
-                    {t.createDialog.aiDraft}
+                    {drafting ? t.createDialog.drafting : t.createDialog.aiDraft}
                   </Button>
                 </div>
 
@@ -320,6 +358,63 @@ export function GoalCreateDialog({
                   >
                     <Plus className="size-3.5" aria-hidden />
                     {t.createDialog.addCriteria}
+                  </Button>
+                </div>
+              </section>
+
+              <section className="rounded-2xl border border-edge-subtle bg-surface-base/60 p-4">
+                <h3 className="text-sm font-semibold text-fg">{t.createDialog.contractTitle}</h3>
+                <p className="mt-1 text-xs text-fg-muted">{t.createDialog.contractHint}</p>
+                <label className="mt-3 grid gap-1.5">
+                  <span className="text-sm font-medium text-fg">{t.createDialog.objective}</span>
+                  <textarea
+                    value={draft.objective}
+                    onChange={(e) => patch({ objective: e.target.value })}
+                    placeholder={t.createDialog.objectivePlaceholder}
+                    rows={2}
+                    className="resize-none rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                  />
+                </label>
+                <label className="mt-3 grid gap-1.5">
+                  <span className="text-sm font-medium text-fg">{t.createDialog.scopeBoundary}</span>
+                  <textarea
+                    value={draft.scopeBoundary}
+                    onChange={(e) => patch({ scopeBoundary: e.target.value })}
+                    placeholder={t.createDialog.scopeBoundaryPlaceholder}
+                    rows={2}
+                    className="resize-none rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                  />
+                </label>
+                <div className="mt-3 grid gap-1.5">
+                  <span className="text-sm font-medium text-fg">{t.createDialog.evidencePlan}</span>
+                  <p className="text-xs text-fg-muted">{t.createDialog.evidencePlanHint}</p>
+                  {draft.evidencePlan.map((item, index) => (
+                    <div key={index} className="flex gap-2">
+                      <input
+                        value={item}
+                        onChange={(e) => patchEvidence(index, e.target.value)}
+                        placeholder={formatMessage(t.createDialog.evidencePlanPlaceholder, { index: index + 1 })}
+                        className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="size-9 shrink-0 rounded-lg p-0"
+                        aria-label={t.createDialog.removeEvidence}
+                        onClick={() => removeEvidence(index)}
+                      >
+                        <Trash2 className="size-4" aria-hidden />
+                      </Button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-8 justify-start rounded-lg text-xs"
+                    onClick={() => patch({ evidencePlan: [...draft.evidencePlan, ''] })}
+                  >
+                    <Plus className="size-3.5" aria-hidden />
+                    {t.createDialog.addEvidence}
                   </Button>
                 </div>
               </section>

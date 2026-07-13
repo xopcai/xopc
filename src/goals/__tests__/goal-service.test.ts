@@ -47,6 +47,79 @@ describe('GoalService', () => {
     expect(current?.checklist).toEqual([]);
   });
 
+  it('persists a user-confirmed goal contract with initial acceptance criteria', () => {
+    const goal = goals.create({
+      title: 'Ship a verified export change',
+      sessionKey: SESSION_KEY,
+      contract: {
+        objective: 'Deliver the requested export change without breaking existing formats.',
+        scopeBoundary: 'Only change src/export; do not redesign the export UI.',
+        evidencePlan: ['Targeted export tests pass.', 'A sample export file is generated.'],
+        criteria: ['Existing export formats remain compatible.', 'A generated sample file is verified.'],
+      },
+    });
+
+    const stored = goals.get(goal.id);
+    expect(stored?.contract).toMatchObject({
+      version: 1,
+      objective: 'Deliver the requested export change without breaking existing formats.',
+      scopeBoundary: 'Only change src/export; do not redesign the export UI.',
+      evidencePlan: ['Targeted export tests pass.', 'A sample export file is generated.'],
+    });
+    expect(stored?.checklist.map((item) => item.text)).toEqual([
+      'Existing export formats remain compatible.',
+      'A generated sample file is verified.',
+    ]);
+
+    const revised = goals.setContract(goal.id, {
+      objective: 'Deliver the export change with a compatibility report.',
+      evidencePlan: ['The report is attached.'],
+    });
+    expect(revised?.contract).toMatchObject({
+      version: 2,
+      objective: 'Deliver the export change with a compatibility report.',
+      evidencePlan: ['The report is attached.'],
+    });
+  });
+
+  it('requires linked and human-approved evidence for every contract requirement', () => {
+    const goal = goals.create({
+      title: 'Ship a verified change',
+      sessionKey: SESSION_KEY,
+      contract: {
+        evidencePlan: ['Targeted tests pass.', 'A sample artifact is attached.'],
+      },
+    });
+
+    expect(goals.getCompletionReadiness(goal.id)).toEqual({
+      ready: false,
+      missingEvidence: ['Targeted tests pass.', 'A sample artifact is attached.'],
+      pendingApproval: [],
+    });
+
+    const requirements = goals.get(goal.id)!.evidenceRequirements;
+    const testEvidence = goals.addEvidence({ goalId: goal.id, kind: 'test', title: 'Targeted tests pass' });
+    const artifactEvidence = goals.addEvidence({ goalId: goal.id, kind: 'artifact', title: 'Sample artifact' });
+    goals.linkEvidenceRequirement({ goalId: goal.id, requirementId: requirements[0]!.id, evidenceId: testEvidence.id, linkedBy: 'user' });
+    goals.linkEvidenceRequirement({ goalId: goal.id, requirementId: requirements[1]!.id, evidenceId: artifactEvidence.id, linkedBy: 'user' });
+    expect(goals.getCompletionReadiness(goal.id)).toEqual({
+      ready: false,
+      missingEvidence: [],
+      pendingApproval: ['Targeted tests pass.', 'A sample artifact is attached.'],
+    });
+
+    for (const requirement of requirements) {
+      goals.reviewEvidenceRequirement({
+        goalId: goal.id,
+        requirementId: requirement.id,
+        status: 'approved',
+        reason: 'Approved after inspection.',
+        reviewedBy: 'user',
+      });
+    }
+    expect(goals.getCompletionReadiness(goal.id)).toEqual({ ready: true, missingEvidence: [], pendingApproval: [] });
+  });
+
   it('publishes product events when goals are created and blocked', () => {
     const events: Array<{ type: string; payload?: Record<string, unknown> }> = [];
     const unsubscribe = onAutomationProductEvent((event) => {
