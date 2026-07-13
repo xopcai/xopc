@@ -8,6 +8,7 @@ type DesktopPetCopy = MessageBundle['desktopPet'];
 export function actionForEvent(event: DesktopPetEvent): DesktopPetAction {
   if (event.kind === 'agent-error' || event.severity === 'error') return 'error';
   if (event.kind === 'agent-success' || event.severity === 'success') return 'success';
+  if (event.activity?.phase === 'waiting') return 'idle';
   if (event.kind === 'agent-start' || event.kind === 'agent-progress') return 'typing';
   if (event.kind === 'agent-tool') return toolActionAnimation(event.toolName);
   return 'idle';
@@ -136,11 +137,28 @@ function interpolate(template: string, values: Record<string, string>): string {
 export function messageForEvent(event: DesktopPetEvent, language: 'en' | 'zh', t: DesktopPetCopy): string {
   if (event.message?.trim()) return event.message.trim();
   const zh = language === 'zh';
-  if (event.kind === 'agent-start') return zh ? '收到，我开始处理。' : 'Got it. I am on it.';
+  if (event.kind === 'agent-start') {
+    return zh ? '任务已接手，正在准备。' : 'Task accepted. Getting ready.';
+  }
   if (event.kind === 'agent-tool') {
     return interpolate(t.toolUsing, { action: toolActionForPet(event.toolName, t) });
   }
-  if (event.kind === 'agent-progress') return zh ? '还在处理中。' : 'Still working.';
+  if (event.kind === 'agent-progress') {
+    switch (event.activity?.phase) {
+      case 'planning':
+        return zh ? '正在拆解下一步。' : 'Breaking down the next step.';
+      case 'researching':
+        return zh ? '正在梳理相关信息。' : 'Gathering the relevant information.';
+      case 'running':
+        return zh ? '正在运行验证。' : 'Running verification.';
+      case 'compacting':
+        return zh ? '正在整理工作上下文。' : 'Organizing the working context.';
+      case 'waiting':
+        return zh ? '正在等待你的确认。' : 'Waiting for your confirmation.';
+      default:
+        return zh ? '任务仍在推进。' : 'The task is still moving forward.';
+    }
+  }
   if (event.kind === 'agent-success') return zh ? '处理好了，点我查看。' : 'Done. Click me to view it.';
   if (event.kind === 'agent-error') return zh ? '这里卡住了，点我看详情。' : 'Something needs attention. Click for details.';
   if (event.kind === 'goal') return zh ? '目标状态有更新。' : 'A goal status changed.';

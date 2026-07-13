@@ -53,7 +53,16 @@ export class ChatStreamMapper {
       case 'user_transcript':
         return [this.make('user_transcript', { text: String(event.text ?? ''), media: event.media })];
       case 'progress':
-        return [this.make('progress', { stage: String(event.stage ?? ''), message: String(event.message ?? '') })];
+        return [
+          this.make('progress', {
+            stage: String(event.stage ?? ''),
+            message: String(event.message ?? ''),
+            ...(typeof event.detail === 'string' ? { detail: event.detail } : {}),
+            ...(typeof event.toolName === 'string' ? { toolName: event.toolName } : {}),
+            ...(typeof event.completed === 'number' ? { completed: event.completed } : {}),
+            ...(typeof event.total === 'number' ? { total: event.total } : {}),
+          }),
+        ];
       case 'compaction':
         return [
           this.make('compaction', {

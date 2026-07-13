@@ -333,8 +333,8 @@
       "maxRequestsPerTurnDesc": "LLM request attempts per user message (reliability; default 50).",
       "maxToolFailuresPerTurn": "Max tool failures per turn",
       "maxToolFailuresPerTurnDesc": "Consecutive tool errors before giving up (default 3).",
-      "goalsCheckLink": "Goal checking (/goal) → Goal judge settings",
-      "goalsCheckLinkHint": "Checklist judging defaults are configured under Settings → Automation → Goal judge.",
+      "goalsCheckLink": "Goal checking (/goal) → Goal runtime rules",
+      "goalsCheckLinkHint": "Checklist judging defaults are configured under Settings → Automation → Goal runtime rules.",
       "cardCompactionTitle": "Context compaction",
       "cardCompactionSubtitle": "When to compact older context to stay within the model window.",
       "compactionEnabled": "Enable compaction",
@@ -873,8 +873,8 @@
     "createCopy": "Create Copy"
   },
   "goalsSettings": {
-    "title": "Goal judge (/goal)",
-    "hint": "Defaults for persistent goal missions and the judge model that scores progress.",
+    "title": "Goal runtime rules (/goal)",
+    "hint": "Defaults for judging, execution limits, and notifications for persistent goal missions.",
     "save": "Save",
     "discard": "Discard",
     "saving": "Saving…",

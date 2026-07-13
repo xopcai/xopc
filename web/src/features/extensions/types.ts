@@ -36,7 +36,7 @@ export type ExtensionCommandContribution = {
   id: string;
   title: string;
   shortcut?: string;
-  /** When set, run navigates to `/apps/{extensionId}` for this extension. */
+  /** When set, run navigates to `/extensions/{extensionId}` for this extension. */
   opensPanel?: string;
   chatAlias?: string;
   when?: string;

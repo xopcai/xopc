@@ -109,6 +109,8 @@ export interface ProgressState {
   message: string;
   detail?: string;
   toolName?: string;
+  completed?: number;
+  total?: number;
   timestamp: number;
 }
 

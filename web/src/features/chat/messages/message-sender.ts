@@ -431,6 +431,8 @@ export class MessageSender {
           message: String(payload.message || ''),
           detail: payload.detail as string | undefined,
           toolName: payload.toolName as string | undefined,
+          completed: typeof payload.completed === 'number' ? payload.completed : undefined,
+          total: typeof payload.total === 'number' ? payload.total : undefined,
           timestamp: Date.now(),
         });
         break;

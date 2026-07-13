@@ -12,7 +12,7 @@ import { ExtensionProvider } from '@/features/extensions/extension-provider';
 import {
   loadAgentsSettingsPage,
   loadAgentBrowserSettingsPage,
-  loadAppsPage,
+  loadExtensionsPage,
   loadAutomationsPage,
   loadChannelsPage,
   loadConnectorsPage,
@@ -57,7 +57,7 @@ const AgentBrowserSettingsPage = lazy(() =>
   loadAgentBrowserSettingsPage().then((m) => ({ default: m.AgentBrowserSettingsPage })),
 );
 const ChannelsPage = lazy(() => loadChannelsPage().then((m) => ({ default: m.ChannelsSettingsPanel })));
-const AppsPage = lazy(() => loadAppsPage().then((m) => ({ default: m.AppsPage })));
+const ExtensionsPage = lazy(() => loadExtensionsPage().then((m) => ({ default: m.ExtensionsPage })));
 const ExtensionPage = lazy(() => loadExtensionPage().then((m) => ({ default: m.ExtensionPage })));
 const ExtensionSettingsPage = lazy(() =>
   loadExtensionSettingsPage().then((m) => ({ default: m.ExtensionSettingsPage })),
@@ -301,15 +301,15 @@ const router = createHashRouter([
         ),
       },
       {
-        path: 'apps',
+        path: 'extensions',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
-            <AppsPage />
+            <ExtensionsPage />
           </Suspense>
         ),
       },
       {
-        path: 'apps/:extensionId',
+        path: 'extensions/:extensionId',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
             <ExtensionPage />
@@ -317,7 +317,7 @@ const router = createHashRouter([
         ),
       },
       {
-        path: 'apps/:extensionId/:pageId',
+        path: 'extensions/:extensionId/:pageId',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
             <ExtensionPage />
@@ -346,14 +346,6 @@ const router = createHashRouter([
             element: (
               <Suspense fallback={<SecondaryRouteFallback />}>
                 <LogsPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'apps',
-            element: (
-              <Suspense fallback={<SettingsRouteFallback />}>
-                <AppsPage />
               </Suspense>
             ),
           },

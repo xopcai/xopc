@@ -94,7 +94,7 @@ function collectExtensionNavItems(extensions: readonly ExtensionUiInfo[]): NavIt
     // gateway process keeps the extension loaded pending a restart. See
     // `extensionUiUnlocked()` in extension-provider.tsx: it intentionally
     // keeps `active && !activationEligible` extensions visible to other
-    // surfaces (command palette, /apps), so we narrow the rule here.
+    // surfaces (command palette, /extensions), so we narrow the rule here.
     if (extension.activationEligible === false) continue;
     const pages = extension.ui?.contributions?.pages;
     if (!pages) continue;
@@ -137,7 +137,7 @@ export function SidebarNavItems({
 
   const available = useMemo<NavItem[]>(() => {
     const builtins: NavItem[] = BUILTIN_NAV_DEFS.map((def) => {
-      const labelKey = def.id.slice('builtin:'.length) as 'agents' | 'projects' | 'goals' | 'skills' | 'connectors' | 'automations' | 'notes' | 'workflows' | 'channels';
+      const labelKey = def.id.slice('builtin:'.length) as 'agents' | 'projects' | 'goals' | 'skills' | 'connectors' | 'automations' | 'notes' | 'workflows' | 'channels' | 'extensions';
       return {
         id: def.id,
         kind: 'builtin',

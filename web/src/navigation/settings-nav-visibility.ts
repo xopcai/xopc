@@ -19,7 +19,6 @@ const SIMPLE_MODE_HIDDEN_SETTINGS_PATH_PREFIXES = [
   '/settings/goals',
   '/settings/dreams',
   '/settings/logs',
-  '/settings/apps',
   '/settings/extensions/debug',
   '/settings/ext/',
 ] as const;

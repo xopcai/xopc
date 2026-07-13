@@ -1,4 +1,4 @@
-import { Cable, FolderKanban, GitBranch, Layers, ListChecks, Plug, StickyNote, Users, Zap } from 'lucide-react';
+import { Cable, FolderKanban, GitBranch, Layers, ListChecks, Plug, Puzzle, StickyNote, Users, Zap } from 'lucide-react';
 
 import type { LucideIcon } from '@/features/extensions/extension-nav-icon';
 
@@ -25,7 +25,8 @@ export type BuiltinNavId =
   | 'builtin:automations'
   | 'builtin:notes'
   | 'builtin:workflows'
-  | 'builtin:channels';
+  | 'builtin:channels'
+  | 'builtin:extensions';
 
 export type BuiltinNavDef = {
   id: BuiltinNavId;
@@ -45,6 +46,7 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:connectors', to: '/connectors', Icon: Cable },
   { id: 'builtin:automations', to: '/automations', Icon: Zap },
   { id: 'builtin:channels', to: '/channels', Icon: Plug },
+  { id: 'builtin:extensions', to: '/extensions', Icon: Puzzle },
   { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
   { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
 ] as const;

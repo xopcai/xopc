@@ -37,7 +37,7 @@
         {
           "id": "synapse.board",
           "title": "Synapse 看板",
-          "path": "/apps/synapse",
+          "path": "/extensions/synapse",
           "entrypoint": "ui/panel.html",
           "showInNav": true,
           "navIcon": "columns-3"

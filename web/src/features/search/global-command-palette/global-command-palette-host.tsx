@@ -167,7 +167,7 @@ function buildExtensionHits(args: {
         run: () => {
           args.close();
           if (command.opensPanel !== undefined && command.opensPanel !== '') {
-            args.navigate(`/apps/${encodeURIComponent(extension.id)}`);
+            args.navigate(`/extensions/${encodeURIComponent(extension.id)}`);
           } else {
             window.dispatchEvent(
               new CustomEvent('extension-command', {

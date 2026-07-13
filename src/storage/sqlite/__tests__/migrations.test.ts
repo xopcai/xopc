@@ -147,6 +147,9 @@ describe('SQLite migrations', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);
     db.exec(`
+      CREATE TABLE goals (
+        goal_id TEXT PRIMARY KEY
+      );
       CREATE TABLE projects (
         project_id TEXT PRIMARY KEY,
         name TEXT NOT NULL,

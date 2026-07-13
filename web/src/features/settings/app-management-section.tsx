@@ -1,4 +1,4 @@
-import { Copy, FolderOpen, Package } from 'lucide-react';
+import { Copy, Package } from 'lucide-react';
 import { useCallback, useEffect, useReducer } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
@@ -77,8 +77,7 @@ type AppManagementMessages = {
   copyPath: string;
   copied: string;
   copyFailed: string;
-  cliDataWarning: string;
-  openCliData: string;
+  sharedDataWarning: string;
   pendingUpdateBlocked: string;
   clearData: string;
   clearDataDesc: string;
@@ -186,17 +185,6 @@ export function AppManagementSection({
     dispatch({ type: 'patch', patch: { actionError: m.copyFailed } });
   };
 
-  const openCliData = async (path: string) => {
-    const shell = window.electronAPI?.shell;
-    if (!shell) {
-      return;
-    }
-    const r = await shell.openPath(path);
-    if (r.error) {
-      dispatch({ type: 'patch', patch: { actionError: r.error } });
-    }
-  };
-
   const handleClearData = async () => {
     if (!api?.clearUserData) {
       return;
@@ -289,23 +277,6 @@ export function AppManagementSection({
           </p>
         ) : null}
 
-        {info.hasSeparateCliData && info.cliDataPath ? (
-          <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2.5">
-            <p className="text-xs text-amber-800 dark:text-amber-200">{m.cliDataWarning}</p>
-            <button
-              type="button"
-              className={cn(
-                'mt-2 inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover',
-                interaction.press,
-              )}
-              onClick={() => void openCliData(info.cliDataPath!)}
-            >
-              <FolderOpen className="size-3.5" strokeWidth={1.75} aria-hidden />
-              {m.openCliData}
-            </button>
-          </div>
-        ) : null}
-
         <dl className="space-y-3 text-sm">
           <div className="rounded-xl bg-surface-panel/70 p-3 shadow-surface">
             <dt className="text-xs font-medium text-fg-muted">{m.appPath}</dt>
@@ -327,21 +298,24 @@ export function AppManagementSection({
           <div className="rounded-xl bg-surface-panel/70 p-3 shadow-surface">
             <dt className="text-xs font-medium text-fg-muted">{m.dataPath}</dt>
             <dd className="mt-1 flex items-start justify-between gap-2">
-              <code className="break-all text-xs text-fg">{info.userDataPath}</code>
+              <code className="break-all text-xs text-fg">{info.dataPath}</code>
               <button
                 type="button"
                 className={cn(
                   'inline-flex shrink-0 items-center gap-1 rounded-lg border border-edge px-2 py-1 text-xs text-fg hover:bg-surface-hover',
                   interaction.press,
                 )}
-                onClick={() => void copyPath(info.userDataPath, 'data')}
+                onClick={() => void copyPath(info.dataPath, 'data')}
               >
                 <Copy className="size-3" aria-hidden />
                 {copiedField === 'data' ? m.copied : m.copyPath}
               </button>
             </dd>
             <p className="mt-2 text-xs text-fg-muted">
-              {m.dataSize}: {formatBytes(info.userDataSizeBytes, m.dataSizeUnknown)}
+              {m.dataSize}: {formatBytes(info.dataSizeBytes, m.dataSizeUnknown)}
+            </p>
+            <p className="mt-2 text-xs leading-relaxed text-amber-800 dark:text-amber-200">
+              {m.sharedDataWarning}
             </p>
           </div>
         </dl>

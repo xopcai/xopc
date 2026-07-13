@@ -284,7 +284,7 @@ import type { ExtensionService } from '@xopcai/xopc/extension-sdk';
 - **首次权限确认** — 展示 manifest **`ui.permissions`**；用户同意后写入 **`localStorage`** 键 **`xopc.extensionUiGrants.v1`**（按扩展 id + 权限集合指纹）。
 - **iframe `sandbox`** — 一般为 `allow-scripts allow-forms allow-popups`，**不启用 `allow-same-origin`** 以降低与宿主同源混用风险（通信依赖 `postMessage`）。
 - **Agent 流式事件** — 网关在 webchat 场景广播 **`agent.stream`**；控制台 **`/api/events`** SSE 收到后，由宿主转发给已通过 **`agent.subscribe`** 订阅对应 **`sessionKey`** 的 iframe。
-- **命令面板** — **⌘K / Ctrl+K**（或 `window` 上的 `open-command-palette`）列出 **`contributions.commands`**；带 **`opensPanel`** 的命令会导航到 **`/apps/{extensionId}`**。
+- **命令面板** — **⌘K / Ctrl+K**（或 `window` 上的 `open-command-palette`）列出 **`contributions.commands`**；带 **`opensPanel`** 的命令会导航到 **`/extensions/{extensionId}`**。
 - **调试** — **设置 → Extensions → 扩展调试** 可查看网关返回的扩展列表与 **UI 授权** JSON。
 
 ### 示例：Hello 扩展
