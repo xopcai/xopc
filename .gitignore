@@ -32,6 +32,7 @@ pnpm-debug.log*
 .env
 .env.local
 .env.*.local
+apps/mobile-expo/google-services.json
 
 # OS
 .DS_Store

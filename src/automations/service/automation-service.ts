@@ -451,6 +451,11 @@ export class AutomationService {
       });
       this.activeRuns.delete(initialRun.id);
       this.finishAutomationRun(automation.id, status, error, endedAtMs);
+      try {
+        this.deps.onRunCompleted?.(run);
+      } catch (err) {
+        log.warn({ err, automationId: automation.id, runId: run.id }, 'Automation completion hook failed');
+      }
     }
   }
 

@@ -499,6 +499,9 @@ export const en = {
     softwareVersion: 'Version',
     gatewayNotConfigured: 'Not configured',
     clipboardIntake: 'Detect clipboard content',
+    notifications: 'Task notifications',
+    notificationsHint: 'Get alerts when an agent needs input or a task fails.',
+    notificationsPermissionDenied: 'Notifications are disabled in system settings.',
     // Gateway section
     gateway: 'Gateway',
     gatewayHint: 'Manage multiple gateway connections. MMKV persists these in a development build. Expo Go uses in-memory storage only.',

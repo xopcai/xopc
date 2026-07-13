@@ -121,6 +121,27 @@ pnpm run android:mobile
 
 修改 `app.json`、config plugin、原生权限或原生网络设置后，请运行 `pnpm -C apps/mobile-expo exec expo prebuild --clean`。
 
+## 推送通知
+
+App 通过 Expo Push Service 发送任务提醒。完成 gateway 配对后，在 App 设置中开启**任务通知**；仅在这次显式操作时请求系统权限，并把 Expo token 注册到 gateway。点击通知会打开对应聊天或自动化页面。
+
+Gateway 会在本地 SQLite 中保存设备注册信息，并为“目标需要输入”“目标阻塞”和自动化失败发送提醒。完成类提醒默认关闭，可通过设备偏好 API 开启。
+
+发布构建前，请在各平台账号中完成以下配置（不要提交凭据或凭据文件）：
+
+1. 在 Expo/EAS 中确认项目 ID 与 `app.json` 相同，并使用 development 或 production client 测试；Android 的 Expo Go 不能作为推送通知测试目标。
+2. Android：在 Firebase 创建包名为 `ai.xopc.xopc` 的 Android App，并在 Expo 项目凭据中配置 FCM v1。`google-services.json` 必须留在 Git 之外。
+3. iOS：在 Apple Developer 中为 `ai.xopc.xopc` 开启 Push Notifications，并在 EAS 凭据中配置 APNs key 或 profile；请在真机 iPhone/iPad 上测试。
+4. 确认 gateway 主机可通过 HTTPS 访问 `https://exp.host`；手机仍通过已配对的 LAN 或远程 URL 访问 gateway。
+
+首次完成凭据配置、或变更原生通知配置后，需要重新构建：
+
+```bash
+pnpm -C apps/mobile-expo exec expo prebuild --clean
+pnpm -C apps/mobile-expo run build:android:preview
+pnpm -C apps/mobile-expo run build:ios:preview
+```
+
 ## 原生网络说明
 
 本地 gateway 通常在 LAN IP 上使用普通 HTTP，例如 `http://192.168.1.44:18790`。Expo Go 与已安装的原生构建行为可能不同，因为原生构建使用本 App 自己的 bundle ID、权限和网络策略。

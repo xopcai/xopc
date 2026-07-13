@@ -59,10 +59,6 @@ export const WorkflowBoard = memo(function WorkflowBoard({
 
   const totalCards = columns.reduce((sum, col) => sum + col.runs.length, 0);
 
-  if (loading && totalCards === 0) {
-    return <p className="text-sm text-fg-muted">{labels.loading}</p>;
-  }
-
   if (!loading && totalCards === 0) {
     return (
       <div className="flex h-full min-h-0 flex-col items-center justify-center rounded-2xl border border-dashed border-edge bg-surface-panel/40 px-6 py-12 text-center">
@@ -78,7 +74,8 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   }
 
   return (
-    <div className="-mx-1 flex h-full min-w-0 snap-x snap-mandatory gap-3 overflow-x-auto px-1 pb-3">
+    <div className="min-h-0 h-full min-w-0 overflow-x-auto rounded-lg px-2 py-2">
+      <div className="flex min-h-full min-w-max items-start gap-3 pr-4">
       {columns.map((column) => (
         <WorkflowBoardColumn
           key={column.id}
@@ -87,12 +84,14 @@ export const WorkflowBoard = memo(function WorkflowBoard({
           localeTag={localeTag}
           nowMs={nowMs}
           selectedRunId={selectedRunId}
+          loading={loading}
           onOpenRun={onOpenRun}
           onOpenRunChat={onOpenRunChat}
           onCancelRun={onCancelRun}
           onRetryRun={onRetryRun}
         />
       ))}
+      </div>
     </div>
   );
 });
