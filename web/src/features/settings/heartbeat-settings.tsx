@@ -26,6 +26,7 @@ import {
   SettingsPageHeader,
   SettingsTabPanel,
 } from '@/features/settings/settings-page-layout';
+import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages, type HeartbeatSettingsMessages } from '@/i18n/messages';
@@ -368,11 +369,8 @@ export function HeartbeatSettingsPanel() {
 
   if (loading) {
     return (
-      <SettingsPageFrame gap="gap-3" padding="px-3 py-8 sm:px-5 xl:px-6">
-        <div className="flex items-center gap-2 text-sm text-fg-muted">
-          <Loader2 className="size-4 animate-spin" />
-          {h.loading}
-        </div>
+      <SettingsPageFrame gap="gap-6" padding="px-3 py-8 sm:px-5 xl:px-6">
+        <SettingsPageSkeleton sections={3} />
       </SettingsPageFrame>
     );
   }

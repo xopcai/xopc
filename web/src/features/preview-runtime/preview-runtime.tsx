@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { messages } from '@/i18n/messages';
+import { Skeleton } from '@/components/ui/skeleton';
 import { selectPreviewPlugin } from '@/features/preview-runtime/preview-plugins';
 import { PreviewToolbar } from '@/features/preview-runtime/preview-toolbar';
 import type { PreviewRuntimeRenderProps } from '@/features/preview-runtime/preview-types';
@@ -84,8 +85,12 @@ export function PreviewRuntimeView(
 
   if (props.loading) {
     return (
-      <div className="flex min-h-0 flex-1 items-center justify-center px-4 py-6 text-sm text-fg-muted">
-        {m.chat.loading}
+      <div className="flex min-h-0 flex-1 flex-col gap-3 px-4 py-6" aria-busy="true">
+        <Skeleton className="h-5 w-48 max-w-full" />
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-11/12" />
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="mt-3 min-h-48 flex-1 rounded-lg" />
       </div>
     );
   }

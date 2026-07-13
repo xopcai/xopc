@@ -1,10 +1,11 @@
-import { Loader2, Plus, Server, Trash2 } from 'lucide-react';
+import { Plus, Server, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
 import useSWR from 'swr';
 
 import { PopoverSelect, type PopoverSelectOption } from '@/components/ui/popover-select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useExtensions } from '@/features/extensions/extension-provider';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { SettingsCollapsibleSection } from '@/features/settings/settings-collapsible-section';
@@ -319,6 +320,31 @@ function ImageModelSelectSection({
   );
 }
 
+function ImageModelsSettingsSkeleton() {
+  return (
+    <div className="flex flex-col gap-4" aria-hidden="true">
+      {Array.from({ length: 2 }).map((_, i) => (
+        <section key={i} className="rounded-lg bg-surface-base p-4">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="mt-2 h-3 w-72 max-w-full" />
+          <div className="mt-4 grid gap-3">
+            <Skeleton className="h-10 rounded-lg" />
+            <Skeleton className="h-10 rounded-lg" />
+            <Skeleton className="h-9 w-36 rounded-lg" />
+          </div>
+        </section>
+      ))}
+      <section className="rounded-lg bg-surface-base p-4">
+        <Skeleton className="h-4 w-36" />
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <Skeleton className="h-10 rounded-lg" />
+          <Skeleton className="h-16 rounded-lg" />
+        </div>
+      </section>
+    </div>
+  );
+}
+
 export function ImageModelsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -459,11 +485,7 @@ export function ImageModelsSettingsPanel() {
   }
 
   if (providersLoading || capabilitiesLoading || defaultsLoading) {
-    return (
-      <div className="flex w-full items-center gap-2 text-sm text-fg-muted">
-        <Loader2 className="size-4 animate-spin" /> Loading…
-      </div>
-    );
+    return <ImageModelsSettingsSkeleton />;
   }
 
   return (

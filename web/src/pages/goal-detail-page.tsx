@@ -24,6 +24,7 @@ import { type FormEvent, useCallback, useEffect, useLayoutEffect, useMemo, useSt
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { AutomationSuggestionCard } from '@/features/automations/automation-suggestion-card';
 import type { AutomationRun } from '@/features/automations/automation-api';
 import { formatAutomationMessage } from '@/features/automations/automation-explanations';
@@ -50,6 +51,42 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 type GoalStatus = 'active' | 'paused' | 'blocked' | 'needs_input' | 'done' | 'archived';
 type ChecklistStatus = 'pending' | 'completed' | 'impossible';
 type EvidenceKind = 'file' | 'diff' | 'command' | 'test' | 'link' | 'message' | 'artifact';
+
+function GoalDetailPageSkeleton() {
+  return (
+    <div className="grid gap-4" aria-hidden="true">
+      <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
+        <div className="flex flex-wrap items-center gap-2">
+          <Skeleton className="h-5 w-20 rounded-full" />
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <Skeleton className="mt-4 h-4 w-full max-w-3xl" />
+        <Skeleton className="mt-2 h-4 w-2/3 max-w-2xl" />
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <Skeleton className="h-16 rounded-md" />
+          <Skeleton className="h-16 rounded-md" />
+          <Skeleton className="h-16 rounded-md" />
+        </div>
+      </section>
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
+          <Skeleton className="h-4 w-32" />
+          <div className="mt-4 grid gap-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-14 rounded-md" />
+            ))}
+          </div>
+        </section>
+        <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
+          <Skeleton className="h-4 w-28" />
+          <Skeleton className="mt-4 h-24 rounded-md" />
+          <Skeleton className="mt-3 h-24 rounded-md" />
+        </section>
+      </div>
+    </div>
+  );
+}
 
 type GoalDetail = {
   id: string;
@@ -748,7 +785,11 @@ export function GoalDetailPage() {
       ),
       main: (
         <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{goal?.title ?? (loading ? t.loading : t.notFound)}</h1>
+          {loading ? (
+            <Skeleton className="h-5 w-48 max-w-full" />
+          ) : (
+            <h1 className="truncate text-base font-semibold tracking-tight text-fg">{goal?.title ?? t.notFound}</h1>
+          )}
           {goal ? (
             <p className="truncate text-xs text-fg-muted">
               {statusLabel(goal.status, t)} · {formatMessage(t.agent, { agentId: goal.agentId })} · {formatMessage(t.turns, { used: goal.turnsUsed, max: goal.maxTurns })}
@@ -775,11 +816,12 @@ export function GoalDetailPage() {
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
       <div className="flex w-full flex-1 flex-col gap-4 px-3 py-5 sm:px-5 xl:px-6">
-        {loading ? <p className="text-sm text-fg-muted">{t.loading}</p> : null}
         {error ? <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
         {!loading && !goal ? <p className="text-sm text-fg-muted">{t.notFound}</p> : null}
 
-        {goal ? (
+        {loading ? (
+          <GoalDetailPageSkeleton />
+        ) : goal ? (
           <>
             <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
               <div className="flex flex-wrap items-center gap-2">

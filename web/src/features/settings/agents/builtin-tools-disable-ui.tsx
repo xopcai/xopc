@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { SettingsListSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { cn } from '@/lib/cn';
 
 import { BUILTIN_TOOL_UI_GROUPS, miscBuiltinToolIds, type BuiltinToolUiGroupKey } from './builtin-tool-disable-groups';
@@ -173,7 +174,7 @@ export function BuiltinToolsDisableUi(props: BuiltinToolsDisableUiProps) {
         </div>
       </div>
       {loading ? (
-        <p className="text-sm text-fg-muted">{labels.loadingBuiltin}</p>
+        <SettingsListSkeleton rows={4} />
       ) : !hasRows ? (
         <p className="text-sm text-fg-muted">{labels.emptyBuiltin}</p>
       ) : (

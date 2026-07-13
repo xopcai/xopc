@@ -104,7 +104,7 @@ export function AppShell() {
       <ToastHost />
       <TokenDialog />
       <OnboardingDialog />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="app-chrome-shell flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <WindowsTitlebar />
         <TopBannerStack>
           <ElectronGatewayExitBanner />
@@ -115,7 +115,7 @@ export function AppShell() {
           <SidebarColumn />
 
           {/* Main + workspace: workspace is a right rail sibling (not a dialog), like app-sidebar */}
-          <div className="flex min-h-0 min-w-0 flex-1 min-w-0 flex-col overflow-hidden bg-surface-panel">
+          <div className="app-main-surface flex min-h-0 min-w-0 flex-1 min-w-0 flex-col overflow-hidden bg-surface-panel">
             <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
               <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                 {!isSettingsRoute && !previewPath ? <PrimaryAppHeader /> : null}

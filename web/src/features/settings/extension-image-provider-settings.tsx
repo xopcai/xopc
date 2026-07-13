@@ -1,7 +1,7 @@
-import { Loader2 } from 'lucide-react';
 import { useMemo } from 'react';
 import useSWR from 'swr';
 
+import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { fetchImageProvidersList } from '@/features/settings/fetch-image-providers';
 import {
   ImageProviderCredentialsPanel,
@@ -100,12 +100,7 @@ export function ExtensionImageProviderSettings({ extensionId }: { extensionId: s
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center gap-2 py-6 text-sm text-fg-muted">
-        <Loader2 className="size-4 animate-spin" />
-        …
-      </div>
-    );
+    return <SettingsPanelSkeleton rows={2} />;
   }
 
   if (summaries.length === 0) {

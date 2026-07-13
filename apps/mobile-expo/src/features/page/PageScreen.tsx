@@ -13,7 +13,15 @@ import { useTheme } from '../../theme';
 import { NoteDetailHeader } from '../notes/NoteDetailHeader';
 import { NoteViewActionBar, type NoteViewActionBarItem } from '../notes/NoteViewActionBar';
 import { NoteTagPickerSheet } from '../notes/NoteTagPickerSheet';
-import { NoteEditorBridge, type NoteEditorAiAction, type NoteEditorBridgeHandle } from '../notes/editor/NoteEditorBridge';
+import {
+  NoteEditorBridge,
+  type NoteEditorAiAction,
+  type NoteEditorBridgeHandle,
+} from '../notes/editor/NoteEditorBridge';
+import {
+  noteEditorModeFromInteraction,
+  type NoteEditorInteractionState,
+} from '../notes/editor/editor-interaction';
 import { countNoteCharacters } from '../notes/note-title';
 import { getNotePrimaryTag, getTagColors } from '../notes/note-tag-utils';
 import { useVoiceCaptureInteraction } from '../notes/use-voice-capture-interaction';
@@ -61,7 +69,6 @@ export function PageScreen() {
 
   const editorCommandIdRef = useRef(0);
   const editorRef = useRef<NoteEditorBridgeHandle | null>(null);
-  const noteEditorModeRef = useRef<NoteEditorMode>('viewing');
   const autoFocusedNoteIdRef = useRef<string | null>(null);
   const allowNextRemoveRef = useRef(false);
   const savingBeforeLeaveRef = useRef(false);
@@ -70,10 +77,6 @@ export function PageScreen() {
   useEffect(() => {
     hydrateNoteTags();
   }, [hydrateNoteTags]);
-
-  useEffect(() => {
-    noteEditorModeRef.current = noteEditorMode;
-  }, [noteEditorMode]);
 
   const handleMissingNote = useCallback(() => {
     router.replace('/notes');
@@ -142,18 +145,9 @@ export function PageScreen() {
     setEditorCommand({ id: editorCommandIdRef.current, ...next } as EditorCommand);
   }, []);
 
-  const handleEditorFocusChange = useCallback((focused: boolean) => {
-    if (noteEditorModeRef.current === 'native_modal') return;
-    setNoteEditorMode(focused ? 'editing' : 'viewing');
+  const handleEditorInteractionStateChange = useCallback((state: NoteEditorInteractionState) => {
+    setNoteEditorMode(noteEditorModeFromInteraction(state));
   }, []);
-
-  const handleNativeModalChange = useCallback((open: boolean) => {
-    if (open) {
-      setNoteEditorMode('native_modal');
-      return;
-    }
-    setNoteEditorMode(editorRuntimeState.focused ? 'editing' : 'viewing');
-  }, [editorRuntimeState.focused]);
 
   const voice = useVoiceCaptureInteraction({
     value: markdownRef.current,
@@ -515,8 +509,7 @@ export function PageScreen() {
               labels={labels}
               onChangeMarkdown={updateMarkdown}
               onRequestAttachment={handleRequestAttachment}
-              onFocusChange={handleEditorFocusChange}
-              onNativeModalChange={handleNativeModalChange}
+              onInteractionStateChange={handleEditorInteractionStateChange}
               onRuntimeStateChange={setEditorRuntimeState}
               aiActions={aiActions}
               aiLoadingKey={aiLoadingKey}

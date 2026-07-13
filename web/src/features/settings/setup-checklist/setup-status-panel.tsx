@@ -17,6 +17,7 @@ import {
   SettingsFormSection,
   SettingsFormSectionHeader,
 } from '@/features/settings/settings-form-section';
+import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -323,10 +324,7 @@ export function SetupStatusPanel() {
       ) : null}
 
       {!ready || !snapshot ? (
-        <div className="flex items-center gap-2 text-sm text-fg-muted" aria-busy>
-          <Loader2 className="size-4 animate-spin" aria-hidden />
-          {s.loading}
-        </div>
+        <SettingsPageSkeleton sections={2} />
       ) : (
         <>
           <HealthBanner

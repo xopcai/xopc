@@ -5,6 +5,7 @@ import type { LogErrorSummaryItem } from '@/features/logs/log.types';
 import { formatTimeCompact } from '@/features/logs/logs-page-lib';
 import type { LogsMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type Props = {
   L: LogsMessages;
@@ -34,7 +35,10 @@ export function LogsErrorSummarySection({ L, items, loading, onSelectItem }: Pro
         </div>
         <div className="flex shrink-0 items-center gap-2 pt-0.5">
           {loading ? (
-            <span className="text-xs text-fg-muted">{L.loading}</span>
+            <>
+              <Skeleton className="h-5 w-8 rounded-md" />
+              <Skeleton className="h-5 w-10 rounded-md" />
+            </>
           ) : (
             <>
               <span className="rounded-md bg-red-500/10 px-2 py-0.5 text-xs tabular-nums text-red-600 dark:text-red-400">

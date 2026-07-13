@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import type { GatewayAgentRow, SkillCatalogRow } from '@/features/settings/agents-admin-api';
+import { SettingsListSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
@@ -100,7 +101,9 @@ export function AgentSkillsTab(props: {
             : '—'}
       </p>
       {skillsCatalogLoading ? (
-        <p className="shrink-0 text-sm text-fg-muted">{a.skillsCatalogLoading}</p>
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5">
+          <SettingsListSkeleton rows={4} />
+        </div>
       ) : catalogForPick.length === 0 ? (
         <p className="shrink-0 text-sm text-fg-muted">{a.skillsEmptyCatalog}</p>
       ) : (

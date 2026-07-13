@@ -4,6 +4,7 @@ import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { AppShell } from '@/components/shell/app-shell';
 import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
 import { SettingsSheet } from '@/components/shell/settings-sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ChatPage } from '@/features/chat/chat-page';
 import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
 import { DesktopPetEventBridge } from '@/features/desktop-pet/desktop-pet-event-bridge';
@@ -69,11 +70,26 @@ const DesktopPetPage = lazy(() => import('@/pages/desktop-pet').then((m) => ({ d
 
 function SecondaryRouteFallback() {
   return (
-    <div
-      className="flex min-h-[min(40vh,16rem)] flex-1 items-center justify-center text-sm text-fg-muted"
-      aria-busy
-    >
-      Loading…
+    <div className="flex min-h-0 flex-1 flex-col bg-surface-panel" aria-busy>
+      <div className="flex w-full flex-col gap-5 px-3 py-6 sm:px-5 xl:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 space-y-2">
+            <Skeleton className="h-5 w-44" />
+            <Skeleton className="h-3 w-64 max-w-full" />
+          </div>
+          <Skeleton className="h-9 w-24 shrink-0 rounded-lg" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-20 rounded-lg" />
+          ))}
+        </div>
+        <div className="grid gap-3 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-36 rounded-lg" />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -83,10 +99,13 @@ function SettingsRouteFallback() {
   return (
     <div className="flex min-h-0 flex-1 flex-col" aria-busy>
       <div className="w-full flex-1 px-3 py-8 sm:px-5 xl:px-6">
-        <div className="h-8 w-48 max-w-full animate-pulse rounded-md bg-surface-hover" />
-        <div className="mt-6 h-36 animate-pulse rounded-xl bg-surface-hover" />
-        <div className="mt-4 h-24 animate-pulse rounded-xl bg-surface-hover" />
-        <p className="mt-6 text-sm text-fg-muted">Loading…</p>
+        <Skeleton className="h-8 w-48 max-w-full" />
+        <Skeleton className="mt-6 h-36 rounded-xl" />
+        <Skeleton className="mt-4 h-24 rounded-xl" />
+        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+          <Skeleton className="h-20 rounded-xl" />
+          <Skeleton className="h-20 rounded-xl" />
+        </div>
       </div>
     </div>
   );

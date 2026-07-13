@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-do
 
 import { fetchCommandsCached } from '@/features/chat/palette/command-palette-api';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
 import { ChatGoalBanner } from '@/features/chat/goals/chat-goal-banner';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
@@ -936,8 +937,19 @@ export function ChatPage() {
               onScroll={handleChatScroll}
             >
               {session.showSessionLoading ? (
-                <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">
-                  {m.chat.loading}
+                <div className="flex min-h-[min(40vh,20rem)] w-full flex-col gap-10 py-8" aria-busy="true">
+                  <div className="flex justify-end">
+                    <Skeleton className="h-11 w-[min(70%,22rem)] rounded-2xl" />
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-[min(82%,36rem)]" />
+                    <Skeleton className="h-4 w-[min(74%,32rem)]" />
+                    <Skeleton className="h-4 w-[min(48%,22rem)]" />
+                  </div>
+                  <div className="flex justify-end">
+                    <Skeleton className="h-11 w-[min(62%,18rem)] rounded-2xl" />
+                  </div>
                 </div>
               ) : (
                 <>

@@ -134,15 +134,6 @@ export function buildAppMenuModel(
     },
 
     {
-      id: 'navigate',
-      label: t.navigate.label,
-      items: [
-        item('navigate.back', t.navigate.back),
-        item('navigate.forward', t.navigate.forward),
-      ],
-    },
-
-    {
       id: 'agent',
       label: t.agent.label,
       items: [
@@ -153,23 +144,6 @@ export function buildAppMenuModel(
         separator(),
         item('agent.providers', t.agent.providers),
         item('agent.models', t.agent.models),
-      ],
-    },
-
-    {
-      id: 'window',
-      label: t.window.label,
-      items: [
-        item('window.minimize', t.window.minimize, { role: 'minimize' }),
-        item('window.zoom', t.window.zoom, { role: 'zoom' }),
-        ...(isMac
-          ? [
-              separator(),
-              item('window.front', t.window.front, { role: 'front' }),
-              separator(),
-              item('window.window', t.window.window, { role: 'window' }),
-            ]
-          : [item('window.close', t.window.close, { role: 'close' })]),
       ],
     },
 

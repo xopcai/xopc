@@ -1,6 +1,7 @@
 import { AlertCircle, AlertTriangle, Info, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
 import useSWR, { mutate } from 'swr';
 
+import { Skeleton } from '@/components/ui/skeleton';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import {
   fetchGatewaySecurityAudit,
@@ -73,9 +74,9 @@ export function GatewaySecurityAuditCard({ enabled, refreshToken = 0 }: Props) {
       ) : null}
 
       {!fetchError && refreshing && !audit ? (
-        <div className="flex items-center gap-2 text-sm text-fg-muted">
-          <Loader2 className="size-4 animate-spin" aria-hidden />
-          {g.securityAuditLoading}
+        <div className="space-y-2" aria-busy="true">
+          <Skeleton className="h-11 w-full rounded-lg" />
+          <Skeleton className="h-10 w-full rounded-lg" />
         </div>
       ) : null}
 

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import {
   fetchVoiceModels,
   fetchVoiceProviders,
@@ -557,12 +558,7 @@ export function VoiceSettingsPanel() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 text-sm text-fg-muted">
-          <Loader2 className="size-4 animate-spin" />
-          {v.loading}
-        </div>
-      </div>
+      <SettingsPanelSkeleton rows={4} />
     );
   }
 

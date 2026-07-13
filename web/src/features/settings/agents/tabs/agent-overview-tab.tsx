@@ -9,6 +9,7 @@ import { ModelSelector } from '@/features/chat/model/model-selector';
 import { DirectoryPickerPathField } from '@/features/fs/directory-picker-path-field';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import type { OverviewProfileDraft } from '@/features/settings/agents/hooks/use-agent-overview-profile-markdown';
+import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -337,7 +338,7 @@ export function AgentOverviewTab(props: {
 
       {/* ===== Section 3: Personality & Style ===== */}
       {profileMarkdownLoading ? (
-        <p className="text-sm text-fg-muted">{a.loading}</p>
+        <SettingsPanelSkeleton rows={2} />
       ) : (
         <SettingsFormSection>
           <SettingsFormSectionHeader icon={User} title={a.personaSectionSoul} subtitle={a.personaSectionSoulHint} />

@@ -1,4 +1,4 @@
-import { Ban, Loader2, Plus, Search, Trash2 } from 'lucide-react';
+import { Ban, Plus, Search, Trash2 } from 'lucide-react';
 import { useCallback, useMemo, useReducer, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { SettingsAdvancedGate } from '@/features/settings/settings-advanced-gate';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
+import { SettingsPanelSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { selectFieldMaxWidthClass, selectTriggerClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { cn } from '@/lib/cn';
@@ -148,12 +149,7 @@ export function WebSearchSettingsPanel() {
   }
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center gap-3">
-        <Loader2 className="size-8 animate-spin text-fg-muted" aria-hidden />
-        <p className="text-sm text-fg-muted">{w.loading}</p>
-      </div>
-    );
+    return <SettingsPanelSkeleton rows={3} />;
   }
 
   if (!form) {

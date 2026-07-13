@@ -2,6 +2,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -65,9 +66,9 @@ export function MigrationStatusCard({ messages }: { messages: MigrationStatusMes
 
   if (isLoading) {
     return (
-      <section className="rounded-2xl bg-surface-panel p-4 shadow-surface">
-        <h2 className="text-sm font-semibold text-fg">{messages.title}</h2>
-        <p className="mt-1 text-sm text-fg-muted">{messages.checking}</p>
+      <section className="rounded-2xl bg-surface-panel p-4 shadow-surface" aria-busy="true">
+        <Skeleton className="h-5 w-40 max-w-full" />
+        <Skeleton className="mt-2 h-4 w-64 max-w-full" />
       </section>
     );
   }

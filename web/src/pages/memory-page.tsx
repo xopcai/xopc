@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { messages } from '@/i18n/messages';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -95,6 +96,21 @@ function qualityTone(summary?: MemoryFeedbackSummary): string {
   return 'border-danger/30 bg-danger-soft text-fg';
 }
 
+function MemoryRecordSkeleton() {
+  return (
+    <article className="px-4 py-3" aria-hidden="true">
+      <div className="flex flex-wrap items-center gap-2">
+        <Skeleton className="h-3 w-16" />
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-3 w-24" />
+      </div>
+      <Skeleton className="mt-3 h-4 w-full" />
+      <Skeleton className="mt-2 h-4 w-5/6" />
+      <Skeleton className="mt-2 h-4 w-2/3" />
+    </article>
+  );
+}
+
 export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; agentId?: string }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).agentsSettings.memoryPanel;
@@ -110,31 +126,31 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
     autoWriteKinds: [],
   });
 
-  const { data: providersData } = useSWR<{ providers: MemoryProvider[] }>(
+  const { data: providersData, isLoading: providersLoading } = useSWR<{ providers: MemoryProvider[] }>(
     apiUrl('/api/memory/providers'),
     fetcher,
   );
-  const { data: recordsData, mutate: mutateRecords } = useSWR<{ records: MemoryRecord[] }>(
+  const { data: recordsData, isLoading: recordsLoading, mutate: mutateRecords } = useSWR<{ records: MemoryRecord[] }>(
     apiUrl('/api/memory/records?status=active&limit=80'),
     fetcher,
   );
-  const { data: candidatesData, mutate: mutateCandidates } = useSWR<{ records: MemoryRecord[] }>(
+  const { data: candidatesData, isLoading: candidatesLoading, mutate: mutateCandidates } = useSWR<{ records: MemoryRecord[] }>(
     apiUrl('/api/memory/records?status=candidate&limit=80'),
     fetcher,
   );
-  const { data: signalsData } = useSWR<{ signals: MemorySignal[] }>(
+  const { data: signalsData, isLoading: signalsLoading } = useSWR<{ signals: MemorySignal[] }>(
     apiUrl('/api/memory/signals?limit=50'),
     fetcher,
   );
-  const { data: tracesData, mutate: mutateTraces } = useSWR<{ traces: MemoryTrace[] }>(
+  const { data: tracesData, isLoading: tracesLoading, mutate: mutateTraces } = useSWR<{ traces: MemoryTrace[] }>(
     apiUrl('/api/memory/traces?limit=80'),
     fetcher,
   );
-  const { data: feedbackSummaryData } = useSWR<{ summaries: MemoryFeedbackSummary[] }>(
+  const { data: feedbackSummaryData, isLoading: feedbackSummaryLoading } = useSWR<{ summaries: MemoryFeedbackSummary[] }>(
     apiUrl('/api/memory/feedback-summary?limit=1000'),
     fetcher,
   );
-  const { data: configData, mutate: mutateConfig } = useSWR<MemoryConfig>(
+  const { data: configData, isLoading: configLoading, mutate: mutateConfig } = useSWR<MemoryConfig>(
     apiUrl(`/api/memory/config${agentId ? `?agentId=${encodeURIComponent(agentId)}` : ''}`),
     fetcher,
   );
@@ -155,6 +171,14 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
   const signalCount = signalsData?.signals.length ?? 0;
   const traceCount = tracesData?.traces.length ?? 0;
   const feedbackSummaries = feedbackSummaryData?.summaries ?? [];
+  const initialLoading =
+    providersLoading ||
+    recordsLoading ||
+    candidatesLoading ||
+    signalsLoading ||
+    tracesLoading ||
+    feedbackSummaryLoading ||
+    configLoading;
   const feedbackByRecordId = useMemo(
     () => new Map(feedbackSummaries.map((summary) => [summary.recordId, summary])),
     [feedbackSummaries],
@@ -268,7 +292,11 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
         {summary.map((item) => (
           <div key={item.label} className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
             <div className="text-xs text-fg-muted">{item.label}</div>
-            <div className="mt-1 text-2xl font-semibold text-fg">{item.value}</div>
+            {initialLoading ? (
+              <Skeleton className="mt-2 h-7 w-16" />
+            ) : (
+              <div className="mt-1 text-2xl font-semibold text-fg">{item.value}</div>
+            )}
           </div>
         ))}
       </div>
@@ -311,7 +339,9 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
           <div className="md:col-span-2">
             <div className="mb-2 text-xs font-medium text-fg-muted">{t.writableProviders}</div>
             <div className="flex flex-wrap gap-2">
-              {(providersData?.providers ?? []).filter((provider) => !provider.capabilities.local).map((provider) => {
+              {providersLoading
+                ? Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-10 w-28 rounded-md" />)
+                : (providersData?.providers ?? []).filter((provider) => !provider.capabilities.local).map((provider) => {
                 const checked = routingDraft.allowedProviderIds?.includes(provider.id) ?? false;
                 return (
                   <label key={provider.id} className="flex items-center gap-2 rounded-md border border-edge px-3 py-2 text-sm text-fg">
@@ -347,7 +377,9 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
           <div className="text-xs text-fg-muted">{candidateCount}</div>
         </div>
         <div className="divide-y divide-edge">
-          {(candidatesData?.records ?? []).map((record) => (
+          {candidatesLoading
+            ? Array.from({ length: 3 }).map((_, i) => <MemoryRecordSkeleton key={i} />)
+            : (candidatesData?.records ?? []).map((record) => (
             <article key={record.id} className="px-4 py-3">
               <div className="flex flex-wrap items-center gap-2 text-xs text-fg-muted">
                 <span className="font-medium text-fg">{record.kind}</span>
@@ -372,7 +404,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
               </div>
             </article>
           ))}
-          {candidateCount === 0 ? <div className="px-4 py-8 text-sm text-fg-muted">{t.noInbox}</div> : null}
+          {!candidatesLoading && candidateCount === 0 ? <div className="px-4 py-8 text-sm text-fg-muted">{t.noInbox}</div> : null}
         </div>
       </section>
 
@@ -400,7 +432,9 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
             {submitted ? `${t.searchResults}${searchLoading ? '…' : ''}` : t.recentRecords}
           </div>
           <div className="divide-y divide-edge">
-            {records.map((record) => {
+            {searchLoading || (recordsLoading && !submitted) ? (
+              Array.from({ length: 5 }).map((_, i) => <MemoryRecordSkeleton key={i} />)
+            ) : records.map((record) => {
               const feedback = feedbackByRecordId.get(record.id);
               const percent = qualityPercent(feedback);
               return (
@@ -429,7 +463,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
                 </article>
               );
             })}
-            {records.length === 0 ? <div className="px-4 py-8 text-sm text-fg-muted">{t.noRecords}</div> : null}
+            {!recordsLoading && !searchLoading && records.length === 0 ? <div className="px-4 py-8 text-sm text-fg-muted">{t.noRecords}</div> : null}
           </div>
         </div>
 
@@ -437,7 +471,9 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
           <div className="rounded-lg bg-surface-panel shadow-surface">
             <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.providers}</div>
             <div className="divide-y divide-edge">
-              {(providersData?.providers ?? []).map((provider) => (
+              {providersLoading
+                ? Array.from({ length: 3 }).map((_, i) => <MemoryRecordSkeleton key={i} />)
+                : (providersData?.providers ?? []).map((provider) => (
                 <div key={provider.id} className="px-4 py-3">
                   <div className="text-sm font-medium text-fg">{provider.displayName}</div>
                   <div className="mt-1 text-xs text-fg-muted">
@@ -457,7 +493,9 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
           <div className="rounded-lg bg-surface-panel shadow-surface">
             <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.recallQuality}</div>
             <div className="divide-y divide-edge">
-              {feedbackSummaries.slice(0, 8).map((summary) => {
+              {feedbackSummaryLoading ? (
+                Array.from({ length: 3 }).map((_, i) => <MemoryRecordSkeleton key={i} />)
+              ) : feedbackSummaries.slice(0, 8).map((summary) => {
                 const record = (recordsData?.records ?? []).find((item) => item.id === summary.recordId);
                 const percent = qualityPercent(summary);
                 return (
@@ -479,7 +517,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
                   </div>
                 );
               })}
-              {feedbackSummaries.length === 0 ? (
+              {!feedbackSummaryLoading && feedbackSummaries.length === 0 ? (
                 <div className="px-4 py-8 text-sm text-fg-muted">{t.noRecallFeedback}</div>
               ) : null}
             </div>
@@ -488,7 +526,9 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
           <div className="rounded-lg bg-surface-panel shadow-surface">
             <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.signals}</div>
             <div className="divide-y divide-edge">
-              {(signalsData?.signals ?? []).map((signal) => (
+              {signalsLoading
+                ? Array.from({ length: 3 }).map((_, i) => <MemoryRecordSkeleton key={i} />)
+                : (signalsData?.signals ?? []).map((signal) => (
                 <div key={signal.signalId} className="px-4 py-3 text-xs text-fg-muted">
                   <div className="font-medium text-fg">{signal.source}</div>
                   <div>{signal.providerId ?? 'local'} · {new Date(signal.createdAt).toLocaleString()}</div>
@@ -500,7 +540,9 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
           <div className="rounded-lg bg-surface-panel shadow-surface">
             <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.trace}</div>
             <div className="divide-y divide-edge">
-              {(tracesData?.traces ?? []).slice(0, 20).map((trace) => (
+              {tracesLoading
+                ? Array.from({ length: 3 }).map((_, i) => <MemoryRecordSkeleton key={i} />)
+                : (tracesData?.traces ?? []).slice(0, 20).map((trace) => (
                 <div key={trace.traceId} className="px-4 py-3 text-xs text-fg-muted">
                   <div className="font-medium text-fg">{trace.phase} · {trace.providerId}</div>
                   <div>{trace.resultCount ?? 0} {(trace.resultCount ?? 0) === 1 ? t.result : t.results} · {trace.durationMs} ms</div>

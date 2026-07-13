@@ -1,11 +1,14 @@
-import { describe, expect, it } from 'vitest';
+import { join, resolve } from 'node:path';
 import pathWin32 from 'node:path/win32';
+
+import { describe, expect, it } from 'vitest';
 
 import {
   NSIS_UNINSTALL_EXE,
   detectLinuxPackageKind,
   detectSeparateCliData,
   resolveAppPath,
+  resolveDataRemovalTargets,
   resolveNsisUninstallerPath,
   resolveShowInFolderTarget,
 } from '../uninstall/paths.js';
@@ -74,6 +77,22 @@ describe('detectSeparateCliData', () => {
         (p) => p,
       ),
     ).toBe(true);
+  });
+});
+
+describe('resolveDataRemovalTargets', () => {
+  it('includes separate shared state data and removes nested duplicates', () => {
+    const userData = join('home', 'me', 'electron-user-data');
+    const cache = join('home', 'me', 'electron-cache');
+    const logs = join(userData, 'logs');
+    const stateDir = join('home', 'me', '.xopc');
+    const configPath = join(stateDir, 'xopc.json');
+
+    expect(resolveDataRemovalTargets([userData, cache, logs, stateDir, configPath])).toEqual([
+      resolve(userData),
+      resolve(cache),
+      resolve(stateDir),
+    ]);
   });
 });
 
