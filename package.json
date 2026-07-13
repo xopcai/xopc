@@ -31,6 +31,8 @@
     "access": "public"
   },
   "scripts": {
+    "assets:brand": "node scripts/generate-brand-assets.mjs",
+    "assets:brand:check": "node scripts/generate-brand-assets.mjs --check",
     "generate:bundled-image-providers": "node scripts/generate-bundled-image-providers.mjs",
     "generate:bundled": "pnpm run generate:bundled-image-providers",
     "build:node": "node scripts/tsdown-build.mjs",
@@ -90,7 +92,7 @@
     "electron:dev": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite dev",
     "electron:vite:build": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite build",
     "electron:vite:build:package": "cross-env ELECTRON_ENTRY=out/main/index.js ELECTRON_VITE_SKIP_RENDERER=1 electron-vite build",
-    "electron:package": "node scripts/electron-builder.mjs",
+    "electron:package": "pnpm run assets:brand && node scripts/electron-builder.mjs",
     "electron:server:build": "node scripts/build-electron-server.mjs",
     "electron:extensions:build": "node scripts/build-electron-extensions.mjs",
     "electron:build:artifacts": "pnpm run electron:vite:build:package && pnpm run electron:server:build && pnpm run electron:extensions:build",
@@ -180,6 +182,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/vite": "^4.3.0",
     "@types/adm-zip": "^0.5.8",
     "@types/js-yaml": "^4.0.9",

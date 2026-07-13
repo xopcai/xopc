@@ -28,7 +28,7 @@ export default defineConfig({
   ignoreDeadLinks: true,
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}favicon.svg` }],
-    ['link', { rel: 'apple-touch-icon', href: `${base}favicon.svg` }],
+    ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}apple-touch-icon.png` }],
     ['meta', { property: 'og:title', content: 'xopc - Turn goals into loops' }],
     ['meta', { property: 'og:description', content: 'Keep what matters moving. A local-first AI system that remembers context, coordinates AI, and sustains long-term progress.' }],
     ['meta', { property: 'og:image', content: `https://xopcai.github.io${base}social-preview.svg` }],
