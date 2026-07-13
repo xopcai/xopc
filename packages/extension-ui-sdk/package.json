@@ -1,6 +1,6 @@
 {
   "name": "@xopcai/extension-ui-sdk",
-  "version": "0.0.127",
+  "version": "0.0.128",
   "description": "Gateway Console extension UI SDK (iframe postMessage client)",
   "type": "module",
   "sideEffects": false,
