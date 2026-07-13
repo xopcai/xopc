@@ -1,0 +1,113 @@
+import { createHash } from 'node:crypto';
+
+import AdmZip from 'adm-zip';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { Config } from '../../config/schema.js';
+import { getStoreConnectorInstallPlan } from '../store-connector.js';
+
+const manifest = {
+  id: 'demo-connector',
+  displayName: 'Demo Connector',
+  description: 'A verified remote MCP connector.',
+  category: 'docs',
+  capabilities: ['tools', 'resources', 'runtime.mcp.streamableHttp'],
+  auth: { mode: 'none' },
+  setup: {},
+  permissions: {
+    data: ['workspace.read'],
+    networkDomains: ['mcp.example.com'],
+    localExec: false,
+    filesystem: [],
+  },
+  runtime: {
+    type: 'mcp',
+    serverId: 'demo_connector',
+    serverTemplate: {
+      url: 'https://mcp.example.com/mcp',
+      transport: 'streamable-http',
+    },
+  },
+};
+
+function archiveForManifest(value = manifest): Buffer {
+  const zip = new AdmZip();
+  zip.addFile('xopc.connector.json', Buffer.from(JSON.stringify(value)));
+  return zip.toBuffer();
+}
+
+function config(): Config {
+  return { gateway: { skillsStoreBaseUrl: 'https://store.example.com' } } as Config;
+}
+
+function mockStore(archive: Buffer, sha256 = createHash('sha256').update(archive).digest('hex')): void {
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+    const url = String(input);
+    if (url === 'https://store.example.com/api/v1/packages/demo-connector') {
+      return new Response(JSON.stringify({
+        id: 'pkg_1',
+        name: 'demo-connector',
+        type: 'connector',
+        description: manifest.description,
+        latestVersion: {
+          version: '1.0.0',
+          manifest,
+          downloadUrl: 'https://store.example.com/files/demo-connector.zip',
+          sha256,
+        },
+      }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }
+    if (url === 'https://store.example.com/files/demo-connector.zip') {
+      return new Response(archive, { status: 200 });
+    }
+    throw new Error(`Unexpected fetch: ${url}`);
+  });
+}
+
+afterEach(() => vi.restoreAllMocks());
+
+describe('store connector install plans', () => {
+  it('verifies the artifact checksum and returns only a remote MCP definition', async () => {
+    const archive = archiveForManifest();
+    mockStore(archive);
+
+    const plan = await getStoreConnectorInstallPlan(config(), 'demo-connector');
+
+    expect(plan).toMatchObject({
+      packageName: 'demo-connector',
+      version: '1.0.0',
+      requiresRestart: false,
+      requiresOAuth: false,
+      permissions: { data: ['workspace.read'], localExec: false },
+      definition: {
+        source: 'store',
+        runtime: { type: 'mcp', serverId: 'demo_connector' },
+      },
+    });
+  });
+
+  it('rejects a connector whose downloaded artifact does not match the store checksum', async () => {
+    const archive = archiveForManifest();
+    mockStore(archive, '0'.repeat(64));
+
+    await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).rejects.toThrow(
+      'checksum verification failed',
+    );
+  });
+
+  it('rejects an artifact that does not explicitly deny local execution', async () => {
+    const unsafeManifest = {
+      ...manifest,
+      permissions: {
+        data: ['workspace.read'],
+        networkDomains: ['mcp.example.com'],
+      },
+    };
+    const archive = archiveForManifest(unsafeManifest);
+    mockStore(archive);
+
+    await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).rejects.toThrow(
+      'explicitly deny local command execution',
+    );
+  });
+});

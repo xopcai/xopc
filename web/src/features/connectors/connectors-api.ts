@@ -71,7 +71,35 @@ export type ConnectorDefinition = {
         toolkit?: string;
         toolsetId?: string;
         sourceKind?: string;
-      };
+  };
+};
+
+export type StoreConnectorCatalogItem = {
+  id: string;
+  name: string;
+  type: 'connector';
+  category: string | null;
+  description: string;
+  downloads: number;
+  author: { username: string; avatarUrl: string | null };
+  latestVersion?: string;
+  updatedAt: number;
+};
+
+export type StoreConnectorPermissions = {
+  data?: string[];
+  networkDomains?: string[];
+  localExec?: boolean;
+  filesystem?: string[];
+};
+
+export type StoreConnectorInstallPlan = {
+  packageName: string;
+  version: string;
+  definition: ConnectorDefinition;
+  permissions: StoreConnectorPermissions;
+  requiresRestart: false;
+  requiresOAuth: boolean;
 };
 
 export type ConnectorHealthStatus =
@@ -237,6 +265,50 @@ export async function fetchConnectorCatalog(): Promise<ConnectorDefinition[]> {
     apiUrl('/api/connectors/catalog'),
   );
   return requirePayload(response, 'Could not load connector catalog.').connectors;
+}
+
+export async function fetchStoreConnectorCatalog(params?: {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+  category?: string;
+  sort?: 'downloads' | 'newest';
+}): Promise<{ items: StoreConnectorCatalogItem[]; meta: { page: number; pageSize: number; total: number; totalPages: number } }> {
+  const search = new URLSearchParams();
+  if (params?.q?.trim()) search.set('q', params.q.trim());
+  if (params?.page) search.set('page', String(params.page));
+  if (params?.pageSize) search.set('pageSize', String(params.pageSize));
+  if (params?.category?.trim()) search.set('category', params.category.trim());
+  if (params?.sort) search.set('sort', params.sort);
+  const suffix = search.size ? `?${search.toString()}` : '';
+  const response = await fetchJson<ApiEnvelope<{ items: StoreConnectorCatalogItem[]; meta: { page: number; pageSize: number; total: number; totalPages: number } }>>(
+    apiUrl(`/api/capabilities/connectors${suffix}`),
+  );
+  return requirePayload(response, 'Could not load Store connector capabilities.');
+}
+
+export async function fetchStoreConnectorInstallPlan(
+  packageName: string,
+  version?: string,
+): Promise<StoreConnectorInstallPlan> {
+  const response = await fetchJson<ApiEnvelope<{ plan: StoreConnectorInstallPlan }>>(
+    apiUrl(`/api/capabilities/connectors/${encodeURIComponent(packageName)}/install-plan`),
+    { method: 'POST', body: JSON.stringify({ version }) },
+  );
+  return requirePayload(response, 'Could not prepare connector installation.').plan;
+}
+
+export async function installStoreConnector(
+  packageName: string,
+  input: Omit<ConnectorInstallInput, 'definition'>,
+  version?: string,
+): Promise<ConnectorInstance> {
+  const response = await fetchJson<ApiEnvelope<{ instance: ConnectorInstance }>>(
+    apiUrl(`/api/capabilities/connectors/${encodeURIComponent(packageName)}/install`),
+    { method: 'POST', body: JSON.stringify({ ...input, version }) },
+  );
+  void revalidateGatewayConfig();
+  return requirePayload(response, 'Could not install Store connector.').instance;
 }
 
 export async function fetchConnectorRegistries(): Promise<ConnectorRegistryProvider[]> {

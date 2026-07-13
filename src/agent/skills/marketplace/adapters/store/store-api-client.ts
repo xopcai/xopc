@@ -174,6 +174,22 @@ export async function listSkillPackages(
   return fetchJson<SkillsStoreListResponse>(url);
 }
 
+/** Public connector catalog exposed by xopc-store. */
+export async function listConnectorPackages(
+  storeBaseUrl: string,
+  params: SkillsStoreListParams,
+): Promise<SkillsStoreListResponse> {
+  const base = normalizeBaseUrl(storeBaseUrl);
+  const sp = new URLSearchParams();
+  sp.set('type', 'connector');
+  if (params.q?.trim()) sp.set('q', params.q.trim());
+  if (params.page != null) sp.set('page', String(params.page));
+  if (params.pageSize != null) sp.set('pageSize', String(params.pageSize));
+  if (params.sort) sp.set('sort', params.sort);
+  if (params.category?.trim()) sp.set('category', params.category.trim());
+  return fetchJson<SkillsStoreListResponse>(`${base}/api/v1/packages?${sp.toString()}`);
+}
+
 /** GET /api/v1/packages/:name — published skill package (public). */
 export interface MarketplacePackageDetail {
   id: string;
@@ -188,6 +204,45 @@ export interface MarketplacePackageDetail {
     changelog: string | null;
     publishedAt: string;
   };
+}
+
+export interface StoreConnectorPackageDetail {
+  id: string;
+  name: string;
+  type: 'connector';
+  description: string;
+  latestVersion: {
+    version: string;
+    manifest: unknown;
+    downloadUrl: string;
+    sha256: string | null;
+  };
+}
+
+export async function fetchStoreConnectorPackageDetail(
+  storeBaseUrl: string,
+  packageName: string,
+  version?: string,
+): Promise<StoreConnectorPackageDetail> {
+  const base = normalizeBaseUrl(storeBaseUrl);
+  const enc = encodeURIComponent(packageName.trim());
+  const pkg = await fetchJson<StoreConnectorPackageDetail>(`${base}/api/v1/packages/${enc}`);
+  if (pkg.type !== 'connector') {
+    throw new Error(`Package "${packageName}" has type "${pkg.type}" (expected connector).`);
+  }
+  if (!version?.trim() || version.trim() === pkg.latestVersion.version) {
+    assertDownloadUrlAllowed(pkg.latestVersion.downloadUrl, base);
+    return pkg;
+  }
+  const resolvedVersion = encodeURIComponent(version.trim());
+  const detail = await fetchJson<{
+    version: string;
+    manifest: unknown;
+    downloadUrl: string;
+    sha256: string | null;
+  }>(`${base}/api/v1/packages/${enc}/versions/${resolvedVersion}`);
+  assertDownloadUrlAllowed(detail.downloadUrl, base);
+  return { ...pkg, latestVersion: detail };
 }
 
 export async function fetchMarketplacePackageDetail(
@@ -338,6 +393,28 @@ export async function downloadExtensionStoreZipBuffer(
   const buf = Buffer.from(ab);
   if (buf.length > MAX_EXTENSION_STORE_ZIP_BYTES) {
     throw new Error(`Zip exceeds maximum size (${MAX_EXTENSION_STORE_ZIP_BYTES} bytes)`);
+  }
+  return buf;
+}
+
+export async function downloadConnectorStoreZipBuffer(
+  storeBaseUrl: string,
+  downloadUrl: string,
+): Promise<Buffer> {
+  const base = normalizeBaseUrl(storeBaseUrl);
+  assertDownloadUrlAllowed(downloadUrl, base);
+  const res = await fetch(downloadUrl, { redirect: 'error' });
+  if (!res.ok) {
+    throw new Error(`Failed to download connector archive (${res.status})`);
+  }
+  const maxBytes = 1024 * 1024;
+  const len = res.headers.get('content-length');
+  if (len && Number(len) > maxBytes) {
+    throw new Error(`Connector archive exceeds maximum size (${maxBytes} bytes)`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > maxBytes) {
+    throw new Error(`Connector archive exceeds maximum size (${maxBytes} bytes)`);
   }
   return buf;
 }

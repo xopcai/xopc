@@ -37,10 +37,13 @@ import {
   fetchConnectorCatalog,
   fetchConnectorInstances,
   fetchConnectorRegistries,
+  fetchStoreConnectorCatalog,
+  fetchStoreConnectorInstallPlan,
   searchConnectorRegistryPage,
   type ConnectorDefinition,
   type ConnectorInstance,
   type ConnectorRegistryProvider,
+  type StoreConnectorCatalogItem,
 } from './connectors-api';
 
 type TabId = 'marketplace' | 'builtin' | 'user' | 'config';
@@ -48,6 +51,7 @@ type ConnectorSort = 'name' | 'source';
 
 const CONNECTOR_REGISTRY_PROVIDER_PARAM = 'mprov';
 const DEFAULT_CONNECTOR_REGISTRY_SOURCE = 'smithery';
+const STORE_CONNECTOR_SOURCE = 'xopc-store';
 type LoadState = {
   catalog: ConnectorDefinition[];
   registryCatalog: ConnectorDefinition[];
@@ -68,6 +72,26 @@ const inputClass = cn(
   settingsInputFocusClass,
 );
 
+function connectorFromStoreItem(item: StoreConnectorCatalogItem): ConnectorDefinition {
+  const category = ['code', 'docs', 'browser', 'data', 'automation', 'custom'].includes(item.category ?? '')
+    ? item.category as ConnectorDefinition['category']
+    : 'custom';
+  return {
+    id: item.name,
+    version: item.latestVersion ?? 'store',
+    displayName: item.name,
+    description: item.description,
+    category,
+    kind: 'mcp',
+    source: 'store',
+    capabilities: ['tools', 'runtime.mcp.streamableHttp'],
+    tags: ['store'],
+    auth: { mode: 'none' },
+    setup: {},
+    runtime: { type: 'mcp', serverId: `store-${item.name}`.slice(0, 64) },
+  };
+}
+
 export function ConnectorsPage() {
   const language = useLocaleStore((state) => state.language);
   const m = messages(language);
@@ -80,6 +104,7 @@ export function ConnectorsPage() {
   const [tab, setTab] = useState<TabId>('marketplace');
   const [state, setState] = useState<LoadState>({ catalog: [], registryCatalog: [], instances: [], registries: [], loading: true, error: null });
   const [registryLoading, setRegistryLoading] = useState(false);
+  const [storePlanLoading, setStorePlanLoading] = useState(false);
   const [registryPage, setRegistryPage] = useState(1);
   const [registryTotalPages, setRegistryTotalPages] = useState<number | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState('');
@@ -138,16 +163,19 @@ export function ConnectorsPage() {
     setRegistrySource(searchParams.get(CONNECTOR_REGISTRY_PROVIDER_PARAM)?.trim() || DEFAULT_CONNECTOR_REGISTRY_SOURCE);
   }, [searchParams, searchParamsKey]);
 
-  const registrySources = useMemo(() => state.registries.map((registry) => registry.id), [state.registries]);
+  const marketplaceSources = useMemo(
+    () => [{ id: STORE_CONNECTOR_SOURCE, displayName: cs.storeSourceName }, ...state.registries],
+    [cs.storeSourceName, state.registries],
+  );
 
   useEffect(() => {
-    if (registrySources.length === 0) return;
-    if (registrySources.includes(registrySource)) return;
-    const fallback = registrySources.includes(DEFAULT_CONNECTOR_REGISTRY_SOURCE)
+    if (marketplaceSources.length === 0) return;
+    if (marketplaceSources.some((source) => source.id === registrySource)) return;
+    const fallback = marketplaceSources.some((source) => source.id === DEFAULT_CONNECTOR_REGISTRY_SOURCE)
       ? DEFAULT_CONNECTOR_REGISTRY_SOURCE
-      : registrySources[0];
+      : marketplaceSources[0]?.id;
     if (fallback) setRegistrySource(fallback);
-  }, [registrySource, registrySources]);
+  }, [marketplaceSources, registrySource]);
 
   useEffect(() => {
     if (!registrySource || registrySource === searchParams.get(CONNECTOR_REGISTRY_PROVIDER_PARAM)) return;
@@ -163,7 +191,7 @@ export function ConnectorsPage() {
     const browse = options?.browse ?? false;
     const page = Math.max(options?.page ?? 1, 1);
     const append = options?.append ?? false;
-    if (!hasToken || (!query && !browse)) return;
+    if (!hasToken || (registrySource !== STORE_CONNECTOR_SOURCE && !query && !browse)) return;
     setRegistryLoading(true);
     if (!append) {
       setRegistryPage(1);
@@ -173,7 +201,17 @@ export function ConnectorsPage() {
       setState((prev) => ({ ...prev, error: null }));
     }
     try {
-      const result = await searchConnectorRegistryPage(query, registrySource, { browse, page });
+      const result = registrySource === STORE_CONNECTOR_SOURCE
+        ? await fetchStoreConnectorCatalog({
+            q: query || undefined,
+            page,
+            pageSize: 24,
+            sort: connectorSort === 'source' ? 'newest' : 'downloads',
+          }).then((catalog) => ({
+            connectors: catalog.items.map(connectorFromStoreItem),
+            totalPages: catalog.meta.totalPages,
+          }))
+        : await searchConnectorRegistryPage(query, registrySource, { browse, page });
       setRegistryPage(page);
       setRegistryTotalPages(result.totalPages);
       setState((prev) => ({
@@ -189,7 +227,7 @@ export function ConnectorsPage() {
     } finally {
       setRegistryLoading(false);
     }
-  }, [hasToken, searchQuery, registrySource]);
+  }, [connectorSort, hasToken, searchQuery, registrySource]);
 
   useEffect(() => {
     if (tab !== 'marketplace') return;
@@ -207,6 +245,26 @@ export function ConnectorsPage() {
   const connectorDefinitionsById = useMemo(() => new Map(
     [...state.catalog, ...state.registryCatalog].map((connector) => [connector.id, connector]),
   ), [state.catalog, state.registryCatalog]);
+
+  const openStoreInstall = useCallback(async (packageName: string) => {
+    setStorePlanLoading(true);
+    setState((prev) => ({ ...prev, error: null }));
+    try {
+      const plan = await fetchStoreConnectorInstallPlan(packageName);
+      if (plan.requiresOAuth && plan.definition.id !== 'github') {
+        throw new Error(cs.storeOAuthUnsupported);
+      }
+      setInstallDraft(buildInitialDraft(plan.definition, {
+        packageName: plan.packageName,
+        version: plan.version,
+        permissions: plan.permissions,
+      }));
+    } catch (error) {
+      setState((prev) => ({ ...prev, error: error instanceof Error ? error.message : String(error) }));
+    } finally {
+      setStorePlanLoading(false);
+    }
+  }, [cs.storeOAuthUnsupported]);
   const managedServerIds = useMemo(
     () => new Set(state.instances.flatMap((instance) => instance.materialized.type === 'mcp' ? [instance.materialized.serverId] : [])),
     [state.instances],
@@ -255,7 +313,7 @@ export function ConnectorsPage() {
   const headerEnd = useMemo(
     () => (
       <ConnectorsPageHeaderEnd
-        loading={state.loading || registryLoading}
+        loading={state.loading || registryLoading || storePlanLoading}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         onReloadClick={load}
@@ -273,7 +331,7 @@ export function ConnectorsPage() {
         reloadLabel={cs.reload}
       />
     ),
-    [cs, load, openAddCustomServer, registryLoading, searchQuery, state.loading, tab],
+    [cs, load, openAddCustomServer, registryLoading, searchQuery, state.loading, storePlanLoading, tab],
   );
 
   useLayoutEffect(() => {
@@ -342,7 +400,7 @@ export function ConnectorsPage() {
           <div className="flex min-h-9 min-w-0 flex-wrap items-center gap-2 sm:justify-end">
             {tab === 'marketplace' ? (
               <div className="inline-flex h-9 max-w-full shrink-0 overflow-x-auto rounded-lg border border-edge bg-surface-panel p-0.5 shadow-surface" role="group" aria-label={cs.registrySourceAria}>
-                {state.registries.map((registry) => (
+                {marketplaceSources.map((registry) => (
                   <button
                     key={registry.id}
                     type="button"
@@ -514,8 +572,14 @@ export function ConnectorsPage() {
                       key={connector.id}
                       connector={connector}
                       installed={installedIds.has(connector.id) || connectorIsInstalled(connector, state.instances)}
-                      onInstall={(selected) => setInstallDraft(buildInitialDraft(selected))}
-                      onOpenDetails={setDetailConnector}
+                      onInstall={(selected) => {
+                        if (selected.source === 'store') {
+                          void openStoreInstall(selected.id);
+                          return;
+                        }
+                        setInstallDraft(buildInitialDraft(selected));
+                      }}
+                      onOpenDetails={connector.source === 'store' ? undefined : setDetailConnector}
                       t={cs}
                     />
                   ))}
@@ -525,7 +589,7 @@ export function ConnectorsPage() {
                     <Button
                       type="button"
                       variant="secondary"
-                      disabled={registryLoading}
+                      disabled={registryLoading || storePlanLoading}
                       onClick={() => void searchRegistry({ browse: !searchQuery.trim(), page: registryPage + 1, append: true })}
                     >
                       {registryLoading ? <Loader2 className="size-4 animate-spin" /> : null}

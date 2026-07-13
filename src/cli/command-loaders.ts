@@ -37,6 +37,7 @@ export const REGISTRY_COMMAND_MODULES: Record<string, CommandLoader> = {
   search: () => import('./commands/search.js'),
   auth: () => import('./commands/auth.js'),
   skills: () => import('./commands/skills.js'),
+  connectors: () => import('./commands/connectors.js'),
   browser: () => import('./commands/browser.js'),
   update: () => import('./commands/update.js'),
   logs: () => import('./commands/logs.js'),
