@@ -244,7 +244,7 @@ export function FilesScreen() {
   if (!configured) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
-        <FloatingHeader title={labels.title} onBack={() => router.back()} />
+        <FloatingHeader variant="large" title={labels.title} onBack={() => router.back()} />
         <View style={styles.center}>
           <Icon source="cloud-off-outline" size={42} color={colors.text.tertiary} />
           <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>{labels.gatewayRequiredTitle}</Text>
@@ -257,6 +257,7 @@ export function FilesScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
       <FloatingHeader
+        variant={currentDir ? 'compact' : 'large'}
         title={labels.title}
         onBack={goBack}
         rightActions={currentFolderEntry ? [
@@ -321,10 +322,11 @@ export function FilesScreen() {
               <Text style={[styles.emptyText, { color: colors.text.tertiary }]}>{labels.emptyHint}</Text>
             </View>
           )}
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <FileRow
               entry={item}
               subtitle={entrySubtitle(item, labels)}
+              isLast={index === entries.length - 1}
               onPress={() => openEntry(item)}
               onLongPress={() => setActionTarget(item)}
             />
@@ -367,11 +369,13 @@ export function FilesScreen() {
 function FileRow({
   entry,
   subtitle,
+  isLast,
   onPress,
   onLongPress,
 }: {
   entry: WorkspaceEntry;
   subtitle: string;
+  isLast: boolean;
   onPress: () => void;
   onLongPress: () => void;
 }) {
@@ -381,8 +385,8 @@ function FileRow({
     <Pressable
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: colors.surface.panel, borderColor: colors.border.default },
-        pressed && styles.pressed,
+        !isLast && { borderBottomColor: colors.border.subtle, borderBottomWidth: StyleSheet.hairlineWidth },
+        pressed && { backgroundColor: colors.surface.pressed },
       ]}
       onPress={onPress}
       onLongPress={onLongPress}
@@ -390,8 +394,8 @@ function FileRow({
       accessibilityRole="button"
       accessibilityLabel={entry.isDirectory ? labels.openFolder : labels.openFile}
     >
-      <View style={[styles.iconTile, { backgroundColor: colors.accent.selectionBg }]}>
-        <Icon source={entryIcon(entry)} size={21} color={colors.accent.primary} />
+      <View style={[styles.iconTile, { backgroundColor: colors.surface.grouped }]}>
+        <Icon source={entryIcon(entry)} size={21} color={colors.text.secondary} />
       </View>
       <View style={styles.rowCopy}>
         <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>
@@ -433,7 +437,7 @@ function FileActionSheet({
     >
       <View style={styles.actionSheetBody}>
         <Pressable
-          style={({ pressed }) => [styles.sheetAction, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.sheetAction, pressed && styles.sheetActionPressed]}
           onPress={onCopy}
           accessibilityRole="button"
           accessibilityLabel={labels.copyPath}
@@ -444,7 +448,7 @@ function FileActionSheet({
           <Text style={[styles.sheetActionText, { color: colors.text.primary }]}>{labels.copyPath}</Text>
         </Pressable>
         <Pressable
-          style={({ pressed }) => [styles.sheetAction, pressed && styles.pressed]}
+          style={({ pressed }) => [styles.sheetAction, pressed && styles.sheetActionPressed]}
           onPress={onShare}
           accessibilityRole="button"
           accessibilityLabel={entry?.isDirectory ? labels.shareFolder : labels.share}
@@ -554,21 +558,17 @@ const styles = StyleSheet.create({
   },
   crumbText: { ...typography.caption, fontWeight: '600' },
   list: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
-    gap: spacing.sm,
   },
   row: {
     minHeight: 64,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    borderRadius: radii.xl,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingLeft: spacing.md,
-    paddingRight: spacing.xs,
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
-  pressed: { opacity: 0.74 },
   iconTile: {
     width: 38,
     height: 38,
@@ -594,6 +594,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
+  sheetActionPressed: { opacity: 0.72 },
   sheetActionIcon: {
     width: 44,
     height: 44,

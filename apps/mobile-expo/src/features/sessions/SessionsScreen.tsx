@@ -22,6 +22,7 @@ import { refreshSessionsList } from '../../query/infinite-list-sync';
 import { queryKeys } from '../../query/keys';
 import {
   archiveSession,
+  createSession,
   deleteSession,
   fetchSessionsList,
   pinSession,
@@ -31,7 +32,7 @@ import {
   unarchiveSession,
   useGatewayConfigured,
 } from '../../query/sessions';
-import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, spacing, useTheme } from '../../theme';
+import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, spacing, typography, useTheme } from '../../theme';
 
 import { RenameDialog } from './RenameDialog';
 import { SessionCard } from './SessionCard';
@@ -84,6 +85,16 @@ export function SessionsScreen() {
       .filter((item) => !pendingDeleteIds.has(item.key)),
     [pendingDeleteIds, sessionsQuery.data?.pages],
   );
+
+  const createSessionMutation = useMutation({
+    mutationFn: () => createSession(),
+    onSuccess: (sessionKey) => {
+      router.push(`/chat/${sessionKey}`);
+    },
+    onError: (error) => {
+      setSnackMsg(error instanceof Error ? error.message : m.notesPage.actionFailed);
+    },
+  });
 
   const refreshList = useCallback(async () => {
     await refreshSessionsList(queryClient);
@@ -292,6 +303,15 @@ export function SessionsScreen() {
         title={selectionMode ? t(li.selectedCount, { count: selectedCount }) : sm.title}
         variant={selectionMode ? 'compact' : 'large'}
         onBack={selectionMode ? exitSelectionMode : () => dismissOrHome(router)}
+        rightActions={selectionMode ? undefined : [
+          {
+            icon: 'square-edit-outline',
+            accessibilityLabel: sm.newChat,
+            onPress: () => {
+              if (!createSessionMutation.isPending) createSessionMutation.mutate();
+            },
+          },
+        ]}
       />
 
       {!configured ? (
@@ -310,6 +330,11 @@ export function SessionsScreen() {
           onEndReached={onEndReached}
           onEndReachedThreshold={0.5}
           onMomentumScrollBegin={onMomentumScrollBegin}
+          ListHeaderComponent={allSessions.length > 0 ? (
+            <Text style={[styles.listSummary, { color: colors.text.tertiary }]}>
+              {t(sm.chatCount, { count: allSessions.length })}
+            </Text>
+          ) : null}
           ListFooterComponent={renderListFooter}
           extraData={{ selectionMode, selectedCount, selectedKey: [...selectedIds].join('|') }}
           refreshControl={
@@ -367,6 +392,12 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 8 },
   list: { paddingTop: spacing.xs, paddingBottom: spacing.lg, gap: 0, flexGrow: 1 },
+  listSummary: {
+    ...typography.label,
+    paddingHorizontal: spacing.content,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xs,
+  },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: '600' },
   emptyText: { fontSize: 13, textAlign: 'center' },

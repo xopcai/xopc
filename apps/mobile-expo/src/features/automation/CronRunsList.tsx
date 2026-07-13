@@ -9,7 +9,7 @@ import { openChat } from '../../lib/navigation';
 import { cronRunSessionKey, fetchCronRunsHistory, RUNS_HISTORY_LIMIT, type CronRunRow } from '../../query/cron';
 import { queryKeys } from '../../query/keys';
 import { useGatewayConfigured } from '../../query/sessions';
-import { useTheme } from '../../theme';
+import { spacing, typography, useTheme } from '../../theme';
 
 export function CronRunsList() {
   const router = useRouter();
@@ -41,7 +41,7 @@ export function CronRunsList() {
     [pm.statusCancelled, pm.statusFailed, pm.statusRunning, pm.statusSuccess],
   );
 
-  const cardBg = colors.surface.panel;
+  const cardBg = colors.surface.base;
   const textPrimary = colors.text.primary;
   const textSecondary = colors.text.secondary;
 
@@ -113,7 +113,7 @@ export function CronRunsList() {
       );
 
       if (!sessionKey) {
-        return <View style={[styles.card, { backgroundColor: cardBg }]}>{card}</View>;
+        return <View style={[styles.card, { backgroundColor: cardBg, borderColor: colors.border.subtle }]}>{card}</View>;
       }
 
       return (
@@ -121,8 +121,7 @@ export function CronRunsList() {
           onPress={() => openRunChat(item)}
           style={({ pressed }) => [
             styles.card,
-            { backgroundColor: cardBg },
-            pressed && styles.cardPressed,
+            { backgroundColor: pressed ? colors.surface.pressed : cardBg, borderColor: colors.border.subtle },
           ]}
         >
           {card}
@@ -183,24 +182,21 @@ export function CronRunsList() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  list: { padding: 16, paddingTop: 0, gap: 12, flexGrow: 1 },
-  headerBlock: { marginBottom: 12 },
-  subtitle: { fontSize: 13, lineHeight: 18 },
+  list: { paddingHorizontal: spacing.xl, paddingTop: 0, paddingBottom: spacing.xxl, gap: 0, flexGrow: 1 },
+  headerBlock: { marginBottom: spacing.md },
+  subtitle: typography.label,
   card: {
-    borderRadius: 14,
-    padding: 14,
-    gap: 6,
-  },
-  cardPressed: {
-    opacity: 0.85,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.md,
+    gap: spacing.sm,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 10,
+    gap: spacing.md,
   },
   cardTitleArea: { flex: 1, minWidth: 0 },
-  cardTitle: { fontSize: 15, fontWeight: '600' },
+  cardTitle: { ...typography.ui, fontWeight: '600' },
   statusPill: {
     paddingHorizontal: 8,
     paddingVertical: 4,

@@ -8,6 +8,7 @@ export function useSettingsColors() {
   return {
     pageBg: colors.surface.base,
     card: colors.surface.panel,
+    iconBg: colors.surface.grouped,
     pressed: colors.surface.pressed,
     text: colors.text.primary,
     textMuted: colors.text.tertiary,
@@ -71,7 +72,7 @@ export function SettingsRow({
   const resolvedIconColor = iconColor ?? colors.accent;
   const content = (
     <View style={[styles.row, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
-      <View style={[styles.iconWrap, { backgroundColor: colors.accentSoft }]}>
+      <View style={[styles.iconWrap, { backgroundColor: colors.iconBg }]}>
         <Icon source={icon} size={18} color={resolvedIconColor} />
       </View>
       <Text style={[styles.rowLabel, { color: colors.text }]} numberOfLines={1}>
@@ -110,6 +111,7 @@ export function SettingsOptionRow({
   label,
   description,
   selected,
+  isLast = false,
   onPress,
 }: SettingsOptionRowProps) {
   const colors = useSettingsColors();
@@ -118,7 +120,8 @@ export function SettingsOptionRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.optionRow,
-        pressed && styles.rowPressed,
+        !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+        pressed && { backgroundColor: colors.pressed },
       ]}
     >
       <View style={styles.optionText}>
@@ -150,18 +153,19 @@ export function SettingsAgentRow({
   agentId,
   description,
   selected,
+  isLast = false,
   chatLoading,
   onSelect,
   onChat,
 }: SettingsAgentRowProps) {
   const colors = useSettingsColors();
   return (
-    <View style={styles.agentRow}>
+    <View style={[styles.agentRow, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
       <Pressable
         onPress={onSelect}
-        style={({ pressed }) => [styles.agentRowMain, pressed && styles.rowPressed]}
+        style={({ pressed }) => [styles.agentRowMain, pressed && { backgroundColor: colors.pressed }]}
       >
-        <View style={[styles.iconWrap, { backgroundColor: colors.accentSoft }]}>
+        <View style={[styles.iconWrap, { backgroundColor: colors.iconBg }]}>
           <Icon source="robot-outline" size={18} color={colors.accent} />
         </View>
         <View style={styles.optionText}>
@@ -177,7 +181,7 @@ export function SettingsAgentRow({
       <Pressable
         onPress={onChat}
         disabled={chatLoading}
-        style={({ pressed }) => [styles.agentChatBtn, pressed && styles.rowPressed]}
+        style={({ pressed }) => [styles.agentChatBtn, pressed && { backgroundColor: colors.pressed }]}
         hitSlop={8}
       >
         <Icon source="chat-outline" size={22} color={colors.accent} />
@@ -188,11 +192,12 @@ export function SettingsAgentRow({
 
 const styles = StyleSheet.create({
   section: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl,
   },
   sectionTitle: {
-    ...typography.micro,
-    marginBottom: spacing.xs,
+    ...typography.label,
+    fontWeight: '600',
+    marginBottom: spacing.sm,
     marginLeft: spacing.md,
   },
   card: {
@@ -203,28 +208,28 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 54,
+    minHeight: 56,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md,
-    gap: 12,
+    gap: spacing.md,
   },
   rowPressed: {
     opacity: 0.68,
   },
   iconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
+    width: 30,
+    height: 30,
+    borderRadius: radii.sm,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rowLabel: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: '400',
+    ...typography.ui,
+    fontWeight: '500',
   },
   rowValue: {
-    fontSize: 15,
+    ...typography.ui,
     maxWidth: '42%',
     textAlign: 'right',
   },
@@ -232,11 +237,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    minHeight: 52,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
   },
   optionLabel: {
-    fontSize: 16,
+    ...typography.ui,
+    fontWeight: '500',
   },
   optionText: {
     flex: 1,
@@ -244,8 +251,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   optionDescription: {
-    fontSize: 13,
-    lineHeight: 18,
+    ...typography.label,
   },
   agentRow: {
     flexDirection: 'row',
@@ -256,13 +262,14 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingLeft: 14,
+    paddingLeft: spacing.md,
     paddingVertical: 12,
-    gap: 12,
+    gap: spacing.md,
     minWidth: 0,
   },
   agentChatBtn: {
-    padding: 10,
+    width: 44,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
   },

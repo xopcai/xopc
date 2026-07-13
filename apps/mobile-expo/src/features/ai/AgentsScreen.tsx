@@ -15,6 +15,7 @@ import { queryKeys } from '../../query/keys';
 import { createSession, useGatewayConfigured } from '../../query/sessions';
 import { invalidateSessionLists } from '../../query/workspace-sync';
 import { usePreferencesStore } from '../../stores/preferences-store';
+import { radii, spacing, typography } from '../../theme';
 import { useSettingsColors } from '../settings/settings-ui';
 import { pickEffectiveDefaultId } from '../settings/use-set-default-agent';
 import { AgentAvatar } from './AgentAvatar';
@@ -84,7 +85,7 @@ export function AgentsScreen() {
   if (!configured) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <FloatingHeader title={am.title} onBack={() => dismissOrHome(router)} />
+        <FloatingHeader variant="large" title={am.title} onBack={() => dismissOrHome(router)} />
         <View style={styles.center}>
           <Text style={{ color: colors.textMuted }}>{m.sessions.gatewayNotConfigured}</Text>
         </View>
@@ -95,7 +96,7 @@ export function AgentsScreen() {
   if (agentsQuery.isLoading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <FloatingHeader title={am.title} onBack={() => router.back()} />
+        <FloatingHeader variant="large" title={am.title} onBack={() => router.back()} />
         <View style={styles.center}>
           <ActivityIndicator size="large" />
         </View>
@@ -106,7 +107,7 @@ export function AgentsScreen() {
   if (agentsQuery.isError) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <FloatingHeader title={am.title} onBack={() => router.back()} />
+        <FloatingHeader variant="large" title={am.title} onBack={() => router.back()} />
         <View style={styles.center}>
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>{am.loadFailed}</Text>
           <Button mode="outlined" onPress={() => void queryClient.invalidateQueries({ queryKey: queryKeys.agents })}>
@@ -120,7 +121,7 @@ export function AgentsScreen() {
   if (agents.length === 0) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-        <FloatingHeader title={am.title} onBack={() => router.back()} />
+        <FloatingHeader variant="large" title={am.title} onBack={() => router.back()} />
         <View style={styles.center}>
           <Icon source="robot-off-outline" size={48} color={colors.textMuted} />
           <Text style={[styles.emptyText, { color: colors.textMuted }]}>{am.empty}</Text>
@@ -131,13 +132,13 @@ export function AgentsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBg }}>
-      <FloatingHeader title={am.title} onBack={() => router.back()} />
+      <FloatingHeader variant="large" title={am.title} onBack={() => router.back()} />
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <View style={[styles.searchBox, { backgroundColor: colors.card }]}>
+        <View style={[styles.searchBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <Icon source="magnify" size={20} color={colors.textMuted} />
           <TextInput
             value={search}
@@ -159,12 +160,13 @@ export function AgentsScreen() {
         {filteredAgents.length === 0 ? (
           <Text style={[styles.noResults, { color: colors.textMuted }]}>{am.noResults}</Text>
         ) : (
-          <View style={styles.cards}>
-            {filteredAgents.map((agent) => (
+          <View style={[styles.cards, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {filteredAgents.map((agent, index) => (
               <AgentCard
                 key={agent.id}
                 agent={agent}
                 selected={agent.id === effectiveId}
+                isLast={index === filteredAgents.length - 1}
                 chatLoading={createMut.isPending && createMut.variables === agent.id}
                 onOpen={() => openAgent(agent.id)}
                 onChat={() => handleChatWith(agent.id)}
@@ -180,12 +182,14 @@ export function AgentsScreen() {
 function AgentCard({
   agent,
   selected,
+  isLast,
   chatLoading,
   onOpen,
   onChat,
 }: {
   agent: ChatAgentOption;
   selected: boolean;
+  isLast: boolean;
   chatLoading?: boolean;
   onOpen: () => void;
   onChat: () => void;
@@ -196,10 +200,10 @@ function AgentCard({
   const subtitle = agent.description?.trim() || agent.id;
 
   return (
-    <View style={[styles.card, { backgroundColor: colors.card }]}>
+    <View style={[styles.card, !isLast && { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
       <Pressable
         onPress={onOpen}
-        style={({ pressed }) => [styles.cardMain, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.cardMain, pressed && { backgroundColor: colors.pressed }]}
       >
         <View style={styles.cardHeader}>
           <AgentAvatar agentId={agent.id} avatar={agent.avatar} size={44} />
@@ -222,7 +226,7 @@ function AgentCard({
       <Pressable
         disabled={chatLoading}
         onPress={onChat}
-        style={({ pressed }) => [styles.chatButton, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.chatButton, pressed && { backgroundColor: colors.pressed }]}
         hitSlop={4}
       >
         {chatLoading ? (
@@ -244,9 +248,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   scroll: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 32,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxxl,
   },
   emptyText: {
     marginTop: 12,
@@ -255,17 +259,18 @@ const styles = StyleSheet.create({
   },
   searchBox: {
     minHeight: 48,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    borderRadius: radii.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
   },
   searchInput: {
     flex: 1,
     minHeight: 44,
-    fontSize: 16,
+    ...typography.body,
     paddingVertical: 0,
   },
   noResults: {
@@ -275,35 +280,34 @@ const styles = StyleSheet.create({
     paddingTop: 8,
   },
   cards: {
-    gap: 12,
+    borderRadius: radii.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
   },
   card: {
-    borderRadius: 12,
-    paddingRight: 6,
+    paddingRight: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
   },
   cardMain: {
     flex: 1,
     minWidth: 0,
-    paddingLeft: 14,
-    paddingVertical: 12,
-  },
-  pressed: {
-    opacity: 0.72,
+    minHeight: 68,
+    paddingLeft: spacing.md,
+    paddingVertical: spacing.md,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
   cardTitle: {
     flex: 1,
     minWidth: 0,
   },
   cardName: {
-    fontSize: 17,
-    fontWeight: '700',
+    ...typography.ui,
+    fontWeight: '600',
   },
   badge: {
     minHeight: 24,
@@ -317,15 +321,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   description: {
-    marginTop: 4,
+    marginTop: spacing.xs,
     marginLeft: 56,
-    fontSize: 13,
-    lineHeight: 18,
+    ...typography.label,
   },
   chatButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: radii.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
