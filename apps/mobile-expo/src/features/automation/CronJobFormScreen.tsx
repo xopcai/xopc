@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   flex: { flex: 1 },
   center: { justifyContent: 'center', alignItems: 'center', padding: 32 },
-  form: { padding: 16, gap: 16, paddingBottom: 40 },
+  form: { paddingHorizontal: 20, paddingTop: 12, gap: 16, paddingBottom: 40 },
   hint: { fontSize: 13, lineHeight: 18 },
   messageInput: { minHeight: 120 },
   warning: { fontSize: 13, lineHeight: 18 },

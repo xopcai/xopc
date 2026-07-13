@@ -783,6 +783,8 @@ export const en = {
 
   sessionsPage: {
     title: 'All chats',
+    newChat: 'New chat',
+    chatCount: '{{count}} conversations',
     empty: 'No chats yet',
     emptyHint: 'Start a chat and it will appear here.',
     manageAgents: 'Manage agents',

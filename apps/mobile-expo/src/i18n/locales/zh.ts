@@ -783,6 +783,8 @@ export const zh: MessageBundle = {
 
   sessionsPage: {
     title: '全部对话',
+    newChat: '新建对话',
+    chatCount: '{{count}} 个对话',
     empty: '还没有对话',
     emptyHint: '开始一次 AI 对话后会显示在这里。',
     manageAgents: '管理智能体',

@@ -48,6 +48,7 @@ export function AutomationScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: screenBg }]}>
       <FloatingHeader
+        variant="large"
         title={pm.title}
         onBack={() => dismissOrHome(router)}
         rightIcon={tab === 'schedules' ? 'plus' : undefined}

@@ -457,8 +457,9 @@ export function GatewayEditScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    padding: 16,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 40,
   },
   fieldGap: {
     marginTop: 8,

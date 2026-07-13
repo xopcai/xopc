@@ -110,7 +110,7 @@ export function MySharesScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: palette.bg }]}>
-      <FloatingHeader title={pm.title} onBack={() => dismissOrHome(router)} />
+      <FloatingHeader variant="large" title={pm.title} onBack={() => dismissOrHome(router)} />
 
       {list.isLoading ? (
         <View style={styles.center}>
@@ -227,7 +227,7 @@ function ShareRow({
     <Pressable
       style={({ pressed }) => [
         styles.card,
-        { backgroundColor: palette.cardBg, borderColor: palette.border },
+        { borderColor: palette.border },
         pressed && styles.pressed,
       ]}
       onPress={onPreview}
@@ -500,13 +500,12 @@ function useShareListColors(colors: ColorScheme) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  list: { padding: spacing.lg, paddingBottom: 40, gap: 0 },
-  separator: { height: spacing.md },
+  list: { paddingHorizontal: spacing.xl, paddingTop: spacing.sm, paddingBottom: 40, gap: 0 },
+  separator: { height: StyleSheet.hairlineWidth },
   subtitle: { ...typography.label, marginBottom: spacing.md },
   card: {
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: radii.lg,
-    padding: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingVertical: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,

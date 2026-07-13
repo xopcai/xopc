@@ -50,17 +50,18 @@ export function AboutScreen() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingHorizontal: 16,
-    paddingTop: 24,
-    paddingBottom: 32,
+    paddingHorizontal: 20,
+    paddingTop: 32,
+    paddingBottom: 40,
   },
   hero: {
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 32,
     gap: 6,
   },
   appName: {
-    fontSize: 28,
+    fontSize: 34,
+    lineHeight: 41,
     fontWeight: '700',
   },
   version: {
