@@ -687,7 +687,7 @@ export const GatewayConfigSchema = z.object({
   },
   maxSseConnections: 100,
   corsOrigins: [],
-  skillsMarketplaceProvider: 'skillhub',
+  skillsMarketplaceProvider: 'store',
   skillsStoreBaseUrl: 'https://store.xopc.ai',
 });
 
@@ -1246,7 +1246,7 @@ export const ConfigSchema = z.object({
     },
     maxSseConnections: 100,
     corsOrigins: [],
-    skillsMarketplaceProvider: 'skillhub',
+    skillsMarketplaceProvider: 'store',
     skillsStoreBaseUrl: 'https://store.xopc.ai',
   },
   browser: {

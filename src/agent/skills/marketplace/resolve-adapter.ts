@@ -23,7 +23,7 @@ export function resolveSkillsMarketplaceProvider(config: Config): string {
   if (fromConfig && isRegisteredProvider(fromConfig)) {
     return fromConfig;
   }
-  return 'skillhub';
+  return 'store';
 }
 
 export function getMarketplaceProviderDisplayName(provider: string): string {

@@ -248,15 +248,7 @@ export function loadSkills(options: {
     const discovered = discoverSkills(builtinDir, 'builtin');
     diagnostics.push(...discovered.diagnostics);
     for (const skill of discovered.skills) {
-      const existing = skillMap.get(skill.name);
-      if (existing) {
-        diagnostics.push({
-          type: 'collision',
-          skillName: skill.name,
-          message: `Skill "${skill.name}" collision: ${existing.source} overrides ${skill.source}`,
-          path: skill.filePath,
-        });
-      } else {
+      if (!skillMap.has(skill.name)) {
         skillMap.set(skill.name, skill);
       }
     }
@@ -271,15 +263,6 @@ export function loadSkills(options: {
     const discovered = discoverSkills(dir, 'global');
     diagnostics.push(...discovered.diagnostics);
     for (const skill of discovered.skills) {
-      const existing = skillMap.get(skill.name);
-      if (existing) {
-        diagnostics.push({
-          type: 'collision',
-          skillName: skill.name,
-          message: `Skill "${skill.name}" collision: ${skill.source} overrides ${existing.source}`,
-          path: skill.filePath,
-        });
-      }
       // Global must win over bundled when names match (Workspace > Global > Bundled).
       skillMap.set(skill.name, skill);
     }
@@ -290,15 +273,6 @@ export function loadSkills(options: {
     diagnostics.push(...discovered.diagnostics);
     const workspaceSkills = discovered.skills;
     for (const skill of workspaceSkills) {
-      const existing = skillMap.get(skill.name);
-      if (existing) {
-        diagnostics.push({
-          type: 'collision',
-          skillName: skill.name,
-          message: `Skill "${skill.name}" collision: ${skill.source} overrides ${existing.source}`,
-          path: skill.filePath,
-        });
-      }
       skillMap.set(skill.name, skill);
     }
   }
@@ -309,15 +283,7 @@ export function loadSkills(options: {
       const discovered = discoverSkills(extraDir, 'global');
       diagnostics.push(...discovered.diagnostics);
       for (const skill of discovered.skills) {
-        const existing = skillMap.get(skill.name);
-        if (existing) {
-          diagnostics.push({
-            type: 'collision',
-            skillName: skill.name,
-            message: `Skill "${skill.name}" collision: ${existing.source} overrides ${skill.source}`,
-            path: skill.filePath,
-          });
-        } else {
+        if (!skillMap.has(skill.name)) {
           skillMap.set(skill.name, skill);
         }
       }

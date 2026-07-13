@@ -95,6 +95,8 @@ describe('buildSafeWebConfigPayload', () => {
       description: 'Fast model',
       model: 'ollama/AutoGLM-Phone-9B:latest',
     });
+    expect(payload.gateway.skillsMarketplaceProvider).toBe('store');
+    expect(payload.gateway.skillsStoreBaseUrl).toBe('https://store.xopc.ai');
   });
 });
 
