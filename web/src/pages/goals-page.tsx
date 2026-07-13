@@ -221,6 +221,12 @@ async function createGoal(input: {
   maxTurns?: number;
   agentId?: string;
   judgeModelRef?: string;
+  contract?: {
+    objective?: string;
+    scopeBoundary?: string;
+    evidencePlan?: string[];
+    criteria?: string[];
+  };
 }): Promise<GoalItem> {
   const res = await fetchJson<{ ok: true; goal: GoalItem }>(apiUrl('/api/goals'), {
     method: 'POST',
@@ -229,11 +235,29 @@ async function createGoal(input: {
   return res.goal;
 }
 
-async function addGoalChecklistItem(goalId: string, text: string): Promise<void> {
-  await fetchJson(apiUrl(`/api/goals/${encodeURIComponent(goalId)}/checklist`), {
+async function draftGoalContract(
+  input: CreateGoalDraft,
+  uiLocale: StoredLanguage,
+): Promise<Pick<CreateGoalDraft, 'objective' | 'scopeBoundary' | 'evidencePlan' | 'checklist'>> {
+  const res = await fetchJson<{
+    ok: true;
+    contract: { objective?: string; scopeBoundary?: string; evidencePlan?: string[]; criteria?: string[] };
+  }>(apiUrl('/api/goals/contract/draft'), {
     method: 'POST',
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({
+      title: input.title,
+      context: input.description,
+      criteria: input.checklist,
+      judgeModelRef: input.judgeModelRef || undefined,
+      uiLocale,
+    }),
   });
+  return {
+    objective: res.contract.objective ?? input.objective,
+    scopeBoundary: res.contract.scopeBoundary ?? input.scopeBoundary,
+    evidencePlan: res.contract.evidencePlan ?? input.evidencePlan,
+    checklist: res.contract.criteria ?? input.checklist,
+  };
 }
 
 async function postGoalAction(goalId: string, action: Exclude<GoalAction, 'continue'>): Promise<void> {
@@ -871,10 +895,13 @@ export function GoalsPage() {
         maxTurns: Number.isFinite(maxTurns) ? maxTurns : undefined,
         agentId: draft.agentId.trim() || undefined,
         judgeModelRef: draft.judgeModelRef.trim() || undefined,
+        contract: {
+          objective: draft.objective.trim() || draft.title.trim(),
+          scopeBoundary: draft.scopeBoundary.trim() || undefined,
+          evidencePlan: normalizeChecklist(draft.evidencePlan),
+          criteria: normalizeChecklist(draft.checklist),
+        },
       });
-      for (const item of normalizeChecklist(draft.checklist)) {
-        await addGoalChecklistItem(goal.id, item);
-      }
       await refresh();
       setSelectedGoalId(goal.id);
     } catch (err) {
@@ -1115,6 +1142,7 @@ export function GoalsPage() {
         options={createOptions}
         onClose={() => setCreateDialogOpen(false)}
         onCreate={createFromDraft}
+        onDraftContract={(draft) => draftGoalContract(draft, language)}
       />
       <GoalDetailDialog
         goal={selectedGoal}

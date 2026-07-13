@@ -8,6 +8,9 @@ import type {
   GoalChecklistAddedBy,
   GoalChecklistStatus,
   GoalContextAttachment,
+  GoalContractInput,
+  GoalEvidenceRequirementStatus,
+  GoalEvidenceReviewSource,
   GoalJudgeDecision,
   GoalListQuery,
   GoalSource,
@@ -88,6 +91,7 @@ export class GoalService {
       uiLocale: input.uiLocale,
       source: input.source,
       projectId: input.projectId,
+      contract: input.contract,
     });
     publishGoalEvent('goal.created', goal);
     return goal;
@@ -101,6 +105,8 @@ export class GoalService {
       checklist: this.store.listChecklist(goalId),
       latestRun: this.store.listRuns(goalId, 1)[0],
       contextMessage: this.store.getContextMessage(goalId) ?? undefined,
+      contract: this.store.getContract(goalId) ?? undefined,
+      evidenceRequirements: this.store.listEvidenceRequirements(goalId),
     };
   }
 
@@ -115,6 +121,8 @@ export class GoalService {
       checklist: this.store.listChecklist(goal.id),
       latestRun: this.store.listRuns(goal.id, 1)[0],
       contextMessage: this.store.getContextMessage(goal.id) ?? undefined,
+      contract: this.store.getContract(goal.id) ?? undefined,
+      evidenceRequirements: this.store.listEvidenceRequirements(goal.id),
     }));
   }
 
@@ -126,6 +134,21 @@ export class GoalService {
     if (!this.store.get(input.goalId)) return null;
     this.store.setContextMessage(input);
     return this.get(input.goalId);
+  }
+
+  setContract(goalId: string, input: GoalContractInput): GoalWithDetails | null {
+    if (!this.store.get(goalId)) return null;
+    this.store.setContract(goalId, input);
+    if (input.criteria) {
+      this.store.replaceChecklist(
+        goalId,
+        input.criteria
+          .map((text) => text.trim())
+          .filter(Boolean)
+          .map((text) => ({ text, status: 'pending', addedBy: 'user' })),
+      );
+    }
+    return this.get(goalId);
   }
 
   update(goalId: string, patch: Partial<Pick<
@@ -434,6 +457,41 @@ export class GoalService {
 
   listEvidence(goalId: string, limit?: number) {
     return this.store.listEvidence(goalId, limit);
+  }
+
+  listEvidenceRequirements(goalId: string) {
+    return this.store.listEvidenceRequirements(goalId);
+  }
+
+  linkEvidenceRequirement(input: Parameters<GoalStore['linkEvidenceRequirement']>[0]) {
+    return this.store.linkEvidenceRequirement(input);
+  }
+
+  reviewEvidenceRequirement(input: {
+    goalId: string;
+    requirementId: string;
+    status: GoalEvidenceRequirementStatus;
+    reason: string;
+    confidence?: number;
+    reviewedBy: GoalEvidenceReviewSource;
+  }) {
+    return this.store.reviewEvidenceRequirement(input);
+  }
+
+  getCompletionReadiness(goalId: string): { ready: boolean; missingEvidence: string[]; pendingApproval: string[] } | null {
+    const goal = this.get(goalId);
+    if (!goal) return null;
+    const required = goal.evidenceRequirements;
+    if (!required.length) return { ready: true, missingEvidence: [], pendingApproval: [] };
+    const missingEvidence = required.filter((item) => item.evidenceIds.length === 0).map((item) => item.text);
+    const pendingApproval = required
+      .filter((item) => item.evidenceIds.length > 0 && item.status !== 'approved')
+      .map((item) => item.text);
+    return {
+      ready: missingEvidence.length === 0 && pendingApproval.length === 0,
+      missingEvidence,
+      pendingApproval,
+    };
   }
 }
 

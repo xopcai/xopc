@@ -20,7 +20,6 @@ import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config
 import { GoalCreateDialog, normalizeChecklist, type CreateGoalDraft, type GoalCreateOptions } from '@/features/goals/goal-create-dialog';
 import { NotesWorkbench } from '@/features/notes/notes-workbench';
 import {
-  addProjectGoalChecklistItem,
   archiveProject,
   createProjectBlocker,
   createProjectSession,
@@ -1096,7 +1095,7 @@ export function ProjectDetailPage() {
     setCreatingGoal(true);
     setError(null);
     try {
-      const goal = await createProjectGoal(project.id, {
+      await createProjectGoal(project.id, {
         title: goalDraft.title.trim(),
         description: goalDraft.description.trim() || undefined,
         attachments: goalDraft.attachments.length ? goalDraft.attachments : undefined,
@@ -1105,10 +1104,13 @@ export function ProjectDetailPage() {
         maxTurns: Number.isFinite(maxTurns) ? maxTurns : undefined,
         agentId: goalDraft.agentId.trim() || undefined,
         judgeModelRef: goalDraft.judgeModelRef.trim() || undefined,
+        contract: {
+          objective: goalDraft.objective.trim() || goalDraft.title.trim(),
+          scopeBoundary: goalDraft.scopeBoundary.trim() || undefined,
+          evidencePlan: normalizeChecklist(goalDraft.evidencePlan),
+          criteria: normalizeChecklist(goalDraft.checklist),
+        },
       });
-      for (const item of normalizeChecklist(goalDraft.checklist)) {
-        await addProjectGoalChecklistItem(goal.id, item);
-      }
       setCreateGoalOpen(false);
       navigateProjectTab('goals');
       await refreshProjectGoals();
