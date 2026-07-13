@@ -1,4 +1,6 @@
-/** Skills catalog — managed global skills (~/.xopc/skills). */
+/** Skills catalog — managed global skills (~/.xopc/skills) and workspace skills (.xopc/skills). */
+
+export type SkillInstallTarget = 'workspace' | 'global';
 
 export interface SkillHubProvenance {
   kind: 'git' | 'archive';
@@ -131,7 +133,14 @@ export interface SkillInstallAvailability {
 export interface SkillInstallResultPayload {
   skillId: string;
   path: string;
+  target?: SkillInstallTarget;
   availability?: SkillInstallAvailability;
+}
+
+export interface SkillSourceInstallResultPayload extends SkillInstallResultPayload {
+  source: string;
+  kind: 'git' | 'archive';
+  contentHash: string;
 }
 
 /**

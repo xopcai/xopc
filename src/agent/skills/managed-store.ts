@@ -115,11 +115,11 @@ export function listManagedSkillDirs(): ManagedSkillListItem[] {
   return out;
 }
 
-export function deleteManagedSkill(skillId: string): void {
+export function deleteManagedSkill(skillId: string, rootDir = resolveSkillsDir()): void {
   if (!isValidSkillId(skillId)) {
     throw new Error('Invalid skill id');
   }
-  const root = resolveSkillsDir();
+  const root = resolve(rootDir);
   const dir = resolve(join(root, skillId));
   const rootResolved = resolve(root);
   if (!dir.startsWith(rootResolved + sep) && dir !== rootResolved) {
@@ -149,11 +149,14 @@ export function getManagedSkillDir(skillId: string): string {
   return join(resolveSkillsDir(), skillId);
 }
 
-export function assertManagedSkillDestination(skillId: string): { root: string; destDir: string } {
+export function assertManagedSkillDestination(
+  skillId: string,
+  rootDir = resolveSkillsDir(),
+): { root: string; destDir: string } {
   if (!isValidSkillId(skillId)) {
     throw new Error(`Invalid skill id "${skillId}" (letters, digits, ._-; max 63 chars after first)`);
   }
-  const root = resolveSkillsDir();
+  const root = resolve(rootDir);
   mkdirSync(root, { recursive: true });
   const destDir = join(root, skillId);
   const destResolved = resolve(destDir);
@@ -164,8 +167,11 @@ export function assertManagedSkillDestination(skillId: string): { root: string; 
   return { root, destDir };
 }
 
-export function prepareManagedSkillTempDir(skillId: string): { root: string; destDir: string; tempDir: string } {
-  const { root, destDir } = assertManagedSkillDestination(skillId);
+export function prepareManagedSkillTempDir(
+  skillId: string,
+  rootDir?: string,
+): { root: string; destDir: string; tempDir: string } {
+  const { root, destDir } = assertManagedSkillDestination(skillId, rootDir);
   const tempDir = createTransientManagedDir(root, TEMP_PREFIX, skillId);
   mkdirSync(tempDir, { recursive: true });
   return { root, destDir, tempDir };
@@ -175,8 +181,9 @@ export function promoteManagedSkillTempDir(params: {
   skillId: string;
   tempDir: string;
   overwrite?: boolean;
+  rootDir?: string;
 }): { skillId: string; path: string } {
-  const { root, destDir } = assertManagedSkillDestination(params.skillId);
+  const { root, destDir } = assertManagedSkillDestination(params.skillId, params.rootDir);
   const tempResolved = resolve(params.tempDir);
   const rootResolved = resolve(root);
   if (!tempResolved.startsWith(rootResolved + sep)) {
@@ -220,7 +227,7 @@ function inferStripPrefix(primary: string): string {
  */
 export function installSkillFromZip(
   buffer: Buffer,
-  options: { skillId?: string; overwrite?: boolean },
+  options: { skillId?: string; overwrite?: boolean; rootDir?: string },
 ): { skillId: string; path: string } {
   if (buffer.length > MAX_SKILL_ZIP_BYTES) {
     throw new Error(`Zip exceeds maximum size (${MAX_SKILL_ZIP_BYTES} bytes)`);
@@ -285,7 +292,7 @@ export function installSkillFromZip(
     );
   }
 
-  const { destDir, tempDir } = prepareManagedSkillTempDir(targetId);
+  const { destDir, tempDir } = prepareManagedSkillTempDir(targetId, options.rootDir);
   const tempResolved = resolve(tempDir);
   try {
     if (existsSync(destDir) && !options.overwrite) {
@@ -321,6 +328,7 @@ export function installSkillFromZip(
       skillId: targetId,
       tempDir,
       overwrite: options.overwrite,
+      rootDir: options.rootDir,
     });
   } catch (err) {
     rmSync(tempDir, { recursive: true, force: true });
