@@ -8,7 +8,6 @@ import {
   FolderKanban,
   FolderOpen,
   Loader2,
-  MessageSquareText,
   MoreHorizontal,
   Pencil,
   Pin,
@@ -483,9 +482,7 @@ function SidebarProjectMenu({
 function SidebarProjectSection({
   group,
   isExpanded,
-  isCollapsed,
   activeSessionKey,
-  onToggleCollapsed,
   onToggleExpanded,
   onCreateProjectChat,
   onToggleProjectPin,
@@ -506,9 +503,7 @@ function SidebarProjectSection({
 }: {
   group: ProjectSidebarGroup;
   isExpanded: boolean;
-  isCollapsed: boolean;
   activeSessionKey?: string;
-  onToggleCollapsed: (projectId: string) => void;
   onToggleExpanded: (projectId: string) => void;
   onCreateProjectChat: (project: Project) => void;
   onToggleProjectPin: (project: Project) => void;
@@ -527,11 +522,7 @@ function SidebarProjectSection({
   agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
   language: string;
 }) {
-  const visibleSessions = isCollapsed
-    ? []
-    : isExpanded
-    ? group.sessions
-    : group.sessions.slice(0, PROJECT_PREVIEW_LIMIT);
+  const visibleSessions = isExpanded ? group.sessions : group.sessions.slice(0, PROJECT_PREVIEW_LIMIT);
   const hasLoadedMore = group.sessions.length > PROJECT_PREVIEW_LIMIT;
   const canToggleSessionLimit = group.sessionHasMore || hasLoadedMore;
   const showLess = isExpanded && !group.sessionHasMore && hasLoadedMore;
@@ -545,13 +536,7 @@ function SidebarProjectSection({
           hasActiveSession ? 'bg-surface-active text-fg' : 'text-fg-muted',
         )}
       >
-        <button
-          type="button"
-          className="flex h-7 min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
-          onClick={() => onToggleCollapsed(group.project.id)}
-          title={group.project.name}
-          aria-expanded={!isCollapsed}
-        >
+        <div className="flex h-7 min-w-0 flex-1 items-center gap-2" title={group.project.name}>
           <span className="relative flex size-4 shrink-0 items-center justify-center">
             <FolderKanban className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
             {group.project.pinnedAt ? (
@@ -563,15 +548,7 @@ function SidebarProjectSection({
             ) : null}
           </span>
           <span className="min-w-0 flex-1 truncate">{group.project.name}</span>
-          <ChevronDown
-            className={cn(
-              'size-3.5 shrink-0 text-fg-subtle transition-transform duration-150 ease-out',
-              isCollapsed && '-rotate-90',
-            )}
-            strokeWidth={1.75}
-            aria-hidden
-          />
-        </button>
+        </div>
         <SidebarProjectMenu
           project={group.project}
           onNavigate={onNavigate}
@@ -596,7 +573,7 @@ function SidebarProjectSection({
         </button>
       </div>
 
-      <div className={cn('ml-6 flex flex-col gap-0.5', isCollapsed && 'hidden')}>
+      <div className="ml-6 flex flex-col gap-0.5">
         {visibleSessions.map((session) => {
           const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
           return (
@@ -688,35 +665,24 @@ function SidebarInboxSection({
 }) {
   if (sessions.length === 0) return null;
 
-  const hasActiveSession = sessions.some((session) => session.key === activeSessionKey);
-
   return (
     <section className="flex flex-col gap-0.5" aria-label={sb.inboxHeading}>
-      <div
-        className={cn(
-          'group flex min-w-0 items-center gap-2 rounded-xl px-2 text-sm font-medium leading-5',
-          hasActiveSession ? 'bg-surface-active text-fg' : 'text-fg-muted',
-        )}
+      <button
+        type="button"
+        className="flex items-center gap-1 px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle transition-colors hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+        onClick={onToggleCollapsed}
+        aria-expanded={!isCollapsed}
       >
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 rounded-lg text-left outline-none transition-colors hover:text-fg focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
-          onClick={onToggleCollapsed}
-          title={sb.inboxHeading}
-          aria-expanded={!isCollapsed}
-        >
-          <MessageSquareText className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
-          <span className="min-w-0 max-w-[9rem] truncate">{sb.inboxHeading}</span>
-          <ChevronDown
-            className={cn(
-              'size-3.5 shrink-0 text-fg-subtle transition-transform duration-150 ease-out',
-              isCollapsed && '-rotate-90',
-            )}
-            strokeWidth={1.75}
-            aria-hidden
-          />
-        </button>
-      </div>
+        {sb.inboxHeading}
+        <ChevronDown
+          className={cn(
+            'size-3.5 transition-transform duration-150 ease-out',
+            isCollapsed && '-rotate-90',
+          )}
+          strokeWidth={1.75}
+          aria-hidden
+        />
+      </button>
       <div className={cn('ml-6 flex flex-col gap-0.5', isCollapsed && 'hidden')}>
         {sessions.map((session) => {
           const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
@@ -797,7 +763,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const [renameProjectDraft, setRenameProjectDraft] = useState('');
   const [removeProjectId, setRemoveProjectId] = useState<string | null>(null);
   const [includedSessionKey, setIncludedSessionKey] = useState<string | undefined>(() => activeSessionKey);
-  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(() => new Set());
+  const [projectsCollapsed, setProjectsCollapsed] = useState(false);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
   const [projectSessionOverrides, setProjectSessionOverrides] = useState<Record<string, ProjectSessionOverride>>({});
@@ -1033,18 +999,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     }
   };
 
-  const toggleProjectCollapsed = useCallback((projectId: string) => {
-    setCollapsedProjects((prev) => {
-      const next = new Set(prev);
-      if (next.has(projectId)) {
-        next.delete(projectId);
-      } else {
-        next.add(projectId);
-      }
-      return next;
-    });
-  }, []);
-
   const toggleProjectExpanded = useCallback((projectId: string) => {
     const group = projectGroups.find((candidate) => candidate.project.id === projectId);
     if (!group) return;
@@ -1201,36 +1155,49 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
           <div className="flex flex-col px-4 pt-4">
             {projectGroups.length > 0 ? (
               <div className="pb-1">
-                <div className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
+                <button
+                  type="button"
+                  className="flex items-center gap-1 px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle transition-colors hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+                  onClick={() => setProjectsCollapsed((value) => !value)}
+                  aria-expanded={!projectsCollapsed}
+                >
                   {sb.projectsHeading}
-                </div>
-                {projectGroups.map((group) => (
-                  <SidebarProjectSection
-                    key={group.project.id}
-                    group={group}
-                    isExpanded={expandedProjects.has(group.project.id)}
-                    isCollapsed={collapsedProjects.has(group.project.id)}
-                    activeSessionKey={activeSessionKey}
-                    onToggleCollapsed={toggleProjectCollapsed}
-                    onToggleExpanded={toggleProjectExpanded}
-                    onCreateProjectChat={(project) => void createProjectChat(project)}
-                    onToggleProjectPin={(project) => void toggleProjectPin(project)}
-                    onRequestProjectRename={openProjectRename}
-                    onArchiveProject={(project) => void runProjectArchive(project)}
-                    onRequestProjectRemove={(project) => setRemoveProjectId(project.id)}
-                    onNavigate={onNavigate}
-                    mutate={refreshSidebar}
-                    onRequestRename={openRename}
-                    onRequestDelete={setDeleteKey}
-                    sb={sb}
-                    sess={sess}
-                    clipboard={m.clipboard}
-                    defaultUnnamedTitle={m.chat.newSession}
-                    defaultAgentId={defaultAgentId}
-                    agentItems={agentItems}
-                    language={language}
+                  <ChevronDown
+                    className={cn(
+                      'size-3.5 transition-transform duration-150 ease-out',
+                      projectsCollapsed && '-rotate-90',
+                    )}
+                    strokeWidth={1.75}
+                    aria-hidden
                   />
-                ))}
+                </button>
+                {!projectsCollapsed
+                  ? projectGroups.map((group) => (
+                      <SidebarProjectSection
+                        key={group.project.id}
+                        group={group}
+                        isExpanded={expandedProjects.has(group.project.id)}
+                        activeSessionKey={activeSessionKey}
+                        onToggleExpanded={toggleProjectExpanded}
+                        onCreateProjectChat={(project) => void createProjectChat(project)}
+                        onToggleProjectPin={(project) => void toggleProjectPin(project)}
+                        onRequestProjectRename={openProjectRename}
+                        onArchiveProject={(project) => void runProjectArchive(project)}
+                        onRequestProjectRemove={(project) => setRemoveProjectId(project.id)}
+                        onNavigate={onNavigate}
+                        mutate={refreshSidebar}
+                        onRequestRename={openRename}
+                        onRequestDelete={setDeleteKey}
+                        sb={sb}
+                        sess={sess}
+                        clipboard={m.clipboard}
+                        defaultUnnamedTitle={m.chat.newSession}
+                        defaultAgentId={defaultAgentId}
+                        agentItems={agentItems}
+                        language={language}
+                      />
+                    ))
+                  : null}
               </div>
             ) : null}
 
