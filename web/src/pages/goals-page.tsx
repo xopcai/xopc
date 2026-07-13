@@ -16,7 +16,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { type DragEvent, useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { type DragEvent, type PointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
@@ -42,6 +42,12 @@ type GoalBoardLaneId = 'active' | 'paused' | 'attention' | 'done' | 'archived';
 type GoalAction = 'continue' | 'pause' | 'resume' | 'reopen' | 'complete' | 'archive' | 'unarchive';
 type GoalsViewMode = 'focus' | 'board';
 type FocusSectionId = 'attention' | 'running' | 'active' | 'paused' | 'recentDone';
+type BoardPanState = {
+  pointerId: number;
+  startX: number;
+  scrollLeft: number;
+  active: boolean;
+};
 
 type GoalItem = {
   id: string;
@@ -82,6 +88,11 @@ const BOARD_STATUSES: GoalStatus[] = ['active', 'paused', 'blocked', 'needs_inpu
 const BOARD_LANES: GoalBoardLaneId[] = ['active', 'paused', 'attention', 'done', 'archived'];
 const FOCUS_SECTIONS: FocusSectionId[] = ['attention', 'running', 'active', 'paused', 'recentDone'];
 const DRAG_TYPE = 'application/x-xopc-goal-id';
+
+function shouldIgnoreBoardPan(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return true;
+  return Boolean(target.closest('a,button,input,select,textarea,[contenteditable="true"],[draggable="true"],[data-board-pan-skip="true"]'));
+}
 
 function progress(goal: GoalItem): { done: number; total: number } {
   const total = goal.checklist.length;
@@ -721,6 +732,8 @@ export function GoalsPage() {
   const t = messages(language).goalsPage;
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+  const boardScrollerRef = useRef<HTMLElement | null>(null);
+  const boardPanRef = useRef<BoardPanState | null>(null);
   const [goals, setGoals] = useState<GoalItem[]>([]);
   const [queue, setQueue] = useState<GoalQueueItem[]>([]);
   const [query, setQuery] = useState('');
@@ -738,6 +751,7 @@ export function GoalsPage() {
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [draggingGoalId, setDraggingGoalId] = useState<string | null>(null);
   const [dropLane, setDropLane] = useState<GoalBoardLaneId | null>(null);
+  const [isPanningBoard, setIsPanningBoard] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -878,6 +892,43 @@ export function GoalsPage() {
     if (!goal || !action) return;
     await runAction(goal.id, action);
   };
+
+  const endBoardPan = useCallback((event: PointerEvent<HTMLElement>) => {
+    const pan = boardPanRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    boardPanRef.current = null;
+    setIsPanningBoard(false);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
+  const handleBoardPointerDown = useCallback((event: PointerEvent<HTMLElement>) => {
+    if (event.button !== 0 || draggingGoalId || shouldIgnoreBoardPan(event.target)) return;
+    const scroller = boardScrollerRef.current;
+    if (!scroller) return;
+    boardPanRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      scrollLeft: scroller.scrollLeft,
+      active: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, [draggingGoalId]);
+
+  const handleBoardPointerMove = useCallback((event: PointerEvent<HTMLElement>) => {
+    const pan = boardPanRef.current;
+    const scroller = boardScrollerRef.current;
+    if (!pan || !scroller || pan.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - pan.startX;
+    if (!pan.active && Math.abs(deltaX) < 5) return;
+    if (!pan.active) {
+      pan.active = true;
+      setIsPanningBoard(true);
+    }
+    event.preventDefault();
+    scroller.scrollLeft = pan.scrollLeft - deltaX;
+  }, []);
 
   const createFromDraft = useCallback(async (draft: CreateGoalDraft) => {
     const maxTurns = Number.parseInt(draft.maxTurns, 10);
@@ -1063,7 +1114,24 @@ export function GoalsPage() {
             </div>
           </section>
         ) : (
-          <section className="min-h-0 w-full flex-1 overflow-x-auto rounded-lg px-2 py-2" aria-label={t.boardLabel}>
+          <section
+            ref={boardScrollerRef}
+            className={cn(
+              'min-h-0 w-full flex-1 overflow-x-auto rounded-lg px-2 py-2',
+              isPanningBoard ? 'cursor-grabbing select-none' : 'cursor-grab',
+            )}
+            aria-label={t.boardLabel}
+            onPointerDown={handleBoardPointerDown}
+            onPointerMove={handleBoardPointerMove}
+            onPointerUp={endBoardPan}
+            onPointerCancel={endBoardPan}
+            onLostPointerCapture={(event) => {
+              if (boardPanRef.current?.pointerId === event.pointerId) {
+                boardPanRef.current = null;
+                setIsPanningBoard(false);
+              }
+            }}
+          >
             <div className="flex min-h-full min-w-max items-start gap-3 pr-4">
               {BOARD_LANES.map((lane) => {
                 const laneGoals = lanes.get(lane) ?? [];

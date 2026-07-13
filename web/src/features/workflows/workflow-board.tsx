@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { type PointerEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { StoredLanguage } from '@/lib/storage';
@@ -6,6 +6,18 @@ import type { StoredLanguage } from '@/lib/storage';
 import type { WorkflowRunSummary } from './workflow-api';
 import { WorkflowBoardColumn } from './workflow-board-column';
 import { buildWorkflowBoardColumns, filterRunsForBoard } from './workflow-board.utils';
+
+type BoardPanState = {
+  pointerId: number;
+  startX: number;
+  scrollLeft: number;
+  active: boolean;
+};
+
+function shouldIgnoreBoardPan(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return true;
+  return Boolean(target.closest('a,button,input,select,textarea,[contenteditable="true"],[draggable="true"],[data-board-pan-skip="true"]'));
+}
 
 export const WorkflowBoard = memo(function WorkflowBoard({
   runs,
@@ -44,7 +56,10 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   onStart: () => void;
 }) {
   const hasActiveRuns = runs.some((run) => run.status === 'queued' || run.status === 'running');
+  const boardScrollerRef = useRef<HTMLDivElement | null>(null);
+  const boardPanRef = useRef<BoardPanState | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [isPanningBoard, setIsPanningBoard] = useState(false);
 
   useEffect(() => {
     if (!hasActiveRuns) return;
@@ -58,6 +73,43 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   }, [nowMs, runs, searchQuery, triggerFilter, workflowFilterId]);
 
   const totalCards = columns.reduce((sum, col) => sum + col.runs.length, 0);
+
+  const endBoardPan = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const pan = boardPanRef.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    boardPanRef.current = null;
+    setIsPanningBoard(false);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  }, []);
+
+  const handleBoardPointerDown = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || shouldIgnoreBoardPan(event.target)) return;
+    const scroller = boardScrollerRef.current;
+    if (!scroller) return;
+    boardPanRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      scrollLeft: scroller.scrollLeft,
+      active: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }, []);
+
+  const handleBoardPointerMove = useCallback((event: PointerEvent<HTMLDivElement>) => {
+    const pan = boardPanRef.current;
+    const scroller = boardScrollerRef.current;
+    if (!pan || !scroller || pan.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - pan.startX;
+    if (!pan.active && Math.abs(deltaX) < 5) return;
+    if (!pan.active) {
+      pan.active = true;
+      setIsPanningBoard(true);
+    }
+    event.preventDefault();
+    scroller.scrollLeft = pan.scrollLeft - deltaX;
+  }, []);
 
   if (!loading && totalCards === 0) {
     return (
@@ -74,7 +126,23 @@ export const WorkflowBoard = memo(function WorkflowBoard({
   }
 
   return (
-    <div className="min-h-0 h-full min-w-0 overflow-x-auto rounded-lg px-2 py-2">
+    <div
+      ref={boardScrollerRef}
+      className={[
+        'min-h-0 h-full min-w-0 overflow-x-auto rounded-lg px-2 py-2',
+        isPanningBoard ? 'cursor-grabbing select-none' : 'cursor-grab',
+      ].join(' ')}
+      onPointerDown={handleBoardPointerDown}
+      onPointerMove={handleBoardPointerMove}
+      onPointerUp={endBoardPan}
+      onPointerCancel={endBoardPan}
+      onLostPointerCapture={(event) => {
+        if (boardPanRef.current?.pointerId === event.pointerId) {
+          boardPanRef.current = null;
+          setIsPanningBoard(false);
+        }
+      }}
+    >
       <div className="flex min-h-full min-w-max items-start gap-3 pr-4">
       {columns.map((column) => (
         <WorkflowBoardColumn
