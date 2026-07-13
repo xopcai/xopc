@@ -12,7 +12,7 @@ import { LIST_DELAY_LONG_PRESS } from '../../constants/list-interaction';
 import { t, useMessages } from '../../i18n/messages';
 import { sessionDisplayName } from '../../lib/session-helpers';
 import type { SessionListItem } from '../../query/sessions';
-import { useTheme } from '../../theme';
+import { spacing, typography, useTheme } from '../../theme';
 import { AgentAvatar } from '../ai/AgentAvatar';
 
 function relativeTime(dateStr: string): string {
@@ -112,9 +112,10 @@ export const SessionCard = memo(function SessionCard({
         styles.card,
         {
           backgroundColor: selected ? colors.accent.selectionBg : colors.surface.panel,
-          borderColor: selected ? colors.accent.primary : colors.border.default,
+          borderColor: selected ? colors.accent.primary : colors.border.subtle,
         },
-        pressed && { opacity: 0.85 },
+        selected && styles.selectedCard,
+        pressed && !selected && { backgroundColor: colors.surface.pressed },
       ]}
     >
       <View style={styles.row}>
@@ -174,10 +175,13 @@ export const SessionCard = memo(function SessionCard({
 
 const styles = StyleSheet.create({
   card: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    paddingHorizontal: spacing.content,
     paddingVertical: 12,
+  },
+  selectedCard: {
+    borderTopWidth: 1,
+    borderRadius: 12,
   },
   row: {
     flexDirection: 'row',
@@ -201,6 +205,8 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
+    ...typography.ui,
+    fontWeight: '600',
   },
   archivedTitle: {
     opacity: 0.6,
@@ -212,9 +218,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   meta: {
-    fontSize: 12,
+    ...typography.caption,
   },
   metaDot: {
-    fontSize: 12,
+    ...typography.caption,
   },
 });

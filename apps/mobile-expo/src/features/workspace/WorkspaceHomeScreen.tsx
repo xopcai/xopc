@@ -49,6 +49,7 @@ import { AgentAvatar } from '../ai/AgentAvatar';
 import { readAgentUsage, sortHomeAgents, touchAgentUsage } from '../ai/agent-usage-cache';
 import { useHomeChatPrefetch } from './use-home-chat-prefetch';
 import { useWorkspaceNavigation } from './workspace-navigation-context';
+import { useOptionalWorkspaceTransition } from './workspace-transition-context';
 
 type ContinueItem =
   | { id: string; kind: 'session'; title: string; meta: string; icon: string; onPress: () => void }
@@ -143,7 +144,7 @@ export function WorkspaceHomeScreen() {
   const configured = useGatewayConfigured();
   const activeGatewayId = useGatewayStore((s) => s.activeGatewayId);
   const defaultAgentId = useEffectiveDefaultAgentId();
-  const { prefetchAskAiSession } = useWorkspaceNavigation();
+  const { openAskAi, prefetchAskAiSession } = useWorkspaceNavigation();
   const [searchOpen, setSearchOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [agentUsage, setAgentUsage] = useState(() => readAgentUsage(activeGatewayId));
@@ -425,6 +426,7 @@ export function WorkspaceHomeScreen() {
         accessibilityLabel={hm.quickNewNote}
         disabled={createNoteMutation.isPending}
         onPress={handleCreateNote}
+        onAskAi={openAskAi}
       />
       <WorkspaceSearchOverlay visible={searchOpen} onClose={() => setSearchOpen(false)} />
       <AppToast
@@ -783,15 +785,16 @@ function LibrarySection({
   onAutomation: () => void;
   onAgents: () => void;
 }) {
+  const { colors } = useTheme();
   const { homePage: hm } = useMessages();
   return (
     <Section title={hm.sectionLibrary}>
-      <View style={styles.libraryGrid}>
+      <View style={[styles.libraryGrid, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
         <LibraryButton icon="note-text-outline" label={hm.libraryNotes} onPress={onNotes} />
         <LibraryButton icon="message-processing-outline" label={hm.librarySessions} onPress={onSessions} />
         <LibraryButton icon="folder-outline" label={hm.libraryFiles} onPress={onFiles} />
         <LibraryButton icon="clock-outline" label={hm.libraryAutomation} onPress={onAutomation} />
-        <LibraryButton icon="account-supervisor-outline" label={hm.libraryAgents} onPress={onAgents} />
+        <LibraryButton icon="account-supervisor-outline" label={hm.libraryAgents} onPress={onAgents} last />
       </View>
     </Section>
   );
@@ -824,15 +827,20 @@ function Section({
   );
 }
 
-function LibraryButton({ icon, label, onPress }: { icon: string; label: string; onPress: () => void }) {
+function LibraryButton({ icon, label, onPress, last = false }: { icon: string; label: string; onPress: () => void; last?: boolean }) {
   const { colors } = useTheme();
   return (
     <Pressable
-      style={[styles.libraryButton, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}
+      style={({ pressed }) => [
+        styles.libraryButton,
+        !last && { borderBottomColor: colors.border.subtle, borderBottomWidth: StyleSheet.hairlineWidth },
+        pressed && { backgroundColor: colors.surface.pressed },
+      ]}
       onPress={onPress}
     >
       <Icon source={icon} size={20} color={colors.accent.primary} />
       <Text numberOfLines={1} style={[styles.libraryLabel, { color: colors.text.primary }]}>{label}</Text>
+      <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
     </Pressable>
   );
 }
@@ -842,14 +850,19 @@ function CenterNewNoteButton({
   accessibilityLabel,
   disabled,
   onPress,
+  onAskAi,
 }: {
   active: boolean;
   accessibilityLabel: string;
   disabled: boolean;
   onPress: () => void;
+  onAskAi?: () => void;
 }) {
   const { colors, isDark } = useTheme();
+  const { homePage: hm } = useMessages();
   const insets = useSafeAreaInsets();
+  const transition = useOptionalWorkspaceTransition();
+  const askAiRef = useRef<View>(null);
   const shadowOpacity = isDark ? 0.18 : 0.06;
   const scale = useRef(new Animated.Value(active ? 1 : 0)).current;
 
@@ -861,6 +874,21 @@ function CenterNewNoteButton({
       useNativeDriver: true,
     }).start();
   }, [active, scale]);
+
+  useEffect(() => {
+    if (!transition || !onAskAi) return;
+    transition.registerPillMeasurer(async () => new Promise<{ x: number; y: number; width: number; height: number } | null>((resolve) => {
+      const node = askAiRef.current;
+      if (!node) {
+        resolve(null);
+        return;
+      }
+      node.measureInWindow((x, y, width, height) => {
+        resolve(width > 0 && height > 0 ? { x, y, width, height } : null);
+      });
+    }));
+    return () => transition.registerPillMeasurer(null);
+  }, [onAskAi, transition]);
 
   const buttonScale = scale.interpolate({
     inputRange: [0, 1],
@@ -883,7 +911,27 @@ function CenterNewNoteButton({
         { paddingBottom: floatingBottomPadding(insets.bottom) + FLOATING_BOTTOM_OFFSET },
       ]}
     >
-      <View style={styles.centerNewNoteCluster}>
+      <View style={styles.workspaceDock}>
+        {onAskAi ? (
+          <Pressable
+            ref={askAiRef}
+            style={({ pressed }) => [
+              styles.askAiButton,
+              {
+                backgroundColor: colors.surface.elevated,
+                borderColor: colors.border.default,
+              },
+              pressed && { backgroundColor: colors.surface.pressed },
+            ]}
+            onPress={onAskAi}
+            accessibilityRole="button"
+            accessibilityLabel={hm.askAi}
+          >
+            <Icon source="creation-outline" size={18} color={colors.accent.primary} />
+            <Text style={[styles.askAiLabel, { color: colors.text.primary }]}>{hm.askAi}</Text>
+          </Pressable>
+        ) : null}
+        <View style={styles.centerNewNoteCluster}>
         <Animated.View
           pointerEvents="none"
           style={[
@@ -922,6 +970,7 @@ function CenterNewNoteButton({
             )}
           </Pressable>
         </Animated.View>
+        </View>
       </View>
     </View>
   );
@@ -929,7 +978,7 @@ function CenterNewNoteButton({
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  content: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm, gap: spacing.xl },
+  content: { paddingHorizontal: spacing.content, paddingTop: spacing.sm, gap: spacing.section },
   centerContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 10 },
   emptyTitle: { ...typography.heading, fontWeight: '600' },
   emptyText: { ...typography.ui, textAlign: 'center' },
@@ -1104,21 +1153,19 @@ const styles = StyleSheet.create({
   inboxEmptyHint: { ...typography.label, fontWeight: '500' },
   disabled: { opacity: 0.6 },
   libraryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
   },
   libraryButton: {
-    width: '47.9%',
-    minHeight: 72,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
+    width: '100%',
+    minHeight: 54,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
   },
-  libraryLabel: { ...typography.label, fontWeight: '600' },
+  libraryLabel: { ...typography.ui, fontWeight: '500', flex: 1 },
   centerNewNoteWrap: {
     position: 'absolute',
     left: 0,
@@ -1133,6 +1180,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  workspaceDock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  askAiButton: {
+    minWidth: 104,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
+  },
+  askAiLabel: { ...typography.ui, fontWeight: '600' },
   centerNewNoteRing: {
     position: 'absolute',
     top: 0,
