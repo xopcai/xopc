@@ -50,8 +50,8 @@ type TabId = 'marketplace' | 'builtin' | 'user' | 'config';
 type ConnectorSort = 'name' | 'source';
 
 const CONNECTOR_REGISTRY_PROVIDER_PARAM = 'mprov';
-const DEFAULT_CONNECTOR_REGISTRY_SOURCE = 'smithery';
 const STORE_CONNECTOR_SOURCE = 'xopc-store';
+const DEFAULT_CONNECTOR_REGISTRY_SOURCE = STORE_CONNECTOR_SOURCE;
 type LoadState = {
   catalog: ConnectorDefinition[];
   registryCatalog: ConnectorDefinition[];

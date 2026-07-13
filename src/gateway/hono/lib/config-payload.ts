@@ -299,7 +299,7 @@ export async function buildSafeWebConfigPayload(service: GatewayService, options
         : [],
       share: resolveShareConfig(config.gateway?.share),
       publicUrl: config.gateway?.publicUrl ?? null,
-      skillsMarketplaceProvider: config.gateway?.skillsMarketplaceProvider ?? 'skillhub',
+      skillsMarketplaceProvider: config.gateway?.skillsMarketplaceProvider ?? 'store',
       skillsStoreBaseUrl: config.gateway?.skillsStoreBaseUrl ?? 'https://store.xopc.ai',
     },
     browser: buildSafeBrowserConfigForWeb(config.browser),

@@ -110,9 +110,7 @@ export class SkillManager {
     this.loadedAt = Date.now();
 
     for (const diag of result.diagnostics) {
-      if (diag.type === 'collision') {
-        log.warn({ skill: diag.skillName, path: diag.path, message: diag.message }, 'Skill collision');
-      } else if (diag.type === 'warning') {
+      if (diag.type === 'warning') {
         log.warn({ skill: diag.skillName, path: diag.path, message: diag.message }, 'Skill warning');
       } else if (diag.type === 'error') {
         log.error({ skill: diag.skillName, path: diag.path, message: diag.message }, 'Skill error');
