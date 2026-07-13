@@ -13,12 +13,14 @@ import { formatConnectorMessage } from '../utils/connector-i18n';
 import {
   completeConnectorOAuth,
   installConnector,
+  installStoreConnector,
   startConnectorOAuth,
   testConnector,
   type ConnectorDefinition,
   type ConnectorHealthResult,
   type ConnectorInstance,
   type ConnectorOAuthStartResult,
+  type StoreConnectorPermissions,
 } from '../connectors-api';
 
 const inputClass = cn(
@@ -46,6 +48,11 @@ export type InstallDraft = {
     flow: ConnectorOAuthStartResult | null;
     connected: boolean;
   };
+  store?: {
+    packageName: string;
+    version: string;
+    permissions: StoreConnectorPermissions;
+  };
 };
 
 function parseConfigValue(type: string, raw: string): unknown {
@@ -62,7 +69,10 @@ function parseConfigValue(type: string, raw: string): unknown {
   return trimmed || undefined;
 }
 
-export function buildInitialDraft(connector: ConnectorDefinition): InstallDraft {
+export function buildInitialDraft(
+  connector: ConnectorDefinition,
+  store?: InstallDraft['store'],
+): InstallDraft {
   const secrets: Record<string, string> = {};
   for (const field of connector.setup.secrets ?? []) {
     secrets[field.key] = '';
@@ -85,6 +95,7 @@ export function buildInitialDraft(connector: ConnectorDefinition): InstallDraft 
     result: null,
     health: null,
     oauth: { flow: null, connected: connector.auth.mode !== 'oauth' },
+    ...(store ? { store } : {}),
   };
 }
 
@@ -190,7 +201,9 @@ export function InstallConnectorDialog({
           config[field.key] = parsed;
         }
       }
-      const instance = await installConnector(connector.id, { secrets: draft.secrets, config, definition: connector.source === 'registry' ? connector : undefined });
+      const instance = draft.store
+        ? await installStoreConnector(draft.store.packageName, { secrets: draft.secrets, config }, draft.store.version)
+        : await installConnector(connector.id, { secrets: draft.secrets, config, definition: connector.source === 'registry' ? connector : undefined });
       let health: ConnectorHealthResult | null = null;
       try {
         health = await testConnector(instance.instanceId);
@@ -299,6 +312,27 @@ export function InstallConnectorDialog({
                 </Button>
               </div>
             </div>
+          ) : null}
+
+          {draft.store ? (
+            <section className="rounded-2xl border border-edge bg-surface-base p-4">
+              <h3 className="text-sm font-semibold text-fg">{t.detailPermissions}</h3>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {(draft.store.permissions.data ?? []).map((permission) => (
+                  <span key={permission} className="rounded-md border border-edge bg-surface-panel px-2 py-1 text-xs text-fg-muted">
+                    {permission}
+                  </span>
+                ))}
+                {(draft.store.permissions.networkDomains ?? []).map((domain) => (
+                  <span key={domain} className="rounded-md border border-edge bg-surface-panel px-2 py-1 text-xs text-fg-muted">
+                    {domain}
+                  </span>
+                ))}
+                <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-xs text-emerald-700 dark:text-emerald-300">
+                  {t.storeLocalExecDenied}
+                </span>
+              </div>
+            </section>
           ) : null}
 
           {(connector.setup.secrets ?? []).map((field) => (

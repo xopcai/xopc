@@ -30,6 +30,8 @@ export async function installConnectorDefinition(
           version: definition.version,
           enabled: true,
           displayName: definition.displayName,
+          source: definition.source,
+          artifactSha256: definition.provenance?.sha256,
         },
         runtime: definition.runtime,
         ...(definition.runtime.type === 'composio' && definition.runtime.toolkit !== 'composio' ? { scope: 'read' } : {}),
