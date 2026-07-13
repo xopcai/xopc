@@ -1,6 +1,6 @@
 /** Stage the minimal Electron app directory consumed by electron-builder. */
 import { spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,7 +37,7 @@ function copyRequired(repoRoot, from, to) {
   cpSync(src, dest, { recursive: true, dereference: true });
 }
 
-function installRuntimeDeps(packDirPath) {
+function installRuntimeDeps(packDirPath, target) {
   const r = spawnSync(
     'pnpm',
     [
@@ -48,6 +48,8 @@ function installRuntimeDeps(packDirPath) {
       '--no-frozen-lockfile',
       '--ignore-scripts',
       '--prefer-offline',
+      `--cpu=${target.arch}`,
+      `--os=${target.platform}`,
     ],
     { cwd: packDirPath, stdio: 'inherit', shell: process.platform === 'win32' },
   );
@@ -56,19 +58,12 @@ function installRuntimeDeps(packDirPath) {
   }
 }
 
-function stageRipgrepBinary(repoRoot, packDirPath) {
-  const rgName = process.platform === 'win32' ? 'rg.exe' : 'rg';
-  const platformPkg = `@vscode/ripgrep-${process.platform}-${process.arch}`;
-  const direct = join(repoRoot, 'node_modules', '@vscode', `ripgrep-${process.platform}-${process.arch}`, 'bin', rgName);
-  const pnpmStore = join(repoRoot, 'node_modules', '.pnpm');
-  const pnpm = existsSync(pnpmStore)
-    ? readdirSync(pnpmStore)
-        .filter((name) => name.startsWith(platformPkg.replace('/', '+') + '@'))
-        .map((name) => join(pnpmStore, name, 'node_modules', '@vscode', `ripgrep-${process.platform}-${process.arch}`, 'bin', rgName))
-        .find((candidate) => existsSync(candidate))
-    : undefined;
-  const rgPath = existsSync(direct) ? direct : pnpm;
-  if (!rgPath) {
+function stageRipgrepBinary(packDirPath, target) {
+  const { platform, arch } = target;
+  const rgName = platform === 'win32' ? 'rg.exe' : 'rg';
+  const platformPkg = `@vscode/ripgrep-${platform}-${arch}`;
+  const rgPath = join(packDirPath, 'node_modules', '@vscode', `ripgrep-${platform}-${arch}`, 'bin', rgName);
+  if (!existsSync(rgPath)) {
     throw new Error(`[prepare-electron-pack-dir] Missing ripgrep binary for ${platformPkg}`);
   }
   const destDir = join(packDirPath, '_pack-resources/rg');
@@ -76,7 +71,10 @@ function stageRipgrepBinary(repoRoot, packDirPath) {
   cpSync(rgPath, join(destDir, rgName));
 }
 
-export function prepareElectronPackDir(repoRoot = root) {
+export function prepareElectronPackDir(
+  repoRoot = root,
+  target = { platform: process.platform, arch: process.arch },
+) {
   rmSync(packDir, { recursive: true, force: true });
   mkdirSync(packDir, { recursive: true });
 
@@ -85,10 +83,22 @@ export function prepareElectronPackDir(repoRoot = root) {
 
   const rootPkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'));
   const minimalPkg = buildMinimalElectronPackageJson(rootPkg, repoRoot);
+  const ripgrepVersion = rootPkg.dependencies?.['@vscode/ripgrep'];
+  if (typeof ripgrepVersion !== 'string') {
+    throw new Error('[prepare-electron-pack-dir] Missing @vscode/ripgrep dependency');
+  }
+  const ripgrepPlatformPackage = `@vscode/ripgrep-${target.platform}-${target.arch}`;
+  minimalPkg.dependencies[ripgrepPlatformPackage] = ripgrepVersion;
   writeFileSync(join(packDir, 'package.json'), `${JSON.stringify(minimalPkg, null, 2)}\n`);
 
-  installRuntimeDeps(packDir);
-  stageRipgrepBinary(repoRoot, packDir);
+  installRuntimeDeps(packDir, target);
+  stageRipgrepBinary(packDir, target);
+  rmSync(join(packDir, 'node_modules', '@vscode', `ripgrep-${target.platform}-${target.arch}`), {
+    recursive: true,
+    force: true,
+  });
+  delete minimalPkg.dependencies[ripgrepPlatformPackage];
+  writeFileSync(join(packDir, 'package.json'), `${JSON.stringify(minimalPkg, null, 2)}\n`);
 
   console.log(`[prepare-electron-pack-dir] Staged ${packDir}`);
   return packDir;

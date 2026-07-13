@@ -58,7 +58,15 @@ const hasPublishFlag = extra.some((a) => a === '--publish' || a.startsWith('--pu
 const publishArgs =
   process.env['ELECTRON_PUBLISH'] === '1' || hasPublishFlag ? [] : ['--publish', 'never'];
 
-const packDir = prepareElectronPackDir(root);
+const electronPlatform = extra.includes('--mac')
+  ? 'darwin'
+  : extra.includes('--win')
+    ? 'win32'
+    : extra.includes('--linux')
+      ? 'linux'
+      : process.platform;
+const electronArch = extra.includes('--arm64') ? 'arm64' : extra.includes('--x64') ? 'x64' : process.arch;
+const packDir = prepareElectronPackDir(root, { platform: electronPlatform, arch: electronArch });
 const entitlementsPath = join(packDir, '_pack-resources/entitlements.mac.plist').replace(/\\/g, '/');
 const effectivePackConfig = join(packDir, 'electron-builder.effective.yml');
 writeFileSync(
