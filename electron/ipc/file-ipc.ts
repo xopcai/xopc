@@ -21,7 +21,7 @@ export type ShellOpenErrorCode =
   | 'CANCELED'
   | 'INVALID_PATH'
   | 'NOT_FOUND'
-  | 'NOT_FILE'
+  | 'NOT_OPENABLE'
   | 'INVALID_APP'
   | 'OPEN_FAILED';
 
@@ -480,8 +480,15 @@ async function firstExistingPath(paths: string[]): Promise<string | null> {
 }
 
 async function getRecommendedOpenWithAppsForPath(filePath: string): Promise<RecommendedOpenWithApp[]> {
+  let targetStat: Awaited<ReturnType<typeof stat>>;
+  try {
+    targetStat = await stat(filePath);
+  } catch {
+    return [];
+  }
   const ext = extname(filePath).toLowerCase();
-  const categories = EXTENSION_CATEGORIES[ext] ?? ['code', 'document'];
+  /** A folder is a development workspace, so only offer code editors. */
+  const categories = targetStat.isDirectory() ? ['code'] : EXTENSION_CATEGORIES[ext] ?? ['code', 'document'];
   const categorySet = new Set(categories);
   const candidates = knownAppCandidates().filter((candidate) =>
     candidate.categories.some((category) => categorySet.has(category)),
@@ -502,16 +509,19 @@ async function getRecommendedOpenWithAppsForPath(filePath: string): Promise<Reco
   return out.slice(0, 8);
 }
 
-async function validateFilePath(filePath: string): Promise<ShellOpenResult> {
-  if (typeof filePath !== 'string' || !isAbsolute(filePath)) {
-    return { ok: false, code: 'INVALID_PATH', error: 'File path must be absolute.' };
+/** Validate a workspace file or directory before passing it to an external application. */
+async function validateOpenWithTargetPath(targetPath: string): Promise<ShellOpenResult> {
+  if (typeof targetPath !== 'string' || !isAbsolute(targetPath)) {
+    return { ok: false, code: 'INVALID_PATH', error: 'Path must be absolute.' };
   }
   try {
-    const s = await stat(filePath);
-    if (!s.isFile()) return { ok: false, code: 'NOT_FILE', error: 'Path is not a file.' };
+    const s = await stat(targetPath);
+    if (!s.isFile() && !s.isDirectory()) {
+      return { ok: false, code: 'NOT_OPENABLE', error: 'Path is not a file or directory.' };
+    }
     return { ok: true };
   } catch {
-    return { ok: false, code: 'NOT_FOUND', error: 'File does not exist.' };
+    return { ok: false, code: 'NOT_FOUND', error: 'Path does not exist.' };
   }
 }
 
@@ -562,8 +572,8 @@ async function validateAppPath(appPath: string): Promise<ShellOpenResult> {
 }
 
 async function spawnOpenWithApp(filePath: string, appPath: string): Promise<ShellOpenResult> {
-  const fileValidation = await validateFilePath(filePath);
-  if (!fileValidation.ok) return fileValidation;
+  const targetValidation = await validateOpenWithTargetPath(filePath);
+  if (!targetValidation.ok) return targetValidation;
   const appValidation = await validateAppPath(appPath);
   if (!appValidation.ok) return appValidation;
 
@@ -655,7 +665,7 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
 
   ipcMain.handle('shell:choose-app-and-open-path', async (event, filePath: string): Promise<ShellOpenResult> => {
     assertTrustedRenderer(event);
-    const validation = await validateFilePath(filePath);
+    const validation = await validateOpenWithTargetPath(filePath);
     if (!validation.ok) return validation;
     const defaultPath =
       process.platform === 'darwin'
@@ -694,7 +704,7 @@ export function registerFileIpc(ipcMain: IpcMain, options: FileIpcOptions = {}):
 
   ipcMain.handle('shell:get-open-with-apps-for-path', async (event, filePath: string) => {
     assertTrustedRenderer(event);
-    const validation = await validateFilePath(filePath);
+    const validation = await validateOpenWithTargetPath(filePath);
     if (!validation.ok) return { recommended: [], recent: [] };
     const [recommended, recent] = await Promise.all([
       getRecommendedOpenWithAppsForPath(filePath),
