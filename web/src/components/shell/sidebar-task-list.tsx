@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ClipboardCopy,
   ExternalLink,
-  FolderKanban,
   FolderOpen,
   Loader2,
   MoreHorizontal,
@@ -500,6 +499,7 @@ function SidebarProjectSection({
   defaultAgentId,
   agentItems,
   language,
+  excludedSessionKeys,
 }: {
   group: ProjectSidebarGroup;
   isExpanded: boolean;
@@ -521,12 +521,17 @@ function SidebarProjectSection({
   defaultAgentId: string;
   agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
   language: string;
+  /** Sessions rendered in the dedicated pinned section stay out of their project list. */
+  excludedSessionKeys?: ReadonlySet<string>;
 }) {
-  const visibleSessions = isExpanded ? group.sessions : group.sessions.slice(0, PROJECT_PREVIEW_LIMIT);
-  const hasLoadedMore = group.sessions.length > PROJECT_PREVIEW_LIMIT;
+  const unpinnedSessions = excludedSessionKeys
+    ? group.sessions.filter((session) => !excludedSessionKeys.has(session.key))
+    : group.sessions;
+  const visibleSessions = isExpanded ? unpinnedSessions : unpinnedSessions.slice(0, PROJECT_PREVIEW_LIMIT);
+  const hasLoadedMore = unpinnedSessions.length > PROJECT_PREVIEW_LIMIT;
   const canToggleSessionLimit = group.sessionHasMore || hasLoadedMore;
   const showLess = isExpanded && !group.sessionHasMore && hasLoadedMore;
-  const hasActiveSession = group.sessions.some((session) => session.key === activeSessionKey);
+  const hasActiveSession = unpinnedSessions.some((session) => session.key === activeSessionKey);
 
   return (
     <section className="flex flex-col gap-0.5" aria-label={group.project.name}>
@@ -536,17 +541,7 @@ function SidebarProjectSection({
           hasActiveSession ? 'bg-surface-active text-fg' : 'text-fg-muted',
         )}
       >
-        <div className="flex h-7 min-w-0 flex-1 items-center gap-2" title={group.project.name}>
-          <span className="relative flex size-4 shrink-0 items-center justify-center">
-            <FolderKanban className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
-            {group.project.pinnedAt ? (
-              <Pin
-                className="absolute -right-1 -top-1 size-2.5 rotate-45 rounded-sm bg-surface-base text-fg-subtle"
-                strokeWidth={2}
-                aria-hidden
-              />
-            ) : null}
-          </span>
+        <div className="flex h-7 min-w-0 flex-1 items-center" title={group.project.name}>
           <span className="min-w-0 flex-1 truncate">{group.project.name}</span>
         </div>
         <SidebarProjectMenu
@@ -643,6 +638,7 @@ function SidebarInboxSection({
   defaultAgentId,
   agentItems,
   language,
+  excludedSessionKeys,
 }: {
   sessions: SessionMetadata[];
   hasMore: boolean;
@@ -662,8 +658,13 @@ function SidebarInboxSection({
   defaultAgentId: string;
   agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
   language: string;
+  /** Sessions rendered in the dedicated pinned section stay out of the inbox. */
+  excludedSessionKeys?: ReadonlySet<string>;
 }) {
-  if (sessions.length === 0) return null;
+  const unpinnedSessions = excludedSessionKeys
+    ? sessions.filter((session) => !excludedSessionKeys.has(session.key))
+    : sessions;
+  if (unpinnedSessions.length === 0 && !hasMore) return null;
 
   return (
     <section className="flex flex-col gap-0.5" aria-label={sb.inboxHeading}>
@@ -684,7 +685,7 @@ function SidebarInboxSection({
         />
       </button>
       <div className={cn('ml-6 flex flex-col gap-0.5', isCollapsed && 'hidden')}>
-        {sessions.map((session) => {
+        {unpinnedSessions.map((session) => {
           const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
           return (
             <SidebarTaskRow
@@ -722,6 +723,70 @@ function SidebarInboxSection({
             {sb.projectShowMore}
           </button>
         ) : null}
+      </div>
+    </section>
+  );
+}
+
+function SidebarPinnedSection({
+  sessions,
+  activeSessionKey,
+  onNavigate,
+  mutate,
+  onRequestRename,
+  onRequestDelete,
+  sb,
+  sess,
+  clipboard,
+  defaultUnnamedTitle,
+  defaultAgentId,
+  agentItems,
+  language,
+}: {
+  sessions: SessionMetadata[];
+  activeSessionKey?: string;
+  onNavigate?: () => void;
+  mutate: () => void;
+  onRequestRename: (key: string) => void;
+  onRequestDelete: (key: string) => void;
+  sb: ReturnType<typeof messages>['sidebar'];
+  sess: ReturnType<typeof messages>['sessions'];
+  clipboard: ReturnType<typeof messages>['clipboard'];
+  defaultUnnamedTitle: string;
+  defaultAgentId: string;
+  agentItems: Awaited<ReturnType<typeof fetchChatAgents>>['items'];
+  language: string;
+}) {
+  if (sessions.length === 0) return null;
+
+  return (
+    <section className="mb-3 flex flex-col gap-0.5" aria-label={sess.pinnedSessions}>
+      <h2 className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
+        {sess.pinnedSessions}
+      </h2>
+      <div className="flex flex-col gap-0.5">
+        {sessions.map((session) => {
+          const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
+          return (
+            <SidebarTaskRow
+              key={session.key}
+              session={session}
+              isActive={activeSessionKey === session.key}
+              showSourceChannelIcon={!isWebSession(session)}
+              onNavigate={onNavigate}
+              mutate={mutate}
+              onRequestRename={onRequestRename}
+              onRequestDelete={onRequestDelete}
+              sb={sb}
+              sess={sess}
+              clipboard={clipboard}
+              defaultUnnamedTitle={defaultUnnamedTitle}
+              sessionAgentId={sessionAgentId}
+              sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
+              timeLabel={timeAgoLabel(session.updatedAt, language)}
+            />
+          );
+        })}
       </div>
     </section>
   );
@@ -858,6 +923,18 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   }, [inboxItems, projectGroups]);
 
   const hasGroupedItems = projectGroups.length > 0 || inboxItems.length > 0;
+
+  const pinnedSessions = useMemo(
+    () =>
+      items
+        .filter((session) => session.status === 'pinned')
+        .sort((a, b) => sessionUpdatedAtMs(b) - sessionUpdatedAtMs(a)),
+    [items],
+  );
+  const pinnedSessionKeys = useMemo(
+    () => new Set(pinnedSessions.map((session) => session.key)),
+    [pinnedSessions],
+  );
 
   const loadingMore = Boolean(data && size > data.length);
   const lastPage = data?.[data.length - 1];
@@ -1153,6 +1230,21 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
           </div>
         ) : hasGroupedItems ? (
           <div className="flex flex-col px-4 pt-4">
+            <SidebarPinnedSection
+              sessions={pinnedSessions}
+              activeSessionKey={activeSessionKey}
+              onNavigate={onNavigate}
+              mutate={refreshSidebar}
+              onRequestRename={openRename}
+              onRequestDelete={setDeleteKey}
+              sb={sb}
+              sess={sess}
+              clipboard={m.clipboard}
+              defaultUnnamedTitle={m.chat.newSession}
+              defaultAgentId={defaultAgentId}
+              agentItems={agentItems}
+              language={language}
+            />
             {projectGroups.length > 0 ? (
               <div className="pb-1">
                 <button
@@ -1195,6 +1287,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                         defaultAgentId={defaultAgentId}
                         agentItems={agentItems}
                         language={language}
+                        excludedSessionKeys={pinnedSessionKeys}
                       />
                     ))
                   : null}
@@ -1220,6 +1313,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
               defaultAgentId={defaultAgentId}
               agentItems={agentItems}
               language={language}
+              excludedSessionKeys={pinnedSessionKeys}
             />
           </div>
         ) : (
