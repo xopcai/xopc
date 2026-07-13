@@ -36,11 +36,23 @@ function archiveForManifest(value = manifest): Buffer {
   return zip.toBuffer();
 }
 
+const localManifest = {
+  ...manifest,
+  capabilities: ['tools', 'runtime.mcp.stdio'],
+  permissions: { localExec: true, filesystem: [], networkDomains: [] },
+  runtime: {
+    type: 'mcp',
+    serverId: 'demo_local_connector',
+    localPackage: { registry: 'npm', name: '@acme/mcp-server', version: '1.2.3' },
+    serverTemplate: { command: 'npx', args: ['--yes', '@acme/mcp-server@1.2.3'] },
+  },
+};
+
 function config(): Config {
   return { gateway: { skillsStoreBaseUrl: 'https://store.example.com' } } as Config;
 }
 
-function mockStore(archive: Buffer, sha256 = createHash('sha256').update(archive).digest('hex')): void {
+function mockStore(archive: Buffer, sha256 = createHash('sha256').update(archive).digest('hex'), value = manifest): void {
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = String(input);
     if (url === 'https://store.example.com/api/v1/packages/demo-connector') {
@@ -48,10 +60,10 @@ function mockStore(archive: Buffer, sha256 = createHash('sha256').update(archive
         id: 'pkg_1',
         name: 'demo-connector',
         type: 'connector',
-        description: manifest.description,
+        description: value.description,
         latestVersion: {
           version: '1.0.0',
-          manifest,
+          manifest: value,
           downloadUrl: 'https://store.example.com/files/demo-connector.zip',
           sha256,
         },
@@ -109,5 +121,22 @@ describe('store connector install plans', () => {
     await expect(getStoreConnectorInstallPlan(config(), 'demo-connector')).rejects.toThrow(
       'explicitly deny local command execution',
     );
+  });
+
+  it('accepts only the pinned npx form for reviewed local Store connectors', async () => {
+    const archive = archiveForManifest(localManifest);
+    mockStore(archive, undefined, localManifest);
+
+    const plan = await getStoreConnectorInstallPlan(config(), 'demo-connector');
+
+    expect(plan).toMatchObject({
+      permissions: { localExec: true, filesystem: [], networkDomains: [] },
+      definition: {
+        runtime: {
+          localPackage: { registry: 'npm', name: '@acme/mcp-server', version: '1.2.3' },
+          serverTemplate: { command: 'npx', args: ['--yes', '@acme/mcp-server@1.2.3'] },
+        },
+      },
+    });
   });
 });
