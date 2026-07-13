@@ -4,6 +4,8 @@ import { isElectron } from '@/lib/electron-env';
 import { TOAST_EVENT } from '@/lib/toast';
 import type { DesktopPetEvent } from '@/types/electron';
 
+import { activityForProgress, activityForTool } from './desktop-pet-activity';
+
 type AgentStreamDetail = {
   sessionKey?: string;
   event?: unknown;
@@ -34,7 +36,7 @@ function readEventString(
   return readString(payload, key) ?? readString(record, key);
 }
 
-function mapAgentStreamEvent(detail: AgentStreamDetail): DesktopPetEvent | null {
+export function mapAgentStreamEvent(detail: AgentStreamDetail): DesktopPetEvent | null {
   const event = detail.event;
   if (!event || typeof event !== 'object') return null;
   const rec = event as Record<string, unknown>;
@@ -42,24 +44,28 @@ function mapAgentStreamEvent(detail: AgentStreamDetail): DesktopPetEvent | null 
   if (!type) return null;
   const payload = eventPayload(rec);
   const route = detail.sessionKey ? `/chat/${detail.sessionKey}` : '/chat';
+  const runId = readString(rec, 'runId');
 
   if (type === 'run_start' || type === 'assistant_message_start') {
-    return { kind: 'agent-start', sessionKey: detail.sessionKey, route };
+    return { kind: 'agent-start', sessionKey: detail.sessionKey, runId, route };
   }
   if (type === 'tool_start') {
     const toolName = readEventString(rec, payload, 'toolName') ?? readEventString(rec, payload, 'name');
     return {
       kind: 'agent-tool',
       toolName,
+      activity: activityForTool(toolName, payload['args']),
       sessionKey: detail.sessionKey,
+      runId,
       route,
     };
   }
   if (type === 'progress' || type === 'compaction') {
     return {
       kind: 'agent-progress',
-      message: readEventString(rec, payload, 'message'),
+      activity: type === 'compaction' ? { phase: 'compacting' } : activityForProgress(payload),
       sessionKey: detail.sessionKey,
+      runId,
       route,
     };
   }
@@ -68,6 +74,17 @@ function mapAgentStreamEvent(detail: AgentStreamDetail): DesktopPetEvent | null 
       kind: 'agent-success',
       severity: 'success',
       sessionKey: detail.sessionKey,
+      runId,
+      route,
+    };
+  }
+  if (type === 'clarify_request') {
+    return {
+      kind: 'agent-progress',
+      severity: 'warning',
+      activity: { phase: 'waiting' },
+      sessionKey: detail.sessionKey,
+      runId,
       route,
     };
   }
@@ -75,11 +92,8 @@ function mapAgentStreamEvent(detail: AgentStreamDetail): DesktopPetEvent | null 
     return {
       kind: 'agent-error',
       severity: 'error',
-      message:
-        readEventString(rec, payload, 'content') ??
-        readEventString(rec, payload, 'message') ??
-        readEventString(rec, payload, 'error'),
       sessionKey: detail.sessionKey,
+      runId,
       route,
     };
   }

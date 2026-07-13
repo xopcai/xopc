@@ -1,5 +1,3 @@
-import { existsSync, realpathSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import pathPosix from 'node:path/posix';
 import pathWin32 from 'node:path/win32';
@@ -74,26 +72,6 @@ export function resolveNsisUninstallerPath(
     return primary;
   }
   return null;
-}
-
-export function resolveCliDataPath(homeDir: string = homedir()): string {
-  return join(homeDir, '.xopc');
-}
-
-export function detectSeparateCliData(
-  userDataPath: string,
-  cliDataPath: string,
-  exists: (path: string) => boolean = existsSync,
-  realpath: (path: string) => string = realpathSync,
-): boolean {
-  if (!exists(cliDataPath)) {
-    return false;
-  }
-  try {
-    return realpath(cliDataPath) !== realpath(userDataPath);
-  } catch {
-    return cliDataPath !== userDataPath;
-  }
 }
 
 export function resolveDataRemovalTargets(paths: string[]): string[] {

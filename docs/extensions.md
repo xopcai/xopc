@@ -233,7 +233,7 @@ Same **`Authorization: Bearer <token>`** as the rest of the console API.
 - **First-load permission prompt** — Before mounting an iframe, the shell may show a dialog listing **`ui.permissions`**; approval is stored under **`localStorage`** key **`xopc.extensionUiGrants.v1`** (keyed by extension id + permission-set fingerprint).
 - **iframe `sandbox`** — Typically `allow-scripts allow-forms allow-popups` **without** `allow-same-origin` for stronger isolation (host communication uses `postMessage`, not same-origin cookie access).
 - **Agent stream** — Webchat runs emit **`agent.stream`** on the gateway event bus; clients subscribed to **`GET /api/events`** receive them; the shell forwards matching chunks to iframes that subscribed via **`agent.subscribe`** for that **`sessionKey`**.
-- **Command palette** — **⌘K / Ctrl+K** (or `open-command-palette` on `window`) lists **`contributions.commands`**; commands with **`opensPanel`** navigate to **`/apps/{extensionId}`**.
+- **Command palette** — **⌘K / Ctrl+K** (or `open-command-palette` on `window`) lists **`contributions.commands`**; commands with **`opensPanel`** navigate to **`/extensions/{extensionId}`**.
 - **Debug** — **Settings → Extensions → Extension debug** lists gateway extensions and the raw **UI grants** JSON.
 
 ### Sample: Hello extension

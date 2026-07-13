@@ -24,7 +24,7 @@
     "agents": "Agents",
     "system": "System permissions",
     "desktop-pet": "Pet",
-    "app-management": "App management",
+    "desktop-app": "Application data",
     "cron": "Scheduled tasks",
     "skills": "Skills",
     "keyboard-shortcuts": "Keyboard shortcuts"
@@ -644,7 +644,12 @@
     "toolActionMemory": "reading memory",
     "toolActionAutomation": "handling automations",
     "toolActionConnector": "using a connector",
-    "toolActionUnknown": "using a tool"
+    "toolActionUnknown": "using a tool",
+    "taskInProgress": "Task in progress",
+    "taskRecentActivity": "Recent activity",
+    "viewSession": "View session",
+    "stopTask": "Stop",
+    "taskStopped": "Task stopped."
   },
   "desktopPetSettings": {
     "title": "Pet",
@@ -726,11 +731,11 @@
     "clickThroughDesc": "Let clicks pass through the transparent window when the menu is closed.",
     "mute": "Mute sounds",
     "muteDesc": "Keep visual feedback but silence pet sounds.",
-    "feedbackLevel": "Feedback frequency",
-    "feedbackLevelDesc": "Choose how often the pet speaks.",
+    "feedbackLevel": "Feedback detail",
+    "feedbackLevelDesc": "Choose how much execution progress the pet shows.",
     "feedbackQuiet": "Quiet",
-    "feedbackNormal": "Normal",
-    "feedbackChatty": "Chatty",
+    "feedbackNormal": "Compact",
+    "feedbackChatty": "Progress",
     "resetPosition": "Reset position"
   },
   "systemSettings": {
@@ -871,29 +876,28 @@
         "linux": "Grant location in your desktop portal if location features fail."
       }
     },
-    "appManagement": {
-      "title": "App management",
+    "desktopApp": {
+      "title": "Application data",
       "loading": "Loading…",
       "devOnlyTitle": "Development build",
-      "devOnlyBody": "Clear data and uninstall are only available in the packaged desktop app. Paths below are for reference.",
+      "devOnlyBody": "Deleting data and uninstalling are only available in the packaged desktop app. Paths below are for reference.",
       "appPath": "Install location",
-      "dataPath": "Local data",
+      "dataPath": "Shared data directory",
       "dataSize": "Data size",
       "dataSizeUnknown": "—",
       "copyPath": "Copy",
       "copied": "Copied",
       "copyFailed": "Could not copy to the clipboard. Select the path and copy manually.",
-      "cliDataWarning": "Separate CLI data was found at ~/.xopc. Clearing local data here does not remove it.",
-      "openCliData": "Open CLI data folder",
-      "pendingUpdateBlocked": "Finish or cancel the pending update before clearing data or uninstalling.",
-      "clearData": "Clear local data",
-      "clearDataDesc": "Remove config, sessions, workspace, and caches. The app will restart with default settings.",
-      "clearDataConfirmTitle": "Clear local data?",
-      "clearDataConfirmDesc": "This permanently deletes API keys, sessions, transcripts, and workspace files stored by the desktop app. This cannot be undone.",
+      "sharedDataWarning": "Gateway, Electron, and TUI share this directory. Deleting it affects every client; stop other xopc processes first to avoid concurrent writes.",
+      "pendingUpdateBlocked": "Finish or cancel the pending update before deleting data or uninstalling.",
+      "clearData": "Delete application data",
+      "clearDataDesc": "Permanently remove shared config, sessions, workspaces, and caches. Gateway, Electron, and TUI will all lose this data.",
+      "clearDataConfirmTitle": "Delete application data?",
+      "clearDataConfirmDesc": "This permanently deletes API keys, sessions, transcripts, and workspace files in the shared data directory. Gateway, Electron, and TUI are all affected, and this cannot be undone.",
       "clearDataConfirmCheckbox": "I understand this cannot be undone",
       "clearDataConfirmPhrase": "confirm delete",
       "clearDataConfirmLabel": "Type \"confirm delete\" to continue",
-      "clearDataConfirmHint": "The clear button stays disabled until the phrase matches exactly.",
+      "clearDataConfirmHint": "The delete button stays disabled until the phrase matches exactly.",
       "uninstall": "Uninstall app",
       "uninstallDescDarwin": "Opens Finder with xopc selected, then quits the app. Drag xopc.app to the Trash to finish uninstalling.",
       "uninstallDescWin": "Opens the Windows uninstall wizard and quits xopc.",
@@ -901,8 +905,8 @@
       "uninstallDescLinuxDeb": "Quits xopc and opens the install folder. Remove the package with: sudo dpkg -r {{package}} (or use your distro software center).",
       "uninstallDescLinuxUnknown": "Opens the install location, then quits xopc. Remove the app binary or package using your distro tools.",
       "uninstallConfirmTitle": "Uninstall xopc?",
-      "removeUserDataCheckbox": "Also clear local data before uninstalling",
-      "confirmClear": "Clear data",
+      "removeUserDataCheckbox": "Also delete application data before uninstalling (affects Gateway, Electron, and TUI)",
+      "confirmClear": "Delete data",
       "confirmUninstall": "Uninstall",
       "cancel": "Cancel",
       "migrations": {
@@ -943,8 +947,8 @@
     "tasksLink": "Manage tasks and run history →"
   },
   "goalsSettingsPage": {
-    "title": "Goal judge",
-    "subtitle": "Default settings for persistent /goal tasks and checklist judging."
+    "title": "Goal runtime rules",
+    "subtitle": "Configure judging, execution limits, and notification rules for persistent /goal tasks."
   },
   "imageModelsSettings": {
     "title": "Images",

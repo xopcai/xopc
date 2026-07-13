@@ -13,10 +13,8 @@ export type UninstallInfo = {
   platform: 'darwin' | 'win32' | 'linux';
   uninstallMode: UninstallMode;
   appPath: string;
-  userDataPath: string;
-  userDataSizeBytes: number | null;
-  hasSeparateCliData: boolean;
-  cliDataPath: string | null;
+  dataPath: string;
+  dataSizeBytes: number | null;
   uninstallerPath: string | null;
   pendingUpdate: boolean;
   linuxPackageKind?: LinuxPackageKind;

@@ -42,7 +42,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'voice', description: 'Configure text-to-speech (TTS) output' },
   { name: 'search', description: 'Manage web-search providers (brave / tavily / bing / searxng)' },
   { name: 'skills', description: 'Manage skills' },
-  { name: 'connectors', description: 'Browse and install connector capabilities from xopc-store' },
+  { name: 'connectors', description: 'Browse and install verified connector capabilities from xopc-store' },
   { name: 'tailscale', description: 'Tailscale status for gateway remote access' },
   { name: 'browser', description: 'Browser automation commands (uses Playwright)' },
   { name: 'agents', description: 'Manage agents (config + workspace)' },

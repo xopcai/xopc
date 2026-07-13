@@ -333,8 +333,8 @@
       "maxRequestsPerTurnDesc": "单条用户消息内大模型重试/请求尝试上限（默认 50）。",
       "maxToolFailuresPerTurn": "每轮最大工具失败次数",
       "maxToolFailuresPerTurnDesc": "连续工具错误达到该值后放弃（默认 3）。",
-      "goalsCheckLink": "目标检查 (/goal) → 目标评判设置",
-      "goalsCheckLinkHint": "清单评判默认值在「设置 → 自动化 → 目标评判」中配置。",
+      "goalsCheckLink": "目标检查 (/goal) → 目标运行规则",
+      "goalsCheckLinkHint": "清单评判默认值在「设置 → 自动化 → 目标运行规则」中配置。",
       "cardCompactionTitle": "上下文压缩",
       "cardCompactionSubtitle": "在上下文中按策略压缩较早内容以适配窗口。",
       "compactionEnabled": "启用压缩",
@@ -873,8 +873,8 @@
     "createCopy": "创建副本"
   },
   "goalsSettings": {
-    "title": "目标评判（/goal）",
-    "hint": "持久化目标任务与评判模型评分的默认设置。",
+    "title": "目标运行规则（/goal）",
+    "hint": "持久化目标任务的评判、执行限制与通知默认设置。",
     "save": "保存",
     "discard": "放弃",
     "saving": "保存中…",

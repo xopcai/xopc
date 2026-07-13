@@ -11,6 +11,25 @@ export type DesktopPetAction =
 
 export type DesktopPetFeedbackLevel = 'quiet' | 'normal' | 'chatty';
 
+export type DesktopPetActivityPhase =
+  | 'preparing'
+  | 'planning'
+  | 'researching'
+  | 'reading'
+  | 'editing'
+  | 'running'
+  | 'browsing'
+  | 'compacting'
+  | 'waiting';
+
+export type DesktopPetActivity = {
+  phase?: DesktopPetActivityPhase;
+  /** A short, safe-to-display target such as a file basename or origin. */
+  detail?: string;
+  completed?: number;
+  total?: number;
+};
+
 export type DesktopPetBounds = {
   x: number;
   y: number;
@@ -110,7 +129,9 @@ export type DesktopPetEvent = {
   title?: string;
   severity?: 'info' | 'success' | 'warning' | 'error';
   sessionKey?: string;
+  runId?: string;
   route?: string;
   toolName?: string;
+  activity?: DesktopPetActivity;
   createdAt?: number;
 };

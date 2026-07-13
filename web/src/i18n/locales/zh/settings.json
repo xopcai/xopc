@@ -24,7 +24,7 @@
     "agents": "智能体",
     "system": "系统授权",
     "desktop-pet": "宠物",
-    "app-management": "应用管理",
+    "desktop-app": "应用数据",
     "cron": "定时任务",
     "skills": "技能",
     "keyboard-shortcuts": "快捷键"
@@ -644,7 +644,12 @@
     "toolActionMemory": "读取记忆",
     "toolActionAutomation": "处理自动化",
     "toolActionConnector": "调用连接器",
-    "toolActionUnknown": "使用工具"
+    "toolActionUnknown": "使用工具",
+    "taskInProgress": "任务进行中",
+    "taskRecentActivity": "最近活动",
+    "viewSession": "查看会话",
+    "stopTask": "停止",
+    "taskStopped": "任务已停止。"
   },
   "desktopPetSettings": {
     "title": "宠物",
@@ -726,11 +731,11 @@
     "clickThroughDesc": "菜单关闭时，让透明区域的点击穿透到下方窗口。",
     "mute": "静音",
     "muteDesc": "保留视觉反馈，但不播放宠物声音。",
-    "feedbackLevel": "反馈频率",
-    "feedbackLevelDesc": "选择宠物说话的频率。",
-    "feedbackQuiet": "安静",
-    "feedbackNormal": "普通",
-    "feedbackChatty": "活跃",
+    "feedbackLevel": "反馈密度",
+    "feedbackLevelDesc": "选择桌宠展示执行进度的密度。",
+    "feedbackQuiet": "静默",
+    "feedbackNormal": "简洁",
+    "feedbackChatty": "进度",
     "resetPosition": "重置位置"
   },
   "systemSettings": {
@@ -871,29 +876,28 @@
         "linux": "若位置功能失败，请在 desktop portal 中授予位置权限。"
       }
     },
-    "appManagement": {
-      "title": "应用管理",
+    "desktopApp": {
+      "title": "应用数据",
       "loading": "加载中…",
       "devOnlyTitle": "开发模式",
-      "devOnlyBody": "清除数据与卸载仅在打包后的桌面应用中可用。下方路径仅供参考。",
+      "devOnlyBody": "删除数据与卸载仅在打包后的桌面应用中可用。下方路径仅供参考。",
       "appPath": "安装位置",
-      "dataPath": "本地数据",
+      "dataPath": "共享数据目录",
       "dataSize": "数据大小",
       "dataSizeUnknown": "—",
       "copyPath": "复制",
       "copied": "已复制",
       "copyFailed": "无法复制到剪贴板，请手动选择路径复制。",
-      "cliDataWarning": "检测到独立的 CLI 数据目录 ~/.xopc。在此清除本地数据不会删除该目录。",
-      "openCliData": "打开 CLI 数据目录",
-      "pendingUpdateBlocked": "有待安装的更新时无法清除数据或卸载，请先完成或取消更新。",
-      "clearData": "清除本地数据",
-      "clearDataDesc": "删除配置、会话、工作区与缓存。应用将重启并恢复默认设置。",
-      "clearDataConfirmTitle": "清除本地数据？",
-      "clearDataConfirmDesc": "将永久删除桌面应用保存的 API 密钥、会话、对话记录与工作区文件，且无法恢复。",
+      "sharedDataWarning": "此目录由 Gateway、Electron 和 TUI 共用。删除会影响所有客户端；请先停止其他 xopc 进程，避免并发写入。",
+      "pendingUpdateBlocked": "有待安装的更新时无法删除数据或卸载，请先完成或取消更新。",
+      "clearData": "删除应用数据",
+      "clearDataDesc": "永久删除共享配置、会话、工作区与缓存。Gateway、Electron 和 TUI 都会失去这些数据。",
+      "clearDataConfirmTitle": "删除应用数据？",
+      "clearDataConfirmDesc": "将永久删除共享数据目录中的 API 密钥、会话、对话记录与工作区文件。Gateway、Electron 和 TUI 都会受影响，且无法恢复。",
       "clearDataConfirmCheckbox": "我了解此操作不可恢复",
       "clearDataConfirmPhrase": "确认删除",
       "clearDataConfirmLabel": "请输入「确认删除」以继续",
-      "clearDataConfirmHint": "必须输入「确认删除」后才会启用清除按钮。",
+      "clearDataConfirmHint": "必须输入「确认删除」后才会启用删除按钮。",
       "uninstall": "卸载应用",
       "uninstallDescDarwin": "将在 Finder 中选中 xopc 并退出应用。请将 xopc.app 拖入废纸篓以完成卸载。",
       "uninstallDescWin": "将打开 Windows 卸载向导并退出 xopc。",
@@ -901,8 +905,8 @@
       "uninstallDescLinuxDeb": "将退出 xopc 并打开安装目录。在终端执行：sudo dpkg -r {{package}}（或使用发行版软件中心卸载）。",
       "uninstallDescLinuxUnknown": "将打开安装位置并退出 xopc。请使用发行版工具删除应用文件或软件包。",
       "uninstallConfirmTitle": "卸载 xopc？",
-      "removeUserDataCheckbox": "卸载前同时清除本地数据",
-      "confirmClear": "清除数据",
+      "removeUserDataCheckbox": "卸载前同时删除应用数据（会影响 Gateway、Electron 和 TUI）",
+      "confirmClear": "删除数据",
       "confirmUninstall": "卸载",
       "cancel": "取消",
       "migrations": {
@@ -943,8 +947,8 @@
     "tasksLink": "管理任务与运行历史 →"
   },
   "goalsSettingsPage": {
-    "title": "目标评判",
-    "subtitle": "持久目标 /goal 的评判模型、轮数上限与清单模式默认值。"
+    "title": "目标运行规则",
+    "subtitle": "配置持久目标 /goal 的评判方式、执行限制与通知规则。"
   },
   "imageModelsSettings": {
     "title": "图像",

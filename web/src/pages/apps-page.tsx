@@ -26,9 +26,9 @@ import { cn } from '@/lib/cn';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-type AppsPageCopy = MessageBundle['appsPage'];
+type ExtensionsPageCopy = MessageBundle['extensionsPage'];
 
-export function AppsPage() {
+export function ExtensionsPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -116,23 +116,23 @@ export function AppsPage() {
       startExtra: null,
       main: (
         <div className="min-w-0">
-          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{m.appsPage.title}</h1>
+          <h1 className="truncate text-base font-semibold tracking-tight text-fg">{m.extensionsPage.title}</h1>
         </div>
       ),
       end: null,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, m.appsPage.title, setPageHeader]);
+  }, [clearPageHeader, m.extensionsPage.title, setPageHeader]);
 
   if (loading && mainTab !== 'marketplace') {
-    return <AppsPageSkeleton />;
+    return <ExtensionsPageSkeleton />;
   }
 
   const showSearch = mainTab !== 'marketplace' && listForTab.length > 0;
   const tabItems = [
-    { id: 'marketplace' as const, label: m.appsPage.tabMarketplace },
-    { id: 'builtin' as const, label: m.appsPage.tabBuiltin, count: bundledExtensions.length },
-    { id: 'user' as const, label: m.appsPage.tabUser, count: userExtensions.length },
+    { id: 'marketplace' as const, label: m.extensionsPage.tabMarketplace },
+    { id: 'builtin' as const, label: m.extensionsPage.tabBuiltin, count: bundledExtensions.length },
+    { id: 'user' as const, label: m.extensionsPage.tabUser, count: userExtensions.length },
   ];
 
   return (
@@ -143,9 +143,9 @@ export function AppsPage() {
             items={tabItems}
             activeTab={mainTab}
             onChange={setMainTab}
-            ariaLabel={m.appsPage.appsNavAria}
-            tabIdPrefix="apps-tab"
-            panelIdPrefix="apps-panel"
+            ariaLabel={m.extensionsPage.extensionsNavAria}
+            tabIdPrefix="extensions-tab"
+            panelIdPrefix="extensions-panel"
             className="flex-wrap"
           />
           {showSearch ? (
@@ -158,7 +158,7 @@ export function AppsPage() {
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder={m.appsPage.searchPlaceholder}
+                placeholder={m.extensionsPage.searchPlaceholder}
                 className="w-full rounded-lg border border-edge bg-surface-base py-2 pl-9 pr-3 text-sm text-fg placeholder:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                 autoComplete="off"
               />
@@ -169,12 +169,12 @@ export function AppsPage() {
         {mainTab === 'marketplace' ? (
           <ExtensionMarketplacePanel />
         ) : mainTab === 'builtin' && bundledExtensions.length === 0 ? (
-          <EmptyAppsState message={m.appsPage.emptyBuiltin} />
+          <EmptyExtensionsState message={m.extensionsPage.emptyBuiltin} />
         ) : mainTab === 'user' && userExtensions.length === 0 ? (
-          <EmptyAppsState message={m.appsPage.emptyUser} />
+          <EmptyExtensionsState message={m.extensionsPage.emptyUser} />
         ) : filtered.length === 0 ? (
           <p className="rounded-xl border border-edge-subtle bg-surface-base px-3 py-8 text-center text-sm text-fg-muted shadow-surface sm:px-5 xl:px-6">
-            {m.appsPage.noSearchResults}
+            {m.extensionsPage.noSearchResults}
           </p>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -182,7 +182,7 @@ export function AppsPage() {
               <ExtensionAppCard
                 key={ext.id}
                 extension={ext}
-                copy={m.appsPage}
+                copy={m.extensionsPage}
                 showSourceBadge={mainTab === 'user'}
                 onOpen={() => setDetail(ext)}
               />
@@ -192,7 +192,7 @@ export function AppsPage() {
       </div>
 
       {detail ? (
-        <ExtensionDetailDialog key={detail.id} extension={detail} copy={m.appsPage} onClose={() => setDetail(null)} />
+        <ExtensionDetailDialog key={detail.id} extension={detail} copy={m.extensionsPage} onClose={() => setDetail(null)} />
       ) : null}
     </div>
   );
@@ -202,20 +202,20 @@ function activationEligibleFor(ext: ExtensionApiRow): boolean {
   return ext.activationEligible ?? ext.active;
 }
 
-function providerLabel(ext: ExtensionApiRow, copy: AppsPageCopy): string {
+function providerLabel(ext: ExtensionApiRow, copy: ExtensionsPageCopy): string {
   if (ext.source === 'bundled') return copy.providerBundled;
   if (ext.source === 'global') return copy.providerGlobal;
   if (ext.source === 'workspace') return copy.providerWorkspace;
   return copy.providerOther;
 }
 
-function installSourceBadgeLabel(ext: ExtensionApiRow, copy: AppsPageCopy): string {
+function installSourceBadgeLabel(ext: ExtensionApiRow, copy: ExtensionsPageCopy): string {
   if (ext.source === 'global') return copy.badgeSourceGlobal;
   if (ext.source === 'workspace') return copy.badgeSourceWorkspace;
   return copy.badgeSourceOther;
 }
 
-function bundledRunCaption(ext: ExtensionApiRow, copy: AppsPageCopy): string {
+function bundledRunCaption(ext: ExtensionApiRow, copy: ExtensionsPageCopy): string {
   const eligible = activationEligibleFor(ext);
   if (eligible && ext.active) return copy.runStateLive;
   if (eligible && !ext.active) return copy.runStatePendingOn;
@@ -230,7 +230,7 @@ function ExtensionAppCard({
   onOpen,
 }: {
   extension: ExtensionApiRow;
-  copy: AppsPageCopy;
+  copy: ExtensionsPageCopy;
   /** When true, show a short global/workspace/other pill (user-installed tab). */
   showSourceBadge: boolean;
   onOpen: () => void;
@@ -312,7 +312,7 @@ function ExtensionDetailDialog({
   onClose,
 }: {
   extension: ExtensionApiRow;
-  copy: AppsPageCopy;
+  copy: ExtensionsPageCopy;
   onClose: () => void;
 }) {
   const { mutate } = useSWRConfig();
@@ -546,7 +546,7 @@ function ContributionBadge({
   );
 }
 
-function AppsPageSkeleton() {
+function ExtensionsPageSkeleton() {
   return (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-surface-panel">
       <div className="w-full px-3 py-8 sm:px-5 xl:px-6">
@@ -563,7 +563,7 @@ function AppsPageSkeleton() {
   );
 }
 
-function EmptyAppsState({ message }: { message: string }) {
+function EmptyExtensionsState({ message }: { message: string }) {
   return (
     <div className="flex min-h-[min(40vh,16rem)] flex-col items-center justify-center rounded-xl border border-edge-subtle bg-surface-base px-4 py-12 text-center shadow-surface">
       <p className="text-sm text-fg-muted">{message}</p>
