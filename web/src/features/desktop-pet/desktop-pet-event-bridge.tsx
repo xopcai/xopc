@@ -1,140 +1,99 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from "react";
 
-import { isElectron } from '@/lib/electron-env';
-import { TOAST_EVENT } from '@/lib/toast';
-import type { DesktopPetEvent } from '@/types/electron';
+import { activityForProgress, activityForTool } from "@/features/desktop-pet/desktop-pet-activity";
+import { getFriendlyToolTitle } from "@/features/chat/messages/tool-friendly-title";
+import { isElectron } from "@/lib/electron-env";
+import { apiFetch } from "@/lib/fetch";
+import { apiUrl } from "@/lib/url";
+import type { PetSessionUpdate } from "@/types/electron";
 
-import { activityForProgress, activityForTool } from './desktop-pet-activity';
+type AgentStreamDetail = { sessionKey?: string; event?: unknown };
 
-type AgentStreamDetail = {
-  sessionKey?: string;
-  event?: unknown;
-};
-
-type ToastDetail = {
-  type?: 'info' | 'success' | 'warning' | 'error';
-  title?: string;
-  message?: string;
-};
-
-function readString(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key];
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
 
-function eventPayload(record: Record<string, unknown>): Record<string, unknown> {
-  return record.payload && typeof record.payload === 'object' && !Array.isArray(record.payload)
-    ? (record.payload as Record<string, unknown>)
-    : {};
+function text(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
-function readEventString(
-  record: Record<string, unknown>,
-  payload: Record<string, unknown>,
-  key: string,
-): string | undefined {
-  return readString(payload, key) ?? readString(record, key);
+function safeTail(value: unknown): string | undefined {
+  const tail = text(value)?.split(/\r?\n/).at(-1)?.replace(/(?:token|authorization|api[_-]?key)\s*[:=].*/i, "[redacted]").trim();
+  return tail ? tail.slice(0, 96) : undefined;
 }
 
-export function mapAgentStreamEvent(detail: AgentStreamDetail): DesktopPetEvent | null {
-  const event = detail.event;
-  if (!event || typeof event !== 'object') return null;
-  const rec = event as Record<string, unknown>;
-  const type = readString(rec, 'type');
+function safeLines(value: unknown): string[] | undefined {
+  if (typeof value !== "string") return undefined;
+  const lines = value.split(/\r?\n/).map((line) => safeTail(line)).filter((line): line is string => Boolean(line));
+  return lines.length ? lines.slice(0, 12) : undefined;
+}
+
+const toolLabels = { searchedWeb: "搜索网页", readFile: "读取文件", runCommand: "运行命令", updatePlan: "更新计划", listDirectory: "查看目录", writeFile: "写入文件", editFile: "修改文件", openUrl: "打开链接", fetchUrl: "获取网页", unknownTool: "使用 {{name}}" };
+
+export function mapAgentStreamEvent(detail: AgentStreamDetail, sequence: number, sessionLabel: string): PetSessionUpdate | null {
+  if (!detail.sessionKey) return null;
+  const event = record(detail.event);
+  const payload = record(event.payload);
+  const type = text(event.type);
   if (!type) return null;
-  const payload = eventPayload(rec);
-  const route = detail.sessionKey ? `/chat/${detail.sessionKey}` : '/chat';
-  const runId = readString(rec, 'runId');
-
-  if (type === 'run_start' || type === 'assistant_message_start') {
-    return { kind: 'agent-start', sessionKey: detail.sessionKey, runId, route };
+  const runId = text(event.runId) ?? "active";
+  const base = { sessionKey: detail.sessionKey, runId, sessionLabel, sequence, timestamp: Date.now() };
+  if (type === "run_start") return { ...base, state: "running", phase: "preparing", action: "正在准备工作" };
+  if (type === "tool_start" || type === "tool_update") {
+    const toolName = text(event.toolName) ?? text(payload.toolName) ?? "tool";
+    const activity = activityForTool(toolName, payload.args);
+    return { ...base, state: "running", phase: activity.phase ?? "running", action: `正在${getFriendlyToolTitle(toolName, toolLabels)}`, detail: activity.detail };
   }
-  if (type === 'tool_start') {
-    const toolName = readEventString(rec, payload, 'toolName') ?? readEventString(rec, payload, 'name');
-    return {
-      kind: 'agent-tool',
-      toolName,
-      activity: activityForTool(toolName, payload['args']),
-      sessionKey: detail.sessionKey,
-      runId,
-      route,
-    };
+  if (type === "progress" || type === "compaction") {
+    const activity = type === "compaction" ? { phase: "compacting" as const } : activityForProgress(payload);
+    return { ...base, state: "running", phase: activity.phase ?? "preparing", action: activity.phase === "running" ? "正在验证" : "任务仍在推进", progress: typeof activity.completed === "number" && typeof activity.total === "number" ? { completed: activity.completed, total: activity.total } : undefined };
   }
-  if (type === 'progress' || type === 'compaction') {
-    return {
-      kind: 'agent-progress',
-      activity: type === 'compaction' ? { phase: 'compacting' } : activityForProgress(payload),
-      sessionKey: detail.sessionKey,
-      runId,
-      route,
-    };
-  }
-  if (type === 'run_end' || type === 'assistant_message_end') {
-    return {
-      kind: 'agent-success',
-      severity: 'success',
-      sessionKey: detail.sessionKey,
-      runId,
-      route,
-    };
-  }
-  if (type === 'clarify_request') {
-    return {
-      kind: 'agent-progress',
-      severity: 'warning',
-      activity: { phase: 'waiting' },
-      sessionKey: detail.sessionKey,
-      runId,
-      route,
-    };
-  }
-  if (type === 'error') {
-    return {
-      kind: 'agent-error',
-      severity: 'error',
-      sessionKey: detail.sessionKey,
-      runId,
-      route,
-    };
-  }
+  if (type === "clarify_request") return { ...base, state: "waiting", phase: "waiting", action: "等待你的确认", outputTail: safeTail(payload.question) };
+  if (type === "assistant_delta" || type === "command_output_delta") return { ...base, state: "running", phase: "running", action: "正在处理", outputTail: safeTail(payload.delta ?? event.delta) };
+  if (type === "assistant_message_end") return { ...base, state: "running", phase: "running", action: "正在整理结果", outputLines: safeLines(payload.content ?? event.content) };
+  if (type === "run_end") return { ...base, state: "success", phase: "running", action: "已完成" };
+  if (type === "error") return { ...base, state: "error", phase: "waiting", action: "需要处理", outputTail: safeTail(payload.message ?? event.message) };
   return null;
 }
 
 export function DesktopPetEventBridge() {
-  const lastEventRef = useRef<{ key: string; at: number } | null>(null);
-
+  const sequenceRef = useRef(new Map<string, number>());
+  const titleRef = useRef(new Map<string, Promise<string | undefined>>());
+  const pendingRef = useRef(new Map<string, PetSessionUpdate>());
+  const timerRef = useRef<number | null>(null);
   useEffect(() => {
-    if (!isElectron() || !window.electronAPI?.pet) return;
-    const send = (event: DesktopPetEvent) => {
-      const key = `${event.kind}:${event.sessionKey ?? ''}:${event.message ?? ''}:${event.toolName ?? ''}`;
-      const now = Date.now();
-      const last = lastEventRef.current;
-      if (last && last.key === key && now - last.at < 1600) return;
-      lastEventRef.current = { key, at: now };
-      void window.electronAPI?.pet?.sendEvent(event).catch(() => {});
+    const pet = window.electronAPI?.pet;
+    if (!isElectron() || !pet) return;
+    const flush = () => {
+      timerRef.current = null;
+      for (const update of pendingRef.current.values()) void pet.sendEvent(update);
+      pendingRef.current.clear();
     };
-    const onAgentStream = (e: Event) => {
-      const event = mapAgentStreamEvent((e as CustomEvent<AgentStreamDetail>).detail);
-      if (event) send(event);
-    };
-    const onToast = (e: Event) => {
-      const detail = (e as CustomEvent<ToastDetail>).detail;
-      if (!detail?.title && !detail?.message) return;
-      send({
-        kind: 'toast',
-        severity: detail.type,
-        title: detail.title,
-        message: detail.message ?? detail.title,
-        route: '/chat',
+    const titleFor = (sessionKey: string) => {
+      const cached = titleRef.current.get(sessionKey);
+      if (cached) return cached;
+      const pending = apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=0&limit=1`))
+        .then(async (response) => response.ok ? (await response.json() as { session?: { name?: string } }).session?.name?.trim() : undefined)
+        .catch(() => undefined);
+      void pending.then((title) => {
+        if (title) titleRef.current.set(sessionKey, Promise.resolve(title));
       });
+      return pending;
     };
-    window.addEventListener('agent-stream-event', onAgentStream);
-    window.addEventListener(TOAST_EVENT, onToast);
-    return () => {
-      window.removeEventListener('agent-stream-event', onAgentStream);
-      window.removeEventListener(TOAST_EVENT, onToast);
+    const onStream = async (event: Event) => {
+      const detail = (event as CustomEvent<AgentStreamDetail>).detail;
+      if (!detail.sessionKey) return;
+      const sessionLabel = (await titleFor(detail.sessionKey)) ?? "新对话";
+      const next = (sequenceRef.current.get(detail.sessionKey ?? "") ?? 0) + 1;
+      const update = mapAgentStreamEvent(detail, next, sessionLabel);
+      if (!update) return;
+      sequenceRef.current.set(update.sessionKey, next);
+      pendingRef.current.set(update.sessionKey, update);
+      if (update.state === "error" || update.state === "waiting" || update.state === "success") flush();
+      else if (timerRef.current === null) timerRef.current = window.setTimeout(flush, 500);
     };
+    window.addEventListener("agent-stream-event", onStream);
+    return () => { window.removeEventListener("agent-stream-event", onStream); if (timerRef.current !== null) window.clearTimeout(timerRef.current); };
   }, []);
-
   return null;
 }

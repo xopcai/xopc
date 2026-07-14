@@ -2,21 +2,29 @@ import { fetch as undiciFetch } from 'undici';
 import { resolveGatewayLocalClientHost } from '../config/gateway-bind.js';
 import type { Config } from '../config/schema.js';
 import { loadConfig } from '../config/loader.js';
+import {
+  createGatewayCredential,
+  gatewayCredentialAuthorization,
+  type GatewayCredential,
+} from '../gateway/credential.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('Mcp:GatewayClient');
 
-function resolveGatewayTokenFromConfig(cfg: Config): string | undefined {
-  const fromConfig = cfg.gateway?.auth?.token?.trim();
-  if (fromConfig) {
-    return fromConfig;
+function resolveGatewayCredentialFromConfig(cfg: Config): GatewayCredential | undefined {
+  const auth = cfg.gateway?.auth;
+  if (auth?.mode === 'password') {
+    return createGatewayCredential('password', auth.password);
   }
-  return process.env.XOPC_GATEWAY_TOKEN?.trim() || undefined;
+  if (auth?.mode === 'token') {
+    return createGatewayCredential('token', auth.token ?? process.env.XOPC_GATEWAY_TOKEN);
+  }
+  return undefined;
 }
 
 export type GatewayHttpClientOptions = {
   baseUrl: string;
-  token?: string;
+  credential?: GatewayCredential;
 };
 
 export class GatewayHttpClient {
@@ -24,8 +32,9 @@ export class GatewayHttpClient {
 
   private headers(extra?: Record<string, string>): Record<string, string> {
     const h: Record<string, string> = { Accept: 'application/json', ...extra };
-    if (this.opts.token) {
-      h.Authorization = `Bearer ${this.opts.token}`;
+    const authorization = gatewayCredentialAuthorization(this.opts.credential);
+    if (authorization) {
+      h.Authorization = authorization;
     }
     return h;
   }
@@ -77,12 +86,12 @@ export function resolveGatewayHttpBaseUrl(config: Config, override?: string): st
 export function createGatewayHttpClientFromConfig(params: {
   config?: Config;
   gatewayUrl?: string;
-  gatewayToken?: string;
+  gatewayCredential?: GatewayCredential;
 }): GatewayHttpClient {
   const cfg = params.config ?? loadConfig();
-  const token = params.gatewayToken ?? resolveGatewayTokenFromConfig(cfg) ?? undefined;
+  const credential = params.gatewayCredential ?? resolveGatewayCredentialFromConfig(cfg);
   return new GatewayHttpClient({
     baseUrl: resolveGatewayHttpBaseUrl(cfg, params.gatewayUrl),
-    token,
+    credential,
   });
 }

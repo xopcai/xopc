@@ -141,6 +141,43 @@ function rowShellClass(isActive: boolean): string {
   );
 }
 
+function SidebarSessionSkeletonRow({ indented = false }: { indented?: boolean }) {
+  return (
+    <div className={cn('flex items-center gap-2 px-1.5 py-1.5', indented && 'pl-7')}>
+      <Skeleton className="size-6 shrink-0 animate-none rounded-lg" />
+      <div className="min-w-0 flex-1">
+        <Skeleton className="h-3 w-4/5 animate-none" />
+        <Skeleton className="mt-1.5 h-2.5 w-2/5 animate-none" />
+      </div>
+    </div>
+  );
+}
+
+/** Mirrors the sidebar's section hierarchy so first load has a stable footprint. */
+function SidebarTaskListSkeleton() {
+  return (
+    <div className="flex flex-col gap-3 px-4 py-4" aria-busy="true">
+      <div>
+        <Skeleton className="mb-1.5 h-2.5 w-14 animate-none" />
+        <SidebarSessionSkeletonRow />
+      </div>
+      <div>
+        <Skeleton className="mb-1.5 h-2.5 w-16 animate-none" />
+        <div className="rounded-xl border border-edge-subtle/70 py-1">
+          <SidebarSessionSkeletonRow />
+          <SidebarSessionSkeletonRow indented />
+          <SidebarSessionSkeletonRow indented />
+        </div>
+      </div>
+      <div>
+        <Skeleton className="mb-1.5 h-2.5 w-12 animate-none" />
+        <SidebarSessionSkeletonRow />
+        <SidebarSessionSkeletonRow />
+      </div>
+    </div>
+  );
+}
+
 const SidebarTaskRow = memo(function SidebarTaskRow({
   session,
   isActive,
@@ -859,7 +896,12 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         includeSessionKey: includeSessionKey || undefined,
       });
     },
-    { revalidateOnFocus: false },
+    {
+      // Changing includeSessionKey to reveal a freshly created chat must not
+      // replace the visible list with the first-load skeleton.
+      keepPreviousData: true,
+      revalidateOnFocus: false,
+    },
   );
 
   const projectGroups = useMemo(() => {
@@ -1217,17 +1259,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         onScroll={onScroll}
       >
         {loadingFirst ? (
-          <div className="flex flex-col gap-2 px-4 py-4" aria-busy="true">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-2 rounded-lg px-2 py-1.5">
-                <Skeleton className="size-5 rounded-md" />
-                <div className="min-w-0 flex-1">
-                  <Skeleton className="h-3 w-4/5" />
-                  <Skeleton className="mt-1.5 h-2.5 w-1/2" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <SidebarTaskListSkeleton />
         ) : hasGroupedItems ? (
           <div className="flex flex-col px-4 pt-4">
             <SidebarPinnedSection

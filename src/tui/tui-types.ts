@@ -1,9 +1,11 @@
+import type { GatewayCredential } from '../gateway/credential.js';
+
 /** TUI configuration options passed from CLI. */
 export interface TuiOptions {
   /** Connect to a running gateway instead of embedded mode. */
   url?: string;
-  /** Gateway bearer token. */
-  token?: string;
+  /** Gateway shared credential for remote mode. */
+  credential?: GatewayCredential;
   /** Session key to resume. */
   session?: string;
   /** Agent id for a fresh TUI session. */

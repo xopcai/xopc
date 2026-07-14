@@ -19,6 +19,7 @@ const userMsg: Message = {
 
 const idleSlice = {
   ...defaultSessionMeta(),
+  historyStatus: 'ready' as const,
   messages: [userMsg],
   hasMore: false,
   streamingMsg: null,
@@ -60,6 +61,17 @@ describe('useChatSessionStore', () => {
     const snap = getChatSessionSnapshot(sessionKey);
     expect(snap?.name).toBe('My chat');
     expect(snap?.messages).toHaveLength(1);
+  });
+
+  it('tracks history knowledge per session instead of with a global loading key', () => {
+    useChatSessionStore.getState().setSessionHistoryStatus(sessionKey, 'loading');
+    expect(getChatSessionSnapshot(sessionKey)?.historyStatus).toBe('loading');
+
+    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, {
+      messages: [],
+      hasMore: false,
+    });
+    expect(getChatSessionSnapshot(sessionKey)?.historyStatus).toBe('ready');
   });
 
   it('mutateSessionStreaming updates bubble and streaming flag', () => {

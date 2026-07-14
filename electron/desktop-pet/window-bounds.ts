@@ -1,60 +1,55 @@
-export type DesktopPetWindowBounds = {
+export type DesktopPetAnchor = {
   x: number;
   y: number;
+};
+
+export type DesktopPetWindowBounds = DesktopPetAnchor & {
   width: number;
   height: number;
 };
 
-const MIN_WIDTH = 180;
-const MIN_HEIGHT = 140;
-const EDGE_INSET = 24;
-const BOTTOM_INSET = 72;
+export type DesktopPetContentSize = {
+  width: number;
+  height: number;
+};
 
-function horizontalInset(workArea: DesktopPetWindowBounds): number {
-  return Math.min(EDGE_INSET, Math.max(0, Math.floor((workArea.width - MIN_WIDTH) / 2)));
-}
-
-function verticalInsets(workArea: DesktopPetWindowBounds): { top: number; bottom: number } {
-  const available = Math.max(0, workArea.height - MIN_HEIGHT);
-  const top = Math.min(EDGE_INSET, Math.floor(available / 2));
-  return { top, bottom: Math.min(BOTTOM_INSET, available - top) };
-}
-
-export function desktopPetDefaultBounds(
+export function desktopPetDefaultAnchor(
   workArea: DesktopPetWindowBounds,
-  scale: number,
-): DesktopPetWindowBounds {
-  const width = Math.round(360 * scale);
-  const height = Math.round(250 * scale);
-  const { bottom } = verticalInsets(workArea);
-  const right = horizontalInset(workArea);
+): DesktopPetAnchor {
   return {
-    width,
-    height,
-    x: Math.round(workArea.x + workArea.width - width - right),
-    y: Math.round(workArea.y + workArea.height - height - bottom),
+    x: workArea.x + workArea.width,
+    y: workArea.y + workArea.height,
   };
 }
 
-/** Keeps the transparent pet window clear of display edges and auto-hidden taskbars. */
-export function clampDesktopPetBounds(
-  bounds: DesktopPetWindowBounds,
+/** Keeps the pet's interactive region reachable while allowing it to touch display edges. */
+export function clampDesktopPetAnchor(
+  anchor: DesktopPetAnchor,
   workArea: DesktopPetWindowBounds,
-): DesktopPetWindowBounds {
-  const side = horizontalInset(workArea);
-  const { top, bottom } = verticalInsets(workArea);
-  const availableWidth = Math.max(1, workArea.width - side * 2);
-  const availableHeight = Math.max(1, workArea.height - top - bottom);
-  const width = Math.min(Math.max(MIN_WIDTH, bounds.width), availableWidth);
-  const height = Math.min(Math.max(MIN_HEIGHT, bounds.height), availableHeight);
-  const minX = workArea.x + side;
-  const maxX = workArea.x + workArea.width - side - width;
-  const minY = workArea.y + top;
-  const maxY = workArea.y + workArea.height - bottom - height;
+  interactiveWidth: number,
+  interactiveHeight: number,
+): DesktopPetAnchor {
   return {
-    width,
-    height,
-    x: Math.min(Math.max(minX, bounds.x), Math.max(minX, maxX)),
-    y: Math.min(Math.max(minY, bounds.y), Math.max(minY, maxY)),
+    x: Math.min(
+      Math.max(workArea.x + interactiveWidth, anchor.x),
+      workArea.x + workArea.width,
+    ),
+    y: Math.min(
+      Math.max(workArea.y + interactiveHeight, anchor.y),
+      workArea.y + workArea.height,
+    ),
+  };
+}
+
+/** The pet is pinned to the window's bottom-right corner, so expansion grows up and left. */
+export function desktopPetWindowBoundsForAnchor(
+  anchor: DesktopPetAnchor,
+  content: DesktopPetContentSize,
+): DesktopPetWindowBounds {
+  return {
+    x: Math.round(anchor.x - content.width),
+    y: Math.round(anchor.y - content.height),
+    width: Math.max(1, Math.round(content.width)),
+    height: Math.max(1, Math.round(content.height)),
   };
 }

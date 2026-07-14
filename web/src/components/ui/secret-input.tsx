@@ -15,6 +15,9 @@ export type SecretInputLabels = {
 
 export type SecretInputProps = {
   id?: string;
+  name?: string;
+  ariaDescribedBy?: string;
+  ariaInvalid?: boolean;
   value: string;
   onChange?: (value: string) => void;
   placeholder?: string;
@@ -43,6 +46,9 @@ const defaultInputClass = cn(
 
 export function SecretInput({
   id,
+  name,
+  ariaDescribedBy,
+  ariaInvalid,
   value,
   onChange,
   placeholder,
@@ -86,6 +92,9 @@ export function SecretInput({
         <input
           ref={inputRef}
           id={id}
+          name={name}
+          aria-describedby={ariaDescribedBy}
+          aria-invalid={ariaInvalid || undefined}
           type={inputType}
           autoComplete={autoComplete}
           spellCheck={false}

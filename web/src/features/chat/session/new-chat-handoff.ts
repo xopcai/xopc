@@ -1,5 +1,3 @@
-import { dispatchSidebarSessionFocus } from '@/lib/provisional-session-title';
-import { markSkipInitialSessionLoad } from '@/features/chat/session/chat-session-init-skip-load';
 import { resolveNewChatTarget } from '@/features/chat/session/resolve-new-chat-target';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { addWebchatEmptyShellToCache } from '@/features/chat/session/webchat-empty-shell-cache';
@@ -43,7 +41,6 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
     });
 
     if (resolution.kind === 'noop') {
-      markSkipInitialSessionLoad(resolution.sessionKey);
       opts.onOpened(resolution.sessionKey);
       const routeKey = opts.routeSessionKey?.trim() || null;
       if (routeKey !== resolution.sessionKey) {
@@ -53,10 +50,8 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
     }
 
     if (resolution.kind === 'reuse') {
-      markSkipInitialSessionLoad(resolution.sessionKey);
       opts.onOpened(resolution.sessionKey);
       opts.navigateToSession(resolution.sessionKey, opts.replaceNavigate ?? false, opts.search);
-      dispatchSidebarSessionFocus(resolution.sessionKey);
       return resolution.sessionKey;
     }
 
@@ -72,10 +67,8 @@ export function openNewChatHandoff(opts: NewChatHandoffOpts): Promise<string> {
       projectId: session.projectId,
       routing: session.routing,
     });
-    markSkipInitialSessionLoad(sessionKey);
     opts.onOpened(sessionKey);
     opts.navigateToSession(sessionKey, opts.replaceNavigate ?? false, opts.search);
-    dispatchSidebarSessionFocus(sessionKey);
     return sessionKey;
   })().finally(() => {
     resolveInflight = null;

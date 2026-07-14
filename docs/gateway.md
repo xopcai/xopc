@@ -390,7 +390,7 @@ Creates a webchat-scoped session (or returns an existing empty one). JSON body (
 | POST | `/api/message` | Send message (async) |
 | POST | `/api/message/sync` | Send message (sync) |
 | POST | `/api/agent` | Agent chat |
-| POST | `/api/sessions` | Create or reuse a webchat session (optional `agentId` in JSON body) |
+| POST | `/api/sessions` | Create a webchat session (optional `agentId` in JSON body) |
 | GET | `/api/sessions` | List sessions |
 | GET | `/api/sessions/:key` | Get session |
 | DELETE | `/api/sessions/:key` | Delete session |

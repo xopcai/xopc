@@ -2,6 +2,7 @@ import { Command } from 'commander';
 
 import { setTuiDefaultAgentConfig } from '../../commands/agents.config.js';
 import { loadConfig, saveConfig } from '../../config/loader.js';
+import { createGatewayCredential } from '../../gateway/credential.js';
 import { detectMigrations, runBootstrapMigrationsSync } from '../../migrations/runner.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 
@@ -14,7 +15,7 @@ function createTuiCommand(ctx: CLIContext): Command {
         'xopc                                        # Open embedded TUI (default command)',
         'xopc tui                                    # Embedded mode (default)',
         'xopc tui --gateway                          # Force gateway mode',
-        'xopc tui --url http://host:3120 --token xxx # Connect to remote gateway',
+        'XOPC_GATEWAY_PASSWORD=xxx xopc tui --url http://host:3120 --password-env XOPC_GATEWAY_PASSWORD',
         'xopc tui -s agent:main:tui-...              # Resume a session',
         'xopc tui --agent coder                      # Start with a specific agent',
         'xopc tui --set-default-agent coder          # Persist default agent for new TUI sessions',
@@ -23,6 +24,7 @@ function createTuiCommand(ctx: CLIContext): Command {
     )
     .option('--url <url>', 'Gateway URL (default: http://localhost:3120)')
     .option('--token <token>', 'Gateway bearer token')
+    .option('--password-env <name>', 'Environment variable holding the gateway password')
     .option('-s, --session <key>', 'Session key to resume (omitted: start a fresh TUI session)')
     .option('--agent <id>', 'Agent id for a fresh TUI session')
     .option('--set-default-agent <id>', 'Persist default agent for new TUI sessions and exit')
@@ -30,7 +32,7 @@ function createTuiCommand(ctx: CLIContext): Command {
     .option('--workdir <dir>', 'Workspace directory for the new TUI session')
     .option('--no-cwd', 'Do not use the launch directory as the new TUI session workspace')
     .option('--local', 'Run in embedded mode (no gateway required)')
-    .option('--gateway', 'Force gateway mode even without explicit --url or --token')
+    .option('--gateway', 'Force gateway mode even without an explicit URL or credential')
     .option('--theme <name>', 'Theme: auto, dark, light, or custom name from ~/.xopc/themes/')
     .option('--thinking <level>', 'Thinking level override')
     .action(async (options: Record<string, string | boolean | undefined>) => {
@@ -53,18 +55,27 @@ function createTuiCommand(ctx: CLIContext): Command {
         return;
       }
       const { runTui } = await import('../../tui/tui.js');
+      const token = typeof options.token === 'string' ? options.token : undefined;
+      const passwordEnv = typeof options.passwordEnv === 'string' ? options.passwordEnv.trim() : undefined;
+      if (token && passwordEnv) {
+        throw new Error('Use either --token or --password-env, not both.');
+      }
+      const password = passwordEnv ? process.env[passwordEnv] : undefined;
+      if (passwordEnv && !password) {
+        throw new Error(`Gateway password environment variable ${passwordEnv} is not set.`);
+      }
+      const credential = token
+        ? createGatewayCredential('token', token)
+        : createGatewayCredential('password', password);
       const useLocal = options.local === true;
-      const useGateway =
-        options.gateway === true ||
-        typeof options.url === 'string' ||
-        typeof options.token === 'string';
+      const useGateway = options.gateway === true || typeof options.url === 'string' || credential !== undefined;
       if (useLocal && useGateway) {
         console.log('`--local` and gateway flags both set. Using local mode.');
       }
       const localMode = useLocal || !useGateway;
       await runTui({
         url: typeof options.url === 'string' ? options.url : undefined,
-        token: typeof options.token === 'string' ? options.token : undefined,
+        credential,
         session: typeof options.session === 'string' ? options.session : undefined,
         agentId: typeof options.agent === 'string' ? options.agent : undefined,
         message: typeof options.message === 'string' ? options.message : undefined,

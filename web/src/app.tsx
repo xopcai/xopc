@@ -7,6 +7,7 @@ import { SettingsSheet } from '@/components/shell/settings-sheet';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatPage } from '@/features/chat/chat-page';
 import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
+import { CHAT_SESSION_ROUTE_PATH } from '@/features/chat/chat-session-route';
 import { DesktopPetEventBridge } from '@/features/desktop-pet/desktop-pet-event-bridge';
 import { ExtensionProvider } from '@/features/extensions/extension-provider';
 import {
@@ -139,9 +140,7 @@ const router = createHashRouter([
         path: 'chat',
         element: <ChatRouteLayout />,
         children: [
-          { index: true, element: <ChatPage /> },
-          { path: 'new', element: <ChatPage /> },
-          { path: ':sessionKey', element: <ChatPage /> },
+          { path: CHAT_SESSION_ROUTE_PATH, element: <ChatPage /> },
         ],
       },
       {

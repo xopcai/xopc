@@ -33,6 +33,7 @@ function createMockService(config: Partial<Config> = pairingConfig()): GatewaySe
     getChannelsStatus: () => [],
     getAuthToken: () => TOKEN,
     getAuthMode: () => 'token',
+    getResolvedAuth: () => ({ mode: 'token', token: TOKEN }),
     sessionIndexInstance: {} as GatewayService['sessionIndexInstance'],
     emit: () => {},
     listSessions: async () => ({ items: [], total: 0 }),

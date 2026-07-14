@@ -137,6 +137,13 @@ ${markLayer('url(#badge-mark)', 0.67)}`;
   return document(definitions, body);
 }
 
+function faviconSvg() {
+  const body = `  <rect x="40" y="40" width="944" height="944" rx="216" fill="#F8FAFC" />
+  <rect x="41" y="41" width="942" height="942" rx="215" fill="none" stroke="#0B1020" stroke-opacity="0.14" stroke-width="2" />
+${markLayer('#111827', 0.85)}`;
+  return document('', body);
+}
+
 function trayTemplateSvg() {
   return uiMarkSvg(DARK).replace('scale(1)', 'scale(0.9)');
 }
@@ -146,6 +153,7 @@ function renderSvg(scene) {
   if (scene === 'app-light') return appIconSvg('light');
   if (scene === 'desktop') return desktopIconSvg();
   if (scene === 'badge') return badgeSvg();
+  if (scene === 'favicon') return faviconSvg();
   if (scene === 'tray-template') return trayTemplateSvg();
   if (scene === 'mark-light') return uiMarkSvg(LIGHT_MARK);
   if (scene === 'mark-dark') return uiMarkSvg(LIGHT);
@@ -214,6 +222,7 @@ const appDarkPngs = renderSet('app-dark');
 const appLightPngs = renderSet('app-light');
 const desktopPngs = renderSet('desktop');
 const badgePngs = renderSet('badge');
+const faviconPngs = renderSet('favicon');
 const uiLight = renderSvg('mark-light');
 const uiDark = renderSvg('mark-dark');
 
@@ -228,22 +237,23 @@ for (const [outputTarget, base] of [
 ]) {
   queue(outputTarget, `${base}/logo.svg`, uiLight);
   queue(outputTarget, `${base}/logo-dark.svg`, uiDark);
-  queue(outputTarget, `${base}/favicon.svg`, renderSvg('badge'));
 }
 
 queue('docs', 'docs/public/apple-touch-icon.png', appDarkPngs.get(180));
+queue('docs', 'docs/public/favicon.svg', renderSvg('badge'));
 
-queue('web', 'web/public/favicon-icon.svg', renderSvg('badge'));
-queue('web', 'web/public/favicon.png', badgePngs.get(192));
-queue('web', 'web/public/favicon-16x16.png', badgePngs.get(16));
-queue('web', 'web/public/favicon-32x32.png', badgePngs.get(32));
+queue('web', 'web/public/favicon.svg', renderSvg('favicon'));
+queue('web', 'web/public/favicon-icon.svg', renderSvg('favicon'));
+queue('web', 'web/public/favicon.png', faviconPngs.get(192));
+queue('web', 'web/public/favicon-16x16.png', faviconPngs.get(16));
+queue('web', 'web/public/favicon-32x32.png', faviconPngs.get(32));
 queue('web', 'web/public/apple-touch-icon.png', appDarkPngs.get(180));
 queue('web', 'web/public/pwa-192x192.png', appDarkPngs.get(192));
 queue('web', 'web/public/pwa-512x512.png', appDarkPngs.get(512));
 queue(
   'web',
   'web/public/favicon.ico',
-  makeIco([16, 32, 48].map((size) => ({ size, data: badgePngs.get(size) }))),
+  makeIco([16, 32, 48].map((size) => ({ size, data: faviconPngs.get(size) }))),
 );
 queue(
   'web',

@@ -57,12 +57,18 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     ? !mobileNavOpen
     : chromeLayout.collapsedNewChatVisible;
 
+  // Header details change as a session is created. Clear only when this page
+  // actually leaves; clearing during an in-place replacement visibly remounts
+  // the shell chrome.
+  useLayoutEffect(() => () => clearPageHeader(), [clearPageHeader]);
+
   useLayoutEffect(() => {
     setPageHeader({
       className: 'bg-surface-panel',
       startExtra: showNewChatLink ? (
         <Link
           to="/chat/new"
+          state={{ forceNewChat: true }}
           className={cn(
             'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-panel text-sm font-medium leading-none text-fg transition-colors hover:bg-surface-hover',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
@@ -125,7 +131,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
         </div>
       ),
     });
-    return () => clearPageHeader();
   }, [
     chatHeadline,
     chatAgents,
@@ -142,7 +147,6 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     workspacePanelOpen,
     toggleWorkspacePanel,
     setPageHeader,
-    clearPageHeader,
   ]);
 
   return null;

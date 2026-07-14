@@ -35,7 +35,6 @@ const log = createLogger('Gateway:App');
 
 export interface HonoAppConfig {
   service: GatewayService;
-  token?: string;
 }
 
 /**
@@ -51,7 +50,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   if (process.env.VITEST) {
     resetLazyRouteBundlesForTests();
   }
-  const { service, token } = config;
+  const { service } = config;
   const app = new Hono();
 
   const gatewayPort = resolveGatewayServiceListenPort(service);
@@ -243,14 +242,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   authenticated.use(routeErrorMiddleware());
   authenticated.use(
     auth({
-      token,
       getGatewayAuth: () => service.currentConfig.gateway?.auth,
-      getResolvedAuth: () => {
-        if (typeof service.getResolvedAuth === 'function') {
-          return service.getResolvedAuth();
-        }
-        return token ? { mode: 'token', token } : { mode: 'none' };
-      },
+      getResolvedAuth: () => service.getResolvedAuth(),
       getTrustedProxyContext: () => ({
         trustedProxies: service.currentConfig.gateway?.trustedProxies,
         allowRealIpFallback: service.currentConfig.gateway?.allowRealIpFallback === true,

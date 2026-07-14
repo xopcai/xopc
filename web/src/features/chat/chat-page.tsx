@@ -472,8 +472,11 @@ export function ChatPage() {
     return () => setWorkspaceEditorAgentId('');
   }, [auth.hasToken, agents.displayAgentId, setWorkspaceEditorAgentId]);
 
+  const isCreatingSession = session.conversationPhase === 'creating-session';
+  const isLoadingHistory = session.conversationPhase === 'loading-history';
+  const isSessionTransitioning = isCreatingSession || isLoadingHistory;
   /** Match `MessageList` empty welcome: tighter vertical padding so the first screen fits without scrolling. */
-  const showConversationLoading = session.showSessionLoading || session.sessionContentLoading;
+  const showConversationLoading = isLoadingHistory;
   const compactWelcomeLayout =
     !showConversationLoading && msgSlice.items.length === 0 && !stream.streaming;
   const chatHeadline = useMemo(() => {
@@ -773,7 +776,7 @@ export function ChatPage() {
         showChatAgentSelector={agents.showChatAgentSelector}
         chatAgentId={agents.displayAgentId}
         onChatAgentChange={agents.onChatAgentChange}
-        chatAgentDisabled={session.showSessionLoading || session.sessionRoutePending}
+        chatAgentDisabled={isSessionTransitioning}
       />
 
       <div className="relative mx-auto flex min-h-0 w-full max-w-[calc(var(--max-width-chat)+8rem)] flex-1 flex-col">
@@ -936,7 +939,7 @@ export function ChatPage() {
               )}
               onScroll={handleChatScroll}
             >
-              {session.showSessionLoading ? (
+              {isLoadingHistory ? (
                 <div className="flex min-h-[min(40vh,20rem)] w-full flex-col gap-10 py-8" aria-busy="true">
                   <div className="flex justify-end">
                     <Skeleton className="h-11 w-[min(70%,22rem)] rounded-2xl" />
@@ -983,13 +986,11 @@ export function ChatPage() {
                     />
                   ) : null}
                   <MessageList
-                    key={session.decodedKey ?? 'new'}
                     messages={msgSlice.items}
                     authToken={token ?? undefined}
                     sessionKey={session.decodedKey ?? session.sessionKey}
                     streaming={stream.streaming}
                     progress={stream.progress}
-                    loading={session.sessionContentLoading}
                     reasoningLevel={session.reasoningLevel}
                     registerListContentRef={registerListContentRef}
                     onPickWelcomePrompt={onPickWelcomePrompt}
@@ -1021,9 +1022,7 @@ export function ChatPage() {
               />
               <ChatComposer
                 disabled={
-                  session.showSessionLoading ||
-                  session.sessionContentLoading ||
-                  session.sessionRoutePending ||
+                  isSessionTransitioning ||
                   Boolean(clarify.clarifyPrompt)
                 }
                 sending={stream.sending}
@@ -1052,10 +1051,10 @@ export function ChatPage() {
                 onPendingFollowUpSteer={(id) => void followUp.steerPendingFollowUp(id)}
                 steeringFollowUpId={followUp.steeringFollowUpId}
                 sessionModel={session.sessionModel}
-                showModelSelector={Boolean(session.sessionKey && !session.sessionRoutePending)}
+                showModelSelector
                 onModelChange={session.onSessionModelChange}
                 modelDisabled={
-                  session.showSessionLoading || session.sessionRoutePending || stream.streaming
+                  isSessionTransitioning || stream.streaming
                 }
                 contextUsageMessages={msgSlice.items}
                 onChatAgentChange={
