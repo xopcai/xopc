@@ -5,10 +5,13 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 import type { DreamingConfigState } from '@/features/settings/dreaming-config-api';
 import { type DreamingSettingsI18n } from '@/features/settings/dreaming-settings-shared';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { SettingsPageHeader } from '@/features/settings/settings-page-layout';
+import type { AgentsSettingsMessages } from '@/i18n/messages';
 
 type Props = {
   t: DreamingSettingsI18n;
+  agentsMessages: AgentsSettingsMessages;
   hasToken: boolean;
   agents: GatewayAgentRow[];
   selectedAgentId: string;
@@ -24,6 +27,7 @@ type Props = {
 
 export function DreamingHeader({
   t,
+  agentsMessages,
   hasToken,
   agents,
   selectedAgentId,
@@ -52,7 +56,7 @@ export function DreamingHeader({
           >
             {agents.map((agent) => (
               <SelectOption key={agent.id} value={agent.id}>
-                {agent.name || agent.id}
+                {agentListDisplayName(agent, agentsMessages)}
               </SelectOption>
             ))}
           </Select>

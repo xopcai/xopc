@@ -8,6 +8,7 @@ import {
   FileTree,
 } from '@/features/file-tree/file-tree';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
@@ -176,7 +177,7 @@ export function WorkspacePathPickerDialog({
               >
                 {agentOptions.map((a) => (
                   <SelectOption key={a.id} value={a.id}>
-                    {a.name || a.id}
+                    {agentListDisplayName(a, m.agentsSettings)}
                     {a.id === agentsPayload?.defaultId ? ' ★' : ''}
                   </SelectOption>
                 ))}

@@ -15,6 +15,7 @@ import {
   type ProjectStatus,
 } from '@/features/projects/api';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -434,7 +435,7 @@ export function ProjectsPage() {
                     <SelectOption value={GLOBAL_AGENT_CHOICE}>{t.agentGlobalDefault}</SelectOption>
                     {agents.map((agent) => (
                       <SelectOption key={agent.id} value={agent.id}>
-                        {agent.name || agent.id}
+                        {agentListDisplayName(agent, msg.agentsSettings)}
                       </SelectOption>
                     ))}
                   </Select>
