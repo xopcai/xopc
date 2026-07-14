@@ -78,6 +78,7 @@ export const MessageList = memo(function MessageList({
       {list.map((msg, index) => {
         const isLast = index === list.length - 1;
         const isStreamRow = Boolean(streaming && isLast && msg.role === 'assistant');
+        const isLastUserRow = isLastUserMessageInThread(list, index);
         const key = messageRowKey(msg, index);
         return (
           <div
@@ -96,15 +97,17 @@ export const MessageList = memo(function MessageList({
               messageIndex={index}
               onDeleteRound={onDeleteRound}
               onRetryUserMessageRound={onRetryUserMessageRound}
-              userMessageCanRetry={
-                Boolean(onRetryUserMessageRound) && isLastUserMessageInThread(list, index)
-              }
-              deleteRoundDisabled={deleteRoundDisabled}
+              userMessageCanRetry={Boolean(onRetryUserMessageRound) && isLastUserRow}
+              // Streaming is only relevant to the active user round. Passing this
+              // session-wide flag to every historical row defeats MessageBubble's memo.
+              deleteRoundDisabled={Boolean(deleteRoundDisabled && isLastUserRow)}
               onAbortCurrentTurn={onAbortCurrentTurn}
               onSaveAssistantToSourceNote={onSaveAssistantToSourceNote}
               onExtractAssistantTask={onExtractAssistantTask}
               onSuggestWorkItemUpdate={onSuggestWorkItemUpdate}
-              suppressAssistantActions={streaming}
+              // Do not unmount action footers from every prior assistant message
+              // when a new reply starts; only the live row has no actions.
+              suppressAssistantActions={isStreamRow}
             />
           </div>
         );

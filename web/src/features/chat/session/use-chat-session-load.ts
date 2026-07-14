@@ -6,7 +6,10 @@ import { type Message, coerceReasoningLevel } from '@/features/chat/messages/mes
 import { modelSupportsReasoning } from '@/features/chat/model/model-capabilities';
 import { hasPendingAgentRunForChat } from '@/features/chat/messages/message-sender';
 import { isViewingSession, resolveViewSessionKey } from '@/features/chat/session/chat-session-view';
-import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
+import {
+  shouldShowHistoryLoading,
+  useChatSessionStore,
+} from '@/features/chat/session/chat-session-store';
 import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 
@@ -168,7 +171,9 @@ export function useChatSessionLoad(deps: {
           dismissClarifyOnSessionLoad();
         }
         loadingSessionRef.current = true;
-        if (initialLoad) {
+        const markHistoryLoading =
+          initialLoad && shouldShowHistoryLoading(store().sessions[k]?.historyStatus);
+        if (markHistoryLoading) {
           store().setSessionHistoryStatus(k, 'loading');
         }
         try {
@@ -240,7 +245,7 @@ export function useChatSessionLoad(deps: {
           return undefined;
         } finally {
           loadingSessionRef.current = false;
-          if (initialLoad && store().sessions[k]?.historyStatus === 'loading') {
+          if (markHistoryLoading && store().sessions[k]?.historyStatus === 'loading') {
             store().setSessionHistoryStatus(k, 'ready');
           }
         }

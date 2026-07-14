@@ -21,6 +21,10 @@ import { cloneMessageForRender, ensureAssistantMessage } from '@/features/chat/m
 /** Per-session chat UI and agent config. @see docs/web/chat-session-semantics.md */
 export type SessionHistoryStatus = 'unknown' | 'loading' | 'ready';
 
+export function shouldShowHistoryLoading(status: SessionHistoryStatus | undefined): boolean {
+  return status !== 'ready';
+}
+
 export type ChatSessionSlice = {
   name: string | null;
   model: string;
@@ -74,7 +78,7 @@ type ChatSessionStoreActions = {
     sessionKey: string,
     updater: (prev: Message[]) => Message[],
   ) => void;
-  finalizeStreamingTurn: (sessionKey: string, messages: Message[]) => void;
+  finalizeStreamingTurn: (sessionKey: string, message: Message) => void;
   clearStreamingState: (sessionKey: string) => void;
   clearSession: (sessionKey: string) => void;
   getSessionSnapshot: (sessionKey: string) => ChatSessionSlice | undefined;
@@ -133,6 +137,36 @@ function createEmptySessionSlice(historyStatus: SessionHistoryStatus): ChatSessi
 
 function cloneMessages(messages: Message[]): Message[] {
   return messages.map((m) => cloneMessageForRender(m));
+}
+
+function messagesEqualForRender(left: Message, right: Message): boolean {
+  if (left === right) return true;
+  if (left.role !== right.role || left.timestamp !== right.timestamp) return false;
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/** Keep row identities stable when a background history refresh returns unchanged data. */
+function reconcileMessages(current: Message[], incoming: Message[]): Message[] {
+  let changed = current.length !== incoming.length;
+  const next = incoming.map((message, index) => {
+    const existing = current[index];
+    if (existing && messagesEqualForRender(existing, message)) {
+      return existing;
+    }
+    changed = true;
+    return cloneMessageForRender(message);
+  });
+  return changed ? next : current;
+}
+
+function appendFinalAssistantMessage(current: Message[], message: Message): Message[] {
+  const finalMessage = cloneMessageForRender(message);
+  const last = current[current.length - 1];
+  if (last?.role !== 'assistant') {
+    return [...current, finalMessage];
+  }
+  const mergedTail = mergeConsecutiveAssistantMessages([last, finalMessage]);
+  return [...current.slice(0, -1), ...mergedTail];
 }
 
 function attachmentKey(att: MessageAttachment): string {
@@ -254,12 +288,12 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       set((state) => {
         const current = state.sessions[key];
         const hasMore = data.hasMore;
-        const messages = cloneMessages(data.messages);
         const meta = metaFrom(current);
         if (data.name !== undefined) {
           meta.name = data.name;
         }
         if (!current) {
+          const messages = cloneMessages(data.messages);
           return {
             sessions: {
               ...state.sessions,
@@ -275,6 +309,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             },
           };
         }
+        const messages = reconcileMessages(current.messages, data.messages);
         return {
           sessions: {
             ...state.sessions,
@@ -299,7 +334,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       });
     },
 
-    finalizeStreamingTurn: (sessionKey, messages) => {
+    finalizeStreamingTurn: (sessionKey, message) => {
       const key = normalizeKey(sessionKey);
       if (!key) return;
       set((state) => {
@@ -312,7 +347,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             [key]: {
               ...meta,
               historyStatus: 'ready',
-              messages: cloneMessages(messages),
+              messages: appendFinalAssistantMessage(current?.messages ?? [], message),
               hasMore,
               ...IDLE_STREAM,
             },

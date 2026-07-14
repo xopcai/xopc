@@ -6,6 +6,7 @@ import {
   getChatSessionSnapshot,
   isSessionAgentRunActive,
   isSessionSliceLive,
+  shouldShowHistoryLoading,
   useChatSessionStore,
 } from '@/features/chat/session/chat-session-store';
 
@@ -72,6 +73,13 @@ describe('useChatSessionStore', () => {
       hasMore: false,
     });
     expect(getChatSessionSnapshot(sessionKey)?.historyStatus).toBe('ready');
+  });
+
+  it('only shows history loading when there is no ready cached transcript', () => {
+    expect(shouldShowHistoryLoading(undefined)).toBe(true);
+    expect(shouldShowHistoryLoading('unknown')).toBe(true);
+    expect(shouldShowHistoryLoading('loading')).toBe(true);
+    expect(shouldShowHistoryLoading('ready')).toBe(false);
   });
 
   it('mutateSessionStreaming updates bubble and streaming flag', () => {
@@ -162,6 +170,20 @@ describe('useChatSessionStore', () => {
     expect(snap?.streaming).toBe(true);
   });
 
+  it('reuses unchanged message rows during a background transcript refresh', () => {
+    useChatSessionStore.getState().initSessionSnapshot(sessionKey, idleSlice);
+    const beforeMessages = useChatSessionStore.getState().sessions[sessionKey].messages;
+
+    useChatSessionStore.getState().setCommittedSnapshot(sessionKey, {
+      messages: [{ ...userMsg, content: userMsg.content.map((block) => ({ ...block })) }],
+      hasMore: false,
+    });
+
+    const afterMessages = useChatSessionStore.getState().sessions[sessionKey].messages;
+    expect(afterMessages).toBe(beforeMessages);
+    expect(afterMessages[0]).toBe(beforeMessages[0]);
+  });
+
   it('finalizeStreamingTurn clears streaming state and updates messages', () => {
     useChatSessionStore.getState().initSessionSnapshot(sessionKey, {
       ...idleSlice,
@@ -171,15 +193,18 @@ describe('useChatSessionStore', () => {
       streaming: true,
     });
 
-    useChatSessionStore.getState().finalizeStreamingTurn(sessionKey, [
-      userMsg,
-      { role: 'assistant', content: [{ type: 'text', text: 'done' }], timestamp: 2 },
-    ]);
+    const historicalRow = useChatSessionStore.getState().sessions[sessionKey].messages[0];
+    useChatSessionStore.getState().finalizeStreamingTurn(sessionKey, {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'done' }],
+      timestamp: 2,
+    });
 
     const snap = getChatSessionSnapshot(sessionKey);
     expect(snap?.messages).toHaveLength(2);
     expect(snap?.hasMore).toBe(true);
     expect(isSessionSliceLive(snap)).toBe(false);
+    expect(useChatSessionStore.getState().sessions[sessionKey].messages[0]).toBe(historicalRow);
   });
 
   it('clearSession removes slice', () => {

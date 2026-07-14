@@ -2,7 +2,7 @@
 // into either text/image nodes or a collapsible AssistantStepsBlock for runs
 // of consecutive thinking/tool_use blocks.
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useDeferredValue, useState, type ReactNode } from 'react';
 import { AlertCircle, Copy, ExternalLink, File, FolderOpen, Loader2, X } from 'lucide-react';
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
@@ -224,11 +224,17 @@ function ChatMarkdownView({
   content,
   compact,
   sessionKey,
+  streaming = false,
 }: {
   content: string;
   compact?: boolean;
   sessionKey?: string | null;
+  streaming?: boolean;
 }) {
+  // Markdown parsing sanitizes and replaces the whole rendered HTML. Defer that
+  // expensive work while SSE tokens are arriving so React can coalesce updates.
+  const deferredContent = useDeferredValue(content);
+  const renderedContent = streaming ? prepareStreamingMarkdown(deferredContent) : content;
   const setPreview = useWorkspacePreviewStore((s) => s.setPath);
   const language = useLocaleStore((s) => s.language);
   const fileReferenceMessages = messages(language).chat.fileReference;
@@ -273,7 +279,7 @@ function ChatMarkdownView({
 
   return (
     <>
-      <MarkdownView content={content} compact={compact} onWorkspaceFileOpen={openFile} />
+      <MarkdownView content={renderedContent} compact={compact} onWorkspaceFileOpen={openFile} />
       {resolution ? (
         <ChatMarkdownFileActionCard
           resolution={resolution}
@@ -320,9 +326,10 @@ function renderTextOrImageBlock(
     return (
       <div key={key} className="markdown-content min-w-0">
         <ChatMarkdownView
-          content={isAssistantMessageStreaming ? prepareStreamingMarkdown(block.text) : block.text}
+          content={block.text}
           compact
           sessionKey={sessionKey}
+          streaming={isAssistantMessageStreaming}
         />
       </div>
     );
