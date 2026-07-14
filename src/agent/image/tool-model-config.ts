@@ -104,21 +104,21 @@ export function resolveImageModelConfigForTool(params: { cfg?: Config }): ToolMo
     primaryCandidates.push(vision);
   }
   if (primary.provider === 'openai') {
-    primaryCandidates.push('openai/gpt-4o-mini');
+    primaryCandidates.push('openai/gpt-5.6-luna');
   }
   if (primary.provider === 'anthropic') {
-    primaryCandidates.push('anthropic/claude-sonnet-4-5');
+    primaryCandidates.push('anthropic/claude-sonnet-5');
   }
   if (primary.provider === 'google') {
-    primaryCandidates.push('google/gemini-2.0-flash');
+    primaryCandidates.push('google/gemini-3.5-flash');
   }
 
   return buildToolModelConfigFromCandidates({
     explicit,
     candidates: [
       ...primaryCandidates,
-      firstVisionModelRef('openai') ?? 'openai/gpt-4o-mini',
-      firstVisionModelRef('anthropic') ?? 'anthropic/claude-sonnet-4-5',
+      firstVisionModelRef('openai') ?? 'openai/gpt-5.6-luna',
+      firstVisionModelRef('anthropic') ?? 'anthropic/claude-sonnet-5',
     ],
   });
 }

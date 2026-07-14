@@ -16,8 +16,6 @@ const PROVIDERS_WITH_LOGOS = new Set([
   'google',
   'kimi-coding',
   'minimax',
-  'moonshotai',
-  'moonshotai-cn',
   'openai',
 ]);
 

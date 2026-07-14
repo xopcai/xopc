@@ -191,7 +191,7 @@ export function listThinkingLevels(provider?: string | null, model?: string | nu
 
   // xhigh is only supported for specific models
   const normalizedModel = model?.trim().toLowerCase();
-  if (normalizedModel && ['gpt-5.4', 'gpt-5.4-pro', 'gpt-5.2'].some((m) => normalizedModel.includes(m))) {
+  if (normalizedModel && ['gpt-5.6', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-pro', 'gpt-5.2'].some((m) => normalizedModel.includes(m))) {
     levels.push('xhigh');
   }
 

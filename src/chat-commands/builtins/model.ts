@@ -95,7 +95,7 @@ const switchCommand: CommandDefinition = {
   category: 'model',
   scope: ['global', 'private', 'group'],
   acceptsArgs: true,
-  examples: ['/switch deepseek/deepseek-chat', '/switch minimax/minimax-m2.7'],
+  examples: ['/switch openai/gpt-5.6', '/switch anthropic/claude-sonnet-5'],
   handler: async (ctx: CommandContext, args: string) => {
     if (!args.trim()) {
       return {
@@ -103,7 +103,7 @@ const switchCommand: CommandDefinition = {
           '❌ Missing model ref.',
           '**Usage:** `/switch provider/model-id`',
           'Run `/models` — each line shows a display name and a `provider/model` ref in backticks. Copy that ref.',
-          '**Example:** `/switch deepseek/deepseek-chat`',
+          '**Example:** `/switch openai/gpt-5.6`',
         ),
         success: false,
       };
@@ -129,7 +129,7 @@ const switchCommand: CommandDefinition = {
       content: joinBlocks(
         `❌ Could not switch to ${code(modelId)}.`,
         'Use the exact `provider/model` ref from `/models` (not only the display name).',
-        '**Example:** `/switch anthropic/claude-sonnet-4-20250514`',
+        '**Example:** `/switch anthropic/claude-sonnet-5`',
       ),
       success: false,
     };

@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { OnboardingCard } from '@/features/onboarding/onboarding-card';
 import { useNeedsModelSetup } from '@/features/onboarding/use-needs-model-setup';
@@ -17,11 +17,14 @@ export function OnboardingDialog() {
   const token = useGatewayStore((s) => s.token);
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
+  const { pathname } = useLocation();
   const navigate = useNavigate();
   const modelSetup = useNeedsModelSetup(Boolean(token));
+  const isSettingsRoute = pathname.startsWith('/settings');
 
   const open =
     Boolean(token) &&
+    !isSettingsRoute &&
     modelSetup.ready &&
     modelSetup.needsSetup;
 
