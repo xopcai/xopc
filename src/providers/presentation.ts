@@ -128,7 +128,7 @@ const RECOMMENDED_MODEL_PATTERNS: Record<string, RegExp[]> = {
   openrouter: [/^openai\/gpt-5/i, /^anthropic\/claude-sonnet-4/i, /^google\/gemini-3/i],
   moonshotai: [/^kimi-k2\.7-code$/i, /^kimi-k2\.6$/i],
   'moonshotai-cn': [/^kimi-k2\.7-code$/i, /^kimi-k2\.6$/i],
-  'kimi-coding': [/^kimi-k2\.7-code$/i],
+  'kimi-coding': [/^k2p7$/i, /^kimi-for-coding$/i],
   stepfun: [/^step-3\.7-flash$/i, /^step-3\.5-flash-2603$/i, /^step-3\.5-flash$/i],
   'stepfun-cn': [/^step-3\.7-flash$/i, /^step-3\.5-flash-2603$/i, /^step-3\.5-flash$/i],
   'stepfun-intl': [/^step-3\.7-flash$/i, /^step-3\.5-flash-2603$/i, /^step-3\.5-flash$/i],

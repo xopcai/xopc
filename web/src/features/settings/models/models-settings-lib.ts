@@ -179,13 +179,13 @@ export const PROVIDER_PRESETS: Record<string, ProviderPresetOption> = {
     providerId: 'kimi-coding',
     description: 'Dedicated Kimi coding endpoint',
     config: {
-      baseUrl: 'https://api.kimi.com/coding/',
+      baseUrl: 'https://api.kimi.com/coding',
       api: 'anthropic-messages',
       apiKey: 'KIMI_API_KEY',
-      headers: { 'User-Agent': 'claude-code/0.1.0' },
+      headers: { 'User-Agent': 'KimiCLI/1.5' },
       models: [
-        { id: 'kimi-k2.7-code', name: 'Kimi K2.7 Code', contextWindow: 262144, maxTokens: 32768, reasoning: true, input: ['text', 'image'] },
-        { id: 'kimi-for-coding', name: 'Kimi Code', contextWindow: 262144, maxTokens: 32768, reasoning: true, input: ['text', 'image'] },
+        { id: 'k2p7', name: 'Kimi K2.7 Code', contextWindow: 262144, maxTokens: 32768, reasoning: true, input: ['text', 'image'] },
+        { id: 'kimi-for-coding', name: 'Kimi For Coding', contextWindow: 262144, maxTokens: 32768, reasoning: true, input: ['text', 'image'] },
       ],
     },
   },
