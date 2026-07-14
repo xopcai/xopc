@@ -62,6 +62,7 @@ pnpm run dev:gateway     # start gateway with ~/.xopc-dev and info logs
 | `browser` | Browser automation commands |
 | `agents` | Manage multi-agent entries in config (`list`, `add`, `delete`) |
 | `extensions` | Manage extensions |
+| `connectors` | Browse and install verified connector capabilities from xopc-store |
 
 MCP server management is documented in [MCP](./mcp.md). It is currently not shown as a root command in `xopc --help`; use the gateway settings and MCP configuration docs for supported setup paths.
 
@@ -98,6 +99,7 @@ Use `xopc <command> --help` for option-level details. This table tracks the comm
 | `browser` | `open`, `state`, `click`, `type`, `screenshot`, `validate`, `run`, `doctor`, `close`, `cloakbrowser`, `extension` |
 | `agents` | `list`, `add`, `delete` |
 | `extensions` | `list`, `inspect`, `freeze`, `health`, `verify`, `doctor`, `audit`, `pack`, `create`, `dev`, `install`, `search`, `publish`, `update` |
+| `connectors` | `list`, `install` |
 
 ---
 
