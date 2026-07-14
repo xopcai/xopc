@@ -2,7 +2,6 @@ import { useCallback, useRef, type RefObject } from 'react';
 
 import { buildSendFailedErrorPayload } from '@/features/chat/messages/agent-run-error-parser';
 import { createAgentStreamMessagingCallbacks, readStreamingBubbleFromStore } from '@/features/chat/messages/agent-stream-messaging-callbacks';
-import { mergeConsecutiveAssistantMessages } from '@/features/chat/messages/agent-messages';
 import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import type { Message } from '@/features/chat/messages/messages.types';
 import { extractUserMessagePlainText, messageAttachmentsToWire } from '@/features/chat/messages/user-message-plain-text';
@@ -101,11 +100,7 @@ export function useChatSessionStreaming(deps: {
         finalMsg = cloneMessageForRender(msg);
       }
       if (finalMsg && hasRenderableAssistantContent(finalMsg) && cacheKey) {
-        const prior = getChatSessionSnapshot(cacheKey)?.messages ?? getSessionMessages(cacheKey);
-        store().finalizeStreamingTurn(
-          cacheKey,
-          mergeConsecutiveAssistantMessages([...prior, finalMsg]),
-        );
+        store().finalizeStreamingTurn(cacheKey, finalMsg);
       } else if (cacheKey) {
         store().clearStreamingState(cacheKey);
       }
