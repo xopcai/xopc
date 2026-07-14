@@ -19,6 +19,14 @@ import {
 describe('sqlite notes and memory repositories', () => {
   let stateDir: string;
 
+  function todayMemoryFileName(): string {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}.md`;
+  }
+
   beforeEach(() => {
     stateDir = mkdtempSync(join(tmpdir(), 'xopc-notes-memory-'));
     resetXopcDatabaseSingletonForTest();
@@ -63,7 +71,8 @@ describe('sqlite notes and memory repositories', () => {
     const workspaceDir = join(stateDir, 'workspace');
     const memoryDir = join(workspaceDir, 'memory');
     mkdirSync(memoryDir, { recursive: true });
-    const dailyPath = join(memoryDir, '2026-06-15.md');
+    const dailyFileName = todayMemoryFileName();
+    const dailyPath = join(memoryDir, dailyFileName);
     writeFileSync(dailyPath, '# Daily\nproject-phoenix launch checklist\n');
 
     syncMemoryIndex({ agentId: 'main', workspaceDir });
@@ -75,7 +84,7 @@ describe('sqlite notes and memory repositories', () => {
     });
 
     expect(hits.length).toBeGreaterThan(0);
-    expect(hits[0].path).toContain('memory/2026-06-15.md');
+    expect(hits[0].path).toContain(`memory/${dailyFileName}`);
     expect(hits[0].lines).toContain('phoenix');
   });
 });
