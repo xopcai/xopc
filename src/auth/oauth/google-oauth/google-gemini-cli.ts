@@ -1,6 +1,6 @@
 /**
  * Gemini CLI OAuth flow (Google Cloud Code Assist)
- * Standard Gemini models only (gemini-2.0-flash, gemini-2.5-*)
+ * Standard Gemini models through Google Cloud Code Assist.
  *
  * NOTE: This module uses Node.js http.createServer for the OAuth callback.
  * It is only intended for CLI use, not browser environments.

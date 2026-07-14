@@ -11,8 +11,8 @@ function isRefineAvailable(config: Config | undefined): boolean {
   if (!config) return false;
   for (const candidate of [
     process.env.XOPC_VOICE_REFINE_MODEL?.trim(),
-    'openai/gpt-4o-mini',
-    'google/gemini-2.0-flash',
+    'openai/gpt-5.6-luna',
+    'google/gemini-3.5-flash',
   ]) {
     if (!candidate) continue;
     try {

@@ -2,6 +2,10 @@ import { ExternalLink } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 
+import { BrandLogo } from '@/components/shell/brand-logo';
+import { Button } from '@/components/ui/button';
+import { SecretInput } from '@/components/ui/secret-input';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/features/chat/api/registry-api';
 import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
@@ -24,12 +28,9 @@ import {
   TIMEZONE_OPTIONS,
   type UserFields,
 } from '@/features/settings/agents/agent-profile-markdown';
-import { Button } from '@/components/ui/button';
-import { SecretInput } from '@/components/ui/secret-input';
 import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
-import { Select, SelectOption } from '@/components/ui/popover-select';
 
 interface OnboardingCardProps {
   onComplete: () => void | Promise<void>;
@@ -247,9 +248,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   return (
     <div className="w-full max-w-xl rounded-2xl border border-edge bg-surface-panel p-6 shadow-elevated">
       <div className="text-center">
-        <div className="text-3xl" aria-hidden>
-          🤖
-        </div>
+        <BrandLogo className="mx-auto size-11" />
         <h2 className="mt-3 text-lg font-semibold tracking-tight text-fg">{o.title}</h2>
         <p className="mt-1 text-sm text-fg-muted">{o.subtitle}</p>
         <p className="mt-2 text-xs font-medium uppercase tracking-wide text-fg-muted">{stepLabel}</p>

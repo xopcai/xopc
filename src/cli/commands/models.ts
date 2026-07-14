@@ -36,6 +36,15 @@ const IMAGE_GENERATION_IDS = new Set([
 ]);
 
 const VISION_IDS = new Set([
+  'gpt-5.6',
+  'gpt-5.6-luna',
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'claude-sonnet-5',
+  'gemini-3.5-flash',
+  'gemini-3.1-pro-preview',
+  'gemini-3-flash-preview',
+  'gemini-3-pro-preview',
   'gpt-4o',
   'gpt-4o-mini',
   'gpt-4-turbo',

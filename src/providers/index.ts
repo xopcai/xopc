@@ -14,6 +14,7 @@ import { getModelRegistry } from './model-registry.js';
 import { CredentialResolver, resolveApiKey, hasCredentials } from '../auth/credentials.js';
 import { hasProviderAuthOnDiskSync } from '../auth/sync-provider-auth.js';
 import { getApiKeyFromEnv } from './env-keys.js';
+import { getSupplementalModels } from './model-supplements.js';
 import { getProviderRegistry } from './plugin-registry.js';
 import type { ProviderModelDefinition } from '../extensions/types/providers.js';
 
@@ -93,6 +94,9 @@ export function resolveModel(ref: string): Model<Api> {
 		const piAiModel = getPiAiModel(provider as any, modelId as any);
 		if (piAiModel) return normalizeProviderModel(piAiModel as Model<Api>);
 
+		const supplementalModel = getSupplementalModels().find(m => m.provider === provider && m.id === modelId);
+		if (supplementalModel) return normalizeProviderModel(supplementalModel);
+
 		const pluginRegistry = getProviderRegistry();
 		const plugin = pluginRegistry.get(provider);
 		if (plugin) {
@@ -112,6 +116,9 @@ export function resolveModel(ref: string): Model<Api> {
 		}
 	}
 
+	const supplementalModel = getSupplementalModels().find(m => m.id === trimmedRef);
+	if (supplementalModel) return normalizeProviderModel(supplementalModel);
+
 	const pluginRegistry = getProviderRegistry();
 	for (const plugin of pluginRegistry.listAll()) {
 		const found = plugin.models.find(m => m.id === trimmedRef);
@@ -124,10 +131,14 @@ export function resolveModel(ref: string): Model<Api> {
 export function getModelsByProvider(provider: string): readonly Model<Api>[] {
 	const registry = getModelRegistry();
 	const fromRegistry = registry.getAll().filter(m => m.provider === provider).map(normalizeProviderModel);
+	const existingIds = new Set(fromRegistry.map(m => m.id));
+	const supplementalModels = getSupplementalModels()
+		.filter(m => m.provider === provider && !existingIds.has(m.id))
+		.map(normalizeProviderModel);
 	const plugin = getProviderRegistry().get(provider);
-	if (!plugin) return fromRegistry;
+	if (!plugin) return [...fromRegistry, ...supplementalModels];
 	const pluginModels = plugin.models.map(m => pluginModelToModel(provider, m));
-	return [...fromRegistry, ...pluginModels];
+	return [...fromRegistry, ...supplementalModels, ...pluginModels];
 }
 
 export function getAllProviders(): string[] {
@@ -270,11 +281,17 @@ export async function getConfiguredProviders(): Promise<string[]> {
 export function getAllModels(): readonly Model<Api>[] {
 	const registry = getModelRegistry();
 	const registryModels = registry.getAll().map(normalizeProviderModel);
-	const pluginProviders = getProviderRegistry().listAll();
-	if (pluginProviders.length === 0) return registryModels;
-
 	const existingIds = new Set(registryModels.map(m => `${m.provider}/${m.id}`));
-	const merged: Model<Api>[] = [...registryModels];
+	const supplementalModels = getSupplementalModels()
+		.filter(m => !existingIds.has(`${m.provider}/${m.id}`))
+		.map(normalizeProviderModel);
+	for (const model of supplementalModels) {
+		existingIds.add(`${model.provider}/${model.id}`);
+	}
+	const pluginProviders = getProviderRegistry().listAll();
+	if (pluginProviders.length === 0) return [...registryModels, ...supplementalModels];
+
+	const merged: Model<Api>[] = [...registryModels, ...supplementalModels];
 	for (const plugin of pluginProviders) {
 		for (const model of plugin.models) {
 			const compositeId = `${plugin.id}/${model.id}`;

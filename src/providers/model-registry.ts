@@ -15,7 +15,6 @@ import {
 	getModels as getPiAiModels,
 	getProviders as getPiAiProviders,
 	type Model,
-	type KnownProvider,
 } from '@earendil-works/pi-ai/compat';
 import { existsSync, readFileSync } from 'fs';
 import { resolveConfigValue, resolveHeaders } from '../config/resolve-config-value.js';
@@ -332,7 +331,7 @@ export class ModelRegistry {
 	): Model<Api>[] {
 		return getPiAiProviders().flatMap((provider) => {
 			try {
-				const models = getPiAiModels(provider as KnownProvider) as Model<Api>[];
+				const models = getPiAiModels(provider as any) as Model<Api>[];
 				const providerOverride = overrides.get(provider);
 				const perModelOverrides = modelOverrides.get(provider);
 
