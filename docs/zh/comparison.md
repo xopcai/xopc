@@ -13,7 +13,7 @@
 | 产品 | 公开定位 | 适合场景 | xopc 的优势 |
 | --- | --- | --- | --- |
 | **Codex** | OpenAI 面向软件开发的 coding agent，覆盖 CLI、IDE、App 和云端任务。 | 写代码、代码审查、调试、自动化开发任务。 | xopc 不只服务 coding：`~/.xopc/` 本地状态、BYOK/本地模型、Gateway API、定时循环、桌面/网页/手机和 IM 可以共享同一个助手。 |
-| **Claude Code** | Anthropic 的 agentic coding system：读代码库、改文件、跑测试、处理 git 和工具链。 | 项目级工程任务和编码任务托付。 | xopc 是面向长期工作的个人 Agent OS，不只是一轮 repo 执行。目标、会话、Agent、通道、技能、工作流和自动化可以围绕同一套本地状态连接起来。 |
+| **Claude Code** | Anthropic 的 agentic coding system：读代码库、改文件、跑测试、处理 git 和工具链。 | 项目级工程任务和编码任务托付。 | xopc 是面向长期工作的个人 AI 运行时，不只是一轮 repo 执行。目标、会话、Agent、通道、技能、工作流和自动化可以围绕同一套本地状态连接起来。 |
 | **Qoder / QoderWork** | Agentic platform，覆盖 autonomous development desktop、QoderWork、QoderWake、Qoder CLI、插件和云端 Agent。 | 商业化 coding 与 work agent 套件，多 Agent 协作与桌面/办公场景。 | xopc 是 MIT 开源、可自托管、可改造的系统。运行时、配置、状态目录、模型选择、Gateway 和扩展面都由你掌控。 |
 | **WorkBuddy** | 面向职场角色的 AI agent 桌面工作站，自主规划并执行任务，交付可验证结果。 | 报告、PPT、表格、数据分析、深度调研、批量文件处理等办公任务。 | xopc 更适合想掌控运行环境的用户：自带 key，混用本地/云端模型，接入 IM，并把长期项目上下文保留在本地。 |
 

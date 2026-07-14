@@ -7,8 +7,8 @@
 
 <p align="center">
   <strong>把目标变成循环。</strong><br />
-  让真正重要的事情持续向前。<br />
-  从一次普通对话开始，把项目持续托管给 xopc；在手机上随手记录 note/idea，再用自动化养成私有的本地 AI 数据飞轮。
+  让重要的事持续向前。<br />
+  xopc 是自托管、本地优先的个人 AI 运行时：统一连接模型、Agent、持续状态、工作流、自动化与多端入口。你掌控数据、密钥和运行环境。
 </p>
 
 <p align="center">
@@ -35,8 +35,8 @@
 <details>
 <summary><strong>目录</strong></summary>
 
-- [适合谁](#适合谁)
-- [从聊天到数据飞轮](#从聊天到数据飞轮)
+- [xopc 是什么](#xopc-是什么)
+- [一套运行时，四类能力](#一套运行时四类能力)
 - [快速开始](#快速开始)
 - [为什么选 xopc](#为什么选-xopc)
 - [和 Codex / Claude Code / QoderWork / WorkBuddy 的区别](#和-codex--claude-code--qoderwork--workbuddy-的区别)
@@ -53,28 +53,24 @@
 
 ---
 
-## 适合谁
+## xopc 是什么
 
-- **想先简单用起来的人** —— 先本地开聊；项目变复杂后，再逐步加笔记、通道、连接器和自动化。
-- **长期目标持续跟踪** —— 目标、决策、阻塞点、下⼀步不会断在一次次聊天里。
-- **自己的 Agent，随时可用** —— CLI、TUI、网页、桌面、手机、Telegram、微信和飞书/Lark。手机 App 扫码连接，数据留在你的环境里。
-- **本地优先，用自己的密钥** —— 用你自己的 API Key，云端/本地模型混用，支持技能和扩展，数据默认保存在 **`~/.xopc/`**。
+xopc 不是某个模型的套壳，也不只是另一个聊天界面。它是一套**自托管、本地优先的个人 AI 运行时**：负责让模型、Agent、数据和触发器在同一个环境里协作。
 
-## 从聊天到数据飞轮
+你可以先把它当作一个使用自有密钥的本地助手；也可以进一步把真实项目交给它，用明确的目标和下一步保存状态，用笔记收集输入，用工作流拆解复杂任务，再用定时或 webhook 自动化触发后续工作。所有入口连接的是同一套运行时，而不是几个互相失忆的机器人。
 
-你不需要第一天就搭好复杂系统。xopc 的价值会随着你的使用逐步长出来。
+## 一套运行时，四类能力
 
-| 阶段 | 你做什么 | xopc 开始帮你什么 |
+| 层次 | xopc 提供什么 | 解决什么问题 |
 | --- | --- | --- |
-| **聊天** | 问问题、讨论想法、做判断。 | 先有一个使用你自己模型配置、状态保存在本地的 AI 助手。 |
-| **项目** | 让它持续跟进一个真实目标。 | 记住目标、当前状态、阻塞点和下一步。 |
-| **笔记 / 想法** | 随手丢进展、反馈、链接、灵感和复盘。 | 把零散输入沉淀成之后能继续使用的上下文。 |
-| **外部入口** | 手机 App 扫码连接，也可以在桌面、终端、网页、IM 和 gateway API 里继续使用同一个助手。 | 不在电脑前也能对话、记录 note/idea；Agent 和数据仍在你的 xopc 环境里。 |
-| **自动化** | 设置定时复盘、提醒、摘要和工作流运行。 | 重要事项会自己回到视野里，不完全依赖你想起来再问。 |
+| **运行与所有权** | 自托管 gateway、本地状态目录、自有 API Key、云端/本地模型 | 数据、成本与可用性由你掌控 |
+| **持续状态** | 持久会话、项目、目标、笔记、工作区与 Agent 记忆策略 | 工作可以恢复，不必每次从零解释 |
+| **执行与主动性** | 工具、技能、子 Agent、可观测工作流、定时/手动/webhook 自动化 | 从“给建议”走向“执行、检查并继续” |
+| **随处接入** | CLI、TUI、网页、桌面、iOS/Android、Telegram、微信、飞书/Lark、HTTP/SSE API | 在工作发生的地方使用同一个系统 |
 
-**这就是循环：** 上下文进来，xopc 帮你判断下一步；你去行动，再把结果和反馈带回来；系统越用越知道该如何继续推进。
+典型用法不是固定漏斗，而是按需组合：在终端处理代码，在手机上语音速记到 Notes，在项目页查看目标、阻塞与失败的工作流，在每天的自动化中生成摘要，最后从任意入口继续同一个会话。
 
-**你的时间线：** 第一天 → 聊天 + 跟进项目。第一周 → 喂进展和笔记。用顺手后 → 加手机、IM、桌面。事情重复时 → 加自动化。
+了解这些部件如何形成可恢复、可触发、可检查的闭环：[持续工作模型](https://xopcai.github.io/xopc/zh/concepts/loops)。
 
 ---
 
@@ -155,12 +151,12 @@ Windows 源码安装：`& ([scriptblock]::Create((irm https://xopc.ai/install.ps
 
 ## 为什么选 xopc
 
-- 🔁 **从聊天自然长成循环** — 项目、笔记、外部入口和自动化逐步接上，让长期事情持续滚动。
-- 🏠 **你的机器** — 配置与数据在 **`~/.xopc/`**，无强制云端、无意外账单。
+- 🧠 **有状态，不只是一轮上下文** — 会话、项目、目标、笔记、工作区和运行记录都有明确归属，长期工作可以恢复。
+- 🏠 **运行在你的环境里** — 配置与本地状态默认在 **`~/.xopc/`**；你决定如何部署、备份和远程访问。
 - 🔑 **使用自己的密钥** — OpenAI、Anthropic、Google、DeepSeek、Ollama、LM Studio、vLLM 等 **20+** 厂商；云端和本地模型可混用。
-- 📱 **随时可用** — 手机 App 扫码连接，也可从桌面、终端、网页、Telegram、微信和飞书/Lark 继续对话。数据不出你的环境。
-- 🧩 **可按需扩展** — **`xopc skills install`** / **`xopc extensions install`** 扩展工具、频道与 UI；多 Agent 可按场景隔离。
-- ⏰ **支持主动任务** — 自动化做定时摘要、提醒和工作流运行；子 Agent 扇出并行任务。
+- ⚙️ **能执行，也能主动触发** — 工具和工作流负责执行；自动化用定时、手动或 webhook 触发 Agent 与工作流。
+- 📡 **同一个运行时，多种入口** — 桌面、终端、网页、手机与 IM 共享 Agent、会话和项目状态。
+- 🧩 **能力边界可配置** — 每个 Agent 可以拥有独立的身份、模型角色、工作区、工具策略、技能、记忆与边界，并通过扩展继续增加能力。
 
 ## 和 Codex / Claude Code / QoderWork / WorkBuddy 的区别
 
@@ -169,7 +165,7 @@ xopc 不是又一个聊天 UI。它更像一个本地优先的系统层：让同
 | 产品 | 更擅长 | 为什么还需要 xopc |
 | --- | --- | --- |
 | **Codex** | 终端、IDE 和云端的软件开发任务 | xopc 不只服务一个代码仓库：长期目标、BYOK/本地模型、定时循环、Gateway API、桌面/网页/手机和 IM 都共享同一套本地状态。 |
-| **Claude Code** | 项目级编码：读代码、改文件、跑测试、处理 git 工作流 | xopc 是面向个人长期工作的 Agent OS：既能服务 coding，也能协调模型、频道、技能、工作流和自动化。 |
+| **Claude Code** | 项目级编码：读代码、改文件、跑测试、处理 git 工作流 | xopc 是面向个人长期工作的 AI 运行时：既能服务 coding，也能协调模型、频道、技能、工作流和自动化。 |
 | **Qoder / QoderWork** | Agentic coding 平台与本地优先办公助手 | xopc 开源、可自托管、可改造，状态明确放在 **`~/.xopc/`**，支持自选 provider、自托管 gateway 和扩展机制。 |
 | **WorkBuddy** | 办公交付物：报告、PPT、表格、调研、数据分析 | xopc 更适合想掌控运行环境的人：使用自己的 key，混用本地/云端模型，接入 IM，并把长期项目上下文留在本地。 |
 
@@ -185,7 +181,7 @@ xopc 不是又一个聊天 UI。它更像一个本地优先的系统层：让同
 | **TUI** | `xopc` 或 `xopc tui`（远程：`xopc tui --url …`） | 全键盘、流式输出，最快终端路径 |
 | **CLI** | `xopc agent -i` / `xopc agent -m "…"` | 脚本、最小终端环境 |
 | **网页** | `xopc gateway` → 打开控制台地址 | 聊天、设置、日志 |
-| **手机** | [移动端 App](./apps/mobile-expo) + 网关扫码配对（[移动端 App](https://xopcai.github.io/xopc/zh/mobile-app)、[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在 iOS/Android 上继续对话、记录 note/idea；Agent 仍运行在你的电脑或本地环境里 |
+| **手机** | [移动端 App](./apps/mobile-expo) + 网关扫码配对（[移动端 App](https://xopcai.github.io/xopc/zh/mobile-app)、[远程访问](https://xopcai.github.io/xopc/zh/remote-access)） | 在 iOS/Android 上继续对话，记录文字、语音、图片和附件；Agent 仍运行在你的电脑或本地环境里 |
 | **即时通讯** | 配置 `channels.*` 并启动网关 | Telegram、微信、飞书/Lark |
 
 ---
@@ -236,7 +232,8 @@ xopc extensions dev ./my-extension
 | 指南 | 说明 |
 | --- | --- |
 | [快速开始](https://xopcai.github.io/xopc/zh/getting-started) | 安装、向导、第一次对话 |
-| [从聊天到数据飞轮](https://xopcai.github.io/xopc/zh/concepts/loops) | xopc 如何从简单聊天逐步长成项目上下文、外部入口和自动化循环 |
+| [持续工作模型](https://xopcai.github.io/xopc/zh/concepts/loops) | 状态、执行与触发如何组成可恢复、可检查的工作闭环 |
+| [项目、目标与笔记](https://xopcai.github.io/xopc/zh/projects-goals-notes) | 用明确的数据对象组织长期工作，而不是依赖超长聊天记录 |
 | [配置](https://xopcai.github.io/xopc/zh/configuration) | `xopc.json` 字段 |
 | [CLI](https://xopcai.github.io/xopc/zh/cli) | 命令与参数 |
 | [频道](https://xopcai.github.io/xopc/zh/channels) | Telegram、微信、飞书 |
@@ -255,7 +252,7 @@ xopc extensions dev ./my-extension
 
 **最快怎么试用？** — [桌面端](#快速开始) 适合 GUI 用户，终端用户执行 `xopc onboard --quick && xopc`。
 
-**它和普通聊天 UI 有什么区别？** — xopc 从聊天长成目标循环：项目上下文、笔记、外部入口、自动化，跨多个入口继续工作。
+**它和普通聊天 UI 有什么区别？** — 聊天只是入口。xopc 还管理 Agent、持久会话、项目/目标、笔记、工作区、工作流、自动化和多端连接。
 
 **能在手机或即时通讯里用吗？** — 可以。用 [移动端 App](./apps/mobile-expo) 扫码连接，或配置 Telegram、微信、飞书/Lark。
 
