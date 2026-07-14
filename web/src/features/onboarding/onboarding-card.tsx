@@ -275,7 +275,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 to="/settings/credentials"
                 className="text-xs font-medium text-accent-fg hover:underline"
               >
-                {language === 'zh' ? '高级设置…' : 'More settings…'}
+                {language === 'zh' ? '配置其他模型…' : 'Configure other models…'}
               </Link>
               {canDismiss ? (
                 <button

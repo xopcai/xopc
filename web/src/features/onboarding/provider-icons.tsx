@@ -10,6 +10,21 @@ type IconProps = {
   className?: string;
 } & Pick<SVGAttributes<SVGSVGElement>, 'aria-hidden'>;
 
+const PROVIDERS_WITH_LOGOS = new Set([
+  'anthropic',
+  'deepseek',
+  'google',
+  'kimi-coding',
+  'minimax',
+  'moonshotai',
+  'moonshotai-cn',
+  'openai',
+]);
+
+export function hasProviderLogo(providerId: string): boolean {
+  return PROVIDERS_WITH_LOGOS.has(providerId);
+}
+
 function IconShell({ className, children, ...rest }: IconProps & { children: ReactNode }) {
   return (
     <svg
