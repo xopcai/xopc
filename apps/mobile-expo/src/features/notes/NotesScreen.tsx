@@ -335,7 +335,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   ], [handleBatchArchive, handleBatchPin, li.addTags, pm.archive, pm.delete, pm.pin, pm.unpin, selectedCount]);
 
   const renderNote = useCallback(
-    ({ item }: { item: NoteIndexEntry }) => (
+    ({ item, index }: { item: NoteIndexEntry; index: number }) => (
       <NoteCard
         note={item}
         onPress={handleNotePress}
@@ -343,9 +343,11 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
         onSwipeAction={handleSwipeAction}
         selectionMode={selectionMode}
         selected={selectedIds.has(item.id)}
+        isFirst={index === 0}
+        isLast={index === filteredNotes.length - 1}
       />
     ),
-    [handleNoteLongPress, handleNotePress, handleSwipeAction, selectedIds, selectionMode],
+    [filteredNotes.length, handleNoteLongPress, handleNotePress, handleSwipeAction, selectedIds, selectionMode],
   );
 
   const listBottomPadding = selectionMode
@@ -532,7 +534,7 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.select({ ios: 10, android: 6, default: 8 }),
   },
   listArea: { flex: 1, minHeight: 0 },
-  list: { paddingTop: spacing.xs, paddingBottom: spacing.lg, gap: 0, flexGrow: 1 },
+  list: { paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: 0, flexGrow: 1 },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
   empty: { alignItems: 'center', paddingVertical: 48, gap: 6 },
   emptyIconWrap: {
