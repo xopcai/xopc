@@ -67,6 +67,7 @@ pnpm run dev:gateway     # 使用 ~/.xopc-dev 启动 gateway，日志级别为 i
 | `browser` | 浏览器自动化命令 |
 | `agents` | 管理 `config.json` 中的多个智能体（`agents.list`：列出、添加、删除） |
 | `extensions` | 管理扩展 |
+| `connectors` | 从 xopc-store 浏览并安装已验证的连接器能力 |
 
 MCP 配置见 [MCP](./mcp.md)。当前 `xopc --help` 不展示 `mcp` 作为顶层命令；请以网关设置和 MCP 配置文档为准。
 
@@ -103,6 +104,7 @@ MCP 配置见 [MCP](./mcp.md)。当前 `xopc --help` 不展示 `mcp` 作为顶�
 | `browser` | `open`、`state`、`click`、`type`、`screenshot`、`validate`、`run`、`doctor`、`close`、`cloakbrowser`、`extension` |
 | `agents` | `list`、`add`、`delete` |
 | `extensions` | `list`、`inspect`、`freeze`、`health`、`verify`、`doctor`、`audit`、`pack`、`create`、`dev`、`install`、`search`、`publish`、`update` |
+| `connectors` | `list`、`install` |
 
 ---
 

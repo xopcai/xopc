@@ -4,7 +4,7 @@ layout: home
 hero:
   name: xopc
   text: Turn goals into loops.
-  tagline: "Start with chat. Keep projects alive. Capture notes from your phone. Let automations turn repeated follow-up into a private, local-first data flywheel."
+  tagline: "Keep what matters moving. A self-hosted, local-first personal AI runtime connecting models, agents, durable state, workflows, automations, and every surface you use. You own the data, keys, and environment."
   image:
     light: /logo.svg
     dark: /logo-dark.svg
@@ -18,8 +18,8 @@ hero:
       link: https://github.com/xopcai/xopc
 
 features:
-  - title: 🔁 Goal loops, not one-shot chats
-    details: "Start with a normal conversation, then grow into projects, notes, connectors, and automations as the work gets more valuable."
+  - title: 🧠 Durable state, not one-shot context
+    details: "Persistent sessions, projects, goals, notes, workspaces, and run history give long-running work an explicit place to resume and inspect."
     link: /concepts/loops
   - title: 🏠 Local-first by default
     details: "xopc runs on your hardware. Config, workspace files, credentials, and local state live under ~/.xopc/. No mandatory cloud."
@@ -27,14 +27,14 @@ features:
   - title: 🔑 Bring your own keys. Any model.
     details: "DeepSeek, OpenAI, Anthropic, Google, Ollama, LM Studio, vLLM, Bedrock, Azure — 20+ providers. Run offline or mix cloud and local. Switch models in one config line."
     link: /models
-  - title: 📡 One assistant, every surface
-    details: "The same assistant across TUI, CLI, browser, desktop app, mobile app on iOS/Android, and messengers. No sync needed. It's all one system."
+  - title: 📡 One runtime, every surface
+    details: "TUI, CLI, browser, desktop, iOS/Android, and messengers connect to the same agents, sessions, and project state."
     link: /desktop-app
-  - title: 🧩 Grows with you. Never outgrow it.
-    details: "xopc skills install · xopc extensions install — extend capabilities with reusable modules, tools, channels, and UI panels without forking core."
+  - title: 🧩 Explicit agent boundaries
+    details: "Configure identity, model roles, workspace, tool policy, skills, memory, and boundaries per agent; add tools, channels, and UI through extensions."
     link: /extensions
-  - title: ⏰ Automations
-    details: Scheduled, manual, and webhook-triggered agent or workflow runs. Your agent keeps moving while you focus elsewhere.
+  - title: ⏰ Triggerable automations
+    details: Run agents or workflows on schedules, manually, or from webhooks, with visible run results and failures.
     link: /automations
   - title: 🔀 Dynamic workflows
     details: Fan out subagents from deterministic scripts — repo audits, multi-perspective reviews, and parallel research with live progress.
@@ -53,26 +53,27 @@ features:
     link: /voice
 ---
 
-## How xopc grows with you
+## xopc manages a work runtime
 
-You do not need to build a workflow system on day one. xopc starts useful as a local chat assistant, then becomes more valuable as you keep giving it project context.
+Most chat products organize everything around one conversation. xopc gives long-running work several explicit, connected objects:
 
-| Stage | Start with | Add when it helps |
+| Object | What it keeps | How it continues |
 | --- | --- | --- |
-| Chat | Ask questions, think through work, make decisions | Your own model keys and local state |
-| Project | Ask xopc to follow one goal over time | Goal state, blockers, decisions, next actions |
-| Notes | Drop updates, links, ideas, and feedback | Reusable context for future turns |
-| Connectors | Pair the mobile app by QR code, or use desktop, terminal, browser, messengers, gateway APIs | Signals from where your work already happens, while the agent and data stay in your xopc runtime |
-| Automations | Schedule reviews, reminders, summaries, workflows | A loop that keeps work visible without manual restarts |
+| Agent | Identity, responsibilities, model roles, tools, skills, memory, and boundaries | Give each kind of work a deliberate capability envelope |
+| Session | Transcript, context, and run events | Resume from terminal, web, desktop, mobile, or a messenger |
+| Project / Goal | Brief, status, blockers, next actions, and linked activity | See what needs attention without mining chat history |
+| Note / Workspace | Quick inputs, attachments, and durable files | Collect source material and retain reusable context and artifacts |
+| Workflow / Automation | Multi-agent execution, triggers, run state, and results | Execute complex work and run it again on time or on an event |
 
-Read the concept guide: [From Chat to Loops](./concepts/loops.md).
+The point is not that “AI remembers everything automatically.” Important state has a clear home, execution and triggers are observable, and you can tell where to resume. Read [The Continuous Work Model](./concepts/loops.md).
 
 ## Start by what you want
 
 | Goal | Start here |
 | --- | --- |
 | I want a private AI assistant on my computer | [First 5 Minutes](./first-5-minutes.md) |
-| I want to understand how chat becomes a data flywheel | [From Chat to Loops](./concepts/loops.md) |
+| I want to understand how xopc stores state, executes work, and triggers follow-up | [The Continuous Work Model](./concepts/loops.md) |
+| I want to organize long-running work with projects, goals, and notes | [Projects, Goals, and Notes](./projects-goals-notes.md) |
 | I want to know how xopc differs from Codex, Claude Code, Qoder, and WorkBuddy | [Comparison](./comparison.md) |
 | I want the same assistant in Telegram, WeChat, or Feishu/Lark | [Channels](./channels/index.md) |
 | I want scheduled reviews, reminders, and summaries | [Automations](./automations.md) |

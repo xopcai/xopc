@@ -1,70 +1,61 @@
-# From Chat to Loops
+# The Continuous Work Model
 
-"Turn goals into loops" does not mean you need to design a workflow system before you can use xopc.
+When xopc talks about a “loop,” it does not mean you must design a complicated workflow first, and it does not promise that a model automatically remembers everything. It describes a more reliable operating model: **state has an explicit home, execution is observable, and follow-up can be triggered again.**
 
-Most people should start with a normal chat. Ask questions, think through a decision, summarize a project, or capture what happened today. The loop appears gradually as xopc keeps the useful context and helps you return to the next step.
+A normal conversation stops after the answer. Continuous work must answer three questions: Where are we now? Who does what next? What time or event starts the work again? xopc uses separate, connected product objects for those jobs.
 
-## The path
+## What makes a loop
 
-You do not need a perfect system on day one. xopc is designed to become more useful as you keep using it.
-
-| Stage | What you do | What xopc starts to do |
+| Component | Role | Good home for |
 | --- | --- | --- |
-| **Chat** | Ask questions, think through work, make decisions. | Gives you a local AI assistant that uses your model keys and local state. |
-| **Project** | Ask it to keep track of one active goal. | Carries the goal, current state, blockers, and next actions across sessions. |
-| **Notes & ideas** | Drop rough notes, progress updates, links, and feedback as they happen. | Turns scattered inputs into context the assistant can reuse. |
-| **Connectors** | Pair the mobile app by QR code, or use the same assistant on desktop, terminal, messengers, and gateway APIs. | Lets you chat and capture notes from anywhere while the agent and data stay in your xopc runtime. |
-| **Automations** | Schedule reviews, reminders, summaries, and workflow runs. | Keeps important work resurfacing and closes the loop without you starting every turn manually. |
+| **Session** | Keeps a continuing conversation and its run events | Discussion, tool results, temporary context |
+| **Project** | Groups sessions, goals, workflows, and memory around one topic | Project brief, recent activity, attention items |
+| **Goal** | Explicitly tracks a desired outcome and progress | Status, checklist, blockers, and next action |
+| **Note / Workspace** | Captures inputs and retains durable material | Text, voice, images, attachments, documents, artifacts |
+| **Workflow** | Organizes complex or parallel execution into visible phases | Reviews, research, audits, structured outputs |
+| **Automation** | Decides when an agent or workflow runs again | Schedules, manual runs, webhooks, retries, notifications |
 
-## A simple first prompt
+You do not need all of them. A temporary question may need only a Session. A long-running effort can add a Project and Goals. Repeated work can then become a Workflow or Automation.
 
-```text
-Help me keep this project moving. Track the goal, current status, blockers, decisions, and next actions. When I send updates, summarize what changed and suggest the next step.
-```
+## State, execution, and triggers are different
 
-Use it for a side project, writing plan, product idea, customer follow-up, learning plan, or personal checklist. Once the habit works in chat, add channels and automations only where they reduce friction.
+Keeping them separate avoids vague expectations about “AI memory.”
 
-### What to look for after the first prompt
+1. **State** answers “what do we know now?” Sessions retain conversations, goals retain progress, notes and workspaces retain material, and projects group related activity.
+2. **Execution** answers “what happens this time?” An agent uses its allowed tools and skills; a workflow organizes multiple steps or subagents into an inspectable run.
+3. **Triggers** answer “when does it happen again?” Start manually or let a schedule or webhook launch an automation, then inspect success, failure, and retry history.
 
-- The assistant should treat the work as something you will continue, not just a one-shot question.
-- Your local state and config live under `~/.xopc/` by default.
-- You can keep feeding short notes, links, blockers, and decisions in the same chat.
-- You can add Web, mobile QR pairing, messenger, connector, and automation paths later when they reduce friction.
+A model does not gain infinite memory because a prompt says “remember this.” Put important information in the right object: an outcome to track belongs in a Goal, durable source material belongs in a Note or Workspace, and recurring action belongs in an Automation.
 
-## What a loop looks like
+## A real project loop
 
-1. You give xopc a goal and the current state.
-2. xopc helps identify the next action.
-3. You act outside or inside xopc.
-4. You send back the result, a blocker, or a new idea.
-5. xopc updates the context and helps choose the next move.
-6. Automations repeat the review, reminder, or summary when needed.
+Consider shipping a product release:
 
-The value comes from repetition. A single chat can answer a question. A loop keeps the project visible, current, and easier to resume.
+1. Create or select a Project and state the release scope and success criteria.
+2. Track “ship the release” as a Goal with a checklist, blockers, and a next action.
+3. Implement and test from terminal or web sessions; associate relevant sessions and workflow runs with the project.
+4. Capture user feedback, voice thoughts, or screenshots into Notes from mobile.
+5. Run a Workflow that fans out code review, documentation checks, and release-note drafting.
+6. Use an Automation to summarize unfinished work daily or start checks from a webhook.
+7. Return to the project to see its timeline, stale goals, failed runs, and recommended next action.
 
-## Mobile as a private remote control
+The loop does not mean the system decides everything for you. It means inputs, decisions, execution, feedback, and the next trigger each have a place you can find.
 
-Many useful notes do not happen while you are sitting at your computer. The xopc mobile app is meant for those moments: capture a thought, send a project update, record a blocker, or continue a conversation from iOS or Android.
+## Many surfaces, one state
 
-The important distinction is that the mobile app is not a separate cloud brain. xopc still runs on your computer or self-managed host. The app pairs with your gateway by QR code and talks to that runtime. Your long-term project context stays in your xopc environment instead of being moved into a hosted chat account.
+CLI, TUI, web, desktop, mobile, and messenger channels are not separate assistants. They connect to the same xopc gateway and state store. Mobile is useful for capture and remote conversation, terminal for execution, and web for managing projects, agents, automations, and run history.
 
-## Your timeline
+Remote access does not change ownership: xopc still runs on your computer or self-managed host. You choose the network exposure, token policy, and model providers.
 
-| When | What to add |
-| --- | --- |
-| **Day 1** | Chat locally, configure one model, ask xopc to track a real project. |
-| **This week** | Feed it notes, blockers, decisions, links, and progress updates. |
-| **When it sticks** | Add the surfaces you actually use: desktop, terminal, browser, mobile QR pairing, Telegram, WeChat, or Feishu/Lark. |
-| **As work repeats** | Add automations for reviews, reminders, summaries, and workflow runs. |
+## Start with the smallest useful combination
 
-## Start by what you want
+| Need | Minimum combination | Next step |
+| --- | --- | --- |
+| Temporary question or one task | Agent + Session | [First 5 Minutes](../first-5-minutes.md) |
+| Keep a project moving | Project + Goal + Sessions | Open Projects / Goals in the gateway console |
+| Capture material anywhere | Notes + Mobile / Web | [Mobile app](../mobile-app.md) |
+| Execute complex multi-step work | Workflow + Agent | [Workflows](../workflows.md) |
+| Review on a schedule or react to events | Automation + Agent / Workflow | [Automations](../automations.md) |
+| Isolate capabilities by context | Multiple agents + capability presets | [Routing system](../routing-system.md) |
 
-| Goal | Start here |
-| --- | --- |
-| I want a private AI assistant on my computer | [First 5 Minutes](../first-5-minutes.md) |
-| I want to understand how chat becomes a data flywheel | This page |
-| I want to know how xopc differs from Codex, Claude Code, Qoder, and WorkBuddy | [Comparison](../comparison.md) |
-| I want the same assistant in Telegram, WeChat, or Feishu/Lark | [Channels](../channels/index.md) |
-| I want scheduled reviews, reminders, and summaries | [Automations](../automations.md) |
-| I want multiple agents for work, code, and personal contexts | [Routing system](../routing-system.md) |
-| I want to extend xopc with tools, channels, or reusable skills | [Skills](../skills.md) and [Extensions](../extensions.md) |
+On your first run, get one Agent and one Session working. Add a Project / Goal when work needs to be resumed, and a Workflow / Automation when an action repeats. Complexity should come from a real need, not from installation-day ceremony.

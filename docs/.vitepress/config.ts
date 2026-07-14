@@ -50,7 +50,7 @@ export default defineConfig({
           alt: 'xopc'
         },
         nav: [
-          { text: 'Guide', link: '/concepts/loops' },
+          { text: 'Product model', link: '/concepts/loops' },
           { text: 'Reference', link: '/configuration' }
         ],
         sidebar: [
@@ -59,7 +59,7 @@ export default defineConfig({
             items: [
               { text: 'First 5 Minutes', link: '/first-5-minutes' },
               { text: 'Getting Started', link: '/getting-started' },
-              { text: 'From Chat to Loops', link: '/concepts/loops' },
+              { text: 'Continuous Work Model', link: '/concepts/loops' },
               { text: 'Comparison', link: '/comparison' },
               { text: 'Models', link: '/models' }
             ]
@@ -73,6 +73,7 @@ export default defineConfig({
               { text: 'Gateway console', link: '/gateway' },
               { text: 'Mobile app', link: '/mobile-app' },
               { text: 'Session', link: '/session' },
+              { text: 'Projects, Goals & Notes', link: '/projects-goals-notes' },
               {
                 text: 'Channels',
                 collapsed: true,
@@ -157,7 +158,7 @@ export default defineConfig({
           alt: 'xopc'
         },
         nav: [
-          { text: '指南', link: '/zh/concepts/loops' },
+          { text: '产品模型', link: '/zh/concepts/loops' },
           { text: '参考', link: '/zh/configuration' }
         ],
         sidebar: [
@@ -166,7 +167,7 @@ export default defineConfig({
             items: [
               { text: '5分钟快速入门', link: '/zh/first-5-minutes' },
               { text: '快速上手', link: '/zh/getting-started' },
-              { text: '从聊天到数据飞轮', link: '/zh/concepts/loops' },
+              { text: '持续工作模型', link: '/zh/concepts/loops' },
               { text: '产品对比', link: '/zh/comparison' },
               { text: '模型支持', link: '/zh/models' }
             ]
@@ -180,6 +181,7 @@ export default defineConfig({
               { text: '网关控制台', link: '/zh/gateway' },
               { text: '手机端 App', link: '/zh/mobile-app' },
               { text: '会话管理', link: '/zh/session' },
+              { text: '项目、目标与笔记', link: '/zh/projects-goals-notes' },
               {
                 text: '消息通道',
                 collapsed: true,
