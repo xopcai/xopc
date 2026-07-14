@@ -4,8 +4,8 @@ import { registerGatewaySseConnection } from '@/features/gateway/sse-controller'
 import { setSseConnectionState } from '@/stores/gateway-sse-store';
 
 /** Start `/api/events` SSE; returns teardown. Lives outside hooks so effect bodies stay lean. */
-export function startGatewaySseConnection(token: string): () => void {
-  const config = { token, autoReconnect: true, maxReconnectAttempts: 10 };
+export function startGatewaySseConnection(credential: string): () => void {
+  const config = { credential, autoReconnect: true, maxReconnectAttempts: 10 };
 
   const conn = new GatewaySseConnection(config, {
     onConnected: () => {

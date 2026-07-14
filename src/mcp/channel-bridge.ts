@@ -18,6 +18,7 @@ import {
 } from './gateway-http-client.js';
 import { loadUndiciRuntimeDeps } from '../infra/undici-fetch.js';
 import { createLogger } from '../utils/logger.js';
+import { gatewayCredentialAuthorization, type GatewayCredential } from '../gateway/credential.js';
 
 const log = createLogger('Mcp:Bridge');
 
@@ -35,7 +36,7 @@ export class XopcChannelBridge {
     private readonly cfg: Config,
     private readonly params: {
       gatewayUrl?: string;
-      gatewayToken?: string;
+      gatewayCredential?: GatewayCredential;
       claudeChannelMode: ClaudeChannelMode;
       verbose: boolean;
     },
@@ -50,7 +51,7 @@ export class XopcChannelBridge {
     this.client = createGatewayHttpClientFromConfig({
       config: this.cfg,
       gatewayUrl: this.params.gatewayUrl,
-      gatewayToken: this.params.gatewayToken,
+      gatewayCredential: this.params.gatewayCredential,
     });
     this.connectEvents();
   }
@@ -72,21 +73,22 @@ export class XopcChannelBridge {
     const abort = new AbortController();
     this.eventsAbort = abort;
     const baseUrl = resolveGatewayHttpBaseUrl(this.cfg, this.params.gatewayUrl);
-    void this.runEventsLoop(baseUrl, this.params.gatewayToken, abort.signal);
+    void this.runEventsLoop(baseUrl, this.params.gatewayCredential, abort.signal);
   }
 
   private async runEventsLoop(
     baseUrl: string,
-    token: string | undefined,
+    credential: GatewayCredential | undefined,
     signal: AbortSignal,
   ): Promise<void> {
     const url = new URL(`${baseUrl}/api/events`);
-    if (token?.trim()) {
-      url.searchParams.set('token', token.trim());
-    }
+    const authorization = gatewayCredentialAuthorization(credential);
     try {
       const res = await loadUndiciRuntimeDeps().fetch(url.toString(), {
-        headers: { Accept: 'text/event-stream' },
+        headers: {
+          Accept: 'text/event-stream',
+          ...(authorization ? { Authorization: authorization } : {}),
+        },
         signal,
       });
       if (!res.ok || !res.body) {
@@ -119,10 +121,7 @@ export class XopcChannelBridge {
     } catch (err) {
       const em = err instanceof Error ? err.message : String(err);
       if (!signal.aborted && !this.closed) {
-        log.warn(
-          { err, errorMessage: em, phase: 'mcp.bridge.sse', baseUrl },
-          `Gateway events SSE disconnected: ${em}`,
-        );
+        log.warn({ err, errorMessage: em, phase: 'mcp.bridge.sse', baseUrl }, `Gateway events SSE disconnected: ${em}`);
       }
     }
     if (!this.closed && !signal.aborted) {
@@ -187,13 +186,9 @@ export class XopcChannelBridge {
     if (args.search) query.set('search', args.search);
     if (args.channel) query.set('channel', args.channel);
     const qs = query.toString();
-    const rows = await client.getJson<SessionRow[] | { sessions?: SessionRow[] }>(
-      `/api/sessions${qs ? `?${qs}` : ''}`,
-    );
+    const rows = await client.getJson<SessionRow[] | { sessions?: SessionRow[] }>(`/api/sessions${qs ? `?${qs}` : ''}`);
     const sessions = Array.isArray(rows) ? rows : (rows.sessions ?? []);
-    return sessions
-      .map((row) => toConversation(row))
-      .filter((c): c is ConversationDescriptor => c !== null);
+    return sessions.map((row) => toConversation(row)).filter((c): c is ConversationDescriptor => c !== null);
   }
 
   async getConversation(sessionKey: string): Promise<ConversationDescriptor | null> {
@@ -206,21 +201,15 @@ export class XopcChannelBridge {
     }
   }
 
-  async readMessages(
-    sessionKey: string,
-    limit: number,
-  ): Promise<Array<Record<string, unknown>>> {
+  async readMessages(sessionKey: string, limit: number): Promise<Array<Record<string, unknown>>> {
     const client = this.client!;
-    const payload = await client.getJson<{ messages?: Array<Record<string, unknown>> }>(
-      `/api/sessions/${encodeURIComponent(sessionKey)}/messages?limit=${limit}`,
-    );
+    const payload = await client.getJson<{
+      messages?: Array<Record<string, unknown>>;
+    }>(`/api/sessions/${encodeURIComponent(sessionKey)}/messages?limit=${limit}`);
     return payload.messages ?? [];
   }
 
-  pollEvents(
-    filter: WaitFilter,
-    limit: number,
-  ): { events: QueueEvent[]; nextCursor: number } {
+  pollEvents(filter: WaitFilter, limit: number): { events: QueueEvent[]; nextCursor: number } {
     const events = this.queue
       .filter((e) => e.cursor > filter.afterCursor)
       .filter((e) => !filter.sessionKey || ('sessionKey' in e && e.sessionKey === filter.sessionKey))

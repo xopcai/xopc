@@ -53,6 +53,7 @@ function createMockService(cfg: Partial<Config>, workspaceRoot: string): Gateway
     currentConfig: cfg,
     getAuthToken: () => TOKEN,
     getAuthMode: () => 'token',
+    getResolvedAuth: () => ({ mode: 'token', token: TOKEN }),
     emit: () => {},
     getEffectiveWorkspacePathForSession: async () => workspaceRoot,
     getHealth: () => ({ status: 'healthy', version: 'test', channels: [], uptime: 0 }),

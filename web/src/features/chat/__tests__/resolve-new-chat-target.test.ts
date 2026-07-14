@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 import type { SessionInfo } from '@/features/chat/chat.types';
 import { resolveNewChatTarget } from '@/features/chat/session/resolve-new-chat-target';
+import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import {
   addWebchatEmptyShellToCache,
@@ -52,6 +53,7 @@ describe('resolveNewChatTarget', () => {
   beforeEach(() => {
     resetWebchatEmptyShellCacheForTests();
     invalidateWebchatEmptyShellCache();
+    useChatSessionStore.setState({ sessions: {} });
   });
 
   it('forceNew always creates a server session', async () => {
@@ -74,6 +76,23 @@ describe('resolveNewChatTarget', () => {
     });
     expect(result).toEqual({ kind: 'noop', sessionKey: emptyA.key });
     expect(mgr.loadSessions).toHaveBeenCalled();
+  });
+
+  it('creates a new session when the current session has a local user message', async () => {
+    useChatSessionStore.getState().setCommittedSnapshot(emptyA.key, {
+      messages: [{ role: 'user', content: [{ type: 'text', text: 'Hello' }], timestamp: 1 }],
+      hasMore: false,
+    });
+    const mgr = mockSessionMgr([emptyA]);
+
+    const result = await resolveNewChatTarget({
+      sessionMgr: mgr,
+      agentId: 'main',
+      currentSessionKey: emptyA.key,
+    });
+
+    expect(result.kind).toBe('create');
+    expect(mgr.createSession).toHaveBeenCalledWith({ agentId: 'main', projectId: undefined });
   });
 
   it('reuses another empty shell when current is not empty', async () => {

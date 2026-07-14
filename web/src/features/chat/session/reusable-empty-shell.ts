@@ -1,5 +1,8 @@
 import type { SessionInfo } from '@/features/chat/chat.types';
-import { isSessionAgentRunActive } from '@/features/chat/session/chat-session-store';
+import {
+  getChatSessionSnapshot,
+  isSessionAgentRunActive,
+} from '@/features/chat/session/chat-session-store';
 import { normalizeAgentId } from '@/lib/agent-id';
 
 function parseAgentWebchatKey(key: string): { agentId: string; sourceChannel: string; peerId: string } | null {
@@ -42,7 +45,11 @@ export function isReusableEmptyShell(session: SessionInfo, scope: ReusableEmptyS
   if (session.customData?.genericNewChatShell === false) return false;
   if (hasSourceBinding(session.customData)) return false;
   if (!isGenericNewChatPeer(parsed.peerId)) return false;
-  if ((session.messageCount ?? 0) !== 0) return false;
+  // Session-list metadata can lag behind the optimistic user message in the
+  // local slice. A session is empty only when neither source has a message.
+  if ((session.messageCount ?? 0) !== 0 || (getChatSessionSnapshot(key)?.messages.length ?? 0) !== 0) {
+    return false;
+  }
   const sessionAgent = (session.routing?.agentId ?? parsed?.agentId)?.trim().toLowerCase();
   if (!sessionAgent || sessionAgent !== normalizeAgentId(scope.agentId)) return false;
   const requestedProjectId = normalizeProjectId(scope.projectId);

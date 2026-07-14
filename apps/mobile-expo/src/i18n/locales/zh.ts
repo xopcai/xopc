@@ -709,6 +709,8 @@ export const zh: MessageBundle = {
     noChats: '还没有 AI 对话',
     askAi: '问 AI',
     askAiHint: '开始新对话',
+    askAiStarting: '正在发起新对话…',
+    askAiStartFailed: '无法发起新对话。请检查连接后重试。',
     noRecentOpened: '还没有最近打开的笔记',
     noContinueItems: '还没有可继续的工作',
     inboxCleared: 'Inbox 已清空',

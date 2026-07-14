@@ -30,6 +30,7 @@ export function SidebarNav({
           {!collapsed ? (
             <Link
               to="/chat/new"
+              state={{ forceNewChat: true }}
               className={cn(
                 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-medium leading-5 transition-colors duration-200 ease-out',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',

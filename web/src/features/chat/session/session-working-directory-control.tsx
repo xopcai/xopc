@@ -93,10 +93,6 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
     });
   }, [wd.lockedTapBody, wd.lockedTapTitle]);
 
-  if (!sessionKey) {
-    return null;
-  }
-
   const fullPath = effectivePath.trim();
   const hasPath = Boolean(fullPath);
   const label = hasPath ? folderDisplayName(fullPath) : wd.notSet;
@@ -148,6 +144,18 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
       </TooltipPortal>
     </TooltipRoot>
   );
+
+  if (!sessionKey) {
+    return (
+      <div
+        aria-hidden="true"
+        className={cn(chipClass, 'cursor-not-allowed text-fg-muted opacity-60')}
+      >
+        <FolderInput className="size-3.5 shrink-0 text-fg-muted" />
+        <span className="min-w-0 truncate text-left font-medium text-fg">{wd.notSet}</span>
+      </div>
+    );
+  }
 
   const readOnlyChip = () =>
     wrapChipTooltip(

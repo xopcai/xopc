@@ -1,5 +1,5 @@
-import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir } from "node:fs/promises";
+import { join } from "node:path";
 
 import {
   BrowserWindow,
@@ -8,24 +8,30 @@ import {
   shell,
   type BrowserWindowConstructorOptions,
   type Rectangle,
-} from 'electron';
+} from "electron";
 
-import { createDesktopPetPackage } from '../../src/pets/factory.js';
+import { createDesktopPetPackage } from "../../src/pets/factory.js";
 import {
   desktopPetCustomDir,
   patchDesktopPetPrefs,
   readDesktopPetPrefs,
   readDesktopPetState,
-} from './prefs.js';
+} from "./prefs.js";
 import type {
+  DesktopPetAnchor,
+  DesktopPetContentSize,
   DesktopPetCreateRequest,
   DesktopPetCreateResult,
   DesktopPetDragPoint,
-  DesktopPetEvent,
+  PetSessionUpdate,
   DesktopPetPrefs,
   DesktopPetState,
-} from './types.js';
-import { clampDesktopPetBounds, desktopPetDefaultBounds } from './window-bounds.js';
+} from "./types.js";
+import {
+  clampDesktopPetAnchor,
+  desktopPetDefaultAnchor,
+  desktopPetWindowBoundsForAnchor,
+} from "./window-bounds.js";
 
 type DesktopPetRuntime = {
   resolveUrl: () => string | null;
@@ -35,48 +41,59 @@ type DesktopPetRuntime = {
 
 let runtime: DesktopPetRuntime | null = null;
 let petWindow: BrowserWindow | null = null;
-let boundsSaveTimer: NodeJS.Timeout | null = null;
-let dragState: { startPoint: DesktopPetDragPoint; startBounds: Rectangle } | null = null;
+let dragState: {
+  startPoint: DesktopPetDragPoint;
+  startAnchor: DesktopPetAnchor;
+} | null = null;
+let contentSize: DesktopPetContentSize = { width: 138, height: 132 };
+let interactiveSize: DesktopPetContentSize = { width: 138, height: 132 };
 
 function scaleFromPrefs(prefs: DesktopPetPrefs): number {
   return Math.min(1.4, Math.max(0.7, prefs.sizePercent / 100));
 }
 
-function defaultBounds(prefs: DesktopPetPrefs): Rectangle {
-  const display = screen.getPrimaryDisplay().workArea;
-  return desktopPetDefaultBounds(display, scaleFromPrefs(prefs));
+function defaultContentSize(prefs: DesktopPetPrefs): DesktopPetContentSize {
+  const stageSize = Math.round(132 * scaleFromPrefs(prefs));
+  return {
+    width: stageSize + Math.round(6 * scaleFromPrefs(prefs)),
+    height: stageSize,
+  };
 }
 
-function clampBounds(bounds: Rectangle): Rectangle {
-  const display = screen.getDisplayMatching(bounds).workArea;
-  return clampDesktopPetBounds(bounds, display);
+function updateInteractiveSize(prefs: DesktopPetPrefs): void {
+  interactiveSize = defaultContentSize(prefs);
 }
 
-async function getInitialBounds(): Promise<Rectangle> {
+function clampAnchor(anchor: DesktopPetAnchor): DesktopPetAnchor {
+  const display = screen.getDisplayNearestPoint(anchor).workArea;
+  return clampDesktopPetAnchor(
+    anchor,
+    display,
+    interactiveSize.width,
+    interactiveSize.height,
+  );
+}
+
+function boundsForAnchor(anchor: DesktopPetAnchor): Rectangle {
+  return desktopPetWindowBoundsForAnchor(anchor, contentSize);
+}
+
+async function getInitialAnchor(): Promise<DesktopPetAnchor> {
   const prefs = await readDesktopPetPrefs();
-  const fallback = defaultBounds(prefs);
-  return clampBounds({ ...fallback, ...(prefs.bounds ?? {}) });
+  return clampAnchor(
+    prefs.anchor ??
+      desktopPetDefaultAnchor(screen.getPrimaryDisplay().workArea),
+  );
 }
 
 function emitStateChanged(): void {
   void getDesktopPetState().then((state) => {
     for (const win of BrowserWindow.getAllWindows()) {
       if (!win.isDestroyed()) {
-        win.webContents.send('desktop-pet:state-changed', state);
+        win.webContents.send("desktop-pet:state-changed", state);
       }
     }
   });
-}
-
-function scheduleBoundsSave(win: BrowserWindow): void {
-  if (boundsSaveTimer) {
-    clearTimeout(boundsSaveTimer);
-  }
-  boundsSaveTimer = setTimeout(() => {
-    boundsSaveTimer = null;
-    if (win.isDestroyed()) return;
-    void patchDesktopPetPrefs({ bounds: win.getBounds() }).then(() => emitStateChanged());
-  }, 350);
 }
 
 async function createPetWindow(): Promise<BrowserWindow | null> {
@@ -87,7 +104,9 @@ async function createPetWindow(): Promise<BrowserWindow | null> {
   if (!href) return null;
 
   const prefs = await readDesktopPetPrefs();
-  const bounds = await getInitialBounds();
+  updateInteractiveSize(prefs);
+  contentSize = defaultContentSize(prefs);
+  const bounds = boundsForAnchor(await getInitialAnchor());
   const options: BrowserWindowConstructorOptions = {
     ...bounds,
     frame: false,
@@ -97,10 +116,10 @@ async function createPetWindow(): Promise<BrowserWindow | null> {
     show: false,
     skipTaskbar: true,
     hasShadow: false,
-    backgroundColor: '#00000000',
+    backgroundColor: "#00000000",
     fullscreenable: false,
     webPreferences: {
-      preload: join(import.meta.dirname, '../preload/index.cjs'),
+      preload: join(import.meta.dirname, "../preload/index.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
       ...(runtime.disableSandbox ? { sandbox: false } : {}),
@@ -108,13 +127,12 @@ async function createPetWindow(): Promise<BrowserWindow | null> {
   };
   const win = new BrowserWindow(options);
   petWindow = win;
-  win.setAlwaysOnTop(prefs.alwaysOnTop, 'floating');
-  win.on('move', () => scheduleBoundsSave(win));
-  win.on('closed', () => {
+  win.setAlwaysOnTop(prefs.alwaysOnTop, "floating");
+  win.on("closed", () => {
     if (petWindow === win) petWindow = null;
     emitStateChanged();
   });
-  win.webContents.on('did-finish-load', () => emitStateChanged());
+  win.webContents.on("did-finish-load", () => emitStateChanged());
   await win.loadURL(href);
   return win;
 }
@@ -134,8 +152,10 @@ export async function showDesktopPet(): Promise<void> {
   const prefs = await patchDesktopPetPrefs({ enabled: true });
   const win = await createPetWindow();
   if (!win || win.isDestroyed()) return;
-  win.setAlwaysOnTop(prefs.alwaysOnTop, 'floating');
-  win.setBounds(clampBounds({ ...defaultBounds(prefs), ...(prefs.bounds ?? {}) }));
+  win.setAlwaysOnTop(prefs.alwaysOnTop, "floating");
+  updateInteractiveSize(prefs);
+  contentSize = defaultContentSize(prefs);
+  win.setBounds(boundsForAnchor(await getInitialAnchor()));
   win.showInactive();
   emitStateChanged();
 }
@@ -155,19 +175,16 @@ export async function toggleDesktopPet(): Promise<void> {
   await showDesktopPet();
 }
 
-export async function applyDesktopPetPrefs(patch: Partial<DesktopPetPrefs>): Promise<DesktopPetState> {
+export async function applyDesktopPetPrefs(
+  patch: Partial<DesktopPetPrefs>,
+): Promise<DesktopPetState> {
   const prefs = await patchDesktopPetPrefs(patch);
   if (petWindow && !petWindow.isDestroyed()) {
-    petWindow.setAlwaysOnTop(prefs.alwaysOnTop, 'floating');
+    petWindow.setAlwaysOnTop(prefs.alwaysOnTop, "floating");
     if (patch.sizePercent !== undefined) {
-      const fallback = defaultBounds(prefs);
-      const resizedBounds = clampBounds({
-        ...fallback,
-        x: prefs.bounds?.x ?? fallback.x,
-        y: prefs.bounds?.y ?? fallback.y,
-      });
-      petWindow.setBounds(resizedBounds);
-      await patchDesktopPetPrefs({ bounds: resizedBounds });
+      updateInteractiveSize(prefs);
+      contentSize = defaultContentSize(prefs);
+      petWindow.setBounds(boundsForAnchor(await getInitialAnchor()));
     }
     if (!prefs.enabled) {
       petWindow.hide();
@@ -182,27 +199,26 @@ export async function applyDesktopPetPrefs(patch: Partial<DesktopPetPrefs>): Pro
 
 export async function resetDesktopPetPosition(): Promise<DesktopPetState> {
   const prefs = await readDesktopPetPrefs();
-  const bounds = defaultBounds({ ...prefs, bounds: undefined });
-  const next = await patchDesktopPetPrefs({ bounds });
+  const anchor = desktopPetDefaultAnchor(screen.getPrimaryDisplay().workArea);
+  const next = await patchDesktopPetPrefs({ anchor });
   if (petWindow && !petWindow.isDestroyed()) {
-    petWindow.setBounds(clampBounds(bounds));
+    petWindow.setBounds(boundsForAnchor(anchor));
   }
-  const state = await readDesktopPetState(Boolean(petWindow && !petWindow.isDestroyed() && petWindow.isVisible()));
+  const state = await readDesktopPetState(
+    Boolean(petWindow && !petWindow.isDestroyed() && petWindow.isVisible()),
+  );
   state.prefs = next;
   emitStateChanged();
   return state;
 }
 
 export async function getDesktopPetState(): Promise<DesktopPetState> {
-  return readDesktopPetState(Boolean(petWindow && !petWindow.isDestroyed() && petWindow.isVisible()));
+  return readDesktopPetState(
+    Boolean(petWindow && !petWindow.isDestroyed() && petWindow.isVisible()),
+  );
 }
 
-export async function sendDesktopPetEvent(event: DesktopPetEvent): Promise<void> {
-  const payload: DesktopPetEvent = {
-    ...event,
-    id: event.id ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    createdAt: event.createdAt ?? Date.now(),
-  };
+export async function sendDesktopPetEvent(event: PetSessionUpdate): Promise<void> {
   const prefs = await readDesktopPetPrefs();
   if (!prefs.enabled) return;
   const win = await createPetWindow();
@@ -210,7 +226,7 @@ export async function sendDesktopPetEvent(event: DesktopPetEvent): Promise<void>
     if (!win.isVisible()) {
       win.showInactive();
     }
-    win.webContents.send('desktop-pet:event', payload);
+    win.webContents.send("desktop-pet:event", event);
   }
 }
 
@@ -227,7 +243,9 @@ export function openDesktopPetMainWindow(hashPath?: string): void {
   runtime?.openMainWindow(hashPath);
 }
 
-export async function openDesktopPetCustomDir(): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function openDesktopPetCustomDir(): Promise<
+  { ok: true } | { ok: false; error: string }
+> {
   const target = desktopPetCustomDir();
   await mkdir(target, { recursive: true });
   const message = await shell.openPath(target);
@@ -259,23 +277,34 @@ function isFiniteDragPoint(point: DesktopPetDragPoint): boolean {
 }
 
 export function startDesktopPetDrag(point: DesktopPetDragPoint): void {
-  if (!petWindow || petWindow.isDestroyed() || !isFiniteDragPoint(point)) return;
+  if (!petWindow || petWindow.isDestroyed() || !isFiniteDragPoint(point))
+    return;
   dragState = {
     startPoint: { screenX: point.screenX, screenY: point.screenY },
-    startBounds: petWindow.getBounds(),
+    startAnchor: {
+      x: petWindow.getBounds().x + contentSize.width,
+      y: petWindow.getBounds().y + contentSize.height,
+    },
   };
 }
 
 export function dragDesktopPet(point: DesktopPetDragPoint): void {
-  if (!petWindow || petWindow.isDestroyed() || !dragState || !isFiniteDragPoint(point)) return;
+  if (
+    !petWindow ||
+    petWindow.isDestroyed() ||
+    !dragState ||
+    !isFiniteDragPoint(point)
+  )
+    return;
   const dx = Math.round(point.screenX - dragState.startPoint.screenX);
   const dy = Math.round(point.screenY - dragState.startPoint.screenY);
   petWindow.setBounds(
-    clampBounds({
-      ...dragState.startBounds,
-      x: dragState.startBounds.x + dx,
-      y: dragState.startBounds.y + dy,
-    }),
+    boundsForAnchor(
+      clampAnchor({
+        x: dragState.startAnchor.x + dx,
+        y: dragState.startAnchor.y + dy,
+      }),
+    ),
   );
 }
 
@@ -283,15 +312,32 @@ export async function endDesktopPetDrag(): Promise<void> {
   if (!dragState) return;
   dragState = null;
   if (!petWindow || petWindow.isDestroyed()) return;
-  await patchDesktopPetPrefs({ bounds: petWindow.getBounds() });
+  const bounds = petWindow.getBounds();
+  await patchDesktopPetPrefs({
+    anchor: {
+      x: bounds.x + contentSize.width,
+      y: bounds.y + contentSize.height,
+    },
+  });
   emitStateChanged();
 }
 
+export function setDesktopPetContentSize(next: DesktopPetContentSize): void {
+  if (!petWindow || petWindow.isDestroyed()) return;
+  if (!Number.isFinite(next.width) || !Number.isFinite(next.height)) return;
+  const width = Math.max(1, Math.round(next.width));
+  const height = Math.max(1, Math.round(next.height));
+  if (width === contentSize.width && height === contentSize.height) return;
+  const bounds = petWindow.getBounds();
+  const anchor = clampAnchor({
+    x: bounds.x + contentSize.width,
+    y: bounds.y + contentSize.height,
+  });
+  contentSize = { width, height };
+  petWindow.setBounds(boundsForAnchor(anchor));
+}
+
 export function destroyDesktopPetWindow(): void {
-  if (boundsSaveTimer) {
-    clearTimeout(boundsSaveTimer);
-    boundsSaveTimer = null;
-  }
   if (petWindow && !petWindow.isDestroyed()) {
     petWindow.destroy();
   }

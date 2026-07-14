@@ -169,7 +169,7 @@ export function useChatSessionLoad(deps: {
         }
         loadingSessionRef.current = true;
         if (initialLoad) {
-          store().setLoadingSessionKey(k);
+          store().setSessionHistoryStatus(k, 'loading');
         }
         try {
           const {
@@ -240,8 +240,8 @@ export function useChatSessionLoad(deps: {
           return undefined;
         } finally {
           loadingSessionRef.current = false;
-          if (initialLoad && store().loadingSessionKey === k) {
-            store().setLoadingSessionKey(null);
+          if (initialLoad && store().sessions[k]?.historyStatus === 'loading') {
+            store().setSessionHistoryStatus(k, 'ready');
           }
         }
       };

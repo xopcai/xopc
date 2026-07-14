@@ -42,7 +42,7 @@ export function resolveElectronFileIpcRoots(config: Config, paths: ElectronUserP
 
 /**
  * Ensure shared xopc config exists with a persisted gateway token and workspace path.
- * Returns the gateway auth token for the UI (?token= / localStorage initial cache).
+ * Returns the gateway auth token for trusted Electron IPC initialization.
  */
 export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): Promise<{
   port: number;

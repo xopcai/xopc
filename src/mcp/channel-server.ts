@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { Config } from '../config/schema.js';
 import { loadConfig } from '../config/loader.js';
+import type { GatewayCredential } from '../gateway/credential.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { XopcChannelBridge } from './channel-bridge.js';
 import { ClaudePermissionRequestSchema, type ClaudeChannelMode } from './channel-shared.js';
@@ -9,7 +10,7 @@ import { getChannelMcpCapabilities, registerChannelMcpTools } from './channel-to
 
 export type XopcMcpServeOptions = {
   gatewayUrl?: string;
-  gatewayToken?: string;
+  gatewayCredential?: GatewayCredential;
   config?: Config;
   claudeChannelMode?: ClaudeChannelMode;
   verbose?: boolean;
@@ -24,13 +25,10 @@ export async function createXopcChannelMcpServer(opts: XopcMcpServeOptions = {})
   const cfg = opts.config ?? loadConfig();
   const claudeChannelMode = opts.claudeChannelMode ?? 'auto';
   const capabilities = getChannelMcpCapabilities(claudeChannelMode);
-  const server = new McpServer(
-    { name: 'xopc', version: PACKAGE_VERSION },
-    capabilities ? { capabilities } : undefined,
-  );
+  const server = new McpServer({ name: 'xopc', version: PACKAGE_VERSION }, capabilities ? { capabilities } : undefined);
   const bridge = new XopcChannelBridge(cfg, {
     gatewayUrl: opts.gatewayUrl,
-    gatewayToken: opts.gatewayToken,
+    gatewayCredential: opts.gatewayCredential,
     claudeChannelMode,
     verbose: opts.verbose ?? false,
   });

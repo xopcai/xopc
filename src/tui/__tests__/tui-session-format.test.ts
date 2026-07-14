@@ -81,27 +81,31 @@ describe('sessionMetadataToTuiItem', () => {
 
 describe('GatewaySseBackend session list mapping', () => {
   it('carries cwd into TUI session items for remote session scope/search parity', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(
-        JSON.stringify({
-          items: [
-            {
-              key: 'agent:main:remote',
-              name: 'Remote session',
-              updatedAt: '2026-01-01T00:00:00.000Z',
-              estimatedTokens: 42,
-              messageCount: 2,
-              customData: { model: 'openai/gpt-4.1' },
-              cwd: '/tmp/remote-work',
-            },
-          ],
-        }),
-        { status: 200 },
-      ),
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            items: [
+              {
+                key: 'agent:main:remote',
+                name: 'Remote session',
+                updatedAt: '2026-01-01T00:00:00.000Z',
+                estimatedTokens: 42,
+                messageCount: 2,
+                customData: { model: 'openai/gpt-4.1' },
+                cwd: '/tmp/remote-work',
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
     );
     vi.stubGlobal('fetch', fetchMock);
 
-    const backend = new GatewaySseBackend({ url: 'http://gateway.test', token: 'tok' });
+    const backend = new GatewaySseBackend({
+      url: 'http://gateway.test',
+      credential: { kind: 'token', value: 'tok' },
+    });
     const sessions = await backend.listSessions();
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -121,23 +125,24 @@ describe('GatewaySseBackend session list mapping', () => {
   it('normalizes /api/models composite ids for TUI provider/model formatting', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            ok: true,
-            payload: {
-              models: [
-                {
-                  id: 'openai/gpt-5',
-                  name: 'GPT-5',
-                  provider: 'openai',
-                  contextWindow: 400000,
-                },
-              ],
-            },
-          }),
-          { status: 200 },
-        ),
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              ok: true,
+              payload: {
+                models: [
+                  {
+                    id: 'openai/gpt-5',
+                    name: 'GPT-5',
+                    provider: 'openai',
+                    contextWindow: 400000,
+                  },
+                ],
+              },
+            }),
+            { status: 200 },
+          ),
       ),
     );
 

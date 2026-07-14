@@ -6,14 +6,16 @@ import { loadConfig } from '../../config/index.js';
 import { resolveConfigPath } from '../../config/paths.js';
 import { resolveGatewayEffectiveHost } from '../../config/gateway-bind.js';
 import { assertSecureGatewayHttpUrl } from '../../gateway/ws-security.js';
+import {
+  createGatewayCredential,
+  gatewayCredentialAuthorization,
+  type GatewayCredential,
+} from '../../gateway/credential.js';
 import { createLogger } from '../../utils/logger.js';
 import type { GatewayClientOptions } from './gateway-client-options.js';
 
 export type { GatewayClientOptions } from './gateway-client-options.js';
-export {
-  addGatewayClientOptions,
-  parseGatewayClientOptions,
-} from './gateway-client-options.js';
+export { addGatewayClientOptions, parseGatewayClientOptions } from './gateway-client-options.js';
 
 const log = createLogger('GatewayClient');
 
@@ -58,20 +60,35 @@ export function resolveGatewayUrl(opts?: { url?: string; configPath?: string }):
   }
 }
 
-export function resolveGatewayToken(opts?: { token?: string; configPath?: string }): string | undefined {
-  if (opts?.token) return opts.token;
+export function resolveGatewayCredential(opts?: {
+  token?: string;
+  passwordEnv?: string;
+  credential?: GatewayCredential;
+  configPath?: string;
+}): GatewayCredential | undefined {
+  if (opts?.credential) return opts.credential;
+  if (opts?.token && opts.passwordEnv) {
+    throw new Error('Use either --token or --password-env, not both.');
+  }
+  if (opts?.token) return createGatewayCredential('token', opts.token);
+  if (opts?.passwordEnv) {
+    return createGatewayCredential('password', process.env[opts.passwordEnv]);
+  }
 
   const envToken = process.env.XOPC_GATEWAY_TOKEN;
-  if (envToken) return envToken;
+  if (envToken) return createGatewayCredential('token', envToken);
 
   try {
     const configPath = opts?.configPath ?? resolveConfigPath();
     const config = loadConfig(configPath);
     if (config.gateway?.mode === 'remote') {
       const remoteToken = config.gateway.remote?.token?.trim();
-      if (remoteToken) return remoteToken;
+      if (remoteToken) return createGatewayCredential('token', remoteToken);
     }
-    return config?.gateway?.auth?.token;
+    const auth = config.gateway?.auth;
+    return auth?.mode === 'password'
+      ? createGatewayCredential('password', auth.password)
+      : createGatewayCredential('token', auth?.token);
   } catch {
     return undefined;
   }
@@ -84,15 +101,16 @@ export async function callGatewayApi<T = unknown>(
   body?: unknown,
 ): Promise<GatewayCallResult<T>> {
   const baseUrl = resolveGatewayUrl(opts);
-  const token = resolveGatewayToken(opts);
+  const credential = resolveGatewayCredential(opts);
   const timeoutMs = opts?.timeoutMs ?? 10_000;
   const url = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
 
   const headers: Record<string, string> = {
     Accept: 'application/json',
   };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
+  const authorization = gatewayCredentialAuthorization(credential);
+  if (authorization) {
+    headers.Authorization = authorization;
   }
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
@@ -117,14 +135,22 @@ export async function callGatewayApi<T = unknown>(
     if (!response.ok) {
       let errorMessage: string;
       try {
-        const errorBody = (await response.json()) as { error?: string; message?: string };
+        const errorBody = (await response.json()) as {
+          error?: string;
+          message?: string;
+        };
         errorMessage = errorBody.error || errorBody.message || response.statusText;
       } catch {
         errorMessage = response.statusText;
       }
 
       log.debug({ url, status: response.status, durationMs }, `Gateway call failed: ${errorMessage}`);
-      return { ok: false, status: response.status, error: errorMessage, durationMs };
+      return {
+        ok: false,
+        status: response.status,
+        error: errorMessage,
+        durationMs,
+      };
     }
 
     const data = (await response.json()) as T;
@@ -143,4 +169,3 @@ export async function callGatewayApi<T = unknown>(
     return { ok: false, status: 0, error: errorMessage, durationMs };
   }
 }
-

@@ -27,6 +27,7 @@ import {
   spawnGatewayProcess,
   stopGatewayProcess,
   registerEmbeddedGatewayRuntime,
+  getEmbeddedGatewayCredential,
   restartEmbeddedGatewayFromSavedConfig,
   waitForGatewayReady,
   type GatewayProcessOptions,
@@ -488,7 +489,6 @@ async function resolveWindowLoad(): Promise<
       void maybeAutoStartTunnel();
       startTunnelStatusPolling();
       const u = new URL(`http://127.0.0.1:${port}/`);
-      u.searchParams.set('token', token);
       u.hash = '#/chat';
       return { kind: 'url', href: u.toString(), openDevTools: false };
     } catch (e) {
@@ -852,7 +852,11 @@ app.whenReady().then(async () => {
   initDesktopPetWindow({
     resolveUrl: resolveDesktopPetUrl,
     openMainWindow: (hashPath) => {
-      navigateMainWindow(hashPath ?? '/chat');
+      if (hashPath) {
+        navigateMainWindow(hashPath);
+      } else {
+        focusOrCreateMainWindow();
+      }
     },
     disableSandbox: win32DisableSandbox,
   });
@@ -941,6 +945,11 @@ app.whenReady().then(async () => {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, message };
     }
+  });
+
+  ipcMain.handle('gateway:get-credential', (event) => {
+    assertTrustedRenderer(event);
+    return getEmbeddedGatewayCredential();
   });
 
   ipcMain.handle('startup:get-diagnostic', (event) => {

@@ -1,11 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 
 import { defaultSessionMeta } from '@/features/chat/session/chat-session-defaults';
-import {
-  markSkipInitialSessionLoad,
-  resetSkipInitialSessionLoadForTests,
-  takeSkipInitialSessionLoad,
-} from '@/features/chat/session/chat-session-init-skip-load';
 import { useChatSessionStore } from '@/features/chat/session/chat-session-store';
 import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
 
@@ -47,17 +42,5 @@ describe('patchSessionAgentConfigView', () => {
 
     expect(useChatSessionStore.getState().sessions[sessionKey]?.model).toBe('anthropic/claude-sonnet-4-6');
     expect(useChatSessionStore.getState().sessions[sessionKey]?.model).not.toBe(defaultSessionMeta().model);
-  });
-});
-
-describe('skip initial session load handoff', () => {
-  beforeEach(() => {
-    resetSkipInitialSessionLoadForTests();
-  });
-
-  it('marks and consumes the createSession skip flag once', () => {
-    markSkipInitialSessionLoad(sessionKey);
-    expect(takeSkipInitialSessionLoad(sessionKey)).toBe(true);
-    expect(takeSkipInitialSessionLoad(sessionKey)).toBe(false);
   });
 });

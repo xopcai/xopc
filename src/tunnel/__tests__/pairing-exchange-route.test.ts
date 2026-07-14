@@ -11,6 +11,7 @@ function mockService() {
       tunnel: { enabled: false, brokerUrl: 'https://frp.xopc.ai/api', autoStart: false },
     },
     getAuthToken: () => 'gateway-secret-token',
+    getResolvedAuth: () => ({ mode: 'token', token: 'gateway-secret-token' }),
     getHealth: () => ({ status: 'ok', version: '0', uptime: 0 }),
   } as unknown as import('../../gateway/service.js').GatewayService;
 }

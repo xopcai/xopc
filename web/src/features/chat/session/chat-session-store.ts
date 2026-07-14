@@ -19,6 +19,8 @@ import { chatRunManager } from '@/features/chat/session/chat-run-manager';
 import { cloneMessageForRender, ensureAssistantMessage } from '@/features/chat/messages/streaming';
 
 /** Per-session chat UI and agent config. @see docs/web/chat-session-semantics.md */
+export type SessionHistoryStatus = 'unknown' | 'loading' | 'ready';
+
 export type ChatSessionSlice = {
   name: string | null;
   model: string;
@@ -26,6 +28,7 @@ export type ChatSessionSlice = {
   reasoningLevel: ReasoningLevel;
   modelSupportsThinking: boolean;
   workingDirectoryLocked: boolean;
+  historyStatus: SessionHistoryStatus;
   messages: Message[];
   hasMore: boolean;
   streamingMsg: Message | null;
@@ -37,7 +40,6 @@ export type ChatSessionSlice = {
 type ChatSessionStoreState = {
   focusedSessionKey: string | null;
   initLoading: boolean;
-  loadingSessionKey: string | null;
   loadingMore: boolean;
   shellError: string | null;
   sessions: Record<string, ChatSessionSlice>;
@@ -46,9 +48,9 @@ type ChatSessionStoreState = {
 type ChatSessionStoreActions = {
   setFocusedSessionKey: (key: string | null) => void;
   setInitLoading: (loading: boolean) => void;
-  setLoadingSessionKey: (key: string | null) => void;
   setLoadingMore: (loading: boolean) => void;
   setShellError: (error: string | null) => void;
+  setSessionHistoryStatus: (sessionKey: string, status: SessionHistoryStatus) => void;
   patchSessionMeta: (
     sessionKey: string,
     partial: Partial<
@@ -119,6 +121,16 @@ const IDLE_STREAM: Pick<ChatSessionSlice, 'streamingMsg' | 'progress' | 'sending
   streaming: false,
 };
 
+function createEmptySessionSlice(historyStatus: SessionHistoryStatus): ChatSessionSlice {
+  return {
+    ...defaultSessionMeta(),
+    historyStatus,
+    messages: [],
+    hasMore: false,
+    ...IDLE_STREAM,
+  };
+}
+
 function cloneMessages(messages: Message[]): Message[] {
   return messages.map((m) => cloneMessageForRender(m));
 }
@@ -150,6 +162,7 @@ function cloneSlice(slice: ChatSessionSlice): ChatSessionSlice {
     reasoningLevel: slice.reasoningLevel,
     modelSupportsThinking: slice.modelSupportsThinking,
     workingDirectoryLocked: slice.workingDirectoryLocked,
+    historyStatus: slice.historyStatus,
     messages: cloneMessages(slice.messages),
     hasMore: slice.hasMore,
     streamingMsg: slice.streamingMsg ? cloneMessageForRender(slice.streamingMsg) : null,
@@ -187,23 +200,37 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
   (set, get) => ({
     focusedSessionKey: null,
     initLoading: true,
-    loadingSessionKey: null,
     loadingMore: false,
     shellError: null,
     sessions: {},
 
     setFocusedSessionKey: (key) => set({ focusedSessionKey: key }),
     setInitLoading: (loading) => set({ initLoading: loading }),
-    setLoadingSessionKey: (key) => set({ loadingSessionKey: key }),
     setLoadingMore: (loading) => set({ loadingMore: loading }),
     setShellError: (error) => set({ shellError: error }),
+
+    setSessionHistoryStatus: (sessionKey, historyStatus) => {
+      const key = normalizeKey(sessionKey);
+      if (!key) return;
+      set((state) => {
+        const current = state.sessions[key];
+        if (current?.historyStatus === historyStatus) return state;
+        const base = current ?? createEmptySessionSlice('unknown');
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: { ...base, historyStatus },
+          },
+        };
+      });
+    },
 
     patchSessionMeta: (sessionKey, partial) => {
       const key = normalizeKey(sessionKey);
       if (!key) return;
       set((state) => {
         const current = state.sessions[key];
-        const base = current ?? { ...defaultSessionMeta(), messages: [], hasMore: false, ...IDLE_STREAM };
+        const base = current ?? createEmptySessionSlice('unknown');
         return {
           sessions: {
             ...state.sessions,
@@ -236,7 +263,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
           return {
             sessions: {
               ...state.sessions,
-              [key]: { ...meta, messages, hasMore, ...IDLE_STREAM },
+              [key]: { ...meta, historyStatus: 'ready', messages, hasMore, ...IDLE_STREAM },
             },
           };
         }
@@ -244,14 +271,14 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
           return {
             sessions: {
               ...state.sessions,
-              [key]: { ...current, ...meta, hasMore },
+              [key]: { ...current, ...meta, historyStatus: 'ready', hasMore },
             },
           };
         }
         return {
           sessions: {
             ...state.sessions,
-            [key]: { ...current, ...meta, messages, hasMore, ...IDLE_STREAM },
+            [key]: { ...current, ...meta, historyStatus: 'ready', messages, hasMore, ...IDLE_STREAM },
           },
         };
       });
@@ -284,6 +311,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
             ...state.sessions,
             [key]: {
               ...meta,
+              historyStatus: 'ready',
               messages: cloneMessages(messages),
               hasMore,
               ...IDLE_STREAM,
@@ -330,6 +358,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
       if (!key || get().sessions[key]) return;
       get().initSessionSnapshot(key, {
         ...defaultSessionMeta(),
+        historyStatus: 'ready',
         messages,
         hasMore,
         streamingMsg: null,
@@ -465,6 +494,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
               ...state.sessions,
               [key]: {
                 ...meta,
+                historyStatus: 'ready',
                 messages: cloneMessages([message]),
                 hasMore: false,
                 ...IDLE_STREAM,
@@ -515,6 +545,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
               ...state.sessions,
               [key]: {
                 ...meta,
+                historyStatus: 'ready',
                 messages: cloneMessages(serverMessages),
                 hasMore: nextHasMore,
                 ...IDLE_STREAM,
@@ -526,18 +557,27 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
           return {
             sessions: {
               ...state.sessions,
-              [key]: { ...meta, messages: cloneMessages(serverMessages), hasMore: nextHasMore, ...IDLE_STREAM },
+              [key]: { ...meta, historyStatus: 'ready', messages: cloneMessages(serverMessages), hasMore: nextHasMore, ...IDLE_STREAM },
             },
           };
         }
         const merged = mergeMissingUserMessagesFromServer(current.messages, serverMessages);
-        if (merged === current.messages && nextHasMore === current.hasMore) {
+        if (
+          merged === current.messages &&
+          nextHasMore === current.hasMore &&
+          current.historyStatus === 'ready'
+        ) {
           return state;
         }
         return {
           sessions: {
             ...state.sessions,
-            [key]: { ...current, messages: cloneMessages(merged), hasMore: nextHasMore },
+            [key]: {
+              ...current,
+              historyStatus: 'ready',
+              messages: cloneMessages(merged),
+              hasMore: nextHasMore,
+            },
           },
         };
       });
@@ -553,7 +593,7 @@ export const useChatSessionStore = create<ChatSessionStoreState & ChatSessionSto
           return {
             sessions: {
               ...state.sessions,
-              [key]: { ...meta, messages: cloneMessages(older), hasMore, ...IDLE_STREAM },
+              [key]: { ...meta, historyStatus: 'ready', messages: cloneMessages(older), hasMore, ...IDLE_STREAM },
             },
           };
         }

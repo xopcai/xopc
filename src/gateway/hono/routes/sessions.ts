@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import type { Hono } from 'hono';
 
 import { buildSessionKey } from '../../../routing/session-key.js';
@@ -68,25 +70,6 @@ function buildDirectSessionMetadata(params: {
       genericNewChatShell: params.source === 'webchat' && params.peerId.startsWith('chat_'),
     },
   };
-}
-
-function isGenericNewChatShell(session: {
-  messageCount?: number;
-  routing?: { agentId?: string; peerId?: string };
-  projectId?: string;
-  customData?: Record<string, unknown>;
-  parentSessionKey?: string;
-  workflowRunId?: string;
-  workflowDefinitionId?: string;
-}, agentId: string, projectId: string | undefined): boolean {
-  if (session.messageCount !== 0) return false;
-  if (session.routing?.agentId !== agentId) return false;
-  if (projectId ? session.projectId !== projectId : Boolean(session.projectId)) return false;
-  if (session.parentSessionKey || session.workflowRunId || session.workflowDefinitionId) return false;
-  if (session.customData?.genericNewChatShell === false) return false;
-  const sourceBinding = session.customData?.sourceBinding;
-  if (sourceBinding && typeof sourceBinding === 'object') return false;
-  return Boolean(session.routing?.peerId?.startsWith('chat_'));
 }
 
 export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -161,7 +144,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
     });
   });
 
-  // POST /api/sessions - Create new session (reuses empty sessions)
+  // POST /api/sessions - Create a new session. Empty-shell reuse is a client concern.
   authenticated.post('/api/sessions', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const channel = body.channel || 'webchat';
@@ -177,8 +160,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       projectId,
     });
 
-    // If a specific chat_id is provided, use it (for advanced use cases)
-    // Otherwise, try to find and reuse an existing empty session
+    // If a specific chat_id is provided, use it (for advanced use cases).
     if (body.chat_id) {
       const sessionKey = buildSessionKey({
         agentId,
@@ -203,28 +185,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       return c.json({ session }, 201);
     }
 
-    // Look for existing empty sessions to reuse
-    const existingSessions = await service.sessions.listSessions({
-      channel,
-      includeHidden: true,
-      limit: 50,
-      sortBy: 'updatedAt',
-      sortOrder: 'desc',
-    });
-    
-    // Reuse an empty session only when it matches the requested agent (session key embeds agent id).
-    const emptySession = existingSessions.items.find((s) => {
-      return isGenericNewChatShell(s, agentId, projectId);
-    });
-    
-    if (emptySession) {
-      // Return existing empty session instead of creating a new one
-      const session = await service.sessions.getSession(emptySession.key);
-      return c.json({ session, reused: true }, 200);
-    }
-    
-    // No empty session found, create a new one
-    const chatId = `chat_${Date.now()}`;
+    const chatId = `chat_${randomUUID()}`;
     const sessionKey = buildSessionKey({
       agentId,
       source: channel,

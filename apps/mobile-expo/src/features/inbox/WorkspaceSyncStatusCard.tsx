@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon, Text } from 'react-native-paper';
 
 import { useMessages, t } from '../../i18n/messages';
 import {
-  getPendingWorkspaceOperationCount,
   getWorkspaceSyncDeadLetters,
   retryWorkspaceSyncDeadLetter,
 } from '../../sync/workspace-sync';
 import { flushWorkspaceSyncNow } from '../../sync/use-workspace-sync-flush';
+import { useWorkspaceSyncStatus } from '../../sync/use-workspace-sync-status';
 import { radii, spacing, typography, useTheme } from '../../theme';
 
 type WorkspaceSyncStatusCardProps = {
@@ -20,36 +20,22 @@ export function WorkspaceSyncStatusCard({ onChanged, onToast }: WorkspaceSyncSta
   const { colors } = useTheme();
   const m = useMessages();
   const labels = m.inboxPage.syncStatus;
-  const [pendingCount, setPendingCount] = useState(() => getPendingWorkspaceOperationCount());
-  const [failedCount, setFailedCount] = useState(() => getWorkspaceSyncDeadLetters().length);
+  const { pendingCount, failedCount } = useWorkspaceSyncStatus();
   const [busy, setBusy] = useState(false);
-
-  const refreshCounts = useCallback(() => {
-    setPendingCount(getPendingWorkspaceOperationCount());
-    setFailedCount(getWorkspaceSyncDeadLetters().length);
-  }, []);
-
-  useEffect(() => {
-    refreshCounts();
-    const interval = setInterval(refreshCounts, 5_000);
-    return () => clearInterval(interval);
-  }, [refreshCounts]);
 
   const syncNow = useCallback(async () => {
     if (busy) return;
     setBusy(true);
     try {
       const flushed = await flushWorkspaceSyncNow();
-      refreshCounts();
       await onChanged();
       onToast(flushed > 0 ? t(labels.synced, { count: flushed }) : labels.nothingToSync);
     } catch (error) {
-      refreshCounts();
       onToast(error instanceof Error ? error.message : labels.syncFailed);
     } finally {
       setBusy(false);
     }
-  }, [busy, labels, onChanged, onToast, refreshCounts]);
+  }, [busy, labels, onChanged, onToast]);
 
   const retryFailed = useCallback(async () => {
     if (busy) return;

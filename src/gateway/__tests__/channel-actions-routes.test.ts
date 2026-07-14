@@ -26,6 +26,7 @@ function createMockService(plugin: Partial<ChannelPlugin>, overrides: Partial<Ga
     getChannelsHubMeta: () => ({ channels: [] }),
     getAuthToken: () => TOKEN,
     getAuthMode: () => 'token',
+    getResolvedAuth: () => ({ mode: 'token', token: TOKEN }),
     sessionIndexInstance: {} as GatewayService['sessionIndexInstance'],
     emit: () => {},
     listSessions: async () => ({ items: [], total: 0 }),

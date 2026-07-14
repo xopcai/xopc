@@ -25,6 +25,10 @@ export function registerEmbeddedGatewayRuntime(runtime: EmbeddedGatewayRuntime):
   embeddedGatewayRuntime = runtime;
 }
 
+export function getEmbeddedGatewayCredential(): string | undefined {
+  return embeddedGatewayRuntime?.authToken;
+}
+
 export function isEmbeddedGatewayRegistered(): boolean {
   return embeddedGatewayRuntime !== null;
 }

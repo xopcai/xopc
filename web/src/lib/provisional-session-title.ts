@@ -63,10 +63,3 @@ export function dispatchSessionTitleUpdated(sessionKey: string, name: string): v
     new CustomEvent('session-updated', { detail: { key, name: title }, bubbles: true }),
   );
 }
-
-/** Notify sidebar to show / bump a session row (e.g. after new chat handoff). */
-export function dispatchSidebarSessionFocus(sessionKey: string): void {
-  const key = sessionKey.trim();
-  if (!key) return;
-  window.dispatchEvent(new CustomEvent('session-updated', { detail: { key }, bubbles: true }));
-}

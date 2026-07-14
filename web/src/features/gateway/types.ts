@@ -1,5 +1,5 @@
 export type GatewaySseConfig = {
-  token?: string;
+  credential?: string;
   autoReconnect?: boolean;
   maxReconnectAttempts?: number;
 };

@@ -18,19 +18,12 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import type {
-  ReasoningLevel,
-  ThinkLevel,
-  VerboseLevel,
-} from '../agent/transcript/thinking-types.js';
+import type { ReasoningLevel, ThinkLevel, VerboseLevel } from '../agent/transcript/thinking-types.js';
 import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
 import { loadConfig } from '../config/index.js';
 import { resolveStateDir, resolveXopcDatabasePath } from '../config/paths.js';
 import { ensureStarterAgentsInitialized } from '../agent/starter-agents.js';
-import {
-  MAX_CHAT_ATTACHMENTS,
-  MAX_WEBCHAT_ATTACHMENT_FILE_BYTES,
-} from '../gateway/chat-limits.js';
+import { MAX_CHAT_ATTACHMENTS, MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../gateway/chat-limits.js';
 import { resolveTuiSessionKey, resolveTuiStartupSessionKey } from '../routing/resolve-tui-session-key.js';
 import { normalizeAgentId, parseAgentSessionKey } from '../routing/agent-session-key.js';
 import type {
@@ -55,11 +48,7 @@ import { ChatLog } from './components/chat-log.js';
 import { CustomEditor } from './components/custom-editor.js';
 import { TuiBottomBar } from './components/tui-bottom-bar.js';
 import { TuiHeader } from './components/tui-header.js';
-import {
-  createTuiCommandHandler,
-  getSlashCommands,
-  type SlashCommandDef,
-} from './tui-commands.js';
+import { createTuiCommandHandler, getSlashCommands, type SlashCommandDef } from './tui-commands.js';
 import {
   formatTuiCompactionResult,
   formatTuiShareResult,
@@ -68,11 +57,7 @@ import {
 } from './tui-command-formatters.js';
 import { createLocalShellRunner } from './tui-local-shell.js';
 import { drainFollowUpQueue, restoreQueuedMessages } from './tui-follow-up-queue.js';
-import {
-  createBackspaceDeduper,
-  drainAndStopTuiSafely,
-  resolveCtrlCAction,
-} from './tui-lifecycle.js';
+import { createBackspaceDeduper, drainAndStopTuiSafely, resolveCtrlCAction } from './tui-lifecycle.js';
 import {
   openAgentPickerOverlay,
   openProjectTrustOverlay,
@@ -97,10 +82,7 @@ import { installTuiStdioFilter } from './tui-stdio-filter.js';
 import { withTuiSuspended } from './tui-suspend.js';
 import { extensionForImageMimeType, readClipboardImage } from './clipboard-image.js';
 import { copyTextToClipboard } from './clipboard-text.js';
-import {
-  renderWorkflowFinalSummary,
-  renderWorkflowPanel,
-} from '../agent/workflow/snapshot.js';
+import { renderWorkflowFinalSummary, renderWorkflowPanel } from '../agent/workflow/snapshot.js';
 import { isTerminalWorkflowRunStatus, type WorkflowRunView } from '../workflows/domain/index.js';
 import { runViewToSnapshot } from '../workflows/service/run-view-to-snapshot.js';
 import {
@@ -123,11 +105,7 @@ import { createInitialState, type TuiOptions, type TuiResult, type TuiState } fr
 import { createXopcTuiKeybindingsManager } from './tui-keybindings-file.js';
 import { formatKeyIds } from './format-tui-hotkeys.js';
 import { formatTuiStartupText } from './tui-startup-text.js';
-import {
-  filterModelsForCycle,
-  loadScopedModelRefs,
-  saveScopedModelRefs,
-} from './tui-scoped-models.js';
+import { filterModelsForCycle, loadScopedModelRefs, saveScopedModelRefs } from './tui-scoped-models.js';
 import {
   formatBusyResponseHint,
   formatSteerUnavailableHint,
@@ -162,10 +140,7 @@ import type {
   TuiVerboseLevel,
 } from '../extensions/types/tui.js';
 import { getAllModels, getAllProviders, getApiKey, isProviderConfiguredSync } from '../providers/index.js';
-import {
-  hasTrustRequiringProjectResources,
-  ProjectTrustStore,
-} from '../project-trust/trust-store.js';
+import { hasTrustRequiringProjectResources, ProjectTrustStore } from '../project-trust/trust-store.js';
 import { transcriptTreeEntryIdToRowNumber } from './tui-transcript-tree.js';
 import {
   isActiveRunStreamStale,
@@ -189,15 +164,7 @@ export {
 
 export { withTuiSuspended } from './tui-suspend.js';
 
-const THINK_LEVEL_CYCLE: ThinkLevel[] = [
-  'off',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'adaptive',
-];
+const THINK_LEVEL_CYCLE: ThinkLevel[] = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive'];
 
 function nextThinkLevel(current: string | undefined): ThinkLevel {
   const c = (current ?? 'medium').toLowerCase();
@@ -210,11 +177,7 @@ function nextThinkLevel(current: string | undefined): ThinkLevel {
 const DOUBLE_ESCAPE_WINDOW_MS = 500;
 
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 function exportExtension(format: TuiExportFormat): string {
@@ -408,7 +371,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         implicitTrustedWorkspace,
         isWorkspaceTrusted: () => projectTrustSessionDecision,
       })
-    : new GatewaySseBackend({ url: opts.url ?? 'http://localhost:3120', token: opts.token });
+    : new GatewaySseBackend({
+        url: opts.url ?? 'http://localhost:3120',
+        credential: opts.credential,
+      });
   if (startupWorkingDirectory) {
     state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
   }
@@ -419,8 +385,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   setKeybindings(keybindings);
 
   let modelChoices: TuiModelChoice[] = [];
-  const cycleModelChoices = (): TuiModelChoice[] =>
-    filterModelsForCycle(modelChoices, state.scopedModelRefs);
+  const cycleModelChoices = (): TuiModelChoice[] => filterModelsForCycle(modelChoices, state.scopedModelRefs);
 
   const refreshCycleModels = () => {
     bottomBar.invalidate();
@@ -439,12 +404,15 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     return { data: next };
   });
 
-  const header = new TuiHeader(() => ({
-    version: packageJson.version ?? 'dev',
-    connectionLabel: client.connectionLabel,
-    sessionKey: state.currentSessionKey,
-    showHints: tuiSettings.showStartupHints,
-  }), keybindings);
+  const header = new TuiHeader(
+    () => ({
+      version: packageJson.version ?? 'dev',
+      connectionLabel: client.connectionLabel,
+      sessionKey: state.currentSessionKey,
+      showHints: tuiSettings.showStartupHints,
+    }),
+    keybindings,
+  );
   const statusContainer = new Container();
   const bottomBar = new TuiBottomBar(
     () => state,
@@ -531,36 +499,38 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     if (!turnText) {
       return;
     }
-    void persist.then(() => {
-      const controlText = `Continue with the extension message "${customType}" above.`;
-      if (options?.deliverAs === 'nextTurn') {
-        pendingNextTurnCustomMessages.push(controlText);
-        chatLog.addSystem(
-          theme.dim(`Queued extension message for next turn (${pendingNextTurnCustomMessages.length}).`),
-        );
-        bottomBar.invalidate();
-        tui.requestRender();
-        return;
-      }
-      if (state.activeRunId) {
-        if (options?.deliverAs === 'followUp') {
-          state.messageFollowUpQueue.push(controlText);
+    void persist
+      .then(() => {
+        const controlText = `Continue with the extension message "${customType}" above.`;
+        if (options?.deliverAs === 'nextTurn') {
+          pendingNextTurnCustomMessages.push(controlText);
           chatLog.addSystem(
-            theme.dim(
-              `Queued extension follow-up (${state.messageFollowUpQueue.length} in queue). ${tuiSettings.followUpMode === 'all' ? 'All queued messages send together when this reply finishes.' : 'Next sends when this reply finishes.'}`,
-            ),
+            theme.dim(`Queued extension message for next turn (${pendingNextTurnCustomMessages.length}).`),
           );
           bottomBar.invalidate();
           tui.requestRender();
           return;
         }
-        steerMessage(turnText);
-        return;
-      }
-      if (options?.triggerTurn) {
-        sendMessage(controlText);
-      }
-    }).catch(() => {});
+        if (state.activeRunId) {
+          if (options?.deliverAs === 'followUp') {
+            state.messageFollowUpQueue.push(controlText);
+            chatLog.addSystem(
+              theme.dim(
+                `Queued extension follow-up (${state.messageFollowUpQueue.length} in queue). ${tuiSettings.followUpMode === 'all' ? 'All queued messages send together when this reply finishes.' : 'Next sends when this reply finishes.'}`,
+              ),
+            );
+            bottomBar.invalidate();
+            tui.requestRender();
+            return;
+          }
+          steerMessage(turnText);
+          return;
+        }
+        if (options?.triggerTurn) {
+          sendMessage(controlText);
+        }
+      })
+      .catch(() => {});
   };
   const defaultEditor = new CustomEditor(tui, editorTheme, keybindings, {
     paddingX: tuiSettings.editorPaddingX,
@@ -584,9 +554,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const updateEditorBorderColor = () => {
     if (isBashMode) {
-      editor.borderColor = isBashExcludeContext
-        ? getBashExcludeBorderColor()
-        : getBashModeBorderColor();
+      editor.borderColor = isBashExcludeContext ? getBashExcludeBorderColor() : getBashModeBorderColor();
     } else {
       const level = state.sessionInfo.thinkingLevel ?? opts.thinking ?? 'off';
       editor.borderColor = getThinkingBorderColor(level);
@@ -617,8 +585,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     customEditor.onEscape ??= () => defaultEditor.onEscape?.();
     customEditor.onCtrlD ??= () => defaultEditor.onCtrlD?.();
     customEditor.onPasteImage ??= () => defaultEditor.onPasteImage?.();
-    customEditor.onExtensionShortcut ??= (data: string) =>
-      defaultEditor.onExtensionShortcut?.(data) ?? false;
+    customEditor.onExtensionShortcut ??= (data: string) => defaultEditor.onExtensionShortcut?.(data) ?? false;
     for (const [action, handler] of defaultEditor.actionHandlers) {
       customEditor.actionHandlers.set(action, handler);
     }
@@ -684,10 +651,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     return close;
   };
 
-  const openCommandOverlay = (
-    component: Component,
-    _options?: OverlayOptions,
-  ): OverlayHandle => {
+  const openCommandOverlay = (component: Component, _options?: OverlayOptions): OverlayHandle => {
     let hidden = false;
     let closeCurrent = openEditorSelector(component, component);
     return {
@@ -749,9 +713,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     const customDir = getCustomThemesDir();
     return listAvailableThemeIds().map((name) => ({
       name,
-      path: name === 'auto' || name === 'dark' || name === 'light'
-        ? undefined
-        : join(customDir, `${name}.json`),
+      path: name === 'auto' || name === 'dark' || name === 'light' ? undefined : join(customDir, `${name}.json`),
     }));
   };
 
@@ -891,7 +853,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
           try {
             return { ok: true, apiKey: await getApiKey(provider), headers: {} };
           } catch (error) {
-            return { ok: false, error: error instanceof Error ? error.message : String(error) };
+            return {
+              ok: false,
+              error: error instanceof Error ? error.message : String(error),
+            };
           }
         },
       },
@@ -901,15 +866,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       isProjectTrusted: isCurrentProjectTrusted,
       isIdle: () => !state.activeRunId && !state.isCompacting,
       hasPendingMessages: () =>
-        state.messageFollowUpQueue.length > 0 ||
-        state.steeringQueue.length > 0 ||
-        state.compactionQueue.length > 0,
+        state.messageFollowUpQueue.length > 0 || state.steeringQueue.length > 0 || state.compactionQueue.length > 0,
       abort: () => abortActive(),
       shutdown: () => requestExit(),
-      compact: (options) => runCompaction(options?.customInstructions, {
-        onComplete: options?.onComplete,
-        onError: options?.onError,
-      }),
+      compact: (options) =>
+        runCompaction(options?.customInstructions, {
+          onComplete: options?.onComplete,
+          onError: options?.onError,
+        }),
       getSystemPrompt: getExtensionSystemPrompt,
       getSystemPromptOptions: () => ({
         cwd: process.cwd(),
@@ -933,11 +897,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       setReasoningLevel,
       getVerboseLevel: () => state.sessionInfo.verboseLevel as TuiVerboseLevel | undefined,
       setVerboseLevel,
-      getCommands: () => slashCommands.map((command) => ({
-        name: command.name,
-        description: command.description,
-        source: 'builtin' as const,
-      })),
+      getCommands: () =>
+        slashCommands.map((command) => ({
+          name: command.name,
+          description: command.description,
+          source: 'builtin' as const,
+        })),
       getContextUsage: () => {
         const tokens = state.sessionInfo.totalTokens ?? state.sessionInfo.contextTokens ?? null;
         const contextWindow = state.sessionInfo.contextWindow ?? null;
@@ -970,9 +935,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
   };
 
-  const runExtensionNewSession = async (
-    options?: TuiNewSessionOptions,
-  ): Promise<TuiReplacementResult> => {
+  const runExtensionNewSession = async (options?: TuiNewSessionOptions): Promise<TuiReplacementResult> => {
     await abortActive({ clearUi: false });
     const targetKey = resolveSessionKey(`session-${randomUUID()}`);
     await setSession(targetKey);
@@ -981,10 +944,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     return { cancelled: false };
   };
 
-  const runExtensionFork = async (
-    entryId: string,
-    options?: TuiForkOptions,
-  ): Promise<TuiReplacementResult> => {
+  const runExtensionFork = async (entryId: string, options?: TuiForkOptions): Promise<TuiReplacementResult> => {
     const rowNumber = transcriptTreeEntryIdToRowNumber(entryId);
     if (rowNumber == null) {
       throw new Error(`Invalid entry ID for forking: ${entryId}`);
@@ -1104,10 +1064,11 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     },
     abortActive: () => abortActive(),
     requestExit: () => requestExit(),
-    compactSession: (options) => runCompaction(options?.customInstructions, {
-      onComplete: options?.onComplete,
-      onError: options?.onError,
-    }),
+    compactSession: (options) =>
+      runCompaction(options?.customInstructions, {
+        onComplete: options?.onComplete,
+        onError: options?.onError,
+      }),
     setModel: (modelRef) => switchCurrentModel(modelRef),
     setThinkingLevel: (level) => setThinkingLevel(level),
     setReasoningLevel: (level) => setReasoningLevel(level),
@@ -1236,9 +1197,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const syncTerminalTitle = () => {
     const shortKey =
-      state.currentSessionKey.length > 48
-        ? `${state.currentSessionKey.slice(0, 45)}…`
-        : state.currentSessionKey;
+      state.currentSessionKey.length > 48 ? `${state.currentSessionKey.slice(0, 45)}…` : state.currentSessionKey;
     tui.terminal.setTitle(`xopc · ${shortKey}`);
   };
 
@@ -1274,9 +1233,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     tui.terminal.setProgress(false);
     void drainAndStopTuiSafely(tui).then(() => {
       restoreStdio();
-      process.stdout.write(
-        `\nTo resume this session: ${formatTuiResumeCommand(opts, state.currentSessionKey)}\n`,
-      );
+      process.stdout.write(`\nTo resume this session: ${formatTuiResumeCommand(opts, state.currentSessionKey)}\n`);
       finishTui?.();
       process.exit(0);
     });
@@ -1329,13 +1286,15 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   const showStartupCardOnce = () => {
     if (startupCardShown) return;
     startupCardShown = true;
-    chatLog.addSystem(formatTuiStartupText({
-      state,
-      isLocal: isLocalMode,
-      keybindings,
-      resources: startupResources,
-      expanded: false,
-    }));
+    chatLog.addSystem(
+      formatTuiStartupText({
+        state,
+        isLocal: isLocalMode,
+        keybindings,
+        resources: startupResources,
+        expanded: false,
+      }),
+    );
   };
 
   const applyStartupWorkingDirectory = async () => {
@@ -1349,7 +1308,8 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   const applyStartupProject = async () => {
-    if (startupProjectApplied || !startupWorkingDirectory || opts.useStartupCwd === false || opts.session?.trim()) return;
+    if (startupProjectApplied || !startupWorkingDirectory || opts.useStartupCwd === false || opts.session?.trim())
+      return;
     startupProjectApplied = true;
     const result = await client.resolveStartupProject?.({
       workspacePath: startupWorkingDirectory,
@@ -1373,7 +1333,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       state.sessionInfo.effectiveWorkspacePath = startupWorkingDirectory;
       state.sessionInfo.workingDirectoryLocked = true;
     } else {
-      await client.patchSession(state.currentSessionKey, { projectId: result.project.id });
+      await client.patchSession(state.currentSessionKey, {
+        projectId: result.project.id,
+      });
     }
     const verb = result.created ? 'Created project' : 'Using project';
     chatLog.addStatus(theme.dim(`${verb}: ${result.project.name}`));
@@ -1394,7 +1356,10 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         if (state.activeRunId === runId) {
           clearSeenStreamEventsForRun(runId);
           if (client.resumeChat) {
-            const resumed = await client.resumeChat({ sessionKey: state.currentSessionKey, runId });
+            const resumed = await client.resumeChat({
+              sessionKey: state.currentSessionKey,
+              runId,
+            });
             if (resumed.ok) {
               state.progressMessage = 'Reconnecting output';
               setActivityStatus('recovering');
@@ -1437,7 +1402,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const setThinkingLevel = async (level: ThinkLevel) => {
     try {
-      await client.patchSession(state.currentSessionKey, { thinkingLevel: level });
+      await client.patchSession(state.currentSessionKey, {
+        thinkingLevel: level,
+      });
       state.sessionInfo.thinkingLevel = level;
       await refreshSessionInfoWithBorder();
       updateFooter();
@@ -1452,7 +1419,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const setReasoningLevel = async (level: ReasoningLevel) => {
     try {
-      await client.patchSession(state.currentSessionKey, { reasoningLevel: level });
+      await client.patchSession(state.currentSessionKey, {
+        reasoningLevel: level,
+      });
       state.sessionInfo.reasoningLevel = level;
       await refreshSessionInfoWithBorder();
       updateFooter();
@@ -1467,7 +1436,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const setVerboseLevel = async (level: VerboseLevel) => {
     try {
-      await client.patchSession(state.currentSessionKey, { verboseLevel: level });
+      await client.patchSession(state.currentSessionKey, {
+        verboseLevel: level,
+      });
       state.sessionInfo.verboseLevel = level;
       await refreshSessionInfoWithBorder();
       updateFooter();
@@ -1652,7 +1623,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     try {
       chatLog.addStatus(theme.dim(`Creating share for: ${request.path}`));
       tui.requestRender();
-      const result = await client.createShare(state.currentSessionKey, request, { agentId: currentAgentId });
+      const result = await client.createShare(state.currentSessionKey, request, {
+        agentId: currentAgentId,
+      });
       chatLog.addSystem(formatTuiShareResult(result));
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
@@ -1690,11 +1663,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         chatLog.addSystem(`BTW failed: ${result.error}`);
         return;
       }
-      chatLog.finalizeAssistant({
-        role: 'assistant',
-        content: [{ type: 'text', text: `BTW\n\n${result.text}` }],
-        timestamp: Date.now(),
-      } as AgentMessage, runId);
+      chatLog.finalizeAssistant(
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: `BTW\n\n${result.text}` }],
+          timestamp: Date.now(),
+        } as AgentMessage,
+        runId,
+      );
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       chatLog.addSystem(`BTW failed: ${errorMessage}`);
@@ -1781,8 +1757,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     })();
   };
 
-  const isAgentBusy = () =>
-    state.activeRunId != null || state.isCompacting || busyStates.has(state.activityStatus);
+  const isAgentBusy = () => state.activeRunId != null || state.isCompacting || busyStates.has(state.activityStatus);
 
   let steeringInFlightForRunId: string | null = null;
 
@@ -1794,15 +1769,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
       .steerChat({ sessionKey: state.currentSessionKey, message: text })
       .then(({ ok }) => {
         if (!ok) {
-          chatLog.addSystem(
-            theme.dim(
-              formatSteerUnavailableHint(keybindings),
-            ),
-          );
+          chatLog.addSystem(theme.dim(formatSteerUnavailableHint(keybindings)));
         } else {
-          chatLog.addSystem(
-            theme.dim('Steered — message injects at the next tool boundary (pi-style).'),
-          );
+          chatLog.addSystem(theme.dim('Steered — message injects at the next tool boundary (pi-style).'));
         }
         tui.requestRender();
       })
@@ -1868,9 +1837,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
 
     if (state.activeRunId) {
-      chatLog.addSystem(
-        formatBusyResponseHint(keybindings),
-      );
+      chatLog.addSystem(formatBusyResponseHint(keybindings));
       if (pendingCustomText) {
         pendingNextTurnCustomMessages.unshift(pendingCustomText);
       }
@@ -1945,13 +1912,14 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     state.isCompacting = true;
     setActivityStatus('compacting');
     chatLog.addSystem(
-      theme.dim(
-        instructions ? `Compacting session with instructions: ${instructions}` : 'Compacting session…',
-      ),
+      theme.dim(instructions ? `Compacting session with instructions: ${instructions}` : 'Compacting session…'),
     );
     tui.requestRender();
     try {
-      const result = await client.compactSession(state.currentSessionKey, { force: true, instructions });
+      const result = await client.compactSession(state.currentSessionKey, {
+        force: true,
+        instructions,
+      });
       if (result.compacted) {
         clearSeenStreamEvents();
         state.historyLoaded = false;
@@ -2078,7 +2046,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     await refreshStartupResources();
     if (previousWorkspace && state.sessionInfo.workingDirectoryLocked !== true) {
       try {
-        await client.patchSession(state.currentSessionKey, { workingDirectory: previousWorkspace });
+        await client.patchSession(state.currentSessionKey, {
+          workingDirectory: previousWorkspace,
+        });
         state.sessionInfo.effectiveWorkspacePath = previousWorkspace;
         state.sessionInfo.workingDirectoryLocked = true;
         await refreshSessionInfoWithBorder();
@@ -2224,7 +2194,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     if (isAgentBusy()) {
       if (pendingImageAttachments.length > 0) {
         chatLog.addSystem(
-          theme.dim('Image attachments cannot be queued while the agent is busy. Wait for this reply to finish, then send.'),
+          theme.dim(
+            'Image attachments cannot be queued while the agent is busy. Wait for this reply to finish, then send.',
+          ),
         );
         tui.requestRender();
         return;
@@ -2259,9 +2231,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     }
     editor.setText(restored.text);
     chatLog.addStatus(
-      theme.dim(
-        `Restored ${restored.restoredCount} queued message${restored.restoredCount > 1 ? 's' : ''} to editor.`,
-      ),
+      theme.dim(`Restored ${restored.restoredCount} queued message${restored.restoredCount > 1 ? 's' : ''} to editor.`),
     );
     bottomBar.invalidate();
     tui.requestRender();
@@ -2351,14 +2321,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     keybindings,
   };
 
-  uiOverlays.openModelPicker = (initialSearch?: string) =>
-    void openModelPickerOverlay(pickerSvc, initialSearch);
+  uiOverlays.openModelPicker = (initialSearch?: string) => void openModelPickerOverlay(pickerSvc, initialSearch);
   uiOverlays.openAgentPicker = () => void openAgentPickerOverlay(pickerSvc);
   uiOverlays.openReviewLauncher = () => void openReviewLauncherOverlay(pickerSvc);
   uiOverlays.openSessionPicker = () => void openSessionPickerOverlay(pickerSvc);
   uiOverlays.openSessionTree = () => void openSessionTreeOverlay(pickerSvc);
-  uiOverlays.openTimeline = (initialSearch?: string) =>
-    void openTimelineOverlay(pickerSvc, initialSearch);
+  uiOverlays.openTimeline = (initialSearch?: string) => void openTimelineOverlay(pickerSvc, initialSearch);
   uiOverlays.openTranscriptTree = () => void openTranscriptTreeOverlay(pickerSvc);
   uiOverlays.openUserMessageFork = () => void openUserMessageForkOverlay(pickerSvc);
   uiOverlays.openScopedModels = () => void openScopedModelsOverlay(pickerSvc);
@@ -2459,9 +2427,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
         size: image.bytes.byteLength,
       });
       chatLog.addStatus(
-        theme.dim(
-          `Attached image: ${name} (${pendingImageAttachments.length} pending). Send a message to include it.`,
-        ),
+        theme.dim(`Attached image: ${name} (${pendingImageAttachments.length} pending). Send a message to include it.`),
       );
       tui.requestRender();
     })();
@@ -2492,7 +2458,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
 
   const handleWorkflowRunUpdated = (data: Record<string, unknown>): boolean => {
     const runId = typeof data.runId === 'string' ? data.runId : '';
-    const view = data.view && typeof data.view === 'object' ? data.view as WorkflowRunView : null;
+    const view = data.view && typeof data.view === 'object' ? (data.view as WorkflowRunView) : null;
     if (!runId || !view || !visibleWorkflowRunIds.has(runId)) return false;
 
     const snapshot = runViewToSnapshot(view);

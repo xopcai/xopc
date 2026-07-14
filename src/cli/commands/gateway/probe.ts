@@ -1,10 +1,7 @@
 import { Command } from 'commander';
 
 import { resolveConfigPath } from '../../../config/paths.js';
-import {
-  addGatewayClientOptions,
-  parseGatewayClientOptions,
-} from '../../utils/gateway-client-options.js';
+import { addGatewayClientOptions, parseGatewayClientOptions } from '../../utils/gateway-client-options.js';
 import { getContextWithOpts } from '../../context.js';
 
 type GatewayClientModule = typeof import('../../utils/gateway-client.js');
@@ -42,10 +39,13 @@ function resolveProbeTargets(opts: { url?: string; port: number }): ProbeTarget[
 async function probeTarget(
   callGatewayApi: GatewayClientModule['callGatewayApi'],
   target: ProbeTarget,
-  token?: string,
+  credential?: import('../../../gateway/credential.js').GatewayCredential,
   timeoutMs?: number,
 ): Promise<ProbeResultEntry> {
-  const healthResult = await callGatewayApi<{ status: string; version?: string }>('GET', '/api/health', {
+  const healthResult = await callGatewayApi<{
+    status: string;
+    version?: string;
+  }>('GET', '/api/health', {
     url: target.url,
     timeoutMs: timeoutMs ?? 5000,
   });
@@ -62,10 +62,10 @@ async function probeTarget(
   }
 
   let authenticated = false;
-  if (token) {
+  if (credential) {
     const statusResult = await callGatewayApi('GET', '/api/status', {
       url: target.url,
-      token,
+      credential,
       timeoutMs: timeoutMs ?? 5000,
     });
     authenticated = statusResult.ok;
@@ -89,20 +89,23 @@ export function createProbeCommand(): Command {
   cmd.action(async (options) => {
     const ctx = getContextWithOpts();
     const configPath = ctx.configPath || resolveConfigPath();
-    const [{ loadConfig }, { callGatewayApi, resolveGatewayToken }] = await Promise.all([
+    const [{ loadConfig }, { callGatewayApi, resolveGatewayCredential }] = await Promise.all([
       import('../../../config/index.js'),
       import('../../utils/gateway-client.js'),
     ]);
     const config = loadConfig(configPath);
     const port = config?.gateway?.port ?? 18790;
 
-    const clientOpts = { ...parseGatewayClientOptions(options as Record<string, unknown>), configPath };
-    const token = resolveGatewayToken(clientOpts);
+    const clientOpts = {
+      ...parseGatewayClientOptions(options as Record<string, unknown>),
+      configPath,
+    };
+    const credential = resolveGatewayCredential(clientOpts);
     const targets = resolveProbeTargets({ url: clientOpts.url, port });
     const results: ProbeResultEntry[] = [];
 
     for (const target of targets) {
-      const result = await probeTarget(callGatewayApi, target, token, clientOpts.timeoutMs);
+      const result = await probeTarget(callGatewayApi, target, credential, clientOpts.timeoutMs);
       results.push(result);
     }
 
@@ -119,9 +122,7 @@ export function createProbeCommand(): Command {
       if (result.reachable) {
         console.log(`✅ ${result.label} (${result.url})`);
         console.log(`   Reachable: yes (${result.durationMs}ms)`);
-        console.log(
-          `   Auth: ${result.authenticated ? '✅ authenticated' : '🔒 not authenticated (pass --token)'}`,
-        );
+        console.log(`   Auth: ${result.authenticated ? '✅ authenticated' : '🔒 not authenticated (pass --token)'}`);
         if (result.version) {
           console.log(`   Version: ${result.version}`);
         }

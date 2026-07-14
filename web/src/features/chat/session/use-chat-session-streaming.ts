@@ -306,7 +306,15 @@ export function useChatSessionStreaming(deps: {
 
       const existing = getChatSessionSnapshot(chatId);
       store().initSessionSnapshot(chatId, {
-        ...(existing ?? { ...defaultSessionMeta(), hasMore: false, streamingMsg: null, progress: null, sending: false, streaming: false }),
+        ...(existing ?? {
+          ...defaultSessionMeta(),
+          historyStatus: 'ready',
+          hasMore: false,
+          streamingMsg: null,
+          progress: null,
+          sending: false,
+          streaming: false,
+        }),
         messages: nextMessages,
         hasMore: existing?.hasMore ?? false,
         streamingMsg: null,

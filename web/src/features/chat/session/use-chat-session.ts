@@ -25,6 +25,7 @@ import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-u
 import { SessionManager, type SessionTimelineItem } from '@/features/chat/session/session-manager';
 import { patchSessionAgentConfigView } from '@/features/chat/session/patch-session-agent-config-view';
 import { resetChatViewState } from '@/features/chat/session/reset-chat-view-state';
+import { resolveChatConversationPhase } from '@/features/chat/session/chat-conversation-phase';
 import { useChatFollowUpClarify } from '@/features/chat/session/use-chat-follow-up-clarify';
 import { useChatSessionAgents } from '@/features/chat/session/use-chat-session-agents';
 import { useChatSessionInit } from '@/features/chat/session/use-chat-session-init';
@@ -38,10 +39,12 @@ export function useChatSession() {
   const navigate = useNavigate();
   const {
     isNewRoute,
+    forceNewChat,
     decodedKey,
     viewSessionKey,
     routedFocusedSessionKey,
     routeSessionKeyRef,
+    locationKey,
     locationSearch,
     locationState,
   } = useChatSessionRoute();
@@ -66,7 +69,6 @@ export function useChatSession() {
 
   const focusedSessionKey = routedFocusedSessionKey;
   const initLoading = useChatSessionStore((s) => s.initLoading);
-  const loadingSessionKey = useChatSessionStore((s) => s.loadingSessionKey);
   const loadingMore = useChatSessionStore((s) => s.loadingMore);
   const shellError = useChatSessionStore((s) => s.shellError);
   /** URL is visible-session truth; do not read the store via lagging `focusedSessionKey`. */
@@ -113,12 +115,19 @@ export function useChatSession() {
 
   const sessionRoutePending = Boolean(decodedKey !== undefined && focusedSessionKey !== decodedKey);
   const sessionContentLoading = Boolean(
-    decodedKey && loadingSessionKey === decodedKey && !sessionRoutePending,
+    decodedKey && sessionSlice?.historyStatus === 'loading' && !sessionRoutePending,
   );
   const showSessionLoading = useMemo(
     () => initLoading && (focusedSessionKey == null || decodedKey === undefined),
     [initLoading, focusedSessionKey, decodedKey],
   );
+  const conversationPhase = resolveChatConversationPhase({
+    isNewRoute,
+    sessionRoutePending,
+    showSessionLoading,
+    sessionContentLoading,
+    messageCount: sessionSlice?.messages.length ?? 0,
+  });
 
   const navigateToSession = useCallback(
     (key: string, replace = false, search?: string) => {
@@ -305,7 +314,9 @@ export function useChatSession() {
   useChatSessionInit({
     token,
     isNewRoute,
+    forceNewChat,
     decodedKey,
+    locationKey,
     locationSearch,
     sessionMgrRef,
     resolveAgentIdForPost,
@@ -394,6 +405,7 @@ export function useChatSession() {
       sessionRoutePending,
       sessionContentLoading,
       showSessionLoading,
+      conversationPhase,
       loading: initLoading,
       sessionModel,
       thinkingLevel,

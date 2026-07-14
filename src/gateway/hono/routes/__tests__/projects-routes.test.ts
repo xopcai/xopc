@@ -293,14 +293,16 @@ describe('project association routes', () => {
     expect(body.session.key.startsWith('agent:coder:')).toBe(true);
     expect(body.session.routing?.agentId).toBe('coder');
     expect(projects.listSessionKeys(project.id)).toEqual([body.session.key]);
-    expect(listSessions).toHaveBeenCalledWith(expect.objectContaining({ includeHidden: true }));
+    expect(listSessions).not.toHaveBeenCalled();
   });
 
-  it('reuses hidden empty project chat shells instead of creating duplicates', async () => {
+  it('creates a fresh project chat even when an empty shell already exists', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Reusable Project', defaultAgentId: 'coder' });
     const existingKey = 'agent:coder:webchat:default:direct:chat_1783525363859';
-    const saveMessages = vi.fn();
+    const saveMessages = vi.fn(async (sessionKey: string) => {
+      ensureSessionRecord(sessionKey, process.cwd());
+    });
     const existingSession = {
       key: existingKey,
       messageCount: 0,
@@ -325,7 +327,11 @@ describe('project association routes', () => {
       projects,
       sessions: {
         listSessions: vi.fn(async () => ({ items: [existingSession] })),
-        getSession: vi.fn(async () => existingSession),
+        getSession: vi.fn(async (key: string) => ({
+          ...existingSession,
+          key,
+          routing: { ...existingSession.routing, peerId: key.split(':').at(-1) },
+        })),
       } as unknown as GatewayService['sessions'],
       sessionIndexInstance: {
         saveMessages,
@@ -338,12 +344,12 @@ describe('project association routes', () => {
       body: JSON.stringify({ projectId: project.id }),
     });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     const body = (await res.json()) as { reused?: boolean; session: { key: string } };
-    expect(body.reused).toBe(true);
-    expect(body.session.key).toBe(existingKey);
-    expect(saveMessages).not.toHaveBeenCalled();
-    expect(projects.listSessionKeys(project.id)).toEqual([]);
+    expect(body.reused).toBeUndefined();
+    expect(body.session.key).not.toBe(existingKey);
+    expect(saveMessages).toHaveBeenCalledOnce();
+    expect(projects.listSessionKeys(project.id)).toEqual([body.session.key]);
   });
 
   it('omits hidden empty project chat shells from project session lists', async () => {

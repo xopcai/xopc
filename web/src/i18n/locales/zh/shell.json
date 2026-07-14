@@ -54,17 +54,21 @@
     "gatewayUrl": "网关地址",
     "tokenLabel": "访问令牌",
     "placeholder": "网关访问令牌（例如 ea4c67bf…）",
-    "save": "保存",
+    "save": "连接",
+    "connecting": "连接中…",
+    "tokenRejected": "访问令牌被拒绝，请检查后重试。",
+    "gatewayUnreachable": "无法连接网关，请确认网关正在运行后重试。",
+    "tokenVerificationFailed": "无法验证访问令牌，请重试。",
     "show": "显示",
     "hide": "隐藏"
   },
   "gatewayLanding": {
-    "headline": "连接网关",
-    "subline": "网页控制台需使用与网关相同的访问令牌。请从初始化向导或配置文件中获取，并在下方粘贴。",
-    "sessionExpired": "登录已失效或访问令牌被拒绝，请重新输入有效的网关访问令牌。",
-    "stepOnboard": "在终端运行 xopc onboard（或 xopc onboard --gateway）并启用网页控制台，向导会打印访问令牌。",
-    "stepPaste": "将访问令牌粘贴到下方并保存。也可直接打开向导给出的带 ?token= 的链接。",
-    "stepUrlHint": "若使用带 ?token= 的链接打开，访问令牌会自动保存（随后地址栏会去掉参数）。",
+    "headline": "输入网关访问令牌",
+    "subline": "使用访问令牌连接此控制台与网关。",
+    "sessionExpired": "登录已失效，请重新输入有效的网关访问令牌。",
+    "tokenHelpSummary": "在哪里找到访问令牌？",
+    "tokenHelpOnboard": "在终端运行 xopc onboard（或 xopc onboard --gateway），初始化输出中会包含访问令牌。",
+    "tokenHelpLink": "直接打开以 ?token= 结尾的初始化链接，访问令牌会自动保存。",
     "docsGatewayLink": "网关说明"
   },
   "electron": {

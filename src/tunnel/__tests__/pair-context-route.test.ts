@@ -16,6 +16,7 @@ function mockService() {
     },
     saveConfig: async () => ({ saved: true }),
     getAuthToken: () => 'gateway-secret-token',
+    getResolvedAuth: () => ({ mode: 'token', token: 'gateway-secret-token' }),
     getHealth: () => ({ status: 'ok', version: '0', uptime: 0 }),
   } as unknown as import('../../gateway/service.js').GatewayService;
 }
@@ -30,7 +31,7 @@ describe('GET /api/tunnel/pair/context', () => {
     const app = createHonoApp({ service: mockService(), token: 'admin-token' });
 
     const res = await app.request('/api/tunnel/pair/context', {
-      headers: { Authorization: 'Bearer admin-token' },
+      headers: { Authorization: 'Bearer gateway-secret-token' },
     });
 
     expect(res.status).toBe(200);
@@ -59,7 +60,7 @@ describe('POST /api/tunnel/pair/enable-lan', () => {
 
     const res = await app.request('/api/tunnel/pair/enable-lan', {
       method: 'POST',
-      headers: { Authorization: 'Bearer admin-token' },
+      headers: { Authorization: 'Bearer gateway-secret-token' },
     });
 
     expect(res.status).toBe(200);

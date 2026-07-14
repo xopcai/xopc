@@ -5,9 +5,9 @@ export interface ElectronOpenDirectoryOptions {
 export interface ElectronFileAPI {
   readFile(filePath: string): Promise<string>;
   writeFile(filePath: string, content: string): Promise<{ success: boolean }>;
-  listDirectory(dirPath: string): Promise<
-    Array<{ name: string; path: string; isDirectory: boolean }>
-  >;
+  listDirectory(
+    dirPath: string,
+  ): Promise<Array<{ name: string; path: string; isDirectory: boolean }>>;
   openDirectory(options?: ElectronOpenDirectoryOptions): Promise<string | null>;
   watchFile(filePath: string, callback: (content: string) => void): void;
 }
@@ -28,7 +28,10 @@ export interface ElectronSearchAPI {
 }
 
 export interface ElectronAgentAPI {
-  sendMessage(message: string, sessionKey: string): Promise<{ done: boolean; error?: string }>;
+  sendMessage(
+    message: string,
+    sessionKey: string,
+  ): Promise<{ done: boolean; error?: string }>;
   onStream(callback: (chunk: string) => void): void;
 }
 
@@ -37,8 +40,16 @@ export interface ElectronStartupAPI {
 }
 
 export interface ElectronGatewayShellAPI {
-  onExited(callback: (detail: { code: number | null; signal: string | null }) => void): () => void;
-  restart(): Promise<{ ok: boolean; message?: string; token?: string; port?: number }>;
+  getCredential(): Promise<string | undefined>;
+  onExited(
+    callback: (detail: { code: number | null; signal: string | null }) => void,
+  ): () => void;
+  restart(): Promise<{
+    ok: boolean;
+    message?: string;
+    token?: string;
+    port?: number;
+  }>;
 }
 
 export type ElectronShellOpenResult =
@@ -46,28 +57,38 @@ export type ElectronShellOpenResult =
   | {
       ok: false;
       error: string;
-      code?: 'CANCELED' | 'INVALID_PATH' | 'NOT_FOUND' | 'NOT_FILE' | 'INVALID_APP' | 'OPEN_FAILED' | string;
+      code?:
+        | "CANCELED"
+        | "INVALID_PATH"
+        | "NOT_FOUND"
+        | "NOT_FILE"
+        | "INVALID_APP"
+        | "OPEN_FAILED"
+        | string;
     };
 
 export type ElectronRecentOpenWithApp = {
   name: string;
   path: string;
-  platform: 'darwin' | 'win32' | 'linux' | string;
+  platform: "darwin" | "win32" | "linux" | string;
   lastUsedAt: number;
 };
 
 export type ElectronRecommendedOpenWithApp = {
   name: string;
   path: string;
-  platform: 'darwin' | 'win32' | 'linux' | string;
-  source: 'known';
+  platform: "darwin" | "win32" | "linux" | string;
+  source: "known";
 };
 
 export interface ElectronShellAPI {
   openPath(filePath: string): Promise<ElectronShellOpenResult>;
   showItemInFolder(filePath: string): Promise<{ success: boolean }>;
   chooseAppAndOpenPath(filePath: string): Promise<ElectronShellOpenResult>;
-  openPathWithApp(filePath: string, appPath: string): Promise<ElectronShellOpenResult>;
+  openPathWithApp(
+    filePath: string,
+    appPath: string,
+  ): Promise<ElectronShellOpenResult>;
   getRecentOpenWithApps(): Promise<ElectronRecentOpenWithApp[]>;
   getOpenWithAppsForPath(filePath: string): Promise<{
     recommended: ElectronRecommendedOpenWithApp[];
@@ -81,7 +102,7 @@ export interface ElectronClipboardAPI {
   readText(): Promise<string>;
 }
 
-export type TccTriState = 'granted' | 'denied' | 'unknown';
+export type TccTriState = "granted" | "denied" | "unknown";
 
 export type ShellPermissionSnapshot = {
   fullDisk: TccTriState;
@@ -94,17 +115,17 @@ export type ShellPermissionSnapshot = {
 };
 
 export type PrivacyPaneKind =
-  | 'fullDisk'
-  | 'screen'
-  | 'microphone'
-  | 'accessibility'
-  | 'automation'
-  | 'notifications'
-  | 'location'
-  | 'camera';
+  | "fullDisk"
+  | "screen"
+  | "microphone"
+  | "accessibility"
+  | "automation"
+  | "notifications"
+  | "location"
+  | "camera";
 
 export type SystemSettingsBehavior = {
-  platform: 'darwin' | 'win32' | 'linux';
+  platform: "darwin" | "win32" | "linux";
   /** False when running unpackaged (e.g. electron:dev); macOS privacy lists may show "Electron". */
   packaged: boolean;
   openAtLogin: boolean;
@@ -115,19 +136,19 @@ export type SystemSettingsBehavior = {
   notifySoundEnabled: boolean;
 };
 
-export type UninstallMode = 'manual' | 'native-uninstaller' | 'unsupported';
+export type UninstallMode = "manual" | "native-uninstaller" | "unsupported";
 
-export type LinuxPackageKind = 'appimage' | 'deb' | 'unknown';
+export type LinuxPackageKind = "appimage" | "deb" | "unknown";
 
 export type UninstallErrorCode =
-  | 'PENDING_UPDATE'
-  | 'NOT_PACKAGED'
-  | 'UNINSTALLER_NOT_FOUND'
-  | 'PLATFORM_UNSUPPORTED';
+  | "PENDING_UPDATE"
+  | "NOT_PACKAGED"
+  | "UNINSTALLER_NOT_FOUND"
+  | "PLATFORM_UNSUPPORTED";
 
 export type UninstallInfo = {
   packaged: boolean;
-  platform: 'darwin' | 'win32' | 'linux';
+  platform: "darwin" | "win32" | "linux";
   uninstallMode: UninstallMode;
   appPath: string;
   dataPath: string;
@@ -141,20 +162,22 @@ export type UninstallInfo = {
 export type UninstallAppResult =
   | {
       ok: true;
-      mode: 'manual' | 'native-uninstaller';
+      mode: "manual" | "native-uninstaller";
       linuxPackageKind?: LinuxPackageKind;
       debPackageName?: string;
     }
   | { ok: false; error: UninstallErrorCode };
 
-export type ClearUserDataResult = { ok: true } | { ok: false; error: UninstallErrorCode };
+export type ClearUserDataResult =
+  | { ok: true }
+  | { ok: false; error: UninstallErrorCode };
 
 export type PermissionRequestOutcome =
-  | 'granted'
-  | 'denied'
-  | 'prompted'
-  | 'opened-settings'
-  | 'already-granted';
+  | "granted"
+  | "denied"
+  | "prompted"
+  | "opened-settings"
+  | "already-granted";
 
 export type PermissionRequestResult = {
   status: TccTriState;
@@ -162,9 +185,9 @@ export type PermissionRequestResult = {
 };
 
 export type ElectronMenuItemModel =
-  | { type: 'separator' }
+  | { type: "separator" }
   | {
-      type: 'item';
+      type: "item";
       id: string;
       label: string;
       accelerator?: string;
@@ -179,7 +202,9 @@ export type ElectronMenuGroupModel = {
 
 export interface ElectronMenuAPI {
   getModel(): Promise<ElectronMenuGroupModel[]>;
-  invoke(id: string): Promise<{ ok: true } | { ok: false; error: 'UNKNOWN_MENU_ACTION' }>;
+  invoke(
+    id: string,
+  ): Promise<{ ok: true } | { ok: false; error: "UNKNOWN_MENU_ACTION" }>;
   onNavigate(callback: (path: string) => void): () => void;
   onTogglePalette(callback: () => void): () => void;
   onQuickCapture(callback: () => void): () => void;
@@ -187,11 +212,13 @@ export interface ElectronMenuAPI {
   onHistoryNavigate(callback: (delta: -1 | 1) => void): () => void;
 }
 
-export type ElectronUiLanguage = 'en' | 'zh';
+export type ElectronUiLanguage = "en" | "zh";
 
 export interface ElectronLocaleAPI {
   getLanguage(): Promise<ElectronUiLanguage>;
-  setLanguage(language: ElectronUiLanguage): Promise<{ ok: true; language: ElectronUiLanguage }>;
+  setLanguage(
+    language: ElectronUiLanguage,
+  ): Promise<{ ok: true; language: ElectronUiLanguage }>;
   onChanged(callback: (language: ElectronUiLanguage) => void): () => void;
 }
 
@@ -208,28 +235,28 @@ export interface ElectronFullscreenAPI {
 }
 
 export type DesktopPetAction =
-  | 'idle'
-  | 'typing'
-  | 'toolbox'
-  | 'search'
-  | 'file'
-  | 'terminal'
-  | 'browser'
-  | 'success'
-  | 'error';
+  | "idle"
+  | "typing"
+  | "toolbox"
+  | "search"
+  | "file"
+  | "terminal"
+  | "browser"
+  | "success"
+  | "error";
 
-export type DesktopPetFeedbackLevel = 'quiet' | 'normal' | 'chatty';
+export type DesktopPetFeedbackLevel = "quiet" | "normal" | "chatty";
 
 export type DesktopPetActivityPhase =
-  | 'preparing'
-  | 'planning'
-  | 'researching'
-  | 'reading'
-  | 'editing'
-  | 'running'
-  | 'browsing'
-  | 'compacting'
-  | 'waiting';
+  | "preparing"
+  | "planning"
+  | "researching"
+  | "reading"
+  | "editing"
+  | "running"
+  | "browsing"
+  | "compacting"
+  | "waiting";
 
 export type DesktopPetActivity = {
   phase?: DesktopPetActivityPhase;
@@ -238,9 +265,12 @@ export type DesktopPetActivity = {
   total?: number;
 };
 
-export type DesktopPetBounds = {
+export type DesktopPetAnchor = {
   x: number;
   y: number;
+};
+
+export type DesktopPetContentSize = {
   width: number;
   height: number;
 };
@@ -308,30 +338,24 @@ export type DesktopPetPrefs = {
   feedbackLevel: DesktopPetFeedbackLevel;
   sizePercent: number;
   collapsed: boolean;
-  bounds?: DesktopPetBounds;
+  anchor?: DesktopPetAnchor;
 };
 
-export type DesktopPetEvent = {
-  id?: string;
-  kind:
-    | 'hello'
-    | 'info'
-    | 'agent-start'
-    | 'agent-tool'
-    | 'agent-progress'
-    | 'agent-success'
-    | 'agent-error'
-    | 'goal'
-    | 'toast';
-  title?: string;
-  message?: string;
-  severity?: 'info' | 'success' | 'warning' | 'error';
-  sessionKey?: string;
-  runId?: string;
-  route?: string;
-  toolName?: string;
-  activity?: DesktopPetActivity;
-  createdAt?: number;
+export type PetSessionState = "running" | "waiting" | "success" | "error";
+
+export type PetSessionUpdate = {
+  sessionKey: string;
+  runId: string;
+  sessionLabel: string;
+  sequence: number;
+  timestamp: number;
+  state: PetSessionState;
+  phase: DesktopPetActivityPhase;
+  action: string;
+  detail?: string;
+  progress?: { completed: number; total: number };
+  outputTail?: string;
+  outputLines?: string[];
 };
 
 export type DesktopPetState = {
@@ -351,16 +375,19 @@ export interface ElectronDesktopPetAPI {
   resetPosition(): Promise<DesktopPetState>;
   openMainWindow(path?: string): Promise<void>;
   setClickThrough(enabled: boolean): Promise<void>;
-  sendEvent(event: DesktopPetEvent): Promise<void>;
+  sendEvent(event: PetSessionUpdate): Promise<void>;
   openCustomPetsDir(): Promise<{ ok: true } | { ok: false; error: string }>;
   createFromPrompt(
     request: DesktopPetCreateRequest,
-  ): Promise<{ ok: true; result: DesktopPetCreateResult } | { ok: false; error: string }>;
+  ): Promise<
+    { ok: true; result: DesktopPetCreateResult } | { ok: false; error: string }
+  >;
   startDrag(point: DesktopPetDragPoint): Promise<void>;
   drag(point: DesktopPetDragPoint): Promise<void>;
   endDrag(): Promise<void>;
+  setContentSize(size: DesktopPetContentSize): Promise<void>;
   onStateChanged(callback: (state: DesktopPetState) => void): () => void;
-  onEvent(callback: (event: DesktopPetEvent) => void): () => void;
+  onEvent(callback: (event: PetSessionUpdate) => void): () => void;
 }
 
 export interface ElectronSystemSettingsAPI {
@@ -372,7 +399,9 @@ export interface ElectronSystemSettingsAPI {
     notifyEnabled?: boolean;
     notifySoundEnabled?: boolean;
   }): Promise<{ ok: true; behavior: SystemSettingsBehavior }>;
-  getPermissions(options?: { probe?: boolean }): Promise<ShellPermissionSnapshot>;
+  getPermissions(options?: {
+    probe?: boolean;
+  }): Promise<ShellPermissionSnapshot>;
   openPrivacy(
     kind: PrivacyPaneKind,
   ): Promise<{ ok: true } | { ok: false; error: string }>;
@@ -382,7 +411,9 @@ export interface ElectronSystemSettingsAPI {
   requestScreen(): Promise<PermissionRequestResult>;
   getUninstallInfo(): Promise<UninstallInfo>;
   clearUserData(): Promise<ClearUserDataResult>;
-  uninstallApp(options?: { removeUserData?: boolean }): Promise<UninstallAppResult>;
+  uninstallApp(options?: {
+    removeUserData?: boolean;
+  }): Promise<UninstallAppResult>;
 }
 
 export interface ElectronAPI {
@@ -393,7 +424,7 @@ export interface ElectronAPI {
   agent: ElectronAgentAPI;
   startup?: ElectronStartupAPI;
   gateway?: ElectronGatewayShellAPI;
-  platform: 'darwin' | 'win32' | 'linux';
+  platform: "darwin" | "win32" | "linux";
   menu?: ElectronMenuAPI;
   locale?: ElectronLocaleAPI;
   cron?: ElectronCronDisplayWakeAPI;

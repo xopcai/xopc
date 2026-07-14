@@ -1,26 +1,26 @@
 export type DesktopPetAction =
-  | 'idle'
-  | 'typing'
-  | 'toolbox'
-  | 'search'
-  | 'file'
-  | 'terminal'
-  | 'browser'
-  | 'success'
-  | 'error';
+  | "idle"
+  | "typing"
+  | "toolbox"
+  | "search"
+  | "file"
+  | "terminal"
+  | "browser"
+  | "success"
+  | "error";
 
-export type DesktopPetFeedbackLevel = 'quiet' | 'normal' | 'chatty';
+export type DesktopPetFeedbackLevel = "quiet" | "normal" | "chatty";
 
 export type DesktopPetActivityPhase =
-  | 'preparing'
-  | 'planning'
-  | 'researching'
-  | 'reading'
-  | 'editing'
-  | 'running'
-  | 'browsing'
-  | 'compacting'
-  | 'waiting';
+  | "preparing"
+  | "planning"
+  | "researching"
+  | "reading"
+  | "editing"
+  | "running"
+  | "browsing"
+  | "compacting"
+  | "waiting";
 
 export type DesktopPetActivity = {
   phase?: DesktopPetActivityPhase;
@@ -30,9 +30,12 @@ export type DesktopPetActivity = {
   total?: number;
 };
 
-export type DesktopPetBounds = {
+export type DesktopPetAnchor = {
   x: number;
   y: number;
+};
+
+export type DesktopPetContentSize = {
   width: number;
   height: number;
 };
@@ -100,7 +103,7 @@ export type DesktopPetPrefs = {
   feedbackLevel: DesktopPetFeedbackLevel;
   sizePercent: number;
   collapsed: boolean;
-  bounds?: DesktopPetBounds;
+  anchor?: DesktopPetAnchor;
 };
 
 export type DesktopPetState = {
@@ -111,27 +114,19 @@ export type DesktopPetState = {
   petIssues: DesktopPetIssue[];
 };
 
-export type DesktopPetEventKind =
-  | 'hello'
-  | 'info'
-  | 'agent-start'
-  | 'agent-tool'
-  | 'agent-progress'
-  | 'agent-success'
-  | 'agent-error'
-  | 'goal'
-  | 'toast';
+export type PetSessionState = "running" | "waiting" | "success" | "error";
 
-export type DesktopPetEvent = {
-  id?: string;
-  kind: DesktopPetEventKind;
-  message?: string;
-  title?: string;
-  severity?: 'info' | 'success' | 'warning' | 'error';
-  sessionKey?: string;
-  runId?: string;
-  route?: string;
-  toolName?: string;
-  activity?: DesktopPetActivity;
-  createdAt?: number;
+export type PetSessionUpdate = {
+  sessionKey: string;
+  runId: string;
+  sessionLabel: string;
+  sequence: number;
+  timestamp: number;
+  state: PetSessionState;
+  phase: DesktopPetActivityPhase;
+  action: string;
+  detail?: string;
+  progress?: { completed: number; total: number };
+  outputTail?: string;
+  outputLines?: string[];
 };

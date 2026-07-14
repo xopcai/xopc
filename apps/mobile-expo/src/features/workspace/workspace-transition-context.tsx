@@ -30,6 +30,7 @@ import type {
   LayoutRect,
   WorkspaceTransitionPhase,
 } from './workspace-transition.types';
+import { shouldQueueWorkspaceOpen } from './workspace-transition-queue';
 
 export type WorkspaceTransitionContextValue = {
   phase: WorkspaceTransitionPhase;
@@ -74,6 +75,8 @@ export function WorkspaceTransitionProvider({ children, onClosed }: WorkspaceTra
   const composerMeasurerRef = useRef<LayoutMeasurer | null>(null);
   const finalizeHandlerRef = useRef<FinalizeAskAiHandler | null>(null);
   const transitionBusyRef = useRef(false);
+  const queuedOpenSessionKeyRef = useRef<string | null>(null);
+  const openAskAiRef = useRef<((sessionKey: string) => Promise<void>) | null>(null);
 
   const registerPillMeasurer = useCallback((measurer: LayoutMeasurer | null) => {
     pillMeasurerRef.current = measurer;
@@ -114,6 +117,14 @@ export function WorkspaceTransitionProvider({ children, onClosed }: WorkspaceTra
     hapticAskAiDismiss();
     announce(m.chat.overlayClosedAnnouncement);
     onClosed?.();
+
+    const queuedSessionKey = queuedOpenSessionKeyRef.current;
+    queuedOpenSessionKeyRef.current = null;
+    if (queuedSessionKey) {
+      setTimeout(() => {
+        void openAskAiRef.current?.(queuedSessionKey);
+      }, 0);
+    }
   }, [announce, dismissDrag, m.chat.overlayClosedAnnouncement, onClosed]);
 
   const notifyComposerAnchor = useCallback((rect: LayoutRect) => {
@@ -121,6 +132,10 @@ export function WorkspaceTransitionProvider({ children, onClosed }: WorkspaceTra
   }, []);
 
   const openAskAi = useCallback(async (sessionKey: string) => {
+    if (shouldQueueWorkspaceOpen(phase)) {
+      queuedOpenSessionKeyRef.current = sessionKey;
+      return;
+    }
     if (transitionBusyRef.current || phase === 'open' || phase === 'opening') return;
     transitionBusyRef.current = true;
     hapticAskAiPress();
@@ -151,6 +166,8 @@ export function WorkspaceTransitionProvider({ children, onClosed }: WorkspaceTra
     progress,
     reducedMotion,
   ]);
+
+  openAskAiRef.current = openAskAi;
 
   const closeAskAi = useCallback(() => {
     if (transitionBusyRef.current || phase === 'closed' || phase === 'closing') return;

@@ -1,221 +1,92 @@
-import { ChevronDown } from 'lucide-react';
-import {
-  type CSSProperties,
-  type PointerEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { ChevronDown, X } from "lucide-react";
+import { type CSSProperties, type PointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-import { DesktopPetSprite } from '@/features/desktop-pet/desktop-pet-sprite';
-import { actionForEvent, messageForEvent } from '@/features/desktop-pet/desktop-pet-copy';
-import { messages } from '@/i18n/messages';
-import { cn } from '@/lib/cn';
-import { apiFetch } from '@/lib/fetch';
-import { interaction } from '@/lib/interaction';
-import { useLocaleStore } from '@/stores/locale-store';
-import type { DesktopPetAction, DesktopPetEvent, DesktopPetState } from '@/types/electron';
+import { DesktopPetSprite } from "@/features/desktop-pet/desktop-pet-sprite";
+import { desktopPetWindowTarget } from "@/features/desktop-pet/desktop-pet-window-target";
+import { messages } from "@/i18n/messages";
+import { useLocaleStore } from "@/stores/locale-store";
+import type { DesktopPetAction, DesktopPetState, PetSessionUpdate } from "@/types/electron";
 
-type ActivityEntry = {
-  id: string;
-  label: string;
-  detail?: string;
-};
+type Activity = PetSessionUpdate & { expiresAt?: number };
+const TERMINAL_TTL_MS = 8_000;
 
-function activityDetail(event: DesktopPetEvent): string | undefined {
-  const detail = event.activity?.detail;
-  const { completed, total } = event.activity ?? {};
-  const progress =
-    typeof completed === 'number' && typeof total === 'number' ? `${completed}/${total}` : undefined;
-  return [detail, progress].filter((value): value is string => Boolean(value)).join(' · ') || undefined;
+function visibleActivities(values: Activity[]): Activity[] {
+  const rank = { error: 0, waiting: 1, running: 2, success: 3 };
+  return values.sort((a, b) => rank[a.state] - rank[b.state] || b.timestamp - a.timestamp).slice(0, 3);
 }
 
 function fallbackState(): DesktopPetState {
-  return {
-    prefs: {
-      enabled: true,
-      showOnStartup: false,
-      selectedPetId: 'ember',
-      alwaysOnTop: true,
-      bubbleEnabled: true,
-      clickThroughWhenIdle: false,
-      muted: false,
-      feedbackLevel: 'normal',
-      sizePercent: 100,
-      collapsed: false,
-    },
-    pets: [],
-    visible: true,
-    customPetsDir: '',
-    petIssues: [],
-  };
+  return { prefs: { enabled: true, showOnStartup: false, selectedPetId: "ember", alwaysOnTop: true, bubbleEnabled: true, clickThroughWhenIdle: false, muted: false, feedbackLevel: "normal", sizePercent: 100, collapsed: false }, pets: [], visible: true, customPetsDir: "", petIssues: [] };
 }
 
 export function DesktopPetRoot() {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).desktopPet;
-  const [state, setState] = useState<DesktopPetState>(() => fallbackState());
-  const [action, setAction] = useState<DesktopPetAction>('idle');
-  const [bubble, setBubble] = useState<string | null>(null);
-  const [bubbleDetail, setBubbleDetail] = useState<string | null>(null);
-  const [activityEntries, setActivityEntries] = useState<ActivityEntry[]>([]);
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
-  const [taskStartedAt, setTaskStartedAt] = useState<number | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [tipCount, setTipCount] = useState(0);
-  const [activeRoute, setActiveRoute] = useState('/chat');
-  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; moved: boolean } | null>(null);
+  const [state, setState] = useState<DesktopPetState>(fallbackState);
+  const [activities, setActivities] = useState<Record<string, Activity>>({});
+  const [dismissedSessionKeys, setDismissedSessionKeys] = useState<Set<string>>(() => new Set());
+  const [now, setNow] = useState(Date.now());
+  const dragRef = useRef<{ pointerId: number; x: number; y: number; moved: boolean } | null>(null);
   const suppressClickRef = useRef(false);
-  const bubbleTimerRef = useRef<number | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const queueRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const selectedPet = useMemo(() => state.pets.find((pet) => pet.id === state.prefs.selectedPetId) ?? state.pets[0], [state]);
+  const sizeScale = Math.min(1.4, Math.max(0.7, state.prefs.sizePercent / 100));
+  const allActive = useMemo(() => visibleActivities(Object.values(activities).filter((item) => !item.expiresAt || item.expiresAt > now)), [activities, now]);
+  const active = useMemo(() => allActive.filter((item) => !dismissedSessionKeys.has(item.sessionKey)), [allActive, dismissedSessionKeys]);
+  const primary = active[0];
+  const action: DesktopPetAction = primary?.state === "error" ? "error" : primary?.state === "success" ? "success" : primary ? "typing" : "idle";
 
   useEffect(() => {
-    document.documentElement.dataset.desktopPet = 'true';
-    return () => {
-      delete document.documentElement.dataset.desktopPet;
-    };
-  }, []);
-
-  useEffect(() => {
+    document.documentElement.dataset.desktopPet = "true";
     const api = window.electronAPI?.pet;
     if (!api) return;
-    void api.getState().then((next) => {
-      setState(next);
-      setTipCount(0);
-    }).catch(() => {});
-    const offState = api.onStateChanged((next) => {
-      setState(next);
-      if (!next.prefs.collapsed) setTipCount(0);
-    });
-    const offEvent = api.onEvent((event: DesktopPetEvent) => {
-      if (
-        state.prefs.feedbackLevel === 'quiet' &&
-        event.severity !== 'error' &&
-        event.kind !== 'agent-success' &&
-        event.activity?.phase !== 'waiting'
-      ) {
-        return;
-      }
-      const label = messageForEvent(event, language, t);
-      const detail = activityDetail(event);
-      const isWaiting = event.activity?.phase === 'waiting';
-      const isTerminal = event.kind === 'agent-success' || event.kind === 'agent-error';
-      setAction(actionForEvent(event));
-      setBubble(label);
-      setBubbleDetail(detail ?? null);
-      if (event.kind === 'agent-start') {
-        setActivityEntries([]);
-        setTaskStartedAt(Date.now());
-        setElapsedSeconds(0);
-      }
-      if (event.runId) setActiveRunId(event.runId);
-      if (event.kind === 'agent-tool' || event.kind === 'agent-progress') {
-        setActivityEntries((current) => [
-          { id: `${Date.now()}-${event.kind}-${Math.random().toString(36).slice(2, 7)}`, label, detail },
-          ...current.filter((entry) => entry.label !== label || entry.detail !== detail),
-        ].slice(0, 3));
-      }
-      if (isTerminal) setActiveRunId(null);
-      setTipCount((current) => (state.prefs.collapsed ? Math.min(99, Math.max(1, current) + 1) : 1));
-      if (event.route?.startsWith('/')) {
-        setActiveRoute(event.route);
-      }
-      if (bubbleTimerRef.current !== null) window.clearTimeout(bubbleTimerRef.current);
-      if (isWaiting) return;
-      bubbleTimerRef.current = window.setTimeout(() => {
-        setAction('idle');
-        setBubble(null);
-        setBubbleDetail(null);
-        if (!state.prefs.collapsed) setTipCount(0);
-      }, event.severity === 'error' ? 9000 : 6200);
-    });
-    return () => {
-      offState();
-      offEvent();
-      if (bubbleTimerRef.current !== null) window.clearTimeout(bubbleTimerRef.current);
-    };
-  }, [language, state.prefs.collapsed, state.prefs.feedbackLevel, t]);
-
-  useEffect(() => {
-    if (!taskStartedAt || !activeRunId) return;
-    const tick = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - taskStartedAt) / 1000)));
-    tick();
-    const timer = window.setInterval(tick, 1000);
-    return () => window.clearInterval(timer);
-  }, [activeRunId, taskStartedAt]);
-
-  useEffect(() => {
-    void window.electronAPI?.pet?.setClickThrough(false);
+    void api.getState().then(setState).catch(() => {});
+    const offState = api.onStateChanged(setState);
+    const offEvent = api.onEvent((update) => setActivities((current) => {
+      const prior = current[update.sessionKey];
+      if (prior && update.sequence <= prior.sequence) return current;
+      return { ...current, [update.sessionKey]: { ...prior, ...update, outputLines: update.outputLines ?? prior?.outputLines, expiresAt: update.state === "success" ? Date.now() + TERMINAL_TTL_MS : undefined } };
+    }));
+    const timer = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => { delete document.documentElement.dataset.desktopPet; offState(); offEvent(); window.clearInterval(timer); };
   }, []);
 
-  const selectedPet = useMemo(
-    () => state.pets.find((pet) => pet.id === state.prefs.selectedPetId) ?? state.pets[0],
-    [state.pets, state.prefs.selectedPetId],
-  );
-  const sizeScale = Math.min(1.4, Math.max(0.7, state.prefs.sizePercent / 100));
-  const petDisplayHeight = Math.round(112 * sizeScale);
-  const petWindowStyle = {
-    '--desktop-pet-stage-size': `${Math.round(132 * sizeScale)}px`,
-    '--desktop-pet-stage-right': `${Math.round(24 * sizeScale)}px`,
-    '--desktop-pet-stage-bottom': `${Math.round(16 * sizeScale)}px`,
-    '--desktop-pet-menu-size': `${Math.round(28 * sizeScale)}px`,
-    '--desktop-pet-menu-left': `${Math.round(-6 * sizeScale)}px`,
-    '--desktop-pet-menu-bottom': `${Math.round(12 * sizeScale)}px`,
-  } as CSSProperties;
+  useLayoutEffect(() => {
+    const root = rootRef.current;
+    const pet = window.electronAPI?.pet;
+    if (!root || !pet) return;
+    const report = () => {
+      const rects = [queueRef.current, stageRef.current].filter((item): item is HTMLDivElement => item !== null).map((item) => item.getBoundingClientRect());
+      if (!rects.length) return;
+      const left = Math.min(...rects.map((rect) => rect.left)); const top = Math.min(...rects.map((rect) => rect.top));
+      const right = Math.max(...rects.map((rect) => rect.right)); const bottom = Math.max(...rects.map((rect) => rect.bottom));
+      void pet.setContentSize({ width: Math.ceil(right - left), height: Math.ceil(bottom - top) });
+    };
+    const observer = new ResizeObserver(report); observer.observe(root); if (queueRef.current) observer.observe(queueRef.current); if (stageRef.current) observer.observe(stageRef.current); report();
+    return () => observer.disconnect();
+  }, [active.length, state.prefs.collapsed, sizeScale]);
 
-  const openTarget = () => {
-    void window.electronAPI?.pet?.openMainWindow(activeRoute);
-  };
-
-  const stopTask = async () => {
-    if (!activeRunId) return;
-    const response = await apiFetch('/api/agent/abort', {
-      method: 'POST',
-      body: JSON.stringify({ runId: activeRunId }),
-    }).catch(() => null);
-    if (response?.ok) {
-      setActiveRunId(null);
-      setBubble(t.taskStopped);
-      setBubbleDetail(null);
-      setAction('idle');
+  const open = (item = primary) => {
+    if (item?.state === "success") {
+      setActivities((current) => {
+        const { [item.sessionKey]: _opened, ...remaining } = current;
+        return remaining;
+      });
     }
+    void window.electronAPI?.pet?.openMainWindow(desktopPetWindowTarget(item));
   };
-
-  const toggleBubble = async () => {
-    const nextCollapsed = !state.prefs.collapsed;
-    setTipCount((current) => (nextCollapsed && bubble ? Math.max(1, current) : 0));
-    setState((current) => ({
-      ...current,
-      prefs: { ...current.prefs, collapsed: nextCollapsed },
-    }));
-    const next = await window.electronAPI?.pet?.setPrefs({ collapsed: nextCollapsed });
+  const toggle = async () => {
+    if (dismissedSessionKeys.size > 0) {
+      setDismissedSessionKeys(new Set());
+      if (!state.prefs.collapsed) return;
+    }
+    const next = await window.electronAPI?.pet?.setPrefs({ collapsed: !state.prefs.collapsed });
     if (next) setState(next);
   };
-
-  const beginDrag = useCallback((event: PointerEvent<HTMLButtonElement>) => {
-    if (event.button !== 0) return;
-    dragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      moved: false,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-    void window.electronAPI?.pet?.startDrag({ screenX: event.screenX, screenY: event.screenY });
-  }, []);
-
-  const moveDrag = useCallback((event: PointerEvent<HTMLButtonElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const distance = Math.abs(event.clientX - drag.startX) + Math.abs(event.clientY - drag.startY);
-    if (distance > 4) {
-      drag.moved = true;
-      event.preventDefault();
-      void window.electronAPI?.pet?.drag({ screenX: event.screenX, screenY: event.screenY });
-    }
-  }, []);
-
+  const beginDrag = useCallback((event: PointerEvent<HTMLButtonElement>) => { if (event.button !== 0) return; dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false }; event.currentTarget.setPointerCapture(event.pointerId); void window.electronAPI?.pet?.startDrag({ screenX: event.screenX, screenY: event.screenY }); }, []);
+  const moveDrag = useCallback((event: PointerEvent<HTMLButtonElement>) => { const drag = dragRef.current; if (!drag || drag.pointerId !== event.pointerId) return; if (Math.abs(event.clientX - drag.x) + Math.abs(event.clientY - drag.y) > 4) { drag.moved = true; void window.electronAPI?.pet?.drag({ screenX: event.screenX, screenY: event.screenY }); } }, []);
   const endDrag = useCallback((event: PointerEvent<HTMLButtonElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
@@ -223,95 +94,15 @@ export function DesktopPetRoot() {
     void window.electronAPI?.pet?.endDrag();
     if (drag.moved) {
       suppressClickRef.current = true;
-      event.preventDefault();
-      event.stopPropagation();
-      window.setTimeout(() => {
-        suppressClickRef.current = false;
-      }, 0);
+      window.setTimeout(() => { suppressClickRef.current = false; }, 0);
     }
   }, []);
+  const handlePetClick = () => { if (!suppressClickRef.current) open(); };
 
-  const handlePetClick = () => {
-    if (suppressClickRef.current) return;
-    openTarget();
-  };
-
-  if (!selectedPet) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-transparent text-sm text-fg-muted">
-        {t.loading}
-      </div>
-    );
-  }
-
-  return (
-    <div className="desktop-pet-window" style={petWindowStyle}>
-      {state.prefs.bubbleEnabled && !state.prefs.collapsed && bubble ? (
-        <div className="desktop-pet-bubble">
-          <button
-            type="button"
-            className={cn('desktop-pet-bubble-main', interaction.press)}
-            onClick={openTarget}
-            title={t.openApp}
-          >
-            <span className="desktop-pet-bubble-title">{bubble}</span>
-            {state.prefs.feedbackLevel === 'chatty' && bubbleDetail ? (
-              <span className="desktop-pet-bubble-detail">{bubbleDetail}</span>
-            ) : null}
-          </button>
-          {state.prefs.feedbackLevel === 'chatty' && (activityEntries.length > 0 || activeRunId) ? (
-            <div className="desktop-pet-activity-card">
-              <div className="desktop-pet-activity-heading">
-                {activeRunId ? `${t.taskInProgress} · ${elapsedSeconds}s` : t.taskRecentActivity}
-              </div>
-              {activityEntries.length > 0 ? (
-                <ul className="desktop-pet-activity-list">
-                  {activityEntries.map((entry) => (
-                    <li key={entry.id}>
-                      <span>{entry.label}</span>
-                      {entry.detail ? <small>{entry.detail}</small> : null}
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              <div className="desktop-pet-activity-actions">
-                <button type="button" onClick={openTarget}>{t.viewSession}</button>
-                {activeRunId ? <button type="button" onClick={() => void stopTask()}>{t.stopTask}</button> : null}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="desktop-pet-stage">
-        <button
-          type="button"
-          className={cn('desktop-pet-menu-button', state.prefs.collapsed && 'desktop-pet-menu-button--collapsed')}
-          onClick={() => void toggleBubble()}
-          aria-pressed={state.prefs.collapsed}
-          aria-label={t.menu}
-          title={t.menu}
-        >
-          {state.prefs.collapsed && tipCount > 0 ? (
-            <span className="desktop-pet-tip-count">{tipCount}</span>
-          ) : (
-            <ChevronDown className="desktop-pet-menu-chevron size-4" strokeWidth={1.8} />
-          )}
-        </button>
-        <button
-          type="button"
-          className="desktop-pet-hit-area"
-          onClick={handlePetClick}
-          onDoubleClick={handlePetClick}
-          onPointerDown={beginDrag}
-          onPointerMove={moveDrag}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          title={t.openApp}
-        >
-          <DesktopPetSprite pet={selectedPet} action={action} displayHeight={petDisplayHeight} />
-        </button>
-      </div>
-    </div>
-  );
+  if (!selectedPet) return null;
+  const style = { "--desktop-pet-stage-size": `${Math.round(132 * sizeScale)}px`, "--desktop-pet-menu-size": `${Math.round(28 * sizeScale)}px`, "--desktop-pet-menu-left": "0px", "--desktop-pet-menu-bottom": `${Math.round(12 * sizeScale)}px` } as CSSProperties;
+  return <div ref={rootRef} className="desktop-pet-window" style={style}>
+    {!state.prefs.collapsed && active.length > 0 ? <div ref={queueRef} className="desktop-pet-bubble desktop-pet-queue">{active.map((item) => <div key={item.sessionKey} className={`desktop-pet-session desktop-pet-session--${item.state}`}><button type="button" className="desktop-pet-session-open" onClick={() => open(item)}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{item.sessionLabel}</strong><span>{item.action}{item.detail ? `：${item.detail}` : item.progress ? ` · ${item.progress.completed}/${item.progress.total}` : item.outputLines?.length ? `：${item.outputLines[Math.floor((now - item.timestamp) / 1800) % item.outputLines.length]}` : item.outputTail ? `：${item.outputTail}` : item.state === "running" ? ` · ${Math.max(1, Math.floor((now - item.timestamp) / 1000))}s` : ""}</span></span></button><button type="button" className="desktop-pet-session-close" aria-label="收起会话" onClick={() => setDismissedSessionKeys((current) => new Set(current).add(item.sessionKey))}><X size={12} /></button></div>)}</div> : null}
+    <div ref={stageRef} className="desktop-pet-stage"><button type="button" className="desktop-pet-menu-button" onClick={() => void toggle()} aria-label={t.menu}>{(state.prefs.collapsed ? allActive.length : dismissedSessionKeys.size) > 0 ? <span className="desktop-pet-tip-count">{Math.min(99, state.prefs.collapsed ? allActive.length : dismissedSessionKeys.size)}</span> : <ChevronDown className="desktop-pet-menu-chevron size-4" />}</button><button type="button" className="desktop-pet-hit-area" onClick={handlePetClick} onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title={t.openApp}><DesktopPetSprite pet={selectedPet} action={action} displayHeight={Math.round(112 * sizeScale)} /></button></div>
+  </div>;
 }

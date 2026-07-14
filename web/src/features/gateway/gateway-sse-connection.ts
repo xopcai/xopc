@@ -14,7 +14,7 @@ export type GatewaySseCallbacks = {
  * Server-Sent Events client for `/api/events`.
  */
 export class GatewaySseConnection {
-  private _eventSource?: EventSource;
+  private _abort?: AbortController;
   private _shouldReconnect = true;
   private _reconnectCount = 0;
 
@@ -32,44 +32,51 @@ export class GatewaySseConnection {
   }
 
   connect(): void {
-    if (this._eventSource) return;
+    if (this._abort) return;
+    const abort = new AbortController();
+    this._abort = abort;
+    void this._consume(abort);
+  }
 
-    const url = new URL(apiUrl('/api/events'));
-    if (this._config.token) url.searchParams.set('token', this._config.token);
-
-    this._eventSource = new EventSource(url.toString());
-
-    this._eventSource.onopen = () => {
+  private async _consume(abort: AbortController): Promise<void> {
+    try {
+      const headers = new Headers({ Accept: 'text/event-stream' });
+      if (this._config.credential) headers.set('Authorization', `Bearer ${this._config.credential}`);
+      const response = await fetch(apiUrl('/api/events'), { headers, signal: abort.signal });
+      if (!response.ok || !response.body) throw new Error(`Gateway event stream failed: ${response.status}`);
       this._reconnectCount = 0;
-    };
-
-    this._eventSource.addEventListener('connected', () => {
-      this._callbacks.onConnected();
-    });
-
-    for (const evt of [
-      'agent.stream',
-      'config.reload',
-      'channels.status',
-      'message.sent',
-      'session.updated',
-      'session.transcript_updated',
-      'session.created',
-      'dreaming.phase.start',
-      'dreaming.phase.end',
-    ]) {
-      this._eventSource.addEventListener(evt, (e: MessageEvent) => {
-        this._callbacks.onEvent(evt, e.data as string);
-      });
-    }
-
-    this._eventSource.onerror = () => {
-      if (this._eventSource?.readyState === EventSource.CLOSED) {
-        this._handlePermanentDisconnect();
-      } else {
-        this._callbacks.onReconnecting();
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (!abort.signal.aborted) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let boundary = buffer.indexOf('\n\n');
+        while (boundary >= 0) {
+          this._dispatchChunk(buffer.slice(0, boundary));
+          buffer = buffer.slice(boundary + 2);
+          boundary = buffer.indexOf('\n\n');
+        }
       }
-    };
+    } catch (error) {
+      if (!abort.signal.aborted) this._callbacks.onReconnecting();
+      if (!abort.signal.aborted && error instanceof Error) this._callbacks.onError(error.message);
+    } finally {
+      if (this._abort === abort) this._abort = undefined;
+      if (!abort.signal.aborted) this._handlePermanentDisconnect();
+    }
+  }
+
+  private _dispatchChunk(chunk: string): void {
+    let event = 'message';
+    const data: string[] = [];
+    for (const line of chunk.split(/\r?\n/)) {
+      if (line.startsWith('event:')) event = line.slice(6).trim();
+      if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+    }
+    if (event === 'connected') this._callbacks.onConnected();
+    else if (data.length > 0) this._callbacks.onEvent(event, data.join('\n'));
   }
 
   private _handlePermanentDisconnect(): void {
@@ -78,13 +85,16 @@ export class GatewaySseConnection {
     this._reconnectCount++;
     if (this._reconnectCount > this.maxReconnectAttempts) {
       this._callbacks.onError('Connection failed after max retries');
+      return;
     }
+    this._callbacks.onReconnecting();
+    setTimeout(() => this.connect(), Math.min(1000 * this._reconnectCount, 5000));
   }
 
   disconnect(): void {
     this._shouldReconnect = false;
-    this._eventSource?.close();
-    this._eventSource = undefined;
+    this._abort?.abort();
+    this._abort = undefined;
   }
 
   reconnect(): void {

@@ -1,29 +1,35 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 
-import { clampDesktopPetBounds, desktopPetDefaultBounds } from '../desktop-pet/window-bounds.js';
+import {
+  clampDesktopPetAnchor,
+  desktopPetDefaultAnchor,
+  desktopPetWindowBoundsForAnchor,
+} from "../desktop-pet/window-bounds.js";
 
 const workArea = { x: 0, y: 0, width: 1920, height: 1040 };
 
-describe('desktop pet window bounds', () => {
-  it('keeps the default window above the bottom safety area', () => {
-    const bounds = desktopPetDefaultBounds(workArea, 1);
+describe("desktop pet anchor bounds", () => {
+  it("puts the pet anchor flush with the usable display edge", () => {
+    const anchor = desktopPetDefaultAnchor(workArea);
 
-    expect(bounds.y + bounds.height).toBe(968);
-    expect(workArea.height - (bounds.y + bounds.height)).toBeGreaterThanOrEqual(72);
+    expect(anchor).toEqual({ x: 1920, y: 1040 });
   });
 
-  it('pulls a saved or dragged window back from the bottom display edge', () => {
-    const bounds = clampDesktopPetBounds({ x: 1600, y: 790, width: 320, height: 250 }, workArea);
-
-    expect(bounds).toMatchObject({ x: 1576, y: 718, width: 320, height: 250 });
+  it("keeps the whole interactive pet region on the display while allowing it to touch every edge", () => {
+    expect(
+      clampDesktopPetAnchor({ x: -100, y: 9999 }, workArea, 138, 132),
+    ).toEqual({ x: 138, y: 1040 });
+    expect(
+      clampDesktopPetAnchor({ x: 9999, y: -100 }, workArea, 138, 132),
+    ).toEqual({ x: 1920, y: 132 });
   });
 
-  it('keeps small displays usable instead of creating invalid bounds', () => {
-    const bounds = clampDesktopPetBounds(
-      { x: -100, y: 999, width: 360, height: 250 },
-      { x: 0, y: 0, width: 200, height: 150 },
+  it("grows the native window upward and leftward without moving the pet anchor", () => {
+    const bounds = desktopPetWindowBoundsForAnchor(
+      { x: 1500, y: 900 },
+      { width: 334, height: 278 },
     );
 
-    expect(bounds).toEqual({ x: 10, y: 5, width: 180, height: 140 });
+    expect(bounds).toEqual({ x: 1166, y: 622, width: 334, height: 278 });
   });
 });
