@@ -709,6 +709,8 @@ export const en = {
     noChats: 'No AI chats yet',
     askAi: 'Ask AI',
     askAiHint: 'Start a new chat',
+    askAiStarting: 'Starting a new chat…',
+    askAiStartFailed: 'Could not start a new chat. Check your connection and try again.',
     noRecentOpened: 'No recently opened notes',
     noContinueItems: 'No work to continue yet',
     inboxCleared: 'Inbox is clear',

@@ -189,11 +189,6 @@ export const SidebarColumn = memo(function SidebarColumn() {
             onPointerDown={onSidebarResizePointerDown}
             className={cn(
               'pointer-events-auto absolute right-0 top-0 z-10 hidden h-full w-2 shrink-0 cursor-col-resize md:block',
-              "before:content-[''] before:pointer-events-none before:absolute before:left-1/2 before:top-0 before:z-0 before:h-full before:w-px before:-translate-x-1/2",
-              'before:bg-transparent before:transition-[background-color] before:duration-150',
-              'hover:bg-surface-hover/20 hover:before:bg-edge/65 dark:hover:before:bg-edge/75',
-              widthResizing && 'bg-surface-hover/30 before:!bg-edge/80 dark:before:!bg-edge/85',
-              'transition-[background-color] duration-150',
               'touch-none select-none',
               APP_CHROME_NO_DRAG_CLASS,
             )}

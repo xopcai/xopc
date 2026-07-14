@@ -22,10 +22,15 @@ import { queryKeys } from '../../query/keys';
 import { fetchNotes, type NoteIndexEntry } from '../../query/notes';
 import { fetchSessionsList, type SessionListItem, useGatewayConfigured } from '../../query/sessions';
 import { useTheme, FLOATING_BOTTOM_OFFSET, floatingBottomPadding } from '../../theme';
+import { listSyncJournalEntries } from '../../sync/sync-journal';
+
+import { shouldPreserveWorkspaceSearch } from './workspace-search-recovery';
+import { aggregateWorkspaceSearchResults, pendingDraftSearchResults } from './workspace-search-aggregator';
 
 type SearchResult =
   | { id: string; type: 'note'; note: NoteIndexEntry }
-  | { id: string; type: 'session'; session: SessionListItem };
+  | { id: string; type: 'session'; session: SessionListItem }
+  | { id: string; type: 'draft'; title: string; snippet?: string };
 
 interface WorkspaceSearchOverlayProps {
   visible: boolean;
@@ -41,12 +46,17 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
   const configured = useGatewayConfigured();
   const [searchText, setSearchText] = useState('');
   const inputRef = useRef<TextInput>(null);
+  const searchTextRef = useRef(searchText);
   const query = searchText.trim();
   const searchEnabled = visible && configured && query.length > 0;
 
   useEffect(() => {
+    searchTextRef.current = searchText;
+  }, [searchText]);
+
+  useEffect(() => {
     if (!visible) {
-      setSearchText('');
+      if (!shouldPreserveWorkspaceSearch(searchTextRef.current)) setSearchText('');
       return;
     }
     const timer = setTimeout(() => inputRef.current?.focus(), 120);
@@ -77,8 +87,27 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
       type: 'session' as const,
       session,
     }));
-    return [...noteResults, ...sessionResults];
-  }, [notesQuery.data?.items, query, sessionsQuery.data?.items]);
+    const byId = new Map<string, SearchResult>([...noteResults, ...sessionResults].map((result) => [result.id, result]));
+    const drafts = pendingDraftSearchResults(listSyncJournalEntries(), query).map((draft) => ({ id: draft.id, type: 'draft' as const, title: draft.title, snippet: draft.snippet }));
+    drafts.forEach((draft) => byId.set(draft.id, draft));
+    return aggregateWorkspaceSearchResults([
+      noteResults.map((result) => ({
+        id: result.id,
+        type: result.type,
+        title: result.note.title ?? result.note.snippet ?? '',
+        updatedAt: result.note.updatedAt,
+        score: 1,
+      })),
+      sessionResults.map((result) => ({
+        id: result.id,
+        type: result.type,
+        title: sessionDisplayName(result.session, m.sessions.untitled),
+        updatedAt: Date.parse(result.session.updatedAt),
+        score: 1,
+      })),
+      pendingDraftSearchResults(listSyncJournalEntries(), query),
+    ]).flatMap((result) => byId.get(result.id) ?? []);
+  }, [m.sessions.untitled, notesQuery.data?.items, query, sessionsQuery.data?.items]);
 
   const isLoading = notesQuery.isLoading || sessionsQuery.isLoading;
   const isSearching = notesQuery.isFetching || sessionsQuery.isFetching;
@@ -89,17 +118,22 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
       openNoteDetail(router, item.note.id);
       return;
     }
+    if (item.type === 'draft') {
+      router.push('/inbox');
+      return;
+    }
     router.push(`/chat/${item.session.key}`);
   }, [onClose, router]);
 
   const renderItem = useCallback(({ item }: { item: SearchResult }) => {
     const isNote = item.type === 'note';
+    const isDraft = item.type === 'draft';
     const title = isNote
       ? item.note.snippet || sm.emptyNoteTitle
-      : sessionDisplayName(item.session, m.sessions.untitled);
+      : isDraft ? item.title : sessionDisplayName(item.session, m.sessions.untitled);
     const meta = isNote
       ? sm.noteMeta
-      : t(sm.sessionMessages, { count: item.session.messageCount });
+      : isDraft ? sm.noteMeta : t(sm.sessionMessages, { count: item.session.messageCount });
 
     return (
       <Pressable
@@ -113,7 +147,7 @@ export function WorkspaceSearchOverlay({ visible, onClose }: WorkspaceSearchOver
         onPress={() => openResult(item)}
       >
         <View style={[styles.iconBubble, { backgroundColor: colors.accent.selectionBg }]}>
-          <Icon source={isNote ? 'note-text-outline' : 'message-processing-outline'} size={18} color={colors.accent.primary} />
+          <Icon source={isNote || isDraft ? 'note-text-outline' : 'message-processing-outline'} size={18} color={colors.accent.primary} />
         </View>
         <View style={styles.resultText}>
           <Text numberOfLines={2} style={[styles.resultTitle, { color: colors.text.primary }]}>{title}</Text>

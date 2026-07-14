@@ -139,11 +139,11 @@ async function runOnboard(
   const showGatewaySummary = Boolean(gatewayConfigured && gwToken && (doGateway || runFullWizard));
 
   if (showGatewaySummary && gwToken) {
-    const webuiUrl = `http://${displayHost}:${port}?token=${gwToken}`;
+    const webuiUrl = `http://${displayHost}:${port}`;
     console.log('🌐 Web console (browser) — start here');
     console.log(`   Open: http://${displayHost}:${port}`);
     console.log(`   Token: ${gwToken.slice(0, 8)}...${gwToken.slice(-8)}`);
-    console.log('   Bookmark link (token is saved in the browser when you open it):');
+    console.log('   Open the console and enter the token when prompted:');
     console.log(`   ${webuiUrl}`);
     console.log('');
   }

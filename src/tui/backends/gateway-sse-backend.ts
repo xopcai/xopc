@@ -29,19 +29,18 @@ import type { SessionInfo } from '../tui-types.js';
 import { computeTuiSessionStats } from '../tui-session-stats.js';
 import { buildTuiTranscriptTree, transcriptTreeEntryIdToRowNumber } from '../tui-transcript-tree.js';
 import type { ReviewContext } from '../../review/review-git.js';
+import { gatewayCredentialAuthorization, type GatewayCredential } from '../../gateway/credential.js';
 
 const log = createLogger('TUI:GatewaySSE');
 
 interface GatewaySSEOptions {
   url: string;
-  token?: string;
+  credential?: GatewayCredential;
 }
 
 function normalizeGatewayModelChoice(model: TuiModelChoice): TuiModelChoice {
   const providerPrefix = `${model.provider}/`;
-  const id = model.id.startsWith(providerPrefix)
-    ? model.id.slice(providerPrefix.length)
-    : model.id;
+  const id = model.id.startsWith(providerPrefix) ? model.id.slice(providerPrefix.length) : model.id;
   return { ...model, id };
 }
 
@@ -60,12 +59,13 @@ export function normalizeGatewaySseEvent(evt: TuiEvent): TuiEvent {
 async function gatewayFetch(
   baseUrl: string,
   path: string,
-  token: string | undefined,
+  credential: GatewayCredential | undefined,
   init?: RequestInit,
 ): Promise<Response> {
+  const authorization = gatewayCredentialAuthorization(credential);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(authorization ? { Authorization: authorization } : {}),
     ...(init?.headers as Record<string, string> | undefined),
   };
   return fetch(`${baseUrl}${path}`, { ...init, headers });
@@ -80,7 +80,7 @@ async function gatewayFetch(
  */
 export class GatewaySseBackend implements TuiBackend {
   private readonly baseUrl: string;
-  private readonly token: string | undefined;
+  private readonly credential: GatewayCredential | undefined;
   private eventAbort: AbortController | null = null;
   private chatAbort: AbortController | null = null;
 
@@ -91,7 +91,7 @@ export class GatewaySseBackend implements TuiBackend {
 
   constructor(opts: GatewaySSEOptions) {
     this.baseUrl = opts.url.replace(/\/+$/, '');
-    this.token = opts.token;
+    this.credential = opts.credential;
   }
 
   get connectionLabel(): string {
@@ -122,21 +122,18 @@ export class GatewaySseBackend implements TuiBackend {
     const signal = this.chatAbort.signal;
     const runId = crypto.randomUUID();
 
-
     // Fire-and-forget: run the HTTP request + SSE consumption in background
     // so the TUI event loop stays responsive for keyboard input.
     void (async () => {
       try {
-        const res = await gatewayFetch(this.baseUrl, '/api/agent', this.token, {
+        const res = await gatewayFetch(this.baseUrl, '/api/agent', this.credential, {
           method: 'POST',
           headers: { Accept: 'text/event-stream' },
           body: JSON.stringify({
             // Prepend envelope timestamp for regular messages so the model knows
             // the current date/time. Skip for slash commands — parseSlashCommand
             // requires lines starting with '/'.
-            message: opts.message.trimStart().startsWith('/')
-              ? opts.message
-              : prependEnvelopeTimestamp(opts.message),
+            message: opts.message.trimStart().startsWith('/') ? opts.message : prependEnvelopeTimestamp(opts.message),
             channel: 'webchat',
             sessionKey: opts.sessionKey,
             attachments: opts.attachments,
@@ -146,7 +143,9 @@ export class GatewaySseBackend implements TuiBackend {
         });
 
         if (!res.ok) {
-          const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: { message?: string };
+          };
           this.onEvent?.({
             event: 'error',
             data: {
@@ -154,7 +153,10 @@ export class GatewaySseBackend implements TuiBackend {
               runId,
               sessionKey: opts.sessionKey,
               timestamp: Date.now(),
-              payload: { code: 'GATEWAY_ERROR', message: body.error?.message ?? `Gateway error: ${res.status}` },
+              payload: {
+                code: 'GATEWAY_ERROR',
+                message: body.error?.message ?? `Gateway error: ${res.status}`,
+              },
             },
             source: 'agent-response',
           });
@@ -170,20 +172,71 @@ export class GatewaySseBackend implements TuiBackend {
               if (signal.aborted) return;
               const data = parseSSEData<Record<string, unknown>>(sseEvent.data);
               if (!data) return;
-              this.onEvent?.({ event: sseEvent.event, data, source: 'agent-response' });
+              this.onEvent?.({
+                event: sseEvent.event,
+                data,
+                source: 'agent-response',
+              });
             },
             signal,
           );
         } else {
-          const json = (await res.json()) as { ok?: boolean; payload?: { content?: string } };
+          const json = (await res.json()) as {
+            ok?: boolean;
+            payload?: { content?: string };
+          };
           if (json.ok && json.payload?.content) {
             const messageId = `msg_${runId}_1`;
-            const base = { runId, sessionKey: opts.sessionKey, timestamp: Date.now() };
-            this.onEvent?.({ event: 'run_start', data: { ...base, type: 'run_start', payload: { channel: 'webchat' } }, source: 'agent-response' });
-            this.onEvent?.({ event: 'assistant_message_start', data: { ...base, type: 'assistant_message_start', payload: { messageId } }, source: 'agent-response' });
-            this.onEvent?.({ event: 'assistant_delta', data: { ...base, type: 'assistant_delta', payload: { messageId, delta: json.payload.content } }, source: 'agent-response' });
-            this.onEvent?.({ event: 'assistant_message_end', data: { ...base, type: 'assistant_message_end', payload: { messageId } }, source: 'agent-response' });
-            this.onEvent?.({ event: 'run_end', data: { ...base, type: 'run_end', payload: { status: 'success' } }, source: 'agent-response' });
+            const base = {
+              runId,
+              sessionKey: opts.sessionKey,
+              timestamp: Date.now(),
+            };
+            this.onEvent?.({
+              event: 'run_start',
+              data: {
+                ...base,
+                type: 'run_start',
+                payload: { channel: 'webchat' },
+              },
+              source: 'agent-response',
+            });
+            this.onEvent?.({
+              event: 'assistant_message_start',
+              data: {
+                ...base,
+                type: 'assistant_message_start',
+                payload: { messageId },
+              },
+              source: 'agent-response',
+            });
+            this.onEvent?.({
+              event: 'assistant_delta',
+              data: {
+                ...base,
+                type: 'assistant_delta',
+                payload: { messageId, delta: json.payload.content },
+              },
+              source: 'agent-response',
+            });
+            this.onEvent?.({
+              event: 'assistant_message_end',
+              data: {
+                ...base,
+                type: 'assistant_message_end',
+                payload: { messageId },
+              },
+              source: 'agent-response',
+            });
+            this.onEvent?.({
+              event: 'run_end',
+              data: {
+                ...base,
+                type: 'run_end',
+                payload: { status: 'success' },
+              },
+              source: 'agent-response',
+            });
           }
         }
       } catch (error) {
@@ -191,7 +244,13 @@ export class GatewaySseBackend implements TuiBackend {
         const errorMessage = error instanceof Error ? error.message : String(error);
         this.onEvent?.({
           event: 'error',
-          data: { type: 'error', runId, sessionKey: opts.sessionKey, timestamp: Date.now(), payload: { code: 'NETWORK_ERROR', message: errorMessage } },
+          data: {
+            type: 'error',
+            runId,
+            sessionKey: opts.sessionKey,
+            timestamp: Date.now(),
+            payload: { code: 'NETWORK_ERROR', message: errorMessage },
+          },
           source: 'agent-response',
         });
       }
@@ -213,7 +272,7 @@ export class GatewaySseBackend implements TuiBackend {
       const res = await gatewayFetch(
         this.baseUrl,
         `/api/workspace/editor/files/search?${params.toString()}`,
-        this.token,
+        this.credential,
       );
       if (!res.ok) return [];
       const json = (await res.json()) as {
@@ -230,7 +289,7 @@ export class GatewaySseBackend implements TuiBackend {
 
   async getReviewContext(sessionKey: string): Promise<ReviewContext> {
     const params = new URLSearchParams({ sessionKey });
-    const res = await gatewayFetch(this.baseUrl, `/api/review/context?${params.toString()}`, this.token);
+    const res = await gatewayFetch(this.baseUrl, `/api/review/context?${params.toString()}`, this.credential);
     const json = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
       payload?: ReviewContext;
@@ -244,7 +303,7 @@ export class GatewaySseBackend implements TuiBackend {
 
   async startWorkflowRun(opts: TuiWorkflowRunStartRequest): Promise<TuiWorkflowRunStartResult> {
     const goal = opts.goal?.trim();
-    const res = await gatewayFetch(this.baseUrl, '/api/workflows/runs', this.token, {
+    const res = await gatewayFetch(this.baseUrl, '/api/workflows/runs', this.credential, {
       method: 'POST',
       body: JSON.stringify({
         definitionId: opts.definitionId,
@@ -277,15 +336,22 @@ export class GatewaySseBackend implements TuiBackend {
     agentId: string;
     autoCreate?: boolean;
   }): Promise<TuiStartupProjectResult> {
-    const res = await gatewayFetch(this.baseUrl, '/api/projects/resolve-workspace', this.token, {
+    const res = await gatewayFetch(this.baseUrl, '/api/projects/resolve-workspace', this.credential, {
       method: 'POST',
       body: JSON.stringify(opts),
     });
-    const json = (await res.json().catch(() => ({}))) as TuiStartupProjectResult & { ok?: boolean; error?: string };
+    const json = (await res.json().catch(() => ({}))) as TuiStartupProjectResult & {
+      ok?: boolean;
+      error?: string;
+    };
     if (!res.ok || json.ok === false) {
       throw new Error(json.error ?? `Project workspace resolve failed (${res.status})`);
     }
-    return { project: json.project ?? null, created: json.created, reason: json.reason };
+    return {
+      project: json.project ?? null,
+      created: json.created,
+      reason: json.reason,
+    };
   }
 
   async resumeChat(opts: { sessionKey: string; runId: string }): Promise<{ ok: boolean; reason?: string }> {
@@ -294,16 +360,25 @@ export class GatewaySseBackend implements TuiBackend {
     const signal = this.chatAbort.signal;
     this.onEvent?.({
       event: 'run_start',
-      data: { type: 'run_start', runId: opts.runId, sessionKey: opts.sessionKey, timestamp: Date.now(), payload: { channel: 'webchat' } },
+      data: {
+        type: 'run_start',
+        runId: opts.runId,
+        sessionKey: opts.sessionKey,
+        timestamp: Date.now(),
+        payload: { channel: 'webchat' },
+      },
       source: 'agent-resume',
     });
 
     let res: Response;
     try {
-      res = await gatewayFetch(this.baseUrl, '/api/agent/resume', this.token, {
+      res = await gatewayFetch(this.baseUrl, '/api/agent/resume', this.credential, {
         method: 'POST',
         headers: { Accept: 'text/event-stream' },
-        body: JSON.stringify({ runId: opts.runId, sessionKey: opts.sessionKey }),
+        body: JSON.stringify({
+          runId: opts.runId,
+          sessionKey: opts.sessionKey,
+        }),
         signal,
       });
     } catch (error) {
@@ -313,13 +388,21 @@ export class GatewaySseBackend implements TuiBackend {
     }
 
     if (!res.ok) {
-      const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-      return { ok: false, reason: body.error?.message ?? `Resume failed: ${res.status}` };
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: { message?: string };
+      };
+      return {
+        ok: false,
+        reason: body.error?.message ?? `Resume failed: ${res.status}`,
+      };
     }
 
     const contentType = res.headers.get('Content-Type') ?? '';
     if (!contentType.includes('text/event-stream') || !res.body) {
-      return { ok: false, reason: 'Resume endpoint did not return an SSE stream' };
+      return {
+        ok: false,
+        reason: 'Resume endpoint did not return an SSE stream',
+      };
     }
 
     void (async () => {
@@ -330,7 +413,11 @@ export class GatewaySseBackend implements TuiBackend {
             if (signal.aborted) return;
             const data = parseSSEData<Record<string, unknown>>(sseEvent.data);
             if (!data) return;
-            this.onEvent?.({ event: sseEvent.event, data, source: 'agent-resume' });
+            this.onEvent?.({
+              event: sseEvent.event,
+              data,
+              source: 'agent-resume',
+            });
           },
           signal,
         );
@@ -339,7 +426,13 @@ export class GatewaySseBackend implements TuiBackend {
         const errorMessage = error instanceof Error ? error.message : String(error);
         this.onEvent?.({
           event: 'error',
-          data: { type: 'error', runId: opts.runId, sessionKey: opts.sessionKey, timestamp: Date.now(), payload: { code: 'NETWORK_ERROR', message: errorMessage } },
+          data: {
+            type: 'error',
+            runId: opts.runId,
+            sessionKey: opts.sessionKey,
+            timestamp: Date.now(),
+            payload: { code: 'NETWORK_ERROR', message: errorMessage },
+          },
           source: 'agent-resume',
         });
       }
@@ -352,7 +445,7 @@ export class GatewaySseBackend implements TuiBackend {
     this.chatAbort?.abort();
     this.chatAbort = null;
     try {
-      const res = await gatewayFetch(this.baseUrl, '/api/agent/abort', this.token, {
+      const res = await gatewayFetch(this.baseUrl, '/api/agent/abort', this.credential, {
         method: 'POST',
         body: JSON.stringify({ runId: opts.runId }),
       });
@@ -365,9 +458,12 @@ export class GatewaySseBackend implements TuiBackend {
 
   async steerChat(opts: { sessionKey: string; message: string }): Promise<{ ok: boolean }> {
     try {
-      const res = await gatewayFetch(this.baseUrl, '/api/agent/steer', this.token, {
+      const res = await gatewayFetch(this.baseUrl, '/api/agent/steer', this.credential, {
         method: 'POST',
-        body: JSON.stringify({ sessionKey: opts.sessionKey, message: opts.message }),
+        body: JSON.stringify({
+          sessionKey: opts.sessionKey,
+          message: opts.message,
+        }),
       });
       if (!res.ok) return { ok: false };
       const json = (await res.json()) as { ok?: boolean };
@@ -380,15 +476,22 @@ export class GatewaySseBackend implements TuiBackend {
   // ── REST helpers ──
 
   async getStartupResources(sessionKey: string): Promise<TuiStartupResources> {
-    const empty: TuiStartupResources = { context: [], skills: [], workflows: [], connectors: [] };
+    const empty: TuiStartupResources = {
+      context: [],
+      skills: [],
+      workflows: [],
+      connectors: [],
+    };
     try {
       const res = await gatewayFetch(
         this.baseUrl,
         `/api/tui/startup-resources?sessionKey=${encodeURIComponent(sessionKey)}`,
-        this.token,
+        this.credential,
       );
       if (!res.ok) return empty;
-      const json = (await res.json()) as { payload?: Partial<TuiStartupResources> };
+      const json = (await res.json()) as {
+        payload?: Partial<TuiStartupResources>;
+      };
       return {
         context: Array.isArray(json.payload?.context) ? json.payload.context : [],
         skills: Array.isArray(json.payload?.skills) ? json.payload.skills : [],
@@ -402,15 +505,12 @@ export class GatewaySseBackend implements TuiBackend {
     }
   }
 
-  async loadHistory(opts: {
-    sessionKey: string;
-    limit?: number;
-  }): Promise<{ messages: HistoryMessage[] }> {
+  async loadHistory(opts: { sessionKey: string; limit?: number }): Promise<{ messages: HistoryMessage[] }> {
     try {
       const res = await gatewayFetch(
         this.baseUrl,
         `/api/sessions/${encodeURIComponent(opts.sessionKey)}?include=transcriptRows`,
-        this.token,
+        this.credential,
       );
       if (!res.ok) return { messages: [] };
       const json = (await res.json()) as {
@@ -419,7 +519,9 @@ export class GatewaySseBackend implements TuiBackend {
       const rows = Array.isArray(json.session?.transcriptRows)
         ? (json.session.transcriptRows as TranscriptStoredRow[])
         : [];
-      return { messages: transcriptRowsToClientHistory(rows, { limit: opts.limit }) };
+      return {
+        messages: transcriptRowsToClientHistory(rows, { limit: opts.limit }),
+      };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn({ err: error, errorMessage }, `Failed to load history: ${errorMessage}`);
@@ -427,12 +529,7 @@ export class GatewaySseBackend implements TuiBackend {
     }
   }
 
-  async loadHistoryWindow(opts: {
-    sessionKey: string;
-    rowNumber: number;
-    before?: number;
-    after?: number;
-  }) {
+  async loadHistoryWindow(opts: { sessionKey: string; rowNumber: number; before?: number; after?: number }) {
     const params = new URLSearchParams({
       rowNumber: String(opts.rowNumber),
       before: String(opts.before ?? 80),
@@ -442,10 +539,15 @@ export class GatewaySseBackend implements TuiBackend {
       const res = await gatewayFetch(
         this.baseUrl,
         `/api/sessions/${encodeURIComponent(opts.sessionKey)}/transcript/window?${params.toString()}`,
-        this.token,
+        this.credential,
       );
       if (!res.ok) {
-        return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows: 0 };
+        return {
+          messages: [],
+          startRowNumber: 0,
+          endRowNumber: 0,
+          totalRows: 0,
+        };
       }
       const json = (await res.json()) as {
         payload?: {
@@ -465,7 +567,12 @@ export class GatewaySseBackend implements TuiBackend {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       log.warn(
-        { err: error, sessionKey: opts.sessionKey, rowNumber: opts.rowNumber, errorMessage },
+        {
+          err: error,
+          sessionKey: opts.sessionKey,
+          rowNumber: opts.rowNumber,
+          errorMessage,
+        },
         `Failed to load history window: ${errorMessage}`,
       );
       return { messages: [], startRowNumber: 0, endRowNumber: 0, totalRows: 0 };
@@ -477,7 +584,7 @@ export class GatewaySseBackend implements TuiBackend {
       const res = await gatewayFetch(
         this.baseUrl,
         `/api/sessions/${encodeURIComponent(sessionKey)}?include=transcriptRows`,
-        this.token,
+        this.credential,
       );
       if (!res.ok) return [];
       const json = (await res.json()) as {
@@ -499,7 +606,7 @@ export class GatewaySseBackend implements TuiBackend {
       const res = await gatewayFetch(
         this.baseUrl,
         `/api/sessions/${encodeURIComponent(sessionKey)}/timeline`,
-        this.token,
+        this.credential,
       );
       if (!res.ok) return [];
       const json = (await res.json()) as { items?: unknown[] };
@@ -516,7 +623,7 @@ export class GatewaySseBackend implements TuiBackend {
       const res = await gatewayFetch(
         this.baseUrl,
         `/api/sessions/${encodeURIComponent(sessionKey)}?include=transcriptRows`,
-        this.token,
+        this.credential,
       );
       if (!res.ok) return computeTuiSessionStats([]);
       const json = (await res.json()) as {
@@ -535,7 +642,7 @@ export class GatewaySseBackend implements TuiBackend {
 
   async listSessions(): Promise<TuiSessionItem[]> {
     try {
-      const res = await gatewayFetch(this.baseUrl, '/api/sessions', this.token);
+      const res = await gatewayFetch(this.baseUrl, '/api/sessions', this.credential);
       if (!res.ok) return [];
       const json = (await res.json()) as {
         items?: Array<{
@@ -561,9 +668,7 @@ export class GatewaySseBackend implements TuiBackend {
               ? s.customData.modelRef
               : null,
         forkedFromSessionKey:
-          typeof s.customData?.forkedFromSessionKey === 'string'
-            ? s.customData.forkedFromSessionKey
-            : undefined,
+          typeof s.customData?.forkedFromSessionKey === 'string' ? s.customData.forkedFromSessionKey : undefined,
         cwd: typeof s.cwd === 'string' ? s.cwd : undefined,
       }));
     } catch {
@@ -574,7 +679,7 @@ export class GatewaySseBackend implements TuiBackend {
   async listAgents(): Promise<TuiAgentInfo[]> {
     const agents = new Map<string, TuiAgentInfo>();
     try {
-      const res = await gatewayFetch(this.baseUrl, '/api/agents', this.token);
+      const res = await gatewayFetch(this.baseUrl, '/api/agents', this.credential);
       if (res.ok) {
         const json = (await res.json()) as {
           payload?: { agents?: Array<{ id?: unknown; name?: unknown }> };
@@ -585,9 +690,7 @@ export class GatewaySseBackend implements TuiBackend {
           agents.set(id, {
             id,
             enabled: true,
-            ...(typeof row.name === 'string' && row.name.trim()
-              ? { displayName: row.name.trim() }
-              : {}),
+            ...(typeof row.name === 'string' && row.name.trim() ? { displayName: row.name.trim() } : {}),
           });
         }
       }
@@ -600,7 +703,7 @@ export class GatewaySseBackend implements TuiBackend {
 
   async setTuiDefaultAgent(agentId: string): Promise<{ agentId: string }> {
     const target = agentId.trim().toLowerCase();
-    const res = await gatewayFetch(this.baseUrl, '/api/config', this.token, {
+    const res = await gatewayFetch(this.baseUrl, '/api/config', this.credential, {
       method: 'PATCH',
       body: JSON.stringify({ tui: { defaultAgent: target } }),
     });
@@ -610,14 +713,13 @@ export class GatewaySseBackend implements TuiBackend {
       payload?: { config?: { tui?: { defaultAgent?: unknown } } };
     };
     if (!res.ok || json.ok === false) {
-      const error =
-        typeof json.error === 'string'
-          ? json.error
-          : json.error?.message;
+      const error = typeof json.error === 'string' ? json.error : json.error?.message;
       throw new Error(error ?? `TUI default agent update failed (${res.status})`);
     }
     const saved = json.payload?.config?.tui?.defaultAgent;
-    return { agentId: typeof saved === 'string' && saved.trim() ? saved.trim().toLowerCase() : target };
+    return {
+      agentId: typeof saved === 'string' && saved.trim() ? saved.trim().toLowerCase() : target,
+    };
   }
 
   async getSessionInfo(sessionKey: string): Promise<SessionInfo> {
@@ -625,8 +727,8 @@ export class GatewaySseBackend implements TuiBackend {
     try {
       const sessionPath = `/api/sessions/${encodeURIComponent(sessionKey)}`;
       const [sessionRes, agentCfgRes] = await Promise.all([
-        gatewayFetch(this.baseUrl, sessionPath, this.token),
-        gatewayFetch(this.baseUrl, `${sessionPath}/agent-config`, this.token),
+        gatewayFetch(this.baseUrl, sessionPath, this.credential),
+        gatewayFetch(this.baseUrl, `${sessionPath}/agent-config`, this.credential),
       ]);
 
       type SessionRow = {
@@ -686,12 +788,7 @@ export class GatewaySseBackend implements TuiBackend {
 
       if (!out.model && session?.customData) {
         const cd = session.customData;
-        const ref =
-          typeof cd.model === 'string'
-            ? cd.model
-            : typeof cd.modelRef === 'string'
-              ? cd.modelRef
-              : undefined;
+        const ref = typeof cd.model === 'string' ? cd.model : typeof cd.modelRef === 'string' ? cd.modelRef : undefined;
         if (ref) {
           const parsed = parseModelRef(ref);
           if (parsed) {
@@ -709,16 +806,12 @@ export class GatewaySseBackend implements TuiBackend {
       if (out.totalTokens != null) {
         const models = await this.listModels();
         const match = models.find(
-          (m) =>
-            m.id === out.model &&
-            (!out.modelProvider || m.provider === out.modelProvider),
+          (m) => m.id === out.model && (!out.modelProvider || m.provider === out.modelProvider),
         );
         const contextWindow = match?.contextWindow ?? 128_000;
         out.contextWindow = contextWindow;
         out.contextUsagePercent =
-          contextWindow > 0
-            ? Math.min(100, Math.round((out.totalTokens / contextWindow) * 100))
-            : null;
+          contextWindow > 0 ? Math.min(100, Math.round((out.totalTokens / contextWindow) * 100)) : null;
       }
 
       return out;
@@ -729,7 +822,7 @@ export class GatewaySseBackend implements TuiBackend {
 
   async listModels(): Promise<TuiModelChoice[]> {
     try {
-      const res = await gatewayFetch(this.baseUrl, '/api/models', this.token);
+      const res = await gatewayFetch(this.baseUrl, '/api/models', this.credential);
       if (!res.ok) return [];
       const json = (await res.json()) as {
         ok?: boolean;
@@ -742,12 +835,9 @@ export class GatewaySseBackend implements TuiBackend {
   }
 
   async resetSession(sessionKey: string): Promise<void> {
-    await gatewayFetch(
-      this.baseUrl,
-      `/api/sessions/${encodeURIComponent(sessionKey)}/reset`,
-      this.token,
-      { method: 'POST' },
-    ).catch(() => {});
+    await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(sessionKey)}/reset`, this.credential, {
+      method: 'POST',
+    }).catch(() => {});
   }
 
   async compactSession(
@@ -758,7 +848,7 @@ export class GatewaySseBackend implements TuiBackend {
       const res = await gatewayFetch(
         this.baseUrl,
         `/api/sessions/${encodeURIComponent(sessionKey)}/compaction/run`,
-        this.token,
+        this.credential,
         {
           method: 'POST',
           body: JSON.stringify({
@@ -768,7 +858,10 @@ export class GatewaySseBackend implements TuiBackend {
         },
       );
       if (!res.ok) {
-        return { compacted: false, summary: `Compaction failed (${res.status})` };
+        return {
+          compacted: false,
+          summary: `Compaction failed (${res.status})`,
+        };
       }
       const json = (await res.json()) as {
         ok?: boolean;
@@ -803,7 +896,7 @@ export class GatewaySseBackend implements TuiBackend {
     const res = await gatewayFetch(
       this.baseUrl,
       `/api/sessions/${encodeURIComponent(sessionKey)}/export?${params.toString()}`,
-      this.token,
+      this.credential,
     );
     if (!res.ok) {
       throw new Error(`Export failed (${res.status})`);
@@ -816,12 +909,13 @@ export class GatewaySseBackend implements TuiBackend {
     targetSessionKey: string,
     jsonContent: string,
   ): Promise<{ sessionKey: string; rowCount: number }> {
-    const res = await gatewayFetch(
-      this.baseUrl,
-      '/api/sessions/import',
-      this.token,
-      { method: 'POST', body: JSON.stringify({ targetKey: targetSessionKey, content: jsonContent }) },
-    );
+    const res = await gatewayFetch(this.baseUrl, '/api/sessions/import', this.credential, {
+      method: 'POST',
+      body: JSON.stringify({
+        targetKey: targetSessionKey,
+        content: jsonContent,
+      }),
+    });
     const json = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
       error?: string;
@@ -839,7 +933,7 @@ export class GatewaySseBackend implements TuiBackend {
     request: TuiShareRequest,
     options?: { agentId?: string },
   ): Promise<TuiShareResult> {
-    const res = await gatewayFetch(this.baseUrl, '/api/shares/auto', this.token, {
+    const res = await gatewayFetch(this.baseUrl, '/api/shares/auto', this.credential, {
       method: 'POST',
       body: JSON.stringify({
         path: request.path,
@@ -892,7 +986,7 @@ export class GatewaySseBackend implements TuiBackend {
     const res = await gatewayFetch(
       this.baseUrl,
       `/api/sessions/${encodeURIComponent(sessionKey)}/btw`,
-      this.token,
+      this.credential,
       { method: 'POST', body: JSON.stringify({ question }) },
     );
     if (!res.ok) {
@@ -908,7 +1002,7 @@ export class GatewaySseBackend implements TuiBackend {
     const res = await gatewayFetch(
       this.baseUrl,
       `/api/sessions/${encodeURIComponent(sourceSessionKey)}/fork`,
-      this.token,
+      this.credential,
       { method: 'POST', body: JSON.stringify({ targetKey: targetSessionKey }) },
     );
     const json = (await res.json().catch(() => ({}))) as {
@@ -935,8 +1029,11 @@ export class GatewaySseBackend implements TuiBackend {
     const res = await gatewayFetch(
       this.baseUrl,
       `/api/sessions/${encodeURIComponent(sourceSessionKey)}/fork-row`,
-      this.token,
-      { method: 'POST', body: JSON.stringify({ targetKey: targetSessionKey, throughRow }) },
+      this.credential,
+      {
+        method: 'POST',
+        body: JSON.stringify({ targetKey: targetSessionKey, throughRow }),
+      },
     );
     const json = (await res.json().catch(() => ({}))) as {
       ok?: boolean;
@@ -950,36 +1047,34 @@ export class GatewaySseBackend implements TuiBackend {
     return { sessionKey: json.sessionKey, rowCount: json.rowCount ?? 0 };
   }
 
-  async setTranscriptLabel(
-    sessionKey: string,
-    entryId: string,
-    label: string | undefined,
-  ): Promise<{ ok: boolean }> {
+  async setTranscriptLabel(sessionKey: string, entryId: string, label: string | undefined): Promise<{ ok: boolean }> {
     const res = await gatewayFetch(
       this.baseUrl,
       `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/label`,
-      this.token,
+      this.credential,
       { method: 'POST', body: JSON.stringify({ targetId: entryId, label }) },
     );
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+    };
     if (!res.ok || json.ok === false) {
       throw new Error(json.error ?? `Label update failed (${res.status})`);
     }
     return { ok: true };
   }
 
-  async appendCustomEntry(
-    sessionKey: string,
-    customType: string,
-    data?: unknown,
-  ): Promise<{ ok: boolean }> {
+  async appendCustomEntry(sessionKey: string, customType: string, data?: unknown): Promise<{ ok: boolean }> {
     const res = await gatewayFetch(
       this.baseUrl,
       `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/custom`,
-      this.token,
+      this.credential,
       { method: 'POST', body: JSON.stringify({ customType, data }) },
     );
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+    };
     if (!res.ok || json.ok === false) {
       throw new Error(json.error ?? `Custom entry append failed (${res.status})`);
     }
@@ -998,10 +1093,13 @@ export class GatewaySseBackend implements TuiBackend {
     const res = await gatewayFetch(
       this.baseUrl,
       `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/custom-message`,
-      this.token,
+      this.credential,
       { method: 'POST', body: JSON.stringify(message) },
     );
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+    };
     if (!res.ok || json.ok === false) {
       throw new Error(json.error ?? `Custom message append failed (${res.status})`);
     }
@@ -1023,10 +1121,13 @@ export class GatewaySseBackend implements TuiBackend {
     const res = await gatewayFetch(
       this.baseUrl,
       `/api/sessions/${encodeURIComponent(sessionKey)}/transcript/bash`,
-      this.token,
+      this.credential,
       { method: 'POST', body: JSON.stringify(entry) },
     );
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+    };
     if (!res.ok || json.ok === false) {
       throw new Error(json.error ?? `Bash execution append failed (${res.status})`);
     }
@@ -1037,10 +1138,13 @@ export class GatewaySseBackend implements TuiBackend {
     const res = await gatewayFetch(
       this.baseUrl,
       `/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`,
-      this.token,
+      this.credential,
       { method: 'PATCH', body: JSON.stringify(patch) },
     );
-    const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    const json = (await res.json().catch(() => ({}))) as {
+      ok?: boolean;
+      error?: string;
+    };
     if (!res.ok || json.ok === false) {
       throw new Error(json.error ?? `Session config patch failed (${res.status})`);
     }
@@ -1049,10 +1153,13 @@ export class GatewaySseBackend implements TuiBackend {
       const metaRes = await gatewayFetch(
         this.baseUrl,
         `/api/sessions/${encodeURIComponent(sessionKey)}`,
-        this.token,
+        this.credential,
         { method: 'PATCH', body: JSON.stringify({ projectId }) },
       );
-      const metaJson = (await metaRes.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      const metaJson = (await metaRes.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
       if (!metaRes.ok || metaJson.ok === false) {
         throw new Error(metaJson.error ?? `Session project patch failed (${metaRes.status})`);
       }
@@ -1064,7 +1171,7 @@ export class GatewaySseBackend implements TuiBackend {
       const res = await gatewayFetch(
         this.baseUrl,
         `/api/sessions/${encodeURIComponent(sessionKey)}/rename`,
-        this.token,
+        this.credential,
         { method: 'POST', body: JSON.stringify({ name }) },
       );
       return { ok: res.ok };
@@ -1075,12 +1182,9 @@ export class GatewaySseBackend implements TuiBackend {
 
   async deleteSession(sessionKey: string): Promise<{ ok: boolean }> {
     try {
-      const res = await gatewayFetch(
-        this.baseUrl,
-        `/api/sessions/${encodeURIComponent(sessionKey)}`,
-        this.token,
-        { method: 'DELETE' },
-      );
+      const res = await gatewayFetch(this.baseUrl, `/api/sessions/${encodeURIComponent(sessionKey)}`, this.credential, {
+        method: 'DELETE',
+      });
       if (!res.ok) return { ok: false };
       const json = (await res.json()) as { deleted?: boolean };
       return { ok: json.deleted !== false };
@@ -1096,13 +1200,19 @@ export class GatewaySseBackend implements TuiBackend {
     this.eventAbort = new AbortController();
 
     const url = new URL(`${this.baseUrl}/api/events`);
-    if (this.token) url.searchParams.set('token', this.token);
 
     const connect = async () => {
       try {
         const res = await fetch(url.toString(), {
           signal: this.eventAbort!.signal,
-          headers: { Accept: 'text/event-stream' },
+          headers: {
+            Accept: 'text/event-stream',
+            ...(gatewayCredentialAuthorization(this.credential)
+              ? {
+                  Authorization: gatewayCredentialAuthorization(this.credential)!,
+                }
+              : {}),
+          },
         });
 
         if (!res.ok || !res.body) {
@@ -1122,18 +1232,23 @@ export class GatewaySseBackend implements TuiBackend {
                 expected?: unknown;
                 received?: unknown;
               } | null;
-              if (
-                gapData &&
-                typeof gapData.expected === 'number' &&
-                typeof gapData.received === 'number'
-              ) {
-                this.onGap?.({ expected: gapData.expected, received: gapData.received });
+              if (gapData && typeof gapData.expected === 'number' && typeof gapData.received === 'number') {
+                this.onGap?.({
+                  expected: gapData.expected,
+                  received: gapData.received,
+                });
               }
               return;
             }
             const data = parseSSEData(sseEvent.data);
             if (data !== null) {
-              this.onEvent?.(normalizeGatewaySseEvent({ event: sseEvent.event, data, source: 'broadcast' }));
+              this.onEvent?.(
+                normalizeGatewaySseEvent({
+                  event: sseEvent.event,
+                  data,
+                  source: 'broadcast',
+                }),
+              );
             }
           },
           this.eventAbort!.signal,

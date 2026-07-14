@@ -83,11 +83,7 @@ export class GatewayServer {
     const { configureTunnelFromGatewayConfig } = await import('../tunnel/gateway-lifecycle.js');
     await configureTunnelFromGatewayConfig(this.service.currentConfig, { deferWellKnownFetch: true });
 
-    const effectiveToken = this.config.token || this.service.getAuthToken();
-    const app = createHonoApp({
-      service: this.service,
-      token: effectiveToken,
-    });
+    const app = createHonoApp({ service: this.service });
 
     const primaryHost = listenHosts[0] ?? bindHost;
     const attachUpgrade = (server: ServerType): void => {

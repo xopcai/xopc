@@ -71,6 +71,24 @@ function createMockService(config: any = {}, listenPort?: number): GatewayServic
 }
 
 describe('Gateway Security Fixes', () => {
+  describe('password gateway authentication', () => {
+    it('fails closed without a password and accepts only the configured password', async () => {
+      const service = createMockService({ gateway: { auth: { mode: 'password', password: 'correct-password' } } });
+      const app = createHonoApp({ service });
+
+      expect((await app.request('/api/config')).status).toBe(401);
+      expect((await app.request('/api/config', { headers: { Authorization: 'Bearer wrong-password' } })).status).toBe(401);
+      expect((await app.request('/api/config', { headers: { Authorization: 'Bearer correct-password' } })).status).toBe(200);
+    });
+
+    it('never accepts password credentials in a query string', async () => {
+      const service = createMockService({ gateway: { auth: { mode: 'password', password: 'correct-password' } } });
+      const app = createHonoApp({ service });
+
+      expect((await app.request('/api/events?token=correct-password')).status).toBe(401);
+    });
+  });
+
   describe('query token path policy', () => {
     it('allows query token only for SSE and agent avatar GET', () => {
       expect(isQueryTokenAllowedPath('/api/events', 'GET')).toBe(true);
@@ -697,8 +715,8 @@ describe('Gateway Security Fixes', () => {
     });
 
     it('allows GET agent avatar with ?token= (img subresources cannot send Authorization)', async () => {
-      const service = createMockService();
-      const app = createHonoApp({ service, token: 'test' });
+      const service = createMockService({ gateway: { auth: { mode: 'token', token: 'test' } } });
+      const app = createHonoApp({ service });
 
       const res = await app.request('/api/agents/main/avatar?token=test');
       expect(res.status).not.toBe(401);
@@ -707,7 +725,7 @@ describe('Gateway Security Fixes', () => {
       expect(rejected.status).toBe(401);
     });
 
-    it('does not count missing-token requests as failures', async () => {
+    it('does not count missing-credential requests as failures', async () => {
       // Page reloads / SDK cold starts often issue requests before a token is
       // attached. Counting these as brute-force attempts would lock users out
       // of the recovery path (they couldn't even open the token-entry UI).
@@ -733,7 +751,7 @@ describe('Gateway Security Fixes', () => {
         const res = await app.request('/api/config');
         expect(res.status).toBe(401);
         const body = (await res.json()) as { code?: string };
-        expect(body.code).toBe('missing_token');
+        expect(body.code).toBe('missing_credential');
       }
 
       // After all that, valid token still works — bucket was never armed.

@@ -43,19 +43,23 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
 }));
 
 export function initGatewayFromWindow(): void {
-  const params = new URLSearchParams(window.location.search);
-  const urlToken = params.get('token');
-  if (urlToken) {
-    useGatewayStore.getState().setGatewayToken(urlToken);
-    const clean = window.location.pathname + window.location.hash;
-    const prev = window.history.state;
-    const nextState =
-      prev && typeof prev === 'object' && !Array.isArray(prev)
-        ? { ...(prev as Record<string, unknown>) }
-        : prev;
-    window.history.replaceState(nextState, '', clean);
+  const getElectronCredential = window.electronAPI?.gateway?.getCredential;
+  if (typeof getElectronCredential === 'function') {
+    void getElectronCredential()
+      .then((credential) => {
+        if (credential) {
+          useGatewayStore.setState({ token: credential, tokenDialogOpen: false, tokenExpired: false });
+          return;
+        }
+        hydrateStoredGatewayToken();
+      })
+      .catch(hydrateStoredGatewayToken);
     return;
   }
+  hydrateStoredGatewayToken();
+}
+
+function hydrateStoredGatewayToken(): void {
   const stored = getToken();
   useGatewayStore.setState({
     token: stored || undefined,

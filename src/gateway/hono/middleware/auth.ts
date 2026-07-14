@@ -21,7 +21,6 @@ import { createLogger, logAuthEvent } from '../../../utils/logger.js';
 const log = createLogger('Gateway:Auth');
 
 export interface AuthConfig {
-  token?: string;
   /** Current gateway auth from config (for rate-limit settings); optional. */
   getGatewayAuth?: () => GatewayAuthConfig | undefined;
   getResolvedAuth?: () => ResolvedGatewayAuth;
@@ -31,9 +30,13 @@ export interface AuthConfig {
   };
 }
 
-function validateToken(providedToken: string | undefined, expectedToken: string): boolean {
-  if (!providedToken) return false;
-  return safeEqualSecret(providedToken, expectedToken);
+function resolveExpectedCredential(auth: ResolvedGatewayAuth): string | undefined {
+  return auth.mode === 'token' ? auth.token : auth.mode === 'password' ? auth.password : undefined;
+}
+
+function validateCredential(providedCredential: string | undefined, expectedCredential: string): boolean {
+  if (!providedCredential) return false;
+  return safeEqualSecret(providedCredential, expectedCredential);
 }
 
 function extractTokenFromHeader(authHeader: string | null): string | null {
@@ -146,11 +149,15 @@ function blockedResponse(c: Context, retryAfterSec: number) {
 }
 
 export function auth(config?: AuthConfig) {
-  const { token, getGatewayAuth, getResolvedAuth, getTrustedProxyContext } = config || {};
+  const { getGatewayAuth, getResolvedAuth, getTrustedProxyContext } = config || {};
 
   return createMiddleware(async (c, next) => {
     const resolvedAuth = getResolvedAuth?.();
-    const authMode = resolvedAuth?.mode ?? (token ? 'token' : 'none');
+    if (!resolvedAuth) {
+      log.error({ path: c.req.path, method: c.req.method }, 'HTTP auth rejected: gateway auth is unavailable');
+      return c.json({ error: 'Unauthorized', code: 'auth_unavailable' }, 401);
+    }
+    const authMode = resolvedAuth.mode;
 
     if (authMode === 'trusted-proxy') {
       const proxyContext = getTrustedProxyContext?.();
@@ -206,8 +213,14 @@ export function auth(config?: AuthConfig) {
       return;
     }
 
-    if (authMode === 'none' || !token) {
+    if (authMode === 'none') {
       return next();
+    }
+
+    const expectedCredential = resolveExpectedCredential(resolvedAuth);
+    if (!expectedCredential) {
+      log.error({ path: c.req.path, method: c.req.method, authMode }, 'HTTP auth rejected: credential is unavailable');
+      return c.json({ error: 'Unauthorized', code: 'auth_unconfigured' }, 401);
     }
 
     const proxyContext = getTrustedProxyContext?.();
@@ -217,20 +230,20 @@ export function auth(config?: AuthConfig) {
 
     const authHeader = extractTokenFromHeader(c.req.header('authorization'));
     const requestPath = new URL(c.req.url).pathname;
-    const queryToken = isQueryTokenAllowedPath(requestPath, c.req.method)
+    const queryToken = authMode === 'token' && isQueryTokenAllowedPath(requestPath, c.req.method)
       ? extractTokenFromQuery(c.req.url)
       : null;
 
     if (!authHeader && queryToken === null && new URL(c.req.url).searchParams.has('token')) {
       log.warn(
         { path: requestPath, method: c.req.method, clientIp },
-        'Token in query string rejected: use Authorization header for this endpoint',
+        'Credential in query string rejected: use Authorization header for this endpoint',
       );
     }
 
-    const providedToken = authHeader || queryToken;
+    const providedCredential = authHeader || queryToken;
 
-    if (providedToken && validateToken(providedToken, token)) {
+    if (providedCredential && validateCredential(providedCredential, expectedCredential)) {
       recordSuccess(rl);
       await next();
       return;
@@ -245,37 +258,37 @@ export function auth(config?: AuthConfig) {
       return blockedResponse(c, blocked.retryAfterSec);
     }
 
-    // Missing token is an unauthenticated request, not a brute-force signal —
-    // page reloads / SDK cold starts often hit endpoints before the token is
+    // Missing credentials are unauthenticated requests, not brute-force signals —
+    // page reloads / SDK cold starts often hit endpoints before credentials are
     // attached. Counting this would lock users out of the token-entry path.
-    if (!providedToken) {
+    if (!providedCredential) {
       log.warn(
-        { path: c.req.path, method: c.req.method, clientIp, reason: 'missing_token', phase: 'gateway.http.auth' },
-        'HTTP auth rejected: no Bearer or ?token=',
+        { path: c.req.path, method: c.req.method, clientIp, reason: 'missing_credential', phase: 'gateway.http.auth' },
+        'HTTP auth rejected: no Authorization credential',
       );
       void logAuthEvent('auth.failed', {
         ip: clientIp,
         result: 'denied',
-        reason: 'missing_token',
+        reason: 'missing_credential',
       });
       return c.json(
-        { error: 'Unauthorized', code: 'missing_token', message: 'Missing authentication token' },
+        { error: 'Unauthorized', code: 'missing_credential', message: 'Missing authentication credential' },
         401,
       );
     }
 
     recordFailure(rl);
     log.warn(
-      { path: c.req.path, method: c.req.method, clientIp, reason: 'invalid_token', phase: 'gateway.http.auth' },
-      'HTTP auth rejected: token mismatch',
+      { path: c.req.path, method: c.req.method, clientIp, reason: 'invalid_credential', phase: 'gateway.http.auth' },
+      'HTTP auth rejected: credential mismatch',
     );
     void logAuthEvent('auth.failed', {
       ip: clientIp,
       result: 'failure',
-      reason: 'invalid_token',
+      reason: 'invalid_credential',
     });
     return c.json(
-      { error: 'Unauthorized', code: 'invalid_token', message: 'Invalid authentication token' },
+      { error: 'Unauthorized', code: 'invalid_credential', message: 'Invalid authentication credential' },
       401,
     );
   });

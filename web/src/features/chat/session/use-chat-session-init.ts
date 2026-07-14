@@ -13,7 +13,6 @@ import {
   getSessionMessages,
 } from '@/features/chat/session/chat-session-store';
 import { searchParamsForComposerHandoff } from '@/features/chat/session/composer-handoff-params';
-import { takeSkipInitialSessionLoad } from '@/features/chat/session/chat-session-init-skip-load';
 import { openNewChatHandoff } from '@/features/chat/session/new-chat-handoff';
 import type { SessionManager } from '@/features/chat/session/session-manager';
 import { lastNonNewSessionKeyRef } from '@/features/chat/session/use-chat-session-route';
@@ -21,7 +20,9 @@ import { lastNonNewSessionKeyRef } from '@/features/chat/session/use-chat-sessio
 export function useChatSessionInit(opts: {
   token: string | undefined;
   isNewRoute: boolean;
+  forceNewChat: boolean;
   decodedKey: string | undefined;
+  locationKey: string;
   locationSearch: string;
   sessionMgrRef: MutableRefObject<SessionManager>;
   resolveAgentIdForPost: () => string | null | undefined;
@@ -44,7 +45,9 @@ export function useChatSessionInit(opts: {
   const {
     token,
     isNewRoute,
+    forceNewChat,
     decodedKey,
+    locationKey,
     locationSearch,
     sessionMgrRef,
     resolveAgentIdForPost,
@@ -59,10 +62,44 @@ export function useChatSessionInit(opts: {
 
   const initGenRef = useRef(0);
   const newRouteLocationSearch = isNewRoute ? locationSearch : '';
+  const requestKey = isNewRoute
+    ? `new:${locationKey}`
+    : decodedKey
+      ? `session:${decodedKey}`
+      : `fallback:${locationKey}`;
+
+  // Session initialization is a route operation. Runtime callbacks may change
+  // as Agent/config data arrives, but that must not restart history hydration.
+  const requestRef = useRef({ isNewRoute, forceNewChat, decodedKey, newRouteLocationSearch });
+  requestRef.current = { isNewRoute, forceNewChat, decodedKey, newRouteLocationSearch };
+  const runtimeRef = useRef({
+    sessionMgrRef,
+    resolveAgentIdForPost,
+    navigateToSession,
+    loadSessionById,
+    tryResumeAgentRun,
+    restoreLiveCacheIfNeeded,
+    adoptEmptySession,
+    applyAgentConfig,
+    patchInitUi,
+  });
+  runtimeRef.current = {
+    sessionMgrRef,
+    resolveAgentIdForPost,
+    navigateToSession,
+    loadSessionById,
+    tryResumeAgentRun,
+    restoreLiveCacheIfNeeded,
+    adoptEmptySession,
+    applyAgentConfig,
+    patchInitUi,
+  };
 
   useEffect(() => {
+    const request = requestRef.current;
+    const runtime = runtimeRef.current;
     if (!token) {
-      patchInitUi({ loading: false });
+      runtime.patchInitUi({ loading: false });
       return;
     }
 
@@ -72,11 +109,11 @@ export function useChatSessionInit(opts: {
 
     const applyResolvedSessionConfig = (key: string) => {
       if (!isLive()) return;
-      void sessionMgrRef.current
+      void runtime.sessionMgrRef.current
         .loadSessionAgentConfig(key)
         .then((cfg) => {
           if (!isLive()) return;
-          applyAgentConfig(key, cfg);
+          runtime.applyAgentConfig(key, cfg);
         })
         .catch(() => {
           /* ignore */
@@ -85,34 +122,35 @@ export function useChatSessionInit(opts: {
 
     const createNewRouteSession = (): Promise<void> => {
       if (!isLive()) return Promise.resolve();
-      const aid = resolveAgentIdForPost();
+      const aid = runtime.resolveAgentIdForPost();
       return openNewChatHandoff({
-        sessionMgr: sessionMgrRef.current,
+        sessionMgr: runtime.sessionMgrRef.current,
         agentId: aid,
         currentSessionKey: lastNonNewSessionKeyRef.current,
         routeSessionKey: null,
-        navigateToSession,
+        forceNew: request.forceNewChat,
+        navigateToSession: runtime.navigateToSession,
         replaceNavigate: true,
-        search: searchParamsForComposerHandoff(newRouteLocationSearch),
-        onOpened: (key) => adoptEmptySession(key, null),
+        search: searchParamsForComposerHandoff(request.newRouteLocationSearch),
+        onOpened: (key) => runtime.adoptEmptySession(key, null),
       }).then(() => undefined);
     };
 
     const resumeSessionRun = (key: string, seed: Message[]): Promise<void> => {
       if (!isLive()) return Promise.resolve();
-      restoreLiveCacheIfNeeded(key);
+      runtime.restoreLiveCacheIfNeeded(key);
       const resolvedSeed =
         getChatSessionSnapshot(key)?.messages ?? seed ?? getSessionMessages(key);
-      return tryResumeAgentRun(key, resolvedSeed);
+      return runtime.tryResumeAgentRun(key, resolvedSeed);
     };
 
     const initDecodedKey = (key: string): Promise<void> => {
       if (!isLive()) return Promise.resolve();
-      if (takeSkipInitialSessionLoad(key)) {
+      if (getChatSessionSnapshot(key)?.historyStatus === 'ready') {
         applyResolvedSessionConfig(key);
         return resumeSessionRun(key, getSessionMessages(key));
       }
-      return loadSessionById(key, 0).then((loaded) => {
+      return runtime.loadSessionById(key, 0).then((loaded) => {
         if (!isLive()) return;
         return resumeSessionRun(key, loaded ?? getSessionMessages(key));
       });
@@ -120,56 +158,56 @@ export function useChatSessionInit(opts: {
 
     const initFallback = (): Promise<void> => {
       if (!isLive()) return Promise.resolve();
-      return sessionMgrRef.current.loadSessions().then((sessions) => {
+      return runtime.sessionMgrRef.current.loadSessions().then((sessions) => {
         if (!isLive()) return;
         const withMsgs = sessions.filter((s) => (s.messageCount ?? 0) > 0);
         const target = withMsgs[0] ?? sessions[0];
         if (target) {
           if (!isLive()) return;
-          return loadSessionById(target.key, 0).then((loaded) => {
+          return runtime.loadSessionById(target.key, 0).then((loaded) => {
             if (!isLive()) return;
-            restoreLiveCacheIfNeeded(target.key);
+            runtime.restoreLiveCacheIfNeeded(target.key);
             const seed = getChatSessionSnapshot(target.key)?.messages ?? loaded ?? getSessionMessages(target.key);
-            const keyFromUrl = sessionMgrRef.current.parseSessionFromHash();
-            if (!keyFromUrl) navigateToSession(target.key, true);
-            return tryResumeAgentRun(target.key, seed);
+            const keyFromUrl = runtime.sessionMgrRef.current.parseSessionFromHash();
+            if (!keyFromUrl) runtime.navigateToSession(target.key, true);
+            return runtime.tryResumeAgentRun(target.key, seed);
           });
         }
         if (!isLive()) return;
-        const aid = resolveAgentIdForPost();
+        const aid = runtime.resolveAgentIdForPost();
         return openNewChatHandoff({
-          sessionMgr: sessionMgrRef.current,
+          sessionMgr: runtime.sessionMgrRef.current,
           agentId: aid,
           currentSessionKey: null,
           routeSessionKey: null,
-          navigateToSession,
-          onOpened: (key) => adoptEmptySession(key, null),
+          navigateToSession: runtime.navigateToSession,
+          onOpened: (key) => runtime.adoptEmptySession(key, null),
         }).then(() => undefined);
       });
     };
 
     const run = () => {
-      const needsFullBlockingLoad = decodedKey === undefined && !isNewRoute;
-      patchInitUi({ loading: needsFullBlockingLoad, error: null });
+      const needsFullBlockingLoad = request.decodedKey === undefined && !request.isNewRoute;
+      runtime.patchInitUi({ loading: needsFullBlockingLoad, error: null });
 
-      const branch = isNewRoute
+      const branch = request.isNewRoute
         ? createNewRouteSession()
-        : decodedKey
-          ? initDecodedKey(decodedKey)
+        : request.decodedKey
+          ? initDecodedKey(request.decodedKey)
           : initFallback();
 
       void branch
         .then(() => {
-          if (isLive()) patchInitUi({ loading: false });
+          if (isLive()) runtime.patchInitUi({ loading: false });
         })
         .catch((err) => {
           if (!cancelled) {
-            patchInitUi({
+            runtime.patchInitUi({
               error: err instanceof Error ? err.message : 'Chat init failed',
               loading: false,
             });
           } else if (isLive()) {
-            patchInitUi({ loading: false });
+            runtime.patchInitUi({ loading: false });
           }
         });
     };
@@ -180,17 +218,6 @@ export function useChatSessionInit(opts: {
     };
   }, [
     token,
-    isNewRoute,
-    decodedKey,
-    newRouteLocationSearch,
-    sessionMgrRef,
-    resolveAgentIdForPost,
-    navigateToSession,
-    loadSessionById,
-    tryResumeAgentRun,
-    restoreLiveCacheIfNeeded,
-    adoptEmptySession,
-    applyAgentConfig,
-    patchInitUi,
+    requestKey,
   ]);
 }

@@ -70,6 +70,12 @@ export function AppShell() {
   if (!token) {
     return (
       <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
+        <a
+          href="#app-main-content"
+          className="sr-only z-[80] rounded-lg bg-surface-panel px-3 py-2 text-sm text-fg shadow-elevated focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          {language === 'zh' ? '跳到主要内容' : 'Skip to main content'}
+        </a>
         <WindowsTitlebar />
         <ElectronMenuListener />
         <div className="min-h-0 flex-1">

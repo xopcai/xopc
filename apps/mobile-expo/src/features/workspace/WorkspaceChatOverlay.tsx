@@ -12,6 +12,7 @@ import { useTheme } from '../../theme';
 
 import { ChatScreen } from '../chat/ChatScreen';
 
+import { isWorkspaceChatOverlayInteractive } from './workspace-overlay-interactivity';
 import { useWorkspaceTransition } from './workspace-transition-context';
 
 const AnimatedView = Animated.createAnimatedComponent(View);
@@ -44,7 +45,9 @@ export const WorkspaceChatOverlay = memo(function WorkspaceChatOverlay({
 
   if (!isChatWarm) return null;
 
-  const interactive = phase === 'opening' || phase === 'open' || phase === 'closing';
+  // Once the close gesture starts, the home screen is visible beneath this
+  // full-screen layer. Let it receive the next tap immediately.
+  const interactive = isWorkspaceChatOverlayInteractive(phase);
 
   return (
     <>

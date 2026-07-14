@@ -46,6 +46,7 @@ import { WorkspaceSearchOverlay } from '../search/WorkspaceSearchOverlay';
 import { AgentAvatar } from '../ai/AgentAvatar';
 import { readAgentUsage, sortHomeAgents, touchAgentUsage } from '../ai/agent-usage-cache';
 import { useHomeChatPrefetch } from './use-home-chat-prefetch';
+import { shouldShowHomeAttention } from './home-attention';
 import { useWorkspaceNavigation } from './workspace-navigation-context';
 import { useOptionalWorkspaceTransition } from './workspace-transition-context';
 
@@ -142,7 +143,14 @@ export function WorkspaceHomeScreen() {
   const configured = useGatewayConfigured();
   const activeGatewayId = useGatewayStore((s) => s.activeGatewayId);
   const defaultAgentId = useEffectiveDefaultAgentId();
-  const { openAskAi, prefetchAskAiSession } = useWorkspaceNavigation();
+  const {
+    openAskAi,
+    prefetchAskAiSession,
+    isOpeningAskAi,
+    askAiError,
+    dismissAskAiError,
+    retryAskAi,
+  } = useWorkspaceNavigation();
   const [searchOpen, setSearchOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [agentUsage, setAgentUsage] = useState(() => readAgentUsage(activeGatewayId));
@@ -423,15 +431,17 @@ export function WorkspaceHomeScreen() {
         disabled={createNoteMutation.isPending}
         onPress={handleCreateNote}
         onAskAi={openAskAi}
+        askAiPending={isOpeningAskAi}
       />
       <WorkspaceSearchOverlay visible={searchOpen} onClose={() => setSearchOpen(false)} />
       <AppToast
-        visible={!!toastMessage}
-        onDismiss={() => setToastMessage('')}
+        visible={!!toastMessage || !!askAiError}
+        onDismiss={askAiError ? dismissAskAiError : () => setToastMessage('')}
         duration={TOAST_DURATION_SHORT}
         bottomLift={TOAST_BOTTOM_LIFT_ABOVE_BAR}
+        action={askAiError ? { label: m.common.retry, onPress: retryAskAi } : undefined}
       >
-        {toastMessage}
+        {askAiError ?? toastMessage}
       </AppToast>
     </View>
   );
@@ -618,6 +628,8 @@ function AttentionSection({
     }]
     : [];
   const attentionItems = [...workflowItems, ...taskItem].slice(0, HOME_ATTENTION_ITEM_LIMIT);
+
+  if (!shouldShowHomeAttention(inboxCount, attentionItems.length)) return null;
 
   return (
     <Section title={hm.sectionAttention}>
@@ -846,11 +858,13 @@ function WorkspaceActionDock({
   disabled,
   onPress,
   onAskAi,
+  askAiPending = false,
 }: {
   accessibilityLabel: string;
   disabled: boolean;
   onPress: () => void;
   onAskAi?: () => void;
+  askAiPending?: boolean;
 }) {
   const { colors } = useTheme();
   const { homePage: hm } = useMessages();
@@ -894,11 +908,19 @@ function WorkspaceActionDock({
               pressed && { backgroundColor: colors.surface.pressed },
             ]}
             onPress={onAskAi}
+            disabled={askAiPending}
             accessibilityRole="button"
             accessibilityLabel={hm.askAi}
+            accessibilityState={{ disabled: askAiPending, busy: askAiPending }}
           >
-            <Icon source="creation-outline" size={18} color={colors.accent.primary} />
-            <Text style={[styles.askAiLabel, { color: colors.text.primary }]}>{hm.askAi}</Text>
+            {askAiPending ? (
+              <ActivityIndicator size={18} color={colors.accent.primary} />
+            ) : (
+              <Icon source="creation-outline" size={18} color={colors.accent.primary} />
+            )}
+            <Text style={[styles.askAiLabel, { color: colors.text.primary }]}>
+              {askAiPending ? hm.askAiStarting : hm.askAi}
+            </Text>
           </Pressable>
         ) : null}
         <Pressable
