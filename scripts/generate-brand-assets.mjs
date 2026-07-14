@@ -34,6 +34,7 @@ if (!validTargets.has(target)) {
 const DARK = '#0B0D10';
 const LIGHT = '#F8FAFC';
 const LIGHT_MARK = '#111827';
+const MOBILE_MARK_SCALE = 0.60;
 
 const outputs = [];
 
@@ -50,17 +51,22 @@ function document(definitions, body) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">\n${definitions ? `  <defs>${definitions}</defs>\n` : ''}${body}\n</svg>\n`;
 }
 
-function markLayer(foreground, scale = 1) {
+function markLayer(foreground, scale = 1, offsetX = 0, offsetY = 0) {
   const recolouredMark = mark.replaceAll('currentColor', foreground);
-  return `  <g transform="translate(512 512) scale(${scale}) translate(-512 -512)">\n    <svg width="1024" height="1024" viewBox="${markViewBox}">\n      ${recolouredMark}\n    </svg>\n  </g>`;
+  return `  <g transform="translate(${512 + offsetX} ${512 + offsetY}) scale(${scale}) translate(-512 -512)">\n    <svg width="1024" height="1024" viewBox="${markViewBox}">\n      ${recolouredMark}\n    </svg>\n  </g>`;
 }
 
-function uiMarkSvg(foreground) {
-  return document('', markLayer(foreground));
+function uiMarkSvg(foreground, scale = 1, offsetX = 0, offsetY = 0) {
+  return document('', markLayer(foreground, scale, offsetX, offsetY));
 }
 
-function appIconSvg(appearance) {
+function appIconSvg(appearance, options = {}) {
   const isDark = appearance === 'dark';
+  const {
+    markScale = 0.77,
+    markOffsetX = 0,
+    markOffsetY = 0,
+  } = options;
   const definitions = isDark
     ? `
     <linearGradient id="surface" x1="90" y1="74" x2="910" y2="950" gradientUnits="userSpaceOnUse">
@@ -94,8 +100,18 @@ function appIconSvg(appearance) {
   const body = `  <rect width="1024" height="1024" fill="url(#surface)" />
   <rect width="1024" height="1024" fill="url(#bloom)" />
   <circle cx="512" cy="512" r="402" fill="none" stroke="${orbit}" stroke-opacity="0.14" stroke-width="2" />
-${markLayer('url(#mark)', 0.77)}`;
+${markLayer('url(#mark)', markScale, markOffsetX, markOffsetY)}`;
   return document(definitions, body);
+}
+
+function mobileAppIconSvg(appearance) {
+  return appIconSvg(appearance, {
+    markScale: MOBILE_MARK_SCALE,
+  });
+}
+
+function mobileAdaptiveIconSvg(foreground) {
+  return uiMarkSvg(foreground, MOBILE_MARK_SCALE);
 }
 
 function desktopIconSvg() {
@@ -151,6 +167,9 @@ function trayTemplateSvg() {
 function renderSvg(scene) {
   if (scene === 'app-dark') return appIconSvg('dark');
   if (scene === 'app-light') return appIconSvg('light');
+  if (scene === 'mobile-app-dark') return mobileAppIconSvg('dark');
+  if (scene === 'mobile-app-light') return mobileAppIconSvg('light');
+  if (scene === 'mobile-adaptive-light') return mobileAdaptiveIconSvg(LIGHT);
   if (scene === 'desktop') return desktopIconSvg();
   if (scene === 'badge') return badgeSvg();
   if (scene === 'favicon') return faviconSvg();
@@ -220,6 +239,8 @@ const iconSizes = [16, 32, 48, 64, 128, 180, 192, 256, 512, 1024];
 const renderSet = (scene) => new Map(iconSizes.map((size) => [size, renderPng(scene, size)]));
 const appDarkPngs = renderSet('app-dark');
 const appLightPngs = renderSet('app-light');
+const mobileAppDarkPngs = renderSet('mobile-app-dark');
+const mobileAppLightPngs = renderSet('mobile-app-light');
 const desktopPngs = renderSet('desktop');
 const badgePngs = renderSet('badge');
 const faviconPngs = renderSet('favicon');
@@ -279,12 +300,12 @@ queue(
 
 // Native mobile icons. iOS receives appearance-specific full-bleed PNGs; Android gets
 // a transparent foreground plus the same silhouette for Android 13+ themed icons.
-queue('mobile', 'apps/mobile-expo/assets/icon.png', appDarkPngs.get(1024));
-queue('mobile', 'apps/mobile-expo/assets/icon-light.png', appLightPngs.get(1024));
-queue('mobile', 'apps/mobile-expo/assets/icon-dark.png', appDarkPngs.get(1024));
-queue('mobile', 'apps/mobile-expo/assets/icon-tinted.png', appLightPngs.get(1024));
-queue('mobile', 'apps/mobile-expo/assets/adaptive-icon.png', renderPng('mark-light-plain', 1024));
-queue('mobile', 'apps/mobile-expo/assets/adaptive-icon-monochrome.png', renderPng('mark-light-plain', 1024));
+queue('mobile', 'apps/mobile-expo/assets/icon.png', mobileAppDarkPngs.get(1024));
+queue('mobile', 'apps/mobile-expo/assets/icon-light.png', mobileAppLightPngs.get(1024));
+queue('mobile', 'apps/mobile-expo/assets/icon-dark.png', mobileAppDarkPngs.get(1024));
+queue('mobile', 'apps/mobile-expo/assets/icon-tinted.png', mobileAppLightPngs.get(1024));
+queue('mobile', 'apps/mobile-expo/assets/adaptive-icon.png', renderPng('mobile-adaptive-light', 1024));
+queue('mobile', 'apps/mobile-expo/assets/adaptive-icon-monochrome.png', renderPng('mobile-adaptive-light', 1024));
 queue('mobile', 'apps/mobile-expo/assets/favicon.png', badgePngs.get(48));
 queue('mobile', 'apps/mobile-expo/assets/splash-icon.png', renderPng('mark-dark-plain', 1024));
 queue('mobile', 'apps/mobile-expo/assets/splash-icon-dark.png', renderPng('mark-light-plain', 1024));

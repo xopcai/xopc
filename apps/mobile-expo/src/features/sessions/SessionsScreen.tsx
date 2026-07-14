@@ -275,7 +275,7 @@ export function SessionsScreen() {
     void refreshList();
   }, [refreshList]);
 
-  const renderSession = useCallback(({ item }: { item: SessionListItem }) => (
+  const renderSession = useCallback(({ item, index }: { item: SessionListItem; index: number }) => (
     <SessionCard
       session={item}
       onPress={() => handleSessionPress(item)}
@@ -283,8 +283,10 @@ export function SessionsScreen() {
       onSwipeAction={(action) => handleSwipeAction(item, action)}
       selectionMode={selectionMode}
       selected={selectedIds.has(item.key)}
+      isFirst={index === 0}
+      isLast={index === allSessions.length - 1}
     />
-  ), [handleSessionPress, handleSessionLongPress, handleSwipeAction, selectedIds, selectionMode]);
+  ), [allSessions.length, handleSessionPress, handleSessionLongPress, handleSwipeAction, selectedIds, selectionMode]);
 
   const renderListFooter = useCallback(() => {
     if (sessionsQuery.isFetchingNextPage) {
@@ -331,9 +333,11 @@ export function SessionsScreen() {
           onEndReachedThreshold={0.5}
           onMomentumScrollBegin={onMomentumScrollBegin}
           ListHeaderComponent={allSessions.length > 0 ? (
-            <Text style={[styles.listSummary, { color: colors.text.tertiary }]}>
-              {t(sm.chatCount, { count: allSessions.length })}
-            </Text>
+            <View style={styles.listHeader}>
+              <Text style={[styles.listSummary, { color: colors.text.tertiary }]}>
+                {t(sm.chatCount, { count: allSessions.length })}
+              </Text>
+            </View>
           ) : null}
           ListFooterComponent={renderListFooter}
           extraData={{ selectionMode, selectedCount, selectedKey: [...selectedIds].join('|') }}
@@ -391,12 +395,13 @@ export function SessionsScreen() {
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 8 },
-  list: { paddingTop: spacing.xs, paddingBottom: spacing.lg, gap: 0, flexGrow: 1 },
+  list: { paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: 0, flexGrow: 1 },
+  listHeader: {
+    paddingHorizontal: spacing.content,
+    paddingBottom: spacing.sm,
+  },
   listSummary: {
     ...typography.label,
-    paddingHorizontal: spacing.content,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
   },
   footerLoader: { paddingVertical: 16, alignItems: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: '600' },
