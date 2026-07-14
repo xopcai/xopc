@@ -1,11 +1,12 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { ghostIconButton } from '@/lib/interaction';
 import { SETTINGS_SHELL_CONTENT_Z, SETTINGS_SHELL_OVERLAY_Z } from '@/lib/settings-shell-dialog-layer';
+import { SettingsShellLayerProvider } from '@/lib/settings-shell-layer-context';
 
 export type ChannelSettingsPresentation = 'modal' | 'drawer';
 
@@ -56,6 +57,7 @@ export function ChannelSettingsShell({
   headerExtra?: ReactNode;
 }) {
   const isDrawer = presentation === 'drawer';
+  const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
 
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
@@ -67,44 +69,47 @@ export function ChannelSettingsShell({
           )}
         />
         <Dialog.Content
+          ref={setPortalContainer}
           className={channelSettingsShellContentClass(presentation, wide)}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
-          {srTitle ? <Dialog.Title className="sr-only">{srTitle}</Dialog.Title> : null}
-          {srDescription ? <Dialog.Description className="sr-only">{srDescription}</Dialog.Description> : null}
+          <SettingsShellLayerProvider layer="modal" portalContainer={portalContainer}>
+            {srTitle ? <Dialog.Title className="sr-only">{srTitle}</Dialog.Title> : null}
+            {srDescription ? <Dialog.Description className="sr-only">{srDescription}</Dialog.Description> : null}
 
-          {isDrawer ? (
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge px-4 py-3">
-              <div className="min-w-0 flex-1">
-                {title ? <div className="text-base font-semibold text-fg">{title}</div> : null}
-                {description ? <p className="mt-1 text-sm text-fg-muted">{description}</p> : null}
+            {isDrawer ? (
+              <div className="flex shrink-0 items-start justify-between gap-3 border-b border-edge px-4 py-3">
+                <div className="min-w-0 flex-1">
+                  {title ? <div className="text-base font-semibold text-fg">{title}</div> : null}
+                  {description ? <p className="mt-1 text-sm text-fg-muted">{description}</p> : null}
+                </div>
+                <Dialog.Close asChild>
+                  <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={closeAriaLabel}>
+                    <X className="size-5" strokeWidth={1.75} />
+                  </Button>
+                </Dialog.Close>
               </div>
-              <Dialog.Close asChild>
-                <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={closeAriaLabel}>
-                  <X className="size-5" strokeWidth={1.75} />
-                </Button>
-              </Dialog.Close>
-            </div>
-          ) : (
-            <>
-              <Dialog.Close asChild>
-                <button
-                  type="button"
-                  className={cn(
-                    ghostIconButton,
-                    'absolute right-3 top-3 z-20 p-1.5 hover:bg-surface-hover',
-                  )}
-                  aria-label={closeAriaLabel}
-                >
-                  <X className="size-4" />
-                </button>
-              </Dialog.Close>
-              {headerExtra}
-            </>
-          )}
+            ) : (
+              <>
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    className={cn(
+                      ghostIconButton,
+                      'absolute right-3 top-3 z-20 p-1.5 hover:bg-surface-hover',
+                    )}
+                    aria-label={closeAriaLabel}
+                  >
+                    <X className="size-4" />
+                  </button>
+                </Dialog.Close>
+                {headerExtra}
+              </>
+            )}
 
-          <div className={cn('min-h-0 flex-1 overflow-y-auto', isDrawer ? 'px-4 py-4' : 'p-6')}>{children}</div>
-          {footer}
+            <div className={cn('min-h-0 flex-1 overflow-y-auto', isDrawer ? 'px-4 py-4' : 'p-6')}>{children}</div>
+            {footer}
+          </SettingsShellLayerProvider>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

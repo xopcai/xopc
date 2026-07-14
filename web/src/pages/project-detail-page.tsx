@@ -49,6 +49,7 @@ import {
   type ProjectWithDetails,
 } from '@/features/projects/api';
 import { fetchGatewayAgents, type GatewayAgentRow } from '@/features/settings/agents-admin-api';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { normalizeGoalsConfigFromConfig } from '@/features/settings/goals-config-api';
 import {
   cancelWorkflowRun,
@@ -2400,7 +2401,7 @@ export function ProjectDetailPage() {
                   <SelectOption value="">{pm.settings.globalDefaultAgent}</SelectOption>
                   {agents.map((agent) => (
                     <SelectOption key={agent.id} value={agent.id}>
-                      {agent.name || agent.id}
+                      {agentListDisplayName(agent, msg.agentsSettings)}
                     </SelectOption>
                   ))}
                 </Select>

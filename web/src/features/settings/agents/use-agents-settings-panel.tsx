@@ -32,7 +32,7 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import type { AgentsEditorPanelContentProps } from './agents-editor-panel-content';
 import { AgentsSettingsToolbar } from './agents-settings-toolbar';
-import { agentListDisplayName } from './agent-display-names';
+import { agentListDisplayDescription, agentListDisplayName } from './agent-display-names';
 import { useAgentOverviewProfileMarkdown } from './hooks/use-agent-overview-profile-markdown';
 import { useAgentProfileFiles } from './hooks/use-agent-profile-files';
 import { useAgentsChannelBindings } from './hooks/use-agents-channel-bindings';
@@ -265,7 +265,7 @@ export function useAgentsSettingsPanel() {
     setEditWorkspace(selected.workspace);
     setEditModel(selected.model?.primary ?? '');
     setEditName(agentListDisplayName(selected, messages(language).agentsSettings));
-    setEditDescription(selected.description ?? '');
+    setEditDescription(agentListDisplayDescription(selected, messages(language).agentsSettings));
   } else if (!selected && trackedSelectedIdRef.current !== null) {
     trackedSelectedIdRef.current = null;
     setEditWorkspace('');

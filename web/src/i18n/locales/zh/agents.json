@@ -768,8 +768,32 @@
     "listToolsAllEnabled": "全部启用",
     "listToolsDisabledCount": "已禁用 {{count}} 个",
     "listSkillsCount": "允许 {{count}} 个",
-    "defaultMainAgentName": "智能助手",
-    "defaultMainAgentDescription": "你的个人智能助手：解答疑问、协助日常事务，并随时与你交流。",
+    "builtInAgents": {
+      "assistant": {
+        "name": "智能助手",
+        "description": "你的个人智能助手：解答疑问、协助日常事务，并随时与你交流。"
+      },
+      "coding": {
+        "name": "编程专家",
+        "description": "编写、调试、重构和测试软件。"
+      },
+      "writing": {
+        "name": "写作助手",
+        "description": "根据受众需求起草、编辑和润色内容。"
+      },
+      "research": {
+        "name": "研究助手",
+        "description": "研究主题、比较来源并综合结论。"
+      },
+      "data": {
+        "name": "数据分析师",
+        "description": "清洗和分析数据，生成可视化并交付报告。"
+      },
+      "creative": {
+        "name": "创意助手",
+        "description": "探索视觉方向、提示词、设计评审和创意方案。"
+      }
+    },
     "editorNavAria": "智能体编辑器分区",
     "skillsLibraryLink": "技能库",
     "personaHint": "通过表单快速设置智能体身份与个性。需要直接编辑文本时请使用「角色配置」。",

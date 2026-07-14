@@ -29,6 +29,7 @@ import { DreamingMaintenanceSection } from '@/features/settings/dreaming-setting
 import { DreamingPreviewSection } from '@/features/settings/dreaming-settings-preview-section';
 import { DreamingRuntimeSection } from '@/features/settings/dreaming-settings-runtime-section';
 import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import {
   SettingsPageFrame,
   SettingsTabPanel,
@@ -301,8 +302,16 @@ export function DreamingSettingsPanel() {
     async (phase: DreamingPhaseId = 'deep') => {
       const startedAtMs = Date.now();
       const targets: DreamingRunAgent[] = agentOptions.length > 0
-        ? agentOptions.map((agent) => ({ id: agent.id, name: agent.name, avatar: agent.avatar }))
-        : [{ id: selectedAgentId, name: selectedAgent?.name, avatar: selectedAgent?.avatar }].filter((agent) => agent.id);
+        ? agentOptions.map((agent) => ({
+            id: agent.id,
+            name: agentListDisplayName(agent, m.agentsSettings),
+            avatar: agent.avatar,
+          }))
+        : [{
+            id: selectedAgentId,
+            name: selectedAgent ? agentListDisplayName(selectedAgent, m.agentsSettings) : undefined,
+            avatar: selectedAgent?.avatar,
+          }].filter((agent) => agent.id);
       const runTargets = targets.length > 0 ? targets : [{ id: selectedAgentId }];
       const errors: string[] = [];
       dispatchUi({ type: 'patch', patch: { runPhase: phase, runBusy: true, runOk: false, runError: null } });
@@ -347,7 +356,7 @@ export function DreamingSettingsPanel() {
         dispatchUi({ type: 'patch', patch: { runBusy: false } });
       }
     },
-    [agentOptions, mutate, selectedAgent?.avatar, selectedAgent?.name, selectedAgentId],
+    [agentOptions, m.agentsSettings, mutate, selectedAgent?.avatar, selectedAgent?.name, selectedAgentId],
   );
 
   const doAction = useCallback(
@@ -440,7 +449,7 @@ export function DreamingSettingsPanel() {
             status.memory,
           );
         } catch (e) {
-          const label = agent.name || agent.id;
+          const label = agentListDisplayName(agent, m.agentsSettings);
           errors.push(`${label}: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
@@ -454,12 +463,13 @@ export function DreamingSettingsPanel() {
     } finally {
       dispatchUi({ type: 'patch', patch: { enableAllBusy: false } });
     }
-  }, [agentOptions, mutate, selectedAgent?.avatar, selectedAgent?.name, selectedAgentId]);
+  }, [agentOptions, m.agentsSettings, mutate, selectedAgent?.avatar, selectedAgent?.name, selectedAgentId]);
 
   return (
     <SettingsPageFrame>
       <DreamingHeader
         t={t}
+        agentsMessages={m.agentsSettings}
         hasToken={hasToken}
         agents={agentOptions}
         selectedAgentId={selectedAgentId}
