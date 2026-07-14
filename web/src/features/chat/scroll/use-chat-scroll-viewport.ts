@@ -64,9 +64,7 @@ export function useChatScrollViewport({
   const scrollRef = useRef<HTMLDivElement>(null);
   const listContentRef = useRef<HTMLDivElement | null>(null);
   const followingRef = useRef(true);
-  const programmaticScrollRef = useRef(false);
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
-  const followRafRef = useRef<number | null>(null);
 
   const [atBottom, setAtBottom] = useState(true);
 
@@ -95,8 +93,6 @@ export function useChatScrollViewport({
         setFollowing(true);
       }
 
-      programmaticScrollRef.current = true;
-
       if (opts?.smooth) {
         el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
         return;
@@ -106,17 +102,6 @@ export function useChatScrollViewport({
     },
     [setFollowing],
   );
-
-  const scheduleFollowIfNeeded = useCallback(() => {
-    if (!followingRef.current) return;
-    if (followRafRef.current != null) {
-      cancelAnimationFrame(followRafRef.current);
-    }
-    followRafRef.current = requestAnimationFrame(() => {
-      followRafRef.current = null;
-      scrollToEnd();
-    });
-  }, [scrollToEnd]);
 
   const stopFollowing = useCallback(() => {
     setFollowing(false);
@@ -133,31 +118,25 @@ export function useChatScrollViewport({
       if (!el) return;
 
       const ro = new ResizeObserver(() => {
-        scheduleFollowIfNeeded();
+        // ResizeObserver runs before paint. Correct the tail position here so a
+        // growing streaming row never paints one frame at the stale scrollTop.
+        scrollToEnd();
       });
       ro.observe(el);
       resizeObserverRef.current = ro;
     },
-    [scheduleFollowIfNeeded],
+    [scrollToEnd],
   );
 
   useEffect(() => {
     return () => {
       resizeObserverRef.current?.disconnect();
-      if (followRafRef.current != null) {
-        cancelAnimationFrame(followRafRef.current);
-      }
     };
   }, []);
 
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-
-    if (programmaticScrollRef.current) {
-      programmaticScrollRef.current = false;
-      return;
-    }
 
     const near = isNearChatBottom(el);
     setFollowing(near);
