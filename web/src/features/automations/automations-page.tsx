@@ -24,6 +24,7 @@ import { RefreshButton } from '@/components/ui/refresh-button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/agent-selection/chat-agents-api';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { formatCronExpressionLabel } from '@/features/scheduling/cron/format-cron-label';
 import { messages, type MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -1805,6 +1806,7 @@ function AutomationForm({
   agentsLoading: boolean;
   language: StoredLanguage;
 }) {
+  const agentsMessages = messages(language).agentsSettings;
   const update = (patch: Partial<FormState>) => setForm((prev) => ({ ...prev, ...patch }));
 
   useEffect(() => {
@@ -1908,7 +1910,7 @@ function AutomationForm({
             <SelectOption value="">{agentsLoading ? labels.form.loadingAgents : labels.form.defaultAgent}</SelectOption>
             {agentOptions.map((agent) => (
               <SelectOption key={agent.id} value={agent.id}>
-                {agent.name || agent.id}
+                {agentListDisplayName(agent, agentsMessages)}
               </SelectOption>
             ))}
           </Select>

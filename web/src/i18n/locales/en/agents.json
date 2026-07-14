@@ -768,8 +768,32 @@
     "listToolsAllEnabled": "All enabled",
     "listToolsDisabledCount": "{{count}} disabled",
     "listSkillsCount": "{{count}} allowed",
-    "defaultMainAgentName": "Smart Assistant",
-    "defaultMainAgentDescription": "Your personal intelligent assistant for answering questions, handling everyday tasks, and chatting with you anytime.",
+    "builtInAgents": {
+      "assistant": {
+        "name": "Smart Assistant",
+        "description": "Your personal intelligent assistant for questions, everyday tasks, and conversation."
+      },
+      "coding": {
+        "name": "Coding Expert",
+        "description": "Build, debug, refactor, and test software."
+      },
+      "writing": {
+        "name": "Writing Assistant",
+        "description": "Draft, edit, and refine content for its audience."
+      },
+      "research": {
+        "name": "Research Assistant",
+        "description": "Research topics, compare sources, and synthesize findings."
+      },
+      "data": {
+        "name": "Data Analyst",
+        "description": "Clean and analyze data, create visualizations, and report results."
+      },
+      "creative": {
+        "name": "Creative Assistant",
+        "description": "Explore visual direction, prompts, critique, and creative options."
+      }
+    },
     "editorNavAria": "Agent editor sections",
     "skillsLibraryLink": "Skill library",
     "personaHint": "Set up your agent's identity and personality with a friendly form. For raw Markdown, use Profile Markdown.",

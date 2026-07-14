@@ -285,6 +285,10 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   }
 
   async start(options?: ChannelPluginStartOptions): Promise<void> {
+    if (!this.workflowProgressUnregister) {
+      await this.registerWorkflowProgressCapability();
+    }
+
     const ids = options?.accountId
       ? [options.accountId]
       : listWeixinAccountIds(this.cfg);
@@ -342,6 +346,18 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   }
 
   async onConfigUpdated(cfg: Config): Promise<void> {
+    const routingConfigChanged = !isDeepStrictEqual(
+      {
+        agents: this.cfg.agents,
+        bindings: this.cfg.bindings,
+        session: this.cfg.session,
+      },
+      {
+        agents: cfg.agents,
+        bindings: cfg.bindings,
+        session: cfg.session,
+      },
+    );
     const prevWx = this.cfg.channels?.weixin as unknown;
     const nextWx = cfg.channels?.weixin as { enabled?: boolean } | undefined;
     const channelOff = !nextWx || nextWx.enabled !== true;
@@ -354,7 +370,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
 
     this.cfg = cfg;
 
-    if (isDeepStrictEqual(prevWx, nextWx) && this.channelIsRunning(cfg)) {
+    if (!routingConfigChanged && isDeepStrictEqual(prevWx, nextWx) && this.channelIsRunning(cfg)) {
       return;
     }
 

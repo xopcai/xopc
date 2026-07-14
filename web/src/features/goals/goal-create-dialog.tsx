@@ -9,9 +9,14 @@ import type { WireAttachment } from '@/features/chat/composer/composer.types';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
+import {
+  agentListDisplayDescription,
+  agentListDisplayName,
+} from '@/features/settings/agents/agent-display-names';
 import type { GoalsConfigState } from '@/features/settings/goals-config-api';
-import type { messages } from '@/i18n/messages';
+import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { useLocaleStore } from '@/stores/locale-store';
 
 export type GoalPriority = 'low' | 'normal' | 'high';
 export type GoalsPageMessages = ReturnType<typeof messages>['goalsPage'];
@@ -137,6 +142,8 @@ export function GoalCreateDialog({
   onCreate: (draft: CreateGoalDraft) => Promise<void>;
   onDraftContract?: (draft: CreateGoalDraft) => Promise<Pick<CreateGoalDraft, 'objective' | 'scopeBoundary' | 'evidencePlan' | 'checklist'>>;
 }) {
+  const language = useLocaleStore((s) => s.language);
+  const agentsMessages = messages(language).agentsSettings;
   const [draft, setDraft] = useState<CreateGoalDraft>(() => emptyCreateDraft());
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -170,6 +177,9 @@ export function GoalCreateDialog({
     tools: { presetDenied: [], entryDisable: [], effectiveDisable: [] },
   } satisfies GatewayAgentRow];
   const selectedAgent = agents.find((agent) => agent.id === draft.agentId) ?? agents.find((agent) => agent.id === options.defaultAgentId) ?? agents[0];
+  const selectedAgentDescription = selectedAgent
+    ? agentListDisplayDescription(selectedAgent, agentsMessages)
+    : '';
   const selectedAgentId = draft.agentId || selectedAgent?.id || 'main';
   const agentModelRoles = [...(selectedAgent?.typedModels.effective ?? [])].sort((a, b) => {
     if (a.id === 'judge') return -1;
@@ -442,12 +452,14 @@ export function GoalCreateDialog({
                       >
                         {agents.map((agent) => (
                           <SelectOption key={agent.id} value={agent.id}>
-                            {(agent.name?.trim() || agent.id) + (agent.isDefault ? ` · ${t.createDialog.defaultAgent}` : ` · ${agent.id}`)}
+                            {agentListDisplayName(agent, agentsMessages) + (agent.isDefault ? ` · ${t.createDialog.defaultAgent}` : ` · ${agent.id}`)}
                           </SelectOption>
                         ))}
                       </Select>
-                      {selectedAgent?.description ? (
-                        <span className="line-clamp-2 text-xs text-fg-muted">{selectedAgent.description}</span>
+                      {selectedAgentDescription ? (
+                        <span className="line-clamp-2 text-xs text-fg-muted">
+                          {selectedAgentDescription}
+                        </span>
                       ) : selectedAgent?.model?.primary ? (
                         <span className="truncate text-xs text-fg-muted">{formatMessage(t.createDialog.agentPrimaryModel, { model: selectedAgent.model.primary })}</span>
                       ) : null}

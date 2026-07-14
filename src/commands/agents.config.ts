@@ -28,6 +28,8 @@ export function applyAgentConfig(
   cfg: Config,
   params: {
     agentId: string;
+    /** Used only when creating a previously absent agent entry. */
+    identity?: AgentEntry['identity'];
     workspace?: string;
     model?: string;
     models?: AgentEntry['models'];
@@ -42,7 +44,7 @@ export function applyAgentConfig(
   const base = index >= 0 ? list[index] : {
     id: agentId,
     enabled: true as const,
-    identity: { name: agentId, role: 'Agent', language: 'en', tone: 'direct' },
+    identity: params.identity ?? { name: agentId, role: 'Agent', language: 'en', tone: 'direct' },
     responsibilities: { primary: ['Help the user complete tasks'] },
     workspace: { root: `~/.xopc/workspace/${agentId}` },
     tools: { builtin: {} },

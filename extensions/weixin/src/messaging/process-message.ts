@@ -4,7 +4,6 @@ import { randomBytes } from 'node:crypto';
 
 import type { Config } from '@xopcai/xopc/config/schema.js';
 import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
-import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
 import { issuePairingChallenge, resolveWeixinPairingPath } from '@xopcai/xopc/channels/pairing/index.js';
 import { evaluateAccess } from '@xopcai/xopc/channels/security.js';
 import type { WeixinMessage } from '../api/types.js';
@@ -23,6 +22,7 @@ import {
   type WeixinInboundMediaOpts,
 } from './inbound.js';
 import { isDebugMode } from './debug-mode.js';
+import { generateWeixinSessionKeyWithRouting } from '../routing-integration.js';
 
 function extractTextBody(itemList?: import('../api/types.js').MessageItem[]): string {
   if (!itemList?.length) return '';
@@ -199,13 +199,10 @@ export async function processWeixinInboundMessage(
   const ctx = weixinMessageToMsgContext(full, deps.accountId, mediaOpts);
   const body = ctx.Body?.trim() ?? '';
 
-  const sessionKey = generateSessionKey({
-    source: 'weixin',
-    chatId: senderId,
-    senderId,
-    isGroup: false,
-    accountId: deps.accountId,
-  });
+  const sessionKey = generateWeixinSessionKeyWithRouting(
+    { accountId: deps.accountId, senderId },
+    deps.config,
+  );
 
   const attachments: Array<{ type: string; mimeType?: string; data?: string; name?: string }> = [];
 

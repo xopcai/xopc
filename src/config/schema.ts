@@ -122,7 +122,8 @@ export const AgentsConfigSchema = z.object({
       id: 'main',
       enabled: true,
       identity: {
-        name: 'Main',
+        name: 'Smart Assistant',
+        description: 'General-purpose personal assistant.',
         role: 'General assistant',
         language: 'en',
         tone: 'direct',
@@ -1183,7 +1184,8 @@ export const ConfigSchema = z.object({
         id: 'main',
         enabled: true,
         identity: {
-          name: 'Main',
+          name: 'Smart Assistant',
+          description: 'General-purpose personal assistant.',
           role: 'General assistant',
           language: 'en',
           tone: 'direct',

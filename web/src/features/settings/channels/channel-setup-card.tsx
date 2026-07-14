@@ -130,14 +130,12 @@ export function ChannelSetupCard({
   locale,
   messages: ch,
   onChanged,
-  autoStartPrimary = false,
   compact = false,
 }: {
   entry: ChannelCatalogEntry;
   locale: string;
   messages: ChannelsSettingsMessages;
   onChanged: () => Promise<void> | void;
-  autoStartPrimary?: boolean;
   compact?: boolean;
 }) {
   const primary = useMemo(() => choosePrimaryChannelAction(entry), [entry]);
@@ -194,12 +192,6 @@ export function ChannelSetupCard({
       setState((prev) => ({ ...prev, busy: false, error: err instanceof Error ? err.message : String(err) }));
     }
   }, [entry.id, locale, onChanged]);
-
-  useEffect(() => {
-    if (!autoStartPrimary || !primary || primary[1].result !== 'qr') return;
-    if (state.payload || state.busy || state.error) return;
-    void runAction(primary[0]);
-  }, [autoStartPrimary, primary, runAction, state.busy, state.error, state.payload]);
 
   useEffect(() => {
     const content = payloadQrContent(state.payload, entry.id);
@@ -262,7 +254,6 @@ export function ChannelSetupCard({
   const qrContent = payloadQrContent(state.payload, entry.id);
   const qrImage = qrContent ? state.generatedQr : payloadQrImage(state.payload);
   const qrStageActive = primary?.[1].result === 'qr' && (
-    autoStartPrimary ||
     state.busy ||
     state.payload?.type === 'qr' ||
     state.payload?.type === 'poll'

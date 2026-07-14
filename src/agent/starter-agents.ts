@@ -16,6 +16,7 @@ type StarterAgent = {
   id: string;
   displayName: string;
   description: string;
+  role: string;
   emoji: string;
   tools?: NonNullable<Config['agents']['list']>[number]['tools'];
   profileFiles: Record<string, string>;
@@ -32,12 +33,13 @@ function identity(params: { name: string; description: string; creature: string;
 export const STARTER_AGENTS: readonly StarterAgent[] = [
   {
     id: 'main',
-    displayName: 'Main',
+    displayName: 'Smart Assistant',
     description: 'General-purpose personal assistant.',
+    role: 'General assistant',
     emoji: '✨',
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
-        name: 'Main',
+        name: 'Smart Assistant',
         description: 'General-purpose personal assistant.',
         creature: 'assistant',
         emoji: '✨',
@@ -48,13 +50,14 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
   },
   {
     id: 'coder',
-    displayName: 'Coder',
+    displayName: 'Coding Expert',
     description: 'Software development, debugging, refactoring, and tests.',
+    role: 'Software engineer',
     emoji: '💻',
     tools: denyTools([]),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
-        name: 'Coder',
+        name: 'Coding Expert',
         description: 'Software engineering agent for repository understanding, implementation, debugging, refactoring, tests, and review.',
         creature: 'software engineer',
         emoji: '💻',
@@ -65,13 +68,14 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
   },
   {
     id: 'writer',
-    displayName: 'Writer',
+    displayName: 'Writing Assistant',
     description: 'Drafting, editing, rewriting, and audience-aware content.',
+    role: 'Writer and editor',
     emoji: '✍️',
     tools: denyTools([]),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
-        name: 'Writer',
+        name: 'Writing Assistant',
         description: 'Drafting, editing, rewriting, and audience-aware content.',
         creature: 'editor',
         emoji: '✍️',
@@ -82,13 +86,14 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
   },
   {
     id: 'researcher',
-    displayName: 'Researcher',
+    displayName: 'Research Assistant',
     description: 'Deep research, source comparison, and fact synthesis.',
+    role: 'Research analyst',
     emoji: '🔍',
     tools: denyTools([]),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
-        name: 'Researcher',
+        name: 'Research Assistant',
         description: 'Deep research, source comparison, and fact synthesis.',
         creature: 'analyst',
         emoji: '🔍',
@@ -101,6 +106,7 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     id: 'data-analyst',
     displayName: 'Data Analyst',
     description: 'Data cleaning, analysis, visualization, and reproducible reports.',
+    role: 'Data analyst',
     emoji: '📊',
     tools: denyTools([]),
     profileFiles: {
@@ -116,13 +122,14 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
   },
   {
     id: 'creative',
-    displayName: 'Creative',
+    displayName: 'Creative Assistant',
     description: 'Visual direction, image prompts, design critique, and creative options.',
+    role: 'Creative director',
     emoji: '🎨',
     tools: denyTools([]),
     profileFiles: {
       [WORKSPACE_FILES.IDENTITY]: identity({
-        name: 'Creative',
+        name: 'Creative Assistant',
         description: 'Visual direction, image prompts, design critique, and creative options.',
         creature: 'creative director',
         emoji: '🎨',
@@ -132,6 +139,25 @@ export const STARTER_AGENTS: readonly StarterAgent[] = [
     },
   },
 ];
+
+const LEGACY_STARTER_DISPLAY_NAMES: Readonly<Record<string, string>> = {
+  main: 'Main',
+  coder: 'Coder',
+  writer: 'Writer',
+  researcher: 'Researcher',
+  'data-analyst': 'Data Analyst',
+  creative: 'Creative',
+};
+
+function renderStarterProfileFile(starter: StarterAgent, name: string, content: string): string {
+  if (name === WORKSPACE_FILES.IDENTITY) return content;
+  const legacyName = LEGACY_STARTER_DISPLAY_NAMES[starter.id];
+  if (!legacyName || legacyName === starter.displayName) return content;
+  return content
+    .replace(`# SOUL.md - ${legacyName}`, `# SOUL.md - ${starter.displayName}`)
+    .replace(`You are ${legacyName},`, `You are ${starter.displayName},`)
+    .replace(`# TOOLS.md - ${legacyName} Tool Policy`, `# TOOLS.md - ${starter.displayName} Tool Policy`);
+}
 
 function hasAgentEntry(cfg: Config, agentId: string): boolean {
   const id = normalizeAgentId(agentId);
@@ -151,7 +177,7 @@ export function materializeStarterAgentFiles(cfg: Config): void {
     mkdirSync(profileDir, { recursive: true });
     mkdirSync(workspaceDir, { recursive: true });
     for (const [name, content] of Object.entries(starter.profileFiles)) {
-      writeFileIfMissing(join(profileDir, name), content);
+      writeFileIfMissing(join(profileDir, name), renderStarterProfileFile(starter, name, content));
     }
   }
 }
@@ -162,6 +188,13 @@ export function ensureStarterAgentsInitialized(cfg: Config): { config: Config; c
     if (hasAgentEntry(next, starter.id)) continue;
     next = applyAgentConfig(next, {
       agentId: starter.id,
+      identity: {
+        name: starter.displayName,
+        description: starter.description,
+        role: starter.role,
+        language: 'en',
+        tone: 'direct',
+      },
       ...(starter.tools ? { tools: starter.tools } : {}),
     });
   }

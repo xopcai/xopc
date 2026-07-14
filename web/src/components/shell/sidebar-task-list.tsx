@@ -518,8 +518,10 @@ function SidebarProjectMenu({
 function SidebarProjectSection({
   group,
   isExpanded,
+  isCollapsed,
   activeSessionKey,
   onToggleExpanded,
+  onToggleCollapsed,
   onCreateProjectChat,
   onToggleProjectPin,
   onRequestProjectRename,
@@ -540,8 +542,10 @@ function SidebarProjectSection({
 }: {
   group: ProjectSidebarGroup;
   isExpanded: boolean;
+  isCollapsed: boolean;
   activeSessionKey?: string;
   onToggleExpanded: (projectId: string) => void;
+  onToggleCollapsed: (projectId: string) => void;
   onCreateProjectChat: (project: Project) => void;
   onToggleProjectPin: (project: Project) => void;
   onRequestProjectRename: (project: Project) => void;
@@ -578,9 +582,15 @@ function SidebarProjectSection({
           hasActiveSession ? 'bg-surface-active text-fg' : 'text-fg-muted',
         )}
       >
-        <div className="flex h-7 min-w-0 flex-1 items-center" title={group.project.name}>
+        <button
+          type="button"
+          className="flex h-7 min-w-0 flex-1 items-center gap-1 text-left hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+          onClick={() => onToggleCollapsed(group.project.id)}
+          title={group.project.name}
+          aria-expanded={!isCollapsed}
+        >
           <span className="min-w-0 flex-1 truncate">{group.project.name}</span>
-        </div>
+        </button>
         <SidebarProjectMenu
           project={group.project}
           onNavigate={onNavigate}
@@ -605,53 +615,55 @@ function SidebarProjectSection({
         </button>
       </div>
 
-      <div className="ml-6 flex flex-col gap-0.5">
-        {visibleSessions.map((session) => {
-          const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
-          return (
-            <SidebarTaskRow
-              key={session.key}
-              session={session}
-              isActive={activeSessionKey === session.key}
-              showSourceChannelIcon={!isWebSession(session)}
-              onNavigate={onNavigate}
-              mutate={mutate}
-              onRequestRename={onRequestRename}
-              onRequestDelete={onRequestDelete}
-              sb={sb}
-              sess={sess}
-              clipboard={clipboard}
-              defaultUnnamedTitle={defaultUnnamedTitle}
-              sessionAgentId={sessionAgentId}
-              sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
-              timeLabel={timeAgoLabel(session.updatedAt, language)}
-            />
-          );
-        })}
-        {canToggleSessionLimit ? (
-          <button
-            type="button"
-            className="ml-1 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
-            onClick={() => onToggleExpanded(group.project.id)}
-            disabled={group.sessionLoading}
-            aria-busy={group.sessionLoading || undefined}
-          >
-            {group.sessionLoading ? (
-              <Loader2 className="size-3.5 animate-spin" strokeWidth={1.75} aria-hidden />
-            ) : (
-              <ChevronDown
-                className={cn(
-                  'size-3.5 transition-transform duration-150 ease-out',
-                  showLess && 'rotate-180',
-                )}
-                strokeWidth={1.75}
-                aria-hidden
+      {!isCollapsed ? (
+        <div className="ml-6 flex flex-col gap-0.5">
+          {visibleSessions.map((session) => {
+            const sessionAgentId = resolveSessionAgentId(session, defaultAgentId);
+            return (
+              <SidebarTaskRow
+                key={session.key}
+                session={session}
+                isActive={activeSessionKey === session.key}
+                showSourceChannelIcon={!isWebSession(session)}
+                onNavigate={onNavigate}
+                mutate={mutate}
+                onRequestRename={onRequestRename}
+                onRequestDelete={onRequestDelete}
+                sb={sb}
+                sess={sess}
+                clipboard={clipboard}
+                defaultUnnamedTitle={defaultUnnamedTitle}
+                sessionAgentId={sessionAgentId}
+                sessionAgentAvatar={agentAvatarFromOptions(sessionAgentId, agentItems)}
+                timeLabel={timeAgoLabel(session.updatedAt, language)}
               />
-            )}
-            {showLess ? sb.projectShowLess : sb.projectShowMore}
-          </button>
-        ) : null}
-      </div>
+            );
+          })}
+          {canToggleSessionLimit ? (
+            <button
+              type="button"
+              className="ml-1 flex w-fit items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-fg-subtle transition-colors hover:bg-surface-hover hover:text-fg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+              onClick={() => onToggleExpanded(group.project.id)}
+              disabled={group.sessionLoading}
+              aria-busy={group.sessionLoading || undefined}
+            >
+              {group.sessionLoading ? (
+                <Loader2 className="size-3.5 animate-spin" strokeWidth={1.75} aria-hidden />
+              ) : (
+                <ChevronDown
+                  className={cn(
+                    'size-3.5 transition-transform duration-150 ease-out',
+                    showLess && 'rotate-180',
+                  )}
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+              )}
+              {showLess ? sb.projectShowLess : sb.projectShowMore}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -867,6 +879,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const [includedSessionKey, setIncludedSessionKey] = useState<string | undefined>(() => activeSessionKey);
   const [projectsCollapsed, setProjectsCollapsed] = useState(false);
   const [inboxCollapsed, setInboxCollapsed] = useState(false);
+  const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(() => new Set());
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(() => new Set());
   const [projectSessionOverrides, setProjectSessionOverrides] = useState<Record<string, ProjectSessionOverride>>({});
   const [loadingProjectIds, setLoadingProjectIds] = useState<Set<string>>(() => new Set());
@@ -1177,6 +1190,18 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     })();
   }, [activeSessionKey, expandedProjects, loadingProjectIds, projectGroups, sidebarUpdatedAfter]);
 
+  const toggleProjectCollapsed = useCallback((projectId: string) => {
+    setCollapsedProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  }, []);
+
   const loadMoreInbox = useCallback(() => {
     if (!inboxHasMore || loadingInboxMore) return;
     setLoadingInboxMore(true);
@@ -1301,8 +1326,10 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                         key={group.project.id}
                         group={group}
                         isExpanded={expandedProjects.has(group.project.id)}
+                        isCollapsed={collapsedProjectIds.has(group.project.id)}
                         activeSessionKey={activeSessionKey}
                         onToggleExpanded={toggleProjectExpanded}
+                        onToggleCollapsed={toggleProjectCollapsed}
                         onCreateProjectChat={(project) => void createProjectChat(project)}
                         onToggleProjectPin={(project) => void toggleProjectPin(project)}
                         onRequestProjectRename={openProjectRename}

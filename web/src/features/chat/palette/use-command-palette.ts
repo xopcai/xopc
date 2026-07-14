@@ -4,6 +4,11 @@ import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api
 import { listSkillNamesInWire } from '@/features/chat/composer/composer-editor-wire';
 import { ABORT_CLASS_NAMES } from '@/features/chat/composer/palette-item-handlers';
 import { fetchCommandsCached, getChatSkillsCached } from '@/features/chat/palette/command-palette-api';
+import {
+  agentListDisplayDescription,
+  agentListDisplayName,
+} from '@/features/settings/agents/agent-display-names';
+import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import type { PaletteItem, SlashRange } from '@/features/chat/palette/command-palette.types';
 import { FILE_WIRE_TAIL_BODY } from '@/features/chat/palette/file-wire-pattern';
@@ -264,16 +269,17 @@ export function useCommandPalette(
         },
       }));
       // Agents: only when there is more than one (matches header `showChatAgentSelector`).
+      const agentsMessages = messages(language).agentsSettings;
       const agentItems: PaletteItem[] =
         agentsPayload && agentsPayload.items.length > 1
           ? agentsPayload.items.map((a) => ({
               kind: 'agent' as const,
               id: `agent:${a.id}`,
-              name: a.id,
-              description: a.description ?? '',
+              name: agentListDisplayName(a, agentsMessages),
+              description: agentListDisplayDescription(a, agentsMessages),
               category: 'agent',
               ...(a.avatar ? { avatar: a.avatar } : {}),
-              ...(a.name ? { aliases: [a.name] } : {}),
+              aliases: [a.id, ...(a.name ? [a.name] : [])],
             }))
           : [];
       return [...skillItems, ...commandItems, ...agentItems];

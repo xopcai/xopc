@@ -4,7 +4,11 @@ import { Children, Fragment, isValidElement, useId, useState, type ReactNode, ty
 
 import { cn } from '@/lib/cn';
 import { SETTINGS_SHELL_POPOVER_Z } from '@/lib/settings-shell-dialog-layer';
-import { useSettingsShellPopoverPortalContainer } from '@/lib/settings-shell-layer-context';
+import { settingsShellPopoverZClass } from '@/lib/settings-shell-layer.utils';
+import {
+  useSettingsShellPopoverLayer,
+  useSettingsShellPopoverPortalContainer,
+} from '@/lib/settings-shell-layer-context';
 
 export type PopoverSelectOption = {
   value: string;
@@ -75,7 +79,11 @@ export function PopoverSelect({
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const settingsShellLayer = useSettingsShellPopoverLayer();
   const portalContainer = useSettingsShellPopoverPortalContainer();
+  const popoverZ = settingsShellLayer === 'default'
+    ? SETTINGS_SHELL_POPOVER_Z
+    : settingsShellPopoverZClass(settingsShellLayer);
   const selected = options.find((option) => option.value === value);
   const label = selected?.label ?? (value ? `${value} · unavailable` : placeholder);
   let lastGroup: string | undefined;
@@ -107,7 +115,7 @@ export function PopoverSelect({
           align={align}
           sideOffset={4}
           className={cn(
-            SETTINGS_SHELL_POPOVER_Z,
+            popoverZ,
             'w-[var(--radix-popover-trigger-width)] min-w-[16rem] overflow-hidden rounded-lg border border-edge bg-surface-panel p-1 shadow-popover outline-none',
             contentClassName,
           )}

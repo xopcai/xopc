@@ -1,12 +1,17 @@
-import { AlertTriangle, ExternalLink, Loader2, Settings2 } from 'lucide-react';
-import { useCallback, useLayoutEffect, useMemo, useState } from 'react';
+import { AlertTriangle, CircleAlert, CircleCheck, ExternalLink, Loader2, RotateCcw, Settings2 } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { PopoverSelect, type PopoverSelectOption } from '@/components/ui/popover-select';
 import { SchemaForm, type JsonSchema } from '@/components/ui/schema-form';
 import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { ExtensionIframeHost } from '@/features/extensions/extension-iframe-host';
+import { fetchChatAgents } from '@/features/chat/agent-selection/chat-agents-api';
+import type { GatewayConfigBinding } from '@/features/settings/agents-admin-api';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
+import { channelsStatusSwrKey, fetchChannelsStatusSwr } from '@/features/settings/channels-status-swr';
 import { SettingsPageSkeleton } from '@/features/settings/settings-loading-skeleton';
 import { SettingsPageFrame, SettingsPageHeader } from '@/features/settings/settings-page-layout';
 import { apiFetch, fetchJson } from '@/lib/fetch';
@@ -19,10 +24,13 @@ import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { CHANNELS_HUB_PATH, channelDetailPath, normalizeChannelRouteId } from './channels-routes';
 import { ChannelSetupCard, choosePrimaryChannelAction } from './channel-setup-card';
+import { getChannelAgentBinding, mergeChannelAgentBinding } from './channel-agent-binding';
+import { resolveChannelRuntime, type ChannelRuntimeState } from './channel-runtime';
 import { ChannelSettingsShell } from './channel-settings-shell';
 import { ChannelsPageHeaderActions } from './channels-page-header-actions';
 import { ChannelsSettingsDialogFooter } from './channels-settings-dialog-footer';
 import { useChannelCatalog, type ChannelCatalogEntry, type ChannelSetupIssue, type ChannelSetupStatus } from './use-channel-catalog';
+import { parseChannelStatusSseDetail, useChannelStatusSse } from './use-channel-status-sse';
 
 function configSwrKey(channelId: string | null): string | null {
   return channelId ? apiUrl(`/api/channels/${encodeURIComponent(channelId)}/config`) : null;
@@ -37,13 +45,24 @@ async function fetchChannelConfig(channelId: string): Promise<Record<string, unk
 
 type ChannelsConfigMap = Record<string, { config?: Record<string, unknown> }>;
 
+type ChannelsSettingsConfig = {
+  channels: ChannelsConfigMap;
+  bindings: GatewayConfigBinding[];
+};
+
 const SCHEMA_FIELD_PATHS_MANAGED_OUTSIDE_FORM = ['enabled'];
 
-async function fetchChannelsConfigMap(): Promise<ChannelsConfigMap> {
-  const data = await fetchJson<{ ok?: boolean; payload?: { config?: { channels?: ChannelsConfigMap } } }>(
+async function fetchChannelsSettingsConfig(): Promise<ChannelsSettingsConfig> {
+  const data = await fetchJson<{
+    ok?: boolean;
+    payload?: { config?: { channels?: ChannelsConfigMap; bindings?: GatewayConfigBinding[] } };
+  }>(
     apiUrl('/api/config'),
   );
-  return data.payload?.config?.channels ?? {};
+  return {
+    channels: data.payload?.config?.channels ?? {},
+    bindings: data.payload?.config?.bindings ?? [],
+  };
 }
 
 function encodeAssetPath(entrypoint: string): string {
@@ -71,23 +90,28 @@ function channelSetupStatus(entry: ChannelCatalogEntry): ChannelSetupStatus {
   };
 }
 
-function statusLabel(entry: ChannelCatalogEntry, ch: ReturnType<typeof messages>['channelsSettings']): string {
-  const setup = channelSetupStatus(entry);
-  if (setup.state === 'needs_setup') return ch.hubStatusNeedsSetup;
-  if (setup.state === 'error') return ch.hubStatusError;
-  if (setup.enabled && setup.ready && entry.runtime === 'loaded') return ch.hubStatusRunning;
-  if (setup.enabled && setup.ready) return ch.hubStatusEnabled;
-  if (setup.ready) return ch.hubStatusConfigured;
-  return ch.hubStatusNotConfigured;
+function runtimeStatusLabel(runtime: ChannelRuntimeState, ch: ReturnType<typeof messages>['channelsSettings']): string {
+  if (runtime === 'running') return ch.connectionRunning;
+  if (runtime === 'stopped') return ch.connectionStopped;
+  if (runtime === 'checking') return ch.connectionChecking;
+  if (runtime === 'disabled') return ch.connectionDisabled;
+  return ch.connectionNeedsSetup;
 }
 
-function statusClass(entry: ChannelCatalogEntry): string {
-  const setup = channelSetupStatus(entry);
-  if (setup.state === 'needs_setup') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
-  if (setup.state === 'error') return 'bg-red-500/10 text-red-700 dark:text-red-300';
-  if (setup.enabled && setup.ready && entry.runtime === 'loaded') return 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300';
-  if (setup.enabled || setup.ready) return 'bg-accent-soft text-accent';
-  return 'bg-surface-hover text-fg-muted';
+function runtimeStatusHint(runtime: ChannelRuntimeState, ch: ReturnType<typeof messages>['channelsSettings']): string {
+  if (runtime === 'running') return ch.connectionRunningHint;
+  if (runtime === 'stopped') return ch.connectionStoppedHint;
+  if (runtime === 'disabled') return ch.connectionDisabledHint;
+  if (runtime === 'needs_setup') return ch.connectionNeedsSetupHint;
+  return ch.connectionChecking;
+}
+
+function runtimeStatusClass(runtime: ChannelRuntimeState): string {
+  if (runtime === 'running') return 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300';
+  if (runtime === 'stopped') return 'bg-red-500/10 text-red-700 dark:text-red-300';
+  if (runtime === 'checking') return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
+  if (runtime === 'disabled') return 'bg-surface-hover text-fg-muted';
+  return 'bg-amber-500/10 text-amber-700 dark:text-amber-300';
 }
 
 function getBasicConfigPaths(entry: ChannelCatalogEntry | undefined): string[] {
@@ -342,22 +366,29 @@ function ChannelEnabledSwitch({
 function ChannelHubCard({
   entry,
   config,
+  runtime,
   busy,
+  restarting,
   ch,
   onOpen,
   onToggle,
+  onRestart,
 }: {
   entry: ChannelCatalogEntry;
   config?: Record<string, unknown>;
+  runtime: ChannelRuntimeState;
   busy: boolean;
+  restarting: boolean;
   ch: ReturnType<typeof messages>['channelsSettings'];
   onOpen: () => void;
   onToggle: () => void;
+  onRestart: () => void;
 }) {
   const setup = channelSetupStatus(entry);
   const summary = channelSummary(entry, config, ch);
   const capabilityLabels = channelCapabilityLabels(entry, ch);
   const canDirectEnable = !setup.enabled && setup.ready;
+  const primaryAction = canDirectEnable ? onToggle : runtime === 'stopped' ? onRestart : onOpen;
   return (
     <article
       className="flex min-h-[15.5rem] flex-col rounded-xl bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/45"
@@ -367,8 +398,8 @@ function ChannelHubCard({
           <ChannelIcon entry={entry} />
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-fg">{entry.label}</h2>
-            <span className={cn('mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium', statusClass(entry))}>
-              {statusLabel(entry, ch)}
+            <span className={cn('mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-medium', runtimeStatusClass(runtime))}>
+              {runtimeStatusLabel(runtime, ch)}
             </span>
           </div>
         </div>
@@ -411,20 +442,81 @@ function ChannelHubCard({
             ) : null}
           </div>
         )}
-        {!setup.ready && entry.description ? (
-          <p className="mt-3 truncate text-xs text-fg-subtle" title={entry.description}>
-            {ch.cardAdapterLabel}: {entry.description}
-          </p>
-        ) : null}
       </button>
 
       <div className="mt-auto pt-4">
-        <Button type="button" variant="primary" className="w-full rounded-2xl py-2.5" onClick={canDirectEnable ? onToggle : onOpen}>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-          {channelActionLabel(entry, ch)}
+        <Button type="button" variant="secondary" className="w-full rounded-2xl py-2.5" onClick={primaryAction} disabled={busy || restarting}>
+          {busy || restarting ? <Loader2 className="size-4 animate-spin" /> : null}
+          {restarting ? ch.restartingChannel : runtime === 'stopped' ? ch.restartChannel : channelActionLabel(entry, ch)}
         </Button>
       </div>
     </article>
+  );
+}
+
+function ChannelConnectionStatusPanel({
+  runtime,
+  restarting,
+  checking,
+  showConnectionOptions,
+  canManageConnection,
+  ch,
+  onRestart,
+  onCheck,
+  onManageConnection,
+}: {
+  runtime: ChannelRuntimeState;
+  restarting: boolean;
+  checking: boolean;
+  showConnectionOptions: boolean;
+  canManageConnection: boolean;
+  ch: ReturnType<typeof messages>['channelsSettings'];
+  onRestart: () => void;
+  onCheck: () => void;
+  onManageConnection: () => void;
+}) {
+  const Icon =
+    runtime === 'running'
+      ? CircleCheck
+      : runtime === 'stopped' || runtime === 'needs_setup'
+        ? CircleAlert
+        : Loader2;
+  return (
+    <section className="rounded-xl bg-surface-panel/80 p-4 shadow-surface">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <Icon className={cn(
+            'mt-0.5 size-5 shrink-0',
+            runtime === 'running' && 'text-emerald-600 dark:text-emerald-400',
+            runtime === 'stopped' && 'text-red-600 dark:text-red-400',
+            runtime === 'checking' && 'animate-spin text-amber-600 dark:text-amber-400',
+            runtime === 'disabled' && 'text-fg-muted',
+            runtime === 'needs_setup' && 'text-amber-600 dark:text-amber-400',
+          )} />
+          <div>
+            <h3 className="text-sm font-semibold text-fg">{ch.connectionStatus}</h3>
+            <p className="mt-1 text-sm text-fg-muted">{runtimeStatusHint(runtime, ch)}</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 gap-2">
+          <Button type="button" variant="secondary" className="px-2.5 py-1.5 text-xs" disabled={checking || restarting} onClick={onCheck}>
+            {checking ? <Loader2 className="size-4 animate-spin" /> : null}
+            {checking ? ch.checkingConnection : ch.checkConnection}
+          </Button>
+          {runtime === 'stopped' ? (
+            <Button type="button" variant="primary" className="px-2.5 py-1.5 text-xs" disabled={restarting || checking} onClick={onRestart}>
+              {restarting ? <Loader2 className="size-4 animate-spin" /> : <RotateCcw className="size-4" />}
+              {restarting ? ch.restartingChannel : ch.restartChannel}
+            </Button>
+          ) : null}
+          {canManageConnection ? (
+            <Button type="button" variant="ghost" className="px-2.5 py-1.5 text-xs" disabled={checking || restarting} onClick={onManageConnection}>
+              {showConnectionOptions ? ch.hideConnectionOptions : ch.connectionOptions}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -467,9 +559,21 @@ export function ChannelsSettingsPanel() {
 
   const catalog = useChannelCatalog(hasToken, language);
   const entries = catalog.entries;
-  const { data: channelsConfig = {}, mutate: mutateChannelsConfig } = useSWR(
+  const { data: runtimeStatuses, mutate: mutateRuntimeStatuses, isValidating: isValidatingRuntime } = useSWR(
+    hasToken ? channelsStatusSwrKey() : null,
+    fetchChannelsStatusSwr,
+    { revalidateOnFocus: true },
+  );
+  const { data: channelsSettingsConfig, mutate: mutateChannelsSettingsConfig } = useSWR(
     hasToken ? 'channels-config-map' : null,
-    fetchChannelsConfigMap,
+    fetchChannelsSettingsConfig,
+    { revalidateOnFocus: false },
+  );
+  const channelsConfig = channelsSettingsConfig?.channels ?? {};
+  const bindings = channelsSettingsConfig?.bindings ?? [];
+  const { data: agentsData } = useSWR(
+    hasToken ? 'channel-routing-agents' : null,
+    fetchChatAgents,
     { revalidateOnFocus: false },
   );
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
@@ -487,7 +591,10 @@ export function ChannelsSettingsPanel() {
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
   const [saving, setSaving] = useState(false);
   const [toggleBusy, setToggleBusy] = useState<string | null>(null);
+  const [restartingChannelId, setRestartingChannelId] = useState<string | null>(null);
+  const [showConnectionOptions, setShowConnectionOptions] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [agentBindingDraft, setAgentBindingDraft] = useState<string | null>(null);
 
   const effectiveConfig = draft ?? remoteConfig ?? {};
   const ch = m.channelsSettings;
@@ -509,6 +616,22 @@ export function ChannelsSettingsPanel() {
     [basicConfigPaths, formConfigSchema],
   );
   const hasBasicConfigFields = useMemo(() => hasSchemaFields(basicConfigSchema), [basicConfigSchema]);
+  const channelAgentId = activeEntry
+    ? agentBindingDraft ?? getChannelAgentBinding(bindings, activeEntry.id)
+    : '';
+  const agentOptions = useMemo<PopoverSelectOption[]>(() => (
+    (agentsData?.items ?? []).map((agent) => {
+      const name = agentListDisplayName(agent, m.agentsSettings);
+      return {
+        value: agent.id,
+        label: name === agent.id ? name : `${name} · ${agent.id}`,
+      };
+    })
+  ), [agentsData?.items, m.agentsSettings]);
+  const defaultAgent = agentsData?.items.find((agent) => agent.id === agentsData.defaultId);
+  const defaultAgentName = defaultAgent
+    ? agentListDisplayName(defaultAgent, m.agentsSettings)
+    : agentsData?.defaultId ?? '';
   const schemaLabels = useMemo(() => ({
     defaultBooleanLabel: ch.schemaBooleanDefault,
     unsupportedArrayType: ch.schemaUnsupportedArrayType,
@@ -518,16 +641,34 @@ export function ChannelsSettingsPanel() {
       .replace('{{type}}', type ? ` (${type})` : ''),
   }), [ch]);
 
+  const runtimeByChannel = useMemo(
+    () => new Map((runtimeStatuses ?? []).map((status) => [status.name, status])),
+    [runtimeStatuses],
+  );
+  const runtimeLoaded = runtimeStatuses !== undefined;
+  const runtimeFor = useCallback(
+    (entry: ChannelCatalogEntry) => resolveChannelRuntime(entry, runtimeByChannel.get(entry.id), runtimeLoaded),
+    [runtimeByChannel, runtimeLoaded],
+  );
+  const refreshChannelState = useCallback(async () => {
+    await Promise.all([catalog.mutate(), mutateRuntimeStatuses()]);
+  }, [catalog, mutateRuntimeStatuses]);
+  const onChannelStatusEvent = useCallback((detail: unknown) => {
+    const next = parseChannelStatusSseDetail(detail);
+    if (next) void mutateRuntimeStatuses(next, false);
+  }, [mutateRuntimeStatuses]);
+  useChannelStatusSse(onChannelStatusEvent, hasToken);
+
   const headerEnd = useMemo(
     () => hasToken ? (
       <ChannelsPageHeaderActions
         ch={ch}
-        refreshing={catalog.isValidating}
+        refreshing={catalog.isValidating || isValidatingRuntime}
         saveOk={false}
-        onRefresh={() => void catalog.mutate()}
+        onRefresh={() => void refreshChannelState()}
       />
     ) : null,
-    [catalog, ch, hasToken],
+    [catalog.isValidating, ch, hasToken, isValidatingRuntime, refreshChannelState],
   );
 
   useLayoutEffect(() => {
@@ -546,33 +687,65 @@ export function ChannelsSettingsPanel() {
   const openChannel = useCallback((id: string) => {
     navigate(channelDetailPath(id));
     setDraft(null);
+    setAgentBindingDraft(null);
     setError(null);
   }, [navigate]);
 
   const closeChannel = useCallback(() => {
     navigate(CHANNELS_HUB_PATH);
     setDraft(null);
+    setAgentBindingDraft(null);
     setError(null);
   }, [navigate]);
 
+  const restartChannel = useCallback(async (entry: ChannelCatalogEntry) => {
+    setRestartingChannelId(entry.id);
+    setError(null);
+    try {
+      const res = await apiFetch(apiUrl(`/api/channels/${encodeURIComponent(entry.id)}/restart`), { method: 'POST' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
+        throw new Error(body.error?.message ?? res.statusText);
+      }
+      await refreshChannelState();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRestartingChannelId(null);
+    }
+  }, [refreshChannelState]);
+
+  useEffect(() => {
+    setAgentBindingDraft(null);
+    setShowConnectionOptions(false);
+  }, [activeEntry?.id]);
+
   const saveConfig = useCallback(async () => {
-    if (!activeEntry || !draft) return false;
+    if (!activeEntry || (!draft && agentBindingDraft === null)) return false;
     const key = channelConfigKey(activeEntry);
     setSaving(true);
     setError(null);
     try {
       const res = await apiFetch(apiUrl('/api/config'), {
         method: 'PATCH',
-        body: JSON.stringify({ channels: { [key]: draft } }),
+        body: JSON.stringify({
+          ...(draft ? { channels: { [key]: draft } } : {}),
+          ...(agentBindingDraft !== null
+            ? { bindings: mergeChannelAgentBinding(bindings, activeEntry.id, agentBindingDraft) }
+            : {}),
+        }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({})) as { error?: { message?: string } };
         throw new Error(body.error?.message ?? res.statusText);
       }
-      await mutateConfig(draft, false);
-      await mutateChannelsConfig();
+      if (draft) {
+        await mutateConfig(draft, false);
+      }
+      await mutateChannelsSettingsConfig();
       await catalog.mutate();
       setDraft(null);
+      setAgentBindingDraft(null);
       return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -580,7 +753,7 @@ export function ChannelsSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [activeEntry, catalog, draft, mutateChannelsConfig, mutateConfig]);
+  }, [activeEntry, agentBindingDraft, bindings, catalog, draft, mutateChannelsSettingsConfig, mutateConfig]);
 
   const toggleChannel = useCallback(async (entry: ChannelCatalogEntry) => {
     const setup = channelSetupStatus(entry);
@@ -607,7 +780,8 @@ export function ChannelsSettingsPanel() {
         throw new Error(body.error?.message ?? res.statusText);
       }
       await catalog.mutate();
-      await mutateChannelsConfig();
+      await mutateChannelsSettingsConfig();
+      await mutateRuntimeStatuses();
       if (activeEntry?.id === entry.id) {
         await mutateConfig();
         setDraft(null);
@@ -617,10 +791,14 @@ export function ChannelsSettingsPanel() {
     } finally {
       setToggleBusy(null);
     }
-  }, [activeEntry?.id, catalog, draft, mutateChannelsConfig, mutateConfig, openChannel]);
+  }, [activeEntry?.id, catalog, draft, mutateChannelsSettingsConfig, mutateConfig, mutateRuntimeStatuses, openChannel]);
 
   const extensionModal = activeEntry?.ui?.modal;
   const showSchemaConfig = extensionModal?.placement !== 'replace-config';
+  const activeRuntime = activeEntry ? runtimeFor(activeEntry) : 'checking';
+  const showSetupCard = activeEntry
+    ? !channelSetupStatus(activeEntry).ready || showConnectionOptions
+    : false;
 
   if (!hasToken) {
     return (
@@ -644,10 +822,13 @@ export function ChannelsSettingsPanel() {
               key={entry.id}
               entry={entry}
               config={channelsConfig[channelConfigKey(entry)]?.config}
+              runtime={runtimeFor(entry)}
               busy={toggleBusy === entry.id}
+              restarting={restartingChannelId === entry.id}
               ch={ch}
               onOpen={() => openChannel(entry.id)}
               onToggle={() => void toggleChannel(entry)}
+              onRestart={() => void restartChannel(entry)}
             />
           ))}
         </div>
@@ -669,10 +850,13 @@ export function ChannelsSettingsPanel() {
           activeEntry ? (
             <ChannelsSettingsDialogFooter
               ch={ch}
-              dirty={Boolean(draft)}
+              dirty={Boolean(draft) || agentBindingDraft !== null}
               saving={saving}
               onCancel={closeChannel}
-              onDiscard={() => setDraft(null)}
+              onDiscard={() => {
+                setDraft(null);
+                setAgentBindingDraft(null);
+              }}
               onSave={saveConfig}
             />
           ) : null
@@ -687,13 +871,13 @@ export function ChannelsSettingsPanel() {
                   <div className="min-w-0">
                     <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <h2 className="truncate text-base font-semibold text-fg">{activeEntry.label}</h2>
-                      <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', statusClass(activeEntry))}>
-                        {statusLabel(activeEntry, ch)}
+                      <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-xs font-medium', runtimeStatusClass(activeRuntime))}>
+                        {runtimeStatusLabel(activeRuntime, ch)}
                       </span>
                     </div>
                     <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-muted">
                       <span className="min-w-0 truncate">
-                        {choosePrimaryChannelAction(activeEntry)?.[1].result === 'qr'
+                        {!channelSetupStatus(activeEntry).ready && choosePrimaryChannelAction(activeEntry)?.[1].result === 'qr'
                           ? ch.scanLoginHint.replace('{{channel}}', activeEntry.label)
                           : activeEntry.description}
                       </span>
@@ -712,7 +896,9 @@ export function ChannelsSettingsPanel() {
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2 pr-8">
-                  <span className="hidden text-xs text-fg-muted sm:inline">{ch.enabledLabel}</span>
+                  <span className="hidden text-xs text-fg-muted sm:inline">
+                    {channelSetupStatus(activeEntry).enabled ? ch.enabledLabel : ch.disabledLabel}
+                  </span>
                   <ChannelEnabledSwitch
                     checked={channelSetupStatus(activeEntry).enabled}
                     disabled={toggleBusy === activeEntry.id}
@@ -723,7 +909,34 @@ export function ChannelsSettingsPanel() {
               </div>
             </div>
 
+            <ChannelConnectionStatusPanel
+              runtime={activeRuntime}
+              restarting={restartingChannelId === activeEntry.id}
+              checking={isValidatingRuntime}
+              showConnectionOptions={showConnectionOptions}
+              canManageConnection={channelSetupStatus(activeEntry).ready && extensionModal?.placement !== 'replace-config'}
+              ch={ch}
+              onRestart={() => void restartChannel(activeEntry)}
+              onCheck={() => void refreshChannelState()}
+              onManageConnection={() => setShowConnectionOptions((show) => !show)}
+            />
+
             <ChannelSetupReadinessBanner entry={activeEntry} ch={ch} />
+
+            {showSetupCard && extensionModal?.placement !== 'replace-config' ? (
+              <ChannelSetupCard
+                key={activeEntry.id}
+                entry={activeEntry}
+                locale={language}
+                messages={ch}
+                compact
+                onChanged={async () => {
+                  await mutateConfig();
+                  await refreshChannelState();
+                  await mutateChannelsSettingsConfig();
+                }}
+              />
+            ) : null}
 
             {extensionModal?.entrypoint && extensionModal.placement === 'before-config' ? (
               <ExtensionIframeHost
@@ -734,22 +947,6 @@ export function ChannelsSettingsPanel() {
                 minHeight={extensionModal.minHeight}
                 maxHeight={extensionModal.maxHeight}
                 initialData={{ channelId: activeEntry.id, entry: activeEntry, config: effectiveConfig }}
-              />
-            ) : null}
-
-            {extensionModal?.placement !== 'replace-config' ? (
-              <ChannelSetupCard
-                key={activeEntry.id}
-                entry={activeEntry}
-                locale={language}
-                messages={ch}
-                autoStartPrimary
-                compact
-                onChanged={async () => {
-                  await mutateConfig();
-                  await catalog.mutate();
-                  await mutateChannelsConfig();
-                }}
               />
             ) : null}
 
@@ -780,6 +977,28 @@ export function ChannelsSettingsPanel() {
                 />
               </section>
             ) : null}
+
+            <details className="group rounded-xl bg-surface-panel/80 shadow-surface">
+              <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium text-fg marker:hidden [&::-webkit-details-marker]:hidden">
+                <Settings2 className="size-4 text-fg-muted" />
+                {ch.messageHandling}
+              </summary>
+              <div className="bg-surface-base/50 p-4">
+                <div className="mb-3">
+                  <h3 className="text-sm font-semibold text-fg">{ch.agentRouting}</h3>
+                  <p className="mt-1 text-sm text-fg-muted">{ch.messageHandlingHint}</p>
+                </div>
+                <PopoverSelect
+                  value={channelAgentId}
+                  options={agentOptions}
+                  placeholder={ch.agentRoutingSelect}
+                  emptyLabel={ch.agentRoutingDefault.replace('{{agent}}', defaultAgentName || ch.agentRoutingSelect)}
+                  ariaLabel={ch.agentRouting}
+                  disabled={saving || !agentsData}
+                  onChange={(agentId) => setAgentBindingDraft(agentId)}
+                />
+              </div>
+            </details>
 
             {showSchemaConfig && hasSchemaFields(advancedConfigSchema) ? (
               <details className="group rounded-xl bg-surface-panel/80 shadow-surface">
