@@ -1,6 +1,5 @@
 import Constants from 'expo-constants';
 import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import type { ImperativeRouter } from 'expo-router';
 import { Platform } from 'react-native';
 
@@ -10,6 +9,9 @@ import { useGatewayStore } from '../../stores/gateway-store';
 
 import { resolveNotificationRoute } from './notification-route';
 
+type NotificationsModule = typeof import('expo-notifications');
+type NotificationStatus = Awaited<ReturnType<NotificationsModule['getPermissionsAsync']>>['status'];
+type NotificationSubscription = { remove: () => void };
 type NotificationPermission = 'granted' | 'denied' | 'unknown';
 
 type DeviceRegistration = {
@@ -20,7 +22,24 @@ type DeviceRegistration = {
   appVersion?: string;
 };
 
-if (Platform.OS !== 'web') {
+function supportsRemoteNotifications(): boolean {
+  return Platform.OS !== 'web'
+    && !(Platform.OS === 'android' && Constants.appOwnership === 'expo');
+}
+
+let notificationHandlerConfigured = false;
+
+async function loadNotifications(): Promise<NotificationsModule | null> {
+  if (!supportsRemoteNotifications()) return null;
+  try {
+    return await import('expo-notifications');
+  } catch {
+    return null;
+  }
+}
+
+function ensureNotificationHandler(Notifications: NotificationsModule): void {
+  if (notificationHandlerConfigured) return;
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
@@ -29,6 +48,7 @@ if (Platform.OS !== 'web') {
       shouldSetBadge: false,
     }),
   });
+  notificationHandlerConfigured = true;
 }
 
 function installationId(): string {
@@ -39,9 +59,9 @@ function installationId(): string {
   return id;
 }
 
-function notificationPermission(status: Notifications.PermissionStatus): NotificationPermission {
-  if (status === Notifications.PermissionStatus.GRANTED) return 'granted';
-  if (status === Notifications.PermissionStatus.DENIED) return 'denied';
+function notificationPermission(status: NotificationStatus): NotificationPermission {
+  if (status === 'granted') return 'granted';
+  if (status === 'denied') return 'denied';
   return 'unknown';
 }
 
@@ -70,7 +90,9 @@ async function registerWithGateway(registration: DeviceRegistration): Promise<bo
 }
 
 async function buildRegistration(requestPermission: boolean): Promise<DeviceRegistration | null> {
-  if (Platform.OS === 'web' || !Device.isDevice) return null;
+  const Notifications = await loadNotifications();
+  if (!Notifications || !Device.isDevice) return null;
+  ensureNotificationHandler(Notifications);
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('xopc-default', {
       name: 'xopc',
@@ -78,7 +100,7 @@ async function buildRegistration(requestPermission: boolean): Promise<DeviceRegi
     });
   }
   let permissions = await Notifications.getPermissionsAsync();
-  if (requestPermission && permissions.status !== Notifications.PermissionStatus.GRANTED) {
+  if (requestPermission && notificationPermission(permissions.status) !== 'granted') {
     permissions = await Notifications.requestPermissionsAsync();
   }
   const permission = notificationPermission(permissions.status);
@@ -108,6 +130,7 @@ export async function syncMobileNotificationRegistration(): Promise<boolean> {
 }
 
 export async function disableMobileNotifications(): Promise<void> {
+  if (!supportsRemoteNotifications()) return;
   try {
     await apiFetch(`/api/mobile/devices/${encodeURIComponent(installationId())}`, { method: 'DELETE' });
   } catch {
@@ -116,25 +139,39 @@ export async function disableMobileNotifications(): Promise<void> {
 }
 
 export function subscribeToMobileNotifications(router: ImperativeRouter): () => void {
-  if (Platform.OS === 'web') return () => {};
-  void Notifications.getLastNotificationResponseAsync().then((response) => {
+  if (!supportsRemoteNotifications()) return () => {};
+
+  let active = true;
+  let responseSubscription: NotificationSubscription | undefined;
+  let tokenSubscription: NotificationSubscription | undefined;
+
+  void (async () => {
+    const Notifications = await loadNotifications();
+    if (!active || !Notifications) return;
+    ensureNotificationHandler(Notifications);
+
+    const response = await Notifications.getLastNotificationResponseAsync();
+    if (!active) return;
     if (response) navigateNotification(router, response.notification.request.content.data);
-  });
-  const responseSubscription = Notifications.addNotificationResponseReceivedListener((response) => {
-    navigateNotification(router, response.notification.request.content.data);
-  });
-  const tokenSubscription = Notifications.addPushTokenListener((token) => {
-    if (!useGatewayStore.getState().activeGatewayId) return;
-    void registerWithGateway({
-      id: installationId(),
-      pushToken: token.data,
-      platform: Platform.OS === 'android' ? 'android' : 'ios',
-      permissions: 'granted',
-      appVersion: Constants.expoConfig?.version,
+
+    responseSubscription = Notifications.addNotificationResponseReceivedListener((nextResponse) => {
+      navigateNotification(router, nextResponse.notification.request.content.data);
     });
-  });
+    tokenSubscription = Notifications.addPushTokenListener((token) => {
+      if (!useGatewayStore.getState().activeGatewayId) return;
+      void registerWithGateway({
+        id: installationId(),
+        pushToken: token.data,
+        platform: Platform.OS === 'android' ? 'android' : 'ios',
+        permissions: 'granted',
+        appVersion: Constants.expoConfig?.version,
+      });
+    });
+  })();
+
   return () => {
-    responseSubscription.remove();
-    tokenSubscription.remove();
+    active = false;
+    responseSubscription?.remove();
+    tokenSubscription?.remove();
   };
 }

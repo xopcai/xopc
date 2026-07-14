@@ -261,8 +261,10 @@ export function InboxScreen() {
     },
   ], [archiveMutation, deleteMutation, pm.archive, pm.delete, selectedCount, selectedIds]);
 
-  const renderItem = useCallback(({ item }: { item: NoteIndexEntry }) => {
+  const renderItem = useCallback(({ item, index }: { item: NoteIndexEntry; index: number }) => {
     const selected = selectedIds.has(item.id);
+    const isFirst = index === 0;
+    const isLast = index === items.length - 1;
     const row = (
       <Pressable
         style={({ pressed }) => [
@@ -274,6 +276,12 @@ export function InboxScreen() {
                 ? colors.surface.pressed
                 : colors.surface.panel,
             borderColor: selected ? colors.accent.primary : colors.border.subtle,
+            borderTopWidth: isFirst || selected ? StyleSheet.hairlineWidth : 0,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderTopLeftRadius: isFirst || selected ? radii.lg : 0,
+            borderTopRightRadius: isFirst || selected ? radii.lg : 0,
+            borderBottomLeftRadius: isLast || selected ? radii.lg : 0,
+            borderBottomRightRadius: isLast || selected ? radii.lg : 0,
           },
           selected && styles.itemCardSelected,
         ]}
@@ -324,6 +332,7 @@ export function InboxScreen() {
     handleItemLongPress,
     handleItemPress,
     handleSwipeAction,
+    items.length,
     pm.archive,
     pm.delete,
     selectedIds,
@@ -446,18 +455,18 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
   },
-  listContent: { paddingTop: spacing.xs, paddingBottom: spacing.lg, gap: 0 },
+  listContent: { paddingTop: spacing.sm, paddingBottom: spacing.lg, gap: 0 },
   itemCard: {
+    marginHorizontal: spacing.content,
     height: INBOX_ITEM_HEIGHT,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.content,
+    paddingHorizontal: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    overflow: 'hidden',
   },
   itemCardSelected: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderRadius: radii.md,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   itemIcon: {
     width: 36,

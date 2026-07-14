@@ -35,6 +35,8 @@ export type NoteCardProps = {
   onSwipeAction?: (note: NoteIndexEntry, action: SwipeAction) => void;
   selectionMode?: boolean;
   selected?: boolean;
+  isFirst?: boolean;
+  isLast?: boolean;
 };
 
 export function NoteCard({
@@ -44,6 +46,8 @@ export function NoteCard({
   onSwipeAction,
   selectionMode = false,
   selected = false,
+  isFirst = false,
+  isLast = false,
 }: NoteCardProps) {
   const { colors } = useTheme();
   const m = useMessages();
@@ -63,7 +67,6 @@ export function NoteCard({
   const statusText = statusLabel(note.status, pm);
   const taskStateText = note.taskDone ? pm.done : pm.kindTodo;
   const visibleTags = note.tags?.slice(0, 2) ?? [];
-  const hiddenTagCount = Math.max(0, (note.tags?.length ?? 0) - visibleTags.length);
   const updatedAt = note.updatedAt ?? note.createdAt;
   const time = new Date(updatedAt).toLocaleString(undefined, {
     month: 'short',
@@ -71,6 +74,13 @@ export function NoteCard({
     hour: '2-digit',
     minute: '2-digit',
   });
+  const metaParts = [
+    kindLabel,
+    statusText,
+    note.kind === 'task' && note.taskDone != null ? taskStateText : null,
+    ...visibleTags,
+    time,
+  ].filter((part): part is string => Boolean(part));
 
   const handlePress = useCallback(() => onPress(note), [note, onPress]);
   const handleLongPress = useCallback(() => onLongPress?.(note), [note, onLongPress]);
@@ -97,6 +107,12 @@ export function NoteCard({
               ? colors.surface.pressed
               : colors.surface.panel,
           borderColor: selected ? colors.accent.primary : colors.border.subtle,
+          borderTopWidth: isFirst || selected ? StyleSheet.hairlineWidth : 0,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderTopLeftRadius: isFirst || selected ? radii.lg : 0,
+          borderTopRightRadius: isFirst || selected ? radii.lg : 0,
+          borderBottomLeftRadius: isLast || selected ? radii.lg : 0,
+          borderBottomRightRadius: isLast || selected ? radii.lg : 0,
         },
         selected && styles.selectedCard,
       ]}
@@ -110,12 +126,15 @@ export function NoteCard({
           <ListSelectionCheckbox selected={selected} size={28} />
         ) : null}
         <View style={styles.copy}>
-          <Text
-            style={[styles.title, { color: colors.text.primary }]}
-            numberOfLines={1}
-          >
-            {displayTitle}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text
+              style={[styles.title, { color: colors.text.primary }]}
+              numberOfLines={1}
+            >
+              {displayTitle}
+            </Text>
+            {note.pinned ? <Icon source="pin" size={13} color={colors.accent.primary} /> : null}
+          </View>
           {!!preview.subtitle && (
             <Text
               style={[styles.subtitle, { color: colors.text.secondary }]}
@@ -124,89 +143,10 @@ export function NoteCard({
               {preview.subtitle}
             </Text>
           )}
+          <Text style={[styles.metaText, { color: colors.text.tertiary }]} numberOfLines={1}>
+            {metaParts.join(' · ')}
+          </Text>
         </View>
-      </View>
-
-      <View style={styles.metaRow}>
-        {!!kindLabel && (
-          <View
-            style={[
-              styles.chip,
-              {
-                backgroundColor: colors.surface.input,
-                borderColor: colors.border.subtle,
-              },
-            ]}
-          >
-            <Text style={[styles.chipText, { color: colors.text.secondary }]}>{kindLabel}</Text>
-          </View>
-        )}
-        {!!statusText && (
-          <View
-            style={[
-              styles.chip,
-              {
-                backgroundColor: colors.surface.input,
-                borderColor: colors.border.subtle,
-              },
-            ]}
-          >
-            <View style={[styles.statusDot, { backgroundColor: colors.semantic.warning }]} />
-            <Text style={[styles.chipText, { color: colors.text.secondary }]}>{statusText}</Text>
-          </View>
-        )}
-        {note.kind === 'task' && note.taskDone != null && (
-          <View
-            style={[
-              styles.chip,
-              {
-                backgroundColor: colors.surface.input,
-                borderColor: colors.border.subtle,
-              },
-            ]}
-          >
-            <Icon
-              source={note.taskDone ? 'check-circle-outline' : 'circle-outline'}
-              size={12}
-              color={note.taskDone ? colors.semantic.success : colors.text.tertiary}
-            />
-            <Text style={[styles.chipText, { color: colors.text.secondary }]}>
-              {taskStateText}
-            </Text>
-          </View>
-        )}
-        {note.pinned && (
-          <View
-            style={[
-              styles.chip,
-              styles.pinChip,
-              {
-                backgroundColor: colors.accent.soft,
-                borderColor: colors.accent.selectionBg,
-              },
-            ]}
-          >
-            <Icon source="pin" size={11} color={colors.accent.primary} />
-          </View>
-        )}
-        {visibleTags.map((tag) => (
-          <View
-            key={tag}
-            style={[
-              styles.chip,
-              {
-                backgroundColor: colors.surface.input,
-                borderColor: colors.border.subtle,
-              },
-            ]}
-          >
-            <Text style={[styles.chipText, { color: colors.text.secondary }]}>{tag}</Text>
-          </View>
-        ))}
-        {hiddenTagCount > 0 ? (
-          <Text style={[styles.time, { color: colors.text.tertiary }]}>+{hiddenTagCount}</Text>
-        ) : null}
-        <Text style={[styles.time, { color: colors.text.tertiary }]}>{time}</Text>
       </View>
     </Pressable>
   );
@@ -224,16 +164,15 @@ export function NoteCard({
 
 const styles = StyleSheet.create({
   card: {
-    width: '100%',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.content,
+    marginHorizontal: spacing.content,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    minHeight: 78,
-    gap: 8,
+    minHeight: 76,
+    overflow: 'hidden',
   },
   selectedCard: {
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderRadius: radii.md,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   topRow: {
     flexDirection: 'row',
@@ -242,10 +181,16 @@ const styles = StyleSheet.create({
   },
   copy: {
     flex: 1,
-    gap: 2,
+    gap: 3,
     minWidth: 0,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   title: {
+    flex: 1,
     fontSize: 16,
     lineHeight: 21,
     fontWeight: '600',
@@ -254,34 +199,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 4,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: radii.full,
-    borderWidth: 0,
-  },
-  pinChip: {
-    paddingHorizontal: 7,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  chipText: {
-    ...typography.micro,
-  },
-  time: {
-    marginLeft: 'auto',
-    ...typography.micro,
+  metaText: {
+    ...typography.caption,
   },
 });
