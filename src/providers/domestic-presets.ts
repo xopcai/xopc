@@ -202,7 +202,6 @@ export const DOMESTIC_PROVIDER_PRESETS = [
     models: [
       { id: 'kimi-k2.7-code', name: 'Kimi K2.7 Code', contextWindow: 262144, maxTokens: 32768, reasoning: true, input: ['text', 'image'] },
       { id: 'kimi-k2.6', name: 'Kimi K2.6', contextWindow: 128000, input: ['text'] },
-      { id: 'kimi-k2.5', name: 'Kimi K2.5', contextWindow: 128000, input: ['text'] },
     ],
     aliases: ['kimi', 'moonshot', 'moonshot cn'],
     quirks: ['Provider-specific thinking and tool-call stream fields may need compatibility handling.'],
@@ -222,7 +221,6 @@ export const DOMESTIC_PROVIDER_PRESETS = [
     models: [
       { id: 'kimi-k2.7-code', name: 'Kimi K2.7 Code', contextWindow: 262144, maxTokens: 32768, reasoning: true, input: ['text', 'image'] },
       { id: 'kimi-k2.6', name: 'Kimi K2.6', contextWindow: 128000, input: ['text'] },
-      { id: 'kimi-k2.5', name: 'Kimi K2.5', contextWindow: 128000, input: ['text'] },
     ],
     aliases: ['kimi intl', 'moonshot intl', 'moonshot ai'],
     quirks: ['Provider-specific thinking and tool-call stream fields may need compatibility handling.'],

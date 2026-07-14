@@ -62,7 +62,7 @@ function resolveRefineModel(config: Config | undefined): ReturnType<typeof resol
       return resolveModel(envRef);
     } catch { /* fall through */ }
   }
-  for (const candidate of ['openai/gpt-4o-mini', 'google/gemini-2.0-flash']) {
+  for (const candidate of ['openai/gpt-5.6-luna', 'google/gemini-3.5-flash']) {
     try {
       return resolveModel(candidate);
     } catch { /* next */ }
