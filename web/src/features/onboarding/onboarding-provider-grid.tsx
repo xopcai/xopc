@@ -2,7 +2,7 @@ import useSWR from 'swr';
 
 import { cn } from '@/lib/cn';
 
-import { ProviderLogo } from '@/features/onboarding/provider-icons';
+import { hasProviderLogo, ProviderLogo } from '@/features/onboarding/provider-icons';
 import { fetchProviderMetaList, type ProviderMeta } from '@/features/settings/providers-api';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -10,9 +10,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 const FALLBACK_FEATURED_PROVIDERS: ProviderMeta[] = [
   { id: 'openai', name: 'OpenAI', category: 'common', supportsOAuth: false, supportsApiKey: true, configured: false, onboardingFeatured: true },
   { id: 'anthropic', name: 'Anthropic', category: 'common', supportsOAuth: true, supportsApiKey: true, configured: false, onboardingFeatured: true },
-  { id: 'xai', name: 'xAI', category: 'specialty', supportsOAuth: false, supportsApiKey: true, configured: false, onboardingFeatured: true },
   { id: 'google', name: 'Google AI', category: 'common', supportsOAuth: false, supportsApiKey: true, configured: false, onboardingFeatured: true },
-  { id: 'openrouter', name: 'OpenRouter', category: 'specialty', supportsOAuth: false, supportsApiKey: true, configured: false, onboardingFeatured: true },
   { id: 'deepseek', name: 'DeepSeek', category: 'common', supportsOAuth: false, supportsApiKey: true, configured: false, onboardingFeatured: true },
 ];
 
@@ -35,7 +33,8 @@ export function OnboardingProviderGrid({
     revalidateOnFocus: false,
   });
 
-  const providers = (data?.filter((p) => p.onboardingFeatured) ?? FALLBACK_FEATURED_PROVIDERS)
+  const featuredProviders = data?.filter((p) => p.onboardingFeatured && hasProviderLogo(p.id));
+  const providers = (featuredProviders?.length ? featuredProviders : FALLBACK_FEATURED_PROVIDERS)
     .slice()
     .sort((a, b) => (FEATURED_ORDER.get(a.id) ?? 999) - (FEATURED_ORDER.get(b.id) ?? 999));
 
