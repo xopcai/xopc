@@ -47,4 +47,17 @@ describe('workspace sync status', () => {
     expect(onStatusChange).toHaveBeenCalledOnce();
     unsubscribe();
   });
+
+  it('returns a cached snapshot until the sync status changes', () => {
+    const initialStatus = getWorkspaceSyncStatus();
+
+    expect(getWorkspaceSyncStatus()).toBe(initialStatus);
+
+    queueWorkspaceCapture('Cache this snapshot');
+
+    const queuedStatus = getWorkspaceSyncStatus();
+    expect(queuedStatus).toEqual({ pendingCount: 1, failedCount: 0 });
+    expect(queuedStatus).not.toBe(initialStatus);
+    expect(getWorkspaceSyncStatus()).toBe(queuedStatus);
+  });
 });

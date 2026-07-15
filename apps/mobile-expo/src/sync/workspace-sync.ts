@@ -54,8 +54,10 @@ export type WorkspaceSyncStatus = {
 };
 
 const statusListeners = new Set<() => void>();
+let workspaceSyncStatus: WorkspaceSyncStatus | undefined;
 
 function notifyWorkspaceSyncStatus(): void {
+  getWorkspaceSyncStatus();
   statusListeners.forEach((listener) => listener());
 }
 
@@ -65,10 +67,16 @@ export function subscribeWorkspaceSyncStatus(listener: () => void): () => void {
 }
 
 export function getWorkspaceSyncStatus(): WorkspaceSyncStatus {
-  return {
-    pendingCount: workspaceSyncQueue.pendingCount(),
-    failedCount: workspaceSyncQueue.deadLetterCount(),
-  };
+  const pendingCount = workspaceSyncQueue.pendingCount();
+  const failedCount = workspaceSyncQueue.deadLetterCount();
+
+  if (!workspaceSyncStatus
+    || pendingCount !== workspaceSyncStatus.pendingCount
+    || failedCount !== workspaceSyncStatus.failedCount) {
+    workspaceSyncStatus = { pendingCount, failedCount };
+  }
+
+  return workspaceSyncStatus;
 }
 
 export function queueWorkspaceOperation(operation: WorkspaceSyncOperation): string {
