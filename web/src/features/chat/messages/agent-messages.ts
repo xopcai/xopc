@@ -376,19 +376,11 @@ function appendReviewFromMetadata(content: MessageContent[], metadata: unknown):
 }
 
 function mergeAssistantContent(m: WireMessage): MessageContent[] {
-  const blocks = normalizeContentBlocks(m.content);
-  for (const rawBlock of normalizeContentBlocks(m.rawContent)) {
-    if (rawBlock.type === 'review' && blocks.some((b) => b.type === 'review' && b.target === rawBlock.target)) {
-      continue;
-    }
-    if (rawBlock.type === 'tool_use' && blocks.some((b) => b.type === 'tool_use' && b.id === rawBlock.id)) {
-      continue;
-    }
-    if (rawBlock.type === 'text' && blocks.some((b) => b.type === 'text' && b.text === rawBlock.text)) {
-      continue;
-    }
-    blocks.push(rawBlock);
-  }
+  // Session history carries a flattened `content` string for text-only clients.
+  // Prefer the structured copy when present so a reload keeps the original
+  // thinking/tool ordering instead of replacing it with plain assistant text.
+  const rawBlocks = normalizeContentBlocks(m.rawContent);
+  const blocks = rawBlocks.length > 0 ? rawBlocks : normalizeContentBlocks(m.content);
 
   const tc = m.tool_calls;
   if (Array.isArray(tc)) {
