@@ -26,10 +26,18 @@ export function OnboardingDialog() {
     Boolean(token) &&
     !isSettingsRoute &&
     modelSetup.ready &&
-    modelSetup.needsSetup;
+    modelSetup.needsSetup &&
+    !modelSetup.guideDismissed;
 
   return (
-    <Dialog.Root open={open}>
+    <Dialog.Root
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          modelSetup.dismissPermanently();
+        }
+      }}
+    >
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[55] bg-scrim backdrop-blur-[2px]" />
         <Dialog.Content
@@ -38,7 +46,6 @@ export function OnboardingDialog() {
             'rounded-xl p-2 outline-none sm:p-3',
           )}
           onPointerDownOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <Dialog.Title className="sr-only">{m.onboarding.title}</Dialog.Title>
@@ -49,7 +56,7 @@ export function OnboardingDialog() {
               navigate('/chat');
             }}
             onDismiss={modelSetup.dismissPermanently}
-            canDismiss={false}
+            canDismiss
           />
         </Dialog.Content>
       </Dialog.Portal>
