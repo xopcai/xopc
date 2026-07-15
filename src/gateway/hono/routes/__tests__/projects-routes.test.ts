@@ -561,6 +561,31 @@ describe('project association routes', () => {
     })]);
   });
 
+  it('lists work items across projects', async () => {
+    const projects = new ProjectService();
+    const first = projects.create({ name: 'First project' });
+    const second = projects.create({ name: 'Second project' });
+    const app = registerProjectRouteApp({ projects });
+
+    for (const [projectId, title] of [[first.id, 'First item'], [second.id, 'Second item']] as const) {
+      const response = await app.request(`/api/projects/${projectId}/work-items`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ title }),
+      });
+      expect(response.status).toBe(201);
+    }
+
+    const response = await app.request('/api/work-items?sortBy=createdAt&sortOrder=asc');
+    const body = await response.json() as { ok: boolean; total: number; items: Array<{ projectId: string; title: string }> };
+    expect(response.status).toBe(200);
+    expect(body).toMatchObject({ ok: true, total: 2 });
+    expect(body.items).toEqual([
+      expect.objectContaining({ projectId: first.id, title: 'First item' }),
+      expect.objectContaining({ projectId: second.id, title: 'Second item' }),
+    ]);
+  });
+
   it('creates, reads, and removes work item attachments', async () => {
     const projects = new ProjectService();
     const project = projects.create({ name: 'Attachment Project' });

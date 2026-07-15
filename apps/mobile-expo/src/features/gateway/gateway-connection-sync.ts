@@ -27,6 +27,9 @@ function runGatewaySync(options: GatewaySyncOptions): void {
   if (invalidateQueries) {
     invalidateSessionLists(queryClient);
     void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.home });
+    void queryClient.invalidateQueries({ queryKey: ['work-items'] });
+    void queryClient.invalidateQueries({ queryKey: ['projects'] });
   }
   if (reconnectSse) {
     getSharedGatewaySseConnection()?.reconnect();

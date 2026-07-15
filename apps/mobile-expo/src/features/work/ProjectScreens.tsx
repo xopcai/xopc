@@ -1,0 +1,99 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { FlatList, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { ActivityIndicator, Text } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { FloatingHeader } from '../../components/FloatingHeader';
+import { useMessages } from '../../i18n/messages';
+import { dismissOrHome } from '../../lib/navigation';
+import { queryKeys } from '../../query/keys';
+import { updateNote } from '../../query/notes';
+import { createWorkItem, fetchProjectOverview, fetchProjectWorkItems, fetchProjects } from '../../query/work-items';
+import { useGatewayConfigured } from '../../query/sessions';
+import { radii, spacing, typography, useTheme } from '../../theme';
+
+function firstParam(value: string | string[] | undefined): string { return Array.isArray(value) ? value[0] ?? '' : value ?? ''; }
+
+export function ProjectsScreen() {
+  const router = useRouter();
+  const configured = useGatewayConfigured();
+  const { colors } = useTheme();
+  const { workPage: labels } = useMessages();
+  const query = useQuery({ queryKey: queryKeys.projects, queryFn: fetchProjects, enabled: configured });
+  return (
+    <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
+      <FloatingHeader title={labels.projectsTitle} onBack={() => dismissOrHome(router)} />
+      {query.isLoading ? <View style={styles.loading}><ActivityIndicator /></View> : <FlatList data={query.data ?? []} keyExtractor={(item) => item.id} contentContainerStyle={styles.list} ListEmptyComponent={<Text style={{ color: colors.text.tertiary }}>{labels.projectsEmpty}</Text>} renderItem={({ item }) => <Pressable onPress={() => router.push(`/projects/${item.id}`)} style={({ pressed }) => [styles.card, { backgroundColor: pressed ? colors.surface.pressed : colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{item.name}</Text>{item.description ? <Text numberOfLines={2} style={{ color: colors.text.secondary }}>{item.description}</Text> : null}</Pressable>} />}
+    </View>
+  );
+}
+
+export function ProjectDetailScreen() {
+  const router = useRouter();
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const projectId = firstParam(id);
+  const configured = useGatewayConfigured();
+  const { colors } = useTheme();
+  const { workPage: labels } = useMessages();
+  const overview = useQuery({ queryKey: queryKeys.projectOverview(projectId), queryFn: () => fetchProjectOverview(projectId), enabled: configured && !!projectId });
+  const work = useQuery({ queryKey: queryKeys.projectWorkItems(projectId), queryFn: () => fetchProjectWorkItems(projectId, { limit: 10 }), enabled: configured && !!projectId });
+  if (overview.isLoading || !overview.data) return <View style={[styles.screen, styles.loading, { backgroundColor: colors.surface.base }]}><ActivityIndicator /></View>;
+  return (
+    <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
+      <FloatingHeader title={overview.data.project.name} onBack={() => dismissOrHome(router)} rightActions={[{ icon: 'plus', onPress: () => router.push(`/work/create?projectId=${projectId}`), accessibilityLabel: labels.create }]} />
+      <ScrollView contentContainerStyle={styles.list}>
+        {overview.data.digest ? <View style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{labels.projectPulse}</Text><Text style={{ color: colors.text.secondary }}>{overview.data.digest.summary}</Text>{overview.data.digest.nextAction ? <Text style={{ color: colors.accent.primary }}>{overview.data.digest.nextAction}</Text> : null}</View> : null}
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.projectWork}</Text>
+        {(work.data?.items ?? []).map((item) => <Pressable key={item.id} onPress={() => router.push(`/work/${item.id}`)} style={[styles.card, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}><Text style={[styles.cardTitle, { color: colors.text.primary }]}>{item.title}</Text><Text style={{ color: colors.accent.primary }}>{labels.status[item.status]}</Text>{item.nextAction ? <Text style={{ color: colors.text.secondary }}>{item.nextAction}</Text> : null}</Pressable>)}
+      </ScrollView>
+    </View>
+  );
+}
+
+export function CreateWorkItemScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ projectId?: string; title?: string; noteId?: string }>();
+  const configured = useGatewayConfigured();
+  const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
+  const { colors } = useTheme();
+  const { workPage: labels } = useMessages();
+  const projects = useQuery({ queryKey: queryKeys.projects, queryFn: fetchProjects, enabled: configured });
+  const [title, setTitle] = useState(firstParam(params.title));
+  const [projectId, setProjectId] = useState(firstParam(params.projectId));
+  const selectedProject = useMemo(() => projects.data?.find((project) => project.id === projectId), [projectId, projects.data]);
+  const create = useMutation({
+    mutationFn: () => createWorkItem(projectId, { title: title.trim() }),
+    onSuccess: async (item) => {
+      const noteId = firstParam(params.noteId);
+      if (noteId) await updateNote(noteId, { status: 'processed' });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workItems() });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projectWorkItems(item.projectId) });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.home });
+      if (noteId) void queryClient.invalidateQueries({ queryKey: queryKeys.notesAll });
+      router.replace(`/work/${item.id}`);
+    },
+  });
+  return (
+    <View style={[styles.screen, { backgroundColor: colors.surface.base }]}>
+      <FloatingHeader title={labels.create} onBack={() => dismissOrHome(router)} />
+      <ScrollView contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xl }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.titleLabel}</Text>
+        <TextInput value={title} onChangeText={setTitle} placeholder={labels.titlePlaceholder} placeholderTextColor={colors.text.tertiary} style={[styles.input, { color: colors.text.primary, borderColor: colors.border.default }]} />
+        <Text style={[styles.sectionTitle, { color: colors.text.primary }]}>{labels.projectLabel}</Text>
+        {(projects.data ?? []).map((project) => <Pressable key={project.id} onPress={() => setProjectId(project.id)} style={[styles.projectChoice, { borderColor: project.id === projectId ? colors.accent.primary : colors.border.default, backgroundColor: colors.surface.panel }]}><Text style={{ color: colors.text.primary }}>{project.name}</Text>{project.id === projectId ? <Text style={{ color: colors.accent.primary }}>{labels.selected}</Text> : null}</Pressable>)}
+        <Pressable disabled={!title.trim() || !selectedProject || create.isPending} onPress={() => create.mutate()} style={({ pressed }) => [styles.createButton, { backgroundColor: colors.accent.primary, opacity: pressed || create.isPending || !title.trim() || !selectedProject ? 0.55 : 1 }]}><Text style={styles.createText}>{labels.create}</Text></Pressable>
+        {create.error ? <Text style={{ color: colors.text.secondary }}>{create.error.message}</Text> : null}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1 }, loading: { alignItems: 'center', justifyContent: 'center' }, list: { padding: spacing.md, gap: spacing.sm },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.lg, padding: spacing.md, gap: spacing.xs }, cardTitle: { ...typography.body, fontWeight: '700' }, sectionTitle: { ...typography.body, fontWeight: '700', marginTop: spacing.sm },
+  input: { ...typography.body, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.md, padding: spacing.md }, projectChoice: { minHeight: 48, borderWidth: StyleSheet.hairlineWidth, borderRadius: radii.md, padding: spacing.md, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  createButton: { borderRadius: radii.md, padding: spacing.md, alignItems: 'center', marginTop: spacing.md }, createText: { color: '#fff', fontWeight: '700' },
+});

@@ -276,6 +276,23 @@ export class WorkItemStore {
     };
   }
 
+  listAll(query: WorkItemListQuery = {}): WorkItemListResult {
+    const rows = getSqliteDatabase()
+      .prepare(`SELECT * FROM work_items`)
+      .all() as WorkItemRow[];
+    const result = applyQuery(rows.map(rowToItem), query);
+    const linksByItem = this.listLinksForItems(result.items.map((item) => item.id));
+    const attachmentsByItem = this.listAttachmentsForItems(result.items.map((item) => item.id));
+    return {
+      ...result,
+      items: result.items.map((item) => ({
+        ...item,
+        links: linksByItem.get(item.id) ?? [],
+        attachments: attachmentsByItem.get(item.id) ?? [],
+      })),
+    };
+  }
+
   update(id: string, patch: UpdateWorkItemInput): WorkItem | null {
     const current = this.get(id);
     if (!current) return null;
