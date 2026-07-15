@@ -493,6 +493,11 @@ export const en = {
         tagline: 'Understand the entry points, then move forward.',
         categories: [],
       },
+      codingWorkspace: {
+        headline: 'Start from this code workspace',
+        tagline: 'Understand the structure and entry points, then make the next change.',
+        categories: [],
+      },
       generalProject: {
         headline: 'Start from this project',
         tagline: 'Clarify state, then plan the next step.',
