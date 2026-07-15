@@ -1,6 +1,6 @@
 import { useCallback, useState, type MutableRefObject } from 'react';
 import { useRouter } from 'expo-router';
-import { Keyboard, Platform, Share } from 'react-native';
+import { Keyboard, Share } from 'react-native';
 import type { QueryClient } from '@tanstack/react-query';
 
 import { t } from '../../i18n/messages';
@@ -106,11 +106,6 @@ export function useNotePageActions({
       await flushEditorToDraft();
       await flushSave();
       const message = markdownRef.current.trim() || titleRef.current.trim() || messages.untitledNote;
-      if (Platform.OS === 'web') {
-        await setAppClipboardStringAsync(message);
-        setSnackMsg(messages.shareNotesCopied);
-        return;
-      }
       await Share.share({
         message,
         title: titleRef.current.trim() || messages.shareNotesTitle,

@@ -29,6 +29,10 @@ export type WelcomeSuggestionContext =
   | {
       kind: 'workingDirectory';
       path: string;
+    }
+  | {
+      kind: 'codingWorkspace';
+      path: string;
     };
 
 export type WelcomeSuggestionContextStatus = 'loading' | 'ready' | 'degraded';
@@ -130,6 +134,7 @@ export type WelcomeSpotlightCopy = {
   agentCards: Partial<Record<WelcomeSuggestionAgentKind, WelcomeSuggestionCard>>;
   empty: SpotlightTemplate;
   codingProject: SpotlightTemplate;
+  codingWorkspace: SpotlightTemplate;
   generalProject: SpotlightTemplate;
   note: SpotlightTemplate;
   workItem: SpotlightTemplate;
@@ -213,6 +218,7 @@ function contextTitle(context: WelcomeSuggestionContext): string {
     case 'workItem':
       return context.title;
     case 'workingDirectory':
+    case 'codingWorkspace':
       return context.path;
     case 'empty':
     default:
@@ -244,6 +250,7 @@ function contextReason(
     case 'note':
       return fillTemplate(copy.reasons.note, { noteTitle: context.title }) ?? copy.reasons.general;
     case 'workingDirectory':
+    case 'codingWorkspace':
       return fillTemplate(copy.reasons.directory, { path: context.path }) ?? copy.reasons.general;
     case 'empty':
     default:
@@ -303,6 +310,8 @@ function candidateContextBoost(context: WelcomeSuggestionContext, categoryId: st
       return 0;
     case 'codingProject':
       return categoryId === 'understand-codebase' ? 45 : categoryId === 'implement-feature' ? 30 : 20;
+    case 'codingWorkspace':
+      return categoryId === 'directory-understand' ? 45 : categoryId === 'directory-entry' ? 30 : 20;
     case 'generalProject':
       return categoryId === 'project-next-step' ? 40 : 25;
     case 'note':
@@ -388,6 +397,10 @@ function selectExplorationCard(
   return preferred && preferred.score > 0 ? preferred.card : (cards[baseIndex] ?? cards[0]);
 }
 
+function isCodingWorkspaceContext(context: WelcomeSuggestionContext): boolean {
+  return context.kind === 'codingProject' || context.kind === 'codingWorkspace';
+}
+
 export function buildWelcomeSpotlight(
   context: WelcomeSuggestionContext,
   copy: WelcomeSpotlightCopy,
@@ -401,6 +414,10 @@ export function buildWelcomeSpotlight(
       template = copy.codingProject;
       vars.projectName = context.projectName;
       vars.workspaceRoot = context.workspaceRoot;
+      break;
+    case 'codingWorkspace':
+      template = copy.codingWorkspace;
+      vars.path = context.path;
       break;
     case 'generalProject':
       template = copy.generalProject;
@@ -433,7 +450,11 @@ export function buildWelcomeSpotlight(
   const contextName = contextTitle(context) || copy.contextFallbackTitle;
   let agentCategoryId: string | null = null;
   const categories = [...base.categories];
-  if (!(context.kind === 'codingProject' && agentKind === 'coding') && agentKind !== 'general') {
+  if (
+    agentKind !== 'general' &&
+    agentKind !== 'coding' &&
+    !isCodingWorkspaceContext(context)
+  ) {
     const agentTemplate = copy.agentCards[agentKind];
     if (agentTemplate) {
       const [agentCard] = fillSpotlightTemplate(

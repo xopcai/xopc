@@ -32,7 +32,7 @@
 | 路由 | Expo Router |
 | 服务端状态 | TanStack React Query |
 | 客户端状态 | Zustand |
-| 存储 | react-native-mmkv，Web/降级环境使用 fallback |
+| 存储 | react-native-mmkv，Expo Go 环境使用内存 fallback |
 | UI | react-native-paper 加项目设计 token |
 | 手势与动画 | react-native-gesture-handler, react-native-reanimated |
 | 键盘 | react-native-keyboard-controller |
@@ -83,7 +83,6 @@ pnpm run dev:mobile
 | `pnpm run android:mobile` | 构建并运行 Android |
 | `pnpm run ios:mobile` | 构建并运行 iOS |
 | `pnpm -C apps/mobile-expo run ios:no-proxy` | 清空代理环境变量后构建并运行 iOS |
-| `pnpm -C apps/mobile-expo run web` | 启动 Expo web |
 | `pnpm run mobile:lint` | 对 `app` 和 `src` 运行 ESLint |
 | `pnpm run mobile:typecheck` | 类型检查 App 与 SSE 工作区包 |
 | `pnpm run mobile:test` | 运行 Vitest 测试 |

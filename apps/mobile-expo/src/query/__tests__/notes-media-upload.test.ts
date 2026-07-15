@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiFetch } from '../../api/client';
 import { captureNote, uploadNoteMedia } from '../notes';
 
-const platform = vi.hoisted(() => ({ OS: 'web' }));
+const platform = vi.hoisted(() => ({ OS: 'ios' }));
 
 vi.mock('react-native', () => ({
   Platform: platform,
@@ -20,7 +20,7 @@ const mockedApiFetch = vi.mocked(apiFetch);
 
 describe('uploadNoteMedia', () => {
   beforeEach(() => {
-    platform.OS = 'web';
+    platform.OS = 'ios';
     mockedApiFetch.mockReset();
     mockedApiFetch.mockResolvedValue({
       ok: true,
@@ -35,25 +35,6 @@ describe('uploadNoteMedia', () => {
         },
       }),
     } as Response);
-  });
-
-  it('uploads the ImagePicker web File instead of treating localUri as missing content', async () => {
-    const file = new File(['data'], 'photo.png', { type: 'image/png' });
-
-    await expect(uploadNoteMedia('note-1', {
-      localUri: 'blob:http://localhost/photo',
-      file,
-      name: 'photo.png',
-      mimeType: 'image/png',
-    })).resolves.toEqual(expect.objectContaining({ id: 'att-1' }));
-
-    const [path, init] = mockedApiFetch.mock.calls[0];
-    expect(path).toBe('/api/notes/note-1/media');
-    expect(init?.body).toBeInstanceOf(FormData);
-    const appended = (init?.body as FormData).get('file') as File;
-    expect(appended.name).toBe('photo.png');
-    expect(appended.type).toBe('image/png');
-    expect(appended.size).toBe(4);
   });
 
   it('falls back to base64 content when native localUri upload fails', async () => {

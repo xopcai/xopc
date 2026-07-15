@@ -137,7 +137,7 @@ export function QuickCaptureComposer({
       <View
         style={[
           styles.shell,
-          Platform.OS === 'web' ? styles.shellRaisedWeb : styles.shellRaisedNative,
+          styles.shellRaisedNative,
           { backgroundColor: surface, borderColor: border },
         ]}
       >
@@ -211,9 +211,6 @@ const styles = StyleSheet.create({
     shadowRadius: 9,
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
-  },
-  shellRaisedWeb: {
-    boxShadow: '0 4px 14px rgba(17, 19, 24, 0.10)',
   },
   compactRow: {
     flexDirection: 'row',

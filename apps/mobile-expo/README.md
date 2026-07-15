@@ -32,7 +32,7 @@ Remote access uses LAN-first routing. When FRP is enabled, broker-terminated TLS
 | Routing | Expo Router |
 | Server state | TanStack React Query |
 | Client state | Zustand |
-| Storage | react-native-mmkv, with web/local fallback |
+| Storage | react-native-mmkv, with an Expo Go in-memory fallback |
 | UI | react-native-paper plus project design tokens |
 | Gestures and motion | react-native-gesture-handler, react-native-reanimated |
 | Keyboard | react-native-keyboard-controller |
@@ -83,7 +83,6 @@ Common scripts:
 | `pnpm run android:mobile` | Build and run Android |
 | `pnpm run ios:mobile` | Build and run iOS |
 | `pnpm -C apps/mobile-expo run ios:no-proxy` | Build and run iOS with proxy variables cleared |
-| `pnpm -C apps/mobile-expo run web` | Start Expo web |
 | `pnpm run mobile:lint` | Run ESLint on `app` and `src` |
 | `pnpm run mobile:typecheck` | Type-check the app and SSE workspace package |
 | `pnpm run mobile:test` | Run the Vitest suite |

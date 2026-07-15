@@ -12,7 +12,7 @@
 - `../../packages/gateway-sse-client/` is the workspace SSE parser.
 - `plugins/` contains Expo config plugins; prefer plugins over generated `android/` or `ios/` patches.
 
-Use `@/*` for `src/*` imports and `*.native.tsx` / `*.web.tsx` for platform splits.
+Use `@/*` for `src/*` imports. This app targets iOS and Android only; do not add browser targets, `.web.*` modules, or Web compatibility branches.
 
 ## Build, Test, and Development Commands
 

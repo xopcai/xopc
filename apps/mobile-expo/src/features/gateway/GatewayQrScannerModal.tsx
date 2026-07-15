@@ -3,7 +3,7 @@ import {
   useCameraPermissions,
 } from 'expo-camera';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from 'react-native-paper';
 
@@ -95,11 +95,6 @@ export function GatewayQrScannerModal({
     </View>
   );
 
-  if (Platform.OS === 'web') {
-    if (!visible) return null;
-    return <View style={styles.webOverlay}>{content}</View>;
-  }
-
   if (embedded) {
     if (!visible) return null;
     return <View style={styles.embeddedOverlay}>{content}</View>;
@@ -130,11 +125,6 @@ export async function requestGatewayQrCameraAccess(
 }
 
 const styles = StyleSheet.create({
-  webOverlay: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 1000,
-    elevation: 1000,
-  },
   embeddedOverlay: {
     ...StyleSheet.absoluteFill,
     zIndex: 1000,

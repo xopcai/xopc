@@ -4,7 +4,7 @@
  * Mirrors web/src/stores/locale-store.ts + theme-store.ts combined,
  * adapted for React Native (no DOM, no View Transitions).
  */
-import { Appearance, Platform } from 'react-native';
+import { Appearance } from 'react-native';
 import { create } from 'zustand';
 
 import { KEYS, storage } from '../storage/mmkv';
@@ -41,9 +41,8 @@ export type PreferencesState = {
 
 // ── Helpers ──────────────────────────────────────────────
 
-/** Push preference to RN so `useColorScheme()` matches the user's choice (native only). */
+/** Push preference to React Native so `useColorScheme()` matches the user's choice. */
 function syncAppearance(pref: ThemePreference): void {
-  if (Platform.OS === 'web') return;
   Appearance.setColorScheme(pref === 'system' ? 'unspecified' : pref);
 }
 

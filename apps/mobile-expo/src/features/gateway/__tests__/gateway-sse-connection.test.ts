@@ -60,7 +60,6 @@ describe('GatewaySseConnection', () => {
   it('does not throw or open a transport when gateway base URL is not configured', () => {
     const xhr = vi.fn();
     vi.stubGlobal('XMLHttpRequest', xhr);
-    vi.stubGlobal('EventSource', undefined);
 
     const callbacks = {
       onConnected: vi.fn(),

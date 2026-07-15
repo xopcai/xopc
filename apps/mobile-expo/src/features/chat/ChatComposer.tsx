@@ -446,12 +446,6 @@ export const ChatComposer = memo(function ChatComposer({
     setMeterSamples([]);
     grantInFlightRef.current = true;
 
-    if (Platform.OS === 'web') {
-      grantInFlightRef.current = false;
-      setSnack(cm.voiceWebUnsupported);
-      return;
-    }
-
     void (async () => {
       const ok = await requestMicPermission();
       if (!ok) {
@@ -858,7 +852,7 @@ export const ChatComposer = memo(function ChatComposer({
         }}
         style={[
           styles.shell,
-          Platform.OS === 'web' ? styles.shellRaisedWeb : styles.shellRaisedNative,
+          styles.shellRaisedNative,
           { backgroundColor: surface, borderColor: shellBorder },
           shellRevealStyle,
         ]}
@@ -995,9 +989,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 2,
   },
-  shellRaisedWeb: {
-    boxShadow: '0 4px 14px rgba(17, 19, 24, 0.10)',
-  },
   captureRail: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1070,14 +1061,10 @@ const styles = StyleSheet.create({
   input: {
     ...typography.body,
     paddingHorizontal: 4,
-    paddingVertical: Platform.select({ ios: 5, android: 4, web: 0, default: 4 }),
+    paddingVertical: Platform.select({ ios: 5, android: 4, default: 4 }),
     maxHeight: MAX_COMPOSER_INPUT_HEIGHT,
     borderWidth: 0,
     ...(Platform.OS === 'android' ? { includeFontPadding: false as const } : null),
-    ...Platform.select({
-      web: { outlineStyle: 'none' } as Record<string, string>,
-      default: {},
-    }),
   },
   inputCompact: {
     flex: 1,

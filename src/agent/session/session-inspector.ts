@@ -19,6 +19,7 @@ import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import type { BtwQueryOptions } from '../../chat-commands/index.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
+import { resolveDefaultAgentWorkspaceDir } from '../../config/workspace-defaults.js';
 import {
   effectiveWorkspacePathForSession,
   projectWorkspacePath,
@@ -68,6 +69,7 @@ export interface SessionAgentConfigView {
   verboseLevel: VerboseLevel;
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
+  workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
 }
 
 export class SessionInspector {
@@ -214,13 +216,23 @@ export class SessionInspector {
     const model = this.opts.modelManager.getModelForSession(sessionKey);
     const project = getProjectForSession(sessionKey);
     const projectWorkspace = projectWorkspacePath(project);
+    const hasSessionWorkspaceOverride = Boolean(sc?.workingDirectoryOverride?.trim());
+    const effectiveWorkspacePath = effectiveWorkspacePathForSession(cfg, sessionKey, sc, project);
+    const isDefaultWorkspaceRoot = effectiveWorkspacePath === resolveDefaultAgentWorkspaceDir();
     return {
       thinkingLevel: level,
       model,
       reasoningLevel,
       verboseLevel,
-      effectiveWorkspacePath: effectiveWorkspacePathForSession(cfg, sessionKey, sc, project),
-      workingDirectoryLocked: Boolean(projectWorkspace || sc?.workingDirectoryOverride?.trim()),
+      effectiveWorkspacePath,
+      workingDirectoryLocked: Boolean(projectWorkspace || hasSessionWorkspaceOverride),
+      workspaceSource: projectWorkspace
+        ? 'project'
+        : hasSessionWorkspaceOverride
+          ? 'session_override'
+          : isDefaultWorkspaceRoot
+            ? 'agent_default_root'
+            : 'agent_workspace',
     };
   }
 }

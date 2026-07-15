@@ -33,10 +33,6 @@ vi.mock('expo-audio', () => ({
         linearPCMIsBigEndian: false,
         linearPCMIsFloat: false,
       },
-      web: {
-        mimeType: 'audio/webm',
-        bitsPerSecond: 128000,
-      },
     },
   },
   requestRecordingPermissionsAsync: vi.fn(async () => ({ granted: true })),

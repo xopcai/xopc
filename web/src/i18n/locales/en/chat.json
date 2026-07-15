@@ -484,33 +484,33 @@
       },
       "workingDirectory": {
         "headline": "Start from this directory",
-        "tagline": "Understand the structure, find entrypoints, and organize direction.",
+        "tagline": "Take stock of the content, then surface priorities and an organizing direction.",
         "categories": [
           {
             "id": "directory-understand",
             "icon": "folder",
-            "title": "Understand directory",
-            "description": "Structure, type, key files",
+            "title": "Take stock",
+            "description": "File types, highlights, overview",
             "scenarios": [
               {
-                "prompt": "Help me understand the structure, project type, and most important files in “{{path}}”."
+                "prompt": "Take stock of the main content, file types, and most important materials in “{{path}}”."
               },
               {
-                "prompt": "Scan this directory first and tell me what kind of project or file collection it appears to be."
+                "prompt": "Scan this directory first and tell me what kind of material collection it is and what I should review first."
               }
             ]
           },
           {
-            "id": "directory-entry",
-            "icon": "code",
-            "title": "Find entrypoints",
-            "description": "Startup, config, dependencies",
+            "id": "directory-summarize",
+            "icon": "documents",
+            "title": "Extract highlights",
+            "description": "Summary, leads, next actions",
             "scenarios": [
               {
-                "prompt": "Find the likely startup entrypoints, config files, and dependency docs in “{{path}}”."
+                "prompt": "Summarize the important content in “{{path}}” and flag leads worth following up."
               },
               {
-                "prompt": "If I want to start working in this directory, which files should I open first?"
+                "prompt": "If I want to start working from this directory, which materials should I review and which questions should I confirm first?"
               }
             ]
           },
@@ -525,6 +525,54 @@
               },
               {
                 "prompt": "Create a summary of the important content in this directory."
+              }
+            ]
+          }
+        ]
+      },
+      "codingWorkspace": {
+        "headline": "Start from this code directory",
+        "tagline": "Understand the structure, find entrypoints, and choose an implementation direction.",
+        "categories": [
+          {
+            "id": "directory-understand",
+            "icon": "folder",
+            "title": "Understand codebase",
+            "description": "Structure, stack, key files",
+            "scenarios": [
+              {
+                "prompt": "Help me understand the structure, tech stack, and most important files in the code directory “{{path}}”."
+              },
+              {
+                "prompt": "Scan this code directory first and explain its project type, core modules, and recommended reading order."
+              }
+            ]
+          },
+          {
+            "id": "directory-entry",
+            "icon": "code",
+            "title": "Find entrypoints",
+            "description": "Startup, config, dependencies",
+            "scenarios": [
+              {
+                "prompt": "Find the likely startup entrypoints, config files, and dependency docs in the code directory “{{path}}”."
+              },
+              {
+                "prompt": "If I want to modify this code directory, which files should I open first?"
+              }
+            ]
+          },
+          {
+            "id": "directory-organize",
+            "icon": "review",
+            "title": "Review & organize",
+            "description": "Modules, risks, cleanup",
+            "scenarios": [
+              {
+                "prompt": "Review the module boundaries, likely risks, and cleanup opportunities in the code directory “{{path}}”."
+              },
+              {
+                "prompt": "Create an engineering-focused summary of the important content in this code directory."
               }
             ]
           }

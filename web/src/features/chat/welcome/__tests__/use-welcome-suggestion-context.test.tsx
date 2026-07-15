@@ -22,11 +22,13 @@ vi.mock('@/features/projects/api', () => ({ fetchProject, inferProjectDefaults }
 function Probe({
   sessionKey = 'agent:main:webchat:test',
   effectiveWorkspacePath,
+  workingDirectoryLocked = false,
   sessionManager,
   onState,
 }: {
   sessionKey?: string;
   effectiveWorkspacePath?: string | null;
+  workingDirectoryLocked?: boolean;
   sessionManager: SessionManager;
   onState: (state: WelcomeSuggestionContextState) => void;
 }) {
@@ -34,6 +36,7 @@ function Probe({
     enabled: true,
     sessionKey,
     effectiveWorkspacePath,
+    workingDirectoryLocked,
     sessionManager,
   });
   onState(state);
@@ -47,6 +50,7 @@ describe('useWelcomeSuggestionContext', () => {
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     vi.clearAllMocks();
+    inferProjectDefaults.mockResolvedValue({ inference: { kind: 'general' } });
     container = document.createElement('div');
     document.body.append(container);
     root = createRoot(container);
@@ -136,23 +140,64 @@ describe('useWelcomeSuggestionContext', () => {
     });
   });
 
-  it('uses a resolved workspace path without entering loading', () => {
+  it('keeps an unclassified workspace non-code without entering loading', async () => {
     const sessionManager = {
       loadSessionAgentConfig: vi.fn(),
     } as unknown as SessionManager;
 
-    act(() => {
+    await act(async () => {
       root.render(
         <Probe
           effectiveWorkspacePath="/repo/xopc"
+          workingDirectoryLocked
+          sessionManager={sessionManager}
+          onState={() => {}}
+        />,
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toBe('ready:workingDirectory');
+    expect(sessionManager.loadSessionAgentConfig).not.toHaveBeenCalled();
+  });
+
+  it('uses code suggestions only after workspace detection confirms a code project', async () => {
+    inferProjectDefaults.mockResolvedValue({ inference: { kind: 'coding' } });
+    const sessionManager = { loadSessionAgentConfig: vi.fn() } as unknown as SessionManager;
+
+    await act(async () => {
+      root.render(
+        <Probe
+          effectiveWorkspacePath="/repo/xopc"
+          workingDirectoryLocked
+          sessionManager={sessionManager}
+          onState={() => {}}
+        />,
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toBe('ready:codingWorkspace');
+    expect(inferProjectDefaults).toHaveBeenCalledWith({ workspaceRoot: '/repo/xopc' });
+  });
+
+  it('treats the inherited default workspace as no welcome context', () => {
+    const sessionManager = { loadSessionAgentConfig: vi.fn() } as unknown as SessionManager;
+
+    act(() => {
+      root.render(
+        <Probe
+          sessionKey=""
+          effectiveWorkspacePath="/Users/example/.xopc/workspace"
           sessionManager={sessionManager}
           onState={() => {}}
         />,
       );
     });
 
-    expect(container.textContent).toBe('ready:workingDirectory');
-    expect(sessionManager.loadSessionAgentConfig).not.toHaveBeenCalled();
+    expect(container.textContent).toBe('ready:empty');
+    expect(inferProjectDefaults).not.toHaveBeenCalled();
   });
 
   it('degrades to general suggestions and retries failed context reads', async () => {

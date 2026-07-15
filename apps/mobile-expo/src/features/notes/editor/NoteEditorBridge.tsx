@@ -1,6 +1,6 @@
 import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import type { GestureResponderHandlers } from 'react-native';
-import { InteractionManager, Keyboard, NativeModules, Platform, Pressable, ScrollView, StyleSheet, TextInput, UIManager, View, useWindowDimensions } from 'react-native';
+import { InteractionManager, Keyboard, NativeModules, Pressable, ScrollView, StyleSheet, TextInput, UIManager, View, useWindowDimensions } from 'react-native';
 import type { ReactNode } from 'react';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { Icon, Text } from 'react-native-paper';
@@ -132,7 +132,6 @@ function sameEditorState(a: EditorRuntimeState, b: EditorRuntimeState): boolean 
 
 function isExpoDomWebViewAvailable(): boolean {
   return canUseDomEditor({
-    platform: Platform.OS,
     isStoreClient: Constants.executionEnvironment === ExecutionEnvironment.StoreClient,
     hasExpoDomWebViewModule: Boolean(NativeModules.ExpoDomWebViewModule),
     getViewManagerConfig: UIManager.getViewManagerConfig,

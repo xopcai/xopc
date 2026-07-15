@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { PanResponder, Platform } from 'react-native';
+import { PanResponder } from 'react-native';
 
 import { AppToast } from '../../components/AppToast';
 import { TOAST_BOTTOM_LIFT_ABOVE_BAR, TOAST_DURATION_LONG } from '../../constants/toast';
@@ -174,14 +174,6 @@ export function useVoiceCaptureInteraction({
     setMeterSamples([]);
     setStarting(true);
     grantInFlightRef.current = true;
-
-    if (Platform.OS === 'web') {
-      grantInFlightRef.current = false;
-      interactionStartedRef.current = false;
-      setStarting(false);
-      setSnack(cm.voiceWebUnsupported);
-      return;
-    }
 
     void (async () => {
       const ok = await requestMicPermission();

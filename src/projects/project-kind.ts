@@ -13,7 +13,6 @@ export type ProjectKindInference = {
 };
 
 const STRONG_CODE_MARKERS = [
-  '.git',
   'package.json',
   'pnpm-lock.yaml',
   'yarn.lock',

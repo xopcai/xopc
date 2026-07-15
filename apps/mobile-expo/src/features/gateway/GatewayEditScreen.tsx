@@ -4,7 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import { Alert, Platform, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Button, HelperText, Text, TextInput } from 'react-native-paper';
 
@@ -398,13 +398,9 @@ export function GatewayEditScreen() {
         />
 
         <View style={styles.actionRow}>
-          {Platform.OS !== 'web' ? (
-            <Button mode="outlined" onPress={() => void openScanner()} icon="barcode-scan">
-              {l.scanQr}
-            </Button>
-          ) : (
-            <View />
-          )}
+          <Button mode="outlined" onPress={() => void openScanner()} icon="barcode-scan">
+            {l.scanQr}
+          </Button>
           <Button mode="outlined" loading={testing} disabled={testing} onPress={() => void handleTestConnection()}>
             {testing ? g.testingConnection : g.testConnection}
           </Button>

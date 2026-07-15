@@ -89,6 +89,7 @@ export function useChatSession() {
   const modelSupportsThinking = sessionSlice?.modelSupportsThinking ?? false;
   const effectiveWorkspacePath = sessionSlice?.effectiveWorkspacePath ?? '';
   const workingDirectoryLocked = sessionSlice?.workingDirectoryLocked ?? false;
+  const workspaceSource = sessionSlice?.workspaceSource ?? 'agent_default_root';
 
   useEffect(() => {
     messagesLenRef.current = sessionSlice?.messages.length ?? 0;
@@ -265,6 +266,7 @@ export function useChatSession() {
         reasoningLevel?: string | null;
         effectiveWorkspacePath?: string | null;
         workingDirectoryLocked?: boolean;
+        workspaceSource?: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
       },
     ) => {
       patchSessionAgentConfigView(sessionKey, cfg);
@@ -416,6 +418,7 @@ export function useChatSession() {
       modelSupportsThinking,
       effectiveWorkspacePath,
       workingDirectoryLocked,
+      workspaceSource,
       hasMore,
       loadingMore,
       loadMoreMessages,

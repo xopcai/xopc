@@ -484,33 +484,33 @@
       },
       "workingDirectory": {
         "headline": "从当前目录开始",
-        "tagline": "先理解结构，再找到入口和整理方向。",
+        "tagline": "先盘点内容，再提炼重点和整理方向。",
         "categories": [
           {
             "id": "directory-understand",
             "icon": "folder",
-            "title": "理解目录",
-            "description": "结构、类型、关键文件",
+            "title": "盘点内容",
+            "description": "文件类型、重点、概览",
             "scenarios": [
               {
-                "prompt": "帮我理解目录「{{path}}」的结构、项目类型和最重要的文件。"
+                "prompt": "帮我盘点目录「{{path}}」里的主要内容、文件类型和最重要的资料。"
               },
               {
-                "prompt": "请先扫描这个目录，告诉我它大概是什么项目或资料集合。"
+                "prompt": "请先扫描这个目录，告诉我它更像什么资料集合，以及最值得先看的内容。"
               }
             ]
           },
           {
-            "id": "directory-entry",
-            "icon": "code",
-            "title": "找入口",
-            "description": "启动、配置、依赖",
+            "id": "directory-summarize",
+            "icon": "documents",
+            "title": "提炼重点",
+            "description": "摘要、线索、待办",
             "scenarios": [
               {
-                "prompt": "帮我找出目录「{{path}}」里可能的启动入口、配置文件和依赖说明。"
+                "prompt": "帮我把目录「{{path}}」里的重要内容整理成摘要，并标出值得继续跟进的线索。"
               },
               {
-                "prompt": "如果我要开始处理这个目录，应该先打开哪些文件？"
+                "prompt": "如果我要从这个目录开始处理事情，应该先看哪些资料、确认哪些问题？"
               }
             ]
           },
@@ -525,6 +525,54 @@
               },
               {
                 "prompt": "请帮我把这个目录里的重要内容做一份摘要。"
+              }
+            ]
+          }
+        ]
+      },
+      "codingWorkspace": {
+        "headline": "从这个代码目录开始",
+        "tagline": "先理解结构，再找到入口和实现方向。",
+        "categories": [
+          {
+            "id": "directory-understand",
+            "icon": "folder",
+            "title": "理解代码目录",
+            "description": "结构、类型、关键文件",
+            "scenarios": [
+              {
+                "prompt": "帮我理解代码目录「{{path}}」的结构、技术栈和最重要的文件。"
+              },
+              {
+                "prompt": "请先扫描这个代码目录，告诉我项目类型、核心模块和建议的阅读顺序。"
+              }
+            ]
+          },
+          {
+            "id": "directory-entry",
+            "icon": "code",
+            "title": "找入口",
+            "description": "启动、配置、依赖",
+            "scenarios": [
+              {
+                "prompt": "帮我找出代码目录「{{path}}」里可能的启动入口、配置文件和依赖说明。"
+              },
+              {
+                "prompt": "如果我要开始修改这个代码目录，应该先打开哪些文件？"
+              }
+            ]
+          },
+          {
+            "id": "directory-organize",
+            "icon": "review",
+            "title": "审查与整理",
+            "description": "模块、风险、清理建议",
+            "scenarios": [
+              {
+                "prompt": "帮我梳理代码目录「{{path}}」的模块边界、潜在风险和可以清理的地方。"
+              },
+              {
+                "prompt": "请帮我把这个代码目录里的重要内容做一份工程视角的摘要。"
               }
             ]
           }

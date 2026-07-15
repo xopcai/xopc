@@ -596,6 +596,8 @@ export function ChatPage() {
     sourceContextPending: Boolean(sourceWorkItemId) && sourceWorkItemLoadState === 'loading',
     sourceContextFailed: Boolean(sourceWorkItemId) && sourceWorkItemLoadState === 'error',
     effectiveWorkspacePath: session.effectiveWorkspacePath,
+    workingDirectoryLocked:
+      session.workspaceSource === 'session_override' || session.workspaceSource === 'agent_workspace',
     sessionManager: session.sessionManager,
   });
   const welcomeAgent = useMemo(

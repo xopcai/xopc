@@ -62,16 +62,6 @@ export async function tryConsumeGatewayDeeplink(
   rawUrl: string,
   router: ImperativeRouter,
 ): Promise<boolean> {
-  // On Web, Linking.getInitialURL() returns the current page URL (e.g. http://localhost:8082/).
-  // This is NOT a gateway deep link — skip it to prevent writing the dev server origin as baseUrl.
-  if (typeof window !== 'undefined') {
-    try {
-      const current = new URL(window.location.href);
-      const incoming = new URL(rawUrl);
-      if (incoming.origin === current.origin) return false;
-    } catch { /* not a valid URL, continue parsing */ }
-  }
-
   const embedded = extractGatewayLinkCandidate(rawUrl);
   const link = (embedded ?? rawUrl).trim();
   const parsed = parseGatewayQrPayload(link);
