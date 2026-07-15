@@ -15,7 +15,11 @@ function git(cwd: string, args: string[]): void {
   execFileSync('git', args, { cwd, stdio: 'ignore' });
 }
 
-function createContext(root: string, btwQuery: CommandContext['btwQuery']): CommandContext {
+function createContext(
+  root: string,
+  btwQuery: CommandContext['btwQuery'],
+  emitEvent?: CommandContext['emitEvent'],
+): CommandContext {
   return {
     sessionKey: 'agent:main:webchat:review-test',
     source: 'webui',
@@ -48,6 +52,7 @@ function createContext(root: string, btwQuery: CommandContext['btwQuery']): Comm
     setTyping: vi.fn(async () => undefined),
     supports: () => false,
     btwQuery,
+    emitEvent,
   } as unknown as CommandContext;
 }
 
@@ -100,7 +105,73 @@ describe('/review command', () => {
     expect(review?.type).toBe('review');
     expect(review?.overallCorrectness).toBe('patch is incorrect');
     expect(Array.isArray(review?.findings)).toBe(true);
-    expect(btwQuery).toHaveBeenCalledOnce();
+    expect(btwQuery).toHaveBeenCalledWith(expect.any(String), {
+      maxTokens: 8192,
+      temperature: 0.1,
+      modelRef: 'openai/gpt-4.1',
+    });
+  });
+
+  it('emits review trace tool events for streaming clients', async () => {
+    writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
+    const btwQuery = vi.fn(async () => ({
+      text: JSON.stringify({
+        findings: [],
+        overall_correctness: 'patch is correct',
+        overall_explanation: 'No correctness issues found.',
+        overall_confidence_score: 0.7,
+        summary: 'No findings',
+      }),
+    }));
+    const emitEvent = vi.fn();
+
+    const result = await commandRegistry.execute('review', createContext(repo, btwQuery, emitEvent), '');
+
+    expect(result.success).toBe(true);
+    expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'tool_execution_start',
+      toolName: 'review.prepare_diff',
+    }));
+    expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'tool_execution_end',
+      toolName: 'review.prepare_diff',
+      isError: false,
+    }));
+    expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'tool_execution_start',
+      toolName: 'review.model_judge',
+      args: expect.objectContaining({ modelRef: 'openai/gpt-4.1' }),
+    }));
+    expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'tool_execution_end',
+      toolName: 'review.model_judge',
+      isError: false,
+    }));
+  });
+
+  it('marks reviewer fallback as a failed judge trace instead of no findings', async () => {
+    writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
+    const btwQuery = vi.fn(async () => ({ text: 'not json' }));
+    const emitEvent = vi.fn();
+
+    const result = await commandRegistry.execute('review', createContext(repo, btwQuery, emitEvent), '');
+
+    expect(result.success).toBe(true);
+    expect(result.content).toContain('No model findings were produced.');
+    expect(result.content).toContain('Reviewer model output could not be parsed');
+    expect(result.content).not.toContain('No findings.');
+    expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'tool_execution_end',
+      toolName: 'review.model_judge',
+      isError: true,
+      result: expect.objectContaining({
+        details: expect.objectContaining({
+          fallback: true,
+          reason: expect.stringContaining('could not be parsed'),
+          responsePreview: 'not json',
+        }),
+      }),
+    }));
   });
 
   it('includes untracked file contents in the reviewer prompt', async () => {

@@ -17,6 +17,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ThinkingLevel } from '@earendil-works/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
+import type { BtwQueryOptions } from '../../chat-commands/index.js';
 import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import {
   effectiveWorkspacePathForSession,
@@ -119,13 +120,19 @@ export class SessionInspector {
   }
 
   /** One-shot LLM answer for `/btw`: transcript as background, not persisted. */
-  btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {
+  btwQuery(
+    sessionKey: string,
+    question: string,
+    options?: BtwQueryOptions,
+  ): Promise<{ text: string; error?: string }> {
     return runBtwQuery({
       sessionKey,
       question,
       sessionStore: this.opts.sessionStore,
-      modelForSession: this.opts.modelManager.getModelForSession(sessionKey),
+      modelForSession: options?.modelRef?.trim() || this.opts.modelManager.getModelForSession(sessionKey),
       log,
+      maxTokens: options?.maxTokens,
+      temperature: options?.temperature,
     });
   }
 

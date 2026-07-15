@@ -8,6 +8,7 @@ import { Select, SelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChatComposer } from '@/features/chat/composer/chat-composer';
 import { ChatGoalBanner } from '@/features/chat/goals/chat-goal-banner';
+import { ChatWelcomeSpotlightSkeleton } from '@/features/chat/chat-welcome-spotlight';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/agent-selection/chat-sse-status';
 import { MessageList } from '@/features/chat/messages/message-list';
@@ -25,6 +26,15 @@ import { isValidSkillWireId } from '@/features/chat/palette/skill-wire-pattern';
 import { wireTextForSlashCommandEntry } from '@/features/chat/palette/slash-command-wire-text';
 import { WorkflowRunLinkCard } from '@/features/chat/workflow/workflow-run-link-card';
 import { WorkflowSessionBanner } from '@/features/chat/workflow/workflow-session-banner';
+import { useWelcomeSuggestionContext } from '@/features/chat/welcome/use-welcome-suggestion-context';
+import {
+  buildWelcomeSpotlight,
+  type WelcomeSuggestionSelection,
+} from '@/features/chat/welcome/welcome-suggestions';
+import {
+  readWelcomeSuggestionAffinity,
+  recordWelcomeSuggestionMetric,
+} from '@/features/chat/welcome/welcome-suggestion-metrics';
 import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import { ACTIVE_RUN_STATUSES } from '@/features/workflows/workflow-page.constants';
 import { useSessionWorkflowRunLinks } from '@/features/workflows/use-session-workflow-run-links';
@@ -112,6 +122,19 @@ function inferSuggestedStatus(text: string): WorkItemStatus | '' {
   return '';
 }
 
+function welcomePromptWasUsed(original: string, sent: string): boolean {
+  const source = original.replace(/\s+/g, '').toLocaleLowerCase();
+  const target = sent.replace(/\s+/g, '').toLocaleLowerCase();
+  if (!source || !target) return false;
+  if (source === target) return true;
+  const sampleLength = Math.min(18, Math.max(8, Math.floor(source.length * 0.16)));
+  return target.includes(source.slice(0, sampleLength));
+}
+
+function welcomeExplorationDaySeed(date = new Date()): string {
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
 function buildWorkItemUpdateDraft(content: string): WorkItemUpdateDraft {
   const progressNote = compactAssistantText(content);
   const nextAction = extractLineAfterLabel(content, ['next action', 'next step', '下一步', '后续动作']);
@@ -142,15 +165,23 @@ export function ChatPage() {
   const routeComposerSeedMarkerRef = useRef<string | null>(null);
 
   const welcomeDraftSeq = useRef(0);
+  const pendingWelcomeSelectionRef = useRef<WelcomeSuggestionSelection | null>(null);
+  const welcomeImpressionRef = useRef('');
   const pendingSourceNoteSaveRef = useRef<PendingSourceNoteSave | null>(null);
   const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
+  const [welcomeAffinity, setWelcomeAffinity] = useState<Record<string, number>>(() =>
+    readWelcomeSuggestionAffinity(),
+  );
+  const [welcomeExplorationOffset, setWelcomeExplorationOffset] = useState(0);
   const [sourceNoteLoadedTitle, setSourceNoteLoadedTitle] = useState<string | null>(null);
   const [sourceWorkItem, setSourceWorkItem] = useState<WorkItem | null>(null);
+  const [sourceWorkItemLoadState, setSourceWorkItemLoadState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [workItemContextExpanded, setWorkItemContextExpanded] = useState(false);
   const [workItemUpdateDraft, setWorkItemUpdateDraft] = useState<WorkItemUpdateDraft | null>(null);
   const [workItemUpdateSubmitting, setWorkItemUpdateSubmitting] = useState(false);
   const [sourceNoteSaveDraft, setSourceNoteSaveDraft] = useState<SourceNoteSaveDraft | null>(null);
   const [sourceNoteSaveSubmitting, setSourceNoteSaveSubmitting] = useState(false);
+  const [showWelcomeSkeleton, setShowWelcomeSkeleton] = useState(false);
 
   const { auth, session, messages: msgSlice, timeline, stream, followUp, clarify, agents } = useChatSession();
 
@@ -441,11 +472,24 @@ export function ChatPage() {
 
   useEffect(() => {
     setWelcomeDraftSeed(null);
+    pendingWelcomeSelectionRef.current = null;
+    welcomeImpressionRef.current = '';
+    setWelcomeAffinity(readWelcomeSuggestionAffinity());
   }, [session.sessionKey]);
 
-  const onPickWelcomePrompt = useCallback((text: string) => {
+  const onPickWelcomePrompt = useCallback((selection: WelcomeSuggestionSelection) => {
+    pendingWelcomeSelectionRef.current = selection;
+    recordWelcomeSuggestionMetric({
+      type: 'pick',
+      suggestionId: selection.suggestionId,
+      categoryId: selection.categoryId,
+      contextKind: selection.contextKind,
+    });
     welcomeDraftSeq.current += 1;
-    setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text });
+    setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text: selection.prompt });
+  }, []);
+  const refreshWelcomeExploration = useCallback(() => {
+    setWelcomeExplorationOffset((value) => value + 1);
   }, []);
 
   const canSelectWorkingDirectory = useMemo(
@@ -515,14 +559,21 @@ export function ChatPage() {
   useEffect(() => {
     let cancelled = false;
     setSourceWorkItem(null);
+    setSourceWorkItemLoadState(sourceWorkItemId ? 'loading' : 'idle');
     setWorkItemContextExpanded(false);
     if (!sourceWorkItemId) return undefined;
     void fetchWorkItem(sourceWorkItemId)
       .then((result) => {
-        if (!cancelled) setSourceWorkItem(result.item);
+        if (!cancelled) {
+          setSourceWorkItem(result.item);
+          setSourceWorkItemLoadState('ready');
+        }
       })
       .catch(() => {
-        if (!cancelled) setSourceWorkItem(null);
+        if (!cancelled) {
+          setSourceWorkItem(null);
+          setSourceWorkItemLoadState('error');
+        }
       });
     return () => {
       cancelled = true;
@@ -531,6 +582,103 @@ export function ChatPage() {
 
   const sourceNoteTitle =
     sourceNoteLoadedTitle || workflowMeta?.sourceNoteTitle || m.chat.sourceNoteFallbackTitle;
+  const welcomeContextState = useWelcomeSuggestionContext({
+    enabled:
+      auth.hasToken &&
+      Boolean(chatSessionKey) &&
+      msgSlice.items.length === 0 &&
+      !session.showSessionLoading &&
+      !session.sessionRoutePending,
+    sessionKey: chatSessionKey,
+    sourceNoteId,
+    sourceNoteTitle,
+    sourceWorkItem,
+    sourceContextPending: Boolean(sourceWorkItemId) && sourceWorkItemLoadState === 'loading',
+    sourceContextFailed: Boolean(sourceWorkItemId) && sourceWorkItemLoadState === 'error',
+    effectiveWorkspacePath: session.effectiveWorkspacePath,
+    sessionManager: session.sessionManager,
+  });
+  const welcomeAgent = useMemo(
+    () =>
+      agents.chatAgents?.items.find((item) => item.id === agents.displayAgentId) ?? {
+        id: agents.displayAgentId,
+      },
+    [agents.chatAgents?.items, agents.displayAgentId],
+  );
+  const welcomeSpotlight = useMemo(
+    () =>
+      buildWelcomeSpotlight(welcomeContextState.context, m.chat.welcomeSpotlight, welcomeAgent, {
+        affinity: welcomeAffinity,
+        contextStatus: welcomeContextState.status,
+        explorationSeed: welcomeExplorationDaySeed(),
+        explorationOffset: welcomeExplorationOffset,
+      }),
+    [
+      m.chat.welcomeSpotlight,
+      welcomeAffinity,
+      welcomeAgent,
+      welcomeContextState.context,
+      welcomeContextState.status,
+      welcomeExplorationOffset,
+    ],
+  );
+  const welcomeContextLoading = welcomeContextState.status === 'loading';
+  const activeWelcomeSpotlight = welcomeContextLoading ? undefined : welcomeSpotlight;
+  useEffect(() => {
+    if (!welcomeContextLoading) {
+      setShowWelcomeSkeleton(false);
+      return undefined;
+    }
+    const timeout = window.setTimeout(() => setShowWelcomeSkeleton(true), 180);
+    return () => window.clearTimeout(timeout);
+  }, [welcomeContextLoading]);
+  const primaryWelcomeSelection = useMemo<WelcomeSuggestionSelection | null>(
+    () =>
+      activeWelcomeSpotlight
+        ? {
+            suggestionId: activeWelcomeSpotlight.primaryRecommendation.id,
+            categoryId: activeWelcomeSpotlight.primaryRecommendation.categoryId,
+            contextKind: activeWelcomeSpotlight.contextKind,
+            prompt: activeWelcomeSpotlight.primaryRecommendation.prompt,
+          }
+        : null,
+    [activeWelcomeSpotlight],
+  );
+
+  useEffect(() => {
+    if (msgSlice.items.length > 0 || stream.streaming) return;
+    if (!activeWelcomeSpotlight) return;
+    const recommendation = activeWelcomeSpotlight.primaryRecommendation;
+    const impressionKey = `${chatSessionKey ?? 'new'}:${activeWelcomeSpotlight.contextStatus}:${recommendation.id}`;
+    if (welcomeImpressionRef.current === impressionKey) return;
+    welcomeImpressionRef.current = impressionKey;
+    recordWelcomeSuggestionMetric({
+      type: 'impression',
+      suggestionId: recommendation.id,
+      categoryId: recommendation.categoryId,
+      contextKind: activeWelcomeSpotlight.contextKind,
+    });
+  }, [activeWelcomeSpotlight, chatSessionKey, msgSlice.items.length, stream.streaming]);
+
+  const handleComposerSend = useCallback(
+    (...args: Parameters<typeof stream.sendMessage>) => {
+      const [text] = args;
+      const selection = pendingWelcomeSelectionRef.current;
+      if (selection && welcomePromptWasUsed(selection.prompt, text)) {
+        recordWelcomeSuggestionMetric({
+          type: 'send',
+          suggestionId: selection.suggestionId,
+          categoryId: selection.categoryId,
+          contextKind: selection.contextKind,
+          edited: selection.prompt.trim() !== text.trim(),
+          characterDelta: text.length - selection.prompt.length,
+        });
+      }
+      pendingWelcomeSelectionRef.current = null;
+      return stream.sendMessage(...args);
+    },
+    [stream.sendMessage],
+  );
   const closeSourceNoteSaveDialog = useCallback(() => {
     pendingSourceNoteSaveRef.current?.reject();
     pendingSourceNoteSaveRef.current = null;
@@ -994,6 +1142,14 @@ export function ChatPage() {
                     reasoningLevel={session.reasoningLevel}
                     registerListContentRef={registerListContentRef}
                     onPickWelcomePrompt={onPickWelcomePrompt}
+                    welcomeSpotlight={activeWelcomeSpotlight}
+                    welcomeOverlay={
+                      welcomeContextLoading ? (
+                        <ChatWelcomeSpotlightSkeleton showSkeleton={showWelcomeSkeleton} />
+                      ) : undefined
+                    }
+                    onRetryWelcomeContext={welcomeContextState.retry}
+                    onRefreshWelcomeExploration={refreshWelcomeExploration}
                     onDeleteRound={stream.deleteMessageRound}
                     onRetryUserMessageRound={stream.retryUserMessageRound}
                     deleteRoundDisabled={stream.streaming || stream.sending}
@@ -1030,11 +1186,13 @@ export function ChatPage() {
                 sessionKey={session.sessionKey}
                 sessionManager={session.sessionManager}
                 welcomeDraftSeed={welcomeDraftSeed}
+                welcomeSuggestion={compactWelcomeLayout ? primaryWelcomeSelection : null}
+                onAcceptWelcomeSuggestion={onPickWelcomePrompt}
                 canSelectWorkingDirectory={canSelectWorkingDirectory}
                 thinkingLevel={session.thinkingLevel}
                 showThinkingSelector={session.modelSupportsThinking}
                 onThinkingChange={session.onSessionThinkingLevelChange}
-                onSend={stream.sendMessage}
+                onSend={handleComposerSend}
                 onAbort={stream.abort}
                 onAddPendingFollowUp={(text, atts) => void followUp.addPendingFollowUp(text, atts)}
                 onSteeringInterrupt={(text, atts) => void stream.interruptAndSend(text, atts)}

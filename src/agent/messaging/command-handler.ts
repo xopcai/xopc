@@ -14,7 +14,9 @@ import { createLogger } from '../../utils/logger.js';
 import {
   commandRegistry,
   createCommandContext,
+  type BtwQueryOptions,
   type CommandContext as UnifiedCommandContext,
+  type CommandStreamEvent,
 } from '../../chat-commands/index.js';
 import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
 import type { PersistentGoalApis } from '../goals/persistent-goal-apis.js';
@@ -66,7 +68,11 @@ export interface CommandHandlerConfig {
     options?: { instructions?: string; force?: boolean },
   ) => Promise<CompactionResult>;
 
-  btwQuery?: (sessionKey: string, question: string) => Promise<{ text: string; error?: string }>;
+  btwQuery?: (
+    sessionKey: string,
+    question: string,
+    options?: BtwQueryOptions,
+  ) => Promise<{ text: string; error?: string }>;
 
   getSessionContextReport?: (
     sessionKey: string,
@@ -133,6 +139,7 @@ export class CommandHandler {
   private buildCommandContext(
     context: CommandContext,
     recorder?: (text: string) => void,
+    emitEvent?: (event: CommandStreamEvent) => void | Promise<void>,
   ): UnifiedCommandContext {
     const skipBusOutbound = shouldSkipBusOutboundForChannel(context.channel);
 
@@ -242,6 +249,7 @@ export class CommandHandler {
 
       compactSession: this.compactSession,
       btwQuery: this.btwQuery,
+      emitEvent,
       getSessionContextReport: this.getSessionContextReport,
       persistentGoalApis: this.getPersistentGoalApisForCommand({
         sessionKey: context.sessionKey,
@@ -290,6 +298,7 @@ export class CommandHandler {
     commandName: string,
     args: string,
     context: CommandContext,
+    options?: { emitEvent?: (event: CommandStreamEvent) => void | Promise<void> },
   ): Promise<{ handled: boolean; aggregatedText: string; metadata?: Record<string, unknown> }> {
     if (!commandRegistry.has(commandName)) {
       return { handled: false, aggregatedText: '' };
@@ -298,7 +307,7 @@ export class CommandHandler {
     log.info({ command: commandName, sessionKey: context.sessionKey }, 'Executing command (aggregate reply)');
 
     const segments: string[] = [];
-    const wrapped = this.buildCommandContext(context, (text) => segments.push(text));
+    const wrapped = this.buildCommandContext(context, (text) => segments.push(text), options?.emitEvent);
     const result = await commandRegistry.execute(commandName, wrapped, args);
 
     if (result.content) {

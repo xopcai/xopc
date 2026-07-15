@@ -19,6 +19,7 @@ export interface WireContentBlock {
 export interface WireMessage {
   role?: string;
   content?: unknown;
+  rawContent?: unknown;
   tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
   toolCalls?: Array<{
     id?: string;

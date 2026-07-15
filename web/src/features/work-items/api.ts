@@ -1,4 +1,5 @@
 import type { ProjectGoal, ProjectSession } from '@/features/projects/api';
+import type { StartWorkflowRunResult } from '@/features/workflows/workflow-api';
 import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -219,6 +220,19 @@ export async function createWorkItemGoal(workItemId: string): Promise<{ ok: true
     method: 'POST',
     body: JSON.stringify({}),
   });
+}
+
+export async function startWorkItemWorkflowRun(workItemId: string, input: {
+  definitionId: string;
+  goal?: string;
+}): Promise<StartWorkflowRunResult & { ok: true; item: WorkItem }> {
+  return fetchJson<StartWorkflowRunResult & { ok: true; item: WorkItem }>(
+    apiUrl(`/api/work-items/${encodeURIComponent(workItemId)}/workflows/run`),
+    {
+      method: 'POST',
+      body: JSON.stringify(input),
+    },
+  );
 }
 
 export async function fetchWorkItemEvents(workItemId: string): Promise<{ ok: true; events: WorkItemEvent[] }> {

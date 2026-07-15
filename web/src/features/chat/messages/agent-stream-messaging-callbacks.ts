@@ -123,13 +123,13 @@ export function createAgentStreamMessagingCallbacks(opts: {
       });
       store().setSessionFlags(chatId, { streaming: true });
     },
-    onToolEnd: (toolName, isErr, result) => {
+    onToolEnd: (toolName, isErr, result, toolCallId) => {
       if (toolName === 'clarify') {
         fq.onClarifyToolEnd(chatId);
       }
       beforeAssistantDelta();
       store().mutateSessionStreaming(chatId, (msg) => {
-        completeTool(msg.content, toolName, isErr, result);
+        completeTool(msg.content, toolName, isErr, result, toolCallId);
       });
     },
     onToolUpdate: (toolName, toolCallId, details) => {

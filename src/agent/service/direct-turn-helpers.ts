@@ -16,6 +16,7 @@ import { parseSlashCommand } from '../../chat-commands/command-parse.js';
 import { shouldSkipResetOverlapCommand } from '../../session/reset-triggers.js';
 import { hydrateUserTurnForLlm, type TranscriptUserMessage } from '../inbound/attachment-pipeline.js';
 import type { CommandHandler } from '../messaging/command-handler.js';
+import type { CommandStreamEvent } from '../../chat-commands/types.js';
 import type { SessionStore } from '../../session/index.js';
 import type { Config } from '../../config/schema.js';
 import type { AgentInstanceGateway } from '../agent-instance-gateway.js';
@@ -74,7 +75,10 @@ export async function tryRunSlashCommand(
     inboundMetadata?: Record<string, unknown>;
   },
   content: string,
-  options?: { skipResetCommands?: boolean },
+  options?: {
+    skipResetCommands?: boolean;
+    emitEvent?: (event: CommandStreamEvent) => void | Promise<void>;
+  },
 ): Promise<SlashCommandOutcome> {
   const parsed = parseSlashCommand(content);
   if (!parsed) {
@@ -98,6 +102,7 @@ export async function tryRunSlashCommand(
         isGroup: ctx.isGroup ?? false,
         inboundMetadata: ctx.inboundMetadata ?? {},
       },
+      { emitEvent: options?.emitEvent },
     );
     return { matched: true, aggregatedText: aggregatedText ?? '', command: parsed.command, metadata };
   } catch (err) {

@@ -87,6 +87,7 @@ export function useChatSession() {
   const thinkingLevel = sessionSlice?.thinkingLevel ?? DEFAULT_THINKING;
   const reasoningLevel = sessionSlice?.reasoningLevel ?? 'stream';
   const modelSupportsThinking = sessionSlice?.modelSupportsThinking ?? false;
+  const effectiveWorkspacePath = sessionSlice?.effectiveWorkspacePath ?? '';
   const workingDirectoryLocked = sessionSlice?.workingDirectoryLocked ?? false;
 
   useEffect(() => {
@@ -262,6 +263,7 @@ export function useChatSession() {
         model: string;
         thinkingLevel?: string | null;
         reasoningLevel?: string | null;
+        effectiveWorkspacePath?: string | null;
         workingDirectoryLocked?: boolean;
       },
     ) => {
@@ -412,6 +414,7 @@ export function useChatSession() {
       onSessionThinkingLevelChange,
       reasoningLevel,
       modelSupportsThinking,
+      effectiveWorkspacePath,
       workingDirectoryLocked,
       hasMore,
       loadingMore,

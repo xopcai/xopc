@@ -67,7 +67,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     agentName,
     modelName,
     displayMessages,
-    chatSuggestions,
+    welcomeModel,
     isEmptyChat,
     composerDisabled,
     composerSuggestion,
@@ -92,7 +92,7 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
     handleModelSelect,
     handleAgentSelect,
     handleNewChat,
-    handleStarterSend,
+    handleStarterPrefill,
     handleGoalShortcutPress,
     handleComposerSend,
     handleUserMessageCopy,
@@ -220,10 +220,10 @@ export function ChatScreen({ embedded = false, overlay = false, onRequestHome }:
             }}
             onAtBottomChange={(isAtBottom) => { chat.messageListAtBottomRef.current = isAtBottom; }}
             sessionKey={sessionKey}
-            welcomeTitle={m.chat.welcomeTitle}
-            welcomeSubtitle={m.chat.welcomeSubtitle}
-            suggestions={chatSuggestions}
-            onSuggestionSend={handleStarterSend}
+            welcomeTitle={welcomeModel.headline}
+            welcomeSubtitle={welcomeModel.tagline}
+            welcomeStarters={welcomeModel.starters}
+            onSuggestionSend={handleStarterPrefill}
             onUserMessageCopy={handleUserMessageCopy}
             onUserMessageEdit={handleUserMessageEdit}
             onAssistantCopy={handleAssistantCopy}

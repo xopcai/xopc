@@ -7,6 +7,8 @@
 
 import type {
   CommandContext,
+  BtwQueryOptions,
+  CommandStreamEvent,
   ReplyOptions,
   UIComponent,
   SessionInfo,
@@ -77,7 +79,13 @@ export interface CommandContextDeps {
     options?: { instructions?: string; force?: boolean },
   ) => Promise<CompactionResult>;
 
-  btwQuery?: (sessionKey: string, question: string) => Promise<{ text: string; error?: string }>;
+  btwQuery?: (
+    sessionKey: string,
+    question: string,
+    options?: BtwQueryOptions,
+  ) => Promise<{ text: string; error?: string }>;
+
+  emitEvent?: (event: CommandStreamEvent) => void | Promise<void>;
 
   getSessionContextReport?: (
     sessionKey: string,
@@ -404,11 +412,15 @@ export class CommandContextImpl implements CommandContext {
     };
   }
 
-  async btwQuery(question: string): Promise<{ text: string; error?: string }> {
+  async btwQuery(question: string, options?: BtwQueryOptions): Promise<{ text: string; error?: string }> {
     if (!this.deps.btwQuery) {
       return { text: '', error: 'Side questions are not available in this environment.' };
     }
-    return this.deps.btwQuery(this.sessionKey, question);
+    return this.deps.btwQuery(this.sessionKey, question, options);
+  }
+
+  emitEvent(event: CommandStreamEvent): void | Promise<void> {
+    return this.deps.emitEvent?.(event);
   }
 
   async exportSessionToWorkspace(format: 'markdown' | 'html' | 'json'): Promise<{ path: string }> {

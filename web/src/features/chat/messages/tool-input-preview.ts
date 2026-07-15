@@ -35,7 +35,13 @@ export function extractSearchQuery(input: unknown): string {
 
 export function extractPathPreview(input: unknown): string {
   const obj = parseInputAsObject(input);
-  const p = obj?.path ?? obj?.file_path ?? obj?.filepath ?? obj?.file;
+  const p =
+    obj?.path ??
+    obj?.file_path ??
+    obj?.filepath ??
+    obj?.file ??
+    obj?.qualified_name ??
+    obj?.function_name;
   if (typeof p === 'string') return p;
   return '';
 }
@@ -81,6 +87,11 @@ export function getKeyDetailLine(input: unknown): string {
     obj.query_string,
     obj.search_term,
     obj.searchQuery,
+    obj.qualified_name,
+    obj.function_name,
+    obj.name_pattern,
+    obj.qn_pattern,
+    obj.file_pattern,
   ];
 
   for (const c of candidates) {

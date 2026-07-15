@@ -2,6 +2,7 @@ import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import type { ImageContent } from '@earendil-works/pi-ai';
 
 import type { Config } from '../../config/schema.js';
+import { extractProfileAgentId } from '../../config/agent-profile.js';
 import {
   isImageInboundAttachment,
   type MediaRef,
@@ -159,9 +160,11 @@ export async function buildTranscriptUserMessage(opts: {
 
   if (imageRefs.length > 0 && strategy !== 'native') {
     const images = await Promise.all(imageRefs.map((ref) => readImageBase64FromRef(ref)));
+    const agentId = opts.config ? extractProfileAgentId(opts.sessionKey, opts.config) : undefined;
     const parts = await resolveInboundImageContentParts({
       modelRef: opts.modelRef,
       cfg: opts.config,
+      agentId,
       userTextForContext: expandedText,
       images,
     });

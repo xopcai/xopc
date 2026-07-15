@@ -37,6 +37,7 @@ export function useChatSessionInit(opts: {
       model: string;
       thinkingLevel?: string | null;
       reasoningLevel?: string | null;
+      effectiveWorkspacePath?: string | null;
       workingDirectoryLocked?: boolean;
     },
   ) => void;
@@ -132,7 +133,10 @@ export function useChatSessionInit(opts: {
         navigateToSession: runtime.navigateToSession,
         replaceNavigate: true,
         search: searchParamsForComposerHandoff(request.newRouteLocationSearch),
-        onOpened: (key) => runtime.adoptEmptySession(key, null),
+        onOpened: (key) => {
+          runtime.adoptEmptySession(key, null);
+          applyResolvedSessionConfig(key);
+        },
       }).then(() => undefined);
     };
 
@@ -181,7 +185,10 @@ export function useChatSessionInit(opts: {
           currentSessionKey: null,
           routeSessionKey: null,
           navigateToSession: runtime.navigateToSession,
-          onOpened: (key) => runtime.adoptEmptySession(key, null),
+          onOpened: (key) => {
+            runtime.adoptEmptySession(key, null);
+            applyResolvedSessionConfig(key);
+          },
         }).then(() => undefined);
       });
     };

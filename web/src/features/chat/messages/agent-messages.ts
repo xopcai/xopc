@@ -377,6 +377,18 @@ function appendReviewFromMetadata(content: MessageContent[], metadata: unknown):
 
 function mergeAssistantContent(m: WireMessage): MessageContent[] {
   const blocks = normalizeContentBlocks(m.content);
+  for (const rawBlock of normalizeContentBlocks(m.rawContent)) {
+    if (rawBlock.type === 'review' && blocks.some((b) => b.type === 'review' && b.target === rawBlock.target)) {
+      continue;
+    }
+    if (rawBlock.type === 'tool_use' && blocks.some((b) => b.type === 'tool_use' && b.id === rawBlock.id)) {
+      continue;
+    }
+    if (rawBlock.type === 'text' && blocks.some((b) => b.type === 'text' && b.text === rawBlock.text)) {
+      continue;
+    }
+    blocks.push(rawBlock);
+  }
 
   const tc = m.tool_calls;
   if (Array.isArray(tc)) {
@@ -406,7 +418,9 @@ function mergeAssistantContent(m: WireMessage): MessageContent[] {
   if (Array.isArray(piTcs)) {
     for (let i = 0; i < piTcs.length; i += 1) {
       const call = piTcs[i];
-      const id = call.id ?? `tool-call-${i}-${call.name || 'tool'}`;
+      const id = typeof call.id === 'string' && call.id
+        ? call.id
+        : `tool-call-${i}-${call.name || 'tool'}`;
       if (blocks.some((b) => b.type === 'tool_use' && b.id === id)) {
         continue;
       }

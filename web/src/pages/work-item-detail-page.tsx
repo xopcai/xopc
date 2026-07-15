@@ -5,10 +5,12 @@ import {
   Download,
   ExternalLink,
   FileText,
+  GitBranch,
   MessageSquarePlus,
   Paperclip,
   Plus,
   RefreshCw,
+  Rocket,
   Target,
   Trash2,
 } from 'lucide-react';
@@ -16,6 +18,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { fetchProject, type ProjectWithDetails } from '@/features/projects/api';
 import {
   createWorkItemGoal,
@@ -24,12 +27,14 @@ import {
   fetchWorkItem,
   fetchWorkItemEvents,
   startWorkItemChat,
+  startWorkItemWorkflowRun,
   uploadWorkItemAttachments,
   type WorkItem,
   type WorkItemAttachment,
   type WorkItemEvent,
   type WorkItemStatus,
 } from '@/features/work-items/api';
+import { listWorkflowDefinitions, type WorkflowDefinition } from '@/features/workflows/workflow-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -97,6 +102,53 @@ function ActivityList({ events, t }: { events: WorkItemEvent[]; t: WorkItemsMess
   );
 }
 
+function tokenize(value: string): Set<string> {
+  return new Set(value.toLowerCase().split(/[^a-z0-9\u4e00-\u9fff]+/).filter((token) => token.length >= 2));
+}
+
+function workflowRecommendationScore(item: WorkItem, project: ProjectWithDetails | null, definition: WorkflowDefinition): number {
+  const projectKind = (project as { projectKind?: string } | null)?.projectKind;
+  const workText = [
+    item.title,
+    item.description,
+    item.nextAction,
+    item.blockedReason,
+    item.status,
+    item.priority,
+    project?.name,
+    project?.description,
+    projectKind,
+  ].filter(Boolean).join(' ');
+  const definitionText = [
+    definition.title,
+    definition.description,
+    definition.metadata.whenToUse,
+    ...(definition.metadata.tags ?? []),
+  ].filter(Boolean).join(' ');
+  const workTokens = tokenize(workText);
+  let score = 0;
+  for (const token of tokenize(definitionText)) {
+    if (workTokens.has(token)) score += 3;
+  }
+  const lowerDefinition = definitionText.toLowerCase();
+  if ((item.status === 'blocked' || item.status === 'needs_input') && /debug|diagnos|review|audit|fix|检查|排查|修复/.test(lowerDefinition)) score += 8;
+  if (item.status === 'in_review' && /review|audit|check|验收|评审|检查/.test(lowerDefinition)) score += 6;
+  if (item.attachments?.length && /analy|extract|summar|review|整理|分析|总结/.test(lowerDefinition)) score += 5;
+  if (projectKind === 'coding' && /code|repo|test|pr|review|代码|仓库|测试/.test(lowerDefinition)) score += 5;
+  return score;
+}
+
+function rankWorkflowDefinitionsForWorkItem(
+  item: WorkItem,
+  project: ProjectWithDetails | null,
+  definitions: WorkflowDefinition[],
+): WorkflowDefinition[] {
+  return [...definitions].sort((a, b) => (
+    workflowRecommendationScore(item, project, b) - workflowRecommendationScore(item, project, a)
+    || a.title.localeCompare(b.title)
+  ));
+}
+
 export function WorkItemDetailPage() {
   const { workItemId = '' } = useParams();
   const navigate = useNavigate();
@@ -105,6 +157,9 @@ export function WorkItemDetailPage() {
   const [item, setItem] = useState<WorkItem | null>(null);
   const [project, setProject] = useState<ProjectWithDetails | null>(null);
   const [events, setEvents] = useState<WorkItemEvent[]>([]);
+  const [workflowDefinitions, setWorkflowDefinitions] = useState<WorkflowDefinition[]>([]);
+  const [selectedWorkflowId, setSelectedWorkflowId] = useState('');
+  const [workflowGoal, setWorkflowGoal] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,9 +181,16 @@ export function WorkItemDetailPage() {
         fetchWorkItemEvents(workItemId).catch(() => ({ events: [] })),
       ]);
       setItem(itemRes.item);
+      setWorkflowGoal(itemRes.item.nextAction || itemRes.item.title);
       setEvents(eventsRes.events);
-      const loadedProject = await fetchProject(itemRes.item.projectId).catch(() => null);
+      const [loadedProject, definitions] = await Promise.all([
+        fetchProject(itemRes.item.projectId).catch(() => null),
+        listWorkflowDefinitions().catch(() => []),
+      ]);
+      const rankedDefinitions = rankWorkflowDefinitionsForWorkItem(itemRes.item, loadedProject, definitions);
       setProject(loadedProject);
+      setWorkflowDefinitions(rankedDefinitions);
+      setSelectedWorkflowId((current) => current || rankedDefinitions[0]?.id || '');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -175,6 +237,25 @@ export function WorkItemDetailPage() {
     setEvents(nextEvents.events);
   }, []);
 
+  const handleStartWorkflow = useCallback(async () => {
+    if (!item || !selectedWorkflowId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await startWorkItemWorkflowRun(item.id, {
+        definitionId: selectedWorkflowId,
+        goal: workflowGoal.trim() || item.nextAction || item.title,
+      });
+      setItem(res.item);
+      await refreshEvents(res.item.id);
+      navigate(`/workflows?run=${encodeURIComponent(res.runId)}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
+  }, [item, navigate, refreshEvents, selectedWorkflowId, workflowGoal]);
+
   const handleAddAttachments = useCallback(async (files: File[]) => {
     if (!item || !files.length) return;
     setBusy(true);
@@ -214,6 +295,14 @@ export function WorkItemDetailPage() {
       setError(err instanceof Error ? err.message : String(err));
     }
   }, [item]);
+
+  const recommendedWorkflowDefinitions = useMemo(() => (
+    item
+      ? workflowDefinitions
+        .filter((definition) => workflowRecommendationScore(item, project, definition) > 0)
+        .slice(0, 3)
+      : []
+  ), [item, project, workflowDefinitions]);
 
   const headerEnd = useMemo(() => (
     <>
@@ -339,6 +428,74 @@ export function WorkItemDetailPage() {
         </section>
 
         <aside className="grid content-start gap-4">
+          <section className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
+                <GitBranch className="size-4 shrink-0 text-fg-muted" aria-hidden />
+                <span className="truncate">{t.detail.workflowTitle}</span>
+              </h2>
+            </div>
+            <p className="mt-1 text-xs leading-5 text-fg-muted">{t.detail.workflowHint}</p>
+            <div className="mt-3 grid gap-2">
+              <label className="grid gap-1 text-xs font-medium text-fg-subtle">
+                {t.detail.workflowTemplate}
+                <Select
+                  className="h-9 rounded-md border border-edge bg-surface-base px-2 text-sm font-normal text-fg outline-none focus:border-accent"
+                  value={selectedWorkflowId}
+                  disabled={busy || workflowDefinitions.length === 0}
+                  onChange={(event) => setSelectedWorkflowId(event.target.value)}
+                >
+                  {workflowDefinitions.length === 0 ? <SelectOption value="">{t.detail.noWorkflowTemplates}</SelectOption> : null}
+                  {workflowDefinitions.map((definition) => (
+                    <SelectOption key={definition.id} value={definition.id}>{definition.title}</SelectOption>
+                  ))}
+                </Select>
+              </label>
+              {recommendedWorkflowDefinitions.length ? (
+                <div className="grid gap-1">
+                  <div className="text-xs font-medium text-fg-subtle">{t.detail.recommendedWorkflows}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {recommendedWorkflowDefinitions.map((definition) => (
+                      <button
+                        key={definition.id}
+                        type="button"
+                        className={cn(
+                          'min-w-0 rounded-md border px-2 py-1 text-left text-xs transition-colors',
+                          selectedWorkflowId === definition.id
+                            ? 'border-accent bg-accent-soft text-accent-fg'
+                            : 'border-edge bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg',
+                        )}
+                        disabled={busy}
+                        onClick={() => setSelectedWorkflowId(definition.id)}
+                      >
+                        <span className="block max-w-48 truncate">{definition.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <label className="grid gap-1 text-xs font-medium text-fg-subtle">
+                {t.detail.workflowGoal}
+                <textarea
+                  className="min-h-20 resize-y rounded-md border border-edge bg-surface-base px-2 py-2 text-sm font-normal text-fg outline-none focus:border-accent"
+                  value={workflowGoal}
+                  disabled={busy}
+                  onChange={(event) => setWorkflowGoal(event.target.value)}
+                />
+              </label>
+              <Button
+                type="button"
+                variant="primary"
+                className="h-9 rounded-lg px-3 text-xs"
+                disabled={busy || !selectedWorkflowId}
+                onClick={handleStartWorkflow}
+              >
+                <Rocket className="size-3.5" aria-hidden />
+                {t.detail.startWorkflow}
+              </Button>
+              {!workflowDefinitions.length ? <p className="text-xs text-fg-muted">{t.detail.noWorkflowTemplates}</p> : null}
+            </div>
+          </section>
           <section className="rounded-lg bg-surface-panel px-4 py-3 shadow-surface">
             <div className="flex items-center justify-between gap-3">
               <h2 className="inline-flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
