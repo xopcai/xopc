@@ -95,6 +95,25 @@ describe('messagesToClientHistory', () => {
     ]);
   });
 
+  it('preserves structured assistant content for chat history reloads', () => {
+    const structuredContent = [
+      { type: 'thinking', thinking: 'Inspecting files.' },
+      { type: 'tool_use', id: 'tool-1', name: 'read_file', input: { path: 'a.ts' } },
+      { type: 'text', text: 'Done.' },
+    ];
+    const rows = [
+      { role: 'assistant', content: structuredContent },
+    ] as unknown as TranscriptStoredRow[];
+
+    expect(transcriptRowsToClientHistory(rows)).toMatchObject([
+      {
+        role: 'assistant',
+        content: 'Done.',
+        rawContent: structuredContent,
+      },
+    ]);
+  });
+
   it('preserves row numbers and global display indexes for explicit transcript windows', () => {
     const rows = [
       { role: 'user', content: 'turn 1' },

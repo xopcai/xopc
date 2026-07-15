@@ -56,11 +56,11 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
 }) {
   const s = spotlight;
   const panelId = useId();
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [selectedCategoryIndex, setSelectedCategoryIndex] = useState<number | null>(null);
 
   const selectedCategory = useMemo(
-    () => s.categories.find((category) => category.id === selectedCategoryId),
-    [s.categories, selectedCategoryId],
+    () => (selectedCategoryIndex == null ? undefined : s.categories[selectedCategoryIndex]),
+    [s.categories, selectedCategoryIndex],
   );
 
   const pick = (selection: Omit<WelcomeSuggestionSelection, 'contextKind'>) => {
@@ -105,9 +105,8 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
         </div>
       </div>
 
-      <section className="mt-10 sm:mt-12" aria-label={s.otherSuggestionsLabel}>
-        <div className="mb-2 flex min-h-8 items-center justify-between gap-3">
-          <h2 className="text-xs font-medium text-fg-muted">{s.otherSuggestionsLabel}</h2>
+      <section className="mt-7 sm:mt-8" aria-label={s.otherSuggestionsLabel}>
+        <div className="mb-2 flex min-h-8 items-center justify-end gap-3">
           {canRefreshExploration ? (
             <button
               type="button"
@@ -127,15 +126,15 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
           ) : null}
         </div>
         <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-2.5">
-          {s.categories.map((category) => {
-            const expanded = selectedCategoryId === category.id;
+          {s.categories.map((category, index) => {
+            const expanded = selectedCategoryIndex === index;
             return (
               <div key={category.id} className="relative min-w-0">
                 <button
                   type="button"
                   aria-expanded={expanded}
                   aria-controls={expanded ? panelId : undefined}
-                  onClick={() => setSelectedCategoryId((previous) => (previous === category.id ? null : category.id))}
+                  onClick={() => setSelectedCategoryIndex((previous) => (previous === index ? null : index))}
                   className={cn(
                     'flex min-h-14 h-full w-full flex-row items-start gap-2.5 rounded-xl border bg-surface-panel p-2.5 text-left shadow-surface sm:flex-col sm:gap-2',
                     interaction.transition,
@@ -216,9 +215,8 @@ export const ChatWelcomeSpotlightSkeleton = memo(function ChatWelcomeSpotlightSk
         </div>
       </div>
 
-      <section className="mt-10 sm:mt-12" aria-hidden="true">
-        <div className="mb-2 flex min-h-8 items-center justify-between gap-3">
-          <Skeleton className={cn('h-3 w-16', skeletonClassName)} />
+      <section className="mt-7 sm:mt-8" aria-hidden="true">
+        <div className="mb-2 flex min-h-8 items-center justify-end gap-3">
           <Skeleton className={cn('h-7 w-24 rounded-lg', skeletonClassName)} />
         </div>
         <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-2.5">
