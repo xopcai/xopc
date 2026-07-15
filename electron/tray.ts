@@ -143,7 +143,7 @@ export function createTray(iconDir: string, actions: TrayActions, messages: Elec
   }
   if (process.platform === 'darwin') {
     // Keep status bar icon aligned with macOS menubar glyph size.
-    icon = icon.resize({ height: 18 });
+    icon = icon.resize({ height: 20 });
     icon.setTemplateImage(true);
   } else if (process.platform === 'win32') {
     // Windows notification area icons render best from a real small bitmap.
