@@ -384,7 +384,7 @@ export class AgentService {
       reloadSkills: () => this.refreshSkillsAfterDiskChange(),
       installSkillFromSource: (opts) => this.installSkillFromSource(opts),
       compactSession: (sessionKey, options) => this.sessionInspector.compact(sessionKey, options),
-      btwQuery: (sessionKey, question) => this.sessionInspector.btwQuery(sessionKey, question),
+      btwQuery: (sessionKey, question, options) => this.sessionInspector.btwQuery(sessionKey, question, options),
       getSessionContextReport: (sessionKey, mode) => this.sessionInspector.report(sessionKey, mode),
     });
 

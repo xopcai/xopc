@@ -142,6 +142,17 @@ export interface CommandResult {
   metadata?: Record<string, unknown>;
 }
 
+export type CommandStreamEvent = {
+  type: string;
+  [key: string]: unknown;
+};
+
+export type BtwQueryOptions = {
+  maxTokens?: number;
+  temperature?: number;
+  modelRef?: string;
+};
+
 // ============================================================================
 // Command Context (Platform Abstraction)
 // ============================================================================
@@ -251,7 +262,10 @@ export interface CommandContext {
   compactSession?(options?: { instructions?: string; force?: boolean }): Promise<CompactSessionResult | null>;
 
   /** Side question: LLM answer without appending to the session transcript. */
-  btwQuery?(question: string): Promise<{ text: string; error?: string }>;
+  btwQuery?(question: string, options?: BtwQueryOptions): Promise<{ text: string; error?: string }>;
+
+  /** Optional stream bridge for rich surfaces such as webchat/TUI. */
+  emitEvent?(event: CommandStreamEvent): void | Promise<void>;
 
   /** Write session transcript to workspace `exports/` (markdown, html, or json). */
   exportSessionToWorkspace?(format: 'markdown' | 'html' | 'json'): Promise<{ path: string }>;

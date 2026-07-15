@@ -948,6 +948,88 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, goal: goalWithContext, item: updated }, 201);
   });
 
+  authenticated.post('/api/work-items/:id/workflows/run', async (c) => {
+    const item = workItems.getWorkItem(c.req.param('id'));
+    if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);
+    const project = service.projects.get(item.projectId);
+    if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);
+    if (item.status === 'done' || item.status === 'cancelled' || item.archivedAt) {
+      return c.json({ ok: false, error: 'Work item is not active' }, 409);
+    }
+
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const definitionId = textField(body, 'definitionId')?.trim();
+    if (!definitionId) return c.json({ ok: false, error: 'Missing definitionId' }, 400);
+
+    const agentId = resolveProjectAgentId({
+      config: service.currentConfig,
+      projects: service.projects,
+      explicitAgentId: item.ownerAgentId,
+      projectId: project.id,
+    });
+    const goalText = textField(body, 'goal')?.trim() || item.nextAction || item.title;
+    const attachments = item.attachments?.map((attachment) => ({
+      id: attachment.id,
+      fileName: attachment.fileName,
+      type: attachment.type,
+      mimeType: attachment.mimeType,
+      size: attachment.size,
+    }));
+    const input = Object.hasOwn(body, 'input') ? body.input : {
+      workItem: {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        status: item.status,
+        priority: item.priority,
+        nextAction: item.nextAction,
+        blockedReason: item.blockedReason,
+        attachments,
+      },
+      project: {
+        id: project.id,
+        name: project.name,
+        description: project.description,
+        brief: project.brief,
+        instructions: project.instructions,
+        workspaceRoot: project.workspaceRoot,
+      },
+    };
+    const rawTokenBudget = body.tokenBudget;
+    const tokenBudget = rawTokenBudget === null
+      ? null
+      : typeof rawTokenBudget === 'number' && Number.isFinite(rawTokenBudget)
+        ? rawTokenBudget
+        : undefined;
+
+    const result = await service.createWorkflowRunService().startWorkflowRun({
+      agentId,
+      definitionId,
+      projectId: project.id,
+      workItemId: item.id,
+      goal: goalText,
+      input,
+      source: { kind: 'webui' },
+      concurrency: finiteNumberField(body.concurrency),
+      maxSubagents: finiteNumberField(body.maxSubagents),
+      tokenBudget,
+    });
+    if (result.ok === false) {
+      return c.json({ ok: false, error: result.message, code: result.code }, result.httpStatus);
+    }
+
+    workItems.addLink(item.id, {
+      kind: 'workflow_run',
+      targetId: result.runId,
+      title: goalText,
+      statusSnapshot: 'queued',
+    }, 'workflow_started');
+    const updated = item.status === 'todo' || item.status === 'backlog'
+      ? workItems.updateWorkItem(item.id, { status: 'in_progress' })
+      : workItems.getWorkItem(item.id);
+    return c.json({ ok: true, runId: result.runId, sessionKey: result.sessionKey, item: updated }, 202);
+  });
+
   authenticated.post('/api/projects/:id/digest-memory', async (c) => {
     const project = service.projects.getWithDetails(c.req.param('id'));
     if (!project) return c.json({ ok: false, error: 'Project not found' }, 404);

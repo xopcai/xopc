@@ -3,6 +3,7 @@ export const queryKeys = {
   sessionsRecent: ['sessions', 'recent'] as const,
   sessionsAll: ['sessions'] as const,
   session: (key: string) => ['session', key] as const,
+  sessionAgentConfig: (key: string) => ['session', key, 'agent-config'] as const,
   sessionHistory: (key: string) => ['session', key, 'history'] as const,
   sessionHistoryOlderPreview: (key: string, before: string) => ['session', key, 'history', 'olderPreview', before] as const,
   agents: ['agents'] as const,

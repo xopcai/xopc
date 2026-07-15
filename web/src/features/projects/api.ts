@@ -98,6 +98,7 @@ export type ProjectSession = {
   name?: string;
   updatedAt?: string;
   agentId?: string;
+  sourceChannel?: string;
   routing?: {
     agentId?: string;
   };

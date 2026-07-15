@@ -53,6 +53,11 @@ export type GatewayAgentRow = {
   name?: string;
   description?: string;
   language?: string;
+  role?: string;
+  responsibilities?: {
+    primary: string[];
+    secondary?: string[];
+  };
   /** Value from `IDENTITY.md` **Avatar:** line when present (may be URL, `xopc:…`, etc.). */
   avatar?: string;
   workspace: string;
@@ -171,6 +176,13 @@ export async function listGatewayAgents(
       ...(identity.name ? { name: identity.name } : {}),
       ...(identity.description ? { description: identity.description } : {}),
       ...(identity.language ? { language: identity.language } : {}),
+      ...(profile.manifest.identity.role ? { role: profile.manifest.identity.role } : {}),
+      responsibilities: {
+        primary: [...profile.manifest.responsibilities.primary],
+        ...(profile.manifest.responsibilities.secondary
+          ? { secondary: [...profile.manifest.responsibilities.secondary] }
+          : {}),
+      },
       ...(identity.avatar ? { avatar: identity.avatar } : {}),
       workspace: profile.resolvedWorkspacePath,
       profileDir: resolveAgentProfileDir(cfg, id),

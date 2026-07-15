@@ -261,6 +261,25 @@ function activitySourceLabel(activity: ProjectActivityEvent): string {
   return source.kind;
 }
 
+function projectSessionSource(session: ProjectSession): string {
+  const explicit = session.sourceChannel?.trim();
+  if (explicit) return formatProjectSessionSource(explicit);
+
+  const parts = session.key.split(':').filter(Boolean);
+  const rest = parts[0]?.toLowerCase() === 'agent' ? parts.slice(2).join(':') : session.key;
+  const candidate = rest.split(':')[0]?.split(/[-_]/)[0]?.trim();
+  return formatProjectSessionSource(candidate || '');
+}
+
+function formatProjectSessionSource(source: string): string {
+  const normalized = source.trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized === 'tui') return 'TUI';
+  if (normalized === 'acp') return 'ACP';
+  if (normalized === 'webchat') return 'Webchat';
+  return normalized;
+}
+
 function activityPayloadPreview(activity: ProjectActivityEvent): string {
   const changes = activity.payload.changes;
   if (Array.isArray(changes) && changes.length) {
@@ -1529,7 +1548,8 @@ export function ProjectDetailPage() {
       const agentLabel = session.routing?.agentId || session.agentId || pm.common.agent;
       const title = session.name?.trim() || pm.sessions.fallbackTitle;
       const messagesLabel = messageCount(session.messageCount ?? 0);
-      return [title, session.key, agentLabel, updatedAt, messagesLabel]
+      const sourceLabel = projectSessionSource(session);
+      return [title, session.key, agentLabel, sourceLabel, updatedAt, messagesLabel]
         .filter(Boolean)
         .join(' ')
         .toLowerCase()
@@ -2198,6 +2218,7 @@ export function ProjectDetailPage() {
               {visibleSessions.map((session) => {
               const updatedAt = formatDate(session.updatedAt);
               const agentLabel = session.routing?.agentId || session.agentId || pm.common.agent;
+              const sourceLabel = projectSessionSource(session);
               const title = session.name?.trim() || pm.sessions.fallbackTitle;
               const messagesLabel = messageCount(session.messageCount ?? 0);
               return (
@@ -2205,17 +2226,21 @@ export function ProjectDetailPage() {
                   key={session.key}
                   to={`/chat/${encodeURIComponent(session.key)}`}
                   onClick={onProjectTabLinkClick('sessions')}
-                  className="group flex min-h-[11rem] min-w-0 flex-col rounded-lg bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  className="group flex min-h-[8.75rem] min-w-0 flex-col rounded-lg bg-surface-panel p-4 shadow-surface transition-colors hover:bg-surface-hover/45 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 >
                   <div className="flex min-w-0 items-start gap-3">
                     <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-base text-fg-muted">
                       <MessageSquarePlus className="size-4" aria-hidden />
                     </span>
-                    <div className="min-w-0">
-                      <h3 className="truncate text-sm font-semibold text-fg">{title}</h3>
-                      <p className="mt-1 line-clamp-2 break-all font-mono text-xs leading-5 text-fg-muted" title={session.key}>
-                        {session.key}
-                      </p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{title}</h3>
+                        {sourceLabel ? (
+                          <span className="shrink-0 rounded-md bg-surface-base px-2 py-0.5 text-[11px] font-medium leading-5 text-fg-muted">
+                            {sourceLabel}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   </div>
                   <div className="mt-auto grid gap-2 pt-4 text-xs text-fg-muted">

@@ -66,7 +66,12 @@ export type MessagingCallbacks = {
   onThinking: (content: string, isDelta: boolean) => void;
   onThinkingEnd: () => void;
   onToolStart: (toolName: string, args?: unknown, toolCallId?: string) => void;
-  onToolEnd: (toolName: string, isError: boolean, result?: unknown) => void;
+  onToolEnd: (
+    toolName: string,
+    isError: boolean,
+    result?: unknown,
+    toolCallId?: string,
+  ) => void;
   /**
    * Mid-execution structured update for a tool whose `partialResult` carried
    * `details`. Only emitted today by the `workflow` tool — feeds the
@@ -423,6 +428,7 @@ export class MessageSender {
           typeof payload.toolName === 'string' && payload.toolName ? payload.toolName : 'unknown',
           payload.status === 'error' || payload.status === 'cancelled',
           serializeProtocolPayload(payload.result),
+          typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined,
         );
         break;
       case 'progress':

@@ -352,6 +352,8 @@ export type PetSessionUpdate = {
   state: PetSessionState;
   phase: DesktopPetActivityPhase;
   action: string;
+  animation?: DesktopPetAction;
+  priority?: "low" | "normal" | "high";
   detail?: string;
   progress?: { completed: number; total: number };
   outputTail?: string;

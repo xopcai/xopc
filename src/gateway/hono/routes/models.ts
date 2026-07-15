@@ -293,12 +293,13 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
 
   authenticated.get('/api/image/capabilities', async (c) => {
     const config = service.currentConfig as Config;
+    const agentId = c.req.query('agentId')?.trim() || undefined;
     const imageGenerationProviders = await resolveImageGenerationCapabilities(config);
     const imageUnderstandingProviders = await resolveImageUnderstandingCapabilities(config);
     return c.json({
       ok: true,
       payload: {
-        current: resolveCurrentImageModelCapabilities(config),
+        current: resolveCurrentImageModelCapabilities(config, agentId),
         imageGeneration: { providers: imageGenerationProviders },
         imageUnderstanding: { providers: imageUnderstandingProviders },
       },

@@ -31,6 +31,7 @@ export type ChatSessionSlice = {
   thinkingLevel: string;
   reasoningLevel: ReasoningLevel;
   modelSupportsThinking: boolean;
+  effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
   historyStatus: SessionHistoryStatus;
   messages: Message[];
@@ -65,6 +66,7 @@ type ChatSessionStoreActions = {
         | 'thinkingLevel'
         | 'reasoningLevel'
         | 'modelSupportsThinking'
+        | 'effectiveWorkspacePath'
         | 'workingDirectoryLocked'
       >
     >,
@@ -195,6 +197,7 @@ function cloneSlice(slice: ChatSessionSlice): ChatSessionSlice {
     thinkingLevel: slice.thinkingLevel,
     reasoningLevel: slice.reasoningLevel,
     modelSupportsThinking: slice.modelSupportsThinking,
+    effectiveWorkspacePath: slice.effectiveWorkspacePath,
     workingDirectoryLocked: slice.workingDirectoryLocked,
     historyStatus: slice.historyStatus,
     messages: cloneMessages(slice.messages),
@@ -217,6 +220,7 @@ function metaFrom(current: ChatSessionSlice | undefined): Pick<
   | 'thinkingLevel'
   | 'reasoningLevel'
   | 'modelSupportsThinking'
+  | 'effectiveWorkspacePath'
   | 'workingDirectoryLocked'
 > {
   if (!current) return defaultSessionMeta();
@@ -226,6 +230,7 @@ function metaFrom(current: ChatSessionSlice | undefined): Pick<
     thinkingLevel: current.thinkingLevel,
     reasoningLevel: current.reasoningLevel,
     modelSupportsThinking: current.modelSupportsThinking,
+    effectiveWorkspacePath: current.effectiveWorkspacePath,
     workingDirectoryLocked: current.workingDirectoryLocked,
   };
 }

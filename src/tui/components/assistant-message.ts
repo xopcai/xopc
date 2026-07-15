@@ -50,9 +50,12 @@ function isMechanicalToolSummaryLine(line: string): boolean {
 
 function reviewMarkdown(block: ContentBlock): string {
   const findings = Array.isArray(block.findings) ? block.findings : [];
-  const lines: string[] = ['Code review', ''];
+  const lines: string[] = ['<< Code review finished >>', '', 'Code review', ''];
+  const source = typeof block.source === 'string' ? block.source : '';
+  const correctness = typeof block.overallCorrectness === 'string' ? block.overallCorrectness : 'unknown';
+  const modelReviewIncomplete = source === 'local' && correctness === 'unknown';
   if (findings.length === 0) {
-    lines.push('No findings.');
+    lines.push(modelReviewIncomplete ? 'No model findings were produced.' : 'No findings.');
   } else {
     lines.push('Findings:');
     for (const item of findings) {
@@ -72,7 +75,6 @@ function reviewMarkdown(block: ContentBlock): string {
       if (body) lines.push(`  ${body.replace(/\n+/g, '\n  ')}`);
     }
   }
-  const correctness = typeof block.overallCorrectness === 'string' ? block.overallCorrectness : 'unknown';
   const explanation = typeof block.overallExplanation === 'string' ? block.overallExplanation : '';
   lines.push('');
   lines.push(`Overall correctness: ${correctness}`);

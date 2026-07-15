@@ -2,7 +2,15 @@ import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export type ChatAgentOption = { id: string; name?: string; description?: string; avatar?: string };
+export type ChatAgentOption = {
+  id: string;
+  name?: string;
+  description?: string;
+  avatar?: string;
+  role?: string;
+  responsibilities?: string[];
+  skills?: string[];
+};
 
 export type ChatAgentsPayload = {
   defaultId: string;
@@ -26,13 +34,21 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
       ok?: boolean;
       payload?: {
         defaultId?: string;
-        agents?: Array<{ id?: string; name?: string; description?: string; avatar?: string }>;
+        agents?: Array<{
+          id?: string;
+          name?: string;
+          description?: string;
+          avatar?: string;
+          role?: string;
+          responsibilities?: { primary?: string[]; secondary?: string[] };
+          skills?: { effectiveAllowlist?: string[]; entry?: string[] };
+        }>;
       };
     };
     if (data.ok && data.payload?.defaultId && Array.isArray(data.payload.agents)) {
       const defaultId = data.payload.defaultId.trim().toLowerCase();
       const items: ChatAgentOption[] = data.payload.agents
-        .filter((a): a is { id: string; name?: string; description?: string; avatar?: string } =>
+        .filter((a): a is NonNullable<typeof a> & { id: string } =>
           Boolean(a && typeof a.id === 'string' && a.id.trim()),
         )
         .map((a) => ({
@@ -41,6 +57,14 @@ async function fetchChatAgentsUncached(): Promise<ChatAgentsPayload> {
           description:
             typeof a.description === 'string' && a.description.trim() ? a.description.trim() : undefined,
           ...(typeof a.avatar === 'string' && a.avatar.trim() ? { avatar: a.avatar.trim() } : {}),
+          ...(typeof a.role === 'string' && a.role.trim() ? { role: a.role.trim() } : {}),
+          responsibilities: [
+            ...(Array.isArray(a.responsibilities?.primary) ? a.responsibilities.primary : []),
+            ...(Array.isArray(a.responsibilities?.secondary) ? a.responsibilities.secondary : []),
+          ].filter((item): item is string => typeof item === 'string' && Boolean(item.trim())),
+          skills: (a.skills?.effectiveAllowlist ?? a.skills?.entry ?? []).filter(
+            (item): item is string => typeof item === 'string' && Boolean(item.trim()),
+          ),
         }));
       if (items.length > 0) {
         return { defaultId, items };

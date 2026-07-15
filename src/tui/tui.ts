@@ -549,11 +549,12 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   tui.addChild(root);
   tui.setFocus(editor as Component);
 
+  let editorMode: 'chat' | 'shell' = 'chat';
   let isBashMode = false;
   let isBashExcludeContext = false;
 
   const updateEditorBorderColor = () => {
-    if (isBashMode) {
+    if (editorMode === 'shell' || isBashMode) {
       editor.borderColor = isBashExcludeContext ? getBashExcludeBorderColor() : getBashModeBorderColor();
     } else {
       const level = state.sessionInfo.thinkingLevel ?? opts.thinking ?? 'off';
@@ -565,7 +566,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   editor.onChange = (text: string) => {
     const trimmed = text.trimStart();
     const nextExclude = trimmed.startsWith('!!');
-    const nextBash = trimmed.startsWith('!');
+    const nextBash = editorMode === 'shell' || trimmed.startsWith('!');
     if (nextBash !== isBashMode || nextExclude !== isBashExcludeContext) {
       isBashMode = nextBash;
       isBashExcludeContext = nextExclude;
@@ -2160,6 +2161,26 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     },
   });
 
+  const enterShellMode = () => {
+    editorMode = 'shell';
+    editor.setText('');
+    isBashMode = true;
+    isBashExcludeContext = false;
+    updateEditorBorderColor();
+    updateFooter();
+    tui.requestRender();
+  };
+
+  const exitShellMode = () => {
+    if (editorMode !== 'shell') return;
+    editorMode = 'chat';
+    isBashMode = editor.getText().trimStart().startsWith('!');
+    isBashExcludeContext = editor.getText().trimStart().startsWith('!!');
+    updateEditorBorderColor();
+    updateFooter();
+    tui.requestRender();
+  };
+
   const submitCore = createEditorSubmitHandler({
     editor: {
       setText: (value) => editor.setText(value),
@@ -2168,6 +2189,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     handleCommand,
     sendMessage,
     handleBangLine: runLocalShellLine,
+    getMode: () => editorMode,
+    enterShellMode,
+    exitShellMode,
     isAgentBusy,
     steerWhileBusy: steerMessage,
     hasPendingAttachments: () => pendingImageAttachments.length > 0,
@@ -2352,6 +2376,11 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   };
 
   defaultEditor.onEscape = () => {
+    if (editorMode === 'shell') {
+      editor.setText('');
+      exitShellMode();
+      return;
+    }
     if (state.activeRunId) {
       void abortActive();
       return;

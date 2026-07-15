@@ -22,35 +22,36 @@ function stripAnsi(text: string): string {
 /** Local `!` / `!!` shell output block (pi coding-agent–aligned). */
 export class BashExecutionComponent extends Container {
   private readonly contentContainer = new Container();
+  private readonly header: Text;
   private readonly loader: Loader;
   private outputLines: string[] = [];
   private status: 'running' | 'complete' | 'error' = 'running';
   private exitCode: number | undefined;
   private expanded = false;
+  private readonly colorKey: 'bashExclude' | 'bashMode';
 
   constructor(
-    command: string,
+    private readonly command: string,
     ui: TUI,
     private readonly excludeFromContext: boolean,
     private readonly keybindings?: KeybindingsManager,
   ) {
     super();
-    const colorKey = excludeFromContext ? 'bashExclude' : 'bashMode';
-    const borderColor = (str: string) => theme.fg(colorKey, str);
+    this.colorKey = excludeFromContext ? 'bashExclude' : 'bashMode';
+    const borderColor = (str: string) => theme.fg(this.colorKey, str);
 
     this.addChild(new Spacer(1));
     this.addChild(new DynamicBorder(borderColor));
     this.addChild(this.contentContainer);
 
-    const header = new Text(theme.fg(colorKey, theme.bold(`$ ${command}`)), 1, 0);
-    this.contentContainer.addChild(header);
-
+    this.header = new Text(this.formatHeader(), 1, 0);
     this.loader = new Loader(
       ui,
-      (spinner) => theme.fg(colorKey, spinner),
+      (spinner) => theme.fg(this.colorKey, spinner),
       (text) => theme.dim(text),
       'Running…',
     );
+    this.contentContainer.addChild(this.header);
     this.contentContainer.addChild(this.loader);
 
     this.addChild(new DynamicBorder(borderColor));
@@ -102,6 +103,8 @@ export class BashExecutionComponent extends Container {
       this.contentContainer.removeChild(this.contentContainer.children[2]!);
     }
 
+    this.header.setText(this.formatHeader());
+
     const lines = this.outputLines.filter((l) => l.length > 0);
     const visible = this.expanded ? lines : lines.slice(-PREVIEW_LINES);
     const hidden = lines.length - visible.length;
@@ -111,17 +114,25 @@ export class BashExecutionComponent extends Container {
         ? formatKeyIds(this.keybindings, 'app.tools.expand', { capitalize: true })
         : 'Ctrl+O';
       this.contentContainer.addChild(
-        new Text(theme.dim(`… ${hidden} more line${hidden > 1 ? 's' : ''} (${expandKey} to expand tools/output)`), 1, 0),
+        new Text(
+          theme.dim(`… ${hidden} more line${hidden > 1 ? 's' : ''} (${expandKey} to expand tools/output)`),
+          1,
+          0,
+        ),
       );
     }
 
     if (visible.length > 0) {
-      const outputText = visible.map((line) => theme.toolOutput(line)).join('\n');
+      const outputText = visible
+        .map((line, index) => theme.toolOutput(`${index === 0 ? '  └ ' : '    '}${line}`))
+        .join('\n');
       if (this.expanded) {
         this.contentContainer.addChild(new Text(outputText, 1, 0));
       } else {
         this.contentContainer.addChild(createVisualTailComponent(outputText, PREVIEW_LINES, 1));
       }
+    } else if (this.status !== 'running') {
+      this.contentContainer.addChild(new Text(theme.dim('  └ (no output)'), 1, 0));
     }
 
     if (this.status !== 'running') {
@@ -131,6 +142,11 @@ export class BashExecutionComponent extends Container {
           : `exit ${this.exitCode ?? 0}${this.excludeFromContext ? ' · excluded from agent context' : ''}`;
       this.contentContainer.addChild(new Text(theme.dim(suffix), 1, 0));
     }
+  }
+
+  private formatHeader(): string {
+    const verb = this.status === 'running' ? 'Running' : 'You ran';
+    return theme.fg(this.colorKey, theme.bold(`• ${verb} ${this.command}`));
   }
 }
 

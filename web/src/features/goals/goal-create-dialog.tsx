@@ -145,6 +145,7 @@ export function GoalCreateDialog({
   const language = useLocaleStore((s) => s.language);
   const agentsMessages = messages(language).agentsSettings;
   const [draft, setDraft] = useState<CreateGoalDraft>(() => emptyCreateDraft());
+  const [completionOpen, setCompletionOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [drafting, setDrafting] = useState(false);
@@ -153,6 +154,7 @@ export function GoalCreateDialog({
   useEffect(() => {
     if (!open) {
       setDraft(emptyCreateDraft());
+      setCompletionOpen(false);
       setAdvancedOpen(false);
       setLocalError(null);
       setDrafting(false);
@@ -226,6 +228,7 @@ export function GoalCreateDialog({
             checklist: draft.checklist,
           };
       patch(next);
+      setCompletionOpen(true);
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : t.createDialog.draftFailed);
     } finally {
@@ -268,6 +271,25 @@ export function GoalCreateDialog({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
             <div className="grid gap-4">
+              <section className="rounded-lg border border-accent/25 bg-accent-soft/50 px-3 py-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-fg">{t.createDialog.simpleStartTitle}</p>
+                    <p className="mt-1 text-xs text-fg-muted">{t.createDialog.simpleStartHint}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="h-8 shrink-0 rounded-lg text-xs"
+                    onClick={() => void generateContract()}
+                    disabled={drafting || (!draft.title.trim() && !draft.description.trim())}
+                  >
+                    <Sparkles className="size-3.5" aria-hidden />
+                    {drafting ? t.createDialog.drafting : t.createDialog.aiDraft}
+                  </Button>
+                </div>
+              </section>
+
               <label className="grid gap-1.5">
                 <span className="text-sm font-medium text-fg">{t.createDialog.goalTitle}</span>
                 <input
@@ -317,116 +339,121 @@ export function GoalCreateDialog({
                 />
               </label>
 
-              <section className="rounded-2xl border border-edge-subtle bg-surface-base/60 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <h3 className="text-sm font-semibold text-fg">{t.createDialog.criteriaTitle}</h3>
-                    <p className="mt-1 text-xs text-fg-muted">{t.createDialog.criteriaHint}</p>
-                    <p className="mt-1 text-xs text-fg-subtle">
-                      {options.checklistDecomposePolicy === 'supplement_existing'
-                        ? t.createDialog.checklistPolicySupplementExisting
-                        : t.createDialog.checklistPolicyEmptyOnly}
-                    </p>
+              <section className="rounded-2xl border border-edge-subtle bg-surface-base/60">
+                <button
+                  type="button"
+                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
+                  onClick={() => setCompletionOpen((current) => !current)}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-fg">{t.createDialog.completionPlan}</span>
+                    <span className="mt-1 block text-xs text-fg-muted">{t.createDialog.completionPlanHint}</span>
+                  </span>
+                  <ChevronDown className={cn('size-4 shrink-0 text-fg-muted transition-transform', completionOpen && 'rotate-180')} aria-hidden />
+                </button>
+                {completionOpen ? (
+                  <div className="grid gap-4 border-t border-edge-subtle p-4">
+                    <section className="rounded-lg border border-edge-subtle bg-surface-panel/70 p-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-fg">{t.createDialog.criteriaTitle}</h3>
+                        <p className="mt-1 text-xs text-fg-muted">{t.createDialog.criteriaHint}</p>
+                        <p className="mt-1 text-xs text-fg-subtle">
+                          {options.checklistDecomposePolicy === 'supplement_existing'
+                            ? t.createDialog.checklistPolicySupplementExisting
+                            : t.createDialog.checklistPolicyEmptyOnly}
+                        </p>
+                      </div>
+
+                      <div className="mt-3 grid gap-2">
+                        {draft.checklist.map((item, index) => (
+                          <div key={index} className="flex gap-2">
+                            <input
+                              value={item}
+                              onChange={(e) => patchChecklist(index, e.target.value)}
+                              placeholder={formatMessage(t.createDialog.criteriaPlaceholder, { index: index + 1 })}
+                              className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="size-9 shrink-0 rounded-lg p-0"
+                              aria-label={t.createDialog.removeCriteria}
+                              onClick={() => removeChecklist(index)}
+                            >
+                              <Trash2 className="size-4" aria-hidden />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-8 justify-start rounded-lg text-xs"
+                          onClick={() => patch({ checklist: [...draft.checklist, ''] })}
+                        >
+                          <Plus className="size-3.5" aria-hidden />
+                          {t.createDialog.addCriteria}
+                        </Button>
+                      </div>
+                    </section>
+
+                    <section className="rounded-lg border border-edge-subtle bg-surface-panel/70 p-3">
+                      <h3 className="text-sm font-semibold text-fg">{t.createDialog.contractTitle}</h3>
+                      <p className="mt-1 text-xs text-fg-muted">{t.createDialog.contractHint}</p>
+                      <label className="mt-3 grid gap-1.5">
+                        <span className="text-sm font-medium text-fg">{t.createDialog.objective}</span>
+                        <textarea
+                          value={draft.objective}
+                          onChange={(e) => patch({ objective: e.target.value })}
+                          placeholder={t.createDialog.objectivePlaceholder}
+                          rows={2}
+                          className="resize-none rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                        />
+                      </label>
+                      <label className="mt-3 grid gap-1.5">
+                        <span className="text-sm font-medium text-fg">{t.createDialog.scopeBoundary}</span>
+                        <textarea
+                          value={draft.scopeBoundary}
+                          onChange={(e) => patch({ scopeBoundary: e.target.value })}
+                          placeholder={t.createDialog.scopeBoundaryPlaceholder}
+                          rows={2}
+                          className="resize-none rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                        />
+                      </label>
+                      <div className="mt-3 grid gap-1.5">
+                        <span className="text-sm font-medium text-fg">{t.createDialog.evidencePlan}</span>
+                        <p className="text-xs text-fg-muted">{t.createDialog.evidencePlanHint}</p>
+                        {draft.evidencePlan.map((item, index) => (
+                          <div key={index} className="flex gap-2">
+                            <input
+                              value={item}
+                              onChange={(e) => patchEvidence(index, e.target.value)}
+                              placeholder={formatMessage(t.createDialog.evidencePlanPlaceholder, { index: index + 1 })}
+                              className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="size-9 shrink-0 rounded-lg p-0"
+                              aria-label={t.createDialog.removeEvidence}
+                              onClick={() => removeEvidence(index)}
+                            >
+                              <Trash2 className="size-4" aria-hidden />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-8 justify-start rounded-lg text-xs"
+                          onClick={() => patch({ evidencePlan: [...draft.evidencePlan, ''] })}
+                        >
+                          <Plus className="size-3.5" aria-hidden />
+                          {t.createDialog.addEvidence}
+                        </Button>
+                      </div>
+                    </section>
                   </div>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="h-8 rounded-lg text-xs"
-                    onClick={() => void generateContract()}
-                    disabled={drafting || (!draft.title.trim() && !draft.description.trim())}
-                  >
-                    <Sparkles className="size-3.5" aria-hidden />
-                    {drafting ? t.createDialog.drafting : t.createDialog.aiDraft}
-                  </Button>
-                </div>
-
-                <div className="mt-3 grid gap-2">
-                  {draft.checklist.map((item, index) => (
-                    <div key={index} className="flex gap-2">
-                      <input
-                        value={item}
-                        onChange={(e) => patchChecklist(index, e.target.value)}
-                        placeholder={formatMessage(t.createDialog.criteriaPlaceholder, { index: index + 1 })}
-                        className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="size-9 shrink-0 rounded-lg p-0"
-                        aria-label={t.createDialog.removeCriteria}
-                        onClick={() => removeChecklist(index)}
-                      >
-                        <Trash2 className="size-4" aria-hidden />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-8 justify-start rounded-lg text-xs"
-                    onClick={() => patch({ checklist: [...draft.checklist, ''] })}
-                  >
-                    <Plus className="size-3.5" aria-hidden />
-                    {t.createDialog.addCriteria}
-                  </Button>
-                </div>
-              </section>
-
-              <section className="rounded-2xl border border-edge-subtle bg-surface-base/60 p-4">
-                <h3 className="text-sm font-semibold text-fg">{t.createDialog.contractTitle}</h3>
-                <p className="mt-1 text-xs text-fg-muted">{t.createDialog.contractHint}</p>
-                <label className="mt-3 grid gap-1.5">
-                  <span className="text-sm font-medium text-fg">{t.createDialog.objective}</span>
-                  <textarea
-                    value={draft.objective}
-                    onChange={(e) => patch({ objective: e.target.value })}
-                    placeholder={t.createDialog.objectivePlaceholder}
-                    rows={2}
-                    className="resize-none rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-                  />
-                </label>
-                <label className="mt-3 grid gap-1.5">
-                  <span className="text-sm font-medium text-fg">{t.createDialog.scopeBoundary}</span>
-                  <textarea
-                    value={draft.scopeBoundary}
-                    onChange={(e) => patch({ scopeBoundary: e.target.value })}
-                    placeholder={t.createDialog.scopeBoundaryPlaceholder}
-                    rows={2}
-                    className="resize-none rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-                  />
-                </label>
-                <div className="mt-3 grid gap-1.5">
-                  <span className="text-sm font-medium text-fg">{t.createDialog.evidencePlan}</span>
-                  <p className="text-xs text-fg-muted">{t.createDialog.evidencePlanHint}</p>
-                  {draft.evidencePlan.map((item, index) => (
-                    <div key={index} className="flex gap-2">
-                      <input
-                        value={item}
-                        onChange={(e) => patchEvidence(index, e.target.value)}
-                        placeholder={formatMessage(t.createDialog.evidencePlanPlaceholder, { index: index + 1 })}
-                        className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-muted px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="size-9 shrink-0 rounded-lg p-0"
-                        aria-label={t.createDialog.removeEvidence}
-                        onClick={() => removeEvidence(index)}
-                      >
-                        <Trash2 className="size-4" aria-hidden />
-                      </Button>
-                    </div>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-8 justify-start rounded-lg text-xs"
-                    onClick={() => patch({ evidencePlan: [...draft.evidencePlan, ''] })}
-                  >
-                    <Plus className="size-3.5" aria-hidden />
-                    {t.createDialog.addEvidence}
-                  </Button>
-                </div>
+                ) : null}
               </section>
 
               <section className="rounded-2xl border border-edge-subtle bg-surface-base/60">

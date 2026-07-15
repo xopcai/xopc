@@ -85,6 +85,8 @@ describe('agents-admin', () => {
     const coder = agents.find((a) => a.id === 'coder');
     expect(defaultId).toBe('main');
     expect(coder?.workspace.replace(/\\/g, '/')).toMatch(/\/tmp\/coder$/);
+    expect(coder?.role).toBe('Agent');
+    expect(coder?.responsibilities?.primary).toEqual(['Help']);
     expect(coder?.model?.primary).toBe('anthropic/claude-sonnet-4-5');
     expect(coder?.skills.entry).toEqual(['diagnose']);
     expect(coder?.tools.effectiveDisable).toEqual(['exec_command']);

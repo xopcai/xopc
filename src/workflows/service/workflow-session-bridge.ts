@@ -4,9 +4,11 @@ import type { GatewayWorkflowHost } from '../../gateway/gateway-workflow-host.ty
 import { renderWorkflowText } from '../../agent/workflow/snapshot.js';
 import type { SessionStore } from '../../session/store.js';
 import { SessionStatus } from '../../session/types.js';
+import { upsertMemoryRecord } from '../../storage/sqlite/index.js';
 import type { WorkflowRunView } from '../domain/index.js';
 import { isTerminalWorkflowRunStatus } from '../domain/index.js';
 import { GoalWorkflowJudge } from '../../goals/index.js';
+import { WorkItemWorkflowJudge } from '../../work-items/index.js';
 
 import { runViewToSnapshot } from './run-view-to-snapshot.js';
 import { buildWorkflowRunSessionKey } from './workflow-session-key.js';
@@ -123,6 +125,8 @@ export class WorkflowSessionBridge {
         status: view.run.status,
       });
     }
+    new WorkItemWorkflowJudge().handleTerminalWorkflowRun({ view });
+    this.recordProjectWorkflowMemory(sessionKey, view);
     await new GoalWorkflowJudge().handleTerminalWorkflowRun({
       config: this.gateway.currentConfig,
       view,
@@ -196,6 +200,48 @@ export class WorkflowSessionBridge {
       createdAt: new Date().toISOString(),
     });
   }
+
+  private recordProjectWorkflowMemory(sessionKey: string, view: WorkflowRunView): void {
+    const projectId = view.run.metadata?.projectId?.trim();
+    const agentId = view.run.metadata?.agentId?.trim();
+    if (!projectId || !agentId) return;
+
+    const summary = view.run.result?.summary?.trim();
+    const resultText = summary || renderWorkflowText(
+      runViewToSnapshot(view),
+      view.run.status === 'succeeded',
+      { showResultPreviews: true },
+    );
+    upsertMemoryRecord({
+      id: `workflow-run:${view.run.id}`,
+      providerId: 'workflow-run',
+      kind: 'task_lesson',
+      agentId,
+      workspaceId: this.gateway.currentWorkspacePath,
+      sessionKey,
+      projectId,
+      content: [
+        `Workflow ${view.run.definitionId} finished with status ${view.run.status}.`,
+        view.run.goal ? `Goal: ${view.run.goal}` : undefined,
+        compactMemoryLine(resultText),
+      ].filter((line): line is string => Boolean(line)).join('\n'),
+      source: { provider: 'workflow-run' },
+      confidence: view.run.status === 'succeeded' ? 0.7 : 0.82,
+      tags: ['project', 'workflow', view.run.definitionId, view.run.status],
+      status: view.run.status === 'succeeded' ? 'active' : 'needs_review',
+      sensitivity: 'normal',
+      evidence: [{
+        sessionKey,
+        sourceText: `workflow:${view.run.id}`,
+      }],
+    });
+  }
+}
+
+function compactMemoryLine(text: string): string {
+  const compact = text.trim().replace(/\s+/g, ' ');
+  if (compact.length <= 1200) return compact;
+  return `${compact.slice(0, 1197)}...`;
 }
 
 function formatWorkflowGoalUserMessage(definitionId: string, goal: string): string {

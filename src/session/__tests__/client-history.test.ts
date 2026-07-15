@@ -151,6 +151,79 @@ describe('messagesToClientHistory', () => {
     ]);
   });
 
+  it('replays persisted review trace rows as assistant tool calls', () => {
+    const rows = [
+      { role: 'user', content: 'review this' },
+      {
+        kind: 'context',
+        text: 'Review trace: review.prepare_diff started',
+        createdAt: '2026-06-17T00:00:01.000Z',
+        data: {
+          type: 'review_trace',
+          scope: 'review',
+          event: 'tool_start',
+          llmInput: false,
+          toolCallId: 'review-1',
+          toolName: 'review.prepare_diff',
+          status: 'running',
+          input: { target: 'uncommitted' },
+        },
+      },
+      {
+        kind: 'context',
+        text: 'Review trace: review.prepare_diff completed',
+        createdAt: '2026-06-17T00:00:02.000Z',
+        data: {
+          type: 'review_trace',
+          scope: 'review',
+          event: 'tool_end',
+          llmInput: false,
+          toolCallId: 'review-1',
+          toolName: 'review.prepare_diff',
+          status: 'done',
+          resultPreview: 'Changed files:\n app.ts | 2 +-',
+        },
+      },
+      { role: 'assistant', content: [{ type: 'review', target: 'working tree changes', findings: [] }] },
+    ] as unknown as TranscriptStoredRow[];
+
+    expect(transcriptRowsToClientHistory(rows)).toEqual([
+      {
+        id: 'row-1',
+        role: 'user',
+        kind: 'message',
+        content: 'review this',
+        displayIndex: 0,
+        timestamp: undefined,
+      },
+      {
+        id: 'row-2',
+        role: 'assistant',
+        content: '',
+        timestamp: Date.parse('2026-06-17T00:00:01.000Z'),
+        toolCalls: [
+          {
+            id: 'review-1',
+            name: 'review.prepare_diff',
+            args: { target: 'uncommitted' },
+            result: 'Changed files:\n app.ts | 2 +-',
+            isError: false,
+          },
+        ],
+      },
+      {
+        id: 'row-4',
+        role: 'assistant',
+        kind: 'message',
+        content: '',
+        rawContent: [{ type: 'review', target: 'working tree changes', findings: [] }],
+        displayIndex: 1,
+        timestamp: undefined,
+        toolCalls: undefined,
+      },
+    ]);
+  });
+
   it('preserves bash execution transcript rows for TUI replay', () => {
     const rows = [
       {

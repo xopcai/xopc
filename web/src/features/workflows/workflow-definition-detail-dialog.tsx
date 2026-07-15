@@ -40,24 +40,40 @@ export function WorkflowDefinitionDetailDialog({
           <div className="min-h-0 flex-1 space-y-4 overflow-auto px-5 py-4">
             {localized.whenToUse ? (
               <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.whenToUseHeading}</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.templateBestFor}</h3>
                 <p className="mt-2 text-sm leading-6 text-fg-muted">{localized.whenToUse}</p>
               </section>
             ) : null}
 
-            <DefinitionCapabilities definition={definition} labels={labels} />
-
-            {definition.inputSchema ? (
-              <SchemaPreview title={labels.inputsHeading} schema={definition.inputSchema} />
+            {localized.examplePrompts?.length ? (
+              <section>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.templateExample}</h3>
+                <div className="mt-2 grid gap-2">
+                  {localized.examplePrompts.slice(0, 3).map((example) => (
+                    <div key={`${example.field}:${example.text}`} className="rounded-xl border border-edge bg-surface-base/40 px-3 py-2 text-sm text-fg-muted">
+                      {example.text}
+                    </div>
+                  ))}
+                </div>
+              </section>
             ) : null}
 
-            {definition.outputSchema ? (
-              <SchemaPreview title={labels.outputsHeading} schema={definition.outputSchema} />
-            ) : null}
+            <section className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl border border-edge bg-surface-base/40 px-3 py-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.templateInputs}</h3>
+                <p className="mt-1 text-sm text-fg-muted">
+                  {definition.inputSchema ? labels.templateInputsStructured : labels.templateInputsGoalOnly}
+                </p>
+              </div>
+              <div className="rounded-xl border border-edge bg-surface-base/40 px-3 py-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.templateExpectedOutput}</h3>
+                <p className="mt-1 text-sm text-fg-muted">{labels.templateOutputReport}</p>
+              </div>
+            </section>
 
             {definition.phases.length > 0 ? (
               <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.phasesHeading}</h3>
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.templatePlan}</h3>
                 <ol className="mt-2 space-y-2">
                   {definition.phases.map((phase, index) => (
                     <li key={phase.id} className="rounded-xl border border-edge bg-surface-base/40 px-3 py-2">
@@ -73,14 +89,31 @@ export function WorkflowDefinitionDetailDialog({
               </section>
             ) : null}
 
-            {script ? (
-              <section>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.scriptHeading}</h3>
-                <pre className="mt-2 max-h-64 overflow-auto rounded-xl border border-edge bg-surface-base/50 p-3 font-mono text-xs leading-5 text-fg-muted">
-                  {script}
-                </pre>
-              </section>
-            ) : null}
+            <details className="rounded-xl border border-edge bg-surface-base/35">
+              <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-fg">
+                {labels.advancedTemplateDetails}
+              </summary>
+              <div className="space-y-4 border-t border-edge px-3 py-3">
+                <DefinitionCapabilities definition={definition} labels={labels} />
+
+                {definition.inputSchema ? (
+                  <SchemaPreview title={labels.inputsHeading} schema={definition.inputSchema} />
+                ) : null}
+
+                {definition.outputSchema ? (
+                  <SchemaPreview title={labels.outputsHeading} schema={definition.outputSchema} />
+                ) : null}
+
+                {script ? (
+                  <section>
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-fg-subtle">{labels.scriptHeading}</h3>
+                    <pre className="mt-2 max-h-64 overflow-auto rounded-xl border border-edge bg-surface-base/50 p-3 font-mono text-xs leading-5 text-fg-muted">
+                      {script}
+                    </pre>
+                  </section>
+                ) : null}
+              </div>
+            </details>
           </div>
 
           <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">

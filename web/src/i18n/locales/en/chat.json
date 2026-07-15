@@ -24,78 +24,512 @@
     "welcomeTitle": "Welcome to xopc",
     "welcomeDescription": "Send a message to get started",
     "welcomeSpotlight": {
-      "headline": "Your personal AI assistant, ready to help",
-      "tagline": "Just tell me what you need — I'll break it down, look things up, and get it done.",
-      "categories": [
+      "otherSuggestionsLabel": "Other directions",
+      "acceptSuggestionHint": "Press Tab to use suggestion",
+      "refreshExplorationLabel": "Show another exploration direction",
+      "contextLoading": "Using the current context to shape suggestions…",
+      "contextFallback": "Some context is temporarily unavailable. Suggestions use the information that is available.",
+      "retryContext": "Read context again",
+      "contextFallbackTitle": "this task",
+      "reasons": {
+        "general": "An easy starting point you can edit before sending",
+        "agent": "Better matched to {{agentName}}'s capabilities",
+        "project": "Based on the current context for {{projectName}}",
+        "note": "Based on the note {{noteTitle}}",
+        "workItem": "Based on the current state of {{workItemTitle}}",
+        "blocked": "Prioritizes the current blocker: {{blockedReason}}",
+        "nextAction": "Continues the defined next action: {{nextAction}}",
+        "directory": "Starts from the current directory: {{path}}"
+      },
+      "contextPrompts": {
+        "workItemBlocked": "Work item {{workItemTitle}} is blocked by {{blockedReason}}. Analyze the root cause, then propose the smallest executable unblock plan, the information to confirm, and who to ask for help.",
+        "workItemNextAction": "The defined next action for {{workItemTitle}} is {{nextAction}}. Check prerequisites and risks, then break it into an action I can start now.",
+        "codingWorkspace": "Start from {{workspaceRoot}} and understand project {{projectName}}. Locate the entrypoints, core modules, and highest-value files to read, then recommend where I should look next."
+      },
+      "exploreCards": [
         {
-          "id": "work",
-          "icon": "documents",
-          "title": "Work & productivity",
-          "description": "Emails, reports, meeting notes",
-          "scenarios": [
-            {
-              "prompt": "Help me write a professional reply to an email declining a meeting invitation politely while suggesting an alternative time."
-            },
-            {
-              "prompt": "Draft a concise weekly status update covering what I accomplished, what's in progress, and any blockers — keep it under 200 words."
-            },
-            {
-              "prompt": "I have a meeting in 30 minutes. Help me prepare 5 key talking points and 3 questions I should ask about project timeline risks."
-            }
-          ]
-        },
-        {
-          "id": "research",
+          "id": "explore-news",
           "icon": "globe",
-          "title": "Research & learning",
-          "description": "News, explanations, decisions",
+          "title": "Today & trends",
+          "description": "AI, technology, industry news",
           "scenarios": [
             {
-              "prompt": "What are the biggest tech news stories this week? Give me a quick summary of the top 3 with why they matter."
+              "prompt": "Collect today's most important AI news, rank it by significance, and explain why each item matters."
             },
             {
-              "prompt": "Explain how RAG (Retrieval-Augmented Generation) works in simple terms, as if I'm explaining it to a non-technical manager."
+              "prompt": "Summarize the past week's major technology trends, separating short-lived hype from changes with lasting impact."
             },
             {
-              "prompt": "I'm choosing between Notion and Obsidian for personal note-taking. Compare them on features, pricing, and offline use, then recommend one for my case."
+              "prompt": "Choose 3 new products or technologies worth understanding today and give me a focused reading path."
             }
           ]
         },
         {
-          "id": "content",
+          "id": "explore-learn",
+          "icon": "search",
+          "title": "Learn something new",
+          "description": "Concepts, sources, learning paths",
+          "scenarios": [
+            {
+              "prompt": "Find today's latest AI news, pick the 3 developments most worth attention, and explain in plain language what they are and why they matter."
+            },
+            {
+              "prompt": "Design a focused 30-minute learning session on a topic you recommend."
+            },
+            {
+              "prompt": "Teach me an overlooked but practical mental model and give me 3 examples of when to use it."
+            }
+          ]
+        },
+        {
+          "id": "explore-life",
+          "icon": "target",
+          "title": "Life & decisions",
+          "description": "Choices, plans, practical ideas",
+          "scenarios": [
+            {
+              "prompt": "Design one small action I can complete this week that would noticeably improve my quality of life."
+            },
+            {
+              "prompt": "Recommend a weekend exploration theme: a book, film, local activity, or new experience."
+            },
+            {
+              "prompt": "Teach me a simple way to reduce everyday decision fatigue and help me apply it once right now."
+            }
+          ]
+        },
+        {
+          "id": "explore-creative",
           "icon": "content",
-          "title": "Writing & creation",
-          "description": "Posts, copy, translation",
+          "title": "Explore ideas",
+          "description": "Creativity, observation, new angles",
           "scenarios": [
             {
-              "prompt": "Turn this idea into a LinkedIn post: AI tools are making individual contributors as productive as small teams. Keep it engaging and under 150 words."
+              "prompt": "Give me 5 creative prompts I can explore today across different fields."
             },
             {
-              "prompt": "Rewrite the following paragraph to be more concise and punchy, suitable for a product landing page hero section."
+              "prompt": "Start from an everyday object and guide me through a 10-minute divergent-thinking exercise."
             },
             {
-              "prompt": "Translate this text to English and adjust the tone to sound natural for a global audience, not just a literal translation."
-            }
-          ]
-        },
-        {
-          "id": "data",
-          "icon": "folder",
-          "title": "Data & files",
-          "description": "Organize, analyze, automate",
-          "scenarios": [
-            {
-              "prompt": "Look at my Downloads folder and suggest how to organize it — group files by type and tell me what's safe to delete."
-            },
-            {
-              "prompt": "I have a CSV with sales data. Help me find the top 5 products by revenue and spot any month-over-month trends."
-            },
-            {
-              "prompt": "Create a simple daily planning template in Markdown: sections for top 3 priorities, meetings, notes, and end-of-day reflection."
+              "prompt": "Suggest a viewpoint worth turning into a short essay, then list arguments for and against it."
             }
           ]
         }
-      ]
+      ],
+      "empty": {
+        "headline": "What do you want to move forward?",
+        "tagline": "Pick a starting point, edit it, then send.",
+        "categories": [
+          {
+            "id": "work",
+            "icon": "documents",
+            "title": "Work output",
+            "description": "Email, updates, meetings",
+            "scenarios": [
+              {
+                "prompt": "Help me write a concise weekly update covering completed work, risks, and next week's plan."
+              },
+              {
+                "prompt": "I have a meeting in 30 minutes. Help me prepare 5 talking points and 3 follow-up questions."
+              }
+            ]
+          },
+          {
+            "id": "research",
+            "icon": "globe",
+            "title": "Organize information",
+            "description": "News, research, decisions",
+            "scenarios": [
+              {
+                "prompt": "Summarize today's most important tech news and explain why it matters."
+              },
+              {
+                "prompt": "Compare these two options by pros, cons, cost, and best-fit use cases, then recommend one."
+              }
+            ]
+          },
+          {
+            "id": "content",
+            "icon": "content",
+            "title": "Refine writing",
+            "description": "Copy, posts, translation",
+            "scenarios": [
+              {
+                "prompt": "Rewrite this idea into a clearer, more persuasive paragraph."
+              },
+              {
+                "prompt": "Translate this Chinese text into natural English without sounding literal."
+              }
+            ]
+          }
+        ]
+      },
+      "agentTagline": "{{agentName}} is selected, so suggestions prioritize that agent's working style.",
+      "agentCards": {
+        "coding": {
+          "id": "agent-coding",
+          "icon": "code",
+          "title": "Ship code",
+          "description": "Implementation, tests, review",
+          "scenarios": [
+            {
+              "prompt": "Based on the current context “{{contextTitle}}”, turn the requirement into a code implementation plan and list the files to change."
+            },
+            {
+              "prompt": "Review the work around “{{contextTitle}}” from an engineering perspective, focusing on implementation risk, test gaps, and maintainability."
+            }
+          ]
+        },
+        "writing": {
+          "id": "agent-writing",
+          "icon": "content",
+          "title": "Shape writing",
+          "description": "Structure, tone, wording",
+          "scenarios": [
+            {
+              "prompt": "Based on the current context “{{contextTitle}}”, turn this into a clear, accurate written draft."
+            },
+            {
+              "prompt": "Rewrite the material around “{{contextTitle}}” to be clearer and more persuasive while preserving key information."
+            }
+          ]
+        },
+        "research": {
+          "id": "agent-research",
+          "icon": "search",
+          "title": "Research and verify",
+          "description": "Sources, comparison, conclusion",
+          "scenarios": [
+            {
+              "prompt": "Based on the current context “{{contextTitle}}”, list the questions to verify, likely sources, and a research path."
+            },
+            {
+              "prompt": "Run a fact-check and comparison pass around “{{contextTitle}}”, then give me a trustworthy conclusion."
+            }
+          ]
+        },
+        "data": {
+          "id": "agent-data",
+          "icon": "review",
+          "title": "Analyze data",
+          "description": "Cleaning, metrics, insight",
+          "scenarios": [
+            {
+              "prompt": "Based on the current context “{{contextTitle}}”, identify useful metrics, how to analyze them, and likely insights."
+            },
+            {
+              "prompt": "Turn the information around “{{contextTitle}}” into an analyzable data structure and propose the next analysis steps."
+            }
+          ]
+        },
+        "creative": {
+          "id": "agent-creative",
+          "icon": "content",
+          "title": "Explore ideas",
+          "description": "Directions, drafts, tradeoffs",
+          "scenarios": [
+            {
+              "prompt": "Based on the current context “{{contextTitle}}”, propose 5 different creative directions and explain when each fits."
+            },
+            {
+              "prompt": "Give me 3 bolder but still executable expression or design directions around “{{contextTitle}}”."
+            }
+          ]
+        }
+      },
+      "codingProject": {
+        "headline": "Continue this code project",
+        "tagline": "Start by understanding, implementing, or debugging.",
+        "contextLabel": "Project: {{projectName}}",
+        "categories": [
+          {
+            "id": "understand-codebase",
+            "icon": "code",
+            "title": "Understand codebase",
+            "description": "Structure, entrypoints, modules",
+            "scenarios": [
+              {
+                "prompt": "Help me quickly understand the structure, core modules, and startup flow of project “{{projectName}}”."
+              },
+              {
+                "prompt": "If I need to modify project “{{projectName}}”, which files should I inspect first? Prioritize them."
+              }
+            ]
+          },
+          {
+            "id": "implement-feature",
+            "icon": "target",
+            "title": "Move a feature",
+            "description": "Locate code, plan changes",
+            "scenarios": [
+              {
+                "prompt": "I want to implement a feature in project “{{projectName}}”. First locate the relevant code and propose a change plan."
+              },
+              {
+                "prompt": "Based on this codebase, break this requirement into concrete implementation steps."
+              }
+            ]
+          },
+          {
+            "id": "review-debug",
+            "icon": "review",
+            "title": "Review or debug",
+            "description": "Risks, tests, build failures",
+            "scenarios": [
+              {
+                "prompt": "Review project “{{projectName}}” for likely risks, focusing on type safety, edge cases, and test gaps."
+              },
+              {
+                "prompt": "Check this project for likely build or test issues and give me an investigation order."
+              }
+            ]
+          }
+        ]
+      },
+      "generalProject": {
+        "headline": "Continue this project",
+        "tagline": "Review status, choose the next step, and create output.",
+        "contextLabel": "Project: {{projectName}}",
+        "categories": [
+          {
+            "id": "project-status",
+            "icon": "search",
+            "title": "Review status",
+            "description": "Goals, progress, risks",
+            "scenarios": [
+              {
+                "prompt": "Review the current state of project “{{projectName}}”: goal, completed work, risks, and next step."
+              },
+              {
+                "prompt": "Based on this project, prepare a concise progress summary."
+              }
+            ]
+          },
+          {
+            "id": "project-next-step",
+            "icon": "target",
+            "title": "Plan next step",
+            "description": "Tasks, priority, action",
+            "scenarios": [
+              {
+                "prompt": "Break the next work for project “{{projectName}}” into 3 to 5 clearly prioritized steps."
+              },
+              {
+                "prompt": "Given the current project state, suggest the smallest useful thing I can do today."
+              }
+            ]
+          },
+          {
+            "id": "project-material",
+            "icon": "documents",
+            "title": "Create material",
+            "description": "Updates, briefs, explanations",
+            "scenarios": [
+              {
+                "prompt": "Write a project update for “{{projectName}}” covering current outcomes, risks, and support needed."
+              },
+              {
+                "prompt": "Turn this project into a concise one-page overview."
+              }
+            ]
+          }
+        ]
+      },
+      "note": {
+        "headline": "Keep thinking with this note",
+        "tagline": "Extract points, find gaps, and turn it into output.",
+        "contextLabel": "Note: {{noteTitle}}",
+        "categories": [
+          {
+            "id": "note-summarize",
+            "icon": "note",
+            "title": "Extract note",
+            "description": "Points, conclusions, actions",
+            "scenarios": [
+              {
+                "prompt": "Summarize note “{{noteTitle}}” into core points, key conclusions, and actionable next steps."
+              },
+              {
+                "prompt": "Reorganize this note into a clearer hierarchy."
+              }
+            ]
+          },
+          {
+            "id": "note-think",
+            "icon": "search",
+            "title": "Think further",
+            "description": "Questions, gaps, directions",
+            "scenarios": [
+              {
+                "prompt": "Based on note “{{noteTitle}}”, suggest 5 questions worth thinking about next."
+              },
+              {
+                "prompt": "Find unclear logic, weak evidence, or missing context in this note."
+              }
+            ]
+          },
+          {
+            "id": "note-output",
+            "icon": "content",
+            "title": "Make output",
+            "description": "Article, tasks, plan",
+            "scenarios": [
+              {
+                "prompt": "Turn note “{{noteTitle}}” into an article outline while preserving the core ideas and improving structure."
+              },
+              {
+                "prompt": "Extract a prioritized task list from this note."
+              }
+            ]
+          }
+        ]
+      },
+      "workItem": {
+        "headline": "Continue this work item",
+        "tagline": "Summarize status, choose the next step, and check risk.",
+        "contextLabel": "Work item: {{workItemTitle}}",
+        "categories": [
+          {
+            "id": "work-item-progress",
+            "icon": "task",
+            "title": "Summarize progress",
+            "description": "Status, done, blockers",
+            "scenarios": [
+              {
+                "prompt": "Based on work item “{{workItemTitle}}”, summarize current progress, completed work, risks, and blockers."
+              },
+              {
+                "prompt": "Turn this work item into a status update I can share with the team."
+              }
+            ]
+          },
+          {
+            "id": "work-item-next",
+            "icon": "target",
+            "title": "Find next step",
+            "description": "Small action, priority, dependencies",
+            "scenarios": [
+              {
+                "prompt": "Based on work item “{{workItemTitle}}”, identify the smallest executable next step."
+              },
+              {
+                "prompt": "Break down the remaining work for this item and mark priority and dependencies."
+              }
+            ]
+          },
+          {
+            "id": "work-item-risk",
+            "icon": "review",
+            "title": "Identify risks",
+            "description": "Blockers, gaps, acceptance",
+            "scenarios": [
+              {
+                "prompt": "Check work item “{{workItemTitle}}” for missing details, risks, or unclear acceptance criteria."
+              },
+              {
+                "prompt": "List the questions I need to confirm before moving this work item forward."
+              }
+            ]
+          }
+        ]
+      },
+      "workItemBlocked": {
+        "headline": "This work item is blocked",
+        "tagline": "Analyze the cause, then choose an executable path.",
+        "contextLabel": "Work item: {{workItemTitle}}",
+        "categories": [
+          {
+            "id": "work-item-progress",
+            "icon": "task",
+            "title": "Summarize progress",
+            "description": "Status, done, blockers",
+            "scenarios": [
+              {
+                "prompt": "Based on work item “{{workItemTitle}}”, summarize current progress, completed work, risks, and blockers."
+              },
+              {
+                "prompt": "Turn this work item into a status update I can share with the team."
+              }
+            ]
+          },
+          {
+            "id": "work-item-unblock",
+            "icon": "target",
+            "title": "Unblock it",
+            "description": "Cause, options, owner",
+            "scenarios": [
+              {
+                "prompt": "Work item “{{workItemTitle}}” is currently blocked. Analyze the blocker and suggest 3 possible ways forward."
+              },
+              {
+                "prompt": "Help me decide who to ask, what information is missing, and how to move this blocker forward."
+              }
+            ]
+          },
+          {
+            "id": "work-item-risk",
+            "icon": "review",
+            "title": "Identify risks",
+            "description": "Gaps, dependencies, acceptance",
+            "scenarios": [
+              {
+                "prompt": "Check work item “{{workItemTitle}}” for missing details, risks, or unclear acceptance criteria."
+              },
+              {
+                "prompt": "List the questions I need to confirm before moving this work item forward."
+              }
+            ]
+          }
+        ]
+      },
+      "workingDirectory": {
+        "headline": "Start from this directory",
+        "tagline": "Understand the structure, find entrypoints, and organize direction.",
+        "categories": [
+          {
+            "id": "directory-understand",
+            "icon": "folder",
+            "title": "Understand directory",
+            "description": "Structure, type, key files",
+            "scenarios": [
+              {
+                "prompt": "Help me understand the structure, project type, and most important files in “{{path}}”."
+              },
+              {
+                "prompt": "Scan this directory first and tell me what kind of project or file collection it appears to be."
+              }
+            ]
+          },
+          {
+            "id": "directory-entry",
+            "icon": "code",
+            "title": "Find entrypoints",
+            "description": "Startup, config, dependencies",
+            "scenarios": [
+              {
+                "prompt": "Find the likely startup entrypoints, config files, and dependency docs in “{{path}}”."
+              },
+              {
+                "prompt": "If I want to start working in this directory, which files should I open first?"
+              }
+            ]
+          },
+          {
+            "id": "directory-organize",
+            "icon": "review",
+            "title": "Organize files",
+            "description": "Categories, summary, cleanup",
+            "scenarios": [
+              {
+                "prompt": "Organize the files in “{{path}}” and suggest categories and cleanup opportunities."
+              },
+              {
+                "prompt": "Create a summary of the important content in this directory."
+              }
+            ]
+          }
+        ]
+      }
     },
     "you": "You",
     "assistant": "Assistant",
@@ -544,7 +978,7 @@
       "showGroupedMore": "Show {{count}} more"
     },
     "goal": {
-      "heading": "Standing goal",
+      "heading": "Goal in progress",
       "turns": "{{used}} / {{max}} turns",
       "checklistHeading": "Criteria",
       "checklistProgress": "{{done}} / {{total}} done",
@@ -556,7 +990,7 @@
       "removeItem": "Remove",
       "resetChecklist": "Reset criteria",
       "moreActions": "More",
-      "moreHint": "Restart turn budget, clear goal, or view judge details",
+      "moreHint": "Restart turn budget, detach this goal, or inspect automatic checks",
       "statusActive": "Active",
       "statusPaused": "Paused",
       "statusDone": "Done",
@@ -575,7 +1009,7 @@
       "clear": "Clear goal",
       "restart": "Restart budget",
       "detach": "Detach",
-      "detailsToggle": "Judge details",
+      "detailsToggle": "Check details",
       "lastVerdict": "Last verdict",
       "verdictDone": "Done",
       "verdictContinue": "Continue",
@@ -599,16 +1033,36 @@
       "phaseAgentRunning": "Agent running",
       "phasePaused": "Goal paused",
       "phaseDone": "Goal done",
-      "phaseJudged": "Judge updated",
-      "lastJudgementTitle": "Last judgement",
+      "phaseJudged": "Check updated",
+      "lastJudgementTitle": "Last check",
       "showDetails": "Expand",
       "hideDetails": "Collapse",
       "pausedReason": "Paused reason",
-      "judgeModel": "Judge model",
-      "parseFailures": "Parse failures",
-      "judgeGenerated": "Judge generated",
+      "judgeModel": "Check model",
+      "parseFailures": "Check failures",
+      "judgeGenerated": "Automatically added",
       "userAdded": "User added",
       "evidenceLabel": "Evidence",
+      "composerHeading": "Goal",
+      "composerNoGoalAttached": "No goal attached",
+      "composerStartGoal": "Start goal",
+      "composerGoalTitlePlaceholder": "What should be true when done?",
+      "composerSwitchGoal": "Switch goal",
+      "composerAttachGoal": "Attach goal",
+      "composerNoOpenGoals": "No open goals",
+      "composerDetachCurrent": "Detach current goal",
+      "composerRunWorkflow": "Run task template",
+      "composerNoWorkflows": "No templates",
+      "composerGoalStarted": "Goal started",
+      "composerGoalAttached": "Goal attached",
+      "composerGoalDetached": "Goal detached",
+      "composerWorkflowStarted": "Task started",
+      "composerLoadGoalsFailed": "Failed to load goals",
+      "composerLoadWorkflowsFailed": "Failed to load task templates",
+      "composerStartGoalFailed": "Failed to start goal",
+      "composerAttachGoalFailed": "Failed to attach goal",
+      "composerDetachGoalFailed": "Failed to detach goal",
+      "composerStartWorkflowFailed": "Failed to start task",
       "pendingGroup": "Pending",
       "completedGroup": "Completed",
       "impossibleGroup": "Impossible",

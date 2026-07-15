@@ -263,6 +263,7 @@ export class AgentToolsFactory {
       config: cfg,
       workspace,
       modelHasVision,
+      agentId: options?.agentId,
     });
     const imageGenerateTool = createImageGenerateTool({
       config: cfg,

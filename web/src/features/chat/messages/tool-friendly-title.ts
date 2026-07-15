@@ -19,6 +19,8 @@ export type FriendlyToolTitleLabels = {
 
 export function getFriendlyToolTitle(name: string, labels: FriendlyToolTitleLabels): string {
   const n = toolNameKey(name);
+  if (n === 'review.prepare_diff' || n === 'review_prepare_diff') return labels.readFile;
+  if (n === 'review.model_judge' || n === 'review_model_judge') return labels.unknownTool.replace('{{name}}', 'review.model_judge');
   if (n === 'exec_command') return labels.runCommand;
   if (n === 'update_plan') return labels.updatePlan ?? 'Update plan';
   if (n === 'list_dir' || n === 'ls') return labels.listDirectory;
@@ -26,7 +28,19 @@ export function getFriendlyToolTitle(name: string, labels: FriendlyToolTitleLabe
   if (n === 'apply_patch') return labels.editFile;
   if (n === 'web_fetch') return labels.fetchUrl;
   if (n === 'open_url') return labels.openUrl;
-  if (n === 'web_search' || n === 'brave_search' || n.includes('search')) return labels.searchedWeb;
-  if (n === 'read_file' || n.includes('read_file') || n.includes('file_read')) return labels.readFile;
+  if (
+    n === 'web_search' ||
+    n === 'brave_search' ||
+    n.includes('search') ||
+    n.endsWith('query_graph') ||
+    n.endsWith('trace_path') ||
+    n.endsWith('get_architecture')
+  ) return labels.searchedWeb;
+  if (
+    n === 'read_file' ||
+    n.includes('read_file') ||
+    n.includes('file_read') ||
+    n.endsWith('get_code_snippet')
+  ) return labels.readFile;
   return labels.unknownTool.replace('{{name}}', name.trim() || 'tool');
 }

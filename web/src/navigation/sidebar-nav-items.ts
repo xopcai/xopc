@@ -42,13 +42,13 @@ export const BUILTIN_NAV_DEFS: readonly BuiltinNavDef[] = [
   { id: 'builtin:agents', to: '/agents', Icon: Users },
   { id: 'builtin:projects', to: '/projects', Icon: FolderKanban },
   { id: 'builtin:goals', to: '/goals', Icon: ListChecks },
+  { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
   { id: 'builtin:skills', to: '/skills', Icon: Layers },
   { id: 'builtin:connectors', to: '/connectors', Icon: Cable },
   { id: 'builtin:automations', to: '/automations', Icon: Zap },
   { id: 'builtin:channels', to: '/channels', Icon: Plug },
   { id: 'builtin:extensions', to: '/extensions', Icon: Puzzle },
   { id: 'builtin:notes', to: '/notes', Icon: StickyNote },
-  { id: 'builtin:workflows', to: '/workflows', Icon: GitBranch },
 ] as const;
 
 /** Cap on visible rail rows excluding the "New chat" button at the top. */

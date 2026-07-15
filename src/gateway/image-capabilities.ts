@@ -1,12 +1,16 @@
 import type { Config } from '../config/schema.js';
 import {
   getAgentDefaultImageGenerationModelConfig,
-  getAgentDefaultImageModelConfig,
 } from '../config/schema.js';
 import {
   getImageGenerationProvider,
   listImageGenerationProvidersSummary,
 } from '../agent/image/generation/runtime.js';
+import {
+  resolveConfiguredImageModelConfig,
+  resolveEffectiveImageModelConfig,
+  type ImageModelResolutionSource,
+} from '../agent/image/tool-model-config.js';
 import { getAllProviders, getModelsByProvider, isProviderConfigured } from '../providers/index.js';
 
 export type ImageProviderCapability = {
@@ -22,6 +26,11 @@ export type ImageProviderCapability = {
 export type CurrentImageModelCapabilities = {
   imageModel: string | null;
   imageModelFallbacks: string[];
+  effectiveImageModel: string | null;
+  effectiveImageModelFallbacks: string[];
+  imageModelSource: ImageModelResolutionSource;
+  imageModelRoleId?: string;
+  imageModelRoleDescription?: string;
   imageGenerationModel: string | null;
   imageGenerationModelFallbacks: string[];
   imageGenerationModelTimeoutMs: number | null;
@@ -29,12 +38,23 @@ export type CurrentImageModelCapabilities = {
   mediaMaxMb: number | null;
 };
 
-export function resolveCurrentImageModelCapabilities(config: Config): CurrentImageModelCapabilities {
-  const imageModel = getAgentDefaultImageModelConfig(config);
+export function resolveCurrentImageModelCapabilities(
+  config: Config,
+  agentId?: string,
+): CurrentImageModelCapabilities {
+  const imageModel = resolveConfiguredImageModelConfig({ cfg: config, agentId });
+  const effectiveImageModel = resolveEffectiveImageModelConfig({ cfg: config, agentId });
   const imageGenerationModel = getAgentDefaultImageGenerationModelConfig(config);
   return {
     imageModel: imageModel?.primary?.trim() || null,
     imageModelFallbacks: imageModel?.fallbacks ?? [],
+    effectiveImageModel: effectiveImageModel?.primary?.trim() || null,
+    effectiveImageModelFallbacks: effectiveImageModel?.fallbacks ?? [],
+    imageModelSource: effectiveImageModel?.source ?? 'none',
+    ...(effectiveImageModel?.roleId ? { imageModelRoleId: effectiveImageModel.roleId } : {}),
+    ...(effectiveImageModel?.roleDescription
+      ? { imageModelRoleDescription: effectiveImageModel.roleDescription }
+      : {}),
     imageGenerationModel: imageGenerationModel?.primary?.trim() || null,
     imageGenerationModelFallbacks: imageGenerationModel?.fallbacks ?? [],
     imageGenerationModelTimeoutMs: imageGenerationModel?.timeoutMs ?? null,
