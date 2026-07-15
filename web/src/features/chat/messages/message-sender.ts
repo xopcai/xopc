@@ -187,8 +187,8 @@ export class MessageSender {
       }
     }
 
-    this._clearPendingRun();
     this._abort = undefined;
+    this._clearPendingRun();
   }
 
   abort(): void {
@@ -249,8 +249,8 @@ export class MessageSender {
       }
     }
 
-    this._clearPendingRun();
     this._abort = undefined;
+    this._clearPendingRun();
   }
 
   /** Ensures at most one of onResult/onError fires from the wrapped callbacks. */
