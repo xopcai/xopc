@@ -137,3 +137,70 @@ describe('MessageSender abort', () => {
     );
   });
 });
+
+describe('MessageSender terminal state', () => {
+  const sessionKey = 'agent:main:webchat:default:direct:complete-me';
+  const storage = new Map<string, string>();
+
+  beforeEach(() => {
+    vi.mocked(apiFetch).mockReset();
+    storage.clear();
+    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+      callback(0);
+      return 1;
+    });
+    vi.stubGlobal('sessionStorage', {
+      getItem: (k: string) => storage.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        storage.set(k, v);
+      },
+      removeItem: (k: string) => {
+        storage.delete(k);
+      },
+      clear: () => storage.clear(),
+    });
+  });
+
+  it.each(['send', 'resume'] as const)(
+    'marks the %s stream idle before notifying sidebar listeners',
+    async (method) => {
+      const sender = new MessageSender();
+      const streamingStatesAtNotification: boolean[] = [];
+      vi.stubGlobal('window', {
+        location: { origin: 'http://localhost:3000' },
+        dispatchEvent: vi.fn((event: Event) => {
+          if (event.type === 'xopc-pending-agent-run-changed') {
+            streamingStatesAtNotification.push(sender.isStreamingFor(sessionKey));
+          }
+          return true;
+        }),
+      });
+      vi.mocked(apiFetch).mockResolvedValue(
+        new Response(
+          [
+            'event: run_start',
+            'data: {"runId":"run-complete"}',
+            '',
+            'event: run_end',
+            'data: {"payload":{}}',
+            '',
+            '',
+          ].join('\n'),
+          { headers: { 'Content-Type': 'text/event-stream' } },
+        ),
+      );
+
+      if (method === 'send') {
+        await sender.send('hello', sessionKey);
+      } else {
+        setPendingAgentRun(sessionKey, 'run-complete');
+        streamingStatesAtNotification.length = 0;
+        await sender.resume('run-complete', sessionKey);
+      }
+
+      expect(streamingStatesAtNotification).toEqual([true, false]);
+      expect(sender.isStreamingFor(sessionKey)).toBe(false);
+      expect(hasPendingAgentRunForChat(sessionKey)).toBe(false);
+    },
+  );
+});
