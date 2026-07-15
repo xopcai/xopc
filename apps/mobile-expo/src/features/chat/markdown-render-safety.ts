@@ -1,8 +1,7 @@
 /**
  * Heuristics for when to avoid the native GFM markdown renderer.
  * `react-native-enriched-markdown` can hard-crash on some native table shapes
- * and its WASM parser can fail during Expo web bundling, so use the JS fallback
- * for those cases.
+ * so use the JS fallback for those cases.
  */
 
 function isGfmTableSeparatorLine(line: string): boolean {
@@ -38,13 +37,10 @@ export function markdownNeedsPlainFallback(content: string): boolean {
 export function shouldUseMarkdownFallback({
   content,
   hasEnriched,
-  platform,
 }: {
   content: string;
   hasEnriched: boolean;
-  platform: string;
 }): boolean {
   if (!hasEnriched) return true;
-  if (platform === 'web') return true;
   return markdownNeedsPlainFallback(content);
 }

@@ -1,1 +1,1 @@
-export { AutomationScreen } from './AutomationScreen.web';
+export { AutomationScreen } from './AutomationScreen.native';

@@ -20,6 +20,7 @@ type UseWelcomeSuggestionContextOptions = {
   sourceContextPending?: boolean;
   sourceContextFailed?: boolean;
   effectiveWorkspacePath?: string | null;
+  workingDirectoryLocked?: boolean;
   sessionManager: SessionManager;
 };
 
@@ -41,6 +42,13 @@ function projectWorkspace(project: Project): string | undefined {
   return project.effectiveWorkspaceRoot || project.workspaceRoot || undefined;
 }
 
+async function inferWorkspaceSuggestionContext(path: string): Promise<WelcomeSuggestionContext> {
+  const result = await inferProjectDefaults({ workspaceRoot: path });
+  return result.inference.kind === 'coding'
+    ? { kind: 'codingWorkspace', path }
+    : { kind: 'workingDirectory', path };
+}
+
 function contextStateKey({
   attempt,
   enabled,
@@ -51,12 +59,13 @@ function contextStateKey({
   sourceContextPending,
   sourceContextFailed,
   effectiveWorkspacePath,
+  workingDirectoryLocked,
 }: UseWelcomeSuggestionContextOptions & { attempt: number }): string {
   if (!enabled) return 'disabled';
   if (sourceContextPending) return `pending:${sessionKey ?? ''}`;
   if (sourceWorkItem) return `work-item:${sourceWorkItem.id}`;
   if (sourceNoteId) return `note:${sourceNoteId}:${sourceNoteTitle?.trim() ?? ''}`;
-  if (effectiveWorkspacePath?.trim()) {
+  if (workingDirectoryLocked && effectiveWorkspacePath?.trim()) {
     return `workspace:${sessionKey ?? ''}:${effectiveWorkspacePath.trim()}`;
   }
   if (sessionKey) return `session:${sessionKey}:attempt:${attempt}:failed:${sourceContextFailed ? '1' : '0'}`;
@@ -100,7 +109,7 @@ function immediateContextState(
     };
   }
   const effectiveWorkspacePath = options.effectiveWorkspacePath?.trim();
-  if (effectiveWorkspacePath) {
+  if (options.workingDirectoryLocked && effectiveWorkspacePath) {
     return {
       key,
       context: { kind: 'workingDirectory', path: effectiveWorkspacePath },
@@ -122,6 +131,7 @@ export function useWelcomeSuggestionContext({
   sourceContextPending = false,
   sourceContextFailed = false,
   effectiveWorkspacePath,
+  workingDirectoryLocked = false,
   sessionManager,
 }: UseWelcomeSuggestionContextOptions): WelcomeSuggestionContextState {
   const [attempt, setAttempt] = useState(0);
@@ -135,6 +145,7 @@ export function useWelcomeSuggestionContext({
     sourceContextPending,
     sourceContextFailed,
     effectiveWorkspacePath,
+    workingDirectoryLocked,
     sessionManager,
   };
   const currentKey = contextStateKey(currentOptions);
@@ -144,6 +155,7 @@ export function useWelcomeSuggestionContext({
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
   useEffect(() => {
+    let cancelled = false;
     if (!enabled) {
       setState({ key: currentKey, context: { kind: 'empty' }, status: 'ready' });
       return undefined;
@@ -184,14 +196,32 @@ export function useWelcomeSuggestionContext({
       return undefined;
     }
 
-    const syncWorkspacePath = effectiveWorkspacePath?.trim();
+    const syncWorkspacePath = workingDirectoryLocked ? effectiveWorkspacePath?.trim() : undefined;
     if (syncWorkspacePath) {
       setState({
         key: currentKey,
         context: { kind: 'workingDirectory', path: syncWorkspacePath },
         status: sourceContextFailed ? 'degraded' : 'ready',
       });
-      return undefined;
+      void (async () => {
+        try {
+          const context = await inferWorkspaceSuggestionContext(syncWorkspacePath);
+          if (!cancelled) {
+            setState({ key: currentKey, context, status: sourceContextFailed ? 'degraded' : 'ready' });
+          }
+        } catch {
+          if (!cancelled) {
+            setState({
+              key: currentKey,
+              context: { kind: 'workingDirectory', path: syncWorkspacePath },
+              status: 'degraded',
+            });
+          }
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (!sessionKey) {
@@ -199,7 +229,6 @@ export function useWelcomeSuggestionContext({
       return undefined;
     }
 
-    let cancelled = false;
     setState({ key: currentKey, context: { kind: 'empty' }, status: 'loading' });
 
     void (async () => {
@@ -252,12 +281,19 @@ export function useWelcomeSuggestionContext({
 
       try {
         const config = await sessionManager.loadSessionAgentConfig(sessionKey);
-        const path = config.effectiveWorkspacePath.trim();
+        const path = config.workingDirectoryLocked ? config.effectiveWorkspacePath.trim() : '';
         if (cancelled) return;
         if (path) {
+          let context: WelcomeSuggestionContext = { kind: 'workingDirectory', path };
+          try {
+            context = await inferWorkspaceSuggestionContext(path);
+          } catch {
+            degraded = true;
+          }
+          if (cancelled) return;
           setState({
             key: currentKey,
-            context: { kind: 'workingDirectory', path },
+            context,
             status: degraded ? 'degraded' : 'ready',
           });
           return;
@@ -283,6 +319,7 @@ export function useWelcomeSuggestionContext({
     sourceContextFailed,
     sourceContextPending,
     effectiveWorkspacePath,
+    workingDirectoryLocked,
     sourceNoteId,
     sourceNoteTitle,
     sourceWorkItem,

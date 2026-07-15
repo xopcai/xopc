@@ -27,22 +27,11 @@ describe('markdown-render-safety', () => {
     expect(markdownNeedsPlainFallback(md)).toBe(false);
   });
 
-  it('uses the JS fallback on web even when the enriched renderer is available', () => {
-    expect(
-      shouldUseMarkdownFallback({
-        content: '## Title\n\nsimple markdown',
-        hasEnriched: true,
-        platform: 'web',
-      }),
-    ).toBe(true);
-  });
-
   it('uses the JS fallback when the enriched renderer is unavailable', () => {
     expect(
       shouldUseMarkdownFallback({
         content: '## Title\n\nsimple markdown',
         hasEnriched: false,
-        platform: 'ios',
       }),
     ).toBe(true);
   });
@@ -52,7 +41,6 @@ describe('markdown-render-safety', () => {
       shouldUseMarkdownFallback({
         content: '## Title\n\nsimple markdown',
         hasEnriched: true,
-        platform: 'ios',
       }),
     ).toBe(false);
   });

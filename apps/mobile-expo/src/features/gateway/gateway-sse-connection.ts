@@ -11,16 +11,6 @@ export type GatewaySseCallbacks = {
   onError: (msg: string) => void;
 };
 
-const GATEWAY_SSE_EVENTS = [
-  'agent.stream',
-  'config.reload',
-  'channels.status',
-  'message.sent',
-  'session.updated',
-  'session.transcript_updated',
-  'session.created',
-] as const;
-
 /** Incremental SSE line parser for long-lived GET streams. */
 class GatewaySseLineParser {
   private buf = '';
@@ -73,10 +63,7 @@ class GatewaySseLineParser {
 
 type Transport = { close: () => void };
 
-/**
- * Long-lived SSE to `GET /api/events` (parity with web `GatewaySseConnection`).
- * Uses `EventSource` on web when available; XHR incremental parse on React Native.
- */
+/** Long-lived SSE to `GET /api/events` using React Native XHR incremental parsing. */
 /** Re-probe LAN/tunnel and pick the new winner after this many consecutive
  * reconnect failures on the current route. Tied to wall-clock cap of about
  * 1+2+4 seconds of backoff before the first re-route attempt. */
@@ -151,47 +138,7 @@ export class GatewaySseConnection {
       return;
     }
 
-    const { token } = useGatewayStore.getState();
-    if (!token && typeof EventSource !== 'undefined' && typeof document !== 'undefined') {
-      this.transport = this.openEventSource(url);
-      return;
-    }
     this.transport = this.openXhr(url);
-  }
-
-  private openEventSource(url: string): Transport {
-    const es = new EventSource(url);
-    let sawConnected = false;
-
-    const onNamed = (evt: MessageEvent) => {
-      dispatchGatewaySseEvent(evt.type, String(evt.data ?? ''));
-    };
-
-    es.addEventListener('connected', () => {
-      sawConnected = true;
-      this._reconnectCount = 0;
-      this._failureStreak = 0;
-      this.callbacks.onConnected();
-    });
-
-    for (const name of GATEWAY_SSE_EVENTS) {
-      es.addEventListener(name, onNamed as EventListener);
-    }
-
-    es.onerror = () => {
-      if (es.readyState === EventSource.CLOSED) {
-        es.close();
-        this.scheduleReconnect(sawConnected ? 'disconnected' : 'error');
-      } else {
-        this.callbacks.onReconnecting();
-      }
-    };
-
-    return {
-      close: () => {
-        es.close();
-      },
-    };
   }
 
   private openXhr(url: string): Transport {

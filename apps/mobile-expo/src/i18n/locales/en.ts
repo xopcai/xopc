@@ -557,7 +557,6 @@ export const en = {
     voiceTextGlyph: 'Txt',
     voiceReleaseCancelHint: 'Release to cancel',
     voicePermissionDenied: 'Microphone permission is required for voice input.',
-    voiceWebUnsupported: 'Voice hold-to-speak is available in the iOS/Android app build.',
     voiceTooShort: 'Recording was too short.',
     voiceRecordingFailed: 'Could not finish recording. Try again.',
     voiceSending: 'Sending voice message…',

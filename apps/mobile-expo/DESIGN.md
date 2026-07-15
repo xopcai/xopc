@@ -386,7 +386,7 @@ Accessibility is a product requirement and a measure of craft.
 - Respect reduced motion, reduce transparency, increased contrast, system appearance, screen reader, hardware keyboard, and landscape/wide layouts.
 - Keep primary reach actions in the middle/lower reachable area when task context permits, while respecting safe areas and keyboard.
 - Every async state is announced visually and, where appropriate, to assistive technologies.
-- Test light/dark mode, small iPhone, large iPhone, iPad/wide web, slow network, offline state, keyboard, and long localized strings.
+- Test light/dark mode, small iPhone, large iPhone, iPad, slow network, offline state, keyboard, and long localized strings.
 
 ## 8. Implementation rules
 

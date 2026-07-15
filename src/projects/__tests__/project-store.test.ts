@@ -165,6 +165,14 @@ describe('ProjectService', () => {
     expect(inference.confidence).toBeGreaterThan(0.7);
   });
 
+  it('does not treat version control metadata alone as a coding project', () => {
+    const workspaceRoot = join(stateDir, 'notes-repository');
+    mkdirSync(join(workspaceRoot, '.git'), { recursive: true });
+    writeFileSync(join(workspaceRoot, 'README.md'), '# Team notes');
+
+    expect(inferProjectKind({ workspaceRoot }).kind).toBe('general');
+  });
+
   it('suggests coder for coding projects when the agent exists', () => {
     const config = {
       agents: {
