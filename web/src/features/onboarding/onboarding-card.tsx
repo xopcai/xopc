@@ -1,4 +1,4 @@
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useReducer } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -246,7 +246,17 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
   };
 
   return (
-    <div className="w-full max-w-xl rounded-2xl border border-edge bg-surface-panel p-6 shadow-elevated">
+    <div className="relative w-full max-w-xl rounded-2xl border border-edge bg-surface-panel p-6 shadow-elevated">
+      {canDismiss ? (
+        <button
+          type="button"
+          aria-label={o.skipSetup}
+          className="absolute right-3 top-3 inline-flex size-8 items-center justify-center rounded-lg text-fg-muted transition hover:bg-surface-muted hover:text-fg focus:outline-none focus:ring-2 focus:ring-accent/30"
+          onClick={onDismiss}
+        >
+          <X className="size-4" />
+        </button>
+      ) : null}
       <div className="text-center">
         <BrandLogo className="mx-auto size-11" />
         <h2 className="mt-3 text-lg font-semibold tracking-tight text-fg">{o.title}</h2>
