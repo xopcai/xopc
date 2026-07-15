@@ -22,6 +22,8 @@ export interface TuiOptions {
   local?: boolean;
   /** Theme id: `auto`, `dark`, `light`, or custom name under `~/.xopc/themes/`. */
   theme?: string;
+  /** Open the session picker after the TUI connects instead of loading the startup session. */
+  openSessionPickerOnStart?: boolean;
 }
 
 export type TuiExitReason = 'exit' | 'signal';
