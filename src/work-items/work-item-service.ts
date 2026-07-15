@@ -40,6 +40,10 @@ export class WorkItemService {
     return this.store.list(projectId, query);
   }
 
+  listWorkItems(query: WorkItemListQuery = {}): WorkItemListResult {
+    return this.store.listAll(query);
+  }
+
   createProjectWorkItem(projectId: string, input: CreateWorkItemInput): WorkItem {
     const item = this.store.create(projectId, input);
     this.store.addEvent(item.id, 'created', { title: item.title, status: item.status, priority: item.priority });

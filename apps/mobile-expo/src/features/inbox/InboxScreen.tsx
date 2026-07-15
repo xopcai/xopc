@@ -223,6 +223,13 @@ export function InboxScreen() {
   }, [selectionMode, startSelection, toggleSelected]);
 
   const handleSwipeAction = useCallback((item: NoteIndexEntry, action: SwipeAction) => {
+    if (action.key === 'work') {
+      router.push({
+        pathname: '/work/create',
+        params: { noteId: item.id, title: item.title ?? item.snippet ?? '' },
+      });
+      return;
+    }
     if (action.key === 'archive') {
       archiveMutation.mutate([item.id]);
       return;
@@ -239,7 +246,7 @@ export function InboxScreen() {
       );
       setSnackMsg(pm.deleted);
     }
-  }, [archiveMutation, invalidateInbox, pm.actionFailed, pm.deleted, scheduleDelete]);
+  }, [archiveMutation, invalidateInbox, pm.actionFailed, pm.deleted, router, scheduleDelete]);
 
   const batchActions = useMemo(() => [
     {
@@ -312,6 +319,7 @@ export function InboxScreen() {
     if (selectionMode) return row;
 
     const actions: SwipeAction[] = [
+      { key: 'work', icon: 'checkbox-marked-circle-outline', color: 'blue', label: m.workPage.create },
       { key: 'archive', icon: 'archive-arrow-down-outline', color: 'blue', label: pm.archive },
       { key: 'delete', icon: 'trash-can-outline', color: 'red', label: pm.delete, destructive: true },
     ];
@@ -333,6 +341,7 @@ export function InboxScreen() {
     handleItemPress,
     handleSwipeAction,
     items.length,
+    m.workPage.create,
     pm.archive,
     pm.delete,
     selectedIds,

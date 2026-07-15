@@ -718,6 +718,20 @@ export function registerProjectsRoutes(authenticated: Hono, deps: AuthenticatedR
     return c.json({ ok: true, item: created }, 201);
   });
 
+  authenticated.get('/api/work-items', (c) => {
+    const result = workItems.listWorkItems({
+      status: parseCsvEnum(c.req.query('status'), WORK_ITEM_STATUSES),
+      priority: parseCsvEnum(c.req.query('priority'), WORK_ITEM_PRIORITIES),
+      includeArchived: c.req.query('includeArchived') === 'true',
+      search: c.req.query('search'),
+      sortBy: c.req.query('sortBy') as 'updatedAt' | 'createdAt' | 'priority' | 'status' | undefined,
+      sortOrder: c.req.query('sortOrder') as 'asc' | 'desc' | undefined,
+      limit: parseLimit(c.req.query('limit')),
+      offset: c.req.query('offset') ? Math.max(0, Number.parseInt(c.req.query('offset')!, 10) || 0) : undefined,
+    });
+    return c.json({ ok: true, ...result });
+  });
+
   authenticated.get('/api/work-items/:id', async (c) => {
     const item = workItems.getWorkItem(c.req.param('id'));
     if (!item) return c.json({ ok: false, error: 'Work item not found' }, 404);

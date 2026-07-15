@@ -403,6 +403,11 @@ export function WorkspaceHomeScreen() {
                 else router.push('/automation');
               }}
             />
+            <HomeWorkSection
+              items={home?.work?.items ?? []}
+              onOpenWork={() => router.push('/work')}
+              onItemPress={(itemId) => router.push(`/work/${itemId}`)}
+            />
             <AgentStrip
               agents={homeAgents}
               loading={agentsQuery.isLoading}
@@ -421,6 +426,8 @@ export function WorkspaceHomeScreen() {
               onFiles={() => router.push('/files')}
               onAutomation={() => router.push('/automation')}
               onAgents={() => router.push('/ai/agents')}
+              onWork={() => router.push('/work')}
+              onProjects={() => router.push('/projects')}
             />
           </>
         )}
@@ -701,6 +708,39 @@ function AttentionItemRow({
   );
 }
 
+function HomeWorkSection({
+  items,
+  onOpenWork,
+  onItemPress,
+}: {
+  items: NonNullable<HomeData['work']>['items'];
+  onOpenWork: () => void;
+  onItemPress: (itemId: string) => void;
+}) {
+  const { colors } = useTheme();
+  const { workPage: labels } = useMessages();
+  if (items.length === 0) return null;
+  return (
+    <Section title={labels.title} actionLabel={labels.title} onAction={onOpenWork}>
+      <View style={[styles.panel, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
+        {items.slice(0, 3).map((item, index) => (
+          <Pressable key={item.id} style={styles.listRow} onPress={() => onItemPress(item.id)}>
+            <View style={[styles.iconBubble, { backgroundColor: colors.accent.selectionBg }]}>
+              <Icon source={item.status === 'blocked' || item.status === 'needs_input' ? 'alert-circle-outline' : 'checkbox-marked-circle-outline'} size={18} color={colors.accent.primary} />
+            </View>
+            <View style={styles.rowCopy}>
+              <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text.primary }]}>{item.title}</Text>
+              <Text numberOfLines={1} style={[styles.rowSubtitle, { color: colors.text.tertiary }]}>{item.projectName} · {labels.status[item.status]}</Text>
+            </View>
+            <Icon source="chevron-right" size={18} color={colors.text.tertiary} />
+            {index < Math.min(items.length, 3) - 1 ? <View style={[styles.rowDivider, { backgroundColor: colors.border.subtle }]} /> : null}
+          </Pressable>
+        ))}
+      </View>
+    </Section>
+  );
+}
+
 function InboxPreviewPanel({
   inboxCount,
   todayCount,
@@ -786,15 +826,19 @@ function LibrarySection({
   onFiles,
   onAutomation,
   onAgents,
+  onWork,
+  onProjects,
 }: {
   onNotes: () => void;
   onSessions: () => void;
   onFiles: () => void;
   onAutomation: () => void;
   onAgents: () => void;
+  onWork: () => void;
+  onProjects: () => void;
 }) {
   const { colors } = useTheme();
-  const { homePage: hm } = useMessages();
+  const { homePage: hm, workPage } = useMessages();
   return (
     <Section title={hm.sectionLibrary}>
       <View style={[styles.libraryGrid, { backgroundColor: colors.surface.panel, borderColor: colors.border.default }]}>
@@ -802,6 +846,8 @@ function LibrarySection({
         <LibraryButton icon="message-processing-outline" label={hm.librarySessions} onPress={onSessions} />
         <LibraryButton icon="folder-outline" label={hm.libraryFiles} onPress={onFiles} />
         <LibraryButton icon="clock-outline" label={hm.libraryAutomation} onPress={onAutomation} />
+        <LibraryButton icon="checkbox-marked-circle-outline" label={workPage.title} onPress={onWork} />
+        <LibraryButton icon="folder-multiple-outline" label={workPage.projectsTitle} onPress={onProjects} />
         <LibraryButton icon="account-supervisor-outline" label={hm.libraryAgents} onPress={onAgents} last />
       </View>
     </Section>

@@ -4,6 +4,7 @@ import { listGatewayAgents } from '../../agents-admin.js';
 import { getTunnelService } from '../../../tunnel/index.js';
 import type { Automation, AutomationRun } from '../../../automations/index.js';
 import type { WorkflowRunSummary } from '../../../workflows/domain/index.js';
+import { WorkItemService } from '../../../work-items/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 type HomeWorkflowRun = {
@@ -39,6 +40,14 @@ type HomeAutomationRun = {
   sessionKey?: string;
   workflowRunId?: string;
 };
+
+function workItemAttentionRank(item: { status: string; dueAt?: number; priority: string; updatedAt: number }, nowMs: number): number {
+  if (item.status === 'needs_input' || item.status === 'blocked') return 0;
+  if (item.dueAt != null && item.dueAt < nowMs) return 1;
+  if (item.dueAt != null && item.dueAt < nowMs + 24 * 60 * 60 * 1000) return 2;
+  if (item.priority === 'urgent') return 3;
+  return 4;
+}
 
 function toHomeWorkflowRun(run: WorkflowRunSummary): HomeWorkflowRun {
   return {
@@ -123,6 +132,8 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
     const workflowRunStore = workflowRunService.createRunStore(defaultAgent?.id ?? agents.defaultId);
     const tunnel = getTunnelService().getStatus();
     const health = service.getHealth();
+    const workItems = new WorkItemService();
+    const nowMs = Date.now();
 
     const [
       recentlyOpened,
@@ -132,6 +143,8 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       workflowRuns,
       automations,
       automationRuns,
+      projects,
+      allWorkItems,
     ] = await Promise.all([
       notes.listNotes({ sortBy: 'lastOpenedAt', sortOrder: 'desc', limit: 10 }),
       notes.listNotes({ status: 'inbox', limit: 0 }),
@@ -140,7 +153,28 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
       workflowRunStore.listRunSummaries(20),
       service.automationServiceInstance.list(),
       service.automationServiceInstance.listRuns({ limit: 10 }),
+      service.projects.list({ limit: 500 }),
+      Promise.resolve(workItems.listWorkItems({ limit: 100 })),
     ]);
+    const projectsById = new Map(projects.items.map((project) => [project.id, project]));
+    const activeWorkItems = allWorkItems.items
+      .filter((item) => item.status !== 'done' && item.status !== 'cancelled')
+      .sort((left, right) => {
+        const rank = workItemAttentionRank(left, nowMs) - workItemAttentionRank(right, nowMs);
+        return rank || right.updatedAt - left.updatedAt;
+      });
+    const attentionWorkItems = activeWorkItems.slice(0, 6).map((item) => ({
+      id: item.id,
+      projectId: item.projectId,
+      projectName: projectsById.get(item.projectId)?.name ?? 'Project',
+      title: item.title,
+      status: item.status,
+      priority: item.priority,
+      nextAction: item.nextAction,
+      blockedReason: item.blockedReason,
+      dueAt: item.dueAt,
+      updatedAt: item.updatedAt,
+    }));
 
     const activeWorkflowRuns = workflowRuns
       .filter((run) => run.status === 'queued' || run.status === 'running')
@@ -186,6 +220,12 @@ export function registerHomeRoutes(authenticated: Hono, deps: AuthenticatedRoute
         active: activeWorkflowRuns,
         attention: attentionWorkflowRuns,
         recent: recentWorkflowRuns,
+      },
+      work: {
+        attentionCount: activeWorkItems.filter((item) => workItemAttentionRank(item, nowMs) < 3).length,
+        overdueCount: activeWorkItems.filter((item) => item.dueAt != null && item.dueAt < nowMs).length,
+        todayCount: activeWorkItems.filter((item) => item.dueAt != null && item.dueAt >= nowMs && item.dueAt < nowMs + 24 * 60 * 60 * 1000).length,
+        items: attentionWorkItems,
       },
       upcomingAutomations,
       recentAutomationRuns: automationRuns.slice(0, 5).map(toHomeAutomationRun),

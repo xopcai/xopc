@@ -128,6 +128,8 @@ export default function RootLayout() {
                 <Stack.Screen name="(home)" options={{ headerShown: false }} />
                 <Stack.Screen name="chat" options={{ headerShown: false }} />
                 <Stack.Screen name="inbox" options={{ headerShown: false }} />
+                <Stack.Screen name="work" options={{ headerShown: false }} />
+                <Stack.Screen name="projects" options={{ headerShown: false }} />
                 <Stack.Screen name="notes/index" options={{ headerShown: false }} />
                 <Stack.Screen name="sessions" options={{ headerShown: false }} />
                 <Stack.Screen name="items/[id]" options={{ headerShown: false }} />

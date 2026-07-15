@@ -49,13 +49,13 @@ describe('syncGatewayAfterConnectivityChange', () => {
     expect(invalidateQueries).not.toHaveBeenCalled();
 
     vi.advanceTimersByTime(2_000);
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledTimes(6);
     expect(reconnect).toHaveBeenCalledTimes(1);
   });
 
   it('runs immediately when requested', () => {
     syncGatewayAfterConnectivityChange({ immediate: true });
-    expect(invalidateQueries).toHaveBeenCalledTimes(3);
+    expect(invalidateQueries).toHaveBeenCalledTimes(6);
     expect(reconnect).toHaveBeenCalledTimes(1);
   });
 
