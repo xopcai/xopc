@@ -141,7 +141,7 @@ export class SessionManager {
           ? data.payload.effectiveWorkspacePath
           : '';
       const workingDirectoryLocked = Boolean(data.payload?.workingDirectoryLocked);
-      const workspaceSource =
+      const workspaceSource: SessionAgentConfig['workspaceSource'] =
         data.payload?.workspaceSource === 'project' || data.payload?.workspaceSource === 'session_override'
           ? data.payload.workspaceSource
         : data.payload?.workspaceSource === 'agent_workspace'
