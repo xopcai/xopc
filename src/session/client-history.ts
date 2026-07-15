@@ -32,7 +32,7 @@ export interface ClientHistoryMessage {
     summary: string;
     fromId?: string;
   };
-  toolCalls?: Array<{ name: string; args?: unknown; result?: string; isError?: boolean }>;
+  toolCalls?: Array<{ id?: string; name: string; args?: unknown; result?: string; isError?: boolean }>;
 }
 
 export function flattenMessageContent(content: string | unknown[]): string {
@@ -88,6 +88,7 @@ function toolCallsWithResults(
   for (const tc of tool_calls) {
     const res = results.get(tc.id);
     out.push({
+      id: tc.id,
       name: tc.function.name,
       args: safeJsonParseArguments(tc.function.arguments),
       result: res?.text,
@@ -222,8 +223,52 @@ function contextRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessa
   };
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function reviewTraceRowToClientHistory(row: TranscriptStoredRow): {
+  event: 'tool_start' | 'tool_end';
+  toolCallId: string;
+  toolName: string;
+  input?: unknown;
+  resultPreview?: string;
+  isError?: boolean;
+  timestamp?: number;
+} | null {
+  if ((row as { kind?: unknown }).kind !== 'context') return null;
+  const data = asRecord((row as { data?: unknown }).data);
+  if (data?.type !== 'review_trace' || data.scope !== 'review') return null;
+  const event = data.event === 'tool_end'
+    ? 'tool_end'
+    : data.event === 'tool_start'
+      ? 'tool_start'
+      : null;
+  if (!event) return null;
+  const toolCallId = optionalString(data.toolCallId);
+  const toolName = optionalString(data.toolName);
+  if (!toolCallId || !toolName) return null;
+  const createdAt = (row as { createdAt?: unknown }).createdAt;
+  return {
+    event,
+    toolCallId,
+    toolName,
+    input: data.input,
+    resultPreview: optionalString(data.resultPreview),
+    isError: data.isError === true || data.status === 'error',
+    timestamp: typeof createdAt === 'string' ? parseTimestamp(createdAt) : undefined,
+  };
+}
+
 function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
+}
+
+function rawReviewContent(content: unknown): unknown[] | undefined {
+  if (!Array.isArray(content)) return undefined;
+  return content.some((block) => asRecord(block)?.type === 'review') ? content : undefined;
 }
 
 function bashRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessage | null {
@@ -367,6 +412,7 @@ export function transcriptRowsToClientHistory(
     .filter((row): row is HistoryMessageRow => row !== null);
   const results = collectHistoryToolResults(messages);
   const out: ClientHistoryMessage[] = [];
+  const reviewTraceToolById = new Map<string, NonNullable<ClientHistoryMessage['toolCalls']>[number]>();
 
   for (const [offset, row] of slice.entries()) {
     const rowNumber = startIndex + offset + 1;
@@ -391,6 +437,33 @@ export function transcriptRowsToClientHistory(
       out.push({
         id,
         ...compactionSummaryRow,
+        ...(displayIndex !== undefined ? { displayIndex } : {}),
+      });
+      continue;
+    }
+
+    const reviewTraceRow = reviewTraceRowToClientHistory(row);
+    if (reviewTraceRow) {
+      const existing = reviewTraceToolById.get(reviewTraceRow.toolCallId);
+      if (reviewTraceRow.event === 'tool_end' && existing) {
+        existing.result = reviewTraceRow.resultPreview ?? '';
+        existing.isError = reviewTraceRow.isError;
+        continue;
+      }
+      const toolCall: NonNullable<ClientHistoryMessage['toolCalls']>[number] = {
+        id: reviewTraceRow.toolCallId,
+        name: reviewTraceRow.toolName,
+        args: reviewTraceRow.input,
+        ...(reviewTraceRow.event === 'tool_end' ? { result: reviewTraceRow.resultPreview ?? '' } : {}),
+        ...(reviewTraceRow.isError ? { isError: true } : {}),
+      };
+      reviewTraceToolById.set(reviewTraceRow.toolCallId, toolCall);
+      out.push({
+        id,
+        role: 'assistant',
+        content: '',
+        timestamp: reviewTraceRow.timestamp,
+        toolCalls: [toolCall],
         ...(displayIndex !== undefined ? { displayIndex } : {}),
       });
       continue;
@@ -464,11 +537,13 @@ export function transcriptRowsToClientHistory(
       continue;
     }
 
+    const rawContent = rawReviewContent(messageRow.content);
     out.push({
       id,
       role: 'assistant',
       kind: 'message',
       content: flattenMessageContent(messageRow.content ?? ''),
+      ...(rawContent ? { rawContent } : {}),
       ...(displayIndex !== undefined ? { displayIndex } : {}),
       timestamp: parseTimestampValue(messageRow.timestamp),
       toolCalls: toolCallsWithResults(messageRow.tool_calls ?? messageRow.toolCalls, results),

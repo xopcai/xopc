@@ -78,6 +78,53 @@ describe('runBtwQuery', () => {
     expect(result).toEqual({ text: 'String answer.' });
   });
 
+  it('passes caller token and temperature overrides to the model call', async () => {
+    vi.mocked(complete).mockResolvedValue({
+      content: [{ type: 'text', text: 'Longer answer.' }],
+    } as Awaited<ReturnType<typeof complete>>);
+
+    const result = await runBtwQuery({
+      sessionKey: 'agent:main:main',
+      question: 'review this',
+      sessionStore: makeSessionStore([]) as never,
+      modelForSession: 'openai/gpt-test',
+      log: makeLog(),
+      maxTokens: 8192,
+      temperature: 0.1,
+    });
+
+    expect(result).toEqual({ text: 'Longer answer.' });
+    expect(vi.mocked(complete).mock.calls[0]?.[2]).toMatchObject({
+      maxTokens: 8192,
+      temperature: 0.1,
+    });
+  });
+
+  it('caps caller token overrides at the model maxTokens value', async () => {
+    vi.mocked(resolveModel).mockReturnValue({
+      provider: 'openai',
+      id: 'gpt-test',
+      api: 'openai-completions',
+      maxTokens: 4096,
+    } as never);
+    vi.mocked(complete).mockResolvedValue({
+      content: [{ type: 'text', text: 'Capped answer.' }],
+    } as Awaited<ReturnType<typeof complete>>);
+
+    await runBtwQuery({
+      sessionKey: 'agent:main:main',
+      question: 'review this',
+      sessionStore: makeSessionStore([]) as never,
+      modelForSession: 'openai/gpt-test',
+      log: makeLog(),
+      maxTokens: 8192,
+    });
+
+    expect(vi.mocked(complete).mock.calls[0]?.[2]).toMatchObject({
+      maxTokens: 4096,
+    });
+  });
+
   it('returns an explicit error when the model returns no text content', async () => {
     vi.mocked(complete).mockResolvedValue({
       content: [],

@@ -6,6 +6,7 @@ import { resolveImageHandlingStrategy } from './vision-detection.js';
 export async function resolveInboundImageContentParts(params: {
   modelRef: string;
   cfg?: Config;
+  agentId?: string;
   userTextForContext: string;
   images: Array<{ data: string; mimeType: string }>;
 }): Promise<Array<{ type: 'image'; data: string; mimeType: string } | { type: 'text'; text: string }>> {
@@ -18,7 +19,7 @@ export async function resolveInboundImageContentParts(params: {
     }));
   }
 
-  const toolCfg = resolveImageModelConfigForTool({ cfg: params.cfg });
+  const toolCfg = resolveImageModelConfigForTool({ cfg: params.cfg, agentId: params.agentId });
   const primary = toolCfg?.primary;
   const fallbacks = toolCfg?.fallbacks ?? [];
 

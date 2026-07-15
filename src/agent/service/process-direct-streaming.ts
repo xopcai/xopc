@@ -111,6 +111,84 @@ function isReviewOutput(value: unknown): value is ReviewOutput {
     && (value as { type?: unknown }).type === 'review';
 }
 
+const REVIEW_TRACE_PREVIEW_MAX = 2_000;
+
+type ReviewTraceContextEntry = {
+  id: string;
+  text: string;
+  data: Record<string, unknown>;
+  createdAt: string;
+};
+
+function boundedPreview(text: string): string {
+  return text.length > REVIEW_TRACE_PREVIEW_MAX
+    ? `${text.slice(0, REVIEW_TRACE_PREVIEW_MAX)}\n[trace preview truncated]`
+    : text;
+}
+
+function extractTraceResultText(result: unknown): string {
+  if (typeof result === 'string') return result;
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    return result == null ? '' : String(result);
+  }
+  const rec = result as Record<string, unknown>;
+  if (typeof rec.text === 'string') return rec.text;
+  if (Array.isArray(rec.content)) {
+    return rec.content
+      .map((block) => {
+        if (!block || typeof block !== 'object') return '';
+        const b = block as Record<string, unknown>;
+        return b.type === 'text' && typeof b.text === 'string' ? b.text : '';
+      })
+      .join('');
+  }
+  return '';
+}
+
+function reviewTraceContextEntryFromCommandEvent(
+  event: { type: string; [key: string]: unknown },
+  runId: string | undefined,
+): ReviewTraceContextEntry | null {
+  if (event.type !== 'tool_execution_start' && event.type !== 'tool_execution_end') {
+    return null;
+  }
+  const toolName = typeof event.toolName === 'string' ? event.toolName : '';
+  if (!toolName.startsWith('review.')) {
+    return null;
+  }
+  const toolCallId = typeof event.toolCallId === 'string' && event.toolCallId
+    ? event.toolCallId
+    : `review_trace_${Date.now()}`;
+  const ended = event.type === 'tool_execution_end';
+  const isError = ended && event.isError === true;
+  const resultPreview = ended ? boundedPreview(extractTraceResultText(event.result).trim()) : undefined;
+  const details = ended && event.result && typeof event.result === 'object' && !Array.isArray(event.result)
+    ? (event.result as Record<string, unknown>).details
+    : undefined;
+
+  return {
+    id: `review-trace:${toolCallId}:${ended ? 'end' : 'start'}`,
+    text: ended
+      ? `Review trace: ${toolName} ${isError ? 'failed' : 'completed'}`
+      : `Review trace: ${toolName} started`,
+    createdAt: new Date().toISOString(),
+    data: {
+      type: 'review_trace',
+      scope: 'review',
+      event: ended ? 'tool_end' : 'tool_start',
+      llmInput: false,
+      ...(runId ? { runId } : {}),
+      toolCallId,
+      toolName,
+      status: ended ? (isError ? 'error' : 'done') : 'running',
+      ...(event.args !== undefined ? { input: event.args } : {}),
+      ...(resultPreview ? { resultPreview } : {}),
+      ...(details !== undefined ? { details } : {}),
+      ...(isError ? { isError: true } : {}),
+    },
+  };
+}
+
 function makeAssistantReceiptMessage(text: string, metadata?: Record<string, unknown>): AgentMessage {
   const review = isReviewOutput(metadata?.review) ? metadata.review : undefined;
   return {
@@ -176,6 +254,7 @@ export async function* runProcessDirectStreaming(
   let mergedUserText = input.content;
   let webchatSlashReceipt: string | undefined;
   let slashCommandMetadata: Record<string, unknown> | undefined;
+  const slashTraceRows: ReviewTraceContextEntry[] = [];
 
   const taskPromise = (async () => {
     try {
@@ -269,7 +348,16 @@ export async function* runProcessDirectStreaming(
           inboundMetadata: context.metadata,
         },
         mergedUserText,
-        { skipResetCommands: resetTriggeredAtInit },
+        {
+          skipResetCommands: resetTriggeredAtInit,
+          emitEvent: (event) => {
+            pushVisible({ ...event, runId: input.runId });
+            const traceRow = reviewTraceContextEntryFromCommandEvent(event, input.runId);
+            if (traceRow) {
+              slashTraceRows.push(traceRow);
+            }
+          },
+        },
       );
       if (slash.matched) {
         ranSlashCommand = true;
@@ -398,6 +486,9 @@ export async function* runProcessDirectStreaming(
           timestamp: Date.now(),
         } as AgentMessage;
         await deps.sessionStore.appendTranscriptMessage(sessionKey, userMsg);
+        for (const traceRow of slashTraceRows) {
+          await deps.sessionStore.appendTranscriptContextEntry(sessionKey, traceRow);
+        }
         if (webchatSlashReceipt?.trim()) {
           const assistantMsg = {
             role: 'assistant' as const,

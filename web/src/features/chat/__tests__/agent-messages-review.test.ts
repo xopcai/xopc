@@ -25,4 +25,11 @@ describe('normalizeAgentMessages review blocks', () => {
     ]);
     expect(ui[0]?.content[0]).toMatchObject({ type: 'review', summary: 'No findings.' });
   });
+
+  it('restores review from persisted rawContent history rows', () => {
+    const ui = normalizeAgentMessages([
+      { role: 'assistant', content: '', rawContent: [review], timestamp: 1 },
+    ]);
+    expect(ui[0]?.content[0]).toMatchObject({ type: 'review', summary: 'No findings.' });
+  });
 });

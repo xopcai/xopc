@@ -50,6 +50,8 @@ export async function runBtwQuery(opts: {
   sessionStore: SessionStore;
   modelForSession: string;
   log: BtwLog;
+  maxTokens?: number;
+  temperature?: number;
 }): Promise<{ text: string; error?: string }> {
   const q = opts.question.trim();
   if (!q) {
@@ -91,9 +93,13 @@ export async function runBtwQuery(opts: {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 90_000);
   try {
+    const requestedMaxTokens = Math.max(1, Math.trunc(opts.maxTokens ?? 2048));
+    const modelMaxTokens = typeof model.maxTokens === 'number' && Number.isFinite(model.maxTokens)
+      ? Math.max(1, Math.trunc(model.maxTokens))
+      : undefined;
     const out = await complete(model, { messages: [userMessage] }, {
-      maxTokens: 2048,
-      temperature: 0.4,
+      maxTokens: modelMaxTokens ? Math.min(requestedMaxTokens, modelMaxTokens) : requestedMaxTokens,
+      temperature: opts.temperature ?? 0.4,
       signal: controller.signal as AbortSignal,
     });
     const text = textFromCompleteContent((out as { content?: unknown }).content).trim();

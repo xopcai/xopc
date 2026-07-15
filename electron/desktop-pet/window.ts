@@ -221,13 +221,9 @@ export async function getDesktopPetState(): Promise<DesktopPetState> {
 export async function sendDesktopPetEvent(event: PetSessionUpdate): Promise<void> {
   const prefs = await readDesktopPetPrefs();
   if (!prefs.enabled) return;
-  const win = await createPetWindow();
-  if (win && !win.isDestroyed()) {
-    if (!win.isVisible()) {
-      win.showInactive();
-    }
-    win.webContents.send("desktop-pet:event", event);
-  }
+  const win = petWindow && !petWindow.isDestroyed() ? petWindow : null;
+  if (!win || !win.isVisible()) return;
+  win.webContents.send("desktop-pet:event", event);
 }
 
 export function setDesktopPetClickThrough(enabled: boolean): void {

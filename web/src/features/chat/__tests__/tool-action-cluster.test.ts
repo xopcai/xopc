@@ -100,12 +100,18 @@ describe('classifyTool', () => {
     expect(classifyTool('ls')).toBe('listDir');
     expect(classifyTool('read_file')).toBe('readFile');
     expect(classifyTool('fs.read_file')).toBe('readFile');
+    expect(classifyTool('codebase-memory-mcp.get_code_snippet')).toBe('readFile');
+    expect(classifyTool('codebase-memory-mcp__get_code_snippet')).toBe('readFile');
+    expect(classifyTool('review.prepare_diff')).toBe('readFile');
     expect(classifyTool('apply_patch')).toBe('editFile');
     expect(classifyTool('write_file')).toBe('writeFile');
     expect(classifyTool('web_fetch')).toBe('fetchUrl');
     expect(classifyTool('open_url')).toBe('openUrl');
     expect(classifyTool('web_search')).toBe('search');
     expect(classifyTool('brave_search')).toBe('search');
+    expect(classifyTool('codebase-memory-mcp.search_graph')).toBe('search');
+    expect(classifyTool('codebase-memory-mcp__query_graph')).toBe('search');
+    expect(classifyTool('review.model_judge')).toBe('other');
     expect(classifyTool('mystery_tool')).toBe('other');
   });
 });

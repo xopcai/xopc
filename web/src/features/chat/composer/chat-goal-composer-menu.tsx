@@ -14,9 +14,11 @@ import {
   startGoalWorkflowRun,
   type WorkflowDefinition,
 } from '@/features/workflows/workflow-api';
+import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { showToast } from '@/lib/toast';
 import { Select, SelectOption } from '@/components/ui/popover-select';
+import { useLocaleStore } from '@/stores/locale-store';
 
 const inputClass =
   'min-w-0 rounded-md border border-edge bg-surface-muted px-2.5 py-1.5 text-xs text-fg placeholder:text-fg-muted focus-visible:border-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent';
@@ -35,6 +37,8 @@ export function ChatGoalComposerMenu({
   disabled: boolean;
   onDone?: () => void;
 }) {
+  const language = useLocaleStore((s) => s.language);
+  const t = messages(language).chat.goal;
   const [current, setCurrent] = useState<WebchatPersistentGoalWire | null>(null);
   const [goals, setGoals] = useState<WebchatPersistentGoalWire[]>([]);
   const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
@@ -56,9 +60,9 @@ export function ChatGoalComposerMenu({
       setGoals(listRes.goals);
       setSelectedGoalId((prev) => prev || listRes.goals.find((goal) => goal.id !== currentRes.goal?.id)?.id || '');
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to load goals');
+      setError(e instanceof Error ? e.message : t.composerLoadGoalsFailed);
     }
-  }, [sessionKey]);
+  }, [sessionKey, t.composerLoadGoalsFailed]);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,12 +73,12 @@ export function ChatGoalComposerMenu({
         setSelectedWorkflowId((prev) => prev || definitions[0]?.id || '');
       })
       .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : 'Failed to load workflows');
+        if (!cancelled) setError(e instanceof Error ? e.message : t.composerLoadWorkflowsFailed);
       });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [t.composerLoadWorkflowsFailed]);
 
   useEffect(() => {
     void load();
@@ -101,10 +105,10 @@ export function ChatGoalComposerMenu({
       setCurrent(res.goal);
       setTitle('');
       notifySessionGoalChanged();
-      showToast({ type: 'success', title: 'Goal started', message: nextTitle });
+      showToast({ type: 'success', title: t.composerGoalStarted, message: nextTitle });
       onDone?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start goal');
+      setError(e instanceof Error ? e.message : t.composerStartGoalFailed);
     } finally {
       setBusy(null);
     }
@@ -118,10 +122,10 @@ export function ChatGoalComposerMenu({
       const res = await attachWebchatGoal(sessionKey, selectedGoalId);
       setCurrent(res.goal);
       notifySessionGoalChanged();
-      showToast({ type: 'success', title: 'Goal attached', message: res.goal?.title });
+      showToast({ type: 'success', title: t.composerGoalAttached, message: res.goal?.title });
       onDone?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to attach goal');
+      setError(e instanceof Error ? e.message : t.composerAttachGoalFailed);
     } finally {
       setBusy(null);
     }
@@ -135,10 +139,10 @@ export function ChatGoalComposerMenu({
       await detachWebchatGoal(current.id);
       setCurrent(null);
       notifySessionGoalChanged();
-      showToast({ type: 'info', title: 'Goal detached' });
+      showToast({ type: 'info', title: t.composerGoalDetached });
       onDone?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to detach goal');
+      setError(e instanceof Error ? e.message : t.composerDetachGoalFailed);
     } finally {
       setBusy(null);
     }
@@ -155,11 +159,11 @@ export function ChatGoalComposerMenu({
         goal: current.nextAction || current.title,
       });
       notifySessionGoalChanged();
-      showToast({ type: 'success', title: 'Workflow started', message: current.title });
+      showToast({ type: 'success', title: t.composerWorkflowStarted, message: current.title });
       window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { sessionKey: result.sessionKey } }));
       onDone?.();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start workflow');
+      setError(e instanceof Error ? e.message : t.composerStartWorkflowFailed);
     } finally {
       setBusy(null);
     }
@@ -172,27 +176,27 @@ export function ChatGoalComposerMenu({
       <div className="flex items-center gap-2 px-1.5 text-fg">
         <Target className="size-4 text-accent-fg" aria-hidden />
         <div className="min-w-0">
-          <div className="font-medium">Goal</div>
-          <div className="truncate text-fg-muted">{current ? goalLabel(current) : 'No goal attached'}</div>
+          <div className="font-medium">{t.composerHeading}</div>
+          <div className="truncate text-fg-muted">{current ? goalLabel(current) : t.composerNoGoalAttached}</div>
         </div>
       </div>
 
       <div className="grid gap-1.5 rounded-md border border-edge/70 bg-surface-muted/30 p-2">
-        <div className="font-medium text-fg-muted">Start goal</div>
+        <div className="font-medium text-fg-muted">{t.composerStartGoal}</div>
         <div className="flex gap-1.5">
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className={cn(inputClass, 'flex-1')}
-            placeholder="Goal title"
+            placeholder={t.composerGoalTitlePlaceholder}
             disabled={inactive}
           />
           <button
             type="button"
             className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-accent text-white disabled:opacity-50"
             disabled={inactive || !title.trim()}
-            title="Start goal"
-            aria-label="Start goal"
+            title={t.composerStartGoal}
+            aria-label={t.composerStartGoal}
             onClick={() => void startGoal()}
           >
             <Plus className="size-4" aria-hidden />
@@ -201,7 +205,7 @@ export function ChatGoalComposerMenu({
       </div>
 
       <div className="grid gap-1.5 rounded-md border border-edge/70 bg-surface-muted/30 p-2">
-        <div className="font-medium text-fg-muted">{current ? 'Switch goal' : 'Attach goal'}</div>
+        <div className="font-medium text-fg-muted">{current ? t.composerSwitchGoal : t.composerAttachGoal}</div>
         <div className="flex gap-1.5">
           <Select
             value={selectedGoalId}
@@ -209,7 +213,7 @@ export function ChatGoalComposerMenu({
             className={cn(inputClass, 'flex-1')}
             disabled={inactive || switchableGoals.length === 0}
           >
-            {switchableGoals.length === 0 ? <SelectOption value="">No open goals</SelectOption> : null}
+            {switchableGoals.length === 0 ? <SelectOption value="">{t.composerNoOpenGoals}</SelectOption> : null}
             {switchableGoals.map((goal) => (
               <SelectOption key={goal.id} value={goal.id}>
                 {goalLabel(goal)}
@@ -220,8 +224,8 @@ export function ChatGoalComposerMenu({
             type="button"
             className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-edge text-fg hover:bg-surface-hover disabled:opacity-50"
             disabled={inactive || !selectedGoalId}
-            title={current ? 'Switch goal' : 'Attach goal'}
-            aria-label={current ? 'Switch goal' : 'Attach goal'}
+            title={current ? t.composerSwitchGoal : t.composerAttachGoal}
+            aria-label={current ? t.composerSwitchGoal : t.composerAttachGoal}
             onClick={() => void attachGoal()}
           >
             <Link2 className="size-4" aria-hidden />
@@ -236,10 +240,10 @@ export function ChatGoalComposerMenu({
         onClick={() => void detachGoal()}
       >
         <Unlink className="size-4 text-fg-subtle" aria-hidden />
-        Detach current goal
+        {t.composerDetachCurrent}
       </button>
       <div className="grid gap-1.5 rounded-md border border-edge/70 bg-surface-muted/30 p-2">
-        <div className="font-medium text-fg-muted">Run workflow</div>
+        <div className="font-medium text-fg-muted">{t.composerRunWorkflow}</div>
         <div className="flex gap-1.5">
           <Select
             value={selectedWorkflowId}
@@ -247,7 +251,7 @@ export function ChatGoalComposerMenu({
             className={cn(inputClass, 'flex-1')}
             disabled={inactive || !current || workflows.length === 0}
           >
-            {workflows.length === 0 ? <SelectOption value="">No workflows</SelectOption> : null}
+            {workflows.length === 0 ? <SelectOption value="">{t.composerNoWorkflows}</SelectOption> : null}
             {workflows.map((workflow) => (
               <SelectOption key={workflow.id} value={workflow.id}>
                 {workflow.title || workflow.name}
@@ -258,8 +262,8 @@ export function ChatGoalComposerMenu({
             type="button"
             className="inline-flex size-8 shrink-0 items-center justify-center rounded-md border border-edge text-fg hover:bg-surface-hover disabled:opacity-50"
             disabled={inactive || !current || !selectedWorkflowId}
-            title="Run workflow"
-            aria-label="Run workflow"
+            title={t.composerRunWorkflow}
+            aria-label={t.composerRunWorkflow}
             onClick={() => void runWorkflow()}
           >
             <Target className="size-4" aria-hidden />

@@ -23,6 +23,7 @@ import { ChatRenderErrorBoundary } from './ChatRenderErrorBoundary';
 import { MessageBubble } from './MessageBubble';
 import { isLastAssistantMessage } from './composer-send-helpers';
 import type { Message, ProgressState } from './messages.types';
+import type { MobileWelcomeStarter } from './mobile-welcome-starters';
 import { useChatListScrollFollow } from './use-chat-list-scroll-follow';
 
 const LIST_BASE_PADDING_BOTTOM = 8;
@@ -31,6 +32,33 @@ const LIST_BASE_PADDING_BOTTOM = 8;
 function messageKey(msg: Message, index: number): string {
   if (msg.timestamp) return `${msg.role}-${msg.timestamp}-${index}`;
   return `${msg.role}-${index}`;
+}
+
+function starterIconSource(icon: string): string {
+  switch (icon) {
+    case 'code':
+      return 'code-tags';
+    case 'review':
+      return 'clipboard-check-outline';
+    case 'note':
+      return 'notebook-outline';
+    case 'task':
+      return 'format-list-checks';
+    case 'target':
+      return 'target';
+    case 'search':
+      return 'magnify';
+    case 'folder':
+      return 'folder-outline';
+    case 'content':
+      return 'text-box-edit-outline';
+    case 'documents':
+      return 'file-document-outline';
+    case 'globe':
+      return 'web';
+    default:
+      return 'creation-outline';
+  }
 }
 
 export const MessageList = memo(function MessageList({
@@ -45,6 +73,7 @@ export const MessageList = memo(function MessageList({
   sessionKey,
   welcomeTitle,
   welcomeSubtitle,
+  welcomeStarters,
   suggestions,
   onSuggestionSend,
   onUserMessageCopy,
@@ -65,6 +94,7 @@ export const MessageList = memo(function MessageList({
   sessionKey?: string;
   welcomeTitle?: string;
   welcomeSubtitle?: string;
+  welcomeStarters?: MobileWelcomeStarter[];
   suggestions?: string[];
   onSuggestionSend?: (text: string) => void;
   onUserMessageCopy?: (text: string) => void;
@@ -180,7 +210,10 @@ export const MessageList = memo(function MessageList({
   }
 
   if (messages.length === 0 && !streaming) {
-    const chips = suggestions?.filter(Boolean) ?? [];
+    const starters = welcomeStarters?.filter((starter) => starter.prompt.trim()) ?? [];
+    const chips = starters.length > 0
+      ? []
+      : (suggestions?.filter(Boolean) ?? []);
     return (
       <ScrollView
         style={styles.listFlex}
@@ -199,7 +232,44 @@ export const MessageList = memo(function MessageList({
         <Text variant="bodySmall" style={[styles.emptySubtitle, { color: colors.text.secondary }]}>
           {welcomeSubtitle ?? 'Type a message below to begin chatting with your AI assistant.'}
         </Text>
-        {chips.length > 0 ? (
+        {starters.length > 0 ? (
+          <View style={styles.starterColumn}>
+            {starters.map((starter) => (
+              <Pressable
+                key={starter.id}
+                style={({ pressed }) => [
+                  styles.starterRow,
+                  {
+                    borderColor: colors.border.default,
+                    backgroundColor: pressed ? colors.surface.hover : colors.surface.panel,
+                  },
+                ]}
+                onPress={() => onSuggestionSend?.(starter.prompt)}
+                accessibilityRole="button"
+              >
+                <View style={[styles.starterIcon, { backgroundColor: colors.accent.selectionBg }]}>
+                  <Icon source={starterIconSource(starter.icon)} size={18} color={colors.accent.primary} />
+                </View>
+                <View style={styles.starterText}>
+                  <Text
+                    variant="bodyMedium"
+                    style={[styles.starterTitle, { color: colors.text.primary }]}
+                    numberOfLines={1}
+                  >
+                    {starter.title}
+                  </Text>
+                  <Text
+                    variant="bodySmall"
+                    style={[styles.starterDescription, { color: colors.text.secondary }]}
+                    numberOfLines={1}
+                  >
+                    {starter.description}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        ) : chips.length > 0 ? (
           <View style={styles.chipColumn}>
             {chips.map((label) => (
               <Pressable
@@ -321,6 +391,42 @@ const styles = StyleSheet.create({
   chipText: {
     ...typography.ui,
     textAlign: 'left',
+  },
+  starterColumn: {
+    alignSelf: 'stretch',
+    gap: 8,
+    marginTop: 14,
+    maxWidth: 360,
+    width: '100%',
+  },
+  starterRow: {
+    minHeight: 60,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  starterIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  starterText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  starterTitle: {
+    ...typography.ui,
+  },
+  starterDescription: {
+    ...typography.caption,
+    opacity: 0.82,
   },
   scrollToBottomButton: {
     position: 'absolute',

@@ -7,6 +7,8 @@ import useSWR from 'swr';
 import { PopoverSelect, type PopoverSelectOption } from '@/components/ui/popover-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useExtensions } from '@/features/extensions/extension-provider';
+import { fetchGatewayAgents } from '@/features/settings/agents-admin-api';
+import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { useSaveBarRegistration } from '@/features/settings/save-bar/use-save-bar-registration';
 import { SettingsCollapsibleSection } from '@/features/settings/settings-collapsible-section';
 import { fetchImageProvidersList } from '@/features/settings/fetch-image-providers';
@@ -29,8 +31,12 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const imageProvidersSwrKey = () => apiUrl(IMAGE_PROVIDERS_SWR_KEY);
-const imageCapabilitiesSwrKey = () => apiUrl('/api/image/capabilities');
+const imageCapabilitiesSwrKey = (agentId?: string) => {
+  const trimmed = agentId?.trim();
+  return apiUrl(trimmed ? `/api/image/capabilities?agentId=${encodeURIComponent(trimmed)}` : '/api/image/capabilities');
+};
 const globalDefaultsSwrKey = () => apiUrl('/api/global-defaults');
+const agentsSwrKey = () => 'image-models-agents';
 
 type ImageCapabilityModel = {
   id: string;
@@ -44,10 +50,17 @@ type ImageProviderCapability = {
   models: ImageCapabilityModel[];
 };
 
+type ImageModelResolutionSource = 'explicit' | 'auto-role' | 'auto-provider' | 'none';
+
 type ImageCapabilitiesPayload = {
   current: {
     imageModel: string | null;
     imageModelFallbacks: string[];
+    effectiveImageModel: string | null;
+    effectiveImageModelFallbacks: string[];
+    imageModelSource: ImageModelResolutionSource;
+    imageModelRoleId?: string;
+    imageModelRoleDescription?: string;
     imageGenerationModel: string | null;
     imageGenerationModelFallbacks: string[];
     imageGenerationModelTimeoutMs: number | null;
@@ -75,8 +88,8 @@ const EMPTY_DRAFT: ImageModelDraft = {
   imageGenerationModelAutoProviderFallback: false,
 };
 
-async function fetchImageCapabilities(): Promise<ImageCapabilitiesPayload> {
-  const res = await fetchJson<{ ok?: boolean; payload?: ImageCapabilitiesPayload }>(imageCapabilitiesSwrKey());
+async function fetchImageCapabilities(url: string): Promise<ImageCapabilitiesPayload> {
+  const res = await fetchJson<{ ok?: boolean; payload?: ImageCapabilitiesPayload }>(url);
   if (!res.payload) {
     throw new Error('Invalid image capabilities response');
   }
@@ -153,6 +166,13 @@ function flattenModelOptions(providers: ImageProviderCapability[]): Array<{
     .sort((a, b) => Number(b.configured) - Number(a.configured) || a.value.localeCompare(b.value));
 }
 
+function formatTemplate(template: string, values: Record<string, string>): string {
+  return Object.entries(values).reduce(
+    (text, [key, value]) => text.replaceAll(`{${key}}`, value),
+    template,
+  );
+}
+
 function panelMessagesFromBundle(t: MessageBundle['imageModelsSettings']): ImageProviderCredentialsPanelMessages {
   return {
     credentialsIntro: t.credentialsIntro,
@@ -215,6 +235,68 @@ const initialImageModelsUi: ImageModelsUi = {
   savedFlash: false,
   error: undefined,
 };
+
+function RuntimeImageUnderstandingStatus({
+  current,
+  agentId,
+  agentOptions,
+  t,
+  onAgentIdChange,
+}: {
+  current: ImageCapabilitiesPayload['current'] | undefined;
+  agentId: string;
+  agentOptions: PopoverSelectOption[];
+  t: MessageBundle['imageModelsSettings'];
+  onAgentIdChange: (agentId: string) => void;
+}) {
+  const effectiveModel = current?.effectiveImageModel ?? null;
+  const source = current?.imageModelSource ?? 'none';
+  const roleLabel = current?.imageModelRoleId ?? current?.imageModelRoleDescription ?? '';
+  const detail =
+    source === 'explicit'
+      ? t.runtimeUnderstandingExplicit
+      : source === 'auto-role'
+        ? formatTemplate(t.runtimeUnderstandingAutoRole, { role: roleLabel || 'unknown' })
+        : source === 'auto-provider'
+          ? t.runtimeUnderstandingAutoProvider
+          : t.runtimeUnderstandingNone;
+  const fallbackText = current?.effectiveImageModelFallbacks?.length
+    ? formatTemplate(t.runtimeUnderstandingFallbacks, {
+        models: current.effectiveImageModelFallbacks.join(', '),
+      })
+    : t.runtimeUnderstandingNoFallbacks;
+
+  return (
+    <section className="rounded-lg border border-edge bg-surface-base p-4">
+      <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-fg">{t.runtimeUnderstandingTitle}</h3>
+          <p className="mt-1 max-w-[72ch] text-xs leading-relaxed text-fg-muted">{detail}</p>
+        </div>
+        {agentOptions.length > 0 ? (
+          <label className="flex min-w-0 flex-col gap-1.5 text-xs font-medium text-fg-muted sm:w-56">
+            {t.runtimeAgentLabel}
+            <PopoverSelect
+              value={agentId}
+              options={agentOptions}
+              placeholder={t.runtimeAgentLabel}
+              allowEmpty={false}
+              triggerClassName="bg-surface-panel"
+              onChange={onAgentIdChange}
+            />
+          </label>
+        ) : null}
+      </div>
+      <div className="rounded-lg bg-surface-subtle px-3 py-2 shadow-surface">
+        <div className="text-sm font-medium text-fg">{effectiveModel ?? t.noModelSelected}</div>
+        <div className="mt-1 text-xs text-fg-muted">{fallbackText}</div>
+      </div>
+      {agentOptions.length > 0 ? (
+        <p className="mt-2 text-xs leading-relaxed text-fg-muted">{t.runtimeAgentHint}</p>
+      ) : null}
+    </section>
+  );
+}
 
 function ImageModelSelectSection({
   title,
@@ -363,8 +445,23 @@ export function ImageModelsSettingsPanel() {
     fetchImageProvidersList,
     { revalidateOnFocus: false },
   );
+  const { data: agentsData, isLoading: agentsLoading } = useSWR(
+    hasToken ? agentsSwrKey() : null,
+    fetchGatewayAgents,
+    { revalidateOnFocus: false },
+  );
+  const [selectedRuntimeAgentId, setSelectedRuntimeAgentId] = useState('');
+  useEffect(() => {
+    if (!agentsData) return;
+    setSelectedRuntimeAgentId((prev) => {
+      if (prev && agentsData.agents.some((agent) => agent.id === prev)) {
+        return prev;
+      }
+      return agentsData.defaultId || agentsData.agents[0]?.id || '';
+    });
+  }, [agentsData]);
   const { data: imageCapabilities, isLoading: capabilitiesLoading, mutate: mutateImageCapabilities } = useSWR(
-    hasToken ? imageCapabilitiesSwrKey() : null,
+    hasToken ? imageCapabilitiesSwrKey(selectedRuntimeAgentId) : null,
     fetchImageCapabilities,
     { revalidateOnFocus: false },
   );
@@ -475,6 +572,14 @@ export function ImageModelsSettingsPanel() {
     }),
     [m.providersSettings],
   );
+  const runtimeAgentOptions = useMemo(
+    () =>
+      (agentsData?.agents ?? []).map((agent) => ({
+        value: agent.id,
+        label: agentListDisplayName(agent, m.agentsSettings),
+      })),
+    [agentsData?.agents, m.agentsSettings],
+  );
 
   if (!hasToken) {
     return (
@@ -484,7 +589,7 @@ export function ImageModelsSettingsPanel() {
     );
   }
 
-  if (providersLoading || capabilitiesLoading || defaultsLoading) {
+  if (providersLoading || capabilitiesLoading || defaultsLoading || agentsLoading) {
     return <ImageModelsSettingsSkeleton />;
   }
 
@@ -495,6 +600,14 @@ export function ImageModelsSettingsPanel() {
           {error}
         </div>
       ) : null}
+
+      <RuntimeImageUnderstandingStatus
+        current={imageCapabilities?.current}
+        agentId={selectedRuntimeAgentId}
+        agentOptions={runtimeAgentOptions}
+        t={t}
+        onAgentIdChange={setSelectedRuntimeAgentId}
+      />
 
       <ImageModelSelectSection
         title={t.understandingTitle}

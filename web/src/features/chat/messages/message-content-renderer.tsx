@@ -58,6 +58,7 @@ function reviewLocation(finding: ReviewContent['findings'][number]): string {
 }
 
 function ReviewBlock({ review }: { review: ReviewContent }) {
+  const modelReviewIncomplete = review.source === 'local' && review.overallCorrectness === 'unknown';
   const correctnessTone =
     review.overallCorrectness === 'patch is incorrect'
       ? 'border-red-500/30 bg-red-500/5 text-red-700 dark:text-red-300'
@@ -67,7 +68,7 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
   return (
     <div className="min-w-0 rounded-lg border border-edge bg-surface-subtle p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="text-sm font-semibold text-fg-primary">Code review</div>
+        <div className="text-sm font-semibold text-fg-primary">Code review finished</div>
         <div className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-medium', correctnessTone)}>
           {review.overallCorrectness}
         </div>
@@ -77,7 +78,9 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
       ) : null}
       <div className="mt-3 space-y-2">
         {review.findings.length === 0 ? (
-          <div className="text-sm text-fg-secondary">No findings.</div>
+          <div className="text-sm text-fg-secondary">
+            {modelReviewIncomplete ? 'No model findings were produced.' : 'No findings.'}
+          </div>
         ) : (
           review.findings.map((finding, index) => {
             const loc = reviewLocation(finding);
@@ -97,7 +100,7 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
         )}
       </div>
       {review.overallExplanation ? (
-        <div className="mt-3 text-sm text-fg-secondary">{review.overallExplanation}</div>
+        <div className="mt-3 whitespace-pre-wrap text-sm text-fg-secondary">{review.overallExplanation}</div>
       ) : null}
     </div>
   );

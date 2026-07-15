@@ -1395,6 +1395,7 @@ html[data-desktop-pet="true"] body {
   display: flex;
   width: 100%;
   min-width: 0;
+  align-items: center;
   gap: 7px;
   border: 0;
   border-radius: 8px;
@@ -1405,6 +1406,7 @@ html[data-desktop-pet="true"] body {
   cursor: pointer;
 }
 .desktop-pet-session-open:hover { background: rgb(59 130 246 / 0.08); }
+.desktop-pet-session--health .desktop-pet-session-open { background: rgb(245 158 11 / 0.08); }
 .desktop-pet-session-close {
   position: absolute;
   top: 4px;
@@ -1425,10 +1427,33 @@ html[data-desktop-pet="true"] body {
 .desktop-pet-session--waiting .desktop-pet-session-dot { background: #d97706; }
 .desktop-pet-session--success .desktop-pet-session-dot { background: #16a34a; }
 .desktop-pet-session--error .desktop-pet-session-dot { background: #dc2626; }
+.desktop-pet-session--idle .desktop-pet-session-dot { background: #64748b; }
 .desktop-pet-session-main { display: grid; min-width: 0; gap: 1px; }
 .desktop-pet-session-main strong, .desktop-pet-session-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .desktop-pet-session-main strong { font-size: 11px; font-weight: 700; }
 .desktop-pet-session-main span { color: #64748b; font-size: 11px; }
+.desktop-pet-session-cta {
+  margin-left: auto;
+  flex: 0 0 auto;
+  border-radius: 9999px;
+  padding: 2px 6px;
+  background: rgb(59 130 246 / 0.1);
+  color: #2563eb;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.desktop-pet-session--waiting .desktop-pet-session-cta {
+  background: rgb(217 119 6 / 0.12);
+  color: #b45309;
+}
+.desktop-pet-session--error .desktop-pet-session-cta {
+  background: rgb(220 38 38 / 0.1);
+  color: #dc2626;
+}
+.desktop-pet-idle-tip {
+  background: rgb(255 255 255 / 0.9);
+}
 
 .desktop-pet-bubble-main {
   display: block;

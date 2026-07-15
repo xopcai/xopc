@@ -32,12 +32,14 @@ export interface ComposerKbdContext {
   adjustHeight: () => void;
   editorRef: MutableRefObject<HTMLDivElement | null>;
   tryInputHistoryArrow?: (dir: 'up' | 'down') => boolean;
+  acceptEmptySuggestion?: () => boolean;
 }
 
 export const ChatComposerInput = memo(function ChatComposerInput({
   editorRef,
   disabled,
   placeholder,
+  ariaLabel,
   onWireInput,
   adjustHeight,
   processFiles,
@@ -48,6 +50,7 @@ export const ChatComposerInput = memo(function ChatComposerInput({
   editorRef: MutableRefObject<HTMLDivElement | null>;
   disabled: boolean;
   placeholder: string;
+  ariaLabel?: string;
   onWireInput: (wire: string, caret: number) => void;
   adjustHeight: () => void;
   processFiles: (files: File[]) => Promise<void>;
@@ -61,7 +64,7 @@ export const ChatComposerInput = memo(function ChatComposerInput({
       ref={editorRef}
       role="textbox"
       aria-multiline="true"
-      aria-label={placeholder}
+      aria-label={ariaLabel ?? placeholder}
       contentEditable={!disabled}
       suppressContentEditableWarning
       spellCheck
@@ -129,7 +132,22 @@ export const ChatComposerInput = memo(function ChatComposerInput({
           return;
         }
 
-        // 3. Input history walk (only when no picker open — adapters above already returned).
+        // 3. Accept the contextual empty-state suggestion without interfering with picker Tab handling.
+        if (
+          e.key === 'Tab' &&
+          !e.shiftKey &&
+          !e.metaKey &&
+          !e.ctrlKey &&
+          !e.altKey &&
+          !k.isComposing &&
+          !k.valueRef.current.trim() &&
+          k.acceptEmptySuggestion?.()
+        ) {
+          e.preventDefault();
+          return;
+        }
+
+        // 4. Input history walk (only when no picker open — adapters above already returned).
         if (!k.isComposing && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
           const dir = e.key === 'ArrowUp' ? 'up' : 'down';
           if (k.tryInputHistoryArrow?.(dir)) {
@@ -139,21 +157,21 @@ export const ChatComposerInput = memo(function ChatComposerInput({
           }
         }
 
-        // 4. Cancel editing of a queued follow-up.
+        // 5. Cancel editing of a queued follow-up.
         if (e.key === 'Escape' && !k.isComposing && k.editingFollowUpId) {
           e.preventDefault();
           k.onCancelEditFollowUp?.();
           return;
         }
 
-        // 5. Newline.
+        // 6. Newline.
         if (e.key === 'Enter' && e.shiftKey && !k.isComposing) {
           e.preventDefault();
           document.execCommand('insertText', false, '\n');
           return;
         }
 
-        // 6. Send / steer / interrupt.
+        // 7. Send / steer / interrupt.
         const nativeComposing =
           typeof KeyboardEvent !== 'undefined' &&
           e.nativeEvent instanceof KeyboardEvent &&

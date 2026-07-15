@@ -365,9 +365,185 @@ export const zh: MessageBundle = {
     dismiss: '关闭',
     failedToRename: '重命名失败',
     welcomeTitle: '今天想做点什么？',
-    welcomeSubtitle: '点击示例将直接发送，也可在下方输入自己的问题。',
+    welcomeSubtitle: '点击建议填入输入框，可编辑后再发送。',
     emptyShortcuts: {
       goal: '/goal',
+    },
+    welcomeSpotlight: {
+      otherSuggestionsLabel: '建议开始',
+      acceptSuggestionHint: '点击填入',
+      refreshExplorationLabel: '换一组',
+      contextLoading: '正在读取当前上下文…',
+      contextFallback: '部分上下文暂时不可用，已根据可用信息生成建议。',
+      retryContext: '重试',
+      contextFallbackTitle: '当前任务',
+      agentTagline: '当前由 {{agentName}} 处理，建议会贴合它的工作方式。',
+      reasons: {
+        general: '一个容易开始、发送前仍可修改的起点',
+        agent: '更贴合 {{agentName}} 的能力',
+        project: '根据项目「{{projectName}}」的当前上下文',
+        note: '根据笔记「{{noteTitle}}」继续推进',
+        workItem: '根据工作项「{{workItemTitle}}」的当前状态',
+        blocked: '优先处理当前阻塞：{{blockedReason}}',
+        nextAction: '沿用已经明确的下一步：{{nextAction}}',
+        directory: '根据当前目录「{{path}}」开始',
+      },
+      contextPrompts: {
+        workItemBlocked: '工作项「{{workItemTitle}}」当前被「{{blockedReason}}」阻塞。请先分析根因，再给出最小可执行的解除阻塞方案。',
+        workItemNextAction: '工作项「{{workItemTitle}}」已经明确下一步是「{{nextAction}}」。请检查前置条件和风险，然后拆成可以立即开始的行动。',
+        codingWorkspace: '请从目录「{{workspaceRoot}}」开始理解项目「{{projectName}}」，先定位入口、核心模块和最值得阅读的文件。',
+      },
+      exploreCards: [
+        {
+          id: 'explore-ai-news',
+          icon: 'search',
+          title: '今日 AI 新闻',
+          description: '最新进展、影响、为什么重要',
+          scenarios: [
+            {
+              prompt: '帮我收集今天最新的 AI 新闻，挑出 3 条最值得关注的进展，用通俗语言说明它们是什么、为什么重要。',
+            },
+          ],
+        },
+        {
+          id: 'explore-learn',
+          icon: 'search',
+          title: '学习新主题',
+          description: '概念、资料、学习路径',
+          scenarios: [
+            { prompt: '给我设计一个 30 分钟可以完成的微型学习计划，主题由你推荐。' },
+          ],
+        },
+      ],
+      agentCards: {
+        coding: {
+          id: 'agent-coding',
+          icon: 'code',
+          title: '推进代码任务',
+          description: '定位、修改、验证',
+          scenarios: [
+            { prompt: '从当前上下文开始，帮我定位最适合推进的代码改动，并给出最小验证步骤。' },
+          ],
+        },
+        writing: {
+          id: 'agent-writing',
+          icon: 'content',
+          title: '整理成文',
+          description: '草稿、结构、润色',
+          scenarios: [
+            { prompt: '帮我把当前想法整理成一段清晰、可直接发送的文字。' },
+          ],
+        },
+        research: {
+          id: 'agent-research',
+          icon: 'search',
+          title: '调研验证',
+          description: '资料、来源、结论',
+          scenarios: [
+            { prompt: '围绕当前主题做一次快速调研，列出关键结论、来源和不确定点。' },
+          ],
+        },
+        data: {
+          id: 'agent-data',
+          icon: 'documents',
+          title: '分析数据',
+          description: '指标、表格、洞察',
+          scenarios: [
+            { prompt: '帮我分析当前数据或资料，提炼最重要的指标、异常和下一步问题。' },
+          ],
+        },
+        creative: {
+          id: 'agent-creative',
+          icon: 'content',
+          title: '发散方案',
+          description: '方向、草案、取舍',
+          scenarios: [
+            { prompt: '基于当前上下文，给我 3 个不同方向的创意方案，并说明各自取舍。' },
+          ],
+        },
+      },
+      empty: {
+        headline: '今天想推进什么？',
+        tagline: '选择一个起点，填入后可继续编辑。',
+        categories: [
+          {
+            id: 'work',
+            icon: 'documents',
+            title: '办公输出',
+            description: '总结、同步、消息',
+            scenarios: [
+              { prompt: '我 30 分钟后要开会，帮我准备一份简短的同步材料。' },
+            ],
+          },
+          {
+            id: 'writing',
+            icon: 'content',
+            title: '写作润色',
+            description: '草稿、结构、表达',
+            scenarios: [
+              { prompt: '帮我把下面这段内容整理得更清晰、更适合发送。' },
+            ],
+          },
+        ],
+      },
+      codingProject: {
+        headline: '从项目开始',
+        tagline: '先理解入口，再推进下一步。',
+        categories: [],
+      },
+      generalProject: {
+        headline: '从项目开始',
+        tagline: '先梳理状态，再规划下一步。',
+        categories: [],
+      },
+      note: {
+        headline: '继续这条笔记',
+        tagline: '提炼、扩展或转成行动。',
+        categories: [],
+      },
+      workItem: {
+        headline: '推进这个工作项',
+        tagline: '总结状态，找到下一步。',
+        categories: [],
+      },
+      workItemBlocked: {
+        headline: '这个工作项需要解除阻塞',
+        tagline: '先定位原因，再拆解行动。',
+        categories: [],
+      },
+      workingDirectory: {
+        headline: '从当前目录开始',
+        tagline: '先理解结构，再找到入口和整理方向。',
+        categories: [
+          {
+            id: 'directory-understand',
+            icon: 'folder',
+            title: '理解目录',
+            description: '结构、类型、关键文件',
+            scenarios: [
+              { prompt: '帮我理解目录「{{path}}」的结构、项目类型和最重要的文件。' },
+            ],
+          },
+          {
+            id: 'directory-entry',
+            icon: 'code',
+            title: '找入口',
+            description: '启动、配置、依赖',
+            scenarios: [
+              { prompt: '帮我找出目录「{{path}}」里可能的启动入口、配置文件和依赖说明。' },
+            ],
+          },
+          {
+            id: 'directory-organize',
+            icon: 'documents',
+            title: '整理文件',
+            description: '分类、摘要、清理建议',
+            scenarios: [
+              { prompt: '帮我整理目录「{{path}}」里的文件，并给出分类和清理建议。' },
+            ],
+          },
+        ],
+      },
     },
     suggestion1: '帮我检索今天值得关注的科技新闻，并按重要性总结',
     suggestion2: '根据我的日程和待办，帮我规划接下来优先做什么',

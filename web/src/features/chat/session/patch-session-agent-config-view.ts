@@ -6,6 +6,7 @@ export type SessionAgentConfigView = {
   model: string;
   thinkingLevel?: string | null;
   reasoningLevel?: string | null;
+  effectiveWorkspacePath?: string | null;
   workingDirectoryLocked?: boolean;
 };
 
@@ -17,6 +18,7 @@ export function patchSessionAgentConfigView(sessionKey: string, cfg: SessionAgen
     model: cfg.model,
     thinkingLevel: cfg.thinkingLevel || DEFAULT_THINKING,
     reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel ?? undefined),
+    effectiveWorkspacePath: cfg.effectiveWorkspacePath ?? '',
     workingDirectoryLocked: Boolean(cfg.workingDirectoryLocked),
   });
 }

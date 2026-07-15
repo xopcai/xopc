@@ -367,9 +367,185 @@ export const en = {
     dismiss: 'Dismiss',
     failedToRename: 'Failed to rename',
     welcomeTitle: 'How can I help today?',
-    welcomeSubtitle: 'Tap a starter to send instantly, or type your own question.',
+    welcomeSubtitle: 'Tap a starter to fill the composer, then edit before sending.',
     emptyShortcuts: {
       goal: '/goal',
+    },
+    welcomeSpotlight: {
+      otherSuggestionsLabel: 'Suggested starts',
+      acceptSuggestionHint: 'Tap to fill',
+      refreshExplorationLabel: 'Refresh',
+      contextLoading: 'Reading current context…',
+      contextFallback: 'Some context is unavailable, so these are based on what is available.',
+      retryContext: 'Retry',
+      contextFallbackTitle: 'current task',
+      agentTagline: '{{agentName}} is handling this, so starters are tuned to its workflow.',
+      reasons: {
+        general: 'A quick starting point you can edit before sending',
+        agent: 'Better matched to {{agentName}}',
+        project: 'Based on project "{{projectName}}"',
+        note: 'Continuing from note "{{noteTitle}}"',
+        workItem: 'Based on work item "{{workItemTitle}}"',
+        blocked: 'Focused on the current blocker: {{blockedReason}}',
+        nextAction: 'Following the known next action: {{nextAction}}',
+        directory: 'Based on the current folder "{{path}}"',
+      },
+      contextPrompts: {
+        workItemBlocked: 'Work item "{{workItemTitle}}" is blocked by "{{blockedReason}}". Analyze the cause, then propose the smallest executable unblocking plan.',
+        workItemNextAction: 'Work item "{{workItemTitle}}" has the next action "{{nextAction}}". Check prerequisites and risks, then break it into actions I can start now.',
+        codingWorkspace: 'Start from "{{workspaceRoot}}" and understand project "{{projectName}}". Identify entry points, core modules, and the files worth reading first.',
+      },
+      exploreCards: [
+        {
+          id: 'explore-ai-news',
+          icon: 'search',
+          title: 'Today’s AI news',
+          description: 'Latest developments, impact, why it matters',
+          scenarios: [
+            {
+              prompt: 'Find today’s latest AI news, pick the 3 developments most worth attention, and explain in plain language what they are and why they matter.',
+            },
+          ],
+        },
+        {
+          id: 'explore-learn',
+          icon: 'search',
+          title: 'Learn something new',
+          description: 'Concepts, sources, learning paths',
+          scenarios: [
+            { prompt: 'Design a focused 30-minute learning session on a topic you recommend.' },
+          ],
+        },
+      ],
+      agentCards: {
+        coding: {
+          id: 'agent-coding',
+          icon: 'code',
+          title: 'Move code forward',
+          description: 'Find, change, verify',
+          scenarios: [
+            { prompt: 'Start from the current context, identify the best code change to make next, and give me the smallest verification plan.' },
+          ],
+        },
+        writing: {
+          id: 'agent-writing',
+          icon: 'content',
+          title: 'Shape a draft',
+          description: 'Structure, rewrite, polish',
+          scenarios: [
+            { prompt: 'Turn my current idea into a clear message I can send.' },
+          ],
+        },
+        research: {
+          id: 'agent-research',
+          icon: 'search',
+          title: 'Research and verify',
+          description: 'Sources, claims, conclusions',
+          scenarios: [
+            { prompt: 'Do a quick research pass on the current topic. List key findings, sources, and uncertainties.' },
+          ],
+        },
+        data: {
+          id: 'agent-data',
+          icon: 'documents',
+          title: 'Analyze data',
+          description: 'Metrics, tables, insight',
+          scenarios: [
+            { prompt: 'Analyze the current data or material and extract the most important metrics, anomalies, and next questions.' },
+          ],
+        },
+        creative: {
+          id: 'agent-creative',
+          icon: 'content',
+          title: 'Explore options',
+          description: 'Directions, drafts, tradeoffs',
+          scenarios: [
+            { prompt: 'Based on the current context, give me 3 different creative directions and explain the tradeoffs.' },
+          ],
+        },
+      },
+      empty: {
+        headline: 'What do you want to move forward?',
+        tagline: 'Choose a starter, then edit it before sending.',
+        categories: [
+          {
+            id: 'work',
+            icon: 'documents',
+            title: 'Work output',
+            description: 'Summary, update, message',
+            scenarios: [
+              { prompt: 'I have a meeting in 30 minutes. Help me prepare a concise update.' },
+            ],
+          },
+          {
+            id: 'writing',
+            icon: 'content',
+            title: 'Writing polish',
+            description: 'Draft, structure, wording',
+            scenarios: [
+              { prompt: 'Help me make the following text clearer and more suitable to send.' },
+            ],
+          },
+        ],
+      },
+      codingProject: {
+        headline: 'Start from this project',
+        tagline: 'Understand the entry points, then move forward.',
+        categories: [],
+      },
+      generalProject: {
+        headline: 'Start from this project',
+        tagline: 'Clarify state, then plan the next step.',
+        categories: [],
+      },
+      note: {
+        headline: 'Continue this note',
+        tagline: 'Summarize, expand, or turn it into action.',
+        categories: [],
+      },
+      workItem: {
+        headline: 'Move this work item forward',
+        tagline: 'Summarize state and find the next step.',
+        categories: [],
+      },
+      workItemBlocked: {
+        headline: 'This work item is blocked',
+        tagline: 'Find the cause, then break down action.',
+        categories: [],
+      },
+      workingDirectory: {
+        headline: 'Start from the current folder',
+        tagline: 'Understand structure, entry points, and next direction.',
+        categories: [
+          {
+            id: 'directory-understand',
+            icon: 'folder',
+            title: 'Understand folder',
+            description: 'Structure, type, key files',
+            scenarios: [
+              { prompt: 'Help me understand the structure, project type, and most important files in "{{path}}".' },
+            ],
+          },
+          {
+            id: 'directory-entry',
+            icon: 'code',
+            title: 'Find entry points',
+            description: 'Startup, config, dependencies',
+            scenarios: [
+              { prompt: 'Find likely entry points, config files, and dependency docs in "{{path}}".' },
+            ],
+          },
+          {
+            id: 'directory-organize',
+            icon: 'documents',
+            title: 'Organize files',
+            description: 'Classify, summarize, clean up',
+            scenarios: [
+              { prompt: 'Organize the files in "{{path}}" and suggest categories and cleanup steps.' },
+            ],
+          },
+        ],
+      },
     },
     suggestion1: 'Find today’s top tech news and summarize what matters most',
     suggestion2: 'Review my schedule and todos, then suggest what to do next',
@@ -1101,8 +1277,13 @@ export const en = {
 };
 
 /** Recursively widen all string literal values to `string` so zh.ts can assign translated values. */
-type DeepStringify<T> = {
-  [K in keyof T]: T[K] extends string ? string : DeepStringify<T[K]>;
-};
+type DeepStringify<T> =
+  T extends string
+    ? string
+    : T extends readonly (infer Item)[]
+      ? DeepStringify<Item>[]
+      : T extends object
+        ? { [K in keyof T]: DeepStringify<T[K]> }
+        : T;
 
 export type MessageBundle = DeepStringify<typeof en>;

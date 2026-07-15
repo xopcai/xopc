@@ -362,6 +362,7 @@ export function registerSessionsRoutes(authenticated: Hono, deps: AuthenticatedR
       offset,
       limit,
       ...(before ? { before } : {}),
+      includeContextRows: true,
     });
 
     if (!result) {

@@ -98,6 +98,25 @@ describe('assistant message rendering', () => {
     expect(rendered).toContain('Overall correctness: patch is incorrect');
   });
 
+  it('does not render local fallback reviews as no findings', () => {
+    const component = new AssistantMessageComponent(
+      assistantMessage([
+        {
+          type: 'review',
+          target: 'working tree changes',
+          summary: 'Review model did not complete; returned a local diff summary.',
+          findings: [],
+          overallCorrectness: 'unknown',
+          overallExplanation: 'Reviewer model error: missing API key.',
+          source: 'local',
+        },
+      ]),
+    );
+    const rendered = stripAnsi(component.render(100).join('\n'));
+    expect(rendered).toContain('No model findings were produced.');
+    expect(rendered).not.toContain('No findings.');
+  });
+
   it('can hide structured assistant thinking behind a label and toggle it back', () => {
     const component = new AssistantMessageComponent(
       assistantMessage([

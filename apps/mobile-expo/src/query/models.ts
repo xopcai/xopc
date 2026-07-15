@@ -119,15 +119,30 @@ export async function setSessionModelRef(sessionKey: string, modelRef: string): 
 /** Fetch the session's agent-config (model override, thinking level, etc.). */
 export async function fetchSessionAgentConfig(
   sessionKey: string,
-): Promise<{ model: string; thinkingLevel: string }> {
+): Promise<{
+  model: string;
+  thinkingLevel: string;
+  effectiveWorkspacePath: string;
+  workingDirectoryLocked: boolean;
+}> {
   const key = encodeURIComponent(sessionKey);
   const res = await apiFetch(`/api/sessions/${key}/agent-config`);
-  if (!res.ok) return { model: '', thinkingLevel: '' };
+  if (!res.ok) {
+    return { model: '', thinkingLevel: '', effectiveWorkspacePath: '', workingDirectoryLocked: false };
+  }
   const data = (await res.json().catch(() => ({}))) as {
-    payload?: { model?: string; thinkingLevel?: string };
+    payload?: {
+      model?: string;
+      thinkingLevel?: string;
+      effectiveWorkspacePath?: string;
+      workingDirectoryLocked?: boolean;
+    };
   };
   return {
     model: typeof data.payload?.model === 'string' ? data.payload.model : '',
     thinkingLevel: data.payload?.thinkingLevel ?? '',
+    effectiveWorkspacePath:
+      typeof data.payload?.effectiveWorkspacePath === 'string' ? data.payload.effectiveWorkspacePath : '',
+    workingDirectoryLocked: Boolean(data.payload?.workingDirectoryLocked),
   };
 }

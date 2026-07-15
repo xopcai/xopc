@@ -228,18 +228,16 @@ export function completeTool(
   toolName: string,
   isError: boolean,
   result?: unknown,
+  toolCallId?: string,
 ): void {
   for (let i = content.length - 1; i >= 0; i--) {
     const b = content[i];
-    if (
-      b.type === 'tool_use' &&
-      b.status === 'running' &&
-      toolNameMatches(b.name, toolName)
-    ) {
-      b.status = isError ? 'error' : 'done';
-      b.result = result;
-      return;
-    }
+    if (b.type !== 'tool_use' || b.status !== 'running') continue;
+    if (toolCallId && b.toolCallId !== toolCallId && b.id !== toolCallId) continue;
+    if (!toolCallId && !toolNameMatches(b.name, toolName)) continue;
+    b.status = isError ? 'error' : 'done';
+    b.result = result;
+    return;
   }
 }
 

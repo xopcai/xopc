@@ -38,6 +38,7 @@ import { parseSessionMessages, dedupeWireMessages } from './session-message-pars
 import { takeNewChatSessionKey } from './session-prefetch';
 import { consumeNoteChatPrefill } from './note-chat-prefill-storage';
 import { MAX_CHAT_ATTACHMENTS } from './chat-limits';
+import { buildMobileWelcomeModel } from './mobile-welcome-starters';
 import { useChatPageBootstrap } from './use-chat-page-bootstrap';
 import { useChatSession } from './use-chat-session';
 import { useSessionHistory } from './use-session-history';
@@ -114,6 +115,11 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   const effectiveModelId = resolveEffectiveModelId(modelsQuery.data, localSelectedModelRef);
   const chatSession = useChatSession({ sessionKey, effectiveModelId });
+  const sessionAgentConfigQuery = useQuery({
+    queryKey: queryKeys.sessionAgentConfig(sessionKey),
+    queryFn: () => fetchSessionAgentConfig(sessionKey),
+    enabled: Boolean(sessionKey),
+  });
 
   // Overlay: reset UI when a new Ask AI session key arrives from the transition.
   const prevOverlayKeyRef = useRef('');
@@ -127,14 +133,10 @@ export function useChatPage(options: UseChatPageOptions = {}) {
 
   // Sync session model override from agent-config when session changes.
   useEffect(() => {
-    if (!sessionKey) return;
-    let cancelled = false;
-    fetchSessionAgentConfig(sessionKey).then((cfg) => {
-      if (cancelled || !cfg.model) return;
-      setSelectedModelRef(cfg.model);
-    }).catch(() => {});
-    return () => { cancelled = true; };
-  }, [sessionKey, setSelectedModelRef]);
+    const cfg = sessionAgentConfigQuery.data;
+    if (!cfg?.model) return;
+    setSelectedModelRef(cfg.model);
+  }, [sessionAgentConfigQuery.data, setSelectedModelRef]);
 
   // Keep the shared ref in sync with chatSession's internal ref
   useEffect(() => {
@@ -148,6 +150,14 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     const agent = agents.find((a) => a.id === sessionAgentId);
     return agent?.name ?? agent?.id ?? sessionAgentId;
   }, [agentsQuery.data, currentSessionAgentId, localDefaultAgentId]);
+  const welcomeAgentId = useMemo(
+    () => currentSessionAgentId || resolveEffectiveDefaultAgentId(agentsQuery.data, localDefaultAgentId),
+    [agentsQuery.data, currentSessionAgentId, localDefaultAgentId],
+  );
+  const welcomeAgent = useMemo(
+    () => (agentsQuery.data?.items ?? []).find((agent) => agent.id === welcomeAgentId),
+    [agentsQuery.data?.items, welcomeAgentId],
+  );
 
   const modelName = useMemo(() => {
     const models = modelsQuery.data?.items ?? [];
@@ -191,9 +201,17 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   const colors = getColors(isDark);
 
   // ── Derived UI state ─────────────────────────────────────
-  const chatSuggestions = useMemo(
-    () => [m.chat.suggestion1, m.chat.suggestion2, m.chat.suggestion3],
-    [m.chat.suggestion1, m.chat.suggestion2, m.chat.suggestion3],
+  const [composerSuggestion, setComposerSuggestion] = useState<string | undefined>(undefined);
+  const [composerPrefillAttachments, setComposerPrefillAttachments] = useState<ComposerAttachment[] | undefined>();
+
+  const welcomeModel = useMemo(
+    () => buildMobileWelcomeModel({
+      messages: m,
+      agent: welcomeAgent,
+      agentId: welcomeAgentId,
+      effectiveWorkspacePath: sessionAgentConfigQuery.data?.effectiveWorkspacePath,
+    }),
+    [m, sessionAgentConfigQuery.data?.effectiveWorkspacePath, welcomeAgent, welcomeAgentId],
   );
 
   const isEmptyChat = displayMessages.length === 0 && !chatSession.streaming && !sessionHistoryQuery.isLoading;
@@ -315,9 +333,10 @@ export function useChatPage(options: UseChatPageOptions = {}) {
   );
 
   const handleStarterSend = useCallback((text: string) => queueFollowUpOrSend(text), [queueFollowUpOrSend]);
-
-  const [composerSuggestion, setComposerSuggestion] = useState<string | undefined>(undefined);
-  const [composerPrefillAttachments, setComposerPrefillAttachments] = useState<ComposerAttachment[] | undefined>();
+  const handleStarterPrefill = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (trimmed) setComposerSuggestion(trimmed);
+  }, []);
 
   // Consume prefill message from URL params (e.g. from Notes → Chat)
   useEffect(() => {
@@ -466,7 +485,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     agentName,
     modelName,
     displayMessages,
-    chatSuggestions,
+    welcomeModel,
     isEmptyChat,
     composerDisabled,
     composerSuggestion,
@@ -502,6 +521,7 @@ export function useChatPage(options: UseChatPageOptions = {}) {
     handleAgentSelect,
     handleNewChat,
     handleStarterSend,
+    handleStarterPrefill,
     handleGoalShortcutPress,
     handleComposerSend,
     handleUserMessageCopy,

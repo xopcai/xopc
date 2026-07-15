@@ -43,6 +43,9 @@ export interface WorkflowRunMetadata {
   triggerSource: WorkflowRunSource['kind'];
   agentId?: string;
   projectId?: string;
+  workItemId?: string;
+  contextRefs?: WorkflowRunContextRef[];
+  writebackPolicy?: WorkflowRunWritebackPolicy;
   retryOfRunId?: string;
   replay?: WorkflowRunReplayMetadata;
   definition: WorkflowRunDefinitionSnapshot;
@@ -54,6 +57,23 @@ export interface WorkflowRunMetadata {
 }
 
 export type WorkflowRunReplayScope = 'failed_agents' | 'failed_phases';
+
+export interface WorkflowRunContextRef {
+  kind: 'project' | 'goal' | 'work_item' | 'session' | 'attachment' | 'memory';
+  id: string;
+  role?: string;
+  title?: string;
+}
+
+export interface WorkflowRunWritebackPolicy {
+  targets: WorkflowRunWritebackTarget[];
+}
+
+export interface WorkflowRunWritebackTarget {
+  kind: 'project' | 'goal' | 'work_item';
+  id: string;
+  mode: 'record' | 'suggest' | 'evaluate';
+}
 
 export interface WorkflowRunReplayMetadata {
   sourceRunId: string;

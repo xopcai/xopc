@@ -1,6 +1,7 @@
-import { useLayoutEffect } from 'react';
-import { GitBranch, LayoutGrid, ListFilter, Search } from 'lucide-react';
+import { useLayoutEffect, useState } from 'react';
+import { ChevronDown, GitBranch, LayoutGrid, ListFilter, Play, Search } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { agentListDisplayName } from '@/features/settings/agents/agent-display-names';
 import { cn } from '@/lib/cn';
@@ -17,14 +18,26 @@ import { WorkflowStartDialog } from './workflow-start-dialog';
 import { WorkflowStatsBar } from './workflow-stats-bar';
 import { WorkflowTaskCard } from './workflow-task-card';
 import type { WorkflowsPageVm } from './use-workflows-page';
-import type { WorkflowRunSummary } from './workflow-api';
+import type { WorkflowDefinition, WorkflowRunSummary } from './workflow-api';
 import { filterRunsForBoard } from './workflow-board.utils';
+import { resolveWorkflowArgLabel } from './workflow-input.utils';
+import { resolveWorkflowLocalizedCopy } from './workflow-meta-locale';
+import { WORKFLOW_ARG_FIELDS } from './workflow-page.constants';
 import { WorkflowsPageHeaderActions } from './workflows-page-header-actions';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 
 type RunSectionId = 'attention' | 'running' | 'queued' | 'recent';
+type WorkflowsMessages = ReturnType<typeof messages>['workflows'];
 
 const RUN_SECTIONS: RunSectionId[] = ['attention', 'running', 'queued', 'recent'];
+const LAUNCH_TEMPLATE_IDS = [
+  'pr_review',
+  'implementation_plan',
+  'research',
+  'debug_incident',
+  'meeting_prep',
+  'content_draft',
+];
 
 function runSectionForStatus(run: WorkflowRunSummary): RunSectionId | null {
   if (run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled') return 'attention';
@@ -75,6 +88,124 @@ function WorkflowTaskCardSkeleton() {
         <Skeleton className="h-8 w-24 rounded-md" />
       </div>
     </article>
+  );
+}
+
+function pickLaunchDefinitions(definitions: WorkflowDefinition[]): WorkflowDefinition[] {
+  const byId = new Map(definitions.map((definition) => [definition.id, definition]));
+  const picked: WorkflowDefinition[] = [];
+  for (const id of LAUNCH_TEMPLATE_IDS) {
+    const definition = byId.get(id);
+    if (definition) picked.push(definition);
+  }
+  for (const definition of definitions) {
+    if (picked.length >= 6) break;
+    if (!picked.some((item) => item.id === definition.id)) picked.push(definition);
+  }
+  return picked;
+}
+
+function templateInputSummary(definition: WorkflowDefinition, labels: WorkflowsMessages): string {
+  const argFields = WORKFLOW_ARG_FIELDS[definition.name] ?? [];
+  if (argFields.length > 0) {
+    return argFields
+      .slice(0, 2)
+      .map((field) => resolveWorkflowArgLabel(labels.args, field.labelKey))
+      .join(' · ');
+  }
+  if (definition.inputSchema?.properties && Object.keys(definition.inputSchema.properties).length > 0) {
+    return labels.templateInputsStructured;
+  }
+  return labels.templateInputsGoalOnly;
+}
+
+function WorkflowLaunchPanel({
+  definitions,
+  language,
+  labels,
+  onStart,
+  onBrowseAll,
+  onManageTemplates,
+}: {
+  definitions: WorkflowDefinition[];
+  language: WorkflowsPageVm['language'];
+  labels: WorkflowsMessages;
+  onStart: (definition: WorkflowDefinition) => void;
+  onBrowseAll: () => void;
+  onManageTemplates: () => void;
+}) {
+  const [expanded, setExpanded] = useState(true);
+  const launchDefinitions = pickLaunchDefinitions(definitions);
+  if (launchDefinitions.length === 0) return null;
+
+  return (
+    <section className="rounded-lg border border-edge-subtle bg-surface-base px-4 py-4 shadow-surface">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+        <button
+          type="button"
+          className={cn('flex min-w-0 flex-1 items-start gap-3 text-left', interaction.focusRingPanel)}
+          aria-expanded={expanded}
+          onClick={() => setExpanded((current) => !current)}
+        >
+          <ChevronDown
+            className={cn('mt-1 size-4 shrink-0 text-fg-subtle transition-transform', expanded ? 'rotate-180' : null)}
+            aria-hidden
+          />
+          <span className="min-w-0">
+            <span className="block text-xs font-medium text-accent-fg">{labels.launchRecommended}</span>
+            <span className="mt-1 block text-base font-semibold text-fg">{labels.launchTitle}</span>
+            <span className="mt-1 block max-w-3xl text-sm leading-6 text-fg-muted">{labels.launchHint}</span>
+          </span>
+        </button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button type="button" variant="secondary" className="h-8 rounded-lg text-xs" onClick={onBrowseAll}>
+            {labels.launchBrowseAll}
+          </Button>
+          <Button type="button" variant="secondary" className="h-8 rounded-lg text-xs" onClick={onManageTemplates}>
+            {labels.launchManageTemplates}
+          </Button>
+        </div>
+      </div>
+
+      {expanded ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {launchDefinitions.map((definition) => {
+            const localized = resolveWorkflowLocalizedCopy(definition, language);
+            return (
+              <article key={definition.id} className="min-w-0 rounded-lg border border-edge bg-surface-panel p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h3 className="line-clamp-1 text-sm font-semibold text-fg">{definition.title}</h3>
+                    <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">
+                      {localized.whenToUse || localized.description}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="h-8 shrink-0 rounded-lg px-2.5 text-xs"
+                    onClick={() => onStart(definition)}
+                  >
+                    <Play className="size-3.5" aria-hidden />
+                    {labels.runWorkflow}
+                  </Button>
+                </div>
+                <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                  <div className="rounded-md bg-surface-muted/50 px-2.5 py-2">
+                    <dt className="font-medium text-fg-subtle">{labels.templateInputs}</dt>
+                    <dd className="mt-0.5 line-clamp-1 text-fg-muted">{templateInputSummary(definition, labels)}</dd>
+                  </div>
+                  <div className="rounded-md bg-surface-muted/50 px-2.5 py-2">
+                    <dt className="font-medium text-fg-subtle">{labels.templateExpectedOutput}</dt>
+                    <dd className="mt-0.5 line-clamp-1 text-fg-muted">{labels.templateOutputReport}</dd>
+                  </div>
+                </dl>
+              </article>
+            );
+          })}
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -185,8 +316,17 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
   }
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-panel">
-      <div className="flex min-h-0 w-full flex-1 flex-col gap-4 px-3 py-5 sm:px-5 xl:px-6">
+    <main className="min-h-0 flex-1 overflow-y-auto bg-surface-panel">
+      <div className="flex min-h-full w-full flex-col gap-4 px-3 py-5 sm:px-5 xl:px-6">
+        <WorkflowLaunchPanel
+          definitions={definitions}
+          language={language}
+          labels={labels}
+          onStart={setStartDefinition}
+          onBrowseAll={() => setPickStartOpen(true)}
+          onManageTemplates={() => setManageOpen(true)}
+        />
+
         <section className="flex w-full flex-wrap items-center gap-2 rounded-lg border border-edge-subtle bg-surface-base px-3 py-2 shadow-surface">
           <div className="relative min-w-48 flex-1 sm:max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-fg-subtle" aria-hidden />
@@ -326,7 +466,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
         ) : null}
 
         {viewMode === 'operations' ? (
-          <div className="min-h-0 flex-1 overflow-y-auto pb-3">
+          <div className="pb-3">
             <div className="grid w-full gap-4">
               {RUN_SECTIONS.map((section) => {
                 const sectionRuns = operationGroups.get(section) ?? [];
@@ -371,7 +511,7 @@ export function WorkflowsPageView({ vm }: { vm: WorkflowsPageVm }) {
             </div>
           </div>
         ) : (
-          <div className="min-h-0 w-full flex-1">
+          <div className="h-[min(72vh,48rem)] min-h-[24rem] w-full sm:min-h-[28rem]">
             <WorkflowBoard
               runs={runs}
               language={language}

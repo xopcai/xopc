@@ -9,6 +9,7 @@ export type DefaultSessionMeta = {
   thinkingLevel: string;
   reasoningLevel: ReasoningLevel;
   modelSupportsThinking: boolean;
+  effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
 };
 
@@ -19,6 +20,7 @@ export function defaultSessionMeta(): DefaultSessionMeta {
     thinkingLevel: DEFAULT_THINKING,
     reasoningLevel: DEFAULT_REASONING,
     modelSupportsThinking: false,
+    effectiveWorkspacePath: '',
     workingDirectoryLocked: false,
   };
 }

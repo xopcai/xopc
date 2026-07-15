@@ -27,6 +27,7 @@ interface StartWorkflowRunRequestBody {
   goal?: string;
   goalId?: string;
   projectId?: string;
+  workItemId?: string;
   agentId?: string;
   parentSessionKey?: string;
   source?: WorkflowRunSource;
@@ -212,6 +213,7 @@ export function registerWorkflowRoutes(authenticated: Hono, deps: AuthenticatedR
       definitionId,
       goalId,
       projectId,
+      workItemId: typeof body.workItemId === 'string' ? body.workItemId : undefined,
       input: body.inputEnvelope ? undefined : body.input,
       inputEnvelope: body.inputEnvelope,
       goal: body.goal,

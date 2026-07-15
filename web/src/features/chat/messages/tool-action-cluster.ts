@@ -94,14 +94,27 @@ const KIND_ORDER: ActionKind[] = [
 
 export function classifyTool(name: string): ActionKind {
   const n = toolNameKey(name);
+  if (n === 'review.prepare_diff' || n === 'review_prepare_diff') return 'readFile';
+  if (n === 'review.model_judge' || n === 'review_model_judge') return 'other';
   if (n === 'exec_command') return 'runCommand';
   if (n === 'list_dir' || n === 'ls') return 'listDir';
   if (n === 'write_file') return 'writeFile';
   if (n === 'apply_patch') return 'editFile';
   if (n === 'web_fetch') return 'fetchUrl';
   if (n === 'open_url') return 'openUrl';
-  if (isWebSearchToolName(name) || n.includes('search')) return 'search';
-  if (n === 'read_file' || n.includes('read_file') || n.includes('file_read')) return 'readFile';
+  if (
+    isWebSearchToolName(name) ||
+    n.includes('search') ||
+    n.endsWith('query_graph') ||
+    n.endsWith('trace_path') ||
+    n.endsWith('get_architecture')
+  ) return 'search';
+  if (
+    n === 'read_file' ||
+    n.includes('read_file') ||
+    n.includes('file_read') ||
+    n.endsWith('get_code_snippet')
+  ) return 'readFile';
   return 'other';
 }
 

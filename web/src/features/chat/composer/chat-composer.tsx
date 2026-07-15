@@ -16,6 +16,7 @@ import type { PendingFollowUp } from '@/features/chat/follow-up/pending-follow-u
 import { interpolate, type WireAttachment } from '@/features/chat/composer/composer.types';
 import { useComposerInputHistoryWalk } from '@/features/chat/composer/use-composer-input-history-walk';
 import type { Message } from '@/features/chat/messages/messages.types';
+import type { WelcomeSuggestionSelection } from '@/features/chat/welcome/welcome-suggestions';
 import { useComposerActions } from '@/features/chat/composer/use-composer-actions';
 import { useComposerAttachments } from '@/features/chat/composer/use-composer-attachments';
 import { useComposerEditor } from '@/features/chat/composer/use-composer-editor';
@@ -53,6 +54,8 @@ export const ChatComposer = memo(function ChatComposer({
   onPendingFollowUpSteer,
   steeringFollowUpId,
   welcomeDraftSeed,
+  welcomeSuggestion,
+  onAcceptWelcomeSuggestion,
   sessionModel,
   showModelSelector,
   onModelChange,
@@ -67,6 +70,8 @@ export const ChatComposer = memo(function ChatComposer({
   sessionKey: string | null;
   sessionManager: SessionManager;
   welcomeDraftSeed?: { id: number; text: string } | null;
+  welcomeSuggestion?: WelcomeSuggestionSelection | null;
+  onAcceptWelcomeSuggestion?: (selection: WelcomeSuggestionSelection) => void;
   canSelectWorkingDirectory: boolean;
   sessionModel: string;
   showModelSelector: boolean;
@@ -300,12 +305,23 @@ export const ChatComposer = memo(function ChatComposer({
     adjustHeight: editor.adjustHeight,
     editorRef: editor.editorRef,
     tryInputHistoryArrow,
+    acceptEmptySuggestion:
+      !runBusy && welcomeSuggestion && onAcceptWelcomeSuggestion
+        ? () => {
+            onAcceptWelcomeSuggestion(welcomeSuggestion);
+            return true;
+          }
+        : undefined,
   };
 
   const runBusyState = runBusy;
   const hasDraft =
     Boolean(editor.value.trim()) || att.attachments.length > 0;
   const showSteeringInterrupt = hasDraft && Boolean(onSteeringInterrupt);
+  const contextualPlaceholder =
+    !runBusyState && !editingFollowUpId && welcomeSuggestion
+      ? `${welcomeSuggestion.prompt} · ${m.chat.welcomeSpotlight.acceptSuggestionHint}`
+      : null;
 
   return (
     <div
@@ -455,12 +471,13 @@ export const ChatComposer = memo(function ChatComposer({
             <ChatComposerInput
               editorRef={editor.editorRef}
               disabled={disabled}
+              ariaLabel={m.chat.inputPlaceholder}
               placeholder={
-                runBusyState
+                contextualPlaceholder ?? (runBusyState
                   ? editingFollowUpId
                     ? m.chat.inputPlaceholderSteeringEdit
                     : m.chat.inputPlaceholderSteering
-                  : m.chat.inputPlaceholder
+                  : m.chat.inputPlaceholder)
               }
               onWireInput={onWireInputClearWalk}
               adjustHeight={editor.adjustHeight}

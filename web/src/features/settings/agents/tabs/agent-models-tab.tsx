@@ -71,6 +71,8 @@ export function AgentModelsTab(props: {
             recommendedTitle: a.typedModelRecommendedTitle,
             customTitle: a.typedModelCustomTitle,
             defaultBadge: a.typedModelDefaultBadge,
+            visionBadge: a.typedModelVisionBadge,
+            visionAutoHint: a.typedModelVisionAutoHint,
             addPurpose: a.addTypedModelPurpose,
             noCustomRoles: a.typedModelNoCustomRoles,
             idPlaceholder: a.typedModelIdPlaceholder,

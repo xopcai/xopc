@@ -24,8 +24,12 @@ export function createImageTool(options: {
   workspace: string;
   /** When true, session model already receives images in the user message. */
   modelHasVision?: boolean;
+  agentId?: string;
 }): AgentTool<any, Record<string, unknown>> | null {
-  const imageModelConfig = resolveImageModelConfigForTool({ cfg: options.config });
+  const imageModelConfig = resolveImageModelConfigForTool({
+    cfg: options.config,
+    agentId: options.agentId,
+  });
   if (!imageModelConfig) {
     return null;
   }

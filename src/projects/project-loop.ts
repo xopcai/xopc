@@ -122,7 +122,7 @@ export function buildProjectLoopOverview(input: {
       title: run.definitionId,
       detail: compactText(run.errorMessage || run.status),
       status: run.status,
-      href: `/workflows/runs/${encodeURIComponent(run.runId)}`,
+      href: `/workflows?run=${encodeURIComponent(run.runId)}`,
       updatedAt: run.createdAt,
     })),
   ].slice(0, 8);
@@ -152,7 +152,7 @@ export function buildProjectLoopOverview(input: {
       detail: run.status,
       timestamp: run.createdAt,
       status: run.status,
-      href: `/workflows/runs/${encodeURIComponent(run.runId)}`,
+      href: `/workflows?run=${encodeURIComponent(run.runId)}`,
     })),
     ...(input.memoryRecords ?? []).slice(0, 5).map((record) => ({
       id: `memory:${record.id}`,

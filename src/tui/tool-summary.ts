@@ -49,7 +49,7 @@ export function getToolSummaryKind(toolName: string): ToolSummaryKind {
 
 export function isReadStyleTool(toolName: string): boolean {
   const base = baseToolName(toolName);
-  return ['read', 'read_file', 'memory_get'].includes(base);
+  return ['read', 'read_file', 'memory_get', 'get_code_snippet', 'prepare_diff'].includes(base);
 }
 
 export function isSearchStyleTool(toolName: string): boolean {
@@ -62,6 +62,10 @@ export function isSearchStyleTool(toolName: string): boolean {
     'search_code',
     'file_search',
     'list_files',
+    'search_graph',
+    'query_graph',
+    'trace_path',
+    'get_architecture',
   ].includes(base);
 }
 
@@ -183,7 +187,7 @@ function commandFromArgs(args: unknown): string | null {
 }
 
 function baseToolName(toolName: string): string {
-  return toolName.split('__').pop()?.toLowerCase() ?? toolName.toLowerCase();
+  return toolName.split(/__|\./).pop()?.toLowerCase() ?? toolName.toLowerCase();
 }
 
 function firstFiniteNumber(...values: unknown[]): number | null {

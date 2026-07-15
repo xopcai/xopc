@@ -9,6 +9,7 @@ import type { WorkflowDefinition } from './workflow-api';
 import { resolveWorkflowLocalizedCopy } from './workflow-meta-locale';
 import {
   resolveWorkflowInputPayload,
+  validateWorkflowInputEditorValue,
 } from './workflow-input-editor';
 import { WorkflowRunSetupPanel, type WorkflowRunSetupValue } from './workflow-run-setup-panel';
 
@@ -40,6 +41,20 @@ export function WorkflowStartDialog({
     () => (definition ? resolveWorkflowLocalizedCopy(definition, language) : null),
     [definition, language],
   );
+  const inputValidity = useMemo(
+    () => validateWorkflowInputEditorValue(definition, inputValue),
+    [definition, inputValue],
+  );
+  const numericValuesValid = useMemo(() => {
+    const values = [inputValue.concurrency, inputValue.maxSubagents];
+    return values.every((value) => {
+      const trimmed = value.trim();
+      if (!trimmed) return true;
+      const parsed = Number(trimmed);
+      return Number.isInteger(parsed) && parsed > 0;
+    });
+  }, [inputValue.concurrency, inputValue.maxSubagents]);
+  const canStart = inputValidity.valid && numericValuesValid && !starting;
 
   useEffect(() => {
     if (!open || !definition) return;
@@ -49,6 +64,7 @@ export function WorkflowStartDialog({
   if (!definition || !localized) return null;
 
   const submit = () => {
+    if (!canStart) return;
     const input = resolveWorkflowInputPayload(definition, inputValue);
     onStart({
       goal: inputValue.goal.trim() || localized.description,
@@ -91,10 +107,15 @@ export function WorkflowStartDialog({
           </div>
 
           <div className="flex justify-end gap-2 border-t border-edge px-5 py-4">
+            {!canStart ? (
+              <div className="mr-auto self-center text-xs text-fg-subtle">
+                {labels.inputRequiredHint}
+              </div>
+            ) : null}
             <Button variant="secondary" onClick={onClose} disabled={starting}>
               {labels.cancelDialog}
             </Button>
-            <Button variant="primary" onClick={submit} disabled={starting}>
+            <Button variant="primary" onClick={submit} disabled={!canStart}>
               {starting ? labels.starting : labels.start}
             </Button>
           </div>

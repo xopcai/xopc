@@ -647,6 +647,8 @@ export function CapabilityPresetsSettingsPanel() {
                     recommendedTitle: cp.modelRecommendedTitle,
                     customTitle: cp.modelCustomTitle,
                     defaultBadge: cp.modelDefaultBadge,
+                    visionBadge: cp.modelVisionBadge,
+                    visionAutoHint: cp.modelVisionAutoHint,
                     addPurpose: cp.addModelPurpose,
                     noCustomRoles: cp.noCustomModelRoles,
                     idPlaceholder: 'deep',

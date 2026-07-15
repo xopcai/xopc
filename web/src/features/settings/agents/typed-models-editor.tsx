@@ -1,7 +1,9 @@
 import { Plus, Trash2 } from 'lucide-react';
-import { useRef } from 'react';
+import { useMemo, useRef } from 'react';
+import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached } from '@/features/chat/api/registry-api';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import type { ChatMessages } from '@/i18n/messages';
 
@@ -35,6 +37,8 @@ export function TypedModelsEditor(props: {
     recommendedTitle: string;
     customTitle: string;
     defaultBadge: string;
+    visionBadge: string;
+    visionAutoHint: string;
     addPurpose: string;
     noCustomRoles: string;
     idPlaceholder: string;
@@ -44,6 +48,13 @@ export function TypedModelsEditor(props: {
   };
 }) {
   const { rows, onChange, disabled, defaultRole, chat, labels } = props;
+  const { data: configuredModels = [] } = useSWR(CONFIGURED_MODELS_SWR_KEY, fetchConfiguredModelsCached, {
+    revalidateOnFocus: false,
+  });
+  const visionModelRefs = useMemo(
+    () => new Set(configuredModels.filter((model) => model.vision === true).map((model) => model.id)),
+    [configuredModels],
+  );
   const rowKeysRef = useRef<string[]>([]);
   const rowKeyCounterRef = useRef(0);
 
@@ -105,6 +116,9 @@ export function TypedModelsEditor(props: {
   ) => {
     const { row, index } = item;
     const isDefault = row.id === defaultRole;
+    const roleSupportsVision = [row.model, ...(row.fallbacks ?? [])].some((ref) =>
+      visionModelRefs.has(ref.trim()),
+    );
     const roleName = isRecommendedRoleId(row.id) ? labels.roleNames[row.id] : labels.id;
     const roleDescription = isRecommendedRoleId(row.id) ? labels.roleDescriptions[row.id] : '';
 
@@ -122,6 +136,11 @@ export function TypedModelsEditor(props: {
                   {labels.defaultBadge}
                 </span>
               ) : null}
+              {roleSupportsVision ? (
+                <span className="shrink-0 rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+                  {labels.visionBadge}
+                </span>
+              ) : null}
             </div>
             <div className="mt-1 truncate font-mono text-[11px] text-fg-subtle">{row.id}</div>
             {roleDescription ? (
@@ -130,7 +149,14 @@ export function TypedModelsEditor(props: {
           </div>
         ) : (
           <div className="min-w-0">
-            <div className="mb-1 text-xs font-medium text-fg-muted">{labels.id}</div>
+            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-fg-muted">
+              <span>{labels.id}</span>
+              {roleSupportsVision ? (
+                <span className="shrink-0 rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+                  {labels.visionBadge}
+                </span>
+              ) : null}
+            </div>
             <input
               type="text"
               className={inputClassName()}
@@ -155,6 +181,9 @@ export function TypedModelsEditor(props: {
               contentAlign="start"
               onChange={(modelId) => updateRow(index, { model: modelId })}
             />
+            {roleSupportsVision ? (
+              <div className="text-xs leading-relaxed text-fg-muted">{labels.visionAutoHint}</div>
+            ) : null}
           </div>
           <div className="grid gap-1.5">
             <div className="flex items-center justify-between gap-2">

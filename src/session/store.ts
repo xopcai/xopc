@@ -23,6 +23,7 @@ import {
   listSessionsByAgent,
   loadCheckpointRows,
   loadLlmMessagesForSession,
+  paginateTranscriptMessages,
   loadTranscriptRowsForSession,
   patchSessionMetadata,
   replaceTranscriptRows,
@@ -58,6 +59,7 @@ import { SessionStatus } from './types.js';
 import type { Message } from './types.js';
 import type { SessionTranscriptUpdate } from './transcript-events.js';
 import { isAppendOnlyLlmTranscriptMessage } from './transcript-stats.js';
+import { transcriptRowsToClientHistory } from './client-history.js';
 
 const log = createLogger('SessionStore');
 
@@ -177,6 +179,7 @@ export class SessionStore {
       before?: string;
       includeTranscriptSummary?: boolean;
       includeTranscriptRows?: boolean;
+      includeContextRows?: boolean;
     } = {},
   ): Promise<{
     session: SessionDetail;
@@ -198,6 +201,37 @@ export class SessionStore {
     const offset = Math.max(0, Math.trunc(options.offset ?? 0));
     const parsedBefore = options.before ? Number.parseInt(options.before, 10) : undefined;
     const hasBeforeCursor = parsedBefore !== undefined && Number.isFinite(parsedBefore);
+
+    if (options.includeContextRows) {
+      const page = paginateTranscriptMessages(key, {
+        limit,
+        offset: hasBeforeCursor ? undefined : offset,
+        beforeEndIndex: hasBeforeCursor ? parsedBefore : undefined,
+        includeContext: true,
+      });
+      const messages = transcriptRowsToClientHistory(page.rows) as unknown as Message[];
+      const endIndex = hasBeforeCursor
+        ? Math.min(page.total, Math.max(0, parsedBefore!))
+        : Math.max(0, page.total - offset);
+      const startIndex = Math.max(0, endIndex - page.rows.length);
+      const session: SessionDetail = {
+        ...metadata,
+        messages,
+        ...(options.includeTranscriptRows ? { transcriptRows: await this.loadTranscriptRows(key) } : {}),
+      };
+      const nextBeforeCursor = startIndex > 0 ? String(startIndex) : undefined;
+      return {
+        session,
+        pagination: {
+          total: page.total,
+          limit,
+          offset,
+          hasMore: hasBeforeCursor ? startIndex > 0 : offset + limit < page.total,
+          ...(hasBeforeCursor ? { before: String(endIndex) } : {}),
+          ...(nextBeforeCursor ? { nextBeforeCursor } : {}),
+        },
+      };
+    }
 
     const displayMessages = await this.loadDisplayMessages(key);
     const page = this.paginateDisplayMessages(displayMessages, {

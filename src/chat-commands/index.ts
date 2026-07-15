@@ -31,6 +31,8 @@ export type {
   CommandScope,
   CommandHandler,
   CommandResult,
+  CommandStreamEvent,
+  BtwQueryOptions,
   CommandContext,
   ReplyOptions,
   UIComponent,

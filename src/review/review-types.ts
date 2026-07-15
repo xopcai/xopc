@@ -31,8 +31,9 @@ function formatLocation(finding: ReviewFinding): string {
 
 export function formatReviewMarkdown(review: ReviewOutput): string {
   const lines: string[] = ['Code review', ''];
+  const modelReviewIncomplete = review.source === 'local' && review.overallCorrectness === 'unknown';
   if (review.findings.length === 0) {
-    lines.push('No findings.');
+    lines.push(modelReviewIncomplete ? 'No model findings were produced.' : 'No findings.');
   } else {
     lines.push('Findings:');
     for (const finding of review.findings) {

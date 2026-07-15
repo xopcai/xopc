@@ -5,6 +5,10 @@ import { MessageBubble } from '@/features/chat/messages/message-bubble';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages/messages.types';
 import { isLastUserMessageInThread } from '@/features/chat/messages/user-message-plain-text';
 import { messageRowKey } from '@/features/chat/messages/thinking-blocks';
+import type {
+  WelcomeSpotlightModel,
+  WelcomeSuggestionSelection,
+} from '@/features/chat/welcome/welcome-suggestions';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -17,6 +21,9 @@ export const MessageList = memo(function MessageList({
   reasoningLevel,
   registerListContentRef,
   onPickWelcomePrompt,
+  welcomeSpotlight,
+  onRetryWelcomeContext,
+  onRefreshWelcomeExploration,
   welcomeOverlay,
   onDeleteRound,
   onRetryUserMessageRound,
@@ -34,7 +41,10 @@ export const MessageList = memo(function MessageList({
   reasoningLevel: ReasoningLevel;
   /** Plain column root — observed by scroll viewport for tail-follow (Cursor-style, non-virtual). */
   registerListContentRef: (el: HTMLDivElement | null) => void;
-  onPickWelcomePrompt?: (text: string) => void;
+  onPickWelcomePrompt?: (selection: WelcomeSuggestionSelection) => void;
+  welcomeSpotlight?: WelcomeSpotlightModel;
+  onRetryWelcomeContext?: () => void;
+  onRefreshWelcomeExploration?: () => void;
   welcomeOverlay?: ReactNode;
   onDeleteRound?: (messageIndex: number) => void;
   onRetryUserMessageRound?: (messageIndex: number) => void;
@@ -51,12 +61,17 @@ export const MessageList = memo(function MessageList({
 
   if (showWelcome) {
     if (welcomeOverlay) {
-      return <div className="flex w-full flex-col items-center pb-6 pt-4">{welcomeOverlay}</div>;
+      return <div className="pb-1.5">{welcomeOverlay}</div>;
     }
-    if (onPickWelcomePrompt && m.chat.welcomeSpotlight) {
+    if (onPickWelcomePrompt && welcomeSpotlight) {
       return (
         <div className="pb-1.5">
-          <ChatWelcomeSpotlight chat={m.chat} onPickPrompt={onPickWelcomePrompt} />
+          <ChatWelcomeSpotlight
+            spotlight={welcomeSpotlight}
+            onPickPrompt={onPickWelcomePrompt}
+            onRetryContext={onRetryWelcomeContext}
+            onRefreshExploration={onRefreshWelcomeExploration}
+          />
         </div>
       );
     }

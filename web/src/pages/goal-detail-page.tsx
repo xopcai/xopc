@@ -1,5 +1,6 @@
 import {
   Activity,
+  AlertTriangle,
   ArrowLeft,
   Archive,
   Bot,
@@ -330,6 +331,194 @@ function priorityLabel(priority: GoalDetail['priority'], t: GoalDetailMessages):
 
 function evidenceKindLabel(kind: EvidenceKind, t: GoalDetailMessages): string {
   return t.evidenceKinds[kind] ?? kind;
+}
+
+function goalStatusSummary(goal: GoalDetail, t: GoalDetailMessages): { title: string; body: string; tone: 'normal' | 'attention' | 'done' } {
+  if (goal.status === 'blocked') {
+    return {
+      title: t.progressPanel.blockedTitle,
+      body: goal.blockedReason || t.progressPanel.blockedFallback,
+      tone: 'attention',
+    };
+  }
+  if (goal.status === 'needs_input') {
+    return {
+      title: t.progressPanel.needsInputTitle,
+      body: goal.blockedReason || goal.nextAction || t.progressPanel.needsInputFallback,
+      tone: 'attention',
+    };
+  }
+  if (goal.status === 'paused') {
+    return {
+      title: t.progressPanel.pausedTitle,
+      body: goal.blockedReason || t.progressPanel.pausedFallback,
+      tone: 'normal',
+    };
+  }
+  if (goal.status === 'done') {
+    return {
+      title: t.progressPanel.doneTitle,
+      body: t.progressPanel.doneFallback,
+      tone: 'done',
+    };
+  }
+  if (goal.status === 'archived') {
+    return {
+      title: t.progressPanel.archivedTitle,
+      body: t.progressPanel.archivedFallback,
+      tone: 'normal',
+    };
+  }
+  return {
+    title: t.progressPanel.activeTitle,
+    body: goal.nextAction || t.noNextAction,
+    tone: 'normal',
+  };
+}
+
+function progressPercent(done: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.min(100, Math.max(0, Math.round((done / total) * 100)));
+}
+
+function GoalProgressPanel({
+  goal,
+  latestRun,
+  done,
+  total,
+  evidence,
+  language,
+  t,
+  busy,
+  primaryActionDisabled,
+  onContinue,
+  onOpenChat,
+  onPause,
+}: {
+  goal: GoalDetail;
+  latestRun?: GoalRun;
+  done: number;
+  total: number;
+  evidence: GoalEvidence[];
+  language: StoredLanguage;
+  t: GoalDetailMessages;
+  busy: string | null;
+  primaryActionDisabled: boolean;
+  onContinue: () => void;
+  onOpenChat: () => void;
+  onPause: () => void;
+}) {
+  const summary = goalStatusSummary(goal, t);
+  const approvedEvidence = goal.evidenceRequirements.filter((item) => item.status === 'approved').length;
+  const evidenceRequired = goal.evidenceRequirements.length;
+  const missingEvidence = goal.evidenceRequirements.filter((item) => item.status !== 'approved').slice(0, 2);
+  const checklistPercent = progressPercent(done, total);
+  const StatusIcon = summary.tone === 'attention' ? AlertTriangle : summary.tone === 'done' ? CheckCircle2 : CirclePlay;
+
+  return (
+    <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cn('rounded-full border px-2 py-0.5 text-xs', badgeClass(goal.status))}>
+              {statusLabel(goal.status, t)}
+            </span>
+            <span className="text-xs text-fg-muted">{formatMessage(t.prioritySummary, { priority: priorityLabel(goal.priority, t) })}</span>
+            <span className="text-xs text-fg-muted">{goal.deadlineAt ? formatDate(goal.deadlineAt, language, t) : t.noDeadline}</span>
+          </div>
+          <div className="mt-3 flex items-start gap-3">
+            <div
+              className={cn(
+                'mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg',
+                summary.tone === 'attention'
+                  ? 'bg-amber-500/10 text-amber-700 dark:text-amber-300'
+                  : summary.tone === 'done'
+                    ? 'bg-success-soft text-success'
+                    : 'bg-accent-soft text-accent-fg',
+              )}
+            >
+              <StatusIcon className="size-5" aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold text-fg">{summary.title}</h2>
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm text-fg-muted">{summary.body}</p>
+              {latestRun?.reason ? (
+                <p className="mt-2 line-clamp-2 break-words text-xs text-fg-subtle">
+                  {formatMessage(t.progressPanel.lastCheck, {
+                    time: formatDateTime(latestRun.finishedAt ?? latestRun.startedAt, language, t),
+                    reason: latestRun.reason,
+                  })}
+                </p>
+              ) : null}
+            </div>
+          </div>
+          {missingEvidence.length ? (
+            <div className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-200">{t.progressPanel.evidenceNeeded}</p>
+              <ul className="mt-1 grid gap-1 text-xs text-amber-800 dark:text-amber-200">
+                {missingEvidence.map((item) => (
+                  <li key={item.id} className="break-words">- {item.text}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="grid content-start gap-3 rounded-lg bg-surface-panel/70 p-3">
+          <div>
+            <div className="flex items-center justify-between gap-2 text-xs text-fg-muted">
+              <span>{t.progressPanel.completion}</span>
+              <span>{total ? formatMessage(t.checklistProgress, { done, total }) : t.noChecklist}</span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-hover">
+              <div className="h-full rounded-full bg-accent" style={{ width: `${checklistPercent}%` }} />
+            </div>
+          </div>
+          <dl className="grid grid-cols-2 gap-2 text-xs">
+            <div className="rounded-md bg-surface-muted/50 px-2 py-2">
+              <dt className="text-fg-muted">{t.progressPanel.evidence}</dt>
+              <dd className="mt-1 font-semibold text-fg">
+                {evidenceRequired
+                  ? formatMessage(t.evidenceRequirementProgress, { approved: approvedEvidence, total: evidenceRequired })
+                  : formatMessage(t.progressPanel.evidenceCount, { count: evidence.length })}
+              </dd>
+            </div>
+            <div className="rounded-md bg-surface-muted/50 px-2 py-2">
+              <dt className="text-fg-muted">{t.progressPanel.turnBudget}</dt>
+              <dd className="mt-1 font-semibold text-fg">{formatMessage(t.turns, { used: goal.turnsUsed, max: goal.maxTurns })}</dd>
+            </div>
+          </dl>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="primary"
+              className="h-9 flex-1 rounded-lg"
+              disabled={primaryActionDisabled}
+              onClick={onContinue}
+            >
+              <CirclePlay className="size-4" aria-hidden />
+              {primaryActionLabel(goal.status, t)}
+            </Button>
+            {goal.activeSessionKey ? (
+              <Button type="button" variant="secondary" className="h-9 rounded-lg px-2.5" aria-label={t.chat} onClick={onOpenChat}>
+                <ExternalLink className="size-4" aria-hidden />
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-9 rounded-lg px-2.5"
+              aria-label={t.pause}
+              disabled={busy != null || goal.status !== 'active'}
+              onClick={onPause}
+            >
+              <CirclePause className="size-4" aria-hidden />
+            </Button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function safeGoalReturnPath(value: string | null): string {
@@ -928,12 +1117,23 @@ export function GoalDetailPage() {
           <GoalDetailPageSkeleton />
         ) : goal ? (
           <>
+            <GoalProgressPanel
+              goal={goal}
+              latestRun={latestRun}
+              done={done}
+              total={total}
+              evidence={evidence}
+              language={language}
+              t={t}
+              busy={busy}
+              primaryActionDisabled={primaryActionDisabled}
+              onContinue={() => void continueGoal()}
+              onOpenChat={() => goal.activeSessionKey && navigate(`/chat/${encodeURIComponent(goal.activeSessionKey)}`)}
+              onPause={() => void postAction('pause')}
+            />
+
             <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={cn('rounded-full border px-2 py-0.5 text-xs', badgeClass(goal.status))}>{statusLabel(goal.status, t)}</span>
-                <span className="text-xs text-fg-muted">{formatMessage(t.prioritySummary, { priority: priorityLabel(goal.priority, t) })}</span>
-                <span className="text-xs text-fg-muted">{goal.deadlineAt ? formatDate(goal.deadlineAt, language, t) : t.noDeadline}</span>
-              </div>
+              <h2 className="text-sm font-semibold text-fg">{t.goalBrief}</h2>
               {goal.description ? <p className="mt-3 whitespace-pre-wrap break-words text-sm text-fg-muted">{goal.description}</p> : null}
               {goal.contract ? (
                 <div className="mt-3 rounded-md border border-edge-subtle bg-surface-muted/40 px-3 py-3">
@@ -1011,12 +1211,6 @@ export function GoalDetailPage() {
                   </details>
                 </div>
               ) : null}
-              <div className="mt-3 rounded-md bg-surface-muted/40 px-3 py-2">
-                <p className="text-xs font-medium text-fg-muted">{goal.blockedReason ? t.currentBlocker : t.nextAction}</p>
-                <p className={cn('mt-1 break-words text-sm', goal.blockedReason ? 'text-amber-700 dark:text-amber-300' : 'text-fg')}>
-                  {goal.blockedReason || goal.nextAction || t.noNextAction}
-                </p>
-              </div>
             </section>
 
             <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">

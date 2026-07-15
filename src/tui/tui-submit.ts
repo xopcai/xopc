@@ -15,6 +15,9 @@ export function createEditorSubmitHandler(params: {
   handleCommand: (value: string) => void | Promise<void>;
   sendMessage: (value: string) => void | Promise<void>;
   handleBangLine: (value: string) => void | Promise<void>;
+  getMode?: () => 'chat' | 'shell';
+  enterShellMode?: () => void;
+  exitShellMode?: () => void;
   isAgentBusy?: () => boolean;
   steerWhileBusy?: (value: string) => void | Promise<void>;
   hasPendingAttachments?: () => boolean;
@@ -22,11 +25,31 @@ export function createEditorSubmitHandler(params: {
 }) {
   return (text: string) => {
     const raw = text;
+    const rawTrimmed = raw.trim();
+    const mode = params.getMode?.() ?? 'chat';
     const hasAttachments = params.hasPendingAttachments?.() === true;
-    const value = raw.trim() || (hasAttachments ? (params.defaultAttachmentMessage ?? 'Please analyze the attachment(s).') : '');
+    const value = rawTrimmed || (hasAttachments ? (params.defaultAttachmentMessage ?? 'Please analyze the attachment(s).') : '');
     params.editor.setText('');
 
+    if (mode === 'shell') {
+      if (!rawTrimmed) {
+        params.exitShellMode?.();
+        return;
+      }
+      params.editor.addToHistory(rawTrimmed);
+      const line = rawTrimmed.startsWith('!') ? rawTrimmed : `!${rawTrimmed}`;
+      void Promise.resolve(params.handleBangLine(line)).finally(() => {
+        params.exitShellMode?.();
+      });
+      return;
+    }
+
     if (!value) {
+      return;
+    }
+
+    if (value === '!') {
+      params.enterShellMode?.();
       return;
     }
 
@@ -126,6 +149,11 @@ export function createSubmitBurstCoalescer(params: {
 
   return (value: string) => {
     if (!params.enabled) {
+      params.submit(value);
+      return;
+    }
+    if (value.trim() === '!' || value.startsWith('!')) {
+      flushPending();
       params.submit(value);
       return;
     }

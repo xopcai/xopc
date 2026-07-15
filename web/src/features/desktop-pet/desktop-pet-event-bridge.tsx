@@ -1,10 +1,16 @@
 import { useEffect, useRef } from "react";
 
 import { activityForProgress, activityForTool } from "@/features/desktop-pet/desktop-pet-activity";
-import { getFriendlyToolTitle } from "@/features/chat/messages/tool-friendly-title";
+import {
+  progressNarrative,
+  toolNarrative,
+  type DesktopPetNarrativeLabels,
+} from "@/features/desktop-pet/desktop-pet-narrative";
+import { messages } from "@/i18n/messages";
 import { isElectron } from "@/lib/electron-env";
 import { apiFetch } from "@/lib/fetch";
 import { apiUrl } from "@/lib/url";
+import { useLocaleStore } from "@/stores/locale-store";
 import type { PetSessionUpdate } from "@/types/electron";
 
 type AgentStreamDetail = { sessionKey?: string; event?: unknown };
@@ -28,9 +34,39 @@ function safeLines(value: unknown): string[] | undefined {
   return lines.length ? lines.slice(0, 12) : undefined;
 }
 
-const toolLabels = { searchedWeb: "搜索网页", readFile: "读取文件", runCommand: "运行命令", updatePlan: "更新计划", listDirectory: "查看目录", writeFile: "写入文件", editFile: "修改文件", openUrl: "打开链接", fetchUrl: "获取网页", unknownTool: "使用 {{name}}" };
+function petNarrativeLabels(t: ReturnType<typeof messages>["desktopPet"]): DesktopPetNarrativeLabels {
+  return {
+    searchedWeb: t.toolActionSearch,
+    readFile: t.toolActionReadFile,
+    runCommand: t.toolActionRunCommand,
+    updatePlan: t.toolActionUpdatePlan,
+    listDirectory: t.toolActionListDirectory,
+    writeFile: t.toolActionWriteFile,
+    editFile: t.toolActionEditFile,
+    openUrl: t.toolActionOpenUrl,
+    fetchUrl: t.toolActionFetchUrl,
+    unknownTool: t.toolActionUnknownNamed,
+    tipRunStart: t.tipRunStart,
+    tipTool: t.tipTool,
+    tipProgress: t.tipProgress,
+    tipValidate: t.tipValidate,
+    tipWaiting: t.tipWaiting,
+    tipAssistantDelta: t.tipAssistantDelta,
+    tipCommandDelta: t.tipCommandDelta,
+    tipAssistantDone: t.tipAssistantDone,
+    tipComplete: t.tipComplete,
+    tipError: t.tipError,
+    targetSuffix: t.tipTargetSuffix,
+    progressSuffix: t.tipProgressSuffix,
+  };
+}
 
-export function mapAgentStreamEvent(detail: AgentStreamDetail, sequence: number, sessionLabel: string): PetSessionUpdate | null {
+export function mapAgentStreamEvent(
+  detail: AgentStreamDetail,
+  sequence: number,
+  sessionLabel: string,
+  labels: DesktopPetNarrativeLabels,
+): PetSessionUpdate | null {
   if (!detail.sessionKey) return null;
   const event = record(detail.event);
   const payload = record(event.payload);
@@ -38,25 +74,32 @@ export function mapAgentStreamEvent(detail: AgentStreamDetail, sequence: number,
   if (!type) return null;
   const runId = text(event.runId) ?? "active";
   const base = { sessionKey: detail.sessionKey, runId, sessionLabel, sequence, timestamp: Date.now() };
-  if (type === "run_start") return { ...base, state: "running", phase: "preparing", action: "正在准备工作" };
+  if (type === "run_start") return { ...base, state: "running", phase: "preparing", action: labels.tipRunStart, animation: "toolbox", priority: "low" };
   if (type === "tool_start" || type === "tool_update") {
     const toolName = text(event.toolName) ?? text(payload.toolName) ?? "tool";
     const activity = activityForTool(toolName, payload.args);
-    return { ...base, state: "running", phase: activity.phase ?? "running", action: `正在${getFriendlyToolTitle(toolName, toolLabels)}`, detail: activity.detail };
+    const phase = activity.phase ?? "running";
+    const narrative = toolNarrative(labels, toolName, phase, activity.detail);
+    return { ...base, state: "running", phase, ...narrative, detail: activity.detail };
   }
   if (type === "progress" || type === "compaction") {
     const activity = type === "compaction" ? { phase: "compacting" as const } : activityForProgress(payload);
-    return { ...base, state: "running", phase: activity.phase ?? "preparing", action: activity.phase === "running" ? "正在验证" : "任务仍在推进", progress: typeof activity.completed === "number" && typeof activity.total === "number" ? { completed: activity.completed, total: activity.total } : undefined };
+    const phase = activity.phase ?? "preparing";
+    const narrative = progressNarrative(labels, phase, activity.completed, activity.total);
+    return { ...base, state: "running", phase, ...narrative, progress: typeof activity.completed === "number" && typeof activity.total === "number" ? { completed: activity.completed, total: activity.total } : undefined };
   }
-  if (type === "clarify_request") return { ...base, state: "waiting", phase: "waiting", action: "等待你的确认", outputTail: safeTail(payload.question) };
-  if (type === "assistant_delta" || type === "command_output_delta") return { ...base, state: "running", phase: "running", action: "正在处理", outputTail: safeTail(payload.delta ?? event.delta) };
-  if (type === "assistant_message_end") return { ...base, state: "running", phase: "running", action: "正在整理结果", outputLines: safeLines(payload.content ?? event.content) };
-  if (type === "run_end") return { ...base, state: "success", phase: "running", action: "已完成" };
-  if (type === "error") return { ...base, state: "error", phase: "waiting", action: "需要处理", outputTail: safeTail(payload.message ?? event.message) };
+  if (type === "clarify_request") return { ...base, state: "waiting", phase: "waiting", action: labels.tipWaiting, animation: "typing", priority: "high", outputTail: safeTail(payload.question) };
+  if (type === "assistant_delta") return { ...base, state: "running", phase: "running", action: labels.tipAssistantDelta, animation: "typing", priority: "low", outputTail: safeTail(payload.delta ?? event.delta) };
+  if (type === "command_output_delta") return { ...base, state: "running", phase: "running", action: labels.tipCommandDelta, animation: "terminal", priority: "low", outputTail: safeTail(payload.delta ?? event.delta) };
+  if (type === "assistant_message_end") return { ...base, state: "running", phase: "running", action: labels.tipAssistantDone, animation: "typing", priority: "normal", outputLines: safeLines(payload.content ?? event.content) };
+  if (type === "run_end") return { ...base, state: "success", phase: "running", action: labels.tipComplete, animation: "success", priority: "high" };
+  if (type === "error") return { ...base, state: "error", phase: "waiting", action: labels.tipError, animation: "error", priority: "high", outputTail: safeTail(payload.message ?? event.message) };
   return null;
 }
 
 export function DesktopPetEventBridge() {
+  const language = useLocaleStore((s) => s.language);
+  const t = messages(language).desktopPet;
   const sequenceRef = useRef(new Map<string, number>());
   const titleRef = useRef(new Map<string, Promise<string | undefined>>());
   const pendingRef = useRef(new Map<string, PetSessionUpdate>());
@@ -83,9 +126,9 @@ export function DesktopPetEventBridge() {
     const onStream = async (event: Event) => {
       const detail = (event as CustomEvent<AgentStreamDetail>).detail;
       if (!detail.sessionKey) return;
-      const sessionLabel = (await titleFor(detail.sessionKey)) ?? "新对话";
+      const sessionLabel = (await titleFor(detail.sessionKey)) ?? t.fallbackSessionLabel;
       const next = (sequenceRef.current.get(detail.sessionKey ?? "") ?? 0) + 1;
-      const update = mapAgentStreamEvent(detail, next, sessionLabel);
+      const update = mapAgentStreamEvent(detail, next, sessionLabel, petNarrativeLabels(t));
       if (!update) return;
       sequenceRef.current.set(update.sessionKey, next);
       pendingRef.current.set(update.sessionKey, update);
@@ -94,6 +137,6 @@ export function DesktopPetEventBridge() {
     };
     window.addEventListener("agent-stream-event", onStream);
     return () => { window.removeEventListener("agent-stream-event", onStream); if (timerRef.current !== null) window.clearTimeout(timerRef.current); };
-  }, []);
+  }, [t]);
   return null;
 }

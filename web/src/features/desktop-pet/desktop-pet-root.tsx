@@ -1,18 +1,120 @@
 import { ChevronDown, X } from "lucide-react";
 import { type CSSProperties, type PointerEvent, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { desktopPetActionForPhase } from "@/features/desktop-pet/desktop-pet-narrative";
 import { DesktopPetSprite } from "@/features/desktop-pet/desktop-pet-sprite";
 import { desktopPetWindowTarget } from "@/features/desktop-pet/desktop-pet-window-target";
 import { messages } from "@/i18n/messages";
 import { useLocaleStore } from "@/stores/locale-store";
-import type { DesktopPetAction, DesktopPetState, PetSessionUpdate } from "@/types/electron";
+import type { DesktopPetAction, DesktopPetFeedbackLevel, DesktopPetState, PetSessionUpdate } from "@/types/electron";
 
-type Activity = PetSessionUpdate & { expiresAt?: number };
+type Activity = PetSessionUpdate & { expiresAt?: number; startedAt?: number };
 const TERMINAL_TTL_MS = 8_000;
+const LONG_RUNNING_MS = 90_000;
+const STALE_SIGNAL_MS = 30_000;
+const IDLE_COMPANION_DELAY_MS = 20 * 60_000;
+const IDLE_COMPANION_TTL_MS = 45_000;
+const IDLE_COMPANION_COOLDOWN_MS = 45 * 60_000;
+const COMPLETION_SUMMARY_MAX_CHARS = 58;
 
 function visibleActivities(values: Activity[]): Activity[] {
   const rank = { error: 0, waiting: 1, running: 2, success: 3 };
   return values.sort((a, b) => rank[a.state] - rank[b.state] || b.timestamp - a.timestamp).slice(0, 3);
+}
+
+function isLongRunning(item: Activity, now: number): boolean {
+  return item.state === "running" && now - (item.startedAt ?? item.timestamp) >= LONG_RUNNING_MS;
+}
+
+function hasStaleSignal(item: Activity, now: number): boolean {
+  return item.state === "running" && now - item.timestamp >= STALE_SIGNAL_MS;
+}
+
+function activityVisibleForFeedback(item: Activity, feedbackLevel: DesktopPetFeedbackLevel, now: number): boolean {
+  if (hasStaleSignal(item, now)) return true;
+  if (feedbackLevel === "chatty") return true;
+  if (isLongRunning(item, now) && feedbackLevel === "normal") return true;
+  if (feedbackLevel === "quiet") return item.priority === "high" || item.state === "waiting" || item.state === "error";
+  return item.priority !== "low";
+}
+
+function activityAnimation(item: Activity | undefined): DesktopPetAction {
+  if (!item) return "idle";
+  if (item.state === "error") return "error";
+  if (item.state === "success") return "success";
+  return item.animation ?? desktopPetActionForPhase(item.phase);
+}
+
+function detailSuffix(template: string, detail: string): string {
+  return template.replace(/\{\{detail\}\}/g, detail);
+}
+
+function compactLine(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function truncateSummary(value: string): string {
+  const text = compactLine(value);
+  return text.length > COMPLETION_SUMMARY_MAX_CHARS ? `${text.slice(0, COMPLETION_SUMMARY_MAX_CHARS - 1)}…` : text;
+}
+
+export function activityDetailText(item: Activity, now: number, targetSuffix: string): string {
+  if (item.progress) {
+    const progress = `${item.progress.completed}/${item.progress.total}`;
+    return item.action.includes(progress) ? "" : ` · ${progress}`;
+  }
+  if (item.outputLines?.length) return detailSuffix(targetSuffix, item.outputLines[Math.floor((now - item.timestamp) / 1800) % item.outputLines.length]);
+  if (item.outputTail) return detailSuffix(targetSuffix, item.outputTail);
+  if (item.detail && !item.action.includes(item.detail)) return detailSuffix(targetSuffix, item.detail);
+  if (item.state === "running") return ` · ${Math.max(1, Math.floor((now - item.timestamp) / 1000))}s`;
+  return "";
+}
+
+export function activityCompletionText(item: Activity, template: string): string | undefined {
+  if (item.state !== "success") return undefined;
+  const summary = item.outputLines?.map(compactLine).filter(Boolean).at(-1) ?? item.outputTail;
+  if (!summary) return undefined;
+  return template.replace(/\{\{summary\}\}/g, truncateSummary(summary));
+}
+
+export function activityHealthText(
+  item: Activity,
+  now: number,
+  labels: { longRunning: string; stale: string },
+): string | undefined {
+  if (hasStaleSignal(item, now)) return labels.stale;
+  if (isLongRunning(item, now)) return labels.longRunning;
+  return undefined;
+}
+
+function activityCtaText(item: Activity, labels: { open: string; needsInput: string; reviewIssue: string }): string | undefined {
+  if (item.state === "waiting") return labels.needsInput;
+  if (item.state === "error") return labels.reviewIssue;
+  if (item.state === "success") return labels.open;
+  return undefined;
+}
+
+export function shouldShowIdleTip(params: {
+  bubbleEnabled: boolean;
+  feedbackLevel: DesktopPetFeedbackLevel;
+  collapsed: boolean;
+  queuedCount: number;
+  activeCount: number;
+  now: number;
+  lastActivityAt: number;
+  dismissedUntil: number;
+}): boolean {
+  const idleElapsed = params.now - params.lastActivityAt;
+  return (
+    params.bubbleEnabled &&
+    params.feedbackLevel !== "quiet" &&
+    !params.collapsed &&
+    params.queuedCount === 0 &&
+    params.activeCount === 0 &&
+    idleElapsed >= IDLE_COMPANION_DELAY_MS &&
+    idleElapsed <= IDLE_COMPANION_DELAY_MS + IDLE_COMPANION_TTL_MS &&
+    params.now >= params.dismissedUntil
+  );
 }
 
 function fallbackState(): DesktopPetState {
@@ -26,6 +128,8 @@ export function DesktopPetRoot() {
   const [activities, setActivities] = useState<Record<string, Activity>>({});
   const [dismissedSessionKeys, setDismissedSessionKeys] = useState<Set<string>>(() => new Set());
   const [now, setNow] = useState(Date.now());
+  const [lastActivityAt, setLastActivityAt] = useState(() => Date.now());
+  const [idleDismissedUntil, setIdleDismissedUntil] = useState(0);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; moved: boolean } | null>(null);
   const suppressClickRef = useRef(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -34,9 +138,30 @@ export function DesktopPetRoot() {
   const selectedPet = useMemo(() => state.pets.find((pet) => pet.id === state.prefs.selectedPetId) ?? state.pets[0], [state]);
   const sizeScale = Math.min(1.4, Math.max(0.7, state.prefs.sizePercent / 100));
   const allActive = useMemo(() => visibleActivities(Object.values(activities).filter((item) => !item.expiresAt || item.expiresAt > now)), [activities, now]);
-  const active = useMemo(() => allActive.filter((item) => !dismissedSessionKeys.has(item.sessionKey)), [allActive, dismissedSessionKeys]);
-  const primary = active[0];
-  const action: DesktopPetAction = primary?.state === "error" ? "error" : primary?.state === "success" ? "success" : primary ? "typing" : "idle";
+  const queued = useMemo(
+    () => state.prefs.bubbleEnabled
+      ? allActive.filter((item) => !dismissedSessionKeys.has(item.sessionKey) && activityVisibleForFeedback(item, state.prefs.feedbackLevel, now))
+      : [],
+    [allActive, dismissedSessionKeys, now, state.prefs.bubbleEnabled, state.prefs.feedbackLevel],
+  );
+  const hiddenQueueCount = useMemo(
+    () => state.prefs.bubbleEnabled
+      ? allActive.filter((item) => dismissedSessionKeys.has(item.sessionKey) && activityVisibleForFeedback(item, state.prefs.feedbackLevel, now)).length
+      : 0,
+    [allActive, dismissedSessionKeys, now, state.prefs.bubbleEnabled, state.prefs.feedbackLevel],
+  );
+  const primary = queued[0] ?? allActive[0];
+  const action = activityAnimation(primary);
+  const idleTipVisible = shouldShowIdleTip({
+    bubbleEnabled: state.prefs.bubbleEnabled,
+    feedbackLevel: state.prefs.feedbackLevel,
+    collapsed: state.prefs.collapsed,
+    queuedCount: queued.length,
+    activeCount: allActive.length,
+    now,
+    lastActivityAt,
+    dismissedUntil: idleDismissedUntil,
+  });
 
   useEffect(() => {
     document.documentElement.dataset.desktopPet = "true";
@@ -45,9 +170,10 @@ export function DesktopPetRoot() {
     void api.getState().then(setState).catch(() => {});
     const offState = api.onStateChanged(setState);
     const offEvent = api.onEvent((update) => setActivities((current) => {
+      setLastActivityAt(Date.now());
       const prior = current[update.sessionKey];
       if (prior && update.sequence <= prior.sequence) return current;
-      return { ...current, [update.sessionKey]: { ...prior, ...update, outputLines: update.outputLines ?? prior?.outputLines, expiresAt: update.state === "success" ? Date.now() + TERMINAL_TTL_MS : undefined } };
+      return { ...current, [update.sessionKey]: { ...prior, ...update, startedAt: prior?.startedAt ?? update.timestamp, outputLines: update.outputLines ?? prior?.outputLines, expiresAt: update.state === "success" ? Date.now() + TERMINAL_TTL_MS : undefined } };
     }));
     const timer = window.setInterval(() => setNow(Date.now()), 1_000);
     return () => { delete document.documentElement.dataset.desktopPet; offState(); offEvent(); window.clearInterval(timer); };
@@ -66,7 +192,7 @@ export function DesktopPetRoot() {
     };
     const observer = new ResizeObserver(report); observer.observe(root); if (queueRef.current) observer.observe(queueRef.current); if (stageRef.current) observer.observe(stageRef.current); report();
     return () => observer.disconnect();
-  }, [active.length, state.prefs.collapsed, sizeScale]);
+  }, [idleTipVisible, queued.length, state.prefs.collapsed, sizeScale]);
 
   const open = (item = primary) => {
     if (item?.state === "success") {
@@ -101,8 +227,15 @@ export function DesktopPetRoot() {
 
   if (!selectedPet) return null;
   const style = { "--desktop-pet-stage-size": `${Math.round(132 * sizeScale)}px`, "--desktop-pet-menu-size": `${Math.round(28 * sizeScale)}px`, "--desktop-pet-menu-left": "0px", "--desktop-pet-menu-bottom": `${Math.round(12 * sizeScale)}px` } as CSSProperties;
+  const menuCount = state.prefs.collapsed ? queued.length : hiddenQueueCount;
   return <div ref={rootRef} className="desktop-pet-window" style={style}>
-    {!state.prefs.collapsed && active.length > 0 ? <div ref={queueRef} className="desktop-pet-bubble desktop-pet-queue">{active.map((item) => <div key={item.sessionKey} className={`desktop-pet-session desktop-pet-session--${item.state}`}><button type="button" className="desktop-pet-session-open" onClick={() => open(item)}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{item.sessionLabel}</strong><span>{item.action}{item.detail ? `：${item.detail}` : item.progress ? ` · ${item.progress.completed}/${item.progress.total}` : item.outputLines?.length ? `：${item.outputLines[Math.floor((now - item.timestamp) / 1800) % item.outputLines.length]}` : item.outputTail ? `：${item.outputTail}` : item.state === "running" ? ` · ${Math.max(1, Math.floor((now - item.timestamp) / 1000))}s` : ""}</span></span></button><button type="button" className="desktop-pet-session-close" aria-label="收起会话" onClick={() => setDismissedSessionKeys((current) => new Set(current).add(item.sessionKey))}><X size={12} /></button></div>)}</div> : null}
-    <div ref={stageRef} className="desktop-pet-stage"><button type="button" className="desktop-pet-menu-button" onClick={() => void toggle()} aria-label={t.menu}>{(state.prefs.collapsed ? allActive.length : dismissedSessionKeys.size) > 0 ? <span className="desktop-pet-tip-count">{Math.min(99, state.prefs.collapsed ? allActive.length : dismissedSessionKeys.size)}</span> : <ChevronDown className="desktop-pet-menu-chevron size-4" />}</button><button type="button" className="desktop-pet-hit-area" onClick={handlePetClick} onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title={t.openApp}><DesktopPetSprite pet={selectedPet} action={action} displayHeight={Math.round(112 * sizeScale)} /></button></div>
+    {!state.prefs.collapsed && queued.length > 0 ? <div ref={queueRef} className="desktop-pet-bubble desktop-pet-queue">{queued.map((item) => {
+      const health = activityHealthText(item, now, { longRunning: t.tipLongRunning, stale: t.tipStaleSignal });
+      const completion = activityCompletionText(item, t.tipCompleteSummary);
+      const cta = activityCtaText(item, { open: t.viewSession, needsInput: t.petCtaNeedsInput, reviewIssue: t.petCtaReviewIssue });
+      return <div key={item.sessionKey} className={`desktop-pet-session desktop-pet-session--${item.state}${health ? " desktop-pet-session--health" : ""}`}><button type="button" className="desktop-pet-session-open" onClick={() => open(item)}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{item.sessionLabel}</strong><span>{completion ?? health ?? item.action}{completion || health ? "" : activityDetailText(item, now, t.tipTargetSuffix)}</span></span>{cta ? <span className="desktop-pet-session-cta">{cta}</span> : null}</button><button type="button" className="desktop-pet-session-close" aria-label="收起会话" onClick={() => setDismissedSessionKeys((current) => new Set(current).add(item.sessionKey))}><X size={12} /></button></div>;
+    })}</div> : null}
+    {idleTipVisible ? <div ref={queueRef} className="desktop-pet-bubble desktop-pet-queue desktop-pet-idle-tip"><div className="desktop-pet-session desktop-pet-session--idle"><button type="button" className="desktop-pet-session-open" onClick={() => open()}><span className="desktop-pet-session-dot" /><span className="desktop-pet-session-main"><strong>{t.idleTipTitle}</strong><span>{t.idleTipBody}</span></span></button><button type="button" className="desktop-pet-session-close" aria-label="收起会话" onClick={() => setIdleDismissedUntil(Date.now() + IDLE_COMPANION_COOLDOWN_MS)}><X size={12} /></button></div></div> : null}
+    <div ref={stageRef} className="desktop-pet-stage"><button type="button" className="desktop-pet-menu-button" onClick={() => void toggle()} aria-label={t.menu}>{menuCount > 0 ? <span className="desktop-pet-tip-count">{Math.min(99, menuCount)}</span> : <ChevronDown className="desktop-pet-menu-chevron size-4" />}</button><button type="button" className="desktop-pet-hit-area" onClick={handlePetClick} onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag} title={t.openApp}><DesktopPetSprite pet={selectedPet} action={action} displayHeight={Math.round(112 * sizeScale)} /></button></div>
   </div>;
 }

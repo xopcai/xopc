@@ -452,6 +452,7 @@ export function WorkflowRunPanel({
                     labels={labels}
                     onOpenRunId={onOpenRunId}
                   />
+                  <WorkflowBindingPanel view={view} labels={labels} />
                 </section>
               ) : null}
 
@@ -867,6 +868,45 @@ function WorkflowReplayLineagePanel({
             {labels.replayOpenSource}
           </Button>
         ) : null}
+      </div>
+    </section>
+  );
+}
+
+function WorkflowBindingPanel({ view, labels }: { view: WorkflowRunView; labels: WorkflowsMessages }) {
+  const refs = view.run.metadata?.contextRefs ?? [];
+  const targets = view.run.metadata?.writebackPolicy?.targets ?? [];
+  if (!refs.length && !targets.length) return null;
+
+  return (
+    <section className="mt-5 rounded-2xl border border-edge-subtle bg-surface-base/35 p-4">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-fg">{labels.contextRefsTitle}</h3>
+          <p className="mt-1 text-xs leading-5 text-fg-subtle">{labels.contextRefsHint}</p>
+          <div className="mt-3 grid gap-2">
+            {refs.length ? refs.map((ref) => (
+              <MetadataItem
+                key={`${ref.kind}:${ref.id}:${ref.role ?? ''}`}
+                label={labels.contextRefKinds[ref.kind] ?? ref.kind}
+                value={[ref.title || ref.id, ref.role].filter(Boolean).join(' · ')}
+              />
+            )) : <p className="text-xs text-fg-muted">{labels.noContextRefs}</p>}
+          </div>
+        </div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-fg">{labels.writebackTitle}</h3>
+          <p className="mt-1 text-xs leading-5 text-fg-subtle">{labels.writebackHint}</p>
+          <div className="mt-3 grid gap-2">
+            {targets.length ? targets.map((target) => (
+              <MetadataItem
+                key={`${target.kind}:${target.id}:${target.mode}`}
+                label={labels.writebackTargetKinds[target.kind] ?? target.kind}
+                value={`${target.id} · ${labels.writebackModes[target.mode] ?? target.mode}`}
+              />
+            )) : <p className="text-xs text-fg-muted">{labels.noWritebackTargets}</p>}
+          </div>
+        </div>
       </div>
     </section>
   );

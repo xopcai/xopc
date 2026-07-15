@@ -4,17 +4,32 @@ import {
   getAgentDefaultModelRef,
   parseModelRef,
 } from '../../config/schema.js';
+import { resolveEffectiveAgentManifestForAgent } from '../../config/agent-profile.js';
 import {
   resolveAgentModelFallbackValues,
   resolveAgentModelPrimaryValue,
 } from '../../config/model-input.js';
-import { getDefaultModelSync, getModelsByProvider, isProviderConfiguredSync } from '../../providers/index.js';
+import { resolveDefaultAgentId } from '../agent-scope.js';
+import {
+  getDefaultModelSync,
+  getModelsByProvider,
+  isProviderConfiguredSync,
+  resolveModel,
+} from '../../providers/index.js';
 
 export type ToolModelConfig = {
   primary?: string;
   fallbacks?: string[];
   timeoutMs?: number;
   autoProviderFallback?: boolean;
+};
+
+export type ImageModelResolutionSource = 'explicit' | 'auto-role' | 'auto-provider' | 'none';
+
+export type ResolvedImageModelConfig = ToolModelConfig & {
+  source: ImageModelResolutionSource;
+  roleId?: string;
+  roleDescription?: string;
 };
 
 export function hasToolModelConfig(model: ToolModelConfig | undefined): boolean {
@@ -48,12 +63,127 @@ export function coerceToolModelConfig(model?: AgentModelConfig): ToolModelConfig
   };
 }
 
+function resolveEffectiveModelsConfig(params: {
+  cfg?: Config;
+  agentId?: string;
+}): {
+  defaultRole?: string;
+  roles?: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
+  imageModel?: AgentModelConfig;
+} | undefined {
+  if (!params.cfg) {
+    return undefined;
+  }
+  try {
+    const agentId = params.agentId?.trim() || resolveDefaultAgentId(params.cfg);
+    return resolveEffectiveAgentManifestForAgent(params.cfg, agentId).models;
+  } catch {
+    return undefined;
+  }
+}
+
+export function resolveConfiguredImageModelConfig(params: {
+  cfg?: Config;
+  agentId?: string;
+}): ToolModelConfig {
+  const models = resolveEffectiveModelsConfig(params);
+  const config = models?.imageModel ?? (params.cfg ? getAgentDefaultImageModelConfig(params.cfg) : undefined);
+  return coerceToolModelConfig(config);
+}
+
+function modelRefSupportsImage(modelRef: string): boolean {
+  try {
+    return resolveModel(modelRef).input?.includes('image') === true;
+  } catch {
+    return false;
+  }
+}
+
+function configuredImageModelRef(modelRef: string): string | null {
+  const trimmed = modelRef.trim();
+  const parsed = parseModelRef(trimmed);
+  if (!parsed || !isProviderConfiguredSync(parsed.provider)) {
+    return null;
+  }
+  return modelRefSupportsImage(trimmed) ? trimmed : null;
+}
+
+function addCandidate(
+  candidates: Array<{ ref: string; roleId?: string; roleDescription?: string }>,
+  seen: Set<string>,
+  entry: { ref: string; roleId?: string; roleDescription?: string },
+): void {
+  const ref = configuredImageModelRef(entry.ref);
+  if (!ref || seen.has(ref)) {
+    return;
+  }
+  seen.add(ref);
+  candidates.push({
+    ref,
+    ...(entry.roleId ? { roleId: entry.roleId } : {}),
+    ...(entry.roleDescription ? { roleDescription: entry.roleDescription } : {}),
+  });
+}
+
+function collectRoleImageModelCandidates(params: {
+  cfg?: Config;
+  agentId?: string;
+}): Array<{ ref: string; roleId?: string; roleDescription?: string }> {
+  const models = resolveEffectiveModelsConfig(params);
+  const roles = models?.roles ?? {};
+  const roleIds = Object.keys(roles);
+  if (roleIds.length === 0) {
+    return [];
+  }
+
+  const orderedRoleIds = [
+    ...(models?.defaultRole && roles[models.defaultRole] ? [models.defaultRole] : []),
+    ...roleIds.filter((roleId) => roleId !== models?.defaultRole),
+  ];
+  const seen = new Set<string>();
+  const candidates: Array<{ ref: string; roleId?: string; roleDescription?: string }> = [];
+
+  for (const roleId of orderedRoleIds) {
+    const role = roles[roleId];
+    if (!role) {
+      continue;
+    }
+    const refs = [role.model, ...(role.fallbacks ?? [])];
+    for (const ref of refs) {
+      addCandidate(candidates, seen, {
+        ref,
+        roleId,
+        ...(role.description ? { roleDescription: role.description } : {}),
+      });
+    }
+  }
+
+  return candidates;
+}
+
+function resolveDefaultModelRefForAgent(params: {
+  cfg?: Config;
+  agentId?: string;
+}): { provider: string; model: string } {
+  const models = resolveEffectiveModelsConfig(params);
+  const role = models?.defaultRole ? models.roles?.[models.defaultRole] : undefined;
+  const ref = role?.model?.trim();
+  if (ref) {
+    const parsed = parseModelRef(ref);
+    if (parsed) {
+      return parsed;
+    }
+  }
+  return resolveDefaultModelRef(params.cfg);
+}
+
 export function buildToolModelConfigFromCandidates(params: {
   explicit: ToolModelConfig;
   candidates: Array<string | null | undefined>;
-}): ToolModelConfig | null {
+  source?: ImageModelResolutionSource;
+}): ResolvedImageModelConfig | null {
   if (hasToolModelConfig(params.explicit)) {
-    return params.explicit;
+    return { ...params.explicit, source: 'explicit' };
   }
 
   const deduped: string[] = [];
@@ -78,6 +208,7 @@ export function buildToolModelConfigFromCandidates(params: {
   return {
     primary: deduped[0],
     ...(deduped.length > 1 ? { fallbacks: deduped.slice(1) } : {}),
+    source: params.source ?? 'auto-provider',
   };
 }
 
@@ -89,36 +220,48 @@ function firstVisionModelRef(provider: string): string | undefined {
 /**
  * Effective image understanding model inferred from configured providers.
  */
-export function resolveImageModelConfigForTool(params: { cfg?: Config }): ToolModelConfig | null {
-  const explicit = coerceToolModelConfig(
-    params.cfg ? getAgentDefaultImageModelConfig(params.cfg) : undefined,
-  );
+export function resolveEffectiveImageModelConfig(params: {
+  cfg?: Config;
+  agentId?: string;
+}): ResolvedImageModelConfig | null {
+  const explicit = resolveConfiguredImageModelConfig(params);
   if (hasToolModelConfig(explicit)) {
-    return explicit;
+    return { ...explicit, source: 'explicit' };
   }
 
-  const primary = resolveDefaultModelRef(params.cfg);
+  const roleCandidates = collectRoleImageModelCandidates(params);
+  if (roleCandidates.length > 0) {
+    const [first, ...rest] = roleCandidates;
+    return {
+      primary: first!.ref,
+      ...(rest.length > 0 ? { fallbacks: rest.map((entry) => entry.ref) } : {}),
+      source: 'auto-role',
+      ...(first!.roleId ? { roleId: first!.roleId } : {}),
+      ...(first!.roleDescription ? { roleDescription: first!.roleDescription } : {}),
+    };
+  }
+
+  const primary = resolveDefaultModelRefForAgent(params);
   const primaryCandidates: string[] = [];
   const vision = firstVisionModelRef(primary.provider);
   if (vision) {
     primaryCandidates.push(vision);
-  }
-  if (primary.provider === 'openai') {
-    primaryCandidates.push('openai/gpt-5.6-luna');
-  }
-  if (primary.provider === 'anthropic') {
-    primaryCandidates.push('anthropic/claude-sonnet-5');
-  }
-  if (primary.provider === 'google') {
-    primaryCandidates.push('google/gemini-3.5-flash');
   }
 
   return buildToolModelConfigFromCandidates({
     explicit,
     candidates: [
       ...primaryCandidates,
-      firstVisionModelRef('openai') ?? 'openai/gpt-5.6-luna',
-      firstVisionModelRef('anthropic') ?? 'anthropic/claude-sonnet-5',
+      firstVisionModelRef('openai'),
+      firstVisionModelRef('anthropic'),
     ],
+    source: 'auto-provider',
   });
+}
+
+export function resolveImageModelConfigForTool(params: {
+  cfg?: Config;
+  agentId?: string;
+}): ResolvedImageModelConfig | null {
+  return resolveEffectiveImageModelConfig(params);
 }

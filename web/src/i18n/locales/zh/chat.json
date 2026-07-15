@@ -24,78 +24,512 @@
     "welcomeTitle": "今天想让 xopc 帮你做什么？",
     "welcomeDescription": "输入问题、任务或文件处理需求，开始对话。",
     "welcomeSpotlight": {
-      "headline": "有任务，直接交给 xopc",
-      "tagline": "告诉我目标，我可以帮你拆解步骤、查找信息并执行操作。",
-      "categories": [
+      "otherSuggestionsLabel": "其他方向",
+      "acceptSuggestionHint": "按 Tab 填入建议",
+      "refreshExplorationLabel": "换一个探索方向",
+      "contextLoading": "正在结合当前上下文生成建议…",
+      "contextFallback": "部分上下文暂时不可用，已根据可用信息生成建议。",
+      "retryContext": "重新读取",
+      "contextFallbackTitle": "当前任务",
+      "reasons": {
+        "general": "一个容易开始、发送前仍可修改的起点",
+        "agent": "更贴合 {{agentName}} 的能力",
+        "project": "根据项目「{{projectName}}」的当前上下文",
+        "note": "根据笔记「{{noteTitle}}」继续推进",
+        "workItem": "根据工作项「{{workItemTitle}}」的当前状态",
+        "blocked": "优先处理当前阻塞：{{blockedReason}}",
+        "nextAction": "沿用已经明确的下一步：{{nextAction}}",
+        "directory": "根据当前目录「{{path}}」开始"
+      },
+      "contextPrompts": {
+        "workItemBlocked": "工作项「{{workItemTitle}}」当前被「{{blockedReason}}」阻塞。请先分析根因，再给出最小可执行的解除阻塞方案、需要确认的信息和建议求助对象。",
+        "workItemNextAction": "工作项「{{workItemTitle}}」已经明确下一步是「{{nextAction}}」。请检查前置条件和风险，然后把它拆成可以立即开始的行动。",
+        "codingWorkspace": "请从目录「{{workspaceRoot}}」开始理解项目「{{projectName}}」，先定位启动入口、核心模块和最值得阅读的文件，再建议我下一步看哪里。"
+      },
+      "exploreCards": [
         {
-          "id": "work",
-          "icon": "documents",
-          "title": "高效办公",
-          "description": "邮件、汇报、会议准备",
-          "scenarios": [
-            {
-              "prompt": "帮我写一封礼貌的邮件，婉拒这次会议邀请，同时建议另一个时间。"
-            },
-            {
-              "prompt": "帮我写一份简短的周报：本周完成了什么、进行中的事项、遇到的阻塞，控制在 200 字以内。"
-            },
-            {
-              "prompt": "我 30 分钟后要开会，帮我准备 5 个核心讨论要点和 3 个我应该追问的关于项目进度风险的问题。"
-            }
-          ]
-        },
-        {
-          "id": "research",
+          "id": "explore-news",
           "icon": "globe",
-          "title": "搜索与学习",
-          "description": "热点资讯、概念解释、选择决策",
+          "title": "今日与趋势",
+          "description": "AI、科技、行业动态",
           "scenarios": [
             {
-              "prompt": "这周科技圈有什么大新闻？帮我总结最重要的 3 条，以及为什么值得关注。"
+              "prompt": "帮我收集今天最值得关注的 AI 新闻，按重要性排序，并说明每条新闻为什么值得关注。"
             },
             {
-              "prompt": "用通俗的语言解释一下 RAG（检索增强生成）是怎么工作的，就像在给一个非技术人员讲解。"
+              "prompt": "总结过去一周的重要科技趋势，区分短期热点和可能产生长期影响的变化。"
             },
             {
-              "prompt": "Notion 和 Obsidian 做个人笔记哪个更好？从功能、价格、离线使用三方面对比，然后给我建议。"
+              "prompt": "帮我挑选 3 个今天值得深入了解的新产品或新技术，并给出阅读路径。"
             }
           ]
         },
         {
-          "id": "content",
+          "id": "explore-learn",
+          "icon": "search",
+          "title": "学习新主题",
+          "description": "概念、资料、学习路径",
+          "scenarios": [
+            {
+              "prompt": "帮我收集今天最新的 AI 新闻，挑出 3 条最值得关注的进展，用通俗语言说明它们是什么、为什么重要。"
+            },
+            {
+              "prompt": "给我设计一个 30 分钟可以完成的微型学习计划，主题由你推荐。"
+            },
+            {
+              "prompt": "介绍一个容易被忽略但很实用的思维模型，并给出 3 个使用例子。"
+            }
+          ]
+        },
+        {
+          "id": "explore-life",
+          "icon": "target",
+          "title": "生活与决策",
+          "description": "选择、计划、实用建议",
+          "scenarios": [
+            {
+              "prompt": "帮我设计一个本周可以完成、能明显改善生活质量的小行动。"
+            },
+            {
+              "prompt": "给我推荐一个周末探索主题，可以是书、电影、城市活动或新的体验。"
+            },
+            {
+              "prompt": "教我一个能减少日常决策负担的简单方法，并帮我马上应用一次。"
+            }
+          ]
+        },
+        {
+          "id": "explore-creative",
           "icon": "content",
-          "title": "写作与创作",
-          "description": "文案、帖子、翻译润色",
+          "title": "灵感探索",
+          "description": "创意、观察、不同视角",
           "scenarios": [
             {
-              "prompt": "帮我把这个想法写成一条朋友圈/小红书帖子：AI 工具正在让个人贡献者拥有小团队的战斗力。要有感染力，150 字以内。"
+              "prompt": "给我 5 个今天可以随手探索的创意题目，覆盖不同领域。"
             },
             {
-              "prompt": "帮我把下面这段话精简润色，让它更有力、适合放在产品官网首屏。"
+              "prompt": "从一个常见事物出发，带我做一次 10 分钟的发散思考练习。"
             },
             {
-              "prompt": "把这段中文翻译成英文，语气要地道自然，不要翻译腔。"
-            }
-          ]
-        },
-        {
-          "id": "data",
-          "icon": "folder",
-          "title": "数据与文件",
-          "description": "整理、分析、自动化",
-          "scenarios": [
-            {
-              "prompt": "看看我的下载文件夹，帮我按类型分类整理，告诉我哪些可以安全删除。"
-            },
-            {
-              "prompt": "我有一份销售数据 CSV，帮我找出营收前 5 的产品，并看看有没有环比增长趋势。"
-            },
-            {
-              "prompt": "帮我创建一个 Markdown 格式的每日计划模板：包含今日 3 件最重要的事、会议安排、备忘、以及每日复盘。"
+              "prompt": "推荐一个值得写成短文的观点，并列出支持和反对它的理由。"
             }
           ]
         }
-      ]
+      ],
+      "empty": {
+        "headline": "今天想推进什么？",
+        "tagline": "选一个起点，改一改就能发送。",
+        "categories": [
+          {
+            "id": "work",
+            "icon": "documents",
+            "title": "办公输出",
+            "description": "邮件、周报、会议材料",
+            "scenarios": [
+              {
+                "prompt": "帮我写一份简短周报，包含本周完成、风险和下周计划。"
+              },
+              {
+                "prompt": "我 30 分钟后要开会，帮我准备 5 个讨论要点和 3 个追问。"
+              }
+            ]
+          },
+          {
+            "id": "research",
+            "icon": "globe",
+            "title": "信息整理",
+            "description": "新闻、资料、选择决策",
+            "scenarios": [
+              {
+                "prompt": "帮我整理今天值得关注的科技新闻，并总结为什么重要。"
+              },
+              {
+                "prompt": "帮我对比两个选择，从优缺点、成本和适用场景给出建议。"
+              }
+            ]
+          },
+          {
+            "id": "content",
+            "icon": "content",
+            "title": "写作润色",
+            "description": "文案、帖子、翻译改写",
+            "scenarios": [
+              {
+                "prompt": "帮我把这个想法改写成一段更清晰、有说服力的表达。"
+              },
+              {
+                "prompt": "把这段中文翻译成自然地道的英文，不要翻译腔。"
+              }
+            ]
+          }
+        ]
+      },
+      "agentTagline": "当前由 {{agentName}} 处理，推荐会优先贴合它的工作方式。",
+      "agentCards": {
+        "coding": {
+          "id": "agent-coding",
+          "icon": "code",
+          "title": "代码落地",
+          "description": "实现、测试、审查",
+          "scenarios": [
+            {
+              "prompt": "基于当前上下文「{{contextTitle}}」，帮我把需求落到代码实现，并列出需要修改的文件。"
+            },
+            {
+              "prompt": "请用工程视角审查「{{contextTitle}}」相关工作，重点看实现风险、测试缺口和可维护性。"
+            }
+          ]
+        },
+        "writing": {
+          "id": "agent-writing",
+          "icon": "content",
+          "title": "整理成文",
+          "description": "结构、语气、表达",
+          "scenarios": [
+            {
+              "prompt": "基于当前上下文「{{contextTitle}}」，帮我整理成一份结构清晰、表达准确的文字稿。"
+            },
+            {
+              "prompt": "请把「{{contextTitle}}」相关内容改写得更清楚、更有说服力，并保留关键信息。"
+            }
+          ]
+        },
+        "research": {
+          "id": "agent-research",
+          "icon": "search",
+          "title": "调研验证",
+          "description": "来源、对比、结论",
+          "scenarios": [
+            {
+              "prompt": "基于当前上下文「{{contextTitle}}」，帮我列出需要验证的问题、可能的信息来源和调研路径。"
+            },
+            {
+              "prompt": "请围绕「{{contextTitle}}」做一轮事实核查和对比分析，最后给出可信结论。"
+            }
+          ]
+        },
+        "data": {
+          "id": "agent-data",
+          "icon": "review",
+          "title": "分析数据",
+          "description": "清洗、指标、洞察",
+          "scenarios": [
+            {
+              "prompt": "基于当前上下文「{{contextTitle}}」，帮我判断可以提取哪些指标、如何分析、可能有哪些洞察。"
+            },
+            {
+              "prompt": "请把「{{contextTitle}}」相关信息整理成可分析的数据结构，并给出下一步分析计划。"
+            }
+          ]
+        },
+        "creative": {
+          "id": "agent-creative",
+          "icon": "content",
+          "title": "发散方案",
+          "description": "方向、草案、取舍",
+          "scenarios": [
+            {
+              "prompt": "基于当前上下文「{{contextTitle}}」，帮我发散 5 个不同方向的创意方案，并说明各自适用场景。"
+            },
+            {
+              "prompt": "请围绕「{{contextTitle}}」给我 3 个更大胆但可执行的表达或设计方向。"
+            }
+          ]
+        }
+      },
+      "codingProject": {
+        "headline": "继续推进这个代码项目",
+        "tagline": "从理解、实现或排查开始。",
+        "contextLabel": "项目：{{projectName}}",
+        "categories": [
+          {
+            "id": "understand-codebase",
+            "icon": "code",
+            "title": "理解代码库",
+            "description": "结构、入口、关键模块",
+            "scenarios": [
+              {
+                "prompt": "帮我快速理解项目「{{projectName}}」的目录结构、核心模块和启动流程。"
+              },
+              {
+                "prompt": "如果我要修改项目「{{projectName}}」，应该先看哪些文件？请按优先级说明。"
+              }
+            ]
+          },
+          {
+            "id": "implement-feature",
+            "icon": "target",
+            "title": "推进功能改动",
+            "description": "定位实现、拆解计划",
+            "scenarios": [
+              {
+                "prompt": "我想在项目「{{projectName}}」里实现一个功能。请先帮我定位相关代码，并给出改动计划。"
+              },
+              {
+                "prompt": "基于当前代码库，帮我把这个需求拆成可执行的实现步骤。"
+              }
+            ]
+          },
+          {
+            "id": "review-debug",
+            "icon": "review",
+            "title": "审查与排查",
+            "description": "风险、测试、构建失败",
+            "scenarios": [
+              {
+                "prompt": "帮我审查项目「{{projectName}}」的潜在风险，重点看类型安全、边界情况和测试缺口。"
+              },
+              {
+                "prompt": "帮我检查这个项目可能的构建或测试问题，并给出排查顺序。"
+              }
+            ]
+          }
+        ]
+      },
+      "generalProject": {
+        "headline": "继续推进这个项目",
+        "tagline": "梳理状态，确定下一步，整理输出。",
+        "contextLabel": "项目：{{projectName}}",
+        "categories": [
+          {
+            "id": "project-status",
+            "icon": "search",
+            "title": "梳理项目状态",
+            "description": "目标、进展、风险",
+            "scenarios": [
+              {
+                "prompt": "帮我梳理项目「{{projectName}}」的当前状态：目标、已完成、风险和下一步。"
+              },
+              {
+                "prompt": "基于这个项目，帮我整理一份简短的进展摘要。"
+              }
+            ]
+          },
+          {
+            "id": "project-next-step",
+            "icon": "target",
+            "title": "规划下一步",
+            "description": "任务拆解、优先级",
+            "scenarios": [
+              {
+                "prompt": "帮我把项目「{{projectName}}」接下来要做的事拆成 3 到 5 个优先级明确的步骤。"
+              },
+              {
+                "prompt": "请根据当前项目情况，给我一个今天可以推进的最小下一步。"
+              }
+            ]
+          },
+          {
+            "id": "project-material",
+            "icon": "documents",
+            "title": "生成项目材料",
+            "description": "汇报、说明、对外表达",
+            "scenarios": [
+              {
+                "prompt": "帮我写一段项目「{{projectName}}」的进展说明，包含当前成果、风险和需要支持的事项。"
+              },
+              {
+                "prompt": "帮我把这个项目整理成一页简洁的介绍材料。"
+              }
+            ]
+          }
+        ]
+      },
+      "note": {
+        "headline": "围绕这篇笔记继续思考",
+        "tagline": "提炼观点，补全问题，转成产出。",
+        "contextLabel": "笔记：{{noteTitle}}",
+        "categories": [
+          {
+            "id": "note-summarize",
+            "icon": "note",
+            "title": "提炼笔记",
+            "description": "观点、结论、行动项",
+            "scenarios": [
+              {
+                "prompt": "帮我总结笔记「{{noteTitle}}」的核心观点、关键结论和可执行行动项。"
+              },
+              {
+                "prompt": "请把这篇笔记整理成更清晰的层级结构。"
+              }
+            ]
+          },
+          {
+            "id": "note-think",
+            "icon": "search",
+            "title": "继续思考",
+            "description": "问题、缺口、延伸方向",
+            "scenarios": [
+              {
+                "prompt": "基于笔记「{{noteTitle}}」，帮我提出 5 个值得继续思考的问题。"
+              },
+              {
+                "prompt": "帮我找出这篇笔记里逻辑不清、论据不足或可以补充的地方。"
+              }
+            ]
+          },
+          {
+            "id": "note-output",
+            "icon": "content",
+            "title": "转成产出",
+            "description": "文章、任务、计划",
+            "scenarios": [
+              {
+                "prompt": "把笔记「{{noteTitle}}」整理成一篇文章大纲，保留核心观点并优化结构。"
+              },
+              {
+                "prompt": "从这篇笔记里提取任务清单，并按优先级排序。"
+              }
+            ]
+          }
+        ]
+      },
+      "workItem": {
+        "headline": "继续推进这个工作项",
+        "tagline": "总结状态，确定下一步，检查风险。",
+        "contextLabel": "工作项：{{workItemTitle}}",
+        "categories": [
+          {
+            "id": "work-item-progress",
+            "icon": "task",
+            "title": "总结进展",
+            "description": "状态、已完成、阻塞",
+            "scenarios": [
+              {
+                "prompt": "基于工作项「{{workItemTitle}}」，帮我总结当前进展、已完成事项、风险和阻塞。"
+              },
+              {
+                "prompt": "帮我把这个工作项整理成一段可以同步给团队的状态更新。"
+              }
+            ]
+          },
+          {
+            "id": "work-item-next",
+            "icon": "target",
+            "title": "找下一步",
+            "description": "最小行动、优先级、依赖",
+            "scenarios": [
+              {
+                "prompt": "基于工作项「{{workItemTitle}}」，帮我判断当前最小可执行下一步是什么。"
+              },
+              {
+                "prompt": "帮我拆解这个工作项的后续步骤，并标出优先级和依赖。"
+              }
+            ]
+          },
+          {
+            "id": "work-item-risk",
+            "icon": "review",
+            "title": "识别风险",
+            "description": "阻塞、遗漏、验收标准",
+            "scenarios": [
+              {
+                "prompt": "帮我检查工作项「{{workItemTitle}}」可能有哪些遗漏、风险或未定义清楚的验收标准。"
+              },
+              {
+                "prompt": "如果我要推进这个工作项，请帮我列出需要确认的问题清单。"
+              }
+            ]
+          }
+        ]
+      },
+      "workItemBlocked": {
+        "headline": "这个工作项需要解除阻塞",
+        "tagline": "先分析原因，再确定可执行方案。",
+        "contextLabel": "工作项：{{workItemTitle}}",
+        "categories": [
+          {
+            "id": "work-item-progress",
+            "icon": "task",
+            "title": "总结进展",
+            "description": "状态、已完成、阻塞",
+            "scenarios": [
+              {
+                "prompt": "基于工作项「{{workItemTitle}}」，帮我总结当前进展、已完成事项、风险和阻塞。"
+              },
+              {
+                "prompt": "帮我把这个工作项整理成一段可以同步给团队的状态更新。"
+              }
+            ]
+          },
+          {
+            "id": "work-item-unblock",
+            "icon": "target",
+            "title": "解除阻塞",
+            "description": "原因、方案、求助对象",
+            "scenarios": [
+              {
+                "prompt": "工作项「{{workItemTitle}}」当前被阻塞。请帮我分析阻塞原因，并给出 3 个可尝试的解决方案。"
+              },
+              {
+                "prompt": "帮我判断这个阻塞应该找谁确认、需要什么信息、下一步怎么推进。"
+              }
+            ]
+          },
+          {
+            "id": "work-item-risk",
+            "icon": "review",
+            "title": "识别风险",
+            "description": "遗漏、依赖、验收标准",
+            "scenarios": [
+              {
+                "prompt": "帮我检查工作项「{{workItemTitle}}」可能有哪些遗漏、风险或未定义清楚的验收标准。"
+              },
+              {
+                "prompt": "如果我要推进这个工作项，请帮我列出需要确认的问题清单。"
+              }
+            ]
+          }
+        ]
+      },
+      "workingDirectory": {
+        "headline": "从当前目录开始",
+        "tagline": "先理解结构，再找到入口和整理方向。",
+        "categories": [
+          {
+            "id": "directory-understand",
+            "icon": "folder",
+            "title": "理解目录",
+            "description": "结构、类型、关键文件",
+            "scenarios": [
+              {
+                "prompt": "帮我理解目录「{{path}}」的结构、项目类型和最重要的文件。"
+              },
+              {
+                "prompt": "请先扫描这个目录，告诉我它大概是什么项目或资料集合。"
+              }
+            ]
+          },
+          {
+            "id": "directory-entry",
+            "icon": "code",
+            "title": "找入口",
+            "description": "启动、配置、依赖",
+            "scenarios": [
+              {
+                "prompt": "帮我找出目录「{{path}}」里可能的启动入口、配置文件和依赖说明。"
+              },
+              {
+                "prompt": "如果我要开始处理这个目录，应该先打开哪些文件？"
+              }
+            ]
+          },
+          {
+            "id": "directory-organize",
+            "icon": "review",
+            "title": "整理文件",
+            "description": "分类、摘要、清理建议",
+            "scenarios": [
+              {
+                "prompt": "帮我整理目录「{{path}}」里的文件，并给出分类和清理建议。"
+              },
+              {
+                "prompt": "请帮我把这个目录里的重要内容做一份摘要。"
+              }
+            ]
+          }
+        ]
+      }
     },
     "you": "你",
     "assistant": "助手",
@@ -544,7 +978,7 @@
       "showGroupedMore": "显示另外 {{count}} 条"
     },
     "goal": {
-      "heading": "持久目标 (/goal)",
+      "heading": "持续目标",
       "turns": "{{used}} / {{max}} 轮",
       "checklistHeading": "验收清单",
       "checklistProgress": "{{done}} / {{total}} 已完成",
@@ -556,7 +990,7 @@
       "removeItem": "删除",
       "resetChecklist": "重置清单",
       "moreActions": "更多",
-      "moreHint": "重置轮次预算、清除目标或查看裁判说明",
+      "moreHint": "重置轮次预算、取消关联目标或查看自动检查细节",
       "statusActive": "进行中",
       "statusPaused": "已暂停",
       "statusDone": "已完成",
@@ -575,7 +1009,7 @@
       "clear": "清除目标",
       "restart": "重置预算",
       "detach": "取消关联",
-      "detailsToggle": "裁判详情",
+      "detailsToggle": "检查详情",
       "lastVerdict": "上次判定",
       "verdictDone": "已完成",
       "verdictContinue": "继续推进",
@@ -599,16 +1033,36 @@
       "phaseAgentRunning": "Agent 正在执行",
       "phasePaused": "目标已暂停",
       "phaseDone": "目标已完成",
-      "phaseJudged": "裁判已更新",
-      "lastJudgementTitle": "最后裁判",
+      "phaseJudged": "检查已更新",
+      "lastJudgementTitle": "最后检查",
       "showDetails": "展开",
       "hideDetails": "收起",
       "pausedReason": "暂停原因",
-      "judgeModel": "裁判模型",
-      "parseFailures": "解析失败次数",
-      "judgeGenerated": "裁判生成",
+      "judgeModel": "检查模型",
+      "parseFailures": "检查失败次数",
+      "judgeGenerated": "自动添加",
       "userAdded": "用户添加",
       "evidenceLabel": "证据",
+      "composerHeading": "目标",
+      "composerNoGoalAttached": "未关联目标",
+      "composerStartGoal": "开始目标",
+      "composerGoalTitlePlaceholder": "完成时应当达成什么？",
+      "composerSwitchGoal": "切换目标",
+      "composerAttachGoal": "关联目标",
+      "composerNoOpenGoals": "暂无打开的目标",
+      "composerDetachCurrent": "取消关联当前目标",
+      "composerRunWorkflow": "运行任务模板",
+      "composerNoWorkflows": "暂无模板",
+      "composerGoalStarted": "已开始目标",
+      "composerGoalAttached": "已关联目标",
+      "composerGoalDetached": "已取消关联目标",
+      "composerWorkflowStarted": "任务已开始",
+      "composerLoadGoalsFailed": "加载目标失败",
+      "composerLoadWorkflowsFailed": "加载任务模板失败",
+      "composerStartGoalFailed": "开始目标失败",
+      "composerAttachGoalFailed": "关联目标失败",
+      "composerDetachGoalFailed": "取消关联目标失败",
+      "composerStartWorkflowFailed": "启动任务失败",
       "pendingGroup": "待完成",
       "completedGroup": "已完成",
       "impossibleGroup": "不可行",

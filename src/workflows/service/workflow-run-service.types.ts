@@ -1,7 +1,9 @@
 import type {
   WorkflowRunInputEnvelope,
+  WorkflowRunContextRef,
   WorkflowRunReplayScope,
   WorkflowRunSource,
+  WorkflowRunWritebackPolicy,
 } from '../domain/index.js';
 
 export interface StartWorkflowRunServiceParams {
@@ -10,6 +12,9 @@ export interface StartWorkflowRunServiceParams {
   goalId?: string;
   parentSessionKey?: string;
   projectId?: string;
+  workItemId?: string;
+  contextRefs?: WorkflowRunContextRef[];
+  writebackPolicy?: WorkflowRunWritebackPolicy;
   input?: unknown;
   inputEnvelope?: WorkflowRunInputEnvelope;
   goal?: string;

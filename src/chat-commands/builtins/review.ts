@@ -1,6 +1,9 @@
+import { randomUUID } from 'node:crypto';
+
 import type { CommandDefinition, CommandContext } from '../types.js';
 import { commandRegistry } from '../registry.js';
 import { effectiveWorkspacePathForSession } from '../../session/session-workspace.js';
+import { resolveEffectiveAgentProfileForSession } from '../../config/agent-profile.js';
 import { getProjectForSession } from '../../projects/workspace.js';
 import {
   buildReviewDiffBundle,
@@ -15,6 +18,41 @@ import {
 } from '../../review/review-types.js';
 
 const MAX_DIFF_CHARS = 60_000;
+const REVIEW_JUDGE_MAX_TOKENS = 8_192;
+
+async function emitToolStart(
+  ctx: CommandContext,
+  toolCallId: string,
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<void> {
+  await ctx.emitEvent?.({
+    type: 'tool_execution_start',
+    toolCallId,
+    toolName,
+    args,
+  });
+}
+
+async function emitToolEnd(
+  ctx: CommandContext,
+  toolCallId: string,
+  toolName: string,
+  resultText: string,
+  details?: Record<string, unknown>,
+  isError = false,
+): Promise<void> {
+  await ctx.emitEvent?.({
+    type: 'tool_execution_end',
+    toolCallId,
+    toolName,
+    isError,
+    result: {
+      content: [{ type: 'text', text: resultText }],
+      ...(details ? { details } : {}),
+    },
+  });
+}
 
 function truncateForPrompt(text: string): { text: string; truncated: boolean } {
   if (text.length <= MAX_DIFF_CHARS) return { text, truncated: false };
@@ -102,6 +140,19 @@ function parseReviewJson(raw: string, target: string): ReviewOutput {
   };
 }
 
+function previewText(text: string, max = 500): string {
+  const trimmed = text.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed;
+}
+
+function reviewDefaultModelRef(ctx: CommandContext): string | undefined {
+  try {
+    return resolveEffectiveAgentProfileForSession(ctx.config, ctx.sessionKey).primaryModelRef;
+  } catch {
+    return undefined;
+  }
+}
+
 function buildReviewPrompt(params: {
   target: string;
   status: string;
@@ -146,7 +197,33 @@ async function buildReview(ctx: CommandContext, args: string): Promise<ReviewOut
   const workspace = await resolveWorkspace(ctx);
   const cwd = await resolveGitRoot(workspace);
   const reviewTarget = parseReviewTargetArgs(args);
-  const bundle = await buildReviewDiffBundle(cwd, reviewTarget);
+  const prepareToolCallId = `review_prepare_${randomUUID()}`;
+  await emitToolStart(ctx, prepareToolCallId, 'review.prepare_diff', {
+    target: args.trim() || 'uncommitted',
+    cwd,
+  });
+  let bundle: Awaited<ReturnType<typeof buildReviewDiffBundle>>;
+  try {
+    bundle = await buildReviewDiffBundle(cwd, reviewTarget);
+    await emitToolEnd(
+      ctx,
+      prepareToolCallId,
+      'review.prepare_diff',
+      [
+        `Target: ${bundle.targetLabel}`,
+        bundle.stat.trim() ? `Changed files:\n${bundle.stat.trim()}` : 'No diff stat.',
+      ].join('\n\n'),
+      {
+        target: bundle.targetLabel,
+        status: bundle.status,
+        stat: bundle.stat,
+      },
+    );
+  } catch (err) {
+    const em = err instanceof Error ? err.message : String(err);
+    await emitToolEnd(ctx, prepareToolCallId, 'review.prepare_diff', em, { cwd }, true);
+    throw err;
+  }
   const { text: diff, truncated } = truncateForPrompt(bundle.diff);
   const target = bundle.targetLabel;
   const instructions = reviewTarget.instructions ?? '';
@@ -172,28 +249,79 @@ async function buildReview(ctx: CommandContext, args: string): Promise<ReviewOut
     truncated,
     instructions,
   });
-  const answer = await ctx.btwQuery?.(prompt);
+  const reviewerModelRef = reviewDefaultModelRef(ctx);
+  const judgeToolCallId = `review_judge_${randomUUID()}`;
+  await emitToolStart(ctx, judgeToolCallId, 'review.model_judge', {
+    target,
+    diffChars: diff.length,
+    truncated,
+    ...(reviewerModelRef ? { modelRef: reviewerModelRef } : {}),
+  });
+  const answer = ctx.btwQuery
+    ? await ctx.btwQuery(prompt, {
+        maxTokens: REVIEW_JUDGE_MAX_TOKENS,
+        temperature: 0.1,
+        ...(reviewerModelRef ? { modelRef: reviewerModelRef } : {}),
+      })
+    : { text: '', error: 'Review model query is not available in this command context.' };
+  let judgeFailure = answer.error
+    ? { reason: `Reviewer model error: ${answer.error}` }
+    : answer.text
+      ? undefined
+      : { reason: 'Reviewer model returned no text.' };
   if (answer?.text && !answer.error) {
     try {
-      return parseReviewJson(answer.text, target);
-    } catch {
-      // Fall through to a deterministic local summary when model output is not parseable.
+      const parsed = parseReviewJson(answer.text, target);
+      await emitToolEnd(
+        ctx,
+        judgeToolCallId,
+        'review.model_judge',
+        parsed.summary || `${parsed.findings.length} findings`,
+        {
+          target,
+          findings: parsed.findings.length,
+          overallCorrectness: parsed.overallCorrectness,
+        },
+      );
+      return parsed;
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      judgeFailure = {
+        reason: `Reviewer model output could not be parsed: ${em}`,
+      };
     }
   }
 
-  return {
+  const reason = judgeFailure?.reason ?? 'Reviewer model output could not be parsed.';
+  const fallback: ReviewOutput = {
     type: 'review',
     target,
-    summary: 'Review model was unavailable; returned a local diff summary.',
+    summary: 'Review model did not complete; returned a local diff summary.',
     findings: [],
     overallCorrectness: 'unknown',
     overallExplanation: [
-      answer?.error ? `Reviewer model error: ${answer.error}` : 'Reviewer model output could not be parsed.',
+      reason,
       bundle.stat.trim() ? `Changed files:\n${bundle.stat.trim()}` : 'No textual diff stat was available.',
     ].join('\n\n'),
     generatedAt: Date.now(),
     source: 'local',
   };
+  await emitToolEnd(
+    ctx,
+    judgeToolCallId,
+    'review.model_judge',
+    fallback.summary,
+    {
+      target,
+      findings: 0,
+      overallCorrectness: fallback.overallCorrectness,
+      fallback: true,
+      reason,
+      ...(answer.text ? { responsePreview: previewText(answer.text) } : {}),
+    },
+    true,
+  );
+  return fallback;
 }
 
 const reviewCommand: CommandDefinition = {
