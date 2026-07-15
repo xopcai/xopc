@@ -471,12 +471,22 @@ export async function openReviewLauncherOverlay(svc: PickerServices): Promise<vo
   openReviewPresetSelector(svc, context);
 }
 
+export interface SessionPickerOverlayOptions {
+  onCancel?: () => void;
+  onEmpty?: () => void;
+  onResume?: () => void;
+}
+
 /** Ctrl+Shift+P — session picker with rename/delete. */
-export async function openSessionPickerOverlay(svc: PickerServices): Promise<void> {
+export async function openSessionPickerOverlay(
+  svc: PickerServices,
+  options: SessionPickerOverlayOptions = {},
+): Promise<void> {
   const sessions = await svc.client.listSessions();
   if (sessions.length === 0) {
     svc.chatLog.addSystem('No sessions listed.');
     svc.tui.requestRender();
+    options.onEmpty?.();
     return;
   }
 
@@ -487,6 +497,7 @@ export async function openSessionPickerOverlay(svc: PickerServices): Promise<voi
         svc.closeOverlay();
         svc.tui.setFocus(svc.editor);
         resumeSession(svc, sessionKey);
+        options.onResume?.();
       },
       onRename: async (sessionKey, name) => {
         const result = await svc.client.renameSession(sessionKey, name);
@@ -503,6 +514,7 @@ export async function openSessionPickerOverlay(svc: PickerServices): Promise<voi
         svc.closeOverlay();
         svc.tui.setFocus(svc.editor);
         svc.tui.requestRender();
+        options.onCancel?.();
       },
       requestRender: () => svc.tui.requestRender(),
     },
