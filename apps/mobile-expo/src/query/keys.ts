@@ -18,5 +18,10 @@ export const queryKeys = {
   notes: (query?: string) => ['notes', query?.trim() ?? ''] as const,
   notesAll: ['notes'] as const,
   note: (id: string) => ['note', id] as const,
+  workItems: (query?: string) => ['work-items', query?.trim() ?? ''] as const,
+  workItem: (id: string) => ['work-item', id] as const,
+  projectWorkItems: (projectId: string) => ['project', projectId, 'work-items'] as const,
+  projects: ['projects'] as const,
+  projectOverview: (id: string) => ['project', id, 'overview'] as const,
   home: ['home'] as const,
 };

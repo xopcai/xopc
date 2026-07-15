@@ -1,6 +1,7 @@
 import { apiFetch } from '../api/client';
 import type { SessionListItem } from './sessions';
 import type { NoteIndexEntry } from './notes';
+import type { WorkItem, WorkItemPriority, WorkItemStatus } from './work-items';
 
 export type HomeAgent = {
   id: string;
@@ -73,6 +74,16 @@ export interface HomeData {
     active: HomeWorkflowRun[];
     attention: HomeWorkflowRun[];
     recent: HomeWorkflowRun[];
+  };
+  work?: {
+    attentionCount: number;
+    overdueCount: number;
+    todayCount: number;
+    items: Array<Pick<WorkItem, 'id' | 'projectId' | 'title' | 'nextAction' | 'blockedReason' | 'dueAt' | 'updatedAt'> & {
+      projectName: string;
+      status: WorkItemStatus;
+      priority: WorkItemPriority;
+    }>;
   };
   nextCronJobs: HomeCronJob[];
   recentCronRuns: HomeCronRun[];
