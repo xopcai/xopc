@@ -23,6 +23,7 @@ export const REGISTRY_COMMAND_MODULES: Record<string, CommandLoader> = {
   onboard: () => import('./commands/onboard.js'),
   agent: () => import('./commands/agent.js'),
   tui: () => import('./commands/tui.js'),
+  resume: () => import('./commands/resume.js'),
   gateway: () => import('./commands/gateway.js'),
   session: () => import('./commands/session.js'),
   project: () => import('./commands/project.js'),

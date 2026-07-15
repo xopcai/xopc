@@ -1219,7 +1219,7 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
   let finishTui: (() => void) | null = null;
   let exitResult: TuiResult = { exitReason: 'exit' };
 
-  const requestExit = () => {
+  const requestExit = (options?: { showResumeHint?: boolean }) => {
     if (state.exitRequested) return;
     state.exitRequested = true;
     if (elapsedTimerId) {
@@ -1234,7 +1234,9 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     tui.terminal.setProgress(false);
     void drainAndStopTuiSafely(tui).then(() => {
       restoreStdio();
-      process.stdout.write(`\nTo resume this session: ${formatTuiResumeCommand(opts, state.currentSessionKey)}\n`);
+      if (options?.showResumeHint !== false) {
+        process.stdout.write(`\nTo resume this session: ${formatTuiResumeCommand(opts, state.currentSessionKey)}\n`);
+      }
       finishTui?.();
       process.exit(0);
     });
@@ -2523,11 +2525,27 @@ export async function runTui(opts: TuiOptions): Promise<TuiResult> {
     );
   };
 
+  let startupSessionPickerOpened = false;
+
   client.onConnected = () => {
     state.isConnected = true;
     setConnectionStatus(isLocalMode ? 'local ready' : 'gateway connected');
     touchStreamingActivity();
     void (async () => {
+      if (opts.openSessionPickerOnStart && !startupSessionPickerOpened) {
+        startupSessionPickerOpened = true;
+        await openSessionPickerOverlay(pickerSvc, {
+          onCancel: () => requestExit({ showResumeHint: false }),
+          onEmpty: () => requestExit({ showResumeHint: false }),
+          onResume: () => {
+            void refreshStartupResources().then(() => {
+              updateFooter();
+              tui.requestRender();
+            });
+          },
+        });
+        return;
+      }
       try {
         await applyStartupWorkingDirectory();
       } catch (err) {

@@ -27,6 +27,7 @@ export const ROOT_HELP_COMMANDS: RootHelpCommand[] = [
   { name: 'auth', description: 'Manage authentication credentials' },
   { name: 'agent [options]', description: 'Chat with the AI agent' },
   { name: 'tui [options]', description: 'Interactive terminal UI (pi-tui)' },
+  { name: 'resume [options] [sessionKey]', description: 'Resume a previous TUI session' },
   { name: 'tunnel', description: 'Manage FRP remote access tunnel' },
   { name: 'gateway [options]', description: 'Start the xopc gateway server' },
   { name: 'session', description: 'Session management commands' },
