@@ -8,7 +8,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   BackHandler,
   Modal,
-  Platform,
   StyleSheet,
   View,
 } from 'react-native';
@@ -370,22 +369,6 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
     </View>
   );
 
-  if (Platform.OS === 'web') {
-    if (!visible) return null;
-    return (
-      <View style={styles.webOverlay}>
-        {landingContent}
-        <GatewayQrScannerModal
-          embedded
-          visible={scannerOpen}
-          onRequestClose={() => setScannerOpen(false)}
-          onScanned={applyParsed}
-          onCameraDenied={() => setSaveError(l.cameraDenied)}
-        />
-      </View>
-    );
-  }
-
   return (
     <Modal
       visible={visible}
@@ -406,11 +389,6 @@ export function GatewayConnectLandingModal({ visible, onRequestClose }: GatewayC
 }
 
 const styles = StyleSheet.create({
-  webOverlay: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 1000,
-    elevation: 1000,
-  },
   root: {
     flex: 1,
   },

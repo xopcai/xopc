@@ -1,5 +1,5 @@
 /**
- * expo-audio microphone recording for hold-to-speak UX (native + web where supported).
+ * expo-audio microphone recording for native hold-to-speak UX.
  */
 import {
   AudioModule,
@@ -38,7 +38,7 @@ function startMeteringPoll(
   meteringPolls.set(rec, setInterval(poll, METERING_POLL_MS));
 }
 
-type RecordingPlatform = typeof Platform.OS;
+type RecordingPlatform = 'ios' | 'android';
 
 export function nativeRecordingOptionsForPlatform(
   platform: RecordingPlatform,
@@ -62,16 +62,9 @@ export function nativeRecordingOptionsForPlatform(
     } as Partial<RecordingOptions>;
   }
 
-  if (platform === 'android') {
-    return {
-      ...commonOptions,
-      ...preset.android,
-    } as Partial<RecordingOptions>;
-  }
-
   return {
     ...commonOptions,
-    ...preset.web,
+    ...preset.android,
   } as Partial<RecordingOptions>;
 }
 
@@ -88,7 +81,8 @@ export async function beginRecording(
     playsInSilentMode: true,
   });
 
-  const recorder = new AudioModule.AudioRecorder(nativeRecordingOptionsForPlatform(Platform.OS));
+  const platform: RecordingPlatform = Platform.OS === 'ios' ? 'ios' : 'android';
+  const recorder = new AudioModule.AudioRecorder(nativeRecordingOptionsForPlatform(platform));
   await recorder.prepareToRecordAsync();
   recorder.record();
   startMeteringPoll(recorder, onStatus);

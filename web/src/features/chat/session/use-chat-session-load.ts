@@ -81,6 +81,7 @@ export function useChatSessionLoad(deps: {
           reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
           effectiveWorkspacePath: cfg.effectiveWorkspacePath,
           workingDirectoryLocked: cfg.workingDirectoryLocked,
+          workspaceSource: cfg.workspaceSource,
         });
         void refreshModelThinkingSupport(cfg.model);
       } catch {
@@ -200,6 +201,7 @@ export function useChatSessionLoad(deps: {
                 reasoningLevel: coerceReasoningLevel(cfg.reasoningLevel),
                 effectiveWorkspacePath: cfg.effectiveWorkspacePath,
                 workingDirectoryLocked: cfg.workingDirectoryLocked,
+                workspaceSource: cfg.workspaceSource,
               });
               void refreshModelThinkingSupport(cfg.model);
             } catch {

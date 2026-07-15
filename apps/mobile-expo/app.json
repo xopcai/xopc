@@ -45,9 +45,6 @@
       ],
       "package": "ai.xopc.xopc"
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
     "plugins": [
       "./plugins/with-android-maven-mirrors",
       "./plugins/with-android-share-intake",

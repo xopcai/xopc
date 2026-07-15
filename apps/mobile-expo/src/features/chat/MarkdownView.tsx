@@ -2,12 +2,12 @@
  * Markdown renderer for chat messages.
  *
  * - **Native dev / release:** `react-native-enriched-markdown` (GFM, streaming on native).
- * - **Expo Go / Web / unsafe native tables / render errors:** `react-native-markdown-display` JS fallback.
+ * - **Expo Go / unsafe native tables / render errors:** `react-native-markdown-display` JS fallback.
  */
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import type { ComponentType } from 'react';
 import { memo, useCallback, useMemo } from 'react';
-import { Linking, Platform, StyleSheet } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 
 import { ChatRenderErrorBoundary } from './ChatRenderErrorBoundary';
@@ -229,8 +229,8 @@ function isExpoGo(): boolean {
 }
 
 function getEnrichedMarkdownText(): ComponentType<EnrichedProps> | null {
-  // Expo Go has no Fabric view manager; web should avoid the package's WASM entry.
-  if (isExpoGo() || Platform.OS === 'web') return null;
+  // Expo Go has no Fabric view manager.
+  if (isExpoGo()) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports -- Expo Go must not load native module
     const mod = require('react-native-enriched-markdown') as {
@@ -243,7 +243,7 @@ function getEnrichedMarkdownText(): ComponentType<EnrichedProps> | null {
 }
 
 function shouldUsePlainFallback(content: string, hasEnriched: boolean): boolean {
-  return shouldUseMarkdownFallback({ content, hasEnriched, platform: Platform.OS });
+  return shouldUseMarkdownFallback({ content, hasEnriched });
 }
 
 /** JS markdown renderer for Expo Go, unsafe native tables, and native render errors. */

@@ -555,7 +555,6 @@ export const zh: MessageBundle = {
     voiceTextGlyph: '字',
     voiceReleaseCancelHint: '松开 取消',
     voicePermissionDenied: '需要麦克风权限才能使用语音输入。',
-    voiceWebUnsupported: '按住说话请在 iOS/Android 客户端中使用。',
     voiceTooShort: '录音时间太短。',
     voiceRecordingFailed: '录音结束失败，请重试。',
     voiceSending: '正在发送语音…',

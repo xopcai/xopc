@@ -19,6 +19,7 @@ type SessionAgentConfig = {
   reasoningLevel: string;
   effectiveWorkspacePath: string;
   workingDirectoryLocked: boolean;
+  workspaceSource: 'project' | 'session_override' | 'agent_default_root' | 'agent_workspace';
 };
 
 const _agentConfigInflight = new Map<string, Promise<SessionAgentConfig>>();
@@ -129,6 +130,7 @@ export class SessionManager {
           reasoningLevel?: string;
           effectiveWorkspacePath?: string;
           workingDirectoryLocked?: boolean;
+          workspaceSource?: string;
         };
       };
       const thinkingLevel = data.payload?.thinkingLevel ?? 'medium';
@@ -139,12 +141,19 @@ export class SessionManager {
           ? data.payload.effectiveWorkspacePath
           : '';
       const workingDirectoryLocked = Boolean(data.payload?.workingDirectoryLocked);
+      const workspaceSource =
+        data.payload?.workspaceSource === 'project' || data.payload?.workspaceSource === 'session_override'
+          ? data.payload.workspaceSource
+        : data.payload?.workspaceSource === 'agent_workspace'
+          ? 'agent_workspace'
+          : 'agent_default_root';
       return {
         thinkingLevel,
         model,
         reasoningLevel,
         effectiveWorkspacePath,
         workingDirectoryLocked,
+        workspaceSource,
       };
     })().finally(() => {
       _agentConfigInflight.delete(sessionKey);

@@ -70,7 +70,7 @@ export default function RootLayout() {
     if (configured) setUserDismissedConnect(false);
   }, [configured]);
 
-  /** 401 — same as web: force gateway landing until credentials are fixed. */
+  /** 401 — force gateway landing until credentials are fixed. */
   useEffect(() => {
     if (unauthorized) setUserDismissedConnect(false);
   }, [unauthorized]);

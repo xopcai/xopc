@@ -28,38 +28,6 @@ export type KeyValueStorage = {
   delete(key: string): void;
 };
 
-// ── Platform detection ──
-// We avoid importing Platform from react-native at module top level because
-// in some Expo Web bundler configurations the import resolves before RN-web
-// is fully initialised. Instead we detect web via `document` existence which
-// is reliable in all JS runtimes.
-
-function isWeb(): boolean {
-  return typeof document !== 'undefined';
-}
-
-// ── Web: localStorage (persists across page refresh) ──
-
-function webGetString(key: string): string | undefined {
-  try {
-    return globalThis.localStorage?.getItem(key) ?? undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function webSet(key: string, value: string | number | boolean): void {
-  try {
-    globalThis.localStorage?.setItem(key, String(value));
-  } catch { /* quota or private browsing */ }
-}
-
-function webDelete(key: string): void {
-  try {
-    globalThis.localStorage?.removeItem(key);
-  } catch { /* ignore */ }
-}
-
 // ── Native: MMKV ──
 
 type MMKVInstance = import('react-native-mmkv').MMKV;
@@ -92,23 +60,20 @@ function getNativeMmkv(): MMKVInstance | null {
 
 const memory = new Map<string, string>();
 
-// ── Public storage: delegates per-call to correct backend ──
+// ── Public storage: MMKV with an Expo Go in-memory fallback ──
 
 export const storage: KeyValueStorage = {
   getString(key: string): string | undefined {
-    if (isWeb()) return webGetString(key);
     const native = getNativeMmkv();
     if (native) return native.getString(key);
     return memory.get(key);
   },
   set(key: string, value: string | number | boolean): void {
-    if (isWeb()) { webSet(key, value); return; }
     const native = getNativeMmkv();
     if (native) native.set(key, value);
     else memory.set(key, String(value));
   },
   delete(key: string): void {
-    if (isWeb()) { webDelete(key); return; }
     const native = getNativeMmkv();
     if (native) native.remove(key);
     else memory.delete(key);

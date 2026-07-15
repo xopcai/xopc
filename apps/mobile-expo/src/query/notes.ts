@@ -166,7 +166,6 @@ export async function quickCaptureNote(markdown: string): Promise<CaptureNoteRes
 export type CaptureNoteAttachment = {
   mimeType: string;
   fileName: string;
-  file?: Blob;
   localUri?: string;
   data?: string;
   duration?: number;
@@ -183,9 +182,7 @@ export interface CaptureNoteInput {
 export type CaptureNoteResult = { note: { id: string } & Partial<Note> };
 
 async function appendCaptureAttachment(form: FormData, attachment: CaptureNoteAttachment): Promise<void> {
-  if (attachment.file) {
-    form.append('file', attachment.file, attachment.fileName);
-  } else if (attachment.localUri && Platform.OS !== 'web') {
+  if (attachment.localUri) {
     form.append('file', { uri: attachment.localUri, name: attachment.fileName, type: attachment.mimeType } as unknown as Blob);
   } else if (attachment.data) {
     const blob = await fetch(`data:${attachment.mimeType};base64,${attachment.data.replace(/\s/g, '')}`).then((res) => res.blob());
@@ -269,7 +266,7 @@ export async function updateNote(id: string, patch: Record<string, unknown>): Pr
 
 export async function uploadNoteMedia(
   noteId: string,
-  input: { file?: Blob; localUri?: string; name: string; mimeType: string; content?: string; durationMillis?: number },
+  input: { localUri?: string; name: string; mimeType: string; content?: string; durationMillis?: number },
 ): Promise<NoteAttachment> {
   async function formWithContent(): Promise<FormData> {
     if (!input.content) throw new Error('Upload media: missing file content');
@@ -296,12 +293,7 @@ export async function uploadNoteMedia(
     return result.attachment;
   }
 
-  const form = new FormData();
-  if (input.file) {
-    form.append('file', input.file, input.name);
-    if (input.durationMillis != null) form.append('duration', String(Math.round(input.durationMillis / 1000)));
-    return uploadForm(form);
-  } else if (input.localUri && Platform.OS !== 'web') {
+  if (input.localUri) {
     try {
       return await uploadForm(formWithNativeUri());
     } catch (error) {

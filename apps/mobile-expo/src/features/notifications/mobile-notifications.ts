@@ -23,8 +23,7 @@ type DeviceRegistration = {
 };
 
 function supportsRemoteNotifications(): boolean {
-  return Platform.OS !== 'web'
-    && !(Platform.OS === 'android' && Constants.appOwnership === 'expo');
+  return !(Platform.OS === 'android' && Constants.appOwnership === 'expo');
 }
 
 let notificationHandlerConfigured = false;

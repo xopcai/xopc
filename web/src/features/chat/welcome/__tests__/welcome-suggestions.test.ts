@@ -121,10 +121,30 @@ describe('buildWelcomeSpotlight', () => {
     expect(spotlight.contextLabel).toBeUndefined();
     expect(spotlight.categories).toHaveLength(3);
     expect(spotlight.categories.map((card) => card.title)).toEqual([
-      '理解目录',
+      '盘点内容',
+      '提炼重点',
+      '学习新主题',
+    ]);
+  });
+
+  it('shows code-directory recommendations only for a detected coding workspace', () => {
+    const spotlight = build({ kind: 'codingWorkspace', path: '/repo/xopc' });
+
+    expect(spotlight.categories.map((card) => card.title)).toEqual([
+      '理解代码目录',
       '找入口',
       '学习新主题',
     ]);
+  });
+
+  it('does not add a code card outside a detected coding workspace', () => {
+    const spotlight = buildWelcomeSpotlight(
+      { kind: 'workingDirectory', path: '/tmp/materials' },
+      copy,
+      { id: 'coder', name: '编程专家' },
+    );
+
+    expect(spotlight.categories.map((card) => card.id)).not.toContain('agent-coding');
   });
 
   it('biases empty context cards for writer agent', () => {
