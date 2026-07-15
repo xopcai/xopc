@@ -491,6 +491,11 @@ export const zh: MessageBundle = {
         tagline: '先理解入口，再推进下一步。',
         categories: [],
       },
+      codingWorkspace: {
+        headline: '从这个代码工作区开始',
+        tagline: '先理解结构和入口，再完成下一处改动。',
+        categories: [],
+      },
       generalProject: {
         headline: '从项目开始',
         tagline: '先梳理状态，再规划下一步。',
