@@ -266,9 +266,8 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function rawReviewContent(content: unknown): unknown[] | undefined {
-  if (!Array.isArray(content)) return undefined;
-  return content.some((block) => asRecord(block)?.type === 'review') ? content : undefined;
+function rawAssistantContent(content: unknown): unknown[] | undefined {
+  return Array.isArray(content) ? content : undefined;
 }
 
 function bashRowToClientHistory(row: TranscriptStoredRow): ClientHistoryMessage | null {
@@ -537,7 +536,7 @@ export function transcriptRowsToClientHistory(
       continue;
     }
 
-    const rawContent = rawReviewContent(messageRow.content);
+    const rawContent = rawAssistantContent(messageRow.content);
     out.push({
       id,
       role: 'assistant',
