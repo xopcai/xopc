@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  AgentManifestSchema,
   buildAgentManifestPromptSection,
   resolveEffectiveAgentManifest,
   validateAgentManifest,
@@ -161,6 +162,32 @@ describe('agent manifest resolver', () => {
 });
 
 describe('agent manifest validator', () => {
+  it('accepts bounded user-understanding review settings', () => {
+    const parsed = AgentManifestSchema.safeParse({
+      ...baseAgent,
+      memory: {
+        ...baseAgent.memory,
+        understanding: {
+          enabled: true,
+          adaptiveCadence: true,
+          reviewIntervalTurns: 5,
+          maxHistoryMessages: 40,
+          maxDurationMs: 60_000,
+        },
+      },
+    });
+    expect(parsed.success).toBe(true);
+
+    const invalid = AgentManifestSchema.safeParse({
+      ...baseAgent,
+      memory: {
+        ...baseAgent.memory,
+        understanding: { reviewIntervalTurns: 0 },
+      },
+    });
+    expect(invalid.success).toBe(false);
+  });
+
   it('validates catalogs and default model role', () => {
     const result = validateAgentManifest({
       agent: baseAgent,

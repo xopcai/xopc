@@ -1,6 +1,12 @@
 import type { EffectiveAgentManifest } from '../agent-manifest/schema.js';
 
-export type MemorySource = 'session' | 'userProfile' | 'agentProfile' | 'curated' | 'workspace';
+export type MemorySource =
+  | 'session'
+  | 'userProfile'
+  | 'agentProfile'
+  | 'curated'
+  | 'workspace'
+  | 'connectedSources';
 export type MemoryWriteTarget = 'userProfile' | 'agentProfile' | 'curated' | 'workspace';
 export type MemoryWriteDecision = 'allow' | 'confirm' | 'deny';
 

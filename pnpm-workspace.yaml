@@ -25,6 +25,7 @@ allowBuilds:
   '@google/genai': true
   '@swc/core': true
   '@vscode/ripgrep': true
+  codebase-memory-mcp: true
   electron: true
   electron-winstaller: true
   esbuild: true

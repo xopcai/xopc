@@ -69,8 +69,8 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
   const canRefreshExploration = Boolean(onRefreshExploration);
 
   return (
-    <div className="flex flex-col gap-3.5 pb-2 pt-6 sm:gap-4 sm:pb-3 sm:pt-8">
-      <div className="flex flex-col items-center gap-1.5 px-1 pt-14 text-center sm:gap-2 sm:pt-16">
+    <div className="flex flex-col gap-3.5 pb-2 pt-6 sm:gap-4 sm:pb-3 sm:pt-8 [@media(max-height:800px)]:pt-3 sm:[@media(max-height:800px)]:pt-4">
+      <div className="flex flex-col items-center gap-1.5 px-1 pt-14 text-center sm:gap-2 sm:pt-16 [@media(max-height:800px)]:pt-6 sm:[@media(max-height:800px)]:pt-7">
         <BrandLogo className="size-11 shrink-0 sm:size-12" aria-hidden />
         {s.contextLabel ? (
           <div
@@ -105,7 +105,7 @@ export const ChatWelcomeSpotlight = memo(function ChatWelcomeSpotlight({
         </div>
       </div>
 
-      <section className="mt-7 sm:mt-8" aria-label={s.otherSuggestionsLabel}>
+      <section className="mt-7 sm:mt-8 [@media(max-height:800px)]:mt-4 sm:[@media(max-height:800px)]:mt-5" aria-label={s.otherSuggestionsLabel}>
         <div className="mb-2 flex min-h-8 items-center justify-end gap-3">
           {canRefreshExploration ? (
             <button

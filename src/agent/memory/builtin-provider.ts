@@ -29,7 +29,7 @@ import type {
  */
 export class BuiltinMemoryProvider implements MemoryProvider {
   readonly id = 'local';
-  readonly displayName = 'Local Markdown Memory';
+  readonly displayName = 'Local Knowledge Store';
   readonly capabilities = {
     search: true,
     read: true,
@@ -59,10 +59,6 @@ export class BuiltinMemoryProvider implements MemoryProvider {
   }
 
   systemPromptBlock(): string {
-    return '';
-  }
-
-  async prefetch(): Promise<string> {
     return '';
   }
 
@@ -183,9 +179,11 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       agentId: request.scope?.agentId ?? this.agentId,
       workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
       kind: request.kind,
+      status: request.status,
+      canonicalKey: request.canonicalKey,
       limit: 200,
     });
-    if (records.length > 0 || request.kind) {
+    if (records.length > 0 || request.kind || request.status || request.canonicalKey) {
       return request.target
         ? records.filter((record) => targetForKind(record.kind) === request.target)
         : records;
@@ -213,7 +211,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
     if (request.status === 'candidate') {
       const record = upsertMemoryRecord({
         providerId: this.id,
-        kind: target === 'user' ? 'user_profile' : request.kind,
+        kind: request.kind,
         agentId: request.scope?.agentId ?? this.agentId,
         workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
         sessionKey: request.scope?.sessionKey,
@@ -221,15 +219,23 @@ export class BuiltinMemoryProvider implements MemoryProvider {
         source: {
           ...(request.source ?? {}),
           provider: this.id,
-          path: sourcePathForTarget(target),
         },
         confidence: request.confidence,
         tags: request.tags,
         status: 'candidate',
         sensitivity: request.sensitivity,
+        canonicalKey: request.canonicalKey,
+        explicitness: request.explicitness,
+        durability: request.durability,
+        importance: request.importance,
+        disclosurePolicy: request.disclosurePolicy,
         evidence: request.evidence,
+        validFrom: request.validFrom,
+        validTo: request.validTo,
         reviewAfter: request.reviewAfter,
         expiresAt: request.expiresAt,
+        supersedesRecordId: request.supersedesRecordId,
+        conflictGroupId: request.conflictGroupId,
       });
       return {
         success: true,
@@ -245,7 +251,7 @@ export class BuiltinMemoryProvider implements MemoryProvider {
       record: upsertMemoryRecord({
         id: `curated:${target}:${Date.now()}`,
         providerId: this.id,
-        kind: target === 'user' ? 'user_profile' : request.kind,
+        kind: request.kind,
         agentId: request.scope?.agentId ?? this.agentId,
         workspaceId: request.scope?.workspaceId ?? this.workspaceDir,
         sessionKey: request.scope?.sessionKey,
@@ -256,6 +262,18 @@ export class BuiltinMemoryProvider implements MemoryProvider {
           path: sourcePathForTarget(target),
         },
         tags: request.tags,
+        canonicalKey: request.canonicalKey,
+        explicitness: request.explicitness,
+        durability: request.durability,
+        importance: request.importance,
+        disclosurePolicy: request.disclosurePolicy,
+        evidence: request.evidence,
+        validFrom: request.validFrom,
+        validTo: request.validTo,
+        reviewAfter: request.reviewAfter,
+        expiresAt: request.expiresAt,
+        supersedesRecordId: request.supersedesRecordId,
+        conflictGroupId: request.conflictGroupId,
       }),
     };
   }
@@ -350,7 +368,10 @@ function inferKindFromPath(path: string): MemoryRecord['kind'] {
 }
 
 function targetForKind(kind: MemoryRecord['kind']): 'memory' | 'user' {
-  return kind === 'user_profile' ? 'user' : 'memory';
+  return kind === 'user_profile' || kind === 'preference' || kind === 'relationship' ||
+    kind === 'routine' || kind === 'personal_logistics'
+    ? 'user'
+    : 'memory';
 }
 
 function sourcePathForTarget(target: 'memory' | 'user'): string {

@@ -61,7 +61,8 @@ xopc onboard
         "memory": {
           "mode": "confirmWrite",
           "sources": ["session", "curated"],
-          "writePolicy": { "curated": "confirm" }
+          "writePolicy": { "curated": "confirm" },
+          "understanding": { "enabled": true, "adaptiveCadence": true, "reviewIntervalTurns": 10 }
         },
         "workflows": {},
         "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }

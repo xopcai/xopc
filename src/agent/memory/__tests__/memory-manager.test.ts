@@ -119,7 +119,9 @@ describe('MemoryManager', () => {
       const listed = await mgr.list({ scope: { agentId: 'main', workspaceId: stateDir } });
       const candidate = listed.find((record) => record.content.includes('pnpm'));
       expect(candidate?.status).toBe('candidate');
-      expect(candidate?.tags).toContain('auto-proposed');
+      expect(candidate?.tags).toContain('user-understanding');
+      expect(candidate?.explicitness).toBe('explicit');
+      expect(candidate?.canonicalKey).toMatch(/^boundary:/);
       expect(candidate?.evidence?.[0]?.sessionKey).toBe('session-2');
 
       const recalled = await mgr.search({

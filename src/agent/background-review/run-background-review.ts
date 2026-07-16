@@ -8,8 +8,8 @@ import { createExtensionAwareStreamFn } from '../../providers/extension-stream-b
 import { createLogger } from '../../utils/logger.js';
 
 import { extractTextContent } from '../context/workspace.js';
-import { shouldRegisterCuratedMemoryTool } from '../memory/memory-config.js';
 import type { MemoryManager } from '../memory/manager.js';
+import type { UnderstandingCandidate } from '../memory/understanding/types.js';
 import {
   runAgentTurnWithTimeout,
   resolveAgentTurnTimeoutMs,
@@ -18,18 +18,11 @@ import {
   isAssistantTurnAborted,
   isAssistantTurnFailed,
 } from '../orchestration/llm-turn-retry.js';
-import type { SkillManager } from '../skills/skill-manager.js';
-import { createCuratedMemoryTool } from '../tools/curated-memory-tool.js';
-import { createSkillManageTool } from '../tools/skill-manage-tool.js';
-import { createSkillsListTool, createSkillViewTool } from '../tools/skills-tools.js';
-import { wrapToolsWithProtection } from '../tools/executor.js';
 
 import type { BackgroundReviewSettings } from './settings.js';
 import {
-  COMBINED_REVIEW_USER_PROMPT,
   MEMORY_REVIEW_USER_PROMPT,
-  REVIEW_SYSTEM_PROMPT,
-  SKILL_REVIEW_USER_PROMPT,
+  UNDERSTANDING_REVIEW_SYSTEM_PROMPT,
 } from './prompts.js';
 
 const log = createLogger('BackgroundReview');
@@ -43,150 +36,111 @@ export interface RunBackgroundReviewParams {
   sessionKey: string;
   mainAgent: Agent;
   settings: BackgroundReviewSettings;
-  reviewMemory: boolean;
-  reviewSkills: boolean;
-  registeredToolNames: string[];
-  skillAllowlist?: string[];
-  workspacePath: string;
-  skillManager: SkillManager;
   memoryManager: MemoryManager;
   getConfig: () => Config | undefined;
-  onSkillsFilesystemMutate: () => void;
 }
 
-export async function runBackgroundReviewTurn(params: RunBackgroundReviewParams): Promise<void> {
-  const {
-    sessionKey,
-    mainAgent,
-    settings,
-    reviewMemory,
-    reviewSkills,
-    registeredToolNames,
-    skillAllowlist,
-    workspacePath,
-    skillManager,
-    memoryManager,
-    getConfig,
-    onSkillsFilesystemMutate,
-  } = params;
+const ALLOWED_UNDERSTANDING_KINDS = new Set<UnderstandingCandidate['kind']>([
+  'preference', 'boundary', 'relationship', 'project_context', 'commitment', 'routine',
+  'personal_logistics', 'open_question', 'milestone', 'current_state', 'task_lesson',
+  'tool_preference', 'long_term_goal', 'derived_insight',
+]);
+const ALLOWED_SENSITIVITIES = new Set<UnderstandingCandidate['sensitivity']>([
+  'normal', 'personal', 'secret', 'regulated',
+]);
 
-  const userPrompt =
-    reviewMemory && reviewSkills
-      ? COMBINED_REVIEW_USER_PROMPT
-      : reviewMemory
-        ? MEMORY_REVIEW_USER_PROMPT
-        : SKILL_REVIEW_USER_PROMPT;
-
-  const rawTools: any[] = [];
-
-  if (reviewMemory && shouldRegisterCuratedMemoryTool(getConfig())) {
-    rawTools.push(createCuratedMemoryTool(() => memoryManager));
+function lastAssistantText(agent: Agent): string {
+  for (let i = agent.state.messages.length - 1; i >= 0; i--) {
+    const message = agent.state.messages[i];
+    if (message.role !== 'assistant') continue;
+    return Array.isArray(message.content)
+      ? extractTextContent(message.content as Array<{ type: string; text?: string }>)
+      : String(message.content);
   }
+  return '';
+}
 
-  if (reviewSkills) {
-    const ctx = () => ({ registeredToolNames, skillAllowlist });
-    rawTools.push(
-      createSkillsListTool({
-        getSkillManager: () => skillManager,
-        getSkillIndexingContext: ctx,
-      }),
-      createSkillViewTool({
-        getSkillManager: () => skillManager,
-        getSkillIndexingContext: ctx,
-      }),
-      createSkillManageTool({
-        getSkillManager: () => skillManager,
-        getWorkspace: () => workspacePath,
-        onSkillsFilesystemMutate,
-      }),
-    );
+function parseUnderstandingCandidates(raw: string): UnderstandingCandidate[] {
+  const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(raw)?.[1];
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  const candidateJson = fenced ?? (start >= 0 && end > start ? raw.slice(start, end + 1) : raw);
+  try {
+    const parsed = JSON.parse(candidateJson) as { candidates?: unknown };
+    if (!Array.isArray(parsed.candidates)) return [];
+    const output: UnderstandingCandidate[] = [];
+    for (const value of parsed.candidates.slice(0, 8)) {
+      if (!value || typeof value !== 'object') continue;
+      const item = value as Record<string, unknown>;
+      if (!ALLOWED_UNDERSTANDING_KINDS.has(item.kind as UnderstandingCandidate['kind'])) continue;
+      if (typeof item.content !== 'string' || item.content.trim().length < 4) continue;
+      const confidence = typeof item.confidence === 'number' ? item.confidence : 0.65;
+      const importance = typeof item.importance === 'number' ? item.importance : 0.5;
+      const durability = item.durability === 'ephemeral' || item.durability === 'recurring'
+        ? item.durability
+        : 'durable';
+      const sensitivity = ALLOWED_SENSITIVITIES.has(item.sensitivity as UnderstandingCandidate['sensitivity'])
+        ? item.sensitivity as UnderstandingCandidate['sensitivity']
+        : 'personal';
+      const disclosurePolicy = item.disclosurePolicy === 'silent' || item.disclosurePolicy === 'ask_before_reference'
+        ? item.disclosurePolicy
+        : 'referenceable';
+      output.push({
+        kind: item.kind as UnderstandingCandidate['kind'],
+        content: item.content.trim(),
+        confidence: Math.max(0, Math.min(1, confidence)),
+        importance: Math.max(0, Math.min(1, importance)),
+        explicitness: 'inferred',
+        durability,
+        sensitivity,
+        disclosurePolicy,
+        tags: Array.isArray(item.tags)
+          ? item.tags.filter((tag): tag is string => typeof tag === 'string').slice(0, 8)
+          : ['background-review'],
+      });
+    }
+    return output;
+  } catch {
+    return [];
   }
+}
 
-  if (rawTools.length === 0) {
-    log.debug({ sessionKey }, 'Background review skipped: no tools registered for selected channels');
-    return;
-  }
-
-  const tools = wrapToolsWithProtection(rawTools, {});
-
-  const model = mainAgent.state.model as Model<Api>;
-  let toolRounds = 0;
-  let aborted = false;
-
+async function runUnderstandingReview(params: RunBackgroundReviewParams): Promise<void> {
+  const { sessionKey, mainAgent, settings, memoryManager, getConfig } = params;
   const reviewAgent = new Agent({
     initialState: {
-      systemPrompt: REVIEW_SYSTEM_PROMPT,
-      model,
+      systemPrompt: UNDERSTANDING_REVIEW_SYSTEM_PROMPT,
+      model: mainAgent.state.model as Model<Api>,
       thinkingLevel: 'off' as ThinkingLevel,
-      tools,
+      tools: [],
       messages: [],
     },
     streamFn: createExtensionAwareStreamFn(),
-    getApiKey: (provider: string) =>
-      resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
-    beforeToolCall: async () => {
-      if (aborted) {
-        return { block: true, reason: 'Background review aborted.' };
-      }
-      if (toolRounds >= settings.maxToolRounds) {
-        return {
-          block: true,
-          reason: `Background review reached max tool rounds (${settings.maxToolRounds}).`,
-        };
-      }
-      return undefined;
-    },
-    afterToolCall: async () => {
-      toolRounds += 1;
-      return undefined;
-    },
+    getApiKey: (provider: string) => resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
   });
-
   reviewAgent.state.messages = cloneMessageTail(mainAgent.state.messages, settings.maxHistoryMessages);
-
   const timeoutMs = Math.min(settings.maxDurationMs, resolveAgentTurnTimeoutMs(getConfig()));
-
   try {
-    await runAgentTurnWithTimeout(
-      reviewAgent,
-      async () => {
-        await reviewAgent.prompt({
-          role: 'user',
-          content: userPrompt,
-          timestamp: Date.now(),
-        });
-        await reviewAgent.waitForIdle();
-      },
-      timeoutMs,
-    );
+    await runAgentTurnWithTimeout(reviewAgent, async () => {
+      await reviewAgent.prompt({ role: 'user', content: MEMORY_REVIEW_USER_PROMPT, timestamp: Date.now() });
+      await reviewAgent.waitForIdle();
+    }, timeoutMs);
   } catch (err) {
-    log.warn({ err, sessionKey }, 'Background review turn failed or timed out');
-    aborted = true;
+    log.warn({ err, sessionKey }, 'User-understanding review failed or timed out');
     reviewAgent.abort();
     await reviewAgent.waitForIdle().catch(() => {});
     return;
   }
+  if (isAssistantTurnAborted(reviewAgent) || isAssistantTurnFailed(reviewAgent)) return;
+  const candidates = parseUnderstandingCandidates(lastAssistantText(reviewAgent));
+  await memoryManager.applyUnderstandingCandidates(candidates, {
+    sessionKey,
+    sourceText: 'Background review of the current session transcript',
+    reviewSource: 'background',
+  });
+  log.debug({ sessionKey, candidateCount: candidates.length }, 'User-understanding review completed');
+}
 
-  if (isAssistantTurnAborted(reviewAgent) || isAssistantTurnFailed(reviewAgent)) {
-    log.debug({ sessionKey }, 'Background review produced aborted/failed assistant turn');
-    return;
-  }
-
-  const last = reviewAgent.state.messages;
-  for (let i = last.length - 1; i >= 0; i--) {
-    const msg = last[i];
-    if (msg.role === 'assistant') {
-      const content = msg.content;
-      const text = Array.isArray(content)
-        ? extractTextContent(content as Array<{ type: string; text?: string }>)
-        : String(content);
-      const trimmed = text.trim();
-      if (trimmed && !/^nothing to save\.?$/i.test(trimmed)) {
-        log.info({ sessionKey, preview: trimmed.slice(0, 120) }, 'Background review completed');
-      } else {
-        log.debug({ sessionKey }, 'Background review: nothing to save');
-      }
-      return;
-    }
-  }
+export async function runBackgroundReviewTurn(params: RunBackgroundReviewParams): Promise<void> {
+  await runUnderstandingReview(params);
 }

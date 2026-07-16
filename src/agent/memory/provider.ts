@@ -19,6 +19,7 @@ import type {
 export interface MemoryProviderInitOptions {
   workspace?: string;
   agentWorkspace?: string;
+  agentId?: string;
   sessionId?: string;
   config?: Record<string, unknown>;
   [key: string]: unknown;
@@ -36,8 +37,6 @@ export interface MemoryProvider {
 
   /** Static text merged into the system prompt. */
   systemPromptBlock?(): string;
-
-  prefetch?(query: string, options?: { sessionId?: string }): Promise<string>;
 
   queuePrefetch?(query: string, options?: { sessionId?: string }): void;
 

@@ -54,7 +54,11 @@ import {
   SessionInspector,
   type SessionContext,
 } from './session/index.js';
-import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
+import {
+  AgentOrchestrator,
+  AgentEventHandler,
+  readChangedPathsFromToolEnd,
+} from './orchestration/index.js';
 import {
   getWorkflowProgressBroker,
   type BrokerListenerHandle,
@@ -303,6 +307,15 @@ export class AgentService {
       toolUsageAnalyzer: this.toolUsageAnalyzer,
       errorPatternMatcher: this.errorPatternMatcher,
       turnDiffTracker: this.turnDiffTracker,
+    });
+    this.agentEventHandler.registerListener('tool_execution_end', (event, context) => {
+      const e = event as Extract<AgentEvent, { type: 'tool_execution_end' }> & {
+        args?: unknown;
+        result: unknown;
+      };
+      if (e.isError) return;
+      const changedPaths = readChangedPathsFromToolEnd(e.toolName, e.args, e.result);
+      this.agentManager.markCodeIntelligenceDirty(context.sessionKey, changedPaths);
     });
 
     // Wire the workflow progress broker into the session event bus. Channel

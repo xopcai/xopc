@@ -1,5 +1,5 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronDown, ChevronUp, Copy, FileCode2, FileText, ListTodo, Pencil, RefreshCw, SquarePen, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Copy, FileCode2, FileText, ListTodo, Pencil, RefreshCw, SquarePen, ThumbsDown, ThumbsUp, Trash2 } from 'lucide-react';
 
 import type {
   ImageContent,
@@ -31,7 +31,9 @@ import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-label
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
+import { fetchJson } from '@/lib/fetch';
 import { interaction } from '@/lib/interaction';
+import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -241,6 +243,11 @@ export const MessageBubble = memo(function MessageBubble({
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | 'user' | null>(null);
   const [assistantActionFeedback, setAssistantActionFeedback] = useState<'save-note' | 'extract-task' | 'work-item-update' | null>(null);
   const [assistantActionBusy, setAssistantActionBusy] = useState<'save-note' | 'extract-task' | 'work-item-update' | null>(null);
+  const [responseFeedback, setResponseFeedback] = useState<'helpful' | 'not_helpful' | null>(null);
+  const [responseFeedbackLoaded, setResponseFeedbackLoaded] = useState(false);
+  const [responseFeedbackBusy, setResponseFeedbackBusy] = useState(false);
+  const [responseFeedbackError, setResponseFeedbackError] = useState(false);
+  const [responseFeedbackRemediated, setResponseFeedbackRemediated] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [inlineImagePreview, setInlineImagePreview] = useState<MessageAttachment | null>(null);
   const [userMessageExpanded, setUserMessageExpanded] = useState(false);
@@ -324,6 +331,62 @@ export const MessageBubble = memo(function MessageBubble({
       window.setTimeout(() => setCopyFeedback((f) => (f === 'user' ? null : f)), 2000);
     });
   }, [userCopyText]);
+
+  const handleResponseFeedback = useCallback((outcome: 'helpful' | 'not_helpful') => {
+    if (!sessionKey || !message.timestamp || responseFeedbackBusy) return;
+    setResponseFeedbackBusy(true);
+    setResponseFeedbackLoaded(true);
+    setResponseFeedbackError(false);
+    void fetchJson<{
+      matched: boolean;
+      attributedRecordCount: number;
+      feedback: { outcome?: string } | null;
+      remediation: { needsReviewRecordIds: string[] } | null;
+    }>(apiUrl('/api/memory/understanding/response-feedback'), {
+      method: 'PATCH',
+      body: JSON.stringify({
+        sessionKey,
+        assistantTimestamp: message.timestamp,
+        outcome,
+      }),
+    })
+      .then((result) => {
+        if (!result.matched) {
+          setResponseFeedbackError(true);
+          return;
+        }
+        setResponseFeedback(outcome);
+        if (result.remediation?.needsReviewRecordIds.length) {
+          setResponseFeedbackRemediated(true);
+        }
+      })
+      .catch(() => setResponseFeedbackError(true))
+      .finally(() => setResponseFeedbackBusy(false));
+  }, [message.timestamp, responseFeedbackBusy, sessionKey]);
+
+  const loadResponseFeedback = useCallback(() => {
+    if (!sessionKey || !message.timestamp || responseFeedbackLoaded || responseFeedbackBusy) return;
+    setResponseFeedbackBusy(true);
+    const query = new URLSearchParams({
+      sessionKey,
+      assistantTimestamp: String(message.timestamp),
+    });
+    void fetchJson<{
+      matched: boolean;
+      feedback: { outcome?: string } | null;
+    }>(apiUrl(`/api/memory/understanding/response-feedback?${query.toString()}`))
+      .then((result) => {
+        const outcome = result.feedback?.outcome;
+        if (outcome === 'helpful' || outcome === 'not_helpful') {
+          setResponseFeedback(outcome);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        setResponseFeedbackLoaded(true);
+        setResponseFeedbackBusy(false);
+      });
+  }, [message.timestamp, responseFeedbackBusy, responseFeedbackLoaded, sessionKey]);
 
   const openDeleteConfirm = useCallback(() => {
     if (messageIndex == null || !onDeleteRound) return;
@@ -611,7 +674,11 @@ export const MessageBubble = memo(function MessageBubble({
         ) : null}
 
         {assistantActionsVisible && copyMarkdown ? (
-          <div className="mt-2 flex shrink-0 flex-wrap items-center gap-2 overflow-visible">
+          <div
+            className="mt-2 flex shrink-0 flex-wrap items-center gap-2 overflow-visible"
+            onPointerEnter={loadResponseFeedback}
+            onFocusCapture={loadResponseFeedback}
+          >
             <button
               type="button"
               className={messageActionIconButton}
@@ -639,6 +706,44 @@ export const MessageBubble = memo(function MessageBubble({
                 <FileCode2 className="size-4" strokeWidth={1.75} aria-hidden />
               )}
             </button>
+            {sessionKey && message.timestamp ? (
+              <>
+                <button
+                  type="button"
+                  className={cn(
+                    messageActionIconButton,
+                    responseFeedback === 'helpful' && 'bg-surface-active text-fg',
+                  )}
+                  onClick={() => handleResponseFeedback('helpful')}
+                  disabled={responseFeedbackBusy}
+                  title={m.chat.messageHelpful}
+                  aria-label={m.chat.messageHelpful}
+                  aria-pressed={responseFeedback === 'helpful'}
+                >
+                  <ThumbsUp className="size-4" strokeWidth={1.75} aria-hidden />
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    messageActionIconButton,
+                    responseFeedback === 'not_helpful' && 'bg-surface-active text-fg',
+                  )}
+                  onClick={() => handleResponseFeedback('not_helpful')}
+                  disabled={responseFeedbackBusy}
+                  title={m.chat.messageNotHelpful}
+                  aria-label={m.chat.messageNotHelpful}
+                  aria-pressed={responseFeedback === 'not_helpful'}
+                >
+                  <ThumbsDown className="size-4" strokeWidth={1.75} aria-hidden />
+                </button>
+                {responseFeedbackError ? (
+                  <span className="text-xs text-danger" role="status">{m.chat.messageFeedbackUnavailable}</span>
+                ) : null}
+                {responseFeedbackRemediated ? (
+                  <span className="text-xs text-fg-muted" role="status">{m.chat.messageUnderstandingReviewQueued}</span>
+                ) : null}
+              </>
+            ) : null}
             {onSaveAssistantToSourceNote ? (
               <button
                 type="button"

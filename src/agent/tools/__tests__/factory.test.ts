@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Config } from '../../../config/schema.js';
+import { ConfigSchema, type Config } from '../../../config/schema.js';
 import type { MessageBus } from '../../../infra/bus/index.js';
 import {
   createAgentCapabilitySessionState,
@@ -61,6 +61,36 @@ describe('AgentToolsFactory', () => {
     expect(factory.createCapabilityTools(['desktop-pet-authoring']).map((tool) => tool.name)).toEqual([
       'create_desktop_pet',
     ]);
+  });
+
+  it('registers code intelligence only for configured agent ids', () => {
+    const config = ConfigSchema.parse(undefined);
+    const codeRuntime = {
+      prime: async () => {},
+      markDirty: () => {},
+      supportsTool: () => true,
+      callTool: async () => { throw new Error('not called'); },
+      getStatus: () => ({
+        state: 'idle' as const,
+        workspace: '/tmp/xopc-tools-factory-test',
+        project: 'tmp-xopc-tools-factory-test',
+        dirtyPaths: [],
+        coverage: 'unknown' as const,
+      }),
+      dispose: async () => {},
+    };
+    const factory = new AgentToolsFactory({
+      workspace: '/tmp/xopc-tools-factory-test',
+      bus: {} as MessageBus,
+      getCurrentContext: () => null,
+      getConfig: () => config,
+      getCodeIntelligenceRuntime: () => codeRuntime,
+    });
+
+    expect(factory.createCoreTools({ agentId: 'coder' }).map((tool) => tool.name)).toEqual(
+      expect.arrayContaining(['code_search', 'code_read_symbol', 'code_trace', 'code_impact', 'code_architecture']),
+    );
+    expect(factory.createCoreTools({ agentId: 'main' }).map((tool) => tool.name)).not.toContain('code_search');
   });
 
   it('resolves declared capability tool names from the registry', () => {

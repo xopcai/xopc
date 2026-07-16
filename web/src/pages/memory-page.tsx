@@ -80,6 +80,22 @@ type MemoryFeedbackSummary = {
   lastFeedbackAt?: string;
 };
 
+type UnderstandingQualityResponse = {
+  metrics: {
+    windowDays: number;
+    candidates: { proposed: number; created: number; deduplicated: number; rejectedByPolicy: number };
+    records: { candidate: number; agingCandidates: number };
+    decisions: { total: number; acceptanceRate: number | null };
+    recall: { total: number; helpfulRate: number | null };
+  };
+  cadence: {
+    baseIntervalTurns: number;
+    effectiveIntervalTurns: number;
+    slowed: boolean;
+    reasons: string[];
+  };
+};
+
 const fetcher = <T,>(url: string) => fetchJson<T>(url);
 type MemorySearchResponse = { results: Array<{ record: MemoryRecord; score: number; snippet: string }> };
 
@@ -94,6 +110,10 @@ function qualityTone(summary?: MemoryFeedbackSummary): string {
   if (percent >= 70) return 'border-success/30 bg-success-soft text-fg';
   if (percent >= 40) return 'border-warning/40 bg-warning-soft text-fg';
   return 'border-danger/30 bg-danger-soft text-fg';
+}
+
+function formatRate(value: number | null): string {
+  return value == null ? '—' : `${Math.round(value * 100)}%`;
 }
 
 function MemoryRecordSkeleton() {
@@ -154,6 +174,14 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
     apiUrl(`/api/memory/config${agentId ? `?agentId=${encodeURIComponent(agentId)}` : ''}`),
     fetcher,
   );
+  const {
+    data: understandingQuality,
+    isLoading: understandingQualityLoading,
+    mutate: mutateUnderstandingQuality,
+  } = useSWR<UnderstandingQualityResponse>(
+    apiUrl(`/api/memory/understanding/quality${agentId ? `?agentId=${encodeURIComponent(agentId)}` : ''}`),
+    fetcher,
+  );
   const searchKey = submitted ? apiUrl('/api/memory/search') : null;
   const { data: searchData, isLoading: searchLoading } = useSWR<MemorySearchResponse>(
     searchKey,
@@ -178,6 +206,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
     signalsLoading ||
     tracesLoading ||
     feedbackSummaryLoading ||
+    understandingQualityLoading ||
     configLoading;
   const feedbackByRecordId = useMemo(
     () => new Map(feedbackSummaries.map((summary) => [summary.recordId, summary])),
@@ -270,7 +299,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
-    await Promise.all([mutateCandidates(), mutateRecords()]);
+    await Promise.all([mutateCandidates(), mutateRecords(), mutateUnderstandingQuality()]);
   }
 
   return (
@@ -300,6 +329,81 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
           </div>
         ))}
       </div>
+
+      <section className="rounded-lg bg-surface-panel shadow-surface">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-edge px-4 py-3">
+          <div>
+            <div className="text-sm font-semibold text-fg">{t.understandingQuality}</div>
+            <div className="mt-0.5 max-w-[70ch] text-xs leading-5 text-fg-muted">{t.understandingQualityHint}</div>
+          </div>
+          {understandingQualityLoading ? (
+            <Skeleton className="h-6 w-36 rounded-full" />
+          ) : understandingQuality ? (
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+              understandingQuality.cadence.slowed
+                ? 'bg-warning-soft text-fg'
+                : 'bg-surface-hover text-fg-muted'
+            }`}>
+              {understandingQuality.cadence.slowed ? t.cadenceSlowed : t.cadenceNormal}
+              {' · '}{understandingQuality.cadence.effectiveIntervalTurns} {t.turns}
+            </span>
+          ) : null}
+        </div>
+        <div className="grid gap-px bg-edge sm:grid-cols-2 lg:grid-cols-4">
+          {understandingQualityLoading ? (
+            Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="bg-surface-panel px-4 py-4">
+                <Skeleton className="h-3 w-24" />
+                <Skeleton className="mt-3 h-7 w-16" />
+                <Skeleton className="mt-2 h-3 w-32" />
+              </div>
+            ))
+          ) : understandingQuality ? (
+            <>
+              <div className="bg-surface-panel px-4 py-4">
+                <div className="text-xs text-fg-muted">{t.candidateAcceptance}</div>
+                <div className="mt-1 text-xl font-semibold text-fg">
+                  {formatRate(understandingQuality.metrics.decisions.acceptanceRate)}
+                </div>
+                <div className="mt-1 text-xs text-fg-subtle">
+                  {understandingQuality.metrics.decisions.total} {t.decisions}
+                </div>
+              </div>
+              <div className="bg-surface-panel px-4 py-4">
+                <div className="text-xs text-fg-muted">{t.understandingRecallHelpful}</div>
+                <div className="mt-1 text-xl font-semibold text-fg">
+                  {formatRate(understandingQuality.metrics.recall.helpfulRate)}
+                </div>
+                <div className="mt-1 text-xs text-fg-subtle">
+                  {understandingQuality.metrics.recall.total} {t.feedback}
+                </div>
+              </div>
+              <div className="bg-surface-panel px-4 py-4">
+                <div className="text-xs text-fg-muted">{t.pendingCandidates}</div>
+                <div className="mt-1 text-xl font-semibold text-fg">
+                  {understandingQuality.metrics.records.candidate}
+                </div>
+                <div className="mt-1 text-xs text-fg-subtle">
+                  {understandingQuality.metrics.records.agingCandidates} {t.agingCandidates}
+                </div>
+              </div>
+              <div className="bg-surface-panel px-4 py-4">
+                <div className="text-xs text-fg-muted">{t.generatedCandidates}</div>
+                <div className="mt-1 text-xl font-semibold text-fg">
+                  {understandingQuality.metrics.candidates.created}
+                </div>
+                <div className="mt-1 text-xs text-fg-subtle">
+                  {understandingQuality.metrics.windowDays} {t.dayWindow}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="bg-surface-panel px-4 py-6 text-sm text-fg-muted sm:col-span-2 lg:col-span-4">
+              {t.understandingQualityUnavailable}
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className="rounded-lg bg-surface-panel shadow-surface">
         <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.providerPolicy}</div>
