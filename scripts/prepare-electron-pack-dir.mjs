@@ -1,5 +1,6 @@
 /** Stage the minimal Electron app directory consumed by electron-builder. */
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -82,6 +83,19 @@ function stageCodebaseMemoryBinary(repoRoot, packDirPath, target) {
   const destDir = join(packDirPath, '_pack-resources', 'cbm');
   mkdirSync(destDir, { recursive: true });
   cpSync(cbmPath, join(destDir, cbmName));
+  const cbmPackage = JSON.parse(
+    readFileSync(join(repoRoot, 'node_modules', 'codebase-memory-mcp', 'package.json'), 'utf8'),
+  );
+  const binarySha256 = createHash('sha256').update(readFileSync(cbmPath)).digest('hex');
+  writeFileSync(
+    join(destDir, 'codebase-memory-mcp.manifest.json'),
+    `${JSON.stringify({
+      cbmVersion: cbmPackage.version,
+      platform: target.platform === 'win32' ? 'windows' : target.platform,
+      arch: target.arch === 'x64' ? 'amd64' : target.arch,
+      binarySha256,
+    }, null, 2)}\n`,
+  );
 }
 
 export function prepareElectronPackDir(
