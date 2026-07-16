@@ -13,7 +13,7 @@ xopc gives the `coder` agent managed repository intelligence backed by codebase-
 
 Do not run `codebase-memory-mcp install` for this integration. That command configures other coding clients. xopc starts the packaged MCP binary directly.
 
-The npm package is supported and pinned as a production dependency. It is a platform installer and command wrapper, not a JavaScript SDK: `postinstall` downloads the matching static binary, then xopc communicates with that binary over MCP stdio.
+The Electron app ships the matching static CBM binary. The npm package downloads CBM only when a coder agent first needs code intelligence; it is not downloaded during `npm install`. The on-demand download has a two-minute deadline, verifies the release SHA-256 manifest before extraction, and writes atomically to the xopc state directory, so an unreachable or untrusted GitHub Releases host cannot leave package installation stuck or introduce an executable.
 
 ## Agent tools
 
@@ -68,7 +68,7 @@ xopc resolves the binary in this order:
 1. `codeIntelligence.binaryPath`
 2. `XOPC_CBM_BINARY`
 3. packaged Electron `resources/bin`
-4. the binary downloaded by the `codebase-memory-mcp` npm package
+4. the binary cached by xopc after its on-demand download
 
 Indexes live under the xopc state directory at `code-intelligence/cbm`. Each process is restricted to its resolved workspace with `CBM_ALLOWED_ROOT`. Indexing is crash-isolated by the CBM process boundary and is stopped when workspace runtimes are cleared.
 
@@ -84,11 +84,11 @@ Common failure modes:
 
 | Symptom | Action |
 |---------|--------|
-| Binary unavailable | Re-run `pnpm install`, or set `XOPC_CBM_BINARY` to a trusted executable. |
+| Binary download fails | Check access to GitHub Releases, retry a coder request, or set `XOPC_CBM_BINARY` / `codeIntelligence.binaryPath` to a trusted executable. |
 | Index timeout | Use `indexMode: "fast"`, increase `indexTimeoutMs`, or reduce the workspace scope. |
 | Partial/degraded coverage | Use direct source tools for flagged paths; do not make absence claims from graph results. |
 | Stale result after an external edit | Wait for CBM auto-sync, or restart the gateway to rebuild the workspace runtime. |
 
 ## Packaging
 
-The npm package downloads a platform-specific static binary during `postinstall`. Electron builds copy that real binary into application resources, so packaged applications do not download CBM at runtime. Release builds must keep the npm version pinned and verify that the expected platform binary exists.
+Electron builds copy the real binary into application resources, so packaged applications do not download CBM at runtime. npm installation does not download CBM; xopc downloads it on demand with a deadline only when code intelligence is first used and no explicit binary has been configured.

@@ -77,9 +77,6 @@ importers:
       cli-table3:
         specifier: ^0.6.5
         version: 0.6.5
-      codebase-memory-mcp:
-        specifier: 0.9.0
-        version: 0.9.0
       commander:
         specifier: ^14.0.3
         version: 14.0.3
@@ -183,6 +180,9 @@ importers:
       '@vitejs/plugin-react-swc':
         specifier: ^4.3.1
         version: 4.3.1(vite@8.0.16(@types/node@25.9.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.3)(yaml@2.9.0))
+      codebase-memory-mcp:
+        specifier: 0.9.0
+        version: 0.9.0
       cross-env:
         specifier: ^10.1.0
         version: 10.1.0
