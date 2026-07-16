@@ -1324,6 +1324,41 @@ html[data-desktop-pet="true"] body {
   cursor: grabbing;
 }
 
+.desktop-pet-close-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 4;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(15 23 42 / 0.1);
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.9);
+  color: #64748b;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 160ms ease,
+    background 160ms ease,
+    color 160ms ease;
+  -webkit-app-region: no-drag;
+}
+
+.desktop-pet-stage:hover .desktop-pet-close-button,
+.desktop-pet-close-button:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.desktop-pet-close-button:hover {
+  background: rgb(255 255 255 / 1);
+  color: #334155;
+}
+
 .desktop-pet-menu-button {
   position: absolute;
   left: var(--desktop-pet-menu-left, -6px);

@@ -5,8 +5,8 @@ import { BrowserWindow, app, screen, type Rectangle } from 'electron';
 
 const STATE_FILE_NAME = 'main-window-state.json';
 
-export const MAIN_WINDOW_MIN_WIDTH = 800;
-export const MAIN_WINDOW_MIN_HEIGHT = 560;
+export const MAIN_WINDOW_MIN_WIDTH = 1200;
+export const MAIN_WINDOW_MIN_HEIGHT = 800;
 
 const DEFAULT_WIDTH = 1200;
 const DEFAULT_HEIGHT = 800;
