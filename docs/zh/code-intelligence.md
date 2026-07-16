@@ -13,7 +13,7 @@ xopc 为 `coder` agent 内置由 codebase-memory-mcp（CBM）提供的代码库�
 
 不要为此集成运行 `codebase-memory-mcp install`。该命令用于配置其他 coding client；xopc 会直接启动内置的 MCP 二进制。
 
-该 npm 包支持直接安装，并已作为生产依赖锁定版本。它是平台安装器和命令包装器，不是 JavaScript SDK：`postinstall` 会下载当前平台的静态二进制，xopc 再通过 MCP stdio 与该二进制通信。
+Electron 应用会随包提供对应的 CBM 静态二进制。npm 版本仅在 coder agent 第一次需要代码智能时才下载 CBM，`npm install` 阶段不会下载。按需下载有两分钟时限、会在解压前校验发布清单中的 SHA-256，并原子写入 xopc 状态目录，因此 GitHub Releases 不可达或不可信时不会让包安装卡住，也不会引入可执行文件。
 
 ## Agent 工具
 
@@ -68,7 +68,7 @@ xopc 按以下顺序查找二进制：
 1. `codeIntelligence.binaryPath`
 2. `XOPC_CBM_BINARY`
 3. Electron 包内的 `resources/bin`
-4. `codebase-memory-mcp` npm 包下载的二进制
+4. xopc 按需下载后缓存的二进制
 
 索引位于 xopc 状态目录的 `code-intelligence/cbm` 下。每个进程通过 `CBM_ALLOWED_ROOT` 限制在解析后的 workspace 内。CBM 进程边界负责崩溃隔离；清理 workspace runtime 时会同时停止对应进程。
 
@@ -82,11 +82,11 @@ pnpm exec codebase-memory-mcp --version
 
 | 现象 | 处理方式 |
 |------|----------|
-| 二进制不可用 | 重新运行 `pnpm install`，或将 `XOPC_CBM_BINARY` 指向可信可执行文件。 |
+| 二进制下载失败 | 检查 GitHub Releases 的网络访问，重试 coder 请求，或将 `XOPC_CBM_BINARY` / `codeIntelligence.binaryPath` 设置为可信可执行文件。 |
 | 索引超时 | 使用 `indexMode: "fast"`、增加 `indexTimeoutMs`，或缩小 workspace。 |
 | 覆盖为 partial/degraded | 对被标记路径使用直接源码工具，不能根据知识图断言代码不存在。 |
 | 外部修改后结果过期 | 等待 CBM 自动同步，或重启 gateway 以重建 workspace runtime。 |
 
 ## 打包
 
-npm 包在 `postinstall` 阶段下载平台对应的静态二进制。Electron 构建会把真实二进制复制进应用资源，因此 packaged app 不会在运行时下载 CBM。发布构建必须锁定 npm 版本，并确认目标平台二进制存在。
+Electron 构建会把真实二进制复制进应用资源，因此 packaged app 不会在运行时下载 CBM。npm 安装不会运行 CBM 下载；仅在首次使用代码智能且没有配置显式二进制路径时，xopc 才会进行有时限的按需下载。

@@ -8,7 +8,7 @@ import type { Config } from '../../config/schema.js';
 import { resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import { XopcStdioClientTransport } from '../mcp/mcp-stdio-transport.js';
-import { resolveCodebaseMemoryBinary } from './binary.js';
+import { ensureCodebaseMemoryBinary } from './binary.js';
 import type {
   CodeIntelligenceRuntimeLike,
   CodeIntelligenceState,
@@ -189,7 +189,7 @@ export class CodeIntelligenceRuntime implements CodeIntelligenceRuntimeLike {
     this.connectionPromise = (async () => {
       this.state = 'connecting';
       const config = this.getConfig().codeIntelligence;
-      const binary = resolveCodebaseMemoryBinary(config.binaryPath);
+      const binary = await ensureCodebaseMemoryBinary(config.binaryPath);
       const cacheDir = join(resolveStateDir(), 'code-intelligence', 'cbm');
       mkdirSync(cacheDir, { recursive: true });
       const transport = new XopcStdioClientTransport({
