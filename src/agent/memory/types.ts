@@ -1,5 +1,5 @@
 /**
- * Built-in curated memory:
+ * Curated Markdown compatibility store:
  * - agent notes: `~/.xopc/agents/<id>/memories/MEMORY.md`
  * - user memory: `~/.xopc/user/MEMORY.md`
  */
@@ -26,6 +26,16 @@ export interface MemorySnapshot {
 
 export type MemoryKind =
   | 'user_profile'
+  | 'preference'
+  | 'boundary'
+  | 'relationship'
+  | 'project_context'
+  | 'commitment'
+  | 'routine'
+  | 'personal_logistics'
+  | 'open_question'
+  | 'milestone'
+  | 'current_state'
   | 'agent_note'
   | 'workspace_fact'
   | 'daily_note'
@@ -45,11 +55,24 @@ export type MemoryStatus =
 
 export type MemorySensitivity = 'normal' | 'personal' | 'secret' | 'regulated';
 
+export type MemoryExplicitness = 'explicit' | 'observed' | 'inferred';
+
+export type MemoryDurability = 'ephemeral' | 'durable' | 'recurring';
+
+export type MemoryDisclosurePolicy = 'silent' | 'referenceable' | 'ask_before_reference';
+
+export type MemoryEvidenceRelation = 'supports' | 'contradicts' | 'supersedes' | 'derived_from';
+
 export interface MemoryEvidence {
+  evidenceId?: string;
+  sourceItemId?: string;
+  relation?: MemoryEvidenceRelation;
   sessionKey?: string;
   turnId?: string;
   toolCallId?: string;
   sourceText?: string;
+  observedAt?: string;
+  confidence?: number;
 }
 
 export interface MemoryScope {
@@ -74,6 +97,7 @@ export interface MemoryRecord {
   id: string;
   kind: MemoryKind;
   status?: MemoryStatus;
+  canonicalKey?: string;
   scope: MemoryScope;
   content: string;
   source: {
@@ -85,9 +109,17 @@ export interface MemoryRecord {
   };
   confidence?: number;
   sensitivity?: MemorySensitivity;
+  explicitness: MemoryExplicitness;
+  durability: MemoryDurability;
+  importance: number;
+  disclosurePolicy: MemoryDisclosurePolicy;
   evidence?: MemoryEvidence[];
+  validFrom?: string;
+  validTo?: string;
   reviewAfter?: string;
   expiresAt?: string;
+  supersedesRecordId?: string;
+  conflictGroupId?: string;
   createdAt: string;
   updatedAt: string;
   tags?: string[];
@@ -123,6 +155,8 @@ export interface MemoryReadResult {
 
 export interface MemoryListRequest {
   kind?: MemoryKind;
+  status?: MemoryStatus;
+  canonicalKey?: string;
   target?: 'memory' | 'user';
   scope?: Partial<MemoryScope>;
 }
@@ -130,6 +164,7 @@ export interface MemoryListRequest {
 export interface MemoryWriteRequest {
   kind: MemoryKind;
   content: string;
+  canonicalKey?: string;
   scope?: Partial<MemoryScope>;
   target?: 'memory' | 'user';
   tags?: string[];
@@ -137,9 +172,17 @@ export interface MemoryWriteRequest {
   confidence?: number;
   status?: MemoryStatus;
   sensitivity?: MemorySensitivity;
+  explicitness?: MemoryExplicitness;
+  durability?: MemoryDurability;
+  importance?: number;
+  disclosurePolicy?: MemoryDisclosurePolicy;
   evidence?: MemoryEvidence[];
+  validFrom?: string;
+  validTo?: string;
   reviewAfter?: string;
   expiresAt?: string;
+  supersedesRecordId?: string;
+  conflictGroupId?: string;
   approved?: boolean;
 }
 

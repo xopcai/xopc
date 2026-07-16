@@ -78,7 +78,8 @@ import {
   shouldRegisterCuratedMemoryTool,
 } from './memory/memory-config.js';
 import type { MemoryManager } from './memory/manager.js';
-import { MemoryPrefetchCoordinator } from './memory/prefetch-coordinator.js';
+import { UserContextCoordinator } from './memory/user-context-coordinator.js';
+import type { UserContextPlan } from './memory/context/types.js';
 import { WorkspaceRuntimeRegistry, type WorkspaceRuntime } from './workspace-runtime/registry.js';
 import { BackgroundReviewCoordinator } from './background-review/coordinator.js';
 import { maybeRequestChannelExecApproval } from '../channels/exec-approval-runtime.js';
@@ -252,7 +253,7 @@ export class AgentManager implements AgentInstanceGateway {
   private credentialCache = new Map<string, string>();
   private credentialResolver: CredentialResolver;
   private workspaceRuntimes: WorkspaceRuntimeRegistry;
-  private memoryPrefetch: MemoryPrefetchCoordinator;
+  private userContext: UserContextCoordinator;
   private backgroundReview: BackgroundReviewCoordinator;
   private skillFilesystemWatcher: SkillFilesystemWatcher;
   private skillDiskRefreshInProgress = false;
@@ -279,14 +280,14 @@ export class AgentManager implements AgentInstanceGateway {
         this.skillFilesystemWatcher.watchWorkspace(resolvedPath);
       },
     });
-    this.memoryPrefetch = new MemoryPrefetchCoordinator({
+    this.userContext = new UserContextCoordinator({
       getConfig: () => this.config.config,
+      isEnabledForSession: (sk) => this.agents.get(sk)?.effectiveProfile.manifest.memory.mode !== 'off',
       getMemoryManagerForSession: (sk) => this.getMemoryManagerForSession(sk),
       getLastAssistantContent: (sk) => this.getLastAssistantContent(sk),
     });
     this.backgroundReview = new BackgroundReviewCoordinator({
       getConfig: () => this.mergedConfig(),
-      onSkillsFilesystemMutate: () => this.refreshSkillsAfterDiskChange('explicit'),
     });
     this.toolsFactory = new AgentToolsFactory(this.buildToolsFactoryDeps());
 
@@ -442,6 +443,8 @@ export class AgentManager implements AgentInstanceGateway {
         }
       },
       installSkillFromSource: this.config.installSkillFromSource,
+      getCodeIntelligenceRuntime: (workspace) =>
+        this.workspaceRuntimes.getOrCreate(workspace).codeIntelligence,
     };
   }
 
@@ -453,23 +456,32 @@ export class AgentManager implements AgentInstanceGateway {
     return this.getWorkspaceRuntimeForSession(sessionKey).memoryManager;
   }
 
-  /**
-   * Prefix the user turn with fenced prefetched memory (external providers).
-   * Delegates to {@link MemoryPrefetchCoordinator}.
-   */
-  applyMemoryPrefetchToUserMessage(
+  markCodeIntelligenceDirty(sessionKey: string, paths: readonly string[]): void {
+    if (paths.length === 0) return;
+    const instance = this.agents.get(sessionKey);
+    const config = this.config.config?.codeIntelligence;
+    if (
+      !instance ||
+      !config?.enabled ||
+      !config.agentIds.includes(instance.effectiveProfile.agentId)
+    ) return;
+    this.getWorkspaceRuntimeForSession(sessionKey).codeIntelligence.markDirty(paths);
+  }
+
+  /** Build the bounded, policy-filtered context used for this model turn. */
+  prepareUserTurnContext(
     userMessage: AgentMessage,
     sessionKey: string,
-  ): Promise<AgentMessage> {
-    return this.memoryPrefetch.applyToUserMessage(userMessage, sessionKey);
+  ): Promise<UserContextPlan> {
+    return this.userContext.prepare(userMessage, sessionKey);
   }
 
   /**
    * After a completed turn: sync external providers and queue next-turn prefetch.
-   * Delegates to {@link MemoryPrefetchCoordinator}.
+   * Delegates to {@link UserContextCoordinator}.
    */
-  afterAgentTurn(sessionKey: string, userPlainText: string): void {
-    this.memoryPrefetch.afterTurn(sessionKey, userPlainText);
+  afterAgentTurn(sessionKey: string, userPlainText: string): Promise<void> {
+    return this.userContext.afterTurn(sessionKey, userPlainText);
   }
 
   /**
@@ -479,7 +491,7 @@ export class AgentManager implements AgentInstanceGateway {
   beginBackgroundReviewUserTurn(sessionKey: string): void {
     const inst = this.agents.get(sessionKey);
     if (!inst) return;
-    this.backgroundReview.beginUserTurn(sessionKey, inst.registeredToolNames);
+    this.backgroundReview.beginUserTurn(sessionKey);
   }
 
   /**
@@ -492,9 +504,6 @@ export class AgentManager implements AgentInstanceGateway {
     this.backgroundReview.scheduleAfterUserTurn({
       sessionKey,
       agent: inst.agent,
-      registeredToolNames: inst.registeredToolNames,
-      skillAllowlist: inst.effectiveProfile.skillsAllowlist,
-      workspacePath: this.getResolvedWorkspaceForSession(sessionKey),
       lastAssistantText: this.getLastAssistantContent(sessionKey),
       workspaceRuntime: this.getWorkspaceRuntimeForSession(sessionKey),
     });
@@ -1004,8 +1013,6 @@ export class AgentManager implements AgentInstanceGateway {
       skillEnvPassthroughKeys: new Set<string>(),
     });
 
-    this.backgroundReview.attachToAgent(sessionKey, agent, registeredToolNames);
-
     const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     this.config.getModelManager?.().setSessionProfileDefault(sessionKey, modelRef, profile.fallbacks);
 
@@ -1039,7 +1046,7 @@ export class AgentManager implements AgentInstanceGateway {
       instance.agent.abort();
       evictEmbeddedSessionRunner(sessionKey, 'agent_removed');
       this.agents.delete(sessionKey);
-      this.memoryPrefetch.forgetSession(sessionKey);
+      this.userContext.forgetSession(sessionKey);
       clearBootstrapSnapshot(sessionKey);
       this.config.getModelManager?.().clearSessionProfileDefault(sessionKey);
       log.info({ sessionKey, totalAgents: this.agents.size }, 'Removed agent instance');
@@ -1133,7 +1140,7 @@ export class AgentManager implements AgentInstanceGateway {
       instance.agent.abort();
     }
     this.agents.clear();
-    this.memoryPrefetch.clear();
+    this.userContext.clear();
     this.sessionWorkspaceOverrides.clear();
     void this.workspaceRuntimes.clearAll();
     log.debug('All agent instances disposed');
@@ -1216,6 +1223,12 @@ export class AgentManager implements AgentInstanceGateway {
       getMemoryManager: () => rt.memoryManager,
       getSkillManager: () => rt.skillManager,
     });
+    if (
+      this.config.config?.codeIntelligence?.enabled &&
+      this.config.config.codeIntelligence.agentIds.includes(profile.agentId)
+    ) {
+      void rt.codeIntelligence.prime().catch(() => {});
+    }
     const registeredToolNames = tools.map((t) => t.name);
 
     const thinkingLevel =

@@ -207,10 +207,11 @@ export class AgentOrchestrator {
       setPendingTranscriptUserMessage(sessionKey, userMessage);
 
       const userPlainForMemory = extractAgentUserPlainText(userMessage);
-      const userMessageForModel = await this.agentManager.applyMemoryPrefetchToUserMessage(
+      const userContext = await this.agentManager.prepareUserTurnContext(
         userMessage,
         sessionKey,
       );
+      const userMessageForModel = userContext.modelMessage;
 
       const llmTurn = await hydrateUserTurnForLlm({
         message: userMessage,
@@ -238,7 +239,7 @@ export class AgentOrchestrator {
         }
       })();
 
-      this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory);
+      await this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory);
       this.agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);
 
       if (turnResult.ok) {

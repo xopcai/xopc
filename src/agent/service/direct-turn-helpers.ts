@@ -146,10 +146,11 @@ export async function runDirectAgentTurn(
   input: RunDirectAgentTurnInput,
 ): Promise<RunDirectAgentTurnResult> {
   const userPlain = extractAgentUserPlainText(input.userMessage);
-  const userMessageForModel = await deps.agentManager.applyMemoryPrefetchToUserMessage(
+  const userContext = await deps.agentManager.prepareUserTurnContext(
     input.userMessage,
     input.sessionKey,
   );
+  const userMessageForModel = userContext.modelMessage;
 
   const modelRef = deps.modelManager.getModelForSession(input.sessionKey);
   const llmTurn = await hydrateUserTurnForLlm({
@@ -173,7 +174,7 @@ export async function runDirectAgentTurn(
     onEvent: input.onEvent,
   });
 
-  deps.agentManager.afterAgentTurn(input.sessionKey, userPlain);
+  await deps.agentManager.afterAgentTurn(input.sessionKey, userPlain);
   deps.agentManager.scheduleBackgroundReviewAfterUserTurn(input.sessionKey);
 
   return result;

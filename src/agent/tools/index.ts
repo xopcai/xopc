@@ -116,6 +116,7 @@ export {
 } from './skill-install-tool.js';
 export { createToolManualTool } from './tool-manual-tool.js';
 export { createDesktopPetTool, type DesktopPetCreateDetails } from './desktop-pet-tool.js';
+export { createCodeIntelligenceTools } from '../code-intelligence/tools.js';
 
 export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';
 export { createImageGenerateTool, resolveImageGenerationModelConfigForTool } from './image-generate-tool.js';

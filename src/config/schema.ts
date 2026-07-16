@@ -138,6 +138,13 @@ export const AgentsConfigSchema = z.object({
         mode: 'confirmWrite',
         sources: ['session', 'curated'],
         writePolicy: { curated: 'confirm' },
+        understanding: {
+          enabled: true,
+          adaptiveCadence: true,
+          reviewIntervalTurns: 10,
+          maxHistoryMessages: 80,
+          maxDurationMs: 120_000,
+        },
       },
       workflows: {},
       boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
@@ -1131,6 +1138,36 @@ export const McpConfigSchema = z
 export type McpServerConfig = z.infer<typeof McpServerSchema>;
 export type McpConfig = z.infer<typeof McpConfigSchema>;
 
+// ============================================
+// Code Intelligence
+// ============================================
+
+export const CodeIntelligenceConfigSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    agentIds: z.array(z.string().min(1)).default(['coder']),
+    indexMode: z.enum(['fast', 'moderate', 'full']).default('moderate'),
+    autoIndex: z.boolean().default(true),
+    autoRefresh: z.boolean().default(true),
+    refreshDebounceMs: z.number().int().min(100).max(30_000).default(600),
+    queryTimeoutMs: z.number().int().min(1_000).max(120_000).default(20_000),
+    indexTimeoutMs: z.number().int().min(10_000).max(30 * 60_000).default(5 * 60_000),
+    binaryPath: z.string().min(1).optional(),
+  })
+  .strict()
+  .default({
+    enabled: true,
+    agentIds: ['coder'],
+    indexMode: 'moderate',
+    autoIndex: true,
+    autoRefresh: true,
+    refreshDebounceMs: 600,
+    queryTimeoutMs: 20_000,
+    indexTimeoutMs: 5 * 60_000,
+  });
+
+export type CodeIntelligenceConfig = z.infer<typeof CodeIntelligenceConfigSchema>;
+
 export const ConnectorsConfigSchema = z
   .object({
     instances: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
@@ -1155,6 +1192,7 @@ export const ConfigSchema = z.object({
   workspace: WorkspaceConfigSchema,
   tools: ToolsConfigSchema,
   mcp: McpConfigSchema,
+  codeIntelligence: CodeIntelligenceConfigSchema,
   connectors: ConnectorsConfigSchema,
   goals: GoalsConfigSchema.optional(),
   extensions: ExtensionsConfigSchema.default({}),
@@ -1200,6 +1238,13 @@ export const ConfigSchema = z.object({
           mode: 'confirmWrite',
           sources: ['session', 'curated'],
           writePolicy: { curated: 'confirm' },
+          understanding: {
+            enabled: true,
+            adaptiveCadence: true,
+            reviewIntervalTurns: 10,
+            maxHistoryMessages: 80,
+            maxDurationMs: 120_000,
+          },
         },
         workflows: {},
         boundaries: { requiresConfirmation: [], forbidden: [], escalation: [] },
@@ -1262,6 +1307,16 @@ export const ConfigSchema = z.object({
         providers: [],
       },
     },
+  },
+  codeIntelligence: {
+    enabled: true,
+    agentIds: ['coder'],
+    indexMode: 'moderate' as const,
+    autoIndex: true,
+    autoRefresh: true,
+    refreshDebounceMs: 600,
+    queryTimeoutMs: 20_000,
+    indexTimeoutMs: 5 * 60_000,
   },
   goals: {
     maxTurns: 20,

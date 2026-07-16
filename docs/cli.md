@@ -43,6 +43,7 @@ pnpm run dev:gateway     # start gateway with ~/.xopc-dev and info logs
 | `auth` | Manage authentication credentials |
 | `agent` | Chat with Agent |
 | `tui` | Full-screen terminal UI (embedded by default; gateway optional) — see [TUI](./tui.md) |
+| `resume` | Resume a previous TUI session directly or choose one interactively |
 | `tunnel` | Manage FRP remote access tunnel |
 | `gateway` | Start REST gateway |
 | `session` | Manage sessions |
@@ -80,6 +81,7 @@ Use `xopc <command> --help` for option-level details. This table tracks the comm
 | `auth` | `list`, `set`, `get`, `remove`, `login`, `logout`, `profiles`, `clear`, `providers` |
 | `agent` | No subcommands |
 | `tui` | No subcommands |
+| `resume` | No subcommands |
 | `tunnel` | `prefetch`, `consent`, `secret`, `start`, `stop`, `status`, `qr`, `broker` |
 | `gateway` | `token`, `status`, `health`, `call`, `probe`, `stop`, `restart`, `logs`, `service`, `ssh-tunnel` |
 | `session` | `list`, `info`, `delete`, `delete-many`, `rename`, `tag`, `untag`, `archive`, `unarchive`, `pin`, `unpin`, `search`, `grep`, `export`, `stats`, `cleanup` |
@@ -336,6 +338,31 @@ Note: if both `--local` and any gateway flag (`--gateway`, `--url`, `--token`) a
 | `--thinking <level>` | Thinking level override |
 
 Full behavior, slash commands, and keyboard shortcuts: **[Terminal UI (tui)](./tui.md)**.
+
+---
+
+## resume
+
+Resume a previous TUI session. Without a session key, XOPC opens the interactive session picker.
+
+```bash
+xopc resume
+xopc resume agent:main:tui-...
+xopc resume --gateway --url http://host:18790
+```
+
+| Option | Description |
+|--------|-------------|
+| `[sessionKey]` | Session key to resume directly; omit it to open the session picker |
+| `--url <url>` | Gateway URL |
+| `--token <token>` | Gateway bearer token |
+| `--password-env <name>` | Environment variable containing the gateway password |
+| `--workdir <dir>` | Workspace directory for the resumed session |
+| `--no-cwd` | Do not use the launch directory as the resumed session workspace |
+| `--local` | Run in embedded mode |
+| `--gateway` | Force gateway mode |
+| `--theme <name>` | Theme: `auto`, `dark`, `light`, or a custom theme name |
+| `--thinking <level>` | Thinking level override |
 
 ---
 

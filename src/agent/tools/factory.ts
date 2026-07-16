@@ -42,6 +42,7 @@ import {
   createXopcUseTool,
   createDesktopPetTool,
   createSkillInstallTool,
+  createCodeIntelligenceTools,
   type SkillInstallToolOptions,
   type SkillInstallToolResult,
 } from './index.js';
@@ -80,6 +81,7 @@ import { createTextToSpeechTool } from './tts-tool.js';
 import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 import { createGoalEvidenceRecorder } from './goal-evidence-recorder.js';
 import { getAgentCapabilityToolNames } from '../capabilities/index.js';
+import type { CodeIntelligenceRuntimeLike } from '../code-intelligence/index.js';
 
 const log = createLogger('AgentToolsFactory');
 
@@ -123,6 +125,8 @@ export interface ToolFactoryDeps {
   registerSkillEnvPassthrough?: (names: string[]) => void;
   /** Install managed skills from explicit sources when a capability/tool enables it. */
   installSkillFromSource?: (opts: SkillInstallToolOptions) => Promise<SkillInstallToolResult>;
+  /** Workspace-scoped structural code intelligence runtime. */
+  getCodeIntelligenceRuntime?: (workspace: string) => CodeIntelligenceRuntimeLike;
 }
 
 export interface CreateCoreToolsOptions {
@@ -269,6 +273,17 @@ export class AgentToolsFactory {
       config: cfg,
       workspace,
     });
+    const codeIntelligenceConfig = cfg?.codeIntelligence;
+    const agentId = options?.agentId;
+    const codeIntelligenceEnabled =
+      codeIntelligenceConfig?.enabled === true &&
+      agentId !== undefined &&
+      codeIntelligenceConfig.agentIds.includes(agentId);
+    const codeIntelligenceTools = codeIntelligenceEnabled && this.deps.getCodeIntelligenceRuntime
+      ? createCodeIntelligenceTools({
+          getRuntime: () => this.deps.getCodeIntelligenceRuntime!(workspace),
+        })
+      : [];
 
     const composioTool = createComposioExecuteTool(() => this.deps.getConfig?.());
     const optionalTools = [imageTool, imageGenerateTool, composioTool].filter((t) => t != null) as any[];
@@ -327,6 +342,7 @@ export class AgentToolsFactory {
           ]
         : []),
       readTool,
+      ...codeIntelligenceTools,
       writeTool,
       applyPatchTool,
       listDir,

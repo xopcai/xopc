@@ -61,7 +61,8 @@ Or create manually:
         "memory": {
           "mode": "confirmWrite",
           "sources": ["session", "curated"],
-          "writePolicy": { "curated": "confirm" }
+          "writePolicy": { "curated": "confirm" },
+          "understanding": { "enabled": true, "adaptiveCadence": true, "reviewIntervalTurns": 10 }
         },
         "workflows": {},
         "boundaries": { "requiresConfirmation": [], "forbidden": [], "escalation": [] }
@@ -200,7 +201,7 @@ Each entry must include **`id`**, **`identity`**, **`responsibilities`**, **`wor
 | `tools.builtin` | object | Built-in tool policy by tool name: `{ "mode": "allow" | "confirm" | "deny", "scope"?: "readonly" | "workspace" | "unrestricted" }`. |
 | `tools.mcp` | object | Optional MCP server/tool policies. |
 | `skills` | object | Skill visibility policy: `all`, `allowlist`, `denylist`, or `off`. |
-| `memory` | object | Memory mode, sources, write policy, retention, and privacy. |
+| `memory` | object | Memory mode, sources, write policy, retention, privacy, and optional background user-understanding review policy. |
 | `workflows` | object | Optional default/allowed/suggested workflow policy. |
 | `boundaries` | object | Confirmation, forbidden, and escalation rules. |
 | `runtime` | object | Optional runtime limits (`maxTurns`, `timeoutMs`, `maxToolFailuresPerTurn`). |

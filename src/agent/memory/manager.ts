@@ -1,9 +1,10 @@
 import type { AgentTool } from '@earendil-works/pi-agent-core';
 
-import { appendMemoryTraceEvent } from '../../storage/sqlite/index.js';
+import { appendMemoryTraceEvent, setKnowledgeSourceItemSynthesisStatus } from '../../storage/sqlite/index.js';
 import { createLogger } from '../../utils/logger.js';
-import { proposeMemoryCandidatesFromTurn } from './candidate-extractor.js';
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
+import { UserUnderstandingService } from './understanding/service.js';
+import type { UnderstandingCandidate } from './understanding/types.js';
 import type {
   MemoryDeleteRequest,
   MemoryListRequest,
@@ -51,6 +52,9 @@ export class MemoryManager {
   private readonly writePolicy: Required<Pick<MemoryWritePolicy, 'allowExternalWrites' | 'requireUserProfileApproval'>> &
     Omit<MemoryWritePolicy, 'allowExternalWrites' | 'requireUserProfileApproval'>;
   private pluginProvidersLoaded = false;
+  private readonly understanding: UserUnderstandingService;
+  private readonly lastTurnSourceItem = new Map<string, string>();
+  private understandingAgentId: string | undefined;
 
   constructor(options: MemoryManagerOptions = {}) {
     this.routing = {
@@ -65,6 +69,10 @@ export class MemoryManager {
       allowedProviderIds: options.writePolicy?.allowedProviderIds,
       autoWriteKinds: options.writePolicy?.autoWriteKinds,
     };
+    this.understanding = new UserUnderstandingService({
+      write: (request) => this.write(request),
+      list: (canonicalKey) => this.list({ canonicalKey }),
+    });
   }
 
   addProvider(provider: MemoryProvider): void {
@@ -116,21 +124,6 @@ export class MemoryManager {
     return blocks.join('\n\n');
   }
 
-  async prefetchAll(query: string, options?: { sessionId?: string }): Promise<string> {
-    const parts: string[] = [];
-    for (const p of this.providers) {
-      try {
-        const v = await p.prefetch?.(query, options);
-        if (v?.trim()) {
-          parts.push(v.trim());
-        }
-      } catch (err) {
-        log.debug({ err, id: p.id }, 'prefetch failed (non-fatal)');
-      }
-    }
-    return parts.join('\n\n');
-  }
-
   queuePrefetchAll(query: string, options?: { sessionId?: string }): void {
     for (const p of this.providers) {
       try {
@@ -142,13 +135,38 @@ export class MemoryManager {
   }
 
   async syncAll(userContent: string, assistantContent: string, options?: { sessionId?: string }): Promise<void> {
+    await this.captureTurnUnderstanding(userContent, assistantContent, options);
+    await this.syncProvidersForTurn(userContent, assistantContent, options);
+  }
+
+  async captureTurnUnderstanding(
+    userContent: string,
+    assistantContent: string,
+    options?: { sessionId?: string; correctionTargetRecordIds?: string[] },
+  ): Promise<void> {
+    const review = await this.understanding.reviewTurn({
+      agentId: this.understandingAgentId,
+      userContent,
+      assistantContent,
+      sessionKey: options?.sessionId,
+      correctionTargetRecordIds: options?.correctionTargetRecordIds,
+    });
+    if (options?.sessionId && review.sourceItemId) {
+      this.lastTurnSourceItem.set(options.sessionId, review.sourceItemId);
+    }
+  }
+
+  async syncProvidersForTurn(
+    userContent: string,
+    assistantContent: string,
+    options?: { sessionId?: string },
+  ): Promise<void> {
     const event: MemorySyncEvent = {
       type: 'turn',
       userContent,
       assistantContent,
       sessionId: options?.sessionId,
     };
-    await this.proposeCandidatesFromTurn(event);
     for (const p of this.providers) {
       const started = Date.now();
       try {
@@ -169,24 +187,24 @@ export class MemoryManager {
     }
   }
 
-  private async proposeCandidatesFromTurn(event: Extract<MemorySyncEvent, { type: 'turn' }>): Promise<void> {
-    const candidates = proposeMemoryCandidatesFromTurn({
-      userContent: event.userContent,
-      assistantContent: event.assistantContent,
-      sessionKey: event.sessionId,
+  async applyUnderstandingCandidates(
+    candidates: UnderstandingCandidate[],
+    context: {
+      sessionKey?: string;
+      sourceText?: string;
+      reviewSource?: 'turn' | 'background';
+    } = {},
+  ): Promise<void> {
+    const sourceItemId = context.sessionKey
+      ? this.lastTurnSourceItem.get(context.sessionKey)
+      : undefined;
+    await this.understanding.applyCandidates(candidates, {
+      ...context,
+      agentId: this.understandingAgentId,
+      sourceItemId,
     });
-    for (const candidate of candidates) {
-      try {
-        await this.write({
-          ...candidate,
-          scope: {
-            ...(candidate.scope ?? {}),
-            ...(event.sessionId ? { sessionKey: event.sessionId } : {}),
-          },
-        });
-      } catch (err) {
-        log.debug({ err, sessionKey: event.sessionId }, 'memory candidate proposal failed');
-      }
+    if (sourceItemId) {
+      setKnowledgeSourceItemSynthesisStatus([sourceItemId], 'completed');
     }
   }
 
@@ -359,6 +377,7 @@ export class MemoryManager {
   }
 
   async initializeAll(sessionId: string, options?: MemoryProviderInitOptions): Promise<void> {
+    this.understandingAgentId = options?.agentId;
     await this.loadPluginProvidersOnce();
     for (const p of this.providers) {
       try {
@@ -389,6 +408,7 @@ export class MemoryManager {
   }
 
   async shutdownAll(): Promise<void> {
+    this.lastTurnSourceItem.clear();
     for (const p of [...this.providers].reverse()) {
       try {
         await p.shutdown();

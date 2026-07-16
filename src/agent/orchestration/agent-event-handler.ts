@@ -283,7 +283,7 @@ function readStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
 }
 
-function readChangedPathsFromToolEnd(toolName: string, args: unknown, result: unknown): string[] {
+export function readChangedPathsFromToolEnd(toolName: string, args: unknown, result: unknown): string[] {
   const name = toolName.toLowerCase();
   const details = readToolResultDetails(result);
 

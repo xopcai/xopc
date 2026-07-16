@@ -47,7 +47,9 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
       setThinkingLevel: vi.fn(),
       expandSkillUserText: (t: string) => t,
       getResolvedWorkspaceForSession: () => '/tmp',
-      applyMemoryPrefetchToUserMessage: vi.fn().mockImplementation(async (m) => m),
+      prepareUserTurnContext: vi.fn().mockImplementation(async (m) => ({
+        traceId: '', modelMessage: m, items: [], rejected: [], estimatedTokens: 0,
+      })),
       afterAgentTurn: vi.fn(),
       beginBackgroundReviewUserTurn: vi.fn(),
       scheduleBackgroundReviewAfterUserTurn: vi.fn(),

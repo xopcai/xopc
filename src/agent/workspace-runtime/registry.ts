@@ -22,6 +22,7 @@ import { resolveBuiltinMemoryStoreConfig } from '../memory/memory-config.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { SkillManager } from '../skills/skill-manager.js';
 import { SystemPromptBuilder } from '../prompt/service-prompt-builder.js';
+import { CodeIntelligenceRuntime } from '../code-intelligence/index.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('WorkspaceRuntimeRegistry');
@@ -31,6 +32,7 @@ export interface WorkspaceRuntime {
   systemPromptBuilder: SystemPromptBuilder;
   builtinMemoryStore: BuiltinMemoryStore;
   memoryManager: MemoryManager;
+  codeIntelligence: CodeIntelligenceRuntime;
 }
 
 export interface WorkspaceRuntimeRegistryOptions {
@@ -72,12 +74,17 @@ export class WorkspaceRuntimeRegistry {
       config: cfg,
       skillManager,
     });
+    const codeIntelligence = new CodeIntelligenceRuntime({
+      workspace: resolvedPath,
+      getConfig: this.getConfig,
+    });
 
     const rt: WorkspaceRuntime = {
       skillManager,
       systemPromptBuilder,
       builtinMemoryStore,
       memoryManager,
+      codeIntelligence,
     };
     this.runtimes.set(resolvedPath, rt);
     this.onRuntimeCreated?.(resolvedPath);
@@ -102,11 +109,14 @@ export class WorkspaceRuntimeRegistry {
     const toShutdown = [...this.runtimes.values()];
     this.runtimes.clear();
     await Promise.allSettled(
-      toShutdown.map((rt) =>
+      toShutdown.flatMap((rt) => [
         rt.memoryManager.shutdownAll().catch((err) => {
           log.warn({ err }, 'memoryManager.shutdownAll failed');
         }),
-      ),
+        rt.codeIntelligence.dispose().catch((err) => {
+          log.warn({ err }, 'codeIntelligence.dispose failed');
+        }),
+      ]),
     );
   }
 }

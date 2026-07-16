@@ -33,6 +33,7 @@ bus, and the agent runtime persists all session state through SQLite.
 | Channels | `src/channels/`, `extensions/telegram`, `extensions/weixin`, `extensions/feishu` | Channel plugins receive external messages, normalize routing/session keys, publish inbound bus messages, and send outbound replies. |
 | Extension runtime | `src/extensions/`, `extensions/*` | Loads extension manifests and code by activation plan, then registers hooks, tools, channel plugins, gateway methods, and extension UI assets. |
 | State and storage | `src/storage/sqlite/`, `src/session/`, `src/config/` | SQLite database, session metadata/transcripts/FTS, compaction checkpoints, notes and memory records, JSON config, agent profiles, workspace files, media, logs, and extension state. |
+| User understanding | `src/knowledge/`, `src/agent/memory/understanding/`, `src/agent/memory/context/` | Evidence ingestion, governed synthesis, deduplicated understanding records, and bounded per-turn context planning. See [User understanding](./user-understanding.md). |
 | External integrations | `src/providers/`, `src/agent/mcp/`, `src/mcp/`, `src/browser/`, `src/remote-access/` | LLM providers through `@earendil-works/pi-ai`, outbound MCP tools over stdio/HTTP, inbound channel MCP bridge, browser extension WebSocket bridge, and optional Tailscale/FRP/SSH exposure. |
 
 ## Main Data Flows

@@ -50,14 +50,14 @@ export interface AgentInstanceGateway {
   getLastAssistantContent(sessionKey: string): string | null;
 
   // ── Turn-time hooks (called by direct-turn helpers + orchestrator) ────
-  /** Prefix prefetched memory blocks into the user turn if cadence config says so. */
-  applyMemoryPrefetchToUserMessage(
+  /** Build the bounded, policy-filtered context used for this model turn. */
+  prepareUserTurnContext(
     userMessage: AgentMessage,
     sessionKey: string,
-  ): Promise<AgentMessage>;
+  ): Promise<import('./memory/context/types.js').UserContextPlan>;
 
   /** Post-turn: sync external memory providers, queue next prefetch. */
-  afterAgentTurn(sessionKey: string, userPlainText: string): void;
+  afterAgentTurn(sessionKey: string, userPlainText: string): Promise<void>;
 
   /** Bump the per-session "turns since memory review" counter. */
   beginBackgroundReviewUserTurn(sessionKey: string): void;

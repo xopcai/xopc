@@ -4,7 +4,11 @@ import { BuiltinMemoryStore } from '../../../agent/memory/builtin-memory-store.j
 import { createMemoryManagerFromConfig } from '../../../agent/memory/create-memory-manager.js';
 import { resolveBuiltinMemoryStoreConfig } from '../../../agent/memory/memory-config.js';
 import { discoverMemoryPlugins } from '../../../agent/memory/plugin-discovery.js';
+import { resolveAdaptiveUnderstandingCadence } from '../../../agent/memory/understanding/quality.js';
 import type {
+  MemoryDisclosurePolicy,
+  MemoryDurability,
+  MemoryExplicitness,
   MemoryKind,
   MemorySensitivity,
   MemoryStatus,
@@ -13,24 +17,40 @@ import { MemoryPolicySchema } from '../../../agent-manifest/schema.js';
 import { resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import { resolveEffectiveAgentManifestForAgent } from '../../../config/agent-profile.js';
 import type { Config } from '../../../config/schema.js';
+import type { KnowledgeSynthesisStatus } from '../../../knowledge/types.js';
 import { prepareUpdateAgent } from '../../agents-admin.js';
 import {
   appendMemorySignal,
   appendMemoryTraceEvent,
   deleteMemoryRecord,
+  findLatestMemoryInjectTrace,
   getMemoryRecord,
+  listKnowledgeSourceItems,
+  listKnowledgeSyncRuns,
   listMemoryRecords,
   listMemorySignals,
   listMemoryTraceEvents,
   searchMemoryRecords,
   setMemoryTraceFeedback,
+  setLatestMemoryInjectFeedback,
   summarizeMemoryRecallFeedback,
+  summarizeUserUnderstandingQuality,
   upsertMemoryRecord,
 } from '../../../storage/sqlite/index.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 const MEMORY_KINDS = new Set<MemoryKind>([
   'user_profile',
+  'preference',
+  'boundary',
+  'relationship',
+  'project_context',
+  'commitment',
+  'routine',
+  'personal_logistics',
+  'open_question',
+  'milestone',
+  'current_state',
   'agent_note',
   'workspace_fact',
   'daily_note',
@@ -39,6 +59,12 @@ const MEMORY_KINDS = new Set<MemoryKind>([
   'task_lesson',
   'tool_preference',
   'long_term_goal',
+]);
+
+const MEMORY_EXPLICITNESS = new Set<MemoryExplicitness>(['explicit', 'observed', 'inferred']);
+const MEMORY_DURABILITY = new Set<MemoryDurability>(['ephemeral', 'durable', 'recurring']);
+const MEMORY_DISCLOSURE_POLICIES = new Set<MemoryDisclosurePolicy>([
+  'silent', 'referenceable', 'ask_before_reference',
 ]);
 
 const MEMORY_STATUSES = new Set<MemoryStatus>([
@@ -64,6 +90,10 @@ const MEMORY_TRACE_FEEDBACK_OUTCOMES = new Set([
   'irrelevant',
 ]);
 
+const KNOWLEDGE_SYNTHESIS_STATUSES = new Set<KnowledgeSynthesisStatus>([
+  'pending', 'processing', 'completed', 'failed', 'ignored',
+]);
+
 function parseLimit(raw: string | undefined, fallback = 100): number {
   const parsed = raw ? Number.parseInt(raw, 10) : fallback;
   return Number.isFinite(parsed) ? Math.max(1, Math.min(500, parsed)) : fallback;
@@ -72,6 +102,11 @@ function parseLimit(raw: string | undefined, fallback = 100): number {
 function parseFeedbackSummaryLimit(raw: string | undefined): number {
   const parsed = raw ? Number.parseInt(raw, 10) : 1000;
   return Number.isFinite(parsed) ? Math.max(1, Math.min(5000, parsed)) : 1000;
+}
+
+function parseWindowDays(raw: string | undefined): number {
+  const parsed = raw ? Number.parseInt(raw, 10) : 30;
+  return Number.isFinite(parsed) ? Math.max(1, Math.min(365, parsed)) : 30;
 }
 
 function parseKind(raw: unknown): MemoryKind | undefined {
@@ -92,6 +127,10 @@ function parseSensitivity(raw: unknown): MemorySensitivity | undefined {
     : undefined;
 }
 
+function parseEnum<T extends string>(raw: unknown, allowed: Set<T>): T | undefined {
+  return typeof raw === 'string' && allowed.has(raw as T) ? raw as T : undefined;
+}
+
 export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   authenticated.get('/api/memory/providers', async (c) => {
     const cfg = deps.service.currentConfig as Config;
@@ -100,7 +139,7 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       providers: [
         {
           id: 'local',
-          displayName: 'Local Markdown Memory',
+          displayName: 'Local Knowledge Store',
           available: true,
           configured: true,
           capabilities: {
@@ -215,6 +254,11 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       tags: Array.isArray(body.tags) ? body.tags.filter((tag): tag is string => typeof tag === 'string') : undefined,
       status: parseStatus(body.status),
       sensitivity: parseSensitivity(body.sensitivity),
+      canonicalKey: typeof body.canonicalKey === 'string' ? body.canonicalKey : undefined,
+      explicitness: parseEnum(body.explicitness, MEMORY_EXPLICITNESS),
+      durability: parseEnum(body.durability, MEMORY_DURABILITY),
+      importance: typeof body.importance === 'number' ? body.importance : undefined,
+      disclosurePolicy: parseEnum(body.disclosurePolicy, MEMORY_DISCLOSURE_POLICIES),
       evidence: Array.isArray(body.evidence)
         ? body.evidence.filter((item: unknown): item is NonNullable<Parameters<typeof upsertMemoryRecord>[0]['evidence']>[number] =>
             Boolean(item) && typeof item === 'object',
@@ -222,6 +266,10 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
         : undefined,
       reviewAfter: typeof body.reviewAfter === 'string' ? body.reviewAfter : undefined,
       expiresAt: typeof body.expiresAt === 'string' ? body.expiresAt : undefined,
+      validFrom: typeof body.validFrom === 'string' ? body.validFrom : undefined,
+      validTo: typeof body.validTo === 'string' ? body.validTo : undefined,
+      supersedesRecordId: typeof body.supersedesRecordId === 'string' ? body.supersedesRecordId : undefined,
+      conflictGroupId: typeof body.conflictGroupId === 'string' ? body.conflictGroupId : undefined,
     });
     return c.json({ record }, 201);
   });
@@ -244,6 +292,11 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       tags: Array.isArray(body.tags) ? body.tags.filter((tag): tag is string => typeof tag === 'string') : existing.tags,
       status: parseStatus(body.status) ?? existing.status,
       sensitivity: parseSensitivity(body.sensitivity) ?? existing.sensitivity,
+      canonicalKey: typeof body.canonicalKey === 'string' ? body.canonicalKey : existing.canonicalKey,
+      explicitness: parseEnum(body.explicitness, MEMORY_EXPLICITNESS) ?? existing.explicitness,
+      durability: parseEnum(body.durability, MEMORY_DURABILITY) ?? existing.durability,
+      importance: typeof body.importance === 'number' ? body.importance : existing.importance,
+      disclosurePolicy: parseEnum(body.disclosurePolicy, MEMORY_DISCLOSURE_POLICIES) ?? existing.disclosurePolicy,
       evidence: Array.isArray(body.evidence)
         ? body.evidence.filter((item: unknown): item is NonNullable<Parameters<typeof upsertMemoryRecord>[0]['evidence']>[number] =>
             Boolean(item) && typeof item === 'object',
@@ -251,6 +304,10 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
         : existing.evidence,
       reviewAfter: typeof body.reviewAfter === 'string' ? body.reviewAfter : existing.reviewAfter,
       expiresAt: typeof body.expiresAt === 'string' ? body.expiresAt : existing.expiresAt,
+      validFrom: typeof body.validFrom === 'string' ? body.validFrom : existing.validFrom,
+      validTo: typeof body.validTo === 'string' ? body.validTo : existing.validTo,
+      supersedesRecordId: typeof body.supersedesRecordId === 'string' ? body.supersedesRecordId : existing.supersedesRecordId,
+      conflictGroupId: typeof body.conflictGroupId === 'string' ? body.conflictGroupId : existing.conflictGroupId,
     });
     return c.json({ record });
   });
@@ -270,6 +327,25 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       limit: parseLimit(c.req.query('limit')),
     });
     return c.json({ signals });
+  });
+
+  authenticated.get('/api/knowledge/source-items', (c) => {
+    const sourceItems = listKnowledgeSourceItems({
+      sourceInstanceId: c.req.query('sourceInstanceId') || undefined,
+      synthesisStatus: parseEnum(c.req.query('synthesisStatus'), KNOWLEDGE_SYNTHESIS_STATUSES),
+      includeDeleted: c.req.query('includeDeleted') === 'true',
+      limit: parseLimit(c.req.query('limit')),
+      offset: c.req.query('offset') ? Number.parseInt(c.req.query('offset')!, 10) : 0,
+    });
+    return c.json({ sourceItems });
+  });
+
+  authenticated.get('/api/knowledge/sync-runs', (c) => {
+    const syncRuns = listKnowledgeSyncRuns({
+      sourceInstanceId: c.req.query('sourceInstanceId') || undefined,
+      limit: parseLimit(c.req.query('limit')),
+    });
+    return c.json({ syncRuns });
   });
 
   authenticated.get('/api/memory/traces', (c) => {
@@ -314,6 +390,73 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
       limit: parseFeedbackSummaryLimit(c.req.query('limit')),
     });
     return c.json({ summaries });
+  });
+
+  authenticated.get('/api/memory/understanding/quality', (c) => {
+    const cfg = deps.service.currentConfig as Config;
+    const agentId = c.req.query('agentId') || resolveDefaultAgentId(cfg);
+    const manifest = resolveEffectiveAgentManifestForAgent(cfg, agentId);
+    const metrics = summarizeUserUnderstandingQuality({
+      agentId: manifest.id,
+      windowDays: parseWindowDays(c.req.query('windowDays')),
+    });
+    const baseIntervalTurns = manifest.memory.understanding?.reviewIntervalTurns ?? 10;
+    const cadence = resolveAdaptiveUnderstandingCadence(
+      baseIntervalTurns,
+      metrics,
+      manifest.memory.understanding?.adaptiveCadence ?? true,
+    );
+    return c.json({ metrics, cadence });
+  });
+
+  authenticated.patch(
+    '/api/memory/understanding/response-feedback',
+    deps.strictRateLimitMiddleware,
+    async (c) => {
+      const body = await c.req.json().catch(() => ({}));
+      const sessionKey = typeof body.sessionKey === 'string' ? body.sessionKey.trim() : '';
+      const assistantTimestamp = typeof body.assistantTimestamp === 'number'
+        ? body.assistantTimestamp
+        : Number.NaN;
+      const outcome = body.outcome === 'helpful' || body.outcome === 'not_helpful'
+        ? body.outcome
+        : undefined;
+      if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0 || !outcome) {
+        return c.json({ error: 'sessionKey, assistantTimestamp, and a valid outcome are required' }, 400);
+      }
+      const trace = setLatestMemoryInjectFeedback({
+        sessionKey,
+        beforeMs: assistantTimestamp,
+        feedback: {
+          outcome,
+          source: 'user',
+          reason: 'assistant_response_feedback',
+        },
+      });
+      return c.json({
+        matched: Boolean(trace),
+        attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
+        feedback: trace?.feedback ?? null,
+        remediation: trace?.remediation ?? null,
+      });
+    },
+  );
+
+  authenticated.get('/api/memory/understanding/response-feedback', (c) => {
+    const sessionKey = c.req.query('sessionKey')?.trim() ?? '';
+    const assistantTimestamp = Number(c.req.query('assistantTimestamp'));
+    if (!sessionKey || !Number.isFinite(assistantTimestamp) || assistantTimestamp <= 0) {
+      return c.json({ error: 'sessionKey and assistantTimestamp are required' }, 400);
+    }
+    const trace = findLatestMemoryInjectTrace({
+      sessionKey,
+      beforeMs: assistantTimestamp,
+    });
+    return c.json({
+      matched: Boolean(trace),
+      attributedRecordCount: trace?.selectedRecordIds.length ?? 0,
+      feedback: trace?.feedback ?? null,
+    });
   });
 
   authenticated.post('/api/memory/signals', async (c) => {

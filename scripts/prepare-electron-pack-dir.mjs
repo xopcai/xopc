@@ -71,6 +71,19 @@ function stageRipgrepBinary(packDirPath, target) {
   cpSync(rgPath, join(destDir, rgName));
 }
 
+function stageCodebaseMemoryBinary(repoRoot, packDirPath, target) {
+  const cbmName = target.platform === 'win32' ? 'codebase-memory-mcp.exe' : 'codebase-memory-mcp';
+  const cbmPath = join(repoRoot, 'node_modules', 'codebase-memory-mcp', 'bin', cbmName);
+  if (!existsSync(cbmPath)) {
+    throw new Error(
+      `[prepare-electron-pack-dir] Missing codebase-memory-mcp binary for ${target.platform}/${target.arch}`,
+    );
+  }
+  const destDir = join(packDirPath, '_pack-resources', 'cbm');
+  mkdirSync(destDir, { recursive: true });
+  cpSync(cbmPath, join(destDir, cbmName));
+}
+
 export function prepareElectronPackDir(
   repoRoot = root,
   target = { platform: process.platform, arch: process.arch },
@@ -93,6 +106,7 @@ export function prepareElectronPackDir(
 
   installRuntimeDeps(packDir, target);
   stageRipgrepBinary(packDir, target);
+  stageCodebaseMemoryBinary(repoRoot, packDir, target);
   rmSync(join(packDir, 'node_modules', '@vscode', `ripgrep-${target.platform}-${target.arch}`), {
     recursive: true,
     force: true,

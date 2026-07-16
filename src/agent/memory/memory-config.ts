@@ -46,8 +46,8 @@ export function resolveBuiltinMemoryStoreConfig(
  * Whether to prefix the user message with prefetched external memory this turn.
  * `first-turn` only injects on turn 1. `contextCadence` N injects on turns 1, N+1, 2N+1, …
  */
-export function shouldInjectMemoryPrefetchThisTurn(
-  config: Config | undefined,
+export function shouldPlanUserContextThisTurn(
+  _config: Config | undefined,
   turnNumber: number,
 ): boolean {
   return turnNumber >= 1;
