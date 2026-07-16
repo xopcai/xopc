@@ -13,7 +13,7 @@ xopc 为 `coder` agent 内置由 codebase-memory-mcp（CBM）提供的代码库�
 
 不要为此集成运行 `codebase-memory-mcp install`。该命令用于配置其他 coding client；xopc 会直接启动内置的 MCP 二进制。
 
-Electron 应用会随包提供对应的 CBM 静态二进制。npm 版本仅在 coder agent 第一次需要代码智能时才下载 CBM，`npm install` 阶段不会下载。按需下载有两分钟时限、会在解压前校验发布清单中的 SHA-256，并原子写入 xopc 状态目录，因此 GitHub Releases 不可达或不可信时不会让包安装卡住，也不会引入可执行文件。
+Electron 应用会随包提供对应的 CBM 静态二进制。npm 版本仅在 coder agent 第一次需要代码智能时才下载 CBM，`npm install` 阶段不会下载。按需下载有两分钟时限、会在解压前校验发布清单中的 SHA-256，并原子写入共享的用户级二进制缓存，因此 GitHub Releases 不可达或不可信时不会让包安装卡住，也不会引入可执行文件。
 
 ## Agent 工具
 
@@ -67,10 +67,11 @@ xopc 按以下顺序查找二进制：
 
 1. `codeIntelligence.binaryPath`
 2. `XOPC_CBM_BINARY`
-3. Electron 包内的 `resources/bin`
-4. xopc 按需下载后缓存的二进制
+3. `~/.xopc/bin/codebase-memory-mcp/v<version>/<platform>-<arch>/` 中完全匹配版本的共享缓存
+4. Electron 包内的 `resources/bin` 或开发包中的二进制；验证后复制到该缓存
+5. 已验证的 GitHub Release 按需下载；写入该缓存
 
-索引位于 xopc 状态目录的 `code-intelligence/cbm` 下。每个进程通过 `CBM_ALLOWED_ROOT` 限制在解析后的 workspace 内。CBM 进程边界负责崩溃隔离；清理 workspace runtime 时会同时停止对应进程。
+共享缓存含有 manifest，记录所需 CBM 版本、平台、架构、来源、大小和 SHA-256；runtime 执行缓存二进制前会重新计算并校验哈希。每个版本都有文件锁，防止 Electron 与 CLI 同时启动时重复下载或复制。索引位于 xopc 状态目录的 `code-intelligence/cbm` 下。每个进程通过 `CBM_ALLOWED_ROOT` 限制在解析后的 workspace 内。CBM 进程边界负责崩溃隔离；清理 workspace runtime 时会同时停止对应进程。
 
 ## 故障排查
 
@@ -89,4 +90,4 @@ pnpm exec codebase-memory-mcp --version
 
 ## 打包
 
-Electron 构建会把真实二进制复制进应用资源，因此 packaged app 不会在运行时下载 CBM。npm 安装不会运行 CBM 下载；仅在首次使用代码智能且没有配置显式二进制路径时，xopc 才会进行有时限的按需下载。
+Electron 构建会将真实二进制及其 SHA-256 sidecar manifest 复制进应用资源。首次使用时 Electron 会填充共享缓存，独立安装的 CLI 随后直接复用；反过来，Electron 也会复用 CLI 已下载的匹配二进制。npm 安装不会运行 CBM 下载。

@@ -13,7 +13,7 @@ xopc gives the `coder` agent managed repository intelligence backed by codebase-
 
 Do not run `codebase-memory-mcp install` for this integration. That command configures other coding clients. xopc starts the packaged MCP binary directly.
 
-The Electron app ships the matching static CBM binary. The npm package downloads CBM only when a coder agent first needs code intelligence; it is not downloaded during `npm install`. The on-demand download has a two-minute deadline, verifies the release SHA-256 manifest before extraction, and writes atomically to the xopc state directory, so an unreachable or untrusted GitHub Releases host cannot leave package installation stuck or introduce an executable.
+The Electron app ships the matching static CBM binary. The npm package downloads CBM only when a coder agent first needs code intelligence; it is not downloaded during `npm install`. The on-demand download has a two-minute deadline, verifies the release SHA-256 manifest before extraction, and writes atomically to the shared user binary cache, so an unreachable or untrusted GitHub Releases host cannot leave package installation stuck or introduce an executable.
 
 ## Agent tools
 
@@ -67,10 +67,11 @@ xopc resolves the binary in this order:
 
 1. `codeIntelligence.binaryPath`
 2. `XOPC_CBM_BINARY`
-3. packaged Electron `resources/bin`
-4. the binary cached by xopc after its on-demand download
+3. the exact-version shared cache at `~/.xopc/bin/codebase-memory-mcp/v<version>/<platform>-<arch>/`
+4. packaged Electron `resources/bin` or a development package, copied into that cache after verification
+5. a verified on-demand GitHub Release download, written into that cache
 
-Indexes live under the xopc state directory at `code-intelligence/cbm`. Each process is restricted to its resolved workspace with `CBM_ALLOWED_ROOT`. Indexing is crash-isolated by the CBM process boundary and is stopped when workspace runtimes are cleared.
+The shared cache has a manifest containing the required CBM version, platform, architecture, source, size, and SHA-256; the hash is rechecked before the runtime executes a cached binary. A per-version file lock prevents concurrent Electron and CLI starts from downloading or copying the same binary twice. Indexes live under the xopc state directory at `code-intelligence/cbm`. Each process is restricted to its resolved workspace with `CBM_ALLOWED_ROOT`. Indexing is crash-isolated by the CBM process boundary and is stopped when workspace runtimes are cleared.
 
 ## Troubleshooting
 
@@ -91,4 +92,4 @@ Common failure modes:
 
 ## Packaging
 
-Electron builds copy the real binary into application resources, so packaged applications do not download CBM at runtime. npm installation does not download CBM; xopc downloads it on demand with a deadline only when code intelligence is first used and no explicit binary has been configured.
+Electron builds copy the real binary and a SHA-256 sidecar manifest into application resources. On first use, Electron seeds the shared cache; a separately installed CLI then reuses it. Conversely, Electron reuses a matching binary that the CLI previously downloaded. npm installation does not download CBM.
