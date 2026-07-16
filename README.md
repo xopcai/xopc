@@ -155,6 +155,7 @@ Windows git install: `& ([scriptblock]::Create((irm https://xopc.ai/install.ps1)
 - 🏠 **Runs in your environment** — Config and local state live under **`~/.xopc/`** by default; you choose deployment, backups, and remote access.
 - 🔑 **Bring your own keys** — OpenAI, Anthropic, Google, DeepSeek, Ollama, LM Studio, vLLM, and **20+** providers. Mix cloud and local models.
 - ⚙️ **Executes and triggers work** — Tools and workflows perform tasks; scheduled, manual, and webhook automations run agents or workflows later.
+- 🧭 **Graph-backed code intelligence** — The `coder` agent gets managed, local repository indexing for symbol search, source grounding, call tracing, change impact, and architecture mapping, with direct-source fallback when graph coverage is incomplete.
 - 📡 **One runtime, many surfaces** — Desktop, terminal, web, mobile, and messengers share agents, sessions, and project state.
 - 🧩 **Explicit capability boundaries** — Each agent can have its own identity, model roles, workspace, tool policy, skills, memory, and boundaries, then grow through extensions.
 
@@ -238,6 +239,7 @@ Full reference: **[Configuration](https://xopcai.github.io/xopc/configuration)**
 | [CLI](https://xopcai.github.io/xopc/cli) | Commands and flags |
 | [Channels](https://xopcai.github.io/xopc/channels) | Telegram, WeChat, Feishu |
 | [Architecture](https://xopcai.github.io/xopc/architecture) | How pieces fit together |
+| [Code intelligence](https://xopcai.github.io/xopc/code-intelligence) | Managed local repository graph for the `coder` agent |
 | [Workflows](https://xopcai.github.io/xopc/workflows) | Fan-out subagents, board UI, scripts |
 
 Also: [Tools](https://xopcai.github.io/xopc/tools) · [Mobile app](https://xopcai.github.io/xopc/mobile-app) · [Voice](https://xopcai.github.io/xopc/voice) · [Remote access](https://xopcai.github.io/xopc/remote-access)
@@ -284,6 +286,8 @@ pnpm run build && pnpm test && pnpm run lint
 ## Credits
 
 - LLM layer: [@earendil-works/pi-ai](https://github.com/earendil-works/pi-mono) · Agent runtime: [@earendil-works/pi-agent-core](https://github.com/earendil-works/pi-mono)
+- Code intelligence: [codebase-memory-mcp](https://github.com/DeusData/codebase-memory-mcp), integrated as a managed local knowledge graph for repository understanding
+- User understanding: inspired by [OpenWiki](https://github.com/langchain-ai/openwiki)'s evidence-to-knowledge approach, reimplemented as a native XOPC capability with governed synthesis and per-turn context planning — see [User understanding](./docs/user-understanding.md)
 - Inspired by [openclaw/openclaw](https://github.com/openclaw/openclaw) and [NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)
 
 ---

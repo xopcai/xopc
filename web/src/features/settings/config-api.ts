@@ -38,15 +38,6 @@ export type AgentDefaultsSessionSearchState = {
   summaryModel: string;
 };
 
-export type AgentDefaultsBackgroundReviewState = {
-  enabled: boolean;
-  memoryNudgeInterval: number;
-  skillNudgeInterval: number;
-  maxToolRounds: number;
-  maxHistoryMessages: number;
-  maxDurationMs: number;
-};
-
 export type AgentDefaultsWebExtractState = {
   model: string;
   maxLength: number | undefined;
@@ -141,7 +132,6 @@ export interface AgentDefaultsState {
   pruning: AgentDefaultsPruningState;
   memory: AgentDefaultsMemoryState;
   sessionSearch: AgentDefaultsSessionSearchState;
-  backgroundReview: AgentDefaultsBackgroundReviewState;
   webExtract: AgentDefaultsWebExtractState;
   delegate: AgentDefaultsDelegateState;
   executeCode: AgentDefaultsExecuteCodeState;
@@ -188,15 +178,6 @@ const DEFAULT_MEMORY: AgentDefaultsMemoryState = {
 
 const DEFAULT_SESSION_SEARCH: AgentDefaultsSessionSearchState = {
   summaryModel: '',
-};
-
-const DEFAULT_BG_REVIEW: AgentDefaultsBackgroundReviewState = {
-  enabled: false,
-  memoryNudgeInterval: 10,
-  skillNudgeInterval: 10,
-  maxToolRounds: 8,
-  maxHistoryMessages: 80,
-  maxDurationMs: 120_000,
 };
 
 const DEFAULT_WEB_EXTRACT: AgentDefaultsWebExtractState = {
@@ -503,36 +484,6 @@ function parseSessionSearch(raw: unknown): AgentDefaultsSessionSearchState {
   };
 }
 
-function parseBackgroundReview(raw: unknown): AgentDefaultsBackgroundReviewState {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ...DEFAULT_BG_REVIEW };
-  }
-  const p = raw as Record<string, unknown>;
-  return {
-    enabled: typeof p.enabled === 'boolean' ? p.enabled : DEFAULT_BG_REVIEW.enabled,
-    memoryNudgeInterval:
-      typeof p.memoryNudgeInterval === 'number' && p.memoryNudgeInterval >= 0
-        ? Math.floor(p.memoryNudgeInterval)
-        : DEFAULT_BG_REVIEW.memoryNudgeInterval,
-    skillNudgeInterval:
-      typeof p.skillNudgeInterval === 'number' && p.skillNudgeInterval >= 0
-        ? Math.floor(p.skillNudgeInterval)
-        : DEFAULT_BG_REVIEW.skillNudgeInterval,
-    maxToolRounds:
-      typeof p.maxToolRounds === 'number' && p.maxToolRounds >= 1 && p.maxToolRounds <= 32
-        ? Math.floor(p.maxToolRounds)
-        : DEFAULT_BG_REVIEW.maxToolRounds,
-    maxHistoryMessages:
-      typeof p.maxHistoryMessages === 'number' && p.maxHistoryMessages >= 10 && p.maxHistoryMessages <= 200
-        ? Math.floor(p.maxHistoryMessages)
-        : DEFAULT_BG_REVIEW.maxHistoryMessages,
-    maxDurationMs:
-      typeof p.maxDurationMs === 'number' && p.maxDurationMs >= 30_000 && p.maxDurationMs <= 600_000
-        ? Math.floor(p.maxDurationMs)
-        : DEFAULT_BG_REVIEW.maxDurationMs,
-  };
-}
-
 function parseWebExtract(raw: unknown): AgentDefaultsWebExtractState {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { ...DEFAULT_WEB_EXTRACT };
@@ -672,7 +623,6 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     pruning: parsePruning(d.pruning),
     memory: parseMemory(d.memory),
     sessionSearch: parseSessionSearch(d.sessionSearch),
-    backgroundReview: parseBackgroundReview(d.backgroundReview),
     webExtract: parseWebExtract(d.webExtract),
     delegate: parseEnabledFlag(d.delegate, false),
     executeCode: parseEnabledFlag(d.executeCode, false),

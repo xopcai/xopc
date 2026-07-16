@@ -272,6 +272,8 @@ function buildCoderHarnessSection(): string {
   return [
     '## Coder Harness',
     '- Inspect relevant repository instructions, files, symbols, tests, and call sites before editing.',
+    '- When code intelligence tools are available, use code_search for definitions, code_read_symbol for source grounding, and code_trace/code_impact for relationships and blast radius. Use grep/find for literals, errors, config, docs, non-code files, and graph coverage gaps.',
+    '- Treat code intelligence as indexed evidence, not ground truth: honor freshness and coverage warnings, and verify affected source directly before editing or making absence claims.',
     '- Make the smallest coherent source change that solves the requested behavior.',
     '- Protect user work: do not discard or overwrite unrelated changes.',
     '- After edits, inspect the diff and run the smallest meaningful verification; explain any skipped checks.',

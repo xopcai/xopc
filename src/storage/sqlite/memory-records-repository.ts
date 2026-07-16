@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
 import type {
+  MemoryDisclosurePolicy,
+  MemoryDurability,
+  MemoryExplicitness,
   MemoryKind,
   MemoryRecord,
   MemorySensitivity,
@@ -26,8 +29,17 @@ type MemoryRecordRow = {
   status: string;
   sensitivity: string;
   evidence_json: string;
+  canonical_key: string | null;
+  explicitness: string;
+  durability: string;
+  importance: number;
+  disclosure_policy: string;
+  valid_from: number | null;
+  valid_to: number | null;
   review_after: number | null;
   expires_at: number | null;
+  supersedes_record_id: string | null;
+  conflict_group_id: string | null;
   created_at: number;
   updated_at: number;
 };
@@ -45,14 +57,23 @@ export interface UpsertMemoryRecordInput {
   sessionKey?: string;
   projectId?: string;
   content: string;
+  canonicalKey?: string;
   source?: MemoryRecord['source'];
   confidence?: number;
   tags?: string[];
   status?: MemoryStatus;
   sensitivity?: MemorySensitivity;
+  explicitness?: MemoryExplicitness;
+  durability?: MemoryDurability;
+  importance?: number;
+  disclosurePolicy?: MemoryDisclosurePolicy;
   evidence?: MemoryRecord['evidence'];
+  validFrom?: string;
+  validTo?: string;
   reviewAfter?: string;
   expiresAt?: string;
+  supersedesRecordId?: string;
+  conflictGroupId?: string;
   nowMs?: number;
 }
 
@@ -63,6 +84,7 @@ export interface ListMemoryRecordsOptions {
   projectId?: string;
   kind?: MemoryKind;
   status?: MemoryStatus;
+  canonicalKey?: string;
   limit?: number;
   offset?: number;
 }
@@ -144,9 +166,10 @@ export interface MemoryTraceFeedback {
 }
 
 export interface AppendMemoryTraceEventInput {
+  traceId?: string;
   sessionKey?: string;
   turnId?: string;
-  phase: 'search' | 'read' | 'write' | 'update' | 'delete' | 'sync' | 'inject' | 'test';
+  phase: 'search' | 'read' | 'write' | 'update' | 'delete' | 'sync' | 'inject' | 'test' | 'understanding' | 'remediation';
   providerId: string;
   request?: unknown;
   resultCount?: number;
@@ -167,6 +190,19 @@ export interface SetMemoryTraceFeedbackInput {
   nowMs?: number;
 }
 
+export interface SetLatestMemoryInjectFeedbackInput {
+  sessionKey: string;
+  beforeMs?: number;
+  requireSelectedRecords?: boolean;
+  feedback: SetMemoryTraceFeedbackInput['feedback'];
+  nowMs?: number;
+}
+
+export type FindLatestMemoryInjectTraceInput = Pick<
+  SetLatestMemoryInjectFeedbackInput,
+  'sessionKey' | 'beforeMs' | 'requireSelectedRecords'
+>;
+
 export interface MemoryTraceEventPayload {
   traceId: string;
   sessionKey?: string;
@@ -179,9 +215,21 @@ export interface MemoryTraceEventPayload {
   skippedReason?: string;
   error?: string;
   feedback?: MemoryTraceFeedback;
+  remediation?: MemoryFeedbackRemediationResult;
   durationMs: number;
   createdAt: string;
 }
+
+export interface MemoryFeedbackRemediationResult {
+  triggerTraceId: string;
+  evaluatedRecordIds: string[];
+  needsReviewRecordIds: string[];
+}
+
+export const USER_UNDERSTANDING_REMEDIATION_POLICY = {
+  minNotHelpful: 2,
+  confidencePenalty: 0.2,
+} as const;
 
 export interface MemoryRecallFeedbackSummary {
   recordId: string;
@@ -192,6 +240,48 @@ export interface MemoryRecallFeedbackSummary {
   total: number;
   averageScore: number | null;
   lastFeedbackAt?: string;
+}
+
+export interface UserUnderstandingQualityMetrics {
+  agentId?: string;
+  windowDays: number;
+  since: string;
+  attempts: {
+    total: number;
+    turn: number;
+    background: number;
+  };
+  candidates: {
+    proposed: number;
+    created: number;
+    deduplicated: number;
+    rejectedByPolicy: number;
+  };
+  records: {
+    total: number;
+    candidate: number;
+    active: number;
+    rejected: number;
+    needsReview: number;
+    stale: number;
+    archived: number;
+    agingCandidates: number;
+    explicit: number;
+    inferred: number;
+    averageConfidence: number | null;
+  };
+  decisions: {
+    total: number;
+    acceptanceRate: number | null;
+  };
+  recall: {
+    total: number;
+    helpful: number;
+    notHelpful: number;
+    mixed: number;
+    irrelevant: number;
+    helpfulRate: number | null;
+  };
 }
 
 function parseStringArray(json: string): string[] {
@@ -309,6 +399,7 @@ function rowToRecord(row: MemoryRecordRow): MemoryRecord {
     id: row.record_id,
     kind: row.kind as MemoryKind,
     status: row.status as MemoryStatus,
+    ...(row.canonical_key ? { canonicalKey: row.canonical_key } : {}),
     scope: {
       agentId: row.agent_id,
       ...(row.workspace_id ? { workspaceId: row.workspace_id } : {}),
@@ -319,9 +410,17 @@ function rowToRecord(row: MemoryRecordRow): MemoryRecord {
     source: parseSource(row.source_json),
     ...(row.confidence != null ? { confidence: row.confidence } : {}),
     sensitivity: row.sensitivity as MemorySensitivity,
+    explicitness: row.explicitness as MemoryExplicitness,
+    durability: row.durability as MemoryDurability,
+    importance: row.importance,
+    disclosurePolicy: row.disclosure_policy as MemoryDisclosurePolicy,
     evidence: parseEvidence(row.evidence_json),
+    ...(timestampToIso(row.valid_from) ? { validFrom: timestampToIso(row.valid_from) } : {}),
+    ...(timestampToIso(row.valid_to) ? { validTo: timestampToIso(row.valid_to) } : {}),
     ...(timestampToIso(row.review_after) ? { reviewAfter: timestampToIso(row.review_after) } : {}),
     ...(timestampToIso(row.expires_at) ? { expiresAt: timestampToIso(row.expires_at) } : {}),
+    ...(row.supersedes_record_id ? { supersedesRecordId: row.supersedes_record_id } : {}),
+    ...(row.conflict_group_id ? { conflictGroupId: row.conflict_group_id } : {}),
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
     tags: parseStringArray(row.tags_json),
@@ -350,6 +449,12 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
   const now = input.nowMs ?? Date.now();
   const status = input.status ?? 'active';
   const sensitivity = input.sensitivity ?? 'normal';
+  const explicitness = input.explicitness ?? 'inferred';
+  const durability = input.durability ?? 'durable';
+  const importance = Math.max(0, Math.min(1, input.importance ?? 0.5));
+  const disclosurePolicy = input.disclosurePolicy ?? 'referenceable';
+  const validFrom = parseOptionalTimestamp(input.validFrom);
+  const validTo = parseOptionalTimestamp(input.validTo);
   const reviewAfter = parseOptionalTimestamp(input.reviewAfter);
   const expiresAt = parseOptionalTimestamp(input.expiresAt);
   const source = {
@@ -362,8 +467,10 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
       `INSERT INTO memory_records (
         record_id, provider_id, kind, agent_id, workspace_id, session_key, project_id,
         content, source_json, confidence, tags_json, status, sensitivity,
-        evidence_json, review_after, expires_at, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        evidence_json, canonical_key, explicitness, durability, importance,
+        disclosure_policy, valid_from, valid_to, review_after, expires_at,
+        supersedes_record_id, conflict_group_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(record_id) DO UPDATE SET
         provider_id = excluded.provider_id,
         kind = excluded.kind,
@@ -378,8 +485,17 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
         status = excluded.status,
         sensitivity = excluded.sensitivity,
         evidence_json = excluded.evidence_json,
+        canonical_key = excluded.canonical_key,
+        explicitness = excluded.explicitness,
+        durability = excluded.durability,
+        importance = excluded.importance,
+        disclosure_policy = excluded.disclosure_policy,
+        valid_from = excluded.valid_from,
+        valid_to = excluded.valid_to,
         review_after = excluded.review_after,
         expires_at = excluded.expires_at,
+        supersedes_record_id = excluded.supersedes_record_id,
+        conflict_group_id = excluded.conflict_group_id,
         updated_at = excluded.updated_at`,
     ).run(
       id,
@@ -396,18 +512,60 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
       status,
       sensitivity,
       JSON.stringify(input.evidence ?? []),
+      input.canonicalKey ?? null,
+      explicitness,
+      durability,
+      importance,
+      disclosurePolicy,
+      validFrom,
+      validTo,
       reviewAfter,
       expiresAt,
+      input.supersedesRecordId ?? null,
+      input.conflictGroupId ?? null,
       now,
       now,
     );
     upsertMemoryRecordFts(db, { ...input, id });
+    if (input.supersedesRecordId && input.supersedesRecordId !== id) {
+      const target = db.prepare(`SELECT 1 FROM memory_records WHERE record_id = ?`)
+        .get(input.supersedesRecordId);
+      if (target) {
+        db.prepare(
+          `INSERT INTO memory_relations (
+            relation_id, from_record_id, relation_type, to_record_id,
+            confidence, valid_from, valid_to, created_at, updated_at
+          ) VALUES (?, ?, 'supersedes', ?, ?, ?, NULL, ?, ?)
+          ON CONFLICT(from_record_id, relation_type, to_record_id) DO UPDATE SET
+            confidence = excluded.confidence,
+            valid_from = excluded.valid_from,
+            valid_to = NULL,
+            updated_at = excluded.updated_at`,
+        ).run(
+          randomUUID(),
+          id,
+          input.supersedesRecordId,
+          input.confidence ?? 1,
+          validFrom ?? now,
+          now,
+          now,
+        );
+        if (status === 'active') {
+          db.prepare(
+            `UPDATE memory_records
+             SET status = 'archived', valid_to = COALESCE(valid_to, ?), updated_at = ?
+             WHERE record_id = ? AND status IN ('active', 'needs_review', 'stale')`,
+          ).run(now, now, input.supersedesRecordId);
+        }
+      }
+    }
   });
 
   return {
     id,
     kind: input.kind,
     status,
+    ...(input.canonicalKey ? { canonicalKey: input.canonicalKey } : {}),
     scope: {
       agentId: input.agentId,
       ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
@@ -418,9 +576,17 @@ export function upsertMemoryRecord(input: UpsertMemoryRecordInput): MemoryRecord
     source,
     ...(input.confidence != null ? { confidence: input.confidence } : {}),
     sensitivity,
+    explicitness,
+    durability,
+    importance,
+    disclosurePolicy,
     evidence: input.evidence ?? [],
+    ...(validFrom != null ? { validFrom: new Date(validFrom).toISOString() } : {}),
+    ...(validTo != null ? { validTo: new Date(validTo).toISOString() } : {}),
     ...(reviewAfter != null ? { reviewAfter: new Date(reviewAfter).toISOString() } : {}),
     ...(expiresAt != null ? { expiresAt: new Date(expiresAt).toISOString() } : {}),
+    ...(input.supersedesRecordId ? { supersedesRecordId: input.supersedesRecordId } : {}),
+    ...(input.conflictGroupId ? { conflictGroupId: input.conflictGroupId } : {}),
     createdAt: new Date(now).toISOString(),
     updatedAt: new Date(now).toISOString(),
     tags: input.tags ?? [],
@@ -460,6 +626,10 @@ export function listMemoryRecords(options: ListMemoryRecordsOptions = {}): Memor
   if (options.status) {
     where.push('status = ?');
     params.push(options.status);
+  }
+  if (options.canonicalKey) {
+    where.push('canonical_key = ?');
+    params.push(options.canonicalKey);
   }
   const limit = Math.max(1, Math.min(500, options.limit ?? 100));
   const offset = Math.max(0, options.offset ?? 0);
@@ -666,7 +836,7 @@ export function setMemoryProviderState(providerId: string, scopeKey: string, sta
 }
 
 export function appendMemoryTraceEvent(input: AppendMemoryTraceEventInput): string {
-  const id = randomUUID();
+  const id = input.traceId ?? randomUUID();
   const now = input.nowMs ?? Date.now();
   const feedback = input.feedback
     ? normalizeMemoryTraceFeedback(input.feedback, now)
@@ -735,16 +905,151 @@ export function setMemoryTraceFeedback(input: SetMemoryTraceFeedbackInput): Memo
   if (!existing) {
     return null;
   }
+  const nowMs = input.nowMs ?? Date.now();
   const feedback = normalizeMemoryTraceFeedback(
     input.feedback,
-    input.nowMs,
+    nowMs,
     parseMemoryTraceFeedback(existing.feedback_json),
   );
+  let remediation: MemoryFeedbackRemediationResult | undefined;
   runSqliteWriteTransaction((db) => {
     db.prepare(`UPDATE memory_trace_events SET feedback_json = ? WHERE trace_id = ?`)
       .run(JSON.stringify(feedback), input.traceId);
+    remediation = reconcileUserUnderstandingFeedback(db, existing, feedback, nowMs);
   });
-  return memoryTraceRowToPayload({ ...existing, feedback_json: JSON.stringify(feedback) });
+  return {
+    ...memoryTraceRowToPayload({ ...existing, feedback_json: JSON.stringify(feedback) }),
+    ...(remediation ? { remediation } : {}),
+  };
+}
+
+function reconcileUserUnderstandingFeedback(
+  db: ReturnType<typeof getSqliteDatabase>,
+  trace: MemoryTraceRow,
+  feedback: MemoryTraceFeedback,
+  nowMs: number,
+): MemoryFeedbackRemediationResult | undefined {
+  if (trace.phase !== 'inject' || feedback.outcome !== 'not_helpful') return undefined;
+  const explicitCorrection = feedback.source === 'system'
+    && feedback.reason === 'detected_explicit_user_correction';
+  const evaluatedRecordIds: string[] = [];
+  const needsReviewRecordIds: string[] = [];
+  const actions: Array<Record<string, unknown>> = [];
+
+  for (const recordId of new Set(parseStringArray(trace.selected_record_ids_json))) {
+    const record = db.prepare(
+      `SELECT * FROM memory_records
+       WHERE record_id = ?
+         AND status = 'active'
+         AND tags_json LIKE '%\"user-understanding\"%'`,
+    ).get(recordId) as MemoryRecordRow | undefined;
+    if (!record) continue;
+    evaluatedRecordIds.push(recordId);
+    const feedbackRows = db.prepare(
+      `SELECT trace.feedback_json
+       FROM memory_trace_events AS trace
+       JOIN json_each(trace.selected_record_ids_json) AS selected
+         ON selected.value = ?
+       WHERE trace.phase = 'inject'`,
+    ).all(recordId) as Array<{ feedback_json: string }>;
+    let helpful = 0;
+    let notHelpful = 0;
+    for (const row of feedbackRows) {
+      const recordFeedback = parseMemoryTraceFeedback(row.feedback_json);
+      if (recordFeedback?.outcome === 'helpful') helpful += 1;
+      if (recordFeedback?.outcome === 'not_helpful') notHelpful += 1;
+    }
+    if (!explicitCorrection && (
+      notHelpful < USER_UNDERSTANDING_REMEDIATION_POLICY.minNotHelpful
+      || notHelpful <= helpful
+    )) {
+      continue;
+    }
+    const nextConfidence = record.confidence == null
+      ? null
+      : Math.round(Math.max(0.1, record.confidence - USER_UNDERSTANDING_REMEDIATION_POLICY.confidencePenalty) * 1000) / 1000;
+    const update = db.prepare(
+      `UPDATE memory_records
+       SET status = 'needs_review', confidence = ?, review_after = ?, updated_at = ?
+       WHERE record_id = ? AND status = 'active'`,
+    ).run(nextConfidence, nowMs, nowMs, recordId);
+    if (update.changes === 0) continue;
+    needsReviewRecordIds.push(recordId);
+    actions.push({
+      recordId,
+      previousStatus: record.status,
+      nextStatus: 'needs_review',
+      previousConfidence: record.confidence,
+      nextConfidence,
+      helpful,
+      notHelpful,
+    });
+  }
+
+  const result: MemoryFeedbackRemediationResult = {
+    triggerTraceId: trace.trace_id,
+    evaluatedRecordIds,
+    needsReviewRecordIds,
+  };
+  if (needsReviewRecordIds.length > 0) {
+    db.prepare(
+      `INSERT INTO memory_trace_events (
+        trace_id, session_key, turn_id, phase, provider_id, request_json,
+        result_count, selected_record_ids_json, skipped_reason, error,
+        feedback_json, duration_ms, created_at
+      ) VALUES (?, ?, ?, 'remediation', 'user-understanding', ?, ?, ?, NULL, NULL, '{}', 0, ?)`,
+    ).run(
+      randomUUID(),
+      trace.session_key,
+      trace.turn_id,
+      JSON.stringify({
+        triggerTraceId: trace.trace_id,
+        reason: explicitCorrection
+          ? 'explicit_user_correction'
+          : 'repeated_not_helpful_feedback',
+        policy: USER_UNDERSTANDING_REMEDIATION_POLICY,
+        actions,
+      }),
+      needsReviewRecordIds.length,
+      JSON.stringify(needsReviewRecordIds),
+      nowMs,
+    );
+  }
+  return result;
+}
+
+export function findLatestMemoryInjectTrace(
+  input: FindLatestMemoryInjectTraceInput,
+): MemoryTraceEventPayload | null {
+  const where = [
+    `session_key = ?`,
+    `phase = 'inject'`,
+    `created_at <= ?`,
+  ];
+  const row = getSqliteDatabase()
+    .prepare(
+      `SELECT * FROM memory_trace_events
+       WHERE ${where.join(' AND ')}
+       ORDER BY created_at DESC
+       LIMIT 1`,
+    )
+    .get(input.sessionKey, input.beforeMs ?? Date.now()) as MemoryTraceRow | undefined;
+  if (!row) return null;
+  const trace = memoryTraceRowToPayload(row);
+  if (input.requireSelectedRecords && trace.selectedRecordIds.length === 0) return null;
+  return trace;
+}
+
+export function setLatestMemoryInjectFeedback(
+  input: SetLatestMemoryInjectFeedbackInput,
+): MemoryTraceEventPayload | null {
+  const row = findLatestMemoryInjectTrace(input);
+  if (!row) return null;
+  return setMemoryTraceFeedback({
+    traceId: row.traceId,
+    feedback: input.feedback,
+    nowMs: input.nowMs,
+  });
 }
 
 export function summarizeMemoryRecallFeedback(options: {
@@ -809,6 +1114,151 @@ export function summarizeMemoryRecallFeedback(options: {
   return [...summaries.values()]
     .map(({ scoreTotal: _scoreTotal, scoreCount: _scoreCount, ...summary }) => summary)
     .sort((a, b) => b.total - a.total);
+}
+
+function boundedMetricCount(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.max(0, Math.floor(value))
+    : 0;
+}
+
+function metricRate(numerator: number, denominator: number): number | null {
+  return denominator > 0 ? Math.round((numerator / denominator) * 10_000) / 10_000 : null;
+}
+
+export function summarizeUserUnderstandingQuality(options: {
+  agentId?: string;
+  windowDays?: number;
+  agingCandidateDays?: number;
+  nowMs?: number;
+} = {}): UserUnderstandingQualityMetrics {
+  const nowMs = options.nowMs ?? Date.now();
+  const windowDays = Math.max(1, Math.min(365, Math.floor(options.windowDays ?? 30)));
+  const sinceMs = nowMs - windowDays * 24 * 60 * 60 * 1000;
+  const agingCandidateDays = Math.max(1, Math.min(windowDays, Math.floor(options.agingCandidateDays ?? 7)));
+  const agingCutoffMs = nowMs - agingCandidateDays * 24 * 60 * 60 * 1000;
+  const db = getSqliteDatabase();
+  const agentWhere = options.agentId ? 'AND agent_id = ?' : '';
+  const recordRows = db.prepare(
+    `SELECT record_id, status, explicitness, confidence, created_at, updated_at
+     FROM memory_records
+     WHERE tags_json LIKE '%"user-understanding"%'
+       ${agentWhere}`,
+  ).all(...(options.agentId ? [options.agentId] : [])) as Array<{
+    record_id: string;
+    status: string;
+    explicitness: string;
+    confidence: number | null;
+    created_at: number;
+    updated_at: number;
+  }>;
+
+  const records: UserUnderstandingQualityMetrics['records'] = {
+    total: recordRows.length,
+    candidate: 0,
+    active: 0,
+    rejected: 0,
+    needsReview: 0,
+    stale: 0,
+    archived: 0,
+    agingCandidates: 0,
+    explicit: 0,
+    inferred: 0,
+    averageConfidence: null,
+  };
+  let confidenceTotal = 0;
+  let confidenceCount = 0;
+  const understandingRecordIds = new Set<string>();
+  for (const row of recordRows) {
+    understandingRecordIds.add(row.record_id);
+    if (row.status === 'candidate') records.candidate += 1;
+    if (row.status === 'active') records.active += 1;
+    if (row.status === 'rejected') records.rejected += 1;
+    if (row.status === 'needs_review') records.needsReview += 1;
+    if (row.status === 'stale') records.stale += 1;
+    if (row.status === 'archived') records.archived += 1;
+    if (row.status === 'candidate' && row.created_at <= agingCutoffMs) records.agingCandidates += 1;
+    if (row.explicitness === 'explicit') records.explicit += 1;
+    if (row.explicitness === 'inferred') records.inferred += 1;
+    if (typeof row.confidence === 'number') {
+      confidenceTotal += row.confidence;
+      confidenceCount += 1;
+    }
+  }
+  records.averageConfidence = confidenceCount > 0
+    ? Math.round((confidenceTotal / confidenceCount) * 10_000) / 10_000
+    : null;
+
+  const attempts: UserUnderstandingQualityMetrics['attempts'] = { total: 0, turn: 0, background: 0 };
+  const candidates: UserUnderstandingQualityMetrics['candidates'] = {
+    proposed: 0,
+    created: 0,
+    deduplicated: 0,
+    rejectedByPolicy: 0,
+  };
+  const understandingTraces = db.prepare(
+    `SELECT request_json FROM memory_trace_events
+     WHERE phase = 'understanding' AND created_at >= ?`,
+  ).all(sinceMs) as Array<{ request_json: string }>;
+  for (const row of understandingTraces) {
+    const parsed = parseJsonValue(row.request_json, {});
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+    const request = parsed as Record<string, unknown>;
+    if (options.agentId && request.agentId !== options.agentId) continue;
+    attempts.total += 1;
+    if (request.source === 'turn') attempts.turn += 1;
+    if (request.source === 'background') attempts.background += 1;
+    candidates.proposed += boundedMetricCount(request.proposed);
+    candidates.created += boundedMetricCount(request.created);
+    candidates.deduplicated += boundedMetricCount(request.deduplicated);
+    candidates.rejectedByPolicy += boundedMetricCount(request.rejected);
+  }
+
+  const recall: UserUnderstandingQualityMetrics['recall'] = {
+    total: 0,
+    helpful: 0,
+    notHelpful: 0,
+    mixed: 0,
+    irrelevant: 0,
+    helpfulRate: null,
+  };
+  if (understandingRecordIds.size > 0) {
+    const recallRows = db.prepare(
+      `SELECT selected_record_ids_json, feedback_json FROM memory_trace_events
+       WHERE phase IN ('search', 'inject') AND created_at >= ?`,
+    ).all(sinceMs) as Array<{ selected_record_ids_json: string; feedback_json: string }>;
+    for (const row of recallRows) {
+      const feedback = parseMemoryTraceFeedback(row.feedback_json);
+      if (!feedback) continue;
+      const selected = parseStringArray(row.selected_record_ids_json);
+      if (!selected.some((recordId) => understandingRecordIds.has(recordId))) continue;
+      recall.total += 1;
+      if (feedback.outcome === 'helpful') recall.helpful += 1;
+      if (feedback.outcome === 'not_helpful') recall.notHelpful += 1;
+      if (feedback.outcome === 'mixed') recall.mixed += 1;
+      if (feedback.outcome === 'irrelevant') recall.irrelevant += 1;
+    }
+  }
+  recall.helpfulRate = metricRate(recall.helpful, recall.total);
+  const recentDecisions = recordRows.filter(
+    (row) => (row.status === 'active' || row.status === 'rejected') && row.updated_at >= sinceMs,
+  );
+  const acceptedDecisions = recentDecisions.filter((row) => row.status === 'active').length;
+  const decisionTotal = recentDecisions.length;
+
+  return {
+    ...(options.agentId ? { agentId: options.agentId } : {}),
+    windowDays,
+    since: new Date(sinceMs).toISOString(),
+    attempts,
+    candidates,
+    records,
+    decisions: {
+      total: decisionTotal,
+      acceptanceRate: metricRate(acceptedDecisions, decisionTotal),
+    },
+    recall,
+  };
 }
 
 function parseJsonValue(json: string, fallback: unknown): unknown {

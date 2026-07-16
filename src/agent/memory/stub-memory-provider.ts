@@ -30,14 +30,6 @@ export class StubMemoryProvider implements MemoryProvider {
     return 'External memory provider: stub (wiring only; no cloud backend).';
   }
 
-  async prefetch(query: string): Promise<string> {
-    const q = query.trim();
-    if (!q) {
-      return '';
-    }
-    return `[stub prefetch] query length=${q.length}`;
-  }
-
   queuePrefetch(): void {}
 
   sync(): void {}

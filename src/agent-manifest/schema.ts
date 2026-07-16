@@ -184,11 +184,21 @@ export const DreamingPolicySchema = z
   .strict()
   .optional();
 
+export const UserUnderstandingPolicySchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    adaptiveCadence: z.boolean().optional(),
+    reviewIntervalTurns: z.number().int().min(1).max(1_000).optional(),
+    maxHistoryMessages: z.number().int().min(1).max(200).optional(),
+    maxDurationMs: z.number().int().min(1_000).max(600_000).optional(),
+  })
+  .strict();
+
 export const MemoryPolicySchema = z
   .object({
     mode: z.enum(['off', 'readOnly', 'confirmWrite', 'auto']).default('off'),
     sources: z
-      .array(z.enum(['session', 'userProfile', 'agentProfile', 'curated', 'workspace']))
+      .array(z.enum(['session', 'userProfile', 'agentProfile', 'curated', 'workspace', 'connectedSources']))
       .default(['session']),
     writePolicy: z
       .object({
@@ -228,11 +238,24 @@ export const MemoryPolicySchema = z
           .array(
             z.enum([
               'user_profile',
+              'preference',
+              'boundary',
+              'relationship',
+              'project_context',
+              'commitment',
+              'routine',
+              'personal_logistics',
+              'open_question',
+              'milestone',
+              'current_state',
               'agent_note',
               'workspace_fact',
               'daily_note',
               'session_summary',
               'derived_insight',
+              'task_lesson',
+              'tool_preference',
+              'long_term_goal',
             ]),
           )
           .optional(),
@@ -240,6 +263,7 @@ export const MemoryPolicySchema = z
       .strict()
       .optional(),
     dreaming: DreamingPolicySchema,
+    understanding: UserUnderstandingPolicySchema.optional(),
   })
   .strict()
   .default({ mode: 'off', sources: ['session'] });

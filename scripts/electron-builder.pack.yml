@@ -47,6 +47,11 @@ extraResources:
     filter:
       - rg
       - rg.exe
+  - from: _pack-resources/cbm
+    to: bin
+    filter:
+      - codebase-memory-mcp
+      - codebase-memory-mcp.exe
   # Playwright Chromium install + CDP (must stay a real package tree; not esbuild-bundled).
   # types/ is .d.ts only; lib/vite/ is the Trace Viewer UI we never invoke.
   - from: _pack-resources/playwright-core

@@ -4,7 +4,7 @@ import {
   isCuratedMemoryInPrompt,
   isMemorySubsystemEnabled,
   resolveBuiltinMemoryStoreConfig,
-  shouldInjectMemoryPrefetchThisTurn,
+  shouldPlanUserContextThisTurn,
 } from '../memory-config.js';
 import type { Config } from '../../../config/schema.js';
 import type { AgentManifest } from '../../../agent-manifest/index.js';
@@ -73,11 +73,11 @@ describe('memory-config', () => {
     expect(custom.userProfileEnabled).toBe(false);
   });
 
-  it('shouldInjectMemoryPrefetchThisTurn injects on every turn', () => {
+  it('shouldPlanUserContextThisTurn plans on every turn', () => {
     const c = cfg({ mode: 'confirmWrite', sources: ['session'] });
-    expect(shouldInjectMemoryPrefetchThisTurn(c, 1)).toBe(true);
-    expect(shouldInjectMemoryPrefetchThisTurn(c, 2)).toBe(true);
-    expect(shouldInjectMemoryPrefetchThisTurn(c, 3)).toBe(true);
-    expect(shouldInjectMemoryPrefetchThisTurn(c, 4)).toBe(true);
+    expect(shouldPlanUserContextThisTurn(c, 1)).toBe(true);
+    expect(shouldPlanUserContextThisTurn(c, 2)).toBe(true);
+    expect(shouldPlanUserContextThisTurn(c, 3)).toBe(true);
+    expect(shouldPlanUserContextThisTurn(c, 4)).toBe(true);
   });
 });

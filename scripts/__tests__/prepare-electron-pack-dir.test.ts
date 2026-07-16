@@ -40,6 +40,7 @@ describe('prepare-electron-pack-dir', () => {
     expect(existsSync(join(packDir, 'node_modules/silk-wasm'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@vscode/ripgrep'))).toBe(false);
     expect(existsSync(join(packDir, '_pack-resources/rg'))).toBe(true);
+    expect(existsSync(join(packDir, '_pack-resources/cbm'))).toBe(true);
     expect(existsSync(join(packDir, 'node_modules/@earendil-works/pi-ai'))).toBe(false);
     // Pack dir lives outside the repo so `pnpm --workspace-root` (run by electron-builder)
     // returns nothing and the dep collector stays scoped to pack dir.

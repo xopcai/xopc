@@ -1,4 +1,9 @@
 const CORE_TOOL_ORDER = [
+  'code_search',
+  'code_read_symbol',
+  'code_trace',
+  'code_impact',
+  'code_architecture',
   'read_file',
   'write_file',
   'apply_patch',
@@ -35,6 +40,11 @@ const CORE_TOOL_ORDER = [
 ] as const;
 
 const CORE_TOOL_SUMMARIES: Record<string, string> = {
+  code_search: 'Find definitions, implementations, routes, types, and structurally important symbols',
+  code_read_symbol: 'Read exact source for a graph symbol before editing',
+  code_trace: 'Trace callers, callees, data flow, and cross-service paths',
+  code_impact: 'Map git changes to affected symbols and blast radius',
+  code_architecture: 'Map packages, boundaries, layers, entry points, hotspots, and clusters',
   read_file: 'Read targeted file contents before editing',
   write_file: 'Create new files or intentional complete rewrites; prefer apply_patch for code changes',
   apply_patch: 'Apply strict patches for source edits',
