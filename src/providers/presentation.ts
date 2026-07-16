@@ -43,6 +43,7 @@ export interface ProviderCatalogView {
 }
 
 const FEATURED_PROVIDER_ORDER = [
+  'deepseek',
   'openai',
   'anthropic',
   'xai',
@@ -53,7 +54,6 @@ const FEATURED_PROVIDER_ORDER = [
   'volcengine-ark',
   'volcengine-plan',
   'byteplus-plan',
-  'deepseek',
   'moonshotai',
   'moonshotai-cn',
   'kimi-coding',
