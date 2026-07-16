@@ -8,10 +8,10 @@ import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const FALLBACK_FEATURED_PROVIDERS: ProviderMeta[] = [
+  { id: 'deepseek', name: 'DeepSeek', category: 'common', supportsOAuth: false, supportsApiKey: true, configured: false, onboardingFeatured: true },
   { id: 'openai', name: 'OpenAI', category: 'common', supportsOAuth: false, supportsApiKey: true, configured: false, onboardingFeatured: true },
   { id: 'anthropic', name: 'Anthropic', category: 'common', supportsOAuth: true, supportsApiKey: true, configured: false, onboardingFeatured: true },
   { id: 'google', name: 'Google AI', category: 'common', supportsOAuth: false, supportsApiKey: true, configured: false, onboardingFeatured: true },
-  { id: 'deepseek', name: 'DeepSeek', category: 'common', supportsOAuth: false, supportsApiKey: true, configured: false, onboardingFeatured: true },
 ];
 
 const FEATURED_ORDER = new Map(FALLBACK_FEATURED_PROVIDERS.map((p, index) => [p.id, index]));

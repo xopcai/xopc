@@ -67,7 +67,10 @@ describe('domestic provider presets', () => {
   });
 
   it('feeds onboarding and provider presentation before a provider is configured', () => {
-    expect(getOnboardingFeaturedProviders()).toEqual(
+    const featuredProviders = getOnboardingFeaturedProviders();
+
+    expect(featuredProviders[0]).toBe('deepseek');
+    expect(featuredProviders).toEqual(
       expect.arrayContaining([
         'dashscope-cn',
         'dashscope-intl',
