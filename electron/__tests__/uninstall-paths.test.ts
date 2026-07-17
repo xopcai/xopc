@@ -51,6 +51,11 @@ describe('resolveNsisUninstallerPath', () => {
     const execPath = pathWin32.join('C:\\Program Files', 'xopc', 'xopc.exe');
     expect(resolveNsisUninstallerPath(execPath, () => false, 'win32')).toBeNull();
   });
+
+  it('uses the filesystem check when no existence callback is supplied', () => {
+    const execPath = pathWin32.join('C:\\definitely-not-installed', 'xopc', 'xopc.exe');
+    expect(resolveNsisUninstallerPath(execPath, undefined, 'win32')).toBeNull();
+  });
 });
 
 describe('resolveDataRemovalTargets', () => {
