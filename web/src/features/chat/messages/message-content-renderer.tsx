@@ -2,8 +2,9 @@
 // into either text/image nodes or a collapsible AssistantStepsBlock for runs
 // of consecutive thinking/tool_use blocks.
 
-import { useCallback, useDeferredValue, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { AlertCircle, Copy, ExternalLink, File, FolderOpen, Loader2, X } from 'lucide-react';
+import { useThrottledCallback } from 'use-debounce';
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import type { WorkspaceFileLinkTarget } from '@/components/markdown/internal-links';
@@ -223,6 +224,30 @@ const fileActionButtonClass = cn(
   interaction.press,
 );
 
+const STREAMING_MARKDOWN_RENDER_INTERVAL_MS = 80;
+
+function useThrottledStreamingMarkdown(content: string, streaming: boolean): string {
+  const [throttledContent, setThrottledContent] = useState(content);
+  const updateThrottledContent = useThrottledCallback(
+    (nextContent: string) => setThrottledContent(nextContent),
+    STREAMING_MARKDOWN_RENDER_INTERVAL_MS,
+    { leading: true, trailing: true },
+  );
+
+  useEffect(() => {
+    if (!streaming) {
+      updateThrottledContent.cancel();
+      setThrottledContent(content);
+      return;
+    }
+    updateThrottledContent(content);
+  }, [content, streaming, updateThrottledContent]);
+
+  useEffect(() => () => updateThrottledContent.cancel(), [updateThrottledContent]);
+
+  return streaming ? throttledContent : content;
+}
+
 function ChatMarkdownView({
   content,
   compact,
@@ -234,10 +259,11 @@ function ChatMarkdownView({
   sessionKey?: string | null;
   streaming?: boolean;
 }) {
-  // Markdown parsing sanitizes and replaces the whole rendered HTML. Defer that
-  // expensive work while SSE tokens are arriving so React can coalesce updates.
-  const deferredContent = useDeferredValue(content);
-  const renderedContent = streaming ? prepareStreamingMarkdown(deferredContent) : content;
+  // Bound reparsing to one update per interval during SSE while still flushing
+  // the first and final values. This prevents high-frequency DOM replacement
+  // without allowing a table to wait for the stream to finish.
+  const streamingContent = useThrottledStreamingMarkdown(content, streaming);
+  const renderedContent = streaming ? prepareStreamingMarkdown(streamingContent) : content;
   const setPreview = useWorkspacePreviewStore((s) => s.setPath);
   const language = useLocaleStore((s) => s.language);
   const fileReferenceMessages = messages(language).chat.fileReference;
