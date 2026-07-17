@@ -11,7 +11,7 @@ import type {
   MemorySignal,
   MemoryStatus,
 } from '../../agent/memory/types.js';
-import { escapeFts5Query } from './fts.js';
+import { buildFts5SearchQuery, fts5RankToScore, memoryLexicalSimilarity } from './fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 type MemoryRecordRow = {
@@ -82,6 +82,14 @@ export interface ListMemoryRecordsOptions {
   agentId?: string;
   workspaceId?: string;
   projectId?: string;
+  /** Include unscoped records plus records visible to this session. */
+  visibleToSessionKey?: string;
+  /** Return only records that are not scoped to a session. */
+  unscopedSessionOnly?: boolean;
+  /** Include unscoped records plus records visible to this project. */
+  visibleToProjectId?: string;
+  /** Return only records that are not scoped to a project. */
+  unscopedProjectOnly?: boolean;
   kind?: MemoryKind;
   status?: MemoryStatus;
   canonicalKey?: string;
@@ -94,6 +102,14 @@ export interface SearchMemoryRecordsOptions {
   agentId?: string;
   workspaceId?: string;
   projectId?: string;
+  /** Include unscoped records plus records visible to this session. */
+  visibleToSessionKey?: string;
+  /** Return only records that are not scoped to a session. */
+  unscopedSessionOnly?: boolean;
+  /** Include unscoped records plus records visible to this project. */
+  visibleToProjectId?: string;
+  /** Return only records that are not scoped to a project. */
+  unscopedProjectOnly?: boolean;
   providerId?: string;
   kinds?: MemoryKind[];
   statuses?: MemoryStatus[];
@@ -427,10 +443,6 @@ function rowToRecord(row: MemoryRecordRow): MemoryRecord {
   };
 }
 
-function bm25ToScore(rank: number): number {
-  return Math.max(0, Math.min(1, 1 / (1 + Math.max(0, rank))));
-}
-
 function upsertMemoryRecordFts(
   db: ReturnType<typeof getSqliteDatabase>,
   row: Pick<UpsertMemoryRecordInput, 'providerId' | 'kind' | 'agentId' | 'workspaceId' | 'content'> & { id: string },
@@ -619,6 +631,18 @@ export function listMemoryRecords(options: ListMemoryRecordsOptions = {}): Memor
     where.push('project_id = ?');
     params.push(options.projectId);
   }
+  if (options.visibleToSessionKey) {
+    where.push('(session_key IS NULL OR session_key = ?)');
+    params.push(options.visibleToSessionKey);
+  } else if (options.unscopedSessionOnly) {
+    where.push('session_key IS NULL');
+  }
+  if (options.visibleToProjectId) {
+    where.push('(project_id IS NULL OR project_id = ?)');
+    params.push(options.visibleToProjectId);
+  } else if (options.unscopedProjectOnly) {
+    where.push('project_id IS NULL');
+  }
   if (options.kind) {
     where.push('kind = ?');
     params.push(options.kind);
@@ -645,7 +669,7 @@ export function listMemoryRecords(options: ListMemoryRecordsOptions = {}): Memor
 }
 
 export function searchMemoryRecords(options: SearchMemoryRecordsOptions): MemorySearchResult[] {
-  const query = escapeFts5Query(options.query);
+  const query = buildFts5SearchQuery(options.query);
   if (!query) return [];
 
   const filters: string[] = ['memory_records_fts MATCH ?'];
@@ -661,6 +685,18 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
   if (options.projectId) {
     filters.push('r.project_id = ?');
     params.push(options.projectId);
+  }
+  if (options.visibleToSessionKey) {
+    filters.push('(r.session_key IS NULL OR r.session_key = ?)');
+    params.push(options.visibleToSessionKey);
+  } else if (options.unscopedSessionOnly) {
+    filters.push('r.session_key IS NULL');
+  }
+  if (options.visibleToProjectId) {
+    filters.push('(r.project_id IS NULL OR r.project_id = ?)');
+    params.push(options.visibleToProjectId);
+  } else if (options.unscopedProjectOnly) {
+    filters.push('r.project_id IS NULL');
   }
   if (options.providerId) {
     filters.push('f.provider_id = ?');
@@ -689,10 +725,46 @@ export function searchMemoryRecords(options: SearchMemoryRecordsOptions): Memory
     )
     .all(...params, maxResults * 3) as MemoryRecordSearchRow[];
 
+  if (rows.length === 0) {
+    const fallbackRecords = listMemoryRecords({
+      providerId: options.providerId,
+      agentId: options.agentId,
+      workspaceId: options.workspaceId,
+      projectId: options.projectId,
+      visibleToSessionKey: options.visibleToSessionKey,
+      unscopedSessionOnly: options.unscopedSessionOnly,
+      visibleToProjectId: options.visibleToProjectId,
+      unscopedProjectOnly: options.unscopedProjectOnly,
+      limit: 500,
+    }).filter((record) =>
+      statuses.includes(record.status ?? 'active')
+      && (!options.kinds?.length || options.kinds.includes(record.kind)),
+    );
+    return fallbackRecords
+      .map((record) => ({
+        record,
+        score: memoryLexicalSimilarity(options.query, record.content),
+        snippet: record.content,
+        citation: {
+          providerId: record.source.provider ?? options.providerId ?? 'local',
+          recordId: record.id,
+          path: record.source.path,
+          lineStart: record.source.lineStart,
+          lineEnd: record.source.lineEnd,
+          createdAt: record.createdAt,
+        },
+      }))
+      .filter((result) => result.score >= minScore)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxResults);
+  }
+
+  const bestRank = Math.min(...rows.map((row) => row.rank));
+  const worstRank = Math.max(...rows.map((row) => row.rank));
   return rows
     .map((row) => {
       const record = rowToRecord(row);
-      const score = bm25ToScore(row.rank);
+      const score = fts5RankToScore(row.rank, bestRank, worstRank);
       return {
         record,
         score,
@@ -868,6 +940,7 @@ export function appendMemoryTraceEvent(input: AppendMemoryTraceEventInput): stri
 
 export function listMemoryTraceEvents(options: {
   providerId?: string;
+  agentId?: string;
   sessionKey?: string;
   phase?: string;
   limit?: number;
@@ -877,6 +950,10 @@ export function listMemoryTraceEvents(options: {
   if (options.providerId) {
     where.push('provider_id = ?');
     params.push(options.providerId);
+  }
+  if (options.agentId) {
+    where.push('session_key LIKE ?');
+    params.push(`agent:${options.agentId}:%`);
   }
   if (options.sessionKey) {
     where.push('session_key = ?');
@@ -1055,6 +1132,7 @@ export function setLatestMemoryInjectFeedback(
 export function summarizeMemoryRecallFeedback(options: {
   recordId?: string;
   providerId?: string;
+  agentId?: string;
   sessionKey?: string;
   limit?: number;
 } = {}): MemoryRecallFeedbackSummary[] {
@@ -1063,6 +1141,10 @@ export function summarizeMemoryRecallFeedback(options: {
   if (options.providerId) {
     where.push('provider_id = ?');
     params.push(options.providerId);
+  }
+  if (options.agentId) {
+    where.push('session_key LIKE ?');
+    params.push(`agent:${options.agentId}:%`);
   }
   if (options.sessionKey) {
     where.push('session_key = ?');

@@ -134,6 +134,7 @@ async function runUnderstandingReview(params: RunBackgroundReviewParams): Promis
   if (isAssistantTurnAborted(reviewAgent) || isAssistantTurnFailed(reviewAgent)) return;
   const candidates = parseUnderstandingCandidates(lastAssistantText(reviewAgent));
   await memoryManager.applyUnderstandingCandidates(candidates, {
+    agentId: settings.agentId,
     sessionKey,
     sourceText: 'Background review of the current session transcript',
     reviewSource: 'background',

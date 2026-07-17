@@ -3,6 +3,7 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
 import { recordDreamingRecalls } from '../memory/dreaming/short-term-store.js';
 import type { MemoryManager } from '../memory/manager.js';
+import type { MemoryScope } from '../memory/types.js';
 
 // =============================================================================
 // Memory Search Tool
@@ -19,6 +20,8 @@ export interface MemoryToolOptions {
   workspaceDir: string;
   dreamingRoot: string;
   getMemoryManager: () => MemoryManager;
+  getScope?: () => Partial<MemoryScope>;
+  shouldRecordDreamingRecalls?: () => boolean;
 }
 
 export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
@@ -38,7 +41,12 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
       const { query, maxResults, minScore } = params as MemorySearchParams;
 
       try {
-        const results = await getMemoryManager().search({ query, maxResults, minScore });
+        const results = await getMemoryManager().search({
+          query,
+          maxResults,
+          minScore,
+          scope: options.getScope?.(),
+        });
         for (const result of results) {
           getMemoryManager().recordSignal({
             source: 'search_recall',
@@ -54,21 +62,24 @@ export function createMemorySearchTool(options: MemoryToolOptions): AgentTool {
           });
         }
         // Dreaming: record short-term recall evidence from memory_search.
-        void recordDreamingRecalls({
-          dreamingRoot,
-          query,
-          matches: results.map((entry) => ({
-            file: entry.citation.path ?? entry.record.source.path ?? entry.record.id,
-            lines: entry.snippet,
-            score: entry.score,
-            lineNumbers:
-              entry.citation.lineStart != null
-                ? [entry.citation.lineStart, entry.citation.lineEnd ?? entry.citation.lineStart]
-                : [],
-          })),
-        }).catch(() => {});
+        if (options.shouldRecordDreamingRecalls?.() !== false) {
+          void recordDreamingRecalls({
+            dreamingRoot,
+            query,
+            matches: results.map((entry) => ({
+              file: entry.citation.path ?? entry.record.source.path ?? entry.record.id,
+              lines: entry.snippet,
+              score: entry.score,
+              lineNumbers:
+                entry.citation.lineStart != null
+                  ? [entry.citation.lineStart, entry.citation.lineEnd ?? entry.citation.lineStart]
+                  : [],
+            })),
+          }).catch(() => {});
+        }
         const withCitations = results.map((entry) => ({
           id: entry.record.id,
+          ownerAgentId: entry.record.scope.agentId,
           kind: entry.record.kind,
           file: entry.citation.path ?? entry.record.source.path,
           lines: entry.snippet,
@@ -123,7 +134,12 @@ export function createMemoryGetTool(options: MemoryToolOptions): AgentTool {
       const { path, from, lines } = params as MemoryGetParams;
 
       try {
-        const result = await getMemoryManager().read({ path, from, lines });
+        const result = await getMemoryManager().read({
+          path,
+          from,
+          lines,
+          scope: options.getScope?.(),
+        });
         if (!result) {
           return {
             content: [{ type: 'text', text: `File not found: ${path}` }],

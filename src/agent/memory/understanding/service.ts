@@ -16,6 +16,7 @@ import type {
 } from '../types.js';
 import { extractExplicitUnderstandingCorrectionContent } from './correction.js';
 import type { UnderstandingCandidate, UnderstandingReviewResult } from './types.js';
+import { inferMemorySensitivity, redactSensitiveMemoryText } from '../sensitivity.js';
 
 const log = createLogger('UserUnderstanding');
 const MAX_CANDIDATE_CHARS = 600;
@@ -58,36 +59,6 @@ function inferKind(content: string): MemoryKind {
   return 'agent_note';
 }
 
-function inferSensitivity(content: string): UnderstandingCandidate['sensitivity'] {
-  if (
-    /\b(api[_-]?key|access[_-]?key|token|password|secret|credential|private[_-]?key|bearer)\b/i.test(content)
-    || /密钥|密码|令牌|私钥/.test(content)
-    || /\b(?:sk|gh[opsu]|xox[abprs])-[a-z0-9_-]{8,}\b/i.test(content)
-    || /\bAKIA[A-Z0-9]{12,}\b/.test(content)
-    || /-----BEGIN [A-Z ]*PRIVATE KEY-----/.test(content)
-  ) {
-    return 'secret';
-  }
-  if (
-    /\b(ssn|social security|bank account|credit card|medical record)\b/i.test(content)
-    || /身份证|银行卡|信用卡|医疗记录/.test(content)
-  ) {
-    return 'regulated';
-  }
-  return /家庭|住址|生日|健康|关系|family|address|birthday|health/i.test(content)
-    ? 'personal'
-    : 'normal';
-}
-
-function redactSensitiveText(content: string): string {
-  return content
-    .replace(/-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----/g, '[REDACTED PRIVATE KEY]')
-    .replace(/\b(api[_-]?key|access[_-]?key|token|password|secret|credential|private[_-]?key|bearer)\b\s*[:=]?\s*[^\s,;]+/gi, '$1=[REDACTED]')
-    .replace(/(密钥|密码|令牌|私钥)\s*[：:=]?\s*[^\s，；]+/g, '$1=[REDACTED]')
-    .replace(/\b(?:sk|gh[opsu]|xox[abprs])-[a-z0-9_-]{8,}\b/gi, '[REDACTED TOKEN]')
-    .replace(/\bAKIA[A-Z0-9]{12,}\b/g, '[REDACTED ACCESS KEY]');
-}
-
 const SENSITIVITY_RANK: Record<MemorySensitivity, number> = {
   normal: 0,
   personal: 1,
@@ -96,7 +67,7 @@ const SENSITIVITY_RANK: Record<MemorySensitivity, number> = {
 };
 
 function stricterSensitivity(content: string, declared: MemorySensitivity): MemorySensitivity {
-  const inferred = inferSensitivity(content);
+  const inferred = inferMemorySensitivity(content);
   return SENSITIVITY_RANK[inferred] > SENSITIVITY_RANK[declared] ? inferred : declared;
 }
 
@@ -120,7 +91,7 @@ export function extractExplicitUnderstandingCandidates(userContent: string): Und
       importance: kind === 'boundary' ? 0.9 : 0.8,
       explicitness: 'explicit',
       durability: 'durable',
-      sensitivity: inferSensitivity(correction),
+      sensitivity: inferMemorySensitivity(correction),
       disclosurePolicy: kind === 'boundary' ? 'silent' : 'referenceable',
       tags: ['user-understanding', 'explicit-user-correction'],
     }];
@@ -139,7 +110,7 @@ export function extractExplicitUnderstandingCandidates(userContent: string): Und
         importance: kind === 'boundary' ? 0.9 : 0.75,
         explicitness: 'explicit',
         durability: 'durable',
-        sensitivity: inferSensitivity(content),
+        sensitivity: inferMemorySensitivity(content),
         disclosurePolicy: kind === 'boundary' ? 'silent' : 'referenceable',
         tags: ['user-understanding', 'explicit-user-request'],
       }];
@@ -165,7 +136,7 @@ export class UserUnderstandingService {
   }): Promise<UnderstandingReviewResult> {
     const candidates = extractExplicitUnderstandingCandidates(params.userContent);
     const sourceText = `User:\n${params.userContent.trim()}\n\nAssistant:\n${params.assistantContent.trim()}`;
-    const normalizedText = redactSensitiveText(sourceText);
+    const normalizedText = redactSensitiveMemoryText(sourceText);
     const contentHash = createHash('sha256').update(sourceText).digest('hex');
     const stored = upsertKnowledgeSourceItems([{
       sourceInstanceId: params.sessionKey ? `session:${params.sessionKey}` : 'session:unknown',
@@ -221,7 +192,7 @@ export class UserUnderstandingService {
         continue;
       }
       const evidenceText = context.sourceText
-        ? redactSensitiveText(context.sourceText).slice(0, MAX_CANDIDATE_CHARS)
+        ? redactSensitiveMemoryText(context.sourceText).slice(0, MAX_CANDIDATE_CHARS)
         : undefined;
       const key = candidate.canonicalKey ?? canonicalKey(candidate.kind, content);
       const supersedesRecordId = context.supersedesRecordIds
@@ -255,7 +226,9 @@ export class UserUnderstandingService {
         kind: candidate.kind,
         content,
         canonicalKey: key,
-        scope: context.sessionKey ? { sessionKey: context.sessionKey } : undefined,
+        scope: context.agentId || context.sessionKey
+          ? { agentId: context.agentId, sessionKey: context.sessionKey }
+          : undefined,
         target: candidate.kind === 'preference' ? 'user' : 'memory',
         tags: [...new Set(['user-understanding', ...(candidate.tags ?? [])])],
         source: { provider: 'user-understanding' },

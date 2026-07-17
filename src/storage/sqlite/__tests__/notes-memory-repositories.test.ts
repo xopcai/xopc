@@ -9,7 +9,9 @@ import {
   openXopcDatabase,
   resetXopcDatabaseSingletonForTest,
   searchMemoryIndex,
+  searchMemoryRecords,
   syncMemoryIndex,
+  upsertMemoryRecord,
   upsertNoteRecord,
   listNoteRecords,
   getNoteRecord,
@@ -86,5 +88,56 @@ describe('sqlite notes and memory repositories', () => {
     expect(hits.length).toBeGreaterThan(0);
     expect(hits[0].path).toContain(`memory/${dailyFileName}`);
     expect(hits[0].lines).toContain('phoenix');
+  });
+
+  it('recalls memory from a longer natural-language query and preserves rank order', () => {
+    upsertMemoryRecord({
+      id: 'memory-strong',
+      providerId: 'local',
+      kind: 'project_context',
+      agentId: 'main',
+      workspaceId: '/workspace',
+      content: 'Phoenix launch checklist uses staged rollout and verification.',
+    });
+    upsertMemoryRecord({
+      id: 'memory-weak',
+      providerId: 'local',
+      kind: 'project_context',
+      agentId: 'main',
+      workspaceId: '/workspace',
+      content: 'Phoenix is the internal project name.',
+    });
+
+    const hits = searchMemoryRecords({
+      agentId: 'main',
+      workspaceId: '/workspace',
+      query: 'What was the Phoenix launch verification checklist?',
+      maxResults: 5,
+      minScore: 0.1,
+    });
+
+    expect(hits.map((hit) => hit.record.id)).toEqual(['memory-strong', 'memory-weak']);
+    expect(hits[0].score).toBeGreaterThan(hits[1].score);
+  });
+
+  it('falls back to bounded lexical similarity for Chinese reformulations', () => {
+    upsertMemoryRecord({
+      id: 'memory-zh-preference',
+      providerId: 'local',
+      kind: 'preference',
+      agentId: 'main',
+      workspaceId: '/workspace',
+      content: '用户偏好简洁的中文回复。',
+    });
+
+    const hits = searchMemoryRecords({
+      agentId: 'main',
+      workspaceId: '/workspace',
+      query: '请用简洁中文回答',
+      maxResults: 5,
+      minScore: 0.15,
+    });
+
+    expect(hits.map((hit) => hit.record.id)).toContain('memory-zh-preference');
   });
 });

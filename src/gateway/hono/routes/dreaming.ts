@@ -19,8 +19,9 @@ import { runRemPatterns } from '../../../agent/memory/dreaming/rem-patterns.js';
 import { parseDreamingLastRunFile, type DreamingDeepLastRun } from '../../../agent/memory/dreaming/last-run.js';
 import { resolveDreamingAgentScope, type DreamingAgentScope } from '../../../agent/memory/dreaming/scope.js';
 import {
+  clearStaleDreamingLock,
   loadDreamingStore,
-  saveDreamingStore,
+  resetDreamingStore,
   type DreamingStore,
 } from '../../../agent/memory/dreaming/short-term-store.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
@@ -249,13 +250,26 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
 
       const result =
         requestedPhase === 'light'
-          ? await runLightSweep({ dreamingRoot: scope.memoriesDir, config: dreaming.phases.light })
+          ? await runLightSweep({
+              workspaceDir: scope.workspaceDir,
+              dreamingRoot: scope.memoriesDir,
+              config: dreaming.phases.light,
+            })
           : requestedPhase === 'rem'
-            ? await runRemPatterns({ dreamingRoot: scope.memoriesDir, config: dreaming.phases.rem })
+            ? await runRemPatterns({
+                agentId: scope.agentId,
+                workspaceDir: scope.workspaceDir,
+                dreamingRoot: scope.memoriesDir,
+                config: dreaming.phases.rem,
+                sensitiveWritePolicy: scope.memory.privacy?.sensitiveWritePolicy,
+                promotionWritePolicy: dreaming.promotionWritePolicy.decision,
+              })
             : await runDreamingDeepPromotion({
+                agentId: scope.agentId,
                 workspaceDir: scope.workspaceDir,
                 dreamingRoot: scope.memoriesDir,
                 config: dreaming.phases.deep,
+                sensitiveWritePolicy: scope.memory.privacy?.sensitiveWritePolicy,
               });
 
       service.emit('dreaming.phase.end', {
@@ -302,9 +316,7 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     }
 
     if (action === 'reset_store') {
-      const nowIso = new Date().toISOString();
-      const next: DreamingStore = { version: 1, updatedAt: nowIso, entries: {} };
-      await saveDreamingStore({ dreamingRoot: scope.memoriesDir, store: next });
+      await resetDreamingStore({ dreamingRoot: scope.memoriesDir });
       return c.json({
         ok: true,
         payload: { agentId: scope.agentId, reset: true, storePath: path.join(scope.memoriesDir, SHORT_TERM_RECALL_STORE_RELATIVE) },
@@ -312,11 +324,16 @@ export function registerDreamingRoutes(authenticated: Hono, deps: AuthenticatedR
     }
 
     const lockPath = path.join(scope.memoriesDir, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
-    await fs.unlink(lockPath).catch(() => undefined);
-    return c.json({
-      ok: true,
-      payload: { agentId: scope.agentId, cleared: true, lockPath },
-    });
+    try {
+      const cleared = await clearStaleDreamingLock(scope.memoriesDir);
+      return c.json({
+        ok: true,
+        payload: { agentId: scope.agentId, cleared, lockPath },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ ok: false, error: { message } }, 409);
+    }
   });
 
   authenticated.get('/api/dreaming/events', async (c) => {

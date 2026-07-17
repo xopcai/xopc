@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
-import { escapeFts5Query } from './fts.js';
+import { buildFts5SearchQuery, fts5RankToScore, memoryLexicalSimilarity } from './fts.js';
 import { getSqliteDatabase, runSqliteWriteTransaction } from './transaction.js';
 
 export type MemorySearchHit = {
@@ -94,10 +94,6 @@ function displayPath(
 
 function contentHash(content: string): string {
   return createHash('sha256').update(content).digest('hex');
-}
-
-function bm25ToScore(rank: number): number {
-  return 1 / (1 + Math.max(0, -rank));
 }
 
 function indexFile(
@@ -196,7 +192,7 @@ export function searchMemoryIndex(params: {
   minScore?: number;
 }): MemorySearchHit[] {
   const { agentId, query, maxResults = 5, minScore = 0.3 } = params;
-  const ftsQuery = escapeFts5Query(query);
+  const ftsQuery = buildFts5SearchQuery(query);
   if (!ftsQuery) {
     return [];
   }
@@ -219,9 +215,36 @@ export function searchMemoryIndex(params: {
     rank: number;
   }>;
 
+  if (rows.length === 0) {
+    const fallbackRows = db.prepare(
+      `SELECT chunk_id, path, start_line, end_line, content
+       FROM memory_fts
+       WHERE agent_id = ?
+       LIMIT 500`,
+    ).all(agentId) as Array<{
+      chunk_id: string;
+      path: string;
+      start_line: number;
+      end_line: number;
+      content: string;
+    }>;
+    return fallbackRows
+      .map((row) => ({
+        path: row.path,
+        lines: row.content,
+        score: memoryLexicalSimilarity(query, row.content),
+        lineNumbers: [row.start_line],
+      }))
+      .filter((result) => result.score >= minScore)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxResults);
+  }
+
+  const bestRank = Math.min(...rows.map((row) => row.rank));
+  const worstRank = Math.max(...rows.map((row) => row.rank));
   const results: MemorySearchHit[] = [];
   for (const row of rows) {
-    const score = bm25ToScore(row.rank);
+    const score = fts5RankToScore(row.rank, bestRank, worstRank);
     if (score < minScore) continue;
     results.push({
       path: row.path,
