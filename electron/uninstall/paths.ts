@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import pathPosix from 'node:path/posix';
 import pathWin32 from 'node:path/win32';
