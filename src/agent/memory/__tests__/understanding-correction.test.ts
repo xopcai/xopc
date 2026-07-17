@@ -94,6 +94,7 @@ describe('understanding correction attribution', () => {
     const coordinator = new UserContextCoordinator({
       getConfig: () => undefined,
       isEnabledForSession: () => true,
+      getAgentIdForSession: () => 'main',
       getMemoryManagerForSession: () => memoryManager,
       getLastAssistantContent: () => null,
     });
@@ -119,7 +120,7 @@ describe('understanding correction attribution', () => {
     expect(captureTurnUnderstanding).toHaveBeenCalledWith(
       '你记错了我的偏好，我需要详细回答。',
       '',
-      { sessionId: sessionKey, correctionTargetRecordIds: ['preference-1'] },
+      { agentId: 'main', sessionId: sessionKey, correctionTargetRecordIds: ['preference-1'] },
     );
   });
 });

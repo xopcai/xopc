@@ -48,6 +48,10 @@ type MemoryConfig = {
     mode: 'off' | 'readOnly' | 'confirmWrite' | 'auto';
     sources: string[];
     writePolicy?: Record<string, string>;
+    privacy?: {
+      crossAgentSharing: 'deny' | 'readOnly' | 'allow';
+      sensitiveWritePolicy: 'deny' | 'confirm' | 'allow';
+    };
     providerRouting?: {
       searchStrategy: 'local-first' | 'external-first' | 'fanout' | 'local-only' | 'external-only';
       writeStrategy: 'local-first' | 'external-first' | 'write-through' | 'local-only' | 'external-only';
@@ -138,6 +142,8 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
   const [submitted, setSubmitted] = useState('');
   const [saveStatus, setSaveStatus] = useState('');
   const [testStatus, setTestStatus] = useState<Record<string, string>>({});
+  const agentQuery = agentId ? `&agentId=${encodeURIComponent(agentId)}` : '';
+  const agentOnlyQuery = agentId ? `?agentId=${encodeURIComponent(agentId)}` : '';
   const [routingDraft, setRoutingDraft] = useState<NonNullable<MemoryConfig['memory']['providerRouting']>>({
     searchStrategy: 'fanout',
     writeStrategy: 'local-first',
@@ -145,29 +151,33 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
     allowedProviderIds: [],
     autoWriteKinds: [],
   });
+  const [privacyDraft, setPrivacyDraft] = useState<NonNullable<MemoryConfig['memory']['privacy']>>({
+    crossAgentSharing: 'deny',
+    sensitiveWritePolicy: 'confirm',
+  });
 
   const { data: providersData, isLoading: providersLoading } = useSWR<{ providers: MemoryProvider[] }>(
     apiUrl('/api/memory/providers'),
     fetcher,
   );
   const { data: recordsData, isLoading: recordsLoading, mutate: mutateRecords } = useSWR<{ records: MemoryRecord[] }>(
-    apiUrl('/api/memory/records?status=active&limit=80'),
+    apiUrl(`/api/memory/records?status=active&limit=80${agentQuery}`),
     fetcher,
   );
   const { data: candidatesData, isLoading: candidatesLoading, mutate: mutateCandidates } = useSWR<{ records: MemoryRecord[] }>(
-    apiUrl('/api/memory/records?status=candidate&limit=80'),
+    apiUrl(`/api/memory/records?status=candidate&limit=80${agentQuery}`),
     fetcher,
   );
   const { data: signalsData, isLoading: signalsLoading } = useSWR<{ signals: MemorySignal[] }>(
-    apiUrl('/api/memory/signals?limit=50'),
+    apiUrl(`/api/memory/signals?limit=50${agentQuery}`),
     fetcher,
   );
   const { data: tracesData, isLoading: tracesLoading, mutate: mutateTraces } = useSWR<{ traces: MemoryTrace[] }>(
-    apiUrl('/api/memory/traces?limit=80'),
+    apiUrl(`/api/memory/traces?limit=80${agentQuery}`),
     fetcher,
   );
   const { data: feedbackSummaryData, isLoading: feedbackSummaryLoading } = useSWR<{ summaries: MemoryFeedbackSummary[] }>(
-    apiUrl('/api/memory/feedback-summary?limit=1000'),
+    apiUrl(`/api/memory/feedback-summary?limit=1000${agentQuery}`),
     fetcher,
   );
   const { data: configData, isLoading: configLoading, mutate: mutateConfig } = useSWR<MemoryConfig>(
@@ -182,13 +192,13 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
     apiUrl(`/api/memory/understanding/quality${agentId ? `?agentId=${encodeURIComponent(agentId)}` : ''}`),
     fetcher,
   );
-  const searchKey = submitted ? apiUrl('/api/memory/search') : null;
+  const searchKey = submitted ? apiUrl(`/api/memory/search${agentOnlyQuery}`) : null;
   const { data: searchData, isLoading: searchLoading } = useSWR<MemorySearchResponse>(
     searchKey,
     (url: string) =>
       fetchJson<MemorySearchResponse>(url, {
         method: 'POST',
-        body: JSON.stringify({ query: submitted, maxResults: 20 }),
+        body: JSON.stringify({ query: submitted, maxResults: 20, ...(agentId ? { agentId } : {}) }),
       }),
   );
 
@@ -252,6 +262,14 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
     });
   }, [configData]);
 
+  useEffect(() => {
+    const privacy = configData?.memory.privacy;
+    setPrivacyDraft({
+      crossAgentSharing: privacy?.crossAgentSharing ?? 'deny',
+      sensitiveWritePolicy: privacy?.sensitiveWritePolicy ?? 'confirm',
+    });
+  }, [configData]);
+
   async function saveRouting() {
     if (!configData) return;
     setSaveStatus(t.saving);
@@ -262,6 +280,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
           agentId: configData.agentId,
           memory: {
             ...configData.memory,
+            privacy: privacyDraft,
             providerRouting: routingDraft,
           },
         }),
@@ -295,7 +314,7 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
   }
 
   async function updateMemoryStatus(recordId: string, status: NonNullable<MemoryRecord['status']>) {
-    await fetchJson(apiUrl(`/api/memory/records/${encodeURIComponent(recordId)}`), {
+    await fetchJson(apiUrl(`/api/memory/records/${encodeURIComponent(recordId)}${agentOnlyQuery}`), {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     });
@@ -406,8 +425,48 @@ export function MemoryPage({ embedded = false, agentId }: { embedded?: boolean; 
       </section>
 
       <section className="rounded-lg bg-surface-panel shadow-surface">
-        <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.providerPolicy}</div>
+        <div className="border-b border-edge px-4 py-3 text-sm font-semibold text-fg">{t.memoryPolicy}</div>
         <div className="grid gap-3 p-4 md:grid-cols-2">
+          <label className="text-xs font-medium text-fg-muted">
+            {t.crossAgentSharing}
+            <Select
+              className="mt-1 min-h-10 w-full rounded-md border border-edge bg-surface-panel px-3 text-sm text-fg"
+              value={privacyDraft.crossAgentSharing}
+              onChange={(event) => setPrivacyDraft((prev) => ({
+                ...prev,
+                crossAgentSharing: event.target.value as typeof prev.crossAgentSharing,
+              }))}
+            >
+              <SelectOption value="deny">{t.crossAgentDeny}</SelectOption>
+              <SelectOption value="readOnly">{t.crossAgentReadOnly}</SelectOption>
+              <SelectOption value="allow">{t.crossAgentAllow}</SelectOption>
+            </Select>
+          </label>
+          <label className="text-xs font-medium text-fg-muted">
+            {t.sensitiveWritePolicy}
+            <Select
+              className="mt-1 min-h-10 w-full rounded-md border border-edge bg-surface-panel px-3 text-sm text-fg"
+              value={privacyDraft.sensitiveWritePolicy}
+              onChange={(event) => setPrivacyDraft((prev) => ({
+                ...prev,
+                sensitiveWritePolicy: event.target.value as typeof prev.sensitiveWritePolicy,
+              }))}
+            >
+              <SelectOption value="deny">{t.policyDeny}</SelectOption>
+              <SelectOption value="confirm">{t.policyConfirm}</SelectOption>
+              <SelectOption value="allow">{t.policyAllow}</SelectOption>
+            </Select>
+          </label>
+          <p className="max-w-[72ch] text-xs leading-5 text-fg-muted md:col-span-2">
+            {privacyDraft.crossAgentSharing === 'deny'
+              ? t.crossAgentDenyHelp
+              : privacyDraft.crossAgentSharing === 'readOnly'
+                ? t.crossAgentReadOnlyHelp
+                : t.crossAgentAllowHelp}
+          </p>
+          <div className="border-t border-edge pt-3 text-xs font-medium text-fg-muted md:col-span-2">
+            {t.providerPolicy}
+          </div>
           <label className="text-xs font-medium text-fg-muted">
             {t.searchStrategy}
             <Select

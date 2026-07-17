@@ -55,6 +55,7 @@ describe('UserContextPlanner', () => {
 
     const plan = await new UserContextPlanner().plan({
       memoryManager,
+      agentId: 'research',
       sessionKey: 'session-1',
       query: 'answer preference',
       userMessage,
@@ -68,5 +69,8 @@ describe('UserContextPlanner', () => {
     expect(String(plan.modelMessage.content)).toContain('<user-context>');
     expect(String(plan.modelMessage.content)).toContain('Prefer concise answers.');
     expect(String(plan.modelMessage.content)).not.toContain('Token value');
+    expect(memoryManager.search).toHaveBeenCalledWith(expect.objectContaining({
+      scope: { agentId: 'research', sessionKey: 'session-1' },
+    }));
   });
 });

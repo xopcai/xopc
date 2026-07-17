@@ -22,8 +22,11 @@ export function isCuratedMemoryInPrompt(config: Config | undefined): boolean {
 export function resolveBuiltinMemoryStoreConfig(
   workspaceDir: string,
   config: Config | undefined,
+  requestedAgentId?: string,
 ): MemoryStoreConfig {
-  const agentId = config != null ? resolveAgentIdForWorkspacePath(config, workspaceDir) : undefined;
+  const agentId = config != null
+    ? requestedAgentId?.trim() || resolveAgentIdForWorkspacePath(config, workspaceDir)
+    : undefined;
   const manifest = config && agentId ? resolveEffectiveAgentManifestForAgent(config, agentId) : undefined;
   const memoriesDir =
     config != null
@@ -36,7 +39,7 @@ export function resolveBuiltinMemoryStoreConfig(
     workspaceDir,
     memoriesDir,
     userMemoryPath: config != null ? resolveUserMemoryPath() : join(workspaceDir, 'user', 'MEMORY.md'),
-    memoryCharLimit: manifest?.memory.retention?.maxItems ?? 2200,
+    memoryCharLimit: manifest?.memory.retention?.maxChars ?? 2200,
     userCharLimit: 1375,
     userProfileEnabled: manifest?.memory.sources.includes('userProfile') ?? true,
   };

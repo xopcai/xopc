@@ -139,7 +139,11 @@ export class AgentOrchestrator {
         const t0 = Date.now();
 
         if (content.includes(DREAMING_LIGHT_SWEEP_TOKEN)) {
-          const result = await runLightSweep({ dreamingRoot: scope.memoriesDir, config: resolved.phases.light });
+          const result = await runLightSweep({
+            workspaceDir: scope.workspaceDir,
+            dreamingRoot: scope.memoriesDir,
+            config: resolved.phases.light,
+          });
           const event: DreamingEvent = {
             timestamp: new Date().toISOString(), phase: 'light',
             ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
@@ -147,7 +151,14 @@ export class AgentOrchestrator {
           };
           await appendDreamingEvent(scope.memoriesDir, event);
         } else if (content.includes(DREAMING_REM_SWEEP_TOKEN)) {
-          const result = await runRemPatterns({ dreamingRoot: scope.memoriesDir, config: resolved.phases.rem });
+          const result = await runRemPatterns({
+            agentId: scope.agentId,
+            workspaceDir: scope.workspaceDir,
+            dreamingRoot: scope.memoriesDir,
+            config: resolved.phases.rem,
+            sensitiveWritePolicy: scope.memory.privacy?.sensitiveWritePolicy,
+            promotionWritePolicy: resolved.promotionWritePolicy.decision,
+          });
           const event: DreamingEvent = {
             timestamp: new Date().toISOString(), phase: 'rem',
             ok: result.ok, reason: result.reason, durationMs: Date.now() - t0,
@@ -156,9 +167,11 @@ export class AgentOrchestrator {
           await appendDreamingEvent(scope.memoriesDir, event);
         } else {
           const result = await runDreamingDeepPromotion({
+            agentId: scope.agentId,
             workspaceDir: scope.workspaceDir,
             dreamingRoot: scope.memoriesDir,
             config: resolved.phases.deep,
+            sensitiveWritePolicy: scope.memory.privacy?.sensitiveWritePolicy,
             memoryManager: this.agentManager.getMemoryManagerForSession(sessionKey),
           });
           const event: DreamingEvent = {

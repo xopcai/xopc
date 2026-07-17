@@ -9,13 +9,17 @@ import {
 import type { Config } from '../../../config/schema.js';
 import type { AgentManifest } from '../../../agent-manifest/index.js';
 
-function manifest(memory: AgentManifest['memory']): AgentManifest {
+function manifest(
+  memory: AgentManifest['memory'],
+  id = 'main',
+  workspaceRoot = '/w',
+): AgentManifest {
   return {
-    id: 'main',
+    id,
     enabled: true,
-    identity: { name: 'main', role: 'Agent', language: 'en', tone: 'direct' },
+    identity: { name: id, role: 'Agent', language: 'en', tone: 'direct' },
     responsibilities: { primary: ['Help'] },
-    workspace: { root: '/w' },
+    workspace: { root: workspaceRoot },
     models: { defaultRole: 'deep', roles: { deep: { model: 'openai/gpt-4.1' } } },
     tools: { builtin: {} },
     skills: { mode: 'all' },
@@ -67,10 +71,33 @@ describe('memory-config', () => {
 
     const custom = resolveBuiltinMemoryStoreConfig(
       '/w',
-      cfg({ mode: 'confirmWrite', sources: ['session'], retention: { compaction: true, maxItems: 100 } }),
+      cfg({ mode: 'confirmWrite', sources: ['session'], retention: { compaction: true, maxItems: 100, maxChars: 900 } }),
     );
-    expect(custom.memoryCharLimit).toBe(100);
+    expect(custom.memoryCharLimit).toBe(900);
     expect(custom.userProfileEnabled).toBe(false);
+  });
+
+  it('resolves memory configuration by explicit agent id for a shared workspace', () => {
+    const config = {
+      agents: {
+        default: 'main',
+        capabilityPresets: {},
+        list: [
+          manifest({ mode: 'confirmWrite', sources: ['session'], retention: { maxChars: 800 } }, 'main', '/shared'),
+          manifest({ mode: 'auto', sources: ['session', 'userProfile'], retention: { maxChars: 1600 } }, 'research', '/shared'),
+        ],
+      },
+    } as Config;
+
+    const main = resolveBuiltinMemoryStoreConfig('/shared', config, 'main');
+    const research = resolveBuiltinMemoryStoreConfig('/shared', config, 'research');
+
+    expect(main.memoriesDir.replace(/\\/g, '/')).toContain('/agents/main/memories');
+    expect(research.memoriesDir.replace(/\\/g, '/')).toContain('/agents/research/memories');
+    expect(main.memoryCharLimit).toBe(800);
+    expect(research.memoryCharLimit).toBe(1600);
+    expect(main.userProfileEnabled).toBe(false);
+    expect(research.userProfileEnabled).toBe(true);
   });
 
   it('shouldPlanUserContextThisTurn plans on every turn', () => {

@@ -11,6 +11,10 @@ import {
 import { buildEntryKey, clamp01, isoDay, normalizeMemoryPath } from './utils.js';
 
 const log = createLogger('Dreaming:Store');
+const STORE_MAX_ENTRIES = 2_000;
+const STORE_MAX_AGE_MS = 90 * 24 * 60 * 60 * 1_000;
+const PROMOTED_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
+const LOCK_STALE_MS = 60_000;
 
 export type DreamingStoreEntry = {
   key: string;
@@ -44,6 +48,7 @@ export type DreamingStoreEntry = {
   // ── Timestamps ───────────────────────────────────────────────────────
   firstRecalledAt: string;
   lastRecalledAt: string;
+  lastObservedAt?: string;
   promotedAt?: string;
 };
 
@@ -96,10 +101,12 @@ async function readStore(dreamingRoot: string, nowIso: string): Promise<Dreaming
   try {
     const raw = await fs.readFile(storePath, 'utf-8');
     const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== 'object') return emptyStore(nowIso);
+    if (!parsed || typeof parsed !== 'object') {
+      throw new Error('Dreaming store root must be an object');
+    }
     const rec = parsed as Partial<DreamingStore>;
     if (rec.version !== 1 || !rec.entries || typeof rec.entries !== 'object') {
-      return emptyStore(nowIso);
+      throw new Error('Dreaming store has an unsupported or invalid shape');
     }
     return {
       version: 1,
@@ -109,12 +116,43 @@ async function readStore(dreamingRoot: string, nowIso: string): Promise<Dreaming
   } catch (err) {
     const code = (err as NodeJS.ErrnoException | undefined)?.code;
     if (code === 'ENOENT') return emptyStore(nowIso);
-    log.warn({ err, dreamingRoot }, 'Failed to read dreaming store; resetting');
+    const quarantinePath = `${storePath}.corrupt-${Date.now()}`;
+    await fs.rename(storePath, quarantinePath).catch(() => undefined);
+    log.warn({ err, dreamingRoot, quarantinePath }, 'Failed to read dreaming store; quarantined corrupt data');
     return emptyStore(nowIso);
   }
 }
 
+function pruneStore(store: DreamingStore, nowMs = Date.now()): void {
+  for (const [key, entry] of Object.entries(store.entries)) {
+    const lastSeenMs = Math.max(
+      Date.parse(entry.lastRecalledAt || entry.firstRecalledAt),
+      entry.lastObservedAt ? Date.parse(entry.lastObservedAt) : 0,
+    );
+    const promotedMs = entry.promotedAt ? Date.parse(entry.promotedAt) : Number.NaN;
+    if (
+      (Number.isFinite(promotedMs) && nowMs - promotedMs > PROMOTED_MAX_AGE_MS)
+      || (Number.isFinite(lastSeenMs) && nowMs - lastSeenMs > STORE_MAX_AGE_MS)
+    ) {
+      delete store.entries[key];
+    }
+  }
+  const entries = Object.values(store.entries);
+  if (entries.length <= STORE_MAX_ENTRIES) return;
+  entries.sort((left, right) => {
+    if (Boolean(left.promotedAt) !== Boolean(right.promotedAt)) return left.promotedAt ? 1 : -1;
+    const signalDelta = (right.totalSignalCount ?? 0) - (left.totalSignalCount ?? 0);
+    if (signalDelta !== 0) return signalDelta;
+    return Date.parse(right.lastRecalledAt) - Date.parse(left.lastRecalledAt);
+  });
+  const keep = new Set(entries.slice(0, STORE_MAX_ENTRIES).map((entry) => entry.key));
+  for (const key of Object.keys(store.entries)) {
+    if (!keep.has(key)) delete store.entries[key];
+  }
+}
+
 async function writeStore(dreamingRoot: string, store: DreamingStore): Promise<void> {
+  pruneStore(store);
   await ensureDreamDir(dreamingRoot);
   const storePath = path.join(dreamingRoot, SHORT_TERM_RECALL_STORE_RELATIVE);
   const tmp = `${storePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
@@ -134,89 +172,87 @@ export async function recordDreamingRecalls(params: {
   if (!dreamingRoot || !query) {
     return { recorded: 0, skipped: params.matches.length, storePath: SHORT_TERM_RECALL_STORE_RELATIVE };
   }
-  const now = params.now ?? new Date();
-  const nowIso = now.toISOString();
-  const dayBucket = isoDay(now);
-  const qHash = hashQuery(query);
+  return withDreamingStoreLock(dreamingRoot, async () => {
+    const now = params.now ?? new Date();
+    const nowIso = now.toISOString();
+    const dayBucket = isoDay(now);
+    const qHash = hashQuery(query);
+    const store = await readStore(dreamingRoot, nowIso);
 
-  const store = await readStore(dreamingRoot, nowIso);
+    let recorded = 0;
+    let skipped = 0;
+    for (const match of params.matches) {
+      const file = typeof match?.file === 'string' ? match.file : '';
+      if (!file || !isRecordableMemoryPath(file)) {
+        skipped += 1;
+        continue;
+      }
+      const lines = typeof match?.lines === 'string' ? match.lines.trim() : '';
+      const lineNumbers = Array.isArray(match?.lineNumbers) ? match.lineNumbers : [];
+      const startLine = Math.max(1, Math.min(...lineNumbers.filter((n) => Number.isFinite(n) && n > 0)));
+      const endLine = Math.max(startLine, Math.max(...lineNumbers.filter((n) => Number.isFinite(n) && n > 0)));
+      if (!Number.isFinite(startLine) || !Number.isFinite(endLine)) {
+        skipped += 1;
+        continue;
+      }
+      const score = clamp01(Number(match.score));
+      const key = buildEntryKey({ path: file, startLine, endLine });
+      const existing = store.entries[key];
+      const snippet = lines.length > 0 ? lines.slice(0, 360) : file;
 
-  let recorded = 0;
-  let skipped = 0;
-  for (const match of params.matches) {
-    const file = typeof match?.file === "string" ? match.file : "";
-    if (!file || !isRecordableMemoryPath(file)) {
-      skipped += 1;
-      continue;
+      const next: DreamingStoreEntry = existing
+        ? {
+            ...existing,
+            snippet,
+            recallCount: Math.max(0, Math.floor(existing.recallCount + 1)),
+            sourceCount: existing.sourceCount ?? 0,
+            groundedCount: existing.groundedCount ?? 0,
+            lightHits: existing.lightHits ?? 0,
+            remHits: existing.remHits ?? 0,
+            phaseHitCount: existing.phaseHitCount ?? 0,
+            totalSignalCount: Math.max(0, (existing.totalSignalCount ?? existing.recallCount ?? 0) + 1),
+            totalScore: Math.max(0, existing.totalScore + score),
+            maxScore: Math.max(existing.maxScore, score),
+            queryHashes: mergeQueryHashes(existing.queryHashes ?? [], qHash),
+            recallDays: mergeRecentDistinct(existing.recallDays ?? [], dayBucket, 16),
+            lastRecalledAt: nowIso,
+          }
+        : {
+            key,
+            path: normalizeMemoryPath(file),
+            startLine,
+            endLine,
+            snippet,
+            recallCount: 1,
+            sourceCount: 0,
+            groundedCount: 0,
+            lightHits: 0,
+            remHits: 0,
+            phaseHitCount: 0,
+            totalSignalCount: 1,
+            totalScore: score,
+            maxScore: score,
+            queryHashes: [qHash],
+            recallDays: [dayBucket],
+            firstRecalledAt: nowIso,
+            lastRecalledAt: nowIso,
+          };
+
+      store.entries[key] = next;
+      recorded += 1;
     }
-    const lines = typeof match?.lines === "string" ? match.lines.trim() : "";
-    const lineNumbers = Array.isArray(match?.lineNumbers) ? match.lineNumbers : [];
-    const startLine = Math.max(1, Math.min(...lineNumbers.filter((n) => Number.isFinite(n) && n > 0)));
-    const endLine = Math.max(startLine, Math.max(...lineNumbers.filter((n) => Number.isFinite(n) && n > 0)));
-    if (!Number.isFinite(startLine) || !Number.isFinite(endLine)) {
-      skipped += 1;
-      continue;
+
+    if (recorded > 0) {
+      store.updatedAt = nowIso;
+      await writeStore(dreamingRoot, store);
     }
-    const score = clamp01(Number(match.score));
-    const key = buildEntryKey({ path: file, startLine, endLine });
-    const existing = store.entries[key];
-    const snippet = lines.length > 0 ? lines.slice(0, 360) : file;
 
-    const next: DreamingStoreEntry = existing
-      ? {
-          ...existing,
-          snippet,
-          recallCount: Math.max(0, Math.floor(existing.recallCount + 1)),
-          sourceCount: existing.sourceCount ?? 0,
-          groundedCount: existing.groundedCount ?? 0,
-          lightHits: existing.lightHits ?? 0,
-          remHits: existing.remHits ?? 0,
-          phaseHitCount: existing.phaseHitCount ?? 0,
-          totalSignalCount: Math.max(0, (existing.totalSignalCount ?? existing.recallCount ?? 0) + 1),
-          totalScore: Math.max(0, existing.totalScore + score),
-          maxScore: Math.max(existing.maxScore, score),
-          queryHashes: mergeQueryHashes(existing.queryHashes ?? [], qHash),
-          recallDays: mergeRecentDistinct(existing.recallDays ?? [], dayBucket, 16),
-          lastRecalledAt: nowIso,
-        }
-      : {
-          key,
-          path: normalizeMemoryPath(file),
-          startLine,
-          endLine,
-          snippet,
-          recallCount: 1,
-          sourceCount: 0,
-          groundedCount: 0,
-          lightHits: 0,
-          remHits: 0,
-          phaseHitCount: 0,
-          totalSignalCount: 1,
-          totalScore: score,
-          maxScore: score,
-          queryHashes: [qHash],
-          recallDays: [dayBucket],
-          firstRecalledAt: nowIso,
-          lastRecalledAt: nowIso,
-        };
-
-    store.entries[key] = next;
-    recorded += 1;
-  }
-
-  if (recorded > 0) {
-    store.updatedAt = nowIso;
-    await writeStore(dreamingRoot, store);
-  }
-
-  return {
-    recorded,
-    skipped,
-    storePath: SHORT_TERM_RECALL_STORE_RELATIVE,
-  };
+    return { recorded, skipped, storePath: SHORT_TERM_RECALL_STORE_RELATIVE };
+  });
 }
 
-export async function withDreamingPromotionLock<T>(
+/** Serialize all read-modify-write operations against the shared Dreaming store. */
+export async function withDreamingStoreLock<T>(
   dreamingRoot: string,
   task: () => Promise<T>,
 ): Promise<T> {
@@ -242,11 +278,37 @@ export async function withDreamingPromotionLock<T>(
       if (code !== 'EEXIST') {
         throw err;
       }
+      const lockStat = await fs.stat(lockPath).catch(() => null);
+      if (lockStat && Date.now() - lockStat.mtimeMs > LOCK_STALE_MS && await lockOwnerIsDead(lockPath)) {
+        await fs.unlink(lockPath).catch(() => undefined);
+        log.warn({ lockPath, ageMs: Date.now() - lockStat.mtimeMs }, 'Removed stale dreaming lock');
+        continue;
+      }
       if (Date.now() - startedAt >= timeoutMs) {
         throw new Error(`Timed out waiting for dreaming promotion lock at ${lockPath}`);
       }
       await new Promise((r) => setTimeout(r, retryDelayMs));
     }
+  }
+}
+
+/** @deprecated Use the store-level name; retained for callers outside this module. */
+export async function withDreamingPromotionLock<T>(
+  dreamingRoot: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  return withDreamingStoreLock(dreamingRoot, task);
+}
+
+async function lockOwnerIsDead(lockPath: string): Promise<boolean> {
+  const raw = await fs.readFile(lockPath, 'utf-8').catch(() => '');
+  const pid = Number.parseInt(raw.split(':', 1)[0] ?? '', 10);
+  if (!Number.isFinite(pid) || pid <= 0) return true;
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException | undefined)?.code === 'ESRCH';
   }
 }
 
@@ -263,6 +325,36 @@ export async function saveDreamingStore(params: {
   store: DreamingStore;
 }): Promise<void> {
   await writeStore(params.dreamingRoot, params.store);
+}
+
+export async function resetDreamingStore(params: {
+  dreamingRoot: string;
+  now?: Date;
+}): Promise<number> {
+  return withDreamingStoreLock(params.dreamingRoot, async () => {
+    const nowIso = (params.now ?? new Date()).toISOString();
+    const store = await readStore(params.dreamingRoot, nowIso);
+    const removed = Object.keys(store.entries).length;
+    await writeStore(params.dreamingRoot, emptyStore(nowIso));
+    return removed;
+  });
+}
+
+/** Remove only a stale lock whose owning process is no longer alive. */
+export async function clearStaleDreamingLock(dreamingRoot: string): Promise<boolean> {
+  const lockPath = path.join(dreamingRoot, SHORT_TERM_PROMOTION_LOCK_RELATIVE);
+  const lockStat = await fs.stat(lockPath).catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT') return null;
+    throw error;
+  });
+  if (!lockStat) return false;
+  const ageMs = Date.now() - lockStat.mtimeMs;
+  if (ageMs <= LOCK_STALE_MS || !(await lockOwnerIsDead(lockPath))) {
+    throw new Error(`Dreaming lock is active and cannot be cleared: ${lockPath}`);
+  }
+  await fs.unlink(lockPath);
+  log.warn({ lockPath, ageMs }, 'Cleared stale dreaming lock');
+  return true;
 }
 
 // ── Phase-level signal helpers ─────────────────────────────────────────

@@ -17,6 +17,7 @@ const log = createLogger('UserContextCoordinator');
 export interface UserContextCoordinatorOptions {
   getConfig: () => Config | undefined;
   isEnabledForSession: (sessionKey: string) => boolean;
+  getAgentIdForSession: (sessionKey: string) => string;
   getMemoryManagerForSession: (sessionKey: string) => MemoryManager;
   getLastAssistantContent: (sessionKey: string) => string | null;
 }
@@ -73,6 +74,7 @@ export class UserContextCoordinator {
     if (!shouldPlanUserContextThisTurn(config, turn)) return empty();
     return this.planner.plan({
       memoryManager: this.options.getMemoryManagerForSession(sessionKey),
+      agentId: this.options.getAgentIdForSession(sessionKey),
       sessionKey,
       query,
       userMessage,
@@ -89,7 +91,11 @@ export class UserContextCoordinator {
       await memoryManager.captureTurnUnderstanding(
         userPlainText,
         assistantContent,
-        { sessionId: sessionKey, correctionTargetRecordIds },
+        {
+          agentId: this.options.getAgentIdForSession(sessionKey),
+          sessionId: sessionKey,
+          correctionTargetRecordIds,
+        },
       );
     } catch (err) {
       log.warn({ err, sessionKey }, 'Turn understanding capture failed');

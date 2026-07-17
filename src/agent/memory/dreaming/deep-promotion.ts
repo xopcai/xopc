@@ -6,7 +6,7 @@ import { MEMORY_MD_FILENAME } from './constants.js';
 import {
   loadDreamingStore,
   saveDreamingStore,
-  withDreamingPromotionLock,
+  withDreamingStoreLock,
   type DreamingStoreEntry,
 } from './short-term-store.js';
 import {
@@ -18,6 +18,8 @@ import {
 } from './last-run.js';
 import type { DreamingDeepConfig } from './config.js';
 import type { MemoryManager } from '../manager.js';
+import { activateDreamingPromotion } from './promotion-lifecycle.js';
+import { inferMemorySensitivity } from '../sensitivity.js';
 import {
   clamp01,
   compareCandidatesByScore,
@@ -97,9 +99,11 @@ function buildDeepLastRun(base: {
 }
 
 export async function runDreamingDeepPromotion(params: {
+  agentId: string;
   workspaceDir: string;
   dreamingRoot: string;
   config?: Partial<DreamingDeepConfig>;
+  sensitiveWritePolicy?: 'deny' | 'confirm' | 'allow';
   memoryManager?: MemoryManager;
   now?: Date;
 }): Promise<{
@@ -139,7 +143,7 @@ export async function runDreamingDeepPromotion(params: {
   }
 
   try {
-    const result = await withDreamingPromotionLock(params.dreamingRoot, async () => {
+    const result = await withDreamingStoreLock(params.dreamingRoot, async () => {
       const { store } = await loadDreamingStore({ dreamingRoot: params.dreamingRoot });
 
       const nowMs = now.getTime();
@@ -186,6 +190,7 @@ export async function runDreamingDeepPromotion(params: {
         score: number;
         recallCount: number;
         avgScore: number;
+        sensitivity: ReturnType<typeof inferMemorySensitivity>;
       }> = [];
 
       const skipped: DreamingDeepPhaseSkipped = emptyDeepPhaseSkipped();
@@ -205,6 +210,11 @@ export async function runDreamingDeepPromotion(params: {
           continue;
         }
         if (isContaminatedSnippet(rehydrated.snippet)) {
+          skipped.contaminated += 1;
+          continue;
+        }
+        const sensitivity = inferMemorySensitivity(rehydrated.snippet);
+        if (sensitivity !== 'normal' && params.sensitiveWritePolicy !== 'allow') {
           skipped.contaminated += 1;
           continue;
         }
@@ -228,6 +238,7 @@ export async function runDreamingDeepPromotion(params: {
           score: candidate.score,
           recallCount: candidate.recallCount,
           avgScore: candidate.avgScore,
+          sensitivity,
         });
       }
 
@@ -256,6 +267,21 @@ export async function runDreamingDeepPromotion(params: {
       sectionLines.push('');
 
       const next = `${header}${existing.endsWith('\n') || existing.length === 0 ? existing : `${existing}\n`}${sectionLines.join('\n')}`;
+      for (const c of appliedCandidates) {
+        activateDreamingPromotion({
+          agentId: params.agentId,
+          workspaceId: params.workspaceDir,
+          candidateKey: c.key,
+          content: c.snippet,
+          sourcePath: c.path,
+          lineStart: c.startLine,
+          lineEnd: c.endLine,
+          score: c.score,
+          recallCount: c.recallCount,
+          observedAt: now.toISOString(),
+          sensitivity: c.sensitivity,
+        });
+      }
       await fs.mkdir(path.dirname(memoryPath), { recursive: true });
       await fs.writeFile(memoryPath, next, 'utf-8');
 

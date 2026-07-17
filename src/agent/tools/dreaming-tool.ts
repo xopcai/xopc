@@ -11,7 +11,11 @@ import {
   SHORT_TERM_PROMOTION_LOCK_RELATIVE,
   SHORT_TERM_RECALL_STORE_RELATIVE,
 } from '../memory/dreaming/constants.js';
-import { loadDreamingStore, saveDreamingStore } from '../memory/dreaming/short-term-store.js';
+import {
+  clearStaleDreamingLock,
+  loadDreamingStore,
+  resetDreamingStore,
+} from '../memory/dreaming/short-term-store.js';
 
 const log = createLogger('DreamingTool');
 
@@ -109,20 +113,15 @@ export function createDreamingTool(deps: DreamingToolDeps): AgentTool {
       }
 
       if (action === 'reset_store') {
-        const { store } = await loadDreamingStore({ dreamingRoot });
-        const before = Object.keys(store.entries ?? {}).length;
-        const nowIso = new Date().toISOString();
-        store.entries = {};
-        store.updatedAt = nowIso;
-        await saveDreamingStore({ dreamingRoot, store });
+        const before = await resetDreamingStore({ dreamingRoot });
         log.info({ dreamingRoot, before }, 'Dreaming store reset');
         return textResult(
           `Reset short-term store. Removed ${before} entr${before === 1 ? 'y' : 'ies'}. Path: ${storePath}`,
         );
       }
 
-      await fs.unlink(lockPath).catch(() => {});
-      return textResult(`Cleared lock (if present). Path: ${lockPath}`);
+      const cleared = await clearStaleDreamingLock(dreamingRoot);
+      return textResult(`${cleared ? 'Cleared stale lock.' : 'No lock present.'} Path: ${lockPath}`);
     },
   } as any;
 }

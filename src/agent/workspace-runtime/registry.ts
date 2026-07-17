@@ -4,8 +4,9 @@
  * Previously these four collaborators (`SkillManager`, `SystemPromptBuilder`,
  * `BuiltinMemoryStore`, `MemoryManager`) were created inline inside
  * `AgentManager.getWorkspaceRuntime` and cached in a private Map. They live
- * outside `AgentInstance` because multiple session keys may share a workspace
- * (the runtime is keyed by **resolved workspace path**, not session key).
+ * outside `AgentInstance` because multiple session keys for the same agent may
+ * share a workspace. Memory ownership is agent-scoped, so runtimes are keyed by
+ * both the effective agent id and resolved workspace path.
  *
  * Extracted so:
  *   - `AgentManager` no longer juggles four sibling caches.
@@ -16,6 +17,8 @@
  */
 
 import type { Config } from '../../config/schema.js';
+import { normalizeAgentId } from '../../routing/agent-session-key.js';
+import { resolveAgentIdForWorkspacePath } from '../agent-scope.js';
 import { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
 import { createMemoryManagerFromConfig } from '../memory/create-memory-manager.js';
 import { resolveBuiltinMemoryStoreConfig } from '../memory/memory-config.js';
@@ -46,6 +49,7 @@ export interface WorkspaceRuntimeRegistryOptions {
 
 export class WorkspaceRuntimeRegistry {
   private readonly runtimes = new Map<string, WorkspaceRuntime>();
+  private readonly notifiedWorkspacePaths = new Set<string>();
   private readonly getConfig: () => Config;
   private readonly bundledSkillsDir: string;
   private readonly onRuntimeCreated?: (resolvedPath: string) => void;
@@ -56,18 +60,22 @@ export class WorkspaceRuntimeRegistry {
     this.onRuntimeCreated = opts.onRuntimeCreated;
   }
 
-  /** Lazily construct (and cache) the runtime for a resolved workspace path. */
-  getOrCreate(resolvedPath: string): WorkspaceRuntime {
-    const existing = this.runtimes.get(resolvedPath);
+  /** Lazily construct and cache an agent-scoped runtime for a workspace. */
+  getOrCreate(resolvedPath: string, requestedAgentId?: string): WorkspaceRuntime {
+    const cfg = this.getConfig();
+    const agentId = normalizeAgentId(
+      requestedAgentId?.trim() || resolveAgentIdForWorkspacePath(cfg, resolvedPath),
+    );
+    const runtimeKey = `${agentId}\u0000${resolvedPath}`;
+    const existing = this.runtimes.get(runtimeKey);
     if (existing) {
       return existing;
     }
 
-    const cfg = this.getConfig();
     const builtinMemoryStore = new BuiltinMemoryStore(
-      resolveBuiltinMemoryStoreConfig(resolvedPath, cfg),
+      resolveBuiltinMemoryStoreConfig(resolvedPath, cfg, agentId),
     );
-    const memoryManager = createMemoryManagerFromConfig(resolvedPath, builtinMemoryStore, cfg);
+    const memoryManager = createMemoryManagerFromConfig(resolvedPath, builtinMemoryStore, cfg, agentId);
     const skillManager = new SkillManager(resolvedPath, this.bundledSkillsDir);
     const systemPromptBuilder = new SystemPromptBuilder({
       workspace: resolvedPath,
@@ -86,19 +94,17 @@ export class WorkspaceRuntimeRegistry {
       memoryManager,
       codeIntelligence,
     };
-    this.runtimes.set(resolvedPath, rt);
-    this.onRuntimeCreated?.(resolvedPath);
+    this.runtimes.set(runtimeKey, rt);
+    if (!this.notifiedWorkspacePaths.has(resolvedPath)) {
+      this.notifiedWorkspacePaths.add(resolvedPath);
+      this.onRuntimeCreated?.(resolvedPath);
+    }
     return rt;
   }
 
   /** Iterate every live workspace runtime (used by skill / config hot-reload). */
   values(): IterableIterator<WorkspaceRuntime> {
     return this.runtimes.values();
-  }
-
-  /** Iterate live workspace runtime entries keyed by resolved workspace path. */
-  entries(): IterableIterator<[string, WorkspaceRuntime]> {
-    return this.runtimes.entries();
   }
 
   /**
@@ -108,6 +114,7 @@ export class WorkspaceRuntimeRegistry {
   async clearAll(): Promise<void> {
     const toShutdown = [...this.runtimes.values()];
     this.runtimes.clear();
+    this.notifiedWorkspacePaths.clear();
     await Promise.allSettled(
       toShutdown.flatMap((rt) => [
         rt.memoryManager.shutdownAll().catch((err) => {

@@ -214,6 +214,7 @@ export const MemoryPolicySchema = z
         compaction: z.boolean().default(true),
         maxAgeDays: z.number().int().positive().optional(),
         maxItems: z.number().int().positive().optional(),
+        maxChars: z.number().int().positive().optional(),
       })
       .strict()
       .optional(),

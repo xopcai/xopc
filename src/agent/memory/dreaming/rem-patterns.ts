@@ -8,9 +8,12 @@ import {
   bumpEntryPhaseSignal,
   loadDreamingStore,
   saveDreamingStore,
+  withDreamingStoreLock,
   type DreamingStoreEntry,
 } from './short-term-store.js';
 import { isoDay } from './utils.js';
+import { inferMemorySensitivity } from '../sensitivity.js';
+import { activateRemInsight, remPatternKey } from './promotion-lifecycle.js';
 import {
   DREAMING_LAST_RUN_FORMAT_VERSION,
   type DreamingRemLastRun,
@@ -55,8 +58,12 @@ function resolveConfig(overrides?: Partial<DreamingRemConfig>): DreamingRemConfi
  * Runs weekly; expensive but insightful.
  */
 export async function runRemPatterns(params: {
+  agentId: string;
+  workspaceDir: string;
   dreamingRoot: string;
   config?: Partial<DreamingRemConfig>;
+  sensitiveWritePolicy?: 'deny' | 'confirm' | 'allow';
+  promotionWritePolicy?: 'deny' | 'confirm' | 'allow';
   now?: Date;
 }): Promise<{
   ok: boolean;
@@ -80,6 +87,7 @@ export async function runRemPatterns(params: {
   }
 
   try {
+    return await withDreamingStoreLock(params.dreamingRoot, async () => {
     const { store } = await loadDreamingStore({ dreamingRoot: params.dreamingRoot });
 
     // Filter entries within the lookback window.
@@ -108,7 +116,12 @@ export async function runRemPatterns(params: {
 
     // Discover patterns by clustering entries that share query hashes.
     const clusters = discoverPatternClusters(recentEntries, cfg.minPatternStrength);
-    const topClusters = clusters.slice(0, cfg.limit);
+    const topClusters = clusters
+      .filter((cluster) => {
+        const sensitivity = inferMemorySensitivity(cluster.members.map((member) => member.snippet).join('\n'));
+        return sensitivity === 'normal' || params.sensitiveWritePolicy === 'allow';
+      })
+      .slice(0, cfg.limit);
 
     // Bump remHits on all entries that belong to a discovered pattern.
     const touchedKeys = new Set<string>();
@@ -126,6 +139,23 @@ export async function runRemPatterns(params: {
 
     store.updatedAt = now.toISOString();
     await saveDreamingStore({ dreamingRoot: params.dreamingRoot, store });
+
+    if (params.promotionWritePolicy === 'allow') {
+      for (const cluster of topClusters) {
+        const sensitivity = inferMemorySensitivity(cluster.members.map((member) => member.snippet).join('\n'));
+        activateRemInsight({
+          agentId: params.agentId,
+          workspaceId: params.workspaceDir,
+          memberKeys: cluster.members.map((member) => member.key),
+          representative: cluster.representative.snippet,
+          distinctPaths: cluster.distinctPaths,
+          strength: cluster.strength,
+          observedAt: now.toISOString(),
+          evidence: cluster.members.map((member) => member.snippet),
+          sensitivity,
+        });
+      }
+    }
 
     // Write pattern summary to DREAMS.md (append).
     if (topClusters.length > 0) {
@@ -153,6 +183,7 @@ export async function runRemPatterns(params: {
       patternsDiscovered: topClusters.length,
       entriesAnalyzed: recentEntries.length,
     };
+    });
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     log.error({ err, errorMessage, dreamingRoot: params.dreamingRoot }, `REM pattern discovery failed: ${errorMessage}`);
@@ -310,6 +341,10 @@ async function appendPatternSummary(
 
   const day = isoDay(now);
   const lines: string[] = [];
+  const newClusters = clusters.filter((cluster) =>
+    !existing.includes(`xopc-rem-pattern id="${remPatternKey(cluster.members.map((member) => member.key))}"`),
+  );
+  if (newClusters.length === 0) return;
 
   if (existing.trim().length === 0) {
     lines.push('# Dream Diary', '');
@@ -318,8 +353,9 @@ async function appendPatternSummary(
   lines.push(`## REM Pattern Discovery — ${day}`, '');
   lines.push(`*${now.toISOString()}*`, '');
 
-  for (let i = 0; i < clusters.length; i++) {
-    const cluster = clusters[i]!;
+  for (let i = 0; i < newClusters.length; i++) {
+    const cluster = newClusters[i]!;
+    lines.push(`<!-- xopc-rem-pattern id="${remPatternKey(cluster.members.map((member) => member.key))}" -->`);
     lines.push(
       `### Pattern ${i + 1}: ${cluster.distinctPaths.length} files, strength=${cluster.strength.toFixed(2)}`,
     );

@@ -33,6 +33,8 @@ describe('UserUnderstandingService', () => {
     await service.applyCandidates(extractExplicitUnderstandingCandidates(
       '你记错了我的偏好，我更喜欢详细解释。',
     ), {
+      agentId: 'research',
+      sessionKey: 'session-1',
       supersedesRecordIds: ['old-preference'],
     });
 
@@ -40,6 +42,7 @@ describe('UserUnderstandingService', () => {
       content: '我更喜欢详细解释。',
       status: 'candidate',
       supersedesRecordId: 'old-preference',
+      scope: { agentId: 'research', sessionKey: 'session-1' },
       tags: expect.arrayContaining(['explicit-user-correction']),
     }));
   });

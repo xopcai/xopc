@@ -66,6 +66,7 @@ import { createDelegateTool } from './delegate-tool.js';
 import { createWorkflowTool } from './workflow-tool.js';
 import { createWorkflowCatalog } from '../workflow/catalog.js';
 import { resolveDreamingRootForAgent } from '../memory/dreaming/scope.js';
+import { resolveDreamingConfig } from '../memory/dreaming/config.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import type { AutomationService } from '../../automations/index.js';
 import type { NotesService } from '../../notes/index.js';
@@ -379,8 +380,32 @@ export class AgentToolsFactory {
         : []),
       ...(getMemMgr
         ? [
-            createMemorySearchTool({ workspaceDir: workspace, dreamingRoot, getMemoryManager: () => getMemMgr() }),
-            createMemoryGetTool({ workspaceDir: workspace, dreamingRoot, getMemoryManager: () => getMemMgr() }),
+            createMemorySearchTool({
+              workspaceDir: workspace,
+              dreamingRoot,
+              getMemoryManager: () => getMemMgr(),
+              getScope: () => ({
+                ...(options?.agentId ? { agentId: options.agentId } : {}),
+                workspaceId: workspace,
+                ...(this.deps.getCurrentContext?.()?.sessionKey
+                  ? { sessionKey: this.deps.getCurrentContext!()!.sessionKey }
+                  : {}),
+              }),
+              shouldRecordDreamingRecalls: () =>
+                resolveDreamingConfig(this.deps.getConfig?.(), options?.agentId).enabled,
+            }),
+            createMemoryGetTool({
+              workspaceDir: workspace,
+              dreamingRoot,
+              getMemoryManager: () => getMemMgr(),
+              getScope: () => ({
+                ...(options?.agentId ? { agentId: options.agentId } : {}),
+                workspaceId: workspace,
+                ...(this.deps.getCurrentContext?.()?.sessionKey
+                  ? { sessionKey: this.deps.getCurrentContext!()!.sessionKey }
+                  : {}),
+              }),
+            }),
           ]
         : []),
       ...(getMemMgr && shouldRegisterCuratedMemoryTool(this.deps.getConfig?.())

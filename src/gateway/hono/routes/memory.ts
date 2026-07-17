@@ -195,9 +195,10 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.get('/api/memory/records', (c) => {
+    const agentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
     const records = listMemoryRecords({
       providerId: c.req.query('providerId') || undefined,
-      agentId: c.req.query('agentId') || undefined,
+      agentId,
       workspaceId: c.req.query('workspaceId') || undefined,
       projectId: c.req.query('projectId') || undefined,
       kind: parseKind(c.req.query('kind')),
@@ -214,10 +215,13 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     if (!query) {
       return c.json({ error: 'Missing required field: query' }, 400);
     }
+    const agentId = typeof body.agentId === 'string' && body.agentId.trim()
+      ? body.agentId.trim()
+      : resolveDefaultAgentId(deps.service.currentConfig as Config);
     const records = searchMemoryRecords({
       query,
       providerId: typeof body.providerId === 'string' ? body.providerId : undefined,
-      agentId: typeof body.agentId === 'string' ? body.agentId : undefined,
+      agentId,
       workspaceId: typeof body.workspaceId === 'string' ? body.workspaceId : undefined,
       projectId: typeof body.projectId === 'string' ? body.projectId : undefined,
       kinds: Array.isArray(body.kinds)
@@ -236,7 +240,9 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
     const body = await c.req.json().catch(() => ({}));
     const kind = parseKind(body.kind);
     const content = typeof body.content === 'string' ? body.content.trim() : '';
-    const agentId = typeof body.agentId === 'string' && body.agentId.trim() ? body.agentId.trim() : 'main';
+    const agentId = typeof body.agentId === 'string' && body.agentId.trim()
+      ? body.agentId.trim()
+      : resolveDefaultAgentId(deps.service.currentConfig as Config);
     if (!kind || !content) {
       return c.json({ error: 'Missing required fields: kind, content' }, 400);
     }
@@ -277,6 +283,10 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
   authenticated.patch('/api/memory/records/:id', async (c) => {
     const existing = getMemoryRecord(c.req.param('id'));
     if (!existing) return c.json({ error: 'Memory record not found' }, 404);
+    const selectedAgentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
+    if (existing.scope.agentId !== selectedAgentId) {
+      return c.json({ error: 'Memory record not found for selected agent' }, 404);
+    }
     const body = await c.req.json().catch(() => ({}));
     const record = upsertMemoryRecord({
       id: existing.id,
@@ -313,16 +323,22 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.delete('/api/memory/records/:id', (c) => {
+    const existing = getMemoryRecord(c.req.param('id'));
+    const selectedAgentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
+    if (!existing || existing.scope.agentId !== selectedAgentId) {
+      return c.json({ error: 'Memory record not found for selected agent' }, 404);
+    }
     const deleted = deleteMemoryRecord(c.req.param('id'));
     if (!deleted) return c.json({ error: 'Memory record not found' }, 404);
     return c.json({ ok: true });
   });
 
   authenticated.get('/api/memory/signals', (c) => {
+    const agentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
     const signals = listMemorySignals({
       recordId: c.req.query('recordId') || undefined,
       providerId: c.req.query('providerId') || undefined,
-      agentId: c.req.query('agentId') || undefined,
+      agentId,
       workspaceId: c.req.query('workspaceId') || undefined,
       limit: parseLimit(c.req.query('limit')),
     });
@@ -349,8 +365,10 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.get('/api/memory/traces', (c) => {
+    const agentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
     const traces = listMemoryTraceEvents({
       providerId: c.req.query('providerId') || undefined,
+      agentId,
       sessionKey: c.req.query('sessionKey') || undefined,
       phase: c.req.query('phase') || undefined,
       limit: parseLimit(c.req.query('limit')),
@@ -383,9 +401,11 @@ export function registerMemoryRoutes(authenticated: Hono, deps: AuthenticatedRou
   });
 
   authenticated.get('/api/memory/feedback-summary', (c) => {
+    const agentId = c.req.query('agentId') || resolveDefaultAgentId(deps.service.currentConfig as Config);
     const summaries = summarizeMemoryRecallFeedback({
       recordId: c.req.query('recordId') || undefined,
       providerId: c.req.query('providerId') || undefined,
+      agentId,
       sessionKey: c.req.query('sessionKey') || undefined,
       limit: parseFeedbackSummaryLimit(c.req.query('limit')),
     });

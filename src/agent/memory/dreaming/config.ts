@@ -1,4 +1,5 @@
 import type { Config } from '../../../config/schema.js';
+import { buildMemoryRuntime, type MemoryWriteCheckResult } from '../../../agent-runtime/memory-runtime.js';
 import { resolveDefaultAgentId } from '../../agent-scope.js';
 import { resolveEffectiveAgentManifestForAgent } from '../../../config/agent-profile.js';
 import {
@@ -41,6 +42,7 @@ export type DreamingRemConfig = {
 
 export type DreamingResolvedConfig = {
   enabled: boolean;
+  promotionWritePolicy: MemoryWriteCheckResult;
   frequency: string;
   timezone?: string;
   phases: {
@@ -88,6 +90,15 @@ export function resolveDreamingConfig(cfg: Config | undefined, requestedAgentId?
   const manifest = cfg && agentId ? resolveEffectiveAgentManifestForAgent(cfg, agentId) : undefined;
   const dreaming = manifest?.memory.dreaming;
   const enabled = dreaming?.enabled === true && manifest?.memory.mode !== 'off';
+  const promotionWritePolicy = manifest
+    ? buildMemoryRuntime(manifest).checkWrite({
+        target: 'curated',
+        content: 'Dreaming automatic memory promotion',
+        source: 'dreaming',
+        confidence: 1,
+        sensitive: false,
+      })
+    : { decision: 'deny' as const, reason: 'agent memory manifest is unavailable' };
 
   const frequency = trimmedStringOr(dreaming?.frequency, DEFAULT_DEEP_CRON);
   const timezone = optionalTrimmedString(dreaming?.timezone);
@@ -105,7 +116,7 @@ export function resolveDreamingConfig(cfg: Config | undefined, requestedAgentId?
   // ── Deep phase ─────────────────────────────────────────────────────
   const deepRaw = dreaming?.phases?.deep ?? {};
   const deep: DreamingDeepConfig = {
-    enabled: enabled && deepRaw?.enabled !== false,
+    enabled: enabled && deepRaw?.enabled !== false && promotionWritePolicy.decision === 'allow',
     cron: trimmedStringOr(deepRaw?.cron, frequency),
     minScore: clampScore(Number(deepRaw?.minScore), 0.8),
     minRecallCount: toPositiveInt(deepRaw?.minRecallCount, 3),
@@ -127,6 +138,7 @@ export function resolveDreamingConfig(cfg: Config | undefined, requestedAgentId?
 
   return {
     enabled,
+    promotionWritePolicy,
     frequency,
     ...(timezone ? { timezone } : {}),
     phases: { light, deep, rem },
