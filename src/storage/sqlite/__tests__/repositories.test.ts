@@ -418,6 +418,40 @@ describe('sqlite repositories', () => {
     expect(results[0]?.record.status).toBe('active');
   });
 
+  it('limits session-scoped memory visibility to the active session', () => {
+    upsertMemoryRecord({
+      id: 'global-memory',
+      providerId: 'local',
+      kind: 'preference',
+      agentId: 'main',
+      workspaceId: CWD,
+      content: 'Use concise aurora summaries for status updates.',
+    });
+    upsertMemoryRecord({
+      id: 'session-memory',
+      providerId: 'local',
+      kind: 'project_context',
+      agentId: 'main',
+      workspaceId: CWD,
+      sessionKey: SESSION_KEY,
+      content: 'Aurora deployment belongs to the current private session.',
+    });
+
+    expect(searchMemoryRecords({
+      query: 'aurora',
+      agentId: 'main',
+      workspaceId: CWD,
+      visibleToSessionKey: SESSION_KEY,
+    }).map((result) => result.record.id)).toEqual(expect.arrayContaining(['global-memory', 'session-memory']));
+
+    expect(searchMemoryRecords({
+      query: 'aurora',
+      agentId: 'main',
+      workspaceId: CWD,
+      visibleToSessionKey: 'agent:main:webchat:default:dm:other-user',
+    }).map((result) => result.record.id)).toEqual(['global-memory']);
+  });
+
   it('records memory trace feedback and summarizes recall quality by record', () => {
     const traceId = appendMemoryTraceEvent({
       sessionKey: SESSION_KEY,
@@ -454,5 +488,24 @@ describe('sqlite repositories', () => {
       total: 1,
       averageScore: 0.8,
     });
+
+    const researchTraceId = appendMemoryTraceEvent({
+      sessionKey: 'agent:research:webchat:default:dm:test-user',
+      phase: 'search',
+      providerId: 'local',
+      request: { query: 'migration checklist' },
+      resultCount: 1,
+      selectedRecordIds: ['research-memory-record'],
+      durationMs: 9,
+    });
+    setMemoryTraceFeedback({
+      traceId: researchTraceId,
+      feedback: { outcome: 'not_helpful', source: 'evaluator' },
+    });
+
+    expect(listMemoryTraceEvents({ agentId: 'main' }).map((trace) => trace.traceId)).toContain(traceId);
+    expect(listMemoryTraceEvents({ agentId: 'main' }).map((trace) => trace.traceId)).not.toContain(researchTraceId);
+    expect(summarizeMemoryRecallFeedback({ agentId: 'main' }).map((summary) => summary.recordId))
+      .not.toContain('research-memory-record');
   });
 });

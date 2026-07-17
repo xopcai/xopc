@@ -5,6 +5,7 @@ import { createLogger } from '../../utils/logger.js';
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
 import { UserUnderstandingService } from './understanding/service.js';
 import type { UnderstandingCandidate } from './understanding/types.js';
+import type { MemoryAccessPolicy } from './access-policy.js';
 import type {
   MemoryDeleteRequest,
   MemoryListRequest,
@@ -35,6 +36,7 @@ export interface MemoryRoutingOptions {
 export interface MemoryManagerOptions extends MemoryRoutingOptions {
   loadProviders?: () => Promise<MemoryProvider[]>;
   writePolicy?: MemoryWritePolicy;
+  accessPolicy?: MemoryAccessPolicy;
 }
 
 export interface MemoryWritePolicy {
@@ -55,6 +57,7 @@ export class MemoryManager {
   private readonly understanding: UserUnderstandingService;
   private readonly lastTurnSourceItem = new Map<string, string>();
   private understandingAgentId: string | undefined;
+  private readonly accessPolicy?: MemoryAccessPolicy;
 
   constructor(options: MemoryManagerOptions = {}) {
     this.routing = {
@@ -63,6 +66,7 @@ export class MemoryManager {
       replicateTo: options.replicateTo ?? [],
     };
     this.loadProviders = options.loadProviders;
+    this.accessPolicy = options.accessPolicy;
     this.writePolicy = {
       allowExternalWrites: options.writePolicy?.allowExternalWrites ?? false,
       requireUserProfileApproval: options.writePolicy?.requireUserProfileApproval ?? false,
@@ -142,10 +146,10 @@ export class MemoryManager {
   async captureTurnUnderstanding(
     userContent: string,
     assistantContent: string,
-    options?: { sessionId?: string; correctionTargetRecordIds?: string[] },
+    options?: { agentId?: string; sessionId?: string; correctionTargetRecordIds?: string[] },
   ): Promise<void> {
     const review = await this.understanding.reviewTurn({
-      agentId: this.understandingAgentId,
+      agentId: options?.agentId ?? this.understandingAgentId,
       userContent,
       assistantContent,
       sessionKey: options?.sessionId,
@@ -190,6 +194,7 @@ export class MemoryManager {
   async applyUnderstandingCandidates(
     candidates: UnderstandingCandidate[],
     context: {
+      agentId?: string;
       sessionKey?: string;
       sourceText?: string;
       reviewSource?: 'turn' | 'background';
@@ -200,7 +205,7 @@ export class MemoryManager {
       : undefined;
     await this.understanding.applyCandidates(candidates, {
       ...context,
-      agentId: this.understandingAgentId,
+      agentId: context.agentId ?? this.understandingAgentId,
       sourceItemId,
     });
     if (sourceItemId) {
@@ -272,6 +277,7 @@ export class MemoryManager {
     const seen = new Set<string>();
     return results
       .sort((a, b) => b.score - a.score)
+      .filter((result) => this.canReadRecord(result.record, request.scope))
       .filter((result) => {
         const key = `${result.citation.providerId}:${result.citation.recordId}`;
         if (seen.has(key)) return false;
@@ -293,7 +299,7 @@ export class MemoryManager {
           durationMs: Date.now() - started,
           sessionKey: request.scope?.sessionKey,
         });
-        if (result) return result;
+        if (result && this.canReadRecord(result.record, request.scope)) return result;
       } catch (err) {
         this.trace('read', p.id, request, {
           error: err instanceof Error ? err.message : String(err),
@@ -311,7 +317,7 @@ export class MemoryManager {
       if (!p.capabilities.read) continue;
       try {
         const direct = await p.get?.(id);
-        if (direct) return direct;
+        if (direct && this.canReadRecord(direct)) return direct;
       } catch (err) {
         log.warn({ err, id: p.id, recordId: id }, 'memory get failed');
       }
@@ -324,7 +330,7 @@ export class MemoryManager {
     for (const p of this.providersForSearch()) {
       if (!p.capabilities.read || !p.list) continue;
       try {
-        out.push(...await p.list(request));
+        out.push(...(await p.list(request)).filter((record) => this.canReadRecord(record, request.scope)));
       } catch (err) {
         log.warn({ err, id: p.id }, 'memory list failed');
       }
@@ -333,15 +339,41 @@ export class MemoryManager {
   }
 
   async write(request: MemoryWriteRequest): Promise<MemoryWriteResult> {
+    const denied = this.crossAgentWriteDenied('write', request);
+    if (denied) return denied;
     return this.writeWithStrategy('write', request);
   }
 
   async update(request: MemoryUpdateRequest): Promise<MemoryWriteResult> {
+    const denied = this.crossAgentWriteDenied('update', request);
+    if (denied) return denied;
     return this.writeWithStrategy('update', request);
   }
 
   async delete(request: MemoryDeleteRequest): Promise<MemoryWriteResult> {
+    const denied = this.crossAgentWriteDenied('delete', request);
+    if (denied) return denied;
     return this.writeWithStrategy('delete', request);
+  }
+
+  private canReadRecord(record: MemoryRecord, scope?: MemorySearchRequest['scope']): boolean {
+    return this.accessPolicy?.canReadRecord(record, scope) ?? true;
+  }
+
+  private crossAgentWriteDenied(
+    action: 'write' | 'update' | 'delete',
+    request: MemoryWriteRequest | MemoryUpdateRequest | MemoryDeleteRequest,
+  ): MemoryWriteResult | null {
+    if (!this.accessPolicy) return null;
+    const ownerAgentId = request.scope?.agentId ?? this.accessPolicy.requesterAgentId;
+    if (ownerAgentId === this.accessPolicy.requesterAgentId) return null;
+    if (action !== 'write' || !('status' in request) || request.status !== 'candidate') {
+      return { success: false, error: 'Cross-agent changes must be submitted as memory candidates' };
+    }
+    if (!this.accessPolicy.canSubmitCandidate(ownerAgentId)) {
+      return { success: false, error: 'Cross-agent candidate submission is not allowed' };
+    }
+    return null;
   }
 
   onMemoryWrite(action: 'add' | 'replace' | 'remove', target: 'memory' | 'user', content: string): void {

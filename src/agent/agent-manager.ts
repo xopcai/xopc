@@ -283,6 +283,7 @@ export class AgentManager implements AgentInstanceGateway {
     this.userContext = new UserContextCoordinator({
       getConfig: () => this.config.config,
       isEnabledForSession: (sk) => this.agents.get(sk)?.effectiveProfile.manifest.memory.mode !== 'off',
+      getAgentIdForSession: (sk) => this.agents.get(sk)?.effectiveProfile.agentId ?? 'main',
       getMemoryManagerForSession: (sk) => this.getMemoryManagerForSession(sk),
       getLastAssistantContent: (sk) => this.getLastAssistantContent(sk),
     });
@@ -322,10 +323,11 @@ export class AgentManager implements AgentInstanceGateway {
   }
 
   private getWorkspaceRuntimeForSession(sessionKey: string | undefined): WorkspaceRuntime {
+    const profile = resolveEffectiveAgentProfileForSession(this.config.config!, sessionKey);
     const resolvedPath = sessionKey
       ? this.getResolvedWorkspaceForSession(sessionKey)
       : this.baseWorkspacePath;
-    return this.workspaceRuntimes.getOrCreate(resolvedPath);
+    return this.workspaceRuntimes.getOrCreate(resolvedPath, profile.agentId);
   }
 
   private getCurrentWorkspaceRuntime(): WorkspaceRuntime {
@@ -444,7 +446,13 @@ export class AgentManager implements AgentInstanceGateway {
       },
       installSkillFromSource: this.config.installSkillFromSource,
       getCodeIntelligenceRuntime: (workspace) =>
-        this.workspaceRuntimes.getOrCreate(workspace).codeIntelligence,
+        this.workspaceRuntimes.getOrCreate(
+          workspace,
+          resolveEffectiveAgentProfileForSession(
+            this.config.config!,
+            this.config.getCurrentContext?.()?.sessionKey,
+          ).agentId,
+        ).codeIntelligence,
     };
   }
 
@@ -608,7 +616,10 @@ export class AgentManager implements AgentInstanceGateway {
   ): string {
     const cfg = this.config.config!;
     const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
-    const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
+    const rt = this.workspaceRuntimes.getOrCreate(
+      resolvedWorkspacePath,
+      instance.effectiveProfile.agentId,
+    );
     const contextFiles = this.resolveContextFilesForSession(instance.sessionKey, instance.effectiveProfile);
     const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
     const thinkingLevel =
@@ -766,7 +777,7 @@ export class AgentManager implements AgentInstanceGateway {
       ? cfg.agents.list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === agentId.toLowerCase())
       : undefined;
     const profile = resolveEffectiveAgentProfile(cfg, agentId);
-    const rt = this.workspaceRuntimes.getOrCreate(profile.resolvedWorkspacePath);
+    const rt = this.workspaceRuntimes.getOrCreate(profile.resolvedWorkspacePath, profile.agentId);
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     const lock = loadSkillsLock();
     const workspaceLock = loadSkillsLock(resolveWorkspaceSkillsLockPath(profile.resolvedWorkspacePath));
@@ -815,18 +826,15 @@ export class AgentManager implements AgentInstanceGateway {
    */
   refreshSkillsAfterSkillConfigChange(): void {
     const cfg = this.config.config!;
-    const touched = new Set<string>();
-    for (const [resolvedPath, rt] of this.workspaceRuntimes.entries()) {
+    for (const rt of this.workspaceRuntimes.values()) {
       rt.skillManager.refreshPromptFromConfig();
-      touched.add(resolvedPath);
     }
     for (const instance of this.agents.values()) {
       const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
-      const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
-      if (!touched.has(resolvedWorkspacePath)) {
-        rt.skillManager.refreshPromptFromConfig();
-        touched.add(resolvedWorkspacePath);
-      }
+      const rt = this.workspaceRuntimes.getOrCreate(
+        resolvedWorkspacePath,
+        instance.effectiveProfile.agentId,
+      );
       const contextFiles = this.resolveContextFilesForSession(
         instance.sessionKey,
         instance.effectiveProfile,
@@ -916,13 +924,12 @@ export class AgentManager implements AgentInstanceGateway {
       rt.skillManager.reload();
     }
 
-    const touched = new Set<string>();
     for (const instance of this.agents.values()) {
       const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
-      const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
-      if (!touched.has(resolvedWorkspacePath)) {
-        touched.add(resolvedWorkspacePath);
-      }
+      const rt = this.workspaceRuntimes.getOrCreate(
+        resolvedWorkspacePath,
+        instance.effectiveProfile.agentId,
+      );
       const contextFiles = this.resolveContextFilesForSession(
         instance.sessionKey,
         instance.effectiveProfile,
@@ -976,7 +983,7 @@ export class AgentManager implements AgentInstanceGateway {
 
     const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
     const resolvedPath = targetPath;
-    const rt = this.workspaceRuntimes.getOrCreate(resolvedPath);
+    const rt = this.workspaceRuntimes.getOrCreate(resolvedPath, profile.agentId);
 
     if (isMemorySubsystemEnabled(cfg)) {
       void rt.memoryManager
@@ -1081,7 +1088,10 @@ export class AgentManager implements AgentInstanceGateway {
 
     const cfg = this.config.config!;
     const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(sessionKey);
-    const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
+    const rt = this.workspaceRuntimes.getOrCreate(
+      resolvedWorkspacePath,
+      instance.effectiveProfile.agentId,
+    );
     const contextFiles = this.resolveContextFilesForSession(sessionKey, instance.effectiveProfile);
     const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
     const thinkingLevel =
@@ -1330,7 +1340,10 @@ export class AgentManager implements AgentInstanceGateway {
     }
     const cfg = this.config.config!;
     const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(instance.sessionKey);
-    const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
+    const rt = this.workspaceRuntimes.getOrCreate(
+      resolvedWorkspacePath,
+      instance.effectiveProfile.agentId,
+    );
     const contextFiles = this.resolveContextFilesForSession(instance.sessionKey, instance.effectiveProfile);
     const modelRef = instance.effectiveProfile.primaryModelRef?.trim() || this.defaultModel;
     const thinkingLevel =
@@ -1378,7 +1391,10 @@ export class AgentManager implements AgentInstanceGateway {
 
       const cfg = this.config.config!;
       const resolvedWorkspacePath = this.getResolvedWorkspaceForSession(sessionKey);
-      const rt = this.workspaceRuntimes.getOrCreate(resolvedWorkspacePath);
+      const rt = this.workspaceRuntimes.getOrCreate(
+        resolvedWorkspacePath,
+        instance.effectiveProfile.agentId,
+      );
       const contextFiles = this.resolveContextFilesForSession(
         sessionKey,
         instance.effectiveProfile,

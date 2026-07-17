@@ -38,9 +38,9 @@ function config(workspaceDir: string, dreamingEnabled: boolean): Config {
       capabilityPresets: {},
       list: [
         manifest('main', workspaceDir, {
-          mode: 'confirmWrite',
+          mode: 'auto',
           sources: ['session', 'curated', 'workspace'],
-          writePolicy: { curated: 'confirm', workspace: 'confirm' },
+          writePolicy: { curated: 'allow', workspace: 'confirm' },
           dreaming: {
             enabled: dreamingEnabled,
             timezone: 'Asia/Shanghai',
@@ -61,9 +61,9 @@ function multiAgentConfig(workspaceDir: string): Config {
   const base = config(workspaceDir, true);
   base.agents.list.push(
     manifest('research', join(workspaceDir, 'research'), {
-      mode: 'confirmWrite',
+      mode: 'auto',
       sources: ['session', 'curated', 'workspace'],
-      writePolicy: { curated: 'confirm', workspace: 'confirm' },
+      writePolicy: { curated: 'allow', workspace: 'confirm' },
       dreaming: {
         enabled: true,
         phases: {

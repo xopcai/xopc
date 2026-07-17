@@ -54,13 +54,16 @@ function scoreResult(result: MemorySearchResult, now: number): number {
   ));
 }
 
-function citationFor(result: MemorySearchResult): string {
+function citationFor(result: MemorySearchResult, requesterAgentId: string): string {
   const base = result.citation.path ?? `${result.citation.providerId}:${result.citation.recordId}`;
-  if (result.citation.lineStart == null) return base;
+  const ownerPrefix = result.record.scope.agentId !== requesterAgentId
+    ? `shared-from-agent:${result.record.scope.agentId} `
+    : '';
+  if (result.citation.lineStart == null) return `${ownerPrefix}${base}`;
   const end = result.citation.lineEnd && result.citation.lineEnd !== result.citation.lineStart
     ? `-L${result.citation.lineEnd}`
     : '';
-  return `${base}#L${result.citation.lineStart}${end}`;
+  return `${ownerPrefix}${base}#L${result.citation.lineStart}${end}`;
 }
 
 function prependContext(message: AgentMessage, block: string): AgentMessage {
@@ -83,6 +86,7 @@ function prependContext(message: AgentMessage, block: string): AgentMessage {
 export class UserContextPlanner {
   async plan(params: {
     memoryManager: MemoryManager;
+    agentId: string;
     sessionKey: string;
     query: string;
     userMessage: AgentMessage;
@@ -95,7 +99,7 @@ export class UserContextPlanner {
     const started = Date.now();
     const results = await params.memoryManager.search({
       query,
-      scope: { sessionKey: params.sessionKey },
+      scope: { agentId: params.agentId, sessionKey: params.sessionKey },
       maxResults: MAX_RESULTS,
       minScore: 0.15,
     }).catch(() => []);
@@ -123,7 +127,7 @@ export class UserContextPlanner {
         content,
         score,
         section: sectionFor(result.record),
-        citation: citationFor(result),
+        citation: citationFor(result, params.agentId),
       });
     }
     const sections: string[] = [];
