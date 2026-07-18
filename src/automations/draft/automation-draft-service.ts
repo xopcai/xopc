@@ -1,7 +1,8 @@
-import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
+import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import type { Config } from '../../config/schema.js';
 import { resolveModel } from '../../providers/index.js';
+import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import { createLogger } from '../../utils/logger.js';
 import { resolveDraftModelRef } from '../../workflows/draft/workflow-draft-service.js';
 import {
@@ -51,7 +52,7 @@ export class AutomationDraftService {
         content: messageContent,
         timestamp: Date.now(),
       };
-      const result = await complete(
+      const result = await completeWithResolvedCredentials(
         model,
         { messages: [userMsg] },
         { maxTokens: 2048, temperature: attempt === 0 ? 0.2 : 0.1, signal },
@@ -108,7 +109,7 @@ export class AutomationDraftService {
         content: messageContent,
         timestamp: Date.now(),
       };
-      const result = await complete(
+      const result = await completeWithResolvedCredentials(
         model,
         { messages: [userMsg] },
         { maxTokens: 2048, temperature: attempt === 0 ? 0.15 : 0.05, signal },

@@ -1,11 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
-import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
+import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import { changedFieldsFromPatch, emitActivity, previewText, systemActivityActor, systemActivitySource } from '../activity/emitter.js';
 import { publishAutomationProductEvent } from '../automations/product-events.js';
 import type { Config } from '../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../providers/index.js';
+import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import { createLogger } from '../utils/logger.js';
 import { buildNoteAttachmentRef } from './attachment-ref.js';
 import { partitionAttachmentsByReference } from './note-attachment-sync.js';
@@ -147,7 +148,7 @@ async function buildAiCatalysisReport(note: Note, config?: Config): Promise<Note
   }
   const resolved = resolveModel(modelRef);
   const messages: UserMessage[] = [{ role: 'user', content: buildCatalysisPrompt(note), timestamp: Date.now() }];
-  const response = await complete(resolved, { messages }, { temperature: 0.2 });
+  const response = await completeWithResolvedCredentials(resolved, { messages }, { temperature: 0.2 });
   let responseText = '';
   if (Array.isArray(response.content)) {
     for (const part of response.content) {

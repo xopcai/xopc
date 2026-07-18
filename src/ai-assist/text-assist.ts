@@ -2,8 +2,13 @@ import type { AssistantMessage, UserMessage } from '@earendil-works/pi-ai';
 
 import { getAssistantMessageErrorReason, stripCodeFences } from '../agent/goals/judge.js';
 import type { Config } from '../config/schema.js';
-import { getApiKey, getDefaultModelSync, resolveModel } from '../providers/index.js';
+import { getDefaultModelSync, resolveModel } from '../providers/index.js';
 import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
+import {
+  isLocalModelBaseUrl,
+  resolveModelCallApiKey,
+  resolveModelCallOptions,
+} from '../providers/model-call.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('AiTextAssist');
@@ -245,35 +250,11 @@ function intentInstruction(intent: TextAssistIntent): string {
   }
 }
 
-export function isLocalModelBaseUrl(baseUrl: string | undefined): boolean {
-  if (!baseUrl) return false;
-  try {
-    const url = new URL(baseUrl);
-    const host = url.hostname.toLowerCase();
-    return (
-      host === 'localhost' ||
-      host === '127.0.0.1' ||
-      host === '::1' ||
-      host === '[::1]' ||
-      host.startsWith('127.') ||
-      host.startsWith('10.') ||
-      host.startsWith('192.168.') ||
-      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
-    );
-  } catch {
-    return false;
-  }
+export async function resolveTextAssistApiKey(model: ReturnType<typeof resolveModel>): Promise<string | undefined> {
+  return resolveModelCallApiKey(model);
 }
 
-export async function resolveTextAssistApiKey(model: ReturnType<typeof resolveModel>): Promise<string | undefined> {
-  try {
-    const apiKey = await getApiKey(model.provider);
-    if (apiKey) return apiKey;
-  } catch {
-    // Local OpenAI-compatible providers often do not need real credentials.
-  }
-  return isLocalModelBaseUrl(model.baseUrl) ? 'xopc-local' : undefined;
-}
+export { isLocalModelBaseUrl };
 
 function scenarioFromRequest(request: TextAssistRequest): TextAssistScenarioDefinition {
   const requested = request.scenario;
@@ -364,12 +345,16 @@ export async function* streamTextAssist(
   const modelRef = getDefaultModelSync(config);
   const model = resolveModel(modelRef);
   const prompt = buildPrompt(resolvedRequest, scenario);
-  const apiKey = await resolveTextAssistApiKey(model);
+  const modelCallOptions = await resolveModelCallOptions(model, {
+    maxTokens: 1600,
+    temperature: intent === 'fix' ? 0.15 : 0.25,
+    signal,
+  });
   log.debug(
     {
       provider: model.provider,
       modelId: model.id,
-      hasApiKey: Boolean(apiKey),
+      hasApiKey: Boolean(modelCallOptions.apiKey),
       localBaseUrl: isLocalModelBaseUrl(model.baseUrl),
     },
     'Resolved AI text assist model auth',
@@ -377,12 +362,7 @@ export async function* streamTextAssist(
 
   yield { type: 'start', provider: model.provider, modelId: model.id, scenario: scenario.id };
 
-  const stream = await createExtensionAwareStreamFn()(model, prompt, {
-    apiKey,
-    maxTokens: 1600,
-    temperature: intent === 'fix' ? 0.15 : 0.25,
-    signal,
-  });
+  const stream = await createExtensionAwareStreamFn()(model, prompt, modelCallOptions);
   let streamedText = '';
 
   for await (const event of stream) {

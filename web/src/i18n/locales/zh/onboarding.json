@@ -1,7 +1,9 @@
 {
   "onboarding": {
     "title": "欢迎使用 xopc",
-    "subtitle": "先完成模型配置，就可以开始对话；个人资料可选补充。",
+    "subtitle": "先告诉我怎么称呼你，再配置模型就可以开始对话了。",
+    "step0Title": "怎么称呼你？",
+    "step0Subtitle": "告诉 xopc 你的名字或昵称，助手在对话中会这样称呼你。",
     "step1Title": "选择 AI 服务商",
     "step1Subtitle": "选择你想要使用的 AI 服务。",
     "step2Title": "输入你的 API 密钥",
@@ -10,23 +12,16 @@
     "step2SecurityNote": "🔒 密钥不会离开你的设备。",
     "step3Title": "选择默认模型",
     "step3Subtitle": "新对话会优先使用这个模型，你可以随时在设置中更改。",
-    "profileTitle": "关于我",
-    "profileSubtitle": "可选填写。助手会用这些信息更自然地称呼你、理解你的时区和偏好。",
     "profileCallNameLabel": "怎么称呼你",
     "profileCallNamePlaceholder": "例如：小明、Joyce、Mic",
-    "profileTimezoneLabel": "常用时区",
-    "profileTimezonePlaceholder": "选择时区",
-    "profileNotesLabel": "补充说明",
-    "profileNotesPlaceholder": "例如：我主要用中文沟通；工作日白天回复更方便；代码回答尽量简洁。",
     "modelSaveFailed": "默认对话模型保存失败，请稍后重试。",
     "back": "返回",
     "continue": "继续",
     "startChatting": "开始对话",
-    "skipProfile": "跳过，开始对话",
+    "skipCallName": "跳过，稍后设置",
     "skipSetup": "跳过 — 稍后再设置",
     "setupComplete": "设置完成！在下方开始对话吧。",
     "stepOf": "第 {{current}} 步，共 {{total}} 步",
-    "optionalStep": "可选",
     "providerRecommended": "推荐"
   }
 }

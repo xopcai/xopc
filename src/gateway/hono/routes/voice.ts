@@ -11,10 +11,11 @@
  */
 
 import type { Hono } from 'hono';
-import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
+import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import type { Config } from '../../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../../providers/index.js';
+import { completeWithResolvedCredentials } from '../../../providers/model-call.js';
 import { isSTTAvailable, transcribe } from '../../../voice/stt/index.js';
 import { isTTSAvailable, mergeTtsConfigFromAppConfig, speak } from '../../../voice/tts/index.js';
 import { listTtsProvidersForApi } from '../../../voice/tts/list-providers.js';
@@ -103,7 +104,7 @@ async function refineTranscript(
         ? AbortSignal.any([signal, timeoutSignal])
         : signal ?? timeoutSignal;
 
-    const result = await complete(
+    const result = await completeWithResolvedCredentials(
       model,
       { messages: [userMsg] },
       {

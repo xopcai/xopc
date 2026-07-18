@@ -127,6 +127,8 @@ export class SessionInspector {
     question: string,
     options?: BtwQueryOptions,
   ): Promise<{ text: string; error?: string }> {
+    const config = this.opts.getConfig();
+    const profile = config ? resolveEffectiveAgentProfileForSession(config, sessionKey) : undefined;
     return runBtwQuery({
       sessionKey,
       question,
@@ -135,6 +137,10 @@ export class SessionInspector {
       log,
       maxTokens: options?.maxTokens,
       temperature: options?.temperature,
+      includeSessionContext: options?.includeSessionContext,
+      credentialOptions: profile && config
+        ? { agentId: profile.agentId, appConfig: config }
+        : undefined,
     });
   }
 

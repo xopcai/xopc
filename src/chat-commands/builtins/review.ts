@@ -18,7 +18,7 @@ import {
 } from '../../review/review-types.js';
 
 const MAX_DIFF_CHARS = 60_000;
-const REVIEW_JUDGE_MAX_TOKENS = 8_192;
+const REVIEW_JUDGE_MAX_TOKENS = 16_384;
 
 async function emitToolStart(
   ctx: CommandContext,
@@ -145,9 +145,16 @@ function previewText(text: string, max = 500): string {
   return trimmed.length > max ? `${trimmed.slice(0, max)}…` : trimmed;
 }
 
-function reviewDefaultModelRef(ctx: CommandContext): string | undefined {
+async function reviewModelRef(ctx: CommandContext): Promise<string | undefined> {
+  const sessionOverride = await ctx.getSessionConfigStore?.()
+    ?.get(ctx.sessionKey)
+    .then((config) => config?.modelOverride?.trim())
+    .catch(() => undefined);
+  if (sessionOverride) return sessionOverride;
+
   try {
-    return resolveEffectiveAgentProfileForSession(ctx.config, ctx.sessionKey).primaryModelRef;
+    const profile = resolveEffectiveAgentProfileForSession(ctx.config, ctx.sessionKey);
+    return profile.manifest.models.roles.review?.model?.trim() || profile.primaryModelRef;
   } catch {
     return undefined;
   }
@@ -249,7 +256,7 @@ async function buildReview(ctx: CommandContext, args: string): Promise<ReviewOut
     truncated,
     instructions,
   });
-  const reviewerModelRef = reviewDefaultModelRef(ctx);
+  const reviewerModelRef = await reviewModelRef(ctx);
   const judgeToolCallId = `review_judge_${randomUUID()}`;
   await emitToolStart(ctx, judgeToolCallId, 'review.model_judge', {
     target,
@@ -260,7 +267,7 @@ async function buildReview(ctx: CommandContext, args: string): Promise<ReviewOut
   const answer = ctx.btwQuery
     ? await ctx.btwQuery(prompt, {
         maxTokens: REVIEW_JUDGE_MAX_TOKENS,
-        temperature: 0.1,
+        includeSessionContext: false,
         ...(reviewerModelRef ? { modelRef: reviewerModelRef } : {}),
       })
     : { text: '', error: 'Review model query is not available in this command context.' };

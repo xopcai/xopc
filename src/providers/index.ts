@@ -11,17 +11,21 @@ import {
 } from '@earendil-works/pi-ai/compat';
 import { getAgentDefaultModelRef, type Config } from '../config/schema.js';
 import { getModelRegistry } from './model-registry.js';
-import { CredentialResolver, resolveApiKey, hasCredentials } from '../auth/credentials.js';
+import {
+	CredentialResolver,
+	resolveApiKey,
+	hasCredentials,
+	type CredentialResolverOptions,
+} from '../auth/credentials.js';
 import { hasProviderAuthOnDiskSync } from '../auth/sync-provider-auth.js';
 import { getApiKeyFromEnv } from './env-keys.js';
+import { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
 import { getSupplementalModels } from './model-supplements.js';
 import { getProviderRegistry } from './plugin-registry.js';
 import type { ProviderModelDefinition } from '../extensions/types/providers.js';
 
+export { EXTENSION_PROVIDER_BASE_URL } from './constants.js';
 export { getApiKeyFromEnv, PROVIDER_ENV_MAP } from './env-keys.js';
-
-/** Sentinel base URL: model is served by an extension {@link ProviderPluginRegistry} provider. */
-export const EXTENSION_PROVIDER_BASE_URL = 'extension://provider-plugin';
 const OPENAI_CODEX_CANONICAL_BASE_URL = 'https://chatgpt.com/backend-api/codex';
 
 function normalizeProviderModel(model: Model<Api>): Model<Api> {
@@ -162,11 +166,14 @@ export function getAllProviders(): string[] {
 	return Array.from(providers);
 }
 
-export async function getApiKey(provider: string): Promise<string | undefined> {
+export async function getApiKey(
+	provider: string,
+	credentialOptions?: CredentialResolverOptions,
+): Promise<string | undefined> {
 	if (getProviderRegistry().has(provider)) return 'extension-managed';
 
 	// Use new credential resolver first (checks: agent private > global > oauth > env)
-	const credentialKey = await resolveApiKey(provider);
+	const credentialKey = await resolveApiKey(provider, credentialOptions);
 	if (credentialKey) {
 		return credentialKey;
 	}

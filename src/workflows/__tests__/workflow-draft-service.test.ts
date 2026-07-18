@@ -12,6 +12,7 @@ vi.mock('../../config/agent-typed-models.js', () => ({
 
 vi.mock('../../providers/index.js', () => ({
   getDefaultModelSync: vi.fn(() => 'openai/gpt-test'),
+  getApiKey: vi.fn(async () => 'test-api-key'),
   resolveModel: vi.fn(() => ({ provider: 'openai', id: 'gpt-test', api: 'openai-completions' })),
 }));
 
