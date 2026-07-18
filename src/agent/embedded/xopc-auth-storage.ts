@@ -1,4 +1,5 @@
-import { AuthStorage } from '@earendil-works/pi-coding-agent';
+import { InMemoryCredentialStore } from '@earendil-works/pi-ai';
+import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
 
 import { resolveProviderApiKeySync } from '../../auth/sync-provider-auth.js';
 import { getApiKeySync } from '../../providers/index.js';
@@ -15,17 +16,20 @@ export function resolveXopcProviderApiKey(providerId: string): string | undefine
  * pi-coding-agent {@link createAgentSession} defaults to `~/.pi/agent/auth.json` and env.
  * Gateway / webchat turns inject xopc credentials through {@link applyXopcProviderApiKey}.
  */
-export function createEmbeddedAuthStorage(): AuthStorage {
-  return AuthStorage.create();
+export function createEmbeddedCredentialStore(): InMemoryCredentialStore {
+  return new InMemoryCredentialStore();
 }
 
 /**
  * Inject the resolved key as a runtime override (highest-priority, in-memory only) before
  * the session starts so request-time auth resolution finds it.
  */
-export function applyXopcProviderApiKey(auth: AuthStorage, providerId: string): void {
+export async function applyXopcProviderApiKey(
+  modelRuntime: Pick<ModelRuntime, 'setRuntimeApiKey'>,
+  providerId: string,
+): Promise<void> {
   const key = resolveXopcProviderApiKey(providerId);
   if (key && key !== 'extension-managed') {
-    auth.setRuntimeApiKey(providerId, key);
+    await modelRuntime.setRuntimeApiKey(providerId, key);
   }
 }

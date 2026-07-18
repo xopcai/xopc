@@ -4,6 +4,7 @@ import {
   createAgentSession,
   DefaultResourceLoader,
   getAgentDir,
+  ModelRuntime,
   SettingsManager,
   type AgentSession,
 } from '@earendil-works/pi-coding-agent';
@@ -13,7 +14,7 @@ import { createLogger } from '../../utils/logger.js';
 import { guardSessionManager, type GuardedPiTranscriptManager } from './session-tool-result-guard.js';
 import { transformUserMessageForPersistence } from '../inbound/attachment-pipeline.js';
 import { openSqliteHydratingSessionManager } from './sqlite-hydrating-session-manager.js';
-import { applyXopcProviderApiKey, createEmbeddedAuthStorage } from './xopc-auth-storage.js';
+import { applyXopcProviderApiKey, createEmbeddedCredentialStore } from './xopc-auth-storage.js';
 import { wrapStreamFnForXopcExtensions } from './xopc-stream-bridge.js';
 import { xopcToolsToDefinitions } from './xopc-tools-bridge.js';
 import { applySystemPromptOverrideToSession } from './system-prompt-override.js';
@@ -265,8 +266,10 @@ export class EmbeddedSessionRunnerPool {
     const toolDefs = xopcToolsToDefinitions(tools);
     const toolNames = tools.map((t) => t.name);
 
-    const authStorage = createEmbeddedAuthStorage();
-    applyXopcProviderApiKey(authStorage, model.provider);
+    const modelRuntime = await ModelRuntime.create({
+      credentials: createEmbeddedCredentialStore(),
+    });
+    await applyXopcProviderApiKey(modelRuntime, model.provider);
 
     const resourceLoader = new DefaultResourceLoader({
       cwd: workspaceDir,
@@ -282,7 +285,7 @@ export class EmbeddedSessionRunnerPool {
       thinkingLevel: thinkingLevel ?? 'medium',
       sessionManager: piSm,
       settingsManager,
-      authStorage,
+      modelRuntime,
       resourceLoader,
       noTools: 'builtin',
       customTools: toolDefs,
