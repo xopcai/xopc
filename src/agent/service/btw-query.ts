@@ -5,7 +5,11 @@ import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import type { SessionStore } from '../../session/index.js';
 import type { CredentialResolverOptions } from '../../auth/credentials.js';
 import { resolveModel } from '../../providers/index.js';
-import { completeWithResolvedCredentials, resolveModelCallApiKey } from '../../providers/model-call.js';
+import {
+  completeWithResolvedCredentials,
+  createResolvedModelStream,
+  resolveModelCallApiKey,
+} from '../../providers/model-call.js';
 
 type BtwLog = { warn: (obj: Record<string, unknown>, msg: string) => void };
 
@@ -55,6 +59,7 @@ export async function runBtwQuery(opts: {
   maxTokens?: number;
   temperature?: number;
   includeSessionContext?: boolean;
+  onTextDelta?: (delta: string) => void | Promise<void>;
   credentialOptions?: CredentialResolverOptions;
 }): Promise<{ text: string; error?: string }> {
   const q = opts.question.trim();
@@ -117,19 +122,46 @@ export async function runBtwQuery(opts: {
     const modelMaxTokens = typeof model.maxTokens === 'number' && Number.isFinite(model.maxTokens)
       ? Math.max(1, Math.trunc(model.maxTokens))
       : undefined;
-    const out = await completeWithResolvedCredentials(model, { messages: [userMessage] }, {
+    const modelCallOptions = {
       maxTokens: modelMaxTokens ? Math.min(requestedMaxTokens, modelMaxTokens) : requestedMaxTokens,
       signal: controller.signal as AbortSignal,
       apiKey,
       ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
-    }, opts.credentialOptions);
+    };
+    let streamedText = '';
+    const out = opts.onTextDelta
+      ? await (async () => {
+          const stream = await createResolvedModelStream(
+            model,
+            { messages: [userMessage] },
+            modelCallOptions,
+            opts.credentialOptions,
+          );
+          for await (const event of stream) {
+            const streamEvent = event as { type?: unknown; delta?: unknown; error?: unknown };
+            if (streamEvent.type === 'text_delta' && typeof streamEvent.delta === 'string') {
+              streamedText += streamEvent.delta;
+              await opts.onTextDelta?.(streamEvent.delta);
+              continue;
+            }
+            if (streamEvent.type === 'error') {
+              const error = streamEvent.error;
+              const message = error && typeof error === 'object' && 'errorMessage' in error
+                ? (error as { errorMessage?: unknown }).errorMessage
+                : undefined;
+              throw new Error(typeof message === 'string' && message ? message : 'Model stream failed');
+            }
+          }
+          return await stream.result();
+        })()
+      : await completeWithResolvedCredentials(model, { messages: [userMessage] }, modelCallOptions, opts.credentialOptions);
     const response = out as {
       content?: unknown;
       stopReason?: unknown;
       errorMessage?: unknown;
       usage?: { output?: unknown; reasoning?: unknown };
     };
-    const text = textFromCompleteContent(response.content).trim();
+    const text = (streamedText || textFromCompleteContent(response.content)).trim();
     if (text) return { text };
 
     const stopReason = typeof response.stopReason === 'string' ? response.stopReason : undefined;

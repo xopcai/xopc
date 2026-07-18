@@ -87,3 +87,18 @@ export async function completeWithResolvedCredentials(
   }
   return await complete(model, context, resolvedOptions as never);
 }
+
+/**
+ * Start a model stream with xopc credential resolution and extension-provider routing.
+ * Callers that need live visible output should consume the returned stream before calling
+ * its `result()` method.
+ */
+export async function createResolvedModelStream(
+  model: Model<Api>,
+  context: Context,
+  options: SimpleStreamOptions = {},
+  credentialOptions?: CredentialResolverOptions,
+) {
+  const resolvedOptions = await resolveModelCallOptions(model, options, credentialOptions);
+  return await createExtensionAwareStreamFn()(model, context, resolvedOptions);
+}
