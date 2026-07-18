@@ -3,6 +3,7 @@ import type { Message, MessageAttachment, MessageContent, TextContent } from './
 import { stripStartupContextForDisplay } from './wire-text-scrub';
 
 const ENVELOPE_TIMESTAMP_RE = /^\[\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}[^\]]*\]\s*/;
+let optimisticMessageSequence = 0;
 
 export function extractUserMessageText(content: MessageContent[]): string {
   return content
@@ -97,11 +98,13 @@ export function buildOptimisticUserMessage(text: string, wire?: WireAttachment[]
   const attachments = wire?.length ? wireAttachmentsToMessageAttachments(wire) : undefined;
   const content = buildUserMessageContent(text, wire);
   const hasAttachments = Boolean(attachments?.length);
+  const timestamp = Date.now();
   return {
+    id: `optimistic-${timestamp}-${++optimisticMessageSequence}`,
     role: hasAttachments ? 'user-with-attachments' : 'user',
     content: content.length ? content : [{ type: 'text', text: text.trim() || '' }],
     attachments,
-    timestamp: Date.now(),
+    timestamp,
   };
 }
 
