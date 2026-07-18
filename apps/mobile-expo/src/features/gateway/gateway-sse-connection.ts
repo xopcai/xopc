@@ -46,6 +46,11 @@ class GatewaySseLineParser {
     }
   }
 
+  /** A transport can only be safely rotated between complete SSE events. */
+  isAtEventBoundary(): boolean {
+    return this.buf.length === 0 && this.evtType.length === 0 && this.evtData.length === 0;
+  }
+
   private processLine(line: string): void {
     if (line.startsWith('event:')) {
       this.evtData = '';
@@ -68,6 +73,9 @@ type Transport = { close: () => void };
  * reconnect failures on the current route. Tied to wall-clock cap of about
  * 1+2+4 seconds of backoff before the first re-route attempt. */
 const SSE_REPROBE_AFTER_FAILURES = 3;
+/** React Native's XHR retains responseText for the lifetime of a request. */
+const SSE_XHR_RESPONSE_ROLLOVER_BYTES = 512 * 1024;
+const SSE_FAST_RECONNECT_DELAY_MS = 100;
 
 export class GatewaySseConnection {
   private transport?: Transport;
@@ -79,6 +87,7 @@ export class GatewaySseConnection {
    * a successful 'connected' event. Drives the route-swap heuristic. */
   private _failureStreak = 0;
   private _reprobeInFlight = false;
+  private _transportGeneration = 0;
 
   constructor(
     private readonly callbacks: GatewaySseCallbacks,
@@ -87,12 +96,14 @@ export class GatewaySseConnection {
 
   connect(): void {
     this._closed = false;
+    this._shouldReconnect = true;
     this.openTransport();
   }
 
   disconnect(): void {
     this._shouldReconnect = false;
     this._closed = true;
+    this._transportGeneration++;
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = undefined;
@@ -107,7 +118,7 @@ export class GatewaySseConnection {
     this._shouldReconnect = true;
     this._reconnectCount = 0;
     this._closed = false;
-    setTimeout(() => this.openTransport(), 100);
+    this.scheduleOpen(SSE_FAST_RECONNECT_DELAY_MS);
   }
 
   private buildUrl(): string {
@@ -129,7 +140,9 @@ export class GatewaySseConnection {
 
   private openTransport(): void {
     if (this._closed) return;
+    const generation = ++this._transportGeneration;
     this.transport?.close();
+    this.transport = undefined;
     const url = this.tryBuildUrl();
     if (!url) {
       this._shouldReconnect = false;
@@ -138,16 +151,17 @@ export class GatewaySseConnection {
       return;
     }
 
-    this.transport = this.openXhr(url);
+    this.transport = this.openXhr(url, generation);
   }
 
-  private openXhr(url: string): Transport {
+  private openXhr(url: string, generation: number): Transport {
     const xhr = new XMLHttpRequest();
     const { token } = useGatewayStore.getState();
     let sawConnected = false;
     let parsedLen = 0;
 
     const parser = new GatewaySseLineParser((event, data) => {
+      if (!this.isCurrentTransport(generation)) return;
       dispatchGatewaySseEvent(event, data);
       if (!sawConnected && event === 'connected') {
         sawConnected = true;
@@ -158,10 +172,14 @@ export class GatewaySseConnection {
     });
 
     const drain = () => {
+      if (!this.isCurrentTransport(generation)) return;
       const text = xhr.responseText;
       if (text.length > parsedLen) {
         parser.feed(text.slice(parsedLen));
         parsedLen = text.length;
+      }
+      if (text.length >= SSE_XHR_RESPONSE_ROLLOVER_BYTES && parser.isAtEventBoundary()) {
+        this.rolloverTransport(generation, xhr);
       }
     };
 
@@ -180,7 +198,9 @@ export class GatewaySseConnection {
     };
 
     xhr.onload = () => {
+      if (!this.isCurrentTransport(generation)) return;
       drain();
+      if (!this.isCurrentTransport(generation)) return;
       parser.flush();
       notifyUnauthorizedIfNeeded(xhr.status);
       if (xhr.status === 401) {
@@ -192,6 +212,7 @@ export class GatewaySseConnection {
     };
 
     xhr.onerror = () => {
+      if (!this.isCurrentTransport(generation)) return;
       this.scheduleReconnect('error');
     };
 
@@ -225,13 +246,32 @@ export class GatewaySseConnection {
       this.triggerRouteReprobe();
     }
 
-    const delayMs = Math.min(30_000, 1000 * 2 ** Math.min(this._reconnectCount, 5));
+    this.scheduleOpen(Math.min(30_000, 1000 * 2 ** Math.min(this._reconnectCount, 5)));
+  }
+
+  private isCurrentTransport(generation: number): boolean {
+    return !this._closed && generation === this._transportGeneration;
+  }
+
+  private scheduleOpen(delayMs: number): void {
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
       if (!this._closed && this._shouldReconnect) {
         this.openTransport();
       }
     }, delayMs);
+  }
+
+  private rolloverTransport(generation: number, xhr: XMLHttpRequest): void {
+    if (!this.isCurrentTransport(generation)) return;
+    this.transport = undefined;
+    this._transportGeneration++;
+    xhr.abort();
+    this.callbacks.onReconnecting();
+    this.scheduleOpen(SSE_FAST_RECONNECT_DELAY_MS);
   }
 
   /** When the current route keeps failing, kick a fresh race so we can move

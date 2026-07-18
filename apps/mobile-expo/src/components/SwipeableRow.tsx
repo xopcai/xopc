@@ -12,7 +12,7 @@
  * - Disabled when selectionMode is active
  */
 
-import { memo, useCallback, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Icon } from 'react-native-paper';
 import ReanimatedSwipeable, {
@@ -185,6 +185,10 @@ export const SwipeableRow = memo(function SwipeableRow({
   }, [handleClose]);
 
   const handleSwipeableClose = useCallback(() => {
+    unregisterSwipeOpen(handleClose);
+  }, [handleClose]);
+
+  useEffect(() => () => {
     unregisterSwipeOpen(handleClose);
   }, [handleClose]);
 

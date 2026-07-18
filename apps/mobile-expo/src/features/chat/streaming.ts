@@ -26,7 +26,7 @@ export function ensureAssistantMessage(msg: Message | null | undefined, timestam
   if (msg && msg.role === 'assistant') {
     return { ...msg, content: [...msg.content] };
   }
-  return { role: 'assistant', content: [], timestamp };
+  return { id: `stream-${timestamp}`, role: 'assistant', content: [], timestamp };
 }
 
 /** Clone message so memoized children see new references after streaming mutations. */
