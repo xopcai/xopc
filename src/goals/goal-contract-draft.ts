@@ -1,7 +1,7 @@
 import type { UserMessage } from '@earendil-works/pi-ai';
-import { complete } from '@earendil-works/pi-ai/compat';
 
 import { getApiKey, resolveModel } from '../providers/index.js';
+import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import type { GoalContractInput } from './types.js';
 
 const MAX_ITEMS = 7;
@@ -130,7 +130,7 @@ export async function draftGoalContract(input: GoalContractDraftInput): Promise<
       `Existing acceptance criteria: ${stringList(input.criteria).join(' | ') || '(none)'}`,
     ].join('\n');
     const message: UserMessage = { role: 'user', content: prompt, timestamp: Date.now() };
-    const result = await complete(model, { messages: [message] }, {
+    const result = await completeWithResolvedCredentials(model, { messages: [message] }, {
       apiKey,
       maxTokens: 1200,
       temperature: 0,

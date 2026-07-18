@@ -151,6 +151,8 @@ export type BtwQueryOptions = {
   maxTokens?: number;
   temperature?: number;
   modelRef?: string;
+  /** Run as an isolated one-shot task instead of adding recent session history. */
+  includeSessionContext?: boolean;
 };
 
 // ============================================================================

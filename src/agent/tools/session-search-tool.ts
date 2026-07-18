@@ -1,10 +1,11 @@
 // Cross-session transcript search + optional LLM summaries
 import { Type } from '@sinclair/typebox';
 import type { AgentMessage, AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
+import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import type { Config } from '../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
+import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import type { SessionStore } from '../../session/store.js';
 import { readAgentMessageContent } from '../memory/agent-message-access.js';
 import { createLogger } from '../../utils/logger.js';
@@ -89,7 +90,7 @@ ${formatted}`;
   const model = resolveSummaryModel(getConfig);
 
   try {
-    const result = await complete(
+    const result = await completeWithResolvedCredentials(
       model,
       { messages: [userMsg] },
       {

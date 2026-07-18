@@ -1,9 +1,10 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@earendil-works/pi-agent-core';
-import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
+import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import type { Config } from '../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
+import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import { createLogger } from '../../utils/logger.js';
 import { checkUrlSafety, checkWebsiteBlocklist, cleanBase64Images } from './url-safety.js';
 
@@ -161,7 +162,7 @@ async function callExtractionLlm(
     timestamp: Date.now(),
   };
 
-  const result = await complete(
+  const result = await completeWithResolvedCredentials(
     model,
     { messages: [userMsg] },
     {

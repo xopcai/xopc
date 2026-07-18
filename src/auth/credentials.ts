@@ -463,9 +463,8 @@ export class CredentialResolver {
 let defaultResolver: CredentialResolver | null = null;
 
 export function getCredentialResolver(options?: CredentialResolverOptions): CredentialResolver {
-  if (!defaultResolver || options) {
-    return new CredentialResolver(options);
-  }
+  if (options) return new CredentialResolver(options);
+  defaultResolver ??= new CredentialResolver();
   return defaultResolver;
 }
 

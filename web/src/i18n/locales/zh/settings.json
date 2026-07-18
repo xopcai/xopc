@@ -1114,6 +1114,8 @@
     "globalCommandPalette": "命令面板",
     "navCommandPalette": "打开命令面板",
     "navQuickCapture": "快速记录笔记",
+    "navToggleSidebar": "切换侧栏",
+    "navToggleFullscreen": "切换全屏",
     "navCloseDialog": "关闭弹窗/设置",
     "chatSend": "发送消息",
     "chatNewLine": "换行",
@@ -1124,7 +1126,13 @@
     "editorBulletList": "无序列表",
     "editorOrderedList": "有序列表",
     "editorTaskList": "任务列表",
-    "desktopOnly": "仅桌面应用"
+    "desktopOnly": "仅桌面应用",
+    "quickCaptureShortcutTitle": "快速记录快捷键",
+    "quickCaptureShortcutDescription": "设置应用处于焦点时用于快速记录笔记的快捷键。",
+    "quickCaptureShortcutChange": "更改快捷键",
+    "quickCaptureShortcutReset": "恢复默认",
+    "quickCaptureShortcutRecording": "请按下快捷键（Esc 取消）",
+    "quickCaptureShortcutConflict": "该快捷键已被核心导航操作占用。"
   },
   "mcpSettings": {
     "title": "外部工具 (MCP)",

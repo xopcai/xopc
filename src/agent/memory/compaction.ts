@@ -1,5 +1,7 @@
 import type { AgentMessage } from '@earendil-works/pi-agent-core';
-import { complete, type Model, type Api, type UserMessage } from '@earendil-works/pi-ai/compat';
+import { type Model, type Api, type UserMessage } from '@earendil-works/pi-ai/compat';
+
+import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import { readAgentMessageContent } from './agent-message-access.js';
 import { generateStructuredSummary, formatSummaryAsText, type ConversationSummary } from './summary-generator.js';
 
@@ -357,7 +359,7 @@ Summary:`;
 
     try {
       const summaryMessage: UserMessage = { role: 'user', content: prompt, timestamp: Date.now() };
-      const result = await complete(this.model, { 
+      const result = await completeWithResolvedCredentials(this.model, {
         messages: [summaryMessage]
       }, {
         maxTokens: this.config.summaryMaxTokens,
