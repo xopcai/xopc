@@ -3,6 +3,7 @@ import type { EditorCommand, EditorRuntimeState } from './editor-protocol';
 export const DEFAULT_EDITOR_RUNTIME_STATE: EditorRuntimeState = {
   ready: false,
   focused: false,
+  focusTarget: 'none',
   selection: { from: 0, to: 0 },
   emptySelection: true,
   canUndo: false,

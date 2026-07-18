@@ -1,6 +1,6 @@
 'use dom';
 
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
@@ -13,6 +13,8 @@ import type {
   EditorAttachmentPickSource,
   EditorAttachmentPickResult,
   EditorCommand,
+  EditorFocusTarget,
+  NoteEditorDraft,
   EditorRuntimeState,
   EditorSelectionContext,
   NoteEditorLabels,
@@ -29,13 +31,15 @@ type DomProps = import('expo/dom').DOMProps;
 
 export type NoteEditorAdapterCommand = EditorCommand | {
   id: number;
-  type: 'requestMarkdownFlush';
+  type: 'requestDraftFlush';
   requestId: number;
 };
 
 export interface NoteEditorDomAdapterProps {
   noteId: string;
+  initialTitle: string;
   initialMarkdown: string;
+  titlePlaceholder: string;
   attachmentSrcMap?: Record<string, string>;
   editable?: boolean;
   theme: NoteEditorTheme;
@@ -43,14 +47,16 @@ export interface NoteEditorDomAdapterProps {
   command?: NoteEditorAdapterCommand | null;
   bottomInset?: number;
   dom?: DomProps;
+  onChangeTitle: (title: string) => Promise<void>;
   onChangeMarkdown: (markdown: string) => Promise<void>;
   onSelectionChange?: (context: EditorSelectionContext) => Promise<void>;
   onStateChange?: (state: EditorRuntimeState) => Promise<void> | void;
   onRequestAttachment: (source: EditorAttachmentPickSource) => Promise<EditorAttachmentPickResult>;
-  onFlushMarkdown?: (requestId: number, markdown: string) => Promise<void> | void;
+  onFlushDraft?: (requestId: number, draft: NoteEditorDraft) => Promise<void> | void;
 }
 
 const MARKDOWN_SYNC_DELAY_MS = 1000;
+const TITLE_SYNC_DELAY_MS = 250;
 
 function markdownFromEditor(editor: NonNullable<ReturnType<typeof useEditor>>): string {
   const storage = editor.storage as unknown as { markdown?: { getMarkdown?: () => string } };
@@ -81,13 +87,17 @@ function selectionContextFromEditor(editor: NonNullable<ReturnType<typeof useEdi
   };
 }
 
-function editorRuntimeState(editor: NonNullable<ReturnType<typeof useEditor>>): EditorRuntimeState {
+function editorRuntimeState(
+  editor: NonNullable<ReturnType<typeof useEditor>>,
+  focusTarget: EditorFocusTarget,
+): EditorRuntimeState {
   try {
     const { from, to } = editor.state.selection;
     const headingLevel = ([1, 2, 3, 4] as const).find((level) => editor.isActive('heading', { level })) ?? 0;
     return {
       ready: !editor.isDestroyed,
-      focused: editor.isFocused,
+      focused: focusTarget !== 'none' || editor.isFocused,
+      focusTarget: focusTarget !== 'none' ? focusTarget : editor.isFocused ? 'body' : 'none',
       selection: { from, to },
       emptySelection: from === to,
       canUndo: canEditorRun(editor, (can) => can.undo()),
@@ -110,6 +120,7 @@ function editorRuntimeState(editor: NonNullable<ReturnType<typeof useEditor>>): 
 function sameRuntimeUiState(a: EditorRuntimeState, b: EditorRuntimeState): boolean {
   return a.ready === b.ready
     && a.focused === b.focused
+    && a.focusTarget === b.focusTarget
     && a.emptySelection === b.emptySelection
     && a.canUndo === b.canUndo
     && a.canRedo === b.canRedo
@@ -181,44 +192,57 @@ function audioTranscriptNode(text: string) {
 
 export default function NoteEditorDomAdapter({
   noteId,
+  initialTitle,
   initialMarkdown,
+  titlePlaceholder,
   attachmentSrcMap,
   editable = true,
   theme,
   labels,
   command,
   bottomInset = 120,
+  onChangeTitle,
   onChangeMarkdown,
   onSelectionChange,
   onStateChange,
   onRequestAttachment,
-  onFlushMarkdown,
+  onFlushDraft,
 }: NoteEditorDomAdapterProps) {
   const changeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const titleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attachmentSrcMapRef = useRef<Record<string, string>>(attachmentSrcMap ?? {});
+  const titleInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const latestTitleRef = useRef(initialTitle);
+  const lastSentTitleRef = useRef(initialTitle);
   const latestMarkdownRef = useRef(initialMarkdown);
   const lastSentMarkdownRef = useRef(initialMarkdown);
   const noteIdRef = useRef(noteId);
+  const titleNoteIdRef = useRef(noteId);
   const contentSeededRef = useRef(false);
+  const titleSeededRef = useRef(false);
+  const titleDirtyRef = useRef(false);
   const editorDirtyRef = useRef(false);
+  const focusTargetRef = useRef<EditorFocusTarget>('none');
+  const onChangeTitleRef = useRef(onChangeTitle);
   const onChangeMarkdownRef = useRef(onChangeMarkdown);
   const onSelectionChangeRef = useRef(onSelectionChange);
   const onStateChangeRef = useRef(onStateChange);
-  const onFlushMarkdownRef = useRef(onFlushMarkdown);
+  const onFlushDraftRef = useRef(onFlushDraft);
   const handledCommandIdRef = useRef<number | null>(null);
   const initialBottomInsetRef = useRef(bottomInset);
   const lastRuntimeStateRef = useRef<EditorRuntimeState | null>(null);
 
   attachmentSrcMapRef.current = attachmentSrcMap ?? {};
+  onChangeTitleRef.current = onChangeTitle;
   onChangeMarkdownRef.current = onChangeMarkdown;
   onSelectionChangeRef.current = onSelectionChange;
   onStateChangeRef.current = onStateChange;
-  onFlushMarkdownRef.current = onFlushMarkdown;
+  onFlushDraftRef.current = onFlushDraft;
 
   const XopcImage = useMemo(() => createXopcImage((canonicalSrc) => attachmentSrcMapRef.current[canonicalSrc]), []);
 
   const emitRuntimeState = useCallback((nextEditor: NonNullable<ReturnType<typeof useEditor>>) => {
-    const nextState = editorRuntimeState(nextEditor);
+    const nextState = editorRuntimeState(nextEditor, focusTargetRef.current);
     const previous = lastRuntimeStateRef.current;
     if (previous && sameRuntimeUiState(previous, nextState)) {
       lastRuntimeStateRef.current = nextState;
@@ -241,6 +265,18 @@ export default function NoteEditorDomAdapter({
     return markdown;
   }, []);
 
+  const emitTitle = useCallback(async () => {
+    const title = latestTitleRef.current;
+    if (lastSentTitleRef.current === title) {
+      titleDirtyRef.current = false;
+      return title;
+    }
+    lastSentTitleRef.current = title;
+    titleDirtyRef.current = false;
+    await onChangeTitleRef.current(title);
+    return title;
+  }, []);
+
   const scheduleMarkdownEmit = useCallback((nextEditor: NonNullable<ReturnType<typeof useEditor>>) => {
     editorDirtyRef.current = true;
     if (changeTimerRef.current) clearTimeout(changeTimerRef.current);
@@ -249,6 +285,15 @@ export default function NoteEditorDomAdapter({
       void emitMarkdown(nextEditor);
     }, MARKDOWN_SYNC_DELAY_MS);
   }, [emitMarkdown]);
+
+  const scheduleTitleEmit = useCallback(() => {
+    titleDirtyRef.current = true;
+    if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
+    titleTimerRef.current = setTimeout(() => {
+      titleTimerRef.current = null;
+      void emitTitle();
+    }, TITLE_SYNC_DELAY_MS);
+  }, [emitTitle]);
 
   const editor = useEditor({
     editable,
@@ -306,6 +351,7 @@ export default function NoteEditorDomAdapter({
       }
     },
     onFocus: ({ editor: nextEditor }) => {
+      focusTargetRef.current = 'body';
       emitRuntimeState(nextEditor);
     },
     onBlur: ({ editor: nextEditor }) => {
@@ -314,6 +360,7 @@ export default function NoteEditorDomAdapter({
         changeTimerRef.current = null;
       }
       if (editorDirtyRef.current) void emitMarkdown(nextEditor);
+      if (focusTargetRef.current === 'body') focusTargetRef.current = 'none';
       emitRuntimeState(nextEditor);
     },
     onCreate: ({ editor: nextEditor }) => {
@@ -374,13 +421,65 @@ export default function NoteEditorDomAdapter({
     emitRuntimeState(editor);
   }, [editor, emitRuntimeState, initialMarkdown, noteId]);
 
+  useEffect(() => {
+    const noteChanged = titleNoteIdRef.current !== noteId;
+    const externalChanged = initialTitle !== latestTitleRef.current;
+    const localClean = !titleDirtyRef.current && latestTitleRef.current === lastSentTitleRef.current;
+    if (titleSeededRef.current && !noteChanged && (!externalChanged || !localClean)) return;
+    titleSeededRef.current = true;
+    titleNoteIdRef.current = noteId;
+    latestTitleRef.current = initialTitle;
+    lastSentTitleRef.current = initialTitle;
+    titleDirtyRef.current = false;
+    if (titleInputRef.current && titleInputRef.current.value !== initialTitle) {
+      titleInputRef.current.value = initialTitle;
+    }
+  }, [initialTitle, noteId]);
+
   useEffect(() => () => {
     if (changeTimerRef.current) {
       clearTimeout(changeTimerRef.current);
       changeTimerRef.current = null;
     }
+    if (titleTimerRef.current) {
+      clearTimeout(titleTimerRef.current);
+      titleTimerRef.current = null;
+    }
     if (editor && editorDirtyRef.current) void emitMarkdown(editor);
-  }, [editor, emitMarkdown]);
+    if (titleDirtyRef.current) void emitTitle();
+  }, [editor, emitMarkdown, emitTitle]);
+
+  const handleTitleInput = useCallback((event: FormEvent<HTMLTextAreaElement>) => {
+    latestTitleRef.current = event.currentTarget.value;
+    scheduleTitleEmit();
+  }, [scheduleTitleEmit]);
+
+  const handleTitleFocus = useCallback(() => {
+    focusTargetRef.current = 'title';
+    if (editor) emitRuntimeState(editor);
+  }, [editor, emitRuntimeState]);
+
+  const handleTitleBlur = useCallback(() => {
+    if (titleTimerRef.current) {
+      clearTimeout(titleTimerRef.current);
+      titleTimerRef.current = null;
+    }
+    if (titleDirtyRef.current) void emitTitle();
+    if (focusTargetRef.current === 'title') focusTargetRef.current = 'none';
+    if (editor) emitRuntimeState(editor);
+  }, [editor, emitRuntimeState, emitTitle]);
+
+  const handleTitleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent.isComposing || !editor) return;
+    event.preventDefault();
+    if (titleTimerRef.current) {
+      clearTimeout(titleTimerRef.current);
+      titleTimerRef.current = null;
+    }
+    void emitTitle();
+    focusTargetRef.current = 'body';
+    editor.commands.focus('start');
+  }, [editor, emitTitle]);
 
   const insertPreparedAttachment = useCallback((picked: NonNullable<EditorAttachmentPickResult>) => {
     if (!editor || !editable) return;
@@ -461,25 +560,37 @@ export default function NoteEditorDomAdapter({
   useEffect(() => {
     if (!editor || !command || handledCommandIdRef.current === command.id) return;
     handledCommandIdRef.current = command.id;
-    if (!editable && command.type !== 'requestMarkdownFlush') return;
+    if (!editable && command.type !== 'requestDraftFlush') return;
 
-    const requestMarkdownFlush = async (requestId: number) => {
+    const requestDraftFlush = async (requestId: number) => {
       if (changeTimerRef.current) {
         clearTimeout(changeTimerRef.current);
         changeTimerRef.current = null;
       }
+      if (titleTimerRef.current) {
+        clearTimeout(titleTimerRef.current);
+        titleTimerRef.current = null;
+      }
       let markdown = latestMarkdownRef.current;
+      let title = latestTitleRef.current;
       try {
-        markdown = await emitMarkdown(editor);
+        [title, markdown] = await Promise.all([emitTitle(), emitMarkdown(editor)]);
       } catch {
         latestMarkdownRef.current = markdown;
+        latestTitleRef.current = title;
       }
-      await onFlushMarkdownRef.current?.(requestId, markdown);
+      await onFlushDraftRef.current?.(requestId, { title, markdown });
     };
 
     switch (command.type) {
       case 'focus':
-        editor.commands.focus(command.position ?? undefined);
+        if (command.target === 'title') {
+          focusTargetRef.current = 'title';
+          titleInputRef.current?.focus();
+        } else {
+          focusTargetRef.current = 'body';
+          editor.commands.focus(command.position ?? undefined);
+        }
         break;
       case 'blur':
         editor.commands.blur();
@@ -530,8 +641,8 @@ export default function NoteEditorDomAdapter({
       case 'redo':
         editor.chain().focus().redo().run();
         break;
-      case 'requestMarkdownFlush':
-        void requestMarkdownFlush(command.requestId);
+      case 'requestDraftFlush':
+        void requestDraftFlush(command.requestId);
         break;
     }
 
@@ -557,6 +668,22 @@ export default function NoteEditorDomAdapter({
     >
       <style>{EDITOR_CSS}</style>
       <section className="xopc-editor-scroll" data-editable={editable ? 'true' : 'false'} onPointerDown={focusEditorFromSurface}>
+        <header className="xopc-editor-header">
+          <textarea
+            key={noteId}
+            ref={titleInputRef}
+            className="xopc-editor-title"
+            defaultValue={initialTitle}
+            rows={1}
+            placeholder={titlePlaceholder}
+            aria-label="Note title"
+            readOnly={!editable}
+            onInput={handleTitleInput}
+            onFocus={handleTitleFocus}
+            onBlur={handleTitleBlur}
+            onKeyDown={handleTitleKeyDown}
+          />
+        </header>
         <EditorContent editor={editor} />
       </section>
     </main>
@@ -602,6 +729,31 @@ button, input {
   touch-action: pan-y;
   scroll-padding-bottom: var(--xopc-editor-bottom-inset);
   padding: 14px 20px var(--xopc-editor-bottom-inset);
+}
+.xopc-editor-header {
+  margin: 0 0 8px;
+}
+.xopc-editor-title {
+  display: block;
+  width: 100%;
+  min-height: 42px;
+  max-height: 116px;
+  resize: none;
+  overflow: hidden;
+  border: 0;
+  outline: none;
+  padding: 0;
+  background: transparent;
+  color: var(--xopc-text);
+  font: 760 32px/1.16 -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+  letter-spacing: -0.45px;
+}
+.xopc-editor-title::placeholder {
+  color: var(--xopc-text-tertiary);
+  opacity: 1;
+}
+.xopc-editor-scroll[data-editable="false"] .xopc-editor-title {
+  caret-color: transparent;
 }
 .xopc-editor-content {
   display: block;

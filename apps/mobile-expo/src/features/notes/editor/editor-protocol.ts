@@ -30,6 +30,7 @@ export type NoteEditorLabels = {
   todo: string;
   linkUrlPlaceholder: string;
   removeLink: string;
+  more: string;
   imageFromLibrary: string;
   imageCamera: string;
   imageDocument: string;
@@ -57,8 +58,16 @@ export type EditorAttachmentPickResult = {
   transcript?: string;
 } | null;
 
+/** The complete user-authored note surface, excluding tags and server metadata. */
+export type NoteEditorDraft = {
+  title: string;
+  markdown: string;
+};
+
+export type EditorFocusTarget = 'none' | 'title' | 'body';
+
 export type EditorCommand =
-  | { id: number; type: 'focus'; position?: 'start' | 'end' | number }
+  | { id: number; type: 'focus'; target?: Exclude<EditorFocusTarget, 'none'>; position?: 'start' | 'end' | number }
   | { id: number; type: 'blur' }
   | { id: number; type: 'setHeading'; level: 1 | 2 | 3 | 4 | 0 }
   | { id: number; type: 'toggleBold' }
@@ -84,6 +93,7 @@ export type EditorCommandInput = EditorCommand extends infer Command
 export type EditorRuntimeState = {
   ready: boolean;
   focused: boolean;
+  focusTarget: EditorFocusTarget;
   selection: { from: number; to: number };
   emptySelection: boolean;
   canUndo: boolean;
@@ -106,9 +116,9 @@ export type EditorEvent =
   | { type: 'focusChanged'; focused: boolean; state: EditorRuntimeState }
   | { type: 'contentChanged'; markdown: string; reason: 'typing' | 'command' | 'flush'; state?: EditorRuntimeState }
   | { type: 'selectionChanged'; context: EditorSelectionContext; state: EditorRuntimeState }
-  | { type: 'flushResult'; requestId: number; markdown: string };
+  | { type: 'flushResult'; requestId: number; draft: NoteEditorDraft };
 
 export type NoteEditorHandle = {
-  flushMarkdown: () => Promise<string>;
-  focus: (position?: 'start' | 'end' | number) => void;
+  flushDraft: () => Promise<NoteEditorDraft>;
+  focus: (target?: Exclude<EditorFocusTarget, 'none'>, position?: 'start' | 'end' | number) => void;
 };

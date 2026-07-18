@@ -40,6 +40,7 @@ describe('editor contract', () => {
     expect(DEFAULT_EDITOR_RUNTIME_STATE).toEqual({
       ready: false,
       focused: false,
+      focusTarget: 'none',
       selection: { from: 0, to: 0 },
       emptySelection: true,
       canUndo: false,

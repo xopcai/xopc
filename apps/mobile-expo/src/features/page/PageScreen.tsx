@@ -1,7 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Keyboard, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert, AppState, Keyboard, Pressable, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Icon, Snackbar, Text } from 'react-native-paper';
 
 import { BottomSheetModal } from '../../components/BottomSheetModal';
@@ -23,7 +23,6 @@ import {
   type NoteEditorInteractionState,
 } from '../notes/editor/editor-interaction';
 import { countNoteCharacters } from '../notes/note-title';
-import { getNotePrimaryTag, getTagColors } from '../notes/note-tag-utils';
 import { useVoiceCaptureInteraction } from '../notes/use-voice-capture-interaction';
 import { applyMarkdownPatchResult } from '../notes/markdown/markdown-patch';
 import { DEFAULT_EDITOR_RUNTIME_STATE } from '../notes/editor/editor-contract';
@@ -94,6 +93,7 @@ export function PageScreen() {
     markdownRef,
     titleRef,
     flushSave,
+    applyDraft,
     updateMarkdown,
     updateTitle,
     updateTags,
@@ -164,11 +164,9 @@ export function PageScreen() {
   });
 
   const flushEditorToDraft = useCallback(async () => {
-    const nextMarkdown = await editorRef.current?.flushMarkdown();
-    if (typeof nextMarkdown === 'string' && nextMarkdown !== markdownRef.current) {
-      updateMarkdown(nextMarkdown);
-    }
-  }, [markdownRef, updateMarkdown]);
+    const draft = await editorRef.current?.flushDraft();
+    if (draft) applyDraft(draft);
+  }, [applyDraft]);
 
   const saveEditorBeforeLeave = useCallback(async () => {
     await flushEditorToDraft();
@@ -224,10 +222,10 @@ export function PageScreen() {
     if (!id || !note || !editorRuntimeState.ready || autoFocusedNoteIdRef.current === id) return;
     autoFocusedNoteIdRef.current = id;
     const timer = setTimeout(() => {
-      sendEditorCommand({ type: 'focus', position: 'end' });
+      editorRef.current?.focus(titleRef.current.trim() ? 'body' : 'title', 'end');
     }, 80);
     return () => clearTimeout(timer);
-  }, [editorRuntimeState.ready, id, note, sendEditorCommand]);
+  }, [editorRuntimeState.ready, id, note, titleRef]);
 
   const handleBack = useCallback(() => {
     if (savingBeforeLeaveRef.current) return;
@@ -306,6 +304,7 @@ export function PageScreen() {
     todo: pm.editorBlockTodo,
     linkUrlPlaceholder: pm.editorLinkUrlPlaceholder,
     removeLink: pm.editorRemoveLink,
+    more: pm.viewMore,
     imageFromLibrary: pm.editorImageLibrary,
     imageCamera: pm.editorImageCamera,
     imageDocument: pm.editorImageDocument,
@@ -408,8 +407,6 @@ export function PageScreen() {
   const showLoading = noteQuery.isLoading && !note;
   const showError = noteQuery.isError && !note;
   const showViewActions = Boolean(note && id && !keyboardVisible && noteEditorMode === 'viewing');
-  const primaryTag = useMemo(() => getNotePrimaryTag({ tags }), [tags]);
-  const primaryTagPalette = useMemo(() => getTagColors(primaryTag, noteTags, colors), [colors, noteTags, primaryTag]);
   const wordCount = useMemo(() => countNoteCharacters(markdown), [markdown]);
 
   const viewActionItems = useMemo<NoteViewActionBarItem[]>(() => [
@@ -464,49 +461,17 @@ export function PageScreen() {
         </View>
       ) : note && id ? (
         <View style={styles.editorWrap}>
-          <View style={styles.titleWrap}>
-            <View style={styles.titleInputFrame}>
-              <TextInput
-                value={title}
-                onChangeText={updateTitle}
-                onFocus={() => {
-                  setNoteEditorMode('viewing');
-                }}
-                editable
-                placeholder={pm.untitledNote}
-                placeholderTextColor={colors.text.tertiary}
-                accessibilityLabel={pm.noteTitle}
-                style={[styles.titleInput, { color: colors.text.primary }]}
-              />
-            </View>
-            <View style={styles.metaRow}>
-              <Pressable
-                style={({ pressed }) => [
-                  styles.categoryChip,
-                  { backgroundColor: primaryTagPalette.bg, opacity: pressed ? 0.72 : 1 },
-                ]}
-                onPress={() => {
-                  setTagPickerVisible(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={pm.tagPickerTitle}
-              >
-                <Icon source="folder-outline" size={14} color={primaryTagPalette.fg} />
-                <Text numberOfLines={1} style={[styles.categoryChipText, { color: primaryTagPalette.fg }]}>
-                  {primaryTag ?? pm.defaultTag}
-                </Text>
-                <Icon source="chevron-down" size={14} color={primaryTagPalette.fg} />
-              </Pressable>
-            </View>
-          </View>
           {editorReady ? (
             <NoteEditorBridge
               ref={editorRef}
               noteId={id}
+              title={title}
+              titlePlaceholder={pm.untitledNote}
               markdown={editorMarkdown}
               attachmentSrcMap={attachmentSrcMap}
               topCommand={editorCommand}
               labels={labels}
+              onChangeTitle={updateTitle}
               onChangeMarkdown={updateMarkdown}
               onRequestAttachment={handleRequestAttachment}
               onInteractionStateChange={handleEditorInteractionStateChange}
@@ -576,6 +541,18 @@ export function PageScreen() {
         <View style={styles.moreActions}>
           <Pressable
             style={({ pressed }) => [styles.moreAction, pressed && styles.moreActionPressed]}
+            onPress={() => {
+              setMoreVisible(false);
+              setTagPickerVisible(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={pm.tagPickerTitle}
+          >
+            <Icon source="folder-outline" size={22} color={colors.text.secondary} />
+            <Text style={[styles.moreActionLabel, { color: colors.text.primary }]}>{pm.tagPickerTitle}</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.moreAction, pressed && styles.moreActionPressed]}
             onPress={() => void handleSyncNow()}
             accessibilityRole="button"
             accessibilityLabel={pm.syncNow}
@@ -598,7 +575,7 @@ export function PageScreen() {
       <NoteTagPickerSheet
         visible={tagPickerVisible}
         tags={noteTags}
-        selectedTag={primaryTag}
+        selectedTag={tags?.[0] ?? null}
         onSelect={handleSelectPrimaryTag}
         onCreateTag={handleCreateTag}
         onDismiss={() => setTagPickerVisible(false)}
