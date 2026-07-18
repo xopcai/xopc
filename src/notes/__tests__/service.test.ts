@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { complete } from '@earendil-works/pi-ai/compat';
 
-vi.mock('@earendil-works/pi-ai/compat', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@earendil-works/pi-ai/compat')>();
-  return { ...actual, complete: vi.fn() };
+vi.mock('../../providers/model-call.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../providers/model-call.js')>();
+  return { ...actual, completeWithResolvedCredentials: vi.fn() };
 });
 
 import { NotesService } from '../service.js';
+import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import type { Note, NoteSnapshot, NoteSnapshotEntry, SnapshotTrigger } from '../types.js';
 import type { Config } from '../../config/schema.js';
 import { onAutomationProductEvent } from '../../automations/product-events.js';
@@ -101,7 +101,7 @@ describe('NotesService markdown sync and AI edit', () => {
   let service: NotesService;
 
   beforeEach(() => {
-    vi.mocked(complete).mockReset();
+    vi.mocked(completeWithResolvedCredentials).mockReset();
     store = new MemoryNotesStore();
     service = new NotesService(store as never);
   });
@@ -215,7 +215,7 @@ describe('NotesService markdown sync and AI edit', () => {
   });
 
   it('catalyzes a note with the model JSON response', async () => {
-    vi.mocked(complete).mockResolvedValueOnce({
+    vi.mocked(completeWithResolvedCredentials).mockResolvedValueOnce({
       role: 'assistant',
       content: [{ type: 'text', text: JSON.stringify({ title: '产品想法催化', valueHypothesis: '把零散想法沉淀为可验证的个人创作闭环。', targetUsers: ['个人创作者'], keyQuestions: ['用户最先需要哪一步？'], mvpPath: ['做一个 Note 到 Chat 的最短路径'], risks: ['范围过大'], nextActions: [{ kind: 'task', text: '写出第一个可验证场景' }], confidence: 0.82 }) }],
     } as never);
@@ -225,16 +225,16 @@ describe('NotesService markdown sync and AI edit', () => {
     expect(result?.report.valueHypothesis).toBe('把零散想法沉淀为可验证的个人创作闭环。');
     expect(result?.note.aiDeep?.catalysis?.status).toBe('catalyzed');
     expect(result?.note.aiDeep?.catalysis?.report?.nextActions[0]).toMatchObject({ kind: 'task', text: '写出第一个可验证场景' });
-    expect(complete).toHaveBeenCalledOnce();
+    expect(completeWithResolvedCredentials).toHaveBeenCalledOnce();
   });
 
   it('falls back to local catalysis when the model call fails', async () => {
-    vi.mocked(complete).mockRejectedValueOnce(new Error('model unavailable'));
+    vi.mocked(completeWithResolvedCredentials).mockRejectedValueOnce(new Error('model unavailable'));
     const note = await service.createNote({ title: '离线想法', markdown: 'Local-first 的 AI Agent 产品。', capturedVia: { channel: 'web' } });
     const result = await service.catalyzeNote(note.id, configWithGlobalModel());
     expect(result?.report.originalNoteId).toBe(note.id);
     expect(result?.report.title).toContain('离线想法');
     expect(result?.note.aiDeep?.catalysis?.status).toBe('catalyzed');
-    expect(complete).toHaveBeenCalledOnce();
+    expect(completeWithResolvedCredentials).toHaveBeenCalledOnce();
   });
 });
