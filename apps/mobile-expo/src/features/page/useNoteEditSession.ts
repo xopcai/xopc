@@ -13,6 +13,7 @@ import {
   type NoteAttachment,
 } from '../../query/notes';
 import { queueWorkspaceOperation } from '../../sync/workspace-sync';
+import type { NoteEditorDraft } from '../notes/editor/editor-protocol';
 
 const SAVE_DEBOUNCE_MS = 600;
 
@@ -329,22 +330,29 @@ export function useNoteEditSession({
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
   }, []);
 
-  const updateMarkdown = useCallback((next: string) => {
+  const applyDraft = useCallback((draft: NoteEditorDraft) => {
+    const titleChanged = draft.title !== titleRef.current;
+    const markdownChanged = draft.markdown !== markdownRef.current;
+    if (!titleChanged && !markdownChanged) return;
     dirtyRef.current = true;
-    markdownRef.current = next;
+    markdownRef.current = draft.markdown;
+    titleRef.current = draft.title;
     setSaveState('dirty');
-    setEditorMarkdown(next);
-    setMarkdown(next);
+    if (markdownChanged) {
+      setEditorMarkdown(draft.markdown);
+      setMarkdown(draft.markdown);
+    }
+    if (titleChanged) setTitle(draft.title);
     scheduleSave();
   }, [scheduleSave]);
 
+  const updateMarkdown = useCallback((next: string) => {
+    applyDraft({ title: titleRef.current, markdown: next });
+  }, [applyDraft]);
+
   const updateTitle = useCallback((next: string) => {
-    dirtyRef.current = true;
-    titleRef.current = next;
-    setSaveState('dirty');
-    setTitle(next);
-    scheduleSave();
-  }, [scheduleSave]);
+    applyDraft({ title: next, markdown: markdownRef.current });
+  }, [applyDraft]);
 
   const updateTags = useCallback((next: string[] | undefined) => {
     setTags(next);
@@ -368,6 +376,7 @@ export function useNoteEditSession({
     titleRef,
     flushSave,
     scheduleSave,
+    applyDraft,
     updateMarkdown,
     updateTitle,
     updateTags,

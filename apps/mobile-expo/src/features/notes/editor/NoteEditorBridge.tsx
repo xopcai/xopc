@@ -25,6 +25,7 @@ import type {
   EditorCommandInput,
   EditorAttachmentPickResult,
   NoteEditorHandle,
+  NoteEditorDraft,
   EditorRuntimeState,
   EditorSelectionContext,
   NoteEditorLabels,
@@ -53,7 +54,12 @@ const TOOL_BUTTON_SIZE = 44;
 const EDITOR_FLUSH_TIMEOUT_MS = 1500;
 const NATIVE_MARKDOWN_SYNC_DELAY_MS = 1000;
 
-type PendingFlush = {
+type PendingDraftFlush = {
+  resolve: (draft: NoteEditorDraft) => void;
+  timeout: ReturnType<typeof setTimeout>;
+};
+
+type PendingMarkdownFlush = {
   resolve: (markdown: string) => void;
   timeout: ReturnType<typeof setTimeout>;
 };
@@ -78,7 +84,7 @@ type NativeRichEditorHandle = {
   redo: () => void;
 };
 
-type EditorSheet = 'image' | 'link' | 'heading' | 'ai';
+type EditorSheet = 'image' | 'link' | 'heading' | 'ai' | 'more';
 
 type SheetPresentation = {
   active: EditorSheet | null;
@@ -116,6 +122,7 @@ function dismissKeyboardAndWait(): Promise<void> {
 function sameEditorState(a: EditorRuntimeState, b: EditorRuntimeState): boolean {
   return a.ready === b.ready
     && a.focused === b.focused
+    && a.focusTarget === b.focusTarget
     && a.emptySelection === b.emptySelection
     && a.canUndo === b.canUndo
     && a.canRedo === b.canRedo
@@ -140,10 +147,13 @@ function isExpoDomWebViewAvailable(): boolean {
 
 export interface NoteEditorBridgeProps {
   noteId: string;
+  title: string;
+  titlePlaceholder: string;
   markdown: string;
   attachmentSrcMap?: Record<string, string>;
   topCommand?: EditorCommand | null;
   labels: NoteEditorLabels;
+  onChangeTitle: (title: string) => void;
   onChangeMarkdown: (markdown: string) => void;
   onSelectionChange?: (context: EditorSelectionContext) => void;
   onRequestAttachment: (source: EditorAttachmentPickSource) => Promise<EditorAttachmentPickResult>;
@@ -161,10 +171,13 @@ export interface NoteEditorBridgeProps {
 
 export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEditorBridgeProps>(function NoteEditorBridge({
   noteId,
+  title,
+  titlePlaceholder,
   markdown,
   attachmentSrcMap,
   topCommand,
   labels,
+  onChangeTitle,
   onChangeMarkdown,
   onSelectionChange,
   onRequestAttachment,
@@ -174,7 +187,6 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   aiLoadingKey,
   onRequestAiAction,
   voiceFeedback,
-  voicePanHandlers,
   voicePressHandler,
   voiceActive,
   voiceDisabled,
@@ -183,11 +195,13 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   const insets = useSafeAreaInsets();
   const keyboardBottomInset = useKeyboardListPadding();
   const richEditorRef = useRef<NativeRichEditorHandle | null>(null);
+  const nativeTitleInputRef = useRef<TextInput | null>(null);
   const linkUrlInputRef = useRef<TextInput | null>(null);
   const commandIdRef = useRef(0);
   const flushRequestIdRef = useRef(0);
-  const pendingFlushesRef = useRef(new Map<number, PendingFlush>());
+  const pendingFlushesRef = useRef(new Map<number, PendingDraftFlush>());
   const latestMarkdownRef = useRef(markdown);
+  const latestTitleRef = useRef(title);
   const [command, setCommand] = useState<NoteEditorAdapterCommand | null>(null);
   const [editorState, setEditorState] = useState<EditorRuntimeState>(DEFAULT_EDITOR_RUNTIME_STATE);
   const editorStateRef = useRef<EditorRuntimeState>(DEFAULT_EDITOR_RUNTIME_STATE);
@@ -233,6 +247,11 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     onChangeMarkdown(nextMarkdown);
   }, [onChangeMarkdown]);
 
+  const handleTitleChange = useCallback(async (nextTitle: string) => {
+    latestTitleRef.current = nextTitle;
+    onChangeTitle(nextTitle);
+  }, [onChangeTitle]);
+
   const handleSelectionChange = useMemo(() => onSelectionChange ? async (context: EditorSelectionContext) => {
     onSelectionChange(context);
   } : undefined, [onSelectionChange]);
@@ -264,7 +283,7 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     }
     pendingFlushesRef.current.forEach(({ resolve, timeout }) => {
       clearTimeout(timeout);
-      resolve(latestMarkdownRef.current);
+      resolve({ title: latestTitleRef.current, markdown: latestMarkdownRef.current });
     });
     pendingFlushesRef.current.clear();
   }, []);
@@ -272,6 +291,10 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   useEffect(() => {
     latestMarkdownRef.current = markdown;
   }, [markdown]);
+
+  useEffect(() => {
+    latestTitleRef.current = title;
+  }, [title]);
 
   useEffect(() => {
     onInteractionStateChange?.({
@@ -361,22 +384,26 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
     setCommand({ ...topCommand, id: commandIdRef.current } as EditorCommand);
   }, [canUseDomEditor, runNativeEditorCommand, topCommand]);
 
-  const handleFlushMarkdown = useCallback(async (requestId: number, nextMarkdown: string) => {
-    latestMarkdownRef.current = nextMarkdown;
+  const handleFlushDraft = useCallback(async (requestId: number, nextDraft: NoteEditorDraft) => {
+    latestTitleRef.current = nextDraft.title;
+    latestMarkdownRef.current = nextDraft.markdown;
     const pending = pendingFlushesRef.current.get(requestId);
     if (!pending) return;
     pendingFlushesRef.current.delete(requestId);
     clearTimeout(pending.timeout);
-    pending.resolve(nextMarkdown);
+    pending.resolve(nextDraft);
   }, []);
 
-  const flushMarkdown = useCallback(() => new Promise<string>((resolve) => {
+  const flushDraft = useCallback(() => new Promise<NoteEditorDraft>((resolve) => {
     if (!canUseDomEditor) {
-      void (richEditorRef.current?.flushMarkdown() ?? Promise.resolve(latestMarkdownRef.current)).then(resolve);
+      void (richEditorRef.current?.flushMarkdown() ?? Promise.resolve(latestMarkdownRef.current)).then((nextMarkdown) => {
+        latestMarkdownRef.current = nextMarkdown;
+        resolve({ title: latestTitleRef.current, markdown: nextMarkdown });
+      });
       return;
     }
     if (!editorStateRef.current.ready) {
-      resolve(latestMarkdownRef.current);
+      resolve({ title: latestTitleRef.current, markdown: latestMarkdownRef.current });
       return;
     }
     flushRequestIdRef.current += 1;
@@ -386,20 +413,26 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
       const pending = pendingFlushesRef.current.get(requestId);
       if (!pending) return;
       pendingFlushesRef.current.delete(requestId);
-      pending.resolve(latestMarkdownRef.current);
+      pending.resolve({ title: latestTitleRef.current, markdown: latestMarkdownRef.current });
     }, EDITOR_FLUSH_TIMEOUT_MS);
     pendingFlushesRef.current.set(requestId, { resolve, timeout });
     setCommand({
       id: commandIdRef.current,
-      type: 'requestMarkdownFlush',
+      type: 'requestDraftFlush',
       requestId,
     });
   }), [canUseDomEditor]);
 
   useImperativeHandle(ref, () => ({
-    flushMarkdown,
-    focus: (position) => dispatch({ type: 'focus', position }),
-  }), [dispatch, flushMarkdown]);
+    flushDraft,
+    focus: (target = 'body', position) => {
+      if (!canUseDomEditor && target === 'title') {
+        nativeTitleInputRef.current?.focus();
+        return;
+      }
+      dispatch({ type: 'focus', target, position });
+    },
+  }), [canUseDomEditor, dispatch, flushDraft]);
 
   const openEditorSheet = useCallback((sheet: EditorSheet) => {
     sheetRequestIdRef.current += 1;
@@ -497,182 +530,115 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
   }, [pickAndInsertAttachment]);
 
   const actions = useMemo<ToolbarAction[]>(() => {
-    const nextActions: ToolbarAction[] = [
-    {
-      key: 'undo',
-      label: labels.undo,
-      icon: 'undo',
-      disabled: !editorState.canUndo,
-      onPress: () => {
-        if (canUseDomEditor) dispatch({ type: 'undo' });
-        else richEditorRef.current?.undo();
+    return [
+      {
+        key: 'todo',
+        label: labels.todo,
+        icon: 'checkbox-marked-outline',
+        active: editorState.taskList,
+        onPress: () => {
+          if (canUseDomEditor) dispatch({ type: 'toggleTaskList' });
+          else richEditorRef.current?.insertTodo();
+        },
       },
-    },
-    {
-      key: 'redo',
-      label: labels.redo,
-      icon: 'redo',
-      disabled: !editorState.canRedo,
-      onPress: () => {
-        if (canUseDomEditor) dispatch({ type: 'redo' });
-        else richEditorRef.current?.redo();
+      {
+        key: 'attachment',
+        label: labels.image,
+        icon: 'paperclip',
+        active: editorState.image,
+        onPress: () => openEditorSheet('image'),
       },
-    },
-    {
-      key: 'format',
-      label: labels.textStyle,
-      icon: 'format-letter-case',
-      active: editorState.headingLevel > 0 || editorState.blockquote || editorState.codeBlock,
-      onPress: () => openEditorSheet('heading'),
-    },
-    {
-      key: 'bold',
-      label: labels.bold,
-      icon: 'format-bold',
-      active: editorState.bold,
-      onPress: () => {
-        if (canUseDomEditor) dispatch({ type: 'toggleBold' });
-        else richEditorRef.current?.toggleBold();
+      {
+        key: 'format',
+        label: labels.textStyle,
+        icon: 'format-letter-case',
+        active: editorState.headingLevel > 0 || editorState.blockquote || editorState.codeBlock,
+        onPress: () => openEditorSheet('heading'),
       },
-    },
-    {
-      key: 'italic',
-      label: labels.italic,
-      icon: 'format-italic',
-      active: editorState.italic,
-      onPress: () => {
-        if (canUseDomEditor) dispatch({ type: 'toggleItalic' });
-        else richEditorRef.current?.toggleItalic();
+      {
+        key: 'more',
+        label: labels.more,
+        icon: 'dots-horizontal-circle-outline',
+        onPress: () => openEditorSheet('more'),
       },
-    },
-    {
-      key: 'bullet',
-      label: labels.bulletList,
-      icon: 'format-list-bulleted',
-      active: editorState.bulletList,
-      onPress: () => {
-        if (canUseDomEditor) dispatch({ type: 'toggleBulletList' });
-        else richEditorRef.current?.toggleBulletList();
-      },
-    },
-    {
-      key: 'todo',
-      label: labels.todo,
-      icon: 'checkbox-marked-outline',
-      active: editorState.taskList,
-      onPress: () => {
-        if (canUseDomEditor) dispatch({ type: 'toggleTaskList' });
-        else richEditorRef.current?.insertTodo();
-      },
-    },
-    {
-      key: 'image',
-      label: labels.image,
-      icon: 'image-outline',
-      active: editorState.image,
-      onPress: () => openEditorSheet('image'),
-    },
-    {
-      key: 'link',
-      label: labels.link,
-      icon: 'link-variant',
-      active: editorState.link,
-      onPress: openLinkSheet,
-    },
     ];
-
-    if (onRequestAiAction && aiActions.length > 0) {
-      nextActions.push({
-        key: 'ai',
-        label: labels.ai,
-        icon: 'creation-outline',
-        disabled: Boolean(aiLoadingKey),
-        onPress: () => openEditorSheet('ai'),
-      });
-    }
-
-    nextActions.push(
-    {
-      key: 'audio',
-      label: labels.audio,
-      icon: 'microphone-outline',
-      active: voiceActive,
-      disabled: voiceDisabled,
-      panHandlers: voiceActive ? voicePanHandlers : undefined,
-      onPress: voicePressHandler ?? (() => undefined),
-    },
-    );
-
-    return nextActions;
   }, [
-    aiActions.length,
-    aiLoadingKey,
     canUseDomEditor,
     dispatch,
     editorState.blockquote,
-    editorState.bold,
-    editorState.bulletList,
-    editorState.canRedo,
-    editorState.canUndo,
     editorState.codeBlock,
     editorState.headingLevel,
     editorState.image,
-    editorState.italic,
-    editorState.link,
     editorState.taskList,
-    labels.ai,
-    labels.bold,
-    labels.redo,
-    labels.bulletList,
-    labels.italic,
-    labels.audio,
     labels.image,
-    labels.link,
+    labels.more,
     labels.textStyle,
     labels.todo,
-    labels.undo,
-    onRequestAiAction,
-    openLinkSheet,
     openEditorSheet,
-    voiceActive,
-    voiceDisabled,
-    voicePanHandlers,
-    voicePressHandler,
   ]);
-  const showEditorToolbar = (editorState.focused && !nativeModalVisible) || Boolean(voiceActive);
+  const showEditorToolbar = (editorState.focused && editorState.focusTarget === 'body' && !nativeModalVisible) || Boolean(voiceActive);
 
   return (
     <View style={styles.container}>
       {canUseDomEditor ? (
         <NoteEditorDomAdapter
           noteId={noteId}
+          initialTitle={title}
           initialMarkdown={markdown}
+          titlePlaceholder={titlePlaceholder}
           attachmentSrcMap={attachmentSrcMap}
           editable
           theme={editorTheme}
           labels={labels}
           command={command}
           bottomInset={editorBottomInset}
+          onChangeTitle={handleTitleChange}
           onChangeMarkdown={handleChange}
           onSelectionChange={handleSelectionChange}
           onStateChange={handleStateChange}
           onRequestAttachment={onRequestAttachment}
-          onFlushMarkdown={handleFlushMarkdown}
+          onFlushDraft={handleFlushDraft}
           dom={domProps}
         />
       ) : (
-        <NativeRichTextEditor
-          ref={richEditorRef}
-          noteId={noteId}
-          markdown={markdown}
-          attachmentSrcMap={attachmentSrcMap}
-          theme={editorTheme}
-          labels={labels}
-          bottomInset={editorBottomInset}
-          onChangeMarkdown={handleChange}
-          onSelectionChange={handleSelectionChange}
-          onStateChange={handleStateChange}
-        />
+        <View style={styles.fallbackCanvas}>
+          <TextInput
+            key={noteId}
+            ref={nativeTitleInputRef}
+            defaultValue={title}
+            placeholder={titlePlaceholder}
+            placeholderTextColor={colors.text.tertiary}
+            style={[styles.fallbackTitle, { color: colors.text.primary }]}
+            onChangeText={(nextTitle) => void handleTitleChange(nextTitle)}
+            onFocus={() => handleStateChange({
+              ...DEFAULT_EDITOR_RUNTIME_STATE,
+              ready: true,
+              focused: true,
+              focusTarget: 'title',
+            })}
+            onBlur={() => handleStateChange({
+              ...DEFAULT_EDITOR_RUNTIME_STATE,
+              ready: true,
+              focused: false,
+              focusTarget: 'none',
+            })}
+            accessibilityLabel={titlePlaceholder}
+            returnKeyType="next"
+            onSubmitEditing={() => richEditorRef.current?.focus('start')}
+          />
+          <NativeRichTextEditor
+            ref={richEditorRef}
+            noteId={noteId}
+            markdown={markdown}
+            attachmentSrcMap={attachmentSrcMap}
+            theme={editorTheme}
+            labels={labels}
+            bottomInset={editorBottomInset}
+            onChangeMarkdown={handleChange}
+            onSelectionChange={handleSelectionChange}
+            onStateChange={handleStateChange}
+          />
+        </View>
       )}
       {showEditorToolbar ? (
         <View
@@ -783,6 +749,76 @@ export const NoteEditorBridge = memo(forwardRef<NoteEditorBridgeHandle, NoteEdit
               }}
             />
           ))}
+        </View>
+      </BottomSheetModal>
+      <BottomSheetModal
+        visible={activeSheet === 'more'}
+        onDismiss={closeEditorSheet}
+        title={labels.more}
+        maxHeight="58%"
+        scroll
+      >
+        <View style={styles.imageMenu}>
+          <ImageSourceRow
+            label={labels.bulletList}
+            icon="format-list-bulleted"
+            onPress={() => {
+              closeEditorSheet();
+              if (canUseDomEditor) dispatch({ type: 'toggleBulletList' });
+              else richEditorRef.current?.toggleBulletList();
+            }}
+          />
+          <ImageSourceRow
+            label={labels.link}
+            icon="link-variant"
+            onPress={() => {
+              closeEditorSheet();
+              void afterNativeInteractions().then(openLinkSheet);
+            }}
+          />
+          <ImageSourceRow
+            label={labels.undo}
+            icon="undo"
+            disabled={!editorState.canUndo}
+            onPress={() => {
+              closeEditorSheet();
+              if (canUseDomEditor) dispatch({ type: 'undo' });
+              else richEditorRef.current?.undo();
+            }}
+          />
+          <ImageSourceRow
+            label={labels.redo}
+            icon="redo"
+            disabled={!editorState.canRedo}
+            onPress={() => {
+              closeEditorSheet();
+              if (canUseDomEditor) dispatch({ type: 'redo' });
+              else richEditorRef.current?.redo();
+            }}
+          />
+          {onRequestAiAction && aiActions.length > 0 ? (
+            <ImageSourceRow
+              label={labels.ai}
+              icon="creation-outline"
+              disabled={Boolean(aiLoadingKey)}
+              onPress={() => {
+                closeEditorSheet();
+                void afterNativeInteractions().then(() => openEditorSheet('ai'));
+              }}
+            />
+          ) : null}
+          {voicePressHandler ? (
+            <ImageSourceRow
+              label={labels.audio}
+              icon="microphone-outline"
+              disabled={voiceDisabled}
+              suffix={voiceActive ? '●' : undefined}
+              onPress={() => {
+                closeEditorSheet();
+                voicePressHandler();
+              }}
+            />
+          ) : null}
         </View>
       </BottomSheetModal>
       <BottomSheetModal
@@ -1116,6 +1152,7 @@ function nativeEditorHtml({
         return {
           ready: true,
           focused: document.activeElement === editor,
+          focusTarget: document.activeElement === editor ? 'body' : 'none',
           selection: { from: from, to: to },
           emptySelection: from === to,
           canUndo: document.queryCommandEnabled('undo'),
@@ -1323,7 +1360,7 @@ const NativeRichTextEditor = memo(forwardRef<NativeRichEditorHandle, NativeRichT
   const lastWebMarkdownRef = useRef(markdown);
   const readyRef = useRef(false);
   const flushRequestIdRef = useRef(0);
-  const pendingFlushesRef = useRef(new Map<number, PendingFlush>());
+  const pendingFlushesRef = useRef(new Map<number, PendingMarkdownFlush>());
   const html = useMemo(
     () => nativeEditorHtml({
       markdown,
@@ -1578,6 +1615,20 @@ const styles = StyleSheet.create({
   dom: {
     flex: 1,
     backgroundColor: 'transparent',
+  },
+  fallbackCanvas: {
+    flex: 1,
+    minHeight: 0,
+  },
+  fallbackTitle: {
+    minHeight: 44,
+    marginHorizontal: spacing.xl,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    paddingVertical: 2,
+    fontSize: 32,
+    lineHeight: 38,
+    fontWeight: '800',
   },
   richWebViewContainer: {
     flex: 1,
