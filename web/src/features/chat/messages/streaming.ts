@@ -277,6 +277,13 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function mergeToolDetails(previous: unknown, next: unknown): unknown {
   const incoming = asRecord(next);
+  if (typeof incoming?.textDelta === 'string') {
+    const current = asRecord(previous) ?? {};
+    return {
+      ...current,
+      text: appendWithOverlap(String(current.text ?? ''), incoming.textDelta),
+    };
+  }
   if (incoming?.kind !== 'command_output_delta') {
     return next;
   }

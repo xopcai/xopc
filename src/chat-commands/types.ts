@@ -153,6 +153,8 @@ export type BtwQueryOptions = {
   modelRef?: string;
   /** Run as an isolated one-shot task instead of adding recent session history. */
   includeSessionContext?: boolean;
+  /** Receives visible model text as it arrives for rich command surfaces. */
+  onTextDelta?: (delta: string) => void | Promise<void>;
 };
 
 // ============================================================================
