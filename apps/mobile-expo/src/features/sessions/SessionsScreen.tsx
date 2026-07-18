@@ -271,6 +271,14 @@ export function SessionsScreen() {
 
   const { onEndReached, onMomentumScrollBegin } = useFlatListEndReached(handleLoadMore);
 
+  const listExtraData = useMemo(
+    () => ({
+      selectionMode,
+      selectedKey: [...selectedIds].sort().join('|'),
+    }),
+    [selectedIds, selectionMode],
+  );
+
   const handleRefresh = useCallback(() => {
     void refreshList();
   }, [refreshList]);
@@ -340,7 +348,7 @@ export function SessionsScreen() {
             </View>
           ) : null}
           ListFooterComponent={renderListFooter}
-          extraData={{ selectionMode, selectedCount, selectedKey: [...selectedIds].join('|') }}
+          extraData={listExtraData}
           refreshControl={
             <RefreshControl
               refreshing={sessionsQuery.isFetching && !sessionsQuery.isLoading && !sessionsQuery.isFetchingNextPage}

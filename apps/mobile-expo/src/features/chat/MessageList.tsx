@@ -22,17 +22,12 @@ import { GatewayUnreachableTip } from '../gateway/GatewayUnreachableTip';
 import { ChatRenderErrorBoundary } from './ChatRenderErrorBoundary';
 import { MessageBubble } from './MessageBubble';
 import { isLastAssistantMessage } from './composer-send-helpers';
+import { messageKey } from './message-key';
 import type { Message, ProgressState } from './messages.types';
 import type { MobileWelcomeStarter } from './mobile-welcome-starters';
 import { useChatListScrollFollow } from './use-chat-list-scroll-follow';
 
 const LIST_BASE_PADDING_BOTTOM = 8;
-
-/** Generate a stable key for each message row. */
-function messageKey(msg: Message, index: number): string {
-  if (msg.timestamp) return `${msg.role}-${msg.timestamp}-${index}`;
-  return `${msg.role}-${index}`;
-}
 
 function starterIconSource(icon: string): string {
   switch (icon) {

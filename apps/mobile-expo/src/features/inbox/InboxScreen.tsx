@@ -110,6 +110,14 @@ export function InboxScreen() {
 
   const { onEndReached, onMomentumScrollBegin } = useFlatListEndReached(handleLoadMore);
 
+  const listExtraData = useMemo(
+    () => ({
+      selectionMode,
+      selectedKey: [...selectedIds].sort().join('|'),
+    }),
+    [selectedIds, selectionMode],
+  );
+
   const captureMutation = useMutation({
     mutationFn: async (payload: CapturePayload) => {
       if (payload.type === 'text') {
@@ -377,7 +385,7 @@ export function InboxScreen() {
           onEndReached={onEndReached}
           onEndReachedThreshold={0.5}
           onMomentumScrollBegin={onMomentumScrollBegin}
-          extraData={{ selectionMode, selectedCount, selectedKey: [...selectedIds].join('|') }}
+          extraData={listExtraData}
           contentContainerStyle={[styles.listContent, { paddingBottom: listBottomPadding }]}
           refreshControl={
             <RefreshControl

@@ -38,7 +38,7 @@ import {
 import { queryKeys } from '../../query/keys';
 import { refreshNotesList } from '../../query/infinite-list-sync';
 import { useGatewayConfigured } from '../../query/sessions';
-import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, spacing, useTheme } from '../../theme';
+import { FLOATING_BOTTOM_OFFSET, floatingBottomPadding, spacing, typography, useTheme } from '../../theme';
 
 import { useNoteTagsStore } from '../../stores/note-tags-store';
 import { NoteTagPickerSheet } from './NoteTagPickerSheet';
@@ -251,7 +251,10 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
     [exitSelectionMode, pm.actionFailed, pm.tagUpdated, refreshList, selectedCount, selectedIds],
   );
 
-  const notes = notesQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const notes = useMemo(
+    () => notesQuery.data?.pages.flatMap((page) => page.items) ?? [],
+    [notesQuery.data?.pages],
+  );
 
   useEffect(() => {
     ensureNoteTags(collectTagsFromNotes(notes));
@@ -290,6 +293,14 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
   }, [notesQuery.fetchNextPage, notesQuery.hasNextPage, notesQuery.isFetchingNextPage]);
 
   const { onEndReached, onMomentumScrollBegin } = useFlatListEndReached(handleLoadMore);
+
+  const listExtraData = useMemo(
+    () => ({
+      selectionMode,
+      selectedKey: [...selectedIds].sort().join('|'),
+    }),
+    [selectedIds, selectionMode],
+  );
 
   const onRefresh = useCallback(async () => {
     await refreshList();
@@ -419,7 +430,7 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
             onMomentumScrollBegin={onMomentumScrollBegin}
             ListFooterComponent={notesQuery.isFetchingNextPage ? <View style={styles.footerLoader}><ActivityIndicator size="small" /></View> : null}
             contentContainerStyle={[styles.list, { paddingBottom: listBottomPadding }]}
-            extraData={{ selectionMode, selectedCount, selectedKey: [...selectedIds].join('|') }}
+            extraData={listExtraData}
             refreshControl={
               <RefreshControl refreshing={notesQuery.isFetching && !notesQuery.isLoading && !notesQuery.isFetchingNextPage} onRefresh={onRefresh} />
             }
@@ -428,10 +439,10 @@ export function NotesScreen({ embedded = false, onRequestHome }: NotesScreenProp
                 <View style={[styles.emptyIconWrap, { backgroundColor: colors.accent.selectionBg }]}>
                   <Icon source="note-text-outline" size={40} color={colors.accent.primary} />
                 </View>
-                <Text style={{ color: colors.text.secondary, marginTop: 12, fontSize: 16, fontWeight: '600' }}>
+                <Text style={{ color: colors.text.secondary, marginTop: spacing.md, ...typography.heading }}>
                   {searchText.trim() ? pm.searchNoResults : tagFilter === 'all' ? pm.empty : pm.tagEmptyFiltered}
                 </Text>
-                <Text style={{ color: colors.text.tertiary, fontSize: 13, textAlign: 'center', maxWidth: 240 }}>
+                <Text style={{ color: colors.text.tertiary, textAlign: 'center', maxWidth: 240, ...typography.label }}>
                   {searchText.trim() ? pm.searchPlaceholder : tagFilter === 'all' ? pm.emptyHint : pm.tagEmptyFilteredHint}
                 </Text>
               </View>
