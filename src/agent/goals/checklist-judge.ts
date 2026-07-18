@@ -1,7 +1,7 @@
 import type { UserMessage } from '@earendil-works/pi-ai';
-import { complete } from '@earendil-works/pi-ai/compat';
 
 import { resolveModel } from '../../providers/index.js';
+import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 
 import {
   DEFAULT_JUDGE_TIMEOUT_MS,
@@ -121,7 +121,7 @@ export async function decomposeGoalChecklist(opts: {
       timestamp: Date.now(),
     };
     const apiKey = await resolveGoalJudgeApiKey(model);
-    const result = await complete(
+    const result = await completeWithResolvedCredentials(
       model,
       { messages: [user] },
       { apiKey, maxTokens: 2000, temperature: 0, signal: merged },
@@ -247,7 +247,7 @@ export async function evaluateGoalChecklistJudge(opts: {
       timestamp: Date.now(),
     };
     const apiKey = await resolveGoalJudgeApiKey(model);
-    const result = await complete(
+    const result = await completeWithResolvedCredentials(
       model,
       { messages: [user] },
       { apiKey, maxTokens: 1500, temperature: 0, signal: merged },

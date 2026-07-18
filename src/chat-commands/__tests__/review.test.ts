@@ -106,10 +106,56 @@ describe('/review command', () => {
     expect(review?.overallCorrectness).toBe('patch is incorrect');
     expect(Array.isArray(review?.findings)).toBe(true);
     expect(btwQuery).toHaveBeenCalledWith(expect.any(String), {
-      maxTokens: 8192,
-      temperature: 0.1,
+      maxTokens: 16384,
+      includeSessionContext: false,
       modelRef: 'openai/gpt-4.1',
     });
+  });
+
+  it('uses a session-selected model before the agent review role', async () => {
+    writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
+    const btwQuery = vi.fn(async () => ({
+      text: JSON.stringify({
+        findings: [],
+        overall_correctness: 'patch is correct',
+        overall_explanation: 'No correctness issues found.',
+        summary: 'No findings',
+      }),
+    }));
+    const context = createContext(repo, btwQuery);
+    const roles = context.config.agents.list[0]?.models.roles as Record<string, { model: string }>;
+    roles.review = { model: 'anthropic/claude-sonnet-4-5' };
+    context.getSessionConfigStore = () => ({
+      get: vi.fn(async () => ({ modelOverride: 'openai/gpt-5.3-codex' })),
+    }) as never;
+
+    await commandRegistry.execute('review', context, '');
+
+    expect(btwQuery).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      modelRef: 'openai/gpt-5.3-codex',
+      includeSessionContext: false,
+    }));
+  });
+
+  it('uses an agent review role when the session has no model override', async () => {
+    writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
+    const btwQuery = vi.fn(async () => ({
+      text: JSON.stringify({
+        findings: [],
+        overall_correctness: 'patch is correct',
+        overall_explanation: 'No correctness issues found.',
+        summary: 'No findings',
+      }),
+    }));
+    const context = createContext(repo, btwQuery);
+    const roles = context.config.agents.list[0]?.models.roles as Record<string, { model: string }>;
+    roles.review = { model: 'anthropic/claude-sonnet-4-5' };
+
+    await commandRegistry.execute('review', context, '');
+
+    expect(btwQuery).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({
+      modelRef: 'anthropic/claude-sonnet-4-5',
+    }));
   });
 
   it('emits review trace tool events for streaming clients', async () => {

@@ -1,7 +1,9 @@
 {
   "onboarding": {
     "title": "Welcome to xopc",
-    "subtitle": "Set up the model first, then optionally add personal context.",
+    "subtitle": "Tell me what to call you, then set up your AI model to start chatting.",
+    "step0Title": "What should I call you?",
+    "step0Subtitle": "This helps the assistant address you naturally throughout your conversations.",
     "step1Title": "Choose an AI Provider",
     "step1Subtitle": "Select the AI service you'd like to use.",
     "step2Title": "Enter your API key",
@@ -10,23 +12,16 @@
     "step2SecurityNote": "🔒 Keys never leave your machine.",
     "step3Title": "Choose a default model",
     "step3Subtitle": "New chats will use this model first. You can change it anytime in settings.",
-    "profileTitle": "About you",
-    "profileSubtitle": "Optional. This helps the assistant address you naturally and understand your timezone and preferences.",
     "profileCallNameLabel": "What should xopc call you?",
     "profileCallNamePlaceholder": "For example: Alex, Joyce, Mic",
-    "profileTimezoneLabel": "Timezone",
-    "profileTimezonePlaceholder": "Select a timezone",
-    "profileNotesLabel": "Notes",
-    "profileNotesPlaceholder": "For example: I prefer concise answers; I usually work in English; weekdays are best for reminders.",
     "modelSaveFailed": "Could not save the default chat model. Please try again.",
     "back": "Back",
     "continue": "Continue",
     "startChatting": "Start chatting",
-    "skipProfile": "Skip and start chatting",
+    "skipCallName": "Skip — I'll set this later",
     "skipSetup": "Skip — I'll set this up later",
     "setupComplete": "You're all set! Start chatting below.",
     "stepOf": "Step {{current}} of {{total}}",
-    "optionalStep": "Optional",
     "providerRecommended": "Recommended"
   }
 }

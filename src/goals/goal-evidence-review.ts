@@ -1,7 +1,7 @@
 import type { UserMessage } from '@earendil-works/pi-ai';
-import { complete } from '@earendil-works/pi-ai/compat';
 
 import { getApiKey, resolveModel } from '../providers/index.js';
+import { completeWithResolvedCredentials } from '../providers/model-call.js';
 import type { GoalEvidence, GoalEvidenceRequirement } from './types.js';
 
 export type GoalEvidenceReviewVerdict = 'approved' | 'needs_more_evidence' | 'rejected';
@@ -82,7 +82,7 @@ export async function reviewGoalEvidenceRequirement(input: {
       ].filter(Boolean).join('; ')),
     ].join('\n');
     const message: UserMessage = { role: 'user', content: prompt, timestamp: Date.now() };
-    const response = await complete(model, { messages: [message] }, {
+    const response = await completeWithResolvedCredentials(model, { messages: [message] }, {
       apiKey,
       maxTokens: 700,
       temperature: 0,

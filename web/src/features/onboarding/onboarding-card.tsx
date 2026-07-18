@@ -5,31 +5,29 @@ import { Link } from 'react-router-dom';
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { Button } from '@/components/ui/button';
 import { SecretInput } from '@/components/ui/secret-input';
-import { Select, SelectOption } from '@/components/ui/popover-select';
 import type { ConfiguredModel } from '@/features/chat/api/registry-api';
 import { fetchConfiguredModelsCached, invalidateConfiguredModelsCache } from '@/features/chat/api/registry-api';
-import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { dispatchConfigReload } from '@/features/gateway/dispatch-config-reload';
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { OnboardingModelSelect } from '@/features/onboarding/onboarding-model-select';
 import { OnboardingProviderGrid } from '@/features/onboarding/onboarding-provider-grid';
-import { fetchModelsJson, saveModelsJson } from '@/features/settings/models-json-api';
 import { buildProviderConfigFromPresetProviderId } from '@/features/settings/models/models-settings-lib';
-import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
-import { patchProviderApiKeys } from '@/features/settings/providers-api';
+import { fetchModelsJson, saveModelsJson } from '@/features/settings/models-json-api';
+import {
+  parseUserMarkdown,
+  detectBrowserTimezone,
+  serializeUserMarkdown,
+  type UserFields,
+} from '@/features/settings/agents/agent-profile-markdown';
 import {
   fetchUserProfileContent,
   saveUserProfileContent,
 } from '@/features/settings/agents-admin-api';
 import { fetchGlobalDefaults, updateGlobalDefaultModels } from '@/features/settings/global-defaults-api';
-import {
-  detectBrowserTimezone,
-  parseUserMarkdown,
-  serializeUserMarkdown,
-  TIMEZONE_OPTIONS,
-  type UserFields,
-} from '@/features/settings/agents/agent-profile-markdown';
-import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
+import { PROVIDER_ENRICHMENT } from '@/features/settings/provider-enrichment';
+import { patchProviderApiKeys } from '@/features/settings/providers-api';
 import { messages } from '@/i18n/messages';
+import { secretInputLabelsFromChannels } from '@/lib/secret-input-labels';
 import { useLocaleStore } from '@/stores/locale-store';
 
 interface OnboardingCardProps {
@@ -38,8 +36,10 @@ interface OnboardingCardProps {
   canDismiss?: boolean;
 }
 
+type OnboardingStep = 'callName' | 'provider' | 'apiKey' | 'model';
+
 type OnboardingState = {
-  step: 'provider' | 'apiKey' | 'model' | 'profile';
+  step: OnboardingStep;
   selectedProvider: string | null;
   apiKey: string;
   busy: boolean;
@@ -47,7 +47,7 @@ type OnboardingState = {
   models: ConfiguredModel[];
   selectedModelId: string | null;
   modelsLoading: boolean;
-  profile: UserFields;
+  callName: string;
 };
 
 type OnboardingAction =
@@ -55,7 +55,7 @@ type OnboardingAction =
   | { type: 'reset-models' };
 
 const initialOnboarding: OnboardingState = {
-  step: 'provider',
+  step: 'callName',
   selectedProvider: null,
   apiKey: '',
   busy: false,
@@ -63,12 +63,7 @@ const initialOnboarding: OnboardingState = {
   models: [],
   selectedModelId: null,
   modelsLoading: false,
-  profile: {
-    callName: '',
-    pronouns: '',
-    timezone: detectBrowserTimezone(),
-    notes: '',
-  },
+  callName: '',
 };
 
 function onboardingReducer(state: OnboardingState, action: OnboardingAction): OnboardingState {
@@ -80,19 +75,20 @@ function onboardingReducer(state: OnboardingState, action: OnboardingAction): On
   }
 }
 
+const STEP_ORDER: OnboardingStep[] = ['callName', 'provider', 'apiKey', 'model'];
+
+const stepNumber = (step: OnboardingStep): number => STEP_ORDER.indexOf(step) + 1;
+
 export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: OnboardingCardProps) {
   const language = useLocaleStore((s) => s.language);
   const o = messages(language).onboarding;
 
   const [state, dispatch] = useReducer(onboardingReducer, initialOnboarding);
-  const { step, selectedProvider, apiKey, busy, error, models, selectedModelId, modelsLoading, profile } = state;
+  const { step, selectedProvider, apiKey, busy, error, models, selectedModelId, modelsLoading, callName } = state;
 
   const stepLabel = useMemo(
-    () => {
-      if (step === 'profile') return o.optionalStep;
-      return o.stepOf.replace('{{current}}', String(step === 'provider' ? 1 : step === 'apiKey' ? 2 : 3)).replace('{{total}}', '3');
-    },
-    [o.optionalStep, o.stepOf, step],
+    () => o.stepOf.replace('{{current}}', String(stepNumber(step))).replace('{{total}}', '4'),
+    [o.stepOf, step],
   );
 
   const loadModels = useCallback(async (providerId: string) => {
@@ -100,7 +96,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
     try {
       const list = await fetchConfiguredModelsCached(true);
       const filtered = list
-        .filter((m) => m.provider === providerId)
+        .filter((model) => model.provider === providerId)
         .sort((a, b) => {
           if (a.recommended !== b.recommended) return a.recommended ? -1 : 1;
           return (a.name || a.id).localeCompare(b.name || b.id, undefined, { sensitivity: 'base' });
@@ -109,11 +105,11 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         type: 'patch',
         patch: { models: filtered, selectedModelId: filtered[0]?.id ?? null },
       });
-    } catch (e) {
+    } catch (cause) {
       dispatch({
         type: 'patch',
         patch: {
-          error: e instanceof Error ? e.message : String(e),
+          error: cause instanceof Error ? cause.message : String(cause),
           models: [],
           selectedModelId: null,
         },
@@ -130,15 +126,8 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
         const defaults = await fetchGlobalDefaults();
         const recommendation = defaults.recommendations[0];
         if (!recommendation || cancelled) return;
-        dispatch({
-          type: 'patch',
-          patch: {
-            selectedProvider: recommendation.provider,
-            step: 'model',
-            error: null,
-          },
-        });
-        await loadModels(recommendation.provider);
+        // Keep the first step visible; the recommendation is used when the user continues.
+        dispatch({ type: 'patch', patch: { selectedProvider: recommendation.provider } });
       } catch {
         /* keep the manual provider step */
       }
@@ -146,7 +135,16 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
     return () => {
       cancelled = true;
     };
-  }, [loadModels]);
+  }, []);
+
+  const continueFromCallName = () => {
+    if (!selectedProvider) {
+      dispatch({ type: 'patch', patch: { step: 'provider' } });
+      return;
+    }
+    dispatch({ type: 'patch', patch: { step: 'model' } });
+    void loadModels(selectedProvider);
+  };
 
   const onContinueApiKey = async () => {
     if (!selectedProvider || !apiKey.trim()) return;
@@ -171,44 +169,18 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
       }
       await loadModels(selectedProvider);
       dispatch({ type: 'patch', patch: { step: 'model' } });
-    } catch (e) {
-      dispatch({ type: 'patch', patch: { error: e instanceof Error ? e.message : String(e) } });
+    } catch (cause) {
+      dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } });
     } finally {
       dispatch({ type: 'patch', patch: { busy: false } });
     }
   };
 
-  const loadProfileDraft = async () => {
-    try {
-      const content = await fetchUserProfileContent();
-      const parsed = parseUserMarkdown(content);
-      dispatch({
-        type: 'patch',
-        patch: {
-          profile: {
-            ...parsed,
-            timezone: parsed.timezone || detectBrowserTimezone(),
-          },
-        },
-      });
-    } catch {
-      dispatch({
-        type: 'patch',
-        patch: {
-          profile: {
-            ...profile,
-            timezone: profile.timezone || detectBrowserTimezone(),
-          },
-        },
-      });
-    }
-  };
-
-  const onContinueModelSetup = async () => {
-    if (!selectedProvider || !selectedModelId) return;
-    const modelRef = models.find((m) => m.id === selectedModelId)?.id ?? selectedModelId;
+  const onFinish = async () => {
+    if (!selectedModelId) return;
     dispatch({ type: 'patch', patch: { busy: true, error: null } });
     try {
+      const modelRef = models.find((model) => model.id === selectedModelId)?.id ?? selectedModelId;
       await updateGlobalDefaultModels({
         defaultRole: 'deep',
         roles: {
@@ -218,31 +190,31 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
       void revalidateGatewayConfig();
       void invalidateConfiguredModelsCache();
       dispatchConfigReload();
-      await loadProfileDraft();
-      dispatch({ type: 'patch', patch: { step: 'profile' } });
-    } catch (e) {
-      dispatch({ type: 'patch', patch: { error: e instanceof Error ? e.message : String(e) } });
-    } finally {
-      dispatch({ type: 'patch', patch: { busy: false } });
-    }
-  };
 
-  const onFinish = async (saveProfile: boolean) => {
-    dispatch({ type: 'patch', patch: { busy: true, error: null } });
-    try {
-      if (saveProfile) {
-        await saveUserProfileContent(serializeUserMarkdown(profile));
+      const detectedTimezone = detectBrowserTimezone();
+      let profile: UserFields = {
+        callName,
+        pronouns: '',
+        timezone: detectedTimezone,
+        notes: '',
+      };
+      try {
+        const existingProfile = parseUserMarkdown(await fetchUserProfileContent());
+        profile = {
+          ...existingProfile,
+          callName: callName.trim() || existingProfile.callName,
+          timezone: existingProfile.timezone || detectedTimezone,
+        };
+      } catch {
+        // A profile has not been created yet; use the onboarding values.
       }
+      await saveUserProfileContent(serializeUserMarkdown(profile));
       await onComplete();
-    } catch (e) {
-      dispatch({ type: 'patch', patch: { error: e instanceof Error ? e.message : String(e) } });
+    } catch (cause) {
+      dispatch({ type: 'patch', patch: { error: cause instanceof Error ? cause.message : String(cause) } });
     } finally {
       dispatch({ type: 'patch', patch: { busy: false } });
     }
-  };
-
-  const patchProfile = (patch: Partial<UserFields>) => {
-    dispatch({ type: 'patch', patch: { profile: { ...profile, ...patch } } });
   };
 
   return (
@@ -265,11 +237,52 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
       </div>
 
       <div className="mt-6">
+        {step === 'callName' ? (
+          <div className="flex flex-col gap-4">
+            <div>
+              <h3 className="text-base font-medium text-fg">{o.step0Title}</h3>
+              <p className="mt-1 text-sm text-fg-muted">{o.step0Subtitle}</p>
+            </div>
+            <label className="block text-sm font-medium text-fg">
+              {o.profileCallNameLabel}
+              <input
+                value={callName}
+                onChange={(event) => dispatch({ type: 'patch', patch: { callName: event.target.value } })}
+                placeholder={o.profileCallNamePlaceholder}
+                className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2.5 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
+                autoFocus
+              />
+            </label>
+            <div className="flex flex-wrap justify-between gap-2">
+              <button
+                type="button"
+                className="text-xs font-medium text-fg-muted hover:text-fg hover:underline"
+                onClick={continueFromCallName}
+              >
+                {o.skipCallName}
+              </button>
+              <Button
+                type="button"
+                className="bg-accent text-white hover:bg-accent/90"
+                onClick={continueFromCallName}
+              >
+                {o.continue}
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         {step === 'provider' ? (
           <div className="flex flex-col gap-4">
             <div>
               <h3 className="text-base font-medium text-fg">{o.step1Title}</h3>
-              <p className="mt-1 text-sm text-fg-muted">{o.step1Subtitle}</p>
+              {callName.trim() ? (
+                <p className="mt-1 text-sm text-fg-muted">
+                  {language === 'zh' ? `好的 ${callName}，${o.step1Subtitle}` : `Great, ${callName}! ${o.step1Subtitle}`}
+                </p>
+              ) : (
+                <p className="mt-1 text-sm text-fg-muted">{o.step1Subtitle}</p>
+              )}
             </div>
             <OnboardingProviderGrid
               onSelect={(id) => {
@@ -280,10 +293,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
               }}
             />
             <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-              <Link
-                to="/settings/credentials"
-                className="text-xs font-medium text-accent-fg hover:underline"
-              >
+              <Link to="/settings/credentials" className="text-xs font-medium text-accent-fg hover:underline">
                 {language === 'zh' ? '配置其他模型…' : 'Configure other models…'}
               </Link>
               {canDismiss ? (
@@ -393,64 +403,7 @@ export function OnboardingCard({ onComplete, onDismiss, canDismiss = true }: Onb
                 type="button"
                 className="bg-accent text-white hover:bg-accent/90"
                 disabled={busy || !selectedModelId || modelsLoading}
-                onClick={() => void onContinueModelSetup()}
-              >
-                {o.continue}
-              </Button>
-            </div>
-          </div>
-        ) : null}
-
-        {step === 'profile' ? (
-          <div className="flex flex-col gap-4">
-            <div>
-              <h3 className="text-base font-medium text-fg">{o.profileTitle}</h3>
-              <p className="mt-1 text-sm text-fg-muted">{o.profileSubtitle}</p>
-            </div>
-            <label className="block text-sm font-medium text-fg">
-              {o.profileCallNameLabel}
-              <input
-                value={profile.callName}
-                onChange={(event) => patchProfile({ callName: event.target.value })}
-                placeholder={o.profileCallNamePlaceholder}
-                className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
-              />
-            </label>
-            <label className="block text-sm font-medium text-fg">
-              {o.profileTimezoneLabel}
-              <Select
-                value={profile.timezone}
-                onChange={(event) => patchProfile({ timezone: event.target.value })}
-                className="mt-1 w-full rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
-              >
-                <SelectOption value="">{o.profileTimezonePlaceholder}</SelectOption>
-                {TIMEZONE_OPTIONS.map((tz) => (
-                  <SelectOption key={tz.value} value={tz.value}>
-                    {language === 'zh' ? tz.labelZh : tz.labelEn}
-                  </SelectOption>
-                ))}
-              </Select>
-            </label>
-            <label className="block text-sm font-medium text-fg">
-              {o.profileNotesLabel}
-              <textarea
-                value={profile.notes}
-                onChange={(event) => patchProfile({ notes: event.target.value })}
-                placeholder={o.profileNotesPlaceholder}
-                rows={4}
-                className="mt-1 w-full resize-none rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/30"
-              />
-            </label>
-            {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
-            <div className="flex flex-wrap justify-between gap-2">
-              <Button type="button" variant="secondary" disabled={busy} onClick={() => void onFinish(false)}>
-                {o.skipProfile}
-              </Button>
-              <Button
-                type="button"
-                className="bg-accent text-white hover:bg-accent/90"
-                disabled={busy}
-                onClick={() => void onFinish(true)}
+                onClick={() => void onFinish()}
               >
                 {o.startChatting}
               </Button>

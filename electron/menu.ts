@@ -115,7 +115,7 @@ export function buildAppMenuModel(
       id: 'view',
       label: t.view.label,
       items: [
-        item('view.toggleSidebar', t.view.toggleSidebar),
+        item('view.toggleSidebar', t.view.toggleSidebar, { accelerator: 'CmdOrCtrl+B' }),
         separator(),
         item('view.reload', t.view.reload, { role: 'reload' }),
         ...(showDeveloperMenuItems
@@ -129,7 +129,10 @@ export function buildAppMenuModel(
         item('view.zoomIn', t.view.zoomIn, { role: 'zoomIn' }),
         item('view.zoomOut', t.view.zoomOut, { role: 'zoomOut' }),
         separator(),
-        item('view.toggleFullscreen', t.view.toggleFullscreen, { role: 'togglefullscreen' }),
+        item('view.toggleFullscreen', t.view.toggleFullscreen, {
+          accelerator: 'F11',
+          role: 'togglefullscreen',
+        }),
       ],
     },
 

@@ -1,8 +1,17 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { APP_CHROME_DRAG_CLASS } from './app-chrome';
 import { GatewayConnectLanding } from './gateway-connect-landing';
+
+// Force English locale so assertions are locale-independent.
+vi.mock('@/lib/storage', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/storage')>();
+  return {
+    ...actual,
+    getLanguage: (): 'en' | 'zh' => 'en',
+  };
+});
 
 describe('GatewayConnectLanding', () => {
   it('provides an Electron drag region while a gateway token is required', () => {

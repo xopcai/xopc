@@ -13,6 +13,7 @@ import { useDebounce } from 'use-debounce';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { buildAutomationActionHits } from '@/features/search/global-command-palette/actions-provider';
+import { buildDesktopMenuActionHits } from '@/features/search/global-command-palette/desktop-menu-provider';
 import {
   commandPaletteGroupCaps,
   commandPaletteGroupSortKey,
@@ -338,7 +339,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
         extensionsGroupLabel: groups.extensions,
       });
 
-      const [commands, skillsPayload, globalSearchHits, sessions, files] = await Promise.all([
+      const [commands, skillsPayload, globalSearchHits, sessions, files, desktopMenuActionHits] = await Promise.all([
         fetchCommandsCached(),
         getSkillsCached(),
         q ? searchGlobal(q, { types: ['project'], limit: 8 }).catch(() => []) : [],
@@ -354,6 +355,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
           }).catch(() => []);
           return items;
         })(),
+        buildDesktopMenuActionHits(language, close),
       ]);
 
       const projectHits: Array<Omit<GlobalHit, 'rank'>> = globalSearchHits.map((h) => ({
@@ -448,6 +450,7 @@ function GlobalCommandPalettePanel({ onClose }: { onClose: () => void }) {
         ...routeHits,
         ...quickHits,
         ...actionHits,
+        ...desktopMenuActionHits,
         ...extensionHits,
         ...settingsFieldHits,
         ...projectHits,

@@ -1,9 +1,10 @@
-import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
+import { type UserMessage } from '@earendil-works/pi-ai/compat';
 
 import { resolveModelRef } from '../../config/agent-typed-models.js';
 import { getAgentDefaultModelRef } from '../../config/schema.js';
 import type { Config } from '../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
+import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import { createLogger } from '../../utils/logger.js';
 
 import {
@@ -47,7 +48,7 @@ export class WorkflowDraftService {
         content: messageContent,
         timestamp: Date.now(),
       };
-      const result = await complete(
+      const result = await completeWithResolvedCredentials(
         model,
         { messages: [userMsg] },
         { maxTokens: 4096, temperature: attempt === 0 ? 0.25 : 0.1, signal: signal as AbortSignal },

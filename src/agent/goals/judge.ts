@@ -1,7 +1,7 @@
 import type { UserMessage } from '@earendil-works/pi-ai';
-import { complete } from '@earendil-works/pi-ai/compat';
 
 import { getApiKey, resolveModel } from '../../providers/index.js';
+import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 
 import type { GoalUiLocale } from './goal-locale.js';
 import {
@@ -214,7 +214,7 @@ export async function judgeGoalHermesStyle(
     };
 
     const apiKey = await resolveGoalJudgeApiKey(model);
-    const result = await complete(
+    const result = await completeWithResolvedCredentials(
       model,
       {
         messages: [combinedUser],

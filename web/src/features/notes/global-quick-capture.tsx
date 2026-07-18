@@ -117,11 +117,13 @@ function GlobalQuickCaptureModal({ onClose }: { onClose: () => void }) {
 
 export function GlobalQuickCaptureHost() {
   const [open, setOpen] = useState(false);
+  const [recordingShortcut, setRecordingShortcut] = useState(false);
   const token = useGatewayStore((s) => s.token);
   const shortcut = useQuickCaptureShortcutStore((s) => s.shortcut);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (recordingShortcut) return;
       if (matchesShortcut(event, shortcut)) {
         event.preventDefault();
         if (token) {
@@ -131,7 +133,15 @@ export function GlobalQuickCaptureHost() {
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [shortcut, token]);
+  }, [recordingShortcut, shortcut, token]);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      setRecordingShortcut(Boolean((event as CustomEvent<{ active?: boolean }>).detail?.active));
+    };
+    window.addEventListener('quick-capture-shortcut-recording', handler);
+    return () => window.removeEventListener('quick-capture-shortcut-recording', handler);
+  }, []);
 
   useEffect(() => {
     const handler = () => {

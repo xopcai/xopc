@@ -1,8 +1,9 @@
-import { complete, type UserMessage } from '@earendil-works/pi-ai/compat';
+import { type UserMessage } from '@earendil-works/pi-ai/compat';
 import type { Api, Model } from '@earendil-works/pi-ai';
 
 import type { Config } from '../../config/schema.js';
 import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
+import { completeWithResolvedCredentials } from '../../providers/model-call.js';
 import { createLogger } from '../../utils/logger.js';
 import { truncateAtSentenceBoundary } from './sentence-boundary.js';
 
@@ -110,7 +111,7 @@ export async function summarizeForTts(options: SummarizeForTtsOptions): Promise<
         ? AbortSignal.any([signal, timeoutSignal])
         : signal ?? timeoutSignal;
 
-    const result = await complete(
+    const result = await completeWithResolvedCredentials(
       model,
       { messages: [userMsg] },
       {

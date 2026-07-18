@@ -13,6 +13,11 @@ vi.mock('@earendil-works/pi-ai/compat', async (importOriginal) => {
   return { ...mod, complete: vi.fn() };
 });
 
+vi.mock('../../../providers/index.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../providers/index.js')>();
+  return { ...actual, getApiKey: vi.fn(async () => 'test-api-key') };
+});
+
 function htmlBody(inner: string) {
   return `<html><head></head><body>${inner}</body></html>`;
 }

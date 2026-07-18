@@ -1114,6 +1114,8 @@
     "globalCommandPalette": "Command palette",
     "navCommandPalette": "Open command palette",
     "navQuickCapture": "Quick capture note",
+    "navToggleSidebar": "Toggle sidebar",
+    "navToggleFullscreen": "Toggle full screen",
     "navCloseDialog": "Close dialog / settings",
     "chatSend": "Send message",
     "chatNewLine": "New line",
@@ -1124,7 +1126,13 @@
     "editorBulletList": "Bullet list",
     "editorOrderedList": "Ordered list",
     "editorTaskList": "Task list",
-    "desktopOnly": "Desktop app only"
+    "desktopOnly": "Desktop app only",
+    "quickCaptureShortcutTitle": "Quick capture shortcut",
+    "quickCaptureShortcutDescription": "Set the shortcut used to capture a note while the app is focused.",
+    "quickCaptureShortcutChange": "Change shortcut",
+    "quickCaptureShortcutReset": "Reset",
+    "quickCaptureShortcutRecording": "Press a shortcut (Esc to cancel)",
+    "quickCaptureShortcutConflict": "That shortcut is already used by a core navigation action."
   },
   "mcpSettings": {
     "title": "External tools (MCP)",
