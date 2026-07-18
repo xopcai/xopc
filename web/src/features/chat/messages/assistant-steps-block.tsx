@@ -459,6 +459,10 @@ function StepRow({
   const isStreaming = block.status === 'running';
   const isError = block.status === 'error';
   const resultText = toolResultText;
+  const liveOutputText = isStreaming && block.details && typeof block.details === 'object'
+    && !Array.isArray(block.details) && typeof (block.details as { text?: unknown }).text === 'string'
+    ? (block.details as { text: string }).text
+    : '';
 
   let outputPreview = resultText ?? '';
   if (outputPreview) {
@@ -533,6 +537,11 @@ function StepRow({
           <p className="min-w-0 rounded-md bg-accent-soft/40 px-1.5 py-1 text-xs break-words text-fg-muted [overflow-wrap:anywhere] dark:bg-accent-soft/25">
             {detailLine}
           </p>
+        ) : null}
+        {liveOutputText ? (
+          <pre className="max-h-48 min-w-0 overflow-y-auto overflow-x-hidden rounded-md bg-surface-hover/60 p-2 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-fg-muted [overflow-wrap:anywhere] dark:bg-surface-hover/35">
+            {liveOutputText}
+          </pre>
         ) : null}
         {showLegacyDetails ? (
           <details className="group min-w-0 text-xs">

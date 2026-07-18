@@ -109,6 +109,7 @@ describe('/review command', () => {
       maxTokens: 16384,
       includeSessionContext: false,
       modelRef: 'openai/gpt-4.1',
+      onTextDelta: expect.any(Function),
     });
   });
 
@@ -192,6 +193,32 @@ describe('/review command', () => {
       type: 'tool_execution_end',
       toolName: 'review.model_judge',
       isError: false,
+    }));
+  });
+
+  it('forwards reviewer text deltas to the running judge tool', async () => {
+    writeFileSync(join(repo, 'app.ts'), 'export const value = 2;\n');
+    const emitEvent = vi.fn();
+    const btwQuery = vi.fn(async (_prompt: string, options?: { onTextDelta?: (delta: string) => Promise<void> }) => {
+      await options?.onTextDelta?.('{\"findings\": []}');
+      return {
+        text: JSON.stringify({
+          findings: [],
+          overall_correctness: 'patch is correct',
+          overall_explanation: 'No correctness issues found.',
+          summary: 'No findings',
+        }),
+      };
+    });
+
+    await commandRegistry.execute('review', createContext(repo, btwQuery, emitEvent), '');
+
+    expect(emitEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'tool_execution_update',
+      toolName: 'review.model_judge',
+      partialResult: {
+        content: [{ type: 'text', text: '{\"findings\": []}' }],
+      },
     }));
   });
 

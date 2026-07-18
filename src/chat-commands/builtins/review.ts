@@ -54,6 +54,24 @@ async function emitToolEnd(
   });
 }
 
+async function emitToolTextDelta(
+  ctx: CommandContext,
+  toolCallId: string,
+  toolName: string,
+  delta: string,
+): Promise<void> {
+  if (!delta) return;
+  await ctx.emitEvent?.({
+    type: 'tool_execution_update',
+    toolCallId,
+    toolName,
+    args: {},
+    partialResult: {
+      content: [{ type: 'text', text: delta }],
+    },
+  });
+}
+
 function truncateForPrompt(text: string): { text: string; truncated: boolean } {
   if (text.length <= MAX_DIFF_CHARS) return { text, truncated: false };
   return {
@@ -266,9 +284,10 @@ async function buildReview(ctx: CommandContext, args: string): Promise<ReviewOut
   });
   const answer = ctx.btwQuery
     ? await ctx.btwQuery(prompt, {
-        maxTokens: REVIEW_JUDGE_MAX_TOKENS,
-        includeSessionContext: false,
-        ...(reviewerModelRef ? { modelRef: reviewerModelRef } : {}),
+      maxTokens: REVIEW_JUDGE_MAX_TOKENS,
+      includeSessionContext: false,
+      onTextDelta: (delta) => emitToolTextDelta(ctx, judgeToolCallId, 'review.model_judge', delta),
+      ...(reviewerModelRef ? { modelRef: reviewerModelRef } : {}),
       })
     : { text: '', error: 'Review model query is not available in this command context.' };
   let judgeFailure = answer.error

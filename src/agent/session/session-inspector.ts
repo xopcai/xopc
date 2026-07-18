@@ -138,6 +138,7 @@ export class SessionInspector {
       maxTokens: options?.maxTokens,
       temperature: options?.temperature,
       includeSessionContext: options?.includeSessionContext,
+      onTextDelta: options?.onTextDelta,
       credentialOptions: profile && config
         ? { agentId: profile.agentId, appConfig: config }
         : undefined,
