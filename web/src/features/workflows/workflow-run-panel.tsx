@@ -1,5 +1,3 @@
-import * as Dialog from '@radix-ui/react-dialog';
-
 import {
   AlertTriangle,
   Check,
@@ -9,7 +7,7 @@ import {
   Download,
   MessageSquare,
   RotateCcw,
-  X,
+  WandSparkles,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -17,12 +15,11 @@ import { useNavigate } from 'react-router-dom';
 import { workflowCardLabels } from '@/features/chat/workflow/workflow-card-labels';
 import { ProgressTree, RunningProgressPanel } from '@/features/chat/workflow/workflow-progress-display';
 import { WorkflowResultSummary } from '@/features/chat/workflow/workflow-result-summary';
-import { AutomationSuggestionCard } from '@/features/automations/automation-suggestion-card';
-import { ProductAutomationFeedback } from '@/features/automations/product-automation-feedback';
 import type { WorkflowAgentSnapshot, WorkflowSnapshot } from '@/features/chat/workflow/workflow.types';
 import { formatAgentElapsed, rollupPhases, type PhaseRollup } from '@/features/chat/workflow/workflow.utils';
 import { Button } from '@/components/ui/button';
 import { PageTabs } from '@/components/ui/page-tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/cn';
 import { copyTextToClipboard } from '@/lib/copy-to-clipboard';
 import { messages } from '@/i18n/messages';
@@ -34,6 +31,7 @@ import {
   downloadWorkflowArtifact,
   type WorkflowArtifactRef,
   type WorkflowFollowUp,
+  type WorkflowNextAction,
   type WorkflowResultEnvelope,
   type WorkflowRunComparison,
   type WorkflowRunReplayScope,
@@ -108,7 +106,6 @@ export function WorkflowRunPanel({
   onOpenRunId,
   ownerAgentId,
   onRepairWorkflow,
-  onClose,
 }: {
   view: WorkflowRunView | undefined;
   comparison?: WorkflowRunComparison;
@@ -123,14 +120,12 @@ export function WorkflowRunPanel({
   onOpenRunId?: (runId: string) => void;
   ownerAgentId?: string;
   onRepairWorkflow?: () => void;
-  onClose: () => void;
 }) {
   const labels = messages(language).workflows;
-  const automationSuggestions = messages(language).automations.suggestions;
   const cardLabels = workflowCardLabels(language);
   const navigate = useNavigate();
 
-  const [processExpanded, setProcessExpanded] = useState(true);
+  const [processExpanded, setProcessExpanded] = useState(false);
   const [logsExpanded, setLogsExpanded] = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
@@ -144,9 +139,7 @@ export function WorkflowRunPanel({
   useEffect(() => {
     if (!view?.run.id) return;
 
-    const shouldExpandProcess = isActive || runStatus === 'failed' || runStatus === 'timeout';
-
-    setProcessExpanded(shouldExpandProcess);
+    setProcessExpanded(false);
     setDownloadError(null);
   }, [view?.run.id, isActive, runStatus, view?.run.metrics.errorAgentCount]);
 
@@ -232,6 +225,28 @@ export function WorkflowRunPanel({
     navigate(workflowChatHref(sessionKey, followUp.prompt));
   }, [navigate, view]);
 
+  const handleResultAction = useCallback((action: WorkflowNextAction) => {
+    if (action.kind === 'copy_result') {
+      void handleCopy();
+      return;
+    }
+    if (action.kind === 'open_artifact') {
+      const artifactId = resultActionReference(action.payload);
+      const artifact = outcome?.artifacts.find((item) => item.id === artifactId || item.name === artifactId);
+      if (artifact) void handleDownloadArtifact(artifact);
+      return;
+    }
+    const followUpId = resultActionReference(action.payload);
+    const followUp = outcome?.followUps.find((item) => item.id === followUpId);
+    if (followUp?.prompt) {
+      handleStartFollowUp(followUp);
+      return;
+    }
+    const prompt = resultActionPrompt(action.payload);
+    if (!prompt) return;
+    handleStartFollowUp({ id: action.id, title: action.label, prompt });
+  }, [handleCopy, handleDownloadArtifact, handleStartFollowUp, outcome?.artifacts, outcome?.followUps]);
+
   const openDiagnosticAgent = useCallback((agentId: string | number | undefined) => {
     if (!view || agentId == null) return;
     const rawAgentId = String(agentId);
@@ -241,24 +256,18 @@ export function WorkflowRunPanel({
     setSelectedAgentId(Number.isFinite(parsed) ? parsed : index + 1);
   }, [view]);
   const workflowSessionKey = view ? resolveWorkflowSessionKeyFromView(view) : null;
-  const shouldSuggestWorkflowFailureAutomation = runStatus === 'failed';
+  const resultActions = outcome?.actions.filter((action) => isResultActionAvailable(action, outcome)) ?? [];
+  const hasEnvelopeCopyAction = resultActions.some((action) => action.kind === 'copy_result');
 
   if (loading) {
     return (
-      <Dialog.Root open onOpenChange={(next) => !next && onClose()}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(85vh,44rem)] w-[min(100%-2rem,48rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-5 py-4">
-              <Dialog.Title className="text-base font-semibold tracking-tight text-fg">{labels.runSummaryTitle}</Dialog.Title>
-              <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={labels.pickStartClose} onClick={onClose}>
-                <X className="size-5" aria-hidden />
-              </Button>
-            </div>
-            <div className="p-5 text-sm text-fg-muted">{labels.loading}</div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <main className="min-h-0 flex-1 overflow-y-auto bg-surface-panel p-5">
+        <div className="mx-auto w-full max-w-6xl" aria-busy>
+          <Skeleton className="h-8 w-72 max-w-full" />
+          <Skeleton className="mt-4 h-28 rounded-2xl" />
+          <Skeleton className="mt-5 h-[28rem] rounded-2xl" />
+        </div>
+      </main>
     );
   }
 
@@ -277,8 +286,17 @@ export function WorkflowRunPanel({
     || view.agents.some((agent) => (agent.status === 'error' || agent.status === 'skipped') && agent.phaseId && agent.prompt?.trim())
   );
   const displayTitle = run.goal?.trim() || run.title;
+  const focusNode = view.nodes.find((node) => node.status === 'running')
+    ?? view.nodes.find((node) => node.status === 'error')
+    ?? [...view.nodes].reverse().find((node) => node.status === 'done');
+  const currentActivity = focusNode
+    ? focusNode.error || focusNode.resultPreview || (language === 'zh'
+      ? `${focusNode.status === 'running' ? '正在执行' : focusNode.status === 'done' ? '刚刚完成' : '需要处理'}：${focusNode.title}`
+      : `${focusNode.status === 'running' ? 'Working on' : focusNode.status === 'done' ? 'Just completed' : 'Needs attention'}: ${focusNode.title}`)
+    : runSummary;
   const hasDiagnostics = diagnostics.length > 0 || Boolean(diagnosticHint);
-  const hasPrimaryActions = Boolean(workflowSessionKey) || canCancel;
+  const canRepair = (run.status === 'failed' || run.status === 'timeout') && Boolean(onRepairWorkflow);
+  const hasPrimaryActions = Boolean(workflowSessionKey) || canCancel || canRepair;
   const hasRecoveryActions = view.controls.canRetry || canReplayFailedAgents || canReplayFailedPhases;
   const hasResultActions = hasResult;
   const hasAnyActions = hasPrimaryActions || hasRecoveryActions || hasResultActions;
@@ -286,18 +304,8 @@ export function WorkflowRunPanel({
     activeTab === 'diagnostics' || activeTab === 'debug' ? 'process' : activeTab;
 
   return (
-    <>
-      <Dialog.Root open onOpenChange={(next) => !next && onClose()}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-65 bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-66 flex h-[min(90vh,52rem)] w-[min(100%-2rem,64rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-edge bg-surface-panel shadow-popover outline-none">
-            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-5 py-4">
-              <Dialog.Title className="truncate text-base font-semibold tracking-tight text-fg">{displayTitle}</Dialog.Title>
-              <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={labels.pickStartClose} onClick={onClose}>
-                <X className="size-5" aria-hidden />
-              </Button>
-            </div>
-            <section className="min-h-0 flex-1 overflow-y-auto p-5">
+    <main className="min-h-0 flex-1 overflow-y-auto bg-surface-panel">
+      <section className="mx-auto w-full max-w-6xl p-5">
               <header className="rounded-2xl border border-edge-subtle bg-surface-base/60 p-4">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
@@ -312,6 +320,10 @@ export function WorkflowRunPanel({
                     </p>
                     <p className="mt-3 text-sm leading-6 text-fg-muted">{runSummary}</p>
                     {diagnosticHint ? <p className="mt-2 text-xs leading-5 text-fg-subtle">{diagnosticHint}</p> : null}
+                    <div className={cn('mt-4 rounded-xl border px-3 py-2.5', focusNode?.status === 'error' ? 'border-danger/30 bg-danger/5' : 'border-accent/20 bg-accent-soft/50')}>
+                      <div className="text-[11px] font-medium uppercase tracking-wide text-fg-subtle">{language === 'zh' ? '当前状态' : 'Current status'}</div>
+                      <p className="mt-1 text-sm font-medium text-fg">{currentActivity}</p>
+                    </div>
                   </div>
                 </div>
                 <dl className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -328,30 +340,6 @@ export function WorkflowRunPanel({
                 </dl>
               </header>
 
-              <ProductAutomationFeedback
-                eventType="workflow.run.completed"
-                source="workflows"
-                payloadKey="runId"
-                payloadValue={run.id}
-                className="mt-4"
-              />
-              {shouldSuggestWorkflowFailureAutomation ? (
-                <AutomationSuggestionCard
-                  title={automationSuggestions.workflowFailedTitle}
-                  description={automationSuggestions.workflowFailedDescription}
-                  prompt={interpolate(automationSuggestions.workflowFailedPrompt, {
-                    runId: run.id,
-                    definitionId: run.definitionId,
-                  })}
-                  coverage={{
-                    eventType: 'workflow.run.completed',
-                    source: 'workflows',
-                    eventPayload: { runId: run.id, status: 'failed' },
-                  }}
-                  className="mt-4"
-                />
-              ) : null}
-
               <WorkflowRunTabs
                 activeTab={visibleActiveTab}
                 onChange={onTabChange}
@@ -365,11 +353,28 @@ export function WorkflowRunPanel({
                     <div className="rounded-xl border border-edge bg-surface-base/50 p-3">
                       <WorkflowResultSummary result={resultForDisplay} labels={cardLabels.result} />
                     </div>
-                  ) : (
+                  ) : run.status !== 'failed' && run.status !== 'timeout' ? (
                     <div className="rounded-xl border border-dashed border-edge p-4 text-sm text-fg-muted">
                       {labels.noResult}
                     </div>
-                  )}
+                  ) : null}
+
+                  {(run.status === 'failed' || run.status === 'timeout') ? (
+                    <WorkflowPartialResults view={view} language={language} />
+                  ) : null}
+
+                  {outcome ? (
+                    <WorkflowOutcomePanel
+                      outcome={outcome}
+                      labels={labels}
+                      downloadingArtifactId={downloadingArtifactId}
+                      downloadError={downloadError}
+                      onCopyText={(text) => void copyTextToClipboard(text)}
+                      onDownloadArtifact={(artifact) => void handleDownloadArtifact(artifact)}
+                      onStartFollowUp={handleStartFollowUp}
+                      compact
+                    />
+                  ) : null}
 
                   {hasAnyActions ? (
                     <section className="rounded-2xl border border-edge-subtle bg-surface-base/35 p-4">
@@ -379,6 +384,12 @@ export function WorkflowRunPanel({
                       <div className="min-w-0">
                         <h4 className="text-xs font-medium text-fg-subtle">{labels.primaryActionsTitle}</h4>
                         <div className="mt-2 flex flex-wrap gap-2">
+                          {(run.status === 'failed' || run.status === 'timeout') && onRepairWorkflow ? (
+                            <Button variant="primary" onClick={onRepairWorkflow}>
+                              <WandSparkles className="size-4" aria-hidden />
+                              {language === 'zh' ? '让 AI 修复' : 'Fix with AI'}
+                            </Button>
+                          ) : null}
                           {workflowSessionKey ? (
                             <Button variant="primary" onClick={continueInChat}>
                               <MessageSquare className="size-4" aria-hidden />
@@ -423,10 +434,17 @@ export function WorkflowRunPanel({
                       <div className="min-w-0">
                         <h4 className="text-xs font-medium text-fg-subtle">{labels.resultActionsTitle}</h4>
                         <div className="mt-2 flex flex-wrap gap-2">
-                          <Button variant="secondary" onClick={handleCopy}>
-                            {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
-                            {copied ? labels.copied : labels.copyResult}
-                          </Button>
+                          {resultActions.map((action) => (
+                            <Button key={action.id} variant="secondary" onClick={() => handleResultAction(action)}>
+                              {action.label}
+                            </Button>
+                          ))}
+                          {!hasEnvelopeCopyAction ? (
+                            <Button variant="secondary" onClick={handleCopy}>
+                              {copied ? <Check className="size-4" aria-hidden /> : <Copy className="size-4" aria-hidden />}
+                              {copied ? labels.copied : labels.copyResult}
+                            </Button>
+                          ) : null}
                           <Button variant="secondary" onClick={handleExport}>
                             <Download className="size-4" aria-hidden />
                             {labels.exportResult}
@@ -507,12 +525,8 @@ export function WorkflowRunPanel({
                   onStartFollowUp={handleStartFollowUp}
                 />
               ) : null}
-            </section>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-
-    </>
+      </section>
+    </main>
   );
 }
 
@@ -736,17 +750,12 @@ function WorkflowAgentInspector({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="truncate text-sm font-semibold text-fg">{agent.label}</h3>
-          <p className="mt-1 text-xs text-fg-subtle">{agent.phase || labels.process}</p>
+          <p className="mt-1 text-xs text-fg-subtle">{[agent.phase || labels.process, elapsed].filter(Boolean).join(' · ')}</p>
         </div>
         <span className={cn('rounded-full px-2 py-0.5 text-xs font-medium', agentStatusTone(agent.status))}>
           {labels.agentStatus[agent.status] ?? agent.status}
         </span>
       </div>
-
-      <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2 xl:grid-cols-1">
-        <MetadataItem label={labels.agentInvocationModel} value={agent.invocation?.modelRef ?? agent.invocation?.resolvedModelRef ?? '—'} />
-        <MetadataItem label={labels.metrics.duration} value={elapsed || '—'} />
-      </dl>
 
       <section className="mt-4 rounded-xl border border-edge-subtle bg-surface-base/60 p-3">
         <h4 className="text-xs font-semibold text-fg">{labels.agentOutputHeading}</h4>
@@ -760,27 +769,6 @@ function WorkflowAgentInspector({
         </div>
       </section>
 
-      {agent.steps?.length ? (
-        <section className="mt-3 rounded-xl border border-edge-subtle bg-surface-base/40 p-3">
-          <h4 className="text-xs font-semibold text-fg">{cardLabels.checkDetail.stepsHeading}</h4>
-          <div className="mt-2 space-y-2">
-            {agent.steps.slice(0, 4).map((step) => (
-              <div key={step.id} className="rounded-lg bg-surface-panel px-2.5 py-2">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate text-xs font-medium text-fg">{step.label}</span>
-                  <span className="shrink-0 text-[10px] text-fg-subtle">{step.status}</span>
-                </div>
-                {step.detail || step.resultPreview || step.error ? (
-                  <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">
-                    {step.error || step.resultPreview || step.detail}
-                  </p>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       <section className="mt-3 rounded-xl border border-edge-subtle bg-surface-base/40">
         <button
           type="button"
@@ -793,6 +781,22 @@ function WorkflowAgentInspector({
         </button>
         {advancedOpen ? (
           <div className="space-y-3 border-t border-edge-subtle p-3">
+            {agent.steps?.length ? (
+              <div>
+                <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{cardLabels.checkDetail.stepsHeading}</div>
+                <div className="mt-2 space-y-2">
+                  {agent.steps.slice(0, 8).map((step) => (
+                    <div key={step.id} className="rounded-lg bg-surface-panel px-2.5 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="min-w-0 truncate text-xs font-medium text-fg">{step.label}</span>
+                        <span className="shrink-0 text-[10px] text-fg-subtle">{step.status}</span>
+                      </div>
+                      {step.detail || step.resultPreview || step.error ? <p className="mt-1 text-xs leading-5 text-fg-muted">{step.error || step.resultPreview || step.detail}</p> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div>
               <div className="text-[10px] font-medium uppercase tracking-wide text-fg-subtle">{labels.agentInputHeading}</div>
               <pre className="mt-1 max-h-44 overflow-auto whitespace-pre-wrap wrap-break-word rounded-lg bg-surface-panel p-2 font-mono text-xs leading-5 text-fg-muted">
@@ -931,6 +935,36 @@ function replayScopeLabel(scope: WorkflowRunReplayScope, labels: WorkflowsMessag
   return scope === 'failed_phases' ? labels.replayScopeFailedPhases : labels.replayScopeFailedAgents;
 }
 
+function WorkflowPartialResults({ view, language }: { view: WorkflowRunView; language: StoredLanguage }) {
+  const completed = view.nodes.filter((node) => node.status === 'done' && node.resultPreview?.trim());
+  const failed = view.nodes.filter((node) => node.status === 'error');
+  if (completed.length === 0 && failed.length === 0) return null;
+
+  return (
+    <section className="rounded-2xl border border-amber-500/25 bg-amber-500/5 p-4">
+      <h3 className="text-sm font-semibold text-fg">{language === 'zh' ? '已保留的阶段结果' : 'Work completed before the failure'}</h3>
+      <p className="mt-1 text-xs leading-5 text-fg-muted">
+        {language === 'zh' ? '失败不会清空已经完成的工作。你可以先使用这些结果，再让 AI 修复剩余步骤。' : 'Completed work is preserved. You can use it now and ask AI to repair the remaining steps.'}
+      </p>
+      {completed.length > 0 ? (
+        <ul className="mt-3 space-y-2">
+          {completed.map((node) => (
+            <li key={node.id} className="rounded-xl border border-edge-subtle bg-surface-base/60 px-3 py-2.5">
+              <div className="text-sm font-medium text-fg">{node.title}</div>
+              <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-fg-muted">{node.resultPreview}</p>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {failed.length > 0 ? (
+        <p className="mt-3 text-xs text-danger">
+          {language === 'zh' ? `待修复：${failed.map((node) => node.title).join('、')}` : `Needs repair: ${failed.map((node) => node.title).join(', ')}`}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 function WorkflowOutcomePanel({
   outcome,
   labels,
@@ -939,6 +973,7 @@ function WorkflowOutcomePanel({
   onCopyText,
   onDownloadArtifact,
   onStartFollowUp,
+  compact = false,
 }: {
   outcome: WorkflowOutcomeView | null;
   labels: WorkflowsMessages;
@@ -947,8 +982,10 @@ function WorkflowOutcomePanel({
   onCopyText: (text: string) => void;
   onDownloadArtifact: (artifact: WorkflowArtifactRef) => void;
   onStartFollowUp: (followUp: WorkflowFollowUp) => void;
+  compact?: boolean;
 }) {
   if (!outcome || (!outcome.artifacts.length && !outcome.followUps.length && outcome.structuredOutput === undefined)) {
+    if (compact) return null;
     return (
       <section className="mt-5 rounded-xl border border-dashed border-edge p-4 text-sm text-fg-muted">
         {labels.noArtifacts}
@@ -957,7 +994,7 @@ function WorkflowOutcomePanel({
   }
 
   return (
-    <div className="mt-5 grid gap-3 lg:grid-cols-3">
+    <div className={cn('grid gap-3 lg:grid-cols-3', !compact && 'mt-5')}>
       {outcome.artifacts.length > 0 ? (
         <OutcomeCard title={labels.outcomeArtifacts}>
           <ul className="space-y-2">
@@ -1015,9 +1052,14 @@ function WorkflowOutcomePanel({
 
       {outcome.structuredOutput !== undefined ? (
         <OutcomeCard title={labels.outcomeStructuredOutput} className="lg:col-span-3">
-          <pre className="max-h-[28rem] min-w-0 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-surface-base p-3 font-mono text-xs leading-5 text-fg-muted">
-            {stringifyWorkflowResult(outcome.structuredOutput)}
-          </pre>
+          <details className="rounded-lg bg-surface-base">
+            <summary className="cursor-pointer px-3 py-2 text-xs font-medium text-fg-muted hover:text-fg">
+              {labels.outcomeStructuredOutput}
+            </summary>
+            <pre className="max-h-[28rem] min-w-0 overflow-auto whitespace-pre-wrap break-words border-t border-edge-subtle p-3 font-mono text-xs leading-5 text-fg-muted">
+              {stringifyWorkflowResult(outcome.structuredOutput)}
+            </pre>
+          </details>
         </OutcomeCard>
       ) : null}
     </div>
@@ -1043,6 +1085,7 @@ function OutcomeCard({ title, children, className }: { title: string; children: 
 }
 
 interface WorkflowOutcomeView {
+  actions: WorkflowNextAction[];
   artifacts: WorkflowArtifactRef[];
   followUps: WorkflowFollowUp[];
   structuredOutput?: unknown;
@@ -1051,10 +1094,46 @@ interface WorkflowOutcomeView {
 function resolveWorkflowOutcome(result: unknown): WorkflowOutcomeView | null {
   if (!result || typeof result !== 'object' || Array.isArray(result)) return null;
   const envelope = result as Partial<WorkflowResultEnvelope>;
+  const actions = Array.isArray(envelope.actions) ? envelope.actions : [];
   const artifacts = Array.isArray(envelope.artifacts) ? envelope.artifacts : [];
   const followUps = Array.isArray(envelope.followUps) ? envelope.followUps : [];
-  if (artifacts.length === 0 && followUps.length === 0 && envelope.structuredOutput === undefined) return null;
-  return { artifacts, followUps, structuredOutput: envelope.structuredOutput };
+  if (actions.length === 0 && artifacts.length === 0 && followUps.length === 0 && envelope.structuredOutput === undefined) return null;
+  return { actions, artifacts, followUps, structuredOutput: envelope.structuredOutput };
+}
+
+function resultActionPayloadRecord(payload: unknown): Record<string, unknown> | null {
+  return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as Record<string, unknown> : null;
+}
+
+function resultActionReference(payload: unknown): string | null {
+  if (typeof payload === 'string') return payload.trim() || null;
+  const record = resultActionPayloadRecord(payload);
+  if (!record) return null;
+  for (const key of ['artifactId', 'followUpId', 'id', 'name']) {
+    if (typeof record[key] === 'string' && record[key].trim()) return record[key].trim();
+  }
+  return null;
+}
+
+function resultActionPrompt(payload: unknown): string | null {
+  const record = resultActionPayloadRecord(payload);
+  if (!record) return null;
+  for (const key of ['prompt', 'message', 'text']) {
+    if (typeof record[key] === 'string' && record[key].trim()) return record[key].trim();
+  }
+  return null;
+}
+
+function isResultActionAvailable(action: WorkflowNextAction, outcome: WorkflowOutcomeView): boolean {
+  if (action.kind === 'copy_result') return true;
+  const reference = resultActionReference(action.payload);
+  if (action.kind === 'open_artifact') {
+    return Boolean(reference && outcome.artifacts.some((item) => item.id === reference || item.name === reference));
+  }
+  if (action.kind === 'start_followup') {
+    return Boolean(resultActionPrompt(action.payload) || (reference && outcome.followUps.some((item) => item.id === reference && item.prompt)));
+  }
+  return Boolean(resultActionPrompt(action.payload));
 }
 
 function AgentInvocationSnapshotView({

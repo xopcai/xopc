@@ -257,11 +257,18 @@ export interface WorkflowFollowUp {
   priority?: 'low' | 'medium' | 'high';
 }
 
+export interface WorkflowNextAction {
+  id: string;
+  label: string;
+  kind: 'open_artifact' | 'copy_result' | 'start_followup' | 'custom';
+  payload?: unknown;
+}
+
 export interface WorkflowResultEnvelope {
   title?: string;
   summary: string;
   sections: WorkflowResultSection[];
-  actions?: unknown[];
+  actions?: WorkflowNextAction[];
   artifacts?: WorkflowArtifactRef[];
   followUps?: WorkflowFollowUp[];
   structuredOutput?: unknown;

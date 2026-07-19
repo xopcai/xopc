@@ -5,9 +5,13 @@ import {
   Activity,
   CalendarClock,
   ChevronDown,
+  ChevronRight,
   CheckCircle2,
+  CircleAlert,
   ExternalLink,
   GitBranch,
+  ListTree,
+  MessageCircle,
   Pause,
   Play,
   Plus,
@@ -22,6 +26,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { MarkdownView } from '@/components/markdown/markdown-view';
 import { RefreshButton } from '@/components/ui/refresh-button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AiTextAssistButton } from '@/features/ai-assist/ai-text-assist-button';
@@ -517,6 +522,12 @@ export function AutomationsPage() {
     [labels, workflowDefinitions],
   );
 
+  useEffect(() => {
+    if (viewTab !== 'activity' || userRuns.length === 0) return;
+    if (selectedRunId && userRuns.some((run) => run.id === selectedRunId)) return;
+    setSelectedRunId(userRuns[0].id);
+  }, [selectedRunId, userRuns, viewTab]);
+
   const reload = useCallback(async () => {
     await Promise.all([automationsSwr.mutate(), runsSwr.mutate(), metricsSwr.mutate(), runEventsSwr.mutate()]);
   }, [automationsSwr.mutate, metricsSwr.mutate, runEventsSwr.mutate, runsSwr.mutate]);
@@ -806,7 +817,7 @@ export function AutomationsPage() {
         {initialLoading ? (
           <AutomationsPageSkeleton />
         ) : viewTab === 'activity' ? (
-          <section className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_26rem]">
+          <section className="grid items-start gap-4 xl:grid-cols-[minmax(18rem,22rem)_minmax(0,1fr)]">
             <div className="min-w-0">
               <RunsList
                 runs={userRuns.slice(0, 12)}
@@ -821,7 +832,7 @@ export function AutomationsPage() {
               />
             </div>
             <RunDetailPanel
-              className="hidden xl:block"
+              className="hidden xl:sticky xl:top-4 xl:block"
               run={selectedRun}
               events={runEvents}
               labels={labels}
@@ -1314,7 +1325,14 @@ function RunsList({
               <span className={cn('rounded-full px-2 py-0.5 text-xs', statusClass(run.status))}>{labels.status[run.status]}</span>
               {run.workflowRunId ? <span className="text-xs text-fg-muted">{labels.workflowPrefix} {run.workflowRunId.slice(0, 8)}</span> : null}
             </div>
-            <div className="mt-1 text-sm text-fg-muted">{run.error || run.summary || actionLabel(run.actionSnapshot, labels)}</div>
+            <div className={cn(
+              'mt-1 line-clamp-2 whitespace-pre-line text-sm text-fg-muted',
+              run.error && 'text-red-700 dark:text-red-300',
+            )}>
+              {run.error
+                || run.summary
+                || (isActiveRun(run) ? labels.runDetail.resultPending : labels.runDetail.noResult)}
+            </div>
             <div className="mt-2 text-xs text-fg-muted">
               {formatDate(run.createdAtMs, labels, language)} · {run.manual ? labels.trigger.manual : automationTriggerLabel(run.triggerSnapshot, labels, cronLabels, language)}
             </div>
@@ -1453,6 +1471,16 @@ function RunDetailPanel({
     );
   }
 
+  const result = run.error || run.summary;
+  const processLink = run.sessionKey
+    ? `/chat/${encodeURIComponent(run.sessionKey)}`
+    : run.workflowRunId
+      ? `/workflows?run=${encodeURIComponent(run.workflowRunId)}`
+      : null;
+  const processLabel = run.sessionKey ? labels.runDetail.openConversation : labels.runDetail.openWorkflow;
+  const ProcessIcon = run.sessionKey ? MessageCircle : GitBranch;
+  const ResultIcon = isActiveRun(run) ? Activity : needsAttention(run) ? CircleAlert : CheckCircle2;
+
   return (
     <aside className={cn('rounded-lg border border-edge-subtle bg-surface-base shadow-surface', className)}>
       <div className="border-b border-edge px-4 py-3">
@@ -1465,36 +1493,10 @@ function RunDetailPanel({
             {labels.status[run.status]}
           </span>
         </div>
-        <div className="mt-3 grid gap-2 text-xs text-fg-muted">
-          <DetailLine label={labels.details.created} value={formatDate(run.createdAtMs, labels, language)} />
-          <DetailLine label={labels.details.started} value={formatDate(run.startedAtMs, labels, language)} />
-          <DetailLine label={labels.details.duration} value={formatDuration(run.durationMs, labels)} />
-          {run.model ? <DetailLine label={labels.details.model} value={run.model} /> : null}
-        </div>
-        <div className="mt-3 rounded-md border border-edge/70 bg-surface-base/50 p-3">
-          <div className="text-xs font-semibold uppercase text-fg-muted">{labels.dashboard.result}</div>
-          <p className={cn('mt-1 break-words text-sm', needsAttention(run) ? 'text-red-700 dark:text-red-300' : 'text-fg')}>
-            {run.error || run.summary || actionLabel(run.actionSnapshot, labels)}
-          </p>
-          <div className="mt-3 grid gap-2 text-xs text-fg-muted">
-            <DetailLine label={labels.explain.whyRan} value={run.manual ? labels.trigger.manual : automationTriggerLabel(run.triggerSnapshot, labels, cronLabels, language)} />
-            {run.sessionKey ? (
-              <Button asChild variant="secondary" className="h-8 justify-start rounded-md px-2 text-xs">
-                <Link to={`/chat/${encodeURIComponent(run.sessionKey)}`}>
-                  <ExternalLink className="size-3.5" />
-                  {labels.dashboard.openSession}
-                </Link>
-              </Button>
-            ) : null}
-            {run.workflowRunId ? (
-              <Button asChild variant="secondary" className="h-8 justify-start rounded-md px-2 text-xs">
-                <Link to={`/workflows?run=${encodeURIComponent(run.workflowRunId)}`}>
-                  <GitBranch className="size-3.5" />
-                  {labels.feedback.workflow}
-                </Link>
-              </Button>
-            ) : null}
-          </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
+          <span>{formatDate(run.createdAtMs, labels, language)}</span>
+          <span aria-hidden>·</span>
+          <span>{labels.details.duration} {formatDuration(run.durationMs, labels)}</span>
         </div>
         {run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled' ? (
           <div className="mt-3 flex justify-end">
@@ -1505,6 +1507,55 @@ function RunDetailPanel({
           </div>
         ) : null}
       </div>
+
+      <section className="border-b border-edge px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-fg">
+            <ResultIcon className={cn(
+              'size-4',
+              isActiveRun(run) ? 'text-blue-500' : needsAttention(run) ? 'text-red-500' : 'text-emerald-500',
+            )} />
+            {labels.runDetail.resultTitle}
+          </div>
+          {processLink ? (
+            <Button asChild variant="secondary" className="h-8 rounded-md px-2.5 text-xs">
+              <Link to={processLink}>
+                <ProcessIcon className="size-3.5" />
+                {processLabel}
+                <ChevronRight className="size-3.5" />
+              </Link>
+            </Button>
+          ) : null}
+        </div>
+        <div className={cn(
+          'mt-3 max-h-80 overflow-y-auto rounded-lg border border-edge/70 bg-surface-muted/25 p-3',
+          run.error && 'border-red-500/25 bg-red-500/5',
+        )}>
+          {result ? (
+            run.error ? (
+              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-red-700 dark:text-red-300">{result}</p>
+            ) : (
+              <MarkdownView content={result} compact className="text-sm" openHttpLinksInNewTab />
+            )
+          ) : (
+            <p className="text-sm leading-relaxed text-fg-muted">
+              {isActiveRun(run) ? labels.runDetail.resultPending : labels.runDetail.noResult}
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="border-b border-edge px-4 py-4">
+        <div className="text-xs font-semibold uppercase text-fg-muted">{labels.runDetail.runInfo}</div>
+        <div className="mt-3 grid gap-2 text-xs text-fg-muted">
+          <DetailLine
+            label={labels.explain.whyRan}
+            value={run.manual ? labels.trigger.manual : automationTriggerLabel(run.triggerSnapshot, labels, cronLabels, language)}
+          />
+          <DetailLine label={labels.details.started} value={formatDate(run.startedAtMs, labels, language)} />
+          {run.model ? <DetailLine label={labels.details.model} value={run.model} /> : null}
+        </div>
+      </section>
 
       {repairDraft ? (
         <div className="border-b border-edge px-4 py-3">
@@ -1538,31 +1589,55 @@ function RunDetailPanel({
         </div>
       ) : null}
 
-      <div className="px-4 py-3">
-        <div className="mb-3 text-xs font-semibold uppercase text-fg-muted">{labels.timeline}</div>
-        {loading ? (
-          <div className="text-sm text-fg-muted">{labels.loading}</div>
-        ) : events.length === 0 ? (
-          <div className="text-sm text-fg-muted">{labels.empty.events}</div>
-        ) : (
-          <ol className="space-y-3">
-            {events.map((event) => (
-              <li key={event.id} className="grid grid-cols-[0.75rem_1fr] gap-3">
-                <span className={cn('mt-1 size-2 rounded-full', eventTone(event.type))} />
-                <div className="min-w-0">
-                  <div className="text-sm text-fg">{runEventLabel(event, labels)}</div>
-                  <div className="mt-1 text-xs text-fg-muted">
-                    {formatDate(event.createdAtMs, labels, language)} · {event.type}
+      <details className="group px-4 py-3">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-md outline-none hover:text-fg focus-visible:ring-2 focus-visible:ring-accent">
+          <span className="flex min-w-0 items-center gap-2 text-sm font-medium text-fg-muted">
+            <ListTree className="size-4 shrink-0" />
+            {labels.runDetail.technicalEvents}
+          </span>
+          <span className="flex shrink-0 items-center gap-1 text-xs text-fg-muted">
+            {labels.runDetail.eventCount.replace('{count}', String(events.length))}
+            <ChevronDown className="size-4 transition-transform group-open:rotate-180" />
+          </span>
+        </summary>
+        <p className="mt-2 text-xs leading-relaxed text-fg-muted">{labels.runDetail.technicalEventsDescription}</p>
+        <div className="mt-4">
+          {loading ? (
+            <div className="space-y-3" aria-label={labels.loading}>
+              <Skeleton className="h-10 w-full" />
+              <Skeleton className="h-10 w-4/5" />
+              <Skeleton className="h-10 w-11/12" />
+            </div>
+          ) : events.length === 0 ? (
+            <div className="text-sm text-fg-muted">{labels.empty.events}</div>
+          ) : (
+            <ol className="space-y-3">
+              {events.map((event) => (
+                <li key={event.id} className="grid grid-cols-[0.75rem_1fr] gap-3">
+                  <span className={cn('mt-1 size-2 rounded-full', eventTone(event.type))} />
+                  <div className="min-w-0">
+                    <div className="text-sm text-fg">{runEventLabel(event, labels)}</div>
+                    <div className="mt-1 text-xs text-fg-muted">
+                      {formatDate(event.createdAtMs, labels, language)} · {event.type}
+                    </div>
+                    {event.data && typeof event.data === 'object' ? (
+                      <details className="group/event mt-2 rounded-md border border-edge/70 bg-surface-muted/35">
+                        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-2.5 py-2 text-xs font-medium text-fg-muted outline-none hover:text-fg">
+                          {labels.details.eventData}
+                          <ChevronDown className="size-3.5 transition-transform group-open/event:rotate-180" />
+                        </summary>
+                        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all border-t border-edge/70 px-2.5 py-2 text-xs leading-relaxed text-fg-muted">
+                          {JSON.stringify(event.data, null, 2)}
+                        </pre>
+                      </details>
+                    ) : null}
                   </div>
-                  {event.data && typeof event.data === 'object' ? (
-                    <JsonDetails value={event.data} labels={labels} title={labels.details.eventData} />
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ol>
-        )}
-      </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      </details>
     </aside>
   );
 }
