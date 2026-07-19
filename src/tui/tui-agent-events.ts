@@ -29,6 +29,9 @@ const STREAM_TOUCH_EVENTS = new Set([
   'assistant_delta',
   'thinking_delta',
   'thinking_end',
+  'review_start',
+  'review_delta',
+  'review_end',
   'review',
   'tool_start',
   'tool_update',
@@ -124,10 +127,66 @@ function appendReviewBlock(message: AgentMessage, review: unknown): void {
   const target = typeof rec.target === 'string' ? rec.target : 'working tree changes';
   const existing = content.findIndex((block) => block.type === 'review' && block.target === target);
   if (existing >= 0) {
-    content[existing] = review as Record<string, unknown>;
+    content[existing] = {
+      ...(review as Record<string, unknown>),
+      reviewId: content[existing].reviewId,
+      status: content[existing].status === 'error' ? 'error' : 'complete',
+      analysisMarkdown: content[existing].analysisMarkdown,
+      errorMessage: content[existing].errorMessage,
+    };
     return;
   }
   content.push(review as Record<string, unknown>);
+}
+
+type ReviewContentBlock = Record<string, unknown> & { type?: unknown };
+
+function reviewBlocks(message: AgentMessage): ReviewContentBlock[] {
+  const content = (message as { content?: unknown }).content;
+  return Array.isArray(content)
+    ? content.filter((block): block is ReviewContentBlock => !!block && typeof block === 'object')
+    : [];
+}
+
+function reviewBlockForId(message: AgentMessage, reviewId: string): ReviewContentBlock | undefined {
+  return reviewBlocks(message).find((block) => block.type === 'review' && block.reviewId === reviewId);
+}
+
+function startReviewBlock(
+  message: AgentMessage,
+  review: { reviewId: string; target: string; stage: 'preparing' | 'reviewing' },
+): void {
+  const existing = reviewBlockForId(message, review.reviewId);
+  if (existing) {
+    existing.target = review.target || existing.target;
+    existing.status = review.stage;
+    return;
+  }
+  const msg = message as { content?: unknown };
+  if (!Array.isArray(msg.content)) msg.content = [];
+  (msg.content as ReviewContentBlock[]).push({
+    type: 'review',
+    reviewId: review.reviewId,
+    target: review.target || 'working tree changes',
+    findings: [],
+    overallCorrectness: 'unknown',
+    overallExplanation: '',
+    status: review.stage,
+  });
+}
+
+function appendReviewDraft(message: AgentMessage, reviewId: string, delta: string): void {
+  const review = reviewBlockForId(message, reviewId);
+  if (!review || !delta) return;
+  review.status = 'reviewing';
+  review.analysisMarkdown = `${typeof review.analysisMarkdown === 'string' ? review.analysisMarkdown : ''}${delta}`;
+}
+
+function finishReviewBlock(message: AgentMessage, reviewId: string, status: 'complete' | 'error', errorMessage?: string): void {
+  const review = reviewBlockForId(message, reviewId);
+  if (!review) return;
+  review.status = status;
+  if (status === 'error' && errorMessage) review.errorMessage = errorMessage;
 }
 
 function finalizeThinking(message: AgentMessage): void {
@@ -229,6 +288,48 @@ export function dispatchAgentEvent(
       chatLog.updateAssistant(message, runId);
       markRunEvent(state, 'streaming', runId, event, source);
       setActivityStatus('streaming');
+      tui.requestRender();
+      break;
+    }
+    case 'review_start': {
+      const reviewId = typeof p.reviewId === 'string' ? p.reviewId : '';
+      if (!reviewId) break;
+      const message = assistantForRun(runId);
+      startReviewBlock(message, {
+        reviewId,
+        target: typeof p.target === 'string' ? p.target : 'working tree changes',
+        stage: p.stage === 'preparing' ? 'preparing' : 'reviewing',
+      });
+      chatLog.startAssistant(message, runId);
+      chatLog.updateAssistant(message, runId);
+      markRunEvent(state, 'streaming', runId, event, source);
+      setActivityStatus('reviewing');
+      tui.requestRender();
+      break;
+    }
+    case 'review_delta': {
+      const reviewId = typeof p.reviewId === 'string' ? p.reviewId : '';
+      const delta = typeof p.delta === 'string' ? p.delta : '';
+      if (!reviewId || !delta) break;
+      const message = assistantForRun(runId);
+      appendReviewDraft(message, reviewId, delta);
+      chatLog.updateAssistant(message, runId);
+      markRunEvent(state, 'streaming', runId, event, source);
+      setActivityStatus('reviewing');
+      tui.requestRender();
+      break;
+    }
+    case 'review_end': {
+      const reviewId = typeof p.reviewId === 'string' ? p.reviewId : '';
+      if (!reviewId) break;
+      const message = assistantForRun(runId);
+      finishReviewBlock(
+        message,
+        reviewId,
+        p.status === 'error' ? 'error' : 'complete',
+        typeof p.message === 'string' ? p.message : undefined,
+      );
+      chatLog.updateAssistant(message, runId);
       tui.requestRender();
       break;
     }

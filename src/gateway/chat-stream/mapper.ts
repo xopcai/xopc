@@ -48,6 +48,26 @@ export class ChatStreamMapper {
         return this.mapToolUpdate(event);
       case 'tool_execution_end':
         return this.mapToolEnd(event);
+      case 'review_start':
+        return [this.make('review_start', {
+          messageId: this.ensureAssistantMessageId(),
+          reviewId: String(event.reviewId ?? ''),
+          target: String(event.target ?? 'working tree changes'),
+          stage: event.stage === 'preparing' ? 'preparing' : 'reviewing',
+        })];
+      case 'review_delta':
+        return [this.make('review_delta', {
+          messageId: this.ensureAssistantMessageId(),
+          reviewId: String(event.reviewId ?? ''),
+          delta: String(event.delta ?? ''),
+        })];
+      case 'review_end':
+        return [this.make('review_end', {
+          messageId: this.ensureAssistantMessageId(),
+          reviewId: String(event.reviewId ?? ''),
+          status: event.status === 'error' ? 'error' : 'complete',
+          ...(typeof event.message === 'string' && event.message ? { message: event.message } : {}),
+        })];
       case 'user_message':
         return [this.make('user_message', { message: userMessageFromLegacyEvent(event) })];
       case 'user_transcript':

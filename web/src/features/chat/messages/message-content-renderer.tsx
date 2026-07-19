@@ -59,6 +59,8 @@ function reviewLocation(finding: ReviewContent['findings'][number]): string {
 }
 
 function ReviewBlock({ review }: { review: ReviewContent }) {
+  const isRunning = review.status === 'preparing' || review.status === 'reviewing';
+  const isPreparing = review.status === 'preparing';
   const modelReviewIncomplete = review.source === 'local' && review.overallCorrectness === 'unknown';
   const correctnessTone =
     review.overallCorrectness === 'patch is incorrect'
@@ -69,13 +71,40 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
   return (
     <div className="min-w-0 rounded-lg border border-edge bg-surface-subtle p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <div className="text-sm font-semibold text-fg-primary">Code review finished</div>
-        <div className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-medium', correctnessTone)}>
-          {review.overallCorrectness}
+        {isRunning ? <Loader2 className="size-4 animate-spin text-accent" aria-hidden /> : null}
+        <div className="text-sm font-semibold text-fg-primary">
+          {isRunning ? 'Reviewing changes' : 'Code review finished'}
         </div>
+        {isRunning ? (
+          <div className="rounded-md border border-edge bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-fg-secondary">
+            {isPreparing ? 'Collecting changes' : 'Review assistant'}
+          </div>
+        ) : (
+          <div className={cn('rounded-md border px-1.5 py-0.5 text-[11px] font-medium', correctnessTone)}>
+            {review.overallCorrectness}
+          </div>
+        )}
       </div>
+      <div className="mt-1 text-xs text-fg-tertiary">Based on {review.target}</div>
+      {isRunning && !review.analysisMarkdown ? (
+        <div className="mt-3 text-sm text-fg-secondary">
+          {isPreparing ? 'Preparing an isolated review context…' : 'The review assistant is checking the changes…'}
+        </div>
+      ) : null}
+      {review.analysisMarkdown ? (
+        <div className="mt-3 rounded-md border border-edge-subtle bg-surface px-2.5 py-2">
+          <div className="mb-1 text-xs font-medium text-fg-secondary">Review assistant</div>
+          <MarkdownView content={review.analysisMarkdown} compact openHttpLinksInNewTab />
+        </div>
+      ) : null}
+      {review.status === 'error' && review.errorMessage ? (
+        <div className="mt-3 rounded-md border border-warning/30 bg-warning/5 px-2.5 py-2 text-sm text-warning">
+          The review assistant could not complete: {review.errorMessage}
+        </div>
+      ) : null}
+      {!isRunning ? <>
       {review.summary ? (
-        <div className="mt-1 text-sm text-fg-secondary">{review.summary}</div>
+        <div className="mt-3 text-sm text-fg-secondary">{review.summary}</div>
       ) : null}
       <div className="mt-3 space-y-2">
         {review.findings.length === 0 ? (
@@ -103,6 +132,7 @@ function ReviewBlock({ review }: { review: ReviewContent }) {
       {review.overallExplanation ? (
         <div className="mt-3 whitespace-pre-wrap text-sm text-fg-secondary">{review.overallExplanation}</div>
       ) : null}
+      </> : null}
     </div>
   );
 }
@@ -308,7 +338,12 @@ function ChatMarkdownView({
 
   return (
     <>
-      <MarkdownView content={renderedContent} compact={compact} onWorkspaceFileOpen={openFile} />
+      <MarkdownView
+        content={renderedContent}
+        compact={compact}
+        onWorkspaceFileOpen={openFile}
+        openHttpLinksInNewTab
+      />
       {resolution ? (
         <ChatMarkdownFileActionCard
           resolution={resolution}

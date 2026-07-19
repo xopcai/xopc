@@ -83,6 +83,10 @@ export type MessagingCallbacks = {
   onCompaction?: (state: CompactionState) => void;
   /** Current agent turn plan, emitted by the `update_plan` tool. */
   onTurnPlanUpdated?: (state: TurnPlanState) => void;
+  /** Isolated `/review` context lifecycle. */
+  onReviewStart?: (payload: { reviewId: string; target: string; stage: 'preparing' | 'reviewing' }) => void;
+  onReviewDelta?: (payload: { reviewId: string; delta: string }) => void;
+  onReviewEnd?: (payload: { reviewId: string; status: 'complete' | 'error'; message?: string }) => void;
   /** Structured code review output emitted by `/review`. */
   onReview?: (payload: { review: unknown }) => void;
   /** Assistant TTS audio persisted under agent home `tts/` (before `run_end`). */
@@ -430,6 +434,29 @@ export class MessageSender {
           serializeProtocolPayload(payload.result),
           typeof payload.toolCallId === 'string' ? payload.toolCallId : undefined,
         );
+        break;
+      case 'review_start':
+        if (typeof payload.reviewId === 'string' && payload.reviewId) {
+          cb?.onReviewStart?.({
+            reviewId: payload.reviewId,
+            target: typeof payload.target === 'string' ? payload.target : 'working tree changes',
+            stage: payload.stage === 'preparing' ? 'preparing' : 'reviewing',
+          });
+        }
+        break;
+      case 'review_delta':
+        if (typeof payload.reviewId === 'string' && typeof payload.delta === 'string' && payload.delta) {
+          cb?.onReviewDelta?.({ reviewId: payload.reviewId, delta: payload.delta });
+        }
+        break;
+      case 'review_end':
+        if (typeof payload.reviewId === 'string' && payload.reviewId) {
+          cb?.onReviewEnd?.({
+            reviewId: payload.reviewId,
+            status: payload.status === 'error' ? 'error' : 'complete',
+            ...(typeof payload.message === 'string' && payload.message ? { message: payload.message } : {}),
+          });
+        }
         break;
       case 'progress':
         cb?.onProgress({

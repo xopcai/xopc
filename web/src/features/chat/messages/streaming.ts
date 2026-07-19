@@ -198,10 +198,71 @@ export function appendReview(content: MessageContent[], rawReview: unknown): voi
   if (!review) return;
   const existingIndex = content.findIndex((b) => b.type === 'review' && b.target === review.target);
   if (existingIndex >= 0) {
-    content[existingIndex] = review;
+    const existing = content[existingIndex];
+    if (!existing || existing.type !== 'review') return;
+    content[existingIndex] = {
+      ...review,
+      reviewId: existing.reviewId,
+      status: existing.status === 'error' ? 'error' : 'complete',
+      analysisMarkdown: existing.analysisMarkdown,
+      errorMessage: existing.errorMessage,
+    };
     return;
   }
   content.push(review);
+}
+
+/** Give an interrupted isolated review a terminal user-facing state. */
+export function finalizeRunningReviews(content: MessageContent[]): void {
+  for (const block of content) {
+    if (block.type !== 'review') continue;
+    if (block.status !== 'preparing' && block.status !== 'reviewing') continue;
+    block.status = 'error';
+    block.errorMessage ??= 'The review stream ended before a conclusion was returned.';
+  }
+}
+
+export function startReview(
+  content: MessageContent[],
+  review: { reviewId: string; target: string; stage: 'preparing' | 'reviewing' },
+): void {
+  closeStreamingThinkingIfAny(content);
+  const existing = content.find((b): b is ReviewContent => b.type === 'review' && b.reviewId === review.reviewId);
+  if (existing) {
+    existing.target = review.target || existing.target;
+    existing.status = review.stage;
+    return;
+  }
+  content.push({
+    type: 'review',
+    reviewId: review.reviewId,
+    target: review.target || 'working tree changes',
+    summary: '',
+    findings: [],
+    overallCorrectness: 'unknown',
+    overallExplanation: '',
+    status: review.stage,
+  });
+}
+
+export function appendReviewDelta(content: MessageContent[], reviewId: string, delta: string): void {
+  if (!delta) return;
+  const review = content.find((b): b is ReviewContent => b.type === 'review' && b.reviewId === reviewId);
+  if (!review) return;
+  review.status = 'reviewing';
+  review.analysisMarkdown = appendWithOverlap(review.analysisMarkdown ?? '', delta);
+}
+
+export function finishReview(
+  content: MessageContent[],
+  reviewId: string,
+  status: 'complete' | 'error',
+  errorMessage?: string,
+): void {
+  const review = content.find((b): b is ReviewContent => b.type === 'review' && b.reviewId === reviewId);
+  if (!review) return;
+  review.status = status;
+  review.errorMessage = status === 'error' ? errorMessage : undefined;
 }
 
 export function appendToolStart(
