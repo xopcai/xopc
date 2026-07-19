@@ -21,6 +21,7 @@ import {
   readSchemaVersion,
   requireXopcDatabase,
   resetXopcDatabaseSingletonForTest,
+  XOPC_DB_SCHEMA_VERSION,
   upsertConnectorActionMetadata,
   upsertConnectorConnection,
   upsertConnectorInstallation,
@@ -42,7 +43,7 @@ describe('connector repository', () => {
   });
 
   it('migrates to the connector schema and persists policy separately from accounts', () => {
-    expect(readSchemaVersion(requireXopcDatabase().db)).toBe(32);
+    expect(readSchemaVersion(requireXopcDatabase().db)).toBe(XOPC_DB_SCHEMA_VERSION);
     const installation = upsertConnectorInstallation({
       id: 'install-gmail-owner',
       connectorId: 'composio-gmail',
