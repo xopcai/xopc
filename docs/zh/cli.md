@@ -462,12 +462,12 @@ xopc extensions list --json
 
 **从 npm 安装**：
 ```bash
-xopc extensions install <package-name>
+xopc extensions install npm:<package-name>
 
 # 示例
-xopc extensions install xopc-extension-telegram
-xopc extensions install @scope/my-extension
-xopc extensions install my-extension@1.0.0
+xopc extensions install npm:xopc-extension-telegram
+xopc extensions install npm:@scope/my-extension
+xopc extensions install npm:my-extension@1.0.0
 ```
 
 **从本地目录安装**（安装到 `~/.xopc/extensions`）：
@@ -475,18 +475,19 @@ xopc extensions install my-extension@1.0.0
 xopc extensions install ./my-local-extension
 ```
 
-**仅从 xopc-store 安装**：
+**从 xopc-store 安装**：
 ```bash
-xopc extensions install --store telegram
+xopc extensions install store:telegram
 ```
 
 **参数**：
 
 | 参数 | 描述 |
 |------|------|
-| `--store` | 仅从 xopc-store 安装 |
-| `--npm` | 仅从 npm 安装 |
 | `-f, --force` | 替换已有的 store / 本地安装 |
+| `-y, --yes` | 跳过 Store 安装确认 |
+
+安装来源必须显式指定为 `store:<id>`、`npm:<package>`，或一个确实存在的本地目录。Store 发布版本必须携带 SHA-256；CLI 会先校验，再暂存并检查扩展主入口。
 
 **安装流程**：
 1. 下载或复制扩展文件
@@ -556,7 +557,7 @@ my-extension/
 └── README.md             # 文档
 ```
 
-**注意**：`extensions dev` 会将本地扩展软链到工作区，适合联调；`extensions pack` 可打包为 `.tgz` 用于分发。
+**注意**：`extensions dev` 会将本地扩展软链到工作区，适合联调；`extensions pack` 会生成用于 Store 分发的 `.zip`、`.sha256` 与 `.manifest.json`，其中元数据同时包含原始 `sha256` 和 SRI `integrity`。
 
 ---
 

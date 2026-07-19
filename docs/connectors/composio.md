@@ -2,12 +2,24 @@
 
 xopc exposes Composio apps as individually installable connectors. The runtime uses Composio Sessions, keeps account selection and agent policy in xopc SQLite, and never exposes the Composio API key to agents or the browser.
 
+## Integration strategy
+
+xopc uses three integration lanes:
+
+- Native channel plugins own core conversation ingress and egress. Telegram is configured under `#/channels/telegram`, not as a Composio toolkit.
+- MCP owns frequent or critical services when a first-party connector exists. GitHub uses the built-in `github` MCP connector.
+- Composio owns long-tail SaaS integrations where managed authentication and broad toolkit coverage are more valuable than a dedicated runtime.
+
+The catalog marks each preferred lane. Composio duplicates for native channels or preferred MCP connectors remain readable for existing installations but cannot be newly installed.
+
 ## Setup
 
 1. Install **Composio API Key** from `#/connectors` and save the key.
 2. Install an app such as Gmail, Notion, Slack, or GitHub.
 3. Open the installed connector, choose **Connect OAuth**, and finish authorization in the new tab.
 4. Return to xopc and refresh. Give accounts recognizable aliases, select the default account, choose the maximum read/write/admin scope, and limit access to specific agents when needed.
+
+Toolkit installation is rejected until the Composio project API key is available from the credential store or `XOPC_COMPOSIO_API_KEY` / `COMPOSIO_API_KEY`.
 
 Agents receive three tools:
 

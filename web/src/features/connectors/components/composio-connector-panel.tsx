@@ -52,6 +52,15 @@ function scopeLabel(scope: ComposioScope, t: ConnectorsSettingsMessages): string
   return t.composioScopeRead;
 }
 
+function degradedHealthMessage(health: ComposioConnectorHealth, t: ConnectorsSettingsMessages): string {
+  if (health.errorCode === 'missing_credential') return t.composioHealthMissingCredential;
+  if (health.errorCode === 'unauthorized') return t.composioHealthUnauthorized;
+  if (health.errorCode === 'forbidden') return t.composioHealthForbidden;
+  if (health.errorCode === 'network') return t.composioHealthNetwork;
+  if (health.errorCode === 'timeout') return t.composioHealthTimeout;
+  return t.composioHealthDegraded;
+}
+
 export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorInstance; t: ConnectorsSettingsMessages }) {
   const toolkit = toolkitFromComposioInstance(instance);
   const [connections, setConnections] = useState<ComposioConnection[]>([]);
@@ -239,12 +248,15 @@ export function ComposioConnectorPanel({ instance, t }: { instance: ConnectorIns
             : health.status === 'reauthorization_required'
               ? t.composioHealthReconnect
               : health.status === 'degraded'
-                ? t.composioHealthDegraded
+                ? degradedHealthMessage(health, t)
                 : t.composioHealthDisconnected}</span>
           {health.recovery !== 'none' ? (
             <Button variant="ghost" disabled={loading} onClick={() => void (health.recovery === 'retry' ? loadComposio() : authorize())}>
               {health.recovery === 'retry' ? t.composioRetry : t.connectOAuth}
             </Button>
+          ) : null}
+          {health.status === 'degraded' && health.message ? (
+            <p className="basis-full break-words text-[11px] opacity-80">{health.message}</p>
           ) : null}
         </div>
       ) : null}

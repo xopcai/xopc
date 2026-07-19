@@ -130,8 +130,34 @@ export interface GoalContract {
   objective: string;
   scopeBoundary?: string;
   evidencePlan: string[];
+  outcomeMetric?: GoalOutcomeMetric;
   createdAt: number;
   updatedAt: number;
+}
+
+export type GoalOutcomeDirection = 'increase' | 'decrease';
+
+/** A measurable user-visible result used to verify that outputs changed the intended outcome. */
+export interface GoalOutcomeMetric {
+  name: string;
+  baselineValue: number;
+  targetValue: number;
+  currentValue?: number;
+  unit?: string;
+  direction: GoalOutcomeDirection;
+  sourceUrl?: string;
+  measuredAt?: number;
+}
+
+export interface GoalOutcomeMetricInput {
+  name: string;
+  baselineValue: number;
+  targetValue: number;
+  currentValue?: number;
+  unit?: string;
+  direction?: GoalOutcomeDirection;
+  sourceUrl?: string;
+  measuredAt?: number;
 }
 
 export interface GoalContractInput {
@@ -139,6 +165,7 @@ export interface GoalContractInput {
   scopeBoundary?: string;
   evidencePlan?: string[];
   criteria?: string[];
+  outcomeMetric?: GoalOutcomeMetricInput | null;
 }
 
 export interface GoalWithDetails extends Goal {

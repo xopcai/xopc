@@ -1,6 +1,7 @@
 import { CredentialResolver } from '../auth/credentials.js';
 import type { Config } from '../config/schema.js';
 import { getConnectorDefinition } from './catalog.js';
+import { assertPreferredConnectorStrategy } from './integration-strategy.js';
 import { getConnectorInstance } from './instances.js';
 import { getConnectorRuntimeAdapter } from './runtime-adapter-registry.js';
 import type { ConnectorDefinition, ConnectorInstallInput, ConnectorInstance } from './types.js';
@@ -11,6 +12,7 @@ export async function installConnectorDefinition(
   input: ConnectorInstallInput,
   resolver = new CredentialResolver(),
 ): Promise<ConnectorInstance> {
+  assertPreferredConnectorStrategy(definition);
   return await getConnectorRuntimeAdapter(definition.runtime.type).install({ config, definition, input, resolver });
 }
 

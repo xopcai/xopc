@@ -168,6 +168,30 @@ describe('SQLite migrations', () => {
     `).get()).toEqual({ default_action_level: 'auto' });
   });
 
+  it('upgrades v35 goal contracts with measurable outcome storage', () => {
+    const db = openEmptyDb();
+    ensureSchemaMetaTable(db);
+    db.exec(`
+      CREATE TABLE goals (goal_id TEXT PRIMARY KEY);
+      CREATE TABLE goal_contracts (
+        goal_id TEXT PRIMARY KEY,
+        version INTEGER NOT NULL DEFAULT 1,
+        objective TEXT NOT NULL,
+        scope_boundary TEXT,
+        evidence_plan_json TEXT NOT NULL DEFAULT '[]',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        FOREIGN KEY (goal_id) REFERENCES goals(goal_id) ON DELETE CASCADE
+      );
+    `);
+    setSchemaVersion(db, 35);
+
+    expect(applyPendingMigrations(db)).toBe(XOPC_DB_SCHEMA_VERSION);
+    expect(
+      db.prepare(`SELECT name FROM pragma_table_info('goal_contracts') WHERE name = 'outcome_metric_json'`).get(),
+    ).toEqual({ name: 'outcome_metric_json' });
+  });
+
   it('upgrades v21 databases with first-class work item tables', () => {
     const db = openEmptyDb();
     ensureSchemaMetaTable(db);

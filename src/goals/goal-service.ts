@@ -32,6 +32,24 @@ function toTerminalStatus(verdict: GoalJudgeDecision['verdict']): GoalStatus {
   return 'active';
 }
 
+export interface GoalCompletionReadiness {
+  ready: boolean;
+  missingEvidence: string[];
+  pendingApproval: string[];
+  pendingOutcome: string[];
+}
+
+function completionReviewReason(readiness: GoalCompletionReadiness): string {
+  const pending = [
+    ...readiness.missingEvidence,
+    ...readiness.pendingApproval,
+    ...readiness.pendingOutcome,
+  ];
+  return pending.length
+    ? `Completion review required: ${pending.join('; ')}`
+    : 'Completion review required.';
+}
+
 function publishGoalEvent(
   type: 'goal.created' | 'goal.status_changed',
   goal: Goal,
@@ -307,9 +325,12 @@ export class GoalService {
     const previousStatus = goal.status;
     const nextStatus = toTerminalStatus(input.decision.verdict);
     const turnsUsed = goal.turnsUsed + 1;
-    const status = turnsUsed >= goal.maxTurns && nextStatus === 'active' ? 'paused' : nextStatus;
-    const reason =
-      status === 'paused' && turnsUsed >= goal.maxTurns
+    const budgetStatus = turnsUsed >= goal.maxTurns && nextStatus === 'active' ? 'paused' : nextStatus;
+    const readiness = budgetStatus === 'done' ? this.getCompletionReadiness(input.goalId) : null;
+    const status = readiness && !readiness.ready ? 'needs_input' : budgetStatus;
+    const reason = readiness && !readiness.ready
+      ? completionReviewReason(readiness)
+      : status === 'paused' && turnsUsed >= goal.maxTurns
         ? `turn budget exhausted (${turnsUsed}/${goal.maxTurns})`
         : input.decision.reason;
 
@@ -423,19 +444,22 @@ export class GoalService {
         summary: input.userQuestion.trim(),
       });
     }
+    const readiness = input.status === 'done' ? this.getCompletionReadiness(input.goalId) : null;
+    const status = readiness && !readiness.ready ? 'needs_input' : input.status;
+    const completionReason = readiness && !readiness.ready ? completionReviewReason(readiness) : input.reason;
     const updated = this.store.update(input.goalId, {
-      status: input.status,
+      status,
       turnsUsed: input.turnsUsed,
       maxTurns: input.maxTurns,
       currentRunId: run.id,
       nextAction: input.nextAction,
       blockedReason:
-        input.status === 'blocked' || input.status === 'needs_input' || input.status === 'paused'
-          ? input.reason
+        status === 'blocked' || status === 'needs_input' || status === 'paused'
+          ? completionReason
           : undefined,
-      completedAt: input.status === 'done' ? Date.now() : undefined,
+      completedAt: status === 'done' ? Date.now() : undefined,
     });
-    if (updated) publishGoalStatusEvent(updated, previousStatus, input.reason);
+    if (updated) publishGoalStatusEvent(updated, previousStatus, completionReason);
     return this.get(input.goalId);
   }
 
@@ -478,19 +502,30 @@ export class GoalService {
     return this.store.reviewEvidenceRequirement(input);
   }
 
-  getCompletionReadiness(goalId: string): { ready: boolean; missingEvidence: string[]; pendingApproval: string[] } | null {
+  getCompletionReadiness(goalId: string): GoalCompletionReadiness | null {
     const goal = this.get(goalId);
     if (!goal) return null;
     const required = goal.evidenceRequirements;
-    if (!required.length) return { ready: true, missingEvidence: [], pendingApproval: [] };
     const missingEvidence = required.filter((item) => item.evidenceIds.length === 0).map((item) => item.text);
     const pendingApproval = required
       .filter((item) => item.evidenceIds.length > 0 && item.status !== 'approved')
       .map((item) => item.text);
+    const metric = goal.contract?.outcomeMetric;
+    const outcomeAchieved = metric?.currentValue != null && (
+      metric.direction === 'increase'
+        ? metric.currentValue >= metric.targetValue
+        : metric.currentValue <= metric.targetValue
+    );
+    const pendingOutcome = metric && !outcomeAchieved
+      ? [metric.currentValue == null
+          ? `${metric.name}: current value is not recorded`
+          : `${metric.name}: current value ${metric.currentValue} has not reached target ${metric.targetValue}`]
+      : [];
     return {
-      ready: missingEvidence.length === 0 && pendingApproval.length === 0,
+      ready: missingEvidence.length === 0 && pendingApproval.length === 0 && pendingOutcome.length === 0,
       missingEvidence,
       pendingApproval,
+      pendingOutcome,
     };
   }
 }

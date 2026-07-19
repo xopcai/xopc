@@ -81,6 +81,14 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
     return { error: `models ${models.error.issues[0]?.message ?? 'is invalid'}` };
   }
   const id = typeof body.id === 'string' ? body.id : undefined;
+  const presetIds = Object.hasOwn(body, 'extends')
+    ? Array.isArray(body.extends)
+      ? body.extends.map((x: unknown) => normalizeAgentId(String(x))).filter(Boolean)
+      : null
+    : undefined;
+  if (presetIds === null) {
+    return { error: 'extends must be an array' };
+  }
   const skills = Object.hasOwn(body, 'skills')
     ? Array.isArray(body.skills)
       ? body.skills.map((x: unknown) => String(x).trim()).filter(Boolean)
@@ -117,6 +125,7 @@ function parseCreateAgentBody(raw: unknown): CreateAgentBody | { error: string }
     workspace,
     ...(models && models.data !== undefined ? { models: models.data } : {}),
     ...(id !== undefined ? { id } : {}),
+    ...(presetIds !== undefined ? { extends: presetIds } : {}),
     ...(skills !== undefined ? { skills } : {}),
     ...(tools !== undefined ? { tools } : {}),
     ...(profileFiles !== undefined ? { profileFiles } : {}),

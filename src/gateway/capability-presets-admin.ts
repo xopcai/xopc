@@ -3,6 +3,7 @@ import {
   DEFAULT_CAPABILITY_PRESET_ID,
   type CapabilityPreset,
 } from '../agent-manifest/schema.js';
+import { linearizePresetIds } from '../agent-manifest/preset-chain.js';
 import type { Config } from '../config/schema.js';
 import { GATEWAY_BUILTIN_TOOL_IDS } from './agent-builtin-tools.js';
 
@@ -13,6 +14,7 @@ export type CapabilityPresetAdminResult<T> =
 export type CapabilityPresetAgentUsage = {
   agentId: string;
   agentName?: string;
+  direct: boolean;
 };
 
 export type CapabilityPresetRow = CapabilityPreset & {
@@ -30,6 +32,16 @@ export type CreateCapabilityPresetBody = {
   id?: string;
   name?: string;
   description?: string;
+  version?: number;
+  extends?: CapabilityPreset['extends'];
+  models?: CapabilityPreset['models'];
+  tools?: CapabilityPreset['tools'];
+  skills?: CapabilityPreset['skills'];
+  memory?: CapabilityPreset['memory'];
+  workflows?: CapabilityPreset['workflows'];
+  boundaries?: CapabilityPreset['boundaries'];
+  runtime?: CapabilityPreset['runtime'];
+  locks?: CapabilityPreset['locks'];
 };
 
 export type UpdateCapabilityPresetBody = {
@@ -58,10 +70,17 @@ function normalizePresetId(id: string): string {
 function agentUsage(cfg: Config, presetId: string): CapabilityPresetAgentUsage[] {
   const defaultPresetId = cfg.agents.defaultPreset || DEFAULT_CAPABILITY_PRESET_ID;
   return cfg.agents.list
-    .filter((agent) => presetId === defaultPresetId || (agent.extends ?? []).includes(presetId))
+    .filter((agent) => {
+      const roots = [
+        ...(cfg.agents.capabilityPresets[defaultPresetId] ? [defaultPresetId] : []),
+        ...(agent.extends ?? []).filter((id) => id !== defaultPresetId),
+      ];
+      return linearizePresetIds(roots, cfg.agents.capabilityPresets).includes(presetId);
+    })
     .map((agent) => ({
       agentId: agent.id,
       ...(agent.identity.name ? { agentName: agent.identity.name } : {}),
+      direct: presetId === defaultPresetId || (agent.extends ?? []).includes(presetId),
     }))
     .sort((a, b) => a.agentId.localeCompare(b.agentId));
 }
@@ -154,10 +173,12 @@ export function prepareCreateCapabilityPreset(
   const id = normalizePresetId(body.id ?? '');
   const name = body.name?.trim() || id;
   const description = body.description?.trim();
+  const { id: _id, name: _name, description: _description, ...policy } = body;
   const parsed = CapabilityPresetSchema.safeParse({
+    ...policy,
     id,
     name,
-    version: 1,
+    version: body.version ?? 1,
     ...(description ? { description } : {}),
   });
   if (!parsed.success) {
@@ -199,7 +220,7 @@ export function prepareUpdateCapabilityPreset(
       nextPreset.description = body.description.trim();
     }
   }
-  if (body.version !== undefined) nextPreset.version = body.version;
+  nextPreset.version = body.version ?? current.version + 1;
   for (const key of ['extends', 'models', 'tools', 'skills', 'memory', 'workflows', 'boundaries', 'runtime', 'locks'] as const) {
     if (body[key] === undefined) continue;
     if (body[key] === null) {

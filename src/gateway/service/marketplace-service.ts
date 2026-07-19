@@ -15,8 +15,7 @@
  * lives here too so callers (commands-skills routes) depend on a single narrow
  * service instead of the full `GatewayService`.
  */
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { existsSync, rmSync } from 'node:fs';
 
 import type { Config } from '../../config/schema.js';
 import type { AgentService } from '../../agent/service.js';
@@ -103,6 +102,19 @@ export interface SkillSourceInstallResultPayload extends SkillInstallResultPaylo
   source: string;
   kind: HubPullResult['kind'];
   contentHash: string;
+}
+
+export interface ExtensionMarketplacePackageDetailPayload extends MarketplacePackageDetail {
+  installability: {
+    available: boolean;
+    reason?: string;
+    sha256?: string;
+  };
+  manifest?: Record<string, unknown>;
+  packageSummary?: {
+    dependencyCount: number;
+    lifecycleScripts: string[];
+  };
 }
 
 export class GatewayMarketplaceService {
@@ -332,10 +344,15 @@ export class GatewayMarketplaceService {
   // ── Extension marketplace ─────────────────────────────────────────────
 
   /** xopc-store extension package preview (type must be `extension`). */
-  async fetchExtensionPackageDetail(packageName: string): Promise<MarketplacePackageDetail> {
+  async fetchExtensionPackageDetail(
+    packageName: string,
+  ): Promise<ExtensionMarketplacePackageDetailPayload> {
     const {
+      downloadExtensionStoreZipBuffer,
       fetchMarketplacePackageDetail,
+      resolveExtensionZipDownloadUrl,
       resolveExtensionsStoreBaseUrl,
+      verifyStoreArtifactSha256,
     } = await import('../../agent/skills/marketplace/adapters/store/store-api-client.js');
     const base = resolveExtensionsStoreBaseUrl(this.opts.getConfig());
     const detail = await fetchMarketplacePackageDetail(base, packageName.trim());
@@ -344,7 +361,40 @@ export class GatewayMarketplaceService {
         `Package "${packageName}" is not an extension (store type: ${detail.type}).`,
       );
     }
-    return detail;
+
+    try {
+      const resolved = await resolveExtensionZipDownloadUrl(base, packageName.trim());
+      const buffer = await downloadExtensionStoreZipBuffer(base, resolved.downloadUrl);
+      verifyStoreArtifactSha256(buffer, resolved.sha256);
+      const {
+        peekExtensionManifestFromStoreZip,
+        peekExtensionPackageJsonFromStoreZip,
+      } = await import('../../extensions/install.js');
+      const manifest = peekExtensionManifestFromStoreZip(buffer);
+      const packageJson = peekExtensionPackageJsonFromStoreZip(buffer);
+      const dependencies = packageJson?.dependencies;
+      const dependencyCount = dependencies && typeof dependencies === 'object' && !Array.isArray(dependencies)
+        ? Object.keys(dependencies).length
+        : 0;
+      const scripts = packageJson?.scripts;
+      const lifecycleNames = new Set(['preinstall', 'install', 'postinstall', 'prepare']);
+      const lifecycleScripts = scripts && typeof scripts === 'object' && !Array.isArray(scripts)
+        ? Object.keys(scripts).filter((name) => lifecycleNames.has(name))
+        : [];
+
+      return {
+        ...detail,
+        installability: { available: true, sha256: resolved.sha256 },
+        ...(manifest ? { manifest } : {}),
+        packageSummary: { dependencyCount, lifecycleScripts },
+      };
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      return {
+        ...detail,
+        installability: { available: false, reason },
+      };
+    }
   }
 
   /**
@@ -370,12 +420,13 @@ export class GatewayMarketplaceService {
       verifyStoreArtifactSha256,
     } = await import('../../agent/skills/marketplace/adapters/store/store-api-client.js');
     const {
-      installExtensionFromStoreZip,
-      peekExtensionIdFromStoreZip,
-    } = await import('../../extensions/install.js');
+      commitStagedExtensionInstall,
+      finalizeStagedExtensionInstall,
+      rollbackStagedExtensionInstall,
+      stageExtensionStoreZip,
+    } = await import('../../extensions/install-transaction.js');
     const storeBase = resolveExtensionsStoreBaseUrl(cfg);
     const targetDir = resolveExtensionsDir();
-    mkdirSync(targetDir, { recursive: true });
 
     const { downloadUrl, version, sha256 } = await resolveExtensionZipDownloadUrl(
       storeBase,
@@ -385,55 +436,79 @@ export class GatewayMarketplaceService {
     const buf = await downloadExtensionStoreZipBuffer(storeBase, downloadUrl);
     verifyStoreArtifactSha256(buf, sha256);
 
-    if (opts.overwrite) {
-      const peekId = peekExtensionIdFromStoreZip(buf);
-      if (peekId && existsSync(join(targetDir, peekId))) {
-        rmSync(join(targetDir, peekId), { recursive: true, force: true });
-      }
-    }
-
-    const result = await installExtensionFromStoreZip(buf, targetDir);
-    if (!result.ok || !result.extensionId) {
-      throw new Error(result.error ?? 'Extension install failed');
-    }
-
+    const transaction = await stageExtensionStoreZip(buf, targetDir);
     const lock = getExtensionLockfileManager();
-    await lock.upsert(result.extensionId, {
-      name: result.extensionId,
-      version,
-      resolved: packageName,
-      source: 'store',
-    });
-
-    const nextConfig = this.mergeExtensionEnabledIntoConfig(cfg, result.extensionId);
-    const saved = await this.opts.saveConfig(nextConfig);
-    if (!saved.saved) {
-      throw new Error(saved.error ?? 'Failed to save config after extension install');
-    }
-
-    const channelIdsBefore = new Set(this.opts.getChannelManager().getAllPlugins().map((p) => p.id));
-    let requiresGatewayRestart = false;
-    const loader = this.opts.getExtensionLoader();
+    const lockSnapshot = await lock.load();
+    let configSaved = false;
+    let lockWriteStarted = false;
     try {
-      if (loader) {
-        loader.invalidateManifestCache();
-        await loader.loadByActivationPlan();
-        const reg = loader.getRegistry();
-        for (const p of reg.channelPlugins) {
-          if (!channelIdsBefore.has(p.id)) {
-            requiresGatewayRestart = true;
-            break;
-          }
-        }
+      commitStagedExtensionInstall(transaction, opts.overwrite ?? false);
+
+      const nextConfig = this.mergeExtensionEnabledIntoConfig(cfg, transaction.extensionId);
+      const saved = await this.opts.saveConfig(nextConfig);
+      if (!saved.saved) {
+        throw new Error(saved.error ?? 'Failed to save config after extension install');
       }
+      configSaved = true;
+
+      lockWriteStarted = true;
+      await lock.upsert(transaction.extensionId, {
+        name: transaction.extensionId,
+        version,
+        resolved: packageName,
+        artifactUrl: downloadUrl,
+        source: 'store',
+      });
     } catch (err) {
       const em = err instanceof Error ? err.message : String(err);
-      log.warn({ err, errorMessage: em }, `Extension loader refresh after marketplace install failed: ${em}`);
-      requiresGatewayRestart = true;
+      const rollbackErrors: string[] = [];
+
+      try {
+        rollbackStagedExtensionInstall(transaction);
+      } catch (rollbackErr) {
+        rollbackErrors.push(`files: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);
+      }
+      if (configSaved) {
+        try {
+          const restored = await this.opts.saveConfig(cfg);
+          if (!restored.saved) {
+            rollbackErrors.push(`config: ${restored.error ?? 'restore failed'}`);
+          }
+        } catch (rollbackErr) {
+          rollbackErrors.push(`config: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);
+        }
+      }
+      if (lockWriteStarted) {
+        try {
+          await lock.save(lockSnapshot);
+        } catch (rollbackErr) {
+          rollbackErrors.push(`lockfile: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);
+        }
+      }
+
+      const rollbackSuffix = rollbackErrors.length > 0
+        ? ` Rollback incomplete (${rollbackErrors.join('; ')}).`
+        : '';
+      log.error(
+        { err, errorMessage: em, extensionId: transaction.extensionId, rollbackErrors },
+        `Marketplace extension install failed: ${em}${rollbackSuffix}`,
+      );
+      throw new Error(`${em}${rollbackSuffix}`, { cause: err });
     }
 
+    try {
+      finalizeStagedExtensionInstall(transaction);
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn(
+        { err, errorMessage: em, extensionId: transaction.extensionId },
+        `Installed extension but temporary backup cleanup failed: ${em}`,
+      );
+    }
+
+    this.opts.getExtensionLoader()?.invalidateManifestCache();
     this.opts.emit('config.reload', { section: 'extensions', source: 'marketplace-install' });
-    return { extensionId: result.extensionId, version, requiresGatewayRestart };
+    return { extensionId: transaction.extensionId, version, requiresGatewayRestart: true };
   }
 
   /** Remove a user-installed extension (global or per-agent dir) from disk and config. */

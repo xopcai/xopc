@@ -466,22 +466,23 @@ xopc extensions list --json
 
 ```bash
 # Install from npm (always under ~/.xopc/extensions)
-xopc extensions install xopc-extension-telegram
+xopc extensions install npm:xopc-extension-telegram
 
 # Install from local directory
 xopc extensions install ./my-local-extension
 
-# Install from xopc-store only
-xopc extensions install --store telegram
+# Install from xopc-store
+xopc extensions install store:telegram
 ```
 
 **Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
-| `--store` | Install from xopc-store only |
-| `--npm` | Install from npm only |
 | `-f, --force` | Replace an existing store/local install |
+| `-y, --yes` | Skip the Store install confirmation prompt |
+
+Install sources are explicit: `store:<id>`, `npm:<package>`, or an existing local directory. Store releases must publish SHA-256 metadata; the CLI verifies it before staging and import-checking the extension.
 
 ### Health, Audit, and Verify
 
@@ -530,6 +531,8 @@ xopc extensions dev ./my-local-extension
 xopc extensions pack ./my-local-extension
 xopc extensions publish ./my-local-extension --dry-run
 ```
+
+`extensions pack` writes a Store-ready `.zip`, `.sha256`, and `.manifest.json` artifact set. The metadata includes raw `sha256` and SRI `integrity` values.
 
 ---
 

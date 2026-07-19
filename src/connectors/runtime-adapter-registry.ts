@@ -8,6 +8,7 @@ import {
 } from '../storage/sqlite/index.js';
 import { assertConnectorAuthorizationReady } from './auth-provider-registry.js';
 import { saveComposioApiKey } from './composio.js';
+import { assertComposioApiKeyConfigured } from './composio-sessions.js';
 import { listConnectorInstances } from './instances.js';
 import { isManagedConnectorServer, materializeConnectorMcpServer } from './materialize.js';
 import { saveConnectorSecrets } from './secret-store.js';
@@ -147,6 +148,7 @@ registerConnectorRuntimeAdapter({
   async install({ config, definition, input, resolver }) {
     if (definition.runtime.type !== 'composio') throw new Error(`Invalid Composio connector definition: ${definition.id}`);
     if (definition.runtime.role === 'credential') await saveComposioApiKey(input, resolver);
+    if (definition.runtime.role === 'toolkit') await assertComposioApiKeyConfigured(resolver);
     const instance = installRecord(
       config,
       definition,

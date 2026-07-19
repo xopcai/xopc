@@ -50,6 +50,7 @@ export type ComposioConnectorHealth = {
   checkedAt: string;
   message: string;
   recovery: 'none' | 'connect' | 'reconnect' | 'retry';
+  errorCode?: 'missing_credential' | 'unauthorized' | 'forbidden' | 'network' | 'timeout' | 'provider_error';
 };
 
 const COMPOSIO_API_KEY_PROVIDER = 'connector-composio-api-key';
@@ -206,6 +207,7 @@ export const COMPOSIO_CONNECTORS: readonly ConnectorDefinition[] = [
       secrets: [{ key: 'COMPOSIO_API_KEY', label: 'Composio API key', required: true }],
     },
     runtime: { type: 'composio', toolkit: 'composio', role: 'credential' },
+    integrationStrategy: { lane: 'composio', workload: 'long_tail', preferred: true },
   },
   ...COMPOSIO_AGENT_READY_TOOLKITS.map((toolkit) => {
     const definition = connectorDefinitionFromComposioToolkit({
@@ -223,9 +225,10 @@ export async function saveComposioApiKey(input: { secrets?: Record<string, unkno
   const resolved = typeof raw === 'string' && raw.trim().startsWith('secret://')
     ? consumeConnectorSetupSecretRef(raw)
     : raw;
-  if (typeof resolved === 'string' && resolved.trim()) {
-    await resolver.saveApiKey(COMPOSIO_API_KEY_PROVIDER, resolved.trim(), { profileName: 'default' });
+  if (typeof resolved !== 'string' || !resolved.trim()) {
+    throw new Error('Composio API key is required.');
   }
+  await resolver.saveApiKey(COMPOSIO_API_KEY_PROVIDER, resolved.trim(), { profileName: 'default' });
 }
 
 export async function listComposioConnections(resolver = new CredentialResolver()): Promise<ComposioConnection[]> {
@@ -287,20 +290,41 @@ export async function inspectComposioConnectorHealth(toolkit: string, resolver =
       recovery: 'connect',
     };
   } catch (error) {
+    const failure = classifyComposioHealthError(error);
     return {
       toolkit: normalizedToolkit,
       status: 'degraded',
       activeConnections: 0,
       affectedConnections: 0,
       checkedAt: new Date().toISOString(),
-      message: errorMessageForHealth(error),
+      message: failure.message,
       recovery: 'retry',
+      errorCode: failure.code,
     };
   }
 }
 
-function errorMessageForHealth(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function classifyComposioHealthError(error: unknown): {
+  code: NonNullable<ComposioConnectorHealth['errorCode']>;
+  message: string;
+} {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/api key is not configured|missing.*api key/i.test(message)) {
+    return { code: 'missing_credential', message };
+  }
+  if (/\b401\b|unauthori[sz]ed|invalid api key|authentication failed/i.test(message)) {
+    return { code: 'unauthorized', message: 'Composio rejected the configured project API key.' };
+  }
+  if (/\b403\b|forbidden|insufficient permission|permission denied/i.test(message)) {
+    return { code: 'forbidden', message: 'The Composio project API key does not have the required permissions.' };
+  }
+  if (/timed?\s*out|timeout|aborterror/i.test(message)) {
+    return { code: 'timeout', message: 'The Composio health request timed out.' };
+  }
+  if (/fetch failed|network|econn|enotfound|eai_again|socket|tls/i.test(message)) {
+    return { code: 'network', message: 'The gateway could not reach the Composio API.' };
+  }
+  return { code: 'provider_error', message };
 }
 
 export function getComposioInstallationPolicy(config: Config | undefined, toolkit: string): ConnectorInstallationPolicy {

@@ -1,5 +1,5 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowLeft, CheckCircle, Loader2, Package, Search, Trash2, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, CheckCircle, Loader2, Package, Search, ShieldCheck, Trash2, X } from 'lucide-react';
 import { useCallback, useEffect, useReducer, useState } from 'react';
 
 import { uiPatchReducer } from '@/lib/settings-form-draft';
@@ -7,6 +7,7 @@ import { Link } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   getExtensionMarketplacePackageDetail,
   installExtensionFromMarketplace,
@@ -171,7 +172,20 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
       {restartHint ? <p className="text-sm text-fg-muted">{restartHint}</p> : null}
 
       {isLoading && !data ? (
-        <p className="text-sm text-fg-muted">…</p>
+        <ul className="flex flex-col gap-3" aria-label={copy.marketplaceLoading}>
+          {[0, 1, 2].map((index) => (
+            <li key={index} className="rounded-xl bg-surface-panel p-4 shadow-surface">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1 space-y-2.5">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-4 w-full max-w-xl" />
+                  <Skeleton className="h-4 w-2/3 max-w-md" />
+                </div>
+                <Skeleton className="h-8 w-20" />
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : (
         <ul className="flex flex-col gap-3">
           {extensionsList.length === 0 ? (
@@ -276,23 +290,14 @@ export function ExtensionMarketplacePanel({ className }: { className?: string })
                       ) : (
                         <button
                           type="button"
-                          disabled={busy}
-                          onClick={() => {
-                            void runInstall(e.id, false).catch(() => {
-                              /* surfaced */
-                            });
-                          }}
+                          onClick={() => dispatch({ type: 'patch', patch: { detailPkg: e.id } })}
                           className={cn(
-                            'inline-flex w-full items-center justify-center rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white',
-                            'shadow-surface transition-[transform,background-color] active:scale-[0.98]',
-                            'hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-                            'disabled:pointer-events-none disabled:opacity-50',
+                            'inline-flex w-full items-center justify-center rounded-lg border border-edge px-3 py-2 text-xs font-medium text-fg',
+                            'transition-[transform,background-color] active:scale-[0.98]',
+                            'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                           )}
                         >
-                          {busy ? (
-                            <Loader2 className="size-3.5 animate-spin" aria-hidden />
-                          ) : null}
-                          {copy.marketplaceInstall}
+                          {copy.marketplaceReview}
                         </button>
                       )}
                     </div>
@@ -334,6 +339,7 @@ function ExtensionMarketplaceDetailDialog({
   onUninstall: (id: string) => Promise<void>;
 }) {
   const [busy, setBusy] = useState(false);
+  const [riskAccepted, setRiskAccepted] = useState(false);
   const hasToken = useGatewayStore((s) => Boolean(s.token));
   const key = hasToken ? `ext-mp-detail-${packageName}` : null;
   const { data, error, isLoading } = useSWR(
@@ -344,6 +350,10 @@ function ExtensionMarketplaceDetailDialog({
 
   const installKind = extensionInstallKind(extensions, packageName);
   const userInstalled = installKind === 'user';
+  const permissions = data?.manifest?.permissions;
+  const permissionEntries = permissions && typeof permissions === 'object' && !Array.isArray(permissions)
+    ? Object.entries(permissions)
+    : [];
 
   const readmeMd =
     data?.readme?.trim() ||
@@ -354,7 +364,7 @@ function ExtensionMarketplaceDetailDialog({
       <Dialog.Portal>
         <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[130] bg-scrim" />
         <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[131] flex max-h-[min(90vh,44rem)] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-elevated"
+          className="fixed left-1/2 top-1/2 z-[131] flex h-[min(44rem,calc(100vh-1.5rem))] w-[min(42rem,calc(100vw-1.5rem))] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-elevated"
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3">
@@ -381,9 +391,23 @@ function ExtensionMarketplaceDetailDialog({
 
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
             {isLoading && !data ? (
-              <p className="text-sm text-fg-muted">…</p>
+              <div className="space-y-4" aria-label={copy.marketplaceLoading}>
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-4 w-28" />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <Skeleton className="h-12" />
+                  <Skeleton className="h-12" />
+                </div>
+                <Skeleton className="h-28 w-full" />
+                <Skeleton className="h-36 w-full" />
+              </div>
             ) : error ? (
-              <p className="text-sm text-fg-muted">{copy.marketplaceDetailLoadFailed}</p>
+              <div className="rounded-lg border border-red-300/70 bg-red-50 p-4 text-sm dark:border-red-900 dark:bg-red-950/30">
+                <p className="font-medium text-red-700 dark:text-red-300">{copy.marketplaceDetailLoadFailed}</p>
+                <p className="mt-1 break-words text-red-600 dark:text-red-400">
+                  {error instanceof Error ? error.message : copy.marketplaceLoadFailed}
+                </p>
+              </div>
             ) : data ? (
               <>
                 <h3 className="text-lg font-semibold text-fg">{data.name}</h3>
@@ -404,6 +428,72 @@ function ExtensionMarketplaceDetailDialog({
                     <dd>{data.downloads}</dd>
                   </div>
                 </dl>
+                {installKind !== 'bundled' ? (
+                  <section className="mt-5 space-y-3 rounded-lg border border-edge bg-surface-base p-4">
+                    <div className="flex items-start gap-2.5">
+                      {data.installability.available ? (
+                        <ShieldCheck className="mt-0.5 size-5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                      ) : (
+                        <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+                      )}
+                      <div className="min-w-0">
+                        <h4 className="text-sm font-semibold text-fg">
+                          {data.installability.available
+                            ? copy.marketplaceRiskTitle
+                            : copy.marketplaceUnavailableTitle}
+                        </h4>
+                        <p className="mt-1 text-xs leading-relaxed text-fg-muted">
+                          {data.installability.available
+                            ? copy.marketplaceCodeRisk
+                            : data.installability.reason ?? copy.marketplaceUnavailableBody}
+                        </p>
+                      </div>
+                    </div>
+
+                    {data.installability.available ? (
+                      <>
+                        <dl className="grid gap-2 text-xs text-fg-muted sm:grid-cols-2">
+                          <div>
+                            <dt className="font-medium text-fg">{copy.marketplaceIntegrity}</dt>
+                            <dd>{copy.marketplaceIntegrityVerified}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium text-fg">{copy.marketplaceDependencies}</dt>
+                            <dd>{data.packageSummary?.dependencyCount ?? 0}</dd>
+                          </div>
+                        </dl>
+                        <div className="text-xs text-fg-muted">
+                          <p className="font-medium text-fg">{copy.marketplacePermissions}</p>
+                          {permissionEntries.length > 0 ? (
+                            <ul className="mt-1 space-y-1">
+                              {permissionEntries.map(([name, value]) => (
+                                <li key={name} className="break-words">
+                                  <code>{name}</code>: {Array.isArray(value) ? value.join(', ') : String(value)}
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="mt-1">{copy.marketplacePermissionsNone}</p>
+                          )}
+                        </div>
+                        {(data.packageSummary?.lifecycleScripts.length ?? 0) > 0 ? (
+                          <p className="text-xs leading-relaxed text-amber-700 dark:text-amber-300">
+                            {copy.marketplaceLifecycleScripts}: {data.packageSummary?.lifecycleScripts.join(', ')}
+                          </p>
+                        ) : null}
+                        <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+                          <input
+                            type="checkbox"
+                            checked={riskAccepted}
+                            onChange={(event) => setRiskAccepted(event.target.checked)}
+                            className="mt-0.5 size-4 rounded border-edge accent-[var(--color-accent)]"
+                          />
+                          <span>{copy.marketplaceRiskConfirm}</span>
+                        </label>
+                      </>
+                    ) : null}
+                  </section>
+                ) : null}
                 {data.readme?.trim() ? (
                   <h4 className="mb-2 mt-6 text-sm font-semibold text-fg">
                     {copy.marketplaceDetailReadmeHeading}
@@ -433,7 +523,7 @@ function ExtensionMarketplaceDetailDialog({
                 <>
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || !data.installability.available || !riskAccepted}
                     onClick={() => {
                       if (userInstalled) {
                         if (!window.confirm(copy.marketplaceReinstallConfirm)) return;

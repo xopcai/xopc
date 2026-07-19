@@ -159,6 +159,31 @@ describe('agent manifest resolver', () => {
       }),
     ).toThrow('cycle');
   });
+
+  it('linearizes shared parents once in diamond inheritance', () => {
+    const result = resolveEffectiveAgentManifest({
+      agent: { ...baseAgent, extends: ['left', 'right'], tools: { builtin: {} } },
+      presets: {
+        base: {
+          id: 'base',
+          name: 'Base',
+          version: 1,
+          tools: { builtin: { exec_command: { mode: 'deny' } } },
+        },
+        left: {
+          id: 'left',
+          name: 'Left',
+          version: 1,
+          extends: ['base'],
+          tools: { builtin: { exec_command: { mode: 'allow' } } },
+        },
+        right: { id: 'right', name: 'Right', version: 1, extends: ['base'] },
+      },
+    });
+
+    expect(result.presetChain).toEqual(['base', 'left', 'right']);
+    expect(result.manifest.tools.builtin.exec_command.mode).toBe('allow');
+  });
 });
 
 describe('agent manifest validator', () => {

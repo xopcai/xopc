@@ -85,6 +85,12 @@ export type ConnectorDefinition = {
         toolsetId?: string;
         sourceKind?: string;
       };
+  integrationStrategy?: {
+    lane: 'native' | 'mcp' | 'composio';
+    workload: 'core' | 'high_frequency' | 'long_tail';
+    preferred: boolean;
+    alternative?: { kind: 'channel' | 'connector'; id: string };
+  };
 };
 
 export type StoreConnectorCatalogItem = {
@@ -277,6 +283,7 @@ export type ComposioConnectorHealth = {
   checkedAt: string;
   message: string;
   recovery: 'none' | 'connect' | 'reconnect' | 'retry';
+  errorCode?: 'missing_credential' | 'unauthorized' | 'forbidden' | 'network' | 'timeout' | 'provider_error';
 };
 
 export type ComposioTool = {

@@ -7,7 +7,7 @@ xopc 提供了一个轻量级但功能强大的扩展系统。
 - **三级存储** — 仅工作区、用户全局目录、或与安装包一并提供的内置扩展（见下表）。
 - **按配置激活** — 根据 `xopc.extension.json` 与当前 **配置 / 环境** 决定加载哪些扩展（见 [何时加载扩展](#何时加载扩展)）。
 - **Extension SDK** — 使用 `@xopcai/xopc/extension-sdk`（可选用 `extension-sdk/core`、`extension-sdk/lazy` 等子路径）。
-- **TypeScript** — 扩展为普通 TS/JS 模块，由运行时直接加载，无需单独编译步骤。
+- **TypeScript 开发** — 可以使用 TypeScript 编写扩展，但发布包的 `main` 必须指向已构建的 `.js`、`.mjs` 或 `.cjs`；加载器不会现场编译源码。
 - **安装来源** — 通过 `xopc extensions install` 支持 npm 包、本地目录或 xopc-store 扩展。
 - **网关控制台 UI（可选）** — manifest 中可声明 **`ui`**，在 Web 控制台沙箱 iframe 中运行；iframe 侧使用 **`@xopcai/extension-ui-sdk`**（见 [网关控制台：扩展 UI](#gateway-extension-ui)）。
 
@@ -19,10 +19,13 @@ xopc 提供了一个轻量级但功能强大的扩展系统。
 
 ```bash
 # 从 npm 安装（目录 ~/.xopc/extensions）
-xopc extensions install xopc-extension-hello
+xopc extensions install npm:xopc-extension-hello
 
 # 从本地目录安装
 xopc extensions install ./my-local-extension
+
+# 从 xopc-store 安装（必须提供并校验 SHA-256）
+xopc extensions install store:hello
 
 # 查看已安装扩展
 xopc extensions list
@@ -301,18 +304,20 @@ xopc 仓库中的 **Hello** 示例演示了扩展 UI 的完整链路。若你提
 
 ```bash
 # 从 npm 安装
-xopc extensions install <package-name>
+xopc extensions install npm:<package-name>
 
 # 安装特定版本
-xopc extensions install my-extension@1.0.0
+xopc extensions install npm:my-extension@1.0.0
 
 # 从本地目录安装
 xopc extensions install ./local-extension-dir
 xopc extensions install /absolute/path/to/extension
 
-# 仅从 xopc-store 安装
-xopc extensions install --store weather
+# 从 xopc-store 安装
+xopc extensions install store:weather
 ```
+
+安装来源必须显式指定：`store:`、`npm:`，或一个确实存在的本地目录。Store 安装要求发布版本提供原始 SHA-256 摘要；CLI 校验后会先暂存、检查主入口，再原子替换正式目录，成功后需要重启网关加载代码。
 
 **安装流程**：
 1. 下载或复制扩展文件
@@ -348,6 +353,8 @@ xopc extensions dev ./local-extension-dir
 xopc extensions pack ./local-extension-dir
 xopc extensions publish ./local-extension-dir --dry-run
 ```
+
+`extensions pack` 会生成可提交到 Store 的 `.zip`、`.sha256` 和 `.manifest.json` 制品集；元数据同时包含原始十六进制 `sha256` 与 SRI 格式 `integrity`。
 
 ### extensions search / update / freeze
 

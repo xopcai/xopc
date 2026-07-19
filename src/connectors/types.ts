@@ -47,6 +47,16 @@ export type ConnectorPermissions = {
   filesystem?: string[];
 };
 
+export type ConnectorIntegrationStrategy = {
+  lane: 'native' | 'mcp' | 'composio';
+  workload: 'core' | 'high_frequency' | 'long_tail';
+  preferred: boolean;
+  alternative?: {
+    kind: 'channel' | 'connector';
+    id: string;
+  };
+};
+
 export type ConnectorSecretReference = {
   xopcSecretRef: {
     provider: string;
@@ -120,6 +130,7 @@ export type ConnectorDefinition = {
   };
   runtime: ConnectorRuntimeDefinition;
   permissions?: ConnectorPermissions;
+  integrationStrategy?: ConnectorIntegrationStrategy;
   provenance?: {
     packageName: string;
     sha256: string;

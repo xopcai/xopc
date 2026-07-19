@@ -5,6 +5,7 @@ import {
   Archive,
   Bot,
   CheckCircle2,
+  ChevronRight,
   Circle,
   CirclePause,
   CirclePlay,
@@ -13,11 +14,13 @@ import {
   ExternalLink,
   FilePlus2,
   GitBranch,
+  Gauge,
   ListChecks,
   Plus,
   RefreshCw,
   ScrollText,
   Terminal,
+  Target,
   Trash2,
   XCircle,
 } from 'lucide-react';
@@ -53,6 +56,16 @@ type GoalStatus = 'active' | 'paused' | 'blocked' | 'needs_input' | 'done' | 'ar
 type ChecklistStatus = 'pending' | 'completed' | 'impossible';
 type EvidenceKind = 'file' | 'diff' | 'command' | 'test' | 'link' | 'message' | 'artifact';
 type EvidenceRequirementStatus = 'pending' | 'ai_verified' | 'approved' | 'rejected';
+type GoalOutcomeMetric = {
+  name: string;
+  baselineValue: number;
+  targetValue: number;
+  currentValue?: number;
+  unit?: string;
+  direction: 'increase' | 'decrease';
+  sourceUrl?: string;
+  measuredAt?: number;
+};
 
 function contractLines(value: string): string[] {
   return value
@@ -118,6 +131,7 @@ type GoalDetail = {
     objective: string;
     scopeBoundary?: string;
     evidencePlan: string[];
+    outcomeMetric?: GoalOutcomeMetric;
   };
   evidenceRequirements: Array<{
     id: string;
@@ -333,19 +347,54 @@ function evidenceKindLabel(kind: EvidenceKind, t: GoalDetailMessages): string {
   return t.evidenceKinds[kind] ?? kind;
 }
 
-function goalStatusSummary(goal: GoalDetail, t: GoalDetailMessages): { title: string; body: string; tone: 'normal' | 'attention' | 'done' } {
+function outcomeMetricAchieved(metric: GoalOutcomeMetric | undefined): boolean {
+  if (!metric || metric.currentValue == null) return false;
+  return metric.direction === 'increase'
+    ? metric.currentValue >= metric.targetValue
+    : metric.currentValue <= metric.targetValue;
+}
+
+function finiteDraftNumber(value: string): number | undefined {
+  if (!value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function goalStatusSummary(
+  goal: GoalDetail,
+  latestRun: GoalRun | undefined,
+  t: GoalDetailMessages,
+): { title: string; body: string; tone: 'normal' | 'attention' | 'done'; needsReview: boolean } {
+  const pendingEvidence = goal.evidenceRequirements.some((item) => item.status !== 'approved');
+  const pendingOutcome = Boolean(goal.contract?.outcomeMetric && !outcomeMetricAchieved(goal.contract.outcomeMetric));
+  const recordedDoneButUnverified = goal.status === 'done' && (
+    pendingEvidence || pendingOutcome || latestRun?.verdict === 'continue'
+  );
+  if (recordedDoneButUnverified) {
+    return {
+      title: t.progressPanel.executionFinishedTitle,
+      body: t.progressPanel.executionFinishedFallback,
+      tone: 'attention',
+      needsReview: true,
+    };
+  }
   if (goal.status === 'blocked') {
     return {
       title: t.progressPanel.blockedTitle,
       body: goal.blockedReason || t.progressPanel.blockedFallback,
       tone: 'attention',
+      needsReview: false,
     };
   }
   if (goal.status === 'needs_input') {
+    const completionReview = goal.blockedReason?.startsWith('Completion review required');
     return {
-      title: t.progressPanel.needsInputTitle,
-      body: goal.blockedReason || goal.nextAction || t.progressPanel.needsInputFallback,
+      title: completionReview ? t.progressPanel.executionFinishedTitle : t.progressPanel.needsInputTitle,
+      body: completionReview
+        ? t.progressPanel.executionFinishedFallback
+        : goal.blockedReason || goal.nextAction || t.progressPanel.needsInputFallback,
       tone: 'attention',
+      needsReview: Boolean(completionReview),
     };
   }
   if (goal.status === 'paused') {
@@ -353,6 +402,7 @@ function goalStatusSummary(goal: GoalDetail, t: GoalDetailMessages): { title: st
       title: t.progressPanel.pausedTitle,
       body: goal.blockedReason || t.progressPanel.pausedFallback,
       tone: 'normal',
+      needsReview: false,
     };
   }
   if (goal.status === 'done') {
@@ -360,6 +410,7 @@ function goalStatusSummary(goal: GoalDetail, t: GoalDetailMessages): { title: st
       title: t.progressPanel.doneTitle,
       body: t.progressPanel.doneFallback,
       tone: 'done',
+      needsReview: false,
     };
   }
   if (goal.status === 'archived') {
@@ -367,12 +418,14 @@ function goalStatusSummary(goal: GoalDetail, t: GoalDetailMessages): { title: st
       title: t.progressPanel.archivedTitle,
       body: t.progressPanel.archivedFallback,
       tone: 'normal',
+      needsReview: false,
     };
   }
   return {
     title: t.progressPanel.activeTitle,
     body: goal.nextAction || t.noNextAction,
     tone: 'normal',
+    needsReview: false,
   };
 }
 
@@ -394,6 +447,8 @@ function GoalProgressPanel({
   onContinue,
   onOpenChat,
   onPause,
+  onConfigureOutcome,
+  onReviewEvidence,
 }: {
   goal: GoalDetail;
   latestRun?: GoalRun;
@@ -407,21 +462,25 @@ function GoalProgressPanel({
   onContinue: () => void;
   onOpenChat: () => void;
   onPause: () => void;
+  onConfigureOutcome: () => void;
+  onReviewEvidence: () => void;
 }) {
-  const summary = goalStatusSummary(goal, t);
+  const summary = goalStatusSummary(goal, latestRun, t);
   const approvedEvidence = goal.evidenceRequirements.filter((item) => item.status === 'approved').length;
   const evidenceRequired = goal.evidenceRequirements.length;
   const missingEvidence = goal.evidenceRequirements.filter((item) => item.status !== 'approved').slice(0, 2);
   const checklistPercent = progressPercent(done, total);
+  const metric = goal.contract?.outcomeMetric;
+  const outcomeAchieved = outcomeMetricAchieved(metric);
   const StatusIcon = summary.tone === 'attention' ? AlertTriangle : summary.tone === 'done' ? CheckCircle2 : CirclePlay;
 
   return (
     <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="grid gap-5">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={cn('rounded-full border px-2 py-0.5 text-xs', badgeClass(goal.status))}>
-              {statusLabel(goal.status, t)}
+            <span className={cn('rounded-full border px-2 py-0.5 text-xs', badgeClass(summary.needsReview ? 'needs_input' : goal.status))}>
+              {summary.needsReview ? t.progressPanel.reviewPendingLabel : statusLabel(goal.status, t)}
             </span>
             <span className="text-xs text-fg-muted">{formatMessage(t.prioritySummary, { priority: priorityLabel(goal.priority, t) })}</span>
             <span className="text-xs text-fg-muted">{goal.deadlineAt ? formatDate(goal.deadlineAt, language, t) : t.noDeadline}</span>
@@ -464,31 +523,67 @@ function GoalProgressPanel({
           ) : null}
         </div>
 
-        <div className="grid content-start gap-3 rounded-lg bg-surface-panel/70 p-3">
-          <div>
-            <div className="flex items-center justify-between gap-2 text-xs text-fg-muted">
-              <span>{t.progressPanel.completion}</span>
-              <span>{total ? formatMessage(t.checklistProgress, { done, total }) : t.noChecklist}</span>
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-edge-subtle bg-surface-panel/70 p-3">
+            <div className="flex items-center gap-2 text-xs font-medium text-fg-muted">
+              <Gauge className="size-4" aria-hidden />
+              {t.progressPanel.execution}
             </div>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-surface-hover">
+            <p className="mt-2 text-lg font-semibold tabular-nums text-fg">
+              {total ? formatMessage(t.checklistProgress, { done, total }) : t.notSet}
+            </p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-hover">
               <div className="h-full rounded-full bg-accent" style={{ width: `${checklistPercent}%` }} />
             </div>
           </div>
-          <dl className="grid grid-cols-2 gap-2 text-xs">
-            <div className="rounded-md bg-surface-muted/50 px-2 py-2">
-              <dt className="text-fg-muted">{t.progressPanel.evidence}</dt>
-              <dd className="mt-1 font-semibold text-fg">
-                {evidenceRequired
-                  ? formatMessage(t.evidenceRequirementProgress, { approved: approvedEvidence, total: evidenceRequired })
-                  : formatMessage(t.progressPanel.evidenceCount, { count: evidence.length })}
-              </dd>
+          <button
+            type="button"
+            className="rounded-lg border border-edge-subtle bg-surface-panel/70 p-3 text-left transition-colors hover:bg-surface-hover"
+            onClick={onReviewEvidence}
+          >
+            <div className="flex items-center justify-between gap-2 text-xs font-medium text-fg-muted">
+              <span>{t.progressPanel.evidence}</span>
+              <ChevronRight className="size-4" aria-hidden />
             </div>
-            <div className="rounded-md bg-surface-muted/50 px-2 py-2">
-              <dt className="text-fg-muted">{t.progressPanel.turnBudget}</dt>
-              <dd className="mt-1 font-semibold text-fg">{formatMessage(t.turns, { used: goal.turnsUsed, max: goal.maxTurns })}</dd>
+            <p className="mt-2 text-lg font-semibold tabular-nums text-fg">
+              {evidenceRequired
+                ? formatMessage(t.evidenceRequirementProgress, { approved: approvedEvidence, total: evidenceRequired })
+                : formatMessage(t.progressPanel.evidenceCount, { count: evidence.length })}
+            </p>
+            <p className="mt-1 text-xs text-fg-muted">
+              {missingEvidence.length ? t.progressPanel.reviewNeeded : t.progressPanel.reviewComplete}
+            </p>
+          </button>
+          <button
+            type="button"
+            className={cn(
+              'rounded-lg border p-3 text-left transition-colors hover:bg-surface-hover',
+              metric && outcomeAchieved
+                ? 'border-success/30 bg-success-soft/40'
+                : 'border-edge-subtle bg-surface-panel/70',
+            )}
+            onClick={onConfigureOutcome}
+          >
+            <div className="flex items-center justify-between gap-2 text-xs font-medium text-fg-muted">
+              <span className="flex items-center gap-2"><Target className="size-4" aria-hidden />{t.progressPanel.outcome}</span>
+              <ChevronRight className="size-4" aria-hidden />
             </div>
-          </dl>
-          <div className="flex flex-wrap gap-2">
+            <p className="mt-2 truncate text-lg font-semibold tabular-nums text-fg">
+              {metric
+                ? formatMessage(t.progressPanel.outcomeSummary, {
+                    baseline: metric.baselineValue,
+                    current: metric.currentValue ?? t.progressPanel.currentMissing,
+                    target: metric.targetValue,
+                    unit: metric.unit ? ` ${metric.unit}` : '',
+                  })
+                : t.progressPanel.outcomeNotSet}
+            </p>
+            <p className="mt-1 truncate text-xs text-fg-muted">
+              {metric ? metric.name : t.progressPanel.outcomeNotSetHint}
+            </p>
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle pt-4">
             <Button
               type="button"
               variant="primary"
@@ -497,8 +592,15 @@ function GoalProgressPanel({
               onClick={onContinue}
             >
               <CirclePlay className="size-4" aria-hidden />
-              {primaryActionLabel(goal.status, t)}
+              {summary.needsReview && goal.nextAction
+                ? t.progressPanel.continueExecution
+                : primaryActionLabel(goal.status, t)}
             </Button>
+            {missingEvidence.length ? (
+              <Button type="button" variant="secondary" className="h-9 rounded-lg" onClick={onReviewEvidence}>
+                {t.progressPanel.reviewEvidenceAction}
+              </Button>
+            ) : null}
             {goal.activeSessionKey ? (
               <Button type="button" variant="secondary" className="h-9 rounded-lg px-2.5" aria-label={t.chat} onClick={onOpenChat}>
                 <ExternalLink className="size-4" aria-hidden />
@@ -514,7 +616,6 @@ function GoalProgressPanel({
             >
               <CirclePause className="size-4" aria-hidden />
             </Button>
-          </div>
         </div>
       </div>
     </section>
@@ -595,6 +696,12 @@ export function GoalDetailPage() {
   const [contractScopeBoundaryDraft, setContractScopeBoundaryDraft] = useState('');
   const [contractCriteriaDraft, setContractCriteriaDraft] = useState('');
   const [contractEvidencePlanDraft, setContractEvidencePlanDraft] = useState('');
+  const [outcomeNameDraft, setOutcomeNameDraft] = useState('');
+  const [outcomeBaselineDraft, setOutcomeBaselineDraft] = useState('');
+  const [outcomeTargetDraft, setOutcomeTargetDraft] = useState('');
+  const [outcomeCurrentDraft, setOutcomeCurrentDraft] = useState('');
+  const [outcomeUnitDraft, setOutcomeUnitDraft] = useState('');
+  const [outcomeSourceDraft, setOutcomeSourceDraft] = useState('');
   const [workflowDefinitionDraft, setWorkflowDefinitionDraft] = useState('');
   const [workflowGoalDraft, setWorkflowGoalDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -663,6 +770,13 @@ export function GoalDetailPage() {
     setContractScopeBoundaryDraft(goal.contract?.scopeBoundary ?? '');
     setContractCriteriaDraft(goal.checklist.map((item) => item.text).join('\n'));
     setContractEvidencePlanDraft(goal.contract?.evidencePlan.join('\n') ?? '');
+    const metric = goal.contract?.outcomeMetric;
+    setOutcomeNameDraft(metric?.name ?? '');
+    setOutcomeBaselineDraft(metric ? String(metric.baselineValue) : '');
+    setOutcomeTargetDraft(metric ? String(metric.targetValue) : '');
+    setOutcomeCurrentDraft(metric?.currentValue != null ? String(metric.currentValue) : '');
+    setOutcomeUnitDraft(metric?.unit ?? '');
+    setOutcomeSourceDraft(metric?.sourceUrl ?? '');
     setEvidenceRequirementDraft((current) => goal.evidenceRequirements.some((item) => item.id === current)
       ? current
       : goal.evidenceRequirements[0]?.id ?? '');
@@ -673,6 +787,12 @@ export function GoalDetailPage() {
     if (!goal) return;
     setBusy('continue');
     try {
+      if (goal.status === 'done') {
+        await fetchJson(apiUrl(`/api/goals/${encodeURIComponent(goal.id)}/reopen`), {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+      }
       const res = await fetchJson<{ ok: true; goal: GoalDetail | null; sessionKey?: string }>(
         apiUrl(`/api/goals/${encodeURIComponent(goal.id)}/continue`),
         { method: 'POST', body: JSON.stringify({}) },
@@ -740,6 +860,73 @@ export function GoalDetailPage() {
             scopeBoundary: contractScopeBoundaryDraft.trim() || undefined,
             criteria: contractLines(contractCriteriaDraft),
             evidencePlan: contractLines(contractEvidencePlanDraft),
+          }),
+        },
+      );
+      setGoal(res.goal);
+      await reloadTimeline(goal.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.errors.save);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const saveOutcomeMetric = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!goal) return;
+    const baselineValue = finiteDraftNumber(outcomeBaselineDraft);
+    const targetValue = finiteDraftNumber(outcomeTargetDraft);
+    const currentValue = finiteDraftNumber(outcomeCurrentDraft);
+    if (!outcomeNameDraft.trim() || baselineValue == null || targetValue == null) return;
+    setBusy('outcome:save');
+    setError(null);
+    try {
+      const res = await fetchJson<{ ok: true; goal: GoalDetail }>(
+        apiUrl(`/api/goals/${encodeURIComponent(goal.id)}/contract`),
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            objective: goal.contract?.objective ?? goal.title,
+            scopeBoundary: goal.contract?.scopeBoundary,
+            criteria: goal.checklist.map((item) => item.text),
+            evidencePlan: goal.contract?.evidencePlan ?? [],
+            outcomeMetric: {
+              name: outcomeNameDraft.trim(),
+              baselineValue,
+              targetValue,
+              currentValue,
+              unit: outcomeUnitDraft.trim() || undefined,
+              sourceUrl: outcomeSourceDraft.trim() || undefined,
+              measuredAt: currentValue == null ? undefined : Date.now(),
+            },
+          }),
+        },
+      );
+      setGoal(res.goal);
+      await reloadTimeline(goal.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t.errors.save);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const clearOutcomeMetric = async () => {
+    if (!goal) return;
+    setBusy('outcome:clear');
+    setError(null);
+    try {
+      const res = await fetchJson<{ ok: true; goal: GoalDetail }>(
+        apiUrl(`/api/goals/${encodeURIComponent(goal.id)}/contract`),
+        {
+          method: 'PUT',
+          body: JSON.stringify({
+            objective: goal.contract?.objective ?? goal.title,
+            scopeBoundary: goal.contract?.scopeBoundary,
+            criteria: goal.checklist.map((item) => item.text),
+            evidencePlan: goal.contract?.evidencePlan ?? [],
+            outcomeMetric: null,
           }),
         },
       );
@@ -1008,28 +1195,29 @@ export function GoalDetailPage() {
     }
     return ids;
   }, [evidence]);
+  const displayEvidence = useMemo(() => {
+    const seen = new Set<string>();
+    return evidence.filter((item) => {
+      if (item.title.trim().toLowerCase().startsWith('missing evidence:')) return false;
+      const key = `${item.kind}\u0000${item.title.trim()}\u0000${item.summary?.trim() ?? ''}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [evidence]);
   const failedWorkflowRuns = workflowRuns.filter((run) => run.status === 'failed' || run.status === 'timeout' || run.status === 'cancelled');
   const latestRun = runs[0];
   const timelineFilter = isTimelineFilter(searchParams.get('timeline')) ? searchParams.get('timeline') : 'all';
   const filteredActivity = timelineFilter === 'all' ? activity : activity.filter((item) => item.kind === timelineFilter);
   const activeWorkflowRuns = workflowRuns.filter((run) => run.status === 'queued' || run.status === 'running');
-  const primaryActionDisabled = busy != null || goal?.status === 'done' || goal?.status === 'archived';
+  const synthesizedSummary = goal ? goalStatusSummary(goal, latestRun, t) : null;
+  const verifiedDone = goal?.status === 'done' && !synthesizedSummary?.needsReview;
+  const primaryActionDisabled = busy != null || goal?.status === 'archived' || verifiedDone;
 
   const headerEnd = useMemo(() => {
     if (!goal) return null;
     return (
       <>
-        <Button
-          type="button"
-          variant="primary"
-          className="h-9 gap-2 rounded-lg px-2.5 md:px-3"
-          aria-label={primaryActionLabel(goal.status, t)}
-          disabled={primaryActionDisabled}
-          onClick={() => void continueGoal()}
-        >
-          <CirclePlay className="size-4" aria-hidden />
-          <span className="hidden md:inline">{primaryActionLabel(goal.status, t)}</span>
-        </Button>
         {goal.activeSessionKey ? (
           <Button
             type="button"
@@ -1042,17 +1230,6 @@ export function GoalDetailPage() {
             <span className="hidden md:inline">{t.chat}</span>
           </Button>
         ) : null}
-        <Button
-          type="button"
-          variant="secondary"
-          className="h-9 gap-2 rounded-lg px-2.5 md:px-3"
-          aria-label={t.pause}
-          disabled={busy != null || goal.status !== 'active'}
-          onClick={() => void postAction('pause')}
-        >
-          <CirclePause className="size-4" aria-hidden />
-          <span className="hidden md:inline">{t.pause}</span>
-        </Button>
         <Button
           type="button"
           variant="ghost"
@@ -1068,7 +1245,7 @@ export function GoalDetailPage() {
         </Button>
       </>
     );
-  }, [busy, goal, navigate, primaryActionDisabled, t]);
+  }, [busy, goal, navigate, t]);
 
   useLayoutEffect(() => {
     setPageHeader({
@@ -1086,8 +1263,7 @@ export function GoalDetailPage() {
           )}
           {goal ? (
             <p className="truncate text-xs text-fg-muted">
-              {statusLabel(goal.status, t)} · {formatMessage(t.agent, { agentId: goal.agentId })} · {formatMessage(t.turns, { used: goal.turnsUsed, max: goal.maxTurns })}
-              {total ? ` · ${formatMessage(t.checklistProgress, { done, total })}` : ''}
+              {synthesizedSummary?.title ?? statusLabel(goal.status, t)} · {formatMessage(t.agent, { agentId: goal.agentId })}
             </p>
           ) : null}
         </div>
@@ -1095,7 +1271,7 @@ export function GoalDetailPage() {
       end: headerEnd,
     });
     return () => clearPageHeader();
-  }, [backPath, clearPageHeader, done, goal, headerEnd, loading, setPageHeader, t, total]);
+  }, [backPath, clearPageHeader, goal, headerEnd, loading, setPageHeader, synthesizedSummary?.title, t]);
 
   const setTimelineFilter = (next: TimelineFilter) => {
     const params = new URLSearchParams(searchParams);
@@ -1130,7 +1306,78 @@ export function GoalDetailPage() {
               onContinue={() => void continueGoal()}
               onOpenChat={() => goal.activeSessionKey && navigate(`/chat/${encodeURIComponent(goal.activeSessionKey)}`)}
               onPause={() => void postAction('pause')}
+              onConfigureOutcome={() => document.getElementById('goal-outcome-metric')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+              onReviewEvidence={() => document.getElementById('goal-verification')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
             />
+
+            <section id="goal-outcome-metric" className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
+                    <Target className="size-4 text-accent" aria-hidden />
+                    {t.outcomeMetric.title}
+                  </h2>
+                  <p className="mt-1 text-sm text-fg-muted">{t.outcomeMetric.hint}</p>
+                </div>
+                {goal.contract?.outcomeMetric ? (
+                  <span className={cn(
+                    'rounded-full border px-2 py-0.5 text-xs font-medium',
+                    outcomeMetricAchieved(goal.contract.outcomeMetric)
+                      ? 'border-success/30 bg-success-soft text-success'
+                      : 'border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200',
+                  )}>
+                    {outcomeMetricAchieved(goal.contract.outcomeMetric)
+                      ? t.outcomeMetric.achieved
+                      : t.outcomeMetric.notAchieved}
+                  </span>
+                ) : null}
+              </div>
+              <form className="mt-4 grid gap-3" onSubmit={saveOutcomeMetric}>
+                <div className="grid gap-3 md:grid-cols-[minmax(12rem,1.4fr)_repeat(3,minmax(7rem,0.7fr))]">
+                  <label className="grid gap-1 text-xs font-medium text-fg-muted">
+                    {t.outcomeMetric.name}
+                    <input value={outcomeNameDraft} onChange={(event) => setOutcomeNameDraft(event.target.value)} className={fieldClass} placeholder={t.outcomeMetric.namePlaceholder} />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-fg-muted">
+                    {t.outcomeMetric.baseline}
+                    <input value={outcomeBaselineDraft} onChange={(event) => setOutcomeBaselineDraft(event.target.value)} className={fieldClass} type="number" step="any" inputMode="decimal" />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-fg-muted">
+                    {t.outcomeMetric.current}
+                    <input value={outcomeCurrentDraft} onChange={(event) => setOutcomeCurrentDraft(event.target.value)} className={fieldClass} type="number" step="any" inputMode="decimal" />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-fg-muted">
+                    {t.outcomeMetric.target}
+                    <input value={outcomeTargetDraft} onChange={(event) => setOutcomeTargetDraft(event.target.value)} className={fieldClass} type="number" step="any" inputMode="decimal" />
+                  </label>
+                </div>
+                <div className="grid gap-3 md:grid-cols-[10rem_minmax(0,1fr)_auto] md:items-end">
+                  <label className="grid gap-1 text-xs font-medium text-fg-muted">
+                    {t.outcomeMetric.unit}
+                    <input value={outcomeUnitDraft} onChange={(event) => setOutcomeUnitDraft(event.target.value)} className={fieldClass} placeholder={t.outcomeMetric.unitPlaceholder} />
+                  </label>
+                  <label className="grid gap-1 text-xs font-medium text-fg-muted">
+                    {t.outcomeMetric.source}
+                    <input value={outcomeSourceDraft} onChange={(event) => setOutcomeSourceDraft(event.target.value)} className={fieldClass} placeholder={t.outcomeMetric.sourcePlaceholder} />
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {goal.contract?.outcomeMetric ? (
+                      <Button type="button" variant="ghost" className="h-9" disabled={busy != null} onClick={() => void clearOutcomeMetric()}>
+                        {t.outcomeMetric.clear}
+                      </Button>
+                    ) : null}
+                    <Button
+                      type="submit"
+                      variant="secondary"
+                      className="h-9"
+                      disabled={busy != null || !outcomeNameDraft.trim() || finiteDraftNumber(outcomeBaselineDraft) == null || finiteDraftNumber(outcomeTargetDraft) == null}
+                    >
+                      {t.outcomeMetric.save}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            </section>
 
             <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
               <h2 className="text-sm font-semibold text-fg">{t.goalBrief}</h2>
@@ -1215,7 +1462,7 @@ export function GoalDetailPage() {
 
             <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
               <div className="grid min-w-0 gap-4">
-                <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
+                <section id="goal-verification" className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                       <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
@@ -1454,9 +1701,9 @@ export function GoalDetailPage() {
                         {t.addEvidence}
                       </Button>
                     </form>
-                    {evidence.length ? (
+                    {displayEvidence.length ? (
                       <ul className="space-y-2 text-sm">
-                        {evidence.slice(0, 6).map((item) => <EvidenceCard key={item.id} item={item} language={language} t={t} />)}
+                        {displayEvidence.slice(0, 6).map((item) => <EvidenceCard key={item.id} item={item} language={language} t={t} />)}
                       </ul>
                     ) : (
                       <p className="text-sm text-fg-muted">{t.noEvidence}</p>
@@ -1478,6 +1725,48 @@ export function GoalDetailPage() {
                       {t.refresh}
                     </Button>
                   </div>
+                  {runs.length ? (
+                    <ol className="mt-4 grid gap-2">
+                      {runs.slice(0, 6).map((run, index) => (
+                        <li key={run.id}>
+                          <details
+                            open={index === 0 && run.verdict !== 'done'}
+                            className="group rounded-lg border border-edge-subtle bg-surface-muted/40 px-3 py-2"
+                          >
+                            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 marker:hidden">
+                              <span className="min-w-0">
+                                <span className="block text-sm font-medium text-fg">
+                                  {formatMessage(t.executionProgress.runTitle, { number: runs.length - index })}
+                                </span>
+                                <time className="mt-0.5 block text-xs text-fg-muted">
+                                  {formatDateTime(run.finishedAt ?? run.startedAt, language, t)}
+                                </time>
+                              </span>
+                              <span className="flex shrink-0 items-center gap-2 text-xs text-fg-muted">
+                                {statusLabel(run.verdict ?? run.status, t)}
+                                <ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden />
+                              </span>
+                            </summary>
+                            <div className="mt-3 border-t border-edge-subtle pt-3">
+                              {run.reason ? <p className="text-sm text-fg">{run.reason}</p> : null}
+                              {run.assistantPreview ? <p className="mt-2 line-clamp-5 whitespace-pre-wrap text-xs text-fg-muted">{run.assistantPreview}</p> : null}
+                              {run.nextAction ? (
+                                <div className="mt-3 rounded-md bg-surface-base px-3 py-2">
+                                  <p className="text-xs font-medium text-fg-muted">{t.nextAction}</p>
+                                  <p className="mt-1 text-sm text-fg">{run.nextAction}</p>
+                                </div>
+                              ) : null}
+                            </div>
+                          </details>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : <p className="mt-4 text-sm text-fg-muted">{t.executionProgress.noRuns}</p>}
+
+                  <details className="mt-4 border-t border-edge-subtle pt-3">
+                    <summary className="cursor-pointer text-sm font-medium text-fg-muted hover:text-fg">
+                      {formatMessage(t.executionProgress.systemActivity, { count: activity.length })}
+                    </summary>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {(['all', 'goal_run', 'workflow_run', 'evidence', 'queue', 'event'] as TimelineFilter[]).map((filter) => (
                       <button
@@ -1536,40 +1825,98 @@ export function GoalDetailPage() {
                 ) : (
                     <p className="mt-3 text-sm text-fg-muted">{t.noTimeline}</p>
                 )}
+                  </details>
                 </section>
               </div>
 
               <aside className="grid h-fit gap-4">
-                <ProductAutomationFeedback
-                  eventType="goal.status_changed"
-                  source="goals"
-                  payloadKey="goalId"
-                  payloadValue={goal.id}
-                  onSaveInsight={saveAutomationInsight}
-                  isInsightSaved={(run) => savedAutomationInsightRunIds.has(run.id)}
-                />
-                <ProductAutomationFeedback
-                  eventType="goal.created"
-                  source="goals"
-                  payloadKey="goalId"
-                  payloadValue={goal.id}
-                  onSaveInsight={saveAutomationInsight}
-                  isInsightSaved={(run) => savedAutomationInsightRunIds.has(run.id)}
-                />
-                {goal.status === 'blocked' || goal.blockedReason ? (
-                  <AutomationSuggestionCard
-                    title={automationSuggestions.goalBlockedTitle}
-                    description={automationSuggestions.goalBlockedDescription}
-                    prompt={formatMessage(automationSuggestions.goalBlockedPrompt, { title: goal.title })}
-                    coverage={{
-                      eventType: 'goal.status_changed',
-                      source: 'goals',
-                      eventPayload: { goalId: goal.id, status: 'blocked' },
+                <section className="rounded-lg border border-accent/25 bg-accent-soft/30 p-4">
+                  <p className="text-xs font-medium text-accent-fg">{t.actionRail.nextTitle}</p>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm font-medium text-fg">
+                    {verifiedDone ? t.progressPanel.doneFallback : goal.nextAction || t.noNextAction}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    className="mt-3 h-9 w-full gap-2"
+                    disabled={busy != null || goal.status === 'archived'}
+                    onClick={() => {
+                      if (verifiedDone) {
+                        if (window.confirm(t.archiveConfirm)) void postAction('archive');
+                        return;
+                      }
+                      void continueGoal();
                     }}
-                  />
+                  >
+                    {verifiedDone ? <Archive className="size-4" aria-hidden /> : <CirclePlay className="size-4" aria-hidden />}
+                    {verifiedDone ? t.archive : t.actionRail.continueAction}
+                  </Button>
+                </section>
+
+                {(goal.evidenceRequirements.some((item) => item.status !== 'approved') ||
+                  Boolean(goal.contract?.outcomeMetric && !outcomeMetricAchieved(goal.contract.outcomeMetric)) ||
+                  latestRun?.verdict === 'continue') ? (
+                  <section className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
+                    <h2 className="text-sm font-semibold text-amber-900 dark:text-amber-100">{t.actionRail.needsYou}</h2>
+                    <ul className="mt-3 grid gap-2 text-sm text-amber-900 dark:text-amber-100">
+                      {goal.contract?.outcomeMetric && !outcomeMetricAchieved(goal.contract.outcomeMetric)
+                        ? <li>• {t.outcomeMetric.notAchieved}</li>
+                        : null}
+                      {goal.evidenceRequirements.some((item) => item.status !== 'approved')
+                        ? <li>• {formatMessage(t.actionRail.reviewEvidenceCount, { count: goal.evidenceRequirements.filter((item) => item.status !== 'approved').length })}</li>
+                        : null}
+                      {latestRun?.verdict === 'continue' ? <li>• {t.actionRail.latestCheckContinue}</li> : null}
+                    </ul>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {goal.contract?.outcomeMetric && !outcomeMetricAchieved(goal.contract.outcomeMetric) ? (
+                        <Button type="button" variant="secondary" className="h-8" onClick={() => document.getElementById('goal-outcome-metric')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
+                          {t.actionRail.setOutcome}
+                        </Button>
+                      ) : null}
+                      {goal.evidenceRequirements.some((item) => item.status !== 'approved') ? (
+                        <Button type="button" variant="secondary" className="h-8" onClick={() => document.getElementById('goal-verification')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                          {t.actionRail.reviewEvidence}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </section>
                 ) : null}
-                <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
-                  <h2 className="text-sm font-semibold text-fg">{t.goalSettings}</h2>
+
+                <details className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
+                  <summary className="cursor-pointer text-sm font-semibold text-fg">{t.actionRail.automation}</summary>
+                  <div className="mt-3 grid gap-3">
+                    <ProductAutomationFeedback
+                      eventType="goal.status_changed"
+                      source="goals"
+                      payloadKey="goalId"
+                      payloadValue={goal.id}
+                      onSaveInsight={saveAutomationInsight}
+                      isInsightSaved={(run) => savedAutomationInsightRunIds.has(run.id)}
+                    />
+                    <ProductAutomationFeedback
+                      eventType="goal.created"
+                      source="goals"
+                      payloadKey="goalId"
+                      payloadValue={goal.id}
+                      onSaveInsight={saveAutomationInsight}
+                      isInsightSaved={(run) => savedAutomationInsightRunIds.has(run.id)}
+                    />
+                    {goal.status === 'blocked' || goal.blockedReason ? (
+                      <AutomationSuggestionCard
+                        title={automationSuggestions.goalBlockedTitle}
+                        description={automationSuggestions.goalBlockedDescription}
+                        prompt={formatMessage(automationSuggestions.goalBlockedPrompt, { title: goal.title })}
+                        coverage={{
+                          eventType: 'goal.status_changed',
+                          source: 'goals',
+                          eventPayload: { goalId: goal.id, status: 'blocked' },
+                        }}
+                      />
+                    ) : null}
+                  </div>
+                </details>
+                <details className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
+                  <summary className="cursor-pointer text-sm font-semibold text-fg">{t.goalSettings}</summary>
                   <dl className="mt-3 grid gap-2 text-sm">
                     <div className="flex items-center justify-between gap-3">
                       <dt className="text-fg-muted">{t.deadline}</dt>
@@ -1698,19 +2045,17 @@ export function GoalDetailPage() {
                       </Button>
                     </form>
                   </details>
-                </section>
+                </details>
 
-                <section className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h2 className="flex items-center gap-2 text-sm font-semibold text-fg">
-                        <GitBranch className="size-4 text-accent" aria-hidden />
-                        {t.workflow}
-                      </h2>
-                      <p className="mt-1 text-sm text-fg-muted">{t.workflowHint}</p>
-                    </div>
+                <details className="rounded-lg border border-edge-subtle bg-surface-base p-4 shadow-surface">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold text-fg marker:hidden">
+                    <span className="flex items-center gap-2">
+                      <GitBranch className="size-4 text-accent" aria-hidden />
+                      {t.workflow}
+                    </span>
                     {activeWorkflowRuns.length ? <span className="rounded-full border border-accent/40 bg-accent-soft px-2 py-0.5 text-xs text-accent-fg">{formatMessage(t.activeCount, { count: activeWorkflowRuns.length })}</span> : null}
-                  </div>
+                  </summary>
+                  <p className="mt-2 text-sm text-fg-muted">{t.workflowHint}</p>
                   {workflowSuggestions.length ? (
                     <div className="mt-3 grid gap-2">
                       {workflowSuggestions.slice(0, 2).map((suggestion) => (
@@ -1860,7 +2205,7 @@ export function GoalDetailPage() {
                       </ul>
                     </div>
                   ) : null}
-                </section>
+                </details>
               </aside>
             </section>
           </>

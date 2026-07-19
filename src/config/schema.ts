@@ -5,6 +5,7 @@ import {
   CapabilityPresetSchema,
   DEFAULT_CAPABILITY_PRESET_ID,
 } from '../agent-manifest/schema.js';
+import { linearizePresetIds } from '../agent-manifest/preset-chain.js';
 import { checkCacheDir } from '../browser/cache-dir-policy.js';
 import { DEFAULT_AGENT_MODELS } from './default-model.js';
 import { validatePublicUrl } from './public-url.js';
@@ -1383,7 +1384,6 @@ export function getAgentDefaultModelRef(config: Config): string | undefined {
   if (!agent) return undefined;
 
   let modelRef: string | undefined;
-  const visited = new Set<string>();
   const applyModels = (models: AgentModelsConfig | undefined): void => {
     const roles = models?.roles ?? {};
     const defaultRole = models?.defaultRole ?? Object.keys(roles)[0];
@@ -1391,22 +1391,12 @@ export function getAgentDefaultModelRef(config: Config): string | undefined {
     const next = role?.model.trim();
     if (next) modelRef = next;
   };
-  const applyPreset = (presetId: string): void => {
-    if (visited.has(presetId)) return;
-    visited.add(presetId);
-    const preset = config.agents.capabilityPresets[presetId];
-    if (!preset) return;
-    for (const parent of preset.extends ?? []) {
-      applyPreset(parent);
-    }
-    applyModels(preset.models);
-  };
-
-  applyPreset(config.agents.defaultPreset);
-  for (const presetId of agent.extends ?? []) {
-    if (presetId !== config.agents.defaultPreset) {
-      applyPreset(presetId);
-    }
+  const rootPresetIds = [
+    ...(config.agents.capabilityPresets[config.agents.defaultPreset] ? [config.agents.defaultPreset] : []),
+    ...(agent.extends ?? []).filter((id) => id !== config.agents.defaultPreset),
+  ];
+  for (const presetId of linearizePresetIds(rootPresetIds, config.agents.capabilityPresets)) {
+    applyModels(config.agents.capabilityPresets[presetId]?.models);
   }
   applyModels(agent.models);
   return modelRef;
@@ -1422,7 +1412,6 @@ function getAgentDefaultModelsConfig(config: Config): AgentModelsConfig | undefi
   if (!agent) return undefined;
 
   let modelConfig: AgentModelsConfig | undefined;
-  const visited = new Set<string>();
   const applyModels = (models: AgentModelsConfig | undefined): void => {
     if (!models) return;
     modelConfig = {
@@ -1434,22 +1423,12 @@ function getAgentDefaultModelsConfig(config: Config): AgentModelsConfig | undefi
       },
     };
   };
-  const applyPreset = (presetId: string): void => {
-    if (visited.has(presetId)) return;
-    visited.add(presetId);
-    const preset = config.agents.capabilityPresets[presetId];
-    if (!preset) return;
-    for (const parent of preset.extends ?? []) {
-      applyPreset(parent);
-    }
-    applyModels(preset.models);
-  };
-
-  applyPreset(config.agents.defaultPreset);
-  for (const presetId of agent.extends ?? []) {
-    if (presetId !== config.agents.defaultPreset) {
-      applyPreset(presetId);
-    }
+  const rootPresetIds = [
+    ...(config.agents.capabilityPresets[config.agents.defaultPreset] ? [config.agents.defaultPreset] : []),
+    ...(agent.extends ?? []).filter((id) => id !== config.agents.defaultPreset),
+  ];
+  for (const presetId of linearizePresetIds(rootPresetIds, config.agents.capabilityPresets)) {
+    applyModels(config.agents.capabilityPresets[presetId]?.models);
   }
   applyModels(agent.models);
   return modelConfig;

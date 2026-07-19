@@ -32,11 +32,23 @@ function isParseError(value: unknown): value is { error: string } {
 function parseCreateBody(raw: unknown): CreateCapabilityPresetBody | { error: string } {
   const body = parseJsonObject(raw);
   if (isParseError(body)) return body;
-  return {
+  const out: CreateCapabilityPresetBody = {
     id: typeof body.id === 'string' ? body.id : undefined,
     name: typeof body.name === 'string' ? body.name : undefined,
     description: typeof body.description === 'string' ? body.description : undefined,
   };
+  if (Object.hasOwn(body, 'version')) out.version = Number(body.version);
+  for (const key of ['extends', 'models', 'tools', 'skills', 'memory', 'workflows', 'boundaries', 'runtime', 'locks'] as const) {
+    if (!Object.hasOwn(body, key)) continue;
+    const parsed = CapabilityPresetSchema.pick({ [key]: true } as Record<typeof key, true>).safeParse({
+      [key]: body[key],
+    });
+    if (!parsed.success) {
+      return { error: `${key} ${parsed.error.issues[0]?.message ?? 'is invalid'}` };
+    }
+    out[key] = parsed.data[key] as never;
+  }
+  return out;
 }
 
 function parseUpdateBody(raw: unknown): UpdateCapabilityPresetBody | { error: string } {

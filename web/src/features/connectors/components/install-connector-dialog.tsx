@@ -330,6 +330,15 @@ export function InstallConnectorDialog({
               })}
             </div>
             <div className="flex flex-col gap-4">
+          {connector.integrationStrategy ? (
+            <div className="rounded-xl border border-accent/20 bg-accent-soft/60 px-4 py-3 text-sm text-accent-fg">
+              {connector.integrationStrategy.lane === 'mcp'
+                ? t.integrationStrategyMcpHint
+                : connector.integrationStrategy.lane === 'native'
+                  ? t.integrationStrategyNativeHint
+                  : t.integrationStrategyComposioHint}
+            </div>
+          ) : null}
           {requiresPreInstallAuthorization(connector) ? (
             <div className="rounded-2xl border border-edge bg-surface-panel p-4">
               <p className="text-sm font-semibold text-fg">{t.oauthTitle}</p>
