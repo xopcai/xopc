@@ -6,6 +6,7 @@ import {
   Plus,
   Puzzle,
   Save,
+  SlidersHorizontal,
   Trash2,
   Wrench,
   X,
@@ -15,6 +16,7 @@ import { useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
 import { fetchSkillsCatalog } from '@/features/settings/agents-admin-api';
 import type { BuiltinToolUiGroupKey } from '@/features/settings/agents/builtin-tool-disable-groups';
 import { TypedModelsEditor } from '@/features/settings/agents/typed-models-editor';
@@ -30,7 +32,14 @@ import {
   fetchCapabilityPresets,
   updateCapabilityPreset,
   type CapabilityPresetRow,
+  type CapabilityPresetPolicyFields,
+  type CapabilityPresetToolPolicy,
 } from '@/features/settings/capability-presets/capability-presets-api';
+import {
+  PresetAdvancedPolicyEditor,
+  type PresetAdvancedFieldKey,
+  type PresetAdvancedJsonFields,
+} from '@/features/settings/capability-presets/preset-advanced-policy-editor';
 import {
   PresetSkillsPolicyEditor,
   type PresetSkillMode,
@@ -50,19 +59,35 @@ import { SettingsShellLayerProvider } from '@/lib/settings-shell-layer-context';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-type ToolMode = 'allow' | 'deny';
-type PresetTab = 'overview' | 'models' | 'tools' | 'skills' | 'impact';
+type PresetTab = 'overview' | 'models' | 'tools' | 'skills' | 'advanced' | 'impact';
 type StarterId = 'blank' | 'safe-coder' | 'read-only' | 'low-cost';
+type CapabilityPresetMessages = ReturnType<typeof messages>['capabilityPresetsSettings'];
+
+type ToolModelDraft = {
+  primary: string;
+  fallbacks: string;
+  timeoutMs: string;
+  autoProviderFallback: '' | 'true' | 'false';
+};
+
+type ModelAdvancedDraft = {
+  imageModel: ToolModelDraft;
+  imageGenerationModel: ToolModelDraft;
+  allowFallbacks: '' | 'true' | 'false';
+  maxCostTier: '' | 'low' | 'medium' | 'high';
+};
 
 type Draft = {
   id: string;
   name: string;
   description: string;
-  version: string;
   modelRows: AgentTypedModelRow[];
-  toolModes: Record<string, ToolMode>;
+  modelAdvanced: ModelAdvancedDraft;
+  toolPolicies: Record<string, CapabilityPresetToolPolicy>;
   skillMode: PresetSkillMode;
   skillPick: Set<string>;
+  extendsIds: string[];
+  jsonFields: PresetAdvancedJsonFields;
 };
 
 const TABS: Array<{ id: PresetTab; icon: typeof Copy }> = [
@@ -70,6 +95,7 @@ const TABS: Array<{ id: PresetTab; icon: typeof Copy }> = [
   { id: 'models', icon: Layers },
   { id: 'tools', icon: Wrench },
   { id: 'skills', icon: Puzzle },
+  { id: 'advanced', icon: SlidersHorizontal },
   { id: 'impact', icon: Eye },
 ];
 
@@ -84,13 +110,8 @@ function typedRowsFromPreset(preset: CapabilityPresetRow | null): AgentTypedMode
   );
 }
 
-function toolModesFromPreset(preset: CapabilityPresetRow | null): Record<string, ToolMode> {
-  return Object.fromEntries(
-    Object.entries(preset?.tools?.builtin ?? {}).map(([id, policy]) => [
-      id,
-      policy.mode === 'allow' ? 'allow' : 'deny',
-    ]),
-  );
+function toolPoliciesFromPreset(preset: CapabilityPresetRow | null): Record<string, CapabilityPresetToolPolicy> {
+  return structuredClone(preset?.tools?.builtin ?? {});
 }
 
 function skillPickFromPreset(preset: CapabilityPresetRow | null): Set<string> {
@@ -100,35 +121,136 @@ function skillPickFromPreset(preset: CapabilityPresetRow | null): Set<string> {
   return new Set(list ?? []);
 }
 
+function emptyToolModelDraft(): ToolModelDraft {
+  return { primary: '', fallbacks: '', timeoutMs: '', autoProviderFallback: '' };
+}
+
+function toolModelDraft(value: NonNullable<CapabilityPresetRow['models']>['imageModel']): ToolModelDraft {
+  return {
+    primary: value?.primary ?? '',
+    fallbacks: value?.fallbacks?.join('\n') ?? '',
+    timeoutMs: value?.timeoutMs ? String(value.timeoutMs) : '',
+    autoProviderFallback:
+      value?.autoProviderFallback === undefined ? '' : value.autoProviderFallback ? 'true' : 'false',
+  };
+}
+
+function emptyModelAdvancedDraft(): ModelAdvancedDraft {
+  return {
+    imageModel: emptyToolModelDraft(),
+    imageGenerationModel: emptyToolModelDraft(),
+    allowFallbacks: '',
+    maxCostTier: '',
+  };
+}
+
+function modelAdvancedFromPreset(preset: CapabilityPresetRow | null): ModelAdvancedDraft {
+  return {
+    imageModel: toolModelDraft(preset?.models?.imageModel),
+    imageGenerationModel: toolModelDraft(preset?.models?.imageGenerationModel),
+    allowFallbacks:
+      preset?.models?.policy?.allowFallbacks === undefined
+        ? ''
+        : preset.models.policy.allowFallbacks
+          ? 'true'
+          : 'false',
+    maxCostTier: preset?.models?.policy?.maxCostTier ?? '',
+  };
+}
+
+function jsonText(value: unknown): string {
+  return value === undefined ? '' : JSON.stringify(value, null, 2);
+}
+
+function emptyAdvancedJson(): PresetAdvancedJsonFields {
+  return { mcp: '', memory: '', workflows: '', boundaries: '', runtime: '', locks: '' };
+}
+
+function advancedJsonFromPreset(preset: CapabilityPresetRow | null): PresetAdvancedJsonFields {
+  return {
+    mcp: jsonText(preset?.tools?.mcp),
+    memory: jsonText(preset?.memory),
+    workflows: jsonText(preset?.workflows),
+    boundaries: jsonText(preset?.boundaries),
+    runtime: jsonText(preset?.runtime),
+    locks: jsonText(preset?.locks),
+  };
+}
+
 function draftFromPreset(preset: CapabilityPresetRow | null): Draft {
   return {
     id: preset?.id ?? '',
     name: preset?.name ?? '',
     description: preset?.description ?? '',
-    version: String(preset?.version ?? 1),
     modelRows: typedRowsFromPreset(preset),
-    toolModes: toolModesFromPreset(preset),
+    modelAdvanced: modelAdvancedFromPreset(preset),
+    toolPolicies: toolPoliciesFromPreset(preset),
     skillMode: preset?.skills?.mode ?? 'inherit',
     skillPick: skillPickFromPreset(preset),
+    extendsIds: [...(preset?.extends ?? [])],
+    jsonFields: advancedJsonFromPreset(preset),
+  };
+}
+
+function toolModelFromDraft(draft: ToolModelDraft) {
+  const primary = draft.primary.trim();
+  if (!primary) return undefined;
+  const fallbacks = draft.fallbacks.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
+  const timeoutMs = draft.timeoutMs.trim() ? Number(draft.timeoutMs) : undefined;
+  const autoProviderFallback =
+    draft.autoProviderFallback === '' ? undefined : draft.autoProviderFallback === 'true';
+  return {
+    primary,
+    ...(fallbacks.length > 0 ? { fallbacks } : {}),
+    ...(timeoutMs ? { timeoutMs } : {}),
+    ...(autoProviderFallback === undefined ? {} : { autoProviderFallback }),
   };
 }
 
 function modelsPatchFromDraft(draft: Draft, selected: CapabilityPresetRow | null) {
   const patch = cleanTypedModelsForPatch(draft.modelRows);
-  if (!patch?.roles) return null;
-  return {
+  const imageModel = toolModelFromDraft(draft.modelAdvanced.imageModel);
+  const imageGenerationModel = toolModelFromDraft(draft.modelAdvanced.imageGenerationModel);
+  const policy =
+    draft.modelAdvanced.allowFallbacks || draft.modelAdvanced.maxCostTier
+      ? {
+          ...(draft.modelAdvanced.allowFallbacks
+            ? { allowFallbacks: draft.modelAdvanced.allowFallbacks === 'true' }
+            : {}),
+          ...(draft.modelAdvanced.maxCostTier ? { maxCostTier: draft.modelAdvanced.maxCostTier } : {}),
+        }
+      : undefined;
+  const models = {
     ...(selected?.models?.defaultRole ? { defaultRole: selected.models.defaultRole } : {}),
-    roles: patch.roles,
+    ...(patch?.roles ? { roles: patch.roles } : {}),
+    ...(imageModel ? { imageModel } : {}),
+    ...(imageGenerationModel ? { imageGenerationModel } : {}),
+    ...(policy ? { policy } : {}),
   };
+  return Object.keys(models).length > 0 ? models : null;
+}
+
+function parseOptionalJson<T>(text: string): T | undefined {
+  return text.trim() ? JSON.parse(text) as T : undefined;
+}
+
+function normalizedJsonText(text: string): string {
+  if (!text.trim()) return '';
+  try {
+    return JSON.stringify(JSON.parse(text));
+  } catch {
+    return `!invalid:${text}`;
+  }
 }
 
 function toolsPatchFromDraft(draft: Draft) {
-  const builtin = Object.fromEntries(
-    Object.entries(draft.toolModes)
-      .toSorted(([a], [b]) => a.localeCompare(b))
-      .map(([id, mode]) => [id, { mode }]),
-  );
-  return Object.keys(builtin).length > 0 ? { builtin } : null;
+  const builtin = Object.fromEntries(Object.entries(draft.toolPolicies).toSorted(([a], [b]) => a.localeCompare(b)));
+  const mcp = parseOptionalJson<NonNullable<CapabilityPresetRow['tools']>['mcp']>(draft.jsonFields.mcp);
+  return Object.keys(builtin).length > 0 || mcp ? { builtin, ...(mcp ? { mcp } : {}) } : null;
+}
+
+function sortedToolPolicies(policies: Record<string, CapabilityPresetToolPolicy> | undefined) {
+  return Object.fromEntries(Object.entries(policies ?? {}).toSorted(([a], [b]) => a.localeCompare(b)));
 }
 
 function skillsPatchFromDraft(draft: Draft) {
@@ -144,10 +266,18 @@ function comparableDraft(draft: Draft, selected: CapabilityPresetRow | null) {
     id: draft.id.trim(),
     name: draft.name.trim(),
     description: draft.description.trim(),
-    version: Number(draft.version),
     models: modelsPatchFromDraft(draft, selected),
-    tools: toolsPatchFromDraft(draft),
+    tools: {
+      builtin: sortedToolPolicies(draft.toolPolicies),
+      mcp: normalizedJsonText(draft.jsonFields.mcp),
+    },
     skills: skillsPatchFromDraft(draft),
+    extends: [...draft.extendsIds].toSorted(),
+    memory: normalizedJsonText(draft.jsonFields.memory),
+    workflows: normalizedJsonText(draft.jsonFields.workflows),
+    boundaries: normalizedJsonText(draft.jsonFields.boundaries),
+    runtime: normalizedJsonText(draft.jsonFields.runtime),
+    locks: normalizedJsonText(draft.jsonFields.locks),
   };
 }
 
@@ -157,76 +287,123 @@ function comparablePreset(preset: CapabilityPresetRow | null) {
     id: preset.id,
     name: preset.name,
     description: preset.description ?? '',
-    version: preset.version,
-    models: preset.models?.roles ? {
-      ...(preset.models.defaultRole ? { defaultRole: preset.models.defaultRole } : {}),
-      roles: preset.models.roles,
-    } : null,
-    tools: preset.tools?.builtin && Object.keys(preset.tools.builtin).length > 0
-      ? { builtin: preset.tools.builtin }
-      : null,
-    skills: preset.skills ?? { mode: 'all' },
+    models: preset.models ?? null,
+    tools: {
+      builtin: sortedToolPolicies(preset.tools?.builtin),
+      mcp: normalizedJsonText(jsonText(preset.tools?.mcp)),
+    },
+    skills: preset.skills ?? null,
+    extends: [...(preset.extends ?? [])].toSorted(),
+    memory: normalizedJsonText(jsonText(preset.memory)),
+    workflows: normalizedJsonText(jsonText(preset.workflows)),
+    boundaries: normalizedJsonText(jsonText(preset.boundaries)),
+    runtime: normalizedJsonText(jsonText(preset.runtime)),
+    locks: normalizedJsonText(jsonText(preset.locks)),
   };
 }
 
-function presetSummary(preset: CapabilityPresetRow): string {
+function presetSummary(preset: CapabilityPresetRow, cp: CapabilityPresetMessages): string {
   const parts = [
-    preset.models?.roles ? `${Object.keys(preset.models.roles).length} model roles` : '',
-    preset.tools?.builtin ? `${Object.keys(preset.tools.builtin).length} tool access settings` : '',
-    preset.skills ? `skills: ${preset.skills.mode}` : '',
+    preset.models?.roles ? cp.summaryModels.replace('{{count}}', String(Object.keys(preset.models.roles).length)) : '',
+    preset.tools?.builtin ? cp.summaryTools.replace('{{count}}', String(Object.keys(preset.tools.builtin).length)) : '',
+    preset.skills ? cp.summarySkills.replace('{{mode}}', cp.skillModeLabels[preset.skills.mode]) : '',
   ].filter(Boolean);
-  return parts.join(' · ') || 'No shared settings yet';
+  return parts.join(' · ') || cp.summaryEmpty;
 }
 
-function starterDraft(id: StarterId): Draft {
+function emptyDraftPolicyFields() {
+  return {
+    modelAdvanced: emptyModelAdvancedDraft(),
+    extendsIds: [] as string[],
+    jsonFields: emptyAdvancedJson(),
+  };
+}
+
+function policyPayloadFromDraft(
+  draft: Draft,
+  selected: CapabilityPresetRow | null,
+): CapabilityPresetPolicyFields {
+  return {
+    extends: [...draft.extendsIds],
+    models: modelsPatchFromDraft(draft, selected) ?? undefined,
+    tools: toolsPatchFromDraft(draft) ?? undefined,
+    skills: skillsPatchFromDraft(draft) ?? undefined,
+    memory: parseOptionalJson<CapabilityPresetRow['memory']>(draft.jsonFields.memory),
+    workflows: parseOptionalJson<CapabilityPresetRow['workflows']>(draft.jsonFields.workflows),
+    boundaries: parseOptionalJson<CapabilityPresetRow['boundaries']>(draft.jsonFields.boundaries),
+    runtime: parseOptionalJson<CapabilityPresetRow['runtime']>(draft.jsonFields.runtime),
+    locks: parseOptionalJson<CapabilityPresetRow['locks']>(draft.jsonFields.locks),
+  };
+}
+
+function starterDraft(id: StarterId, cp: CapabilityPresetMessages): Draft {
   if (id === 'safe-coder') {
     return {
       id: 'safe-coder',
-      name: 'Safe Coder',
-      description: 'Shared settings for coding agents: code-oriented model roles, careful command execution, and focused engineering skills.',
-      version: '1',
-        modelRows: [
-        { id: 'deep', model: '', fallbacks: [], description: 'Complex implementation and planning' },
-        { id: 'code', model: '', fallbacks: [], description: 'Code edits and tests' },
-        { id: 'review', model: '', fallbacks: [], description: 'Review and risk checks' },
+      name: cp.starters['safe-coder'].title,
+      description: cp.starters['safe-coder'].description,
+      modelRows: [
+        { id: 'deep', model: '', fallbacks: [], description: cp.modelRoleDescriptions.deep },
+        { id: 'code', model: '', fallbacks: [], description: cp.modelRoleDescriptions.code },
+        { id: 'review', model: '', fallbacks: [], description: cp.modelRoleDescriptions.review },
       ],
-      toolModes: { exec_command: 'deny', send_message: 'deny', send_media: 'deny' },
+      toolPolicies: {
+        exec_command: { mode: 'deny' },
+        send_message: { mode: 'deny' },
+        send_media: { mode: 'deny' },
+      },
       skillMode: 'allowlist',
       skillPick: new Set(['diagnose', 'tdd']),
+      ...emptyDraftPolicyFields(),
     };
   }
   if (id === 'read-only') {
     return {
       id: 'read-only-research',
-      name: 'Read-only Research',
-      description: 'Shared settings for reading, searching, and summarizing without modifying files or running commands.',
-      version: '1',
-        modelRows: [
-        { id: 'deep', model: '', fallbacks: [], description: 'Synthesis and long-context reading' },
-        { id: 'fast', model: '', fallbacks: [], description: 'Quick summaries' },
+      name: cp.starters['read-only'].title,
+      description: cp.starters['read-only'].description,
+      modelRows: [
+        { id: 'deep', model: '', fallbacks: [], description: cp.modelRoleDescriptions.deep },
+        { id: 'fast', model: '', fallbacks: [], description: cp.modelRoleDescriptions.fast },
       ],
-      toolModes: { write_file: 'deny', apply_patch: 'deny', exec_command: 'deny', send_message: 'deny', send_media: 'deny' },
+      toolPolicies: {
+        write_file: { mode: 'deny' },
+        apply_patch: { mode: 'deny' },
+        exec_command: { mode: 'deny' },
+        send_message: { mode: 'deny' },
+        send_media: { mode: 'deny' },
+      },
       skillMode: 'all',
       skillPick: new Set(),
+      ...emptyDraftPolicyFields(),
     };
   }
   if (id === 'low-cost') {
     return {
       id: 'low-cost-assistant',
-      name: 'Low-cost Assistant',
-      description: 'Shared settings for lightweight agents that should prefer faster or cheaper model roles.',
-      version: '1',
-        modelRows: [
-        { id: 'deep', model: '', fallbacks: [], description: 'Default low-cost model' },
-        { id: 'fast', model: '', fallbacks: [], description: 'Low-latency replies' },
-        { id: 'cheap', model: '', fallbacks: [], description: 'Batch or summary work' },
+      name: cp.starters['low-cost'].title,
+      description: cp.starters['low-cost'].description,
+      modelRows: [
+        { id: 'deep', model: '', fallbacks: [], description: cp.modelRoleDescriptions.deep },
+        { id: 'fast', model: '', fallbacks: [], description: cp.modelRoleDescriptions.fast },
+        { id: 'cheap', model: '', fallbacks: [], description: cp.modelRoleDescriptions.cheap },
       ],
-      toolModes: {},
+      toolPolicies: {},
       skillMode: 'inherit',
       skillPick: new Set(),
+      ...emptyDraftPolicyFields(),
     };
   }
-  return { id: '', name: '', description: '', version: '1', modelRows: [], toolModes: {}, skillMode: 'inherit', skillPick: new Set() };
+  return {
+    id: '',
+    name: '',
+    description: '',
+    modelRows: [],
+    toolPolicies: {},
+    skillMode: 'inherit',
+    skillPick: new Set(),
+    ...emptyDraftPolicyFields(),
+  };
 }
 
 export function CapabilityPresetsSettingsPanel() {
@@ -248,7 +425,7 @@ export function CapabilityPresetsSettingsPanel() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState('');
   const [activeTab, setActiveTab] = useState<PresetTab>('overview');
-  const [draft, setDraft] = useState<Draft>(() => starterDraft('blank'));
+  const [draft, setDraft] = useState<Draft>(() => starterDraft('blank', cp));
   const [busy, setBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
@@ -264,6 +441,33 @@ export function CapabilityPresetsSettingsPanel() {
   const isNew = !selected || draft.id.trim() !== selected.id;
   const isDefaultPreset = Boolean(selected && selected.id === defaultPresetId);
   const dirty = JSON.stringify(comparableDraft(draft, selected)) !== JSON.stringify(comparablePreset(selected));
+  const draftComparable = comparableDraft(draft, selected);
+  const presetComparable = comparablePreset(selected);
+  const changedSections = [
+    draftComparable.id !== presetComparable?.id ||
+    draftComparable.name !== presetComparable?.name ||
+    draftComparable.description !== presetComparable?.description
+      ? cp.tabs.overview
+      : '',
+    JSON.stringify(draftComparable.models) !== JSON.stringify(presetComparable?.models) ? cp.tabs.models : '',
+    JSON.stringify(draftComparable.tools) !== JSON.stringify(presetComparable?.tools) ? cp.tabs.tools : '',
+    JSON.stringify(draftComparable.skills) !== JSON.stringify(presetComparable?.skills) ? cp.tabs.skills : '',
+    JSON.stringify({
+      extends: draftComparable.extends,
+      memory: draftComparable.memory,
+      workflows: draftComparable.workflows,
+      boundaries: draftComparable.boundaries,
+      runtime: draftComparable.runtime,
+      locks: draftComparable.locks,
+    }) !== JSON.stringify({
+      extends: presetComparable?.extends,
+      memory: presetComparable?.memory,
+      workflows: presetComparable?.workflows,
+      boundaries: presetComparable?.boundaries,
+      runtime: presetComparable?.runtime,
+      locks: presetComparable?.locks,
+    }) ? cp.tabs.advanced : '',
+  ].filter(Boolean);
   const displayError = localError ?? (error instanceof Error ? error.message : null);
   const dialogOpen = searchParams.get('action') === 'new' || Boolean(searchParams.get('preset'));
   const dialogTitle = isNew ? cp.newPreset : selected?.name ?? cp.editorTitle;
@@ -278,7 +482,7 @@ export function CapabilityPresetsSettingsPanel() {
     if (searchParams.get('action') === 'new') {
       const starter = searchParams.get('starter');
       setSelectedId('');
-      setDraft(starterDraft(starter === 'safe-coder' || starter === 'read-only' || starter === 'low-cost' ? starter : 'blank'));
+      setDraft(starterDraft(starter === 'safe-coder' || starter === 'read-only' || starter === 'low-cost' ? starter : 'blank', cp));
       setActiveTab('overview');
       return;
     }
@@ -304,7 +508,7 @@ export function CapabilityPresetsSettingsPanel() {
   }
 
   function startNew(starter: StarterId) {
-    const next = starterDraft(starter);
+    const next = starterDraft(starter, cp);
     setSelectedId('');
     setDraft(next);
     setLocalError(null);
@@ -313,6 +517,7 @@ export function CapabilityPresetsSettingsPanel() {
   }
 
   function closeDialog() {
+    if (dirty && !window.confirm(cp.discardConfirm)) return;
     setSearchParams({}, { replace: true });
     setLocalError(null);
     setDraft(draftFromPreset(selected));
@@ -330,37 +535,67 @@ export function CapabilityPresetsSettingsPanel() {
       setActiveTab('models');
       return;
     }
+    for (const model of [draft.modelAdvanced.imageModel, draft.modelAdvanced.imageGenerationModel]) {
+      const refs = [model.primary, ...model.fallbacks.split(/\r?\n|,/)].map((item) => item.trim()).filter(Boolean);
+      if (refs.some((ref) => !/^[^/\s]+\/.+/.test(ref))) {
+        setLocalError(cp.invalidModelRef);
+        setActiveTab('models');
+        return;
+      }
+      if (model.timeoutMs.trim() && (!Number.isInteger(Number(model.timeoutMs)) || Number(model.timeoutMs) <= 0)) {
+        setLocalError(cp.advancedPositiveIntegerError);
+        setActiveTab('models');
+        return;
+      }
+    }
+    for (const policy of Object.values(draft.toolPolicies)) {
+      const limits = [policy.limits?.maxCallsPerTurn, policy.limits?.timeoutMs].filter(
+        (value): value is number => value !== undefined,
+      );
+      if (limits.some((value) => !Number.isInteger(value) || value <= 0)) {
+        setLocalError(cp.advancedPositiveIntegerError);
+        setActiveTab('tools');
+        return;
+      }
+    }
+    for (const field of Object.keys(draft.jsonFields) as PresetAdvancedFieldKey[]) {
+      try {
+        parseOptionalJson(draft.jsonFields[field]);
+      } catch {
+        setLocalError(
+          cp.advancedJsonError.replace('{{field}}', cp.advancedFieldLabels[field]),
+        );
+        setActiveTab('advanced');
+        return;
+      }
+    }
     setBusy(true);
     setLocalError(null);
     try {
+      const policy = policyPayloadFromDraft(draft, selected);
       if (isNew) {
         const created = await createCapabilityPreset({
           id: draft.id.trim(),
           name: draft.name.trim(),
           ...(draft.description.trim() ? { description: draft.description.trim() } : {}),
+          ...policy,
         });
-        let nextPayload = created.presets;
-        const strategy = comparableDraft(draft, null);
-        if (strategy.models || strategy.tools || strategy.skills) {
-          nextPayload = await updateCapabilityPreset(created.presetId, {
-            version: strategy.version,
-            models: strategy.models,
-            tools: strategy.tools,
-            skills: strategy.skills,
-          });
-        }
-        await mutate(nextPayload, { revalidate: false });
+        await mutate(created.presets, { revalidate: false });
         setSelectedId(created.presetId);
         setSearchParams({ preset: created.presetId }, { replace: true });
       } else if (selected) {
-        const strategy = comparableDraft(draft, selected);
         const next = await updateCapabilityPreset(selected.id, {
-          name: strategy.name,
-          description: strategy.description || null,
-          version: strategy.version,
-          models: strategy.models,
-          tools: strategy.tools,
-          skills: strategy.skills,
+          name: draft.name.trim(),
+          description: draft.description.trim() || null,
+          extends: policy.extends ?? null,
+          models: policy.models ?? null,
+          tools: policy.tools ?? null,
+          skills: policy.skills ?? null,
+          memory: policy.memory ?? null,
+          workflows: policy.workflows ?? null,
+          boundaries: policy.boundaries ?? null,
+          runtime: policy.runtime ?? null,
+          locks: policy.locks ?? null,
         });
         await mutate(next, { revalidate: false });
       }
@@ -373,6 +608,7 @@ export function CapabilityPresetsSettingsPanel() {
 
   async function onDelete() {
     if (!selected) return;
+    if (!window.confirm(cp.deleteConfirm.replace('{{name}}', selected.name))) return;
     setBusy(true);
     setLocalError(null);
     try {
@@ -471,7 +707,7 @@ export function CapabilityPresetsSettingsPanel() {
                     {defaultPreset.description}
                   </p>
                 ) : null}
-                <div className="mt-3 text-xs text-fg-subtle">{presetSummary(defaultPreset)}</div>
+                <div className="mt-3 text-xs text-fg-subtle">{presetSummary(defaultPreset, cp)}</div>
               </button>
             </SettingsFormSection>
           ) : null}
@@ -505,7 +741,7 @@ export function CapabilityPresetsSettingsPanel() {
                         {preset.description}
                       </p>
                     ) : null}
-                    <div className="mt-3 truncate text-xs text-fg-subtle">{presetSummary(preset)}</div>
+                    <div className="mt-3 truncate text-xs text-fg-subtle">{presetSummary(preset, cp)}</div>
                   </button>
                 ))}
               </div>
@@ -585,16 +821,14 @@ export function CapabilityPresetsSettingsPanel() {
                       placeholder="safe-coder"
                     />
                   </label>
-                  <label className="flex flex-col gap-1.5 text-sm">
-                    <span className="font-medium text-fg">{cp.versionLabel}</span>
-                    <input
-                      className="w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus:border-edge-strong focus:outline-none"
-                      value={draft.version}
-                      disabled={busy}
-                      inputMode="numeric"
-                      onChange={(e) => setDraft((prev) => ({ ...prev, version: e.target.value }))}
-                    />
-                  </label>
+                  {!isNew && selected ? (
+                    <div className="flex flex-col gap-1.5 text-sm">
+                      <span className="font-medium text-fg">{cp.versionLabel}</span>
+                      <div className="rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg-muted">
+                        {cp.versionAutomatic.replace('{{version}}', String(selected.version))}
+                      </div>
+                    </div>
+                  ) : null}
                   <label className="flex flex-col gap-1.5 text-sm sm:col-span-2">
                     <span className="font-medium text-fg">{cp.nameLabel}</span>
                     <input
@@ -618,7 +852,7 @@ export function CapabilityPresetsSettingsPanel() {
                 </div>
                 <div className="mt-5 grid gap-2 sm:grid-cols-3">
                   <SummaryTile icon={Layers} label={cp.modelsTitle} value={String(draft.modelRows.length)} />
-                  <SummaryTile icon={Wrench} label={cp.toolsTitle} value={String(Object.keys(draft.toolModes).length)} />
+                  <SummaryTile icon={Wrench} label={cp.toolsTitle} value={String(Object.keys(draft.toolPolicies).length)} />
                   <SummaryTile icon={Puzzle} label={cp.skillsTitle} value={cp.skillModeLabels[draft.skillMode]} />
                 </div>
               </SettingsFormSection>
@@ -657,6 +891,12 @@ export function CapabilityPresetsSettingsPanel() {
                     roleDescriptions: cp.modelRoleDescriptions,
                   }}
                 />
+                <ModelAdvancedPolicyEditor
+                  value={draft.modelAdvanced}
+                  onChange={(modelAdvanced) => setDraft((prev) => ({ ...prev, modelAdvanced }))}
+                  disabled={busy}
+                  cp={cp}
+                />
               </SettingsFormSection>
             ) : null}
 
@@ -665,8 +905,8 @@ export function CapabilityPresetsSettingsPanel() {
                 <SettingsFormSectionHeader icon={Wrench} title={cp.toolsTitle} subtitle={cp.toolsHint} />
                 <PresetToolsPolicyEditor
                   builtinToolIds={data?.builtinToolIds ?? []}
-                  toolModes={draft.toolModes}
-                  onChange={(toolModes) => setDraft((prev) => ({ ...prev, toolModes }))}
+                  toolPolicies={draft.toolPolicies}
+                  onChange={(toolPolicies) => setDraft((prev) => ({ ...prev, toolPolicies }))}
                   disabled={busy}
                   getToolDescription={getToolDescription}
                   getGroupTitle={getToolGroupTitle}
@@ -683,7 +923,15 @@ export function CapabilityPresetsSettingsPanel() {
                     noOverrides: cp.toolsNoOverrides,
                     inheritedMode: cp.toolModes.inherit,
                     modeAllow: cp.toolModes.allow,
+                    modeConfirm: cp.toolModes.confirm,
                     modeDeny: cp.toolModes.deny,
+                    scopeLabel: cp.toolScopeLabel,
+                    scopeInherit: cp.toolScopeInherit,
+                    scopeReadonly: cp.toolScopeReadonly,
+                    scopeWorkspace: cp.toolScopeWorkspace,
+                    scopeUnrestricted: cp.toolScopeUnrestricted,
+                    maxCallsLabel: cp.toolMaxCallsLabel,
+                    timeoutLabel: cp.toolTimeoutLabel,
                   }}
                 />
               </SettingsFormSection>
@@ -724,15 +972,55 @@ export function CapabilityPresetsSettingsPanel() {
               </SettingsFormSection>
             ) : null}
 
+            {activeTab === 'advanced' ? (
+              <SettingsFormSection>
+                <SettingsFormSectionHeader
+                  icon={SlidersHorizontal}
+                  title={cp.advancedTitle}
+                  subtitle={cp.advancedHint}
+                />
+                <PresetAdvancedPolicyEditor
+                  extendsIds={draft.extendsIds}
+                  onExtendsChange={(extendsIds) => setDraft((prev) => ({ ...prev, extendsIds }))}
+                  presetOptions={presets.filter(
+                    (preset) => preset.id !== selected?.id && preset.id !== defaultPresetId,
+                  )}
+                  jsonFields={draft.jsonFields}
+                  onJsonFieldsChange={(jsonFields) => setDraft((prev) => ({ ...prev, jsonFields }))}
+                  disabled={busy}
+                  labels={{
+                    inheritanceTitle: cp.advancedInheritanceTitle,
+                    inheritanceHint: cp.advancedInheritanceHint,
+                    inheritanceEmpty: cp.advancedInheritanceEmpty,
+                    jsonTitle: cp.advancedJsonTitle,
+                    jsonHint: cp.advancedJsonHint,
+                    fieldLabels: cp.advancedFieldLabels,
+                    fieldHints: cp.advancedFieldHints,
+                  }}
+                />
+              </SettingsFormSection>
+            ) : null}
+
             {activeTab === 'impact' ? (
               <SettingsFormSection>
                 <SettingsFormSectionHeader icon={Eye} title={cp.usageTitle} subtitle={cp.usageHint} />
+                <div className="mb-4 rounded-lg bg-surface-panel/70 px-3 py-2 shadow-surface">
+                  <div className="text-xs font-medium text-fg-muted">{cp.changePreviewTitle}</div>
+                  <p className="mt-1 text-sm text-fg">
+                    {changedSections.length > 0
+                      ? cp.changePreviewSections.replace('{{sections}}', changedSections.join('、'))
+                      : cp.changePreviewEmpty}
+                  </p>
+                </div>
                 {selected?.usage.length ? (
                   <div className="grid gap-2">
                     {selected.usage.map((usage) => (
                       <div key={usage.agentId} className="rounded-lg bg-surface-panel/80 px-3 py-2 shadow-surface">
                         <div className="text-sm font-medium text-fg">{usage.agentName || usage.agentId}</div>
                         <div className="mt-1 font-mono text-[11px] text-fg-muted">{usage.agentId}</div>
+                        <div className="mt-1 text-[11px] text-fg-subtle">
+                          {usage.direct ? cp.usageDirect : cp.usageIndirect}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -794,6 +1082,141 @@ function SummaryTile({ icon: Icon, label, value }: { icon: typeof Copy; label: s
         {label}
       </div>
       <div className="mt-1 text-sm font-medium text-fg">{value}</div>
+    </div>
+  );
+}
+
+function ModelAdvancedPolicyEditor(props: {
+  value: ModelAdvancedDraft;
+  onChange: (value: ModelAdvancedDraft) => void;
+  disabled?: boolean;
+  cp: CapabilityPresetMessages;
+}) {
+  const { value, onChange, disabled, cp } = props;
+  const updateModel = (key: 'imageModel' | 'imageGenerationModel', next: ToolModelDraft) => {
+    onChange({ ...value, [key]: next });
+  };
+
+  return (
+    <div className="mt-6 border-t border-edge-subtle pt-5 dark:border-edge">
+      <h4 className="text-sm font-semibold text-fg">{cp.modelAdvancedTitle}</h4>
+      <p className="mt-1 text-xs leading-relaxed text-fg-muted">{cp.modelAdvancedHint}</p>
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <ToolModelPolicyCard
+          title={cp.imageUnderstandingTitle}
+          value={value.imageModel}
+          onChange={(next) => updateModel('imageModel', next)}
+          disabled={disabled}
+          cp={cp}
+        />
+        <ToolModelPolicyCard
+          title={cp.imageGenerationTitle}
+          value={value.imageGenerationModel}
+          onChange={(next) => updateModel('imageGenerationModel', next)}
+          disabled={disabled}
+          cp={cp}
+        />
+      </div>
+      <div className="mt-4 grid gap-3 rounded-lg bg-surface-panel/70 p-3 shadow-surface sm:grid-cols-2">
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="font-medium text-fg">{cp.modelAllowFallbacksLabel}</span>
+          <Select
+            value={value.allowFallbacks}
+            disabled={disabled}
+            onChange={(event) => onChange({
+              ...value,
+              allowFallbacks: event.target.value as ModelAdvancedDraft['allowFallbacks'],
+            })}
+          >
+            <SelectOption value="">{cp.policyInherit}</SelectOption>
+            <SelectOption value="true">{cp.policyEnabled}</SelectOption>
+            <SelectOption value="false">{cp.policyDisabled}</SelectOption>
+          </Select>
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm">
+          <span className="font-medium text-fg">{cp.modelMaxCostTierLabel}</span>
+          <Select
+            value={value.maxCostTier}
+            disabled={disabled}
+            onChange={(event) => onChange({
+              ...value,
+              maxCostTier: event.target.value as ModelAdvancedDraft['maxCostTier'],
+            })}
+          >
+            <SelectOption value="">{cp.policyInherit}</SelectOption>
+            <SelectOption value="low">{cp.costTierLow}</SelectOption>
+            <SelectOption value="medium">{cp.costTierMedium}</SelectOption>
+            <SelectOption value="high">{cp.costTierHigh}</SelectOption>
+          </Select>
+        </label>
+      </div>
+    </div>
+  );
+}
+
+function ToolModelPolicyCard(props: {
+  title: string;
+  value: ToolModelDraft;
+  onChange: (value: ToolModelDraft) => void;
+  disabled?: boolean;
+  cp: CapabilityPresetMessages;
+}) {
+  const { title, value, onChange, disabled, cp } = props;
+  const inputClass = 'rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg placeholder:text-fg-subtle focus:border-edge-strong focus:outline-none';
+  return (
+    <div className="rounded-lg bg-surface-panel/70 p-3 shadow-surface">
+      <div className="text-sm font-medium text-fg">{title}</div>
+      <div className="mt-3 grid gap-3">
+        <label className="flex flex-col gap-1 text-xs text-fg-muted">
+          {cp.modelToolPrimaryLabel}
+          <input
+            className={cn(inputClass, 'font-mono text-xs')}
+            value={value.primary}
+            disabled={disabled}
+            placeholder="provider/model"
+            onChange={(event) => onChange({ ...value, primary: event.target.value })}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-fg-muted">
+          {cp.modelToolFallbacksLabel}
+          <textarea
+            className={cn(inputClass, 'min-h-20 resize-y font-mono text-xs')}
+            value={value.fallbacks}
+            disabled={disabled}
+            placeholder={cp.modelToolFallbacksPlaceholder}
+            onChange={(event) => onChange({ ...value, fallbacks: event.target.value })}
+          />
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1 text-xs text-fg-muted">
+            {cp.toolTimeoutLabel}
+            <input
+              type="number"
+              min={1}
+              step={1}
+              className={inputClass}
+              value={value.timeoutMs}
+              disabled={disabled}
+              onChange={(event) => onChange({ ...value, timeoutMs: event.target.value })}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs text-fg-muted">
+            {cp.modelAutoProviderFallbackLabel}
+            <Select
+              value={value.autoProviderFallback}
+              disabled={disabled}
+              onChange={(event) => onChange({
+                ...value,
+                autoProviderFallback: event.target.value as ToolModelDraft['autoProviderFallback'],
+              })}
+            >
+              <SelectOption value="">{cp.policyInherit}</SelectOption>
+              <SelectOption value="true">{cp.policyEnabled}</SelectOption>
+              <SelectOption value="false">{cp.policyDisabled}</SelectOption>
+            </Select>
+          </label>
+        </div>
+      </div>
     </div>
   );
 }

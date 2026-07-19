@@ -199,6 +199,46 @@ describe('agents-admin', () => {
     expect(e?.tools.builtin.exec_command?.mode).toBe('deny');
   });
 
+  it('prepareCreateAgent applies capability plans during creation', () => {
+    const cfg = minimalConfig({
+      agents: {
+        default: 'main',
+        defaultPreset: 'default',
+        capabilityPresets: {
+          default: { id: 'default', name: 'Global baseline', version: 1 },
+          research: { id: 'research', name: 'Research', version: 1 },
+        },
+        list: [manifest('main')],
+      },
+    } as Partial<Config>);
+
+    const created = prepareCreateAgent(cfg, {
+      id: 'researcher',
+      workspace: '/tmp/researcher',
+      profileFiles: { 'IDENTITY.md': identityMarkdown('Researcher') },
+      extends: ['research'],
+    });
+
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    expect(created.data.nextConfig.agents.list.find((agent) => agent.id === 'researcher')?.extends).toEqual([
+      'research',
+    ]);
+  });
+
+  it('prepareCreateAgent rejects unknown capability plans', () => {
+    const created = prepareCreateAgent(minimalConfig(), {
+      id: 'researcher',
+      workspace: '/tmp/researcher',
+      profileFiles: { 'IDENTITY.md': identityMarkdown('Researcher') },
+      extends: ['missing'],
+    });
+
+    expect(created.ok).toBe(false);
+    if (created.ok) return;
+    expect(created.error).toContain('capability preset "missing" not found');
+  });
+
   it('prepareCreateAgent rejects a defaultRole that is missing from roles', () => {
     const r = prepareCreateAgent(minimalConfig(), {
       id: 'bad-model-default',

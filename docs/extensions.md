@@ -7,7 +7,7 @@ xopc provides a lightweight but powerful extension system for customizing and ex
 - **Three-tier storage** — workspace-only, user-global, or bundled with the install (see below).
 - **Activation from config** — extensions load when you enable them, configure related channels or providers, or satisfy rules declared in each extension’s `xopc.extension.json` (see [When extensions load](#when-extensions-load)).
 - **Extension SDK** — `@xopcai/xopc/extension-sdk` (and optional subpaths such as `extension-sdk/core`, `extension-sdk/lazy`).
-- **TypeScript** — extensions are plain TypeScript/JavaScript modules; no separate compile step for the loader.
+- **TypeScript authoring** — extensions may be authored in TypeScript, but distributable packages must point `main` at built `.js`, `.mjs`, or `.cjs` code; the loader does not compile source files.
 - **Install sources** — npm package, local folder, or xopc-store package via `xopc extensions install`.
 - **Gateway console UI (optional)** — a `ui` block in the manifest can add panels in the Web console; iframe code uses **`@xopcai/extension-ui-sdk`** (see [Gateway console: Extension UI](#gateway-console-extension-ui-iframe)).
 
@@ -25,6 +25,9 @@ xopc extensions install npm:xopc-extension-hello
 
 # Install from local directory
 xopc extensions install ./my-local-extension
+
+# Install from xopc-store (SHA-256 is required and verified)
+xopc extensions install store:hello
 
 # View installed extensions
 xopc extensions list
@@ -681,7 +684,7 @@ npm publish --access public
 
 Published packages must not contain `workspace:*` in `dependencies`, `devDependencies`, `peerDependencies`, or `optionalDependencies`. `@xopcai/extension-ui-sdk` is a build-time dependency: bundle it into `ui/*.bundle.js` and keep it out of runtime `dependencies`.
 
-`xopc extensions pack` produces a store-ready artifact set: `.zip`, `.sha256`, and `.manifest.json`. It also rejects unsafe package contents such as `.env`, private key files, and common token patterns before creating the artifact. The `ui` template includes `@xopcai/extension-ui-sdk`, esbuild, `scripts/build-ui.mjs`, and a `build:ui` script that bundles `ui/panel-entry.ts` to `ui/panel.bundle.js`.
+`xopc extensions pack` produces a store-ready artifact set: `.zip`, `.sha256`, and `.manifest.json`. The metadata contains both raw hexadecimal `sha256` and SRI-formatted `integrity`; a store release must preserve the raw digest for installers. Packaging also rejects unsafe contents such as `.env`, private key files, and common token patterns. The `ui` template includes `@xopcai/extension-ui-sdk`, esbuild, `scripts/build-ui.mjs`, and a `build:ui` script that bundles `ui/panel-entry.ts` to `ui/panel.bundle.js`.
 
 ---
 
@@ -714,6 +717,8 @@ xopc extensions install ./local-extension-dir
 # Install from xopc-store
 xopc extensions install store:weather
 ```
+
+The source is intentionally explicit: use `store:`, `npm:`, or an existing local directory path. Store installs require a release-provided raw SHA-256 digest, are staged and import-checked before their live directory is atomically replaced, and request a gateway restart after success.
 
 ### extensions list
 

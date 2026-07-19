@@ -57,6 +57,22 @@ export function AgentsSettingsPanel() {
 
   return (
     <SettingsPageFrame gap="gap-6" padding="px-3 py-8 sm:px-5 xl:px-6" className="min-h-full bg-surface-panel">
+      <SettingsPageHeader
+        title={vm.a.title}
+        subtitle={vm.a.subtitle}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="secondary" onClick={() => vm.navigate('/settings/capability-presets')}>
+              <Layers className="size-4" aria-hidden />
+              {vm.a.capabilityPresetsManage}
+            </Button>
+            <Button type="button" onClick={vm.openAddAgentModal} disabled={vm.busy}>
+              <UserPlus className="size-4" aria-hidden />
+              {vm.a.addAgent}
+            </Button>
+          </div>
+        }
+      />
       {vm.displayError ? (
         <div className="rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-700 shadow-surface dark:text-red-300">
           {vm.displayError}
@@ -125,6 +141,7 @@ export function AgentsSettingsPanel() {
             vm.setCreateModel('');
             vm.setCreateModalError(null);
             vm.onSelectDuplicateSource(null);
+            vm.setCreatePresetIds([]);
           }
         }}
         a={vm.a}
@@ -147,6 +164,10 @@ export function AgentsSettingsPanel() {
         agents={vm.data?.agents ?? []}
         duplicateSourceId={vm.duplicateSourceId}
         onSelectDuplicateSource={vm.onSelectDuplicateSource}
+        capabilityPlans={vm.editorPanelProps.capabilityPresets}
+        defaultPresetId={vm.editorPanelProps.defaultPresetId ?? 'default'}
+        selectedCapabilityPlanIds={vm.createPresetIds}
+        onSelectedCapabilityPlanIdsChange={vm.setCreatePresetIds}
       />
 
       <AgentDeleteConfirmDialog
@@ -173,3 +194,6 @@ export function AgentsSettingsPanel() {
     </SettingsPageFrame>
   );
 }
+import { Layers, UserPlus } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';

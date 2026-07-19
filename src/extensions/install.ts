@@ -212,6 +212,42 @@ export function peekExtensionManifestFromStoreZip(buffer: Buffer): Record<string
   return readShallowestExtensionManifestFromZip(buffer);
 }
 
+/** Read package.json from the same root as the shallowest extension manifest. */
+export function peekExtensionPackageJsonFromStoreZip(
+  buffer: Buffer,
+): Record<string, unknown> | undefined {
+  if (buffer.length > MAX_EXTENSION_STORE_ZIP_BYTES) return undefined;
+  let zip: AdmZip;
+  try {
+    zip = new AdmZip(buffer);
+  } catch {
+    return undefined;
+  }
+  const entries = zip
+    .getEntries()
+    .filter((e) => !e.isDirectory && e.entryName && !isIgnorableZipEntry(e.entryName))
+    .filter((e) => isSafeZipPath(e.entryName));
+  const manifestPaths = entries
+    .map((e) => e.entryName.replace(/\\/g, '/'))
+    .filter((name) => /(^|\/)xopc\.extension\.json$/i.test(name))
+    .filter((name) => name.split('/').filter(Boolean).length <= 2)
+    .sort((a, b) => a.length - b.length);
+  if (manifestPaths.length === 0) return undefined;
+
+  const prefix = inferExtensionStripPrefix(manifestPaths[0]);
+  const packagePath = `${prefix}package.json`;
+  const entry = entries.find((candidate) => candidate.entryName.replace(/\\/g, '/') === packagePath);
+  if (!entry) return undefined;
+  try {
+    const parsed = JSON.parse(entry.getData().toString('utf8')) as unknown;
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Read `id` from the shallowest xopc.extension.json in a store zip (for --force / preflight). */
 export function peekExtensionIdFromStoreZip(buffer: Buffer): string | undefined {
   const m = readShallowestExtensionManifestFromZip(buffer) as { id?: string } | undefined;

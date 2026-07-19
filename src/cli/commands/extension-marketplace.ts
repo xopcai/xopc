@@ -11,17 +11,22 @@ import {
   downloadExtensionStoreZipBuffer,
   resolveExtensionZipDownloadUrl,
   resolveExtensionsStoreBaseUrl,
+  verifyStoreArtifactSha256,
 } from '../../agent/skills/marketplace/adapters/store/store-api-client.js';
 import { loadConfig } from '../../config/loader.js';
 import { resolveExtensionsDir } from '../../config/paths.js';
 import type { InstallResult } from '../../extensions/install.js';
 import {
-  installExtensionFromStoreZip,
   installFromLocal,
   installFromNpm,
-  peekExtensionIdFromStoreZip,
   peekExtensionManifestFromStoreZip,
 } from '../../extensions/install.js';
+import {
+  commitStagedExtensionInstall,
+  finalizeStagedExtensionInstall,
+  rollbackStagedExtensionInstall,
+  stageExtensionStoreZip,
+} from '../../extensions/install-transaction.js';
 import { getExtensionLockfileManager } from '../../extensions/lockfile.js';
 import * as marketplace from '../../extensions/marketplace.js';
 import { colors } from '../utils/colors.js';
@@ -54,16 +59,6 @@ function readInstalledSnapshots(targetDir: string, extensionId: string): {
 
 function sha256Integrity(buffer: Buffer): string {
   return `sha256-${createHash('sha256').update(buffer).digest('base64')}`;
-}
-
-function normalizeIntegrity(raw: string | undefined): string | undefined {
-  const value = raw?.trim();
-  if (!value) return undefined;
-  if (value.startsWith('sha256-')) return value;
-  if (/^[a-f0-9]{64}$/i.test(value)) {
-    return `sha256-${Buffer.from(value, 'hex').toString('base64')}`;
-  }
-  return value;
 }
 
 function printManifestSummary(params: {
@@ -170,7 +165,7 @@ async function installExtensionFromStoreWithLock(params: {
   yes?: boolean;
 }): Promise<{ ok: true; extensionId: string; version: string } | { ok: false; error: string }> {
   try {
-    const { downloadUrl, version, integrity: expectedIntegrityRaw } = await resolveExtensionZipDownloadUrl(
+    const { downloadUrl, version, sha256 } = await resolveExtensionZipDownloadUrl(
       params.storeBase,
       params.packageName,
       params.version,
@@ -180,14 +175,8 @@ async function installExtensionFromStoreWithLock(params: {
       `Downloading ${params.packageName}@${version} from xopc-store (${params.storeBase})…`,
     );
     const buf = await downloadExtensionStoreZipBuffer(params.storeBase, downloadUrl);
+    verifyStoreArtifactSha256(buf, sha256);
     const actualIntegrity = sha256Integrity(buf);
-    const expectedIntegrity = normalizeIntegrity(expectedIntegrityRaw);
-    if (expectedIntegrity && expectedIntegrity !== actualIntegrity) {
-      return {
-        ok: false,
-        error: `Extension artifact checksum mismatch: expected ${expectedIntegrity}, got ${actualIntegrity}`,
-      };
-    }
     const manifest = peekExtensionManifestFromStoreZip(buf);
     const accepted = await confirmInstall({
       source: 'store',
@@ -200,26 +189,50 @@ async function installExtensionFromStoreWithLock(params: {
     if (!accepted) {
       return { ok: false, error: 'Install cancelled' };
     }
-    if (params.force) {
-      const id = peekExtensionIdFromStoreZip(buf);
-      if (id && existsSync(join(params.targetDir, id))) {
-        rmSync(join(params.targetDir, id), { recursive: true, force: true });
+
+    const transaction = await stageExtensionStoreZip(buf, params.targetDir);
+    const lockSnapshot = await params.lock.load();
+    let lockWriteStarted = false;
+    try {
+      commitStagedExtensionInstall(transaction, params.force ?? false);
+      lockWriteStarted = true;
+      await params.lock.upsert(transaction.extensionId, {
+        name: transaction.extensionId,
+        version,
+        resolved: params.packageName,
+        source: 'store',
+        artifactUrl: downloadUrl,
+        integrity: actualIntegrity,
+        ...readInstalledSnapshots(params.targetDir, transaction.extensionId),
+      });
+    } catch (err) {
+      const rollbackErrors: string[] = [];
+      try {
+        rollbackStagedExtensionInstall(transaction);
+      } catch (rollbackErr) {
+        rollbackErrors.push(`files: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);
       }
+      if (lockWriteStarted) {
+        try {
+          await params.lock.save(lockSnapshot);
+        } catch (rollbackErr) {
+          rollbackErrors.push(`lockfile: ${rollbackErr instanceof Error ? rollbackErr.message : String(rollbackErr)}`);
+        }
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      const suffix = rollbackErrors.length > 0
+        ? ` Rollback incomplete (${rollbackErrors.join('; ')}).`
+        : '';
+      throw new Error(`${message}${suffix}`, { cause: err });
     }
-    const result = await installExtensionFromStoreZip(buf, params.targetDir);
-    if (!result.ok || !result.extensionId) {
-      return { ok: false, error: result.error ?? 'install failed' };
+
+    try {
+      finalizeStagedExtensionInstall(transaction);
+    } catch (cleanupErr) {
+      const message = cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr);
+      console.warn(colors.yellow('warning:'), `Installed extension, but temporary backup cleanup failed: ${message}`);
     }
-    await params.lock.upsert(result.extensionId, {
-      name: result.extensionId,
-      version,
-      resolved: params.packageName,
-      source: 'store',
-      artifactUrl: downloadUrl,
-      integrity: actualIntegrity,
-      ...readInstalledSnapshots(params.targetDir, result.extensionId),
-    });
-    return { ok: true, extensionId: result.extensionId, version };
+    return { ok: true, extensionId: transaction.extensionId, version };
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return { ok: false, error: msg };
@@ -237,7 +250,7 @@ export function createExtensionInstallCommand(): Command {
     )
     .option(
       '-f, --force',
-      'Remove existing extension folder (manifest id) before store or local install',
+      'Replace an existing store or local extension with the same manifest id',
       false,
     )
     .option('-y, --yes', 'Skip interactive install confirmation', false)

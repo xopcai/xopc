@@ -70,6 +70,33 @@ function parseGoalContract(raw: unknown): GoalContractInput | null | undefined {
   };
   const evidencePlan = list(value.evidencePlan);
   const criteria = list(value.criteria);
+  let outcomeMetric: GoalContractInput['outcomeMetric'];
+  if (value.outcomeMetric === null) {
+    outcomeMetric = null;
+  } else if (value.outcomeMetric !== undefined) {
+    if (!value.outcomeMetric || typeof value.outcomeMetric !== 'object' || Array.isArray(value.outcomeMetric)) return null;
+    const metric = value.outcomeMetric as Record<string, unknown>;
+    if (
+      typeof metric.name !== 'string' || !metric.name.trim() ||
+      typeof metric.baselineValue !== 'number' || !Number.isFinite(metric.baselineValue) ||
+      typeof metric.targetValue !== 'number' || !Number.isFinite(metric.targetValue) ||
+      (metric.currentValue !== undefined && (typeof metric.currentValue !== 'number' || !Number.isFinite(metric.currentValue))) ||
+      (metric.direction !== undefined && metric.direction !== 'increase' && metric.direction !== 'decrease') ||
+      (metric.unit !== undefined && typeof metric.unit !== 'string') ||
+      (metric.sourceUrl !== undefined && typeof metric.sourceUrl !== 'string') ||
+      (metric.measuredAt !== undefined && (typeof metric.measuredAt !== 'number' || !Number.isFinite(metric.measuredAt)))
+    ) return null;
+    outcomeMetric = {
+      name: metric.name.trim(),
+      baselineValue: metric.baselineValue,
+      targetValue: metric.targetValue,
+      currentValue: typeof metric.currentValue === 'number' ? metric.currentValue : undefined,
+      unit: typeof metric.unit === 'string' ? metric.unit.trim() || undefined : undefined,
+      direction: metric.direction === 'increase' || metric.direction === 'decrease' ? metric.direction : undefined,
+      sourceUrl: typeof metric.sourceUrl === 'string' ? metric.sourceUrl.trim() || undefined : undefined,
+      measuredAt: typeof metric.measuredAt === 'number' ? metric.measuredAt : undefined,
+    };
+  }
   if ((value.evidencePlan !== undefined && !evidencePlan) || (value.criteria !== undefined && !criteria)) return null;
   if (value.objective !== undefined && typeof value.objective !== 'string') return null;
   if (value.scopeBoundary !== undefined && typeof value.scopeBoundary !== 'string') return null;
@@ -78,6 +105,7 @@ function parseGoalContract(raw: unknown): GoalContractInput | null | undefined {
     scopeBoundary: typeof value.scopeBoundary === 'string' ? value.scopeBoundary.trim() : undefined,
     evidencePlan,
     criteria,
+    outcomeMetric,
   };
 }
 
@@ -740,6 +768,7 @@ export function registerGoalsRoutes(authenticated: Hono, deps: AuthenticatedRout
         error: 'Goal completion evidence is still required',
         missingEvidence: readiness.missingEvidence,
         pendingApproval: readiness.pendingApproval,
+        pendingOutcome: readiness.pendingOutcome,
       }, 409);
     }
     const goal = goals.complete(goalId);

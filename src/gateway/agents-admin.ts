@@ -245,6 +245,8 @@ export type CreateAgentBody = {
   id?: string;
   workspace: string;
   models?: AgentModelsConfig;
+  /** Reusable capability plans applied after the global baseline. */
+  extends?: string[];
   /** Initial `agents.list[].skills` for the new entry. */
   skills?: string[];
   /** Initial `agents.list[].tools` for the new entry. */
@@ -313,6 +315,12 @@ export function prepareCreateAgent(
   const wsAbs = resolveUserPath(workspace);
 
   const rawModels = body.models ?? cloneSourceEntry?.models;
+  const inheritedPresetIds = body.extends ?? cloneSourceEntry?.extends ?? [];
+  for (const presetId of inheritedPresetIds) {
+    if (!cfg.agents.capabilityPresets[presetId]) {
+      return { ok: false, error: `capability preset "${presetId}" not found`, status: 400 };
+    }
+  }
   const effectiveModels =
     rawModels?.roles
       ? {
@@ -327,6 +335,7 @@ export function prepareCreateAgent(
   let next = applyAgentConfig(cfg, {
     agentId,
     workspace: wsAbs,
+    extends: [...inheritedPresetIds],
     ...(effectiveModels ? { models: effectiveModels } : {}),
     ...(body.skills !== undefined
       ? { skills: body.skills.map((s) => String(s).trim()).filter(Boolean) }

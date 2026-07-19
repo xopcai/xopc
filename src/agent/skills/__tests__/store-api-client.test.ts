@@ -105,6 +105,9 @@ describe('store-api-client (XOPC Store HTTP)', () => {
       expect(() => verifyStoreArtifactSha256(buf, '0'.repeat(64))).toThrow(
         'checksum verification failed',
       );
+      expect(() => verifyStoreArtifactSha256(buf, undefined)).toThrow(
+        'missing a valid SHA-256 checksum',
+      );
     });
   });
 });

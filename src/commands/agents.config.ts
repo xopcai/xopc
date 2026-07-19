@@ -33,6 +33,7 @@ export function applyAgentConfig(
     workspace?: string;
     model?: string;
     models?: AgentEntry['models'];
+    extends?: AgentEntry['extends'];
     skills?: string[];
     tools?: AgentEntry['tools'];
   },
@@ -56,6 +57,7 @@ export function applyAgentConfig(
   const nextEntry: AgentEntry = {
     ...base,
     enabled: base.enabled ?? true,
+    ...(params.extends !== undefined ? { extends: params.extends } : {}),
     ...(params.workspace ? { workspace: { root: params.workspace } } : {}),
     ...(params.models ? { models: params.models } : {}),
     ...(params.model

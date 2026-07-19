@@ -107,6 +107,7 @@ export async function createGatewayAgent(body: {
     defaultRole?: string;
     roles?: Record<string, { model: string; fallbacks?: string[]; description?: string }>;
   };
+  extends?: string[];
   skills?: string[];
   tools?: ToolPolicySetPatch;
   profileFiles?: Record<string, string>;

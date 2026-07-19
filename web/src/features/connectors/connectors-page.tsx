@@ -387,7 +387,9 @@ export function ConnectorsPage() {
   const visibleInstalledCount = visibleInstances.length + visibleCustomServers.length;
 
   const builtinCatalog = useMemo(
-    () => state.catalog.filter((connector) => connector.source === 'builtin'),
+    () => state.catalog.filter((connector) => (
+      connector.source === 'builtin' && connector.integrationStrategy?.preferred !== false
+    )),
     [state.catalog],
   );
   const discoveryCatalog = useMemo(() => {
@@ -533,6 +535,10 @@ export function ConnectorsPage() {
               <div>
                 <h2 className="text-base font-semibold text-fg">{cs.discoverTitle}</h2>
                 <p className="mt-1 text-sm text-fg-muted">{cs.discoverHint}</p>
+              </div>
+
+              <div className="rounded-xl border border-accent/20 bg-accent-soft/60 px-4 py-3 text-sm text-accent-fg">
+                {cs.integrationStrategyHint}
               </div>
 
               <div className="flex flex-wrap gap-2" role="group" aria-label={cs.outcomeFilterAria}>

@@ -275,7 +275,7 @@ function addDirectoryToZip(zip: AdmZip, root: string, dir: string): void {
   }
 }
 
-function writeStoreReadyArtifact(params: {
+export function writeStoreReadyArtifact(params: {
   extensionDir: string;
   outDir: string;
   manifest: ExtensionManifest;
@@ -305,6 +305,7 @@ function writeStoreReadyArtifact(params: {
         name: params.manifest.name,
         version,
         artifact: basename(zipPath),
+        sha256: sha256Hex,
         integrity,
         manifest: params.manifest,
         packageJson: params.packageJson,
@@ -330,9 +331,9 @@ function printDiagnostics(d: PackDiagnostic[]): void {
 
 export function createExtensionPackCommand(): Command {
   return new Command('pack')
-    .description('Package an extension as a .tgz archive for distribution')
+    .description('Package an extension as a store-ready .zip artifact set')
     .argument('[dir]', 'Extension directory (default: current working directory)', '.')
-    .option('--out <dir>', 'Output directory for the .tgz (default: extension directory)', '')
+    .option('--out <dir>', 'Output directory for the artifact set (default: extension directory)', '')
     .option('--no-build-ui', 'Skip automatic "npm run build:ui" when defined')
     .option('--dry-run', 'Validate only; do not create an archive', false)
     .action((dir: string, opts: { out?: string; buildUi: boolean; dryRun: boolean }) => {

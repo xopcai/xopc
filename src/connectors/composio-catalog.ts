@@ -3,6 +3,7 @@ import {
   upsertConnectorCatalogEntry,
 } from '../storage/sqlite/connector-repository.js';
 import { ComposioSessionsAdapter, type ComposioToolkitCatalogItem } from './composio-sessions.js';
+import { composioIntegrationStrategy } from './integration-strategy.js';
 import type { ConnectorCategory, ConnectorDefinition, ConnectorVerificationLevel } from './types.js';
 
 const CATALOG_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
@@ -177,6 +178,7 @@ export function connectorDefinitionFromComposioToolkit(item: ComposioToolkitCata
       : { mode: 'oauth', provider: 'composio', installPhase: 'after_install' },
     setup: {},
     runtime: { type: 'composio', toolkit: slug, role: 'toolkit' },
+    integrationStrategy: composioIntegrationStrategy(slug),
   };
 }
 
