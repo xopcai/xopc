@@ -8,6 +8,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { parseMarkdown } from './parse-markdown';
 import {
   linkWorkspaceFileMentions,
+  openHttpLinksInNewTab,
   parseWorkspaceFileLinkTarget,
   rewriteXopcSettingsLinksInMarkdown,
   type WorkspaceFileLinkTarget,
@@ -167,6 +168,8 @@ export interface MarkdownViewProps {
   codeCopy?: boolean;
   /** Called when a chat/workspace file link should open in the local preview pane. */
   onWorkspaceFileOpen?: (target: WorkspaceFileLinkTarget) => void;
+  /** Opens HTTP(S) links in a separate browser tab or window. */
+  openHttpLinksInNewTab?: boolean;
 }
 
 function MarkdownViewImpl({
@@ -176,6 +179,7 @@ function MarkdownViewImpl({
   className,
   codeCopy = true,
   onWorkspaceFileOpen,
+  openHttpLinksInNewTab: shouldOpenHttpLinksInNewTab = false,
 }: MarkdownViewProps) {
   const language = useLocaleStore((s) => s.language);
   const labels = useMemo(() => {
@@ -217,6 +221,13 @@ function MarkdownViewImpl({
 
     return mountMarkdownCodeBlocks(el, labels);
   }, [codeCopy, safeHtml, labels, onWorkspaceFileOpen]);
+
+  useLayoutEffect(() => {
+    if (!shouldOpenHttpLinksInNewTab) return;
+    const el = hostRef.current;
+    if (!el) return;
+    openHttpLinksInNewTab(el);
+  }, [safeHtml, shouldOpenHttpLinksInNewTab]);
 
   useLayoutEffect(() => {
     const el = hostRef.current;
@@ -291,7 +302,7 @@ function MarkdownViewImpl({
     <div ref={hostRef}>
       <div
         className={['markdown-body', compact ? 'markdown-compact' : '', className ?? ''].filter(Boolean).join(' ')}
-        // safeHtml is sanitized via DOMPurify above; the external-link hook hardens cross-origin anchors.
+        // safeHtml is sanitized via DOMPurify above; link behavior is applied only after sanitization.
         dangerouslySetInnerHTML={{ __html: safeHtml }}
       />
     </div>

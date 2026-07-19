@@ -8,6 +8,7 @@ import {
   BROWSER_EXT_REQUIRED_FILES,
   computeNeedsRefresh,
   ensureBrowserExtensionArtifacts,
+  resolveWindowsExtensionManager,
   validateBrowserExtLayout,
 } from '../providers/browser-ext-install.js';
 
@@ -131,5 +132,29 @@ describe('browser-ext-install', () => {
     await expect(
       ensureBrowserExtensionArtifacts({ cacheDir: '/tmp/not-allowed' }),
     ).rejects.toThrow(/home directory/i);
+  });
+
+  it('uses Chrome for the extension manager and falls back to Edge on Windows', () => {
+    const localAppData = join(tempHome, 'AppData', 'Local');
+    const chromePath = join(localAppData, 'Google', 'Chrome', 'Application', 'chrome.exe');
+    const edgePath = join(localAppData, 'Microsoft', 'Edge', 'Application', 'msedge.exe');
+
+    mkdirSync(join(chromePath, '..'), { recursive: true });
+    mkdirSync(join(edgePath, '..'), { recursive: true });
+    writeFileSync(chromePath, '');
+    writeFileSync(edgePath, '');
+
+    expect(resolveWindowsExtensionManager({ LOCALAPPDATA: localAppData })).toMatchObject({
+      browser: 'chrome',
+      executablePath: chromePath,
+      url: 'chrome://extensions/',
+    });
+
+    rmSync(chromePath);
+    expect(resolveWindowsExtensionManager({ LOCALAPPDATA: localAppData })).toMatchObject({
+      browser: 'edge',
+      executablePath: edgePath,
+      url: 'edge://extensions/',
+    });
   });
 });

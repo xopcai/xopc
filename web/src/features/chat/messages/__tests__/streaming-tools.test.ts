@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { appendToolStart, completeTool, updateToolDetails } from '@/features/chat/messages/streaming';
+import {
+  appendReviewDelta,
+  appendToolStart,
+  completeTool,
+  finishReview,
+  startReview,
+  updateToolDetails,
+} from '@/features/chat/messages/streaming';
 import type { MessageContent } from '@/features/chat/messages/messages.types';
 
 describe('streaming tool updates', () => {
@@ -29,5 +36,21 @@ describe('streaming tool updates', () => {
       type: 'tool_use',
       details: { text: '{\"findings\": []}' },
     });
+  });
+
+  it('keeps an isolated review draft separate from tool executions', () => {
+    const content: MessageContent[] = [];
+    startReview(content, { reviewId: 'review-1', target: 'uncommitted changes', stage: 'preparing' });
+    startReview(content, { reviewId: 'review-1', target: 'uncommitted changes', stage: 'reviewing' });
+    appendReviewDelta(content, 'review-1', 'Checking auth…');
+    appendReviewDelta(content, 'review-1', '\nNo finding yet.');
+    finishReview(content, 'review-1', 'complete');
+
+    expect(content).toEqual([expect.objectContaining({
+      type: 'review',
+      reviewId: 'review-1',
+      status: 'complete',
+      analysisMarkdown: 'Checking auth…\nNo finding yet.',
+    })]);
   });
 });

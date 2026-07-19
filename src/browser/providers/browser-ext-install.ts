@@ -394,21 +394,66 @@ export async function readInstalledExtensionDir(cacheDir?: string): Promise<stri
 
 export type BrowserExtensionOpenAction = 'chrome' | 'folder' | 'both';
 
+type ExtensionManagerBrowser = 'chrome' | 'edge';
+
+interface ExtensionManagerTarget {
+  browser: ExtensionManagerBrowser;
+  executablePath: string;
+  url: string;
+}
+
 function spawnDetached(command: string, args: readonly string[]): void {
   spawn(command, [...args], { stdio: 'ignore', detached: true }).unref();
 }
 
-function openChromeExtensionsPage(): void {
-  const chromeUrl = 'chrome://extensions';
+function windowsExtensionManagerCandidates(env: NodeJS.ProcessEnv): ExtensionManagerTarget[] {
+  const programFiles = [env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.LOCALAPPDATA].filter(
+    (path): path is string => Boolean(path?.trim()),
+  );
+  const candidates: ExtensionManagerTarget[] = [];
+
+  for (const root of programFiles) {
+    candidates.push({
+      browser: 'chrome',
+      executablePath: join(root, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      url: 'chrome://extensions/',
+    });
+  }
+  for (const root of programFiles) {
+    candidates.push({
+      browser: 'edge',
+      executablePath: join(root, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      url: 'edge://extensions/',
+    });
+  }
+
+  return candidates;
+}
+
+export function resolveWindowsExtensionManager(
+  env: NodeJS.ProcessEnv = process.env,
+): ExtensionManagerTarget | null {
+  return windowsExtensionManagerCandidates(env).find(({ executablePath }) => existsSync(executablePath)) ?? null;
+}
+
+function openBrowserExtensionManager(): ExtensionManagerBrowser | undefined {
+  const chromeUrl = 'chrome://extensions/';
   if (process.platform === 'darwin') {
     spawnDetached('open', ['-a', 'Google Chrome', chromeUrl]);
-    return;
+    return 'chrome';
   }
   if (process.platform === 'win32') {
-    spawnDetached('cmd', ['/c', 'start', 'chrome', chromeUrl]);
-    return;
+    const target = resolveWindowsExtensionManager();
+    if (!target) {
+      throw new Error(
+        'No compatible browser found. Install Google Chrome or Microsoft Edge, then try again.',
+      );
+    }
+    spawnDetached(target.executablePath, [target.url]);
+    return target.browser;
   }
   spawnDetached('xdg-open', [chromeUrl]);
+  return 'chrome';
 }
 
 function revealFolderInFileManager(dir: string): void {
@@ -424,24 +469,26 @@ function revealFolderInFileManager(dir: string): void {
 }
 
 /**
- * Open chrome://extensions and/or reveal the installed extension folder on the gateway host.
+ * Open the compatible browser's extension manager and/or reveal the installed extension folder
+ * on the gateway host.
  */
 export async function openBrowserExtensionInstallUi(opts: {
   action: BrowserExtensionOpenAction;
   cacheDir?: string;
-}): Promise<{ extensionDir: string }> {
+}): Promise<{ extensionDir: string; browser?: ExtensionManagerBrowser }> {
   const doctor = await browserExtDoctor({ cacheDir: opts.cacheDir });
   const dir = doctor.extensionDir;
   if (!dir) {
     throw new Error('Extension not installed. Run xopc browser extension install first.');
   }
 
+  let browser: ExtensionManagerBrowser | undefined;
   if (opts.action === 'chrome' || opts.action === 'both') {
-    openChromeExtensionsPage();
+    browser = openBrowserExtensionManager();
   }
   if (opts.action === 'folder' || opts.action === 'both') {
     revealFolderInFileManager(dir);
   }
 
-  return { extensionDir: dir };
+  return { extensionDir: dir, browser };
 }

@@ -50,6 +50,21 @@ function isMechanicalToolSummaryLine(line: string): boolean {
 
 function reviewMarkdown(block: ContentBlock): string {
   const findings = Array.isArray(block.findings) ? block.findings : [];
+  const status = typeof block.status === 'string' ? block.status : 'complete';
+  const target = typeof block.target === 'string' ? block.target : 'working tree changes';
+  const draft = typeof block.analysisMarkdown === 'string' ? block.analysisMarkdown.trim() : '';
+  const errorMessage = typeof block.errorMessage === 'string' ? block.errorMessage : '';
+  if (status === 'preparing' || status === 'reviewing') {
+    const lines = [
+      '<< Code review >>',
+      '',
+      `Reviewing ${target}`,
+      status === 'preparing' ? 'Collecting changes…' : 'Review assistant is analyzing the changes…',
+    ];
+    if (draft) lines.push('', 'Review assistant', '', draft);
+    return lines.join('\n');
+  }
+
   const lines: string[] = ['<< Code review finished >>', '', 'Code review', ''];
   const source = typeof block.source === 'string' ? block.source : '';
   const correctness = typeof block.overallCorrectness === 'string' ? block.overallCorrectness : 'unknown';
@@ -79,6 +94,9 @@ function reviewMarkdown(block: ContentBlock): string {
   lines.push('');
   lines.push(`Overall correctness: ${correctness}`);
   if (explanation) lines.push(explanation);
+  if (errorMessage) {
+    lines.push('', `Review assistant could not complete: ${errorMessage}`);
+  }
   return lines.join('\n');
 }
 

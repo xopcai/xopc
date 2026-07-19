@@ -58,7 +58,7 @@ import {
   getRendererCrashPageDataUrl,
   getStartupRecoveryPageDataUrl,
 } from './loading-page.js';
-import { isEmbeddedGatewayLoopbackUrl } from './loopback-url.js';
+import { isEmbeddedGatewayLoopbackUrl, isEmbeddedGatewaySiteShareUrl } from './loopback-url.js';
 import {
   checkForUpdates,
   getUpdateStatus,
@@ -329,8 +329,8 @@ let gatewayExitedUnexpectedly = false;
 const devWindowIcon = join(import.meta.dirname, '../../electron/resources/icon.png');
 
 /**
- * Open off-origin http(s) links in the system browser instead of replacing the app window /
- * spawning an in-app BrowserWindow (e.g. chat markdown with target=_blank).
+ * Open published sites and off-origin http(s) links in the system browser instead of replacing
+ * the app window / spawning an in-app BrowserWindow (e.g. chat markdown with target=_blank).
  */
 function attachExternalUrlHandlers(win: BrowserWindow): void {
   const wc = win.webContents;
@@ -340,6 +340,10 @@ function attachExternalUrlHandlers(win: BrowserWindow): void {
       const next = new URL(details.url);
       if (next.protocol !== 'http:' && next.protocol !== 'https:') {
         return { action: 'allow' };
+      }
+      if (isEmbeddedGatewaySiteShareUrl(details.url)) {
+        void shell.openExternal(details.url);
+        return { action: 'deny' };
       }
       // Embedded gateway console always stays in-app on loopback.
       if (isEmbeddedGatewayLoopbackUrl(details.url)) {

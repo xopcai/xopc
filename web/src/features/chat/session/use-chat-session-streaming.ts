@@ -30,6 +30,7 @@ import type { SessionManager } from '@/features/chat/session/session-manager';
 import {
   cloneMessageForRender,
   ensureAssistantMessage,
+  finalizeRunningReviews,
   finalizeRunningTools,
   finalizeStreamingThinking,
   hasRenderableAssistantContent,
@@ -97,6 +98,7 @@ export function useChatSessionStreaming(deps: {
         const msg = ensureAssistantMessage(cachedBubble, Date.now());
         finalizeStreamingThinking(msg.content);
         finalizeRunningTools(msg.content);
+        finalizeRunningReviews(msg.content);
         finalMsg = cloneMessageForRender(msg);
       }
       if (finalMsg && hasRenderableAssistantContent(finalMsg) && cacheKey) {
