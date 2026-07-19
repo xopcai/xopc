@@ -41,6 +41,7 @@ export const BUILTIN_CONNECTORS: readonly ConnectorDefinition[] = [
         args: ['mcp-server-fetch'],
       },
     },
+    integrationStrategy: { lane: 'mcp', workload: 'high_frequency', preferred: true },
   },
   {
     id: 'filesystem',
@@ -74,6 +75,7 @@ export const BUILTIN_CONNECTORS: readonly ConnectorDefinition[] = [
         args: ['-y', '@modelcontextprotocol/server-filesystem', '{{config.rootPath}}'],
       },
     },
+    integrationStrategy: { lane: 'mcp', workload: 'high_frequency', preferred: true },
   },
   {
     id: 'time',
@@ -96,6 +98,7 @@ export const BUILTIN_CONNECTORS: readonly ConnectorDefinition[] = [
         args: ['mcp-server-time'],
       },
     },
+    integrationStrategy: { lane: 'mcp', workload: 'high_frequency', preferred: true },
   },
   {
     id: 'playwright',
@@ -118,6 +121,7 @@ export const BUILTIN_CONNECTORS: readonly ConnectorDefinition[] = [
         args: ['-y', '@playwright/mcp@latest'],
       },
     },
+    integrationStrategy: { lane: 'mcp', workload: 'high_frequency', preferred: true },
   },
   {
     id: 'github',
@@ -141,6 +145,7 @@ export const BUILTIN_CONNECTORS: readonly ConnectorDefinition[] = [
         xopcAuth: { provider: 'github-app' },
       },
     },
+    integrationStrategy: { lane: 'mcp', workload: 'high_frequency', preferred: true },
   },
   {
     id: 'memory',
@@ -163,6 +168,7 @@ export const BUILTIN_CONNECTORS: readonly ConnectorDefinition[] = [
         args: ['-y', '@modelcontextprotocol/server-memory'],
       },
     },
+    integrationStrategy: { lane: 'mcp', workload: 'high_frequency', preferred: true },
   },
   {
     id: 'sequential-thinking',
@@ -185,6 +191,7 @@ export const BUILTIN_CONNECTORS: readonly ConnectorDefinition[] = [
         args: ['-y', '@modelcontextprotocol/server-sequential-thinking'],
       },
     },
+    integrationStrategy: { lane: 'mcp', workload: 'high_frequency', preferred: true },
   },
   {
     id: 'brave-search',
@@ -219,5 +226,6 @@ export const BUILTIN_CONNECTORS: readonly ConnectorDefinition[] = [
         },
       },
     },
+    integrationStrategy: { lane: 'mcp', workload: 'high_frequency', preferred: true },
   },
 ];

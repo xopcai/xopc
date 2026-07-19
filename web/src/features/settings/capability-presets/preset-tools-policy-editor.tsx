@@ -1,6 +1,8 @@
 import { useCallback, useMemo } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Select, SelectOption } from '@/components/ui/popover-select';
+import type { CapabilityPresetToolPolicy } from '@/features/settings/capability-presets/capability-presets-api';
 import {
   BUILTIN_TOOL_UI_GROUPS,
   miscBuiltinToolIds,
@@ -9,8 +11,8 @@ import {
 import { agentDefaultsQuickActionButtonClass } from '@/features/settings/agents/defaults-field-styles';
 import { cn } from '@/lib/cn';
 
-export type PresetToolMode = 'allow' | 'deny';
-export type PresetToolModes = Record<string, PresetToolMode>;
+export type PresetToolMode = 'allow' | 'confirm' | 'deny';
+export type PresetToolPolicies = Record<string, CapabilityPresetToolPolicy>;
 
 type PresetToolPolicyEditorLabels = {
   quickActionsLabel: string;
@@ -25,7 +27,15 @@ type PresetToolPolicyEditorLabels = {
   noOverrides: string;
   inheritedMode: string;
   modeAllow: string;
+  modeConfirm: string;
   modeDeny: string;
+  scopeLabel: string;
+  scopeInherit: string;
+  scopeReadonly: string;
+  scopeWorkspace: string;
+  scopeUnrestricted: string;
+  maxCallsLabel: string;
+  timeoutLabel: string;
 };
 
 const READ_ONLY_WORKSPACE_DENY = ['write_file', 'apply_patch', 'exec_command', 'execute_code'] as const;
@@ -39,12 +49,12 @@ const CODING_DENY = ['send_message', 'send_media'] as const;
 function applyModes(
   builtinSet: Set<string>,
   changes: ReadonlyArray<readonly [readonly string[], PresetToolMode]>,
-): PresetToolModes {
-  const next: PresetToolModes = {};
+): PresetToolPolicies {
+  const next: PresetToolPolicies = {};
   for (const [ids, mode] of changes) {
     for (const id of ids) {
       if (builtinSet.has(id)) {
-        next[id] = mode;
+        next[id] = { mode };
       }
     }
   }
@@ -53,21 +63,21 @@ function applyModes(
 
 export function PresetToolsPolicyEditor(props: {
   builtinToolIds: string[];
-  toolModes: PresetToolModes;
-  onChange: (next: PresetToolModes) => void;
+  toolPolicies: PresetToolPolicies;
+  onChange: (next: PresetToolPolicies) => void;
   disabled?: boolean;
   getToolDescription: (toolId: string) => string;
   getGroupTitle: (groupKey: BuiltinToolUiGroupKey) => string;
   labels: PresetToolPolicyEditorLabels;
 }) {
-  const { builtinToolIds, toolModes, onChange, disabled, getToolDescription, getGroupTitle, labels } = props;
+  const { builtinToolIds, toolPolicies, onChange, disabled, getToolDescription, getGroupTitle, labels } = props;
   const allowedBuiltin = useMemo(() => new Set(builtinToolIds), [builtinToolIds]);
   const overriddenEntries = useMemo(
     () =>
-      Object.entries(toolModes)
+      Object.entries(toolPolicies)
         .filter(([id]) => allowedBuiltin.has(id))
         .toSorted(([a], [b]) => a.localeCompare(b)),
-    [allowedBuiltin, toolModes],
+    [allowedBuiltin, toolPolicies],
   );
 
   const groupsContent = useMemo(() => {
@@ -87,15 +97,24 @@ export function PresetToolsPolicyEditor(props: {
 
   const setToolMode = useCallback(
     (toolId: string, mode: PresetToolMode | 'inherit') => {
-      const next = { ...toolModes };
+      const next = { ...toolPolicies };
       if (mode === 'inherit') {
         delete next[toolId];
       } else {
-        next[toolId] = mode;
+        next[toolId] = { ...next[toolId], mode };
       }
       onChange(next);
     },
-    [onChange, toolModes],
+    [onChange, toolPolicies],
+  );
+
+  const updateToolPolicy = useCallback(
+    (toolId: string, update: (current: CapabilityPresetToolPolicy) => CapabilityPresetToolPolicy) => {
+      const current = toolPolicies[toolId];
+      if (!current) return;
+      onChange({ ...toolPolicies, [toolId]: update(current) });
+    },
+    [onChange, toolPolicies],
   );
 
   const applyPreset = useCallback(
@@ -185,18 +204,19 @@ export function PresetToolsPolicyEditor(props: {
         <div className="text-xs font-medium text-fg-muted">{labels.overrideSummaryTitle}</div>
         {overriddenEntries.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {overriddenEntries.map(([id, mode]) => (
+            {overriddenEntries.map(([id, policy]) => (
               <span
                 key={id}
                 className={cn(
                   'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[11px]',
-                  mode === 'deny' && 'border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300',
-                  mode === 'allow' && 'border-accent/25 bg-accent/10 text-accent',
+                  policy.mode === 'deny' && 'border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-300',
+                  policy.mode === 'confirm' && 'border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-300',
+                  policy.mode === 'allow' && 'border-accent/25 bg-accent/10 text-accent',
                 )}
               >
                 {id}
                 <span className="font-sans opacity-80">
-                  {mode === 'allow' ? labels.modeAllow : labels.modeDeny}
+                  {policy.mode === 'allow' ? labels.modeAllow : policy.mode === 'confirm' ? labels.modeConfirm : labels.modeDeny}
                 </span>
               </span>
             ))}
@@ -215,8 +235,9 @@ export function PresetToolsPolicyEditor(props: {
             <ul className="flex flex-col gap-2.5">
               {ids.map((toolId) => {
                 const desc = getToolDescription(toolId);
-                const mode: PresetToolMode | 'inherit' = Object.prototype.hasOwnProperty.call(toolModes, toolId)
-                  ? toolModes[toolId]
+                const policy = toolPolicies[toolId];
+                const mode: PresetToolMode | 'inherit' = policy
+                  ? policy.mode
                   : 'inherit';
                 return (
                   <li
@@ -234,7 +255,7 @@ export function PresetToolsPolicyEditor(props: {
                         {desc ? <p className="mt-1 text-xs leading-relaxed text-fg-muted">{desc}</p> : null}
                       </div>
                       <div className="inline-flex w-fit rounded-lg border border-edge-subtle bg-surface-base p-0.5">
-                        {(['inherit', 'allow', 'deny'] as const).map((nextMode) => (
+                        {(['inherit', 'allow', 'confirm', 'deny'] as const).map((nextMode) => (
                           <button
                             key={nextMode}
                             type="button"
@@ -249,11 +270,49 @@ export function PresetToolsPolicyEditor(props: {
                               ? labels.inheritedMode
                               : nextMode === 'allow'
                                 ? labels.modeAllow
-                                : labels.modeDeny}
+                                : nextMode === 'confirm'
+                                  ? labels.modeConfirm
+                                  : labels.modeDeny}
                           </button>
                         ))}
                       </div>
                     </div>
+                    {policy ? (
+                      <div className="mt-3 grid gap-2 border-t border-edge-subtle pt-3 sm:grid-cols-3 dark:border-edge">
+                        <label className="flex flex-col gap-1 text-xs text-fg-muted">
+                          {labels.scopeLabel}
+                          <Select
+                            value={policy.scope ?? ''}
+                            disabled={disabled}
+                            onChange={(event) => updateToolPolicy(toolId, (current) => {
+                              const scope = event.target.value as CapabilityPresetToolPolicy['scope'] | '';
+                              if (!scope) {
+                                const { scope: _scope, ...rest } = current;
+                                return rest;
+                              }
+                              return { ...current, scope };
+                            })}
+                          >
+                            <SelectOption value="">{labels.scopeInherit}</SelectOption>
+                            <SelectOption value="readonly">{labels.scopeReadonly}</SelectOption>
+                            <SelectOption value="workspace">{labels.scopeWorkspace}</SelectOption>
+                            <SelectOption value="unrestricted">{labels.scopeUnrestricted}</SelectOption>
+                          </Select>
+                        </label>
+                        <PolicyNumberInput
+                          label={labels.maxCallsLabel}
+                          value={policy.limits?.maxCallsPerTurn}
+                          disabled={disabled}
+                          onChange={(value) => updateToolPolicy(toolId, (current) => withLimit(current, 'maxCallsPerTurn', value))}
+                        />
+                        <PolicyNumberInput
+                          label={labels.timeoutLabel}
+                          value={policy.limits?.timeoutMs}
+                          disabled={disabled}
+                          onChange={(value) => updateToolPolicy(toolId, (current) => withLimit(current, 'timeoutMs', value))}
+                        />
+                      </div>
+                    ) : null}
                   </li>
                 );
               })}
@@ -262,5 +321,45 @@ export function PresetToolsPolicyEditor(props: {
         ))}
       </div>
     </div>
+  );
+}
+
+function withLimit(
+  policy: CapabilityPresetToolPolicy,
+  key: 'maxCallsPerTurn' | 'timeoutMs',
+  value: number | undefined,
+): CapabilityPresetToolPolicy {
+  const limits = { ...policy.limits };
+  if (value === undefined) delete limits[key];
+  else limits[key] = value;
+  if (Object.keys(limits).length === 0) {
+    const { limits: _limits, ...rest } = policy;
+    return rest;
+  }
+  return { ...policy, limits };
+}
+
+function PolicyNumberInput(props: {
+  label: string;
+  value?: number;
+  disabled?: boolean;
+  onChange: (value: number | undefined) => void;
+}) {
+  return (
+    <label className="flex flex-col gap-1 text-xs text-fg-muted">
+      {props.label}
+      <input
+        type="number"
+        min={1}
+        step={1}
+        className="rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg focus:border-edge-strong focus:outline-none"
+        value={props.value ?? ''}
+        disabled={props.disabled}
+        onChange={(event) => {
+          const value = event.target.value.trim();
+          props.onChange(value ? Number(value) : undefined);
+        }}
+      />
+    </label>
   );
 }

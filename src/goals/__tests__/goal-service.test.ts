@@ -95,6 +95,7 @@ describe('GoalService', () => {
       ready: false,
       missingEvidence: ['Targeted tests pass.', 'A sample artifact is attached.'],
       pendingApproval: [],
+      pendingOutcome: [],
     });
 
     const requirements = goals.get(goal.id)!.evidenceRequirements;
@@ -106,6 +107,7 @@ describe('GoalService', () => {
       ready: false,
       missingEvidence: [],
       pendingApproval: ['Targeted tests pass.', 'A sample artifact is attached.'],
+      pendingOutcome: [],
     });
 
     for (const requirement of requirements) {
@@ -117,7 +119,76 @@ describe('GoalService', () => {
         reviewedBy: 'user',
       });
     }
-    expect(goals.getCompletionReadiness(goal.id)).toEqual({ ready: true, missingEvidence: [], pendingApproval: [] });
+    expect(goals.getCompletionReadiness(goal.id)).toEqual({
+      ready: true,
+      missingEvidence: [],
+      pendingApproval: [],
+      pendingOutcome: [],
+    });
+  });
+
+  it('persists measurable outcomes and blocks completion until the target is reached', () => {
+    const goal = goals.create({
+      title: 'Grow repository stars',
+      sessionKey: SESSION_KEY,
+      contract: {
+        evidencePlan: [],
+        outcomeMetric: {
+          name: 'GitHub stars',
+          baselineValue: 22,
+          targetValue: 100,
+          currentValue: 22,
+          unit: 'stars',
+          sourceUrl: 'https://github.com/xopcai/xopc',
+        },
+      },
+    });
+
+    expect(goals.get(goal.id)?.contract?.outcomeMetric).toMatchObject({
+      name: 'GitHub stars',
+      baselineValue: 22,
+      targetValue: 100,
+      currentValue: 22,
+      direction: 'increase',
+    });
+    expect(goals.getCompletionReadiness(goal.id)).toMatchObject({
+      ready: false,
+      pendingOutcome: ['GitHub stars: current value 22 has not reached target 100'],
+    });
+
+    goals.setContract(goal.id, {
+      outcomeMetric: {
+        name: 'GitHub stars',
+        baselineValue: 22,
+        targetValue: 100,
+        currentValue: 100,
+        unit: 'stars',
+      },
+    });
+    expect(goals.getCompletionReadiness(goal.id)?.ready).toBe(true);
+  });
+
+  it('keeps an agent-completed goal awaiting user review when proof is not approved', () => {
+    const goal = goals.create({
+      title: 'Ship a reviewed artifact',
+      sessionKey: SESSION_KEY,
+      contract: { evidencePlan: ['A user approves the artifact.'] },
+    });
+
+    const afterRun = goals.syncPostTurnState({
+      goalId: goal.id,
+      sessionKey: SESSION_KEY,
+      source: 'chat',
+      status: 'done',
+      turnsUsed: 1,
+      maxTurns: 3,
+      verdict: 'done',
+      reason: 'The artifact was generated.',
+    });
+
+    expect(afterRun?.status).toBe('needs_input');
+    expect(afterRun?.completedAt).toBeUndefined();
+    expect(afterRun?.blockedReason).toContain('Completion review required');
   });
 
   it('publishes product events when goals are created and blocked', () => {

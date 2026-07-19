@@ -7,6 +7,7 @@ import {
   type CapabilityPreset,
   type EffectiveAgentManifest,
 } from './schema.js';
+import { linearizePresetIds } from './preset-chain.js';
 
 export interface ResolveManifestResult {
   manifest: EffectiveAgentManifest;
@@ -79,25 +80,6 @@ function mergeInto(
   }
 }
 
-function resolvePresetChain(
-  presetId: string,
-  presets: Record<string, CapabilityPreset>,
-  stack: string[],
-  out: CapabilityPreset[],
-): void {
-  if (stack.includes(presetId)) {
-    throw new Error(`Capability preset cycle detected: ${[...stack, presetId].join(' -> ')}`);
-  }
-  const preset = presets[presetId];
-  if (!preset) {
-    throw new Error(`Capability preset "${presetId}" was not found`);
-  }
-  for (const parent of preset.extends ?? []) {
-    resolvePresetChain(parent, presets, [...stack, presetId], out);
-  }
-  out.push(preset);
-}
-
 function presetPatch(preset: CapabilityPreset): JsonObject {
   const {
     id: _id,
@@ -121,10 +103,7 @@ export function resolveEffectiveAgentManifest(params: ResolveManifestParams): Re
     ...(presets[defaultPresetId] ? [defaultPresetId] : []),
     ...(agent.extends ?? []).filter((id) => id !== defaultPresetId),
   ];
-  const chain: CapabilityPreset[] = [];
-  for (const presetId of presetIds) {
-    resolvePresetChain(presetId, presets, [], chain);
-  }
+  const chain = linearizePresetIds(presetIds, presets).map((presetId) => presets[presetId]!);
 
   const merged: JsonObject = {};
   const sources: Record<string, string> = {};

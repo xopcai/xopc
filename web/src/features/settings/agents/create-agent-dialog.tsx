@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectOption } from '@/components/ui/popover-select';
 import { ModelSelector } from '@/features/chat/model/model-selector';
 import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
+import type { CapabilityPresetRow } from '@/features/settings/capability-presets/capability-presets-api';
 import type { AgentsSettingsMessages, ChatMessages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ghostIconButton } from '@/lib/interaction';
@@ -40,6 +41,10 @@ export function CreateAgentDialog(props: {
   agents: GatewayAgentRow[];
   duplicateSourceId: string | null;
   onSelectDuplicateSource: (id: string | null) => void;
+  capabilityPlans: CapabilityPresetRow[];
+  defaultPresetId: string;
+  selectedCapabilityPlanIds: string[];
+  onSelectedCapabilityPlanIdsChange: (ids: string[]) => void;
 }) {
   const {
     open,
@@ -64,6 +69,10 @@ export function CreateAgentDialog(props: {
     agents,
     duplicateSourceId,
     onSelectDuplicateSource,
+    capabilityPlans,
+    defaultPresetId,
+    selectedCapabilityPlanIds,
+    onSelectedCapabilityPlanIdsChange,
   } = props;
   const [portalContainer, setPortalContainer] = useState<HTMLDivElement | null>(null);
 
@@ -76,9 +85,9 @@ export function CreateAgentDialog(props: {
         <Dialog.Content
           ref={setPortalContainer}
           className={cn(
-            'xopc-dialog-content fixed left-1/2 top-1/2 max-h-[min(90vh,640px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
+            'xopc-dialog-content fixed left-1/2 top-1/2 flex h-[min(90vh,680px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col',
             SETTINGS_SHELL_CONTENT_Z,
-            'overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
+            'overflow-hidden rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
@@ -99,7 +108,8 @@ export function CreateAgentDialog(props: {
             </Dialog.Close>
           </div>
 
-          <form className="grid gap-3" onSubmit={onCreate}>
+          <form className="flex min-h-0 flex-1 flex-col" onSubmit={onCreate}>
+            <div className="grid min-h-0 flex-1 gap-3 overflow-y-auto pr-1">
             {agents.length > 0 ? (
               <label className="flex flex-col gap-1 text-sm">
                 <span className="text-fg-muted">{a.copyFromExistingAgent}</span>
@@ -118,6 +128,44 @@ export function CreateAgentDialog(props: {
                 <span className="text-xs text-fg-muted">{a.duplicateAgentHint}</span>
               </label>
             ) : null}
+
+            <div className="rounded-lg border border-edge-subtle bg-surface-base p-3 dark:border-edge">
+              <div className="text-sm font-medium text-fg">{a.createCapabilityPlansTitle}</div>
+              <p className="mt-1 text-xs leading-relaxed text-fg-muted">{a.createCapabilityPlansHint}</p>
+              <div className="mt-2 rounded-md bg-accent/5 px-2.5 py-2 text-xs text-fg-muted">
+                {capabilityPlans.find((plan) => plan.id === defaultPresetId)?.name ?? a.capabilityPresetsGlobalDefault}
+              </div>
+              <div className="mt-2 grid gap-2">
+                {capabilityPlans
+                  .filter((plan) => plan.id !== defaultPresetId)
+                  .map((plan) => {
+                    const checked = selectedCapabilityPlanIds.includes(plan.id);
+                    return (
+                      <label key={plan.id} className="flex cursor-pointer items-start gap-2 rounded-md bg-surface-panel px-2.5 py-2">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5 shrink-0 rounded border-edge"
+                          checked={checked}
+                          disabled={busy}
+                          onChange={() =>
+                            onSelectedCapabilityPlanIdsChange(
+                              checked
+                                ? selectedCapabilityPlanIds.filter((id) => id !== plan.id)
+                                : [...selectedCapabilityPlanIds, plan.id],
+                            )
+                          }
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-fg">{plan.name}</span>
+                          {plan.description ? (
+                            <span className="mt-0.5 line-clamp-2 block text-xs text-fg-muted">{plan.description}</span>
+                          ) : null}
+                        </span>
+                      </label>
+                    );
+                  })}
+              </div>
+            </div>
 
             {modalError ? (
               <div
@@ -201,7 +249,8 @@ export function CreateAgentDialog(props: {
                 ) : null}
               </div>
             </div>
-            <div className="mt-1 flex justify-end gap-2 border-t border-edge-subtle pt-3 dark:border-edge">
+            </div>
+            <div className="mt-3 flex shrink-0 justify-end gap-2 border-t border-edge-subtle pt-3 dark:border-edge">
               <Dialog.Close asChild>
                 <Button type="button" variant="secondary" disabled={busy}>
                   {a.createModalCancel}

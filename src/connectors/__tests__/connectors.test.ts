@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as bundleMcpMaterialize from '../../agent/mcp/bundle-mcp-materialize.js';
+import type { CredentialResolver } from '../../auth/credentials.js';
 import type { Config } from '../../config/schema.js';
 import { getConnectorDefinition, listConnectorCatalog } from '../catalog.js';
 import { BUILTIN_CONNECTORS } from '../builtin-catalog.js';
@@ -13,7 +14,12 @@ import { setConnectorEnabled } from '../lifecycle.js';
 import { listConnectorInstances } from '../instances.js';
 import { materializeConnectorMcpServer } from '../materialize.js';
 import { createConnectorSetupSecretRequest, submitConnectorSetupSecret } from '../setup-secrets.js';
-import { canUseComposioAction, getComposioToolkitScope, setComposioToolkitScope } from '../composio.js';
+import {
+  canUseComposioAction,
+  getComposioToolkitScope,
+  inspectComposioConnectorHealth,
+  setComposioToolkitScope,
+} from '../composio.js';
 import {
   __testing as githubOAuthTesting,
   getGitHubAccessToken,
@@ -29,6 +35,8 @@ afterEach(() => {
   githubOAuthTesting.clearFlows();
   delete process.env.XOPC_SMITHERY_API_KEY;
   delete process.env.SMITHERY_API_KEY;
+  delete process.env.XOPC_COMPOSIO_API_KEY;
+  delete process.env.COMPOSIO_API_KEY;
 });
 
 describe('connectors catalog', () => {
@@ -501,8 +509,9 @@ describe('connector install and instances', () => {
 
   it('installs a non-MCP Composio connector instance with scoped action gates', async () => {
     const config = {} as Config;
+    const resolver = { resolveApiKey: vi.fn().mockResolvedValue('composio_test') } as unknown as CredentialResolver;
 
-    const instance = await installConnector(config, 'composio-gmail', {});
+    const instance = await installConnector(config, 'composio-gmail', {}, resolver);
 
     expect(instance).toMatchObject({
       instanceId: 'composio-gmail',
@@ -519,6 +528,43 @@ describe('connector install and instances', () => {
     expect(canUseComposioAction(config, 'GMAIL_SEND_EMAIL').ok).toBe(false);
     setComposioToolkitScope(config, 'gmail', 'write');
     expect(canUseComposioAction(config, 'GMAIL_SEND_EMAIL').ok).toBe(true);
+  });
+
+  it('requires the Composio credential before installing a SaaS toolkit', async () => {
+    const config = {} as Config;
+    const resolver = { resolveApiKey: vi.fn().mockResolvedValue(null) } as unknown as CredentialResolver;
+
+    await expect(installConnector(config, 'composio-gmail', {}, resolver))
+      .rejects.toThrow('Install the "Composio API Key" connector first');
+    expect(config.connectors?.instances).toBeUndefined();
+  });
+
+  it('requires a non-empty key when installing the Composio credential connector', async () => {
+    const config = {} as Config;
+    const resolver = { saveApiKey: vi.fn() } as unknown as CredentialResolver;
+
+    await expect(installConnector(config, 'composio-api-key', {}, resolver))
+      .rejects.toThrow('Composio API key is required');
+    expect(config.connectors?.instances).toBeUndefined();
+  });
+
+  it('classifies a missing Composio credential in connector health', async () => {
+    const resolver = { resolveApiKey: vi.fn().mockResolvedValue(null) } as unknown as CredentialResolver;
+
+    await expect(inspectComposioConnectorHealth('notion', resolver)).resolves.toMatchObject({
+      status: 'degraded',
+      recovery: 'retry',
+      errorCode: 'missing_credential',
+    });
+  });
+
+  it('routes core channels and critical services away from Composio fallbacks', async () => {
+    const config = {} as Config;
+
+    await expect(installConnector(config, 'composio-telegram', {}))
+      .rejects.toThrow('native telegram channel');
+    await expect(installConnector(config, 'composio-github', {}))
+      .rejects.toThrow('preferred MCP connector "github"');
   });
 
 });

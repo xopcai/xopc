@@ -177,8 +177,11 @@ export async function handlePersistentGoalPostTurn(opts: {
   });
 
   const completionReadiness = goalService.getCompletionReadiness(goal.id);
-  if (decision.verdict === 'done' && completionReadiness && !completionReadiness.ready && decision.newState) {
-    const reason = `Completion evidence still needed: ${completionReadiness.missingEvidence.join('; ')}`;
+  const executionGaps = completionReadiness
+    ? [...completionReadiness.missingEvidence, ...completionReadiness.pendingOutcome]
+    : [];
+  if (decision.verdict === 'done' && executionGaps.length > 0 && decision.newState) {
+    const reason = `Completion evidence or outcome still needed: ${executionGaps.join('; ')}`;
     decision = {
       ...decision,
       newState: {
@@ -188,11 +191,11 @@ export async function handlePersistentGoalPostTurn(opts: {
         lastReason: reason,
       },
       shouldContinue: true,
-      continuationPrompt: `Before declaring the goal complete, collect this evidence:\n${completionReadiness.missingEvidence.map((item) => `- ${item}`).join('\n')}`,
+      continuationPrompt: `Before declaring the goal complete, address these gaps:\n${executionGaps.map((item) => `- ${item}`).join('\n')}`,
       verdict: 'continue',
       reason,
       message: reason,
-      missingEvidence: completionReadiness.missingEvidence,
+      missingEvidence: executionGaps,
     };
   }
 

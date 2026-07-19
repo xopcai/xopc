@@ -23,6 +23,19 @@ import type {
 const log = createLogger('Connectors:ComposioSessions');
 const COMPOSIO_API_KEY_PROVIDER = 'connector-composio-api-key';
 
+export async function resolveComposioApiKey(resolver = new CredentialResolver()): Promise<string | null> {
+  const stored = await resolver.resolveApiKey(COMPOSIO_API_KEY_PROVIDER).catch(() => undefined);
+  return stored?.trim() || process.env.XOPC_COMPOSIO_API_KEY?.trim() || process.env.COMPOSIO_API_KEY?.trim() || null;
+}
+
+export async function assertComposioApiKeyConfigured(resolver = new CredentialResolver()): Promise<string> {
+  const apiKey = await resolveComposioApiKey(resolver);
+  if (!apiKey) {
+    throw new Error('Composio API key is not configured. Install the "Composio API Key" connector first.');
+  }
+  return apiKey;
+}
+
 export type ComposioToolkitCatalogItem = {
   slug: string;
   name: string;
@@ -143,11 +156,7 @@ export class ComposioSessionsAdapter {
     }
     const resolver = options.resolver ?? new CredentialResolver();
     this.createClient = async () => {
-      const stored = await resolver.resolveApiKey(COMPOSIO_API_KEY_PROVIDER).catch(() => undefined);
-      const apiKey = stored?.trim() || process.env.XOPC_COMPOSIO_API_KEY?.trim() || process.env.COMPOSIO_API_KEY?.trim();
-      if (!apiKey) {
-        throw new Error('Composio API key is not configured.');
-      }
+      const apiKey = await assertComposioApiKeyConfigured(resolver);
       return new Composio({
         apiKey,
         baseURL: process.env.XOPC_COMPOSIO_BASE_URL?.trim() || undefined,

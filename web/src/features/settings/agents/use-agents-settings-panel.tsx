@@ -140,6 +140,7 @@ export function useAgentsSettingsPanel() {
   const [addAgentModalOpen, setAddAgentModalOpen] = useState(false);
   const createWorkspaceSuggestedRef = useRef('');
   const [duplicateSourceId, setDuplicateSourceId] = useState<string | null>(null);
+  const [createPresetIds, setCreatePresetIds] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [listSearchQuery, setListSearchQuery] = useState('');
   const [tuiDefaultAgentDraft, setTuiDefaultAgentDraft] = useState('');
@@ -324,6 +325,7 @@ export function useAgentsSettingsPanel() {
     setCreateModel('');
     setCreateModalError(null);
     setDuplicateSourceId(null);
+    setCreatePresetIds([]);
     setAddAgentModalOpen(true);
   }, []);
 
@@ -356,6 +358,7 @@ export function useAgentsSettingsPanel() {
     (sourceId: string | null) => {
       setDuplicateSourceId(sourceId);
       if (!sourceId) {
+        setCreatePresetIds([]);
         return;
       }
 
@@ -371,6 +374,7 @@ export function useAgentsSettingsPanel() {
       setCreateDescription(sourceDescription);
       setCreateWorkspace(source.workspace);
       setCreateModel(source.model?.primary ?? '');
+      setCreatePresetIds([...source.extends]);
       setCreateModalError(null);
     },
     [a.duplicateName, data, makeAvailableAgentId],
@@ -451,6 +455,7 @@ export function useAgentsSettingsPanel() {
           : {}),
         profileFiles: { 'IDENTITY.md': identityMd },
         ...(duplicateSourceId ? { cloneFrom: duplicateSourceId } : {}),
+        extends: createPresetIds,
       });
       const { createdAgentId, ...agentsPayload } = next;
       void mutateAgents(agentsPayload, { revalidate: false });
@@ -888,6 +893,8 @@ export function useAgentsSettingsPanel() {
     openAddAgentModal,
     openDuplicateAgentModal,
     duplicateSourceId,
+    createPresetIds,
+    setCreatePresetIds,
     onSelectDuplicateSource,
     panel,
     setPanel,

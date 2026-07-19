@@ -43,6 +43,28 @@ describe('Composio agent-ready catalog', () => {
     expect(logoById.get('composio-notion')).toBe('/connector-icons/notion.svg');
   });
 
+  it('routes native channels and high-frequency services away from Composio', () => {
+    const strategyById = new Map(COMPOSIO_CONNECTORS.map((definition) => [definition.id, definition.integrationStrategy]));
+
+    expect(strategyById.get('composio-telegram')).toEqual({
+      lane: 'native',
+      workload: 'core',
+      preferred: false,
+      alternative: { kind: 'channel', id: 'telegram' },
+    });
+    expect(strategyById.get('composio-github')).toEqual({
+      lane: 'mcp',
+      workload: 'high_frequency',
+      preferred: false,
+      alternative: { kind: 'connector', id: 'github' },
+    });
+    expect(strategyById.get('composio-notion')).toEqual({
+      lane: 'composio',
+      workload: 'long_tail',
+      preferred: true,
+    });
+  });
+
   it('gives every built-in Composio connector a logo', () => {
     expect(COMPOSIO_CONNECTORS).toHaveLength(COMPOSIO_AGENT_READY_TOOLKITS.length + 1);
     for (const definition of COMPOSIO_CONNECTORS) {

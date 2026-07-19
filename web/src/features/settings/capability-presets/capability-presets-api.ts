@@ -7,26 +7,50 @@ export type CapabilityPresetModelRole = {
   description?: string;
 };
 
-export type CapabilityPresetRow = {
-  id: string;
-  name: string;
-  description?: string;
-  version: number;
+export type CapabilityPresetToolPolicy = {
+  mode: 'allow' | 'confirm' | 'deny';
+  scope?: 'readonly' | 'workspace' | 'unrestricted';
+  limits?: { maxCallsPerTurn?: number; timeoutMs?: number };
+};
+
+export type CapabilityPresetPolicyFields = {
   extends?: string[];
   models?: {
     defaultRole?: string;
     roles?: Record<string, CapabilityPresetModelRole>;
+    imageModel?: { primary: string; fallbacks?: string[]; timeoutMs?: number; autoProviderFallback?: boolean };
+    imageGenerationModel?: { primary: string; fallbacks?: string[]; timeoutMs?: number; autoProviderFallback?: boolean };
+    policy?: { allowFallbacks?: boolean; maxCostTier?: 'low' | 'medium' | 'high' };
   };
   tools?: {
-    builtin?: Record<string, { mode: 'allow' | 'confirm' | 'deny'; scope?: string }>;
+    builtin?: Record<string, CapabilityPresetToolPolicy>;
+    mcp?: {
+      servers?: Record<string, CapabilityPresetToolPolicy>;
+      tools?: Record<string, CapabilityPresetToolPolicy>;
+    };
   };
   skills?: {
     mode: 'all' | 'allowlist' | 'denylist' | 'off';
     allow?: string[];
     deny?: string[];
   };
+  memory?: Record<string, unknown>;
+  workflows?: Record<string, unknown>;
+  boundaries?: {
+    requiresConfirmation: string[];
+    forbidden: string[];
+    escalation: string[];
+  };
+  runtime?: { maxTurns?: number; timeoutMs?: number; maxToolFailuresPerTurn?: number };
   locks?: string[];
-  usage: Array<{ agentId: string; agentName?: string }>;
+};
+
+export type CapabilityPresetRow = CapabilityPresetPolicyFields & {
+  id: string;
+  name: string;
+  description?: string;
+  version: number;
+  usage: Array<{ agentId: string; agentName?: string; direct?: boolean }>;
 };
 
 export type CapabilityPresetsPayload = {
@@ -55,7 +79,8 @@ export async function createCapabilityPreset(body: {
   id: string;
   name: string;
   description?: string;
-}): Promise<{ presetId: string; presets: CapabilityPresetsPayload }> {
+  version?: number;
+} & CapabilityPresetPolicyFields): Promise<{ presetId: string; presets: CapabilityPresetsPayload }> {
   const res = await fetchJson<{
     ok?: boolean;
     payload?: { presetId?: string; presets?: CapabilityPresetsPayload };
@@ -84,10 +109,7 @@ export async function updateCapabilityPreset(
     name?: string;
     description?: string | null;
     version?: number;
-    models?: CapabilityPresetRow['models'] | null;
-    tools?: CapabilityPresetRow['tools'] | null;
-    skills?: CapabilityPresetRow['skills'] | null;
-  },
+  } & { [K in keyof CapabilityPresetPolicyFields]?: CapabilityPresetPolicyFields[K] | null },
 ): Promise<CapabilityPresetsPayload> {
   const res = await fetchJson<{ ok?: boolean; payload?: CapabilityPresetsPayload }>(
     apiUrl(`/api/capability-presets/${encodeURIComponent(id)}`),

@@ -205,7 +205,7 @@ Full reference: **[Channels](https://xopcai.github.io/xopc/channels)** · **[Con
 
 ```bash
 xopc skills install <name>       # SKILL.md domains
-xopc extensions install <pkg>    # tools, channels, UI panels
+xopc extensions install store:<id>  # or npm:<package> / ./local-directory
 xopc extensions dev ./my-extension
 ```
 

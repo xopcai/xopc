@@ -17,6 +17,7 @@ import type {
   GoalEvidenceRequirementStatus,
   GoalEvidenceReviewSource,
   GoalListQuery,
+  GoalOutcomeMetric,
   GoalPriority,
   GoalRun,
   GoalRunStatus,
@@ -117,6 +118,7 @@ type GoalContractRow = {
   objective: string;
   scope_boundary: string | null;
   evidence_plan_json: string;
+  outcome_metric_json: string | null;
   created_at: number;
   updated_at: number;
 };
@@ -252,8 +254,49 @@ function goalContractFromRow(row: GoalContractRow): GoalContract {
     objective: row.objective,
     scopeBoundary: row.scope_boundary ?? undefined,
     evidencePlan: parseJsonStringArray(row.evidence_plan_json) ?? [],
+    outcomeMetric: parseGoalOutcomeMetric(row.outcome_metric_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function parseGoalOutcomeMetric(raw: string | null): GoalOutcomeMetric | undefined {
+  const value = parseJsonField(raw);
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const metric = value as Partial<GoalOutcomeMetric>;
+  if (
+    typeof metric.name !== 'string' || !metric.name.trim() ||
+    typeof metric.baselineValue !== 'number' || !Number.isFinite(metric.baselineValue) ||
+    typeof metric.targetValue !== 'number' || !Number.isFinite(metric.targetValue) ||
+    (metric.direction !== 'increase' && metric.direction !== 'decrease')
+  ) return undefined;
+  return {
+    name: metric.name.trim(),
+    baselineValue: metric.baselineValue,
+    targetValue: metric.targetValue,
+    currentValue: typeof metric.currentValue === 'number' && Number.isFinite(metric.currentValue)
+      ? metric.currentValue
+      : undefined,
+    unit: typeof metric.unit === 'string' && metric.unit.trim() ? metric.unit.trim() : undefined,
+    direction: metric.direction,
+    sourceUrl: typeof metric.sourceUrl === 'string' && metric.sourceUrl.trim() ? metric.sourceUrl.trim() : undefined,
+    measuredAt: typeof metric.measuredAt === 'number' && Number.isFinite(metric.measuredAt)
+      ? metric.measuredAt
+      : undefined,
+  };
+}
+
+function normalizeGoalOutcomeMetric(input: GoalContractInput['outcomeMetric']): GoalOutcomeMetric | undefined {
+  if (!input) return undefined;
+  return {
+    name: input.name.trim(),
+    baselineValue: input.baselineValue,
+    targetValue: input.targetValue,
+    currentValue: input.currentValue,
+    unit: input.unit?.trim() || undefined,
+    direction: input.direction ?? (input.targetValue >= input.baselineValue ? 'increase' : 'decrease'),
+    sourceUrl: input.sourceUrl?.trim() || undefined,
+    measuredAt: input.measuredAt,
   };
 }
 
@@ -287,6 +330,7 @@ function normalizeContract(
     objective: input.objective?.trim() || fallbackObjective,
     scopeBoundary: input.scopeBoundary?.trim() || undefined,
     evidencePlan: normalizeStringList(input.evidencePlan),
+    outcomeMetric: normalizeGoalOutcomeMetric(input.outcomeMetric),
     createdAt,
     updatedAt: now,
   };
@@ -295,14 +339,15 @@ function normalizeContract(
 function insertGoalContract(db: ReturnType<typeof getSqliteDatabase>, contract: GoalContract): void {
   db.prepare(
     `INSERT INTO goal_contracts (
-      goal_id, version, objective, scope_boundary, evidence_plan_json, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      goal_id, version, objective, scope_boundary, evidence_plan_json, outcome_metric_json, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
     contract.goalId,
     contract.version,
     contract.objective,
     contract.scopeBoundary ?? null,
     JSON.stringify(contract.evidencePlan),
+    contract.outcomeMetric ? JSON.stringify(contract.outcomeMetric) : null,
     contract.createdAt,
     contract.updatedAt,
   );
@@ -569,7 +614,15 @@ export class GoalStore {
         .get(goalId) as GoalContractRow | undefined;
       const now = Date.now();
       const contract = normalizeContract(
-        input,
+        {
+          ...input,
+          objective: input.objective ?? existing?.objective,
+          scopeBoundary: input.scopeBoundary ?? existing?.scope_boundary ?? undefined,
+          evidencePlan: input.evidencePlan ?? parseJsonStringArray(existing?.evidence_plan_json ?? null) ?? [],
+          outcomeMetric: input.outcomeMetric === undefined
+            ? parseGoalOutcomeMetric(existing?.outcome_metric_json ?? null)
+            : input.outcomeMetric,
+        },
         goalId,
         goal.title,
         now,
@@ -579,13 +632,14 @@ export class GoalStore {
       if (!contract) return null;
       db.prepare(
         `INSERT INTO goal_contracts (
-          goal_id, version, objective, scope_boundary, evidence_plan_json, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          goal_id, version, objective, scope_boundary, evidence_plan_json, outcome_metric_json, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(goal_id) DO UPDATE SET
           version = excluded.version,
           objective = excluded.objective,
           scope_boundary = excluded.scope_boundary,
           evidence_plan_json = excluded.evidence_plan_json,
+          outcome_metric_json = excluded.outcome_metric_json,
           updated_at = excluded.updated_at`,
       ).run(
         contract.goalId,
@@ -593,6 +647,7 @@ export class GoalStore {
         contract.objective,
         contract.scopeBoundary ?? null,
         JSON.stringify(contract.evidencePlan),
+        contract.outcomeMetric ? JSON.stringify(contract.outcomeMetric) : null,
         contract.createdAt,
         contract.updatedAt,
       );
@@ -601,7 +656,11 @@ export class GoalStore {
         goalId,
         kind: 'contract_updated',
         message: contract.objective,
-        data: { version: contract.version, evidenceCount: contract.evidencePlan.length },
+        data: {
+          version: contract.version,
+          evidenceCount: contract.evidencePlan.length,
+          hasOutcomeMetric: Boolean(contract.outcomeMetric),
+        },
         createdAt: now,
       });
       return contract;

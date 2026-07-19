@@ -14,6 +14,16 @@ export type ExtensionMarketplacePackageDetail = {
     changelog: string | null;
     publishedAt: string;
   };
+  installability: {
+    available: boolean;
+    reason?: string;
+    sha256?: string;
+  };
+  manifest?: Record<string, unknown>;
+  packageSummary?: {
+    dependencyCount: number;
+    lifecycleScripts: string[];
+  };
 };
 
 async function readErrorMessage(res: Response): Promise<string> {
