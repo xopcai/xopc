@@ -92,7 +92,7 @@ export function preloadRouteForPath(to: string) {
   if (path.startsWith('/goals/')) return preload(loadGoalDetailPage);
   if (path === '/notes') return preload(loadNotesPage);
   if (path.startsWith('/notes/')) return preload(loadNotesPage);
-  if (path === '/workflows') return preload(loadWorkflowsPage);
+  if (path === '/workflows' || path.startsWith('/workflows/')) return preload(loadWorkflowsPage);
   if (path === '/channels' || path.startsWith('/channels/')) return preload(loadChannelsPage);
   if (path === '/agents' || path.startsWith('/agents/')) return preload(loadAgentsSettingsPage);
   if (path === '/extensions') return preload(loadExtensionsPage);

@@ -56,11 +56,9 @@ import {
   listWorkflowDefinitions,
   listWorkflowRuns,
   retryWorkflowRun,
-  startWorkflowRun,
   type WorkflowDefinition,
   type WorkflowRunSummary,
 } from '@/features/workflows/workflow-api';
-import { WorkflowStartDialog } from '@/features/workflows/workflow-start-dialog';
 import { workflowBoardHref } from '@/features/workflows/workflow-page.utils';
 import { WorkItemsPanel } from '@/features/work-items/work-items-panel';
 import { detectPreviewFileType, getPreviewFileName, readModeForPreviewType } from '@/features/preview-runtime';
@@ -706,9 +704,7 @@ export function ProjectDetailPage() {
   const [startingChat, setStartingChat] = useState(false);
   const [createWorkItemRequestKey, setCreateWorkItemRequestKey] = useState(0);
   const [workflowsLoading, setWorkflowsLoading] = useState(false);
-  const [startingWorkflow, setStartingWorkflow] = useState(false);
   const [workflowActionBusy, setWorkflowActionBusy] = useState<string | null>(null);
-  const [workflowStartDefinition, setWorkflowStartDefinition] = useState<WorkflowDefinition | null>(null);
   const [creatingGoal, setCreatingGoal] = useState(false);
   const [creatingBlocker, setCreatingBlocker] = useState(false);
   const [createGoalOpen, setCreateGoalOpen] = useState(false);
@@ -1119,31 +1115,6 @@ export function ProjectDetailPage() {
       setCreatingBlocker(false);
     }
   }, [blockerDraft.reason, blockerDraft.title, project, refreshProjectGoals]);
-
-  const submitWorkflowStart = useCallback(async (payload: { goal: string; input?: unknown; concurrency?: number; maxSubagents?: number }) => {
-    if (!project || !workflowStartDefinition) return;
-    setStartingWorkflow(true);
-    setError(null);
-    try {
-      const ownerAgentId = selectedAgentId || project.defaultAgentId || undefined;
-      const result = await startWorkflowRun({
-        definitionId: workflowStartDefinition.id,
-        projectId: project.id,
-        agentId: ownerAgentId,
-        goal: payload.goal,
-        input: payload.input,
-        concurrency: payload.concurrency,
-        maxSubagents: payload.maxSubagents,
-      });
-      setWorkflowStartDefinition(null);
-      await refreshProjectWorkflows();
-      navigateFromProjectTab('workflows', workflowBoardHref(result.runId, { ownerAgentId }));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setStartingWorkflow(false);
-    }
-  }, [navigateFromProjectTab, project, refreshProjectWorkflows, selectedAgentId, workflowStartDefinition]);
 
   const retryRun = useCallback(async (run: WorkflowRunSummary) => {
     if (!project) return;
@@ -1868,7 +1839,7 @@ export function ProjectDetailPage() {
                     key={definition.id}
                     type="button"
                     className="grid gap-1 rounded-md bg-surface-base p-3 text-left hover:bg-surface-hover focus:outline-none focus:ring-2 focus:ring-accent/30"
-                    onClick={() => setWorkflowStartDefinition(definition)}
+                    onClick={() => navigate(`/workflows/${definition.id}?projectId=${encodeURIComponent(project.id)}${selectedAgentId ? `&agentId=${encodeURIComponent(selectedAgentId)}` : ''}`)}
                   >
                     <span className="flex items-center gap-2 text-sm font-medium text-fg">
                       <Play className="size-4 text-accent-fg" aria-hidden />
@@ -2743,14 +2714,6 @@ export function ProjectDetailPage() {
         onCreate={submitGoal}
       />
 
-      <WorkflowStartDialog
-        open={Boolean(workflowStartDefinition)}
-        definition={workflowStartDefinition}
-        language={language}
-        starting={startingWorkflow}
-        onClose={() => !startingWorkflow && setWorkflowStartDefinition(null)}
-        onStart={(payload) => void submitWorkflowStart(payload)}
-      />
     </main>
   );
 }

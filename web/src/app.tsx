@@ -48,6 +48,9 @@ const GoalsPage = lazy(() => loadGoalsPage().then((m) => ({ default: m.GoalsPage
 const GoalDetailPage = lazy(() => loadGoalDetailPage().then((m) => ({ default: m.GoalDetailPage })));
 const NotesPage = lazy(() => loadNotesPage().then((m) => ({ default: m.NotesPage })));
 const WorkflowsPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowsPage })));
+const WorkflowDetailPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowDetailPage })));
+const WorkflowEditorPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowEditorPage })));
+const WorkflowRunPage = lazy(() => loadWorkflowsPage().then((m) => ({ default: m.WorkflowRunPage })));
 const SkillsPage = lazy(() => loadSkillsPage().then((m) => ({ default: m.SkillsPage })));
 const UserContextPage = lazy(() => loadUserContextPage().then((m) => ({ default: m.UserContextPage })));
 const ConnectorsPage = lazy(() => loadConnectorsPage().then((m) => ({ default: m.ConnectorsPage })));
@@ -250,11 +253,48 @@ const router = createHashRouter([
       },
       {
         path: 'workflows',
-        element: (
-          <Suspense fallback={<SecondaryRouteFallback />}>
-            <WorkflowsPage />
-          </Suspense>
-        ),
+        children: [
+          {
+            index: true,
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <WorkflowsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'new',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <WorkflowEditorPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'runs/:runId',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <WorkflowRunPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: ':definitionId',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <WorkflowDetailPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: ':definitionId/edit',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <WorkflowEditorPage />
+              </Suspense>
+            ),
+          },
+        ],
       },
       {
         path: 'skills',
