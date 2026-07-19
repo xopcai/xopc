@@ -20,12 +20,10 @@ export type ConnectorCapability =
 
 export type ConnectorAuthMode = 'none' | 'apiKey' | 'oauth';
 
-export type ConnectorAuthInstallPhase = 'before_install' | 'after_install';
-
 export type ConnectorAuthDefinition =
   | { mode: 'none' }
   | { mode: 'apiKey' }
-  | { mode: 'oauth'; provider: string; installPhase: ConnectorAuthInstallPhase };
+  | { mode: 'oauth'; provider: string };
 
 export type ConnectorScope = 'read' | 'write' | 'admin';
 

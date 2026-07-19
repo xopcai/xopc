@@ -54,7 +54,7 @@ export const COMPOSIO_TOOLKIT_DISPLAY_NAMES: Record<ComposioAgentReadyToolkit, s
   googledrive: 'Google Drive',
   notion: 'Notion',
   slack: 'Slack',
-  github: 'GitHub via Composio',
+  github: 'GitHub',
   linear: 'Linear via Composio',
   outlook: 'Outlook',
   microsoft_teams: 'Microsoft Teams',
@@ -175,7 +175,7 @@ export function connectorDefinitionFromComposioToolkit(item: ComposioToolkitCata
     verificationLevel: verificationForToolkit(slug),
     auth: item.isNoAuth
       ? { mode: 'none' }
-      : { mode: 'oauth', provider: 'composio', installPhase: 'after_install' },
+      : { mode: 'oauth', provider: 'composio' },
     setup: {},
     runtime: { type: 'composio', toolkit: slug, role: 'toolkit' },
     integrationStrategy: composioIntegrationStrategy(slug),

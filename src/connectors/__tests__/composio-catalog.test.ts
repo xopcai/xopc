@@ -5,7 +5,12 @@ import {
   connectorDefinitionFromComposioToolkit,
 } from '../composio-catalog.js';
 import { composioLogoResponse } from '../composio-logo.js';
-import { COMPOSIO_CONNECTORS, scopeForComposioAction, toolkitFromComposioSlug } from '../composio.js';
+import {
+  COMPOSIO_CONNECTORS,
+  isComposioActionAllowedByCatalog,
+  scopeForComposioAction,
+  toolkitFromComposioSlug,
+} from '../composio.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -25,7 +30,7 @@ describe('Composio agent-ready catalog', () => {
         id: `composio-${slug}`,
         verificationLevel: 'verified',
         runtime: { type: 'composio', toolkit: slug, role: 'toolkit' },
-        auth: { mode: 'oauth', provider: 'composio', installPhase: 'after_install' },
+        auth: { mode: 'oauth', provider: 'composio' },
       });
       expect(definition.branding?.logoUrl).toMatch(/^\/connector-icons\//);
     }
@@ -43,7 +48,7 @@ describe('Composio agent-ready catalog', () => {
     expect(logoById.get('composio-notion')).toBe('/connector-icons/notion.svg');
   });
 
-  it('routes native channels and high-frequency services away from Composio', () => {
+  it('keeps native channels separate and uses Composio for GitHub', () => {
     const strategyById = new Map(COMPOSIO_CONNECTORS.map((definition) => [definition.id, definition.integrationStrategy]));
 
     expect(strategyById.get('composio-telegram')).toEqual({
@@ -53,10 +58,9 @@ describe('Composio agent-ready catalog', () => {
       alternative: { kind: 'channel', id: 'telegram' },
     });
     expect(strategyById.get('composio-github')).toEqual({
-      lane: 'mcp',
-      workload: 'high_frequency',
-      preferred: false,
-      alternative: { kind: 'connector', id: 'github' },
+      lane: 'composio',
+      workload: 'long_tail',
+      preferred: true,
     });
     expect(strategyById.get('composio-notion')).toEqual({
       lane: 'composio',
@@ -103,10 +107,41 @@ describe('Composio agent-ready catalog', () => {
     for (const toolkit of COMPOSIO_AGENT_READY_TOOLKITS) {
       const prefix = toolkit.toUpperCase();
       expect(toolkitFromComposioSlug(`${prefix}_LIST_ITEMS`)).toBe(toolkit);
-      expect(scopeForComposioAction(`${prefix}_LIST_ITEMS`)).toMatchObject({ scope: 'read', curated: true });
-      expect(scopeForComposioAction(`${prefix}_CREATE_ITEM`)).toMatchObject({ scope: 'write', curated: true });
-      expect(scopeForComposioAction(`${prefix}_DELETE_ITEM`)).toMatchObject({ scope: 'admin', curated: true });
+      if (toolkit === 'github') {
+        expect(scopeForComposioAction(`${prefix}_LIST_ITEMS`)).toMatchObject({ curated: false });
+        expect(scopeForComposioAction(`${prefix}_CREATE_ITEM`)).toMatchObject({ curated: false });
+        expect(scopeForComposioAction(`${prefix}_DELETE_ITEM`)).toMatchObject({ curated: false });
+      } else {
+        expect(scopeForComposioAction(`${prefix}_LIST_ITEMS`)).toMatchObject({ scope: 'read', curated: true });
+        expect(scopeForComposioAction(`${prefix}_CREATE_ITEM`)).toMatchObject({ scope: 'write', curated: true });
+        expect(scopeForComposioAction(`${prefix}_DELETE_ITEM`)).toMatchObject({ scope: 'admin', curated: true });
+      }
       expect(scopeForComposioAction(`${prefix}_DO_SOMETHING_UNRECOGNIZED`)).toMatchObject({ scope: 'write', curated: false });
     }
+  });
+
+  it('matches OpenHuman GitHub curation and rejects uncurated GitHub actions', () => {
+    expect(scopeForComposioAction('GITHUB_GET_THE_AUTHENTICATED_USER')).toEqual({
+      toolkit: 'github',
+      scope: 'read',
+      curated: true,
+    });
+    expect(scopeForComposioAction('GITHUB_MERGE_A_PULL_REQUEST')).toEqual({
+      toolkit: 'github',
+      scope: 'write',
+      curated: true,
+    });
+    expect(scopeForComposioAction('GITHUB_DELETE_A_REPOSITORY')).toEqual({
+      toolkit: 'github',
+      scope: 'admin',
+      curated: true,
+    });
+    expect(scopeForComposioAction('GITHUB_LIST_WORKFLOWS')).toEqual({
+      toolkit: 'github',
+      scope: 'write',
+      curated: false,
+    });
+    expect(isComposioActionAllowedByCatalog('GITHUB_GET_AN_ISSUE')).toBe(true);
+    expect(isComposioActionAllowedByCatalog('GITHUB_LIST_WORKFLOWS')).toBe(false);
   });
 });

@@ -56,6 +56,7 @@ export type ComposioConnectorHealth = {
 const COMPOSIO_API_KEY_PROVIDER = 'connector-composio-api-key';
 const COMPOSIO_SCOPE_ORDER: Record<ComposioScope, number> = { read: 1, write: 2, admin: 3 };
 const COMPOSIO_AGENT_READY = new Set<string>(COMPOSIO_AGENT_READY_TOOLKITS);
+const STRICT_CURATED_TOOLKITS = new Set<string>(['github']);
 const READ_ACTION_TOKENS = ['GET', 'LIST', 'SEARCH', 'FETCH', 'FIND', 'LOOKUP', 'RETRIEVE', 'READ', 'QUERY', 'CHECK', 'DESCRIBE', 'DOWNLOAD'];
 const WRITE_ACTION_TOKENS = ['CREATE', 'UPDATE', 'SEND', 'POST', 'ADD', 'UPLOAD', 'REPLY', 'DRAFT', 'INVITE', 'ASSIGN', 'MOVE', 'COPY', 'EDIT', 'WRITE', 'PUBLISH', 'SCHEDULE'];
 const ADMIN_ACTION_TOKENS = ['DELETE', 'REMOVE', 'REVOKE', 'TRASH', 'ARCHIVE', 'CANCEL', 'DISCONNECT', 'DEACTIVATE'];
@@ -97,10 +98,45 @@ const COMPOSIO_CURATED_ACTIONS: Record<string, Record<string, ComposioScope>> = 
     SLACK_SEND_DIRECT_MESSAGE: 'write',
   },
   github: {
+    GITHUB_GET_THE_AUTHENTICATED_USER: 'read',
+    GITHUB_LIST_REPOSITORIES_FOR_THE_AUTHENTICATED_USER: 'read',
+    GITHUB_GET_A_REPOSITORY: 'read',
     GITHUB_GET_REPOSITORY: 'read',
+    GITHUB_LIST_REPOSITORY_COLLABORATORS: 'read',
+    GITHUB_SEARCH_REPOSITORIES: 'read',
+    GITHUB_SEARCH_CODE: 'read',
+    GITHUB_SEARCH_ISSUES_AND_PULL_REQUESTS: 'read',
+    GITHUB_SEARCH_USERS: 'read',
     GITHUB_LIST_REPOSITORY_ISSUES: 'read',
+    GITHUB_GET_AN_ISSUE: 'read',
+    GITHUB_LIST_ISSUE_COMMENTS: 'read',
+    GITHUB_LIST_PULL_REQUESTS: 'read',
+    GITHUB_GET_A_PULL_REQUEST: 'read',
+    GITHUB_LIST_BRANCHES: 'read',
+    GITHUB_GET_A_BRANCH: 'read',
+    GITHUB_LIST_COMMITS: 'read',
+    GITHUB_GET_A_COMMIT: 'read',
+    GITHUB_CREATE_A_REPOSITORY_FOR_THE_AUTHENTICATED_USER: 'write',
+    GITHUB_CREATE_OR_UPDATE_FILE_CONTENTS: 'write',
+    GITHUB_CREATE_A_COMMIT: 'write',
+    GITHUB_CREATE_A_COMMIT_COMMENT: 'write',
     GITHUB_CREATE_AN_ISSUE: 'write',
+    GITHUB_UPDATE_AN_ISSUE: 'write',
+    GITHUB_CREATE_AN_ISSUE_COMMENT: 'write',
+    GITHUB_ADD_LABELS_TO_AN_ISSUE: 'write',
+    GITHUB_ADD_ASSIGNEES_TO_AN_ISSUE: 'write',
+    GITHUB_CREATE_A_PULL_REQUEST: 'write',
     GITHUB_CREATE_PULL_REQUEST: 'write',
+    GITHUB_UPDATE_A_PULL_REQUEST: 'write',
+    GITHUB_MERGE_A_PULL_REQUEST: 'write',
+    GITHUB_CREATE_A_REVIEW_FOR_A_PULL_REQUEST: 'write',
+    GITHUB_CREATE_A_REVIEW_COMMENT_FOR_A_PULL_REQUEST: 'write',
+    GITHUB_CREATE_A_GIST: 'write',
+    GITHUB_DELETE_A_REPOSITORY: 'admin',
+    GITHUB_DELETE_A_REFERENCE: 'admin',
+    GITHUB_DELETE_A_FILE: 'admin',
+    GITHUB_ADD_A_REPOSITORY_COLLABORATOR: 'admin',
+    GITHUB_CANCEL_A_WORKFLOW_RUN: 'admin',
   },
   linear: {
     LINEAR_LIST_ISSUES: 'read',
@@ -139,6 +175,9 @@ export function scopeForComposioAction(slug: string): { toolkit?: string; scope:
   if (!toolkit) return { scope: 'write', curated: false };
   const scope = COMPOSIO_CURATED_ACTIONS[toolkit]?.[slug.trim().toUpperCase()];
   if (scope) return { toolkit, scope, curated: true };
+  if (STRICT_CURATED_TOOLKITS.has(toolkit)) {
+    return { toolkit, scope: 'write', curated: false };
+  }
   if (COMPOSIO_AGENT_READY.has(toolkit)) {
     const tokens = slug.trim().toUpperCase().split('_');
     if (tokens.some((token) => ADMIN_ACTION_TOKENS.some((verb) => token.startsWith(verb)))) {
@@ -152,6 +191,11 @@ export function scopeForComposioAction(slug: string): { toolkit?: string; scope:
     }
   }
   return { toolkit, scope: 'write', curated: false };
+}
+
+export function isComposioActionAllowedByCatalog(slug: string): boolean {
+  const action = scopeForComposioAction(slug);
+  return Boolean(action.toolkit && (action.curated || !STRICT_CURATED_TOOLKITS.has(action.toolkit)));
 }
 
 export function getComposioToolkitScope(config: Config | undefined, toolkit: string): ComposioScope {
@@ -174,6 +218,14 @@ export function setComposioToolkitScope(config: Config, toolkit: string, scope: 
 export function canUseComposioAction(config: Config | undefined, slug: string): { ok: true; toolkit?: string; scope: ComposioScope } | { ok: false; reason: string; toolkit?: string; scope: ComposioScope } {
   const action = scopeForComposioAction(slug);
   if (!action.toolkit) return { ok: false, reason: `Unknown Composio toolkit for action: ${slug}`, scope: action.scope };
+  if (!isComposioActionAllowedByCatalog(slug)) {
+    return {
+      ok: false,
+      reason: `Composio action ${slug} is not in the curated ${action.toolkit} action catalog.`,
+      toolkit: action.toolkit,
+      scope: action.scope,
+    };
+  }
   const installed = config?.connectors?.instances?.[`composio-${action.toolkit}`];
   if (!installed) return { ok: false, reason: `Composio connector is not installed: ${action.toolkit}`, toolkit: action.toolkit, scope: action.scope };
   const allowedScope = getComposioToolkitScope(config, action.toolkit);
